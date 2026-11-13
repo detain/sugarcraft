@@ -67,7 +67,11 @@ use SugarCraft\SshServer\StreamHelper;
  * blocked on `flock()` wakes up holding a lock over a file nobody can
  * any longer reach, while the next newcomer locks the fresh inode
  * independently and sees a full bucket (2026-11 audit: N parallel connects
- * each got the whole burst). Sidecar locks survive renames.
+ * each got the whole burst). Sidecar locks survive renames. The
+ * mutual exclusion assumes a LOCAL filesystem: on NFS or other shared
+ * mounts `flock` can be silently weak-locked, and concurrent processes
+ * lost-update the bucket — the JSON payload stays atomic via temp+rename,
+ * so the failure is invisible, not loud, and the arithmetic is best-effort.
  *
  * Buckets are PRUNED: any bucket that is not the current session's own
  * and has refilled back to its burst is dropped when the map is next
@@ -162,6 +166,10 @@ final class RateLimit implements Middleware
      * shared `ip:_unknown` bucket together with every other such session,
      * which behind a proxy or on a transport that never learned the peer is
      * one global throttle, not a per-client one (2026-11 audit).
+     * The populated-but-aggregated case behind a bastion/LB/ProxyJump (many
+     * humans sharing one `ip:<host>` bucket) is the same shape, just with a
+     * real address in the key -- the README's rate-limiting section names the
+     * operator remedy (username bucket or throttling at the fronting layer).
      * The failure direction is worth naming: a shared bucket is strict, not
      * safe. One noisy client that arrived without an address can burn the
      * burst and lock out every other address-less client behind it, which is

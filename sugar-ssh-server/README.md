@@ -168,7 +168,14 @@ Match User wishuser
     AllowTcpForwarding no
     PermitTTY yes
     X11Forwarding no
+    PasswordAuthentication no
+    PermitEmptyPasswords no
 ```
+
+Keep the forced account pubkey-only: this library CONSUMES identity, it
+does not verify credentials -- the ceiling is sshd's auth policy, and every
+fingerprint and pairing assumption below it rides the strength of whatever
+sshd accepted before `ForceCommand` ran.
 
 Then `systemctl reload sshd`, and check that it took effect before you
 depend on it:
@@ -180,11 +187,13 @@ ssh -o BatchMode=yes wishuser@host; echo "status=$?"
 That runs your entry script, not your shell -- which is the point. At this
 point in the quickstart the entry script does not exist yet (sections 2 and 3
 provision it below), so a correct `Match` block lands on PHP's
-"Could not open input file" and reports `255` here; `0` and `129` are what the
-same probe answers once `server.php` exists. Any of those three means
+"Could not open input file" -- measured on PHP 8.3, that exits `1`, and
+`255` is reserved for parse errors and in-script fatals (once the file
+exists). `0` and `129` are what the same probe answers once `server.php`
+exists. Any of those three -- `1`, `0`, `129` -- means
 `ForceCommand` reached the account (see [Exit
-status](../docs/admin/sugar-ssh-server.md#exit-status), where a PHP failure is
-likewise `255`, not `129`); a login that drops you
+status](../docs/admin/sugar-ssh-server.md#exit-status), which splits the two
+PHP failure shapes); a login that drops you
 into an interactive shell means the `Match` block never applied, and every
 assumption below it about rate limits and pairing is currently unenforced. Do
 not write the probe as `ssh wishuser@host echo ok`: the argument is discarded
@@ -359,13 +368,28 @@ suite once, rather than parenthetically at every appearance.
 | `CertificateAuth`    | both            | Hands a certificate string from `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`) to a caller-supplied validator. **Stock OpenSSH exports none of them**, so unless your wrapper maps one in, the gate announces that it checked nothing -- refusing at `required: true`, forwarding at `required: false`, and saying so either way. |
 | `AuthMethods`        | both            | Declares accepted auth methods and stores the list in Context (`auth.methods`, readable with `AuthMethods::fromContext()`). The `SSH_AUTH_METHODS` line on STDOUT is **opt-in** (`announce: true`) and off by default -- under `ForceCommand` stdout is the client's data channel, so that line is text in the user's terminal, not a protocol field. |
 | `KeyboardInteractive`| both            | Prompts on STDOUT, answers read from STDIN. *Shaped* like RFC 4256, but it is not: no SSH messages exist here. `echo` is a label, not terminal state -- input stays visible (the exchange says so when any prompt asks for silence), each answer is capped at `MAX_RESPONSE_BYTES`, and there is no deadline but the stream you inject and the session Context between prompts. |
-| `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialise on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; `penalize()` exists so a failed credential can drain a bucket faster than connection attempts alone, but **no gate calls it directly** -- wrap the gate in `AuthRateLimitBridge` (or wire it into your own auth path). See `docs/admin/sugar-ssh-server.md`. |
+| `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialise on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; `penalize()` exists so a failed credential can drain a bucket faster than connection attempts alone, but **no gate calls it directly** -- wrap the gate in `AuthRateLimitBridge` (or wire it into your own auth path). The per-IP key is the **direct TCP peer's** address -- the one sshd saw. Behind a bastion, load balancer, or `ProxyJump`, every client beyond that hop shares one bucket, so enable `$userBurst` or throttle at the fronting layer. See `docs/admin/sugar-ssh-server.md`. |
 | `AuthRateLimitBridge`| both            | Composition wrapper: takes any synchronous auth `Middleware` plus the `RateLimit` instance, and charges the session's buckets `penalty` tokens (default 3.0) whenever the wrapped gate refuses (never invokes `$next`). Admits pass through untouched — same `Context`, same `Session`, one call. An async (promise-returning) gate is refused at `handle()` time with a `LogicException`: its verdict does not exist yet, and charging on non-continuation would penalise in-flight auth. |
 | `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a sugar-pty controlled by the supervisor.                          |
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
 | `Subsystem`          | both            | Terminal — parses `subsystem <name>` from `Session::command`, dispatches to a registered `SubsystemHandler`. Non-subsystem requests pass through to `$next`. |
 | `AsyncMiddleware`    | both            | Abstract base for middleware that needs async I/O (LDAP, OAuth, database auth) — return a `PromiseInterface` from `handleAsync()`. The transport waits for the promise to settle before continuing the chain. |
 | `ClosureMiddleware`  | both            | A bare callable as middleware — appended for you by `Server::onSession()` (below). The closure's return value passes through untouched: nothing means sync, a `PromiseInterface` is awaited at the shared settle point, and any stray value dies loudly in the dispatcher (the one enforcement point, unchanged by this door). |
+
+### Rate limiting keys on the direct TCP peer
+
+`RateLimit`'s `ip:<host>` bucket is `Session::$clientHost` — the source
+sshd recorded for this connection: the **direct TCP peer**, not the human
+behind it. A bastion, load balancer, or `ProxyJump` hop collapses many
+operators into one bucket, so one abusive client locks out everyone else
+sharing that path — enable the `$userBurst` username bucket, or move
+throttling to the fronting layer and treat this one as the per-peer
+backstop. The state file and its `.lock` sidecar must also live on a
+**local** filesystem: `flock` on NFS or other weak-locking mounts can be
+silently absent, and then the bucket arithmetic on shared/network storage
+is best-effort (the JSON payload itself stays atomic, so the failure is
+invisible, not loud). See the Rate Limiting and Files-written sections in
+`docs/admin/sugar-ssh-server.md`.
 
 ### Server doors (not middleware)
 
@@ -501,7 +525,7 @@ and who fills each slot changes what you may trust in it.
 | Variable | Who sets it | Read by | Trust |
 | --- | --- | --- | --- |
 | `USER`, `LOGNAME` | sshd, for the target account | `Session::fromEnvironment()` | Good -- sshd writes it for the account it launched; which account to ask for was the client's choice. |
-| `SSH_CONNECTION` | sshd: `client-ip client-port server-ip server-port` | `Session::fromEnvironment()` | Good -- socket-derived, not peer-asserted. |
+| `SSH_CONNECTION` | sshd: `client-ip client-port server-ip server-port` | `Session::fromEnvironment()` | Good -- socket-derived, not peer-asserted. The socket is the direct TCP peer: behind a bastion or `ProxyJump` this is the proxy's address, which is exactly what `RateLimit` keys on (see *Rate limiting keys on the direct TCP peer*). |
 | `SSH_CLIENT` | sshd: `client-ip client-port server-port` (older, 3 fields) | `Session::fromEnvironment()` fallback | Good, but it has no server-IP slot: `fromEnvironment()` counts the fields and leaves `$serverHost` empty rather than storing the port in it. |
 | `SSH_ORIGINAL_COMMAND` | sshd, when `ForceCommand` rewrote `command` `ssh host some command` | `Session::$command`, then your decoder | Good -- but see the [exec policy](#exec-policy-the-program-comes-from-the-peer): the program string is peer-chosen. |
 | `SSH_TTY` | sshd when a PTY was allocated | `Session::$tty` | Good. |

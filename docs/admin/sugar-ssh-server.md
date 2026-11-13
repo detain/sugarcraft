@@ -187,9 +187,9 @@ by sshd `ForceCommand`. Configuration is entirely through the PHP API:
 Server::new()
     ->withTransport(new InProcessTransport())        // or HostSshdTransport
     ->withKeepalive(30)                                // idle NUL into the child's stdin, not an SSH keepalive
-    ->use(new Logger('/var/log/sshd-hub.jsonl'))
+    ->use(new Logger('/var/log/wish.jsonl'))
     ->use(new Auth(users: ['wishuser']))
-    ->use(new RateLimit('/var/lib/sshd-hub/buckets.json', burst: 5, ratePerSec: 0.5))
+    ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
     ->serve();
 ```
@@ -202,6 +202,14 @@ names that account on every connection; per-user separation needs per-user
 `Match` blocks or `authorized_keys` command entries.
 
 ### Authentication methods
+
+None of these gates verifies a credential — by the time your script runs,
+sshd has already accepted it. This library CONSUMES identity; the ceiling is
+sshd's auth policy, and every fingerprint, pairing, and forgery disclosure in
+this guide presupposes sshd credential strength it cannot observe. Keep the
+forced account pubkey-only: set `PasswordAuthentication no` and
+`PermitEmptyPasswords no` in its `Match` block (or the drop-in file), or pin
+`authorized_keys` to keys only.
 
 `sugar-ssh-server` ships the authentication middleware below. They are
 orthogonal — compose them based on what your deployment needs:
@@ -412,6 +420,12 @@ bridge's rule (gate refused => charge) does not describe.
   `flock` on NFS is advisory at best. For high-volume deployments where
   one writer per connect is too coarse, swap in a shared-store limiter
   (e.g. Redis-backed) — the sidecar lock is correct, not fast.
+- **One path pair across this guide:** every example here writes the pair
+  the provisioning step creates (`/var/lib/wish/buckets.json` +
+  `/var/log/wish.jsonl`). Multi-tenant deployments may deliberately give
+  each forced account its own pair — if so, provision every pair the same
+  way (step 1) and point each account's middleware at its own two paths;
+  the backup and rotation notes below cover only the paths you provisioned.
 
 ### Subsystem
 
@@ -445,9 +459,9 @@ stdin/stdout.
 ## Monitoring
 
 - Logger middleware emits a JSONL line on session start (`{ "event": "session.start", "ts": "...", "user": "...", "client_addr": "host:port", "term": "...", "tty": "...", "pty": "COLSxROWS", "command": "..." }`) and session end (same shape plus `{ "event": "session.end", "elapsed_s": N }` — seconds, rounded to 3 dp).
-- Choose the sink deliberately. `Logger::auto()` / `new Logger()` append to `$SSH_SERVER_LOG` when the service exports it; with nothing set they write to stderr, and the forced command's stderr is forwarded to *the client*, so those records print into the user's terminal and the operator keeps nothing. Set `Environment=SSH_SERVER_LOG=/var/log/sshd-hub/sessions.jsonl` in the socket-activated service unit, or pass `Logger::toFile($path)` / `Logger::toStream($handle)` explicitly. Log a `Logger::target()` line at boot so the choice is on the record.
+- Choose the sink deliberately. `Logger::auto()` / `new Logger()` append to `$SSH_SERVER_LOG` when the service exports it; with nothing set they write to stderr, and the forced command's stderr is forwarded to *the client*, so those records print into the user's terminal and the operator keeps nothing. Set `Environment=SSH_SERVER_LOG=/var/log/wish.jsonl` in the socket-activated service unit, or pass `Logger::toFile($path)` / `Logger::toStream($handle)` explicitly. Log a `Logger::target()` line at boot so the choice is on the record.
 - Parse the JSONL with `jq 'select(.event == "session.end") | .elapsed_s'` to graph p95 session durations.
-- Rate-limit state file (your configured `$statePath`, e.g. `/var/lib/sshd-hub/buckets.json`) is human-readable JSON — monitor its size to gauge active-bucket count.
+- Rate-limit state file (your configured `$statePath`, e.g. `/var/lib/wish/buckets.json`) is human-readable JSON — monitor its size to gauge active-bucket count.
 
 ### Protocol metadata for audit logging
 
@@ -510,10 +524,10 @@ trail of denials is a seam you have to write yourself.
 ### Healthcheck
 
 ```bash
-ssh -o BatchMode=yes hubuser@host; echo "status=$?"
+ssh -o BatchMode=yes wishuser@host; echo "status=$?"
 ```
 
-Do **not** write the probe as `ssh hubuser@host echo ok` and read the output.
+Do **not** write the probe as `ssh wishuser@host echo ok` and read the output.
 `ForceCommand` replaces the command line: the `echo ok` never runs, the entry
 script does, and whatever it prints is the entry script's own banner (see
 **The exec contract** under [What the process does](#what-the-process-does)).
@@ -526,8 +540,9 @@ What the exit status actually tells you is worth the column:
 | Status | Meaning |
 |--------|---------|
 | `0` | The chain ran to its terminal. With no middleware that spawns, that means *nothing was served* - see [Exit status](#exit-status). |
+| `1` | PHP's own "Could not open input file": the `ForceCommand` line names an entry script that does not exist. PHP exits `1` for a missing file (measured, PHP 8.3); this is not a fatal in your code - fix the script path (or finish the provisioning step) before reading anything into the answer. |
 | `129` | A gate refused (`Server::EXIT_DENIED`): auth denied, throttle tripped, or the context was already dead. |
-| `255` | PHP fatal before `serve()` returned - a missing file, a bad path, an unprovisioned sink. Check the provisioning step above. |
+| `255` | PHP fatal before `serve()` returned - a parse error, an unprovisioned sink, a bad path inside the entry script. Check the provisioning step above. |
 | other | The child's own exit code, if a child ran. |
 
 A liveness check that must not depend on credentials at all should be a
