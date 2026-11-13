@@ -120,6 +120,9 @@ final class Compiler
      */
     private array $warnings = [];
 
+    /** `Set Framerate <n>` (finding 008): honoured fps for the render path. */
+    private ?float $framerate = null;
+
     /**
      * The content-LOSING subset of warnings (S09 / finding 024): ParseError
      * drops, unencodable Type chars, skipped cycles / depth overruns and
@@ -284,6 +287,7 @@ final class Compiler
         $this->strict = false;
         $this->warnings = [];
         $this->droppedDiagnostics = [];
+        $this->framerate = null;
         $this->pendingAlt = false;
         $this->pendingShift = false;
     }
@@ -411,9 +415,60 @@ final class Compiler
             // program's real output is captured into the frames. Absence keeps the
             // byte-identical echo path. Mirrors charmbracelet/vhs `Set Shell`.
             'Shell' => $this->shell = trim($node->value, '"\' '),
-            // Padding and Margin are accepted but not enforced (documented no-ops)
+            // The one output-cadence knob upstream exposes: honoured through
+            // TapeToGif's fps resolution (CLI --fps still wins). Finding 008.
+            'Framerate' => $this->framerate = $this->parseFramerate($node->value),
+            // Accepted but not enforced by this renderer: named on every
+            // compile (finding 008's never-silence law), never a ParseError —
+            // these are upstream-legal directives, their EFFECT is the delta.
+            'Padding', 'Margin', 'LetterSpacing', 'LineHeight', 'LoopOffset', 'MarginFill',
+            'CursorBlink', 'BorderRadius', 'WindowBar', 'WindowBarSize', 'WaitPattern', 'WaitTimeout'
+                => $this->recordAcceptedNotEnforced($node->key, $node->value),
             default => null,
         };
+    }
+
+    /**
+     * Loud, non-fatal honesty for settings the renderer parses but does not
+     * act on: it rides warnings() directly because strict mode must NOT abort
+     * on a legal upstream directive (contrast reportCompileProblem, which
+     * throws there) and it stays out of droppedDiagnostics() because no tape
+     * content was lost — only an effect not carried.
+     */
+    private function recordAcceptedNotEnforced(string $key, string $value): void
+    {
+        $where = $this->currentSourcePath !== '' ? ' in ' . $this->currentSourcePath : '';
+        $this->warnings[] = "Set {$key} '{$value}' is accepted, not enforced by this renderer{$where}";
+    }
+
+    /**
+     * `Set Framerate <n>` — must be a positive finite number (same numeric
+     * door as the sibling speed knobs); garbage names itself and keeps the
+     * documented default.
+     */
+    private function parseFramerate(string $value): ?float
+    {
+        $trimmed = trim($value, "\"' \t");
+        if (is_numeric($trimmed)) {
+            $fps = (float) $trimmed;
+            if (is_finite($fps) && $fps > 0.0) {
+                return $fps;
+            }
+            $this->reportCompileProblem("Unparseable Framerate value '{$value}' — using the render default");
+            return null;
+        }
+        $this->reportCompileProblem("Unparseable Framerate value '{$value}' — using the render default");
+        return null;
+    }
+
+    /**
+     * The tape's `Set Framerate` if it carried one (finding 008's honoured
+     * key), null when the tape stayed silent so the caller's own default
+     * keeps its seat.
+     */
+    public function framerate(): ?float
+    {
+        return $this->framerate;
     }
 
     private function parseTypingSpeed(string $value): float

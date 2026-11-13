@@ -79,9 +79,26 @@ final class TapeToGif
      *   $outputPath is null the tape's own confined `Output <path>` directive
      *   is honored, falling back to the tape name with a `.gif` extension.
      */
+    /**
+     * The single fps precedence ladder (finding 008): explicit caller/CLI
+     * value → tape `Set Framerate` → the 30.0 house default. Public so the
+     * door is testable without rendering pixels, and any second render path
+     * that appears later can reuse the ladder instead of re-forking it.
+     */
+    public static function resolveFps(?float $cliFps, ?float $tapeFramerate): float
+    {
+        if ($cliFps !== null) {
+            return $cliFps;
+        }
+        if ($tapeFramerate !== null && is_finite($tapeFramerate) && $tapeFramerate > 0.0) {
+            return $tapeFramerate;
+        }
+
+        return 30.0;
+    }
+
     public function render(string $tapePath, ?string $outputPath = null, array $options = []): string
     {
-        $fps = (float) ($options['fps'] ?? 30.0);
         $cliTheme = $options['theme'] ?? null;
 
         // Size law (finding 032): refuse by name BEFORE slurping — a stat is
@@ -107,6 +124,15 @@ final class TapeToGif
         $ast = $this->parser->parse($tokens);
         $strict = (bool) ($options['strict'] ?? false);
         $cassette = $this->compiler->compile($ast, $tapePath, $strict);
+
+        // fps precedence (finding 008): an explicit --fps always wins; next
+        // the tape's `Set Framerate`; the 30.0 seat is the last word. The
+        // compile has run, so the compiler's framerate knob is live.
+        $optionsFps = $options['fps'] ?? null;
+        $fps = self::resolveFps(
+            is_numeric($optionsFps) ? (float) $optionsFps : null,
+            $this->compiler->framerate(),
+        );
 
         // Prefer font settings from the cassette header (Set FontSize/FontFamily
         // directives in the tape) over CLI defaults. The default matches the

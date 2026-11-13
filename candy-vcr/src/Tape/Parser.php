@@ -34,6 +34,14 @@ use SugarCraft\Vcr\Tape\Ast\WaitDirective;
  */
 final readonly class Parser
 {
+    /**
+     * The upstream-legal `Set` sub-keywords — exactly the 21 in the measured
+     * contract roster (candy-code/tests/VhsTapeContractTest.php KEYWORDS,
+     * transcribed as fixture data per the S05 law against cross-target edits).
+     * Pinned so a silent narrowing can never recur (finding 008); the keys
+     * the renderer does not act on warn "accepted, not enforced" at compile
+     * time (S09's warnings channel is the route).
+     */
     private const SET_KEYS = [
         'Theme' => true,
         'FontSize' => true,
@@ -45,6 +53,17 @@ final readonly class Parser
         'Margin' => true,
         'PlaybackSpeed' => true,
         'Shell' => true,
+        'Framerate' => true,
+        'LetterSpacing' => true,
+        'LineHeight' => true,
+        'LoopOffset' => true,
+        'MarginFill' => true,
+        'CursorBlink' => true,
+        'BorderRadius' => true,
+        'WindowBar' => true,
+        'WindowBarSize' => true,
+        'WaitPattern' => true,
+        'WaitTimeout' => true,
     ];
 
     /**
