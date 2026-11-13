@@ -375,6 +375,44 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('red', $stdout);
     }
 
+    public function testMissingAutoloadRefusesByNameInsteadOfFatalling(): void
+    {
+        // Finding 042's acceptance: a standalone copy of the bin with no
+        // vendor/ in any candidate root must exit 1 with the named refusal —
+        // not the later "Class ... not found" fatal that blames the wrong
+        // layer. Deep temp dirs keep the filesystem candidates honest.
+        $root = sys_get_temp_dir() . '/aip31-' . bin2hex(random_bytes(6));
+        mkdir($root . '/bin', 0o777, true);
+        $copy = $root . '/bin/candy-ansi-inspect';
+        copy(self::bin(), $copy);
+        chmod($copy, 0o755);
+
+        try {
+            $proc = proc_open(
+                escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($copy),
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                null,
+                ['PATH' => '/usr/bin:/bin'],
+            );
+            self::assertIsResource($proc);
+            fclose($pipes[0]);
+            $stdout = (string) stream_get_contents($pipes[1]);
+            $stderr = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $code = proc_close($proc);
+
+            $this->assertSame(1, $code, $stderr);
+            $this->assertStringContainsString('cannot find composer autoload.php', $stderr);
+            $this->assertSame('', $stdout);
+        } finally {
+            unlink($copy);
+            rmdir($root . '/bin');
+            rmdir($root);
+        }
+    }
+
     public function testNoSourceWithATtyStdinIsUsageMisuseNotAStdinWait(): void
     {
         // The "no source named" arm (no operand, STDIN is a terminal) is the

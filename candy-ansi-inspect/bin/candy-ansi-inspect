@@ -8,17 +8,60 @@ use SugarCraft\AnsiInspect\Inspector;
 use SugarCraft\AnsiInspect\Lang;
 use SugarCraft\AnsiInspect\StreamingInspector;
 
-$autoloadCandidates = [
-    __DIR__ . '/../vendor/autoload.php',     // dev: standalone
-    __DIR__ . '/../../../autoload.php',      // installed under vendor/bin
-    __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
-];
-foreach ($autoloadCandidates as $autoload) {
-    if (file_exists($autoload)) {
-        require $autoload;
-        break;
+// Autoload guard (house shape ported from candy-kv's bin). Three filesystem
+// roots for source installs, and — per finding 042 — a NAMED refusal instead
+// of a silent fall-through: without vendor/ every later class reference dies
+// as an "Class not found" fatal *after* the locale machinery, which blames
+// the wrong layer.
+(static function () {
+    // Phar awareness (archive root law, measured on PHP 8.3.6): when
+    // `php candy-ansi-inspect.phar` runs, THIS file is the archive's stub and
+    // the process is NOT inside the archive — Phar::running() answers ''
+    // there, and a bare '/x.phar/entry' path fails is_file()/require for every
+    // caller. Three identities cover the three phar shapes: the stub names
+    // itself in __FILE__, a require-from-inside names the archive in
+    // Phar::running(), and a RENAMED download hands PHP an ordinary script
+    // whose bytes seal an archive, invisible to both doors above because
+    // PHP's phar:// layer is extension-gated. Phar::mapPhar() is the oracle
+    // for that third shape: it loads the archive sealed inside the running
+    // script under the build's alias (tools/build-phar.php pairs with the
+    // literal below) and throws PharException on every UNSEALED script — a
+    // composer checkout's own bin included — so no pre-gate is needed. When
+    // an archive identity exists, the archive's own vendor is the ONLY root:
+    // a stray vendor beside (or above) a downloaded phar must never boot the
+    // app with code from outside the frozen archive, renamed or not.
+    $candidates = [
+        __DIR__ . '/../vendor/autoload.php',     // dev: standalone
+        __DIR__ . '/../../../autoload.php',      // installed under vendor/bin
+        __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
+    ];
+    $running = \Phar::running(false);
+    $archive = $running !== ''
+        ? 'phar://' . $running
+        : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    if ($archive === '') {
+        try {
+            \Phar::mapPhar('candy-ansi-inspect.phar');
+            $archive = 'phar://candy-ansi-inspect.phar';
+        } catch (\PharException) {
+            // Not a sealed script — the filesystem candidates above stand.
+        }
     }
-}
+    if ($archive !== '') {
+        $candidates = [$archive . '/vendor/autoload.php'];
+    }
+    foreach ($candidates as $path) {
+        // TOCTOU note (finding 042): is_file-then-require races by design;
+        // no @ suppression — if the path dies between check and load, the
+        // require warning is the honest forensic, not a swallowed failure.
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-ansi-inspect: cannot find composer autoload.php\n");
+    exit(1);
+})();
 
 // Locale selection from $LC_ALL / $LC_MESSAGES / $LANG (the order
 // T::detect() actually walks): seventeen catalogues ship and both
