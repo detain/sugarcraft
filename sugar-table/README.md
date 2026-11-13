@@ -1100,7 +1100,7 @@ forgotten `return` is announced at the first frame, never silently inherited.
 
 | Code | Effect | Code | Effect |
 |------|--------|------|--------|
-| `0`  | reset (no-op today: the parsed style starts clean anyway; mid-string `0` becomes honoured by the ST-51 fix) | `53` | overline |
+| `0`  | reset — clears everything accumulated before it in the string (a leading `0` is a no-op on the fresh state) | `53` | overline |
 | `1`  | bold | `30`–`37` | foreground: black, red, green, yellow, blue, magenta, cyan, white |
 | `2`  | faint | `40`–`47` | background: same eight |
 | `3`  | italic | `90`–`97` | foreground: bright black … bright white |

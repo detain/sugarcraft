@@ -2941,7 +2941,14 @@ final class Table
 
             switch ($code) {
                 case 0:
-                    // Reset - ignore, Style::new() is already empty
+                    // Reset honours its position (audit ST-51, finding
+                    // 062): the accumulator clears, so '1;0;31' reads red
+                    // only — terminal semantics. Leading 0 keeps its
+                    // effective no-op: the fresh accumulator is already
+                    // empty.
+                    $fg    = null;
+                    $bg    = null;
+                    $attrs = 0;
                     break;
                 case 1:
                     $attrs |= Style::ATTR_BOLD;

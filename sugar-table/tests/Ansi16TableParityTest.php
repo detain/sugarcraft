@@ -187,4 +187,37 @@ final class Ansi16TableParityTest extends TestCase
         $bg = $this->parse->invoke($this->table, '48;5;-1')->bg();
         self::assertSame(0x000000, $bg, '48;5;-1 must keep the pre-canon black default');
     }
+
+    /**
+     * ST-51 (finding 062): a mid-string SGR 0 clears the parse accumulator
+     * at its position — terminal semantics — while a leading 0 stays an
+     * effective no-op on the fresh (empty) accumulator.
+     */
+    public function testMidStringResetClearsEarlierAttributes(): void
+    {
+        $emit = new \ReflectionMethod(Table::class, 'styleToAnsi');
+
+        // Bold then reset then red: only red survives.
+        $this->assertSame(
+            '38;2;205;0;0',
+            $emit->invoke($this->table, $this->parse->invoke($this->table, '1;0;31'))
+        );
+
+        // Reset then bold: the reset no-ops, bold rides on.
+        $this->assertSame(
+            '1',
+            $emit->invoke($this->table, $this->parse->invoke($this->table, '0;1'))
+        );
+
+        // A trailing reset clears what came before it: bold-then-reset
+        // leaves the string end unstyled, exactly like '31;0'.
+        $this->assertSame(
+            '',
+            $emit->invoke($this->table, $this->parse->invoke($this->table, '1;0'))
+        );
+        $this->assertSame(
+            '',
+            $emit->invoke($this->table, $this->parse->invoke($this->table, '31;0'))
+        );
+    }
 }
