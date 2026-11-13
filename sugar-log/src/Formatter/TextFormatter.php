@@ -19,7 +19,8 @@ use SugarCraft\Style\Style;
  */
 final class TextFormatter implements Formatter
 {
-    private const DEFAULT_TIME_FORMAT = 'Y/m/d H:i:s';
+    /** Owner of the default time format; Logger::DEFAULT_FORMAT aliases this. */
+    public const DEFAULT_TIME_FORMAT = 'Y/m/d H:i:s';
 
     private bool $reportTimestamp;
     private ?string $timeFormat;

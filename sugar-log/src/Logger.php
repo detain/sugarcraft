@@ -36,7 +36,8 @@ use SugarCraft\Style\Style;
  */
 final class Logger
 {
-    public const DEFAULT_FORMAT = 'Y/m/d H:i:s';
+    /** Alias of the formatter-owned default ([SL-33] one literal, one owner). */
+    public const DEFAULT_FORMAT = TextFormatter::DEFAULT_TIME_FORMAT;
 
     private Formatter $formatter;
     private Level $minLevel;
@@ -142,20 +143,16 @@ final class Logger
     // Factory
     // -------------------------------------------------------------------------
 
-    /** Create a new logger with options object. */
-    public static function new(
-        ?Formatter $formatter = null,
-        ?Level $level = null,
-        ?string $prefix = null,
-        bool $reportTimestamp = true,
-        ?string $timeFormat = null,
-        bool $reportCaller = false,
-        mixed $stream = null,
-        ?PartsOrder $partsOrder = null,
-        mixed $errorStream = null,
-        ?Level $errorStreamAt = null,
-    ): self {
-        return new self($formatter, $level, $prefix, $reportTimestamp, $timeFormat, $reportCaller, $stream, $partsOrder, $errorStream, $errorStreamAt);
+    /**
+     * Named-argument constructor — charm's option funcs rendered with PHP's
+     * named args: `Logger::new(prefix: 'svc', level: Level::Warn)`.
+     *
+     * Forwards every argument to {@see __construct()} unchanged (the list IS
+     * the constructor's; a hand-copied twin can silently drift out of it).
+     */
+    public static function new(mixed ...$args): self
+    {
+        return new self(...$args);
     }
 
     // -------------------------------------------------------------------------

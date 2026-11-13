@@ -52,6 +52,47 @@ final class LoggerTest extends TestCase
         );
     }
 
+    public function testNewIsTheConstructorForwarderNotACopiedTwin(): void
+    {
+        // [SL-33] Structural dedupe pin: new() takes everything as one
+        // variadic spread — no hand-copied ten-parameter list that can
+        // silently reorder against the constructor.
+        $params = (new \ReflectionMethod(Logger::class, 'new'))->getParameters();
+        $this->assertCount(1, $params);
+        $this->assertTrue($params[0]->isVariadic(), 'new() must spread-forward');
+
+        // Behaviour: identical named arguments through both doors produce
+        // byte-identical records.
+        $viaNew = \fopen('php://memory', 'r+');
+        $viaCtor = \fopen('php://memory', 'r+');
+        Logger::new(level: Level::Debug, prefix: 'svc', reportTimestamp: false, stream: $viaNew)->debug('same');
+        (new Logger(level: Level::Debug, prefix: 'svc', reportTimestamp: false, stream: $viaCtor))->debug('same');
+        \rewind($viaNew);
+        \rewind($viaCtor);
+        $newBytes = \stream_get_contents($viaNew);
+        $ctorBytes = \stream_get_contents($viaCtor);
+        \fclose($viaNew);
+        \fclose($viaCtor);
+        $this->assertSame($ctorBytes, $newBytes);
+        $this->assertStringContainsString('DBG svc same', $newBytes);
+
+        // Fail-fast survives the spread: an unknown named argument still
+        // meets the constructor's real signature.
+        try {
+            Logger::new(nope: 1, stream: \fopen('php://memory', 'r+'));
+            $this->fail('unknown named parameter must throw');
+        } catch (\Error $e) {
+            $this->assertStringContainsString('nope', $e->getMessage());
+        }
+
+        // One time-format literal, one owner: Logger aliases TextFormatter.
+        $this->assertSame('Y/m/d H:i:s', Logger::DEFAULT_FORMAT);
+        $this->assertSame(
+            \constant(TextFormatter::class . '::DEFAULT_TIME_FORMAT'),
+            Logger::DEFAULT_FORMAT
+        );
+    }
+
     public function testInfoEmitsMessage(): void
     {
         $log = $this->logger();
