@@ -217,6 +217,19 @@ final class LangCoverageTest extends TestCase
             }
         }
 
+        // dp-15: the header template is part of the key set, and its
+        // placeholder tokens are protected — a locale may reorder them,
+        // never drop them (a silent template loss would render "{year}").
+        if (!isset($t['header']) || !is_string($t['header'])) {
+            $errors[] = 'missing string key header';
+        } else {
+            foreach (['{month}', '{year}'] as $token) {
+                if (!str_contains($t['header'], $token)) {
+                    $errors[] = "header template '{$t['header']}' must keep the protected token {$token}";
+                }
+            }
+        }
+
         // Positional Sunday-first shape: day.0..day.6 must be the leading
         // key block in index order (the renderer maps dow index straight to
         // column index — reordering keys would silently mislabel columns).

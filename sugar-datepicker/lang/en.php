@@ -47,4 +47,9 @@ return [
     'month.10' => 'October',
     'month.11' => 'November',
     'month.12' => 'December',
+
+    // Month-grid header template (dp-15): {month} and {year} are PROTECTED
+    // placeholder tokens — a locale may reorder them ('{year}年{month}月'-style)
+    // but never drop or rename them; the validator enforces both tokens.
+    'header' => '{month} {year}',
 ];

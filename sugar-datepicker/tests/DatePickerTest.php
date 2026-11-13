@@ -979,4 +979,36 @@ final class DatePickerTest extends TestCase
 
         $this->assertStringContainsString('datepicker: unknown key entr', $log);
     }
+
+    // ------------------------------------------------------------------
+    // dp-15: header template key
+    // ------------------------------------------------------------------
+
+    public function testEnglishHeaderBytesUnchangedByTemplate(): void
+    {
+        // en value '{month} {year}' must render byte-identically to the
+        // pre-template composition (zero golden moves across the suite).
+        $header = \SugarCraft\Core\Util\Ansi::strip(
+            \explode("\n", DatePicker::new(new \DateTimeImmutable('2026-05-01'))->view(21))[0]
+        );
+        $this->assertStringStartsWith('May 2026', $header);
+    }
+
+    public function testYearFirstLocaleReordersHeaderWithoutCodeChange(): void
+    {
+        $prevLocale = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::overrideNamespace('datepicker', __DIR__ . '/fixtures/lang');
+        \SugarCraft\Core\I18n\T::setLocale('reorder');
+
+        try {
+            $header = \SugarCraft\Core\Util\Ansi::strip(
+                \explode("\n", DatePicker::new(new \DateTimeImmutable('2026-05-01'))->view(21))[0]
+            );
+            $this->assertStringStartsWith('2026-May', \rtrim($header),
+                'the {year}-{month} fixture template must drive render order');
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($prevLocale);
+            \SugarCraft\Core\I18n\T::overrideNamespace('datepicker', __DIR__ . '/../lang');
+        }
+    }
 }

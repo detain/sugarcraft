@@ -814,11 +814,16 @@ final class DatePicker
 
         $buffer = Buffer::new($totalWidth, $height);
 
-        // Row 0: header "May 2026" (left-aligned). Budget = the calendar
+        // Row 0: header via the locale template (dp-15) so year-first locales
+        // can reorder without patching code; en renders "May 2026" exactly as
+        // the pre-template byte string. Budget = the calendar
         // area (total width minus the week column); at the natural 21 floor
         // that leaves "September 2026" room, and a fatter locale clips on
         // width instead of bleeding over the day-name row's columns.
-        $headerText = self::monthName($this->viewMonth) . ' ' . $this->viewYear;
+        $headerText = Lang::t('header', [
+            'month' => self::monthName($this->viewMonth),
+            'year'  => (string) $this->viewYear,
+        ]);
         $headerText = Width::truncate($headerText, $totalWidth - $weekColWidth);
         $buffer = $this->placeStringAt($buffer, $weekColWidth, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
 
