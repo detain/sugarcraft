@@ -107,4 +107,9 @@ return [
     'cli.username_invalid' => '无效用户名：\'{username}\'（仅限字母、数字、点、下划线、连字符；不能全为点）',
     'cli.user_exists' => '用户 \'{username}\' 已存在于 {path}',
     'cli.user_not_found' => '{path} 中没有用户 \'{username}\' — 请先运行 \'candy-git-server user add {username}\'。',
+    'cli.init_admin_created' => '管理员账户 \'{username}\' 已创建。',
+    'cli.init_admin_exists' => 'init：{path} 中已存在管理员账户，不再添加（--force 将替换 \'{username}\'）',
+    'cli.init_admin_needs_name' => 'init：--admin 需要账户名',
+    'cli.init_key_invalid' => 'init：{file} 中的 SSH 密钥无效：{why}',
+    'cli.serve_no_admin_hint' => '提示：{path} 中没有管理员账户；请用 \'candy-git-server init {path} --admin <名称> --admin-password-stdin\' 创建第一个',
 ];

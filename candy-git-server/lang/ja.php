@@ -107,4 +107,9 @@ return [
     'cli.username_invalid' => '無効なユーザー名: \'{username}\' (使用可能: 英数字、ドット、アンダースコア、ハイフン。ドットのみは不可)',
     'cli.user_exists' => 'ユーザー \'{username}\' は {path} に既に存在します',
     'cli.user_not_found' => 'ユーザー \'{username}\' は {path} に見つかりません — まず \'candy-git-server user add {username}\' を実行してください。',
+    'cli.init_admin_created' => '管理者アカウント \'{username}\' を作成しました。',
+    'cli.init_admin_exists' => 'init: {path} には管理者アカウントがすでに存在します。追加しません（--force で \'{username}\' を置き換え）',
+    'cli.init_admin_needs_name' => 'init: --admin にはアカウント名が必要です',
+    'cli.init_key_invalid' => 'init: {file} の SSH 鍵が無効です: {why}',
+    'cli.serve_no_admin_hint' => '注意: {path} に管理者アカウントがありません。最初の1件を \'candy-git-server init {path} --admin <名前> --admin-password-stdin\' で作成してください',
 ];

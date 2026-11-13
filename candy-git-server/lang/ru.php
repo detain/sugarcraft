@@ -107,4 +107,9 @@ return [
     'cli.username_invalid' => 'Недопустимое имя пользователя: \'{username}\' (буквы, цифры, точка, подчёркивание, дефис; не только точки)',
     'cli.user_exists' => 'Пользователь \'{username}\' уже существует в {path}',
     'cli.user_not_found' => 'Пользователь \'{username}\' не найден в {path} — сначала выполните \'candy-git-server user add {username}\'.',
+    'cli.init_admin_created' => 'Учётная запись администратора \'{username}\' создана.',
+    'cli.init_admin_exists' => 'init: учётная запись администратора уже существует в {path}; другая не добавляется (--force заменяет \'{username}\')',
+    'cli.init_admin_needs_name' => 'init: для --admin требуется имя учётной записи',
+    'cli.init_key_invalid' => 'init: недопустимый SSH-ключ в {file}: {why}',
+    'cli.serve_no_admin_hint' => 'примечание: в {path} нет учётной записи администратора; создайте первую командой \'candy-git-server init {path} --admin <имя> --admin-password-stdin\'',
 ];

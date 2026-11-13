@@ -116,4 +116,9 @@ Resaltado:   {highlight}
     'cli.username_invalid' => 'Nombre de usuario no valido: \'{username}\' (letras, digitos, punto, guion bajo, guion; no solo puntos)',
     'cli.user_exists' => 'El usuario \'{username}\' ya existe en {path}',
     'cli.user_not_found' => 'No existe el usuario \'{username}\' en {path} — ejecute primero \'candy-git-server user add {username}\'.',
+    'cli.init_admin_created' => 'Cuenta de administrador \'{username}\' creada.',
+    'cli.init_admin_exists' => 'init: ya existe una cuenta de administrador en {path}; no se añade otra (--force reemplaza \'{username}\')',
+    'cli.init_admin_needs_name' => 'init: --admin requiere un nombre de cuenta',
+    'cli.init_key_invalid' => 'init: clave SSH no válida en {file}: {why}',
+    'cli.serve_no_admin_hint' => 'nota: no existe ninguna cuenta de administrador en {path}; cree la primera con \'candy-git-server init {path} --admin <nombre> --admin-password-stdin\'',
 ];

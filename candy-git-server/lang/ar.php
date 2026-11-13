@@ -107,4 +107,9 @@ return [
     'cli.username_invalid' => 'اسم مستخدم غير صالح: \'{username}\' (حروف وأرقام ونقطة وشرطة سفلية وشرطة؛ ليس نقاطًا فقط)',
     'cli.user_exists' => 'المستخدم \'{username}\' موجود بالفعل في {path}',
     'cli.user_not_found' => 'لا يوجد مستخدم \'{username}\' في {path} — شغّل أولاً \'candy-git-server user add {username}\'.',
+    'cli.init_admin_created' => 'تم إنشاء حساب المسؤول \'{username}\'.',
+    'cli.init_admin_exists' => 'init: يوجد حساب مسؤول بالفعل في {path}؛ لن تتم إضافة آخر (--force يستبدل \'{username}\')',
+    'cli.init_admin_needs_name' => 'init: الخيار --admin يتطلب اسم حساب',
+    'cli.init_key_invalid' => 'init: مفتاح SSH غير صالح في {file}: {why}',
+    'cli.serve_no_admin_hint' => 'ملاحظة: لا يوجد حساب مسؤول في {path}؛ أنشئ الأول بالأمر \'candy-git-server init {path} --admin <name> --admin-password-stdin\'',
 ];

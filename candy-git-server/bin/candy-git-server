@@ -310,6 +310,20 @@ function cmdServeHttp(array $args): int
         return 1;
     }
 
+    // S21: a store with no active admin cannot create repos over the wire;
+    // say so once, point at the bootstrap door. A hint, never a refusal —
+    // least-privilege `user add` still works against a live store.
+    $hasAdmin = false;
+    foreach ($storedUsers as $stored) {
+        if ($stored->isAdmin && $stored->isActive) {
+            $hasAdmin = true;
+            break;
+        }
+    }
+    if (!$hasAdmin) {
+        \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.serve_no_admin_hint', ['path' => $config->dataPath]) . "\n");
+    }
+
     // 107 boot sweep: temps minted by a SIGKILLed earlier run (user-store
     // exchanges, LFS object writes, init config) must not fossilise in
     // the plane — cleanup was in-process only. Age-gated (an in-flight
@@ -440,11 +454,58 @@ function cmdServeHttp(array $args): int
 
 function cmdInit(array $args): int
 {
-    $dataPath = bin_data_path($args[0] ?? null);
+    // S21 first-admin bootstrap: `init <data-path> --admin <name>
+    // [--admin-password-stdin | --key-file F] [--force]`, or the
+    // CANDY_GIT_SERVER_BOOTSTRAP_ADMIN env (honoured by init only, so a
+    // stray env on `serve` can never mint an account). The secret never
+    // rides argv: the password comes from STDIN, the key from a file.
+    $adminName     = null;
+    $passwordStdin = false;
+    $keyFile       = null;
+    $force         = false;
+    $positional    = [];
+    for ($i = 0; $i < \count($args); $i++) {
+        switch ($args[$i]) {
+            case '--admin':
+                $adminName = $args[$i + 1] ?? '';
+                if ($adminName === '' || \str_starts_with($adminName, '--')) {
+                    return error(Lang::t('cli.init_admin_needs_name') . "\n");
+                }
+                $i++;
+                break;
+            case '--admin-password-stdin':
+                $passwordStdin = true;
+                break;
+            case '--key-file':
+                $keyFile = $args[$i + 1] ?? '';
+                if ($keyFile === '') {
+                    return error(Lang::t('cli.option_needs_value', ['option' => '--key-file']) . "\n");
+                }
+                $i++;
+                break;
+            case '--force':
+                $force = true;
+                break;
+            default:
+                $positional[] = $args[$i];
+        }
+    }
+    if ($adminName === null) {
+        $envAdmin = \getenv('CANDY_GIT_SERVER_BOOTSTRAP_ADMIN');
+        if (\is_string($envAdmin) && $envAdmin !== '') {
+            $adminName = $envAdmin;
+        }
+    }
+    if ($adminName !== null && !bin_valid_account_name($adminName)) {
+        return error(Lang::t('cli.username_invalid', ['username' => $adminName]) . "\n");
+    }
+
+    $dataPath = bin_data_path($positional[0] ?? null);
 
     if (\is_dir($dataPath) && \is_file($dataPath . '/config.yaml')) {
         echo Lang::t('cli.already_initialized', ['path' => $dataPath]) . "\n";
-        return 0;
+        // An already-initialized tree can still get its first admin.
+        return $adminName === null ? 0 : bin_bootstrap_admin($dataPath, $adminName, $passwordStdin, $keyFile, $force);
     }
 
     // 038: refuse an existing tree another uid created before we layer
@@ -512,10 +573,74 @@ YAML;
     }
 
     echo Lang::t('cli.done') . "\n";
+    if ($adminName !== null) {
+        $rc = bin_bootstrap_admin($dataPath, $adminName, $passwordStdin, $keyFile, $force);
+        if ($rc !== 0) {
+            return $rc;
+        }
+    }
     echo Lang::t('cli.next_steps') . "\n";
     echo Lang::t('cli.next_step_1', ['path' => $dataPath]) . "\n";
     echo Lang::t('cli.next_step_2', ['path' => $dataPath]) . "\n";
     echo Lang::t('cli.next_step_3', ['path' => $dataPath]) . "\n";
+
+    return 0;
+}
+
+/**
+ * Create the first admin inside one UserStore transaction (the same lock
+ * `user add` takes, so a racing bootstrap cannot mint two). Refuses when an
+ * admin already exists unless --force, which replaces the named account.
+ */
+function bin_bootstrap_admin(string $dataPath, string $name, bool $passwordStdin, ?string $keyFile, bool $force): int
+{
+    $password = null;
+    if ($passwordStdin) {
+        $raw = \stream_get_contents(\STDIN);
+        $password = $raw === false ? '' : \rtrim($raw, "\r\n");
+        if ($password === '') {
+            return error(Lang::t('cli.password_flag_empty') . "\n");
+        }
+    }
+    $user = User::new($name)->withAdmin(true);
+    if ($password !== null) {
+        $user = $user->withPasswordHash(\password_hash($password, \PASSWORD_DEFAULT));
+    }
+    if ($keyFile !== null) {
+        $keyText = @\file_get_contents($keyFile);
+        if ($keyText === false) {
+            return error(Lang::t('cli.user_key_read_failed', ['file' => $keyFile]) . "\n");
+        }
+        try {
+            $user = $user->addAuthorizedKey($keyText);
+        } catch (\InvalidArgumentException $e) {
+            return error(Lang::t('cli.init_key_invalid', ['file' => $keyFile, 'why' => $e->getMessage()]) . "\n");
+        }
+    }
+
+    try {
+        $store   = UserStore::forDataPath($dataPath);
+        $blocked = $store->transaction(static function (UserStore $store) use ($user, $force): bool {
+            foreach ($store->all() as $existing) {
+                if ($existing->isAdmin && !$force) {
+                    return true;
+                }
+            }
+            $store->put($user);
+
+            return false;
+        });
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
+    if ($blocked) {
+        return error(Lang::t('cli.init_admin_exists', ['path' => $store->path(), 'username' => $name]) . "\n");
+    }
+
+    echo Lang::t('cli.init_admin_created', ['username' => $name]) . "\n";
+    if ($password === null && $keyFile === null) {
+        \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.user_add_no_password', ['username' => $name]) . "\n");
+    }
 
     return 0;
 }

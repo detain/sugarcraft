@@ -107,4 +107,9 @@ return [
     'cli.username_invalid' => '잘못된 사용자 이름: \'{username}\' (문자, 숫자, 점, 밑줄, 하이픈만 가능; 점만은 불가)',
     'cli.user_exists' => '사용자 \'{username}\'이(가) {path}에 이미 있습니다',
     'cli.user_not_found' => '{path}에 사용자 \'{username}\'이(가) 없습니다 — 먼저 \'candy-git-server user add {username}\'를 실행하세요.',
+    'cli.init_admin_created' => '관리자 계정 \'{username}\'을(를) 만들었습니다.',
+    'cli.init_admin_exists' => 'init: {path}에 관리자 계정이 이미 있어 추가하지 않습니다 (--force는 \'{username}\'을(를) 교체)',
+    'cli.init_admin_needs_name' => 'init: --admin에는 계정 이름이 필요합니다',
+    'cli.init_key_invalid' => 'init: {file}의 SSH 키가 올바르지 않습니다: {why}',
+    'cli.serve_no_admin_hint' => '참고: {path}에 관리자 계정이 없습니다. \'candy-git-server init {path} --admin <이름> --admin-password-stdin\'으로 첫 계정을 만드세요',
 ];

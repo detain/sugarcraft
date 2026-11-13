@@ -34,7 +34,7 @@ return [
     'cli.initializing'         => 'Initializing CandyGitServer data directory: {path}',
     'cli.done'                 => 'Done.',
     'cli.next_steps'           => 'Next steps:',
-    'cli.next_step_1' => '  1. Create an account: candy-git-server user add <name> {path} --password - (the value-less form reads STDIN - keep secrets off argv)',
+    'cli.next_step_1' => '  1. Create the first admin: candy-git-server init {path} --admin <name> --admin-password-stdin (or later accounts: candy-git-server user add <name> {path} --password - - the value-less form reads STDIN, keep secrets off argv)',
 
     'cli.next_step_2'          => '  2. Create a repository: candy-git-server repo create <name> {path} (add --public to publish it for anonymous read)',
 
@@ -116,4 +116,9 @@ Last mirror attempt: {mirror_last_try}',
     'cli.username_invalid' => 'Invalid username: \'{username}\' (letters, digits, dot, underscore, hyphen; not all dots)',
     'cli.user_exists' => 'User \'{username}\' already exists in {path}',
     'cli.user_not_found' => 'No such user \'{username}\' in {path} — run \'candy-git-server user add {username}\' first.',
+    'cli.init_admin_created' => 'Admin account \'{username}\' created.',
+    'cli.init_admin_exists' => 'init: an admin account already exists in {path}; not adding another (--force replaces \'{username}\')',
+    'cli.init_admin_needs_name' => 'init: --admin requires an account name',
+    'cli.init_key_invalid' => 'init: invalid SSH key in {file}: {why}',
+    'cli.serve_no_admin_hint' => 'note: no admin account exists in {path}; create the first one with \'candy-git-server init {path} --admin <name> --admin-password-stdin\'',
 ];
