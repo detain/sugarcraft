@@ -180,7 +180,7 @@ final class AsyncOps
      * WORK take" — a hung I/O whose socket never errors (a silently dropped
      * route produces no socket error in react/mysql/PgAsync terms) would
      * otherwise keep a pending promise and its consumer's in-flight gate alive
-     * forever. When the deadline fires, the inner is cancel()ed and the
+     * forever. When the deadline fires, the inner is cancelled and the
      * optional $onTimeout hook gets one shot at the server-side abort the
      * driver's own cancellation cannot perform; a late driver result is
      * dropped, never resurrected.
@@ -322,7 +322,7 @@ final class AsyncOps
      * once so the producer can abort the underlying work (MySQL KILL QUERY,
      * closing a socket); hook errors are swallowed because cancellation must
      * never fail the caller a second time. The inner promise is also
-     * cancel()ed, so producers that support promise cancellation clean up
+     * cancelled, so producers that support promise cancellation clean up
      * themselves, and cancelling the RETURNED promise behaves exactly like
      * cancelling through the token.
      *
@@ -498,9 +498,9 @@ final class AsyncOps
      *
      * Cancel() on the returned promise abandons the whole cycle: backoff
      * timers are released, no further attempt is scheduled, the current
-     * attempt's promise is cancel()ed, and the returned promise rejects with
+     * attempt's promise is cancelled, and the returned promise rejects with
      * OperationCancelledException. A $token fired mid-attempt does the same
-     * to the visible promise: the in-flight attempt is cancel()ed, and if the
+     * to the visible promise: the in-flight attempt is cancelled, and if the
      * driver ignores the abort (a hung or canceller-less promise), the wait
      * rejects immediately with a generic 'Retry cancelled mid-cycle'
      * OperationCancelledException rather than waiting forever; a cooperative
@@ -901,8 +901,9 @@ final class AsyncOps
      * Fan-in: resolve with every value once ALL promises resolve, preserving
      * keys; reject with the FIRST error the moment one arrives. Non-promise
      * entries are treated as already-resolved values. An empty set resolves
-     * with []. This is the library-side promise vocabulary so callers never
-     * reach past this package for the primitive.
+     * with []. These combinators are the package's own promise vocabulary: callers
+     * need all() and race() here and never reach past this package for a
+     * fan-in primitive.
      *
      * @param iterable<mixed> $promises
      * @return PromiseInterface<array>
@@ -946,7 +947,7 @@ final class AsyncOps
     }
 
     /**
-     * Fan-in: settle with whoever gets there first, value or error. The empty
+     * Fan-in: settle with whichever settles first — value or error. The empty
      * set is a refusal, not a forever-pending promise — that shape renders as
      * a screen frozen with no error to show.
      *

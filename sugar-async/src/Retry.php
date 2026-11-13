@@ -134,7 +134,7 @@ final class Retry
      * at attempt 1, so no counter outlives a connection.
      *
      * Cancelling the returned promise, or firing $token, stops the cycle (the
-     * timer is released, an in-flight dial is cancel()ed) and rejects with
+     * timer is released, an in-flight dial is cancelled) and rejects with
      * {@see OperationCancelledException}.
      *
      * @param callable(): PromiseInterface $dial  One attempt; a throw counts as a failure
