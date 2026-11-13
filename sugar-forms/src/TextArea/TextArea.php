@@ -42,7 +42,11 @@ use SugarCraft\Core\Util\Width;
  * `Ctrl+C` copies the selection to the terminal clipboard through the Cmd
  * channel (`Cmd::setClipboard` → OSC 52; never a direct write — TEA law),
  * `Ctrl+X` copies then deletes it, and a `PasteMsg` replaces the selection
- * and inserts at the caret. An empty selection makes copy/cut silent no-ops.
+ * and inserts at the caret. Chord precedence: under the default `KeyMap`
+ * Ctrl+C is the form's ABORT chord and `Form::update()` checks abort before
+ * forwarding, so inside a form the copy works only when a custom map (via
+ * `Form::withKeyMap()`) frees Ctrl+C; driven raw, the widget always answers
+ * the chord. An empty selection makes copy/cut silent no-ops.
  * Selection spans render as reverse-video. The anchor survives plain typing
  * (deliberate: clearing it from every edit path would churn the keyboard
  * behaviour this component has shipped with); `clearSelection()` resets it.

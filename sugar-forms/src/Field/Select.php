@@ -235,7 +235,9 @@ final class Select implements \SugarCraft\Forms\Field
     /**
      * When a backed enum class is provided, the selected value is coerced
      * to the enum via `EnumClass::from($stringValue)`. The option titles
-     * must match the enum case values exactly. Mirrors huh's enum mode.
+     * must match the enum case values exactly. Mirrors no upstream symbol: huh has
+     * no enum option mode (SugarCraft-native, modeled on tty-prompt enum_select
+     * per docs/research/libraries/sugar-forms-huh-research.md §3.6).
      *
      * @param class-string<\BackedEnum> $enumClass
      */

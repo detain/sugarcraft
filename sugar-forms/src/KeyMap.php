@@ -55,7 +55,9 @@ final class KeyMap
      *   prev   — Shift+Tab (Tab + shift, the shape CSI `Z` decodes to), Up
      *            arrow; alt+Tab is kept as a legacy alias spelling
      *   submit — Enter (only effective on the last field of the last group)
-     *   abort  — Escape, Ctrl-C
+     *   abort  — Escape, Ctrl-C (checked before any field sees the key, so
+     *            a widget advertising a Ctrl+C chord — TextArea copy — gets
+     *            it only when a custom map frees Ctrl+C from abort)
      */
     public static function new(): self
     {
