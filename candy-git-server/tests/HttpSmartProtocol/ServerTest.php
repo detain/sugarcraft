@@ -516,7 +516,10 @@ final class ServerTest extends TestCase
             \substr_count($auth, 'self::basicAuthDecoyHash()'),
             'unknown-user and key-only refusals must each burn the decoy',
         );
-        self::assertStringContainsString('if (!\password_verify($password, $hash)) {', $auth);
+        // S09 re-shaped the real-digest leg into the memoed verify; the
+        // pin follows the intent, not the literal: the stored-hash check
+        // must still gate the identity on its result.
+        self::assertStringContainsString('if (!self::verifyCache()->verify($password, $hash, $username)) {', $auth);
     }
 
     public function testDecoyDigestIsCostMatchedAndNeverMatches(): void

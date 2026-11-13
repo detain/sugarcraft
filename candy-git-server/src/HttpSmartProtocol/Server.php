@@ -52,6 +52,16 @@ final class Server
     private static ?string $basicAuthDecoyHash = null;
 
     /**
+     * Process-scoped bcrypt memo for REAL digest checks (finding 048):
+     * a connection's repeated Basic header stops paying 100-300 ms per
+     * request. Static because a worker may serve several requests and
+     * the serial fallback spans a whole daemon life; TTL bounds how long
+     * a changed-out password can linger. The decoy burns deliberately
+     * stay OUTSIDE it (uniform refusal timing is the enumeration fix).
+     */
+    private static ?PasswordVerifyCache $verifyCache = null;
+
+    /**
      * Minted at the runtime PASSWORD_DEFAULT so the decoy burns exactly the
      * work the bin mints real credentials with, on any PHP. Dated 2026-11-11:
      * the previous hardcoded cost-10 digest fell out of alignment when PHP
@@ -133,6 +143,11 @@ final class Server
             $this->config->httpAuthMaxAttempts,
             $this->config->httpAuthRefillSeconds,
         );
+    }
+
+    private static function verifyCache(): PasswordVerifyCache
+    {
+        return self::$verifyCache ??= new PasswordVerifyCache();
     }
 
     // -------------------------------------------------------------------------
@@ -937,7 +952,10 @@ final class Server
                             \password_verify($password, self::basicAuthDecoyHash());
                             return null;
                         }
-                        if (!\password_verify($password, $hash)) {
+                        // The memoed verify (finding 048): first sight of a
+                        // credential pays bcrypt, the connection's repeats
+                        // do not. On a hit the $hash byte never re-verifies.
+                        if (!self::verifyCache()->verify($password, $hash, $username)) {
                             return null;
                         }
                         // The verify succeeded — honest work paid for, so
