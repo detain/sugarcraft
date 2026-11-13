@@ -484,6 +484,29 @@ final class ColumnTest extends TestCase
         Column::new('a', 'A', -5);
     }
 
+    /**
+     * ST-10: NAN sails through a bare range check (it compares false against
+     * both bounds) and used to floor() into nonsense percent widths; the
+     * INF legs, already rejected, must stay rejected.
+     */
+    public static function nonFinitePercentWidths(): array
+    {
+        return [
+            'NAN' => [NAN],
+            '+INF' => [\INF],
+            '-INF' => [-\INF],
+        ];
+    }
+
+    /** @dataProvider nonFinitePercentWidths */
+    public function testNonFinitePercentWidthThrows(float $value): void
+    {
+        $col = Column::new('id', 'ID', 10);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, $value);
+    }
+
     public function testCtorNullableParamsAreExplicitlyNullable(): void
     {
         $source = (string) file_get_contents(\dirname(__DIR__) . '/src/Column.php');

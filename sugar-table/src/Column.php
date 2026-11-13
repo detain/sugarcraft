@@ -120,7 +120,11 @@ final class Column
 
     public function withColumnWidth(ColumnWidth $columnWidth, float $percentValue = 0.0): self
     {
-        if ($columnWidth === ColumnWidth::Percent && ($percentValue < 0.0 || $percentValue > 100.0)) {
+        // NAN slips past a bare range check (it compares false against both
+        // ends), so non-finite inputs are fronted explicitly: a NAN percent
+        // used to floor() into nonsense widths at solve time (audit #10).
+        // INF was already caught by the range legs and stays caught.
+        if ($columnWidth === ColumnWidth::Percent && (!\is_finite($percentValue) || $percentValue < 0.0 || $percentValue > 100.0)) {
             throw new \InvalidArgumentException('Percent value must be between 0.0 and 100.0');
         }
         return new self($this->key, $this->title, $this->width, $this->flexibleWidth, $this->maxWidth, $this->filterable, $this->alignLeft, $this->style, $columnWidth, $percentValue, $this->wrapMode);
