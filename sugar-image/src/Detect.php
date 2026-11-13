@@ -32,6 +32,11 @@ use SugarCraft\Image\Support\TmuxBinary;
  * The query phase runs with the tty briefly in non-canonical, echo-off
  * mode — in cooked mode the queries echo, the replies sit
  * behind Enter, and leftovers ride into the next reader.
+ *
+ * Mirrors no upstream — SugarCraft addition. Neither chafa nor x/mosaic
+ * runs a live DA1/XTWINOPS round trip: chafa derives the canvas from the
+ * environment, mosaic queries once at startup. This is the library's own
+ * question, asked of the terminal itself.
  */
 final class Detect
 {

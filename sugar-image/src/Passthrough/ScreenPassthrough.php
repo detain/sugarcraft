@@ -50,6 +50,10 @@ use LogicException;
  * inside a DCS/APC payload is data, not a terminator — chicle's scanSt
  * BEL fallback cannot be honoured incrementally without look-ahead, and
  * no real DCS uses it.
+ *
+ * Mirrors the GNU Screen escape-shell passthrough convention (DCS
+ * envelopes) as documented by the screen project; the decoration
+ * discipline — idempotence, empty refusal — is SugarCraft's own.
  */
 final class ScreenPassthrough implements Renderer, PassthroughDecorator
 {

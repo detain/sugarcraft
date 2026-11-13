@@ -26,6 +26,10 @@ use SugarCraft\Image\Lang;
  *
  * Alpha is UNASSOCIATED (straight), matching the kitty spec and chafa's
  * SMOL_PIXEL_RGBA8_UNASSOCIATED destination format.
+ *
+ * Mirrors the kitty graphics protocol's f=32 raw RGBA transmission — the
+ * wire format is upstream's (kitty docs), this writer is original. chafa
+ * chunks encoded frames rather than raw quads.
  */
 final class RawRgba
 {

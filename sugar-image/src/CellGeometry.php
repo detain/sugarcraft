@@ -18,6 +18,10 @@ namespace SugarCraft\Image;
  * This is the single source of truth for that conversion. Every place in the
  * lib that turns an aspect into a cell count goes through it, so the auto-height
  * path, the cover-crop path and the pixel-tier paths cannot drift apart again.
+ *
+ * Mirrors no upstream — SugarCraft addition. Neither chafa nor x/mosaic
+ * exposes cell/pixel arithmetic as a type; upstreams carry cell sizes as
+ * plain dimensions and convert inline.
  */
 final class CellGeometry
 {

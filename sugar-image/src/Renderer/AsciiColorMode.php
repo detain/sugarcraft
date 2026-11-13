@@ -7,6 +7,10 @@ namespace SugarCraft\Image\Renderer;
 /**
  * Colour treatment for the {@see AsciiRenderer}: each pixel becomes a
  * luminance character, optionally tinted.
+ *
+ * Mirrors no upstream — SugarCraft dial. chafa varies colour through
+ * canvas modes, not a per-renderer enum; this rung-set belongs to the
+ * ASCII tier's own contract.
  */
 enum AsciiColorMode: string
 {

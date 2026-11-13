@@ -31,6 +31,11 @@ use SugarCraft\Image\TermInfo;
  * {@see maxColors()} to limit the palette when 256-color fallback is
  * desired (e.g. terminals that advertise Sixel but have limited
  * truecolor support).
+ *
+ * Mirrors chafa's sixel writer lineage for the palette, dither and padding
+ * contract (the chafa-canvas law this file already cites);
+ * charmbracelet/x/mosaic's Sixel strategy is the same tier. The
+ * cell-geometry sizing and ForceTrueColor doors are SugarCraft's.
  */
 final class SixelRenderer implements Renderer, ConfigFingerprintProvider
 {

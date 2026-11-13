@@ -31,6 +31,10 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * with the bottom colour as foreground; a bottom-transparent cell emits
  * ▀ (U+2580, fg paints its UPPER half) with the top colour as
  * foreground. In both cases the other colour layer is omitted entirely.
+ *
+ * Mirrors charmbracelet/x/mosaic's HalfBlock strategy — the
+ * luminance-to-two-row-cell mapping; the foreground/blank pair follows
+ * chafa's half-block idiom (chafa-symbols-halfblocks tables).
  */
 final class HalfBlockRenderer implements Renderer, IncrementalRenderer, AcceptsOptimization
 {

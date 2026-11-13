@@ -19,6 +19,10 @@ use SugarCraft\Image\Lang;
  * as garbage instead of failing loud. One door, one truth, now:
  * {@see GdCallIdiomCensusTest} pins that no src file calls
  * imagepalettetotruecolor outside this class.
+ *
+ * Mirrors no upstream — SugarCraft house gate. Upstream decoders cannot
+ * hand back palette resources; GD can, so the library needed one
+ * enforcement point.
  */
 final class ForceTrueColor
 {

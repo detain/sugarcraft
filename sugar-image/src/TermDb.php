@@ -59,6 +59,10 @@ namespace SugarCraft\Image;
  * process, or touches a terminal. {@see snapshotEnv()} is the only getenv
  * site, and {@see matchChain()} takes its output, so the whole table is
  * testable with string arguments (the hermetic law).
+ *
+ * Mirrors chafa's built-in terminal table (its termdb rows): the
+ * TERM/ident-to-capability data is upstream's; the declarative PHP shape
+ * is this library's.
  */
 final class TermDb
 {

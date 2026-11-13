@@ -17,6 +17,10 @@ namespace SugarCraft\Image;
  * arm (the multi-chunk terminal-probe replies of Mosaic::auto()
  * truncated after about a millisecond of inter-chunk gap, silently degrading
  * capability detection).
+ *
+ * Mirrors no upstream — SugarCraft addition. Monotonic I/O budget
+ * arithmetic for exec timeouts; chafa bounds work per row, not per
+ * wall-clock span.
  */
 final class Deadline
 {

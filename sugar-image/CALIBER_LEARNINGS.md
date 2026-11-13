@@ -442,3 +442,29 @@ kept as design rationale for what shipped._
   this lib carries ZERO `$XSet` sentinels BY DESIGN, and one belongs
   nowhere unless a new wither gains a state where "never passed" and
   "passed null" observably differ.
+
+- **[Two upstreams, one vocabulary]** (SI-44): this lib answers to TWO
+  upstreams and its `Mirrors` citations must name the right one.
+  `charmbracelet/x/mosaic` (Go) is the **architecture** source: the
+  protocol tiers and their ladder (Kitty/Sixel/iTerm2/HalfBlock/
+  QuarterBlock/ASCII/Chafa fallback), layered-image management, the
+  functional-options picker, and the experimental async image pipeline
+  — all mirrored at CONCEPT level, because Go channels/types have no
+  class-for-class PHP twin. **chafa** (C; its reusable core is
+  historically chicle) is the **pixel-semantics** source: symbol tables
+  and tags, canvas modes, dither modes, the PNN quantizer, levels
+  stretch, optimization levels, the termdb table, the pixel-map
+  reduction, and the iTerm2/quarter-block/sixel wire laws — these are
+  restated faithfully, some transcribed verbatim. When a renderer
+  cites both, the tier name is mosaic's and the arithmetic is chafa's.
+  Classes with NO upstream twin (the whole Detect/Tmux/Passthrough/
+  Screen packetizer family, DiskCache, CellGeometry/CellSize, the
+  Concerns gates, support binary-locators, AsyncRenderer's pacing) say
+  "Mirrors no upstream — SugarCraft addition" plainly: false provenance
+  is worse than none, and the roster check is
+  `grep -L 'Mirrors\|Upstream equivalent\|Provenance' src/**/*.php`
+  which must stay empty for src/. The lib's format sniff additionally
+  mirrors the kitty codec roster's ordering (a THIRD name — the kitty
+  graphics protocol docs), which is a wire-format source, not an
+  architecture source. Test files are exempt: they prove THIS lib's
+  contract and citing upstream per-test would be theatre.

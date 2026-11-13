@@ -49,6 +49,11 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * quantised pens it will emit — with a limited palette the best glyph
  * is not the best truecolor glyph. Adaptive palettes are deliberately
  * out of scope (pixel-side only, by design).
+ *
+ * Mirrors chafa's canvas-mode dial (chafov.h ChafaCanvasMode) at ladder
+ * level: Ansi256/Ansi16 restate upstream's indexed-palette rungs;
+ * TrueColor is the passthrough rung, and Fgbg is a SugarCraft rung
+ * upstream never offered.
  */
 enum CanvasMode: string
 {

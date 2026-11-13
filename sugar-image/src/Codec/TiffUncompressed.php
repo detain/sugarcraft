@@ -32,6 +32,10 @@ use SugarCraft\Image\Lang;
  * Size ceiling: the TIFF offsets are u32, so a payload within 4096 bytes
  * of 2^32 is refused (the same guard chafa applies before allocating —
  * chafa-iterm2-renderer.c:129-133).
+ *
+ * Mirrors no upstream — SugarCraft addition. The replacement for chafa's
+ * libtiff dependency: it writes the subset of classic little-endian TIFF
+ * that iTerm2 readers accept, uncompressed on purpose.
  */
 final class TiffUncompressed
 {

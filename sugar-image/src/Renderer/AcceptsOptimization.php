@@ -19,6 +19,10 @@ use SugarCraft\Image\Optimization;
  *
  * Implementations MUST treat mask 0 (Optimization::None) as the historical
  * byte stream — the level is strictly additive opt-in.
+ *
+ * Provenance rides {@see Optimization} (chafa's ChafaOptimizations). The
+ * opt-in contract itself mirrors no upstream — chafa applies levels inside
+ * the renderer; this library lets each tier declare.
  */
 interface AcceptsOptimization
 {

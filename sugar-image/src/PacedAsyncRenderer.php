@@ -34,6 +34,11 @@ use SugarCraft\Image\Renderer\IncrementalRenderer;
  * promise and the session, the generator dies, and the encode dies with it —
  * a push stream half-delivered is a truncated transmission, the consumer's
  * destination contract, never a correctness hazard for the promise itself.
+ *
+ * Mirrors no upstream pacing — SugarCraft addition. The slice-budget pump
+ * discipline (work-effort per tick, never a wall-clock deadline) is this
+ * fleet's own lesson; the async tier it drives rides AsyncRenderer
+ * (x/mosaic concept).
  */
 final class PacedAsyncRenderer implements AsyncRenderer
 {

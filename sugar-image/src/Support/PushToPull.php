@@ -22,6 +22,10 @@ namespace SugarCraft\Image\Support;
  * `finally` cleanups do NOT get a chance to emit trailing bytes — an
  * abandoned stream is a truncated stream. See the interface contract on
  * {@see \SugarCraft\Image\Renderer\IncrementalRenderer::renderRows()}.
+ *
+ * Mirrors no upstream — SugarCraft plumbing. The push-to-pull adapter lets
+ * a callback emitter be driven from the pull side — the shape {@see
+ * IncrementalRenderer} consumers need.
  */
 final class PushToPull
 {

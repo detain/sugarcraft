@@ -36,6 +36,10 @@ namespace SugarCraft\Image\Passthrough;
  * is a chafa emitter detail, not a framing requirement.
  *
  * @internal Not part of the public API.
+ *
+ * Mirrors no upstream — SugarCraft addition. The chunk law follows the
+ * kitty protocol's limits; the packetizer as one seam shared by every
+ * decorator is this library's own anti-drift move.
  */
 final class ScreenPacketizer
 {

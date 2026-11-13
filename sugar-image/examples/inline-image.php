@@ -30,6 +30,10 @@
  *   3 — the path exists but is not a readable regular file, the file did
  *       not load as a supported image, or the render refused at the
  *       requested size
+ *
+ * Provenance: original example — it drives the Mosaic facade described
+ * above and mirrors no upstream sample; the exit-code alphabet below is
+ * this library's own contract.
  */
 
 declare(strict_types=1);

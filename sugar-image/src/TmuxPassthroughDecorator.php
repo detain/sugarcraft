@@ -36,6 +36,11 @@ use SugarCraft\Image\Renderer\SixelRenderer;
  * shipped it.
  *
  * @see https://github.com/tmux/tmux/wiki/Passthrough
+ *
+ * Mirrors the tmux DCS passthrough envelope convention
+ * (allow-passthrough-gated), the same documented ground as
+ * TmuxPassthrough; the decorator discipline — wrap one renderer's bytes,
+ * never re-encode — is SugarCraft's.
  */
 final class TmuxPassthroughDecorator implements Renderer, PassthroughDecorator
 {

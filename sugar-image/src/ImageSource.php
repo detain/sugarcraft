@@ -15,6 +15,12 @@ use SugarCraft\Image\Concerns\ForceTrueColor;
 /**
  * A decoded image ready for rendering. Stores raw bytes, detected
  * format, and pixel dimensions. Immutable.
+ *
+ * Mirrors no upstream class — the value object is this library's: bytes +
+ * format + geometry, GD-decoded on demand. Its intake roster follows
+ * chafa's per-codec loader discipline (see the sniff note below), and its
+ * ceilings guard against the class of bombs upstreams never had to survive
+ * in-process.
  */
 final class ImageSource
 {

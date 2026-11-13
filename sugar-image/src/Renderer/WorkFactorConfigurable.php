@@ -10,6 +10,9 @@ namespace SugarCraft\Image\Renderer;
  * candidate), 1.0 scores the whole corpus. Same interface-cannot-have-
  * bodies rationale as {@see CanvasModeConfigurable}: Mosaic delegates
  * only when the active backend declares this.
+ *
+ * Mirrors no upstream contract; the dial mirrors chafa's --work-factor
+ * effort knob. The optional-interface form is this library's.
  */
 interface WorkFactorConfigurable
 {

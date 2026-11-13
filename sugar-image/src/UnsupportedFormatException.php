@@ -24,6 +24,9 @@ namespace SugarCraft\Image;
  * Extends \InvalidArgumentException so callers that already catch the whole
  * "bad input" family keep catching this: the change refines the message, it
  * does not widen the blast radius.
+ *
+ * Mirrors no upstream — SugarCraft exception. The magic-known /
+ * feature-unsupported split is this library's intake taxonomy.
  */
 final class UnsupportedFormatException extends \InvalidArgumentException
 {

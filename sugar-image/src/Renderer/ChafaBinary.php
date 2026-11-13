@@ -54,6 +54,11 @@ namespace SugarCraft\Image\Renderer;
  * the README's "Chafa binary discovery" section, not a half-supported
  * spawn surface. The same grammar governs tmux and stty via
  * `Support\TmuxBinary` / `Support\SttyBinary`.
+ *
+ * Mirrors no upstream — SugarCraft discovery. x/mosaic embeds chafa's
+ * library via cgo when built for it; this library has no compile-time
+ * partner to find, so the binary hunt (override, candidate list, exec
+ * probe) is its own.
  */
 final class ChafaBinary
 {

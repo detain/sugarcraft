@@ -18,6 +18,10 @@ use SugarCraft\Image\ImageSource;
  * beyond what name() identifies (Sixel's dither, Chafa's CLI options)
  * additionally implements {@see ConfigFingerprintProvider} so the poster
  * disk cache can tell two same-name configurations apart.
+ *
+ * Mirrors no upstream — pure PHP contract. x/mosaic composes distinct
+ * strategy types and chafa picks renderers per backend; one interface
+ * every tier here satisfies is this library's design choice.
  */
 interface Renderer
 {

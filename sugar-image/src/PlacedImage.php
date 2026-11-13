@@ -28,6 +28,10 @@ namespace SugarCraft\Image;
  *   fresh one. Callers that previously keyed ids by something call-shaped (a
  *   URL, a requested cell size, a list index) must not assume that mapping
  *   survives: one id may be shared by every placement of the same bytes.
+ *
+ * Mirrors no upstream — SugarCraft carrier. The placement outcome type
+ * extends x/mosaic's layering idea (see ImageLayer) with the tracked id
+ * and geometry upstream does not model.
  */
 final readonly class PlacedImage
 {

@@ -29,6 +29,11 @@ use SugarCraft\Image\Concerns\ForceTrueColor;
  * threshold promotes semi-transparent pixels into the null (hole) slot
  * for the cell renderers, the PixelGrid mirror of chafa's
  * `ch[3] < alpha_threshold` quantize skip.
+ *
+ * Mirrors chafa's pixel-map stage (chafa/internal/chafa-pixops.c): the
+ * per-cell RGB reduction upstream performs before symbol or colour
+ * selection. The GD-backed sampler replacing chafa's pixel iterator is
+ * this library's implementation.
  */
 final class PixelGrid
 {

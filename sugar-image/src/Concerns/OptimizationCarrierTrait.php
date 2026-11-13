@@ -15,6 +15,10 @@ use SugarCraft\Image\Optimization;
  * The class using this trait must declare it `final` and take the mask into
  * every constructed {@see \SugarCraft\Image\Support\OutputOptimizer} via
  * {@see self::emitsRepeatCells()}.
+ *
+ * Provenance rides {@see Optimization}: the bit field it carries mirrors
+ * chafa's ChafaOptimizations (chafa-common.h). The carrier trait is pure
+ * PHP plumbing with no upstream counterpart.
  */
 trait OptimizationCarrierTrait
 {

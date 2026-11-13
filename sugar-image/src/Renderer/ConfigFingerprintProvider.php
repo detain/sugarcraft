@@ -24,6 +24,10 @@ namespace SugarCraft\Image\Renderer;
  * answers `''` for every renderer not implementing this interface, so their
  * cache keys stay byte-identical. Same posture as the pre-existing optional
  * {@see \SugarCraft\Image\AsyncRenderer} capability in this library.
+ *
+ * Mirrors no upstream — SugarCraft contract. The cache-fingerprint seam
+ * exists because DiskCache must ask renderers what construction choices
+ * their bytes hide.
  */
 interface ConfigFingerprintProvider
 {

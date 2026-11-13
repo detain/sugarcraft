@@ -14,6 +14,11 @@ use React\Promise\PromiseInterface;
  *
  * Use this when you need to render the same image at the same size
  * repeatedly (e.g. a TTY that redraws the same viewport each frame).
+ *
+ * Mirrors no upstream — SugarCraft addition. The memoizing async facade
+ * has no class counterpart in chafa or charmbracelet/x/mosaic; the
+ * async-rendering idea it wraps rides AsyncRenderer (x/mosaic concept,
+ * concept-level).
  */
 final class AdaptiveImage
 {

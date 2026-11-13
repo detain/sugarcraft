@@ -56,6 +56,11 @@ use SugarCraft\Image\Renderer\Renderer;
  * id case). Released ids stay claimed by their content (dedup survives a
  * release, matching {@see removeById()}), so a poster scrolled back into view
  * re-registers under the id the markers already reference.
+ *
+ * Mirrors charmbracelet/x/mosaic's layered-image management at concept
+ * level. Upstream's model is narrower (one image per transaction); the
+ * place/tiling registry with tracked ids is SugarCraft's extension of the
+ * idea.
  */
 final class ImageLayer
 {

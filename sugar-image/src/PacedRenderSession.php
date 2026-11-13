@@ -26,6 +26,10 @@ namespace SugarCraft\Image;
  * only when someone calls advanceSlice(); {@see PacedAsyncRenderer} drives
  * it from futureTick callbacks (loop queue, not clock), and tests drive it
  * directly and count slices instead of watching walls.
+ *
+ * Mirrors no upstream — SugarCraft addition. The resumable session object
+ * is the plumbing that lets PacedAsyncRenderer's slice budget survive
+ * yields.
  */
 final class PacedRenderSession
 {

@@ -16,6 +16,11 @@ use SugarCraft\Image\Lang;
  * true-color, transparency, and various output formats. The binary is
  * located by {@see ChafaBinary} — a fixed absolute roster or an
  * explicit operator override; a bare PATH `chafa` is never executed.
+ *
+ * Mirrors charmbracelet/x/mosaic's chafa fallback tier — the pipeline idea
+ * (when nothing native answers, ask chafa) is upstream's. Shelling to the
+ * chafa CLI (upstream binds the library) and every guard around that exec
+ * — the sink probe, the reap ledger — are SugarCraft's.
  */
 final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 {

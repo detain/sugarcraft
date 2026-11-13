@@ -27,6 +27,9 @@ use SugarCraft\Image\Renderer\Renderer;
  * and expose this `wrap()` as the pure byte-level half of their job; the
  * streaming half (encodeBandStream) lives on the decorators themselves
  * because each mux's framing rules chunk differently.
+ *
+ * Mirrors no upstream — SugarCraft contract. The shared envelope surface
+ * of the tmux and GNU Screen decorators is this library's invention.
  */
 interface PassthroughDecorator
 {

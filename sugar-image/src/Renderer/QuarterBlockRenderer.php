@@ -49,6 +49,11 @@ use SugarCraft\Image\Support\OutputOptimizer;
  * pens, fixed-palette included, so each split's orientation is resolved
  * by the group-luma heuristic in {@see bestCell()}, never by re-scoring
  * the complement.
+ *
+ * Mirrors chafa's quarter-block tier for the scoring model (see the
+ * chafa-faithful notes in this file) — upstream's quarter-block symbol
+ * tables are the ancestor; charmbracelet/x/mosaic's QuarterBlock strategy
+ * is the same lineage at tier level.
  */
 final class QuarterBlockRenderer implements Renderer, AcceptsOptimization, ConfigFingerprintProvider, CanvasModeConfigurable
 {

@@ -26,6 +26,9 @@ namespace SugarCraft\Image\Support;
  * because the filesystem layout the first call sees is the layout every
  * later call reports. {@see reset()} clears that roster memo (test
  * isolation; the override leg is never memoised and needs no clearing).
+ *
+ * Mirrors no upstream — SugarCraft discovery. Same doctrine as SttyBinary;
+ * neither chafa nor mosaic drives tmux.
  */
 final class TmuxBinary
 {

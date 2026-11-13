@@ -65,6 +65,11 @@ use SugarCraft\Image\Support\TmuxBinary;
  * the original silence instead of the run dying over a preference toggle.
  * The whole feature is opt-outable with {@see Detect::setAutoPassthrough()}
  * for embedders who own their tmux configuration.
+ *
+ * Mirrors the tmux allow-passthrough option dance as documented for
+ * graphics-in-tmux workflows (the kitty protocol's tmux guidance); the
+ * transactional ledger — single owner, scope-aware restore, lease — is
+ * SugarCraft's. Neither chafa nor x/mosaic arbitrates tmux state.
  */
 final class TmuxPassthrough
 {

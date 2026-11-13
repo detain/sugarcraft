@@ -44,6 +44,10 @@ use React\Promise\PromiseInterface;
  *    anonymous object (eventfd/eventpoll/inotify) shares ONE (dev, ino),
  *    so a dev/ino census false-matches unrelated fds
  *    (see tests/SsrfServerLeakTest::descriptorIdentities).
+ *
+ * Mirrors charmbracelet/x/mosaic's experimental image pipeline — at
+ * concept level only. The PromiseInterface shape is this library's own;
+ * upstream drives the same staged decode/encode idea with Go channels.
  */
 interface AsyncRenderer
 {

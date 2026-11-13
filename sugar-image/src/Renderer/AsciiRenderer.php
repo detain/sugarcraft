@@ -31,6 +31,12 @@ use SugarCraft\ColorProfile\Color;
  * user-selected character tables (minimal/dense) through here so the canonical
  * quantizer stays the single implementation. The default ramp is byte-frozen —
  * every existing golden pins it.
+ *
+ * Mirrors chafa's ASCII output tier (the character-ramp path upstream
+ * renders when asked for plain ASCII); charmbracelet/x/mosaic's ASCII
+ * strategy rides the same lineage. The luminance mapping and
+ * font-heuristic compensation are this library's faithful restatement in
+ * GD, not a translation of upstream code.
  */
 final class AsciiRenderer implements Renderer, AcceptsOptimization
 {

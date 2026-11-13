@@ -36,6 +36,10 @@ namespace SugarCraft\Image;
  * file, which {@see put()} sweeps once stale and {@see clear()} removes. Keys
  * are hashed to derive the on-disk filename, so an arbitrary (even
  * attacker-supplied) key can never escape the cache directory.
+ *
+ * Mirrors no upstream — SugarCraft addition. Neither upstream persists
+ * rendered output across processes; the key-fingerprint discipline is this
+ * library's answer to caching bytes whose contract is byte-identity.
  */
 final class DiskCache
 {

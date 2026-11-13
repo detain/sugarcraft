@@ -23,6 +23,10 @@ use SugarCraft\Image\Support\PushToPull;
  * SixelRenderer is a hot file for concurrent work (alpha threshold,
  * serpentine, quantizer), and the band stream is already pinned as the
  * one-shot path's twin — the laziness seam is the only new thing here.
+ *
+ * Mirrors no upstream — SugarCraft view. Row-at-a-time iteration is what
+ * {@see IncrementalRenderer} needs of the sixel tier; upstream writes
+ * sixel frames in one sweep.
  */
 final class SixelRows implements IncrementalRenderer
 {

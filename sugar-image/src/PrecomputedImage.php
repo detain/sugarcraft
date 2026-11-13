@@ -7,6 +7,11 @@ namespace SugarCraft\Image;
 /**
  * A precomputed rendered image — holds the encoded ANSI bytes and the
  * target cell dimensions so the caller knows the layout.
+ *
+ * Mirrors charmbracelet/x/mosaic's experimental image pipeline at concept
+ * level: precomputed bytes replayed at a cell box. The value object is
+ * upstream's idea in PHP; cache retention lives in AdaptiveImage, not
+ * here.
  */
 final class PrecomputedImage
 {

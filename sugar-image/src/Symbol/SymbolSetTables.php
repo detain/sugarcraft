@@ -30,6 +30,9 @@ namespace SugarCraft\Image\Symbol;
  * symbols2 array. chafa-symbols-kana.h is 16x8-only, so
  * the kana set contributes NOTHING to the narrow corpus — see the
  * SymbolMap class docblock for the recorded seam.
+ *
+ * Mirrors chafa's narrow symbol tables as transcribed in this file's
+ * header (chafa-symbols-*.h, verbatim).
  */
 final class SymbolSetTables
 {

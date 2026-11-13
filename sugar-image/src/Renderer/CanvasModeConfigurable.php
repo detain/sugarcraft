@@ -13,6 +13,11 @@ use SugarCraft\Image\Symbol\CanvasMode;
  * that speaks canvas modes declares this interface and the single
  * Mosaic call site checks for it — every other implementer keeps
  * compiling untouched (house precedent: ConfigFingerprintProvider).
+ *
+ * Mirrors no upstream contract; the dial it exposes mirrors chafa's canvas
+ * modes (see {@see Symbol\CanvasMode}). Optional-capability interfaces are
+ * this library's way of carrying per-tier knobs without widening {@see
+ * Renderer}.
  */
 interface CanvasModeConfigurable
 {

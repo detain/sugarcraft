@@ -23,6 +23,9 @@ namespace SugarCraft\Image\Support;
  * The roster leg is memoised per process — filesystem layout does not
  * move under a probe — while the override leg is re-read every call so
  * a moved knob is honored immediately; {@see reset()} clears the memo.
+ *
+ * Mirrors no upstream — SugarCraft discovery. stty is consulted only
+ * because GD cannot answer; no upstream shell-hunts a coreutils binary.
  */
 final class SttyBinary
 {

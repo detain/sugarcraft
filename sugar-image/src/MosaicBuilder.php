@@ -12,6 +12,10 @@ use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
  * Builder for {@see Mosaic} with optional renderer swap and dimension defaults.
+ *
+ * Mirrors charmbracelet/x/mosaic's mosaic.New functional options at
+ * concept level. Upstream composes the picker with variadic Option
+ * functions; the fluent builder form is this library's own choice.
  */
 final class MosaicBuilder
 {

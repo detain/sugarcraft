@@ -21,6 +21,10 @@ namespace SugarCraft\Image\Support;
  * fallbacks here exist for caller-supplied raw buffers and for the
  * future ingress decoupling, not to advertise GD-optional operation
  * today.
+ *
+ * Mirrors no upstream — SugarCraft gate. Upstreams ship with their
+ * decoders; this library lives or dies by a PHP extension, so the question
+ * gets one honest answer point.
  */
 final class GdAvailability
 {

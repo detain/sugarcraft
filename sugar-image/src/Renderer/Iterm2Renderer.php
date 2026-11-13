@@ -22,6 +22,11 @@ use SugarCraft\Image\Support\GdAvailability;
  * Adds {@see renderTiff()}: chafa's GD-free container (an
  * uncompressed single-strip TIFF) selectable with an explicit raw-RGBA
  * buffer, so transmission works without imagepng() entirely.
+ *
+ * Mirrors chafa's iTerm2 renderer for the wire law (its internal iTerm2
+ * path: OSC 1337 chunks and container handling); the GD-based encode and
+ * this suite's chunk-size discipline are the library's own.
+ * charmbracelet/x/mosaic's iTerm2 strategy is the same lineage.
  */
 final class Iterm2Renderer implements Renderer
 {

@@ -20,6 +20,11 @@ namespace SugarCraft\Image;
  * Default: `FloydSteinberg` — best quality/speed trade-off, matches xterm.
  * The Ordered/Noise axes are strictly opt-in; the default diffusion path is
  * byte-frozen after the clamp freeze.
+ *
+ * Mirrors chafa's ChafaDitherMode selection (chafov.h) at family level:
+ * the members reproduce upstream's dither families — Ordered/Noise ride
+ * the Bayer and noise matrices in Renderer/OrderedTexture, and the
+ * error-diffusion kin follow chafa's dedicated passes.
  */
 enum Dither: string
 {

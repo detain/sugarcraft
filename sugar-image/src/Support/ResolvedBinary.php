@@ -35,6 +35,10 @@ namespace SugarCraft\Image\Support;
  *     gated on `is_file() && is_executable()`.
  *  3. `null` — nothing resolved; callers degrade exactly as they do for a
  *     missing binary.
+ *
+ * Mirrors no upstream — SugarCraft doctrine. The argv[0] resolution law
+ * (explicit path, name verbatim, no PATH sweep unless named) is this
+ * library's exec hygiene.
  */
 final class ResolvedBinary
 {

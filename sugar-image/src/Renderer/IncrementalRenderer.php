@@ -37,6 +37,10 @@ use SugarCraft\Image\ImageSource;
  * sliced (Chafa's child-process stream is a separate seam). Same posture as
  * the pre-existing optional {@see ConfigFingerprintProvider}: implementers
  * advertise what they can do, callers branch on `instanceof`.
+ *
+ * Mirrors no upstream contract — SugarCraft addition. The row-level pull
+ * seam exists to let the async tier slice an encode that upstreams finish
+ * in one call.
  */
 interface IncrementalRenderer
 {

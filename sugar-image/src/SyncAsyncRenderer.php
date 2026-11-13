@@ -24,6 +24,10 @@ use React\Promise\PromiseInterface;
  * want {@see PacedAsyncRenderer} (AdaptiveImage::withAsync's default),
  * which slices the same encode against a per-slice budget. It is also
  * the documented drop-in for environments without ReactPHP ChildProcess.
+ *
+ * Mirrors no upstream — SugarCraft scheduling shim. The async tier it
+ * implements rides AsyncRenderer (x/mosaic concept); deliberately blocking
+ * in one loop tick is this library's test/one-shot answer.
  */
 final class SyncAsyncRenderer implements AsyncRenderer
 {

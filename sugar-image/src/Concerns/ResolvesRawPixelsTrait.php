@@ -20,6 +20,11 @@ use SugarCraft\Image\Support\GdAvailability;
  *  - GD decode of the stored bytes — guarded through
  *    {@see GdAvailability} so a genuinely GD-less runtime gets a clean
  *    translated refusal instead of an undefined-function fatal.
+ *
+ * Mirrors no upstream — SugarCraft plumbing. The byte-identity law it
+ * enforces (one shared ingest from pixel resolution through to raw pixels)
+ * is why the trait exists; upstream decoders need no such seam because
+ * their image types already are raw.
  */
 trait ResolvesRawPixelsTrait
 {
