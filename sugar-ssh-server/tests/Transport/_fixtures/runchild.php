@@ -37,8 +37,20 @@ $session = new Session(
     tty: null, command: null, lang: 'C.UTF-8',
 );
 
+$transport = new InProcessTransport();
+
+// SSHS-13 integration seam: when the environment arms a keepalive
+// interval, register the beat exactly the way Server::withKeepalive()
+// does (armKeepalive is the same public door serve() calls), so a test
+// can observe the shipped pump-idle -> NUL-write -> tty-echo path
+// end to end. Absent or non-positive values leave the fixture inert.
+$keepalive = \getenv('WISH_FIXTURE_KEEPALIVE');
+if (\is_string($keepalive) && \ctype_digit($keepalive) && (int) $keepalive >= 1) {
+    $transport->armKeepalive((int) $keepalive);
+}
+
 try {
-    $exit = (new InProcessTransport())->runChild($session, $cmd);
+    $exit = $transport->runChild($session, $cmd);
     exit($exit);
 } catch (\Throwable $e) {
     \fwrite(\STDERR, "runchild fixture: " . $e::class . ": " . $e->getMessage() . "\n");

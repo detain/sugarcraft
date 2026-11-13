@@ -28,10 +28,108 @@ use SugarCraft\SshServer\Transport\InProcessTransport;
  * Runs are driven through an injected fake PtySystem (the
  * InProcessTransportStalePidTest recipe) so no real PTY is required;
  * every fake child settles within a few hundred milliseconds, so no
- * test here can hang.
+ * fake-driven test here can hang. The one exception is the
+ * PTY-gated end-to-end pin at the bottom, which skips on hosts
+ * without ext-ffi / ext-pcntl / `/dev/ptmx` exactly like the lib's
+ * other real-PTY tests.
  */
 final class InProcessTransportReuseTest extends TestCase
 {
+    private const RUNCHILD_FIXTURE = __DIR__ . '/_fixtures/runchild.php';
+
+    private function requirePtySyscalls(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('sugar-pty is POSIX-only.');
+        }
+        if (!\extension_loaded('ffi')) {
+            $this->markTestSkipped('ext-ffi is required.');
+        }
+        if (!\extension_loaded('pcntl')) {
+            $this->markTestSkipped('ext-pcntl is required for controllingTerminal:true.');
+        }
+        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
+            $this->markTestSkipped('/dev/ptmx unreadable on this host.');
+        }
+        if (!\is_file(self::RUNCHILD_FIXTURE)) {
+            $this->markTestSkipped('runchild fixture missing: ' . self::RUNCHILD_FIXTURE);
+        }
+    }
+
+    /**
+     * 020-end-to-end: the shipped pump-idle -> keepalive beat -> NUL
+     * write path, observed through a REAL PTY for the first time.
+     * A line discipline put into non-canonical raw echo mode
+     * (`stty -icanon -echoctl echo`) reflects every byte written to
+     * the master straight back to the master reader — canonical
+     * ECHOCTL would render NUL as "^@" two bytes, so the flags are
+     * load-bearing for the single-byte assertion below. With the
+     * fixture armed for a 1 s beat, an NUL must resurface on the
+     * forwarded output around one interval after the pump first
+     * goes quiet, while the child never reads and writes nothing.
+     */
+    public function testTheArmedBeatEchoesANulThroughARealPty(): void
+    {
+        $this->requirePtySyscalls();
+        if (!\is_executable('/bin/stty') || !\is_executable('/bin/sleep') || !\is_executable('/bin/sh')) {
+            $this->markTestSkipped('/bin/stty, /bin/sleep and /bin/sh required.');
+        }
+
+        $previous = \getenv('WISH_FIXTURE_KEEPALIVE');
+        \putenv('WISH_FIXTURE_KEEPALIVE=1');
+        $pipes = [];
+        try {
+            $proc = \proc_open(
+                [PHP_BINARY, self::RUNCHILD_FIXTURE, '80', '24',
+                    '/bin/sh', '-c', 'stty -icanon -echoctl echo; sleep 3'],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+            );
+            $this->assertIsResource($proc, 'proc_open of runchild fixture failed');
+            \stream_set_blocking($pipes[1], false);
+
+            // The beat anchors on the first idle tick (~50 ms into
+            // the pump) and sends one interval later; 2.5 s is a
+            // generous window (a missed send lands on failure, and
+            // nothing here waits past the deadline).
+            $captured = '';
+            $deadline = \microtime(true) + 2.5;
+            while (\microtime(true) < $deadline) {
+                $chunk = @\fread($pipes[1], 4096);
+                if (\is_string($chunk) && $chunk !== '') {
+                    $captured .= $chunk;
+                    if (\str_contains($captured, "\x00")) {
+                        break;
+                    }
+                }
+                \usleep(20_000);
+            }
+        } finally {
+            \putenv(false === $previous ? 'WISH_FIXTURE_KEEPALIVE=' : 'WISH_FIXTURE_KEEPALIVE=' . $previous);
+            if (isset($proc) && \is_resource($proc)) {
+                // Client disconnect first (the graceful path the
+                // stdin-EOF tests already pin); terminate is only
+                // the bounded fallback so this test can never hang.
+                @\fclose($pipes[0]);
+                $status = \proc_get_status($proc);
+                if ($status['running']) {
+                    \proc_terminate($proc, 9);
+                }
+                @\fclose($pipes[1]);
+                $stderrBytes = @\stream_get_contents($pipes[2]);
+                @\fclose($pipes[2]);
+                \proc_close($proc);
+            }
+        }
+
+        $this->assertStringContainsString(
+            "\x00",
+            $captured,
+            'armed 1 s keepalive beat must push one NUL through the real PTY and back; captured='
+            . \bin2hex($captured) . ' stderr=' . \var_export((string) ($stderrBytes ?? ''), true),
+        );
+    }
+
     /**
      * 016-clock: the elapsed gate anchors on the callback's FIRST
      * fire — the pump loop's first idle observation — not at arm
