@@ -166,6 +166,18 @@ final class CheckChildLifetimes
                 . 'descriptors and still says nothing about 3+. Report row — NOT FIXABLE FROM '
                 . 'REPO GUARD; mirrors candy-code\'s ACCOUNTED_FOR_IN_LIBS.',
         ],
+        'candy-scriptui/src/Process/RealProcess.php::spawn' => [
+            'count' => 1,
+            'kind' => 'fd-open',
+            'reason' => 'the consolidated spin child handle (scriptui-01): the spec names fd 0 as '
+                . '/dev/null and routes 1 and 2 to non-blocking capture pipes or the real '
+                . 'STDOUT/STDERR — the same descriptor judgement sugar-pty\'s PosixProcess::spawn '
+                . 'row makes, one package over, and the fd≥3 inheritance stands for '
+                . 'candy-scriptui to own. Reap is bounded in-kind: close() walks TERM→grace→KILL '
+                . 'and wait() drains the capture pipes and proc_close()s on every settle path, '
+                . 'so the exposure is descriptor inheritance during the child\'s bounded life, '
+                . 'not an orphan.',
+        ],
         'sugar-dashboard/src/Plugin/ExternalModule.php::startProcess' => [
             'count' => 1,
             'kind' => 'fd-open',

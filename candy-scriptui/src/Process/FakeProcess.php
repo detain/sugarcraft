@@ -48,6 +48,11 @@ final class FakeProcess implements Process
     public bool $stdoutRead = false;
     public bool $stderrRead = false;
 
+    /** Count of {@see drain()} calls — lets pins assert the run-loop pump actually ran. */
+    public int $drainCount = 0;
+
+    public function drain(): void       { $this->drainCount++; }
+
     public function pid(): int          { return 12345; }
     public function exited(): bool      { return $this->exitCode !== null; }
     public function wait(): int         { $this->closed = true; return $this->exitCode ?? 0; }

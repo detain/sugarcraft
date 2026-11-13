@@ -88,7 +88,12 @@ final class ChildLifetimesToolTest extends TestCase
         // rewrote StatelessRpc, ending the nested double-walk that had counted
         // advertise/negotiate twice each (2+2), so those four derivations became
         // two. Findings now equal the 11 accounted rows exactly, tool rc=0.
-        $this->assertStringContainsString('11 findings', $out);
+        // 11 -> 12 re-derived live with the tool on 2026-11-12: scriptui-01
+        // consolidated the spin lifecycle into candy-scriptui's own
+        // RealProcess::spawn, minting one proc_open site — one more exposed
+        // finding, met by its own honest ACCOUNTED row (fd-open, the same
+        // descriptor judgement as sugar-pty's PosixProcess::spawn sibling).
+        $this->assertStringContainsString('12 findings', $out);
         // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
         // 33 -> 30 re-derived live with the tool on 2026-11-04: net -3 of tree
         // drift since 0bcc4346b (the pin predates later spawn consolidation,
@@ -99,7 +104,9 @@ final class ChildLifetimesToolTest extends TestCase
         // 30 -> 29 re-derived live with the tool on 2026-11-10: the Step-8
         // StatelessRpc rewrite in fd6900382 retired one raw @proc_open site
         // without minting a replacement.
-        $this->assertStringContainsString('29 proc_open sites', $out);
+        // 29 -> 30 re-derived live with the tool on 2026-11-12: scriptui-01
+        // minted the candy-scriptui RealProcess::spawn site described above.
+        $this->assertStringContainsString('30 proc_open sites', $out);
     }
 
     /**
@@ -282,7 +289,7 @@ final class ChildLifetimesToolTest extends TestCase
 
     /**
      * Roster hygiene after n08: every row names a kind, every kind is in the
-     * licensed vocabulary, and the split of the eleven rows across the two
+     * licensed vocabulary, and the split of the twelve rows across the two
      * dimensions is a measured census — a row drifting dimension must be
      * re-adjudicated here, not silently re-labelled.
      */
@@ -309,8 +316,11 @@ final class ChildLifetimesToolTest extends TestCase
         // StatelessRpc::advertise, StatelessRpc::negotiate; fd-open =
         // Spawn::proc, PosixProcess::spawn, ExternalModule::startProcess,
         // AudioPlayer::start, FfmpegDecoder::open, StdioMcpServer::start).
+        // 6 -> 7 fd-open on 2026-11-12: scriptui-01 rostered
+        // candy-scriptui/src/Process/RealProcess.php::spawn beside its
+        // sugar-pty PosixProcess::spawn twin (same descriptor judgement).
         // Re-derive with the tool if a row changes dimension.
-        $this->assertSame(['reap-bounded' => 5, 'fd-open' => 6], $counts);
+        $this->assertSame(['reap-bounded' => 5, 'fd-open' => 7], $counts);
     }
 
     /**
