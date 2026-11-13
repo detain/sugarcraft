@@ -1002,4 +1002,21 @@ final class InspectorTest extends TestCase
         // the very byte the stand-alone pin above tokenises.
         $this->assertSame('set window title to "aÛb"', Inspector::describeOsc("0;aÛb"));
     }
+
+    public function testSanitizeLabelBytesFailsFastAndPinsNumericFallbacks(): void
+    {
+        // Hardening the sanitizer seam (findings 041/057): the sweep is
+        // PCRE-backed and preg_replace_callback() returns null on failure,
+        // which would leak past the :string declaration as a TypeError —
+        // the ??-throw turns that into a named RuntimeException. The legs
+        // pinned here are the token map's fallbacks: an unnamed control
+        // byte renders as its \xHH token (0x80 PAD has no mnemonic), a
+        // named one as its mnemonic (HT/CR stay word-safe), and RI/HTS
+        // chain in order. Printable text is untouched.
+        $this->assertSame('\\x80', Inspector::sanitizeLabelBytes("\x80"));
+        $this->assertSame('HT', Inspector::sanitizeLabelBytes("\x09"));
+        $this->assertSame('CR', Inspector::sanitizeLabelBytes("\x0d"));
+        $this->assertSame('RIHTS', Inspector::sanitizeLabelBytes("\x8d\x88"));
+        $this->assertSame('plain text stays', Inspector::sanitizeLabelBytes('plain text stays'));
+    }
 }

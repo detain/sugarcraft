@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\AnsiInspect;
 
+use RuntimeException;
 use SugarCraft\AnsiParser\Codec\Dcs;
 
 /**
@@ -929,6 +930,6 @@ final class Inspector
                 default => sprintf('\\x%02X', ord($m[0])),
             },
             $s,
-        );
+        ) ?? throw new RuntimeException('sanitizeLabelBytes: PCRE failure: ' . preg_last_error_msg());
     }
 }
