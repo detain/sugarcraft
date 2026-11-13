@@ -102,6 +102,10 @@ final class SubcommandsMcpServeTest extends TestCase
         self::assertArrayNotHasKey('error', $init, json_encode($init));
         self::assertSame(McpServeHost::PROTOCOL_VERSION, $init['result']['protocolVersion'] ?? null);
         self::assertSame('candy-code', $init['result']['serverInfo']['name'] ?? null);
+        $version = $init['result']['serverInfo']['version'] ?? null;
+        self::assertIsString($version);
+        self::assertStringNotContainsString("\n", $version, 'serverInfo.version must not carry the --version trailing newline');
+        self::assertSame(trim($version), $version);
 
         $list = json_decode($lines[1], true);
         self::assertIsArray($list, 'the tools/list answer must be one JSON frame per line: ' . $lines[1]);

@@ -206,7 +206,9 @@ final class McpServeHost
             // and no resources; advertising them (even empty) would claim a
             // surface this host refuses to grow.
             'capabilities' => ['tools' => new \stdClass()],
-            'serverInfo' => ['name' => 'candy-code', 'version' => Help::version()],
+            // Help::version() carries the trailing newline `--version` prints; a
+            // newline inside serverInfo.version is wrong for an MCP client.
+            'serverInfo' => ['name' => 'candy-code', 'version' => \rtrim(Help::version())],
         ];
     }
 
