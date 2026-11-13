@@ -19,6 +19,7 @@ return [
     'cli.deleted_n'             => 'Usunięto {count} wpisów.',
     'cli.unknown_command'       => 'Nieznane polecenie: {cmd}',
     'cli.deleted_none'           => 'Nic nie usunięto: żadne wpisy nie pasują do "{key}".',
+    'cli.dryrun_none'            => 'Nic nie zostałoby usunięte: żadne wpisy nie pasują do "{key}".',
     'cli.pattern_not_supported'  => 'get wymaga dokładnego klucza, nie wzorca. Użyj "{bin} list <pattern>", aby dopasować wzorce glob.',
     'cli.db_deleted'             => 'Baza danych "{name}" usunięta.',
     'cli.db_not_found'           => 'Nie znaleziono bazy danych: {db}',

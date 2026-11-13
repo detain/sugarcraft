@@ -20,6 +20,7 @@ return [
     'cli.usage_export'          => 'Usage: {bin} export <json|yaml|yml> [db] [pattern]',
     'cli.deleted_n'             => 'Deleted {count} entries.',
     'cli.deleted_none'          => 'Nothing deleted: no entries match "{key}".',
+    'cli.dryrun_none'            => 'Nothing would be deleted: no entries match "{key}".',
     'cli.unknown_command'       => 'Unknown command: {cmd}',
     'cli.pattern_not_supported' => 'get takes an exact key, not a pattern. Use "{bin} list <pattern>" to match glob patterns.',
     'cli.db_deleted'            => 'Deleted database "{name}".',

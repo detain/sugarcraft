@@ -508,7 +508,8 @@ final class CliContractTest extends TestCase
     {
         $run = $this->runKv(['delete', 'nothing-matches-*', '--dry-run']);
         $this->assertSame(1, $run['exit']);
-        $this->assertStringContainsString('Nothing deleted', $run['stderr']);
+        $this->assertStringContainsString('Nothing would be deleted', $run['stderr'], 'a preview speaks in the conditional');
+        $this->assertStringNotContainsString('Nothing deleted', $run['stderr']);
     }
 
     public function testDeleteSingleUsesSingularWording(): void

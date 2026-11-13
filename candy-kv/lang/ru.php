@@ -19,6 +19,7 @@ return [
     'cli.deleted_n'             => 'Удалено {count} записей.',
     'cli.unknown_command'       => 'Неизвестная команда: {cmd}',
     'cli.deleted_none'           => 'Ничего не удалено: записи не соответствуют "{key}".',
+    'cli.dryrun_none'            => 'Ничего не будет удалено: записи не соответствуют "{key}".',
     'cli.pattern_not_supported'  => 'get требует точный ключ, а не шаблон. Для glob-шаблонов используйте "{bin} list <pattern>".',
     'cli.db_deleted'             => 'База данных "{name}" удалена.',
     'cli.db_not_found'           => 'База данных не найдена: {db}',

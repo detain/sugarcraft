@@ -338,7 +338,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
                 if (databaseMissing($store, $opts['key'])) {
                     reportDatabaseMiss($store, Store::splitKey($opts['key'], '')[0]);
                 }
-                fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => Store::sanitizeForTty($opts['key'])]) . "\n");
+                fwrite(STDERR, Lang::t('cli.dryrun_none', ['key' => Store::sanitizeForTty($opts['key'])]) . "\n");
                 exit(1);
             }
             echo PluralChooser::t('would_delete', $n) . "\n";

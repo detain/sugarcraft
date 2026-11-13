@@ -19,6 +19,7 @@ return [
     'cli.deleted_n'             => '{count} voci eliminate.',
     'cli.unknown_command'       => 'Comando sconosciuto: {cmd}',
     'cli.deleted_none'           => 'Niente eliminato: nessuna voce corrisponde a "{key}".',
+    'cli.dryrun_none'            => 'Non verrebbe eliminato nulla: nessuna voce corrisponde a "{key}".',
     'cli.pattern_not_supported'  => 'get richiede una chiave esatta, non un pattern. Usa "{bin} list <pattern>" per i pattern glob.',
     'cli.db_deleted'             => 'Database "{name}" eliminato.',
     'cli.db_not_found'           => 'Database non trovato: {db}',
