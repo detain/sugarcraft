@@ -193,7 +193,7 @@ final class ConversationRouter
             if ($inboundId !== null) {
                 $this->map->confirmInbound($platform, $inboundId);
             }
-        }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.session.could_not_open', ['error' => $e->getMessage()])));
+        }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.session.could_not_open', ['error' => $this->failureReason($e)])));
     }
 
     /**
@@ -217,7 +217,7 @@ final class ConversationRouter
             $this->serve->cancel($sessionId)
                 ->then(
                     fn () => $this->sendPrompt($channel, $ref, $sessionId, $fenced, 'queue', $images, $documents),
-                    fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.turn.cancel_failed', ['error' => $e->getMessage()])),
+                    fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.turn.cancel_failed', ['error' => $this->failureReason($e)])),
                 );
             $channel->typing($ref);
 
@@ -274,7 +274,7 @@ final class ConversationRouter
                         $this->map->rememberConversation($sessionId, $key, $ref);
                         $this->followNow($sessionId, $key);
                         $this->deliver($channel, $ref, Lang::t('channels.discord.session.new', ['sessionId' => $sessionId]));
-                    }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.session.could_not_create', ['error' => $e->getMessage()])));
+                    }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.session.could_not_create', ['error' => $this->failureReason($e)])));
                 break;
             case 'stop':
                 $sessionId = $this->map->sessionIdFor($key);
@@ -286,7 +286,7 @@ final class ConversationRouter
                 $this->serve->cancel($sessionId)
                     ->then(
                         fn () => $this->deliver($channel, $ref, Lang::t('channels.discord.turn.cancelled')),
-                        fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.turn.cancel_failed', ['error' => $e->getMessage()])),
+                        fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.turn.cancel_failed', ['error' => $this->failureReason($e)])),
                     );
                 break;
             case 'approve':
@@ -313,7 +313,7 @@ final class ConversationRouter
                     'args' => \implode(' ', $args),
                 ])->then(
                     fn (array $result) => $this->deliver($channel, $ref, $this->commandResultText($result)),
-                    fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.model.failed', ['error' => $e->getMessage()])),
+                    fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.model.failed', ['error' => $this->failureReason($e)])),
                 );
                 break;
             case 'pair':
@@ -840,6 +840,12 @@ final class ConversationRouter
         }
     }
 
+    /** Chat-safe reason (015): a ServeError renders by kind, everything else keeps its message. */
+    private function failureReason(\Throwable $e): string
+    {
+        return $e instanceof ServeError ? $e->userReason() : $e->getMessage();
+    }
+
     private function failWith(PlatformFace $channel, array $ref, string $message): void
     {
         $this->log->error('bridge_failure', ['channel' => $channel->name(), 'error' => $message]);
@@ -942,7 +948,7 @@ final class ConversationRouter
     private function refusePrompt(PlatformFace $channel, array $ref, string $sessionId, \Throwable $error): void
     {
         $this->log->warn('prompt_refused', ['session' => $sessionId, 'kind' => $error instanceof ServeError ? $error->kind : 'unknown']);
-        $this->failWith($channel, $ref, Lang::t('channels.discord.prompt.failed', ['error' => $error->getMessage()]));
+        $this->failWith($channel, $ref, Lang::t('channels.discord.prompt.failed', ['error' => $this->failureReason($error)]));
     }
 
     /**

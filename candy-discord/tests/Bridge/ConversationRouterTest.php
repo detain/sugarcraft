@@ -212,7 +212,7 @@ final class ConversationRouterTest extends TestCase
         $this->pushSettled($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]));
 
         self::assertSame([], $this->face->prompted, 'buttons must not render when approvals are disabled');
-        self::assertContains('/approve ask_9 once|always|deny', $this->face->delivered);
+        self::assertContains('/approve ask_9 [once|always|deny]', $this->face->delivered);
     }
 
     public function testTheTargetDoorKeepsChannelAsksQuietWhenDmOnly(): void

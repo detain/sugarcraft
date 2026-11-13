@@ -219,7 +219,7 @@ final class DiscordAccount implements PlatformFace
                     $this->approvalTtlSeconds(),
                     function () use ($askId): void {
                         unset($this->approvalTimers[$askId]);
-                        $this->retireApproval($askId, "\u{231B} Approval expired; answer with /approve <askId> once|always|deny while the ask is still open.");
+                        $this->retireApproval($askId, $this->approvalExpiryNotice());
                     },
                 );
             },
@@ -254,6 +254,20 @@ final class DiscordAccount implements PlatformFace
         }
 
         return $seconds;
+    }
+
+    /**
+     * The retire copy (014/038): only an approval whose card window was
+     * SHORTER than the core ceiling can honestly advertise the text
+     * answer — at the ceiling the ask itself is dead at this instant, so
+     * the bare expiry line stands.
+     */
+    public function approvalExpiryNotice(): string
+    {
+        $line = Lang::t('channels.discord.approval.expired');
+        $expiredEarly = $this->approvalTtlSeconds() < PendingAsk::EXPIRY_SECONDS;
+
+        return $expiredEarly ? $line . ' ' . Lang::t('channels.discord.approve.usage') : $line;
     }
 
     public function retireApproval(string $askId, string $line): void

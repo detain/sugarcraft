@@ -268,6 +268,22 @@ final class DiscordAccountTest extends TestCase
         self::assertSame([], $map->bindingsOfSession('sess-th'), 'the archived thread released its binding');
     }
 
+    public function testTheExpiryNoticeOnlyAdvertisesTheAnswerWhenTheAskMayStillLive(): void
+    {
+        // (014) at the core ceiling (default 30 min clamps to 1800 s) the
+        // ask is dead the moment the card retires — no hint, no lie.
+        $this->buildFace(['approvals' => ['ttlMinutes' => 30]]);
+        $atCeiling = $this->face->approvalExpiryNotice();
+        self::assertStringContainsString('expired', $atCeiling);
+        self::assertStringNotContainsString('/approve', $atCeiling, 'the dead-ask arm carries no answer promise');
+
+        // A short window retires the card while the core ask lives on:
+        // the canonical bracketed instruction is honest copy.
+        $this->buildFace(['approvals' => ['ttlMinutes' => 5]]);
+        $early = $this->face->approvalExpiryNotice();
+        self::assertStringContainsString('/approve <askId> [once|always|deny]', $early, 'the early arm keeps the canonical hint');
+    }
+
     public function testTheThreadProbeArchivesOnlyRealThreads(): void
     {
         $this->buildFace([]);
