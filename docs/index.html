@@ -490,7 +490,9 @@
                 <div class="layer-title">1. Foundation</div>
                 <div class="layer-bullets">
                     <strong>SugarCraft::Util</strong> — Ansi, Color, ColorProfile,
-                    Width, Tty. Depended on by everything below.
+                    Width, Tty — plus the <strong>SugarPty</strong> master/slave
+                    PTY primitives (POSIX FFI, Windows ConPTY). Depended on by
+                    everything below.
                 </div>
             </div>
             <div class="layer l2">
@@ -506,7 +508,8 @@
                 <div class="layer-bullets">
                     <strong>SugarCraft</strong> — Model / Msg / Cmd /
                     Program. An MVC-style Model–Update–View loop on ReactPHP
-                    with command and subscription hooks.
+                    with command and subscription hooks, driving real
+                    terminals through the layer-1 PTY primitives.
                 </div>
             </div>
             <div class="layer l4">
@@ -524,16 +527,19 @@
                 <div class="layer-bullets">
                     <strong>Tooling libs:</strong> SugarMarkdown (markdown → ANSI),
                     SugarCli (CLI chrome), SugarSshServer (SSH), SugarMetrics (telemetry),
-                    SugarLog (logging), SugarColorprofile (color detection).
+                    SugarLog (logging), SugarColorprofile (color detection),
+                    SugarAnimation (ANSI/GIF animation toolkit).
                     <br>
                     <strong>CLI apps:</strong> CandyScriptui (one-shot CLI helpers), CandyMdview (markdown),
                     CandyAnsiInspect (ANSI inspector), CandyCodeshot (code → SVG),
                     CandySshLauncher (SSH launcher), CandyGitServer (git server),
-                    CandyKv (key/value store), CandyMail (email sender).
+                    CandyKv (key/value store), CandyMail (email sender),
+                    CandyVcr (session record/replay).
                     <br>
                     <strong>TUI apps:</strong> CandyStarter, CandyTetris, CandyFiles,
                     CandyCode, CandyGit, CandySql, CandyCodetime, CandyMinesweeper,
-                    SugarAnimation, CandyTop, CandyFlappy.
+                    CandyTop, CandyFlappy, CandyGifView (GIF viewer),
+                    CandyImage (image viewer).
                     <br>
                     <strong>Web UI:</strong> CandyCodeWeb (browser face of CandyCode).
                 </div>
