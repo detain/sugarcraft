@@ -1106,6 +1106,151 @@ $t->isExpanded(0);   // false
 // tabulated under Row Index Domains in Expanded Rows above.
 ```
 
+## Full API at a Glance
+
+Every public member of the five surface classes, mechanically re-derived from
+the source's reflection data — signature plus its docblock lead line. Members
+the render pipeline owns (`@internal`: `Column::renderHeader()` /
+`renderCell()`, and the `RenderCanvas` / `CellLineMemo` layout plumbing) are
+excluded on rule, not by omission: they are machinery for `View()`, not API
+surface. A public member that appears here without a prose section elsewhere
+in this README is still documented — this table is the completeness floor.
+
+### Table
+
+| Member | Purpose (docblock lead line) |
+|---|---|
+| `static fromColumns(array $columns): self` | — |
+| `withRows(array $rows): self` | Replace the whole row set in ONE bulk copy. |
+| `withColumns(array $columns): self` | Replace all columns with a new set. |
+| `withBaseStyle(string $ansiStyle): self` | — |
+| `withMissingIndicator(StyledCell\|string $s): self` | Set the placeholder that paints any cell whose value is missing |
+| `withBorderStyle(string $ansiStyle): self` | — |
+| `withSelectable(bool $v = true): self` | — |
+| `withPageSize(int $n): self` | Rows per page. $n <= 0 disables pagination entirely — the whole view |
+| `withPage(int $n): self` | Navigate to a page, clamped to the valid range, and park the cursor on |
+| `withFrozenCols(array $indices): self` | Pin columns by index so they remain visible during horizontal scroll. |
+| `withFrozenKeys(array $keys): self` | Key-addressed companion of {@see self::withFrozenCols()} (audit ST-24): |
+| `withScrollX(int $offset): self` | Set the horizontal scroll offset for non-frozen columns. |
+| `withViewportHeight(int $height): self` | Visible-row window for viewport virtualization. Negatives clamp to 0 |
+| `withScrollY(int $offset): self` | — |
+| `scrollY(): int` | — |
+| `withZebra(bool $v = true): self` | — |
+| `withHeaderStyle(string $s): self` | — |
+| `withShowHeader(bool $v): self` | — |
+| `withShowFooter(bool $v): self` | — |
+| `withFooterType(FooterType $type): self` | Set the footer display type. |
+| `withBorder(Border $border): self` | Set the border character family for the table. |
+| `withMultilineMode(bool $multiline = true): self` | Toggle multi-line row rendering. |
+| `withStyleFunc(?callable $fn): self` | Set a per-cell style callback. |
+| `withCellPadding(int $padding): self` | Set inner cell padding. |
+| `withMarkedFrameSanitization(bool $v = true): self` | Route every content/header ingress through the marked-frame policy |
+| `withBorderless(bool $v = true): self` | — |
+| `withWidth(int $cols): self` | Pin the total render width (in cells). Flex columns fill exactly the room |
+| `withHiddenCols(array $indices): self` | Hide columns by index without removing them from the table. |
+| `withHiddenKeys(array $keys): self` | Key-addressed companion of {@see self::withHiddenCols()} (audit ST-24): |
+| `withExpandedRows(array $indices): self` | Set which rows are expanded on the current page. |
+| `toggleExpanded(int $rowIndex): self` | Toggle the expanded state of a row on the current page. |
+| `isExpanded(int $rowIndex): bool` | Check if a row on the current page is currently expanded. |
+| `addRow(Row $row): self` | Append ONE row (audit ST-65, finding 081): each call is an immutable |
+| `addRows(array $rows): self` | Append rows in ONE bulk copy (the counterpart to the single-add |
+| `SelectNext(): self` | — |
+| `SelectPrevious(): self` | — |
+| `withSelectedIndex(int $index): self` | Move the selection directly to a 0-based index in the PAGE-GLOBAL |
+| `SelectPage(int $page): self` | Jump to a page and park the cursor on its first row. Same semantics as |
+| `NextPage(): self` | — |
+| `PreviousPage(): self` | — |
+| `scrollYForKey(string $key): int` | Return the new scrollY value for a given keyboard key. |
+| `handleKey(string $key): self` | Return a new Table with scrollY adjusted for the given keyboard key. |
+| `maxScrollY(): int` | The largest scrollY the current view can show. |
+| `SortBy(string $colKey, bool $ascending = true, bool $primary = true): self` | Sort by $colKey. If already sorting by it, toggle asc/desc. |
+| `ClearSort(): self` | — |
+| `Filter(string $colKey, string $text): self` | — |
+| `ClearFilter(string $colKey): self` | — |
+| `ClearAllFilters(): self` | — |
+| `search(string $text): self` | Global full-text search (case-insensitive). |
+| `ClearSearch(): self` | Clear the global search. |
+| `Columns(): array` | — |
+| `column(string $key): ?Column` | Return the column with the given key, or null if not found. |
+| `Rows(): array` | — |
+| `filteredSortedRows(): array` | — |
+| `pagedRows(): array` | — |
+| `CurrentRow(): ?Row` | The selected row in the PAGE-GLOBAL filtered/sorted view (audit #5: |
+| `CurrentRowData(): ?RowData` | — |
+| `SelectedRow(): ?Row` | The currently selected Row from the filtered/sorted view, or null when |
+| `TotalRows(): int` | — |
+| `TotalPages(): int` | — |
+| `SelectedIndex(): int` | — |
+| `CurrentPage(): int` | — |
+| `PageSize(): int` | — |
+| `sortColumns(): array` | Active sort stack in priority order: the first entry is the primary |
+| `activeFilters(): array` | Active per-column filter texts, keyed by column key (the state |
+| `searchText(): string` | — |
+| `totalWidth(): int` | Total rendered width of the table in columns (pinned width when |
+| `PageFooter(): string` | — |
+| `RowsFooter(): string` | Return a "Showing X to Y of Z rows" footer string. |
+| `computeColumnWidths(int $tableWidth): array` | Compute actual column widths based on ColumnWidth enum values. |
+| `View(): string` | — |
+
+### Column
+
+| Member | Purpose (docblock lead line) |
+|---|---|
+| `static new(string $key, string $title, int $width): self` | — |
+| `withFlexibleWidth(int $share): self` | — |
+| `withFlexWidth(int $share): self` | Alias of withFlexibleWidth() under the Go flex-width name, so ports |
+| `withMaxWidth(int $max): self` | — |
+| `withFilterable(bool $v = true): self` | — |
+| `withAlignLeft(bool $v = true): self` | — |
+| `withStyle(string $ansiStyle): self` | — |
+| `withColumnWidth(ColumnWidth $columnWidth, float $percentValue = 0.0): self` | — |
+| `withWidthMode(ColumnWidth $mode, ?float $percent = null): self` | The single spelling for (re)declaring a column's width mechanism |
+| `withWrapMode(WrapMode $wrapMode): self` | — |
+| `static clipToWidth(string $text, int $width): string` | Clamp one line of text to a display-width budget, announcing the cut |
+| `static splitClusters(string $text): array` | Split text into clusters for character-level wrapping and width fitting. |
+| `readonly string $key` | public state |
+| `readonly string $title` | public state |
+| `readonly int $width` | public state |
+| `readonly int $flexibleWidth` | public state |
+| `readonly int $maxWidth` | public state |
+| `readonly bool $filterable` | public state |
+| `readonly bool $alignLeft` | public state |
+| `readonly string $style` | public state |
+| `readonly ColumnWidth $columnWidth` | public state |
+| `readonly float $percentValue` | public state |
+| `readonly WrapMode $wrapMode` | public state |
+
+### Row
+
+| Member | Purpose (docblock lead line) |
+|---|---|
+| `static new(RowData $data): self` | — |
+| `withStyle(string $ansiStyle): self` | — |
+| `withZebra(bool $on = true): self` | Opt this row into (or out of) the ODD zebra stripe, overriding its |
+| `readonly RowData $data` | public state |
+| `readonly string $style` | public state |
+| `readonly bool $zebra` | public state |
+
+### RowData
+
+| Member | Purpose (docblock lead line) |
+|---|---|
+| `static from(array $data): self` | — |
+| `get(string $key): mixed` | Get a cell value by column key. |
+| `has(string $key): bool` | Check if a key is present in this row. |
+| `all(): array` | — |
+| `with(string $key, mixed $value): self` | — |
+
+### StyledCell
+
+| Member | Purpose (docblock lead line) |
+|---|---|
+| `static new(mixed $value, string $ansiStyle = ''): self` | — |
+| `withStyle(string $ansiStyle): self` | — |
+| `(string) cast` | stringifies with the cell's raw SGR wrapper — see String-cast warning |
+| `readonly mixed $value` | public state |
+| `readonly string $style` | public state |
+
 ## Accessors
 
 sugar-table exposes **zero** `getFoo()`-form property accessors: property reads
