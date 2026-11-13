@@ -41,7 +41,6 @@ use SugarCraft\Vcr\Support\Scalars;
  */
 final class YamlFormat implements Format
 {
-    use RestrictsCassettePermissions;
     private const T_PRECISION = 3;
 
     public function __construct()
@@ -56,10 +55,12 @@ final class YamlFormat implements Format
     public function write(Cassette $cassette, string $path): void
     {
         $yaml = $this->encode($cassette);
-        if (@file_put_contents($path, $yaml) === false) {
-            throw new \RuntimeException("cannot write cassette to {$path}");
+        try {
+            // Atomic placement + 0600 before content (finding 018).
+            AtomicFileWriter::write($path, $yaml, 'cassette');
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("cannot write cassette to {$path}: {$e->getMessage()}", previous: $e);
         }
-        self::restrictToOwner($path);
     }
 
     public function read(string $path): Cassette

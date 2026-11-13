@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Encode;
 
+use SugarCraft\Vcr\Format\AtomicFileWriter;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameDedup;
 use SugarCraft\Vcr\Render\FrameStream;
@@ -331,21 +332,13 @@ final class TapeToGif
      */
     private function encodeAtomically(array $pngPaths, string $output, float $fps, array $frameHoldsMs): void
     {
-        $outputDir = dirname($output);
-
-        // Reserve a unique temp name IN THE SAME DIRECTORY as $output so the final
-        // rename stays on one filesystem (atomic, never cross-device). The `.gif`
-        // suffix is required because the ffmpeg encoder infers its muxer from the
-        // extension. `x` mode is O_CREAT|O_EXCL|O_WRONLY: exclusive creation fails
-        // (and never follows) if the name is already a symlink or a regular file,
-        // and fails if $outputDir is not writable — so a hostile pre-plant or a
-        // read-only directory surfaces as an explicit error, not a silent write.
-        $tmp = $outputDir . DIRECTORY_SEPARATOR . '.candyvcr-' . bin2hex(random_bytes(8)) . '.gif';
-        $handle = @fopen($tmp, 'x');
-        if ($handle === false) {
-            throw new \RuntimeException("Cannot create a temporary file for atomic GIF write in: {$outputDir}");
-        }
-        fclose($handle);
+        // Reserve the temp IN THE SAME DIRECTORY as $output (one filesystem,
+        // atomic rename) with a forced `.gif` suffix: the ffmpeg encoder
+        // infers its muxer from the extension even when the final output
+        // path has none. The exclusive-create `x` door order and the
+        // entry-replacing rename semantics live in AtomicFileWriter — the
+        // same primitive every cassette writer gained in VCR-S19.
+        $tmp = AtomicFileWriter::reserve($output, 'GIF', 'gif');
 
         try {
             // The encoder contract returns bool. Ignoring it meant a real
@@ -361,21 +354,11 @@ final class TapeToGif
                 throw new \RuntimeException("GIF encoder failed to produce: {$output}");
             }
 
-            // rename() replaces the directory ENTRY at $output rather than writing
-            // *through* it: a pre-existing symlink or hard link at $output is
-            // replaced by this fresh regular file instead of being followed or
-            // truncating a shared inode. This is the structural close for CWE-59
-            // (symlink-follow) on the default `<tape>.gif` path, the confine→write
-            // TOCTOU race (check-and-place is the atomic rename, not a compile-time
-            // is_link() far ahead of the write), and hard-link truncation — all at
-            // once, without a fopen O_NOFOLLOW that PHP does not expose.
-            if (!@rename($tmp, $output)) {
-                throw new \RuntimeException("Failed to move rendered GIF into place: {$output}");
-            }
+            AtomicFileWriter::commit($tmp, $output, 'rendered GIF');
         } catch (\Throwable $e) {
-            // Keep: failure-path tmp unlink must not mask $e (and the
+            // Keep: failure-path tmp discard must not mask $e (and the
             // exclusive-create reservation means a vanished tmp is benign).
-            @unlink($tmp);
+            AtomicFileWriter::discard($tmp);
             throw $e;
         }
     }
@@ -395,16 +378,10 @@ final class TapeToGif
      */
     private function writeImageAtomically(\GdImage|\Imagick $image, string $target): void
     {
-        $dir = dirname($target);
-        $ext = strtolower((string) pathinfo($target, PATHINFO_EXTENSION));
-        $suffix = $ext === '' ? '' : '.' . $ext;
-        $tmp = $dir . DIRECTORY_SEPARATOR . '.candyvcr-' . bin2hex(random_bytes(8)) . $suffix;
-
-        $handle = @fopen($tmp, 'x');
-        if ($handle === false) {
-            throw new \RuntimeException("Cannot create a temporary file for atomic image write in: {$dir}");
-        }
-        fclose($handle);
+        // The temp keeps the target's extension so an ext-imagick backend
+        // still infers the same format; reserve/commit/discard semantics
+        // (x door order, entry-replacing rename) are the shared primitive.
+        $tmp = AtomicFileWriter::reserve($target, 'image');
 
         try {
             $written = $image instanceof \Imagick
@@ -413,13 +390,9 @@ final class TapeToGif
             if ($written === false) {
                 throw new \RuntimeException("Failed to write screenshot: {$target}");
             }
-            if (!@rename($tmp, $target)) {
-                throw new \RuntimeException("Failed to move screenshot into place: {$target}");
-            }
+            AtomicFileWriter::commit($tmp, $target, 'screenshot');
         } catch (\Throwable $e) {
-            // Keep: failure-path temp unlink must not mask $e (and the
-            // exclusive-create reservation means a vanished temp is benign).
-            @unlink($tmp);
+            AtomicFileWriter::discard($tmp);
             throw $e;
         }
     }

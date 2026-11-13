@@ -19,7 +19,6 @@ use SugarCraft\Vcr\Cassette;
  */
 final class CompressedJsonlFormat implements Format
 {
-    use RestrictsCassettePermissions;
     private const DEFAULT_COMPRESSION_LEVEL = 6;
 
     /**
@@ -60,36 +59,22 @@ final class CompressedJsonlFormat implements Format
 
         if (!self::isGzipPath($path)) {
             // Write as plain JSONL
-            if (@file_put_contents($path, $contents) === false) {
-                throw new \RuntimeException("cannot write cassette to {$path}");
+            try {
+                AtomicFileWriter::write($path, $contents, 'cassette');
+            } catch (\RuntimeException $e) {
+                throw new \RuntimeException("cannot write cassette to {$path}: {$e->getMessage()}", previous: $e);
             }
-            self::restrictToOwner($path);
             return;
         }
 
-        $gz = @gzopen($path, 'wb' . $this->compressionLevel);
-        if ($gz === false) {
-            throw new \RuntimeException("cannot open gzip stream for {$path}");
-        }
-
         try {
-            // Write line-by-line to maintain streaming behavior.
-            // Each line is JSON-encoded separately by JsonlFormat.
-            $lines = explode("\n", $contents);
-            foreach ($lines as $line) {
-                if ($line === '') {
-                    continue;
-                }
-                $written = gzwrite($gz, $line . "\n");
-                if ($written === false) {
-                    throw new \RuntimeException("gzip write failed for {$path}");
-                }
-            }
-        } finally {
-            gzclose($gz);
+            // gzip into a reserved temp and rename (finding 018): the old
+            // direct gzopen meant a stream that died mid-deflate left a
+            // corrupt archive in place of the last good recording.
+            AtomicFileWriter::writeGzipped($path, $contents, $this->compressionLevel);
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("cannot open gzip stream for {$path}: {$e->getMessage()}", previous: $e);
         }
-        // .gz cassettes are cassettes too: owner-readable only (see write()).
-        self::restrictToOwner($path);
     }
 
     public function read(string $path): Cassette

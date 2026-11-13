@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Diff;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Vcr\Format\AtomicFileWriter;
 
 /**
  * Writes annotated diff output in unified diff format to a file.
@@ -40,8 +41,15 @@ final class DiffWriter
         int $context = 3,
     ): int|false {
         $diff = $this->buildUnifiedDiff($expected, $actual, $context);
-        $result = @file_put_contents($path, $diff);
-        return $result !== false ? strlen($diff) : false;
+        try {
+            // Same atomic placement the cassette writers gained (finding
+            // 018): a diff written during a failing CI run must not land
+            // half-mangled. The documented int|false contract is kept.
+            AtomicFileWriter::write($path, $diff, 'diff');
+        } catch (\RuntimeException) {
+            return false;
+        }
+        return strlen($diff);
     }
 
     /**
@@ -57,9 +65,9 @@ final class DiffWriter
         $expectedLines = explode("\n", $this->normalizeLineEndings($expected));
         $actualLines = explode("\n", $this->normalizeLineEndings($actual));
 
-        $diff = $this->generateUnifiedDiffLines($expectedLines, $actualLines, $context);
+        $diff = $this->generateUnifiedDiffLines($expectedLines, $actualLines);
 
-        return $this->formatUnifiedDiff($diff, $expected, $actual);
+        return $this->formatUnifiedDiff($diff, $context);
     }
 
     /**
@@ -147,11 +155,16 @@ final class DiffWriter
     /**
      * Generate the raw diff lines for a unified diff.
      *
+     * Context width is deliberately not a concern here — this method only
+     * decides WHICH lines changed; how much calm surround to print around
+     * them is the formatter's job (finding 018: the `$context` parameter
+     * used to sink into this signature ignored and die).
+     *
      * @param list<string> $expected
      * @param list<string> $actual
      * @return array{haves: list<string>, lacks: list<string>, changes: list<array{type: string, line: int, exp: string, act: string}>}
      */
-    private function generateUnifiedDiffLines(array $expected, array $actual, int $_context): array
+    private function generateUnifiedDiffLines(array $expected, array $actual): array
     {
         $changes = [];
         $maxLines = max(count($expected), count($actual));
@@ -180,8 +193,11 @@ final class DiffWriter
      * Format the diff lines into a unified diff string.
      *
      * @param array{haves: list<string>, lacks: list<string>, changes: list<array{type: string, line: int, exp: string, act: string}>} $diff
+     * @param int $context Caller-chosen context width, finally honoured
+     *                     (finding 018: this used to re-hardcode 3 no
+     *                     matter what writeUnifiedDiff was given).
      */
-    private function formatUnifiedDiff(array $diff, string $_expected, string $_actual): string
+    private function formatUnifiedDiff(array $diff, int $context): string
     {
         $expectedFile = 'expected.txt';
         $actualFile = 'actual.txt';
@@ -199,7 +215,7 @@ final class DiffWriter
 
         // Group changes by proximity and emit hunks
         $changes = $diff['changes'];
-        $hunks = $this->emitHunks($changes, $diff['haves'], $diff['lacks'], 3);
+        $hunks = $this->emitHunks($changes, $diff['haves'], $diff['lacks'], $context);
 
         return implode("\n", $lines) . "\n" . implode("\n", $hunks) . "\n";
     }

@@ -25,16 +25,18 @@ use SugarCraft\Vcr\Support\Scalars;
  */
 final class RelativeFormat implements Format
 {
-    use RestrictsCassettePermissions;
     private const T_PRECISION = 3;
 
     public function write(Cassette $cassette, string $path): void
     {
         $contents = $this->encode($cassette);
-        if (@file_put_contents($path, $contents) === false) {
-            throw new \RuntimeException("cannot write cassette to {$path}");
+        try {
+            // Atomic placement + 0600 before content (finding 018), same as
+            // JsonlFormat; see AtomicFileWriter for the full contract.
+            AtomicFileWriter::write($path, $contents, 'cassette');
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("cannot write cassette to {$path}: {$e->getMessage()}", previous: $e);
         }
-        self::restrictToOwner($path);
     }
 
     public function read(string $path): Cassette

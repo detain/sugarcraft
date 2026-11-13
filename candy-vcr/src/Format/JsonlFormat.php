@@ -56,20 +56,20 @@ use SugarCraft\Vcr\Support\Scalars;
  */
 final class JsonlFormat implements Format
 {
-    use RestrictsCassettePermissions;
-
     private const T_PRECISION = 3;
 
     public function write(Cassette $cassette, string $path): void
     {
         $contents = $this->encode($cassette);
-        if (@file_put_contents($path, $contents) === false) {
-            throw new \RuntimeException("cannot write cassette to {$path}");
+        try {
+            // Atomic placement: temp + 0600-before-content + rename in the
+            // destination directory (finding 018). A crash can no longer
+            // leave a half-written cassette in place of a good one, and the
+            // recorded keystrokes never exist in a umask-open file.
+            AtomicFileWriter::write($path, $contents, 'cassette');
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("cannot write cassette to {$path}: {$e->getMessage()}", previous: $e);
         }
-        // Cassettes hold everything that was typed; land them owner-readable
-        // only instead of at the ambient umask (Recorder's streaming path
-        // enforces the same 0600).
-        self::restrictToOwner($path);
     }
 
     public function read(string $path): Cassette
