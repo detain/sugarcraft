@@ -67,8 +67,11 @@ final class ManagerSearchFuzzyTest extends TestCase
         $m = $this->start()->search('');
         $this->assertSame('', $m->searchQuery);
         $this->assertCount(6, $m->searchResults);
+        // CF-09 re-pin: the corpus is the pane's in-memory listing, so an
+        // empty query now returns DISPLAY order (sorted, dirs first) where
+        // the old raw-lister call returned unsorted scandir order.
         $this->assertSame(
-            ['README.md', 'main.php', 'Makefile', 'models', 'human.txt', 'notes.txt'],
+            ['models', 'human.txt', 'main.php', 'Makefile', 'notes.txt', 'README.md'],
             $this->names($m),
         );
     }
@@ -111,5 +114,136 @@ final class ManagerSearchFuzzyTest extends TestCase
             true,
             'human.txt should outrank main.php',
         );
+    }
+
+    /**
+     * CF-09 acceptance: the documented impossible query "keep" types all
+     * four keys and reaches its file. Before, the k/j search-cursor hijack
+     * ate the first key and the name could never be typed.
+     */
+    public function testKeepIsFullyTypeableAndFindsItsFile(): void
+    {
+        $lister = static fn(string $p): array => $p === '/' ? [
+            new Entry('keep.txt', false, 10, 0),
+            new Entry('join.h', false, 20, 0),
+            new Entry('alpha', false, 30, 0),
+        ] : [];
+        $m = Manager::start('/', '/', $lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (['k', 'e', 'e', 'p'] as $ch) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        $this->assertSame('keep', $m->searchQuery);
+        // Fuzzy ranking: keep.txt tops the list. Partial scores are a
+        // legitimate Smith-Waterman outcome (alpha shares 'a'), so the
+        // acceptance is the ranking, not exclusivity.
+        $this->assertSame('keep.txt', $this->names($m)[0]);
+    }
+
+    /**
+     * CF-09 acceptance: zero lister invocations per keystroke. The old
+     * search() rescanned the directory on every character (~193 ms/char
+     * measured on real trees, and it also bypassed the visibility law).
+     */
+    public function testSearchIssuesZeroListerCallsPerKeystroke(): void
+    {
+        $calls = 0;
+        $tree = ['/' => [
+            new Entry('keep.txt', false, 10, 0),
+            new Entry('models', true, 0, 0),
+        ]];
+        $lister = static function (string $p) use (&$calls, $tree): array {
+            $calls++;
+            return $tree[$p] ?? [];
+        };
+        $m = Manager::start('/', '/', $lister);
+        $baseline = $calls; // construction-time listing is allowed
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (['k', 'e', 'e', 'p'] as $ch) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$m] = $m->update(new KeyMsg(KeyType::Down, ''));
+        [$m] = $m->update(new KeyMsg(KeyType::Backspace, '')); // 'kee'
+        $this->assertSame($baseline, $calls, 'search keystrokes must never touch the lister');
+    }
+
+    /**
+     * CF-09 (033): the hidden-file visibility law holds inside search.
+     * The old raw-lister corpus dumped every dotfile into '/' results —
+     * exactly where the UI invites selection — and Enter navigated into
+     * one. With showHidden off, hidden names must not surface.
+     */
+    public function testHiddenLawHoldsInSearch(): void
+    {
+        $lister = static fn(string $p): array => $p === '/' ? [
+            new Entry('.secret', true, 0, 0, isHidden: true),
+            new Entry('visible.txt', false, 10, 0),
+        ] : [];
+        $m = Manager::start('/', '/', $lister);
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertSame(['visible.txt'], $this->names($searching), 'empty query must honour showHidden');
+        [$hunting] = $searching->update(new KeyMsg(KeyType::Char, 's'));
+        [$hunting] = $hunting->update(new KeyMsg(KeyType::Char, 'e'));
+        [$hunting] = $hunting->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertNotContains('.secret', $this->names($hunting));
+        // Toggling hidden ON (the '.' chord) admits the dotfile — in BROWSE
+        // mode: during a search, '.' is ordinary query input (top of the
+        // dispatch is the search-mode short-circuit).
+        [$browse] = $hunting->update(new KeyMsg(KeyType::Escape, ''));
+        [$on] = $browse->update(new KeyMsg(KeyType::Char, '.'));
+        $this->assertTrue($on->activePane()->showHidden);
+        [$again] = $on->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertContains('.secret', $this->names($again));
+    }
+
+    /**
+     * CF-09: Enter on a FILE result exits search AND lands the pane cursor
+     * on that file — before, the cursor stayed wherever browse mode left
+     * it, so the next Enter acted on a different entry than the one chosen.
+     */
+    public function testEnterOnFileResultLandsCursorOnIt(): void
+    {
+        $lister = static fn(string $p): array => $p === '/' ? [
+            new Entry('home', true, 0, 0),
+            new Entry('other.txt', false, 5, 0),
+            new Entry('readme', false, 100, 0),
+        ] : [];
+        $m = Manager::start('/', '/', $lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (['r', 'e', 'a', 'd'] as $ch) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        // Top-ranked survivor of "read" is readme.
+        $this->assertSame('readme', $this->names($m)[0]);
+        [$done] = $m->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($done->searchQuery, 'search must close');
+        $this->assertSame('readme', $done->activePane()->currentEntry()?->name,
+            'pane cursor must sit on the chosen file');
+    }
+
+    /**
+     * CF-09: results are hard-capped near the live height. With no height
+     * captured the historical 20-row ceiling holds; with termRows the cap
+     * follows the viewport that CF-02 established.
+     */
+    public function testResultsAreCappedToViewportHeight(): void
+    {
+        $entries = [];
+        for ($i = 0; $i < 40; $i++) {
+            $entries[] = new Entry(sprintf('file-%02d', $i), false, $i, 0);
+        }
+        $lister = static fn(string $p): array => $p === '/' ? $entries : [];
+        $flat = Manager::start('/', '/', $lister);
+        $this->assertCount(20, $flat->search('')->searchResults, 'legacy cap 20 without a live height');
+
+        $pane = \SugarCraft\Files\Pane::open('/', $lister);
+        $short = (new \SugarCraft\Files\Manager\ManagerBuilder())
+            ->withLister($lister)
+            ->withLeft($pane)
+            ->withRight($pane)
+            ->withTermRows(8)
+            ->build();
+        $this->assertCount(3, $short->search('')->searchResults,
+            'cap must follow termRows-6 with a floor of 3');
     }
 }

@@ -270,25 +270,25 @@ final class ManagerTest extends TestCase
         // Initially at first result
         $this->assertSame(0, $searching->searchCursor);
 
-        // Move down with j
-        [$down] = $searching->update(new KeyMsg(KeyType::Char, 'j'));
+        // CF-09: result navigation is arrows-only. The bare j/k legs that
+        // used to move the search cursor hijacked two letters that occur
+        // in real file names, so a query containing them was untypeable.
+        [$down] = $searching->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(1, $down->searchCursor);
 
-        // Move down again
-        [$down] = $down->update(new KeyMsg(KeyType::Char, 'j'));
+        [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(2, $down->searchCursor);
 
-        // Move up with k
-        [$up] = $down->update(new KeyMsg(KeyType::Char, 'k'));
+        [$up] = $down->update(new KeyMsg(KeyType::Up, ''));
         $this->assertSame(1, $up->searchCursor);
 
-        // Move up with arrow
         [$up] = $up->update(new KeyMsg(KeyType::Up, ''));
         $this->assertSame(0, $up->searchCursor);
 
-        // Move down with arrow
-        [$down] = $up->update(new KeyMsg(KeyType::Down, ''));
-        $this->assertSame(1, $down->searchCursor);
+        // And the letters are typeable again: 'j' appends to the query.
+        [$typed] = $up->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame('j', $typed->searchQuery);
+        $this->assertSame(0, $typed->searchCursor);
     }
 
     public function testSearchEnterOpensResult(): void

@@ -53,6 +53,9 @@ final class Manager implements Model
 
     private const UNDO_LIMIT = 50;
 
+    /** @var int Result ceiling for a live-height-less search (CF-02's window math caps the real frame). */
+    private const SEARCH_CAP = 20;
+
     /**
      * Per-process trash directory, created lazily on first delete. @see trashRoot()
      *
@@ -1274,34 +1277,75 @@ final class Manager implements Model
     /** Start search mode with a query */
     public function search(string $query): self
     {
-        $cwd = $this->activePane()->cwd;
-        $allEntries = ($this->lister)($cwd);
+        // CF-09: the search corpus is the pane's IN-MEMORY listing, never a
+        // fresh lister rescan. Two defects died here: the per-keystroke
+        // ($this->lister)($cwd) call cost ~193 ms/char on real directories
+        // (30.7 ms scandir + resort, plus Smith-Waterman over every raw
+        // name), and — worse — the raw listing bypassed the pane's
+        // visibility law, so '/' in a hidden-off pane enumerated (and Enter
+        // navigated into) every dotfile the UI had deliberately hidden.
+        // The parent sentinel is chrome, not a matchable entry: excluded.
+        $cap = $this->termRows > 0 ? max(3, $this->termRows - 6) : self::SEARCH_CAP;
+        $candidates = [];
+        foreach ($this->activePane()->entries as $entry) {
+            if (!$entry->isParentSentinel()) {
+                $candidates[] = $entry;
+            }
+        }
         if ($query === '') {
-            // Empty query shows all entries but stays in search mode
-            return $this->withSearch('', $allEntries, 0);
+            // Empty query shows the (now visibility-correct) full listing,
+            // capped, and stays in search mode.
+            return $this->withSearch('', array_slice($candidates, 0, $cap), 0);
         }
         // Fuzzy-match filenames through the sugar-fuzzy SSOT (Smith-Waterman
         // local alignment). matchAll() ranks by score descending, so the
         // strongest subsequence matches float to the top and a query whose
-        // characters never appear yields no results. This upgrades the old
-        // exact-substring filter to fuzzy filtering without changing the
-        // search-mode UI or key handling.
+        // characters never appear yields no results.
+        //
+        // Charset prefilter: a Smith-Waterman score above zero requires at
+        // least one aligned character pair, so a name sharing no (case-folded)
+        // character with the query can never rank. Dropping those names
+        // before matchAll() skips the alignment matrix for the great
+        // majority of a large directory and cannot drop a single result —
+        // it is a strict superset of the scorer's positive set.
+        $queryChars = [];
+        foreach (self::codepoints(mb_strtolower($query)) as $ch) {
+            $queryChars[$ch] = true;
+        }
+        $survivors = [];
+        foreach ($candidates as $entry) {
+            foreach (self::codepoints(mb_strtolower($entry->name)) as $ch) {
+                if (isset($queryChars[$ch])) {
+                    $survivors[] = $entry;
+                    break;
+                }
+            }
+        }
         $matcher = SmithWatermanMatcher::new();
         // Queue entries per name so ranked results map back 1:1 even if a
         // directory ever surfaces two entries sharing a name.
         $byName = [];
-        foreach ($allEntries as $entry) {
+        foreach ($survivors as $entry) {
             $byName[$entry->name][] = $entry;
         }
-        $names = array_map(static fn(Entry $e) => $e->name, $allEntries);
+        $names = array_map(static fn(Entry $e) => $e->name, $survivors);
         $results = [];
-        foreach ($matcher->matchAll($query, $names) as $result) {
+        // Hard cap via the matcher's own limit: ranking is global, so the
+        // cap must apply after the sort (MatchResultSorter), not before.
+        foreach ($matcher->matchAll($query, $names, $cap) as $result) {
             $entry = array_shift($byName[$result->haystack]);
             if ($entry !== null) {
                 $results[] = $entry;
             }
         }
         return $this->withSearch($query, $results, 0);
+    }
+
+    /** Grapheme-ish codepoint split for the search charset prefilter. */
+    private static function codepoints(string $s): array
+    {
+        $out = preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY);
+        return $out === false ? str_split($s) : $out;
     }
 
     /** Exit search mode */
@@ -1330,7 +1374,11 @@ final class Manager implements Model
         if ($entry === null) {
             return $this;
         }
-        // If it's a directory, navigate into it; if file, deselect and exit search
+        // If it's a directory, navigate into it; if file, CF-09: exit search
+        // AND land the pane cursor on the hit — before, Enter on a file
+        // result dropped the user back to wherever the cursor previously
+        // was, so the visible selection was a lie and the next Enter acted
+        // on a different file than the one just chosen.
         if ($entry->isDir) {
             return $this->withActivePane(fn(Pane $p) => Pane::open(
                 Pane::join($p->cwd, $entry->name),
@@ -1339,7 +1387,7 @@ final class Manager implements Model
                 $p->showHidden
             ))->exitSearch();
         }
-        return $this->exitSearch();
+        return $this->withActivePane(fn(Pane $p) => $p->cursorOnName($entry->name))->exitSearch();
     }
 
     private function withSearch(?string $query, array $results, int $cursor): self
@@ -1362,11 +1410,15 @@ final class Manager implements Model
         if ($msg->type === KeyType::Enter) {
             return $this->openSearchResult();
         }
-        // Up/Down navigate results
-        if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+        // Up/Down navigate results. CF-09: ARROWS ONLY — the old k/j legs
+        // hijacked two letters that legitimately occur in file names, so
+        // "keep.txt" could never be queried (the documented "needs paste"
+        // workaround was a phantom of the hijack). k and j now fall through
+        // to the append leg like every other printable.
+        if ($msg->type === KeyType::Up) {
             return $this->moveSearchCursor(-1);
         }
-        if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+        if ($msg->type === KeyType::Down) {
             return $this->moveSearchCursor(1);
         }
         // Backspace removes last char from query
