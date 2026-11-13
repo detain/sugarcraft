@@ -66,6 +66,16 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     /** @var list<ProcesslistResult>|null Memoized filtered processlist to avoid 2-3× fetch per render */
     private ?array $cachedFilteredProcesslist = null;
 
+    /**
+     * The filter state the memo was computed under (adminpages-009). Compared
+     * by identity, never by value: an immutable with*() change mints a new
+     * ConnectionFilters object, and that new object IS the invalidation.
+     */
+    private ?ConnectionFilters $memoFilters = null;
+
+    /** The provider object identity the memo was computed against (adminpages-009). */
+    private ?int $memoProviderId = null;
+
     public function __construct(
         ServerContextInterface $context,
         private readonly ?int $maxConnections = 151,
@@ -418,8 +428,12 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      */
     public function withSelectedIndex(int $index): self
     {
+        // (adminpages-009) A cursor move cannot change which rows pass the
+        // filters — invalidating the memo here made every j/k keystroke
+        // re-fetch and re-wrap the entire processlist DTO. The filter result
+        // is keyed on (filter identity, provider identity) in
+        // filteredProcesslist(); moving the selection keeps the memo warm.
         $clone = clone $this;
-        $clone->cachedFilteredProcesslist = null; // invalidate memoization
         $filtered = $clone->filteredProcesslist();
 
         $clone->selectedIndex = $index;
@@ -438,9 +452,26 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      */
     public function filteredProcesslist(): array
     {
-        if ($this->cachedFilteredProcesslist === null) {
-            $rows = $this->processlistProvider->fetchAll();
+        // (adminpages-009) Fail loud for an unwired page: a bare `new` (no ::new)
+        // has no provider, and an empty-list fallback here would silently pin a
+        // forever-empty grid instead of surfacing the construction error.
+        $provider = $this->processlistProvider
+            ?? throw new \LogicException('ConnectionsPage rendered before its processlist provider was wired.');
+        // (adminpages-009) The memo is valid for exactly one (filters, provider)
+        // pair: eager nulling at the filter-touching clone arms is the fast path,
+        // these identity checks are the correctness belt — a provider swap
+        // (refresh()) changes the data under an unchanged-looking page clone,
+        // while a cursor move (withSelectedIndex) changes neither and stays warm.
+        $providerId = \spl_object_id($provider);
+        if (
+            $this->cachedFilteredProcesslist === null
+            || $this->filters !== $this->memoFilters
+            || $providerId !== $this->memoProviderId
+        ) {
+            $rows = $provider->fetchAll();
             $this->cachedFilteredProcesslist = $this->applyFilters($rows);
+            $this->memoFilters = $this->filters;
+            $this->memoProviderId = $providerId;
         }
         return $this->cachedFilteredProcesslist;
     }
@@ -452,6 +483,8 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     {
         $this->context->refresh();
         $clone = clone $this;
+        // (adminpages-009) No memo clear needed: the new provider object fails
+        // the identity belt in filteredProcesslist(), so the next read re-derives.
         $clone->processlistProvider = $this->processlistProvider->refresh();
         return $clone;
     }
