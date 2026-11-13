@@ -294,4 +294,76 @@ final class BinArgvTest extends TestCase
         $this->assertSame(0, $code, 'stderr was: ' . $err);
         $this->assertNotEmpty($out);
     }
+
+    // ---- msw-07: the ACCEPTED boot grammar (finding -009) -----------------
+    //
+    // Every older fixture that refuses is symmetric, so a transposition
+    // between fromInput($h, $w) and start($w, $h) kept the whole suite
+    // green. These legs make the CLI's documented "16 10 = 16 wide by 10
+    // tall" contract executable: the refusal probes name the axis that
+    // actually crossed the 2..50 ladder, and one asymmetric accepted boot
+    // pins the painted frame's geometry.
+
+    public function testAsymmetricRefusalProbesNameTheAxisThatCrossed(): void
+    {
+        // `60 5` is width 60 — the COLUMNS side is over the ladder; the
+        // refusal must say so, not blame rows.
+        [$code, , $err] = self::runBinary(['60', '5']);
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('columns must be at most 50', $err);
+        $this->assertStringNotContainsString('rows must be at most 50', $err, 'a $w/$h swap would blame the wrong axis');
+
+        // Mirror leg: `5 60` is height 60 — rows crossed.
+        [$code, , $err] = self::runBinary(['5', '60']);
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('rows must be at most 50', $err);
+        $this->assertStringNotContainsString('columns must be at most 50', $err);
+    }
+
+    public function testAsymmetricAcceptedBootPaintsWidthThenHeight(): void
+    {
+        // 16 wide × 10 tall: the border spans 16 + 2 padding cells and the
+        // interior carries 10 rows. A transposed boot would paint 16 rows
+        // across a 12-wide border — both counts redden together.
+        [$code, $out] = PtyLaunch::run(['16', '10'], rows: 40, cols: 100, quitKey: 'q');
+        $this->assertSame(0, $code, PtyLaunch::printable($out));
+        $printable = PtyLaunch::printable($out);
+        $horizontalMax = 0;
+        $verticalRows = 0;
+        foreach (preg_split('/[\r\n]+/', $printable) ?: [] as $line) {
+            if (($run = substr_count($line, '─')) > $horizontalMax) {
+                $horizontalMax = $run;
+            }
+            if (str_contains($line, '│')) {
+                $verticalRows++;
+            }
+        }
+        $this->assertSame(18, $horizontalMax, 'border spans width 16 + 2 padding');
+        $this->assertSame(10, $verticalRows, 'interior carries height 10 rows');
+        // Default-mines law runs on the accepted path: intdiv(16×10, 8) = 20.
+        $this->assertMatchesRegularExpression('/\b20\b/', $printable, 'derived mine count 20 rides the status line');
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function presetProvider(): array
+    {
+        return [
+            'easy'     => ['--easy'],
+            'standard' => ['--standard'],
+            'medium'   => ['--medium'],
+            'expert'   => ['--expert'],
+        ];
+    }
+
+    /**
+     * @dataProvider presetProvider
+     */
+    public function testEveryPresetBootsUnderAPtyAndQuitsCleanly(string $flag): void
+    {
+        [$code, $out] = PtyLaunch::run([$flag], rows: 40, cols: 100, quitKey: 'q');
+        $this->assertSame(0, $code, $flag . ' must boot and answer q cleanly: ' . PtyLaunch::printable($out));
+        $this->assertStringContainsString("\x1b[?1049h", $out, $flag . ' takes the alt screen');
+    }
 }
