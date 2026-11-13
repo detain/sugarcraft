@@ -64,5 +64,6 @@ return [
     'cli.render_resend_divergence' => 'Nota: --render mostra uma prévia do envelope SMTP MIME; o transporte configurado é o Resend, que envia um payload JSON. Os bytes abaixo não são o que será enviado.',
     'cli.empty_message' => 'Nada para enviar: a mensagem não contém corpo, nem parte HTML, nem anexo. Use --body, canalize a entrada, ou utilize --html.',
     'cli.deprecated_env' => '{old} está obsoleto; defina {new} em vez disso.',
+    'cli.resend_ignored_inputs' => 'Nota: o transporte Resend foi selecionado, portanto as entradas específicas de SMTP {inputs} são ignoradas (o Resend mantém seu orçamento fixo de 10 s de conexão / 30 s de transferência).',
     'cli.stdin_too_large' => 'A entrada STDIN excedeu o limite de {limit} bytes; reduza a entrada ou anexe-a como arquivo.',
 ];

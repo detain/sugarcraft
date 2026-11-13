@@ -64,5 +64,6 @@ return [
     'cli.render_resend_divergence' => 'Let op: --render toont een voorbeeld van de SMTP MIME-envelop; de geconfigureerde transport is Resend, die een JSON-payload plaatst. De onderstaande bytes zijn niet wat verzonden wordt.',
     'cli.empty_message' => 'Er is niets te verzenden: het bericht bevat geen tekstbody, geen HTML-onderdeel en geen bijlage. Gebruik --body, voer de invoer via een pipe in, of gebruik --html.',
     'cli.deprecated_env' => '{old} is verouderd; stel in plaats daarvan {new} in.',
+    'cli.resend_ignored_inputs' => 'Let op: de Resend-transport is gekozen, dus de SMTP-gebonden invoer {inputs} wordt genegeerd (Resend houdt zijn eigen vaste budget van 10 s verbinden / 30 s verzenden aan).',
     'cli.stdin_too_large' => 'De STDIN-invoer overschreed de limiet van {limit} bytes; verkort de invoer of voeg deze toe als bestand.',
 ];

@@ -64,5 +64,6 @@ return [
     'cli.render_resend_divergence' => '注意：--render 预览 SMTP MIME 信封；已配置的传输方式是 Resend，它提交 JSON 载荷。下面的字节不是实际发送的内容。',
     'cli.empty_message' => '没有可发送的内容：邮件不包含正文、HTML 部分或附件。请使用 --body、通过管道输入，或使用 --html。',
     'cli.deprecated_env' => '{old} 已弃用；请改用 {new}。',
+    'cli.resend_ignored_inputs' => '注意：已选择 Resend 传输，因此 SMTP 相关的输入 {inputs} 将被忽略（Resend 使用其固定的 10 秒连接 / 30 秒传输预算）。',
     'cli.stdin_too_large' => 'STDIN 输入超过了 {limit} 字节上限；请缩减输入或将其作为文件附件。',
 ];

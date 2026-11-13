@@ -64,5 +64,6 @@ return [
     'cli.render_resend_divergence' => 'Not: --render SMTP MIME zarfının önizlemesini gösterir; yapılandırılan taşıyıcı Resend olup JSON yük gönderir. Aşağıdaki baytlar gönderilecek içerik değildir.',
     'cli.empty_message' => 'Gönderilecek bir şey yok: ileti gövde, HTML bölümü ya da ek taşımıyor. --body kullanın, girdiyi borulayın ya da --html kullanın.',
     'cli.deprecated_env' => '{old} artık kullanılmıyor; bunun yerine {new} ayarlayın.',
+    'cli.resend_ignored_inputs' => 'Not: Resend taşıyıcısı seçildi, bu nedenle SMTP kapsamındaki {inputs} girdileri yok sayılır (Resend kendi sabit 10 s bağlanma / 30 s aktarma bütçesini korur).',
     'cli.stdin_too_large' => 'STDIN girdisi {limit} bayt sınırını aştı; girdiyi kısaltın ya da dosya olarak ekleyin.',
 ];

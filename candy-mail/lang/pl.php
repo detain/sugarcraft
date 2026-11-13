@@ -64,5 +64,6 @@ return [
     'cli.render_resend_divergence' => 'Uwaga: --render podgląda kopertę SMTP MIME; skonfigurowany transport to Resend, który wysyła ładunek JSON. Poniższe bajty nie są tym, co zostanie wysłane.',
     'cli.empty_message' => 'Brak treści do wysłania: wiadomość nie zawiera ciała, części HTML ani załącznika. Użyj --body, przekaż dane standardowym wejściem albo użyj --html.',
     'cli.deprecated_env' => '{old} jest przestarzałe; ustaw zamiast tego {new}.',
+    'cli.resend_ignored_inputs' => 'Uwaga: wybrano transport Resend, więc wejścia dotyczące SMTP {inputs} są ignorowane (Resend zachowuje własne stałe limity: 10 s łączenia / 30 s przesyłania).',
     'cli.stdin_too_large' => 'Dane ze STDIN przekroczyły limit {limit} bajtów; skróć wejście lub dołącz je jako plik.',
 ];

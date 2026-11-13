@@ -233,7 +233,11 @@ near miss.
 
 Value switches: `--from/--subject/--body/--reply-to/--html/--helo/--ca-file/--timeout`
 (the last three override their `CANDY_MAIL_SMTP_*` env rows, and the flags win over the
-environment). A value that begins with a dash needs the inline form
+environment; `--timeout` is range-checked at parse time on every path). Transport
+selection is a ladder, not a merge: a non-blank `RESEND_API_KEY` wins outright, the
+Resend leg reads none of `--timeout/--helo/--ca-file` (each one supplied prints a
+stderr note naming it), and the API transport keeps its own fixed 10 s connect /
+30 s transfer budget — the CLI's timeout knob is SMTP-only. A value that begins with a dash needs the inline form
 (`--subject=-50% off`) — a switch is never stolen as another switch's value. The CLI
 requires a `--to` recipient: cc/bcc alone ends in a loud refusal (the library itself
 permits cc/bcc-only sends over SMTP; the Resend API needs at least one `to`).
@@ -255,7 +259,8 @@ export CANDY_MAIL_SMTP_REQUIRE_TLS=1          # default ON; ON words 1/true/yes/
 export CANDY_MAIL_SMTP_IMPLICIT_TLS=0         # set 1 for port-465 style direct TLS (same word vocabulary)
 export CANDY_MAIL_SMTP_HELO=mail.example.com  # EHLO/HELO identity (letters, digits, dots, hyphens only)
 export CANDY_MAIL_SMTP_CA_FILE=/path/ca.pem   # custom CA bundle for TLS verification
-export CANDY_MAIL_SMTP_TIMEOUT=30             # connect + per-response seconds budget, 1..3600 (default 30)
+export CANDY_MAIL_SMTP_TIMEOUT=30             # connect + per-response seconds budget, 1..3600 (default 30);
+                                              # range-checked at parse time — ignored (with a note) when Resend wins
 export CANDY_MAIL_FROM=me@example.com         # Sender default — REQUIRED unless --from passed (never fabricated)
 export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to the plain-text body (HTML-only mail drops it)
 # Pre-rename POP_* exports are imported onto CANDY_MAIL_* equivalents whole-prefix

@@ -392,6 +392,14 @@ function parseArgs(array $argv): array
         $opts['to'] = $positional;
     }
 
+    // CM-15: --timeout is validated at PARSE time, on every path — the old
+    // shape only inspected it inside the SMTP branch, so a configured Resend
+    // key let `--timeout=99999` (or `--timeout=cat`) ride silently to a
+    // transport that never reads it. The bounds live in one home.
+    if (isset($opts['timeout'])) {
+        timeoutSeconds($opts['timeout']);
+    }
+
     return [
         'positional' => $positional,
         'opts'       => $opts,
@@ -591,6 +599,22 @@ function buildTransport(array $flags = []): Transport
     // full SMTP config). An absent or blank key means "not configured".
     $apiKey = \trim(envString('RESEND_API_KEY'));
     if ($apiKey !== '') {
+        // CM-15: the Resend leg ignores every SMTP-scoped input — say so
+        // once, loudly, naming each supplied one, instead of letting the
+        // operator believe --timeout/--helo/--ca-file configured the send
+        // that is actually dialling api.resend.com. The env-var NAMES are
+        // attacker-settable and the flag values are user bytes, so the
+        // whole line rides Sanitize::untrusted.
+        $ignored = [];
+        foreach (['timeout' => '--timeout', 'helo' => '--helo', 'ca_file' => '--ca-file'] as $key => $label) {
+            if ((string) ($flags[$key] ?? '') !== '') {
+                $ignored[] = $label;
+            }
+        }
+        if ($ignored !== []) {
+            \fwrite(\STDERR, Sanitize::untrusted(Lang::t('cli.resend_ignored_inputs', ['inputs' => \implode(', ', $ignored)])) . "\n");
+        }
+
         return new ResendTransport($apiKey);
     }
 

@@ -64,5 +64,6 @@ return [
     'cli.render_resend_divergence' => '注意: --render は SMTP MIME エンベロープのプレビューを表示します。設定済みのトランスポートは Resend で、JSON ペイロードが送信されます。以下のバイトは実際の送信内容ではありません。',
     'cli.empty_message' => '送信する内容がありません: メッセージに本文、HTML パート、添付ファイルが含まれていません。--body を指定するか、入力パイプするか、--html を使用してください。',
     'cli.deprecated_env' => '{old} は非推奨です。代わりに {new} を設定してください。',
+    'cli.resend_ignored_inputs' => '注: Resend トランスポートが選択されたため、SMTP 系の入力 {inputs} は無視されます（Resend は接続 10 秒 / 転送 30 秒の固定予算を使います）。',
     'cli.stdin_too_large' => 'STDIN 入力が上限 {limit} バイトを超過しました。入力を削減するか、ファイルとして添付してください。',
 ];

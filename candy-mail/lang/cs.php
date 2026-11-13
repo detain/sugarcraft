@@ -64,5 +64,6 @@ return [
     'cli.render_resend_divergence' => 'Poznámka: --render zobrazuje náhled SMTP MIME obálky; nakonfigurovaný transport je Resend, který posílá JSON payload. Následující bajty se neodešlou.',
     'cli.empty_message' => 'Není co odeslat: zpráva neobsahuje tělo, HTML část ani přílohu. Použijte --body, převeďte vstup troubou, nebo použijte --html.',
     'cli.deprecated_env' => '{old} je zastaralé; nastavte místo toho {new}.',
+    'cli.resend_ignored_inputs' => 'Poznámka: byl vybrán transport Resend, takže vstupy specifické pro SMTP {inputs} jsou ignorovány (Resend si zachovává vlastní pevné limity 10 s připojování / 30 s přenosu).',
     'cli.stdin_too_large' => 'Vstup ze STDIN překročil limit {limit} bajtů; zkraťte vstup, nebo jej přiložte jako soubor.',
 ];

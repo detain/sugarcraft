@@ -569,6 +569,34 @@ final class BinDispatchTest extends TestCase
         }
     }
 
+    public function testParseTimeTimeoutRefusesBeforeTransportSelection(): void
+    {
+        // CM-15 acceptance: with a Resend key configured, an out-of-range
+        // --timeout used to ride silently (the SMTP branch never ran).
+        $result = $this->runCli(
+            ['--to', 'b@example.com', '--timeout=99999', '--render'],
+            'hello',
+            env: ['RESEND_API_KEY' => 're_lane_probe', 'CANDY_MAIL_FROM' => 'a@example.com'],
+        );
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('Timeout', $result['err']);
+    }
+
+    public function testResendLegNotesEveryIgnoredSmtpInput(): void
+    {
+        // CM-15 acceptance: choosing Resend with SMTP-scoped flags supplied
+        // prints one note naming each ignored input instead of silence.
+        $result = $this->runCli(
+            ['--to', 'b@example.com', '--timeout=60', '--helo', 'relay.invalid', '--render'],
+            'hello',
+            env: ['RESEND_API_KEY' => 're_lane_probe', 'CANDY_MAIL_FROM' => 'a@example.com'],
+        );
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['err']);
+        $this->assertStringContainsString('--timeout', $result['err']);
+        $this->assertStringContainsString('--helo', $result['err']);
+        $this->assertStringNotContainsString('--ca-file', $result['err']);
+    }
+
     public function testRelayFailureAnnouncesTheWrapExactlyOnce(): void
     {
         // CM-13 era finding 013: a refused dial printed

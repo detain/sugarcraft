@@ -625,6 +625,44 @@ final class CliTest extends TestCase
         $this->assertSame('subject', \SugarCraft\Mail\canonicalFlagName('--subject'));
     }
 
+    public function testParseTimeTimeoutValidationAppliesOnEveryPath(): void
+    {
+        // CM-15: a malformed --timeout is refused at PARSE time — before any
+        // transport decision — even when the shape that once swallowed it
+        // (a configured Resend key, no SMTP host) is in play.
+        $this->setEnv('RESEND_API_KEY', 're_parse_probe');
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('Timeout 99999');
+            \SugarCraft\Mail\parseArgs(['candy-mail', '--to', 'a@b.c', '--timeout=99999']);
+        } finally {
+            unset($_ENV['RESEND_API_KEY']);
+            \putenv('RESEND_API_KEY');
+        }
+    }
+
+    public function testParseTimeTimeoutKeepsABoundedValue(): void
+    {
+        $args = \SugarCraft\Mail\parseArgs(['candy-mail', '--to', 'a@b.c', '--timeout=60']);
+        $this->assertSame('60', $args['opts']['timeout']);
+    }
+
+    public function testResendSelectionIgnoresNothingSilently(): void
+    {
+        // CM-15: the ignored-inputs note names each SMTP-scoped flag the
+        // Resend leg silently drops. (The fwrite itself is proven by the
+        // BinDispatch subprocess pin; here the list-composition contract
+        // stays exercised without stderr capture.)
+        $this->setEnv('RESEND_API_KEY', 're_note_probe');
+        try {
+            $transport = \SugarCraft\Mail\buildTransport(['timeout' => '60', 'helo' => 'h.invalid']);
+            $this->assertInstanceOf(\SugarCraft\Mail\ResendTransport::class, $transport);
+        } finally {
+            unset($_ENV['RESEND_API_KEY']);
+            \putenv('RESEND_API_KEY');
+        }
+    }
+
     public function testHelpStatesTheExitCodeContract(): void
     {
         // CM-14: the help tail must carry the exit-code contract itself, not
