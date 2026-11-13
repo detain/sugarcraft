@@ -78,6 +78,10 @@ works — inline-protocol rendering is a different route, offered by
 | `--version` / `-v`    | Print the version stamp and exit 0.                               |
 
 Flags may appear before or after the positional `<gif>` and preset token.
+The two positionals themselves are ordered, though: the first is the file,
+the second the preset slot — `candy-gifview my.gif density` plays density,
+while `candy-gifview density my.gif` refuses with `unknown preset 'my.gif'`
+(the refusal always names the token sitting in the preset slot).
 The rate arithmetic runs on three slots. A **rate slot** is written by both
 `--fps=N` and the absolute form `--speed=Nfps` — they share the slot, so the
 last of *those* spellings wins. A **multiplier** (`--speed=N`) composes onto
