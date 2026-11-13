@@ -508,4 +508,18 @@ final class SqliteBackendTest extends TestCase
         $this->backend->insert(new \SugarCraft\CodeTime\Heartbeat(time: time(), project: 'p', language: 'php', file: 'a.php', duration: 60));
         $this->assertTrue($this->backend->hasAnyHeartbeat());
     }
+
+    public function testTheBusyTimeoutAndPrivacyThrowArmsArePinnedInSource(): void
+    {
+        // Finding 075, SqliteBackend side: the busy-timeout refusal and the
+        // database/sidecar mode throws cannot be planted portably (root and
+        // leniency both glide past them), so the arms are structural pins —
+        // renaming or dropping one must redden a test.
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Storage/SqliteBackend.php');
+        $this->assertStringContainsString('cannot set the busy timeout on database file', $src);
+        $this->assertStringContainsString('cannot make database file {$dbPath} owner-private', $src);
+        $this->assertStringContainsString('cannot make database sidecar {$sidecar} owner-private', $src);
+        $this->assertStringContainsString('if (!$this->db->busyTimeout(self::BUSY_TIMEOUT_MS))', $src,
+            'the timeout throw must be gated on the call actually failing');
+    }
 }

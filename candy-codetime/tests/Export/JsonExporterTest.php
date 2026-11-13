@@ -95,4 +95,28 @@ final class JsonExporterTest extends TestCase
         $this->assertSame('a.php', $decoded[0]['file']);
         $this->assertSame(60, $decoded[0]['duration']);
     }
+
+    public function testALegacyRowWithInvalidUtf8BytesIsAnOwnedEncodeErrorNotAFatal(): void
+    {
+        // Finding 075, export side (pairs S04's write door and S05's sweep):
+        // a database poisoned before the UTF-8 gate can hand the exporter
+        // raw broken bytes. json_decode/json_encode then fail — the reader
+        // lane keeps them alive, so encode() must answer with its own
+        // RuntimeException, and a raw JsonException escaping unwrapped
+        // would launder the message through bin's storageError anyway.
+        $broken = new Heartbeat(
+            time: 1700000000,
+            project: "\xff\xfebroken",
+            language: 'php',
+            file: 'a.php',
+            duration: 60,
+        );
+
+        try {
+            $this->exporter->encode([$broken]);
+            $this->fail('invalid UTF-8 must not produce a silently corrupt payload');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('export could not be encoded', $error->getMessage());
+        }
+    }
 }

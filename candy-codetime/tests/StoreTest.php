@@ -855,4 +855,51 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         return [$out, $err, $exit];
     }
 
+
+    public function testEnsurePrivateFileTightensALooseFileAndKeepsItsBytes(): void
+    {
+        // Direct exercise of the public mode door (finding 075): AutoBackup
+        // only ever reaches it through copy paths, so the contract itself —
+        // loose in, tight out, bytes untouched — needs its own pin.
+        $path = $this->tmp . '/loose-day.jsonl';
+        file_put_contents($path, "{\"project\": \"kept\"}\n");
+        chmod($path, 0o666);
+        clearstatcache();
+
+        Store::ensurePrivateFile($path, 'day file');
+
+        clearstatcache();
+        $this->assertSame(0o600, fileperms($path) & 0o777);
+        $this->assertStringContainsString('kept', (string) file_get_contents($path));
+
+        // Already-tight files take the early return untouched (no chmod churn).
+        Store::ensurePrivateFile($path, 'day file');
+        clearstatcache();
+        $this->assertSame(0o600, fileperms($path) & 0o777);
+    }
+
+    public function testTheModeGuardThrowArmsArePinnedInSource(): void
+    {
+        // A failed chmod is not deterministically reachable for an
+        // unprivileged user everywhere (root glides over every mode), so the
+        // throw arms are structural pins, the house pattern for runtime-
+        // unobservable guards (finding 075): removing either check must
+        // redden a test even though no OS failure can be planted reliably.
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Store.php');
+
+        $start = strpos($src, 'private static function makePrivate');
+        $this->assertNotFalse($start, 'makePrivate() is the shared mode door');
+        $body = substr($src, $start, 700);
+        $this->assertStringContainsString('($mode & $looseMask) === 0', $body,
+            'the early return must skip already-private paths, not skip the check');
+        $this->assertStringContainsString('if (!@chmod($path, $target)) {', $body);
+        $this->assertStringContainsString('cannot make {$label} {$path} owner-private', $body);
+
+        $dirStart = strpos($src, 'public static function ensurePrivateDir');
+        $this->assertNotFalse($dirStart);
+        $dirBody = substr($src, $dirStart, 1100);
+        $this->assertStringContainsString('@mkdir($dir, 0o700, true)', $dirBody,
+            'the directory must be created under a narrowed umask, error-surfaced for the message');
+        $this->assertStringContainsString("'cannot create ' . \$label", $dirBody);
+    }
 }
