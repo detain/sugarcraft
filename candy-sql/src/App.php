@@ -770,11 +770,19 @@ final class App implements Model
 
         $cache = AdminQueryCache::instance();
         $connKey = self::adminConnKey($isPostgres, $dsn, $username, $password);
-        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
-            return $isPostgres
-                ? new ReactPostgresConnection($dsn, $username, $password)
-                : new ReactMysqlConnection($dsn, $username, $password);
-        });
+        try {
+            $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+                return $isPostgres
+                    ? new ReactPostgresConnection($dsn, $username, $password)
+                    : new ReactMysqlConnection($dsn, $username, $password);
+            });
+        } catch (\Throwable $e) {
+            // A07 fail-fast doors (empty user / unrecognised sslmode) throw
+            // at construction; this seam keeps the method's documented
+            // always-resolves contract — the pane surfaces the refusal as
+            // the error text instead of the throw crashing the loop.
+            return \React\Promise\resolve(new QueryRowsLoadedMsg($sql, [], $e->getMessage(), $queryGen));
+        }
 
         return $connection->query($sql)
             ->then(
@@ -977,11 +985,18 @@ final class App implements Model
 
         $cache = AdminQueryCache::instance();
         $connKey = self::adminConnKey($isPostgres, $dsn, $username, $password);
-        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
-            return $isPostgres
-                ? new ReactPostgresConnection($dsn, $username, $password)
-                : new ReactMysqlConnection($dsn, $username, $password);
-        });
+        try {
+            $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+                return $isPostgres
+                    ? new ReactPostgresConnection($dsn, $username, $password)
+                    : new ReactMysqlConnection($dsn, $username, $password);
+            });
+        } catch (\Throwable $e) {
+            // A07: the dial doors throw at construction; the browse seam
+            // folds them into the rows-msg error text like any other fetch
+            // failure, never a loop-crashing sync throw.
+            return \React\Promise\resolve(new TableRowsLoadedMsg($name, [], $e->getMessage(), $loadGen));
+        }
 
         return $connection->query(PreviewQuery::columnsSql($flavor, $name))
             ->then(function (array $colRows) use ($connection, $flavor, $name): \React\Promise\PromiseInterface {
@@ -1386,11 +1401,23 @@ final class App implements Model
         // opening a fresh TCP/auth connection every poll).
         $cache = AdminQueryCache::instance();
         $connKey = self::adminConnKey($isPostgres, $dsn, $username, $password);
-        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
-            return $isPostgres
-                ? new ReactPostgresConnection($dsn, $username, $password)
-                : new ReactMysqlConnection($dsn, $username, $password);
-        });
+        try {
+            $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+                return $isPostgres
+                    ? new ReactPostgresConnection($dsn, $username, $password)
+                    : new ReactMysqlConnection($dsn, $username, $password);
+            });
+        } catch (\Throwable $e) {
+            // A07: the dial doors (empty user / unrecognised sslmode) throw
+            // at construction. Honour the method's "wrap entire async flow"
+            // intent here too — a refused dial folds into the same safe
+            // empty-data resolution the context-failure arm produces, after
+            // a logged reason, instead of escaping the tick into the loop.
+            $msg = $e->getMessage();
+            QueryLogger::log('error', 'adminDial', 0, $msg);
+
+            return \React\Promise\resolve($drainOnly ? null : new AdminDataLoadedMsg([], [], microtime(true)));
+        }
 
         if ($isPostgres) {
             $statusQuery = "SELECT datname, numbackends, xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted, conflicts, temp_files, temp_bytes, deadlocks FROM pg_stat_database";

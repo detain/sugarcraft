@@ -21,10 +21,13 @@ use SugarCraft\Sql\Db\Flavor;
  * and the app never needs the MySQL-style sync stand-down for pgsql.
  *
  * Both polarities are pinned: every accepted libpq mode lands verbatim;
- * absent/unknown modes are defensively omitted (PgAsync's own default is
- * 'prefer', matching libpq's). The App-level pin asserts a verified pgsql
- * mode keeps the admin tick armed — if the MySQL refusal gate ever leaked
- * onto pgsql, that goes red by name.
+ * an absent mode omits the parameter (PgAsync's own default is 'prefer',
+ * matching libpq's), and an UNRECOGNISED mode is refused at the door
+ * (admindata-009/SQL-A07) — the old defensive omission handed the
+ * connection to the vendor's plaintext-capable 'prefer' default, exactly
+ * the downgrade a typo'd verify-full must never become. The App-level pin
+ * asserts a verified pgsql mode keeps the admin tick armed — if the MySQL
+ * refusal gate ever leaked onto pgsql, that goes red by name.
  */
 final class ReactPostgresConnectionTlsTest extends TestCase
 {
@@ -41,12 +44,15 @@ final class ReactPostgresConnectionTlsTest extends TestCase
     }
 
     /** @return array<string,mixed> */
-    private function parametersFor(string $dsn): array
+    private function parametersFor(string $dsn, string $user = 'appuser', string $pass = 'secret'): array
     {
-        $connection = new ReactPostgresConnection($dsn);
+        // Reflection-bypass construction (admindata-008 era): the real
+        // constructor now refuses an empty username, and dsnToParameters()
+        // is the unit under test — same pattern as ReactMysqlConnectionTest.
+        $ref = new \ReflectionClass(ReactPostgresConnection::class);
+        $connection = $ref->newInstanceWithoutConstructor();
 
-        return (new \ReflectionMethod($connection, 'dsnToParameters'))
-            ->invoke($connection, $dsn, '', '');
+        return $ref->getMethod('dsnToParameters')->invoke($connection, $dsn, $user, $pass);
     }
 
     /** @return array<string,mixed> */
@@ -78,22 +84,45 @@ final class ReactPostgresConnectionTlsTest extends TestCase
         $this->assertSame($expected, $params['tls']);
     }
 
+    /** @return array<string,string> */
+    public static function refusedTlsModes(): array
+    {
+        return [
+            'invented mode' => ['verify-planet'],
+            // the row's own headline hazard: underscores instead of hyphens
+            // are the classic libpq-CLI spelling carried into a DSN — it must
+            // never quietly become 'prefer'
+            'verify_full typo' => ['verify_full'],
+            'wrong case' => ['REQUIRE'],
+        ];
+    }
+
+    #[DataProvider('refusedTlsModes')]
+    public function testUnknownModeIsRefusedAtTheDoor(string $mode): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('unrecognised sslmode "' . $mode . '"');
+
+        $this->parametersFor("pgsql:host=h;port=5432;dbname=d;sslmode={$mode}");
+    }
+
+    /**
+     * admindata-008 (SQL-A07): the real constructor must refuse to guess
+     * 'postgres' for an empty username.
+     */
+    public function testEmptyUsernameRefusesTheGuessedPostgresDial(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('empty username');
+
+        new ReactPostgresConnection('pgsql:host=h;port=5432;dbname=d', '', 'p');
+    }
+
     public function testModelessDsnOmitsTheTlsParameterEntirely(): void
     {
         $params = $this->parametersFor('pgsql:host=h;port=5432;dbname=d');
 
         $this->assertArrayNotHasKey('tls', $params, 'no sslmode in the DSN must inherit PgAsync defaults');
-    }
-
-    public function testUnknownModeIsDefensivelyOmitted(): void
-    {
-        $params = $this->parametersFor('pgsql:host=h;port=5432;dbname=d;sslmode=verify-planet');
-
-        $this->assertArrayNotHasKey(
-            'tls',
-            $params,
-            'an unrecognised sslmode must not be handed to the vendor constructor, which would throw',
-        );
     }
 
     public function testTlsThreadingLeavesTheOtherParametersUntouched(): void

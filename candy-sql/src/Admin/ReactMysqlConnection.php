@@ -272,7 +272,8 @@ final class ReactMysqlConnection implements AsyncConnection
      * username as the scheme and reports no host), so with assertions disabled
      * react/mysql connects to an empty host and every connect is "refused".
      * react/mysql rawurldecode()s the user/pass/db, so they are rawurlencode()d
-     * here to survive credentials containing @ : / etc.
+     * here to survive credentials containing @ : / etc. The username must be
+     * explicit: an empty one throws instead of guessing 'root' (admindata-008).
      */
     private function dsnToUri(string $dsn, string $username, string $password): string
     {
@@ -285,11 +286,19 @@ final class ReactMysqlConnection implements AsyncConnection
         }
         $dbname = $this->extractDsnValue($dsn, 'dbname') ?? '';
 
-        $user = $username !== '' ? $username : 'root';
+        if ($username === '') {
+            // admindata-008: the empty user used to substitute 'root' — an
+            // unconfigured admin dial silently ran as the server's most
+            // powerful local identity. Refusing is the whole point: the
+            // caller must say who it is before we say it to the server.
+            throw new \InvalidArgumentException(
+                'ReactMysqlConnection: empty username — refusing to dial MySQL as the guessed "root" identity; pass an explicit user',
+            );
+        }
 
         return sprintf(
             'mysql://%s:%s@%s:%s/%s',
-            rawurlencode($user),
+            rawurlencode($username),
             rawurlencode($password),
             $host,
             $port,

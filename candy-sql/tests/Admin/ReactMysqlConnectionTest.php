@@ -85,6 +85,27 @@ final class ReactMysqlConnectionTest extends TestCase
     }
 
     /**
+     * admindata-008 (SQL-A07): an empty username used to substitute 'root',
+     * silently dialing the admin path as the server's most powerful local
+     * identity. The real constructor (not the reflection bypass) must refuse.
+     */
+    public function testEmptyUsernameRefusesTheGuessedRootDial(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('empty username');
+
+        new ReactMysqlConnection('mysql:host=h;port=3306;dbname=d', '', 'p');
+    }
+
+    /** The refusal is only for the empty sentinel — a real user still dials. */
+    public function testExplicitUsernameDialsUnchanged(): void
+    {
+        $connection = new ReactMysqlConnection('mysql:host=h;port=3306;dbname=d', 'appuser', 'p');
+
+        $this->assertInstanceOf(ReactMysqlConnection::class, $connection);
+    }
+
+    /**
      * Pins the query-deadline API on both async wrappers: an optional float
      * defaulting to QueryTimeout::DEFAULT_SECONDS, so existing
      * `new ReactMysqlConnection($dsn,$u,$p)` call sites get the protective

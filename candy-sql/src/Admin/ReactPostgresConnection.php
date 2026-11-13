@@ -65,7 +65,7 @@ final class ReactPostgresConnection implements AsyncConnection
      * so an unrecognised value never throws upstream — it is assigned
      * verbatim and behaves silently (prefer-like). This list is therefore
      * the only thing deciding which modes reach the wire; unknown modes are
-     * defensively omitted.
+     * refused at the door (admindata-009), never silently omitted.
      */
     private const PGSQL_TLS_MODES = ['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'];
 
@@ -142,16 +142,28 @@ final class ReactPostgresConnection implements AsyncConnection
      * pgsql, so its spelling is already normalised — verification-
      * demanding settings arrive folded onto verify-full) rides as the
      * `tls` parameter — see the class docblock for the fold doctrine and
-     * the accept-list rationale.
+     * the accept-list rationale: a mode outside the list throws rather
+     * than falling back to the vendor's plaintext-capable default, and an
+     * empty username throws rather than guessing 'postgres'.
      *
      * @return array<string,mixed>
      */
     private function dsnToParameters(string $dsn, string $username, string $password): array
     {
+        if ($username === '') {
+            // admindata-008: same refusal doctrine as the MySQL connector —
+            // silently substituting 'postgres' lets an unconfigured admin dial
+            // own the cluster's superuser role. Identity is caller-supplied or
+            // the dial does not happen.
+            throw new \InvalidArgumentException(
+                'ReactPostgresConnection: empty username — refusing to dial PostgreSQL as the guessed "postgres" identity; pass an explicit user',
+            );
+        }
+
         $params = [
             'host'            => $this->extractDsnValue($dsn, 'host') ?? 'localhost',
             'port'            => (int) ($this->extractDsnValue($dsn, 'port') ?? '5432'),
-            'user'            => $username !== '' ? $username : 'postgres',
+            'user'            => $username,
             'database'        => $this->extractDsnValue($dsn, 'dbname') ?? 'postgres',
             'auto_disconnect' => true,
         ];
@@ -161,7 +173,20 @@ final class ReactPostgresConnection implements AsyncConnection
         }
 
         $sslMode = $this->extractDsnValue($dsn, 'sslmode');
-        if ($sslMode !== null && in_array($sslMode, self::PGSQL_TLS_MODES, true)) {
+        if ($sslMode !== null && !in_array($sslMode, self::PGSQL_TLS_MODES, true)) {
+            // admindata-009: an unrecognised spelling used to be dropped,
+            // handing the connection to PgAsync's plaintext-capable 'prefer'
+            // default — a typo'd verify-full silently became the exact
+            // downgrade the class docblock argues against. The value is
+            // refused at our door instead of silently un-sent.
+            throw new \InvalidArgumentException(
+                'ReactPostgresConnection: unrecognised sslmode "' . $sslMode . '"; expected one of '
+                . implode(', ', self::PGSQL_TLS_MODES)
+                . ' — silently dropping a typo would downgrade to plaintext-capable "prefer"',
+            );
+        }
+
+        if ($sslMode !== null) {
             $params['tls'] = $sslMode;
         }
 
