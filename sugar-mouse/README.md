@@ -183,6 +183,21 @@ the bytes actually written to the terminal is the consumer's job (e.g.
 candy-code's renderer scans, then strips; `Manager::scan()` returns the
 stripped, display-ready frame).
 
+## Coordinate order
+
+Nearly everything is **(col, row)** — `Scanner::hit($col, $row)`,
+`Manager::zoneAt($col, $row)`, `Zone::pos()` returning `[col, row]`, and
+`MouseMsg`'s own `$x`/`$y`. Two islands are row-first by design, because a
+text selection is addressed like a file:
+
+| API | Order |
+|---|---|
+| `Selection::new($rowFrom, $rowTo, $colFrom, $colTo)`, `begin($row, $col)`, `dragTo($row, $col)` | row, col |
+| `SelectionRange::new($rowA, $colA, $rowB, $colB)`, `extract()` indexing `$lines[$row - 1]` | row, col |
+
+`SelectionRange`'s promoted fields are named (`startRow`, `startCol`, …),
+so construction from a `range()` result is unambiguous.
+
 ## Accessibility
 
 Zone tags are private-use-area codepoints: screen readers announce them as
@@ -671,21 +686,6 @@ integration bug:
 
 `Zones\Zone::toMouseEvent()` is the one public bridge (Core → primitive,
 wheel type matched first so it becomes `Scroll`, not `Press`).
-
-### Coordinate order
-
-Nearly everything is **(col, row)** — `Scanner::hit($col, $row)`,
-`Manager::zoneAt($col, $row)`, `Zone::pos()` returning `[col, row]`, and
-`MouseMsg`'s own `$x`/`$y`. Two islands are row-first by design, because a
-text selection is addressed like a file:
-
-| API | Order |
-|---|---|
-| `Selection::new($rowFrom, $rowTo, $colFrom, $colTo)`, `begin($row, $col)`, `dragTo($row, $col)` | row, col |
-| `SelectionRange::new($rowA, $colA, $rowB, $colB)`, `extract()` indexing `$lines[$row - 1]` | row, col |
-
-`SelectionRange`'s promoted fields are named (`startRow`, `startCol`, …),
-so construction from a `range()` result is unambiguous.
 
 ### Tips
 

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Mouse\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Mouse\MouseEvent;
+use SugarCraft\Mouse\MouseAction;
 use SugarCraft\Mouse\Selection;
 use SugarCraft\Mouse\SelectionRange;
 
@@ -227,5 +229,49 @@ final class SelectionTest extends TestCase
         self::assertNotNull($range);
 
         return [$range->endRow, $range->endCol];
+    }
+
+    /**
+     * The event-addressed wrappers must transpose (x, y) -> (row, col)
+     * exactly once in each direction: beginEvent/dragToEvent produce the
+     * identical SelectionRange as hand-ordered begin/dragTo on the mirrored
+     * pair, off the diagonal, in a multi-row region.
+     */
+    public function testEventWrappersTransposeExactlyTheManualCallOrder(): void
+    {
+        for ($row = 2; $row <= 4; $row++) {
+            for ($col = 2; $col <= 7; $col++) {
+                $viaEvent = Selection::new(1, 6, 1, 9);
+                $manual = Selection::new(1, 6, 1, 9);
+                $press = new MouseEvent($col, $row, 0, MouseAction::Press);
+                $drag = MouseEvent::drag($col, $row + 1);
+
+                $this->assertTrue($viaEvent->beginEvent($press));
+                $this->assertTrue($manual->begin($row, $col));
+                $this->assertTrue($viaEvent->dragToEvent($drag));
+                $this->assertTrue($manual->dragTo($drag->y, $drag->x));
+
+                $a = $viaEvent->range();
+                $b = $manual->range();
+                $this->assertSame(
+                    [$b->startRow, $b->startCol, $b->endRow, $b->endCol],
+                    [$a->startRow, $a->startCol, $a->endRow, $a->endCol],
+                    "event and manual addressing must agree at ($row, $col)"
+                );
+            }
+        }
+
+        // And the transposition is the WHOLE story: a hand-mirrored call to
+        // begin() (row,col swapped the wrong way) lands somewhere else —
+        // guards the test itself from a symmetric-region false green.
+        $sel = Selection::new(1, 6, 1, 9);
+        $sel->beginEvent(new MouseEvent(3, 5, 0, MouseAction::Press));
+        $r = $sel->range();
+        $this->assertSame([5, 3], [$r->startRow, $r->startCol]);
+
+        $wrong = Selection::new(1, 6, 1, 9);
+        $wrong->begin(3, 5); // the manual transpose bug the wrapper kills
+        $w = $wrong->range();
+        $this->assertNotSame([$r->startRow, $r->startCol], [$w->startRow, $w->startCol]);
     }
 }

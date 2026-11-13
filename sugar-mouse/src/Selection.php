@@ -173,6 +173,30 @@ final class Selection
     }
 
     /**
+     * {@see begin()} addressed by a mouse event.
+     *
+     * MouseEvent carries terminal (x, y) — that is (col, row) — while a
+     * Selection is row-first by design (a text region is addressed like a
+     * file). The wrapper performs that single transpose so the call sites
+     * stop hand-rolling it: a mis-ordered manual transpose here silently
+     * selects the wrong cell (verified: both orders are plain `int,int`,
+     * so nothing type-checks it for you).
+     */
+    public function beginEvent(MouseEvent $event, bool $shiftExtend = false): bool
+    {
+        return $this->begin($event->y, $event->x, $shiftExtend);
+    }
+
+    /**
+     * {@see dragTo()} addressed by a mouse event — same (x, y) to
+     * (row, col) transpose as {@see beginEvent()}.
+     */
+    public function dragToEvent(MouseEvent $event, bool $shiftExtend = false): bool
+    {
+        return $this->dragTo($event->y, $event->x, $shiftExtend);
+    }
+
+    /**
      * Drop the gesture: no anchor, no head. The machine returns to idle and
      * the next plain event starts fresh.
      */

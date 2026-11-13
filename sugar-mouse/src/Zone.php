@@ -54,6 +54,10 @@ final class Zone
      * Mouse position relative to the zone's top-left, 0-based.
      * Returns negative values when the mouse is outside the zone.
      *
+     * Col-first, matching {@see Scanner::hit($col, $row)} and
+     * `Manager::zoneAt($col, $row)` — the row-first islands are Selection
+     * and SelectionRange only (see README's Coordinate order section).
+     *
      * @return array{0:int,1:int} [col, row]
      */
     public function pos(MouseEvent $event): array
