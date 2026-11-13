@@ -12,8 +12,12 @@ namespace SugarCraft\CellBuffer;
  * information. All mutation happens through fluent with*() methods that
  * return new Buffer instances — the original is never modified.
  *
- * The cell-grid model follows charmbracelet/lipgloss's Cell/Style design
- * and the terminal buffer representation in charmbracelet/x/vt.
+ * Mirrors charmbracelet/x/cellbuf.Buffer — the rectangular cell grid as
+ * the shared terminal render surface (module `charmbracelet/x/cellbuf`,
+ * the `cellbuf/` package of github.com/charmbracelet/x; the separate
+ * `x/vt`-style GitHub repos were consolidated into the `x` monorepo).
+ * The immutable copy-on-write shape is this port's own law — upstream
+ * buffers are mutable.
  */
 final class Buffer implements \JsonSerializable
 {

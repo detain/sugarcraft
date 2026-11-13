@@ -36,8 +36,8 @@ use SugarCraft\Core\Util\Width;
  *
  * Cell is a readonly value object: rebuild via new rather than with*().
  *
- * The cell shape follows charmbracelet/lipgloss's Cell and the terminal
- * cell representation in charmbracelet/x/vt.
+ * Mirrors charmbracelet/x/cellbuf.Cell — one grid position carrying
+ * runes, style, link and display width.
  *
  * @readonly
  */

@@ -223,4 +223,4 @@ MIT
 
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
 
-The Buffer/Cell data model follows the cell/style design of [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) and the terminal cell representation in [charmbracelet/x](https://github.com/charmbracelet/x) (`x/vt`). The diff framing follows [ratatui](https://github.com/ratatui/ratatui)'s `Buffer::diff`, cited in `DiffEncoder`'s upstream note.
+The Buffer/Cell data model follows the terminal cell buffer of [charmbracelet/x/cellbuf](https://github.com/charmbracelet/x/tree/main/cellbuf) — the Go module `charmbracelet/x/cellbuf`, whose `cellbuf/` (and the old `x/vt`) packages now live consolidated in the [charmbracelet/x](https://github.com/charmbracelet/x) monorepo. The pen/style vocabulary and SGR emission echo [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss). The diff framing follows [ratatui](https://github.com/ratatui/ratatui)'s `Buffer::diff`, cited in `DiffOp`/`DiffEncoder`'s upstream notes.

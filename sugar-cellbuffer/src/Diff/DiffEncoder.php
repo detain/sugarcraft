@@ -38,7 +38,10 @@ use SugarCraft\CellBuffer\Style;
  *   - trailing \x1b[0m    (conditional SGR reset closing the stream when the
  *                          frame ended styled — same contract as toAnsi())
  *
- * Mirrors ratatui's Buffer::diff encode logic.
+ * The operation map follows ratatui's Buffer::diff framing (as stated in
+ * {@see DiffOp}'s note); rendering those transitions onto xterm control
+ * sequences — CUP/ECH/REP/SGR/OSC 8 with the home-anchor prologue — is
+ * this package's own synthesis, not an upstream mirror.
  */
 final class DiffEncoder
 {
