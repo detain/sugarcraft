@@ -155,16 +155,34 @@ final class AmbientColorProfileTest extends TestCase
 
     public function testTheDumbTerminalClaimStaysScopedToColour(): void
     {
-        // S-X14 (candy-top-140): a live-PTY probe with TERM=dumb shows the
-        // colourless frame still rides 1049/1002/1006/2027/2026 and cursor
-        // addressing — the veto steps colour down, never the control bytes.
-        // The README therefore says exactly that (the gate G7 default:
-        // correct claims + declare the true dumb device out of scope);
-        // this guard is the docs-pinned-by-tests leg keeping the prose
-        // honest to the observed bytes.
+        // S-X14 (candy-top-140): TERM=dumb now derives the control modes
+        // from the profile (App::programOptions, pinned live in
+        // tests/Cli/DumbTerminalTest); NO_COLOR and an unrecognised
+        // terminal stay colour-only refusals. The README says exactly that.
         $readme = (string) file_get_contents(__DIR__ . '/../README.md');
-        $this->assertStringContainsString('the refusal covers colour only', $readme);
-        $this->assertStringContainsString('is declared out of scope', $readme);
+        $this->assertStringContainsString('the full-screen control modes are derived from that profile too', $readme);
+        $this->assertStringContainsString('keep those modes', $readme);
+        $this->assertStringNotContainsString('is declared out of scope', $readme, 'the build arm replaced the disclaimer');
         $this->assertStringNotContainsString('gets text only', $readme, 'the old over-claim must not return');
+    }
+
+    public function testProgramOptionsDeriveTheModesFromTheAmbientProfile(): void
+    {
+        $capable = App::programOptions(Config::new());
+        $this->assertTrue($capable->useAltScreen);
+        $this->assertTrue($capable->synchronizedOutput);
+        $this->assertTrue($capable->unicodeMode);
+        foreach ([null, ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii] as $profile) {
+            $o = App::programOptions(Config::new(), $profile);
+            $this->assertTrue($o->useAltScreen, 'a colour refusal keeps the full-screen modes');
+            $this->assertNotSame(\SugarCraft\Core\MouseMode::Off, $o->mouseMode);
+        }
+
+        $dumb = App::programOptions(Config::new(), ColorProfile::NoTty);
+        $this->assertFalse($dumb->useAltScreen);
+        $this->assertSame(\SugarCraft\Core\MouseMode::Off, $dumb->mouseMode);
+        $this->assertFalse($dumb->unicodeMode, 'no DEC 2027');
+        $this->assertFalse($dumb->synchronizedOutput, 'no DEC 2026');
+        $this->assertFalse($dumb->hideCursor);
     }
 }

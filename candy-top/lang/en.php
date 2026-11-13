@@ -309,6 +309,7 @@ return [
     'proc.col.mem' => 'Mem',
     'proc.col.cpu' => 'Cpu%',
     'cli.no_tty' => "No tty detected!\ncandy-top needs an interactive shell to run.",
+    'cli.dumb_terminal' => 'TERM=dumb: starting without the alternate screen, mouse reporting and synchronized-update modes.',
     'cli.missing_value' => 'missing value for {option} (see --help)',
     'cli.not_utf8' => 'the locale codeset {codeset} is not UTF-8 — set a UTF-8 locale (for example LANG=C.UTF-8) or pass {flag} to start anyway',
     'cli.bad_value' => 'bad value for {option}: {value} (see --help)',

@@ -159,9 +159,9 @@ final class BinTest extends TestCase
         // S-O06), the --themes-dir path refusal (S-O07), the non-UTF-8 locale
         // refusal (S-O04), the two tree-state prune notes (S-X02, one per exit
         // path) and the two after-load roster refusals (unknown theme, unknown
-        // preset). Raised 9 -> 16 on 2026-11-13 with S-O06, 16 -> 17 the same
-        // day with S-O07, 17 -> 18 with S-O04, 18 -> 20 with S-X02.
-        $this->assertSame(20, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
+        // preset) and the S-X14 TERM=dumb notice. Raised 9 -> 16 on 2026-11-13 with S-O06, 16 -> 17 the same
+        // day with S-O07, 17 -> 18 with S-O04, 18 -> 20 with S-X02, 20 -> 21 with the S-X14 dumb-terminal notice.
+        $this->assertSame(21, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
         $this->assertStringContainsString('foreach ($loaded->warnings as $warning) {', $source);
 
         $at = strpos($source, '$file = ConfigFile::new($configPath);');

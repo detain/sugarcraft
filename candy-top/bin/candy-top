@@ -46,6 +46,7 @@ namespace SugarCraft\Top\bin;
 })();
 
 use SugarCraft\Core\Program;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Top\App;
 use SugarCraft\Top\Cli\Help;
@@ -325,6 +326,13 @@ if ($statePath !== null && ($panels['proc'] ?? null) instanceof ProcPanel) {
 // btop `lowcolor`: the 256-colour cube whenever truecolor is off.
 $config = $config->with('lowcolor', !$config->bool('truecolor'));
 
+// A dumb terminal gets no alt screen, mouse, 2026 or 2027 modes (S-X14); say
+// so once, on stderr, before the TUI takes the screen.
+$ambient = ColorProfile::detect();
+if ($ambient === ColorProfile::NoTty) {
+    $report(Lang::t('cli.dumb_terminal'));
+}
+
 $program = new Program(
     App::start(
         $config,
@@ -339,7 +347,7 @@ $program = new Program(
         // say so up front instead of painting a silent all-n/a monitor.
         unsupportedOs: $platform->isSupported() ? null : $platform->os,
     ),
-    App::programOptions($config),
+    App::programOptions($config, $ambient),
 );
 // btop's SIGTERM / SIGHUP handlers run clean_quit (config save included).
 // sugar-core's Program::run() installs its own SIGINT/SIGTERM/SIGHUP arms

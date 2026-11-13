@@ -352,8 +352,25 @@ final class App implements Model
      * Runtime flips of disable_mouse answer with the matching Cmd
      * ({@see applyConfig()}).
      */
-    public static function programOptions(Config $config): ProgramOptions
+    public static function programOptions(Config $config, ?ColorProfile $ambient = null): ProgramOptions
     {
+        // A `TERM=dumb` terminal (ambient NoTty) cannot honour the
+        // full-screen control modes: it would echo ?1049/?1002/?1006/?2026/
+        // ?2027 as glyphs. Derive the modes from the profile instead of
+        // assuming a capable terminal; NO_COLOR/Ascii is a colour refusal
+        // only and keeps them. Null (tests, direct callers) is the
+        // capable-terminal default.
+        if ($ambient === ColorProfile::NoTty) {
+            return new ProgramOptions(
+                useAltScreen: false,
+                hideCursor: false,
+                mouseMode: MouseMode::Off,
+                framerate: 20.0,
+                unicodeMode: false,
+                synchronizedOutput: false,
+            );
+        }
+
         return new ProgramOptions(
             useAltScreen: true,
             mouseMode: $config->bool('disable_mouse') ? MouseMode::Off : MouseMode::CellMotion,
