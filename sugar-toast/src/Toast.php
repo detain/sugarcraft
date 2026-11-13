@@ -38,13 +38,25 @@ final class Toast
     private const ZONE_CLOSE = "\u{e001}";
 
     /**
-     * Hard ceiling for view()/actionRects()/actionAt() viewport dimensions.
-     * The frame Buffer allocates width*height cells
+     * Hard per-dimension ceiling for view()/actionRects()/actionAt() viewport
+     * dimensions. The frame Buffer allocates width*height cells
      * eagerly, and a mis-parsed winsize used to reach Buffer::new unbounded —
      * an OOM Error a host cannot even catch. Out-of-range dimensions now fail
      * loud with a descriptive InvalidArgumentException instead of allocating.
+     * 4 096 sits two orders of magnitude above any shipped emulator; the
+     * per-dimension arms alone still admitted 4095x4095 (~1.6e7 cells) before
+     * MAX_VIEWPORT_CELLS below bounded the product.
      */
-    public const MAX_VIEWPORT_DIMENSION = 10000;
+    public const MAX_VIEWPORT_DIMENSION = 4096;
+
+    /**
+     * Product cap on viewport cells (width x height) — the allocation the
+     * frame Buffer actually pays for. A ~1000x1000 grid is already far past
+     * any terminal, yet a huge-but-thin winsize stays legitimate (4096x244
+     * passes). Breaching the cap fails loud with the same throw-before-allocate
+     * InvalidArgumentException as the per-dimension ceilings.
+     */
+    public const MAX_VIEWPORT_CELLS = 1_000_000;
 
     /**
      * Display-cell ceiling for a single alert message.
@@ -812,7 +824,8 @@ final class Toast
      * @return string  The composited output
      *
      * @throws \InvalidArgumentException when either viewport dimension is
-     *         outside 1..self::MAX_VIEWPORT_DIMENSION (fail-fast: the
+     *         outside 1..self::MAX_VIEWPORT_DIMENSION, or the product exceeds
+     *         self::MAX_VIEWPORT_CELLS (fail-fast: the
      *         frame allocates width*height cells eagerly)
      */
     public function view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string
@@ -989,6 +1002,15 @@ final class Toast
                 'viewportHeight %d is outside the supported range 1..%d (sugar-toast::MAX_VIEWPORT_DIMENSION)',
                 $viewportHeight,
                 self::MAX_VIEWPORT_DIMENSION
+            ));
+        }
+        if ($viewportWidth * $viewportHeight > self::MAX_VIEWPORT_CELLS) {
+            throw new \InvalidArgumentException(\sprintf(
+                'viewport %dx%d (%d cells) exceeds the %d-cell product cap (sugar-toast::MAX_VIEWPORT_CELLS)',
+                $viewportWidth,
+                $viewportHeight,
+                $viewportWidth * $viewportHeight,
+                self::MAX_VIEWPORT_CELLS
             ));
         }
 

@@ -12,8 +12,10 @@ use SugarCraft\Toast\{Action, Position, Toast, ToastType};
 /**
  * The bounds cluster: the frame Buffer allocates
  * width*height cells eagerly, so viewport dimensions are now refused outside
- * 1..Toast::MAX_VIEWPORT_DIMENSION instead of OOM-killing the host (an
- * h=30000 winsize previously hit "Allowed memory size exhausted" — an Error
+ * 1..Toast::MAX_VIEWPORT_DIMENSION (4 096 per arm, two orders above any
+ * shipped emulator) or over Toast::MAX_VIEWPORT_CELLS product instead of
+ * OOM-killing the host (an h=30000 winsize previously hit "Allowed memory
+ * size exhausted" — an Error
  * catch(\Throwable) cannot trap); narrow boxes must ELLIPSIZE, never delete
  * message characters or action buttons; and the progress bar fills exactly
  * the box interior rather than flooring at 4 cells and pushing the right
@@ -46,7 +48,7 @@ final class ToastViewportBoundsTest extends TestCase
         // is why the pins below use the tiny-allowed side for the positive.
         $toast = Toast::new(40)->withPosition(Position::TopLeft)
             ->alert(ToastType::Info, 'bounds');
-        foreach ([65535, 10001] as $height) {
+        foreach ([65535, 4097] as $height) {
             $thrown = null;
             try {
                 $toast->view('', 8, $height);
@@ -54,7 +56,7 @@ final class ToastViewportBoundsTest extends TestCase
                 $thrown = $e->getMessage();
             }
             $this->assertNotNull($thrown, "viewport height {$height} must be refused");
-            $this->assertStringContainsString('1..10000', $thrown);
+            $this->assertStringContainsString('1..4096', $thrown);
         }
     }
 
@@ -88,11 +90,54 @@ final class ToastViewportBoundsTest extends TestCase
 
     public function testCeilingItselfIsAllowed(): void
     {
-        // A MAX x MAX-bounded frame must render (10000x10 = 100k cells —
+        // A MAX-dimension frame must render (4096x10 = ~41k cells —
         // cheap) to prove the range is inclusive, not an off-by-one wall.
         $toast = Toast::new(40)->withPosition(Position::TopLeft)
             ->alert(ToastType::Info, 'x');
         $out = $toast->view('', Toast::MAX_VIEWPORT_DIMENSION, 10);
+        $this->assertNotSame('', $out);
+    }
+
+    public function testHugeDimensionWithTinyOtherArmIsRefusedByPerDimensionArm(): void
+    {
+        // 10000x1 (product 10 000) fits under the product cap yet must still
+        // die on the per-dimension arm — the arms are independent, the
+        // message must name the offending width.
+        $toast = Toast::new(40)->alert(ToastType::Info, 'bounds');
+        $thrown = null;
+        try {
+            $toast->view('', 10000, 1);
+        } catch (\InvalidArgumentException $e) {
+            $thrown = $e->getMessage();
+        }
+        $this->assertNotNull($thrown, '10000x1 must be refused by the per-dimension arm');
+        $this->assertStringContainsString('viewportWidth', $thrown);
+    }
+
+    public function testProductCapRefusalNamesTheCap(): void
+    {
+        // 2000x1000: both arms ride under the per-dimension ceiling, product
+        // 2 000 000 > 1 000 000 — the historical 10^8-cell 'each-under-10k
+        // OOM' shape. Refusal must land before allocation and name the cap.
+        $toast = Toast::new(40)->alert(ToastType::Info, 'bounds');
+        $thrown = null;
+        try {
+            $toast->view('', 2000, 1000);
+        } catch (\InvalidArgumentException $e) {
+            $thrown = $e->getMessage();
+        }
+        $this->assertNotNull($thrown, '2000x1000 must be refused by the product cap');
+        $this->assertStringContainsString('1000000-cell product cap', $thrown);
+        $this->assertStringContainsString('sugar-toast::MAX_VIEWPORT_CELLS', $thrown);
+    }
+
+    public function testProductCapBoundaryIsInclusive(): void
+    {
+        // 4096x244 = 998 144 cells — the widest tall-but-legal frame the cap
+        // admits. Renders (positive control against an off-by-one wall).
+        $toast = Toast::new(40)->withPosition(Position::TopLeft)
+            ->alert(ToastType::Info, 'x');
+        $out = $toast->view('', 4096, 244);
         $this->assertNotSame('', $out);
     }
 
