@@ -117,11 +117,18 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
     {
         $safeTable = $this->db->quote($table);
         $result = $this->db->query(
-            "SELECT constraint_name, column_name, referenced_table_name, referenced_column_name, "
-            . "NULL as on_update, NULL as on_delete "
-            . "FROM information_schema.key_column_usage "
-            . "WHERE table_schema = DATABASE() AND referenced_table_name IS NOT NULL "
-            . "AND table_name = {$safeTable}",
+            // key_column_usage carries no referential actions; the NULL
+            // literals this arm used to project kept the VO fields permanently
+            // empty. referential_constraints holds the real UPDATE_RULE/
+            // DELETE_RULE, joined on the constraint's own identity (schema +
+            // name), which also filters the rows to genuine FKs.
+            "SELECT kcu.constraint_name, kcu.column_name, kcu.referenced_table_name, kcu.referenced_column_name, "
+            . "rc.update_rule AS on_update, rc.delete_rule AS on_delete "
+            . "FROM information_schema.key_column_usage kcu "
+            . "JOIN information_schema.referential_constraints rc "
+            . "ON rc.constraint_schema = kcu.constraint_schema AND rc.constraint_name = kcu.constraint_name "
+            . "WHERE kcu.table_schema = DATABASE() AND kcu.referenced_table_name IS NOT NULL "
+            . "AND kcu.table_name = {$safeTable}",
         ) ?? [];
 
         $fks = [];
@@ -131,8 +138,8 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
                 column: (string) ($row['column_name'] ?? ''),
                 foreignTable: (string) ($row['referenced_table_name'] ?? ''),
                 foreignColumn: (string) ($row['referenced_column_name'] ?? ''),
-                onUpdate: '',
-                onDelete: '',
+                onUpdate: (string) ($row['on_update'] ?? ''),
+                onDelete: (string) ($row['on_delete'] ?? ''),
             );
         }
         return $fks;

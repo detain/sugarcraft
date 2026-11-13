@@ -142,12 +142,16 @@ final class PostgresSchemaProviderTest extends TestCase
 
     public function testForeignKeysReturnsForeignKeyDetails(): void
     {
+        // DISCLOSED golden shift (SQL-C09): the canned row used to carry pg attnum
+        // integers ('2'/'1' asserted literally) because the query unnested
+        // conkey/confkey without joining pg_attribute. The provider now answers
+        // column NAMES + real referential actions like its MySQL/SQLite siblings.
         $db = $this->createMockDb(
             [],
             [],
             [],
             [
-                ['constraint_name' => 'fk_user', 'column_id' => 2, 'foreign_table_name' => 'users', 'foreign_column_id' => 1],
+                ['constraint_name' => 'fk_user', 'column_name' => 'user_id', 'foreign_table_name' => 'users', 'foreign_column_name' => 'id', 'on_update' => 'CASCADE', 'on_delete' => 'RESTRICT'],
             ],
         );
 
@@ -158,9 +162,34 @@ final class PostgresSchemaProviderTest extends TestCase
 
         $fk = $fks[0];
         $this->assertInstanceOf(SchemaForeignKey::class, $fk);
-        $this->assertSame('2', $fk->column);
+        $this->assertSame('user_id', $fk->column);
         $this->assertSame('users', $fk->foreignTable);
-        $this->assertSame('1', $fk->foreignColumn);
+        $this->assertSame('id', $fk->foreignColumn);
+        $this->assertSame('CASCADE', $fk->onUpdate);
+        $this->assertSame('RESTRICT', $fk->onDelete);
+    }
+
+    public function testForeignKeysQueryResolvesAttnumsThroughPgAttribute(): void
+    {
+        // can-fail pin for the C09 defect itself: capture the emitted SQL and
+        // demand the pg_attribute joins + confupdtype/confdeltype mapping —
+        // a revert to bare unnest(conkey) projection turns this red.
+        $captured = '';
+        $mock = $this->createMock(DatabaseInterface::class);
+        $mock->method('quote')->willReturnCallback(fn($v) => "'" . addslashes((string) $v) . "'");
+        $mock->method('query')->willReturnCallback(function (string $sql) use (&$captured): array {
+            $captured = $sql;
+            return [];
+        });
+
+        $provider = new PostgresSchemaProvider($mock);
+        $provider->foreignKeys('posts');
+
+        $this->assertStringContainsString('pg_attribute', $captured);
+        $this->assertStringContainsString('WITH ORDINALITY', $captured);
+        $this->assertStringContainsString('confupdtype', $captured);
+        $this->assertStringContainsString('confdeltype', $captured);
+        $this->assertStringNotContainsString('unnest(conkey)', $captured);
     }
 
     public function testForeignKeysReturnsEmptyArrayForTableWithNoForeignKeys(): void

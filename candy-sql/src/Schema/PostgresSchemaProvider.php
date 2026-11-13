@@ -100,24 +100,34 @@ final class PostgresSchemaProvider implements SchemaProviderInterface
     {
         $safeTable = $this->db->quote($table);
         $result = $this->db->query(
-            "SELECT conname AS constraint_name, "
-            . "conrelid::regclass AS table_name, "
-            . "confrelid::regclass AS foreign_table_name, "
-            . "unnest(conkey) AS column_id, "
-            . "unnest(confkey) AS foreign_column_id "
-            . "FROM pg_constraint "
-            . "WHERE contype = 'f' AND conrelid = {$safeTable}::regclass",
+            // conkey/confkey are pg_constraint attnum vectors; joined through
+            // pg_attribute (pairing the two unnests WITH ORDINALITY so composite
+            // FK legs stay aligned) they answer COLUMN NAMES like every sibling
+            // provider — the raw attnums rendered as "2"/"1" next to name-returning
+            // MySQL/SQLite rows. confupdtype/confdeltype are the single-letter
+            // referential actions mapped to the SQL keywords the VO displays.
+            "SELECT con.conname AS constraint_name, "
+            . "con.confrelid::regclass AS foreign_table_name, "
+            . "a.attname AS column_name, "
+            . "fa.attname AS foreign_column_name, "
+            . "CASE con.confupdtype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END AS on_update, "
+            . "CASE con.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END AS on_delete "
+            . "FROM pg_constraint con "
+            . "JOIN unnest(con.conkey, con.confkey) WITH ORDINALITY AS cols(local_attnum, ref_attnum, ord) ON true "
+            . "JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = cols.local_attnum "
+            . "JOIN pg_attribute fa ON fa.attrelid = con.confrelid AND fa.attnum = cols.ref_attnum "
+            . "WHERE con.contype = 'f' AND con.conrelid = {$safeTable}::regclass",
         ) ?? [];
 
         $fks = [];
         foreach ($result as $row) {
             $fks[] = new SchemaForeignKey(
                 id: 0,
-                column: (string) ($row['column_id'] ?? ''),
+                column: (string) ($row['column_name'] ?? ''),
                 foreignTable: (string) ($row['foreign_table_name'] ?? ''),
-                foreignColumn: (string) ($row['foreign_column_id'] ?? ''),
-                onUpdate: '',
-                onDelete: '',
+                foreignColumn: (string) ($row['foreign_column_name'] ?? ''),
+                onUpdate: (string) ($row['on_update'] ?? ''),
+                onDelete: (string) ($row['on_delete'] ?? ''),
             );
         }
         return $fks;

@@ -142,12 +142,15 @@ final class MysqlSchemaProviderTest extends TestCase
 
     public function testForeignKeysReturnsForeignKeyDetails(): void
     {
+        // SQL-C09: the arm used to project `NULL as on_update, NULL as on_delete`;
+        // the canned row now carries the real referential constraints values the
+        // joined query selects, and the VO fields stop being permanently ''.
         $db = $this->createMockDb(
             [],
             [],
             [],
             [
-                ['constraint_name' => 'fk_user', 'column_name' => 'user_id', 'referenced_table_name' => 'users', 'referenced_column_name' => 'id'],
+                ['constraint_name' => 'fk_user', 'column_name' => 'user_id', 'referenced_table_name' => 'users', 'referenced_column_name' => 'id', 'on_update' => 'CASCADE', 'on_delete' => 'RESTRICT'],
             ],
         );
 
@@ -161,6 +164,29 @@ final class MysqlSchemaProviderTest extends TestCase
         $this->assertSame('user_id', $fk->column);
         $this->assertSame('users', $fk->foreignTable);
         $this->assertSame('id', $fk->foreignColumn);
+        $this->assertSame('CASCADE', $fk->onUpdate);
+        $this->assertSame('RESTRICT', $fk->onDelete);
+    }
+
+    public function testForeignKeysQueryJoinsReferentialConstraints(): void
+    {
+        // can-fail pin: the emitted SQL must join referential_constraints and
+        // select the real UPDATE_RULE/DELETE_RULE (was: NULL literals).
+        $captured = '';
+        $mock = $this->createMock(DatabaseInterface::class);
+        $mock->method('quote')->willReturnCallback(fn($v) => "'" . addslashes((string) $v) . "'");
+        $mock->method('query')->willReturnCallback(function (string $sql) use (&$captured): array {
+            $captured = $sql;
+            return [];
+        });
+
+        $provider = new MysqlSchemaProvider($mock);
+        $provider->foreignKeys('posts');
+
+        $this->assertStringContainsString('information_schema.referential_constraints', $captured);
+        $this->assertStringContainsString('update_rule', $captured);
+        $this->assertStringContainsString('delete_rule', $captured);
+        $this->assertStringNotContainsString('NULL as on_update', $captured);
     }
 
     public function testForeignKeysReturnsEmptyArrayForTableWithNoForeignKeys(): void
