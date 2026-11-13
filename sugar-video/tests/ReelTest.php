@@ -756,4 +756,65 @@ final class ReelTest extends TestCase
             @unlink($gif);
         }
     }
+
+    /**
+     * @testdox SV-M21: the subtitle track rides storage → build → PAINTED caption (e2e)
+     *
+     * Load-bearing: comment out the subtitlePath leg inside buildPlayer() and
+     * the caption assert reddens — the M25 arms read the private reader, this
+     * one proves the PUBLIC API path end to end. The play()-leg pin guards the
+     * M16 single-build-path law: play() must keep routing through buildPlayer,
+     * never re-grow its own copy of the threading.
+     */
+    public function testTheSubtitleTrackRidesTheBuildToThePaintedCaption(): void
+    {
+        $dir = sys_get_temp_dir();
+        $gif = Synthetic::generate(
+            $dir . '/sugar-video-m21-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.gif',
+            16,
+            8,
+            4,
+            4,
+        );
+        $vtt = $dir . '/sugar-video-m21-' . getmypid() . '.vtt';
+        file_put_contents($vtt, "WEBVTT\n\n00:00.000 --> 00:02.000\nHello caption world\n");
+
+        try {
+            $player = Reel::open($gif)->withMode(Mode::Ascii)->withSubtitles($vtt)->toPlayer();
+
+            try {
+                $track = (new \ReflectionProperty($player, 'subtitles'))->getValue($player);
+                $this->assertInstanceOf(WebVtt::class, $track, 'withSubtitles() must land a parsed track on the built Player');
+                $this->assertStringContainsString('Hello caption world', (string) $track->cueAt(0.5));
+
+                $view = $player->view();
+                $this->assertStringContainsString(
+                    'Hello caption world',
+                    $view,
+                    'the caption rides the reserved row out of view() — not just storage',
+                );
+            } finally {
+                $player->stop();
+            }
+
+            // The play() build leg: both public exits share the one choke
+            // (SV-M16), so threading pinned here covers the program path too.
+            $src = (string) file_get_contents(dirname(__DIR__) . '/src/Reel.php');
+            $this->assertSame(3, substr_count($src, 'buildPlayer('), 'definition + toPlayer + play, one build path');
+            $this->assertStringContainsString('$player = $this->buildPlayer($path, $loop);', $src, 'play() must not re-grow private threading');
+
+            // The mode-flow matrix leg (completes SV-C1's DOA smoke): an
+            // explicit mode survives the same build choke untouched.
+            $direct = Reel::open($gif)->withMode(Mode::TrueColor)->toPlayer();
+
+            try {
+                $this->assertSame(Mode::TrueColor, $direct->mode, 'withMode threads to the Player unchanged');
+            } finally {
+                $direct->stop();
+            }
+        } finally {
+            @unlink($gif);
+            @unlink($vtt);
+        }
+    }
 }
