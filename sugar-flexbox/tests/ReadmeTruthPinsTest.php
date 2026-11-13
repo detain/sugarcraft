@@ -38,6 +38,8 @@ final class ReadmeTruthPinsTest extends TestCase
         'announces neither colour nor shape',
         'is not a `width × height` guarantee',
         'share one code path',
+        // FBX-29 posture claims: load-bearing exactly because they age.
+        'no in-repo package imports',
     ];
 
     /**

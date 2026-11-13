@@ -17,6 +17,29 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 
 The library carries the house i18n plumbing (`src/Lang.php` plus locale files under `lang/`) but nothing in the shipped interface calls it yet: every label and message is English-only today, and the wiring stands ready for the day a string needs translating.
 
+## Where it fits
+
+The full data-grid genre belongs to `sugar-table` — the canonical
+keyboard-driven table with per-cell styles, pagination and frozen
+columns. sugar-flexbox sits beside it as the layout layer: the flexbox
+engine, a lightweight model `Table` for panes that need sorting,
+filtering and a cursor without taking on a grid dependency, the
+scrolling `Viewport` behind long documents, and the decorative
+`Scrollbar`. As of this writing no in-repo package imports
+`SugarCraft\Flexbox` classes (grep-verified): this lib is a published
+building block for programs written against it, not a dependency of the
+fleet it serves.
+
+State reads follow one rule across all four components: plain
+constructor-carried state is a public `readonly` property (e.g.
+`Column->title`, `Column->width`, `FlexItem->ratio`) — it can never lie,
+because nothing can write it after construction; anything derived,
+settled, or guarded is an accessor (`Table::cursor()`,
+`Table::rawCurrentRow()`, `Column::sortDir()`, `Viewport::yOffset()`) —
+the settle-and-refuse logic lives there, so the property face stays
+boring and the interesting reads are always method calls you can
+intercept.
+
 ## Features
 
 ### FlexBox
@@ -217,6 +240,13 @@ whose row a filter drops lands back at row 0. `cursor()` answers the raw index
 (`null` only while the view holds no rows); `rawCurrentRow()` and
 `rawCurrentCell()` answer that row's stored values or `null`.
 
+The rest of the query surface, named once so it is findable:
+`rowCount()` is the settled view's size, `totalRowCount()` counts every
+stored row filter aside, `colCount()` the columns, `filterText()`
+answers the active filter, `clearFilter()` is exactly `withFilter('')`,
+and `buildLines()` returns the individual frame lines that `render()`
+implodes — memo, renderer and suite all read the same source of truth.
+
 A table wider than the terminal is honest about its width and nothing else:
 `computeTotalWidth()` counts the full grid, and `render()` emits it as
 measured — **no wrapping, no truncation at the box**. A console will
@@ -256,6 +286,12 @@ $viewport = $viewport->showScrollbar(true);
 $viewport = $viewport->lineDown(3)->withStickyHeader(1);
 echo $viewport->view();                    // Line 01 stays pinned; the numbered body has scrolled past Line 04
 ```
+
+All four demos under `examples/` run headless in CI (each is executed
+and asserted silent by the snippet suite): `flexbox.php` for the sizing
+rules, `table.php` for the styled grid, `sort-filter.php` for sorting,
+filtering and the cursor, and `viewport-keys.php` for the
+key/wheel `update()` contract.
 
 ## Trust boundary
 
