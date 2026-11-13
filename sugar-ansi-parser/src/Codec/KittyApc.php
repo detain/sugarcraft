@@ -69,15 +69,19 @@ final class KittyApc
             return null;
         }
 
-        $rest = substr($data, 1);
-        $separator = strpos($rest, ';');
+        // Zero-copy frame slicing (finding sugar-ansi-parser-031): the
+        // separator is located in the ORIGINAL string and the control
+        // segment is sliced by offset+length, so no frame-sized `$rest`
+        // intermediate is copied. The payload substr stays — it IS the
+        // payload.
+        $separator = strpos($data, ';', 1);
         if ($separator === false) {
             // Control-only frame without the payload separator — tolerated.
-            $controlData = $rest;
+            $controlData = substr($data, 1);
             $payload = '';
         } else {
-            $controlData = substr($rest, 0, $separator);
-            $payload = substr($rest, $separator + 1);
+            $controlData = substr($data, 1, $separator - 1);
+            $payload = substr($data, $separator + 1);
         }
 
         $control = [];
