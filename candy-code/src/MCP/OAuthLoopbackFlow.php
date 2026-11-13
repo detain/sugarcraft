@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\MCP;
 
 use SugarCraft\Code\Commands\McpAuthCommand;
+use SugarCraft\Code\Lang;
 
 /**
  * E701: the interactive OAuth authorization-code login with PKCE (RFC 8252
@@ -126,15 +127,15 @@ final class OAuthLoopbackFlow
         $authorizeUrl = $authorizeUrl ?? (isset($metadata['authorization_endpoint']) && is_string($metadata['authorization_endpoint']) ? $metadata['authorization_endpoint'] : null);
 
         if ($registrationUrl === null || $tokenUrl === null || $authorizeUrl === null) {
-            echo "  ✗ OAuth endpoints could not be discovered for `{$serverUrl}`.\n";
-            echo "  login needs registration, token and authorize endpoints; pass the missing ones as [token-url] [authorize-url] [registration-url].\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.no-endpoints', ['server' => $serverUrl]) . "\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.no-endpoints-hint') . "\n";
 
             return 1;
         }
 
         $server = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
         if ($server === false) {
-            echo "  ✗ Could not bind a loopback callback socket: {$errstr}\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.bind-failed', ['reason' => $errstr]) . "\n";
 
             return 1;
         }
@@ -155,11 +156,11 @@ final class OAuthLoopbackFlow
                 OAuthPkce::challengeFor($verifier),
             );
 
-            echo "  Open this URL in a browser to authorize `{$serverUrl}`:\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.open-url', ['server' => $serverUrl]) . "\n";
             echo "\n";
             echo "    {$url}\n";
             echo "\n";
-            echo '  Waiting up to ' . self::secondsWord($timeoutSeconds) . " s for the callback (Ctrl+C cancels)...\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.waiting', ['seconds' => self::secondsWord($timeoutSeconds)]) . "\n";
 
             if ($browser !== null) {
                 $browser($url);
@@ -191,13 +192,13 @@ final class OAuthLoopbackFlow
             );
             $this->oauth->saveAuth($serverUrl, $entry);
 
-            echo "  ✓ Signed in `{$serverUrl}`\n";
-            echo "  Client ID: `{$registered['clientId']}`\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.signed-in', ['server' => $serverUrl]) . "\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.client-id', ['id' => $registered['clientId']]) . "\n";
 
             return 0;
         } catch (\Throwable $e) {
-            echo "  ✗ Login failed: {$e->getMessage()}\n";
-            echo "  Nothing was stored — fix the cause and re-run.\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.failed', ['reason' => $e->getMessage()]) . "\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.login.nothing-stored') . "\n";
 
             return 1;
         } finally {

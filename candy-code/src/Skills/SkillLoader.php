@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Skills;
 
 use SugarCraft\Code\Context\Utf8Scrub;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\Frontmatter;
 use SugarCraft\Code\Support\HomeDirectory;
@@ -708,7 +709,7 @@ final class SkillLoader
         $skillPath = rtrim($skillDir, '/') . '/SKILL.md';
 
         if (!is_file($skillPath)) {
-            throw new \RuntimeException("SKILL.md not found in: $skillDir");
+            throw new \RuntimeException(Lang::t('host.skills.err.manifest-missing', ['dir' => $skillDir]));
         }
 
         // HEAD ONLY, through the bounded reader (audit 15d-27): this stage wants
@@ -1043,7 +1044,7 @@ final class SkillLoader
     public function loadSkillBody(string $skillPath): string
     {
         if (!is_file($skillPath)) {
-            throw new \RuntimeException("Skill file not found: $skillPath");
+            throw new \RuntimeException(Lang::t('host.skills.err.file-missing', ['path' => $skillPath]));
         }
 
         // Bounded (audit 15d-27): the prompt budget caps what is spliced, not

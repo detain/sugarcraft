@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use Symfony\Component\Yaml\Yaml;
@@ -326,17 +327,18 @@ final class HookConfig
                 $unknownKeys = array_diff(array_keys($config), self::ENTRY_KEYS);
                 if ($unknownKeys !== []) {
                     $hint = match (true) {
-                        in_array('enabled', $unknownKeys, true) => " (to switch an entry off, write 'disabled: true')",
-                        in_array('event', $unknownKeys, true) => " (the event is the key this entry is nested under, not a field on it)",
+                        in_array('enabled', $unknownKeys, true) => ' ' . Lang::t('hooks.err.hint-enabled'),
+                        in_array('event', $unknownKeys, true) => ' ' . Lang::t('hooks.err.hint-event'),
                         default => '',
                     };
 
-                    throw new \InvalidArgumentException(
-                        "{$source}: '" . implode("', '", array_map('strval', $unknownKeys))
-                        . "' is not a key a hook entry under 'hooks.{$event}' has (valid keys are '"
-                        . implode("', '", self::ENTRY_KEYS) . "'){$hint}; "
-                        . 'refusing rather than registering a hook that is not the one you wrote.',
-                    );
+                    throw new \InvalidArgumentException(Lang::t('hooks.err.entry-key', [
+                        'source' => $source,
+                        'keys' => implode("', '", array_map('strval', $unknownKeys)),
+                        'event' => $event,
+                        'valid' => implode("', '", self::ENTRY_KEYS),
+                        'hint' => $hint,
+                    ]));
                 }
 
                 $type = $config['type'] ?? self::TYPE_COMMAND;

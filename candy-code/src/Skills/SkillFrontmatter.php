@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Skills;
 
 use InvalidArgumentException;
+use SugarCraft\Code\Lang;
 
 /**
  * The typed reading of one SKILL.md frontmatter block — the single boundary
@@ -370,14 +371,13 @@ final readonly class SkillFrontmatter
 
     private static function refuse(string $key, string $expected, mixed $value): InvalidArgumentException
     {
-        return new InvalidArgumentException(sprintf(
-            'SKILL.md frontmatter "%s" must be %s, %s given%s.',
-            $key,
-            $expected,
-            is_array($value) ? (array_is_list($value) ? 'list' : 'map') : get_debug_type($value),
+        return new InvalidArgumentException(Lang::t('host.skills.err.frontmatter-type', [
+            'key' => $key,
+            'expected' => $expected,
+            'given' => is_array($value) ? (array_is_list($value) ? 'list' : 'map') : get_debug_type($value),
             // An unquoted date is the one case whose given type misleads: YAML
             // turned `2024-01-01` into an int, and the author never wrote one.
-            is_int($value) || is_float($value) ? ' (quote the value if it is meant as text)' : '',
-        ));
+            'hint' => is_int($value) || is_float($value) ? Lang::t('host.skills.err.frontmatter-quote-hint') : '',
+        ]));
     }
 }

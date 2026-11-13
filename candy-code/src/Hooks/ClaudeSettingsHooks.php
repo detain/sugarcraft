@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Lang;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -285,10 +286,7 @@ final class ClaudeSettingsHooks
     private static function guardScope(string $scope): void
     {
         if (!\in_array($scope, self::SCOPES, true)) {
-            throw new \InvalidArgumentException(
-                "'{$scope}' is not a Claude settings tier (valid scopes are 'user', "
-                . "'project' and 'local'); refusing rather than naming rows into the wrong tier.",
-            );
+            throw new \InvalidArgumentException(Lang::t('hooks.err.settings-tier', ['scope' => $scope]));
         }
     }
 
@@ -387,11 +385,11 @@ final class ClaudeSettingsHooks
 
                 $unknown = array_diff(array_keys($group), self::GROUP_KEYS);
                 if ($unknown !== []) {
-                    throw new \InvalidArgumentException(
-                        "{$source}: '" . implode("', '", array_map('strval', $unknown))
-                        . "' is not a key a `hooks.{$event}` group has (valid keys are 'matcher' and 'hooks'); "
-                        . 'refusing rather than registering a hook that is not the one you wrote.',
-                    );
+                    throw new \InvalidArgumentException(Lang::t('hooks.err.group-key', [
+                        'source' => $source,
+                        'keys' => implode("', '", array_map('strval', $unknown)),
+                        'event' => $event,
+                    ]));
                 }
 
                 $matcher = $group['matcher'] ?? '*';
