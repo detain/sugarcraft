@@ -916,10 +916,37 @@ final class TextArea implements Model
      * without (`'md'`); both are accepted. Empty string skips the
      * suffix entirely. Mirrors the editor-example pattern in
      * upstream `bubbles/textarea`.
+     *
+     * @throws \InvalidArgumentException when the suffix is not a single
+     *         safe filename extension — after the optional leading dot
+     *         it must match /^[A-Za-z0-9_-]{1,16}$/. The suffix is
+     *         concatenated into the rename target of {@see openInEditor()},
+     *         and apps that feed this knob from user-editable settings
+     *         must not be able to turn it into a traversal-write path
+     *         (sugar-forms-079).
      */
     public function withEditorExtension(string $ext): self
     {
+        if (!self::isSafeEditorExtension($ext)) {
+            throw new \InvalidArgumentException(
+                "editor extension '{$ext}' is not a safe filename suffix: after an optional leading dot it must match [A-Za-z0-9_-]{1,16}"
+            );
+        }
+
         return $this->mutate(editorExtension: $ext);
+    }
+
+    /**
+     * Whitelist for {@see withEditorExtension()}: an optional leading dot
+     * plus a 1-16 byte ASCII word-ish suffix — no separators, no dots, so
+     * the value can never redirect the {@see openInEditor()} rename out of
+     * the temp directory.
+     */
+    private static function isSafeEditorExtension(string $ext): bool
+    {
+        // '' (and a bare '.') means "no suffix" — openInEditor skips the
+        // rename for those already; anything else must be one word-ish run.
+        return $ext === '' || $ext === '.' || \preg_match('/\A\.?[A-Za-z0-9_-]{1,16}\z/', $ext) === 1;
     }
 
     /** Short alias for {@see withEditorExtension()}. */
@@ -1661,8 +1688,12 @@ final class TextArea implements Model
         if ($tmp === false) {
             return null;
         }
+        // Belt-braces (sugar-forms-079): withEditorExtension refuses unsafe
+        // suffixes at the config door, but a TextArea hydrated from an older
+        // config could still carry one — rename only down the whitelist, and
+        // fall back to the plain suffixless temp path otherwise.
         $ext = ltrim($this->editorExtension, '.');
-        if ($ext !== '') {
+        if ($ext !== '' && self::isSafeEditorExtension($this->editorExtension)) {
             $renamed = $tmp . '.' . $ext;
             if (@rename($tmp, $renamed)) {
                 $tmp = $renamed;

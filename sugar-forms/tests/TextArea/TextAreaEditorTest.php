@@ -248,4 +248,61 @@ final class TextAreaEditorTest extends TestCase
             }
         }
     }
+
+    // --- SF-50 (sugar-forms-079): the suffix is whitelist-validated ---
+
+    public function testWithEditorExtensionRefusesTraversalAndShellishSuffixes(): void
+    {
+        $bad = ['php/../../evil', 'nested/../evil', '../evil', 'a.b', '.tar.gz', 'x y', str_repeat('a', 17), "md\n"];
+        foreach ($bad as $ext) {
+            $threw = false;
+            try {
+                TextArea::new()->withEditorExtension($ext);
+            } catch (\InvalidArgumentException) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, "withEditorExtension must refuse '{$ext}'");
+        }
+    }
+
+    public function testWithEditorExtensionKeepsBenignSuffixes(): void
+    {
+        foreach (['md', '.md', '', '.', '.txt', 'A-1'] as $ext) {
+            $this->assertSame($ext, TextArea::new()->withEditorExtension($ext)->editorExtension);
+        }
+    }
+
+    public function testShortAliasInheritsTheExtensionGuard(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        TextArea::new()->editorExtension('../evil');
+    }
+
+    public function testOpenInEditorIgnoresPoisonedHydratedSuffix(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $this->markTestSkipped('POSIX-only: discovery falls back to vi/nano');
+        }
+
+        $marker = sys_get_temp_dir() . '/sfpin-' . uniqid();
+        // Simulate a TextArea hydrated from a legacy config that pre-dates
+        // the whitelist: bypass the setter door exactly like the private
+        // mutate() plumbing would during construction.
+        $poison = 'nested/../' . basename($marker);
+        $t = (function () use ($poison) {
+            return $this->mutate(editorExtension: $poison);
+        })->call($this->focused('seed'));
+
+        [, $cmd] = $t->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertNotNull($cmd);
+        $req = $cmd();
+        $tmp = $req->command[count($req->command) - 1];
+        // The defensive double-check must skip the rename: the path stays
+        // the bare tempnam result, and nothing landed on the marker path.
+        $this->assertStringStartsWith('sc-textarea-', basename($tmp));
+        $this->assertStringNotContainsString('nested', $tmp);
+        $this->assertFileDoesNotExist($marker);
+        ($req->onComplete)(0, '', '', null);
+        @unlink($marker);
+    }
 }
