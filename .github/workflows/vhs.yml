@@ -89,21 +89,29 @@ jobs:
         if: ${{ hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' }}
         working-directory: ${{ github.workspace }}
         timeout-minutes: 15
+        # RT-17 (repo-tooling-019): the lib name crosses through env: — the
+        # guard now accuses every ${{ matrix.* }} paste inside a run body
+        # (the pty-matrix cache-key leg shows the shape), and a value that
+        # reaches bash as an $LIB expansion cannot rewrite the command line.
+        env:
+          LIB: ${{ matrix.lib }}
         run: |
           set -euo pipefail
           timeout 600 php candy-vcr/bin/candy-vcr render-batch \
-            "${{ matrix.lib }}/.vhs/" \
+            "$LIB/.vhs/" \
             --encoder ffmpeg
 
       - name: Smoke check rendered GIFs are non-empty
         if: ${{ hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' }}
         working-directory: ${{ github.workspace }}
+        env:
+          LIB: ${{ matrix.lib }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          gifs=( "${{ matrix.lib }}"/.vhs/*.gif )
+          gifs=( "$LIB"/.vhs/*.gif )
           if [ "${#gifs[@]}" -eq 0 ]; then
-            echo "ERROR: no GIFs produced for ${{ matrix.lib }}"
+            echo "ERROR: no GIFs produced for $LIB"
             exit 1
           fi
           for g in "${gifs[@]}"; do
@@ -116,7 +124,7 @@ jobs:
             echo "$file_out" | grep -q "GIF image" \
               || { echo "ERROR: $g is not a valid GIF"; exit 1; }
           done
-          echo "Smoke check passed: ${#gifs[@]} GIF(s) rendered for ${{ matrix.lib }}"
+          echo "Smoke check passed: ${#gifs[@]} GIF(s) rendered for $LIB"
 
       - name: Upload rendered GIFs as artifact
         if: ${{ hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' }}
@@ -322,16 +330,20 @@ jobs:
       # need include-hidden-files, which is one more thing to get wrong.
       - name: Stage rendered GIFs under their lib's name
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        # RT-17 (repo-tooling-019): LIB crosses through env: like the render
+        # job's other steps; the staged paths and messages are byte-identical.
+        env:
+          LIB: ${{ matrix.lib }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          gifs=( "${{ matrix.lib }}"/.vhs/*.gif )
+          gifs=( "$LIB"/.vhs/*.gif )
           if [ ${#gifs[@]} -eq 0 ]; then
-            echo "no GIFs rendered for ${{ matrix.lib }} — nothing to stage"
+            echo "no GIFs rendered for $LIB — nothing to stage"
             exit 0
           fi
-          mkdir -p "/tmp/staged/${{ matrix.lib }}"
-          cp -v "${gifs[@]}" "/tmp/staged/${{ matrix.lib }}/"
+          mkdir -p "/tmp/staged/$LIB"
+          cp -v "${gifs[@]}" "/tmp/staged/$LIB/"
 
       - name: Upload rendered GIFs as artifact
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
@@ -410,12 +422,16 @@ jobs:
       # into /tmp/staged/sugar-dashboard/, so merge-multiple reassembles them into
       # one directory with no batch-suffix parsing.
       - name: Stage rendered GIFs under their lib's name
+        # RT-17 (repo-tooling-019): the batch number crosses through env: like
+        # the render step above it does.
+        env:
+          BATCH: ${{ matrix.batch }}
         run: |
           set -euo pipefail
           shopt -s nullglob
           gifs=( sugar-dashboard/.vhs/*.gif )
           if [ ${#gifs[@]} -eq 0 ]; then
-            echo "batch ${{ matrix.batch }} rendered no GIFs — nothing to stage"
+            echo "batch $BATCH rendered no GIFs — nothing to stage"
             exit 0
           fi
           mkdir -p /tmp/staged/sugar-dashboard

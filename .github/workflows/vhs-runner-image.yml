@@ -152,20 +152,28 @@ jobs:
             org.opencontainers.image.created=${{ github.event.repository.updated_at }}
 
       - name: Summary
+        # RT-17 (repo-tooling-019): the step outputs cross into this heredoc
+        # through env:, never pasted as ${{ }} text (IMAGE_NAME is workflow
+        # env and already reaches bash directly).
+        env:
+          STALE: ${{ steps.vers.outputs.stale }}
+          VHS_PINNED: ${{ steps.vers.outputs.vhs }}
+          TTYD_PINNED: ${{ steps.vers.outputs.ttyd }}
+          TAG_PINNED: ${{ steps.vers.outputs.tag }}
         run: |
           {
-            if [ '${{ steps.vers.outputs.stale }}' = 'yes' ]; then
+            if [ "$STALE" = 'yes' ]; then
               echo "## VHS runner pins stale — bump PR opened, build skipped"
               echo ""
-              echo "- Pinned: vhs \`${{ steps.vers.outputs.vhs }}\` ttyd \`${{ steps.vers.outputs.ttyd }}\`"
+              echo "- Pinned: vhs \`$VHS_PINNED\` ttyd \`$TTYD_PINNED\`"
               echo "- Upstream has newer releases; see the \`vhs-runner-pins-bump-*\` branch."
               echo "- The image was NOT rebuilt: builds follow the pins, never upstream."
             else
               echo "## VHS runner image built (pins fresh)"
               echo ""
-              echo "- vhs: \`${{ steps.vers.outputs.vhs }}\`"
-              echo "- ttyd: \`${{ steps.vers.outputs.ttyd }}\`"
-              echo "- Image: \`${{ env.IMAGE_NAME }}:${{ steps.vers.outputs.tag }}\`"
-              echo "- Also tagged: \`${{ env.IMAGE_NAME }}:latest\` (consumers pin the versioned tag — vhs.yml derives it from scripts/vhs-runner/pins.env)"
+              echo "- vhs: \`$VHS_PINNED\`"
+              echo "- ttyd: \`$TTYD_PINNED\`"
+              echo "- Image: \`$IMAGE_NAME:$TAG_PINNED\`"
+              echo "- Also tagged: \`$IMAGE_NAME:latest\` (consumers pin the versioned tag — vhs.yml derives it from scripts/vhs-runner/pins.env)"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

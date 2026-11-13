@@ -58,15 +58,21 @@ jobs:
         id: render_ffmpeg
         continue-on-error: true
         timeout-minutes: 2
-        run: timeout 90 php vendor/bin/candy-vcr render-tape "${{ steps.tape.outputs.path }}" --output /tmp/smoke.gif --encoder ffmpeg
+        # RT-17 (repo-tooling-019): the tape path crosses through env:, never
+        # pasted into the script — same doctrine the release workflows obey.
+        env:
+          TAPE: ${{ steps.tape.outputs.path }}
+        run: timeout 90 php vendor/bin/candy-vcr render-tape "$TAPE" --output /tmp/smoke.gif --encoder ffmpeg
 
       - name: Run smoke tape (php encoder fallback)
         if: steps.render_ffmpeg.outcome == 'failure'
         timeout-minutes: 2
+        env:
+          TAPE: ${{ steps.tape.outputs.path }}
         run: |
           set -euo pipefail
           echo "ffmpeg path failed; falling back to pure-PHP encoder"
-          timeout 90 php vendor/bin/candy-vcr render-tape "${{ steps.tape.outputs.path }}" --output /tmp/smoke.gif --encoder php
+          timeout 90 php vendor/bin/candy-vcr render-tape "$TAPE" --output /tmp/smoke.gif --encoder php
 
       - name: Verify output
         run: |

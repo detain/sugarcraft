@@ -9,10 +9,13 @@ require_once __DIR__ . '/_bootstrap.php';
 use PHPUnit\Framework\TestCase;
 
 /**
- * Guards C-SES-9.d: the three phar-release workflows (plus, since reviews-1103
- * G6-P, the two publisher workflows phar-dev.yml and sync-sugarcraft.yml)
- * must move every tag/input value across into the shell through step `env:`
- * bindings, never by pasting `${{ ... }}` into the text of a `run:` script.
+ * Guards C-SES-9.d: NO workflow in `.github/workflows/` may move a
+ * tag/input/step-output value across into the shell by pasting `${{ ... }}`
+ * into the text of a `run:` script — every such value must cross through a
+ * step `env:` binding. The roster is the whole directory since RT-17
+ * (repo-tooling-019); the five release/publisher workflows that started this
+ * guard (C-SES-9.d trio + phar-dev.yml and sync-sugarcraft.yml from
+ * reviews-1103 G6-P) additionally carry per-file binding pins and body floors.
  *
  * WHY THIS FILE EXISTS AT ALL. GitHub evaluates `${{ }}` textually BEFORE
  * bash ever sees the script: `${{ github.event.inputs.tag }}` and
@@ -59,19 +62,6 @@ use PHPUnit\Framework\TestCase;
 final class WorkflowRunInterpolationTest extends TestCase
 {
     /**
-     * The workflows this guard speaks for, relative to the monorepo root.
-     *
-     * @var list<string>
-     */
-    private const WORKFLOWS = [
-        '.github/workflows/release-phar.yml',
-        '.github/workflows/release-app-phar.yml',
-        '.github/workflows/release-candy-top-phar.yml',
-        '.github/workflows/phar-dev.yml',
-        '.github/workflows/sync-sugarcraft.yml',
-    ];
-
-    /**
      * The three stable release pipelines whose binding arms are spelled per
      * file (EVENT/TAG/APP); the publisher pair joined the scope in G6-P and
      * carries its own binding set below.
@@ -83,6 +73,56 @@ final class WorkflowRunInterpolationTest extends TestCase
         '.github/workflows/release-app-phar.yml',
         '.github/workflows/release-candy-top-phar.yml',
     ];
+
+    /**
+     * The five release/publisher files that additionally carry per-file env
+     * binding pins (arm #3) and body floors. They stay EXPLICIT: silently
+     * shrinking their floors is the rot this file's own doctrine forbids.
+     *
+     * @var list<string>
+     */
+    private const HEADLINED_WITH_BINDINGS = [
+        '.github/workflows/release-phar.yml',
+        '.github/workflows/release-app-phar.yml',
+        '.github/workflows/release-candy-top-phar.yml',
+        '.github/workflows/phar-dev.yml',
+        '.github/workflows/sync-sugarcraft.yml',
+    ];
+
+    /**
+     * Workflows the headline arms deliberately do not speak for, each with a
+     * one-line reason (check-path-repos.php's IDLE_DEFERRAL census is the
+     * house model: every entry named, reasoned, and enforced alive — an entry
+     * pointing at a deleted file reddens testEveryWorkflowIsAccountedFor, so
+     * exemptions rot exactly like rosters do). RT-17 verified the whole
+     * directory CLEAN at time of writing, so the honest roster is the empty
+     * one: an unaccounted-for future workflow must join the roster by default
+     * and pass, not sneak past a hand-maintained 5-file list like
+     * vhs-smoke-test.yml and vhs-runner-image.yml did.
+     *
+     * @var array<string,string> rel-path => reason
+     */
+    private const EXCLUDED_WITH_REASON = [];
+
+    /**
+     * The roster the headline arms accuse: EVERY workflow on disk minus the
+     * reasoned exclusions (RT-17 — the old guard's hand-written 5-file
+     * constant left live violators outside its view; a doctrine that is
+     * doctrine must not depend on someone remembering to edit a list).
+     *
+     * @return list<string> monorepo-relative, sorted
+     */
+    private static function workflowRoster(): array
+    {
+        $files = glob(\dirname(__DIR__, 2) . '/.github/workflows/*.yml') ?: [];
+        $rel = [];
+        foreach ($files as $file) {
+            $rel[] = '.github/workflows/' . \basename($file);
+        }
+        \sort($rel);
+
+        return \array_values(\array_diff($rel, \array_keys(self::EXCLUDED_WITH_REASON)));
+    }
 
     /**
      * Fewest `run:` bodies each file must yield for the parse to be trusted
@@ -111,6 +151,17 @@ final class WorkflowRunInterpolationTest extends TestCase
 
     /** Same reasoning for the step-output arm: outputs resolve case-insensitively too. */
     private const INTERPOLATES_STEP_OUTPUTS = '/\$\{\{\s*steps\./i';
+
+    /**
+     * The matrix arm (RT-17): matrix values are workflow-matrix JSON, and in
+     * ci.yml that JSON is generated from PR-influenceable discovery output —
+     * the exact value class the RT-01 spine routed through `env: LIB:`. The
+     * repo measured ZERO matrix pastes inside run bodies at widening time, so
+     * accusing it costs nothing today and closes the third leg of the same
+     * door. `with:`/`if:` uses of `${{ matrix.* }}` stay legal: the parser
+     * only scans run bodies (the finding's explicit narrowing).
+     */
+    private const INTERPOLATES_MATRIX = '/\$\{\{\s*matrix\./i';
 
     /**
      * Every `run:` body of one workflow, in file order, newlines intact.
@@ -181,33 +232,96 @@ final class WorkflowRunInterpolationTest extends TestCase
     }
 
     /**
-     * Anti-vacuity floor: the parser must actually find the steps in all
-     * three files. Any real edit that makes the extraction return nothing
-     * reddens here, not everywhere silently.
+     * Anti-vacuity floor: the parser must actually find the steps in every
+     * roster file. Any real edit that makes the extraction return nothing
+     * reddens here, not everywhere silently. The five binding-pinned files
+     * keep their per-file floors; the rest are caught by a roster-wide
+     * floor (RT-17 measured 181 bodies across 15 workflows; 170 leaves room
+     * for a few merged steps, none for a blinded parser).
      */
     public function testTheRunBodiesAreActuallyExtracted(): void
     {
-        foreach (self::WORKFLOWS as $rel) {
+        $roster = self::workflowRoster();
+        self::assertGreaterThan(0, \count($roster), 'the workflow roster is empty — the glob found nothing to accuse');
+        foreach (self::HEADLINED_WITH_BINDINGS as $rel) {
+            self::assertContains($rel, $roster, $rel . ': dropped out of the roster — renamed away from *.yml or silently excluded');
+        }
+
+        $total = 0;
+        foreach ($roster as $rel) {
             $bodies = self::runBodies($rel);
-            self::assertGreaterThanOrEqual(
-                self::BODY_FLOORS[$rel],
-                \count($bodies),
-                $rel . ': the run: parser found too few bodies — a vacuous pass here would acquit the whole file'
-            );
+            $total += \count($bodies);
+            if (isset(self::BODY_FLOORS[$rel])) {
+                self::assertGreaterThanOrEqual(
+                    self::BODY_FLOORS[$rel],
+                    \count($bodies),
+                    $rel . ': the run: parser found too few bodies — a vacuous pass here would acquit the whole file'
+                );
+            }
             foreach ($bodies as $index => $body) {
                 self::assertNotSame('', \trim($body), $rel . ": run body #$index is empty — the parser mis-sliced the file");
             }
         }
+        self::assertGreaterThanOrEqual(170, $total, 'the whole-roster parse found far fewer run bodies than the measured corpus — the extraction is going blind');
     }
 
     /**
-     * The headline arm: no script text may interpolate a dispatch input or a
-     * step output. Those values arrive through `env:` (arm #3 pins that
-     * bindings for the moved spellings actually exist).
+     * RT-17 staleness arm: every file in the workflows directory must be
+     * accounted for — either caught by the *.yml glob (roster) or sitting in
+     * EXCLUDED_WITH_REASON naming a file that still exists with a non-empty
+     * reason. Two rot classes die here: an exclusion kept after its workflow
+     * is deleted (lucky exoneration for whatever file claims that name next
+     * is one glob away), and a workflow authored as `.yaml` — GitHub runs it,
+     * the glob does not see it.
+     */
+    public function testEveryWorkflowIsAccountedFor(): void
+    {
+        $dir = \dirname(__DIR__, 2) . '/.github/workflows';
+
+        $yamlLookalikes = \array_values(\array_filter(
+            \scandir($dir) ?: [],
+            static fn (string $f): bool => \str_ends_with(\strtolower($f), '.yaml')
+        ));
+        self::assertSame(
+            [],
+            $yamlLookalikes,
+            'workflow files with a .yaml extension are invisible to the *.yml roster glob — rename them or widen the glob here'
+        );
+
+        $onDisk = [];
+        foreach (\scandir($dir) ?: [] as $entry) {
+            if (\str_ends_with($entry, '.yml')) {
+                $onDisk['.github/workflows/' . $entry] = true;
+            }
+        }
+
+        foreach (self::EXCLUDED_WITH_REASON as $rel => $reason) {
+            self::assertArrayHasKey($rel, $onDisk, $rel . ': excluded but the file is gone — drop the stale exemption (every entry must name a live workflow)');
+            self::assertNotSame('', \trim($reason), $rel . ': excluded without a reason');
+        }
+
+        // The roster is defined as glob minus exclusions, so the only way a
+        // live .yml escapes it is a bug in that definition — pin it directly.
+        foreach (\array_keys($onDisk) as $rel) {
+            $isRostered = \in_array($rel, self::workflowRoster(), true);
+            $isExcluded = isset(self::EXCLUDED_WITH_REASON[$rel]);
+            self::assertTrue(
+                $isRostered !== $isExcluded,
+                $rel . ': neither in the accused roster nor in the reasoned exclusions — account for it one way or the other'
+            );
+        }
+    }
+
+    /**
+     * The headline arm: no run-body script text in ANY roster workflow may
+     * interpolate a dispatch input, a step output, or a matrix value (the
+     * three value classes a PR or dispatch payload can shape). Those values
+     * arrive through `env:` (arm #3 pins that bindings for the moved spellings
+     * actually exist).
      */
     public function testNoRunBodyInterpolatesDispatchInputsOrStepOutputs(): void
     {
-        foreach (self::WORKFLOWS as $rel) {
+        foreach (self::workflowRoster() as $rel) {
             foreach (self::runBodies($rel) as $index => $body) {
                 self::assertDoesNotMatchRegularExpression(
                     self::INTERPOLATES_EVENT_INPUTS,
@@ -220,6 +334,13 @@ final class WorkflowRunInterpolationTest extends TestCase
                     $body,
                     $rel . ": run body #$index interpolates a steps.* output into the script — "
                         . 'script-injection door open; the value must cross through the step env: instead'
+                );
+                self::assertDoesNotMatchRegularExpression(
+                    self::INTERPOLATES_MATRIX,
+                    $body,
+                    $rel . ": run body #$index interpolates a matrix.* value into the script — "
+                        . 'the RT-01 spine env-binds matrix values for exactly this reason (ci.yml is measured clean); '
+                        . 'the value must cross through the step env: instead'
                 );
             }
         }
