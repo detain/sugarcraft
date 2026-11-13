@@ -43,6 +43,28 @@ final class PosterGridTest extends TestCase
         self::assertSame(50, $g->total());
     }
 
+    public function testNavVerbsSaturateAtSentinelSizedTotals(): void
+    {
+        // sugar-gallery-034, QA's exact chain: a host that seeds
+        // reset(PHP_INT_MAX) for an unknown-length remote used to hit
+        // cursor + page-size overflowing int → float inside pageDown(), and
+        // synced()'s int parameter TypeErrored on the way in.
+        $sentinel = $this->grid(0)->reset(PHP_INT_MAX)->moveTo(PHP_INT_MAX - 1);
+        self::assertSame(PHP_INT_MAX - 1, $sentinel->cursorIndex());
+
+        $paged = $sentinel->pageDown();
+        self::assertSame(PHP_INT_MAX - 1, $paged->cursorIndex(), 'clamped at the last index — no float, no TypeError');
+        self::assertSame($paged, $paged->pageDown(), 'repeating the verb is an identity no-op');
+
+        self::assertSame(PHP_INT_MAX - 1, $paged->right()->cursorIndex(), 'right() saturates too');
+        self::assertSame($paged, $paged->down(), 'down() at the sentinel stays identity');
+
+        // Normal totals keep their old windowing through the shared helper.
+        $g = $this->grid(50);
+        self::assertSame(12, $g->moveTo(0)->pageDown()->cursorIndex(), '4 cols * 3 rows steps a full page');
+        self::assertSame(49, $g->moveTo(44)->pageDown()->cursorIndex(), 'the last partial page lands exactly on the last index');
+    }
+
     public function testEmptyGrid(): void
     {
         $g = $this->grid(0);

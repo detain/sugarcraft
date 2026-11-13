@@ -256,7 +256,7 @@ final class PosterGrid
 
     public function right(): self
     {
-        return $this->synced($this->cursor + 1);
+        return $this->synced($this->forward($this->cursor, 1));
     }
 
     public function up(): self
@@ -269,14 +269,15 @@ final class PosterGrid
     public function down(): self
     {
         $cols = $this->columns();
-        $target = $this->cursor + $cols;
-        if ($target <= $this->total - 1) {
-            return $this->synced($target);
+        $last = $this->total - 1;
+        // Saturate BEFORE the addition (sugar-gallery-034): cursor + cols is
+        // only computed when it provably stays inside int range.
+        if ($this->cursor <= $last - $cols) {
+            return $this->synced($this->cursor + $cols);
         }
 
         // No full row below, but step onto the last item if it sits on a lower
         // (partial) row than the cursor.
-        $last = $this->total - 1;
         if ($last > $this->cursor && intdiv($last, $cols) > intdiv($this->cursor, $cols)) {
             return $this->synced($last);
         }
@@ -286,7 +287,7 @@ final class PosterGrid
 
     public function pageDown(): self
     {
-        return $this->synced($this->cursor + $this->columns() * $this->visibleRows());
+        return $this->synced($this->forward($this->cursor, $this->columns() * $this->visibleRows()));
     }
 
     public function pageUp(): self
@@ -302,6 +303,21 @@ final class PosterGrid
     public function end(): self
     {
         return $this->synced($this->total - 1);
+    }
+
+    /**
+     * One forward-jump law for the nav verbs: clamp to the last index BEFORE
+     * the addition, never after it (sugar-gallery-034) — a host seeding
+     * reset(PHP_INT_MAX) for an unknown-length remote used to turn pageDown()
+     * at the sentinel edge into an int→float overflow and a TypeError inside
+     * synced(). Backward jumps cannot overflow and stay with synced()'s
+     * clamp.
+     */
+    private function forward(int $from, int $delta): int
+    {
+        $last = $this->total - 1;
+
+        return $from <= $last - $delta ? $from + $delta : $last;
     }
 
     /** Jump the cursor to an absolute index (e.g. an A–Z letter offset), clamped. */
