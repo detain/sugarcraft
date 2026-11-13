@@ -188,7 +188,7 @@ final class PaginatorTest extends TestCase
                 Paginator::new()->withArabicFormat($bad);
                 $this->fail("grammar must refuse {$bad} at the setter");
             } catch (\InvalidArgumentException $e) {
-                $this->assertStringContainsString('sprintf', $e->getMessage());
+                $this->assertStringContainsString('two integers', $e->getMessage());
             }
         }
         $legal = Paginator::new()->withPerPage(10)->withTotalItems(270)

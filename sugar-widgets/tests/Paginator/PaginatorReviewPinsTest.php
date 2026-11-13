@@ -95,7 +95,7 @@ final class PaginatorReviewPinsTest extends TestCase
                 $p->withArabicFormat($bad);
                 $this->fail("format {$bad} must be refused");
             } catch (\InvalidArgumentException $e) {
-                $this->assertStringContainsString('sprintf', $e->getMessage());
+                $this->assertStringContainsString('two integers', $e->getMessage());
             }
         }
     }
