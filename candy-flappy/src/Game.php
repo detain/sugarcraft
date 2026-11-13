@@ -560,9 +560,6 @@ final class Game implements Model
         return $this->mutate(['started' => true]);
     }
 
-    /** Deferred leaderboard write (M18): the crash path and the settling
-     *  quit path share one Cmd shape — run the persist, swallow I/O so a
-     *  full disk cannot kill the loop, hand back no Msg. */
     /**
      * Process-boundary settle used by bin/candy-flappy after Program::run()
      * returns. `q`/Esc already settle inside update() via a batched Cmd; the
@@ -582,6 +579,9 @@ final class Game implements Model
         $merged->persistHighScores();
     }
 
+    /** Deferred leaderboard write (M18): the crash path and the settling
+     *  quit path share one Cmd shape — run the persist, swallow I/O so a
+     *  full disk cannot kill the loop, hand back no Msg. */
     private function persistCmd(): \Closure
     {
         $g = $this;
