@@ -340,6 +340,10 @@ final class BinArgvTest extends TestCase
         // -109's orphan is now a labelled notes line with -30's honesty.
         $this->assertStringContainsString('notes:  there is no pause', $out);
         $this->assertStringContainsString('wall-clock', $out);
+        // msw-40 (finding -113): the reduced-motion position must survive
+        // next to the pause truth it belongs to.
+        $this->assertStringContainsString('only motion is the 1 Hz', $out);
+        $this->assertStringContainsString('no way to freeze it', $out);
     }
 
     // ---- msw-32: POSIX end-of-options and the -v alias (finding -070) ----

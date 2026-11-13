@@ -182,7 +182,8 @@ if (in_array('--help', $flagTokens, true) || in_array('-h', $flagTokens, true)) 
         . "               shadows until beaten; a plain launch deals the classic\n"
         . "               10x10 board and n re-deals any preset or custom shape\n"
         . "               live (G5-b ruling); the board renders in full — no\n"
-        . "               mid-session resize re-fit.\n");
+        . "               mid-session resize re-fit; the only motion is the 1 Hz\n"
+        . "               clock tick, and there is no way to freeze it.\n");
     exit(0);
 }
 
