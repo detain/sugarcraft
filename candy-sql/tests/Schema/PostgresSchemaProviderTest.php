@@ -48,15 +48,18 @@ final class PostgresSchemaProviderTest extends TestCase
         return $mock;
     }
 
-    private function createMockDb(array $tablesResult, array $columnsResult, array $indexesResult, array $fksResult): DatabaseInterface
+    private function createMockDb(array $tablesResult, array $columnsResult, array $indexesResult, array $fksResult, array $pkResult = []): DatabaseInterface
     {
         $mock = $this->createMock(DatabaseInterface::class);
 
         $mock->method('quote')->willReturnCallback(self::pdoQuote(...));
 
-        $mock->method('query')->willReturnCallback(function (string $sql) use ($tablesResult, $columnsResult, $indexesResult, $fksResult) {
+        $mock->method('query')->willReturnCallback(function (string $sql) use ($tablesResult, $columnsResult, $indexesResult, $fksResult, $pkResult) {
             if (str_contains($sql, 'information_schema.tables')) {
                 return $tablesResult;
+            }
+            if (str_contains($sql, 'key_column_usage')) {
+                return $pkResult;
             }
             if (str_contains($sql, 'information_schema.columns')) {
                 return $columnsResult;
@@ -124,6 +127,25 @@ final class PostgresSchemaProviderTest extends TestCase
         $this->assertSame('name', $nameCol->name);
         $this->assertSame('text', $nameCol->type);
         $this->assertTrue($nameCol->notNull);
+    }
+
+    public function testColumnsMarkPrimaryKeyColumnsFromTheConstraint(): void
+    {
+        $db = $this->createMockDb(
+            [],
+            [
+                ['column_name' => 'org_id', 'data_type' => 'integer', 'is_nullable' => 'NO', 'column_default' => null, 'ordinal_position' => 1],
+                ['column_name' => 'user_id', 'data_type' => 'integer', 'is_nullable' => 'NO', 'column_default' => null, 'ordinal_position' => 2],
+                ['column_name' => 'note', 'data_type' => 'text', 'is_nullable' => 'YES', 'column_default' => null, 'ordinal_position' => 3],
+            ],
+            [],
+            [],
+            [['column_name' => 'org_id'], ['column_name' => 'user_id']],
+        );
+
+        $columns = (new PostgresSchemaProvider($db))->columns('memberships');
+
+        $this->assertSame([true, true, false], array_map(static fn (SchemaColumn $c): bool => $c->primaryKey, $columns));
     }
 
     public function testColumnsReturnsEmptyArrayForNonexistentTable(): void

@@ -67,6 +67,9 @@ final class ResultTable
     /** Row index the cursor sits on (D-C06); -1 = unknown → rowOffset rules. */
     private int $cursorRow = -1;
 
+    /** Column the cell cursor highlights in the cursor row (SQL-O03); -1 = no highlight. */
+    private int $cursorCol = -1;
+
     /** Derived: column names from the first row. */
     private readonly array $columns;
 
@@ -222,6 +225,52 @@ final class ResultTable
         return $new;
     }
 
+    /**
+     * Scroll just far enough that column $col is inside the visible window
+     * (SQL-O03: the cell cursor drives the horizontal scroll). A no-op when
+     * the column is already shown; the offset never overshoots it.
+     */
+    public function revealColumn(int $col): self
+    {
+        $col = max(0, min($col, count($this->columns) - 1));
+        $table = $this;
+        if ($col < $table->offset) {
+            return $table->withOffset($col);
+        }
+        while ($col >= $table->offset + $table->visibleColCount() && $table->offset < $col) {
+            $table = $table->withOffset($table->offset + 1);
+        }
+
+        return $table;
+    }
+
+    /**
+     * Highlight column $col of the cursor row as the cell cursor (reverse
+     * video) and scroll it into view. Pass -1 for no highlight. Render-time
+     * state like the viewport: the other withers do not carry it, so the
+     * renderer re-applies it each frame from the browse state.
+     */
+    public function withCursorCol(int $col): self
+    {
+        $base = $col >= 0 ? $this->revealColumn($col) : $this;
+        $new = new self(
+            rows: $base->rows,
+            offset: $base->offset,
+            visibleWidth: $base->visibleWidth,
+            maxCellWidth: $base->maxCellWidth,
+            jsonPretty: $base->jsonPretty,
+            nullToken: $base->nullToken,
+            colSpacing: $base->colSpacing,
+            precomputedColWidths: $base->colWidths,
+            rowOffset: $base->rowOffset,
+        );
+        $new->viewportRows = $this->viewportRows;
+        $new->cursorRow = $this->cursorRow;
+        $new->cursorCol = $col;
+
+        return $new;
+    }
+
     public function withOffset(int $offset): self
     {
         return new self(
@@ -370,8 +419,8 @@ final class ResultTable
         $lines = [];
         $lines[] = $this->renderHeader();
 
-        foreach ($window as $row) {
-            $lines[] = $this->renderRow($row);
+        foreach ($window as $i => $row) {
+            $lines[] = $this->renderRow($row, $windowStart + $i === $this->cursorRow);
         }
 
         if ($this->canScrollLeft() || $this->canScrollRight()) {
@@ -458,12 +507,21 @@ final class ResultTable
         return implode(str_repeat(' ', $this->colSpacing), $cells);
     }
 
-    private function renderRow(array $row): string
+    private function renderRow(array $row, bool $isCursorRow = false): string
     {
         $cells = [];
+        $colIndex = $this->offset;
         foreach ($this->visibleColumns() as $col) {
             $width = $this->colWidths[$col] ?? 12;
-            $cells[] = $this->styledCell($row[$col] ?? null, $width);
+            if ($isCursorRow && $colIndex === $this->cursorCol) {
+                // The cell cursor is plain padded text under reverse video:
+                // nesting it inside the NULL/JSON colour styling would end the
+                // reverse run at the inner reset (D-C10 padding law).
+                $cells[] = Style::new()->reverse()->render($this->pad($this->formatValuePlain($row[$col] ?? null), $width));
+            } else {
+                $cells[] = $this->styledCell($row[$col] ?? null, $width);
+            }
+            $colIndex++;
         }
         return implode(str_repeat(' ', $this->colSpacing), $cells);
     }

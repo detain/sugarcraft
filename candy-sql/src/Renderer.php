@@ -12,6 +12,7 @@ use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Table\{Column, Row, RowData, Table};
 use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\AdminSection;
+use SugarCraft\Sql\App\EditState;
 use SugarCraft\Sql\App\ExportState;
 use SugarCraft\Sql\Terminal\BorderFrame;
 use SugarCraft\Style\Border;
@@ -144,7 +145,7 @@ final class Renderer
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render("1-{$paneCount}  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  back  ·  esc  cancel dialog");
             $status = '';
-            $ioPrompt = self::ioPrompt($a);
+            $ioPrompt = self::ioPrompt($a) ?? self::editPrompt($a);
             if ($ioPrompt !== null) {
                 $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
                     ->render($ioPrompt);
@@ -173,13 +174,17 @@ final class Renderer
         if ($a->ui->pane === Pane::Query) {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render('tab  switch pane  ·  ctrl+r / ctrl+e  run  ·  enter  newline  ·  ↑/↓  recall history  ·  ctrl+c  quit');
+        } elseif ($a->ui->pane === Pane::Rows && $a->browse->selectedTable !== null && $a->browse->selectedTable !== '(query)') {
+            // SQL-O03: the edit chords are advertised where they act.
+            $help = Style::new()->foreground(Color::hex('#7d6e98'))
+                ->render('tab  switch pane  ·  h/l  cell  ·  e  edit  ·  o  new row  ·  D  delete  ·  x  export  ·  q / esc  quit');
         } else {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render('tab  switch pane  ·  enter  load table  ·  x  export  ·  i  import  ·  q / esc  quit');
         }
 
         $status = '';
-        $ioPrompt = self::ioPrompt($a);
+        $ioPrompt = self::ioPrompt($a) ?? self::editPrompt($a);
         if ($ioPrompt !== null) {
             // SQL-O07: an open file line out-ranks the plain status echo —
             // it IS the input surface, and its text is user bytes.
@@ -332,6 +337,10 @@ final class Renderer
             $body = $a->browse->resultTable
                 ->withVisibleWidth($width)
                 ->withViewport($available, $a->browse->rowCursor)
+                // SQL-O03: the cell cursor shows only where the keys act — the
+                // focused Rows pane — and scrolls its column into view here, at
+                // the width actually painted.
+                ->withCursorCol($a->ui->pane === Pane::Rows ? $a->browse->colCursor : -1)
                 ->render();
             return self::frame($a, Pane::Rows, $title, $body, $width);
         }
@@ -369,7 +378,7 @@ final class Renderer
             ->withViewportHeight($maxRows)
             ->withSelectedIndex($a->browse->rowCursor);
 
-        return self::frame($a, Pane::Rows, $title, $table->View(), $width);
+        return self::frame($a, Pane::Rows, $title, $table->view(), $width);
     }
 
     private static function queryPane(App $a, int $terminalCols): string
@@ -478,6 +487,41 @@ final class Renderer
     private static function focusedTitle(string $title): string
     {
         return Style::new()->bold()->render('▶' . $title);
+    }
+
+    /**
+     * The open in-grid edit line (SQL-O03) as a status-bar prompt, or null
+     * when none is open. The typed value and the staged statement carry
+     * server/user bytes, so both pass CellValue::sanitize; the staged SQL is
+     * flattened to one line and clipped to the terminal width so the prompt
+     * never wraps the frame.
+     */
+    private static function editPrompt(App $a): ?string
+    {
+        $e = $a->edit;
+        $value = $e->isNull ? 'NULL' : CellValue::sanitize($e->buffer);
+        $room = max(20, self::terminalSize()['cols'] - 8);
+        $text = match ($e->stage) {
+            EditState::STAGE_CELL => Lang::t('edit.prompt_cell', [
+                'table' => CellValue::sanitize($e->table),
+                'column' => CellValue::sanitize($e->column),
+                'value' => $value,
+            ]),
+            EditState::STAGE_INSERT => Lang::t('edit.prompt_insert', [
+                'table' => CellValue::sanitize($e->table),
+                'column' => CellValue::sanitize($e->insertColumns[$e->insertIndex] ?? ''),
+                'type' => CellValue::sanitize($e->insertTypes[$e->insertColumns[$e->insertIndex] ?? ''] ?? ''),
+                'n' => (string) ($e->insertIndex + 1),
+                'total' => (string) count($e->insertColumns),
+                'value' => $value,
+            ]),
+            EditState::STAGE_CONFIRM => Lang::t('edit.prompt_confirm', [
+                'sql' => CellValue::sanitize(preg_replace('/\s+/', ' ', $e->statement?->display ?? '') ?? ''),
+            ]),
+            default => null,
+        };
+
+        return $text === null ? null : mb_strimwidth($text, 0, $room, '…');
     }
 
     /**

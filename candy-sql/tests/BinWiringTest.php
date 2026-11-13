@@ -344,4 +344,20 @@ final class BinWiringTest extends TestCase
         $this->assertStringContainsString('ext-pcntl', $readme);
         $this->assertStringContainsString('class_exists', $readme);
     }
+
+    /**
+     * SQL-O03: --read-only is stripped before the connection parser sees it,
+     * reaches the App, and the help screen documents both the edit chords and
+     * the honest limit of the flag (it guards the grid, not Query-pane SQL).
+     */
+    public function testReadOnlyFlagIsWiredAndDocumented(): void
+    {
+        $src = self::binSource();
+
+        $this->assertStringContainsString("in_array('--read-only', \$argv, true)", $src);
+        $this->assertStringContainsString('->withReadOnly($readOnly)', $src);
+        $this->assertStringContainsString('does not filter Query-pane statements', $src);
+        $this->assertStringContainsString('e   edit the cell under the cursor', $src);
+        $this->assertStringContainsString('Rows are addressed by their full PRIMARY KEY only', $src);
+    }
 }

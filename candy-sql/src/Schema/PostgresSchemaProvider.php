@@ -46,6 +46,25 @@ final class PostgresSchemaProvider implements SchemaProviderInterface
     public function columns(string $table): array
     {
         $safeTable = $this->db->quote($table);
+
+        // SQL-O03: the cell editor addresses rows by primary key, and this
+        // provider used to hard-code primaryKey=false for every column. The
+        // key columns come from the PRIMARY KEY constraint's key usage. It runs
+        // BEFORE the column listing so the columns query stays the last
+        // statement emitted (the golden-SQL pins capture the final query).
+        $pkRows = $this->db->query(
+            "SELECT kcu.column_name FROM information_schema.table_constraints tc "
+            . "JOIN information_schema.key_column_usage kcu "
+            . "ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema AND kcu.table_name = tc.table_name "
+            . "WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = 'public' AND tc.table_name = {$safeTable}",
+        ) ?? [];
+        $pk = [];
+        foreach ($pkRows as $row) {
+            if (isset($row['column_name'])) {
+                $pk[(string) $row['column_name']] = true;
+            }
+        }
+
         $result = $this->db->query(
             "SELECT column_name, data_type, is_nullable, column_default, ordinal_position "
             . "FROM information_schema.columns "
@@ -61,7 +80,7 @@ final class PostgresSchemaProvider implements SchemaProviderInterface
                 type: (string) ($row['data_type'] ?? ''),
                 notNull: ($row['is_nullable'] ?? '') === 'NO',
                 defaultValue: $row['column_default'] ?? null,
-                primaryKey: false,
+                primaryKey: isset($pk[(string) ($row['column_name'] ?? '')]),
             );
         }
         return $columns;

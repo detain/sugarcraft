@@ -32,6 +32,8 @@ final class BrowseState
         public readonly string $filterText = '',
         public readonly bool $filterMode = false,
         public readonly int $pageOffset = 0,
+        /** Column the Rows-pane cell cursor sits on (index into the grid's columns). */
+        public readonly int $colCursor = 0,
     ) {}
 
     public static function new(): self
@@ -107,6 +109,11 @@ final class BrowseState
     public function withRowCursor(int $rowCursor): self
     {
         return $this->mutate(['rowCursor' => $rowCursor]);
+    }
+
+    public function withColCursor(int $colCursor): self
+    {
+        return $this->mutate(['colCursor' => max(0, $colCursor)]);
     }
 
     public function withResultTable(?ResultTable $resultTable): self

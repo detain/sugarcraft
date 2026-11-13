@@ -141,6 +141,17 @@ final class PreviewQuery
         return sprintf('SELECT %s FROM %s %s', implode(', ', $select), $tbl, $window);
     }
 
+    /**
+     * Whether the browse preview shows a column of this declared type as a
+     * size placeholder instead of its bytes. Public because the cell editor
+     * (SQL-O03) must not treat a placeholder as the cell's real value — it
+     * would write `[blob 12 bytes]` over the data it stands in for.
+     */
+    public static function elides(Flavor $flavor, string $type): bool
+    {
+        return self::isElided($flavor, $type);
+    }
+
     private static function isElided(Flavor $flavor, string $type): bool
     {
         $type = strtolower(trim($type));

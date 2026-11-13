@@ -45,6 +45,9 @@ use SugarCraft\Sql\Admin\Variables\VariableEditor;
 use SugarCraft\Sql\Admin\Variables\VariablesPage;
 use SugarCraft\Style\Style;
 use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\DmlBuilder;
+use SugarCraft\Sql\Db\DmlRunner;
+use SugarCraft\Sql\Db\DmlStatement;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Db\PreviewQuery;
@@ -54,6 +57,8 @@ use SugarCraft\Sql\App\AdminState;
 use SugarCraft\Sql\App\AppBuilder;
 use SugarCraft\Sql\App\BrowseState;
 use SugarCraft\Sql\App\ConnectionState;
+use SugarCraft\Sql\App\EditPlanner;
+use SugarCraft\Sql\App\EditState;
 use SugarCraft\Sql\App\ExportState;
 use SugarCraft\Sql\App\QueryState;
 use SugarCraft\Sql\App\UiState;
@@ -119,6 +124,7 @@ final class App implements Model
         public readonly UiState $ui = new UiState(),
         public readonly AdminState $admin = new AdminState(),
         public readonly ExportState $io = new ExportState(),
+        public readonly EditState $edit = new EditState(),
     ) {}
 
     /**
@@ -132,6 +138,18 @@ final class App implements Model
      * driver's network timeout — see {@see MysqlDatabase::NETWORK_TIMEOUT_SECONDS}).
      * AdminState carries an injected instance as the test seam.
      */
+    /**
+     * SQL-O03: browse-only session. The in-grid edit chords (e / o / D)
+     * refuse with a named status line while it is set. Query-pane statements
+     * are NOT filtered by it — for a hard guarantee connect as a read-only
+     * database user — so the flag is a guard rail against a slip, not a
+     * permission system.
+     */
+    public function withReadOnly(bool $readOnly): self
+    {
+        return $this->mutate(['connection' => $this->connection->withReadOnly($readOnly)]);
+    }
+
     private function syncTimeout(): StatementTimeout
     {
         return $this->admin->syncTimeoutGuard ?? new StatementTimeout();
@@ -322,8 +340,15 @@ final class App implements Model
             // Escape abandons the line, and 'q' is just a filter letter.
             && !($this->ui->pane === Pane::Tables && $this->browse->filterMode)
             // SQL-O07: same law for an open export/import file line.
-            && !$this->io->isPromptOpen()) {
+            && !$this->io->isPromptOpen()
+            // SQL-O03: and for an open in-grid edit line.
+            && !$this->edit->isOpen()) {
             return [$this, Cmd::quit()];
+        }
+        // SQL-O03: an open edit line owns the keyboard outright — Tab included,
+        // so a half-typed cell value can never be stranded behind a pane switch.
+        if ($this->edit->isOpen()) {
+            return $this->handleEditKey($msg);
         }
         if ($msg->type === KeyType::Tab) {
             $nextPane = $this->ui->pane->next();
@@ -368,6 +393,15 @@ final class App implements Model
             if ($msg->rune === 'i') {
                 return $this->openIoLine(ExportState::STAGE_IMPORT_PATH);
             }
+        }
+        // SQL-O03: in-grid editing chords, Rows pane only — e (edit the cell
+        // under the cursor), o (new row), D (delete the row). Capital D keeps
+        // the destructive one off a one-finger slip.
+        if ($this->ui->pane === Pane::Rows
+            && !$msg->ctrl
+            && $msg->type === KeyType::Char
+            && ($msg->rune === 'e' || $msg->rune === 'o' || $msg->rune === 'D')) {
+            return $this->openEdit($msg->rune);
         }
         // SQL-O11: PgDn/PgUp page the TABLE PREVIEW (the browse window), in
         // either browser pane. A query-pane result is a full buffer, not a
@@ -656,6 +690,260 @@ final class App implements Model
         return [$done, null];
     }
 
+    // ─── SQL-O03: in-grid editing ──────────────────────────────────────────
+
+    /**
+     * Open the edit line for chord `e` (cell), `o` (new row) or `D` (delete
+     * row). Every refusal is a named status line, never a silent no-op, and
+     * is decided BEFORE any state opens: read-only session, a non-table
+     * grid (query result / plan view), no row, a table without a primary
+     * key, a hidden key, a binary cell. Rows are addressed by their full
+     * primary key only; nothing is written until the exact statement has
+     * been shown and confirmed.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function openEdit(string $rune): array
+    {
+        $refuse = fn (string $key, array $params = []): array => [$this->mutate([
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t($key, $params)),
+        ]), null];
+
+        if ($this->connection->readOnly) {
+            return $refuse('edit.refuse_readonly');
+        }
+        $table = $this->browse->selectedTable;
+        if ($table === null || $table === '(query)' || $this->query->plan !== null) {
+            return $refuse('edit.refuse_no_table');
+        }
+        if ($this->browse->rowsLoading) {
+            return $refuse('edit.refuse_no_rows');
+        }
+        $row = $this->browse->rows[$this->browse->rowCursor] ?? null;
+        if ($rune !== 'o' && $row === null) {
+            return $refuse('edit.refuse_no_rows');
+        }
+
+        $db = $this->connection->db;
+        $flavor = $this->connection->flavor;
+        try {
+            $schema = $this->syncTimeout()->run(
+                static fn (): array => SchemaBrowser::providerFor($db, $flavor)->columns($table),
+            );
+        } catch (\Throwable) {
+            return $refuse('edit.refuse_schema', ['table' => $table]);
+        }
+        if ($schema === []) {
+            return $refuse('edit.refuse_schema', ['table' => $table]);
+        }
+
+        if ($rune === 'o') {
+            $names = array_map(static fn ($c): string => $c->name, $schema);
+            $types = [];
+            foreach ($schema as $c) {
+                $types[$c->name] = $c->type;
+            }
+            return [$this->mutate([
+                'edit' => new EditState(
+                    stage: EditState::STAGE_INSERT,
+                    table: $table,
+                    insertColumns: $names,
+                    insertTypes: $types,
+                ),
+                'ui' => $this->ui->withError(null)->withStatus(null),
+            ]), null];
+        }
+
+        assert(is_array($row));
+        $addr = EditPlanner::key($flavor, $schema, $row);
+        if (isset($addr['refusal'])) {
+            return $refuse($addr['refusal'], ['table' => $table]);
+        }
+
+        if ($rune === 'D') {
+            $stmt = DmlBuilder::new($flavor)->delete($table, $addr['key']);
+            return [$this->mutate([
+                'edit' => new EditState(stage: EditState::STAGE_CONFIRM, table: $table, key: $addr['key'], statement: $stmt),
+                'ui' => $this->ui->withError(null)->withStatus(null),
+            ]), null];
+        }
+
+        $cols = array_map('strval', array_keys($row));
+        $column = $cols[min($this->browse->colCursor, max(0, count($cols) - 1))] ?? '';
+        $why = EditPlanner::cellRefusal($flavor, $schema, $column);
+        if ($why !== null) {
+            return $refuse($why, ['table' => $table]);
+        }
+        $current = $row[$column] ?? null;
+        $original = $current === null ? null : (is_scalar($current) ? (string) $current : (string) json_encode($current));
+
+        return [$this->mutate([
+            'edit' => new EditState(
+                stage: EditState::STAGE_CELL,
+                table: $table,
+                column: $column,
+                key: $addr['key'],
+                buffer: $original ?? '',
+                isNull: $original === null,
+                original: $original,
+            ),
+            'ui' => $this->ui->withError(null)->withStatus(null),
+        ]), null];
+    }
+
+    /**
+     * Keys while an edit line is open: Escape cancels (never quits), Enter
+     * advances the stage machine, printable runes and Backspace edit the
+     * buffer, Ctrl+N toggles NULL. The confirm stage accepts Enter/Escape
+     * only, so a stray letter can never fire or alter the staged write.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function handleEditKey(KeyMsg $msg): array
+    {
+        $edit = $this->edit;
+        if ($msg->type === KeyType::Escape) {
+            return [$this->mutate([
+                'edit' => $edit->closed(),
+                'ui' => $this->ui->withError(null)->withStatus(Lang::t('edit.cancelled')),
+            ]), null];
+        }
+        if ($msg->type === KeyType::Enter) {
+            return $this->editAdvance();
+        }
+        if ($edit->stage === EditState::STAGE_CONFIRM) {
+            return [$this, null];
+        }
+        if ($msg->ctrl && $msg->type === KeyType::Char && $msg->rune === 'n') {
+            return [$this->mutate(['edit' => $edit->withNull(!$edit->isNull)]), null];
+        }
+        if ($msg->type === KeyType::Backspace) {
+            return [$this->mutate(['edit' => $edit->withBuffer(
+                $edit->isNull ? '' : mb_substr($edit->buffer, 0, max(0, mb_strlen($edit->buffer) - 1)),
+            )]), null];
+        }
+        if ($msg->type === KeyType::Char && !$msg->ctrl && $msg->rune !== '') {
+            return [$this->mutate(['edit' => $edit->withBuffer(($edit->isNull ? '' : $edit->buffer) . $msg->rune)]), null];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * Enter on an edit line. cell -> stage the UPDATE (or say nothing changed);
+     * insert -> record the column and step on, staging the INSERT after the
+     * last; confirm -> run the staged statement.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function editAdvance(): array
+    {
+        $edit = $this->edit;
+        $builder = DmlBuilder::new($this->connection->flavor);
+
+        if ($edit->stage === EditState::STAGE_CELL) {
+            $value = $edit->isNull ? null : $edit->buffer;
+            if ($value === $edit->original) {
+                return [$this->mutate([
+                    'edit' => $edit->closed(),
+                    'ui' => $this->ui->withError(null)->withStatus(Lang::t('edit.unchanged')),
+                ]), null];
+            }
+            $stmt = $builder->update($edit->table, $edit->key, $edit->column, $value);
+
+            return [$this->mutate([
+                'edit' => $edit->withStage(EditState::STAGE_CONFIRM)->withStatement($stmt),
+            ]), null];
+        }
+
+        if ($edit->stage === EditState::STAGE_INSERT) {
+            $column = $edit->insertColumns[$edit->insertIndex] ?? null;
+            $values = $edit->values;
+            if ($column !== null) {
+                if ($edit->isNull) {
+                    $values[$column] = null;
+                } elseif ($edit->buffer !== '') {
+                    $values[$column] = $edit->buffer;
+                }
+                // An empty buffer is DEFAULT: the column is simply left out.
+            }
+            $next = $edit->insertIndex + 1;
+            if ($next < count($edit->insertColumns)) {
+                return [$this->mutate([
+                    'edit' => $edit->withValues($values)->withInsertIndex($next)->withBuffer(''),
+                ]), null];
+            }
+
+            return [$this->mutate([
+                'edit' => $edit->withValues($values)->withBuffer('')
+                    ->withStage(EditState::STAGE_CONFIRM)
+                    ->withStatement($builder->insert($edit->table, $values)),
+            ]), null];
+        }
+
+        if ($edit->stage === EditState::STAGE_CONFIRM && $edit->statement !== null) {
+            return $this->commitEdit($edit->statement);
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * Run the confirmed statement under the shared stall cap and the
+     * DmlRunner's BEGIN/verify/COMMIT-or-ROLLBACK, then re-show the preview
+     * window with the cursors kept where they were.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function commitEdit(DmlStatement $stmt): array
+    {
+        $table = $this->edit->table;
+        $closed = $this->mutate(['edit' => $this->edit->closed()]);
+        $db = $this->connection->db;
+        try {
+            $touched = $this->syncTimeout()->run(static fn (): int => DmlRunner::run($db, $stmt));
+        } catch (\RangeException $e) {
+            if ($e->getMessage() !== '0') {
+                return [$closed->mutate([
+                    'ui' => $this->ui->withStatus(null)->withError(Lang::t('edit.too_many', ['count' => $e->getMessage()])),
+                ]), null];
+            }
+            // The row vanished between preview and confirm (another client):
+            // nothing was written, so re-read the window and say so.
+            $touched = 0;
+        } catch (\Throwable $e) {
+            return [$closed->mutate([
+                'ui' => $this->ui->withStatus(null)->withError(Lang::t('edit.failed', [
+                    'reason' => $e->getMessage() !== '' ? $e->getMessage() : $e::class,
+                ])),
+            ]), null];
+        }
+
+        $rowCursor = $this->browse->rowCursor;
+        $colCursor = $this->browse->colCursor;
+        $reloaded = $closed->loadTable($table, $this->browse->pageOffset);
+        $rows = count($reloaded->browse->rows);
+        $reloaded = $reloaded->mutate([
+            'browse' => $reloaded->browse
+                ->withRowCursor(max(0, min($rowCursor, $rows - 1)))
+                ->withColCursor($colCursor),
+        ]);
+        $key = match (true) {
+            $touched === 0 => 'edit.none_changed',
+            $stmt->kind === DmlStatement::INSERT => 'edit.done_insert',
+            $stmt->kind === DmlStatement::DELETE => 'edit.done_delete',
+            default => 'edit.done_update',
+        };
+        // loadTable's own error (a failed re-read) must not be papered over.
+        if ($reloaded->ui->error !== null) {
+            return [$reloaded, null];
+        }
+
+        return [$reloaded->mutate([
+            'ui' => $reloaded->ui->withError(null)->withStatus(Lang::t($key, ['table' => $table])),
+        ]), null];
+    }
+
     private function handleRowsKey(KeyMsg $msg): self
     {
         if ($msg->type === KeyType::Up
@@ -672,19 +960,26 @@ final class App implements Model
                 ),
             ]);
         }
-        // Wide results scroll column-wise via h/l + ←/→ — query runs AND table
-        // previews alike ride the same ResultTable (SQL-C14/client-014).
+        // Wide results move a COLUMN cursor with h/l + ←/→ and scroll to keep it
+        // in view — query runs AND table previews alike ride the same
+        // ResultTable (SQL-C14/client-014); the cursor cell is what the SQL-O03
+        // edit chords act on.
         if ($this->browse->resultTable !== null) {
+            $lastCol = max(0, count($this->browse->resultTable->columns()) - 1);
+            $step = 0;
             if ($msg->type === KeyType::Left
                 || ($msg->type === KeyType::Char && $msg->rune === 'h')) {
-                return $this->mutate([
-                    'browse' => $this->browse->withResultTable($this->browse->resultTable->scrollLeft()),
-                ]);
-            }
-            if ($msg->type === KeyType::Right
+                $step = -1;
+            } elseif ($msg->type === KeyType::Right
                 || ($msg->type === KeyType::Char && $msg->rune === 'l')) {
+                $step = 1;
+            }
+            if ($step !== 0) {
+                $col = max(0, min($lastCol, $this->browse->colCursor + $step));
                 return $this->mutate([
-                    'browse' => $this->browse->withResultTable($this->browse->resultTable->scrollRight()),
+                    'browse' => $this->browse
+                        ->withColCursor($col)
+                        ->withResultTable($this->browse->resultTable->revealColumn($col)),
                 ]);
             }
         }
@@ -994,7 +1289,7 @@ final class App implements Model
                 'browse' => $this->browse
                     ->withSelectedTable('(query)')
                     ->withRows($rows)
-                    ->withRowCursor(0)
+                    ->withRowCursor(0)->withColCursor(0)
                     // Query results render through ResultTable (horizontal scroll,
                     // JSON pretty, styled NULL). Cleared again on table browse.
                     ->withResultTable(ResultTable::fromRows($rows)),
@@ -1124,7 +1419,7 @@ final class App implements Model
             'browse' => $this->browse
                 ->withSelectedTable('(query)')
                 ->withRows([])
-                ->withRowCursor(0)
+                ->withRowCursor(0)->withColCursor(0)
                 ->withResultTable(null)
                 ->withRowsLoading(true),
             'query' => $query,
@@ -1225,7 +1520,7 @@ final class App implements Model
         return $this->mutate([
             'browse' => $this->browse
                 ->withRows($msg->rows)
-                ->withRowCursor(0)
+                ->withRowCursor(0)->withColCursor(0)
                 ->withResultTable(ResultTable::fromRows($msg->rows))
                 ->withRowsLoading(false),
             'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($msg->rows))),
@@ -1256,7 +1551,7 @@ final class App implements Model
             ->withTableCursor(array_search($name, $this->browse->visibleTables(), true) ?: 0)
             ->withSelectedTable($name)
             ->withRows([])
-            ->withRowCursor(0)
+            ->withRowCursor(0)->withColCursor(0)
             ->withResultTable(null)
             ->withRowsLoading(true)
             ->withIncrementedLoadGen()
@@ -1322,7 +1617,7 @@ final class App implements Model
         return [$this->mutate([
             'browse' => $this->browse
                 ->withRows([])
-                ->withRowCursor(0)
+                ->withRowCursor(0)->withColCursor(0)
                 ->withResultTable(null)
                 ->withSelectedTable(null),
             'query' => $query->withPlan($view->render()),
@@ -1444,7 +1739,7 @@ final class App implements Model
         return [$this->mutate([
             'browse' => $this->browse
                 ->withRows($msg->rows)
-                ->withRowCursor(0)
+                ->withRowCursor(0)->withColCursor(0)
                 // SQL-C14/client-014: browse joins the query path on ONE grid
                 // object — the old null here meant the Rows pane fell back to
                 // the non-scrolling sugar-table arm, so h/l silently died and
@@ -1535,7 +1830,7 @@ final class App implements Model
                     ->withTableCursor(array_search($name, $this->browse->visibleTables(), true) ?: 0)
                     ->withSelectedTable($name)
                     ->withRows($rows)
-                    ->withRowCursor(0)
+                    ->withRowCursor(0)->withColCursor(0)
                     // SQL-C14/client-014: the sync browse arms (SQLite + startup)
                     // join the async one on the SAME grid object — entry flavor
                     // must not decide whether h/l scrolls.

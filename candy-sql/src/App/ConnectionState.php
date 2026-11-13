@@ -23,6 +23,8 @@ final class ConnectionState
         public readonly Flavor $flavor = Flavor::Sqlite,
         public readonly ?ServerContextInterface $serverContext = null,
         public readonly string $sslMode = '',
+        /** SQL-O03: browse-only session — the in-grid edit chords refuse. */
+        public readonly bool $readOnly = false,
     ) {}
 
     public static function new(
@@ -30,8 +32,14 @@ final class ConnectionState
         Flavor $flavor = Flavor::Sqlite,
         ?ServerContextInterface $serverContext = null,
         string $sslMode = '',
+        bool $readOnly = false,
     ): self {
-        return new self($db, $flavor, $serverContext, $sslMode);
+        return new self($db, $flavor, $serverContext, $sslMode, $readOnly);
+    }
+
+    public function withReadOnly(bool $readOnly): self
+    {
+        return $this->mutate(['readOnly' => $readOnly]);
     }
 
     public function withServerContext(?ServerContextInterface $serverContext): self

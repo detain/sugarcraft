@@ -82,6 +82,9 @@ try {
     // failure, distinct from the autoload refusal's exit 1 above.
     $historyPath = resolveHistoryPath($argv);
     $argv = stripHistoryFlags($argv);
+    // SQL-O03: --read-only turns the in-grid edit chords off for the session.
+    $readOnly = in_array('--read-only', $argv, true);
+    $argv = array_values(array_filter($argv, static fn (string $a): bool => $a !== '--read-only'));
 
     $database = buildDatabase($argv);
 
@@ -146,7 +149,7 @@ try {
     }
 
     (new Program(
-        App::start($database, $flavor, $historyRecorder),
+        App::start($database, $flavor, $historyRecorder)->withReadOnly($readOnly),
         // D-M13: bracketed paste makes the terminal wrap pasted bytes in
         // ESC[200~ / ESC[201~ so the decoder emits one PasteMsg instead of
         // spraying the paste's control bytes (ESC especially) as live keys.
@@ -304,6 +307,28 @@ SAVED CONNECTIONS
   with no arguments on an interactive terminal presents these entries
   as a picker; --connect=<name> dials one directly.
 
+EDITING
+  The Rows pane of a TABLE preview is an editable grid: h/l (or ←/→) move
+  a cell cursor, and three chords change data — each shows the exact
+  statement on the status line and writes nothing until Enter confirms:
+
+    e   edit the cell under the cursor (Ctrl+N sets NULL)
+    o   insert a row (Enter steps through the columns; an empty entry
+        leaves the column to its DEFAULT, Ctrl+N stores NULL)
+    D   delete the row under the cursor
+
+  Rows are addressed by their full PRIMARY KEY only: a table without one,
+  a NULL/binary key, a binary cell and any query result refuse with a
+  named status line. Values are bound parameters; each write runs in a
+  transaction that rolls back unless exactly one row was touched (an
+  UPDATE that writes the value already there is reported as no change).
+  Esc cancels an open edit line.
+
+  --read-only
+    Turn the edit chords off for the session. This guards against a slip;
+    it does not filter Query-pane statements — for a hard guarantee
+    connect as a read-only database user.
+
 HISTORY
   By default every admin poll snapshot is recorded to
   $HOME/.candy-sql/history.db (0700 dir / 0600 file) as an offline
@@ -334,6 +359,8 @@ KEYBOARD SHORTCUTS (TUI)
                ExplainView: the Rows pane shows the colour-coded plan tree,
                not the flat provider grid — and any ANALYZE modifier is
                STRIPPED, the inspector never executes what it inspects
+  e / o / D    (Rows pane, table preview) edit the cell / insert a row /
+               delete the row — see EDITING; h/l move the cell cursor
   Ctrl+Space   Complete at the caret (Query editor): SQL keywords, table
                names after FROM/JOIN/INTO/UPDATE, and columns in context
                (WHERE/SELECT/ORDER BY, `alias.` / `table.` qualified, the

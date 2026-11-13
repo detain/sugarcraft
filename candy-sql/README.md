@@ -142,7 +142,10 @@ than spraying unreadable bytes.
 | `Tab`              | Cycle pane (Tables → Rows → Query → Admin)      |
 | `↑/↓` or `j/k`     | Move cursor in active list pane                 |
 | `↑/↓` (query pane) | Move the editor cursor between lines (chars reach the buffer, so this never scrolls a list here) |
-| `←/→` or `h/l`     | Scroll the Rows pane's result columns when the table is wider than the pane (`App::handleRowsKey`) |
+| `←/→` or `h/l`     | Move the Rows pane's cell cursor between columns, scrolling the grid to keep it in view (`App::handleRowsKey`) |
+| `e` (Rows pane)    | Edit the cell under the cursor — table preview only; shows the `UPDATE`, writes on `Enter` (see *Editing table data*) |
+| `o` (Rows pane)    | Insert a row: `Enter` steps through the columns (empty = `DEFAULT`), then confirm |
+| `D` (Rows pane)    | Delete the row under the cursor — shows the `DELETE`, writes on `Enter` |
 | `Enter` / `Space`  | Load the highlighted table into the rows pane   |
 | `Enter` (query pane) | Insert a newline in the editor — run with `Ctrl+R`/`Ctrl+E` (`App::editQuery`) |
 | `Ctrl+R`           | Run the SQL in the query pane                   |
@@ -206,6 +209,34 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 
 > **Page state survival** — Admin pages (Variables, Dashboard, Connections, etc.) preserve their in-memory state (active tab, cursor position, pending edits) across the admin poll cycle (1.0s tick, 1.0s fetch window — `CacheTtl::DASHBOARD`). Fresh server data is read from the shared `AdminQueryCache` on each render; only switching panes (digits `1`–`8`) rebuilds the page from scratch.
 
+## Editing table data
+
+The Rows pane of a **table preview** is an editable grid (SQL-O03; the model of
+jorgerojas26/lazysql's change-cell / new-row / delete-row flow). `h`/`l` move a
+reverse-video cell cursor; three chords act on it, each staging the exact
+statement on the status line and writing nothing until `Enter` confirms (`Esc`
+cancels at any stage, and while the line is open it owns the keyboard — `q`,
+`Tab` and `x` are value letters there):
+
+| Chord | Flow |
+|-------|------|
+| `e`   | The cell's current value is the starting buffer; type, `Ctrl+N` toggles NULL, `Enter` shows `UPDATE "t" SET "c" = 'v' WHERE "id" = 5`, `Enter` again commits. An unchanged value writes nothing. |
+| `o`   | One prompt per column (name, declared type, `n/total`); `Enter` accepts, an empty entry leaves the column to its `DEFAULT`, `Ctrl+N` stores NULL; the full `INSERT` is shown before it commits. |
+| `D`   | Shows `DELETE FROM "t" WHERE "id" = 5`; `Enter` deletes. |
+
+Safety laws: rows are addressed by their **full primary key** (`DmlBuilder` cannot
+build a statement without one), every identifier goes through `Identifier::quote`
+and every value is a bound parameter, and `DmlRunner` wraps each write in
+`BEGIN` … `COMMIT` that **rolls back unless exactly the promised row count was
+touched** (an `UPDATE` that writes the value already there is reported as "no
+row changed"; a row deleted by another client in the meantime refreshes the
+preview instead of erroring). A read-only database or user fails the same
+way — rolled back, named, data untouched. Refusals (all named, locale-aware):
+read-only session (`--read-only`), query results and plan views, no row under
+the cursor, no primary key, NULL/binary key value, binary or large cell,
+unreadable schema. Postgres primary keys are read from the `PRIMARY KEY`
+constraint (the provider used to report none).
+
 ## Architecture
 
 Names in the `File` column below are resolved against the `SugarCraft\Sql\` root namespace:
@@ -219,6 +250,8 @@ these tables.
 | `Db\ConnectionConfig`| Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Pass never echoed. |
 | `Db\ConnectionFactory`| Static factory — four entries: `fromDsn()` parses a DSN into a `ConnectionConfig` without connecting; `fromConfig()` and `fromArgv()` connect and return a `DatabaseInterface`; `fromPath()` opens a bare SQLite file path.    |
 | `Db\Flavor`          | Enum: `MySQL`, `MariaDB`, `Percona`, `Postgres`, `Sqlite`. Used to identify database flavor. `Flavor::detectFromDriver(string $driverName, string $version = '', string $versionComment = '')` detects flavor from a PDO driver name plus an optional version string and version comment — the comment carries the MariaDB/Percona discriminator that a bare `5.5.5-`-prefixed version string hides. |
+| `Db\DmlBuilder` / `Db\DmlStatement` / `Db\DmlRunner` | The cell editor's write path (SQL-O03): `DmlBuilder::new($flavor)->update()/insert()/delete()` yields a `DmlStatement` (`?`-placeholder SQL + bound `params` + a literal `display` for the confirm line); `DmlRunner::run()` executes it in a transaction and rolls back unless the touched-row count matches. |
+| `App\EditState` / `App\EditPlanner` | The seventh `App` state group (`edit`: stage, key, buffer, staged statement) and the pure refusal ladder (primary key present, key not NULL/binary, cell not binary) in front of every write. |
 | `Db\ServerVersion`  | Parser for server version strings. Handles MariaDB `5.5.5-` prefix. `isAtLeast(int $major, int $minor = 0, int $release = 0): bool` compares versions. |
 | `Database`        | ⚠️ Deprecated thin alias to `SqliteDatabase`. Use `DatabaseInterface` for driver-agnostic code.   |
 | `Db\MysqlDatabase`   | `DatabaseInterface` implementation via PDO `mysql`. Implements `serverVersion()`, `driverName()`, `ping()`, `databases()`. |
@@ -925,17 +958,18 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   window and `PgDn`/`PgUp` walk the table in those windows (SQL-O11) — but a
   hand-typed unbounded `SELECT` still lands entirely in memory. Project what
   you need on huge tables.
-- **The Rows pane is read-only navigation — there is no in-grid data editing**
-  (SQL-O03, disclosed per the owner's ruling 3a). Browsing a table shows its
-  paged preview; nothing on that grid edits a cell, inserts a row, or deletes
-  one, and no in-app DML confirm flow exists. Mutate data through hand-written
-  `UPDATE`/`INSERT`/`DELETE` statements in the Query pane — where the
-  destructive-statement arm double-press-guards `DROP`/`TRUNCATE`/`DELETE`/
-  `ALTER`/`RENAME`/`GRANT`/`REVOKE`, while `UPDATE` and `INSERT` run on the
-  first press (their damage is row-scoped and re-runnable, the arm's roster
-  follows the schema-destroying verbs). The named antecedent's research plan
-  lists cell editing as Priority-3; until it lands, this is the honest fact
-  rather than an implied capability.
+- **In-grid editing is single-row, primary-key addressed, and table-preview only**
+  (SQL-O03). `e`/`o`/`D` in the Rows pane edit, insert and delete ONE row of a
+  table preview; they refuse on query results, tables without a primary key,
+  rows whose key is NULL or a binary placeholder, and binary/large cells (the
+  browse preview shows those as `[blob N bytes]`, so overwriting would destroy
+  the real bytes) — each with a named status line, and the Query pane remains
+  the road for everything else. MySQL/PostgreSQL writes run synchronously on
+  the UI loop under the shared stall cap (a single-row write is cheap; the
+  async admin transport is not involved). `--read-only` turns the chords off
+  but does not filter Query-pane SQL — connect as a read-only database user
+  for a hard guarantee. An empty entry in the insert walk means DEFAULT, so
+  inserting an empty string needs a Query-pane statement.
 - **The EXPLAIN guard restricts shape, not side effects.** The Connections
   MDL-tab guard (see *EXPLAIN safety guard* above) only runs `EXPLAIN` on
   single `SELECT` statements, which stops accidental writes — but MySQL can

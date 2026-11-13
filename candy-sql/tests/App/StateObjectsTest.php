@@ -18,17 +18,17 @@ use SugarCraft\Sql\Pane;
 
 /**
  * Guards the plan-3.3 refactor: App's former ~29-parameter constructor is now
- * six cohesive value objects. Each group must default sensibly, stay
+ * seven cohesive value objects (the seventh, `edit`, is the SQL-O03 cell editor). Each group must default sensibly, stay
  * immutable through its with*() methods, and compose into a working App.
  */
 final class StateObjectsTest extends TestCase
 {
-    public function testAppConstructorTakesExactlyTheSixStateGroups(): void
+    public function testAppConstructorTakesExactlyTheSevenStateGroups(): void
     {
         $params = (new \ReflectionClass(App::class))->getConstructor()->getParameters();
         $names = array_map(static fn (\ReflectionParameter $p) => $p->getName(), $params);
 
-        $this->assertSame(['connection', 'browse', 'query', 'ui', 'admin', 'io'], $names);
+        $this->assertSame(['connection', 'browse', 'query', 'ui', 'admin', 'io', 'edit'], $names);
         // Every group after the required connection is optional.
         foreach (array_slice($params, 1) as $param) {
             $this->assertTrue($param->isDefaultValueAvailable(), $param->getName());
