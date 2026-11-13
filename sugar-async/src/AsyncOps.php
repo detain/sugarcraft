@@ -680,7 +680,7 @@ final class AsyncOps
         ?float $maxTotalSeconds = null,
         ?callable $onRetry = null,
     ): PromiseInterface {
-        $loop ??= \React\EventLoop\Loop::get();
+        $loop ??= Loop::get();
         $clock = $now ?? static fn(): float => Clock::monotonicSeconds();
 
         if ($token->isCancelled()) {
@@ -1073,7 +1073,7 @@ final class AsyncOps
         ?string $label,
         ?LoopInterface $loop,
     ): PromiseInterface {
-        $loop ??= \React\EventLoop\Loop::get();
+        $loop ??= Loop::get();
         $settled = false;
         $timer = null;
 
