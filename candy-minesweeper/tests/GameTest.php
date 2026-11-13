@@ -791,6 +791,91 @@ final class GameTest extends TestCase
         $this->assertFalse($next->board->cell(1, 0)->revealed);
     }
 
+    // ─── Double-click chords (msw-29) ──────────────────────────────────────
+
+    /**
+     * The satisfied-number board from testMiddleClickChords: (1,1) is a
+     * revealed 1 whose ring's single mine (1,0) is flagged. Terminal coords
+     * for interior (1,1): x=4, y=3.
+     */
+    private static function satisfiedBoard(): Board
+    {
+        $rows = [
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(true, false, true, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, true, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+        ];
+
+        return Board::fromRows(3, 3, 1, $rows, true, false, 1);
+    }
+
+    public function testTwoFastLeftClicksOnASatisfiedNumberChord(): void
+    {
+        $g = new Game(self::satisfiedBoard(), 1, 1, static fn(int $_max): int => 0);
+
+        // Press one: a plain click on a revealed number — a no-op today,
+        // and it must stay exactly that (no chord yet, board untouched).
+        [$one, ] = $g->update(self::mouseClick(4, 3, MouseButton::Left));
+        $this->assertFalse($one->board->cell(1, 2)->revealed, 'the first press never chords');
+        $this->assertNotNull($one->lastClickAt, 'the tracker records the press');
+
+        // Press two, same cell, same instant — the Windows gesture.
+        [$two, ] = $one->update(self::mouseClick(4, 3, MouseButton::Left));
+        $this->assertTrue($two->board->cell(1, 2)->revealed, 'the pair chords like a middle-click');
+        $this->assertFalse($two->board->cell(1, 0)->revealed, 'the flagged mine stays buried');
+        $this->assertNull($two->lastClickAt, 'the consumed pair clears the window (no triple-click re-chord)');
+    }
+
+    public function testSlowClicksOnTheSameNumberNeverChord(): void
+    {
+        // The window is measured press-to-press: an ancient tracked click
+        // (5 s ago) makes the next press a lone first press again.
+        $stale = new Game(
+            board: self::satisfiedBoard(),
+            cursorX: 1,
+            cursorY: 1,
+            rand: static fn(int $_max): int => 0,
+            lastClickAt: microtime(true) - 5,
+            lastClickX: 1,
+            lastClickY: 1,
+        );
+        [$next, ] = $stale->update(self::mouseClick(4, 3, MouseButton::Left));
+        $this->assertFalse($next->board->cell(1, 2)->revealed, 'an expired window is a plain press');
+        $this->assertNotNull($next->lastClickAt, 'and it re-arms the tracker for a real pair');
+
+        [$two, ] = $next->update(self::mouseClick(4, 3, MouseButton::Left));
+        $this->assertTrue($two->board->cell(1, 2)->revealed, 'two fresh presses chord regardless of the old one');
+    }
+
+    public function testAQuickClickPairOnDifferentCellsNeverChords(): void
+    {
+        $g = new Game(self::satisfiedBoard(), 1, 1, static fn(int $_max): int => 0);
+        [$one, ] = $g->update(self::mouseClick(4, 3, MouseButton::Left));  // tracker now (1,1)
+        // (2,0): interior terminal x=5, y=2 — a hidden number, not tracked.
+        [$two, ] = $one->update(self::mouseClick(5, 2, MouseButton::Left));
+        $this->assertTrue($two->board->cell(2, 0)->revealed, 'the foreign cell just reveals');
+        $this->assertFalse($two->board->cell(1, 2)->revealed, 'the chord needs the SAME cell twice');
+    }
+
+    public function testDoubleClickedRevealedZeroDoesNotChord(): void
+    {
+        // (0,2) is a revealed zero — its flood already cleared the ring, so
+        // the -20 no-zero-chord law holds for the gesture too: two fast
+        // presses must leave the board untouched.
+        $rows = [
+            [new \SugarCraft\Minesweeper\Cell(true, false, true, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+            [new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, true, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+            [new \SugarCraft\Minesweeper\Cell(false, true, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+        ];
+        $board = Board::fromRows(3, 3, 1, $rows, true, false, 3);
+        $g = new Game($board, 0, 2, static fn(int $_max): int => 0);
+
+        [$one, ] = $g->update(self::mouseClick(3, 4, MouseButton::Left)); // (0,2) terminal
+        [$two, ] = $one->update(self::mouseClick(3, 4, MouseButton::Left));
+        $this->assertSame($g->board, $two->board, 'the zero is not chordable through any door');
+        $this->assertFalse($two->board->cell(0, 1)->revealed, 'the zero ring must not sweep on a pair');
+    }
+
     // ─── Click outside board no-ops ────────────────────────────────────────
 
     public function testClickOutsideBoardIsNoop(): void

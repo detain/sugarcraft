@@ -50,6 +50,18 @@ final class Game implements Model
      */
     private const SAVE_VERSION = 1;
 
+    /**
+     * Inter-click window for the double-click chord (msw-29, finding
+     * candy-minesweeper-094): trackpads, most macOS terminals and touch
+     * surfaces cannot reliably emit middle clicks, and the keyboard `c`
+     * was the only chord path. Two left presses on the SAME revealed
+     * number cell inside this window route the chord — measured against
+     * the previous press (classic semantics), never against game start,
+     * and the first press never waits: reveal resolves as it always did,
+     * so the primary action pays zero latency tax.
+     */
+    private const DOUBLE_CLICK_SECONDS = 0.3;
+
     /** @var \Closure(int):int */
     private \Closure $rand;
 
@@ -137,6 +149,17 @@ final class Game implements Model
          * across frames like every other piece of game state.
          */
         public readonly ?CustomForm $form = null,
+        /**
+         * Double-click chord tracker (msw-29): the board cell of the most
+         * recent left-button press and its arrival instant. A second left
+         * press on the same REVEALED NUMBER cell inside
+         * {@see DOUBLE_CLICK_SECONDS} routes the chord path. Session-local
+         * ergonomics: never written to the save envelope, cleared by the
+         * picker starts and restarts like any other per-board state.
+         */
+        public readonly ?float $lastClickAt = null,
+        public readonly int $lastClickX = -1,
+        public readonly int $lastClickY = -1,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
     }
@@ -326,6 +349,10 @@ final class Game implements Model
                 // neither needs the old game nor this blank one (msw-15).
                 'dirty'          => false,
                 'confirmQuit'    => false,
+                // The double-click pair never crosses a fresh board (msw-29).
+                'lastClickAt'    => null,
+                'lastClickX'     => -1,
+                'lastClickY'     => -1,
                 'notice'         => Lang::t('ui.restarted'),
             ]), null];
         }
@@ -495,6 +522,10 @@ final class Game implements Model
             'confirmQuit'    => false,
             'picking'        => false,
             'form'           => null,
+            // The double-click pair never crosses a fresh board (msw-29).
+            'lastClickAt'    => null,
+            'lastClickX'     => -1,
+            'lastClickY'     => -1,
             'notice'         => null,
         ]);
     }
@@ -892,17 +923,37 @@ final class Game implements Model
         // A reveal click that reveals nothing (flagged or already-open cell)
         // is a full no-op: no cursor jump, no clock arming — matching the
         // keyboard, where Space on a dud cell does not start the timer.
+        $cell = $this->board->cell($x, $y);
+        $now  = microtime(true);
+
+        // Double-click chord (msw-29): the second left press on the same
+        // revealed number inside the window is the middle-click gesture —
+        // the pair lands here because the first press already resolved
+        // (reveal or no-op) and refreshed the tracker below.
+        if ($cell->revealed
+            && $cell->adjacent > 0
+            && $this->lastClickX === $x
+            && $this->lastClickY === $y
+            && $this->lastClickAt !== null
+            && $now - $this->lastClickAt <= self::DOUBLE_CLICK_SECONDS) {
+            // The pair is consumed whether or not the number is satisfied:
+            // chordAt owns that verdict (and its refusal toast).
+            return $this->chordAt($x, $y)
+                ->mutate(['lastClickAt' => null, 'lastClickX' => -1, 'lastClickY' => -1]);
+        }
+
+        $track = ['lastClickAt' => $now, 'lastClickX' => $x, 'lastClickY' => $y];
         $board = $this->board->reveal($x, $y, $this->rand);
         if ($board === $this->board) {
-            return $this;
+            return $this->mutate($track);
         }
-        return $this->mutate([
+        return $this->mutate(array_merge([
             'board'          => $board,
             'cursorX'        => $x,
             'cursorY'        => $y,
-            'startedAt'      => $this->startedAt ?? microtime(true),
+            'startedAt'      => $this->startedAt ?? $now,
             'elapsedSeconds' => null,
-        ]);
+        ], $track));
     }
 
     private function flagAt(int $x, int $y): self
