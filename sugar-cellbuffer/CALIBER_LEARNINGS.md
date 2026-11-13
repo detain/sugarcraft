@@ -2,6 +2,11 @@
 
 ## Accumulated Learnings
 
+### 2026-11-12 — Buffer* alias spellings are the consumer contract
+Pattern: consumers importing this package alongside a colliding class name alias it `BufferStyle`/`BufferRegion`/`BufferPosition` (seven aliased imports, five consumers, zero variance). The names are load-bearing sugar-style-side convention now — new exports that could collide should be documented with the same `Buffer*` alias suggestion in README.
+Anti-pattern: Do not add a sugar-cellbuffer → sugarcraft/sugar-style require to "bridge" the two Style classes — sugar-style already requires this package (`src/Layout/RegionBridge.php`), so the reverse require is a package cycle; converters live on the sugar-style side of the seam.
+Source: review-pipeline CB-19 (bridge option (b) deferred on this ground; option (a) shipped)
+
 ### 2026-07-01 — sugar-core dev-master dependency carries stability risk
 Pattern: When a Sugarcraft lib depends on `sugarcraft/sugar-core`, prefer a stable version constraint once available. Using `dev-master` risks pulling breaking changes in CI.
 Anti-pattern: Do not ship production code that depends on `@dev` dependencies without a plan to pin.
