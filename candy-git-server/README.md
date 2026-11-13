@@ -397,7 +397,9 @@ use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\GitDaemon;
 
 $daemon = new GitDaemon(Config::load('/var/lib/candy-git-server/config.yaml'));
-$repos = [Repo::new('demo', '/var/lib/candy-git-server/repositories/demo')];
+// A fresh Repo handle is PRIVATE by default (fail-closed): a repo only
+// serves the world when the operator says so, right here.
+$repos = [Repo::new('demo', '/var/lib/candy-git-server/repositories/demo')->withPublic(true)];
 $daemon->registerRepos($repos);
 
 // Returns a promise that resolves with exit code 0 on graceful stop.

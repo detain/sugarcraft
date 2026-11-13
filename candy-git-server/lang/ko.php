@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  (아직 저장소 없음)',
     'cli.repo_invalid_name'    => '잘못된 저장소 이름: {name} (영숫자, 점, 밑줄, 하이픈만 사용, 마침표 또는 하이픈으로 시작할 수 없음)',
     'cli.repo_created'         => "저장소 '{name}' 생성됨 ({path})",
+    'cli.repo_exists' => "저장소 '{name}'이(가) 이미 {path}에 존재합니다",
     'cli.repo_not_found'       => '저장소를 찾을 수 없음: {name}',
     'cli.repo_info'            => "이름:         {name}\n설명:  {description}\n공개:       {is_public}\n비공개:      {is_private}\n푸시 허용:   {allow_push}\n경로:         {path}\n브랜치:     {branches}\n태그:         {tags}",
     'cli.bool_yes'             => '예',

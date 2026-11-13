@@ -786,6 +786,16 @@ function cmdRepoCreate(array $args): int
     }
 
     $path = "{$dataPath}/repositories/{$name}";
+    // 013: creating over an existing git directory is refused, not
+    // silently adopted — init() would happily reuse $path/.git, so a typo
+    // aimed at a live repo would print "created" over it (and --public
+    // would rewrite its marker). The operator must pick a fresh name or
+    // adopt the directory deliberately through serve --repo-root, whose
+    // scan honors the existing marker.
+    if (\is_dir(Repo::gitDirFor($path))) {
+        return error(Lang::t('cli.repo_exists', ['name' => $name, 'path' => $path]) . "\n");
+    }
+
     // Created PRIVATE by default (fail-closed): visibility is a publish
     // decision, made once with --public and persisted as a marker inside
     // the repository so the scan-based launcher honors it.

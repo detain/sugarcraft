@@ -59,6 +59,7 @@ return [
     'cli.repo_listing_none'    => '  (noch keine Repositories)',
     'cli.repo_invalid_name'    => 'Ungültiger Repository-Name: {name} (nur alphanumerisch, Punkt, Unterstrich, Bindestrich, darf nicht mit Punkt oder Bindestrich beginnen)',
     'cli.repo_created'         => "Repository '{name}' erstellt unter {path}",
+    'cli.repo_exists' => "Repository '{name}' existiert bereits in {path}",
     'cli.repo_not_found'       => 'Repository nicht gefunden: {name}',
     'cli.repo_info'            => "Name:         {name}\nBeschreibung:  {description}\nÖffentlich:       {is_public}\nPrivat:      {is_private}\nPush erlauben:   {allow_push}\nPfad:         {path}\nBranches:     {branches}\nTags:         {tags}",
     'cli.bool_yes'             => 'ja',

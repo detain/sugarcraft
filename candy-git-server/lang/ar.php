@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  (لا توجد مستودعات حتى الآن)',
     'cli.repo_invalid_name'    => 'اسم مستودع غير صالح: {name} (استخدم alphanumeric و punto و underscore و hyphen فقط, يجب ألا يبدأ بنقطة أو شرطة)',
     'cli.repo_created'         => "تم إنشاء المستودع '{name}' في {path}",
+    'cli.repo_exists' => "مستودع '{name}' موجود بالفعل في {path}",
     'cli.repo_not_found'       => 'المستودع غير موجود: {name}',
     'cli.repo_info'            => "الاسم:         {name}\nالوصف:  {description}\nعام:       {is_public}\nخاص:      {is_private}\nالسماح بالدفع:   {allow_push}\nالمسار:         {path}\nالفروع:     {branches}\nالعلامات:         {tags}",
     'cli.bool_yes'             => 'نعم',

@@ -126,4 +126,18 @@ final class RepoTest extends TestCase
         $this->assertSame(0700, \fileperms($bare . '/.git') & 0777, 'the fresh marker directory is owner-only regardless of process umask');
         $this->assertSame(Visibility::Public, Repo::markerVisibility($bare . '/.git'), 'the marker still round-trips through the reader');
     }
+
+    /**
+     * S18/009: the ctor default was Visibility::Public, which made every
+     * "created PRIVATE by default" comment and every registerRepo marker
+     * gate a lie — and let a fresh handle leak a world-visible posture it
+     * was never given. A bare Repo::new() must NOT be public.
+     */
+    public function testAFreshHandleDefaultsToPrivatePosture(): void
+    {
+        $r = Repo::new('posture', $this->createRepoPath('posture'));
+
+        $this->assertSame(Visibility::Private, $r->visibility);
+        $this->assertFalse($r->isVisiblePublic(), 'a handle that was never published reads as public');
+    }
 }

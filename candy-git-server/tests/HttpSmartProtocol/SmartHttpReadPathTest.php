@@ -61,7 +61,7 @@ final class SmartHttpReadPathTest extends TestCase
         $this->headSha = \trim($out[0] ?? '');
         self::assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $this->headSha, 'fixture seed commit failed');
 
-        $this->server->registerRepo(Repo::new('seeded.git', $bare));
+        $this->server->registerRepo(Repo::new('seeded.git', $bare)->withPublic(true));
 
         // Published world: the anonymous-read lever is raised (the
         // fail-closed default is pinned in ServerTest).

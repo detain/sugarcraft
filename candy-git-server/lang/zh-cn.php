@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  （尚无仓库）',
     'cli.repo_invalid_name'    => '无效的仓库名称：{name}（仅限字母、数字、点、下划线、连字符，不能以点或连字符开头）',
     'cli.repo_created'         => "仓库 '{name}' 已创建于 {path}",
+    'cli.repo_exists' => "仓库 '{name}' 已存在于 {path}",
     'cli.repo_not_found'       => '仓库未找到：{name}',
     'cli.repo_info'            => "名称：         {name}\n描述：  {description}\n公开：       {is_public}\n私有：      {is_private}\n允许推送：   {allow_push}\n路径：         {path}\n分支：     {branches}\n标签：         {tags}",
     'cli.bool_yes'             => '是',

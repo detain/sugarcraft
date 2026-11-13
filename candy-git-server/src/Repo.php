@@ -47,7 +47,7 @@ final class Repo
         string $name,
         string $path,
         string $description = '',
-        Visibility $visibility = Visibility::Public,
+        Visibility $visibility = Visibility::Private,
         bool $allowPush = false,
         ?string $mirrorFrom = null,
         string $highlightLanguage = '',
@@ -64,6 +64,12 @@ final class Repo
         $this->collaborators       = $collaborators;
     }
 
+    /**
+     * A repo handle for ($name, $path). The posture DEFAULT is Private
+     * (009): a handle is un-trusted for the world until visibility is set
+     * explicitly (withVisibility/withPublic, marker overlay, or the CLI's
+     * --public at create). Callers wanting public pass it on purpose.
+     */
     public static function new(string $name, string $path): self
     {
         return new self($name, $path);

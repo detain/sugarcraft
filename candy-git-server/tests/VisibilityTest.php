@@ -53,19 +53,19 @@ final class VisibilityTest extends TestCase
     // Repo integration + BC accessors
     // -------------------------------------------------------------------------
 
-    public function testNewRepoIsPublic(): void
+    public function testNewRepoIsPrivateByDefault(): void
     {
         $r = Repo::new('t', '/tmp/t');
 
-        $this->assertSame(Visibility::Public, $r->visibility);
-        $this->assertTrue($r->isPublic);
-        $this->assertFalse($r->isPrivate());
-        $this->assertTrue($r->isVisiblePublic());
+        $this->assertSame(Visibility::Private, $r->visibility);
+        $this->assertFalse($r->isPublic);
+        $this->assertTrue($r->isPrivate());
+        $this->assertFalse($r->isVisiblePublic());
     }
 
     public function testWithVisibilityReturnsNewInstance(): void
     {
-        $a = Repo::new('t', '/tmp/t');
+        $a = Repo::new('t', '/tmp/t')->withPublic(true);
         $b = $a->withVisibility(Visibility::Private);
 
         $this->assertNotSame($a, $b);
@@ -77,7 +77,7 @@ final class VisibilityTest extends TestCase
 
     public function testBcWithPublicFalseDemotesToCollaboratorOnly(): void
     {
-        $r = Repo::new('t', '/tmp/t')->withPublic(false);
+        $r = Repo::new('t', '/tmp/t')->withPublic(true)->withPublic(false);
 
         $this->assertSame(Visibility::CollaboratorOnly, $r->visibility);
         $this->assertFalse($r->isPublic);
@@ -111,7 +111,7 @@ final class VisibilityTest extends TestCase
 
     public function testBcWithPrivateFalseOnPublicIsNoOp(): void
     {
-        $r = Repo::new('t', '/tmp/t')->withPrivate(false);
+        $r = Repo::new('t', '/tmp/t')->withPublic(true)->withPrivate(false);
 
         $this->assertSame(Visibility::Public, $r->visibility);
         $this->assertTrue($r->isPublic);

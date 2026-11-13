@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  (ainda sem repositórios)',
     'cli.repo_invalid_name'    => 'Nome de repositório inválido: {name} (use apenas alfanumérico, ponto, sublinhado, hífen, não deve começar com ponto ou hífen)',
     'cli.repo_created'         => "Repositório '{name}' criado em {path}",
+    'cli.repo_exists' => "O repositório '{name}' já existe em {path}",
     'cli.repo_not_found'       => 'Repositório não encontrado: {name}',
     'cli.repo_info'            => "Nome:         {name}\nDescrição:  {description}\nPúblico:       {is_public}\nPrivado:      {is_private}\nPermitir push:   {allow_push}\nCaminho:         {path}\nBranches:     {branches}\nTags:         {tags}",
     'cli.bool_yes'             => 'sim',

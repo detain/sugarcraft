@@ -44,7 +44,7 @@ final class LfsRoutesTest extends TestCase
         $this->stats = new Stats();
         $this->server->setStats($this->stats);
 
-        $this->server->registerRepo(Repo::new('testrepo.git', $this->tmpDir . '/testrepo.git'));
+        $this->server->registerRepo(Repo::new('testrepo.git', $this->tmpDir . '/testrepo.git')->withPublic(true));
         // Passwords authenticate against a hash only (cleartext field is
         // never consulted); accounts here mint their hash up front.
         $this->server->registerUser(User::new('admin')->withAdmin(true)
@@ -345,7 +345,7 @@ final class LfsRoutesTest extends TestCase
         );
         $server = new Server(Config::load($this->tmpDir . '/config.yaml'));
         $server->setStats(new Stats());
-        $server->registerRepo(Repo::new('testrepo.git', $this->tmpDir . '/testrepo.git'));
+        $server->registerRepo(Repo::new('testrepo.git', $this->tmpDir . '/testrepo.git')->withPublic(true));
 
         $result = $server->handleRequest('POST', '/testrepo.git/info/lfs/objects/batch', '', [], '{}');
 

@@ -64,6 +64,7 @@ return [
     'cli.repo_listing_none'    => '  (no repositories yet)',
     'cli.repo_invalid_name'    => 'Invalid repo name: {name} (use only alphanumeric, dot, underscore, hyphen; must not start with a dot or hyphen)',
     'cli.repo_created'         => "Repository '{name}' created at {path}",
+    'cli.repo_exists' => "Repository '{name}' already exists at {path}",
     'cli.repo_not_found'       => 'Repository not found: {name}',
     'cli.repo_info'            => "Name:         {name}\nDescription:  {description}\nPublic:       {is_public}\nPrivate:      {is_private}\nAllow push:   {allow_push}\nPath:         {path}\nBranches:     {branches}\nTags:         {tags}",
     'cli.bool_yes'             => 'yes',

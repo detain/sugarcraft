@@ -82,7 +82,7 @@ final class AnonymousReadLeverTest extends TestCase
     public function testCanReadHonoursTheLeverForPublishedRepos(): void
     {
         $ac = AccessControl::instance();
-        $published = Repo::new('pub.git', $this->tmpDir . '/repos/pub.git');
+        $published = Repo::new('pub.git', $this->tmpDir . '/repos/pub.git')->withVisibility(Visibility::Public);
 
         $ac->setAllowAnonymousRead(false);
         self::assertFalse($ac->canRead(null, $published), 'lever off: even a published repo refuses the anonymous caller');

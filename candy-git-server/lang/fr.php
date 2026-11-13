@@ -59,6 +59,7 @@ return [
     'cli.repo_listing_none'    => '  (aucun dépôt pour le moment)',
     'cli.repo_invalid_name'    => 'Nom de dépôt invalide : {name} (utilisez uniquement alphanumérique, point, tiret bas, tiret, ne doit pas commencer par un point ou un tiret)',
     'cli.repo_created'         => "Dépôt '{name}' créé à {path}",
+    'cli.repo_exists' => "Le dépôt '{name}' existe déjà dans {path}",
     'cli.repo_not_found'       => 'Dépôt introuvable : {name}',
     'cli.repo_info'            => "Nom :         {name}\nDescription :  {description}\nPublic :       {is_public}\nPrivé :      {is_private}\nAutoriser push : {allow_push}\nChemin :         {path}\nBranches :     {branches}\nTags :         {tags}",
     'cli.bool_yes'             => 'oui',

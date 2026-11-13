@@ -41,7 +41,7 @@ final class ServerTest extends TestCase
         \mkdir($repoPath, 0755, true);
         \exec("git init --bare " . \escapeshellarg($repoPath) . " 2>/dev/null");
 
-        $repo = Repo::new('testrepo.git', $repoPath);
+        $repo = Repo::new('testrepo.git', $repoPath)->withPublic(true);
         $this->server->registerRepo($repo);
 
         // These arms model the published world: the anonymous-read lever is

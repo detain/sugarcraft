@@ -109,7 +109,8 @@ final class GitServerTest extends TestCase
         $r = Repo::new('test-repo', '/tmp/test-repo');
         $this->assertSame('test-repo', $r->name);
         $this->assertSame('/tmp/test-repo', $r->path());
-        $this->assertTrue($r->isPublic);
+        // S18/009: a bare handle is fail-closed PRIVATE.
+        $this->assertFalse($r->isPublic);
     }
 
     public function testRepoWithPublicPrivate(): void
@@ -159,7 +160,7 @@ final class GitServerTest extends TestCase
 
     public function testRepoImmutability(): void
     {
-        $a = Repo::new('immut', '/tmp/i');
+        $a = Repo::new('immut', '/tmp/i')->withPublic(true);
         $b = $a->withPublic(false);
         $this->assertTrue($a->isPublic);
         $this->assertFalse($b->isPublic);

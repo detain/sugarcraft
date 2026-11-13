@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  （リポジトリはまだありません）',
     'cli.repo_invalid_name'    => '無効なリポジトリ名：{name}（英数字、ピリオド、アンダースコア、ハイフンのみ、先頭はピリオドまたはハイフン不可）',
     'cli.repo_created'         => "リポジトリ '{name}' を作成しました（{path}）",
+    'cli.repo_exists' => "リポジトリ '{name}' はすでに {path} に存在します",
     'cli.repo_not_found'       => 'リポジトリが見つかりません：{name}',
     'cli.repo_info'            => "名前：         {name}\n説明：  {description}\n公開：       {is_public}\n非公開：      {is_private}\nプッシュを許可：   {allow_push}\nパス：         {path}\nブランチ：     {branches}\nタグ：         {tags}",
     'cli.bool_yes'             => 'はい',

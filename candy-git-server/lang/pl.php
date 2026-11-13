@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  (jeszcze brak repozytoriów)',
     'cli.repo_invalid_name'    => 'Nieprawidłowa nazwa repozytorium: {name} (używaj tylko alfanumerycznych, kropki, podkreślenia, myślnika, nie może zaczynać się od kropki ani myślnika)',
     'cli.repo_created'         => "Repozytorium '{name}' utworzone w {path}",
+    'cli.repo_exists' => "Repozytorium '{name}' już istnieje w {path}",
     'cli.repo_not_found'       => 'Nie znaleziono repozytorium: {name}',
     'cli.repo_info'            => "Nazwa:         {name}\nOpis:  {description}\nPubliczne:       {is_public}\nPrywatne:      {is_private}\nZezwól na push:   {allow_push}\nŚcieżka:         {path}\nGałęzie:     {branches}\nTagi:         {tags}",
     'cli.bool_yes'             => 'tak',

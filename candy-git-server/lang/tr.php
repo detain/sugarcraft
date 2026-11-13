@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  (henüz depo yok)',
     'cli.repo_invalid_name'    => 'Geçersiz depo adı: {name} (yalnızca alfanümerik, nokta, alt çizgi, kısa çizgi kullanın, nokta veya tire ile başlayamaz)',
     'cli.repo_created'         => "'{name}' deposu oluşturuldu ({path})",
+    'cli.repo_exists' => "'{name}' deposu zaten {path} içinde var",
     'cli.repo_not_found'       => 'Depo bulunamadı: {name}',
     'cli.repo_info'            => "İsim:         {name}\nAçıklama:  {description}\nHerkese açık:       {is_public}\nÖzel:      {is_private}\nPush izin:   {allow_push}\nYol:         {path}\nDallar:     {branches}\nEtiketler:         {tags}",
     'cli.bool_yes'             => 'evet',

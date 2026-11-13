@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  (zatím žádné repozitáře)',
     'cli.repo_invalid_name'    => 'Neplatný název repozitáře: {name} (používejte pouze alfanumerické, tečku, podtržítko, pomlčku, nesmí začínat tečkou ani pomlčkou)',
     'cli.repo_created'         => "Repozitář '{name}' vytvořen v {path}",
+    'cli.repo_exists' => "Repozitář '{name}' již existuje v {path}",
     'cli.repo_not_found'       => 'Repozitář nenalezen: {name}',
     'cli.repo_info'            => "Název:         {name}\nPopis:  {description}\nVeřejný:       {is_public}\nSoukromý:      {is_private}\nPovolit push:   {allow_push}\nCesta:         {path}\nVětve:     {branches}\nTagy:         {tags}",
     'cli.bool_yes'             => 'ano',

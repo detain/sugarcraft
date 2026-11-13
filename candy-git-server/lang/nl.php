@@ -52,6 +52,7 @@ return [
     'cli.repo_listing_none'    => '  (nog geen opslagplaatsen)',
     'cli.repo_invalid_name'    => 'Ongeldige opslagplaatsnaam: {name} (gebruik alleen alfanumeriek, punt, underscore, koppelteken, mag niet beginnen met een punt of koppelteken)',
     'cli.repo_created'         => "Opslagplaats '{name}' aangemaakt in {path}",
+    'cli.repo_exists' => "Repository '{name}' bestaat al in {path}",
     'cli.repo_not_found'       => 'Opslagplaats niet gevonden: {name}',
     'cli.repo_info'            => "Naam:         {name}\nBeschrijving:  {description}\nOpenbaar:       {is_public}\nPrivé:      {is_private}\nPush toestaan:   {allow_push}\nPad:         {path}\nTakken:     {branches}\nTags:         {tags}",
     'cli.bool_yes'             => 'ja',
