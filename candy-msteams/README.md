@@ -58,7 +58,10 @@ use your own directory. Reasons, from the code:
   your tenant.)
 
 Record the bot's **Microsoft App ID** and your **Directory (tenant) ID**. The
-tenant ID is the `tenantId` the store needs.
+tenant ID is the `tenantId` the store needs. It must be the directory GUID
+(8-4-4-4-12 hex). The bundle refuses to start on `common`, `organizations`, a
+domain name, or any other non-GUID value, and the channel boots no account
+when the tenant is empty (the log names `no_usable_accounts`).
 
 ## App registration: app id and client secret
 
@@ -375,6 +378,9 @@ with `why` set to `no bearer` or `token refused`). For a refused token, check:
   missing or partial.
 - `msteams_tenant_refused` means the conversation's tenant is not the
   configured `tenantId`. Use the same directory as the Bot resource.
+- `channels.msteams ... tenantId is not a directory GUID ... refusing to start`
+  means the stored or env `tenantId` is `common`, `organizations`, a domain, or
+  malformed. Replace it with the Directory (tenant) ID GUID.
 - `channels.msteams.serve_down` / `serve_dial_failed`: the bundle cannot reach
   the local serve. A session is not created until it can.
 - The service URL. Replies go to the activity's `serviceUrl`, which must be
