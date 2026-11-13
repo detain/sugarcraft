@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'TimeSeries noktaları [DateTimeImmutable, sayısal] demetleri olmalı, {given} verildi',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'OHLC çubuk listesi yalnızca Bar örnekleri içermeli, {given} verildi',
+    'ohlc.bar_type'            => 'OHLC çubuk listesi yalnızca Candle örnekleri içermeli, {given} verildi',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => '{side} başlıkların yatay kompozisyonda yeri yoktur; Position::Top veya Position::Bottom kullanın',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'tuval genişliği ve yüksekliği her biri >= 1 olmalıdır',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'X etiketi "{label}" atlandı: "{kept}" ile çakışıyor',
+    'graph.ylabel_clipped' => 'Y etiketi "{label}", eksen sütununu boş bırakmak için "{shown}" olarak kısaltıldı',
 ];

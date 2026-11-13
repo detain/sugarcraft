@@ -43,6 +43,12 @@ use SugarCraft\Core\Util\Width;
  */
 final class Scatter implements ChromeAccessors
 {
+    /**
+     * CH-32c: glyph painted on a cell that two or more points share
+     * (the merge/density marker; one cell wide).
+     */
+    public const OVERLAP_RUNE = '◉';
+
     use MemoizesRender;
     use ChartExtras;
     /**
@@ -331,6 +337,8 @@ final class Scatter implements ChromeAccessors
             );
         }
         $canvas = new Canvas($gW > 0 ? max(1, $this->width - $gW - 1) : $this->width, $this->height);
+        /** @var array<int,array<int,int>> $hits row => col => points landing there */
+        $hits = [];
         foreach ($this->points as $p) {
             $x = (float) $p[0];
             $y = (float) $p[1];
@@ -340,7 +348,20 @@ final class Scatter implements ChromeAccessors
             $col = (int) round(self::norm($x, $minX, $maxX) * ($canvas->width() - 1));
             // Y is inverted so larger values sit at the top.
             $row = (int) round((1.0 - self::norm($y, $minY, $maxY)) * ($this->height - 1));
+            $hits[$row][$col] = ($hits[$row][$col] ?? 0) + 1;
             $canvas->setCell($col, $row, $this->rune);
+        }
+        // CH-32c density policy: one cell cannot show how many points share
+        // it, so a cell hit by two or more points takes the single documented
+        // merge glyph (OVERLAP_RUNE) instead of silently looking like a
+        // lone point. Chosen once, not per-chart: density is an
+        // observation about the data, not a style knob.
+        foreach ($hits as $row => $cols) {
+            foreach ($cols as $col => $n) {
+                if ($n >= 2) {
+                    $canvas->setCell($col, $row, self::OVERLAP_RUNE);
+                }
+            }
         }
         if ($gW === 0) {
             return $canvas->view();

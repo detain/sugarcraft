@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'Os pontos do TimeSeries devem ser tuplas [DateTimeImmutable, numérico], {given} fornecido',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'A lista de barras OHLC deve conter apenas instâncias de Bar, {given} fornecido',
+    'ohlc.bar_type'            => 'A lista de barras OHLC deve conter apenas instâncias de Candle, {given} fornecido',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => 'Títulos {side} não têm espaço na composição horizontal; use Position::Top ou Position::Bottom',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'a largura e a altura da tela devem ser cada uma >= 1',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'rótulo X "{label}" omitido: sobrepõe "{kept}"',
+    'graph.ylabel_clipped' => 'rótulo Y "{label}" cortado para "{shown}" para manter a coluna do eixo livre',
 ];

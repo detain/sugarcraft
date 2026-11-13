@@ -755,6 +755,29 @@ final class LineChart extends Chart
 
     protected function renderChart(): string
     {
+        $notes = [];
+        return $this->renderChartInto($notes);
+    }
+
+    /**
+     * CH-32: the localized disclosures the axis-label overdraw policy
+     * produced for the current state (skipped overlapping x labels,
+     * y labels clipped to the gutter). Empty when nothing was dropped.
+     * Re-renders the plot; the view itself stays byte-for-byte the
+     * policy's result, the notes are the reader-side explanation.
+     *
+     * @return list<string>
+     */
+    public function labelDisclosures(): array
+    {
+        $notes = [];
+        $this->renderChartInto($notes);
+        return $notes;
+    }
+
+    /** @param list<string> $notes receives the CH-32 axis-label disclosures */
+    private function renderChartInto(array &$notes): string
+    {
         // CH-08 (sugar-charts-087): zero dims are no longer a renderable
         // size (Canvas refuses <1×1) — the honest answer is ''.
         if ($this->width < 1 || $this->height < 1) {
@@ -1001,7 +1024,7 @@ final class LineChart extends Chart
                 $canvas, $xOrigin, $yOrigin, $plotW, $plotH,
                 null, $this->lineStyle ?? Graph::LINE_THIN,
             );
-            Graph::drawXYAxisLabel(
+            $notes = Graph::drawXYAxisLabel(
                 $canvas, $xOrigin, $yOrigin, $plotW, $plotH,
                 $xLabels, $yLabels, null, $yRows,
             );

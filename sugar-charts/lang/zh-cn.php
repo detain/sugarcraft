@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'TimeSeries 点必须是 [DateTimeImmutable, 数值] 元组，给定 {given}',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'OHLC 条形列表只能包含 Bar 实例，给定 {given}',
+    'ohlc.bar_type'            => 'OHLC 条形列表只能包含 Candle 实例，给定 {given}',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => '{side} 标题在水平布局中没有边栏；请使用 Position::Top 或 Position::Bottom',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => '画布宽度和高度必须各自 >= 1',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => '已跳过 X 轴标签 "{label}"：与 "{kept}" 重叠',
+    'graph.ylabel_clipped' => 'Y 轴标签 "{label}" 已截断为 "{shown}"，以保持轴列空闲',
 ];

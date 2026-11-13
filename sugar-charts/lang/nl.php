@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'TimeSeries-punten moeten [DateTimeImmutable, numeriek]-tupels zijn, {given} gegeven',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'De OHLC-balklijst mag alleen Bar-instanties bevatten, {given} gegeven',
+    'ohlc.bar_type'            => 'De OHLC-balklijst mag alleen Candle-instanties bevatten, {given} gegeven',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => '{side}-titels hebben geen goot in de horizontale compositie; gebruik Position::Top of Position::Bottom',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'canvasbreedte en -hoogte moeten elk >= 1 zijn',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'X-label "{label}" overgeslagen: overlapt "{kept}"',
+    'graph.ylabel_clipped' => 'Y-label "{label}" ingekort tot "{shown}" om de askolom vrij te houden',
 ];

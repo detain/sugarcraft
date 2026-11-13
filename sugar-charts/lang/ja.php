@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'TimeSeries の点は [DateTimeImmutable, 数値] タプルである必要があります（指定: {given}）',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'OHLC バーリストには Bar インスタンスのみを含められます（指定: {given}）',
+    'ohlc.bar_type'            => 'OHLC バーリストには Candle インスタンスのみを含められます（指定: {given}）',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => '{side} タイトルは水平コンポジジョンの余白がないため、Position::Top または Position::Bottom を使用してください',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'キャンバスの幅と高さはそれぞれ 1 以上である必要があります',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'X ラベル "{label}" を省略しました: "{kept}" と重なります',
+    'graph.ylabel_clipped' => 'Y ラベル "{label}" を軸の列を空けるため "{shown}" に切り詰めました',
 ];

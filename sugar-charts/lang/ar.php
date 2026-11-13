@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'يجب أن تكون نقاط TimeSeries أزواجًا [DateTimeImmutable، رقمي]، تم تقديم {given}',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'يجب أن تحتوي قائمة أعمدة OHLC على نسخ Bar فقط، تم تقديم {given}',
+    'ohlc.bar_type'            => 'يجب أن تحتوي قائمة أعمدة OHLC على نسخ Candle فقط، تم تقديم {given}',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => 'عناوين {side} لا مكان لها في التركيب الأفقي؛ استخدم Position::Top أو Position::Bottom',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'يجب أن يكون عرض ولوحة كل منهما >= 1',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'تم تخطي تسمية المحور X "{label}": تتداخل مع "{kept}"',
+    'graph.ylabel_clipped' => 'تم قص تسمية المحور Y "{label}" إلى "{shown}" لإبقاء عمود المحور خالياً',
 ];

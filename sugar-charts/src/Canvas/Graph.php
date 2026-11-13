@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Canvas;
 
+use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\CellGrid;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\Rune;
@@ -139,6 +140,8 @@ final class Graph
      *
      * @param list<string> $xLabels  drawn left-to-right under the X axis
      * @param list<string> $yLabels  drawn top-to-bottom to the left of the Y axis
+     * @return list<string> localized disclosures for every label the CH-32
+     *                      overdraw policy skipped or clipped (empty = none)
      */
     public static function drawXYAxisLabel(
         CellGrid $c,
@@ -150,22 +153,49 @@ final class Graph
         array $yLabels,
         ?Style $style = null,
         array $yRows = [],
-    ): void {
+    ): array {
         // X labels: spaced evenly along the axis below the line. The
         // last label is right-anchored to the rightmost axis column
         // so '23:59'-style strings don't get clipped at the canvas edge.
+        //
+        // CH-32a overdraw policy: first label wins. A later label whose
+        // columns would overlap one already placed (duplicate columns on a
+        // short axis, or a long label crowding its neighbour) is SKIPPED
+        // and disclosed; it used to be painted over the earlier one,
+        // leaving a garbled hybrid. The right-anchored last label is the
+        // exception: it displaces the label it collides with, because the
+        // axis' end value is the one a reader cannot do without.
+        $notes = [];
         $count = count($xLabels);
         if ($count > 0) {
+            /** @var list<array{0:int,1:int,2:string}> $placed [col, endCol(exclusive), label] */
+            $placed = [];
             for ($i = 0; $i < $count; $i++) {
                 $col = $xOrigin + (int) round($i * ($xLen - 1) / max(1, $count - 1));
                 $label = $xLabels[$i];
                 // anchor by DISPLAY width — mb_strlen charges an
                 // escape-free CJK/emoji rune 1, the terminal paints it 2.
                 $labelLen = Width::string($label);
-                if ($i === $count - 1 && $count > 1) {
+                $isLast = $i === $count - 1 && $count > 1;
+                if ($isLast) {
                     // Right-anchor.
                     $col = max($xOrigin, $xOrigin + $xLen - $labelLen + 1);
                 }
+                $end = $col + $labelLen;
+                if ($labelLen > 0) {
+                    if ($isLast) {
+                        while ($placed !== [] && $col < $placed[count($placed) - 1][1]) {
+                            $gone = array_pop($placed);
+                            $notes[] = Lang::t('graph.xlabel_skipped', ['label' => $gone[2], 'kept' => $label]);
+                        }
+                    } elseif ($placed !== [] && $col < $placed[count($placed) - 1][1]) {
+                        $notes[] = Lang::t('graph.xlabel_skipped', ['label' => $label, 'kept' => $placed[count($placed) - 1][2]]);
+                        continue;
+                    }
+                }
+                $placed[] = [$col, $end, $label];
+            }
+            foreach ($placed as [$col, , $label]) {
                 self::drawString($c, $col, $yOrigin + 1, $label, $style);
             }
         }
@@ -183,10 +213,25 @@ final class Graph
                     ? $top + $yRows[$i]
                     : $top + (int) round($i * ($yLen - 1) / max(1, $count - 1));
                 $label = $yLabels[$i];
-                $startCol = max(0, $xOrigin - Width::string($label) - 1);
-                self::drawString($c, $startCol, $row, $label, $style);
+                // CH-32b gutter clamp: a label may use columns
+                // [0, xOrigin-2]; column xOrigin-1 stays a gap and
+                // xOrigin is the axis itself. A wider label used to start
+                // at col 0 and stamp its tail over the axis — it is now
+                // end-truncated to the gutter (disclosed); a gutter with
+                // no room at all drops the label.
+                $room = max(0, $xOrigin - 1);
+                $shown = Width::string($label) > $room ? Width::truncate($label, $room) : $label;
+                if ($shown !== $label) {
+                    $notes[] = Lang::t('graph.ylabel_clipped', ['label' => $label, 'shown' => $shown]);
+                }
+                if ($shown === '') {
+                    continue;
+                }
+                $startCol = max(0, $xOrigin - Width::string($shown) - 1);
+                self::drawString($c, $startCol, $row, $shown, $style);
             }
         }
+        return $notes;
     }
 
     /**

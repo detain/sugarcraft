@@ -354,6 +354,17 @@ echo $chart->view();
   `Left` / `Right`) is the enum behind both `withLegendPosition()` and
   `withTitlePosition()` — import it; string forms are not accepted.
 
+## Overdraw and collision policy
+
+Strings and glyphs that compete for the same terminal cells follow one policy
+per surface, pinned by `tests/OverdrawPolicyTest.php` (CH-32):
+
+| Surface | What happens on a collision | Disclosure |
+|---|---|---|
+| X labels that overlap or share columns | The first label wins; a later one that would overlap it is skipped. The right-anchored last label is the exception: it displaces every label it collides with, so the axis' end value always survives. | `Graph::drawXYAxisLabel()` returns the localized notes; `LineChart::labelDisclosures()` exposes them |
+| Y labels wider than the left gutter | End-truncated to the gutter (col `xOrigin-1` stays a gap), so a label never stamps the axis column; with no gutter room the label is dropped. | Same notes channel |
+| `Scatter` cell hit by two or more points | Painted with the single merge glyph `Scatter::OVERLAP_RUNE` (`◉`), not the point rune; not configurable. | The glyph itself |
+
 ## Accessibility note
 
 Charts encode series and magnitude through **color** and glyph position.

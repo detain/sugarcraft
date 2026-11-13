@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'TimeSeries 점은 [DateTimeImmutable, 숫자] 튜플이어야 하며 {given}이(가) 제공되었습니다',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'OHLC 막대 목록에는 Bar 인스턴스만 포함할 수 있으며 {given}이(가) 제공되었습니다',
+    'ohlc.bar_type'            => 'OHLC 막대 목록에는 Candle 인스턴스만 포함할 수 있으며 {given}이(가) 제공되었습니다',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => '{side} 제목은 수평 구성에 여백이 없습니다. Position::Top 또는 Position::Bottom을 사용하세요',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => '캔버스 너비와 높이는 각각 1 이상이어야 합니다',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'X 레이블 "{label}" 생략됨: "{kept}"와 겹칩니다',
+    'graph.ylabel_clipped' => '축 열을 비워 두기 위해 Y 레이블 "{label}"을(를) "{shown}"(으)로 잘랐습니다',
 ];

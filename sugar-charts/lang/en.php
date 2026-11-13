@@ -75,7 +75,7 @@ return [
     'timeseries.point_shape'   => 'TimeSeries points must be [DateTimeImmutable, numeric] tuples, {given} given',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'OHLC bar list must contain only Bar instances, {given} given',
+    'ohlc.bar_type'            => 'OHLC bar list must contain only Candle instances, {given} given',
 
     // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => '{side} titles have no gutter in the horizontal composition; use Position::Top or Position::Bottom',
@@ -88,4 +88,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'canvas width and height must each be >= 1',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'x label "{label}" skipped: it overlaps "{kept}"',
+    'graph.ylabel_clipped' => 'y label "{label}" clipped to "{shown}" to keep the axis column clear',
 ];

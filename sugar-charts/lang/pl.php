@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'Punkty TimeSeries muszą być krotkami [DateTimeImmutable, liczbowe], podano {given}',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'Lista słupków OHLC może zawierać wyłącznie instancje Bar, podano {given}',
+    'ohlc.bar_type'            => 'Lista słupków OHLC może zawierać wyłącznie instancje Candle, podano {given}',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => 'Tytuły {side} nie mają światła w poziomej kompozycji; użyj Position::Top lub Position::Bottom',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'szerokość i wysokość płótna muszą wynosić co najmniej 1',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'etykieta X "{label}" pominięta: nakłada się na "{kept}"',
+    'graph.ylabel_clipped' => 'etykieta Y "{label}" skrócona do "{shown}", aby kolumna osi została wolna',
 ];

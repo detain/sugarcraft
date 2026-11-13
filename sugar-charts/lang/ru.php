@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'Точки TimeSeries должны быть кортежами [DateTimeImmutable, число], передано {given}',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'Список столбцов OHLC должен содержать только экземпляры Bar, передано {given}',
+    'ohlc.bar_type'            => 'Список столбцов OHLC должен содержать только экземпляры Candle, передано {given}',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => 'Заголовки {side} не имеют места в горизонтальной композиции; используйте Position::Top или Position::Bottom',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'ширина и высота холста должны быть не менее 1',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'подпись X "{label}" пропущена: перекрывает "{kept}"',
+    'graph.ylabel_clipped' => 'подпись Y "{label}" обрезана до "{shown}", чтобы не задевать столбец оси',
 ];

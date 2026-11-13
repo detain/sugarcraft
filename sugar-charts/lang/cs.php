@@ -53,7 +53,7 @@ return [
     'timeseries.point_shape'   => 'Body TimeSeries musí být tuple [DateTimeImmutable, číslo], zadáno {given}',
 
     // OHLC/OHLCChart.php
-    'ohlc.bar_type'            => 'Seznam sloupců OHLC musí obsahovat pouze instance Bar, zadáno {given}',
+    'ohlc.bar_type'            => 'Seznam sloupců OHLC musí obsahovat pouze instance Candle, zadáno {given}',
 // Chart/Chart.php + ChartExtras compositor doors
     'chart.title_side'         => '{side} titulky nemají v horizontální kompozici místo; použijte Position::Top nebo Position::Bottom',
 
@@ -65,4 +65,8 @@ return [
 
     // Canvas/Canvas.php off-switch closure (CH-08)
     'canvas.dim_positive' => 'šířka a výška plátna musí být každá >= 1',
+
+    // Canvas/Graph.php axis-label overdraw policy (CH-32a/b)
+    'graph.xlabel_skipped' => 'popisek X "{label}" přeskočen: překrývá "{kept}"',
+    'graph.ylabel_clipped' => 'popisek Y "{label}" zkrácen na "{shown}", aby sloupec osy zůstal volný',
 ];
