@@ -762,4 +762,50 @@ final class StyleTest extends TestCase
         $this->assertSame(Style::ATTR_BOLD, $style?->attrs());
         $this->assertNull($style?->fg());
     }
+
+    // ─── Direct-construction builders (sugar-cellbuffer-016) ───────────
+
+    /**
+     * The setters construct the new pen with named arguments instead of the
+     * old array-merge + re-spread mutate() (~2× measured win on the
+     * per-composition path). This pin holds the promise of that rewrite:
+     * every setter carries the six untouched fields exactly and applies the
+     * mutual-exclusion law, with equals() as the oracle.
+     */
+    public function testEverySetterPreservesTheUntouchedChannels(): void
+    {
+        $base = new Style(0x112233, 0x445566, Style::ATTR_BOLD | Style::ATTR_ITALIC, null, null, 0x778899, null);
+
+        self::assertTrue($base->withFg(0xAABBCC)->equals(new Style(0xAABBCC, 0x445566, Style::ATTR_BOLD | Style::ATTR_ITALIC, null, null, 0x778899, null)));
+        self::assertTrue($base->withBg(0x102030)->equals(new Style(0x112233, 0x102030, Style::ATTR_BOLD | Style::ATTR_ITALIC, null, null, 0x778899, null)));
+        self::assertTrue($base->withUl(0x010203)->equals(new Style(0x112233, 0x445566, Style::ATTR_BOLD | Style::ATTR_ITALIC, null, null, 0x010203, null)));
+        self::assertTrue($base->withAttrs(Style::ATTR_STRIKE)->equals(new Style(0x112233, 0x445566, Style::ATTR_STRIKE, null, null, 0x778899, null)));
+
+        // Slot setters carry the exclusivity law: the RGB twin clears and the
+        // channel's slot lands, everything else rides through.
+        $slotted = $base->withFgSlot(5)->withBgSlot(6)->withUlSlot(7);
+        self::assertTrue($slotted->equals(new Style(null, null, Style::ATTR_BOLD | Style::ATTR_ITALIC, 5, 6, null, 7)));
+        self::assertTrue($slotted->withFg(0x112233)->equals(new Style(0x112233, null, Style::ATTR_BOLD | Style::ATTR_ITALIC, null, 6, null, 7)));
+        self::assertTrue($slotted->withBg(0x445566)->equals(new Style(null, 0x445566, Style::ATTR_BOLD | Style::ATTR_ITALIC, 5, null, null, 7)));
+        self::assertTrue($slotted->withUl(0x778899)->equals(new Style(null, null, Style::ATTR_BOLD | Style::ATTR_ITALIC, 5, 6, 0x778899, null)));
+
+        // The nine toggles flip only their own bit and commute with equals().
+        $bits = [
+            'withBold' => Style::ATTR_BOLD,
+            'withItalic' => Style::ATTR_ITALIC,
+            'withUnderline' => Style::ATTR_UNDERLINE,
+            'withStrike' => Style::ATTR_STRIKE,
+            'withFaint' => Style::ATTR_FAINT,
+            'withBlink' => Style::ATTR_BLINK,
+            'withReverse' => Style::ATTR_REVERSE,
+            'withOverline' => Style::ATTR_OVERLINE,
+            'withInvisible' => Style::ATTR_INVISIBLE,
+        ];
+        foreach ($bits as $setter => $bit) {
+            $off = $base->withAttrs($base->attrs() & ~$bit);
+            $on = $off->{$setter}();
+            self::assertTrue($on->equals($off->withAttrs($off->attrs() | $bit)), $setter);
+            self::assertTrue($on->{$setter}(false)->equals($off), $setter . ' off');
+        }
+    }
 }
