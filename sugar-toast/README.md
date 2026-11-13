@@ -152,28 +152,24 @@ host that reads the data instead of the pixels.
 
 ## Stacking & The Frame
 
-The frame is NOT pinned to `viewportHeight`: `view()` composites a canvas
-whose height is `max(background rows, viewportHeight, total stack height)`.
-Deep stacks therefore GROW THE FRAME DOWNWARD past the viewport — on a real
-24-row terminal a ten-alert TopLeft stack emits thirty rows and the last
-ones scroll off (delta hosts should know the frame can dirty more rows than
-the screen). Bottom- and middle-anchored stacks count their offsets against
-that inflated height, so with enough persistent alerts the oldest boxes land
-below the physical screen too; the "clamped" wording only ever meant "inside
-the frame", never "inside the viewport". Growth is position-agnostic — ALL
-nine anchors can emit more rows than `viewportHeight` — so hosts with a
-"frame height ≤ terminal height" invariant must reserve stack-height rows
-(cap `maxConcurrent`, dismiss early, or clip their own output) rather than
-assume the viewport bounds the frame.
-
-Overlapping stacks (the pile-up case: more box rows than the anchor has
-room for) composite NEWER alerts over older ones — an older sibling's
-message or action row can be visually occluded with no signal in the frame.
-Expiry reflow also MOVES surviving boxes (no stable anchors yet); a
-stable-row/`+N more` badge policy is still an open question and may change,
-so hosts with accessibility-critical stacks should cap
-`maxConcurrent` or use `Enqueue` deliberately — its surplus drains only as
-timed alerts expire: with persistent alerts the queue never drains on its own.
+The frame is `max(background rows, viewportHeight)` rows tall and a stack
+never outgrows it: when the boxes cannot be painted inside that canvas
+WITHOUT overlapping, `view()` keeps whole boxes while they fit and folds the
+rest into one dim `+N hidden` row at the far end of the stack (locale-aware,
+the `hidden` lang key). Which alerts survive follows the overflow policy —
+`DropNewest` keeps the oldest, every other policy keeps the newest — and at
+least one box always paints (an alert taller than the canvas is the host's
+to size). Hidden alerts are not dismissed: they stay in `activeAlerts()` and
+return when the stack shrinks, and `actionRects()` `alertIndex` values stay in
+`activeAlerts()` space across a fold. A stack that fits paints byte-for-byte
+as it always did; the fold row carries no button and never lands in
+`actionRects()`. The middle anchors pile UP from the centre, so a middle stack
+stops fitting well before its height reaches the canvas (that is where the
+old pile-up occlusion lived) and folds earlier than the top/bottom families.
+Expiry reflow still MOVES surviving boxes (no stable anchors), so hosts with
+accessibility-critical stacks should cap `maxConcurrent` or use `Enqueue`
+deliberately — its surplus drains only as timed alerts expire: with
+persistent alerts the queue never drains on its own.
 
 Two placement laws ride the same geometry. `view()` bounds the canvas before
 allocating it: each dimension must lie in `1..Toast::MAX_VIEWPORT_DIMENSION`
@@ -321,6 +317,7 @@ locale is pinned by the locale-parity guard (`LangCoverageTest`).
 | `count`           | `Notifications: {count}`          | `{count}`    |
 | `more`            | `+{count} more`                   | `{count}`    |
 | `truncated`       | `…[truncated]`                    | —            |
+| `hidden`          | `+{count} hidden`                 | `{count}`    |
 
 > **Note:** The `dismiss` and `count` keys are provided as convenience strings
 > for host-rendered dismiss-hint and counter UI. They are **not** emitted or
@@ -525,10 +522,10 @@ coloured icon is dropped by suppression, severity retreats to the plain
 (see Styled Alerts); the `Ascii` symbol set keeps icon, border and progress bar
 ASCII end-to-end. The other two sets assume UTF-8 output.
 
-Stacked frames can occlude: an older sibling's message or action row may sit
-visually covered with no signal in the frame, and expiry reflow moves boxes,
-so accessibility-critical hosts should cap `maxConcurrent` deliberately
-(see Stacking & The Frame and Overflow & Concurrency).
+Deep stacks fold into a `+N hidden` row rather than occluding each other, but
+expiry reflow moves boxes, so accessibility-critical hosts should cap
+`maxConcurrent` deliberately (see Stacking & The Frame and Overflow &
+Concurrency).
 
 ## History Log
 
@@ -600,7 +597,7 @@ already over the new cap survive until the next push evicts them.
 | `->actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action` | The dispatch door: which Action (if any) covers a frame cell — top-most (newest) box wins where rows overlap |
 | `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — the full viewport-sized frame; use `placeAt()` for the box rectangle alone |
 | `ToastFrame::placeAt(int $col, int $row): ToastFrame` | Re-anchor the painted boxes at a host-chosen cell (inset): a frame whose `boxRows()` are only the boxes' bounding rectangle, background stripped, with `x`/`y`/`bounds` and every hit rect translated to the new origin |
-| `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'more', 'truncated', 'type.*') — see Internationalization |
+| `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'more', 'truncated', 'hidden', 'type.*') — see Internationalization |
 | `->view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string` | Render the toast layer over the background — frame bounds and ellipsize laws in Stacking & The Frame |
 
 | Class | Method | Description |

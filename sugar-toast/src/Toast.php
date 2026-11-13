@@ -1095,13 +1095,14 @@ final class Toast
      * label+closure with nothing for a host to hit-test against.
      *
      * Layout ONCE: each box is rendered straight to its Buffer and its
-     * height feeds both the frame growth and the placement pass, so the two
+     * height feeds both the fold-to-fit pass and the placement pass, so the two
      * passes can no longer disagree about the coordinate system.
      *
      * The frame is the VIEWPORT canvas, not the box width: every background
      * column survives; only the alert box is capped at maxWidth (via
-     * renderAlert's $capWidth), and top-stacked alerts may grow the frame
-     * downward.
+     * renderAlert's $capWidth), and a stack that cannot fit the canvas folds
+     * its surplus into a '+N hidden' row ({@see foldToFit()}) instead of
+     * growing the frame.
      *
      * xOffset()/yOffset() contract: the extra argument is the cumulative
      * height of the boxes placed BEFORE this one (top families stack
@@ -1109,7 +1110,7 @@ final class Toast
      * box's REAL width is passed to xOffset so centre/right offsets become
      * non-zero.
      *
-     * @return null|array{viewport:Buffer, boxes:list<array{alert:Alert,buffer:Buffer,x:int,y:int}>,frameWidth:int,contentHeight:int}
+     * @return null|array{viewport:Buffer, boxes:list<array{alert:?Alert,buffer:Buffer,x:int,y:int,index:int,fold:int}>,frameWidth:int,contentHeight:int}
      *         null when nothing renders (dismissed / empty / all-expired)
      */
     private function layout(string $background, int $viewportWidth, int $viewportHeight): ?array
@@ -1156,14 +1157,29 @@ final class Toast
         $envCtx = [$this->coloursSuppressed(), $this->reducedMotionPreferred()];
         $boxes = [];
         $stackHeight = 0;
-        foreach ($active as $alert) {
+        foreach ($active as $index => $alert) {
             $box = $this->renderAlertToBuffer($alert, $viewportWidth, $envCtx);
-            $boxes[] = ['alert' => $alert, 'buffer' => $box, 'x' => 0, 'y' => 0];
+            $boxes[] = ['alert' => $alert, 'buffer' => $box, 'x' => 0, 'y' => 0, 'index' => $index, 'fold' => 0];
             $stackHeight += $box->height();
         }
 
         $frameWidth = max(1, $viewportWidth);
-        $contentHeight = max(max(\count($bgLines), $viewportHeight), $stackHeight);
+        // TST-LAYOUT (fold-to-fit): the frame is the host's canvas — a stack
+        // taller than it used to GROW the frame (an 18-line frame for a 5-row
+        // viewport, bottom-anchor semantics inverted, hosts' "frame <=
+        // terminal" invariant broken). Now the painted stack is capped to the
+        // canvas budget and the surplus folds into one '+N hidden' row;
+        // hidden alerts stay live in activeAlerts()/history(). A stack that
+        // fits is byte-identical to before.
+        $budget = max(\count($bgLines), $viewportHeight);
+        if (\count($boxes) > 1 && !$this->stackFits(\array_map(static fn (array $b): int => $b['buffer']->height(), $boxes), $budget)) {
+            $boxes = $this->foldToFit($boxes, $budget, $envCtx);
+            $stackHeight = 0;
+            foreach ($boxes as $placed) {
+                $stackHeight += $placed['buffer']->height();
+            }
+        }
+        $contentHeight = max($budget, $stackHeight);
 
         $stackedBefore = 0;
         foreach ($boxes as $index => $placed) {
@@ -1182,6 +1198,99 @@ final class Toast
             'frameWidth' => $frameWidth,
             'contentHeight' => $contentHeight,
         ];
+    }
+
+    /**
+     * Would a stack of these box heights (queue order, first nearest the
+     * anchor) paint inside $canvasHeight rows WITHOUT overlapping? Asked of
+     * the position's own yOffset() so the answer can never disagree with the
+     * placement: Top/Bottom stacks fit when their heights sum to the canvas,
+     * but the middle families pile UPWARD from the centre and clamp to row 0,
+     * so a middle stack stops fitting well before its height reaches the
+     * canvas (boxes painting 1:1 over each other was the old middle-pile-up
+     * occlusion).
+     *
+     * @param list<int> $heights
+     */
+    private function stackFits(array $heights, int $canvasHeight): bool
+    {
+        $before = 0;
+        $spans = [];
+        foreach ($heights as $h) {
+            $y = $this->position->yOffset($h, $canvasHeight, $before);
+            if ($y + $h > $canvasHeight) {
+                return false;
+            }
+            $spans[] = [$y, $y + $h];
+            $before += $h;
+        }
+        \usort($spans, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
+        for ($i = 1, $n = \count($spans); $i < $n; $i++) {
+            if ($spans[$i][0] < $spans[$i - 1][1]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Cap the painted stack to $budget rows: keep whole boxes while the stack
+     * still fits ({@see stackFits()}, fold row included), fold the rest into a `+N hidden` row
+     * placed at the far end of the stack. Which alerts survive follows the
+     * overflow policy — DropNewest keeps the OLDEST (the queue the host
+     * committed to), every other policy keeps the NEWEST. At least one box
+     * always paints: a single alert taller than the canvas is the host's
+     * problem to size, not a reason to show nothing.
+     *
+     * @param list<array{alert:Alert,buffer:Buffer,x:int,y:int,index:int,fold:int}> $boxes
+     * @param array{0:bool,1:bool} $envCtx
+     * @return list<array{alert:Alert,buffer:Buffer,x:int,y:int,index:int,fold:int}>
+     */
+    private function foldToFit(array $boxes, int $budget, array $envCtx): array
+    {
+        $count = \count($boxes);
+        $order = $this->overflow === Overflow::DropNewest
+            ? \range(0, $count - 1)
+            : \range($count - 1, 0);
+        $keep = [];
+        foreach ($order as $i) {
+            $candidate = $keep + [$i => true];
+            \ksort($candidate);
+            $heights = [];
+            foreach (\array_keys($candidate) as $k) {
+                $heights[] = $boxes[$k]['buffer']->height();
+            }
+            $heights[] = 1; // the fold row always rides the stack's far end
+            if ($keep !== [] && !$this->stackFits($heights, $budget)) {
+                break;
+            }
+            $keep = $candidate;
+        }
+        $kept = [];
+        $widest = 1;
+        foreach ($boxes as $i => $placed) {
+            if (isset($keep[$i])) {
+                $kept[] = $placed;
+                $widest = \max($widest, $placed['buffer']->width());
+            }
+        }
+        $hidden = $count - \count($kept);
+        if ($hidden === 0) {
+            return $boxes;
+        }
+        $text = Width::truncateMiddle(Lang::t('hidden', ['count' => $hidden]), $widest);
+        $line = "\x1b[2m" . Width::padRight($text, $widest) . "\x1b[0m";
+        $cells = $this->scanLine($line, $widest, false, $envCtx);
+        $grid = [];
+        $blank = Cell::new();
+        for ($col = 0; $col < $widest; $col++) {
+            $grid[] = $cells[$col] ?? $blank;
+        }
+        $foldRow = ['alert' => null, 'buffer' => Buffer::fromGrid($widest, 1, $grid), 'x' => 0, 'y' => 0, 'index' => -1, 'fold' => $hidden];
+        // Stack order is queue order; the fold closes the stack at the end
+        // away from the anchor, whichever alerts survived.
+        $kept[] = $foldRow;
+        return $kept;
     }
 
     /**
@@ -1267,8 +1376,12 @@ final class Toast
     private function computeRects(array $layout): array
     {
         $rects = [];
-        foreach ($layout['boxes'] as $alertIndex => $placed) {
+        foreach ($layout['boxes'] as $placed) {
             $alert = $placed['alert'];
+            if ($alert === null) {
+                continue; // the '+N hidden' fold row carries no buttons
+            }
+            $alertIndex = $placed['index'];
             $count = \count($alert->actions);
             if ($count === 0) {
                 continue;

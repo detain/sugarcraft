@@ -29,4 +29,7 @@ return [
 
     // Over-long message marker; the code prepends one space. Keep the leading ellipsis.
     'truncated' => '…[已截斷]',
+
+    // Stack-fold row: alerts that do not fit the viewport budget; {count} is a contract.
+    'hidden' => '+{count} 項已隱藏',
 ];

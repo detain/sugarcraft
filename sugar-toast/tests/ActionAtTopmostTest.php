@@ -38,56 +38,37 @@ final class ActionAtTopmostTest extends TestCase
             ->push(new Alert(ToastType::Info, 'third', null, null, [$action('New')]));
     }
 
-    public function testTheClampedStackSharesOneRectBetweenTheLastTwoBoxes(): void
+    public function testTheFoldedStackNoLongerPaintsOverlappingBoxes(): void
     {
+        // TST-LAYOUT: the clamped middle stack used to paint boxes 1:1 over
+        // each other (shared rects). The stack now folds to the budget, so
+        // only the surviving box (the newest) has a rect — no buried button.
         $rects = self::clampedStack()->actionRects('', 80, 4);
 
-        $keys = [];
-        foreach ($rects as $rect) {
-            $keys[] = $rect['alertIndex'] . '@' . $rect['row'] . ':' . $rect['col'];
-        }
-        self::assertContains('1@2:31', $keys, 'middle box rect (regression guard on geometry)');
-        self::assertContains('2@2:31', $keys, 'newest box rect lands on the SAME row/col');
+        self::assertCount(1, $rects);
+        self::assertSame(2, $rects[0]['alertIndex'], 'alertIndex stays in activeAlerts() space after a fold');
+        self::assertSame('New', $rects[0]['action']->label);
+        self::assertSame('New', self::clampedStack()->actionAt($rects[0]['col'], $rects[0]['row'], '', 80, 4)?->label);
+        self::assertNull(self::clampedStack()->actionAt($rects[0]['col'], $rects[0]['row'] + 2, '', 80, 4));
     }
 
-    public function testTheSharedPositionResolvesToTheNewestBoxesAction(): void
+    public function testTopMostWinsOnAFrameWhoseRectsOverlap(): void
     {
-        $toast = self::clampedStack();
-
-        // Base-state tell: forward queue order returned 'Mid', the box
-        // painted UNDER the newest one.
-        $hit = $toast->actionAt(33, 2, '', 80, 4);
-
-        self::assertNotNull($hit, 'the shared position must hit a button');
-        self::assertSame('New', $hit->label, 'actionAt() must fire the VISIBLE box, not the buried one');
-    }
-
-    public function testNonCollidingPositionsStillResolveToTheirOwnBox(): void
-    {
-        $toast = self::clampedStack();
-
-        // 'Old' sits alone lower in the frame — its rect is untouched by the
-        // reversal, and a position outside every rect stays null.
-        self::assertSame('Old', $toast->actionAt(33, 6, '', 80, 4)?->label);
-        self::assertNull($toast->actionAt(1, 1, '', 80, 4));
-    }
-
-    public function testTopMostWinsRegardlessOfWhichOfTheSharedLabelsIsQueried(): void
-    {
-        // Spelling the law without a tautology: across the whole shared span
-        // the resolved label is always the newest box's.
-        $toast = self::clampedStack();
-        $newest = null;
-        foreach ($toast->actionRects('', 80, 4) as $rect) {
-            if ($rect['row'] === 2) {
-                $newest = max($newest ?? 0, $rect['alertIndex']);
-            }
-        }
-        self::assertSame(2, $newest);
+        // The reverse-paint-order law still guards ToastFrame::actionAt():
+        // later rects are composited OVER earlier ones, so they win a shared
+        // cell. Built by hand now that Toast::frame() can no longer produce
+        // the overlap.
+        $old = new Action('Old', static fn() => null);
+        $new = new Action('New', static fn() => null);
+        $alert = new Alert(ToastType::Info, 'x');
+        $rect = static fn (Action $a, int $i): array => [
+            'action' => $a, 'alert' => $alert, 'alertIndex' => $i, 'actionIndex' => 0, 'row' => 2, 'col' => 31, 'width' => 5,
+        ];
+        $frame = new \SugarCraft\Toast\ToastFrame(0, 0, "x\n", [$rect($old, 0), $rect($new, 1)]);
 
         for ($col = 31; $col < 36; $col++) {
-            self::assertSame('New', $toast->actionAt($col, 2, '', 80, 4)?->label,
-                "column {$col} of the shared span must resolve to the top box");
+            self::assertSame('New', $frame->actionAt($col, 2)?->label, "column {$col}");
         }
+        self::assertNull($frame->actionAt(36, 2));
     }
 }

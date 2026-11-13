@@ -24,21 +24,44 @@ final class ToastStackingRecoveryTest extends TestCase
         return Ansi::strip($frame);
     }
 
-    public function testTenPersistentAlertsGrowTheFramePastTheViewport(): void
+    public function testTenPersistentAlertsFoldToTheViewportBudget(): void
     {
-        // M7 truth: contentHeight = max(background, viewport, stack) — ten
-        // 3-row boxes on a 24-row viewport emit a 30-row frame. Hosts must
-        // treat frame height as a function of the stack, not of the viewport
-        // (dirty-row hazard for delta renderers; stated in the README).
+        // TST-LAYOUT fold-to-fit (disclosed re-pin of the old growth pin: ten
+        // 3-row boxes used to emit a 30-row frame for a 24-row viewport).
+        // The frame now stays at the viewport height: seven whole boxes fit
+        // beside the one-row fold, the other three ride the '+3 hidden' row
+        // and stay live in activeAlerts().
         $toast = Toast::new(50)->withPosition(Position::TopLeft);
         for ($i = 0; $i < 10; $i++) {
             $toast = $toast->info("alert $i");
         }
 
         $rows = \explode("\n", self::strip($toast->view('', 80, 24)));
-        $this->assertCount(30, $rows);
-        $this->assertGreaterThan(24, \count($rows));
-        $this->assertSame(10, \substr_count(\implode("\n", $rows), '╭'), 'every box is emitted');
+        $this->assertCount(24, $rows);
+        $text = \implode("\n", $rows);
+        $this->assertSame(7, \substr_count($text, '╭'), 'only the boxes that fit are painted');
+        $this->assertStringContainsString('+3 hidden', $text);
+        $this->assertCount(10, $toast->activeAlerts(), 'hidden alerts stay live');
+        $this->assertStringContainsString('alert 9', $text, 'DropOldest policy keeps the newest');
+        $this->assertStringNotContainsString('alert 0', $text);
+    }
+
+    public function testDropNewestPolicyKeepsTheOldestWhenFolding(): void
+    {
+        $toast = Toast::new(50)->withPosition(Position::TopLeft)->withOverflow(Overflow::DropNewest);
+        for ($i = 0; $i < 10; $i++) {
+            $toast = $toast->info("alert $i");
+        }
+        $text = self::strip($toast->view('', 80, 24));
+        $this->assertStringContainsString('alert 0', $text);
+        $this->assertStringNotContainsString('alert 9', $text);
+        $this->assertStringContainsString('+3 hidden', $text);
+    }
+
+    public function testAFittingStackHasNoFoldRow(): void
+    {
+        $toast = Toast::new(50)->withPosition(Position::TopLeft)->info('a')->info('b');
+        $this->assertStringNotContainsString('hidden', self::strip($toast->view('', 80, 24)));
     }
 
     public function testDeepBottomStackPinsDocumentedGeometryPolicy(): void
@@ -64,14 +87,14 @@ final class ToastStackingRecoveryTest extends TestCase
         $this->assertSame([12, 15, 18, 21], $tops, 'documented stack geometry for 4x3-row boxes on 24 rows');
     }
 
-    public function testMiddlePileUpOcclusionMatchesTheDocumentedPolicy(): void
+    public function testMiddleStackFoldsInsteadOfOccludingItself(): void
     {
-        // M8: middle families pile up from their clamped first-box position;
-        // siblings rendered earlier are OVERWRITTEN. Observed on this tree at
-        // the flip date: six 5-row two-action boxes -> 3x '[Open]', 4x
-        // '[Retry]' of a possible 6+6. Policy pin (dated 2026-11-03): if a
-        // future fix adds scroll/anchor/+N-badge behaviour these counts move
-        // together with the README section that documents them.
+        // TST-LAYOUT (disclosed re-pin of the M8 'middle pile-up occlusion'
+        // policy): six 5-row two-action boxes used to clamp to row 0 and
+        // paint over each other (3x '[Open]', 4x '[Retry]' of a possible
+        // 6+6, two boxes buried). The middle stack now keeps only the boxes
+        // that fit WITHOUT overlap — the two newest — and folds the other
+        // four into '+4 hidden'; every painted button is visible.
         $toast = Toast::new(40)->withPosition(Position::MiddleLeft);
         foreach (range(1, 6) as $i) {
             $toast = $toast->push(new Alert(
@@ -83,8 +106,13 @@ final class ToastStackingRecoveryTest extends TestCase
             ));
         }
         $frame = self::strip($toast->view('', 80, 24));
-        $this->assertSame(3, \substr_count($frame, '[Open]'));
-        $this->assertSame(4, \substr_count($frame, '[Retry]'));
+        $this->assertSame(2, \substr_count($frame, '[Open]'));
+        $this->assertSame(2, \substr_count($frame, '[Retry]'));
+        $this->assertStringContainsString('+4 hidden', $frame);
+        foreach ([5, 6] as $i) {
+            $this->assertSame(1, \substr_count($frame, "message {$i}"), "message {$i} painted exactly once");
+        }
+        $this->assertSame(6, \count($toast->activeAlerts()));
     }
 
     public function testDropOldestEvicteeRidesTheHistoryLog(): void
@@ -172,26 +200,24 @@ final class ToastStackingRecoveryTest extends TestCase
 
     public function testShortViewportStackYMathIsPinnedForAllNineAnchors(): void
     {
-        // TST-LAYOUT default leg (fold-to-fit stays a gated owner call):
-        // measured truth of the current layout under a 5-row viewport with
-        // six persistent 3-row boxes. The frame GROWS to 18 rows for EVERY
-        // anchor (position-independent), Top stacks run downward, Bottom
-        // stacks invert (newest lands at frame row 0, oldest below the
-        // viewport), and Middle clamps negative offsets to 0 — piling the
-        // three newest boxes 1:1 on the same rows. These numbers are the
-        // contract a host plans around; moving one is a POLICY change, not
-        // a byte pin, and must go through the gated fold leg.
+        // TST-LAYOUT fold-to-fit leg: under a 5-row viewport with six
+        // persistent 3-row boxes the painted stack is capped to the canvas —
+        // ONE box (the newest, per DropOldest) plus the one-row '+5 hidden'
+        // fold, 5 rows for EVERY anchor (it used to grow to 18 with the
+        // newest box at frame row 0 on bottom anchors). Top stacks run
+        // downward, Bottom stacks hug the bottom edge, Middle centres. y
+        // values are [box, fold].
         $layout = new \ReflectionMethod(Toast::class, 'layout');
         $expected = [
-            'TopLeft' => [0, 3, 6, 9, 12, 15],
-            'TopCenter' => [0, 3, 6, 9, 12, 15],
-            'TopRight' => [0, 3, 6, 9, 12, 15],
-            'BottomLeft' => [15, 12, 9, 6, 3, 0],
-            'BottomCenter' => [15, 12, 9, 6, 3, 0],
-            'BottomRight' => [15, 12, 9, 6, 3, 0],
-            'MiddleLeft' => [7, 4, 1, 0, 0, 0],
-            'MiddleCenter' => [7, 4, 1, 0, 0, 0],
-            'MiddleRight' => [7, 4, 1, 0, 0, 0],
+            'TopLeft' => [0, 3],
+            'TopCenter' => [0, 3],
+            'TopRight' => [0, 3],
+            'BottomLeft' => [2, 1],
+            'BottomCenter' => [2, 1],
+            'BottomRight' => [2, 1],
+            'MiddleLeft' => [1, 0],
+            'MiddleCenter' => [1, 0],
+            'MiddleRight' => [1, 0],
         ];
 
         foreach (Position::cases() as $position) {
@@ -199,11 +225,13 @@ final class ToastStackingRecoveryTest extends TestCase
             foreach (['one', 'two', 'three', 'four', 'five', 'six'] as $message) {
                 $toast = $toast->alert(ToastType::Info, $message);
             }
-            /** @var array{boxes: list<array{y:int}>, contentHeight:int} $r */
+            /** @var array{boxes: list<array{y:int,fold:int,index:int}>, contentHeight:int} $r */
             $r = $layout->invoke($toast, '', 60, 5);
-            $this->assertSame(18, $r['contentHeight'], "{$position->name}: frame must grow to stack height");
+            $this->assertSame(5, $r['contentHeight'], "{$position->name}: frame must not outgrow the viewport");
             $this->assertSame($expected[$position->name], \array_column($r['boxes'], 'y'), "{$position->name}: y-math moved");
-            $this->assertCount(18, \explode("\n", $toast->view('', 60, 5)), "{$position->name}: emitted rows");
+            $this->assertSame([5, -1], \array_column($r['boxes'], 'index'), "{$position->name}: newest + fold");
+            $this->assertSame(5, $r['boxes'][1]['fold'], "{$position->name}: hidden count");
+            $this->assertLessThanOrEqual(5, \count(\explode("\n", \rtrim($toast->view('', 60, 5), "\n"))), "{$position->name}: emitted rows");
         }
     }
 }
