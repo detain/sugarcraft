@@ -170,6 +170,7 @@ final class SeatIdentityTest extends TestCase
             'connected_at'  => $now,
             'last_activity' => $now,
             'scan'          => ['pos' => 0, 'mode' => 'size', 'want' => 0, 'decoded' => 0, 'done' => false],
+            'framing'       => null,
         ];
     }
 

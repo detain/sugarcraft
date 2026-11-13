@@ -328,6 +328,87 @@ final class HttpListenerHardeningTest extends TestCase
         }
     }
 
+    public function testFramingDecisionIsParsedOnceAndRidesTheSeat(): void
+    {
+        // 047: the head parse lands exactly once per connection. The
+        // decision is persisted on the client row in the same
+        // cursor-on-the-seat shape the chunk scan already used; pre-cure
+        // the head was re-split and re-regexed on every read tick and no
+        // 'framing' key ever existed.
+        $peer = null;
+        $seat = $this->livePair($peer);
+        $listener = new HttpListener($this->makeServer(null), '127.0.0.1', 0);
+        $this->injectSeats($listener, [(int) $seat => $this->seat($seat)]);
+
+        \fwrite($peer, "POST /ghost.git/git-upload-pack HTTP/1.1\r\nHost: t\r\nContent-Length: 8\r\n\r\nhello");
+        $this->assertTrue(
+            $this->pump($listener, $seat),
+            'three bytes short of the declared body: the seat keeps waiting'
+        );
+
+        $seats = $this->readSeats($listener);
+        $this->assertArrayHasKey('framing', $seats[(int) $seat], 'the framing decision must ride the seat row, not be re-derived per tick');
+        $this->assertSame(['mode' => 'length', 'length' => 8], $seats[(int) $seat]['framing']);
+
+        \fwrite($peer, '!!!');
+        $this->assertFalse($this->pump($listener, $seat), 'the completed body dispatches once and closes the seat');
+        @\fclose($peer);
+    }
+
+    public function testDribbledContentLengthBodyFramesAcrossTicksViaThePersistedDecision(): void
+    {
+        // Behavior arm of 047: head and body fragments land in different
+        // ticks, so every later tick must frame the request through the
+        // persisted decision — a plumbing break here hangs the seat until
+        // the deadlines reap it instead of answering with the 404.
+        $loop = new StreamSelectLoop();
+        $this->loop = $loop;
+        $listener = new HttpListener(
+            $this->makeServer(null),
+            '127.0.0.1',
+            0,
+            $loop,
+            idleTimeoutSeconds: 60.0,
+            absoluteDeadlineSeconds: 60.0
+        );
+        $listener->start();
+        try {
+            $client = $this->connect($listener);
+            \fwrite($client, "POST /ghost.git/git-upload-pack HTTP/1.1\r\nHost: t\r\nContent-Length: 12\r\n\r\nhello");
+            $drip = null;
+            $slices = [' wor', 'ld!'];
+            $sent = 0;
+            $drip = $loop->addPeriodicTimer(0.05, function () use ($loop, &$drip, $client, $slices, &$sent): void {
+                \fwrite($client, $slices[$sent]);
+                if (++$sent === \count($slices)) {
+                    $loop->cancelTimer($drip);
+                }
+            });
+            $response = $this->readResponse($loop, $client, 1.5);
+
+            self::assertStringStartsWith('HTTP/1.1 404', $response, 'a body arriving across ticks still dispatches exactly once');
+            self::assertStringContainsString('Repository not found', $response);
+            self::assertSame(1, \substr_count($response, 'HTTP/1.1'), 'one request, one response — no double dispatch on the persisted rows');
+        } finally {
+            $listener->stop();
+        }
+    }
+
+    public function testSeatPumpReadsWithTheLibraryQuantumNotAnEightKiBSlice(): void
+    {
+        // Structural pin for 047's read-quantum leg: the lib law is
+        // HttpWire::CHUNK_BYTES (64 KiB), and an 8 KiB slice inside
+        // pumpClient is behaviorally invisible at suite scale — only a
+        // source-region assertion keeps the quantum from silently
+        // regressing to the old tick count.
+        $method = new \ReflectionMethod(HttpListener::class, 'pumpClient');
+        $lines = \file((string) $method->getFileName());
+        $body = \implode('', \array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        self::assertStringContainsString('HttpWire::CHUNK_BYTES', $body, 'the seat pump must read through the shared 64 KiB quantum');
+        self::assertStringNotContainsString('8192', $body, 'the 8 KiB slice multiplied tick count on cap-sized pushes');
+    }
+
     public function testPeerAddressHandsOutIpv6PeersWithoutBrackets(): void
     {
         $peer = \Closure::bind(static fn ($sock): ?string => HttpListener::peerAddress($sock), null, HttpListener::class);
@@ -440,6 +521,69 @@ final class HttpListenerHardeningTest extends TestCase
         \rewind($handle);
 
         return $handle;
+    }
+
+    /**
+     * Seat-pump plumbing for the 047 pins (same idioms as
+     * SeatIdentityTest): a non-blocking socket pair whose far end is the
+     * registered seat, seats injected straight into the clients map, and
+     * pumpClient invoked through reflection.
+     *
+     * @param resource|null $peer out-parameter: the writer end
+     * @return resource the seat-stream end registered in the clients map
+     */
+    private function livePair(&$peer)
+    {
+        [$a, $b] = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        self::assertIsResource($a);
+        self::assertIsResource($b);
+        \stream_set_blocking($a, false);
+        \stream_set_blocking($b, false);
+        $peer = $a;
+        $this->sockets[] = $a;
+
+        return $b;
+    }
+
+    /** @param resource $stream @return array<string, mixed> */
+    private function seat($stream): array
+    {
+        $now = \microtime(true);
+
+        return [
+            'stream'        => $stream,
+            'buffer'        => '',
+            'connected_at'  => $now,
+            'last_activity' => $now,
+            'scan'          => ['pos' => 0, 'mode' => 'size', 'want' => 0, 'decoded' => 0, 'done' => false],
+            'framing'       => null,
+        ];
+    }
+
+    /** @param array<int, array<string, mixed>> $seats */
+    private function injectSeats(HttpListener $listener, array $seats): void
+    {
+        $property = (new \ReflectionClass($listener))->getProperty('clients');
+        $property->setAccessible(true);
+        $property->setValue($listener, $seats);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function readSeats(HttpListener $listener): array
+    {
+        $property = (new \ReflectionClass($listener))->getProperty('clients');
+        $property->setAccessible(true);
+
+        return $property->getValue($listener);
+    }
+
+    /** @param resource $client */
+    private function pump(HttpListener $listener, $client): bool
+    {
+        $method = new \ReflectionMethod(HttpListener::class, 'pumpClient');
+        $method->setAccessible(true);
+
+        return (bool) $method->invoke($listener, $client);
     }
 
     private function makeServer(?int $cap, string $dirSuffix = 'shared'): Server
