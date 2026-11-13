@@ -87,6 +87,26 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     public const TAB_THREADS = 'threads';
     public const TAB_OPTIONS = 'options';
 
+    /**
+     * SQL-P09 (adminpages-010): rows given to a toggle-list widget per frame
+     * (house PAGE_SIZE parity with DebugPage / VariablesPage / ConnectionsPage).
+     */
+    private const GRID_WINDOW = 50;
+
+    /**
+     * First index of the cursor-centred window over a list of $total rows.
+     * Pure function of (cursor, total) — the toggle tabs share one page-level
+     * cursor, so a persisted per-tab offset would lie the moment the user
+     * switches tabs; centring cannot.
+     */
+    private static function windowStart(int $cursor, int $total): int
+    {
+        if ($total <= self::GRID_WINDOW) {
+            return 0;
+        }
+        return \max(0, \min($cursor - intdiv(self::GRID_WINDOW, 2), $total - self::GRID_WINDOW));
+    }
+
     /** @var list<string> Tab order */
     private const TABS = [
         self::TAB_EASY_SETUP,
@@ -1268,6 +1288,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         // Instruments are ordered hierarchically via InstrumentTree, then
         // flattened with depth info. Group nodes (non-leaf) show tri-state badges.
         $rows = [];
+        $start = 0;
         if ($this->instruments !== []) {
             // SQL-P07: the parse (~1,500 group+leaf nodes) ran every render
             // frame; memoized until a writer of $instruments runs (loadData,
@@ -1276,7 +1297,19 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
                 $this->treeMemo = InstrumentTree::fromInstruments($this->instruments);
             }
             $tree = $this->treeMemo;
-            foreach ($this->flattenTree($tree) as [$nodeOrInstrument, $depth, $isGroup]) {
+            // SQL-P09 (adminpages-010): the flattened tree is ~1,500 entries
+            // and every one used to get its indent/badge/truncate strings
+            // rebuilt per frame; ~20 lines are on screen. Build the window
+            // only. Unlike VariablesPage (whose Table paints every row it is
+            // handed, so the page owns a minimal-shift offset) the toggle
+            // lists hand ItemList a selection index and let the widget place
+            // its own ~20-row view-window inside the slice we pass — a pure
+            // cursor-centred window guarantees the widget's window stays a
+            // subset of ours and the shared-across-tabs cursor needs no
+            // per-tab persisted offset to be honest.
+            $flat = $this->flattenTree($tree);
+            $start = self::windowStart($this->selectedRowIndex, count($flat));
+            foreach (\array_slice($flat, $start, self::GRID_WINDOW) as [$nodeOrInstrument, $depth, $isGroup]) {
                 if ($isGroup) {
                     // Group node — show tri-state badge with group name
                     $node = $nodeOrInstrument;
@@ -1303,6 +1336,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             $rows,
             '(no instruments available)',
             sprintf('Total: %d instruments', count($this->instruments)),
+            $start,
         );
     }
 
@@ -1461,7 +1495,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
      *
      * @param list<array{0:bool|string,1:string,2?:bool}> $rows
      */
-    private function renderToggleList(string $title, array $rows, string $emptyMessage, string $totalLine): string
+    private function renderToggleList(string $title, array $rows, string $emptyMessage, string $totalLine, int $rowOffset = 0): string
     {
         $header = $this->tabTitle($title);
         $divider = Divider::h()->render();
@@ -1490,7 +1524,9 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             ->withShowStatusBar(false)
             ->withShowHelp(false)
             ->withShowFilter(false)
-            ->select($this->selectedRowIndex);
+            // SQL-P09: $rowOffset shifts a windowed list's global cursor into
+            // this slice's index space (0 for the naturally-bounded tabs).
+            ->select(\max(0, $this->selectedRowIndex - $rowOffset));
 
         return implode("\n", [
             $header,

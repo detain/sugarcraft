@@ -48,6 +48,12 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     private ?ConnectionDetailTabs $detailTabs = null;
 
     private int $selectedIndex = 0;
+
+    /**
+     * SQL-P09: rows built per frame are capped to this window (house
+     * PAGE_SIZE parity with DebugPage / VariablesPage::GRID_WINDOW).
+     */
+    private const ROW_WINDOW = 50;
     private string $activeDetailTab = self::DETAIL_TAB_DETAILS;
 
     /** Connection awaiting a kill confirmation (null = no pending kill). */
@@ -622,7 +628,15 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     private function buildTable(array $rows): Table
     {
         $columns = $this->buildColumns();
-        $tableRows = $this->buildRows($rows);
+        // SQL-P09 (adminpages-010): the SHOW FULL PROCESSLIST mirror carries
+        // up to 500 rows and the pane clips everything past the frame edge;
+        // building a Row (RowData wrap) per row per frame for ~480 lines no
+        // terminal can show is pure churn. The table renders no selection
+        // cursor (the page cursor drives the detail tab off the FULL
+        // filteredProcesslist(), untouched here), so a head window changes
+        // no visible byte and every interaction keeps reading the complete
+        // list — only string construction is bounded.
+        $tableRows = $this->buildRows(\array_slice($rows, 0, self::ROW_WINDOW));
 
         $table = Table::fromColumns($columns)
             ->withRows($tableRows)

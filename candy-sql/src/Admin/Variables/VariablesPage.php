@@ -13,8 +13,10 @@ use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Sql\Admin\PageBase;
+use SugarCraft\Sql\Admin\AsyncCachingServerContext;
 use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\ServerContextInterface;
+use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Position;
 use SugarCraft\Style\Style;
@@ -72,8 +74,50 @@ final class VariablesPage extends PageBase implements RowNavigable
     private int $selectedRowIndex = 0;
     private bool $searchFocused = false;
 
+    /**
+     * SQL-P09 (adminpages-010): the grid used to build a Row object (RowData
+     * wrap + two sanitizes) for EVERY filtered variable on EVERY frame — a
+     * ~1,000-variable SHOW VARIABLES dump rendered ~16 pane lines, so 98 % of
+     * the work was discarded. Rows are now built only for a window around the
+     * cursor; the window follows the cursor with the same minimal-shift rule
+     * DebugPage codifies (shift only when the cursor leaves the window), so a
+     * cursor inside the first window renders byte-identical output. The
+     * visible budget is house PAGE_SIZE (DebugPage::PAGE_SIZE = 50): generous
+     * for any pane height, and window + shift math depends on nothing but the
+     * cursor staying inside it.
+     */
+    private const GRID_WINDOW = 50;
+
+    /** @var int Index of the first row built for the grid (auto-scrolls with the cursor). */
+    private int $gridScrollOffset = 0;
+
+    /**
+     * SQL-P09 (adminpages-017): getFilteredVariableNames ran on every read
+     * (footer count, nav clamp, grid build) and each pass re-copy + double
+     * strtolower-filtered the whole name list — re-running per keystroke even
+     * when the derived list could not have changed. The result memoizes on
+     * exactly its inputs; the data identity is $dataEpoch, bumped only by
+     * loadVariables (the single writer of $variables/$variableNames), so a
+     * fresh arrival recomputes while navigation and repeated reads ride the
+     * memo. The sort was already per-arrival (loadVariables is the only
+     * writer of the sorted list).
+     */
+    private int $dataEpoch = 0;
+    /** @var list<string>|null */
+    private ?array $filterMemo = null;
+    private string $memoQuery = '';
+    private ?string $memoCategory = null;
+    private bool $memoReadWrite = false;
+    private bool $memoHasMetadata = false;
+    private int $memoEpoch = -1;
+    /** Observation seam (tests): number of ACTUAL filter passes, not reads. */
+    private int $filterComputes = 0;
+
     /** @var list<string> */
     private array $categories = [];
+
+    /** SQL-P09: catalog/groups extraction is static per construction — run it once. */
+    private bool $categoriesLoaded = false;
 
     // Edit dialog state — null means no dialog active
     /** @var string|null DLG_INPUT | DLG_CONFIRM | null */
@@ -196,6 +240,23 @@ final class VariablesPage extends PageBase implements RowNavigable
         // Delegate to dialog state machine when active
         if ($this->editDialogPhase !== null) {
             return $this->updateDialog($msg);
+        }
+
+        // SQL-P09: arrivals are the refresh signal now that build() no longer
+        // re-reads the store every frame (the loadVariables === guard folds
+        // identical snapshots). Same arm ConnectionsPage codifies: pull the
+        // fresh cache into the async context, then let the next reads re-derive.
+        if ($msg instanceof ReloadReportMsg) {
+            if ($this->context instanceof AsyncCachingServerContext) {
+                $this->context->refreshFromLiveCache();
+            }
+            $clone = clone $this;
+            $this->loadVariables();
+            $clone->variables = $this->variables;
+            $clone->variableNames = $this->variableNames;
+            $clone->dataEpoch = $this->dataEpoch;
+            $clone->filterMemo = null;
+            return [$clone, null];
         }
 
         if (!$msg instanceof KeyMsg) {
@@ -450,6 +511,7 @@ final class VariablesPage extends PageBase implements RowNavigable
             : self::TAB_STATUS;
         $clone->searchQuery = '';
         $clone->selectedRowIndex = 0;
+        $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         $clone->activeCategory = null;
         $clone->searchFocused = false;
         return $clone;
@@ -464,6 +526,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone->activeTab = $tab;
         $clone->searchQuery = '';
         $clone->selectedRowIndex = 0;
+        $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         $clone->activeCategory = null;
         $clone->searchFocused = false;
         return $clone;
@@ -477,6 +540,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone = clone $this;
         $clone->searchQuery = $search;
         $clone->selectedRowIndex = 0;
+        $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         return $clone;
     }
 
@@ -488,6 +552,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone = clone $this;
         $clone->activeCategory = $category;
         $clone->selectedRowIndex = 0;
+        $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         return $clone;
     }
 
@@ -506,6 +571,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone = clone $this;
         $clone->showReadWriteOnly = !$clone->showReadWriteOnly;
         $clone->selectedRowIndex = 0;
+        $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         return $clone;
     }
 
@@ -522,6 +588,13 @@ final class VariablesPage extends PageBase implements RowNavigable
         $filteredCount = \count($this->getFilteredVariableNames());
         if ($clone->selectedRowIndex < $filteredCount - 1) {
             $clone->selectedRowIndex++;
+            // SQL-P09: DebugPage's auto-scroll rule — the window shifts only
+            // when the cursor tries to leave it, so the rendered bytes stay
+            // identical for every cursor the un-windowed pane could already
+            // reach at the top of the list.
+            if ($clone->selectedRowIndex > $clone->gridScrollOffset + self::GRID_WINDOW - 1) {
+                $clone->gridScrollOffset = $clone->selectedRowIndex - self::GRID_WINDOW + 1;
+            }
         }
         return $clone;
     }
@@ -531,6 +604,9 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone = clone $this;
         if ($clone->selectedRowIndex > 0) {
             $clone->selectedRowIndex--;
+            if ($clone->selectedRowIndex < $clone->gridScrollOffset) {
+                $clone->gridScrollOffset = \max(0, $clone->selectedRowIndex);
+            }
         }
         return $clone;
     }
@@ -540,6 +616,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone = clone $this;
         $clone->searchQuery .= $char;
         $clone->selectedRowIndex = 0;
+        $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         return $clone;
     }
 
@@ -548,6 +625,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone = clone $this;
         $clone->searchQuery = \substr($clone->searchQuery, 0, -1);
         $clone->selectedRowIndex = 0;
+        $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         return $clone;
     }
 
@@ -633,16 +711,38 @@ final class VariablesPage extends PageBase implements RowNavigable
 
     private function loadVariables(): void
     {
-        $this->variables = $this->activeTab === self::TAB_STATUS
+        $vars = $this->activeTab === self::TAB_STATUS
             ? $this->context->statusVariables()
             : $this->context->serverVariables();
 
+        // SQL-P09 (adminpages-017): build() ran this EVERY frame. The context
+        // answers within its TTL window with the identical array, so an ===
+        // check skips the key-extraction + sort of ~1,000 names per paint —
+        // and only a data change can move the derived lists, so the epoch
+        // (the filter memo's data-identity stamp) bumps exactly when the
+        // memo may be stale.
+        if ($vars === $this->variables) {
+            return;
+        }
+
+        $this->variables = $vars;
         $this->variableNames = \array_keys($this->variables);
         \sort($this->variableNames);
+        // SQL-P09: single writer of the sorted name list — bump the data
+        // identity so the filter memo knows its inputs moved.
+        $this->dataEpoch++;
     }
 
     private function loadCategories(): void
     {
+        // SQL-P09: the catalog is immutable per construction (static
+        // metadata), so groups()/all() — a map rebuild over every variable —
+        // runs once, not once per frame.
+        if ($this->categoriesLoaded) {
+            return;
+        }
+        $this->categoriesLoaded = true;
+
         if ($this->catalog === null) {
             $this->categories = [];
             return;
@@ -666,6 +766,24 @@ final class VariablesPage extends PageBase implements RowNavigable
      */
     private function getFilteredVariableNames(): array
     {
+        // SQL-P09 (adminpages-017): memo hit check — every input that can
+        // change the answer is in the stamp; identical stamp means the
+        // stored list IS the answer (the epoch covers any data reload, and
+        // metadata presence covers the lazy catalog leg the rw/category
+        // filters close over).
+        $hasMetadata = $this->metadataMap !== null;
+        if (
+            $this->filterMemo !== null
+            && $this->memoEpoch === $this->dataEpoch
+            && $this->memoQuery === $this->searchQuery
+            && $this->memoCategory === $this->activeCategory
+            && $this->memoReadWrite === $this->showReadWriteOnly
+            && $this->memoHasMetadata === $hasMetadata
+        ) {
+            return $this->filterMemo;
+        }
+
+        $this->filterComputes++;
         $names = $this->variableNames;
 
         // Filter by search query
@@ -700,6 +818,12 @@ final class VariablesPage extends PageBase implements RowNavigable
             );
         }
 
+        $this->filterMemo = $names;
+        $this->memoEpoch = $this->dataEpoch;
+        $this->memoQuery = $this->searchQuery;
+        $this->memoCategory = $this->activeCategory;
+        $this->memoReadWrite = $this->showReadWriteOnly;
+        $this->memoHasMetadata = $hasMetadata;
         return $names;
     }
 
@@ -787,6 +911,13 @@ final class VariablesPage extends PageBase implements RowNavigable
     {
         $filteredNames = $this->getFilteredVariableNames();
 
+        // SQL-P09 (adminpages-010): build Row objects for the window only —
+        // the nav arms keep cursor - offset inside [0, GRID_WINDOW), and the
+        // pane never renders past the frame edge anyway. The widget is told
+        // the WINDOW-LOCAL index so its highlight lands on the same row the
+        // full-list render used to mark.
+        $window = \array_slice($filteredNames, $this->gridScrollOffset, self::GRID_WINDOW);
+
         $columns = [
             Column::new('name', 'Name', 30)->withAlignLeft(true),
             Column::new('value', 'Value', 25)->withAlignLeft(true),
@@ -794,7 +925,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         ];
 
         $rows = [];
-        foreach ($filteredNames as $varName) {
+        foreach ($window as $varName) {
             $value = $this->variables[$varName] ?? '';
 
             // Truncate long values for display
@@ -815,7 +946,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         return Table::fromColumns($columns)
             ->withRows($rows)
             ->withSelectable(true)
-            ->withSelectedIndex($this->selectedRowIndex)
+            ->withSelectedIndex(\max(0, $this->selectedRowIndex - $this->gridScrollOffset))
             ->withShowFooter(false)
             ->View();
     }
