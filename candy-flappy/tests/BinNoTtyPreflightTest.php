@@ -99,6 +99,45 @@ final class BinNoTtyPreflightTest extends TestCase
         self::assertSame(1, $exit);
     }
 
+    public function testTermDumbInsideAPtyIsNeverSwitchedToTheAlternateScreen(): void
+    {
+        // flappy-13 (finding -011) bin seam: the CLI's once-probed profile
+        // gates the alt-screen contract, so a TERM=dumb survivor inside a
+        // real pty sees the in-band refusal WITHOUT the world being torn
+        // off its normal screen first. Requires util-linux script(1) for
+        // the pty; Linux CI has it.
+        if (PHP_OS_FAMILY !== 'Linux') {
+            self::markTestSkipped('script(1) pty harness is Linux-only here');
+        }
+        $script = trim((string) @shell_exec('command -v script 2>/dev/null'));
+        if ($script === '') {
+            self::markTestSkipped('util-linux script(1) not installed');
+        }
+
+        $home = sys_get_temp_dir() . '/flappy-preflight-' . bin2hex(random_bytes(6));
+        self::assertTrue(mkdir($home, 0o700, true));
+        $proc = proc_open(
+            [$script, '-qec', 'env -u CLICOLOR_FORCE -u FORCE_COLOR TERM=dumb HOME=' . $home . ' ' . PHP_BINARY . ' ' . self::BIN, '/dev/null'],
+            [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        stream_set_timeout($pipes[1], 15);
+        $out = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($proc);
+
+        self::assertStringContainsString('interactive terminal', $out, 'the refusal frame must render: ' . $out);
+        self::assertStringNotContainsString("\x1b[?1049", $out, 'no alternate-screen switch for a refused game');
+        self::assertStringNotContainsString("\x1b[?25l", $out, 'no cursor-hide for a refused game');
+        self::assertSame(1, $exit, 'a dumb-terminal refusal exits 1, never a signal death');
+    }
+
     public function testDiagnosticFlagsStillAnswerWhilePiped(): void    {
         // Order law: the preflight sits AFTER the flag legs — diagnostics
         // must stay usable from CI pipes and shell scripts.

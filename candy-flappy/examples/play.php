@@ -20,9 +20,20 @@ foreach ($candidates as $path) {
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Flappy\Game;
 
-$program = new Program(Game::start(), new ProgramOptions(useAltScreen: true));
+// flappy-13: mirrors bin/candy-flappy — one profile, probed once, gating
+// the alt-screen contract and the colour posture together.
+$profile = ColorProfile::detect(null, STDOUT);
+$program = new Program(
+    Game::start(),
+    new ProgramOptions(
+        useAltScreen: $profile !== ColorProfile::NoTty,
+        hideCursor: $profile !== ColorProfile::NoTty,
+        colorProfile: $profile,
+    ),
+);
 $final = $program->run();
 if ($final instanceof Game) {
     try {

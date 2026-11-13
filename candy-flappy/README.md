@@ -115,8 +115,9 @@ simply unused.
   `--version` / `--help` still answer when piped, and a truthy
   `CLICOLOR_FORCE` / `FORCE_COLOR` plays into the pipe on purpose. A real
   terminal reporting `TERM=dumb` gets the in-band NoTty refusal frame
-  instead; sugar-core's program bootstrap may still have emitted
-  alternate-screen enter bytes ahead of it.
+  instead: the CLI probes the capability once and that single answer gates
+  the alternate-screen contract, so a dumb terminal is never switched away
+  from its normal screen and its cursor stays visible.
 - **ASCII-only terminal** (`ColorProfile::Ascii`, e.g. `NO_COLOR` on a real
   tty) — same layout in plain glyphs: `+--+` borders, `#` pipes, no emoji,
   no colour.

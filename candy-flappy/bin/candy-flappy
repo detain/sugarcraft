@@ -160,7 +160,21 @@ if ($legacyConfigBase !== '') {
     }
 }
 
-$program = new Program(Game::start(), new ProgramOptions(useAltScreen: true));
+$profile = ColorProfile::detect(null, STDOUT);
+
+$program = new Program(
+    Game::start(),
+    // flappy-13 (finding -011): one capability profile, probed once, gates
+    // both the alt-screen contract and the model's colour posture — the
+    // candy-tetris bin shape. A TERM=dumb terminal is never switched to the
+    // alternate screen and keeps its cursor; the in-band refusal frame then
+    // quits through the Model (flappy-02).
+    new ProgramOptions(
+        useAltScreen: $profile !== ColorProfile::NoTty,
+        hideCursor: $profile !== ColorProfile::NoTty,
+        colorProfile: $profile,
+    ),
+);
 $final = $program->run();
 // M18: run() hands back the final model on EVERY exit path. Pressing q
 // settles a qualifying mid-flight score inside the Model; a signal death
