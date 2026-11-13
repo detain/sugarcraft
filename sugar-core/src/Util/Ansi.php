@@ -23,6 +23,14 @@ final class Ansi
     public const PM  = "\x1b^";
     public const ST  = "\x1b\\";
     public const BEL = "\x07";
+
+    /**
+     * Upper bound for one OSC 52 clipboard payload in bytes (1 MiB).
+     * Terminals buffer each reply per-escape; past this size the write is
+     * a hostile-buffer risk, not a user story — the bound is named so it
+     * is discoverable (sugar-core-060).
+     */
+    public const MAX_CLIPBOARD_BYTES = 1048576;
     // C0 locking shifts (ansicode.txt:133-134 — "SO Shift Out, switch to G1"
     // / "SI Shift In, switch to G0"): SO swaps G1 into GL, SI swaps G0 back.
     // Needed to *use* a G1 SCS designation — designating without
@@ -760,6 +768,17 @@ final class Ansi
      */
     public static function setClipboard(string $text, string $selection = 'c'): string
     {
+        $selection = self::normalizeClipboardSelection($selection);
+        $bytes = strlen($text);
+        if ($bytes > self::MAX_CLIPBOARD_BYTES) {
+            throw new \InvalidArgumentException(Lang::t('ansi.clipboard_payload_too_large', [
+                'bytes' => (string) $bytes,
+                'limit' => (string) self::MAX_CLIPBOARD_BYTES,
+            ]));
+        }
+        // The payload rides base64 — structurally injection-free (no
+        // ESC/BEL/;/C1 can occur inside it); the bound above is the only
+        // remaining hostile-size surface (sugar-core-060).
         return self::OSC . '52;' . $selection . ';' . base64_encode($text) . self::BEL;
     }
 
@@ -770,21 +789,63 @@ final class Ansi
      */
     public static function readClipboard(string $selection = 'c'): string
     {
-        return self::OSC . '52;' . $selection . ';?' . self::BEL;
+        return self::OSC . '52;' . self::normalizeClipboardSelection($selection) . ';?' . self::BEL;
     }
 
     /**
-     * Strip C0 control bytes from a string destined for an OSC body.
-     * These bytes can terminate or escape the OSC sequence prematurely,
-     * enabling terminal-escape injection attacks.
-     *
-     * @param string $s Raw string
-     * @return string String with C0 controls and \x9c removed
+     * Strip every control byte that could terminate or re-open an OSC
+     * body from a string destined for one (sugar-core-060). The old
+     * filter covered C0 (0x00-0x1f) plus the 8-bit ST \x9c only, which
+     * left the whole C1 family (0x80-0x9f — including the 8-bit OSC
+     * introducer \x9d, and DEL 0x7f) as an injection channel: a title
+     * carrying "\x9d52;c;..." re-opens an OSC on C1-honouring terminals.
+     * The UTF-8 encodings of the same C1 codepoints (\xc2\x80-\xc2\x9f,
+     * what a hostile copy-paste or an encoding round-trip hands you) are
+     * stripped as pairs; well-formed multibyte sequences that merely
+     * contain 0x80-0x9f as a continuation byte (the euro sign
+     * \xe2\x82\xac) are preserved — the final pass removes only a byte
+     * NOT preceded by a UTF-8 lead/continuation byte.
      */
     private static function stripOscControlBytes(string $s): string
     {
-        // \x00-\x1f (C0 controls) plus \x9c (8-bit ST terminator)
-        return preg_replace('/[\x00-\x1f\x9c]/', '', $s) ?? '';
+        // Ordered passes (sugar-core-060):
+        //  1. UTF-8-encoded C1 codepoints (\xc2\x80-\xc2\x9f) vanish as
+        //     pairs, run twice around the DEL/C0 pass: stripping a C0 or
+        //     DEL byte in between can splice a \xc2 back onto its
+        //     continuation, re-creating a pair the first pass missed.
+        //  2. C0 (0x00-0x1f) and DEL (0x7f) — bytes that never occur
+        //     inside well-formed UTF-8.
+        //  3. Raw 8-bit C1 bytes are removed where they are NOT part of
+        //     a well-formed lead/continuation span: every multi-byte
+        //     sequence is consumed whole, so the euro \xe2\x82\xac and
+        //     emoji (whose continuation bytes fall in the C1 range)
+        //     survive, while a bare \x9d — the 8-bit OSC introducer —
+        //     is stripped.
+        $c1Pair = static fn (string $v): string => preg_replace('/\xc2[\x80-\x9f]/', '', $v) ?? '';
+        $s = $c1Pair($s);
+        $s = preg_replace('/[\x00-\x1f\x7f]/', '', $s) ?? '';
+        $s = $c1Pair($s);
+        return preg_replace_callback(
+            '/([\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf4][\x80-\xbf]{3})|[\x80-\x9f]/',
+            static fn (array $m): string => ($m[1] ?? '') !== '' ? $m[1] : '',
+            $s
+        ) ?? '';
+    }
+
+    /**
+     * Parse an OSC 52 selection parameter into its canonical wire form
+     * (sugar-core-060). The parameter was interpolated RAW, so a `;`
+     * inside it re-split the OSC body — setClipboard($t, "c;?...")
+     * forged a second clipboard directive in one string. xterm's grammar
+     * is a comma-separated list over c / p / s / 0-7; anything else is
+     * refused loudly at the boundary (Law 2: parse, don't validate).
+     */
+    private static function normalizeClipboardSelection(string $selection): string
+    {
+        if (preg_match('/^[cps0-7](,[cps0-7])*$/', $selection) !== 1) {
+            throw new \InvalidArgumentException(Lang::t('ansi.selection_invalid', ['selection' => $selection]));
+        }
+        return $selection;
     }
 
     /**
