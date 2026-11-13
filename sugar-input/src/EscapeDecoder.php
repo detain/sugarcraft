@@ -1488,37 +1488,7 @@ final class EscapeDecoder
                 $stream = substr($stream, 0, -$partial);
             }
 
-            // Not complete — accumulate (unless the paste is already past its
-            // cap and discarding: those bytes belong to the announced event).
-            if ($stream !== '') {
-                if ($this->pasteOverflowDiscarding) {
-                    $this->discardedPasteBytes += strlen($stream);
-
-                    return ['events' => [], 'remaining' => ''];
-                }
-                $this->pasteBuffer .= $stream;
-            }
-            if (!$this->pasteOverflowDiscarding && strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
-                // Cap hit: announce ONCE with the truncated PasteEvent, but do
-                // NOT close the paste (C2b). Closing let every byte that
-                // followed — through the real 201~ terminator — decode as
-                // synthetic keystrokes: attacker-controlled pipe content was
-                // promoted to key traffic, the exact tmux send-keys shape the
-                // README threat model names. The paste stays open and discards
-                // body bytes until the genuine end marker arrives; reset() is
-                // the recovery lever if a forged paste never sends one. Leave
-                // any held-back partial end marker in $remainder untouched —
-                // wiping it would turn the marker split across the overflow
-                // boundary into literal keys.
-                $event = PasteEvent::truncate($this->pasteBuffer);
-                $this->discardedPasteBytes += strlen($this->pasteBuffer) - PasteEvent::MAX_SIZE;
-                $this->pasteBuffer = '';
-                $this->pasteOverflowDiscarding = true;
-
-                return ['events' => [$event], 'remaining' => ''];
-            }
-
-            return ['events' => [], 'remaining' => ''];
+            return $this->absorbPasteBytes($stream);
         }
 
         if ($this->pasteOverflowDiscarding) {
@@ -1566,20 +1536,8 @@ final class EscapeDecoder
                 $this->remainder = substr($afterStart, -$partial);
                 $afterStart = substr($afterStart, 0, -$partial);
             }
-            $this->pasteBuffer .= $afterStart;
-            if (strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
-                // Same one-time-announce + keep-discarding law as
-                // handlePastePass() (C2b); a held-back partial end marker in
-                // $remainder survives untouched.
-                $event = PasteEvent::truncate($this->pasteBuffer);
-                $this->discardedPasteBytes += strlen($this->pasteBuffer) - PasteEvent::MAX_SIZE;
-                $this->pasteBuffer = '';
-                $this->pasteOverflowDiscarding = true;
 
-                return ['events' => [$event], 'remaining' => ''];
-            }
-
-            return ['events' => [], 'remaining' => ''];
+            return $this->absorbPasteBytes($afterStart);
         }
 
         $pasteContent = $this->pasteBuffer . substr($afterStart, 0, $pasteEndPos);
@@ -1590,6 +1548,50 @@ final class EscapeDecoder
             'events' => [PasteEvent::truncate($pasteContent)],
             'remaining' => substr($afterStart, $pasteEndPos + strlen(self::PASTE_END)),
         ];
+    }
+
+    /**
+     * Accumulate paste body bytes and apply the cap law — the single copy
+     * both paste passes route through (split-marker holdback stays at the
+     * callers; everything after it is one law).
+     *
+     * While {@see self::$pasteOverflowDiscarding} is set, incoming bytes are
+     * only counted into discardedPasteBytes: they belong to the event the
+     * announce already told the truth about.
+     *
+     * Cap hit: announce ONCE with the truncated PasteEvent, but do NOT close
+     * the paste. Closing let every byte that followed — through the real
+     * 201~ terminator — decode as synthetic keystrokes: attacker-controlled
+     * pipe content was promoted to key traffic, the exact tmux send-keys
+     * shape the README threat model names. The paste stays open and discards
+     * body bytes until the genuine end marker arrives; reset() is the
+     * recovery lever if a forged paste never sends one. A held-back partial
+     * end marker parked in $remainder by the callers survives untouched —
+     * wiping it would turn the marker split across the overflow boundary
+     * into literal keys.
+     *
+     * @return array{events: list<Event>, remaining: string}
+     */
+    private function absorbPasteBytes(string $carry): array
+    {
+        if ($carry !== '') {
+            if ($this->pasteOverflowDiscarding) {
+                $this->discardedPasteBytes += strlen($carry);
+
+                return ['events' => [], 'remaining' => ''];
+            }
+            $this->pasteBuffer .= $carry;
+        }
+        if (!$this->pasteOverflowDiscarding && strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
+            $event = PasteEvent::truncate($this->pasteBuffer);
+            $this->discardedPasteBytes += strlen($this->pasteBuffer) - PasteEvent::MAX_SIZE;
+            $this->pasteBuffer = '';
+            $this->pasteOverflowDiscarding = true;
+
+            return ['events' => [$event], 'remaining' => ''];
+        }
+
+        return ['events' => [], 'remaining' => ''];
     }
 
     /**
