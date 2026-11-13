@@ -72,7 +72,8 @@ final class TokenStore
     /**
      * The owner token: the override, else the file's, minted on first use.
      *
-     * @throws \RuntimeException when the state directory is unsafe or unwritable
+     * @throws \RuntimeException when the state directory is unsafe or unwritable,
+     *                           or the token file exists but cannot be read
      */
     public function token(): string
     {
@@ -84,9 +85,17 @@ final class TokenStore
         }
 
         $path = $this->dir() . '/' . self::FILE;
-        $stored = @\lstat($path) !== false && \is_file($path) && !\is_link($path)
-            ? \trim((string) @\file_get_contents($path))
-            : '';
+        $stored = '';
+        if (@\lstat($path) !== false && \is_file($path) && !\is_link($path)) {
+            // Fail CLOSED: a present file that cannot be read right now (a
+            // transient EACCES/EIO) is not a malformed token, and rotating
+            // would destroy a good one and sign every client out.
+            $raw = @\file_get_contents($path);
+            if ($raw === false) {
+                throw new \RuntimeException(\sprintf('the server token file %s exists but cannot be read; refusing to replace it', $path));
+            }
+            $stored = \trim($raw);
+        }
         if (\preg_match('/^[0-9a-f]{64}$/', $stored) === 1) {
             return $this->cached = $stored;
         }
