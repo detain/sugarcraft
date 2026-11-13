@@ -202,10 +202,17 @@ final class Table implements Model
         // re-running sort+filter inline — same result, computed once.
         $filteredRows = $this->visibleRows();
         // When pagination is active, derive the window offset and size from
-        // the current page rather than the scroll offset.
+        // the current page rather than the scroll offset. The PAINTED window
+        // never exceeds a positive host height — a pageSize larger than
+        // height used to pour rows past the frame the caller allocated
+        // (height 0 is the auto-unbounded case, where pageSize rules) —
+        // while the page ADVANCE stays pageSize-sized so navigation
+        // semantics are unchanged.
         if ($this->pageSize > 0) {
             $top  = $this->currentPage * $this->pageSize;
-            $windowSize = $this->pageSize;
+            $windowSize = $this->height > 0
+                ? min($this->pageSize, $this->height)
+                : $this->pageSize;
         } else {
             $windowSize = $this->height;
         }
@@ -412,6 +419,12 @@ final class Table implements Model
         return $this->withHeaders($headers);
     }
 
+    /**
+     * Host frame in cells. A negative dimension throws; 0 is the
+     * per-component sentinel documented in the README dimension table.
+     * When {@see withPageSize()} is also active, the painted window
+     * clamps to this height (pageSize never overflows the frame).
+     */
     public function withSize(int $width, int $height): self
     {
         if ($width < 0 || $height < 0) {
@@ -524,6 +537,10 @@ final class Table implements Model
      * Set the number of rows displayed per page. When > 0, the table
      * is paginated and only rows for the current page are visible.
      * When 0 (the default), all rows are shown (no pagination).
+     * The painted window never exceeds the height set via
+     * {@see withSize()} — with both set, effectively
+     * `min(pageSize, height)` rows render (page advance stays
+     * pageSize-sized); height 0 means auto/unbounded, so pageSize rules.
      */
     public function withPageSize(int $size): self
     {

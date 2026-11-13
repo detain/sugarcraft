@@ -200,6 +200,28 @@ final class TableTest extends TestCase
         Table::new(['x'], [['a']])->setSize(-1, 10);
     }
 
+    public function testPageSizePaintsNoMoreThanHeight(): void
+    {
+        $rows = [];
+        for ($i = 0; $i < 25; $i++) {
+            $rows[] = ["r$i"];
+        }
+        $v = Table::new(['H'], $rows)->setSize(60, 5)->withPageSize(20)->view();
+        $lines = explode("\n", $v);
+        // M14: header + at most height body rows — the pageSize can no
+        // longer pour 20 rows into a 5-row allocation.
+        $this->assertCount(6, $lines);
+        $this->assertStringContainsString('r3', $v);
+        $this->assertStringNotContainsString('r24', $v);
+        // pageSize below height: the page window rules.
+        $v = Table::new(['H'], $rows)->setSize(60, 10)->withPageSize(3)->view();
+        $this->assertCount(4, explode("\n", $v));
+        $this->assertStringNotContainsString('r3', $v);
+        // height 0 is the auto/unbounded sentinel: pageSize keeps ruling.
+        $v = Table::new(['H'], $rows)->setSize(60, 0)->withPageSize(20)->view();
+        $this->assertCount(21, explode("\n", $v));
+    }
+
     public function testSetForwardsAreByteIdenticalToWithCanonicals(): void
     {
         // The deprecated set* verbs must be pure delegations — zero logic
