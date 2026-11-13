@@ -261,7 +261,10 @@ final class ConPtySystemTest extends TestCase
         // binding's own EXTENDED_STARTUPINFO_PRESENT bit (mirrored by the fake).
         self::assertStringContainsString('flags=0x8080200', $created);
         self::assertStringStartsWith('createProcess(,', $created);
-        self::assertStringContainsString('env=0', $created);
+        // PTY-20: no argument is null = INHERIT; the collapsed-to-[] shape
+        // (env=[0], the empty block) belongs to the explicit empty map, not
+        // to an omitted one.
+        self::assertStringContainsString('env=null', $created);
         self::assertStringNotContainsString('job=none', $created);
     }
 
@@ -272,7 +275,25 @@ final class ConPtySystemTest extends TestCase
 
         $pair->slave()->spawn(['cmd'], ['ONE' => '1', 'TWO' => '2']);
 
-        self::assertStringContainsString('env=2', $api->callsMatching('createProcess(')[0]);
+        self::assertStringContainsString('env=[2]', $api->callsMatching('createProcess(')[0]);
+    }
+
+    public function testEmptyEnvMapReachesTheBindingAsAnExplicitEmptyBlockNotInheritance(): void
+    {
+        // The PTY-20 law, discriminable at the seam: null inherits, [] means
+        // "no parent variables" — the two must not collapse. On Windows the
+        // [] arm encodes EnvBlock::encode([]) (a valid double-terminator
+        // block) with CREATE_UNICODE_ENVIRONMENT; the real-binding guard leg
+        // is pinned by testCreateProcessEncodesAnyNonNullEnvironment in
+        // Kernel32ConPtyTest, the driver-side here runs on any host.
+        $api = new FakeConPtyApi();
+        $pair = (new ConPtySystem($api))->open(80, 24);
+
+        $pair->slave()->spawn(['cmd'], []);
+
+        $created = $api->callsMatching('createProcess(')[0];
+        self::assertStringContainsString('env=[0]', $created, '[] must not arrive as env=null (inheritance)');
+        self::assertStringNotContainsString('env=null', $created);
     }
 
     public function testExplicitGeometryResizesTheConsoleBeforeTheChildStarts(): void

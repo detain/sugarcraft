@@ -508,6 +508,30 @@ final class Kernel32ConPtyTest extends TestCase
         self::assertStringNotContainsString('sizeof($startup->StartupInfo)', $body);
     }
 
+    public function testCreateProcessEncodesAnyNonNullEnvironment(): void
+    {
+        // PTY-20s binding half, pinned as source shape: ONLY null skips the
+        // environment block. `[]` must reach EnvBlock::encode (the valid
+        // double-terminator empty block) with CREATE_UNICODE_ENVIRONMENT, so
+        // an explicit empty env never silently aliases to inheritance —
+        // the driver side of the same law rides ConPtySystemTest.
+        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Windows/Kernel32ConPty.php');
+        $body = self::methodBody($source, 'createProcess');
+
+        self::assertMatchesRegularExpression(
+            '/if \(\$environment !== null\) \{/',
+            $body,
+            'the env guard is no longer the null test — [] is collapsing again',
+        );
+        self::assertStringNotContainsString('$environment !== []', $body);
+        self::assertStringContainsString('CREATE_UNICODE_ENVIRONMENT', $body);
+        // CreateProcessW still receives NULL lpEnvironment only for null env.
+        self::assertMatchesRegularExpression(
+            '/\$envBuffer === null \? null : \\\\FFI::addr\(\$envBuffer\)/',
+            $body,
+        );
+    }
+
     public function testCreateProcessFitsContainmentBeforeTheChildCanRun(): void
     {
         // PTY-06/013's shape law, pinned as source order because this class is

@@ -252,7 +252,7 @@ final class FakeConPtyApi implements ConPtyApi
         string $applicationName,
         string $commandLine,
         int $attributeList,
-        array $environment,
+        ?array $environment,
         string $workingDirectory = '',
         int $creationFlags = 0,
         ?int $job = null,
@@ -282,10 +282,10 @@ final class FakeConPtyApi implements ConPtyApi
         }
 
         $this->transcript[] = \sprintf(
-            'createProcess(%s,%s,env=%d,flags=0x%X,job=%s)',
+            'createProcess(%s,%s,env=%s,flags=0x%X,job=%s)',
             $applicationName,
             $commandLine,
-            \count($environment),
+            $environment === null ? 'null' : '[' . \count($environment) . ']',
             $creationFlags,
             $job === null ? 'none' : (string) $job,
         );

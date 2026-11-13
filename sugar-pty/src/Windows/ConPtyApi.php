@@ -291,8 +291,12 @@ interface ConPtyApi
      * @param string                    $commandLine     built by {@see CommandLine::fromArgv()}
      * @param int                       $attributeList   id from
      *                                                   {@see initializeAttributeList()}
-     * @param array<string, string>     $environment     encoded via {@see EnvBlock};
-     *                                                   an empty array inherits this process's block
+     * @param array<string, string>|null $environment    encoded via {@see EnvBlock};
+     *                                                   null inherits this process's block,
+     *                                                   while an EMPTY array is encoded as
+     *                                                   a valid empty block — the child then
+     *                                                   sees no parent variables (POSIX law,
+     *                                                   PTY-20)
      * @param int                       $creationFlags   additional `CREATE_*` bits;
      *                                                   `CREATE_SUSPENDED` is added by
      *                                                   this call itself and need not
@@ -314,7 +318,7 @@ interface ConPtyApi
         string $applicationName,
         string $commandLine,
         int $attributeList,
-        array $environment,
+        ?array $environment,
         string $workingDirectory = '',
         int $creationFlags = 0,
         ?int $job = null,

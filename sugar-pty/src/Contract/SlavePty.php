@@ -34,7 +34,7 @@ interface SlavePty
      * 80x24 over a geometry the caller already chose.
      *
      * @param list<string>              $cmd
-     * @param array<string,string>|null $env                null inherits parent env
+     * @param array<string,string>|null $env                null inherits parent env; [] starts the child with an EMPTY environment (identical on both backends — the encoded Windows block is a valid empty block, POSIX gets proc_open's empty 5th arg)
      * @param ?int                      $cols               requested window width; null keeps current
      * @param ?int                      $rows               requested window height; null keeps current
      * @param bool                      $controllingTerminal claim slave as child's ctty (Ctrl+C → SIGINT)

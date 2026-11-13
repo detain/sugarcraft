@@ -54,12 +54,13 @@ final class ConPtySlavePty implements SlavePty
      * asked for Ctrl+C semantics on the wrong backend needs to know NOW.
      *
      * @param list<string>              $cmd
-     * @param array<string,string>|null $env null or an empty map inherits
-     *     the parent env — the adapter hands the empty map to Kernel32ConPty,
-     *     which skips the encoded block and CREATE_UNICODE_ENVIRONMENT for
-     *     it; only a non-empty map REPLACES it wholesale. This differs from
-     *     the POSIX side, where any non-null array replaces the env (the
-     *     proc_open 5th-arg law) and an empty map means an empty environment.
+     * @param array<string,string>|null $env null inherits the parent env; an
+     *     empty map means an EMPTY environment (the child sees no parent
+     *     variables) — the same law the POSIX side keeps through proc_open's
+     *     5th argument. The old Windows adapter collapsed `[]` into
+     *     inheritance; it now encodes the empty block (EnvBlock::encode([])
+     *     is a valid double-terminator block) and sets
+     *     CREATE_UNICODE_ENVIRONMENT like any other explicit map.
      */
     public function spawn(
         array $cmd,
@@ -106,7 +107,7 @@ final class ConPtySlavePty implements SlavePty
                     '',
                     CommandLine::fromArgv($cmd),
                     $attributeList,
-                    $env ?? [],
+                    $env,
                     '',
                     ConPtyApi::CREATE_NEW_PROCESS_GROUP | ConPtyApi::CREATE_NO_WINDOW,
                     $job,

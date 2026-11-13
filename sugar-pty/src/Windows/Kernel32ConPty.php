@@ -690,7 +690,7 @@ CDEF;
         string $applicationName,
         string $commandLine,
         int $attributeList,
-        array $environment,
+        ?array $environment,
         string $workingDirectory = '',
         int $creationFlags = 0,
         ?int $job = null,
@@ -742,7 +742,12 @@ CDEF;
         $flags = $creationFlags | self::EXTENDED_STARTUPINFO_PRESENT | self::CREATE_SUSPENDED;
         $envBuffer = null;
 
-        if ($environment !== []) {
+        if ($environment !== null) {
+            // null is the ONLY inherit signal; an empty map encodes the
+            // valid empty block (double terminator) with the Unicode flag
+            // set, so the child starts with no parent variables — matching
+            // the POSIX 5th-arg law (PTY-20). The old `!== []` guard made
+            // [] a silent alias of inheritance.
             $encoded = EnvBlock::encode($environment);
             $envBuffer = $this->byteBuffer($encoded);
             $flags |= self::CREATE_UNICODE_ENVIRONMENT;
