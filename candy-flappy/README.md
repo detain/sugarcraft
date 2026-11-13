@@ -40,8 +40,9 @@ cd candy-flappy
 composer install
 ./bin/candy-flappy      # or: php examples/play.php — interactive use only, no migration
 
-# As a library dependency (pre-1.0: the package publishes a dev branch only):
+# Inside another Composer project (pre-1.0: dev branch only):
 #   composer require sugarcraft/candy-flappy:@dev
+#   vendor/bin/candy-flappy                       # runs the game (composer "bin")
 
 # Standalone executable (the published channel is currently FROZEN — see below):
 wget https://github.com/detain/sugarcraft/releases/download/candy-flappy/latest/candy-flappy.phar
