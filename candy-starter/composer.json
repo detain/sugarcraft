@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-starter",
-    "description": "Skeleton repo for bootstrapping a SugarCraft TUI app \u2014 `composer create-project sugarcraft/candy-starter my-app --stability=dev` (Packagist carries only dev-master until a `candy-starter/*` tag exists). Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps each shipped file to the concept it demonstrates.",
+    "description": "Skeleton repo for bootstrapping a SugarCraft TUI app \u2014 `composer create-project sugarcraft/candy-starter my-app --stability=dev` (Packagist carries dev-master, plus read-only dev-legacy/* branches frozen at the pre-rename candy-mold era, until a `candy-starter/*` tag exists). Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps each shipped file to the concept it demonstrates.",
     "type": "project",
     "license": "MIT",
     "keywords": [
@@ -10,7 +10,8 @@
         "starter",
         "bootstrap",
         "tui",
-        "create-project"
+        "create-project",
+        "bubbletea-app-template"
     ],
     "homepage": "https://github.com/sugarcraft/candy-starter",
     "authors": [
@@ -25,9 +26,6 @@
         "source": "https://github.com/sugarcraft/candy-starter",
         "docs": "https://sugarcraft.github.io/lib/candy-starter.html"
     },
-    "bin": [
-        "bin/start"
-    ],
     "require": {
         "php": "^8.3",
         "sugarcraft/sugar-core": "dev-master",
