@@ -297,6 +297,19 @@ final class PlayerCatchUpTest extends TestCase
         $this->scheduledPlayer([10])->withFixedFps($bad);
     }
 
+    /** SA-P5 (-012): the advertised MAX_FPS ceiling is enforced, both edges. */
+    public function testFixedFpsAtTheCeilingIsAccepted(): void
+    {
+        $player = $this->scheduledPlayer([10])->withFixedFps(Player::MAX_FPS);
+        $this->assertSame(Player::MAX_FPS, $player->fixedFps);
+    }
+
+    public function testFixedFpsAboveTheCeilingClamps(): void
+    {
+        $player = $this->scheduledPlayer([10])->withFixedFps(Player::MAX_FPS * 10);
+        $this->assertSame(Player::MAX_FPS, $player->fixedFps, 'above-ceiling rates clamp to the advertised ceiling');
+    }
+
     #[DataProvider('unacceptableRates')]
     public function testMaxSecondsRefusesNonPositiveAndInfiniteValues(float $bad): void
     {

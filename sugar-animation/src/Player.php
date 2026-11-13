@@ -262,7 +262,11 @@ final class Player implements Model
      * E-09: override the per-frame GIF delays with a uniform cadence of
      * $fps frames per second on the same absolute schedule. Immutable.
      * Re-anchors the schedule to the currently shown frame so a mid-play
-     * switch never triggers an instant catch-up jump.
+     * switch never triggers an instant catch-up jump. Rates above
+     * {@see self::MAX_FPS} clamp to that advertised ceiling (chicle's
+     * CHICLE_ANIM_FPS_MAX): past the MIN_TICK_CS arm floor a faster request
+     * is indistinguishable from the ceiling, so the ceiling is made real
+     * rather than left a doc promise.
      */
     public function withFixedFps(float $fps): self
     {
@@ -270,6 +274,9 @@ final class Player implements Model
             throw new \InvalidArgumentException(
                 'sugar-animation: Player::withFixedFps() requires a positive finite fps, got ' . var_export($fps, true),
             );
+        }
+        if ($fps > self::MAX_FPS) {
+            $fps = self::MAX_FPS;
         }
         $next = $this->mutate(['fixedFps' => $fps]);
         if ($next->anchor === null) {
