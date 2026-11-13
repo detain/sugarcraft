@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Themes — render the same Markdown under each colourful stock theme
  * (plain / notty / ascii are styling variants, not colour palettes).
  *
- *   php examples/themes.php
+ *   $ php examples/themes.php
  */
 
 require __DIR__ . '/../vendor/autoload.php';

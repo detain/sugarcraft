@@ -7,9 +7,9 @@ declare(strict_types=1);
  * GLAMOUR_STYLE or NO_COLOR set, an extra section shows what
  * Theme::fromEnvironment() picks:
  *
- *   php examples/render.php
- *   GLAMOUR_STYLE=tokyo-night php examples/render.php
- *   NO_COLOR=1 php examples/render.php
+ *   $ php examples/render.php
+ *   $ GLAMOUR_STYLE=tokyo-night php examples/render.php
+ *   $ NO_COLOR=1 php examples/render.php
  */
 
 require __DIR__ . '/../vendor/autoload.php';

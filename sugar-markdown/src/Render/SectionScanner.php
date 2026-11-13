@@ -29,9 +29,10 @@ namespace SugarCraft\Markdown\Render;
  * A heading after a list item is a boundary: a column-0 heading behind a
  * blank line cannot continue an item (its content is indented past the
  * marker, and a blank line ends lazy continuation), and the item's last
- * line is no different from a continuation line, which never held. Holding
- * it kept a reply whose sections each end in a list as one open tail,
- * re-rendered whole on every frame.
+ * line is no different from a continuation line. An earlier revision of
+ * this scanner refused the boundary anyway; that refusal never held.
+ * Refusing the post-list heading left a reply whose sections each end in
+ * a list as one open tail, re-rendered whole on every frame.
  *
  * A boundary here is a PROPOSAL. The scanner reads lines, not CommonMark
  * block structure, so {@see SectionStream} has the parser confirm each one

@@ -315,7 +315,7 @@ final class Theme
     }
 
     /**
-     * Plain-text theme that auto-selects when stdout is not a TTY.
+     * The theme `fromEnvironment()` picks when stdout is not a TTY.
      * Mirrors charmbracelet/glamour.Notty style: indistinguishable from `plain()`
      * but a separate factory so docs can refer to it by name. Use as
      * the fallback in non-interactive scripts (CI logs, file dumps).
@@ -330,7 +330,7 @@ final class Theme
      * / underline / strikethrough (no colour; the strike element carries
      * {@see Style::strikethrough()} for `~~text~~`). Distinct from {@see plain()} (which is a
      * total no-op) and {@see notty()} (an alias of plain). Use this
-     * when you want emphasis to survive a colour-less terminal but not
+     * when you want emphasis to survive a colourless terminal but not
      * a totally bare one — e.g. printer-friendly logs, accessibility
      * output, or test fixtures that should still differentiate
      * headings from body text.
