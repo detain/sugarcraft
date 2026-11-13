@@ -34,7 +34,7 @@ return [
 
     'cli.usage'         => 'الاستخدام: candy-ssh-launcher [--config <مسار>] [--ssh <ssh-ثنائي>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: وسيطة غير معروفة: {arg}',
-    'cli.no_config'     => 'candy-ssh-launcher: لم يتم العثور على تكوين. مرر --config <مسار>.',
+    'cli.no_config'     => 'candy-ssh-launcher: لم يتم العثور على تكوين. أنشئ ~/.config/wishlist.yml (راجع البدء السريع في README) أو مرر --config <مسار>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: تم الإلغاء.',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: ثنائي ssh غير موجود أو غير قابل للتنفيذ: {bin}',

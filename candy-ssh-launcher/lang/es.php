@@ -36,7 +36,7 @@ return [
     // bin/candy-ssh-launcher
     'cli.usage'         => 'Uso: candy-ssh-launcher [--config <ruta>] [--ssh <binario-ssh>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: argumento desconocido: {arg}',
-    'cli.no_config'     => 'candy-ssh-launcher: no se encontró configuración. Pase --config <ruta>.',
+    'cli.no_config'     => 'candy-ssh-launcher: no se encontró configuración. Cree ~/.config/wishlist.yml (consulte el inicio rápido del README) o pase --config <ruta>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: cancelado.',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: binario ssh no encontrado o no ejecutable: {bin}',

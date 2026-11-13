@@ -34,7 +34,7 @@ return [
 
     'cli.usage'         => 'Kullanım: candy-ssh-launcher [--config <yol>] [--ssh <ssh-ikili>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: bilinmeyen argüman: {arg}',
-    'cli.no_config'     => 'candy-ssh-launcher: yapılandırma bulunamadı. --config <yol> iletin.',
+    'cli.no_config'     => 'candy-ssh-launcher: yapılandırma bulunamadı. ~/.config/wishlist.yml dosyasını oluşturun (README içindeki hızlı başlangıca bakın) veya --config <yol> iletin.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: iptal edildi.',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh ikilisi bulunamadı veya çalıştırılabilir değil: {bin}',

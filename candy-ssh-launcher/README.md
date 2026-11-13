@@ -15,9 +15,9 @@
 
 ![demo](.vhs/picker.gif)
 
-candy-ssh-launcher — a TUI directory of SSH endpoints for PHP 8.3+. Launch `candy-ssh-launcher`, pick a host, hit Enter, and the current process is replaced with `ssh` connecting to it.
+candy-ssh-launcher — a TUI directory of SSH endpoints for PHP 8.3+. Launch it, pick a host, hit Enter: the launcher replaces itself with an `ssh` session to that host, so prompts, keys and exit codes are all native ssh. Your machines live in one searchable list — type to filter, arrows or `j`/`k` to move, Enter to connect.
 
-The config schema here is a **flat top-level list** of endpoint objects; charmbracelet/wishlist's nested `host:`-keyed `wishlist.yml` is deliberately *not* accepted — feeding one in fails loudly (`wishlist yaml: unparseable line`, or a named refusal for inline-flow values and block mappings under list fields), never silently. <!-- @rename-keep -->
+The config schema here is a **flat top-level list** of endpoint objects; charmbracelet/wishlist's top-level endpoint-name-keyed nested config is deliberately *not* accepted — feeding one in fails loudly (`wishlist yaml: unparseable line`, or a named refusal for inline-flow values and block mappings under list fields), never silently. <!-- @rename-keep -->
 
 ```
 ── wishlist ──
@@ -52,7 +52,36 @@ composer global require sugarcraft/candy-ssh-launcher
 ~/.composer/vendor/bin/candy-ssh-launcher           # legacy location; `composer config --global home` prints yours
 ```
 
-Or add this repo's `candy-ssh-launcher/bin/` to your `$PATH` for a checkout. From a checkout, `examples/sample-wishlist.yml` is a ready-made endpoint list — point the launcher at it with `--config examples/sample-wishlist.yml`.
+With a global install, put your endpoints in `~/.config/wishlist.yml` and run bare from anywhere — that is the zero-flag flow the demo above assumes.
+
+Running from a checkout? Add `candy-ssh-launcher/bin/` to your `$PATH`. The checkout also ships `examples/sample-wishlist.yml` — a ready-made endpoint list to try with `--config examples/sample-wishlist.yml`.
+
+## Quick start
+
+1. Create `~/.config/wishlist.yml` holding one endpoint:
+
+   ```yaml
+   - name: home
+     host: myserver.example.com
+   ```
+
+2. Verify the launcher reads it — `--list` needs no terminal and touches no ssh:
+
+   ```bash
+   candy-ssh-launcher --list
+   ```
+
+   One row prints — the name, `host:port`, and the user (`-` when unset), tab-joined — and the exit code is `0`.
+
+3. Connect:
+
+   ```bash
+   candy-ssh-launcher
+   ```
+
+   The picker lists `home`; hit Enter and you are in `ssh`.
+
+If step 2 exits `1` with a "no config found" refusal, the launcher never saw the file at the path its message names — check there first.
 
 ## Usage
 
@@ -81,7 +110,7 @@ Unrecognized flags and options given without their value exit `2` and name the o
 | `3` | The selected endpoint was refused at dispatch time (a guard-rejected field such as a leading-dash `proxyJump`, `options` entry, or destination) or the ssh binary could not be exec'd; stderr names the sanitized reason |
 | `130` | Quit from the picker (Esc / Ctrl-C — SIGINT restores the terminal before exiting; stdin EOF reads as cancel too, the shape of a container started without `-i`) |
 
-### Config discovery
+### Finding your config
 
 `candy-ssh-launcher` resolves its config in this order:
 
@@ -163,7 +192,7 @@ read config → render picker → read keys → choose → pcntl_exec(ssh, argv)
 
 That last `pcntl_exec` is the critical line: it **replaces** the PHP process with `ssh`. File descriptors, environment, and the controlling tty all flow through unchanged, so the user sees a normal `ssh` session — host-key prompts, agent forwarding, MOTD, exit status, all native. We never proxy bytes; we get out of the way.
 
-## Import from SSH Config
+## Import from ssh config
 
 `candy-ssh-launcher` can import endpoints directly from your OpenSSH config file (`~/.ssh/config`):
 
@@ -205,7 +234,7 @@ use SugarCraft\Core\I18n\T;
 T::setLocale(T::detect()); // or T::setLocale('de');
 ```
 
-The banner reads `── wishlist ──` in every locale — it is the product's heritage wordmark (the config filename, likewise, predates the rename).
+The banner reads `── wishlist ──` in every locale — it is the product's heritage wordmark (the config filename, likewise, predates the rename). CLI and config error messages likewise carry the heritage `wishlist` word — it is this tool, not a dependency.
 
 ## Programmatic use
 
@@ -229,9 +258,9 @@ $sshEndpoints = Config::importFromSshConfig('/home/user/.ssh/config');
 
 ## Shared foundations
 
-candy-ssh-launcher uses [sugar-fuzzy](https://github.com/detain/sugarcraft/tree/master/sugar-fuzzy/README.md) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker surfaces scored ranking and match-highlight indices (ANSI bold+cyan on matched characters) for ranked, highlighted filter results.
+candy-ssh-launcher uses [sugar-fuzzy](https://github.com/detain/sugarcraft/tree/master/sugar-fuzzy/README.md) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker uses the scores to rank matches and paints matched characters bold+cyan.
 
-## Status
+## Test coverage
 
 SSH config import (`Host`/`Host=` blocks, both spacing forms) is supported. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered by the test suite.
 

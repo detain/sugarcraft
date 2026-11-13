@@ -34,7 +34,7 @@ return [
 
     'cli.usage'         => 'Použití: candy-ssh-launcher [--config <cesta>] [--ssh <ssh-binární>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: neznámý argument: {arg}',
-    'cli.no_config'     => 'candy-ssh-launcher: konfigurace nenalezena. Předejte --config <cesta>.',
+    'cli.no_config'     => 'candy-ssh-launcher: konfigurace nenalezena. Vytvořte ~/.config/wishlist.yml (viz rychlý start v README) nebo předejte --config <cesta>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: zrušeno.',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: binární soubor ssh nenalezen nebo není spustitelný: {bin}',

@@ -34,7 +34,7 @@ return [
 
     'cli.usage'                => '用法：candy-ssh-launcher [--config <路径>] [--ssh <ssh二进制>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'          => 'candy-ssh-launcher：未知参数：{arg}',
-    'cli.no_config'            => 'candy-ssh-launcher：未找到配置。请传递 --config <路径>。',
+    'cli.no_config'            => 'candy-ssh-launcher：未找到配置。请创建 ~/.config/wishlist.yml（参见 README 的快速开始），或传递 --config <路径>。',
     'cli.error'                => 'candy-ssh-launcher：{message}',
     'cli.cancelled'            => 'candy-ssh-launcher：已取消。',
     'cli.ssh_not_executable' => 'candy-ssh-launcher：找不到 ssh 程序或它不可执行：{bin}',

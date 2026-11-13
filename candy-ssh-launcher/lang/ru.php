@@ -34,7 +34,7 @@ return [
 
     'cli.usage'         => 'Использование: candy-ssh-launcher [--config <путь>] [--ssh <ssh-бинарник>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: неизвестный аргумент: {arg}',
-    'cli.no_config'     => 'candy-ssh-launcher: конфигурация не найдена. Передайте --config <путь>.',
+    'cli.no_config'     => 'candy-ssh-launcher: конфигурация не найдена. Создайте ~/.config/wishlist.yml (см. быстрый запуск в README) или передайте --config <путь>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: отменено.',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: бинарный файл ssh не найден или не является исполняемым: {bin}',

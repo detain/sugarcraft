@@ -34,7 +34,7 @@ return [
 
     'cli.usage'                => '用法：candy-ssh-launcher [--config <パス>] [--ssh <sshバイナリ>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'          => 'candy-ssh-launcher：不明な引数：{arg}',
-    'cli.no_config'            => 'candy-ssh-launcher：設定が見つかりません。--config <パス> を渡してください。',
+    'cli.no_config'            => 'candy-ssh-launcher：設定が見つかりません。~/.config/wishlist.yml を作成してください（README のクイックスタートを参照）。または --config <パス> を渡してください。',
     'cli.error'                => 'candy-ssh-launcher：{message}',
     'cli.cancelled'            => 'candy-ssh-launcher：キャンセルされました。',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh バイナリが見つからないか実行できません: {bin}',

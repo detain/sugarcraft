@@ -142,6 +142,11 @@ final class BinCliTest extends TestCase
 
         $this->assertSame(1, $code, 'stderr: ' . $err);
         $this->assertStringContainsString('no config', $err);
+        $this->assertStringContainsString(
+            '~/.config/wishlist.yml',
+            $err,
+            'the refusal itself teaches where to create the file (-009)'
+        );
     }
 
     public function testExplicitMissingConfigPathSaysNotFound(): void

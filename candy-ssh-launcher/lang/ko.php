@@ -34,7 +34,7 @@ return [
 
     'cli.usage'         => '사용법: candy-ssh-launcher [--config <경로>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version]',
     'cli.unknown_arg'   => 'candy-ssh-launcher: 알 수 없는 인수: {arg}',
-    'cli.no_config'     => 'candy-ssh-launcher: 구성을 찾을 수 없습니다. --config <경로>를 전달하세요.',
+    'cli.no_config'     => 'candy-ssh-launcher: 구성을 찾을 수 없습니다. ~/.config/wishlist.yml을 작성하세요(README의 빠른 시작 참조). 또는 --config <경로>를 전달하세요.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: 취소됨.',
     'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh 바이너리를 찾을 수 없거나 실행할 수 없습니다: {bin}',
