@@ -79,7 +79,7 @@ final class SessionFeed
     private const DELTA_TYPES = [SessionEvent::ASSISTANT_DELTA, SessionEvent::REASONING_DELTA];
 
     /**
-     * @var array<string, array{client: Client, mode: string, live: bool, buffer: list<EventEnvelope>, lastSent: int, stale: bool}>
+     * @var array<string, array{client: Client, mode: string, live: bool, buffer: list<EventEnvelope>, bytes: int, lastSent: int, stale: bool}>
      */
     private array $subscribers = [];
 
@@ -132,6 +132,14 @@ final class SessionFeed
      * only way back; no gap repair is attempted, by design.
      */
     private const MAX_PRELIVE_BUFFER = 2048;
+
+    /**
+     * The same ceiling in bytes: a count cap alone lets 2048 fat frames (a
+     * tool result is up to megabytes) pin gigabytes per stalled subscriber.
+     * Whichever cap trips first marks the subscriber stale. Sized to the
+     * Gateway outbox's soft watermark — the house per-client budget.
+     */
+    public const MAX_PRELIVE_BYTES = 1_048_576;
 
     /** @var array<string, int> delta type => bytes streamed into the current part */
     private array $offsets = [];
@@ -265,7 +273,7 @@ final class SessionFeed
 
         // Registered before anything is read: what happens from here on is
         // buffered, and flushed after the catch-up.
-        $this->subscribers[$client->id()] = ['client' => $client, 'mode' => $mode, 'live' => false, 'buffer' => [], 'lastSent' => 0, 'stale' => false];
+        $this->subscribers[$client->id()] = ['client' => $client, 'mode' => $mode, 'live' => false, 'buffer' => [], 'bytes' => 0, 'lastSent' => 0, 'stale' => false];
 
         $log = $this->host->events();
         $through = $log?->latestSeq($this->sessionId()) ?? 0;
@@ -492,7 +500,11 @@ final class SessionFeed
                     continue; // already told to resubscribe — nothing left to hoard
                 }
                 $this->subscribers[$clientId]['buffer'][] = $envelope;
-                if (\count($this->subscribers[$clientId]['buffer']) > self::MAX_PRELIVE_BUFFER) {
+                $this->subscribers[$clientId]['bytes'] += $this->envelopeBytes($envelope);
+                if (
+                    \count($this->subscribers[$clientId]['buffer']) > self::MAX_PRELIVE_BUFFER
+                    || $this->subscribers[$clientId]['bytes'] > self::MAX_PRELIVE_BYTES
+                ) {
                     $this->markStale($clientId);
                 }
 
@@ -796,6 +808,14 @@ final class SessionFeed
         $this->goLive($clientId);
     }
 
+    /** Wire size of an envelope, for the pre-live byte budget (unencodable counts as a coarse floor). */
+    private function envelopeBytes(EventEnvelope $envelope): int
+    {
+        $json = \json_encode($envelope->toArray(), \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+        return $json === false ? 1024 : \strlen($json);
+    }
+
     /**
      * CWPD-8: the pre-live buffer ran past its cap. Tell the client what it
      * missed and that only a resubscribe repairs the gap, empty the hoard,
@@ -805,6 +825,7 @@ final class SessionFeed
     {
         $dropped = \count($this->subscribers[$clientId]['buffer']);
         $this->subscribers[$clientId]['buffer'] = [];
+        $this->subscribers[$clientId]['bytes'] = 0;
         $this->subscribers[$clientId]['stale'] = true;
         $this->subscribers[$clientId]['client']->send(JsonRpc::encode(EventEnvelope::server(
             EventType::SERVER_OVERFLOW,
@@ -828,6 +849,7 @@ final class SessionFeed
         }
         $buffer = $this->subscribers[$clientId]['buffer'];
         $this->subscribers[$clientId]['buffer'] = [];
+        $this->subscribers[$clientId]['bytes'] = 0;
         $this->subscribers[$clientId]['live'] = true;
         foreach ($buffer as $envelope) {
             if (isset($this->subscribers[$clientId])) {
