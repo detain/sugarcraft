@@ -644,7 +644,13 @@ trait ServeStartup
                     return;
                 }
                 [$verb, $token] = \explode(' ', \substr($buffer, 0, $newline), 2) + [1 => ''];
-                $reloaded = null;
+                // Authenticate BEFORE any verb runs: a refused peer must cause
+                // zero side effects (reload-token rotates every credential).
+                if (!$tokens->matches(\trim($token))) {
+                    $connection->end((string) \json_encode(['ok' => false, 'error' => 'unauthorized'], \JSON_UNESCAPED_SLASHES) . "\n");
+
+                    return;
+                }
                 if ($verb === self::CONTROL_RELOAD_TOKEN) {
                     try {
                         $reloaded = $server->reloadToken();
@@ -660,13 +666,13 @@ trait ServeStartup
 
                         return;
                     }
+                    $answer = ['ok' => true, 'rotated' => $reloaded !== null, 'closed' => $reloaded ?? 0];
+                } elseif ($verb === self::CONTROL_LOGIN_URL) {
+                    $urls = $server->loginUrls();
+                    $answer = ['ok' => true, 'loginUrl' => $urls[0], 'loginUrls' => $urls];
+                } else {
+                    $answer = ['ok' => false, 'error' => 'unknown request'];
                 }
-                $answer = match (true) {
-                    !$tokens->matches(\trim($token)) => ['ok' => false, 'error' => 'unauthorized'],
-                    $verb === self::CONTROL_LOGIN_URL => (static fn (array $urls): array => ['ok' => true, 'loginUrl' => $urls[0], 'loginUrls' => $urls])($server->loginUrls()),
-                    $verb === self::CONTROL_RELOAD_TOKEN => ['ok' => true, 'rotated' => $reloaded !== null, 'closed' => $reloaded ?? 0],
-                    default => ['ok' => false, 'error' => 'unknown request'],
-                };
                 $connection->end((string) \json_encode($answer, \JSON_UNESCAPED_SLASHES) . "\n");
             });
         });
