@@ -512,7 +512,7 @@ final class Parser
         // cases per byte paid a constant-load plus a linear case scan on the
         // hottest line of the library. The enum stays the public API; the
         // machine works in its backing values.
-        $entry = Transitions::get($this->state, $byte);
+        $entry = Transitions::lookup($this->state, $byte);
         $action = Transitions::action($entry);
         $next = Transitions::nextState($entry);
 

@@ -50,9 +50,24 @@ final class Transitions
      *
      * Returns `(action << 4) | nextState`. Use {@see Transitions::action()}
      * and {@see Transitions::nextState()} to unpack.
+     *
+     * @throws \InvalidArgumentException if the byte is outside 0x00-0xFF or
+     *         the state is outside the built table's rows (finding 012: a
+     *         bad byte used to surface as an undefined-offset warning and a
+     *         bad state silently addressed the wrong — or a padding — row)
      */
-    public static function get(int $state, int $byte): int
+    public static function lookup(int $state, int $byte): int
     {
+        if ($byte < 0 || $byte > 0xFF) {
+            throw new \InvalidArgumentException(
+                'Transitions::lookup() byte must be 0x00-0xFF; got ' . $byte . '.',
+            );
+        }
+        if ($state < 0 || $state > self::STATE_MASK) {
+            throw new \InvalidArgumentException(
+                'Transitions::lookup() state must be 0..' . self::STATE_MASK . ' (the 4-bit table rows); got ' . $state . '.',
+            );
+        }
         return ord((self::$table ??= self::build())[($state << self::STATE_SHIFT) | $byte]);
     }
 

@@ -13,8 +13,8 @@ final class TransitionsCachingTest extends TestCase
 {
     public function testTableIsCachedAfterFirstCall(): void
     {
-        $entry1 = Transitions::get(State::Ground->value, ord('A'));
-        $entry2 = Transitions::get(State::Ground->value, ord('A'));
+        $entry1 = Transitions::lookup(State::Ground->value, ord('A'));
+        $entry2 = Transitions::lookup(State::Ground->value, ord('A'));
 
         // Same entry returned from cache
         $this->assertSame($entry1, $entry2);
@@ -24,7 +24,7 @@ final class TransitionsCachingTest extends TestCase
     {
         // Multiple calls should all return consistent results
         for ($i = 0; $i < 10; $i++) {
-            $entry = Transitions::get(State::Ground->value, ord('A'));
+            $entry = Transitions::lookup(State::Ground->value, ord('A'));
             $this->assertSame(Action::Print->value, Transitions::action($entry));
             $this->assertSame(State::Ground->value, Transitions::nextState($entry));
         }
@@ -43,7 +43,7 @@ final class TransitionsCachingTest extends TestCase
         ];
 
         foreach ($states as $state) {
-            $entry = Transitions::get($state, 0x00);
+            $entry = Transitions::lookup($state, 0x00);
             $this->assertNotNull($entry, "Entry should exist for state $state");
             $this->assertGreaterThanOrEqual(0, Transitions::action($entry));
             $this->assertLessThanOrEqual(15, Transitions::nextState($entry));
@@ -54,7 +54,7 @@ final class TransitionsCachingTest extends TestCase
     {
         foreach (State::cases() as $state) {
             foreach ([0x00, 0x1B, 0x7F, 0x80, 0xFF] as $byte) {
-                $entry = Transitions::get($state->value, $byte);
+                $entry = Transitions::lookup($state->value, $byte);
                 $this->assertNotNull($entry);
             }
         }
@@ -66,7 +66,7 @@ final class TransitionsCachingTest extends TestCase
         // Sample every byte in every state to find all action values
         foreach (State::cases() as $state) {
             for ($byte = 0; $byte <= 0xFF; $byte++) {
-                $entry = Transitions::get($state->value, $byte);
+                $entry = Transitions::lookup($state->value, $byte);
                 $action = Transitions::action($entry);
                 $foundActions[$action] = true;
             }
@@ -82,7 +82,7 @@ final class TransitionsCachingTest extends TestCase
     {
         // Action is upper 4 bits (shifted right by 4)
         // Next state is lower 4 bits (masked with 0x0F)
-        $entry = Transitions::get(State::Ground->value, ord('A'));
+        $entry = Transitions::lookup(State::Ground->value, ord('A'));
         $action = Transitions::action($entry);
         $nextState = Transitions::nextState($entry);
         // Rebuild: (action << 4) | state gives the original byte value
