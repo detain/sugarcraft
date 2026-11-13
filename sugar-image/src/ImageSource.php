@@ -518,7 +518,14 @@ final class ImageSource
         // Some GD builds write to output buffer and return bool|int rather
         // than returning the encoded bytes as a string.  Use a temp file to
         // guarantee we get the binary payload regardless of the GD variant.
-        $tmp = fopen('php://temp', 'w+b');
+        $tmp = @fopen('php://temp', 'w+b');
+        if ($tmp === false) {
+            // Refuse with the encode-failure grammar the match below already
+            // speaks: an unopenable stream is that same failure, and the
+            // alternative is a rewind(false) TypeError masking it (or a GD
+            // call whose missing sink argument silently writes to STDOUT).
+            throw new \RuntimeException(Lang::t('image_source.gd_encode_failed', ['mime' => $format]));
+        }
 
         try {
             $ok = match ($format) {

@@ -370,7 +370,14 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
             imagepalettetotruecolor($src);
         }
 
-        $tmp = fopen('php://temp', 'w+b');
+        $tmp = @fopen('php://temp', 'w+b');
+        if ($tmp === false) {
+            // A stream that will not open is a failed encode, answered with
+            // the typed grammar below — not a rewind(false)/fclose(false)
+            // TypeError party in the finally, and never an imagepng() whose
+            // missing file argument silently means STDOUT.
+            throw new \RuntimeException(Lang::t('renderer.gd_encode_failed'));
+        }
         try {
             $ok = imagepng($src, $tmp, 9);
             rewind($tmp);
