@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Posix;
 
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\Posix\SttyTermios;
@@ -274,6 +275,69 @@ final class SttyTermiosTest extends TestCase
         $this->assertGreaterThan(0, $slaveFd, 'slave fd must open for the probe arm');
         try {
             $this->assertTrue((new SttyTermios($slaveFd))->isAtty(), 'probe arm must report a PTY slave as tty');
+        } finally {
+            $libc->close($slaveFd);
+            $master->close();
+        }
+    }
+
+    public function testGlibcSavedModeRoundTripsThroughTheSingleTokenPath(): void
+    {
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open();
+        $master = $pair->master();
+        $libc = Libc::lib();
+        $slaveFd = $libc->open($pair->slave()->path(), self::O_RDWR);
+        $this->assertGreaterThan(0, $slaveFd, 'slave fd must open for the round-trip');
+
+        $prop = new \ReflectionProperty(SttyTermios::class, 'savedMode');
+        try {
+            $termios = new SttyTermios($slaveFd);
+            $saved = $termios->current();
+            $first = $prop->getValue($saved);
+
+            $termios->makeRaw()->apply();
+            $saved->restore();
+
+            $second = $prop->getValue((new SttyTermios($slaveFd))->current());
+            $this->assertSame($first, $second, 'capture -> restore must put the exact mode back');
+        } finally {
+            $libc->close($slaveFd);
+            $master->close();
+        }
+    }
+
+    public function testRestoreKeepsMultiLineSavedFormsAsOneArgvToken(): void
+    {
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open();
+        $master = $pair->master();
+        $libc = Libc::lib();
+        $slaveFd = $libc->open($pair->slave()->path(), self::O_RDWR);
+        $this->assertGreaterThan(0, $slaveFd, 'slave fd must open for the token pin');
+
+        try {
+            $termios = new SttyTermios($slaveFd);
+            (new \ReflectionProperty(SttyTermios::class, 'savedMode'))->setValue(
+                $termios,
+                "speed 9600 baud; line = 0;\n    intr = ^C; quit = ^\\"
+            );
+
+            // stty(1) rejects this fixture (it is a BSD -g shape, not a
+            // glibc settable token) — what matters is the argv shape
+            // echoed in the failure message: the literal newline and
+            // inner run survive, which whitespace-SPLITting could not
+            // reproduce (it collapses every gap to one space).
+            try {
+                $termios->restore();
+                $this->fail('the junk saved form must not restore cleanly');
+            } catch (RuntimeException $e) {
+                $this->assertMatchesRegularExpression('/line = 0;\n {4}intr/', $e->getMessage());
+            }
         } finally {
             $libc->close($slaveFd);
             $master->close();

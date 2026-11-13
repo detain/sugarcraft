@@ -104,11 +104,13 @@ final class SttyTermios implements Termios
                 . 'call current() and restore() the returned instance.'
             );
         }
-        // stty -g emits a saved mode string. On glibc it is a single
-        // colon-grouped token; on BSD/macOS it is space-separated fields.
-        // Split on whitespace so each token becomes a separate argv element.
-        $args = \preg_split('/\s+/', \trim($this->savedMode), -1, PREG_SPLIT_NO_EMPTY);
-        $this->runStty(...$args);
+        // PTY-30: replay the captured `-g` string as ONE argv token —
+        // array-form proc_open passes it verbatim, no shell involved.
+        // Whitespace-splitting murdered the BSD/macOS form (its
+        // `baud;`, `line =`, ';'-suffixed and multi-line fields became
+        // nonsense settings); glibc's single colon-grouped token is
+        // unaffected either way, so one path serves both vendors.
+        $this->runStty($this->savedMode);
     }
 
     /**
