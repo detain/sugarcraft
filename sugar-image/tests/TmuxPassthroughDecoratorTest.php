@@ -226,4 +226,86 @@ final class TmuxPassthroughDecoratorTest extends TestCase
         $this->assertStringNotContainsString("\x1bPtmux;", $frame);
         $this->assertSame($frame, $wrapped);
     }
+
+    /**
+     * SI-41: the envelope contract of the ST-vs-BEL precedence quirk. For
+     * DCS/APC the historic scan searched the WHOLE remaining string for an
+     * ST before ever consulting BEL — so a BEL riding inside DCS payload
+     * does NOT terminate it, even though the same byte ends an OSC at
+     * first touch. The zero-copy rewrite inherits the law verbatim; if the
+     * two scans were ever unified positionally, the bytes after this BEL
+     * would leak outside the envelope and this pin goes red.
+     */
+    public function testTheStBeatsAnEarlierBelQuirkIsCarriedIntoTheZeroCopyWalk(): void
+    {
+        $decorator = new TmuxPassthroughDecorator(new HalfBlockRenderer());
+
+        $dcs      = "\x1bPdata\x07more\x1b\\";
+        $expected = "\x1bPtmux;" . str_replace("\x1b", "\x1b\x1b", $dcs) . "\x1b\\";
+
+        $this->assertSame($expected, $decorator->wrap($dcs), 'the BEL is payload; the ST is the terminator');
+    }
+
+    /**
+     * The hostile poster the finding measured: thousands of escape openers
+     * on a big frame. Every wrapped span is built AT GENERATION time from
+     * the same parts, so the expected string is an independent oracle —
+     * dense escapes interleaved with plain runs, OSC closed by BEL, DCS
+     * and APC closed by ST, SGR noise, and a lone trailing ESC.
+     */
+    public function testTheDenseEscapeCorpusWrapsByteForByte(): void
+    {
+        $decorator = new TmuxPassthroughDecorator(new HalfBlockRenderer());
+
+        $in       = '';
+        $expected = '';
+        for ($k = 0; $k < 2000; $k++) {
+            $plain = "cell{$k}\x1b[0m";
+            $in       .= $plain;
+            $expected .= $plain; // SGR is non-passthrough: verbatim
+
+            $osc = "\x1b]10;rgb:1f/2e/3f\x07";
+            $in       .= $osc;
+            $expected .= "\x1bPtmux;" . str_replace("\x1b", "\x1b\x1b", $osc) . "\x1b\\";
+
+            $dcs = "\x1bPq#0;G" . $k . "\x1b\\";
+            $in       .= $dcs;
+            $expected .= "\x1bPtmux;" . str_replace("\x1b", "\x1b\x1b", $dcs) . "\x1b\\";
+
+            $apc = "\x1b_G" . $k . "\x1b\\";
+            $in       .= $apc;
+            $expected .= "\x1bPtmux;" . str_replace("\x1b", "\x1b\x1b", $apc) . "\x1b\\";
+        }
+        $in       .= "\x1b"; // lone trailing escape rides the final drain
+        $expected .= "\x1b";
+
+        $this->assertSame($expected, $decorator->wrap($in));
+    }
+
+    /**
+     * Structural pin for the walk itself (the byte corpus above could be
+     * satisfied by either walk): wrap() must never slice the tail of the
+     * input buffer. The per-escape `substr($ansi, $i)` copy is exactly the
+     * O(n x escapes) transient this row removed; reintroducing it (or a
+     * $remaining variable) reddens this guard even when bytes match.
+     */
+    public function testTheWalkIndexesTheBufferInsteadOfCopyingTails(): void
+    {
+        $source = (string) file_get_contents(
+            (new \ReflectionMethod(TmuxPassthroughDecorator::class, 'wrap'))->getFileName()
+        );
+        $start = strpos($source, 'public function wrap');
+        $this->assertIsInt($start);
+        $end = strpos($source, 'private function scanSt', $start);
+        $this->assertIsInt($end);
+        $body = preg_replace(
+            '#/\*\*.*?\*/|//[^\n]*#s',
+            '',
+            substr($source, $start, $end - $start)
+        );
+
+        $this->assertStringNotContainsString('$remaining', $body, 'the tail-copy variable is retired');
+        $this->assertDoesNotMatchRegularExpression('/substr\(\s*\$ansi\s*,\s*\$i\s*\)/', $body,
+            'no whole-tail slice at an escape offset — scan in place and slice only what you emit');
+    }
 }

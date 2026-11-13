@@ -150,6 +150,10 @@ final class TmuxPassthroughDecorator implements Renderer, PassthroughDecorator
      *   \x1bPtmux;  <content with \x1b doubled>  \x1b\\
      *
      * Other bytes are returned unchanged.
+     *
+     * The walk (SI-41) indexes the original buffer and the scans return
+     * absolute offsets: the only copies are output spans and the wrapped
+     * sequences themselves — never a tail slice per escape.
      */
     public function wrap(string $ansi): string
     {
@@ -179,31 +183,29 @@ final class TmuxPassthroughDecorator implements Renderer, PassthroughDecorator
             }
             $flush = $i;
 
-            $remaining = substr($ansi, $i);
+            // SI-41: the introducer is INDEXED, not sliced, and the scans
+            // below work absolute offsets into the original buffer. The old
+            // per-escape substr($ansi, $i) tail copy moved O(n x escapes)
+            // transient bytes — ~10 GiB for a hostile 2 MiB poster with 10k
+            // leading escapes — to answer a question two indexes can ask.
+            $introducer = $i + 1 < $len ? $ansi[$i + 1] : '';
 
-            if (str_starts_with($remaining, "\x1bP")) {
-                // DCS: \x1bP … \x1b\\
-                $end = $this->scanSt($remaining, 2); // skip ESC P
-                $seq = substr($remaining, 0, $end);
-                $out .= "\x1bPtmux;" . $this->escapeInner($seq) . "\x1b\\";
-                $i   = $i + $end - 1;
-                $flush = $i + 1;
-            } elseif (str_starts_with($remaining, "\x1b_")) {
-                // APC: \x1b_ … \x1b\\
-                $end = $this->scanSt($remaining, 2); // skip ESC _
-                $seq = substr($remaining, 0, $end);
-                $out .= "\x1bPtmux;" . $this->escapeInner($seq) . "\x1b\\";
-                $i   = $i + $end - 1;
-                $flush = $i + 1;
-            } elseif (str_starts_with($remaining, "\x1b]")) {
-                // OSC: \x1b] … \x07 or \x1b\\
-                $end = $this->scanOsc($remaining, 2); // skip ESC ]
-                $seq = substr($remaining, 0, $end);
-                $out .= "\x1bPtmux;" . $this->escapeInner($seq) . "\x1b\\";
-                $i   = $i + $end - 1;
-                $flush = $i + 1;
+            if ($introducer === 'P' || $introducer === '_') {
+                // DCS / APC: \x1bP … \x1b\\ and \x1b_ … \x1b\\ — the
+                // historic two-pass scan lets ST win over BEL no matter
+                // where either sits; the merge of the two arms keeps that
+                // law (and every other byte of behaviour) identical.
+                $end = $this->scanSt($ansi, $i, 2);
+            } elseif ($introducer === ']') {
+                // OSC: \x1b] … \x07 or \x1b\\ — first terminator wins.
+                $end = $this->scanOsc($ansi, $i, 2);
+            } else {
+                continue; // non-passthrough escape: passes through as-is
             }
-            // Other escape sequences (non-passthrough): pass through as-is.
+
+            $out   .= "\x1bPtmux;" . $this->escapeInner(substr($ansi, $i, $end - $i)) . "\x1b\\";
+            $i      = $end - 1;
+            $flush  = $end;
         }
 
         // Drain remaining bytes after the last escape.
@@ -216,22 +218,28 @@ final class TmuxPassthroughDecorator implements Renderer, PassthroughDecorator
 
     /**
      * Scan for ST (String Terminator): \x1b\\ or \x07.
-     * Returns the total byte length of the sequence including the terminator.
+     * Returns the ABSOLUTE exclusive end offset of the sequence (SI-41:
+     * the walk stays on the caller's buffer — no tail copy per escape).
+     * ST beats BEL globally: the historic arm scanned the whole remaining
+     * string for ST before ever consulting BEL, and that precedence is
+     * pinned by testTheStBeatsAnEarlierBelQuirkIsCarriedIntoTheZeroCopyWalk.
      *
-     * @param string $s    Full string starting at offset 0
-     * @param int    $skip Bytes to skip at the start (past the introducing ESC)
+     * @param string $ansi  the full buffer
+     * @param int    $start absolute offset of the introducing ESC
+     * @param int    $skip  bytes to skip at the start (past the ESC + introducer)
      */
-    private function scanSt(string $s, int $skip): int
+    private function scanSt(string $ansi, int $start, int $skip): int
     {
-        $len = strlen($s);
-        for ($i = $skip; $i < $len - 1; $i++) {
-            if ($s[$i] === "\x1b" && ($s[$i + 1] ?? '') === '\\') {
+        $len  = strlen($ansi);
+        $from = $start + $skip;
+        for ($i = $from; $i < $len - 1; $i++) {
+            if ($ansi[$i] === "\x1b" && $ansi[$i + 1] === '\\') {
                 return $i + 2; // include \x1b\\
             }
         }
         // No ST found — check for BEL terminator.
-        for ($i = $skip; $i < $len; $i++) {
-            if ($s[$i] === "\x07") {
+        for ($i = $from; $i < $len; $i++) {
+            if ($ansi[$i] === "\x07") {
                 return $i + 1;
             }
         }
@@ -239,18 +247,17 @@ final class TmuxPassthroughDecorator implements Renderer, PassthroughDecorator
     }
 
     /**
-     * Scan OSC terminator: \x07 (BEL) or \x1b\\ (ST).
-     * Returns total byte length including terminator.
+     * Scan OSC terminator: \x07 (BEL) or \x1b\\ (ST), whichever comes
+     * FIRST positionally. Returns the absolute exclusive end offset.
      */
-    private function scanOsc(string $s, int $skip): int
+    private function scanOsc(string $ansi, int $start, int $skip): int
     {
-        $len = strlen($s);
-        // Look for BEL or ST.
-        for ($i = $skip; $i < $len; $i++) {
-            if ($s[$i] === "\x07") {
+        $len = strlen($ansi);
+        for ($i = $start + $skip; $i < $len; $i++) {
+            if ($ansi[$i] === "\x07") {
                 return $i + 1;
             }
-            if ($s[$i] === "\x1b" && ($s[$i + 1] ?? '') === '\\') {
+            if ($ansi[$i] === "\x1b" && $i + 1 < $len && $ansi[$i + 1] === '\\') {
                 return $i + 2;
             }
         }
