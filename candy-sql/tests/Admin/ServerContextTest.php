@@ -114,7 +114,7 @@ final class ServerContextTest extends TestCase
 
     public function testPluginsReturnsEmptyOnError(): void
     {
-        $this->db->setQueryThrows(new \PDOException('Access denied', 42000));
+        $this->db->setQueryThrows($this->realPdoError('Access denied', '42000', 1142));
         $this->assertSame([], $this->ctx->plugins());
     }
 
@@ -142,19 +142,19 @@ final class ServerContextTest extends TestCase
 
     public function testServerVariablesGracefulDegradationOnAccessDenied(): void
     {
-        $this->db->setQueryThrows(new \PDOException('Access denied for user', 42000));
+        $this->db->setQueryThrows($this->realPdoError('Access denied for user', '42000', 1044));
         $this->assertSame([], $this->ctx->serverVariables());
     }
 
     public function testStatusVariablesGracefulDegradationOnConnectionError(): void
     {
-        $this->db->setQueryThrows(new \PDOException("Can't connect to MySQL server", 2002));
+        $this->db->setQueryThrows($this->realPdoError("Can't connect to MySQL server", 'HY000', 2002));
         $this->assertSame([], $this->ctx->statusVariables());
     }
 
     public function testStatusVariablesGracefulDegradationOnTimeout(): void
     {
-        $this->db->setQueryThrows(new \PDOException('Lost connection to MySQL server during query', 2013));
+        $this->db->setQueryThrows($this->realPdoError('Lost connection to MySQL server during query', 'HY000', 2013));
         $this->assertSame([], $this->ctx->statusVariables());
     }
 
@@ -217,19 +217,19 @@ final class ServerContextTest extends TestCase
 
     public function testServerVariablesReturnsEmptyArrayOnTableNotFound(): void
     {
-        $this->db->setQueryThrows(new \PDOException("Table 'performance_schema.global_variables' doesn't exist", 1146));
+        $this->db->setQueryThrows($this->realPdoError("Table 'performance_schema.global_variables' doesn't exist", '42S02', 1146));
         $this->assertSame([], $this->ctx->serverVariables());
     }
 
     public function testGracefulDegradationError1142(): void
     {
-        $this->db->setQueryThrows(new \PDOException('SELECT command denied', 1142));
+        $this->db->setQueryThrows($this->realPdoError('SELECT command denied', '42000', 1142));
         $this->assertSame([], $this->ctx->serverVariables());
     }
 
     public function testGracefulDegradationError1227(): void
     {
-        $this->db->setQueryThrows(new \PDOException('Command denied', 1227));
+        $this->db->setQueryThrows($this->realPdoError('Command denied', 'HY000', 1227));
         $this->assertSame([], $this->ctx->serverVariables());
     }
 
@@ -280,7 +280,7 @@ final class ServerContextTest extends TestCase
         $stale = $this->ctx->statusVariables();
 
         // "Gone away" (2006) is NOT an ignorable code: the fetch rethrows.
-        $this->db->setQueryThrows(new \PDOException('MySQL server has gone away', 2006));
+        $this->db->setQueryThrows($this->realPdoError('MySQL server has gone away', 'HY000', 2006));
         $this->expireStatusCacheWindow();
 
         $served = $this->ctx->statusVariables();
@@ -295,7 +295,7 @@ final class ServerContextTest extends TestCase
 
     public function testStatusVariablesRethrowsWhenColdFetchFails(): void
     {
-        $this->db->setQueryThrows(new \PDOException('MySQL server has gone away', 2006));
+        $this->db->setQueryThrows($this->realPdoError('MySQL server has gone away', 'HY000', 2006));
 
         $this->expectException(\PDOException::class);
         $this->ctx->statusVariables();
@@ -320,7 +320,7 @@ final class ServerContextTest extends TestCase
         ]);
         $stale = $this->ctx->serverVariables();
 
-        $this->db->setQueryThrows(new \PDOException('MySQL server has gone away', 2006));
+        $this->db->setQueryThrows($this->realPdoError('MySQL server has gone away', 'HY000', 2006));
         $this->expireServerCacheWindow();
 
         $this->assertSame($stale, $this->ctx->serverVariables());
@@ -329,10 +329,83 @@ final class ServerContextTest extends TestCase
 
     public function testServerVariablesRethrowsWhenColdFetchFails(): void
     {
-        $this->db->setQueryThrows(new \PDOException('MySQL server has gone away', 2006));
+        $this->db->setQueryThrows($this->realPdoError('MySQL server has gone away', 'HY000', 2006));
 
         $this->expectException(\PDOException::class);
         $this->ctx->serverVariables();
+    }
+
+    /**
+     * SQL-A02: build a PDOException in the REAL driver shape — SQLSTATE
+     * rides getCode() (PDOException's public string $code) and the MySQL
+     * driver code rides errorInfo[1]. The old fixtures threw int-only codes,
+     * which is precisely why the broken classification stayed green.
+     */
+    private function realPdoError(string $message, string $sqlstate, int $driverCode): \PDOException
+    {
+        $e = new \PDOException($message);
+        // Exception::$code is protected; real PDO fills it internally.
+        $code = new \ReflectionProperty(\Exception::class, 'code');
+        $code->setAccessible(true);
+        $code->setValue($e, $sqlstate);
+        $e->errorInfo = [$sqlstate, $driverCode, $message];
+        return $e;
+    }
+
+    // ------------------------------------------------------------------
+    // SQL-A02 (admindata-001/-002): latch edge-trigger + error taxonomy.
+    // ------------------------------------------------------------------
+
+    public function testWasResetIsEdgeTriggeredAndRecovers(): void
+    {
+        $this->db->setQueryResult([['Variable_name' => 'Uptime', 'Value' => '100']]);
+        $this->ctx->statusVariables();
+        $this->assertFalse($this->ctx->wasReset(), 'first seed is not a restart');
+
+        $this->db->setQueryResult([['Variable_name' => 'Uptime', 'Value' => '50']]);
+        $this->ctx->refresh();
+        $this->ctx->statusVariables();
+        $this->assertTrue($this->ctx->wasReset(), 'Uptime decrease is a restart');
+
+        // The old latch wrote true and nothing else: from here on every
+        // Sampler tick re-armed firstSample and the rate legs stayed dead
+        // forever. Edge-triggered detection recovers on the next healthy tick.
+        $this->db->setQueryResult([['Variable_name' => 'Uptime', 'Value' => '75']]);
+        $this->ctx->refresh();
+        $this->ctx->statusVariables();
+        $this->assertFalse($this->ctx->wasReset(), 'latch clears on the next healthy sample');
+    }
+
+    public function testRealShapedLostConnectionDegradesGracefully(): void
+    {
+        // HY000 + driver 2013 is what production actually throws; the old
+        // classifier looked at getCode() only and would have rethrown this
+        // into the render path (same crash family as client-001).
+        $this->db->setQueryThrows($this->realPdoError('Lost connection', 'HY000', 2013));
+        $this->assertSame([], $this->ctx->statusVariables());
+    }
+
+    public function testSyntaxErrorSharingSqlstate42000IsNotIgnored(): void
+    {
+        $this->db->setQueryThrows($this->realPdoError('You have an error in your SQL syntax', '42000', 1064));
+        $this->expectException(\PDOException::class);
+        $this->ctx->statusVariables();
+    }
+
+    public function testUnknownColumnError1054IsNotIgnored(): void
+    {
+        // P16 interlock: adminpages-004's broken THREAD_ID join surfaces as
+        // 1054 — it must REsurface, never be swallowed as access-denied.
+        $this->db->setQueryThrows($this->realPdoError("Unknown column 'THREAD_ID'", '42S22', 1054));
+        $this->expectException(\PDOException::class);
+        $this->ctx->statusVariables();
+    }
+
+    public function testPortableSqlstateLegsDegradeGracefully(): void
+    {
+        // PostgreSQL-shaped: SQLSTATE alone (undefined_table) is ignorable.
+        $this->db->setQueryThrows($this->realPdoError('relation does not exist', '42P01', 0));
+        $this->assertSame([], $this->ctx->statusVariables());
     }
 
     /** Force the status TTL window to expire without sleeping 3 seconds. */

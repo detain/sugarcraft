@@ -95,7 +95,7 @@ final class MysqlAdminProviderTest extends TestCase
 
     public function testFetchProcesslistReturnsEmptyOnError(): void
     {
-        $this->db->setQueryThrows(new \PDOException('Access denied', 42000));
+        $this->db->setQueryThrows($this->realPdoError('Access denied', '42000', 1142));
 
         $result = $this->provider->fetchProcesslist();
 
@@ -173,5 +173,20 @@ final class MysqlAdminProviderTest extends TestCase
 
         $this->assertInstanceOf(MysqlAdminProvider::class, $provider);
         $this->assertInstanceOf(AdminProviderInterface::class, $provider);
+    }
+
+    /**
+     * SQL-A02 companion: real PDO error shape (SQLSTATE on getCode(), MySQL
+     * driver code on errorInfo[1]) — the old int-only fixture was exactly the
+     * lie that kept the broken ServerContext classifier green.
+     */
+    private function realPdoError(string $message, string $sqlstate, int $driverCode): \PDOException
+    {
+        $e = new \PDOException($message);
+        $code = new \ReflectionProperty(\Exception::class, 'code');
+        $code->setAccessible(true);
+        $code->setValue($e, $sqlstate);
+        $e->errorInfo = [$sqlstate, $driverCode, $message];
+        return $e;
     }
 }

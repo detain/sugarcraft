@@ -57,7 +57,7 @@ final class ServerContext implements ServerContextInterface
     private ?array $statusVariablesCache = null;
     private ?float $statusVariablesTsCache = null;
     /** @var list<array<string, mixed>>|null */
-    private $pluginsCache = null;
+    private ?array $pluginsCache = null;
     private ?Version $versionCache = null;
     private ?Flavor $flavorCache = null;
     private ?string $versionStringCache = null;
@@ -320,10 +320,13 @@ final class ServerContext implements ServerContextInterface
      * Detect whether the server has restarted since the last poll.
      *
      * Compares the current Uptime status variable against the last observed
-     * value. If the new uptime is less than the previous (wrap or restart),
-     * sets wasResetCache to true. This is the single authoritative source of
-     * restart detection — consumers (Sampler) delegate to
-     * ServerContext via StatusSnapshotProviderInterface::wasReset().
+     * value. SQL-A02 (admindata-001): this is EDGE-TRIGGERED — the single
+     * authoritative write of the latch — true on a decrease, false on every
+     * other comparison. It used to write true and nothing else, so a lone
+     * restart permanently disabled Queries/s, QPS and Running: Sampler
+     * re-armed its firstSample baseline on every tick the latch said true.
+     * Consumers (Sampler) delegate here via
+     * StatusSnapshotProviderInterface::wasReset().
      *
      * Called automatically by statusVariables() after fetching fresh data.
      */
@@ -343,36 +346,65 @@ final class ServerContext implements ServerContextInterface
         // based on, so the compare and the state transition stay consistent.
         $previousUptime = $this->lastUptime;
         $currentUptime = (int) $uptime;
-        if ($previousUptime !== null && $currentUptime < $previousUptime) {
-            $this->wasResetCache = true;
-        }
+        $this->wasResetCache = $previousUptime !== null && $currentUptime < $previousUptime;
         $this->lastUptime = $currentUptime;
     }
 
     /**
-     * MySQL error codes that indicate missing privileges or unavailable features.
+     * MySQL driver codes (PDO errorInfo[1]) that indicate missing privileges,
+     * unavailable features, or a dead transport — the graceful-degradation set.
      *
-     * Using codes instead of message strings makes this locale-independent — MySQL
-     * error messages are returned in the server's locale, but error codes are fixed.
+     * SQL-A02 (admindata-002): the old list matched PDOException::getCode()
+     * against a mix of SQLSTATEs and driver codes, but real PDO puts the
+     * SQLSTATE in getCode() (e.g. '42S02'/'HY000') and the driver code in
+     * errorInfo[1] — so production errors were misclassified on both axes:
+     * degradation paths stayed dead (cold statusVariables() against a lost
+     * connection rethrew into the render backstop — the same crash family as
+     * client-001) while the broad '42000' SQLSTATE would have swallowed
+     * genuine syntax errors had any production error ever carried it.
+     *
+     * Note what is deliberately absent: 1054 (ER_BAD_FIELD_ERROR) — a broken
+     * column reference must surface, not masquerade as access-denied
+     * (adminpages-004's P16 leg leans on this); and no bare '42000' SQLSTATE
+     * (ER_PARSE_ERROR 1064 shares it).
      *
      * @see https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference/
      * @see https://dev.mysql.com/doc/mysql-errors/8.0/en/client-error-reference/
      */
-    private const IGNORABLE_ERROR_CODES = [
-        '42000', // ER_UNKNOWN_ERROR_CLASS / syntax/access denied (general)
-        '1142',  // ER_TABLEACCESS_DENIED_ERROR
-        '1146',  // ER_NO_SUCH_TABLE
-        '1227',  // ER_SPECIFIC_ACCESS_DENIED_ERROR (proxy, replication grants)
-        '2002',  // CR_CONNECTION_ERROR (Can't connect to MySQL server)
-        '2003',  // CR_CONN_HOST_ERROR (Unknown MySQL server host)
-        '2013',  // CR_SERVER_LOST (Lost connection to MySQL server during query)
+    private const IGNORABLE_DRIVER_CODES = [
+        1044,  // ER_DBACCESS_DENIED_ERROR
+        1049,  // ER_BAD_DB_ERROR
+        1142,  // ER_TABLEACCESS_DENIED_ERROR
+        1143,  // ER_COLUMNACCESS_DENIED_ERROR
+        1146,  // ER_NO_SUCH_TABLE
+        1227,  // ER_SPECIFIC_ACCESS_DENIED_ERROR (proxy, replication grants)
+        2002,  // CR_CONNECTION_ERROR (Can't connect to MySQL server)
+        2003,  // CR_CONN_HOST_ERROR (Unknown MySQL server host)
+        2013,  // CR_SERVER_LOST (Lost connection to MySQL server during query)
     ];
 
     /**
+     * Standard SQLSTATEs safe to degrade on (portable across the MySQL and
+     * PostgreSQL drivers): 42S02 base-table-not-found, 28000 invalid
+     * authorization, 3D000 catalog/database disappears, and the PostgreSQL
+     * privilege/undefined-relation pair 42501/42P01.
+     */
+    private const IGNORABLE_SQLSTATES = ['42S02', '28000', '3D000', '42501', '42P01'];
+
+    /**
      * True for errors that indicate missing privileges or unavailable features.
+     *
+     * Classification order (SQL-A02): driver code from errorInfo[1] first —
+     * it is the precise signal; then a deliberate SQLSTATE set. An int-coded
+     * hand-built PDOException (test fixtures with no errorInfo) matches by
+     * neither and rethrows — that is the honest default.
      */
     private function isIgnorableError(\PDOException $e): bool
     {
-        return \in_array((string) $e->getCode(), self::IGNORABLE_ERROR_CODES, true);
+        $driverCode = isset($e->errorInfo[1]) ? (int) $e->errorInfo[1] : 0;
+        if ($driverCode !== 0 && \in_array($driverCode, self::IGNORABLE_DRIVER_CODES, true)) {
+            return true;
+        }
+        return \in_array((string) $e->getCode(), self::IGNORABLE_SQLSTATES, true);
     }
 }
