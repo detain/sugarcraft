@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Tests\Modules;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Modules\Clock\ClockModule;
+use SugarCraft\Dashboard\Modules\Clock\TickMsg;
 
 final class ClockModuleTest extends TestCase
 {
@@ -104,5 +105,40 @@ final class ClockModuleTest extends TestCase
         // Each update returns a new instance
         $this->assertNotSame($module, $next1);
         $this->assertNotSame($next1, $next2);
+    }
+
+    public function testNonTickMessagesRebuildNoClockTime(): void
+    {
+        // D-110 per-event law: DateTimeImmutable + zone construction belongs
+        // behind the TickMsg gate, not on every routed message.
+        $module = new ClockModule();
+        ClockModule::resetTimeBuildCountForTesting();
+
+        $msg = new class implements Msg {};
+        $current = $module;
+        for ($i = 0; $i < 100; $i++) {
+            [$current] = $current->update($msg);
+        }
+
+        $this->assertSame(0, ClockModule::timeBuildCountForTesting());
+        // The fresh instance still renders the boot-sampled time.
+        $this->assertMatchesRegularExpression('/^\d{2}:\d{2}:\d{2}$/', $current->view());
+
+        [$ticked] = $current->update(new TickMsg());
+        $this->assertSame(1, ClockModule::timeBuildCountForTesting());
+        $this->assertNotSame($current, $ticked);
+    }
+
+    public function testTickArmStillReSamplesAndReturnsCmd(): void
+    {
+        $module = new ClockModule();
+        ClockModule::resetTimeBuildCountForTesting();
+
+        [$next, $cmd] = $module->update(new TickMsg());
+
+        $this->assertSame(1, ClockModule::timeBuildCountForTesting());
+        $this->assertInstanceOf(ClockModule::class, $next);
+        // Tick arm keeps re-arming while unconsulted (legacy chain shape).
+        $this->assertNotNull($cmd);
     }
 }

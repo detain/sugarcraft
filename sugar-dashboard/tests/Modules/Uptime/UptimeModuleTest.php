@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Modules\Uptime;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Module\ProcAvailability;
 use SugarCraft\Dashboard\Modules\Uptime\TickMsg;
 use SugarCraft\Dashboard\Modules\Uptime\UptimeModule;
@@ -60,5 +61,29 @@ final class UptimeModuleTest extends TestCase
             '/^(\d+d \d+h \d+m|\d+h \d+m|\d+m)$/',
             $next->view()
         );
+    }
+
+    public function testNonTickMessagesSampleNoProcUptime(): void
+    {
+        // D-110 per-event law: /proc I/O belongs behind the TickMsg gate —
+        // 100 non-tick messages must cost zero reads and leave the state
+        // value untouched (fresh instance, equal uptime).
+        UptimeModule::resetSampleCountForTesting();
+        $module = new UptimeModule();
+
+        $msg = new class implements Msg {};
+        $current = $module;
+        for ($i = 0; $i < 100; $i++) {
+            [$current] = $current->update($msg);
+        }
+
+        $this->assertSame(0, UptimeModule::sampleCountForTesting());
+        $this->assertSame('N/A', $current->view());
+        $this->assertNotSame($module, $current);
+
+        [$ticked, $cmd] = $current->update(new TickMsg());
+        $this->assertSame(1, UptimeModule::sampleCountForTesting());
+        $this->assertNotNull($cmd);
+        $this->assertInstanceOf(UptimeModule::class, $ticked);
     }
 }

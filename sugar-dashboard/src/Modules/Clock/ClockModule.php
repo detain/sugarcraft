@@ -18,6 +18,8 @@ final class ClockModule extends BaseModule
 {
     private \DateTimeImmutable $time;
 
+    private static int $timeBuildCount = 0;
+
     public function __construct(
         private readonly bool $showDate = false,
         private readonly ?string $timezone = null,
@@ -37,11 +39,14 @@ final class ClockModule extends BaseModule
 
     public function update(Msg $msg): array
     {
-        $newTime = $this->createTime();
+        // Per-event law (SystemModule docblock): rebuilding DateTimeImmutable
+        // + zone on every message is the same sin as per-event /proc I/O —
+        // the wall read belongs behind the tick gate. Non-tick returns an
+        // equal-valued fresh instance, zero time constructions.
         if ($msg instanceof TickMsg) {
-            return [$this->withTime($newTime), $this->selfTickCmd()];
+            return [$this->withTime($this->createTime()), $this->selfTickCmd()];
         }
-        return [$this->withTime($newTime), null];
+        return [$this->withTime($this->time), null];
     }
 
     protected function tickIntervalSeconds(): ?float
@@ -67,6 +72,20 @@ final class ClockModule extends BaseModule
         return $timeStr;
     }
 
+    /**
+     * Test seam (ProcAvailability style): counts createTime() bodies, so the
+     * tick-gating law is pinned directly.
+     */
+    public static function timeBuildCountForTesting(): int
+    {
+        return self::$timeBuildCount;
+    }
+
+    public static function resetTimeBuildCountForTesting(): void
+    {
+        self::$timeBuildCount = 0;
+    }
+
     public function minSize(): array
     {
         return $this->showDate ? [20, 5] : [12, 3];
@@ -84,6 +103,7 @@ final class ClockModule extends BaseModule
 
     private function createTime(): \DateTimeImmutable
     {
+        ++self::$timeBuildCount;
         $timezone = $this->timezone !== null
             ? new \DateTimeZone($this->timezone)
             : new \DateTimeZone(date_default_timezone_get());

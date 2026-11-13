@@ -20,6 +20,8 @@ final class UptimeModule extends BaseModule
 
     private string $uptime = 'N/A';
 
+    private static int $sampleCount = 0;
+
     public function name(): string
     {
         return 'uptime';
@@ -32,12 +34,14 @@ final class UptimeModule extends BaseModule
 
     public function update(Msg $msg): array
     {
-        $newUptime = $this->readUptimeFromProc();
-        $nextModule = $this->withUptime($newUptime);
+        // Per-event law (SystemModule docblock): /proc I/O belongs behind
+        // the tick gate only — key presses and forwarded messages must not
+        // re-sample the system. Non-tick returns an equal-valued fresh
+        // instance, zero syscalls.
         if ($msg instanceof TickMsg) {
-            return [$nextModule, $this->selfTickCmd()];
+            return [$this->withUptime($this->readUptimeFromProc()), $this->selfTickCmd()];
         }
-        return [$nextModule, null];
+        return [$this->withUptime($this->uptime), null];
     }
 
     protected function tickIntervalSeconds(): ?float
@@ -56,6 +60,20 @@ final class UptimeModule extends BaseModule
         return $this->uptime;
     }
 
+    /**
+     * Test seam (ProcAvailability style): counts readUptimeFromProc() bodies
+     * entered, so the tick-gating law is pinned directly.
+     */
+    public static function sampleCountForTesting(): int
+    {
+        return self::$sampleCount;
+    }
+
+    public static function resetSampleCountForTesting(): void
+    {
+        self::$sampleCount = 0;
+    }
+
     public function minSize(): array
     {
         return [15, 3];
@@ -70,6 +88,8 @@ final class UptimeModule extends BaseModule
 
     private function readUptimeFromProc(): string
     {
+        ++self::$sampleCount;
+
         // Door-probe: the door is probed once per
         // process via ProcAvailability; absence carries the visible 'n/a'
         // sentinel (was 'N/A'). @ + ===false stays as the probe→read race net

@@ -24,6 +24,13 @@ use SugarCraft\Core\Model;
  * `Closure(): ?Msg`. PHP lacks tuples; destructure with
  * `[$module, $cmd] = $module->update($msg)`.
  *
+ * Per-event law: `update()` runs for EVERY message the host routes to the
+ * module — key presses, focus moves, forwarded child messages alike. Any
+ * sampling work (system file I/O, wall-clock/timezone rebuilds, subprocess
+ * probes) belongs behind that message's own trigger (typically the tick
+ * marker), never on the unconditional path: an unguarded per-event read
+ * multiplies a periodic cost by every UI interaction.
+ *
  * @extends Model
  */
 interface Module extends Model

@@ -13,6 +13,7 @@ use SugarCraft\Dashboard\Modules\Generic\GenericModule;
 use SugarCraft\Dashboard\Modules\Generic\TickMsg;
 use SugarCraft\Dashboard\Modules\Greeting\GreetingModule;
 use SugarCraft\Dashboard\Modules\System\SystemModule;
+use SugarCraft\Dashboard\Modules\Uptime\TickMsg as UptimeTickMsg;
 use SugarCraft\Dashboard\Modules\Uptime\UptimeModule;
 
 /**
@@ -135,9 +136,10 @@ final class ModuleSpecConformanceTest extends TestCase
     public function testUptimeModuleReturnsFormattedUptime(): void
     {
         $module = new UptimeModule();
-        $tickMsg = new class implements Msg {};
-
-        [$nextModule] = $module->update($tickMsg);
+        // D-110 per-event law: /proc sampling lives behind the module's own
+        // TickMsg gate now, so the pin must drive a real tick (the old
+        // anonymous-msg label was a misnomer leaning on ungated I/O).
+        [$nextModule] = $module->update(new UptimeTickMsg());
         $view = $nextModule->view();
 
         // Should contain numbers and time units (d, h, m)
