@@ -827,8 +827,12 @@ final class DiscordAccount implements PlatformFace
         $action = \strtolower(\trim((string) ($args[0] ?? 'list')));
         if ($action === 'grant' || $action === 'approve') {
             $code = \strtoupper(\trim((string) ($args[1] ?? '')));
-            $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
-            $answer = $paired === null ? Lang::t('channels.discord.pair.no_match') : Lang::t('channels.discord.pair.paired', ['paired' => (string) $paired]);
+            $result = $code === '' ? ['state' => 'unknown'] : $this->pairing->approve($this->account, $code);
+            $answer = match ($result['state']) {
+                'granted' => Lang::t('channels.discord.pair.paired', ['paired' => (string) ($result['userId'] ?? '')]),
+                'malformed' => Lang::t('channels.discord.pair.malformed'),
+                default => Lang::t('channels.discord.pair.no_match'),
+            };
             // Deprecated spelling: still works, but say so once per use.
             $say($action === 'approve' ? Lang::t('channels.discord.pair.deprecated_approve') . "\n" . $answer : $answer);
 

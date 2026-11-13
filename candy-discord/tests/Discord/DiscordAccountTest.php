@@ -304,6 +304,23 @@ final class DiscordAccountTest extends TestCase
         self::assertSame([], $this->pairing->pending('default'));
     }
 
+    public function testPairGrantOfAMalformedCodeWarnsWithoutBurningIt(): void
+    {
+        // (044) an entry with no requester is answerable as 'incomplete' and
+        // stays pending to expire — it is never consumed, never 'no match'.
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
+        $now = \time();
+        $this->store->writeDiscordPairing('default', [
+            'NOREQ111' => ['userId' => '', 'createdAt' => $now, 'expiresAt' => $now + 3600, 'lastReminderAt' => $now],
+        ], []);
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['grant', 'NOREQ111'], 'boss', true);
+        $this->settle();
+        $said = (string) $this->api->lastCallFor('/messages')['body']['content'];
+        self::assertStringContainsString('incomplete', $said, 'the notice names the real state');
+        self::assertStringNotContainsString('No pending pairing matches', $said, 'it is not the no-match lie');
+        self::assertContains('NOREQ111', \array_column($this->pairing->pending('default'), 'code'), 'the row stays pending to expire');
+    }
+
     public function testPairingIsAnApproversActAndCodesListOnlyInADirectMessage(): void
     {
         // Mirrors candy-msteams: an empty roster answers nobody, and a non-approver

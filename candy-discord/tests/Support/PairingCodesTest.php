@@ -56,7 +56,7 @@ final class PairingCodesTest extends TestCase
         $rows = $this->codes->pending('default', $now);
         self::assertCount(1, $rows, 'a live all-digit code must not be pruned');
         self::assertSame('23456789', $rows[0]['code']);
-        self::assertNotNull($this->codes->approve('default', '23456789', $now));
+        self::assertSame('granted', $this->codes->approve('default', '23456789', $now)['state']);
     }
 
     public function testFreshPeersReceiveAnEightCharacterCodeFromTheSafeAlphabet(): void
@@ -100,16 +100,43 @@ final class PairingCodesTest extends TestCase
         $issued = $this->codes->request('default', 'peer-1');
         $code = (string) $issued['code'];
 
-        self::assertSame('peer-1', $this->codes->approve('default', $code));
+        self::assertSame(['state' => 'granted', 'userId' => 'peer-1'], $this->codes->approve('default', $code));
         self::assertTrue($this->codes->isPaired('default', 'peer-1'));
         self::assertSame(['kind' => 'paired'], $this->codes->request('default', 'peer-1'));
-        self::assertNull($this->codes->approve('default', $code), 'the code is spent');
+        self::assertSame('unknown', $this->codes->approve('default', $code)['state'], 'the code is spent');
         self::assertSame([], $this->codes->pending('default'));
     }
 
-    public function testApproveOnAnUnknownCodeReturnsNull(): void
+    public function testApproveOnAnUnknownCodeSaysUnknown(): void
     {
-        self::assertNull($this->codes->approve('default', 'QQQQQQQQ'));
+        self::assertSame('unknown', $this->codes->approve('default', 'QQQQQQQQ')['state']);
+    }
+
+    public function testAMalformedCodeIsNotBurnedAndSaysSo(): void
+    {
+        // (044) a stored entry with no requester can never pair anyone:
+        // approve() must NOT consume it — it expires on its own like a dead row.
+        $now = \time();
+        $this->store->writeDiscordPairing('default', [
+            'NOREQ111' => ['userId' => '', 'createdAt' => $now, 'expiresAt' => $now + 3600, 'lastReminderAt' => $now],
+        ], []);
+
+        self::assertSame('malformed', $this->codes->approve('default', 'NOREQ111')['state']);
+        self::assertCount(1, $this->codes->pending('default'), 'the dead-on-arrival row stays pending to expire');
+        self::assertSame('malformed', $this->codes->approve('default', 'NOREQ111')['state'], 'and stays answerable as malformed');
+    }
+
+    public function testRegisterLiveSecretsRedactsStoredCodesAfterARestart(): void
+    {
+        // (040) the boot window: a fresh TextSafety carries only the tokens,
+        // so a code minted before the restart leaks until re-registered.
+        $code = (string) $this->codes->request('default', 'peer-1')['code'];
+        $fresh = new TextSafety();
+        self::assertStringContainsString($code, $fresh->outbound('transcript mentions ' . $code), 'before the boot hook the code leaks');
+
+        $rebuilt = new PairingCodes(new CredentialStore($this->path), $fresh);
+        $rebuilt->registerLiveSecrets(['default']);
+        self::assertStringNotContainsString($code, $fresh->outbound('transcript mentions ' . $code), 'the boot hook redacts live pending codes');
     }
 
     public function testExpiredRowsArePrunedFromDiskAndFreeTheirSlot(): void
@@ -135,7 +162,7 @@ final class PairingCodesTest extends TestCase
         $code = (string) $this->codes->request('default', 'peer-1')['code'];
         $rebuilt = new PairingCodes(new CredentialStore($this->path), new TextSafety());
         self::assertSame('silent', $rebuilt->request('default', 'peer-1')['kind']);
-        self::assertSame('peer-1', $rebuilt->approve('default', $code));
+        self::assertSame(['state' => 'granted', 'userId' => 'peer-1'], $rebuilt->approve('default', $code));
     }
 
     public function testTheStoreFileIsAlwaysZeroSixZeroZero(): void

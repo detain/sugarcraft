@@ -105,25 +105,54 @@ final class PairingCodes
     /**
      * Redeem a code for its peer id: exactly one pending entry matches, it
      * is removed, and its userId joins the allowlist in the same atomic
-     * write. Returns the paired user id, or null for no/such/expired code.
+     * write. A stored entry with no requester can never pair anyone, so it
+     * is NOT burned here — it stays pending and expires like any dead row
+     * (044: burning it made the honest answer 'no match' a lie).
+     *
+     * @return array{state:string, userId?:string} state is 'granted'
+     *                                             (userId present),
+     *                                             'unknown' or 'malformed'
      */
-    public function approve(string $account, string $code, ?int $now = null): ?string
+    public function approve(string $account, string $code, ?int $now = null): array
     {
         $now ??= time();
         $pending = $this->livePending($account, $now);
         if (!isset($pending[$code])) {
-            return null;
+            return ['state' => 'unknown'];
         }
 
         $userId = strval($pending[$code]['userId'] ?? '');
+        if ($userId === '') {
+            return ['state' => 'malformed'];
+        }
+
         unset($pending[$code]);
         $allowUsers = $this->store->discordAllowUsers($account);
-        if ($userId !== '' && !in_array($userId, $allowUsers, true)) {
+        if (!in_array($userId, $allowUsers, true)) {
             $allowUsers[] = $userId;
         }
         $this->store->writeDiscordPairing($account, $pending, $allowUsers);
 
-        return $userId === '' ? null : $userId;
+        return ['state' => 'granted', 'userId' => $userId];
+    }
+
+    /**
+     * Boot hook for the redaction law (040): a restart builds a fresh
+     * TextSafety carrying only the tokens, so codes minted before the
+     * restart stay un-redacted until re-registered here. livePending()
+     * prunes dead rows on the way, so only codes that can still be
+     * answered join the roster.
+     *
+     * @param list<string> $accounts
+     */
+    public function registerLiveSecrets(array $accounts, ?int $now = null): void
+    {
+        $now ??= time();
+        foreach ($accounts as $account) {
+            foreach (array_keys($this->livePending($account, $now)) as $code) {
+                $this->safety->addSecret(strval($code));
+            }
+        }
     }
 
     public function isPaired(string $account, string $peerId): bool

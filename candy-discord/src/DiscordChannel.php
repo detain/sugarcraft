@@ -175,6 +175,9 @@ final class DiscordChannel implements ChannelInterface
         $this->safety = (new TextSafety())->withSecrets($secrets);
         // The serve token joins the roster on every dial (below).
         $pairing = new PairingCodes($store, $this->safety);
+        // (040) codes minted before this restart must rejoin the fresh
+        // redactor the moment pairing exists, or the restart window leaks them.
+        $pairing->registerLiveSecrets(array_keys($tokens));
 
         $dir = Bootstrap::trustedConfigDirPath() . '/discord';
         if (!is_dir($dir)) {
