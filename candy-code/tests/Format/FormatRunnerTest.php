@@ -164,6 +164,22 @@ final class FormatRunnerTest extends TestCase
         $this->assertSame('', $report->render());
     }
 
+    public function testTheRestorePublishesAtomicallyKeepingModeAndLeavingNoTemp(): void
+    {
+        $this->put('src/a.php', "one\n");
+        chmod($this->root . '/src/a.php', 0o640);
+        $formatter = FormatRunner::new()->withCommands(['php' => 'printf "" > {file}']);
+
+        $report = $formatter->format('src/a.php', $this->root);
+
+        $this->assertNotNull($report);
+        $this->assertSame('the command emptied the file', $report->restored);
+        clearstatcache(true);
+        $this->assertSame("one\n", file_get_contents($this->root . '/src/a.php'));
+        $this->assertSame(0o640, fileperms($this->root . '/src/a.php') & 0o777, 'the restore kept the file mode');
+        $this->assertSame(['a.php'], array_map('basename', glob($this->root . '/src/{,.}*[!.]', GLOB_BRACE) ?: []), 'no temp orphan left behind');
+    }
+
     public function testAFormatterThatRemovesTheFileIsUndone(): void
     {
         $this->put('src/a.php', "one\n");

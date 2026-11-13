@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Code\App\ErrorMsg;
 use SugarCraft\Code\App\StatusMsg;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\AtomicFileWriter;
 
 /**
  * The `/editor` command (roadmap 5.14h): compose the next prompt in the user's
@@ -245,7 +246,10 @@ final class EditorCommand
             return null;
         }
 
-        if (@file_put_contents($path, $initial) === false) {
+        try {
+            // replace() keeps the 0600 inode's mode, so the prompt text stays owner-only.
+            AtomicFileWriter::replace($path, $initial);
+        } catch (\RuntimeException) {
             @unlink($path);
 
             return null;

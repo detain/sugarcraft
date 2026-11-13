@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Format;
 
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\ShellInvocation;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
@@ -435,11 +436,26 @@ final class FormatRunner
         );
     }
 
-    /** Put the pre-run bytes back; false when even that failed. */
+    /**
+     * Put the pre-run bytes back; false when even that failed.
+     *
+     * Published write-then-rename, never a truncating write: a bare
+     * file_put_contents() killed or failing mid-restore leaves the user's file
+     * half-written, which is worse than the formatter damage being undone.
+     * PREMISE: by the time guard() runs the formatter child has exited or been
+     * killed (runCaptured() reaps it before returning), so nothing else is
+     * writing the path and a rename cannot race it.
+     */
     private function restore(string $absolute, string $bytes): bool
     {
         clearstatcache(true, $absolute);
 
-        return @file_put_contents($absolute, $bytes) !== false;
+        try {
+            AtomicFileWriter::replace($absolute, $bytes);
+        } catch (\RuntimeException) {
+            return false;
+        }
+
+        return true;
     }
 }
