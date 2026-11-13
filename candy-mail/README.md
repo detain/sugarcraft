@@ -51,6 +51,16 @@ store, or manage an inbox.
 composer require sugarcraft/candy-mail
 ```
 
+Sibling `sugarcraft/*` requirements track `dev-master`, so the plain command above
+only resolves when dev stability is allowed: pin the package with `composer require
+sugarcraft/candy-mail:@dev`, or set `minimum-stability: "dev"` together with
+`prefer-stable: true` in your consuming manifest. The transitive pull is the part
+that bites a naive consumer: this package's own `sugarcraft/sugar-async` and
+`sugarcraft/sugar-core` requires are themselves pinned to `dev-master`, so
+allowing dev only for candy-mail still hits the stability wall on those siblings —
+the `@dev` pin (or the manifest-wide pair) covers the whole closure. The global
+install takes the same form: `composer global require sugarcraft/candy-mail:@dev`.
+
 The `bin/candy-mail` bootstrap walks an autoload candidate ladder (package-local
 `vendor/autoload.php` first, then the consumer project's `../../../autoload.php`), so
 the CLI runs from a standalone clone, a composer install, or a built phar (which reads
