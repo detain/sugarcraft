@@ -446,6 +446,37 @@ final class RailTest extends TestCase
         self::assertLessThanOrEqual(6, Width::string(explode("\n", $starved)[0]));
     }
 
+    public function testFrameHeightReservesTheRailFromGeometryNotAPaint(): void
+    {
+        // sugar-gallery-026 (G-4 default-leg): a diff-paint host sizes its
+        // damage rect BEFORE the first render. The accessor is the declared
+        // height; the pin compares it to the measured frame line by line.
+        $bare = [new PosterCard('0', 'Card 0'), new PosterCard('1', 'Card 1')];
+        $rail = new Rail('Browse', $bare);
+
+        self::assertSame(4, $rail->frameHeight(2));
+        self::assertSame(count(explode("\n", $rail->render(46, true, 10, 2))), $rail->frameHeight(2));
+
+        // One bar anywhere raises the whole rail — joinHorizontal pads the
+        // shorter blocks to the tallest, so reserving per-card would lie.
+        $mixed = new Rail('Browse', [$bare[0], $bare[1]->withProgress(0.5)]);
+        self::assertSame(5, $mixed->frameHeight(2));
+        self::assertSame(5, count(explode("\n", $mixed->render(46, true, 10, 2))));
+
+        // The bound is UPPER, never lower: railWidth 46 shows four of the
+        // twelve cards, so card 11's bar reserves a line the paint omits —
+        // the owner clears the spare, it is never unexpectedly inked.
+        $many = array_fill(0, 12, $bare[0]);
+        $many[11] = $bare[0]->withProgress(0.9);
+        $wide = new Rail('Browse', $many);
+        self::assertSame(5, $wide->frameHeight(2));
+        self::assertSame(4, count(explode("\n", $wide->render(46, true, 10, 2))));
+
+        // And the degenerate poster height rides the same floor render() does.
+        self::assertSame(3, $rail->frameHeight(0));
+        self::assertSame(3, count(explode("\n", $rail->render(46, true, 10, 0))));
+    }
+
     public function testTheFullRailFrameIsTheGoldenItWasAlwaysDocumentedToBe(): void
     {
         // sugar-gallery-026: every prior assertion sampled the frame (one

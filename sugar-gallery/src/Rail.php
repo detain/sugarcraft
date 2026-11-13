@@ -313,6 +313,32 @@ final readonly class Rail
     }
 
     /**
+     * Lines {@see render()} will emit: one head line, the poster block, the
+     * title row, plus a progress-bar row when ANY loaded card carries
+     * progress. sugar-gallery-026 (G-4 default-leg): the height is reserved
+     * from declared geometry instead of measured off a first paint — and
+     * `Layout::joinHorizontalWithSpacing()` pads the uneven blocks to the
+     * tallest one, so one bar anywhere raises the whole rail.
+     *
+     * CONSERVATIVE UPPER BOUND: the rail paints at most `perRow()` cards, so
+     * a bar on an off-window card reserves a line `render()` will not paint.
+     * Diff-paint owners that size a damage rect from this must clear the
+     * spare line rather than trust it to carry ink.
+     */
+    public function frameHeight(int $posterHeight): int
+    {
+        $bar = 0;
+        foreach ($this->cards as $card) {
+            if ($card->progress !== null) {
+                $bar = 1;
+                break;
+            }
+        }
+
+        return 1 + max(1, $posterHeight) + 1 + $bar;
+    }
+
+    /**
      * Cap a plain (already control-stripped) header line at $max visible
      * cells, with an ellipsis on overflow — the same shape
      * PosterCard::render() uses for plain titles, so both header rows keep

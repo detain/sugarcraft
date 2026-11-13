@@ -408,7 +408,11 @@ above. Affordances: `positionText()` and `fitsViewport($cols, $rows)`; the stati
 `withTitle()` / `withCursor()` (clamped into the card list),
 `moveCursor($delta, $perRow)` (scrolls minimally to keep the cursor in view),
 `focusedCard()`, `isEmpty()`, and the static layout helper
-`Rail::perRow($railWidth, $cardWidth, $spacing)` (how many cards fit a row). `Rail::render()` takes `focused:` as a
+`Rail::perRow($railWidth, $cardWidth, $spacing)` (how many cards fit a row) and
+`Rail::frameHeight($posterHeight)` (how many lines `render()` emits — head, poster
+rows, title, plus a progress-bar row when ANY loaded card carries progress; a bar on
+an off-window card reserves a line the paint omits, so the bound is upper, never
+lower). `Rail::render()` takes `focused:` as a
 **required** argument — the asymmetry against `PosterGrid::render(bool $focused =
 true)` is deliberate (a rail in a media browser is usually *not* the focused pane
 and defaulting it lit up the wrong row in early apps). `Rail::render()` takes no
