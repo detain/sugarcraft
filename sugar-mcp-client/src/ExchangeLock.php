@@ -190,7 +190,8 @@ final class ExchangeLock
      *    residue) say nothing about their owner and are left — including
      *    world-readable transcript residue on a shared /tmp, which is the
      *    accepted cost of never deleting a file this process cannot prove
-     *    dead (an operator may remove them by hand);
+     *    dead (an operator may remove them by hand; the README names the
+     *    residue under *Trust boundary* and *Fork safety*);
      *  - it was made in THIS pid namespace. A pid read from another namespace
      *    (a container sharing /tmp) names a different process, or none — a
      *    live owner there would look dead from here;

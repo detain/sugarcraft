@@ -144,6 +144,15 @@ where the `ExchangeLock` file lives — useful when `TMPDIR` moves or a janitor
 sweeps it; the directory must exist, and a lock that cannot be created there
 fails `start()` loudly rather than silently sharing less.
 
+**Pre-owner-in-name lock residue is never deleted.** Files from before the
+owner-in-name law carry `tempnam()`'s old shape
+(`sugar-mcp-client-lock-XXXXXX`) — the name says nothing about an owner, so
+`ExchangeLock::sweepStale()` leaves them forever, and on a shared `/tmp` the
+residue can include world-readable transcript bytes written at ambient umask
+by an older version. That is the accepted cost of the never-delete-unprovable
+law (see *Fork safety*), not an oversight; the manual remedy is the
+operator's.
+
 **Tool metadata is server output too.** `listTools()` hands back the child's
 self-declared names, descriptions, and input schemas. A control-byte gate
 refuses malformed tool *names* at parse time, but *descriptions* are
@@ -505,8 +514,14 @@ process that started it — one server shared by the whole process tree:
   before it stops its server leaves the file behind, so every new connection
   first removes the files whose owner pid is gone in this pid namespace and
   whose `flock` nobody holds (`ExchangeLock::sweepStale()`). Files of live
-  owners, of other pid namespaces, and pre-existing `tempnam()`-named files
-  are left alone.
+  owners and of other pid namespaces are left alone — and so is the residue
+  from before the owner-in-name law: `tempnam()`-shaped
+  `sugar-mcp-client-lock-XXXXXX` names carry no owner to probe, so they
+  survive every sweep, including any world-readable transcript bytes an older
+  version left at ambient umask on a shared `/tmp`. Keeping what cannot be
+  proven dead is the law (never unlink another process's live file on a
+  guess); the operator's remedy is manual — after confirming nothing holds a
+  file open (`lsof <path>` empty), remove the old-shape files by hand.
 
 stderr is not locked — it is diagnostics only.
 
