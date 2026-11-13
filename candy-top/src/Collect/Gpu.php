@@ -10,6 +10,7 @@ use SugarCraft\Top\Collect\Gpu\DrmScan;
 use SugarCraft\Top\Collect\Gpu\Settled;
 use SugarCraft\Top\Collect\Gpu\SmiProcess;
 use SugarCraft\Top\Collect\Process\AbsoluteSearchPath;
+use SugarCraft\Top\Collect\Process\AsyncCommand;
 
 use function React\Promise\resolve;
 
@@ -828,6 +829,41 @@ final class Gpu implements Backend
     }
 
     /**
+     * `$argv` with argv[0] resolved to an executable: a discovered
+     * candidate is an absolute path; a bare name goes through the PATH
+     * sweep — AbsoluteSearchPath only (candy-top-035): the deleted local
+     * which() hand-rolled the doctrine this class exists to legislate,
+     * joining bare names onto raw (possibly relative) PATH entries, so a
+     * relative hit could resolve against the long-lived TUI's cwd.
+     *
+     * @param list<string> $argv
+     * @return list<string>|null null when there is no such executable
+     */
+    private static function executable(array $argv): ?array
+    {
+        if (str_contains($argv[0], '/')) {
+            if (!is_file($argv[0]) || !is_executable($argv[0])) {
+                return null;
+            }
+        } else {
+            $binary = null;
+            foreach (AbsoluteSearchPath::directories() as $dir) {
+                $candidate = $dir . '/' . $argv[0];
+                if (is_file($candidate) && is_executable($candidate)) {
+                    $binary = $candidate;
+                    break;
+                }
+            }
+            if ($binary === null) {
+                return null;
+            }
+            $argv[0] = $binary;
+        }
+
+        return $argv;
+    }
+
+    /**
      * The default loop-driven runner.
      *
      * @param list<string> $argv
@@ -837,37 +873,20 @@ final class Gpu implements Backend
     {
         $argv = self::executable($argv);
 
-        return $argv === null ? resolve([GpuOutcome::Absent, '']) : SmiProcess::launch($argv);
-    }
-
-    /**
-     * `$argv` with argv[0] resolved to an executable: a discovered
-     * candidate is an absolute path; a bare name goes through PATH.
-     *
-     * @param list<string> $argv
-     * @return list<string>|null null when there is no such executable
-     */
-    private static function executable(array $argv): ?array
-    {
-        $binary = str_contains($argv[0], '/')
-            ? (is_file($argv[0]) && is_executable($argv[0]) ? $argv[0] : null)
-            : self::which($argv[0]);
-        if ($binary === null) {
-            return null;
-        }
-        $argv[0] = $binary;
-
-        return $argv;
-    }
-
-    private static function which(string $command): ?string
-    {
-        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $dir) {
-            if ($dir !== '' && is_file($dir . '/' . $command) && is_executable($dir . '/' . $command)) {
-                return $dir . '/' . $command;
-            }
+        if ($argv === null) {
+            return resolve([GpuOutcome::Absent, '']);
         }
 
-        return null;
+        // candy-top-036: a D-state nvidia-smi ignores SIGKILL, so every
+        // backoff retry used to stack another immortal child and pinned
+        // fd on the one long-lived spawner in the app. Refuse the tick
+        // while a same-binary child lives — Timeout, the transient arm,
+        // keeps the backoff honest. liveFor() reaps exited children as
+        // it counts, which is also the periodic reap this lane lacked.
+        if (AsyncCommand::liveFor($argv[0]) > 0) {
+            return resolve([GpuOutcome::Timeout, '']);
+        }
+
+        return SmiProcess::launch($argv);
     }
 }

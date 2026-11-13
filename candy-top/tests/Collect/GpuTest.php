@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\Gpu\Settled;
 use SugarCraft\Top\Collect\GpuOutcome;
+use SugarCraft\Top\Collect\Process\AsyncCommand;
 use SugarCraft\Top\Collect\Sentinel;
 
 final class GpuTest extends TestCase
@@ -687,6 +688,64 @@ final class GpuTest extends TestCase
         $gpu = Gpu::new(static fn (array $argv): \React\Promise\PromiseInterface => (new \React\Promise\Deferred())->promise(), candidates: ['nvidia-smi']);
         $this->expectException(\LogicException::class);
         $gpu->sample();
+    }
+
+    public function testABareNameNeverResolvesThroughRelativePathEntries(): void
+    {
+        // candy-top-035: the deleted hand-rolled which() joined bare names
+        // onto raw PATH entries, so "rel/nvidia-smi" survived the spawn
+        // gate (it contains a '/') and ran against the TUI's cwd.
+        $base = sys_get_temp_dir() . '/candy-top-hijack-' . bin2hex(random_bytes(4));
+        mkdir($base . '/rel', 0777, true);
+        $marker = $base . '/hijacked';
+        file_put_contents($base . '/rel/nvidia-smi', "#!/bin/sh\ntouch {$marker}\necho x\n");
+        chmod($base . '/rel/nvidia-smi', 0755);
+        $oldCwd = getcwd();
+        $oldPath = getenv('PATH');
+        chdir($base);
+        putenv('PATH=rel:.');
+        try {
+            $gpu = Gpu::new(candidates: ['nvidia-smi'], queries: [Gpu::QUERY]);
+            [$snap] = Settled::value($gpu->sampleAsync());
+
+            $this->assertSame([], $snap->devices);
+            $this->assertFileDoesNotExist($marker, 'a relative PATH entry never reaches spawn');
+        } finally {
+            chdir($oldCwd);
+            putenv($oldPath === false ? 'PATH' : 'PATH=' . $oldPath);
+            @unlink($marker);
+            @unlink($base . '/rel/nvidia-smi');
+            @rmdir($base . '/rel');
+            @rmdir($base);
+        }
+    }
+
+    public function testAStuckBinaryRefusesToStackAnotherChild(): void
+    {
+        // candy-top-036: while a same-binary child lives, the lane answers
+        // Timeout without spawning — no stacked immortal, no pinned fd.
+        $script = sys_get_temp_dir() . '/candy-top-stuck-' . bin2hex(random_bytes(4)) . '.sh';
+        file_put_contents($script, "#!/bin/sh\nsleep 1\n");
+        chmod($script, 0755);
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        AsyncCommand::launch([$script], $loop, 5.0);
+        $loop->addTimer(0.05, static fn () => $loop->stop());
+        $loop->run(); // spawn + register the wedged child
+        try {
+            $this->assertSame(1, AsyncCommand::liveCount());
+
+            $gpu = Gpu::new(candidates: [$script], queries: [Gpu::QUERY]);
+            [$settled, $value] = Settled::peek($p = $gpu->sampleAsync());
+            $this->assertTrue($settled, 'the refusal is immediate, not a second hung child');
+            [$snap] = $value;
+            $this->assertSame([], $snap->devices, 'refused tick renders sentinels, never wrong numbers');
+            $this->assertSame(1, AsyncCommand::liveCount(), 'no child stacked onto the stuck one');
+        } finally {
+            $loop->addTimer(1.5, static fn () => $loop->stop());
+            $loop->run(); // let the seeded sleep finish and reap itself
+            AsyncCommand::shutdown(3.0);
+            @unlink($script);
+        }
     }
 
     public function testAnInjectedBlockingRunnerAlsoServesSampleAsync(): void
