@@ -338,6 +338,22 @@ final class StdioMcpServer implements McpServer
      */
     private static function defaultClientInfo(): array
     {
+        return [
+            'name' => self::DEFAULT_CLIENT_INFO['name'],
+            'version' => self::resolvedClientVersion(),
+        ];
+    }
+
+    /**
+     * The version arm on its own: the SHIPPED package version when the
+     * Composer runtime knows it, the literal fallback otherwise. Shared by
+     * the untouched default and the `clientName:` knob, so an author who
+     * only renames never carries a version at all — a hand-typed version on
+     * the wire rots silently release after release, which is the very
+     * disease the resolver above exists to cure.
+     */
+    private static function resolvedClientVersion(): string
+    {
         if (class_exists(\Composer\InstalledVersions::class)
             && \Composer\InstalledVersions::isInstalled('sugarcraft/sugar-mcp-client')) {
             try {
@@ -347,11 +363,11 @@ final class StdioMcpServer implements McpServer
             }
 
             if (is_string($version) && $version !== '') {
-                return ['name' => self::DEFAULT_CLIENT_INFO['name'], 'version' => $version];
+                return $version;
             }
         }
 
-        return self::DEFAULT_CLIENT_INFO;
+        return self::DEFAULT_CLIENT_INFO['version'];
     }
 
     /** @var array<string,mixed> parsed in the constructor, trusted afterwards */
@@ -423,7 +439,10 @@ final class StdioMcpServer implements McpServer
      * @param array<string,mixed> $clientInfo initialize-handshake identity;
      *        must carry a non-empty string 'name' and a string 'version' —
      *        the default constant is the only shape that may stand in for an
-     *        omission, a caller-supplied [] is a bug, not a reset
+     *        omission, a caller-supplied [] is a bug, not a reset. For an
+     *        identity that equals the default except for one arm, author it
+     *        piecewise with {@see $clientName}/{@see $clientVersion} instead;
+     *        the two doors are mutually exclusive
      * @param string|null $cwd directory the child process starts in; null (the
      *        default) keeps the historic inherit-the-parent-cwd behavior
      *        byte-identical. An embedder that must not let a server see where
@@ -455,6 +474,19 @@ final class StdioMcpServer implements McpServer
      *        file inside a missing one fails start() loudly rather than
      *        silently relocating the shared state out of reach of the
      *        other processes that look for it.
+     * @param string|null $clientName name arm of the initialize-handshake
+     *        identity, authored without replacing the whole map; the version
+     *        arm then rides the same runtime resolution the untouched default
+     *        uses — the honest short path for a consumer that only knows its
+     *        own name, since a hand-carried version literal rots silently
+     *        release after release. Mutually exclusive with a supplied
+     *        $clientInfo; the empty string is refused like the whole-map door
+     *        refuses []
+     * @param string|null $clientVersion version arm of the identity, for the
+     *        embedder the Composer runtime cannot see (a phar, a vendored
+     *        copy older than this knob); omit it and the advertised version is
+     *        whatever the untouched default would announce. Mutually exclusive
+     *        with a supplied $clientInfo
      */
     public function __construct(
         public readonly string $name,
@@ -480,14 +512,35 @@ final class StdioMcpServer implements McpServer
         private readonly array $envRemove = [],
         /** @var ?array<string,string> full replacement, `[]` means a purged environment */
         private readonly ?array $curatedEnv = null,
+        ?string $clientName = null,
+        ?string $clientVersion = null,
     ) {
+        if ($clientName === '' || $clientVersion === '') {
+            throw new \InvalidArgumentException(
+                'clientName:/clientVersion: refuse the empty string — a blank identity arm is not a reset,'
+                . ' it is a wire value that cannot be honored'
+            );
+        }
+
+        if ($clientName !== null || $clientVersion !== null) {
+            if ($clientInfo !== self::DEFAULT_CLIENT_INFO) {
+                throw new \InvalidArgumentException(
+                    'clientName:/clientVersion: and clientInfo: are mutually exclusive — the split knobs'
+                    . ' author the identity piecewise, clientInfo: replaces it whole; supplying both leaves'
+                    . ' one wire value with two masters'
+                );
+            }
+
+            $clientInfo = [
+                'name' => $clientName ?? self::DEFAULT_CLIENT_INFO['name'],
+                'version' => $clientVersion ?? self::resolvedClientVersion(),
+            ];
+        } elseif ($clientInfo === self::DEFAULT_CLIENT_INFO) {
+            $clientInfo = self::defaultClientInfo();
+        }
         $this->startTimeoutSeconds = $startTimeoutSeconds !== null && $startTimeoutSeconds > 0
             ? $startTimeoutSeconds
             : self::DEFAULT_START_TIMEOUT_SECONDS;
-
-        if ($clientInfo === self::DEFAULT_CLIENT_INFO) {
-            $clientInfo = self::defaultClientInfo();
-        }
 
         $this->assertClientInfoShaped($clientInfo);
         $this->assertEnvKnobsShaped($spawnPlanner);

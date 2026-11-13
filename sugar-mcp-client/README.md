@@ -416,6 +416,17 @@ the real installed package version when the Composer runtime knows it (a
 frozen literal would keep announcing an outdated version, release after
 release); an explicitly supplied identity is never rewritten.
 
+For an identity that is the default except for one arm, author it piecewise:
+`clientName: 'acme-agent'` advertises acme-agent at the resolved installed
+version — the omitted arm rides the very same resolution the untouched default
+uses, so renaming yourself never requires carrying a version literal (the
+disease the full-replace door let its first consumer catch). `clientVersion:`
+is the matching escape for an embedder the Composer runtime cannot see — a
+phar, a vendored copy. Supplying a split knob alongside `clientInfo:` throws
+at construction, one wire value with two masters is a lie the constructor
+refuses; so does an empty-string arm, which is not a reset but a blank
+identity.
+
 Tool arguments are shaped one level further: a model's `{"filter":{}}`
 decodes (assoc) to `['filter' => []]`, so `callTool()` walks the arguments
 against the tool's advertised `inputSchema` (`ArgumentShape::conform()`) and
