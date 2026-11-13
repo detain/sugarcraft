@@ -419,4 +419,41 @@ final class StyleGuideTest extends TestCase
         $shared = StyleGuide::fromJsonString('{"document":{},"heading":{"uppercase":true}}')->theme();
         $this->assertSame('upper', $shared->headingCase, 'the shared heading block counts too');
     }
+
+    /**
+     * SM-S21 (SEC-02) boundary pins: stock glamour affixes keep their
+     * exact bytes through the decode, and a hostile slot can no longer
+     * emit raw OSC/CSI — the sweep runs at the decoder, not the render,
+     * so even the public accessors hand back safe strings.
+     */
+    public function testDecodedStringSlotsAreControlSweptAtTheBoundary(): void
+    {
+        $stock = StyleGuide::fromJsonString(
+            '{"document":{"block_prefix":"\\n","block_suffix":"\\n\\n","indent_token":"\\t\\t"},'
+            . '"paragraph":{"block_prefix":"\\n\\n","block_suffix":"\\n"},'
+            . '"block_quote":{"indent_token":"\\u00b8 "}}'
+        );
+        $this->assertSame("\n", $stock->blockPrefix);
+        $this->assertSame("\n\n", $stock->blockSuffix, 'TAB/LF/CR survive the sweep');
+        $this->assertSame("\t\t", $stock->indentToken(), 'tab-token leg: tabs are kept too');
+        $this->assertSame("\u{00B8} ", $stock->indentToken('block_quote'), 'the glyph \\u00b8 is not a control');
+        $theme = $stock->theme();
+        $this->assertSame("\n\n", $theme->paragraphPrefix);
+        $this->assertSame("\n", $theme->paragraphSuffix);
+
+        $hostile = StyleGuide::fromJsonString(
+            '{"document":{"block_prefix":"\\u001b]2;pwned\\u0007"},'
+            . '"paragraph":{"block_suffix":"\\u001b[1;31mX"},'
+            . '"block_quote":{"indent_token":"\\u001b]8;;http://evil\\u0007"}}'
+        );
+        $this->assertSame('', $hostile->blockPrefix, 'the whole OSC sequence, payload included, is swept');
+        $this->assertStringNotContainsString("\x1b", $hostile->blockPrefix);
+        $this->assertStringNotContainsString("\x07", $hostile->blockPrefix);
+        $this->assertStringNotContainsString("\x1b", $hostile->theme()->paragraphSuffix);
+        $this->assertStringNotContainsString("\x1b", $hostile->indentToken('block_quote'));
+
+        $rendered = (new Renderer($hostile->theme()))->render("hello\n");
+        $this->assertStringNotContainsString("\x1b]2;pwned", $rendered);
+        $this->assertStringNotContainsString("\x1b]8;;", $rendered);
+    }
 }

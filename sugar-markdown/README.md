@@ -237,6 +237,13 @@ $writer->close();
   rendered text, code spans, and indented and fenced code. Raw-HTML
   and URL control-stripping run regardless of the flag; see
   Link safety above.
+- Theme files are code. A style/theme JSON drives colours, affixes and
+  indent tokens straight into the terminal, so do not auto-load
+  workspace-adjacent style files — pin the path from operator config.
+  The decoders (`Theme::fromJsonString()`, `StyleGuide::fromJsonString()`)
+  sweep every decoded string slot through `Sanitize::untrusted()`, so a
+  hostile prefix cannot smuggle a raw OSC/CSI sequence; stock glamour
+  `"\n"`-and-space affixes survive byte-identical.
 - There is no source-size cap: rendering cost is roughly proportional
   to the input — see the streaming hold-back bound under Streaming,
   above. Only syntax highlighting refuses to try — a fenced body over

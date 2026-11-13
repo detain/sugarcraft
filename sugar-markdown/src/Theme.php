@@ -134,7 +134,12 @@ final class Theme
         public readonly ?string $headingPrefix = null,
         /** Glyph appended to heading lines. Default null = nothing. */
         public readonly ?string $headingSuffix = null,
-        /** Optional prefix prepended to every paragraph (StylePrimitive::Prefix). */
+        /**
+         * Optional prefix prepended to every paragraph
+         * (StylePrimitive::Prefix). Strings decoded from JSON arrive
+         * control-swept: {@see StyleGuide::fromJsonString()} runs every
+         * string slot through `Sanitize::untrusted()`.
+         */
         public readonly string $paragraphPrefix = '',
         /** Optional suffix appended to every paragraph. */
         public readonly string $paragraphSuffix = '',
@@ -733,6 +738,13 @@ final class Theme
      * non-file path, or a read that warned, raises `RuntimeException`
      * before any decode; contents that are not a JSON object raise
      * `InvalidArgumentException`.
+     *
+     * Trust note: a theme file is CODE the terminal executes — colour
+     * and flag declarations, but declarations nonetheless. Do not
+     * auto-load workspace-adjacent style files; load only files the
+     * operator pinned. (StyleGuide's decoder additionally sweeps every
+     * string slot through `Sanitize::untrusted()`; this loader carries
+     * no string slots to sweep.)
      *
      * @throws \RuntimeException when the file cannot be read or exceeds $maxBytes
      * @throws \InvalidArgumentException when its contents are not a JSON object

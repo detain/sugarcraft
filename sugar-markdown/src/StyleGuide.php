@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Markdown;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Style\Style;
 
 /**
@@ -97,6 +98,14 @@ final class StyleGuide
      * the exception message instead of being suppressed or leaked to the
      * caller's error handler — the same contract as {@see Theme::fromJson()}.
      *
+     * Trust note: a style file is code the terminal runs. Do not
+     * auto-load workspace-adjacent style files; load only files the
+     * operator pinned. Decoded string slots (`block_prefix` /
+     * `block_suffix` / `indent_token`) are swept through
+     * `Sanitize::untrusted()` so a hostile file cannot inject raw
+     * escape sequences — stock glamour "\n"/space affixes survive the
+     * sweep byte-identical.
+     *
      * @throws \RuntimeException        when the file cannot be read
      * @throws \InvalidArgumentException when its contents are not a JSON object
      */
@@ -170,9 +179,15 @@ final class StyleGuide
 
         $document = $elements['document'] ?? [];
 
+        // SEC-02 boundary: every decoded STRING slot goes through
+        // Sanitize::untrusted(). A style file is code the terminal runs
+        // — glamour ships prefixes like "\n" (kept: TAB/LF/CR survive the
+        // sweep byte-identical) but a hostile file must never be able to
+        // inject a raw OSC/CSI sequence into the render through a prefix,
+        // a suffix or an indent token.
         return new self(
-            blockPrefix:    (string) ($document['block_prefix'] ?? ''),
-            blockSuffix:    (string) ($document['block_suffix'] ?? ''),
+            blockPrefix:    Sanitize::untrusted((string) ($document['block_prefix'] ?? '')),
+            blockSuffix:    Sanitize::untrusted((string) ($document['block_suffix'] ?? '')),
             documentIndent: self::nonNegativeInt($document['indent'] ?? 0),
             documentMargin: self::nonNegativeInt($document['margin'] ?? 0),
             elements:       $elements,
@@ -202,7 +217,10 @@ final class StyleGuide
     {
         $token = $this->elements[$element]['indent_token'] ?? null;
         if (is_string($token)) {
-            return $token;
+            // SEC-02: same sweep as the affix slots — glamour's stock "│ "
+            // and four-space tokens pass through unchanged (no control
+            // bytes in them), a hostile token cannot carry an escape.
+            return Sanitize::untrusted($token);
         }
 
         return $element === 'document' ? str_repeat(' ', $this->documentIndent) : '';
@@ -242,8 +260,8 @@ final class StyleGuide
             headingCase:         $this->headingCase(),
             documentMargin:      $this->documentMargin,
             documentIndent:      $this->documentIndent,
-            paragraphPrefix:     (string) ($paragraph['block_prefix'] ?? ''),
-            paragraphSuffix:     (string) ($paragraph['block_suffix'] ?? ''),
+            paragraphPrefix:     Sanitize::untrusted((string) ($paragraph['block_prefix'] ?? '')),
+            paragraphSuffix:     Sanitize::untrusted((string) ($paragraph['block_suffix'] ?? '')),
             documentBlockPrefix: $this->blockPrefix,
             documentBlockSuffix: $this->blockSuffix,
         );
