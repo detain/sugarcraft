@@ -26,7 +26,7 @@ final class DepthGuardsTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('64-level search limit');
-        $stack->filter('zz');
+        $stack->filtered('zz');
     }
 
     public function testOverDeepNestingThrows(): void
@@ -39,7 +39,7 @@ final class DepthGuardsTest extends TestCase
         $stack = (new NavStack())->push('y', $deep);
 
         $this->expectException(InvalidArgumentException::class);
-        $stack->filter('zz');
+        $stack->filtered('zz');
     }
 
     public function testNestingWithinTheBudgetStaysSearchable(): void
@@ -51,8 +51,8 @@ final class DepthGuardsTest extends TestCase
 
         $stack = (new NavStack())->push('y', $nested);
 
-        self::assertSame(1, $stack->filter('needle')->depth());
-        self::assertSame(0, $stack->filter('nope-no-match')->depth());
+        self::assertSame(1, $stack->filtered('needle')->depth());
+        self::assertSame(0, $stack->filtered('nope-no-match')->depth());
     }
 
     public function testTitleByteBudgetEdge(): void

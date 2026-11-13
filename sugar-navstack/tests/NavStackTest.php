@@ -245,7 +245,7 @@ final class NavStackTest extends TestCase
         $s = new NavStack();
         $s->push('Home')->push('Settings')->push('Display')->push('Sound');
 
-        $filtered = $s->filter('dis');
+        $filtered = $s->filtered('dis');
         $this->assertSame(1, $filtered->depth());
         $this->assertSame('Display', $filtered->items()[0]->title);
     }
@@ -257,7 +257,7 @@ final class NavStackTest extends TestCase
         $s->push('Settings', '/settings/display');
         $s->push('Display', '/settings/display/resolution');
 
-        $filtered = $s->filter('/display');
+        $filtered = $s->filtered('/display');
         $this->assertSame(2, $filtered->depth());
     }
 
@@ -266,7 +266,7 @@ final class NavStackTest extends TestCase
         $s = new NavStack();
         $s->push('Home')->push('Settings');
 
-        $filtered = $s->filter('nonexistent');
+        $filtered = $s->filtered('nonexistent');
         $this->assertSame(0, $filtered->depth());
     }
 
@@ -275,7 +275,7 @@ final class NavStackTest extends TestCase
         $s = new NavStack();
         $s->push('Home')->push('Settings')->push('Display');
 
-        $filtered = $s->filter('SET');
+        $filtered = $s->filtered('SET');
         $this->assertSame(1, $filtered->depth());
         $this->assertSame('Settings', $filtered->items()[0]->title);
     }
@@ -290,13 +290,13 @@ final class NavStackTest extends TestCase
         $s->push('Reports', '/reports');                        // scalar data
 
         // 'dash' matches the 'Dashboard' title (and its 'route' value).
-        $filtered = $s->filter('dash');
+        $filtered = $s->filtered('dash');
         $this->assertSame(1, $filtered->depth());
         $this->assertSame('Dashboard', $filtered->items()[0]->title);
 
         // A term that only appears in scalar data still matches (regression:
         // the walk must not disable scalar-data matching).
-        $this->assertSame(1, $s->filter('reports')->depth());
+        $this->assertSame(1, $s->filtered('reports')->depth());
     }
 
     public function testFilterMatchesNestedScalarValuesInsideArrayData(): void
@@ -308,12 +308,12 @@ final class NavStackTest extends TestCase
         $s->push('Else', ['section' => 'other']);
         $s->push('Numeric', ['id' => 42]);
 
-        $this->assertSame(1, $s->filter('zzz')->depth());
-        $this->assertSame('Home', $s->filter('zzz')->items()[0]->title);
+        $this->assertSame(1, $s->filtered('zzz')->depth());
+        $this->assertSame('Home', $s->filtered('zzz')->items()[0]->title);
         // Ints are stringified for the scan.
-        $this->assertSame(1, $s->filter('42')->depth());
+        $this->assertSame(1, $s->filtered('42')->depth());
         // Nothing matches: no fatal, empty result.
-        $this->assertSame(0, $s->filter('nothing-here')->depth());
+        $this->assertSame(0, $s->filtered('nothing-here')->depth());
     }
 
     public function testFilterMatchesStringableData(): void
@@ -327,7 +327,7 @@ final class NavStackTest extends TestCase
         $s = new NavStack();
         $s->push('Settings', $stringable);
 
-        $this->assertSame(1, $s->filter('display')->depth());
+        $this->assertSame(1, $s->filtered('display')->depth());
     }
 
     public function testPushDirectory(): void
@@ -477,6 +477,42 @@ final class NavStackTest extends TestCase
         // A genuinely valid list still passes untouched (green control).
         $stack->setItems([new NavigationItem('Home'), new NavigationItem('Settings')]);
         $this->assertSame(2, $stack->depth());
+    }
+
+    // ─── NS-09: filtered() rename + Unicode fold ─────────────────────────────
+
+    public function testDeprecatedFilterForwarderIsBehaviorIdentical(): void
+    {
+        $s = new NavStack();
+        $s->push('Home')->push('Settings')->push('Display');
+
+        // The forwarder must agree with filtered() on the SAME fresh-stack
+        // result (order + renumbering included), not merely its depth.
+        $viaNew = $s->filtered('dis');
+        $viaOld = $s->filter('dis');
+        $this->assertSame(
+            \array_map(static fn ($i): string => $i->title, $viaNew->items()),
+            \array_map(static fn ($i): string => $i->title, $viaOld->items()),
+        );
+        $this->assertNotSame($s, $viaOld, 'forwarder still returns a fresh stack');
+    }
+
+    public function testFilteredFoldsMultibyteCaseInTitlesAndPayloads(): void
+    {
+        // The retired stripos fold matched É/é only byte-identically; the
+        // mb_stripos fold matches across case, in TITLES and payload strings.
+        $s = new NavStack();
+        $s->push('Café Résumé');
+        $s->push('Plain', ['route' => '/ÉDITEUR']);
+
+        $this->assertSame(1, $s->filtered('café')->depth());
+        $this->assertSame('Café Résumé', $s->filtered('CAFÉ')->items()[0]->title);
+        $this->assertSame('Café Résumé', $s->filtered('é résumé')->items()[0]->title);
+        $this->assertSame(1, $s->filtered('éditeur')->depth(), 'payload leg folds too');
+
+        // Byte-window safety: a query that is a strict byte-prefix of a
+        // multibyte sequence must not half-match through it.
+        $this->assertSame(0, $s->filtered("\xC3\xA")->depth());
     }
 
     // ─── NS-12: safeTitle — the published display facade ─────────────────────

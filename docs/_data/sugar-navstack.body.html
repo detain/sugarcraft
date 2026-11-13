@@ -23,7 +23,7 @@ $nav-&gt;depth();              // 2</code></pre>
     <div class="feature-grid">
       <div class="feature"><strong>NavStack</strong><span>Push / pop navigation stack (mutable, chainable push) with depth, parent and truncation helpers.</span></div>
             <div class="feature"><strong>Directory stacks (Shell)</strong><span>Explicit cwd-tracked trails — your host detects a directory change and calls pushDirectory(); nothing auto-pushes, and `.`/`..` follow the documented no-downward-walk rule.</span></div>
-            <div class="feature"><strong>Filter</strong><span>ASCII case-folded substring filtering over titles and payload data (arrays matched by value up to 64 nesting levels — deeper payloads throw).</span></div>
+            <div class="feature"><strong>Filter</strong><span>Unicode case-folded substring filtering over titles and payload data (arrays matched by value up to 64 nesting levels — deeper payloads throw).</span></div>
             <div class="feature"><strong>Accessible HTML</strong><span>viewHtml() emits the recommended nav[aria-label] &gt; ol shape with aria-current="page" on the live crumb — screen-reader-ready without host markup work.</span></div>
             <div class="feature"><strong>Breadcrumb renderer</strong><span>Theme-aware plain-text rendering with width-capped left-elision, custom separators/ellipses, per-item renderer closures, and stack-indexed mouse zones that survive truncation.</span></div>
             
@@ -47,7 +47,7 @@ $nav-&gt;depth();              // 2</code></pre>
 <tr><td>NavStack</td><td>pop(): ?NavigationItem / popTo(int) / current() / parent() / depth()</td><td>Pop and inspect the stack</td></tr>
 <tr><td>NavStack</td><td>view(string $separator = ' › '): string</td><td>Plain-text crumb trail; titles sanitized for terminal safety</td></tr>
 <tr><td>NavStack</td><td>viewHtml(?callable $href = null, string $label = 'Breadcrumb'): string</td><td>Accessible HTML: nav[aria-label=&quot;…&quot;] around an ol, last item aria-current=&quot;page&quot;. $href maps item =&gt; URL (links for every crumb but the live one); omit it and the trail renders as plain li text. $label names the landmark for screen readers.</td></tr>
-<tr><td>NavStack</td><td>filter(string $term): self</td><td>New stack with items whose title or scalar/Stringable payload (array values up to 64 levels) contains $term — ASCII case-fold only; result indices renumber.</td></tr>
+<tr><td>NavStack</td><td>filtered(string $term): self</td><td>New stack with items whose title or scalar/Stringable payload (array values up to 64 levels) contains $term — Unicode (mb_stripos) case fold; result indices renumber. filter() is a deprecated forwarder.</td></tr>
 <tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry; the constructor refuses titles empty after trim+sanitize and over 64 KiB raw</td></tr>
 <tr><td>Breadcrumb</td><td>withScanner(?Scanner)</td><td>Attach mouse-click zones per crumb (sugar-mouse Scanner; copied in, never aliased — read it back via scanner()). Zone ids carry the STACK index, so click routing survives truncation.</td></tr>
 <tr><td>Breadcrumb</td><td>scan(string $rendered, ?int $viewportWidth = null, int $row = 1) / hit(col, row) / hitItem(stack, col, row)</td><td>Feed the rendered string to the owned scanner (optionally clamped to the viewport width, for a row other than 1), then resolve which crumb a terminal cell falls in — hitItem() is the one-call dispatcher returning the clicked NavigationItem</td></tr>

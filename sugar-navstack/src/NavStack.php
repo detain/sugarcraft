@@ -17,7 +17,7 @@ namespace SugarCraft\NavStack;
  * mutates in place too but returns the removed `?NavigationItem`, never
  * `$this`.
  * This is a deliberate exception to the repo-wide immutable `with*()`
- * convention: `filter()` correctly returns a new instance, but the
+ * convention: `filtered()` correctly returns a new instance, but the
  * push/pop/set family mutate in place. Callers must not assume
  * copy-on-write for the push/pop/set family (see {@see Shell} for the
  * immutable wrapper — its `with*()` family copies the item LIST into a
@@ -396,10 +396,11 @@ final class NavStack
      * (bounded: see {@see MAX_PAYLOAD_DEPTH} below).
      * Returns a new NavStack with only matching items.
      *
-     * "Case-insensitive" is ASCII-only in practice: the fold is the
-     * byte-level one `stripos()` performs, so case variants of non-ASCII
-     * letters (É vs é) match only when their UTF-8 bytes are identical —
-     * an accented query silently under-matches its unaccented spelling.
+     * "Case-insensitive" is a Unicode fold: `mb_stripos()` (UTF-8) is used
+     * for both the title and payload scans, so É matches é and a multibyte
+     * query cannot half-match through a byte window. (The historical
+     * byte-level stripos fold silently under-matched accented spellings —
+     * retired with this rename.)
      *
      * Notes: the result is a FRESH stack — item order is kept but indices
      * renumber, so zone ids (`crumb-N`) of a breadcrumb rendered from the
@@ -410,20 +411,31 @@ final class NavStack
      * @throws \InvalidArgumentException When an array payload nests deeper
      *                                   than the 64-level search limit
      */
-    public function filter(string $term): self
+    public function filtered(string $term): self
     {
-        $filtered = \array_filter(
+        $kept = \array_filter(
             $this->items,
             static function(NavigationItem $item) use ($term): bool {
-                if (\stripos($item->title, $term) !== false) {
+                if (\mb_stripos($item->title, $term) !== false) {
                     return true;
                 }
                 return self::dataMatches($item->data, $term);
             }
         );
         $new = new self();
-        $new->items = \array_values($filtered);
+        $new->items = \array_values($kept);
         return $new;
+    }
+
+    /**
+     * @deprecated Renamed to {@see filtered()} — the verb-style name read as
+     *             a mutator while it in fact returns a fresh stack (the one
+     *             non-with* copy in the library). The forwarder is behavior-
+     *             identical, including the Unicode fold.
+     */
+    public function filter(string $term): self
+    {
+        return $this->filtered($term);
     }
 
     /**
@@ -463,6 +475,6 @@ final class NavStack
         if ($data === null || !(\is_scalar($data) || $data instanceof \Stringable)) {
             return false;
         }
-        return \stripos((string) $data, $term) !== false;
+        return \mb_stripos((string) $data, $term) !== false;
     }
 }

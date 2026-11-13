@@ -45,8 +45,8 @@ $nav2 = (new NavStack())
     ->push('Sound', '/settings/sound')
     ->push('About', '/about');
 
-echo "Filter 'dis': " . $nav2->filter('dis')->view() . "\n";
-echo "Total items: " . $nav2->depth() . ", Filtered: " . $nav2->filter('dis')->depth() . "\n\n";
+echo "Filter 'dis': " . $nav2->filtered('dis')->view() . "\n";
+echo "Total items: " . $nav2->depth() . ", Filtered: " . $nav2->filtered('dis')->depth() . "\n\n";
 
 echo "--- Shell integration (explicit pushDirectory — nothing auto-detects; watching for directory changes is the host app's job) ---\n";
 $shell = \SugarCraft\NavStack\Shell::new();

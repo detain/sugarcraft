@@ -86,8 +86,9 @@ echo $stack->current()->title;   // "Settings"
 `setItems`, and `clear` mutate in place and return `$this` for chaining (`pop`
 also mutates in place but returns the removed item, `null` when the stack is
 empty — never `$this`). This is a deliberate
-exception to the repo-wide `with*()` copy-on-write convention; only `filter()`
-returns a new instance.
+exception to the repo-wide `with*()` copy-on-write convention; only
+`filtered()` returns a new instance (its old verb-style name `filter()` is a
+deprecated forwarder to it).
 
 ### NavStack API
 
@@ -105,7 +106,7 @@ returns a new instance.
 | `clear(): self` | Remove everything |
 | `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
 | `viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?list<string> $allowSchemes = null): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped; `$allowSchemes` gates callback-returned URLs (null = trusted legacy bytes) |
-| `filter(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive substring (array payloads match when any nested scalar/Stringable value does); payloads nested deeper than 64 levels throw |
+| `filtered(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive (Unicode-folded, `mb_stripos`) substring (array payloads match when any nested scalar/Stringable value does); payloads nested deeper than 64 levels throw. `filter()` is a deprecated forwarder to it |
 | `static safeTitle(string $title): string` | The published display-sweep facade — byte-identical to what every library render path applies to titles; use it when echoing an untrusted title outside those surfaces |
 
 ### Guards — limits & refusals
@@ -120,7 +121,7 @@ rather than silently truncating:
   is closed; `popToRoot()` spells the keep-only-the-root intent).
 - Every item is born through `NavigationItem`'s constructor, which refuses
   titles above `NavigationItem::MAX_TITLE_BYTES` (65,536 raw bytes).
-- `filter()` walks array payloads recursively and refuses payloads nested
+- `filtered()` walks array payloads recursively and refuses payloads nested
   deeper than 64 levels (a self-referencing payload would otherwise recurse
   until the process dies).
 - `Shell::pushDirectory()` and `Url::parse()` grow stacks from external input
@@ -201,7 +202,7 @@ $item = $bc->hitItem($stack, $col, $row);
 if ($item !== null) {
     // Zone ids carry positions in the stack THAT WAS RENDERED, so the jump
     // cannot misroute even after setMaxWidth() elided older crumbs — pass
-    // that same stack here (after filter() the ids are FILTERED positions;
+    // that same stack here (after filtered() the ids are FILTERED positions;
     // resolving them against the original stack would misroute):
     $index = \array_search($item, $stack->items(), true);
     $stack->popTo($index);
@@ -222,7 +223,7 @@ Two guarantees make that recipe safe under truncation:
 - Zone ids carry the crumb's position in the **full stack**, never a
   renumbered visible-list index — after `"… Settings › Display"`, the left
   crumb is still `crumb-1`, so `popTo($index)` cannot misroute. The
-  qualification is which stack: `filter()` returns a FRESH stack and
+  qualification is which stack: `filtered()` returns a FRESH stack and
   renumbers, so a filtered bar's ids are positions in the FILTERED stack,
   and lookups must resolve against it.
 - `withScanner()` **copies** the scanner you pass (it is never aliased), so two
