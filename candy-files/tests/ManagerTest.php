@@ -853,4 +853,62 @@ final class ManagerTest extends TestCase
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'G'));
         $this->assertSame($entryCount - 1, $m->left->cursor);
     }
+
+    /**
+     * CF-23 (closes audit 032): the Tab flip keys on the CURRENT TAB's
+     * activeIdx — the field the renderer trusts. The old code computed
+     * `1 - $this->activeIdx` from the flat mirror switchTab/openNewTab
+     * left behind, so a switch-then-Tab could no-op (the tab stayed on
+     * its left pane while the user believed the flip answered).
+     */
+    public function testTabFlipAfterOpenNewTabKeysOnTheCurrentTab(): void
+    {
+        [$flipped] = Manager::start('/etc', '/var', $this->fakeFs())
+            ->update(new KeyMsg(KeyType::Tab, ''));
+        self::assertSame(1, $flipped->activeIdx);
+
+        $landed = $flipped->openNewTab('/home');
+        self::assertSame(0, $landed->tabs[1]['activeIdx'], 'the new tab opens on its left pane');
+
+        [$next] = $landed->update(new KeyMsg(KeyType::Tab, ''));
+
+        self::assertSame(1, $next->tabs[1]['activeIdx'], 'Tab must flip the current tab, not echo stale flat state');
+        self::assertSame(1, $next->activeIdx, 'and the flat mirror tracks it');
+        self::assertSame($next->tabs[1]['right'], $next->activePane());
+    }
+
+    /**
+     * CF-23: switchTab re-projects left/right/activeIdx onto the newly
+     * current tab — they are a mirror, not a second memory.
+     */
+    public function testSwitchTabReprojectsTheFlatMirror(): void
+    {
+        $landed = Manager::start('/etc', '/var', $this->fakeFs())->openNewTab('/home');
+        $back = $landed->switchTab(0);
+
+        self::assertSame(0, $back->tabIndex);
+        self::assertSame('/etc', $back->left->cwd, 'switchTab used to leave the mirror frozen on the tab we departed');
+        self::assertSame('/var', $back->right->cwd);
+        self::assertSame($back->tabs[0]['left'], $back->left);
+        self::assertSame($back->tabs[0]['right'], $back->right);
+    }
+
+    /**
+     * CF-23 (closes audit 040): duplicateTab copies BOTH pane cwds and
+     * the active side — one accidental `t` must not silently collapse
+     * the dual-pane pair onto the left directory.
+     */
+    public function testDuplicateTabCarriesBothCwdsAndTheActiveSide(): void
+    {
+        [$righted] = Manager::start('/etc', '/var', $this->fakeFs())
+            ->update(new KeyMsg(KeyType::Tab, ''));
+
+        $dup = $righted->duplicateTab();
+
+        self::assertSame('/etc', $dup->tabs[1]['left']->cwd);
+        self::assertSame('/var', $dup->tabs[1]['right']->cwd, 'the right side is no longer discarded');
+        self::assertSame(1, $dup->tabs[1]['activeIdx'], 'the active side is duplicated too');
+        self::assertSame('/var', $dup->activePane()->cwd);
+        self::assertSame('/var', $dup->right->cwd, 'the flat mirror lands on the new tab');
+    }
 }

@@ -182,7 +182,9 @@ final class ManagerMutateTest extends TestCase
             'openNewTab' => [
                 'base' => fn() => $this->richManager(),
                 'apply' => fn(Manager $m) => $m->openNewTab('/'),
-                'changed' => ['tabs', 'tabIndex'],
+                // CF-23: the flat trio follows the newly current tab — it
+                // is a projection, not a sibling any more.
+                'changed' => ['tabs', 'tabIndex', 'left', 'right', 'activeIdx'],
             ],
             'duplicateTab' => [
                 'base' => fn() => $this->richManager(),
@@ -192,12 +194,14 @@ final class ManagerMutateTest extends TestCase
             'switchTab' => [
                 'base' => fn() => $this->richManager()->openNewTab('/'), // 2 tabs, tabIndex 1
                 'apply' => fn(Manager $m) => $m->switchTab(0),
-                'changed' => ['tabIndex'],
+                // CF-23: switching tabs re-projects the flat trio onto the
+                // newly current tab (the old desync is the bug, not the law).
+                'changed' => ['tabIndex', 'left', 'right', 'activeIdx'],
             ],
             'closeTab' => [
                 'base' => fn() => $this->richManager()->openNewTab('/'), // 2 tabs, tabIndex 1
                 'apply' => fn(Manager $m) => $m->closeTab(),
-                'changed' => ['tabs', 'tabIndex'],
+                'changed' => ['tabs', 'tabIndex', 'left', 'right', 'activeIdx'],
             ],
         ];
 

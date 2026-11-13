@@ -312,6 +312,40 @@ final class Manager implements Model
         return $this->activeIdx === 0 ? $this->left : $this->right;
     }
 
+    /**
+     * CF-23 (closes audit 032): the single tab-state truth. While a tab
+     * exists, its own `activeIdx` IS the answer (the same field
+     * Renderer::activeIdx reads); the flat field is only the no-tabs
+     * fallback.
+     */
+    private function effectiveActiveIdx(): int
+    {
+        $tab = $this->currentTabs();
+        return $tab !== null ? (int) $tab['activeIdx'] : $this->activeIdx;
+    }
+
+    /**
+     * CF-23: commit a new tabs list together with its selection AND keep
+     * the flat mirror in sync, so no tab mutator can leave $this->left/
+     * $this->right/$this->activeIdx pointing into a stale tab again.
+     *
+     * @param array<int,array{left:Pane,right:Pane,activeIdx:int}> $newTabs
+     */
+    private function withTabs(array $newTabs, int $index): self
+    {
+        if ($newTabs === [] || !isset($newTabs[$index])) {
+            throw new \InvalidArgumentException('tab index ' . $index . ' outside ' . count($newTabs) . ' tabs');
+        }
+        $cur = $newTabs[$index];
+        return $this->mutate([
+            'left'       => $cur['left'],
+            'right'      => $cur['right'],
+            'activeIdx'  => $cur['activeIdx'],
+            'tabs'       => $newTabs,
+            'tabIndex'   => $index,
+        ]);
+    }
+
     public function inactivePane(): Pane
     {
         if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
@@ -376,7 +410,10 @@ final class Manager implements Model
                     ? $this->duplicateTab()
                     : $this->switchTab(($this->tabIndex + 1) % count($this->tabs)),
             $msg->type === KeyType::Tab
-                => $this->withActive(1 - $this->activeIdx),
+                // CF-23 (closes audit 032): key the flip on the RENDERER's
+                // source (the tab's own activeIdx), not the stale flat field
+                // switchTab left behind.
+                => $this->withActive(1 - $this->effectiveActiveIdx()),
             // CF-02: unmodified PageUp/PageDown page the cursor through the
             // entry list (the modified pair cycles tabs — it lives at the top
             // of this match and keeps priority over these arms).
@@ -1681,11 +1718,13 @@ final class Manager implements Model
             'right' => Pane::open($cwd, $this->lister),
             'activeIdx' => 0,
         ];
-        $newTabs = [...$this->tabs, $newTab];
-        return $this->mutate([
-            'tabs' => $newTabs,
-            'tabIndex' => count($newTabs) - 1,
-        ]);
+        // A bare no-tab state must first be materialized as a tab of its
+        // own — `$this->tabs` alone would drop the flat pair on the floor.
+        $base = $this->tabs !== [] ? $this->tabs : [[
+            'left' => $this->left, 'right' => $this->right, 'activeIdx' => $this->activeIdx,
+        ]];
+        $newTabs = [...$base, $newTab];
+        return $this->withTabs($newTabs, count($newTabs) - 1);
     }
 
     /** Close the tab at index, unless it's the last tab */
@@ -1697,11 +1736,7 @@ final class Manager implements Model
         }
         $newTabs = $this->tabs;
         array_splice($newTabs, $index, 1);
-        $newIndex = min($this->tabIndex, count($newTabs) - 1);
-        return $this->mutate([
-            'tabs' => $newTabs,
-            'tabIndex' => $newIndex,
-        ]);
+        return $this->withTabs($newTabs, min($this->tabIndex, count($newTabs) - 1));
     }
 
     /** Switch to tab at index */
@@ -1710,26 +1745,34 @@ final class Manager implements Model
         if ($this->tabs === [] || $index < 0 || $index >= count($this->tabs)) {
             return $this;
         }
-        return $this->mutate(['tabIndex' => $index]);
+        // CF-23: go through withTabs so the flat mirror follows the newly
+        // current tab instead of freezing on the tab we left.
+        return $this->withTabs($this->tabs, $index);
     }
 
-    /** Open a new tab with current pane's directory */
+    /**
+     * Open a new tab duplicating the CURRENT tab honestly (CF-23, closes
+     * audit 040): both pane cwds and the active side are carried over —
+     * one accidental `t` must not collapse the dual-pane pair onto the
+     * left cwd.
+     */
     public function duplicateTab(): self
     {
-        $current = $this->currentTabs();
-        $cwd = $current !== null
-            ? ($this->tabs[$this->tabIndex]['left']->cwd ?? '/')
-            : ($this->left->cwd ?? '/');
-        $newTab = [
-            'left' => Pane::open($cwd, $this->lister),
-            'right' => Pane::open($cwd, $this->lister),
-            'activeIdx' => 0,
+        $cur = $this->currentTabs() ?? [
+            'left' => $this->left,
+            'right' => $this->right,
+            'activeIdx' => $this->activeIdx,
         ];
-        $newTabs = [...$this->tabs, $newTab];
-        return $this->mutate([
-            'tabs' => $newTabs,
-            'tabIndex' => count($newTabs) - 1,
-        ]);
+        $newTab = [
+            'left'  => Pane::open($cur['left']->cwd, $this->lister, $cur['left']->sort, $cur['left']->showHidden),
+            'right' => Pane::open($cur['right']->cwd, $this->lister, $cur['right']->sort, $cur['right']->showHidden),
+            'activeIdx' => $cur['activeIdx'],
+        ];
+        $base = $this->tabs !== [] ? $this->tabs : [[
+            'left' => $this->left, 'right' => $this->right, 'activeIdx' => $this->activeIdx,
+        ]];
+        $newTabs = [...$base, $newTab];
+        return $this->withTabs($newTabs, count($newTabs) - 1);
     }
 
     /** @return array{left:Pane,right:Pane,activeIdx:int}|null */
