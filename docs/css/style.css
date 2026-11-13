@@ -116,6 +116,10 @@ code, pre, .mono {
     position: sticky;
     top: 0;
     z-index: 30;
+    /* Fallback for engines predating color-mix(): an opaque bar beats
+       the transparent-degradation failure. Newer engines let the
+       color-mix() declaration below win in the same rule. */
+    background: var(--bg);
     background: color-mix(in srgb, var(--bg) 80%, transparent);
     backdrop-filter: blur(18px);
     border-bottom: 1px solid var(--line);
@@ -576,10 +580,12 @@ code, pre, .mono {
 }
 
 .lib-card .lib-card-preview-placeholder {
-    color: rgba(255, 255, 255, 0.92);
+    /* SD-S26: white-on-pastel measured 1.46:1; ink on the lightest
+       gradient stop is 11.68:1. */
+    color: var(--ink);
     font-size: 0.88rem;
     font-weight: 500;
-    text-shadow: 0 1px 2px rgba(15, 12, 24, 0.25);
+    text-shadow: none;
     letter-spacing: 0.02em;
 }
 
@@ -753,7 +759,8 @@ pre.code .num  { color: #fcd5b4; }
 
 .copy-btn:hover { background: rgba(255, 255, 255, 0.14); }
 
-.copy-btn.copied { background: var(--pink); border-color: var(--pink); }
+/* SD-S26: #fbeefa on the pink fill measured 2.58:1; ink on pink is 6.07:1. */
+.copy-btn.copied { background: var(--pink); border-color: var(--pink); color: var(--ink); }
 
 /* SD-S13: visible failure state when even the execCommand fallback was
    refused (http origin, locked-down browser) — instead of silence. */
@@ -807,7 +814,8 @@ pre.code .num  { color: #fcd5b4; }
 
 .compare tbody tr:last-child td { border-bottom: 0; }
 
-.compare td.yes { color: #16a34a; font-weight: 600; }
+/* SD-S26: the old #16a34a measured 3.09:1 on --bg; #15803d reaches 4.70:1. */
+.compare td.yes { color: #15803d; font-weight: 600; }
 .compare td.no  { color: var(--ink-2); }
 
 /* ── Footer ────────────────────────────────────────────────────── */
@@ -1397,5 +1405,9 @@ pre.code .num  { color: #fcd5b4; }
 .prose th, .prose td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; }
 .prose a { color: var(--link); }
 .prose a:hover { text-decoration: underline; }
-.prose .heading-permalink { opacity: .35; margin-left: .35em; text-decoration: none; }
-.prose .heading-permalink:hover { opacity: 1; }
+/* SD-S26: opacity .35 put the ¶ under 2:1 against the page; .9 rests at
+   ~4.7:1 and :hover / :focus-within bring it to full. Keyboard users get
+   the reveal too — the anchor stays aria-hidden, this is pointer sight. */
+.prose .heading-permalink { opacity: .9; margin-left: .35em; text-decoration: none; }
+.prose .heading-permalink:hover,
+.prose :is(h1,h2,h3,h4,h5,h6):focus-within .heading-permalink { opacity: 1; }
