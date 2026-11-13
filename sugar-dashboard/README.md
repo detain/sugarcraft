@@ -457,7 +457,10 @@ foreach ($procs as $row => $p) {
 >
 > `examples/dashboard-live.php` is the worked end-to-end wiring: `q`/`Ctrl-C`
 > quit, `Tab`/`Shift+Tab` and the arrows rotate panel focus through a
-> `FocusManager`, and each panel renders into its `Boxer` layout cell.
+> `FocusManager`, and each panel renders into its `Boxer` layout cell. It is
+> the one example that needs a real terminal: piped, it names the PTY
+> requirement on stderr and exits without rendering — every other example
+> renders a pipe-safe one-shot frame (the golden harness asserts those bytes).
 
 ### Components\GridTable (Data Grid)
 
