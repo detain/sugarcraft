@@ -14,7 +14,6 @@
 >
 > Namespace moved from `SugarCraft\Wish\` to `SugarCraft\SshServer\`. <!-- @rename-keep -->
 
-
 sugar-ssh-server — an SSH server middleware framework for PHP 8.3+ that lets you
 build TUIs anyone can `ssh user@host` to run.
 ```sh
@@ -99,7 +98,7 @@ The pre-PTY-upgrade architecture: middleware run inline in the supervisor, and t
 
 ### Picking a transport
 
-- **`InProcessTransport`** when you want to spawn arbitrary shells (`bash -i`, `zsh`, `fish`), editors (`vim`, `less`), or compiled TUI binaries — anything that needs a controlling terminal. Subprocess overhead per connection — every session forks a fresh child (the target program or `/bin/bash -l`, not PHP) — but full PTY semantics.
+- **`InProcessTransport`** when you want to spawn arbitrary shells (`bash -i`, `zsh`, `fish`), editors (`vim`, `less`), or compiled TUI binaries — anything that needs a controlling terminal. Costs a subprocess per connection — every session forks a fresh child (the target program or `/bin/bash -l`, not PHP) — but buys full PTY semantics.
 - **`HostSshdTransport`** when your TUI is a SugarCraft `Program` and you want zero subprocess overhead, or when you have an inline-STDIN-reading middleware (banner-style). No subprocess, but no controlling-terminal isolation.
 
 ### The byte pump needs a blocking STDOUT
@@ -148,7 +147,7 @@ install -d -m 0755 -o wishuser -g wishuser /opt/wish
 - `wishuser` is the account the `Match` block in step 1 forces commands
   on, and the account the entry script runs *as* — the step 2 paths are
   provisioned for its uid.
-- `/opt/wish/vendor/autoload.php` is hard-required at the very first line
+- `/opt/wish/vendor/autoload.php` is hard-required as the first executable line
   of the entry script below. Nothing in sshd's configuration creates it:
   it is produced by a deploy-time install of this package **into
   `/opt/wish`**, run as the same user that will own the directory:
@@ -176,7 +175,7 @@ Match User wishuser
 ```
 
 Keep the forced account pubkey-only: this library CONSUMES identity, it
-does not verify credentials -- the ceiling is sshd's auth policy, and every
+does not verify credentials — the ceiling is sshd's auth policy, and every
 fingerprint and pairing assumption below it rides the strength of whatever
 sshd accepted before `ForceCommand` ran.
 
@@ -187,13 +186,13 @@ depend on it:
 ssh -o BatchMode=yes wishuser@host; echo "status=$?"
 ```
 
-That runs your entry script, not your shell -- which is the point. At this
+That runs your entry script, not your shell — which is the point. At this
 point in the quickstart the entry script does not exist yet (sections 2 and 3
 provision it below), so a correct `Match` block lands on PHP's
-"Could not open input file" -- measured on PHP 8.3, that exits `1`, and
+"Could not open input file" — measured on PHP 8.3, that exits `1`, and
 `255` is reserved for parse errors and in-script fatals (once the file
 exists). `0` and `129` are what the same probe answers once `server.php`
-exists. Any of those three -- `1`, `0`, `129` -- means
+exists. Any of those three — `1`, `0`, `129` — means
 `ForceCommand` reached the account (see [Exit
 status](../docs/admin/sugar-ssh-server.md#exit-status), which splits the two
 PHP failure shapes); a login that drops you
@@ -240,7 +239,7 @@ What happens when you skip this, in the order you will notice it:
   can. When it cannot, it announces on its `$stderr` stream — which is
   the client-visible channel unless you injected one — and, with the
   default `failClosed: false`, **lets the connection through**: your
-  throttle is simply off, and nobody but the prober sees it.
+  throttle is simply off, and nobody but the operator running the probe in step 1 sees it.
 
 A five-line preflight turns both into a deploy-time failure. Put it at
 the top of the entry script (or in a `--preflight` mode you run from a
@@ -330,7 +329,7 @@ per-user `Match` block or a `command="..."` line in each person's own
 that sees its own name.
 
 Both examples `exit(...)` on `serve()` deliberately: that return value is
-the session's answer -- the child's own exit code, `Server::EXIT_DENIED`
+the session's answer — the child's own exit code, `Server::EXIT_DENIED`
 (`129`) when a gate refused and nothing ran, or `0` when the walk finished
 with nothing to spawn. A script that calls `serve()` and falls off the end
 of the file reports success to whichever cron entry or CI step asked.
@@ -368,10 +367,10 @@ suite once, rather than parenthetically at every appearance.
 | `Logger`             | both            | One-line JSON event at session start + end, with elapsed time and connection meta. Sink matters: `Logger::auto()` (and `new Logger()`) append to `$SSH_SERVER_LOG` when set, else `php://stderr` — which under `ForceCommand` **is the connecting client's extended-data channel**, not journald. Pass a file path (we create it `0600`; an existing file keeps its mode) or `Logger::toStream($handle)` you control. `target()` reports the choice. |
 | `Auth`               | both            | Username allowlist, key-fingerprint allowlist, or the paired `userKeys` map (name => that name's keys). **The two flat lists are a cross product, not a pairing:** with `users` `['alice','bob']` and `keyFingerprints` `[alice-key, bob-key]`, bob presenting alice's key is admitted *as alice*. Use `userKeys` when the question is whose key this is (`[Auth::ANY_KEY]` admits the login with-or-without key evidence, that name only). An empty list arms nothing — `new Auth()` admits every session. |
 | `PasswordAuth`       | both            | Compares a password from `SSH_PASSWORD` against a caller-supplied callback; a session that delivered no variable at all is refused before the validator is consulted. **Nothing in OpenSSH ever sets that variable**: a wrapper has to supply it out of band, and if you `AcceptEnv` it the value is peer-asserted rather than proven. Absent means denied, with a path-free notice. |
-| `CertificateAuth`    | both            | Hands a certificate string from `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`) to a caller-supplied validator. **Stock OpenSSH exports none of them**, so unless your wrapper maps one in, the gate announces that it checked nothing -- refusing at `required: true`, forwarding at `required: false`, and saying so either way. |
-| `AuthMethods`        | both            | Declares accepted auth methods and stores the list in Context (`auth.methods`, readable with `AuthMethods::fromContext()`). The `SSH_AUTH_METHODS` line on STDOUT is **opt-in** (`announce: true`) and off by default -- under `ForceCommand` stdout is the client's data channel, so that line is text in the user's terminal, not a protocol field. |
-| `KeyboardInteractive`| both            | Prompts on STDOUT, answers read from STDIN. *Shaped* like RFC 4256, but it is not: no SSH messages exist here. `echo` is a label, not terminal state -- input stays visible (the exchange says so when any prompt asks for silence), each answer is capped at `MAX_RESPONSE_BYTES`, and there is no deadline but the stream you inject and the session Context between prompts. |
-| `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialise on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; `penalize()` exists so a failed credential can drain a bucket faster than connection attempts alone, but **no gate calls it directly** -- wrap the gate in `AuthRateLimitBridge` (or wire it into your own auth path). The per-IP key is the **direct TCP peer's** address -- the one sshd saw. Behind a bastion, load balancer, or `ProxyJump`, every client beyond that hop shares one bucket, so enable `$userBurst` or throttle at the fronting layer. See `docs/admin/sugar-ssh-server.md`. |
+| `CertificateAuth`    | both            | Hands a certificate string from `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`) to a caller-supplied validator. **Stock OpenSSH exports none of them**, so unless your wrapper maps one in, the gate announces that it checked nothing — refusing at `required: true`, forwarding at `required: false`, and saying so either way. |
+| `AuthMethods`        | both            | Declares accepted auth methods and stores the list in Context (`auth.methods`, readable with `AuthMethods::fromContext()`). The `SSH_AUTH_METHODS` line on STDOUT is **opt-in** (`announce: true`) and off by default — under `ForceCommand` stdout is the client's data channel, so that line is text in the user's terminal, not a protocol field. |
+| `KeyboardInteractive`| both            | Prompts on STDOUT, answers read from STDIN. *Shaped* like RFC 4256, but it is not: no SSH messages exist here. `echo` is a label, not terminal state — input stays visible (the exchange says so when any prompt asks for silence), each answer is capped at `MAX_RESPONSE_BYTES`, and there is no deadline but the stream you inject and the session Context between prompts. |
+| `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialize on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; `penalize()` exists so a failed credential can drain a bucket faster than connection attempts alone, but **no gate calls it directly** — wrap the gate in `AuthRateLimitBridge` (or wire it into your own auth path). The per-IP key is the **direct TCP peer's** address — the one sshd saw. Behind a bastion, load balancer, or `ProxyJump`, every client beyond that hop shares one bucket, so enable `$userBurst` or throttle at the fronting layer. See `docs/admin/sugar-ssh-server.md`. |
 | `AuthRateLimitBridge`| both            | Composition wrapper: takes any synchronous auth `Middleware` plus the `RateLimit` instance, and charges the session's buckets `penalty` tokens (default 3.0) whenever the wrapped gate refuses (never invokes `$next`). Admits pass through untouched — same `Context`, same `Session`, one call. An async (promise-returning) gate is refused at `handle()` time with a `LogicException`: its verdict does not exist yet, and charging on non-continuation would penalise in-flight auth. |
 | `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a sugar-pty controlled by the supervisor.                          |
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
@@ -420,8 +419,8 @@ middleware would hide when they actually run.
   through untouched — same `void`/`PromiseInterface` law as any
   hand-written middleware).
 
-All middleware receives a {@see Context} as the first argument, along with
-the {@see Session} and a `$next` continuation. Implement `SugarCraft\SshServer\Middleware`:
+All middleware receives a `Context` as the first argument, along with
+the `Session` and a `$next` continuation. Implement `SugarCraft\SshServer\Middleware`:
 
 ```php
 use SugarCraft\SshServer\Context;
@@ -450,14 +449,14 @@ final class HelloBanner implements Middleware
 - `InProcessTransport::setKeepaliveCallback()` is the low-level seat under
   the keepalive story (its only shipped caller is `armKeepalive()`): the
   zero-argument callback fires in the pump loop whenever `stream_select`
-  reports no ready streams, with no further guarantees -- embedders want
+  reports no ready streams, with no further guarantees — embedders want
   `Server::withKeepalive()`, documented above. `InProcessTransport::pty()`
   returns the live `MasterPty`, valid only while the pump loop runs (it
-  throws otherwise) -- which is how a custom pump callback can write to the
+  throws otherwise) — which is how a custom pump callback can write to the
   master as well.
 - The `Session` constructor also takes the five protocol-metadata fields
   (`sessionId`, `authMethod`, `keyFingerprint`, `clientVersion`,
-  `serverVersion`) as optional named args -- the direct-ctor shape beside
+  `serverVersion`) as optional named args — the direct-ctor shape beside
   the transport-shaped one: `withProtocolMetadata()` (see [Session
   metadata](#session-metadata)) is how the transport fills them, and
   `examples/showcase.php` shows the ctor consumed named-argument-style.
@@ -465,7 +464,7 @@ final class HelloBanner implements Middleware
 ### Constructor options
 
 Every shipped gate takes its knobs at construction, and several defaults are
-security-relevant, so the signatures are tabulated once here rather than
+security-relevant, so the signatures are tabulated centrally here rather than
 inferred from examples. Names in **bold** are the ones that change behaviour
 when left alone, and the Auth-suite four live under
 `SugarCraft\SshServer\Middleware\Auth\` (namespace note under
@@ -473,27 +472,27 @@ when left alone, and the Auth-suite four live under
 
 | Middleware | Constructor | Defaults worth knowing |
 |---|---|---|
-| `Logger` | `Logger::auto()`, `::toFile($path)`, `::toStream($r)`, `::toStderr()`; `new Logger($target)` still works | `auto()` appends to `$`**`SSH_SERVER_LOG`** when set, and to `php://stderr` otherwise -- which under `ForceCommand` is the connecting peer. A file this class creates is `0600`; an existing file keeps its mode. `target()` says which you got. |
+| `Logger` | `Logger::auto()`, `::toFile($path)`, `::toStream($r)`, `::toStderr()`; `new Logger($target)` still works | `auto()` appends to **`$SSH_SERVER_LOG`** when set, and to `php://stderr` otherwise — which under `ForceCommand` is the connecting peer. A file this class creates is `0600`; an existing file keeps its mode. `target()` says which you got. |
 | `Auth` | `new Auth($users, $keyFingerprints, $stderr, $fingerprintValidator, $userKeys)` | Empty **`$users` and `$keyFingerprints` arm nothing**: a bare `new Auth()` admits every session. `$userKeys` is the pairing surface (`[Auth::ANY_KEY]` = any key for that name); notices are sanitized and truncated at `Auth::MAX_ECHOED_BYTES` (128). The named doors `Auth::allowingUsers($users)` and `Auth::pairs($userKeys)` refuse an empty axis with a `LogicException` — construction that cannot be accidentally unarmed. |
 | `PasswordAuth` | `new PasswordAuth($validate, $stderr)` | Reads `SSH_PASSWORD`, which nothing in OpenSSH ever sets. A session that delivered no variable is refused **before** `$validate` runs; an explicitly empty one reaches it. |
-| `CertificateAuth` | `new CertificateAuth($validate, $required = true, $stderr)` | Probes `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`); stock OpenSSH exports none. **`$required = false` forwards** -- after announcing that it checked nothing. |
+| `CertificateAuth` | `new CertificateAuth($validate, $required = true, $stderr)` | Probes `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`); stock OpenSSH exports none. **`$required = false` forwards** — after announcing that it checked nothing. |
 | `AuthMethods` | `new AuthMethods($methods, $stdout, $announce = false)` | Stores the list in `Context`. The `SSH_AUTH_METHODS` stdout line is **off by default**; `announce: true` opts in and owns the placement. |
 | `KeyboardInteractive` | `new KeyboardInteractive($challenges, $validate, $name, $instruction, $stdout, $stdin, $stderr)` | **No `$validate` means any answer passes.** Answers capped at `KeyboardInteractive::MAX_RESPONSE_BYTES` (4096); `echo` is a label, not terminal state, and says so when a prompt asks for silence. No deadline but the stream you inject and the session Context between prompts. |
-| `RateLimit` | `new RateLimit($statePath, $burst = 5, $ratePerSec = 0.5, $stderr, $failClosed = false, $userBurst = null, $userRatePerSec = null)` | **`$failClosed = false`**: a lock or decode problem lets the connection through with a notice. State serialises on a `<state>.lock` sidecar; idle refilled buckets are pruned; `$userBurst` adds a per-username bucket. |
+| `RateLimit` | `new RateLimit($statePath, $burst = 5, $ratePerSec = 0.5, $stderr, $failClosed = false, $userBurst = null, $userRatePerSec = null)` | **`$failClosed = false`**: a lock or decode problem lets the connection through with a notice. State serializes on a `<state>.lock` sidecar; idle refilled buckets are pruned; `$userBurst` adds a per-username bucket. |
 | `AuthRateLimitBridge` | `new AuthRateLimitBridge($gate, $rateLimit, $penalty = 3.0)` | Refusals by `$gate` charge `$rateLimit` `$penalty` extra tokens (detection: the gate did not continue the chain). Synchronous gates only — an async gate draws a `LogicException` at `handle()`; `$penalty <= 0` at construction. |
-| `Spawn` | `new Spawn($factory)` where `fn (Session): array{cmd: list<string>, env?: array}` returns the child command | Terminal. The factory's `cmd` is argv -- no shell is involved, and nothing here vetoes it. |
-| `BubbleTea` | `new BubbleTea($factory)` where `fn (Session): object` builds the `Program` | The returned object must expose a `run()` method — anything else raises `RuntimeException` with the Lang key `bubbletea.bad_factory` when the middleware handles the session. Mounts a `Program` on the supervisor's own stdio, which is only sound under `HostSshdTransport`. Under the default `InProcessTransport` it throws `bubbletea.requires_host_sshd` -- there is no override flag; the alternatives are `Spawn` plus a wrapper script (`examples/run-program.php`) or the legacy transport. |
+| `Spawn` | `new Spawn($factory)` where `fn (Session): array{cmd: list<string>, env?: array}` returns the child command | Terminal. The factory's `cmd` is argv — no shell is involved, and nothing here vetoes it. |
+| `BubbleTea` | `new BubbleTea($factory)` where `fn (Session): object` builds the `Program` | The returned object must expose a `run()` method — anything else raises `RuntimeException` with the Lang key `bubbletea.bad_factory` when the middleware handles the session. Mounts a `Program` on the supervisor's own stdio, which is only sound under `HostSshdTransport`. Under the default `InProcessTransport` it throws `bubbletea.requires_host_sshd` — there is no override flag; the alternatives are `Spawn` plus a wrapper script (`examples/run-program.php`) or the legacy transport. |
 | `Subsystem` | `new Subsystem()` then `->register($name, $handler)` | Terminal for registered names. An **unregistered** name falls through on purpose, so `subsystem sftp` reaches `Spawn` and lands in a shell unless you register the name (or a rejecting handler). |
-| `AsyncMiddleware` | abstract; subclass and implement `protected handleAsync($ctx, $session, $next): PromiseInterface` | The transport's single settle point drives your promise to completion -- never call `PromiseAwait::settle()` yourself, and never await from inside a loop you already run. |
+| `AsyncMiddleware` | abstract; subclass and implement `protected handleAsync($ctx, $session, $next): PromiseInterface` | The transport's single settle point drives your promise to completion — never call `PromiseAwait::settle()` yourself, and never await from inside a loop you already run. |
 
 See [Defaults that are open until you close them](#defaults-that-are-open-until-you-close-them)
 for the four that most often ship open by accident.
 
 ## Defaults that are open until you close them
 
-Four shipped defaults admit traffic. Each is a deliberate choice -- the
+Four shipped defaults admit traffic. Each is a deliberate choice — the
 alternative is a middleware that locks everyone out when you forget an
-argument -- but none of them is a security gate you can rely on by
+argument — but none of them is a security gate you can rely on by
 accident. `tests/SecurityDefaultsTest.php` runs all four against the
 table below.
 
@@ -502,7 +501,7 @@ table below.
 | `Auth` | `new Auth()` has no user list and no fingerprint list, so **every session passes**. | Pass `users`, `keyFingerprints`, or the pairing map `userKeys` (see below). |
 | `KeyboardInteractive` | No `$validate` callable means **any answer authenticates**; the exchange is a form, not a check. | Pass a validator. There is no built-in PAM/password backend in this library. |
 | `RateLimit` | `failClosed` is `false`, so an unreadable or locked state file **lets the connection through** with a notice. | Construct with `failClosed: true` to deny when state cannot be read. |
-| `Server` | `serve()` runs exactly the middleware you `use()` -- **no auth is inserted for you** -- and a stack that runs out of middleware without spawning answers `0`. | `->use(new Auth(...))->use(new RateLimit(...))`, then `exit($server->serve())`: a gate that refuses now answers `Server::EXIT_DENIED` (`129`), a child reports its own code, and `0` means there was nothing to run (full precedence in [The exit contract](#the-exit-contract-refuse-complete-and-129)). |
+| `Server` | `serve()` runs exactly the middleware you `use()` — **no auth is inserted for you** — and a stack that runs out of middleware without spawning answers `0`. | `->use(new Auth(...))->use(new RateLimit(...))`, then `exit($server->serve())`: a gate that refuses now answers `Server::EXIT_DENIED` (`129`), a child reports its own code, and `0` means there was nothing to run (full precedence in [The exit contract](#the-exit-contract-refuse-complete-and-129)). |
 
 The docblocks on those four classes say the same thing in longer words, and
 `docs/admin/sugar-ssh-server.md` describes the deployment posture. If you
@@ -546,23 +545,23 @@ and `docs/admin/sugar-ssh-server.md`.
 ## What sshd actually hands your middleware
 
 There is no protocol conversation to inspect: the child learns about the
-connection from its environment. That list is shorter than people expect,
+connection from its environment. The environment's contribution is shorter than people expect,
 and who fills each slot changes what you may trust in it.
 
 | Variable | Who sets it | Read by | Trust |
 | --- | --- | --- | --- |
-| `USER`, `LOGNAME` | sshd, for the target account | `Session::fromEnvironment()` | Good -- sshd writes it for the account it launched; which account to ask for was the client's choice. |
-| `SSH_CONNECTION` | sshd: `client-ip client-port server-ip server-port` | `Session::fromEnvironment()` | Good -- socket-derived, not peer-asserted. The socket is the direct TCP peer: behind a bastion or `ProxyJump` this is the proxy's address, which is exactly what `RateLimit` keys on (see *Rate limiting keys on the direct TCP peer*). |
+| `USER`, `LOGNAME` | sshd, for the target account | `Session::fromEnvironment()` | Good — sshd writes it for the account it launched; which account to ask for was the client's choice. |
+| `SSH_CONNECTION` | sshd: `client-ip client-port server-ip server-port` | `Session::fromEnvironment()` | Good — socket-derived, not peer-asserted. The socket is the direct TCP peer: behind a bastion or `ProxyJump` this is the proxy's address, which is exactly what `RateLimit` keys on (see *Rate limiting keys on the direct TCP peer*). |
 | `SSH_CLIENT` | sshd: `client-ip client-port server-port` (older, 3 fields) | `Session::fromEnvironment()` fallback | Good, but it has no server-IP slot: `fromEnvironment()` counts the fields and leaves `$serverHost` empty rather than storing the port in it. |
-| `SSH_ORIGINAL_COMMAND` | sshd, when `ForceCommand` rewrote `command` `ssh host some command` | `Session::$command`, then your decoder | Good -- but see the [exec policy](#exec-policy-the-program-comes-from-the-peer): the program string is peer-chosen. |
+| `SSH_ORIGINAL_COMMAND` | sshd, when `ForceCommand` rewrote `command` `ssh host some command` | `Session::$command`, then your decoder | Good — but see the [exec policy](#exec-policy-the-program-comes-from-the-peer): the program string is peer-chosen. |
 | `SSH_TTY` | sshd when a PTY was allocated | `Session::$tty` | Good. |
 | `TERM` | sshd, from the client's pty-request | `Session::$term` | Peer-asserted. Shape it before it reaches a terminfo lookup. |
 | `LANG`, `LC_*` | only if the client sends them **and** `AcceptEnv` allows it | `Session::$lang` (`LANG` only) | Peer-asserted, for `LANG` alone. `LC_*` reach nothing in this library: they matter solely to sugar-core's `T::detect()`, which nothing here calls. This is how a visitor picks your UI language; see the i18n note below. |
-| `COLUMNS`, `LINES` | not by sshd -- the window size lives on the tty (this transport ioctls it, or accepts `withSizeProvider()`) | `Session::$cols/$rows` | Whatever the transport measured -- with one leak: a peer that smuggles them through `AcceptEnv` reaches `Session::fromEnvironment()`, which seeds `declaredSize` from the env value (80/24 defaults, and values above 4096×4096 are clamped). |
-| `SSH_USER_AUTH` | sshd **only** with `ExposeAuthInfo` (see `sshd_config(5)` on your release): the authorized_keys line that matched | private `Auth::fingerprint()` | Good -- server-side, since sshd picked the line. |
+| `COLUMNS`, `LINES` | not by sshd — the window size lives on the tty (the transport queries the tty size via ioctl, or accepts `withSizeProvider()`) | `Session::$cols/$rows` | Whatever the transport measured — with one leak: a peer that smuggles them through `AcceptEnv` reaches `Session::fromEnvironment()`, which seeds `declaredSize` from the env value (80/24 defaults, and values above 4096×4096 are clamped). |
+| `SSH_USER_AUTH` | sshd **only** with `ExposeAuthInfo` (see `sshd_config(5)` on your release): the authorized_keys line that matched | private `Auth::fingerprint()` | Good — server-side, since sshd picked the line. |
 | `SSH_USER_KEY_FINGERPRINT` | not sshd; a wrapper that parses `SSH_USER_AUTH`, or your own `AuthorizedKeysCommand` | private `Auth::fingerprint()` | Depends entirely on your wrapper. |
 | `KEY_FINGERPRINT` | same producers — the shorter alternate name the same gate reads | private `Auth::fingerprint()` | Depends entirely on your wrapper. |
-| `SSH_PASSWORD` | **nothing in OpenSSH ever sets it** | `PasswordAuth` | Operator-injected out of band, or peer-asserted through `AcceptEnv` -- never a credential proof. |
+| `SSH_PASSWORD` | **nothing in OpenSSH ever sets it** | `PasswordAuth` | Operator-injected out of band, or peer-asserted through `AcceptEnv` — never a credential proof. |
 | `SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE` | nothing; the first is Apache mod_ssl, the others are aspirational | `CertificateAuth::ENV_KEYS` | If your wrapper does not export one, the gate sees nothing. |
 | `SSH_CLIENT_VERSION`, `SSH_SERVER_VERSION` | nothing in stock OpenSSH | `Session::$clientVersion/$serverVersion` | Usually empty; do not treat them as audit columns. |
 
@@ -701,8 +700,8 @@ Prefer pinning it per service to detecting it. `T::detect()` reads
 `LC_ALL`, `LC_MESSAGES` and `LANG`, and `LANG` only reaches a `ForceCommand`
 child when sshd's `AcceptEnv` lists it ([What sshd actually hands your
 middleware](#what-sshd-actually-hands-your-middleware)) — so detection lets
-the connecting peer choose the language your server answers in, beside the
-name it also chose for itself. `Session::$lang` is that same peer-asserted
+the connecting peer choose the language your server answers in, on top of the
+name it already chose. `Session::$lang` is that same peer-asserted
 value: log it, do not obey it.
 
 Coverage is uneven, and the suite keeps the list honest rather than letting
@@ -763,7 +762,7 @@ $s = $s->withProtocolMetadata(
 );
 ```
 
-Because `sessionId` is minted here, it identifies one process's worth of lines
+Because `sessionId` is minted here, it ties one process's log lines
 to each other and nothing more: it will not match a `sshd` log line, a
 bastion's record, or the same user's next login. Treat the two version fields
 the same way — an empty one is the normal case, and a filled one means *your*
@@ -817,11 +816,11 @@ script](#3-write-the-entry-script).
 
 ## Context propagation
 
-Every request starts with a root {@see Context} created by `Context::background()`.
+Every request starts with a root `Context` created by `Context::background()`.
 The context is immutable — each `with*()` method returns a new derived
 context that forms a parent chain. Middleware can attach key-value metadata
 via `withValue()`, set a deadline via `withDeadline()`, or make the context
-cancellable via `withCancelable()`. The terminal middleware (Spawn /
+cancelable via `withCancelable()`. The terminal middleware (Spawn /
 BubbleTea) never call `$next`, short-circuiting the chain. A context bounds
 the machinery cooperatively — between dispatch hops, at await entry, at the
 in-process pump's loop head and idle ticks, and between interactive-auth
@@ -863,7 +862,7 @@ audit, and worth knowing before you wire this into a long-lived process.
 injected credential live. Nothing in the stack carries those values through a
 parameter, so a second concurrent session inside the same PHP process would
 authenticate against the first one's environment. Run one process per
-connection -- which is what a `ForceCommand` line gives you for free -- and
+connection — which is what a `ForceCommand` line gives you for free — and
 do not put this behind a worker pool that reuses a process across peers.
 
 **Geometry arrives from `SIGWINCH`, or from you.** `runChild()` reads the
@@ -876,8 +875,8 @@ tick, not cached, so a stale closure is a live bug rather than a frozen one.
 
 **The pump's knobs are not reachable from here.** `runChild()` builds
 `PumpOptions::sshDefault()->withOnIdle($onIdle)` internally. sugar-pty's
-options carry the real recorder, chunk size and `withPumpDeadlineUs()` -- the
-only true bound a pump can honour -- and this transport never exposes them,
+options carry the real recorder, chunk size and `withPumpDeadlineUs()` — the
+only true bound a pump can honor — and this transport never exposes them,
 so a session that needs one has to fork the pump loop itself. That is why the
 admin guide's failure table says a hanging child hangs here, and why the
 `Context::withDeadline()` in the section above is a value you carry, not an
@@ -910,14 +909,14 @@ backgrounded descendants included. The documented boundary is a leader
 that itself died of the ladder's SIGHUP: by the time the escalation
 runs, survivors of its group are no longer ours to signal.
 
-`InProcessTransport::runChild()` accepts two more arguments -- `$stdin` and
-`$stdout` -- and they are what make a testable, stream-injecting middleware
+`InProcessTransport::runChild()` accepts two more arguments — `$stdin` and
+`$stdout` — and they are what make a testable, stream-injecting middleware
 possible. Code holding the interface cannot pass them, so anything that wants
 to redirect the child's streams must `instanceof InProcessTransport` and
 narrow, or take the concrete class in its own constructor. Widening the
 contract is a deliberate no for now: the fake in `SpawnTest` implements the
 three-parameter form, and the interface exists so that fake needs no PTY.
-`TransportAware` is the other half of the same story -- the transport calls
+`TransportAware` is the other half of the same story — the transport calls
 `setTransport()` on every aware middleware at walk time, before the first
 `handle()`, and implementations must tolerate being called twice because a
 `Server` object is reused across sessions.
@@ -926,7 +925,7 @@ three-parameter form, and the interface exists so that fake needs no PTY.
 
 | Exception | When it's thrown |
 |-----------|-----------------|
-| `CancellationException` | Never thrown: `Context->cancel()` records it and `err()` hands it back -- after a bare `cancel()`, or whenever `done()` is true with no stored reason |
+| `CancellationException` | Never thrown: `Context->cancel()` records it and `err()` hands it back — after a bare `cancel()`, or whenever `done()` is true with no stored reason |
 | `DeadlineExceededException` | The context deadline (`withDeadline()`) has passed |
 
 Both extend `\RuntimeException`.
@@ -1023,7 +1022,7 @@ whitespace-only requests decode to `[]` and are not announced at all.
 Shell requests are deliberately *not* gated, because they name no program;
 the interpreter they get resolves per the note below.
 
-The deny-list that makes that sentence true is `DANGEROUS_VARS`, and it is
+The denylist that makes that sentence true is `DANGEROUS_VARS`, and it is
 applied even to names an operator put in `$acceptEnv`: the loader hooks
 (`LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`, and the two macOS spellings
 `DYLD_INSERT_LIBRARIES` and `DYLD_LIBRARY_PATH`), the
@@ -1032,7 +1031,7 @@ anything (`BASH_ENV`, `ENV`) and the code bash runs at each prompt
 (`PROMPT_COMMAND`), plus `IFS`, `PATH`, `SHELL`, `HOSTALIASES` and
 `POSIXLY_CORRECT`. The rule for the list is that a value must not be able to
 decide what code the child runs, which library it loads, or where it looks for
-one -- that is the server configuring its own child, not the peer describing
+one — that is the server configuring its own child, not the peer describing
 its terminal. Two exceptions are honest ones: the child's `PATH` comes from
 the daemon (a search-less child cannot find `/bin/sh`), and `HOME` is derived
 as `/home/<user>` rather than read from the passwd database, so a deployment
@@ -1045,7 +1044,7 @@ with a counted drop and a one-time notice on the refusal stream.
 
 Replacing the handler replaces the policy. `ChannelHandler` is an interface, so
 a custom implementation of `handleExec()` is bound by nothing here: if you
-substitute one, the default-closed question - may this peer run this program? -
+substitute one, the default-closed question — may this peer run this program? —
 becomes yours to answer inside your method.
 
 On a shell request, `DefaultChannelHandler` resolves the login shell in this
@@ -1111,7 +1110,7 @@ final class DebugChannelHandler implements ChannelHandler
     {
         // Implementing the interface means implementing the policy: the
         // default-closed allowlist below belongs to DefaultChannelHandler,
-        // and nothing inherits it into this specimen.
+        // and nothing inherits it into this custom handler.
         fwrite(STDERR, "exec: {$msg->command}\n");
     }
 
@@ -1197,7 +1196,7 @@ Runnable examples:
 - [`examples/showcase.php`](examples/showcase.php) — middleware-stack tour.
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — interactive bash through `Spawn`.
 - [`examples/spawn-program.php`](examples/spawn-program.php) — arbitrary child program through `Spawn`.
-- [`examples/run-program.php`](examples/run-program.php) — the wrapper that pair execs: a `Program` mounted on its own PTY process.
+- [`examples/run-program.php`](examples/run-program.php) — the wrapper `Spawn` runs to mount a `Program` on its own PTY process.
 
 ## Credits & inspiration
 
