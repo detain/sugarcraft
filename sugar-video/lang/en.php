@@ -42,4 +42,19 @@ return [
     // Player status messages
     'player.no_source_for_embedding' => 'Reel::toPlayer() needs a bound source; call Reel::open(path) or Reel::openUrl(url, headers) first',
     'player.cellpx_non_positive' => 'Cell pixel size must be positive, got {w}x{h}',
+
+    // SV-M18: literals promoted from exception sites and the on-screen status
+    // rows. Values keep the exact historical wording (placeholders swapped in)
+    // so the existing substring pins stay green as an equivalence proof.
+    'decoder.source_missing' => 'video source not found: {path}',
+    'player.fps_positive' => 'fps must be greater than zero',
+    'url.not_http' => 'Not an http(s) URL: {url}',
+    'ramp.unknown' => 'Unknown ramp name: {name}',
+    'allowlist.malformed_authority' => 'Remote host not in allowlist: (malformed authority)',
+    'allowlist.host_not_allowed' => 'Remote host not in allowlist: {host}',
+    'player.loading_status' => '[{mode}] loading...  space play  q quit',
+    'player.ended_status' => '[ended]  {hint}',
+    'player.error_status' => '[error] {failure}',
+    'player.restart_hint' => '0 restart  q quit',
+    'player.quit_hint' => 'q quit',
 ];

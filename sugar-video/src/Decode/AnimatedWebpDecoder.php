@@ -259,7 +259,7 @@ final class AnimatedWebpDecoder implements Decoder
         }
 
         if (!is_file($source)) {
-            throw new \RuntimeException('video source not found: ' . AudioPlayer::redactCredentials($source));
+            throw new \RuntimeException(Lang::t('decoder.source_missing', ['path' => AudioPlayer::redactCredentials($source)]));
         }
 
         // Sibling capture gate, GifDecoder::readBoundedBytes-shaped: the path

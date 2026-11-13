@@ -61,6 +61,13 @@ enum Mode: string
 
     /**
      * Human-readable description of the rendering mode.
+     *
+     * SV-M18 decision: these labels stay RAW English. They are technical
+     * protocol names pinned by the README mode table, the CLI help text in
+     * examples/play.php, and byte-level test pins (e.g. the start-screen
+     * '[Unicode half-block (▀)] loading...' row); translating them would
+     * fork one name across three surfaces. The i18n fan-out owns any later
+     * change of heart.
      */
     public function label(): string
     {

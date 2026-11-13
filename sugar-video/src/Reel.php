@@ -171,7 +171,7 @@ final class Reel
         if (preg_match('#^https?://#i', $url) !== 1) {
             // Same credential-redaction law as every other surfaced source:
             // a rejected URL must never echo its userinfo in the exception.
-            throw new \InvalidArgumentException("Not an http(s) URL: " . AudioPlayer::redactCredentials($url));
+            throw new \InvalidArgumentException(Lang::t('url.not_http', ['url' => AudioPlayer::redactCredentials($url)]));
         }
 
         // Shape guard BEFORE parsing: an old call `openUrl($u, ['cdn.example'])`
@@ -346,7 +346,7 @@ final class Reel
     public function withRamp(string $name): self
     {
         if (!\SugarCraft\Video\Render\LumaRamp::isValidRamp($name)) {
-            throw new \InvalidArgumentException("Unknown ramp name: {$name}");
+            throw new \InvalidArgumentException(Lang::t('ramp.unknown', ['name' => $name]));
         }
         return $this->with(ramp: $name);
     }
@@ -373,7 +373,7 @@ final class Reel
         // m11: a zero/negative override would divide by it for the tick
         // interval — refuse at the boundary instead of minting a broken Model.
         if ($fps !== null && $fps <= 0.0) {
-            throw new \InvalidArgumentException('fps must be greater than zero');
+            throw new \InvalidArgumentException(Lang::t('player.fps_positive'));
         }
 
         return $this->with(fps: $fps, fpsSet: true);
@@ -758,17 +758,15 @@ final class Reel
     private static function assertHostAllowed(string $url, array $allowedHosts): void
     {
         if (preg_match('~^https?://[^/?#]*[\\\\;@%]~i', $url) === 1) {
-            throw new \InvalidArgumentException(
-                'Remote host not in allowlist: (malformed authority)'
-            );
+            throw new \InvalidArgumentException(Lang::t('allowlist.malformed_authority'));
         }
 
         $host = self::hostOf($url);
         $allowed = array_map('strtolower', $allowedHosts);
         if ($host === '' || !in_array($host, $allowed, true)) {
-            throw new \InvalidArgumentException(
-                'Remote host not in allowlist: ' . ($host === '' ? '(none)' : $host)
-            );
+            throw new \InvalidArgumentException(Lang::t('allowlist.host_not_allowed', [
+                'host' => $host === '' ? '(none)' : $host,
+            ]));
         }
     }
 

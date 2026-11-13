@@ -14,6 +14,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Video\Lang;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\ColorProfile\Probe;
 use SugarCraft\Video\Decode\Decoder;
@@ -200,7 +201,7 @@ final class Player implements Model
         // guard runs FIRST so a bad fps is reported as itself, not after an
         // unrelated probe failure on the same path.
         if ($fpsOverride !== null && $fpsOverride <= 0.0) {
-            throw new \InvalidArgumentException('fps must be greater than zero');
+            throw new \InvalidArgumentException(Lang::t('player.fps_positive'));
         }
 
         // SV-H7/007: the documented cols [10,200] x rows [5,80] window binds
@@ -356,7 +357,7 @@ final class Player implements Model
         // m11: same boundary law as open() — a hand-built Player with fps <= 0
         // would throw DivisionByZeroError from its first scheduled tick.
         if ($fps <= 0.0) {
-            throw new \InvalidArgumentException('fps must be greater than zero');
+            throw new \InvalidArgumentException(Lang::t('player.fps_positive'));
         }
 
         // SV-H7/007: the pane window binds here too — fromDecoder is the
@@ -1090,11 +1091,11 @@ final class Player implements Model
                 // M3: the loud terminal row. The message was control-swept at
                 // both mint sites (FfmpegDecoder::describePath/stderrTail);
                 // clipToCells keeps it one pane row whatever the terminal.
-                $line = self::clipToCells('[error] ' . $this->failure, $this->cellsW);
+                $line = self::clipToCells(Lang::t('player.error_status', ['failure' => $this->failure]), $this->cellsW);
                 return $out . "\r\n" . $line;
             }
-            $hint = $this->totalFrames > 0 ? '0 restart  q quit' : 'q quit';
-            return $out . "\r\n" . '[ended]  ' . $hint;
+            $hint = $this->totalFrames > 0 ? Lang::t('player.restart_hint') : Lang::t('player.quit_hint');
+            return $out . "\r\n" . Lang::t('player.ended_status', ['hint' => $hint]);
         }
 
         return $out;
@@ -1493,7 +1494,7 @@ final class Player implements Model
         }
         $body = implode("\r\n", $lines);
         // M22: the start screen announces the active render mode by its human label.
-        $status = "[" . $this->mode->label() . "] loading...  space play  q quit";
+        $status = Lang::t('player.loading_status', ['mode' => $this->mode->label()]);
         return $body . "\r\n" . $status;
     }
 
