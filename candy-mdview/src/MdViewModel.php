@@ -114,7 +114,26 @@ final class MdViewModel implements Model
     public function withDocument(string $name): self
     {
         $vp = $this->viewport->withSize($this->viewport->width, max(0, $this->viewport->height - 1));
-        return $this->copy(['viewport' => $vp, 'documentName' => $name]);
+        return $this->copy(['viewport' => self::withIndicator($vp, $name), 'documentName' => $name]);
+    }
+
+    /**
+     * Discoverability for hidden tails (finding 089): a document that
+     * overflows its rows paints the forms scrollbar; one that fits must
+     * stay byte-identical to the plain path. The flag is re-synced ONLY at
+     * content/height transitions (the steady state returns the SAME
+     * viewport — no clone per frame, no per-keystroke width re-scan).
+     * The richer `›` right-edge corner rides the Viewport maxXOffset memo
+     * (finding 012 / S22) — owner-gated upgrade, deliberately not taken.
+     */
+    private static function withIndicator(Viewport $viewport, ?string $documentName): Viewport
+    {
+        if ($documentName === null) {
+            return $viewport;
+        }
+        $overflow = count($viewport->lines) > $viewport->height;
+
+        return $viewport->showScrollbar === $overflow ? $viewport : $viewport->withScrollbar($overflow);
     }
 
     /**
@@ -190,6 +209,7 @@ final class MdViewModel implements Model
                 // refused exactly as the user pinned it.
                 $viewport = $viewport->setContent(($this->reflowAt)($msg->cols));
             }
+            $viewport = self::withIndicator($viewport, $this->documentName);
             return [$this->copy(['viewport' => $viewport]), null];
         }
         if ($msg instanceof ReloadTickMsg && $msg->id === ReloadTickMsg::ID && $this->watchPath !== null) {
@@ -299,7 +319,7 @@ final class MdViewModel implements Model
         }
 
         return $this->copy([
-            'viewport'      => $this->viewport->setContent($content),
+            'viewport'      => self::withIndicator($this->viewport->setContent($content), $this->documentName),
             'watchMtime'    => $seen[0],
             'watchSize'     => $seen[1],
             'reloadCount'   => $this->reloadCount + 1,

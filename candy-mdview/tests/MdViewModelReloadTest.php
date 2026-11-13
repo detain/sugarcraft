@@ -321,6 +321,50 @@ final class MdViewModelReloadTest extends TestCase
         self::assertSame(['body'], \explode("\n", $plainOne->view()));
     }
 
+    public function testScrollbarFlagTracksResizeAndReloadTransitions(): void
+    {
+        $m = MdViewModel::fromContent(str_repeat("x\n", 30), 40, 41)->withDocument('doc.md');
+        self::assertFalse($m->viewport->showScrollbar, 'content inside the reserved rows wears no indicator');
+
+        [$small, ] = $m->update(new WindowSizeMsg(40, 10));
+        self::assertTrue($small->viewport->showScrollbar, 'shrinking under the content length arms the indicator');
+
+        [$grown, ] = $small->update(new WindowSizeMsg(40, 41));
+        self::assertFalse($grown->viewport->showScrollbar, 'undoing the resize disarms it — no stale column');
+
+        $path = $this->createSourceFile("s\n");
+        $watch = MdViewModel::fromContent('RENDERED<s>', 40, 4)
+            ->withDocument('notes.md')
+            ->withWatch($path, $this->markerReRender());
+
+        file_put_contents($path, str_repeat("new\n", 20));
+        [$detect, ] = $watch->update(new ReloadTickMsg());
+        [$applied, ] = $detect->update(new ReloadTickMsg());
+
+        self::assertTrue($applied->viewport->showScrollbar, 'a reload into longer content must re-arm the indicator');
+    }
+
+    public function testOverflowingDocumentGainsTheScrollbarAndFittingOnesDoNot(): void
+    {
+        // Finding 089: hidden tails must be discoverable. The scrollbar
+        // column rides exactly when content exceeds the rows — and the
+        // no-overflow control stays byte-identical (G2).
+        $tall = MdViewModel::fromContent(str_repeat("x\n", 30), 40, 6)->withDocument('long.md');
+
+        self::assertTrue($tall->viewport->showScrollbar);
+        $body = \array_slice(\explode("\n", $tall->view()), 1);
+        self::assertCount(5, $body);
+        foreach ($body as $row) {
+            self::assertSame(40, Width::of($row), 'the indicator occupies the last cell, never a new one');
+        }
+        self::assertStringContainsString('█', $tall->view(), 'the thumb is in the column at the top of the document');
+
+        $fit = MdViewModel::fromContent("a\nb", 40, 10)->withDocument('short.md');
+
+        self::assertFalse($fit->viewport->showScrollbar, 'a document that fits wears no indicator');
+        self::assertSame(['a', 'b'], \array_slice(\explode("\n", $fit->view()), 1), 'byte-identical plain rows for the fitting control');
+    }
+
     public function testReloadMarkerAppearsInHeaderAfterReloads(): void
     {
         $path = $this->createSourceFile('v1');

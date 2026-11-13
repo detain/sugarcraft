@@ -147,7 +147,9 @@ any non-`0` value forces color on at the gate).
 
 The pager reads the keyboard from `/dev/tty`, so `some-command | candy-mdview -p`
 stays scrollable; the document itself can still come from stdin. It reflows
-when you resize the terminal, and — when opened on a file — the header row
+when you resize the terminal, and a document taller than the screen grows a
+`█` scrollbar along the right edge — a short document renders without it. When
+opened on a file, the header row
 shows `file · scroll%` (plus `↻N` after N auto-reloads); a stdin pager has no
 header row.
 
