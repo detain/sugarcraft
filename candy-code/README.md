@@ -2534,7 +2534,7 @@ candy-code gc status                   # inspect the session store: per-table by
 candy-code gc sessions [--sort size|age|name] [--limit N] [--archived] [--children]
                                        #   per-session real bytes: db fold + transcript journals + shadow dirs;
                                        #   archived hidden unless --archived, --children restricts to subagents
-candy-code gc analyze [--top N]        # top sessions by real bytes, a labeled growth rate,
+candy-code gc analyze [--top N]        # top sessions by real bytes, a labelled growth rate,
                                        #   per-table/storage bars, root-vs-subagent, orphan census
 candy-code gc purge [<selectors>]      # destructive family: filters select sessions and
                                        #   --force deletes them (tombstones ride; named and
