@@ -1062,7 +1062,7 @@ final class Renderer
         return $this->theme->codeBlock->render($literal) . "\n\n";
     }
 
-    private function isPlainStyle(\SugarCraft\Style\Style $s): bool
+    private function isPlainStyle(Style $s): bool
     {
         return $s->render('x') === 'x';
     }
@@ -1070,7 +1070,7 @@ final class Renderer
     private function renderStrike(Strikethrough $node): string
     {
         $body = $this->renderChildren($node);
-        $style = $this->theme->strike ?? \SugarCraft\Style\Style::new()->strikethrough();
+        $style = $this->theme->strike ?? Style::new()->strikethrough();
         return $style->render($body);
     }
 
@@ -1078,7 +1078,7 @@ final class Renderer
     {
         $alt = $this->renderChildren($node);
         $url = $this->resolveUrl($node->getUrl());
-        $imageStyle = $this->theme->image ?? \SugarCraft\Style\Style::new()->italic();
+        $imageStyle = $this->theme->image ?? Style::new()->italic();
         if ($alt === '') {
             $rendered = $imageStyle->render('[image]');
         } else {
@@ -1219,7 +1219,9 @@ final class Renderer
     private static function safeUrl(string $url): string
     {
         // Remove C0 controls + DEL + ESC + BEL.
-        return preg_replace('/[\x00-\x1f\x7f]/', '', $url);
+        // A PCRE failure must refuse the URL (empty destination), not
+        // crash the frame: fail closed like the defensive siblings above.
+        return preg_replace('/[\x00-\x1f\x7f]/', '', $url) ?? '';
     }
 
     private function renderHtmlBlock(HtmlBlock $node): string
@@ -1231,7 +1233,7 @@ final class Renderer
         // sanitizer to preserve intentional controls in trusted text must
         // never thereby re-open a raw-HTML escape channel.
         $literal = self::stripControls(rtrim($node->getLiteral(), "\n"));
-        $style = $this->theme->htmlBlock ?? \SugarCraft\Style\Style::new();
+        $style = $this->theme->htmlBlock ?? Style::new();
         return $style->render($literal) . "\n\n";
     }
 
@@ -1240,7 +1242,7 @@ final class Renderer
         // See renderHtmlBlock: raw inline HTML is always control-stripped,
         // independent of the withSanitize() toggle.
         $literal = self::stripControls($node->getLiteral());
-        $style = $this->theme->htmlSpan ?? \SugarCraft\Style\Style::new();
+        $style = $this->theme->htmlSpan ?? Style::new();
         return $style->render($literal);
     }
 
