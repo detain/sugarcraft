@@ -926,6 +926,17 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   window and `PgDn`/`PgUp` walk the table in those windows (SQL-O11) — but a
   hand-typed unbounded `SELECT` still lands entirely in memory. Project what
   you need on huge tables.
+- **The Rows pane is read-only navigation — there is no in-grid data editing**
+  (SQL-O03, disclosed per the owner's ruling 3a). Browsing a table shows its
+  paged preview; nothing on that grid edits a cell, inserts a row, or deletes
+  one, and no in-app DML confirm flow exists. Mutate data through hand-written
+  `UPDATE`/`INSERT`/`DELETE` statements in the Query pane — where the
+  destructive-statement arm double-press-guards `DROP`/`TRUNCATE`/`DELETE`/
+  `ALTER`/`RENAME`/`GRANT`/`REVOKE`, while `UPDATE` and `INSERT` run on the
+  first press (their damage is row-scoped and re-runnable, the arm's roster
+  follows the schema-destroying verbs). The named antecedent's research plan
+  lists cell editing as Priority-3; until it lands, this is the honest fact
+  rather than an implied capability.
 - **The EXPLAIN guard restricts shape, not side effects.** The Connections
   MDL-tab guard (see *EXPLAIN safety guard* above) only runs `EXPLAIN` on
   single `SELECT` statements, which stops accidental writes — but MySQL can
