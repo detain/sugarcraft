@@ -52,7 +52,21 @@ final class CheckDocsAssetsTest extends TestCase
 
     public function testTheRepositoryItselfPassesEveryLeg(): void
     {
-        $this->assertSame([], \CheckDocsAssets::derive(\dirname(__DIR__, 2)), 'the shipped docs site must be asset-clean');
+        $census = null;
+        $findings = \CheckDocsAssets::derive(\dirname(__DIR__, 2), $census);
+        $this->assertSame([], $findings, 'the shipped docs site must be asset-clean');
+
+        // RT-20: sight-pins. A zero-findings answer is ALSO what "the legs
+        // scanned nothing" returns (a root-path bug silently downgrades this
+        // arm to the empty-dir arm), so pin the live corpus the checker must
+        // engage with. Floors re-derived from disk 2026-11-12 (measured
+        // 72/64/64/634/71) with slack for additive churn only — a corpus
+        // shrinking below a floor is a red worth reading.
+        $this->assertGreaterThanOrEqual(70, $census['chrome_pages'], 'chrome pages scanned (0 = the walk never saw docs/)');
+        $this->assertGreaterThanOrEqual(60, $census['icon_files'], 'media/icons pngs scanned');
+        $this->assertGreaterThanOrEqual(60, $census['site_icons'], 'docs/img/icons pngs scanned');
+        $this->assertGreaterThanOrEqual(600, $census['demo_gif_refs'], 'demo-GIF references examined');
+        $this->assertGreaterThanOrEqual(60, $census['sitemap_pages'], 'sitemap universe pages scanned');
     }
 
     public function testACoherentFixtureCarriesNoFindings(): void

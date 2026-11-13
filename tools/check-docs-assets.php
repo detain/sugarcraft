@@ -82,9 +82,9 @@ final class CheckDocsAssets
     /**
      * @return list<string> human-readable findings, empty when the tree is clean
      */
-    public static function derive(string $root): array
+    public static function derive(string $root, ?array &$census = null): array
     {
-        return array_merge(
+        $findings = array_merge(
             self::iconSetEquality($root),
             self::demoGifRefs($root),
             self::localLinks($root),
@@ -94,6 +94,25 @@ final class CheckDocsAssets
             self::navBlockIdentity($root),
             self::sitemapCoverage($root),
         );
+
+        // RT-20: a findings-only answer is vacuously green on a tree the legs
+        // never actually scanned (a path bug turns the real-tree arm into the
+        // empty-dir arm). The census reports what the legs LOOKED AT, so the
+        // caller can sight-pin non-trivial corpus sizes — ChildLifetimesToolTest
+        // style (29 sites/11 findings). $sink absorbs the sitemap leg's
+        // findings-by-ref during re-count; the merge above already carries them.
+        if ($census !== null || func_num_args() > 1) {
+            $sink = [];
+            $census = [
+                'chrome_pages'  => count(self::chromePages($root)),
+                'icon_files'    => count(glob("$root/media/icons/*.png") ?: []),
+                'site_icons'    => count(glob("$root/docs/img/icons/*.png") ?: []),
+                'demo_gif_refs' => self::demoGifRefCensus($root),
+                'sitemap_pages' => is_dir("$root/docs") ? count(self::sitemapUniverse($root, $sink)) : 0,
+            ];
+        }
+
+        return $findings;
     }
 
     /**
@@ -381,6 +400,25 @@ final class CheckDocsAssets
         }
 
         return $findings;
+    }
+
+    /**
+     * RT-20: how many distinct RAW-gif references the leg actually examined —
+     * the findings list says nothing about scan depth (zero findings is also
+     * what a zero-file walk looks like).
+     *
+     * @return int
+     */
+    public static function demoGifRefCensus(string $root): int
+    {
+        $refs = 0;
+        foreach (self::docsHtmlFiles($root) as $file) {
+            $html = (string) file_get_contents($file);
+            $pattern = '~' . preg_quote(self::RAW_GIF, '~') . '([^"\']+\.gif)~';
+            $refs += count(array_unique(preg_match_all($pattern, $html, $m) ? $m[1] : []));
+        }
+
+        return $refs;
     }
 
     /**
