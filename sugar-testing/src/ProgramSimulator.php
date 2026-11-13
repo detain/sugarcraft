@@ -120,6 +120,9 @@ final class ProgramSimulator
     /** Set by addMsgs()/send(): with*() configuration must happen before it. */
     private bool $hasSent = false;
 
+    /** When false, run() keeps only output bytes — no per-frame view() list. */
+    private bool $captureFrames = true;
+
     /**
      * When true, executes cmds and threads their returned messages through
      * update(). When false, captures cmds but does NOT execute them (safe
@@ -306,6 +309,29 @@ final class ProgramSimulator
     }
 
     /**
+     * Control per-frame retention in TestResult::$frames.
+     *
+     * A run retains BOTH the accumulated output bytes and every view()
+     * frame, so a ~10,000-message soak against a full-screen model holds
+     * roughly twice the rendered bytes. withFrameCapture(false) keeps
+     * output — and the final view — intact while the frames list stays
+     * empty, for memory-bound soak runs that assert on output only.
+     *
+     * Clones — throws RuntimeException on an already-sent handle; configure first.
+     *
+     * @param bool $capture when false, run() leaves TestResult::$frames empty
+     * @return self
+     */
+    public function withFrameCapture(bool $capture = true): self
+    {
+        $this->assertConfigureBeforeSend();
+
+        $sim = clone $this;
+        $sim->captureFrames = $capture;
+        return $sim;
+    }
+
+    /**
      * Arm the startup WindowSizeMsg (dispatched before init(), like Program).
      *
      * Clones — throws RuntimeException on an already-sent handle; configure first.
@@ -371,6 +397,11 @@ final class ProgramSimulator
      * from the Program's model, and nothing a previous run produced leaks
      * into the next.
      *
+     * Memory shape: a run retains every view() frame AND the concatenated
+     * output bytes — worst case roughly twice the rendered bytes on a
+     * full-screen soak; {@see withFrameCapture()} trades the frame list
+     * away and keeps only the output.
+     *
      * @return TestResult
      */
     public function run(): TestResult
@@ -422,7 +453,9 @@ final class ProgramSimulator
         if ($model instanceof Model) {
             $finalViewResult = $model->view();
             $finalView = is_string($finalViewResult) ? $finalViewResult : '';
-            $frames[]  = $finalView;
+            if ($this->captureFrames) {
+                $frames[] = $finalView;
+            }
         }
 
         return new TestResult(
@@ -464,6 +497,12 @@ final class ProgramSimulator
     /**
      * Invoke each subscription's produce closure once and collect the
      * messages they return.
+     *
+     * A throwing produce() aborts the whole run — per-subscription isolation
+     * (one bad producer must not poison its siblings) is deliberately NOT
+     * mirrored from any runtime behavior: the simulator has no production
+     * precedent for swallowing producer faults, and a loud abort beats a
+     * silently partial subscription round.
      *
      * @param Model $model
      * @return list<Msg>
@@ -599,7 +638,9 @@ final class ProgramSimulator
             $viewOutput = $model->view();
             if (is_string($viewOutput)) {
                 $this->outputBytes .= $viewOutput;
-                $frames[]           = $viewOutput;
+                if ($this->captureFrames) {
+                    $frames[] = $viewOutput;
+                }
             }
 
             $producedMsg = $this->runCmd($cmd);

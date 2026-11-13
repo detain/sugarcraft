@@ -460,4 +460,36 @@ final class ProgramSimulatorTest extends TestCase
 
         $this->assertSame("Count: 8\n", $result->view);
     }
+
+    public function testFrameCaptureOffKeepsOutputAndViewButNotFrames(): void
+    {
+        $keys = [
+            new KeyMsg(type: KeyType::Char, rune: '+'),
+            new KeyMsg(type: KeyType::Char, rune: '+'),
+        ];
+
+        $plain = ProgramSimulator::new(new CounterModel(0))->addMsgs(...$keys)->run();
+        $lean  = ProgramSimulator::new(new CounterModel(0))
+            ->withFrameCapture(false)
+            ->addMsgs(...$keys)
+            ->run();
+
+        // Soak runs that assert on output only must not pay for the second
+        // full retention; everything except the per-frame list is identical.
+        $this->assertSame([], $lean->frames);
+        $this->assertSame($plain->output, $lean->output);
+        $this->assertSame($plain->view, $lean->view);
+        $this->assertNotSame([], $plain->frames);
+    }
+
+    public function testWithFrameCaptureRefusesAnAlreadySentHandle(): void
+    {
+        $sim = ProgramSimulator::new(new CounterModel(0));
+        $sim->addMsgs(new KeyMsg(type: KeyType::Char, rune: '+'));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('before the first addMsgs()');
+
+        $sim->withFrameCapture(false);
+    }
 }

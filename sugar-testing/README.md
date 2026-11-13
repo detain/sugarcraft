@@ -31,7 +31,8 @@ decoding.
   traversal *and* symlink jail keeps the walk inside the `<base>/fixtures`
   subtree; the fixtures root itself is the sanctioned container)
 - **`TestResult`** — what `run()` returns: final model, last view, captured cmds,
-  raw output, per-turn `frames`, and `droppedAfterStop`
+  raw output, per-turn `frames` (droppable via `withFrameCapture(false)` for
+  memory-bound soaks), and `droppedAfterStop`
 - **`Graphics\`** — inline-image stream assertions headlined by
   `GraphicsAssertions::assertRendersTo()`, over `KittyStream`, `KittyImage`,
   `Iterm2Stream`, `SixelStream`, `PixelGrid`, `Mode`, `DecodeLimits`, and
