@@ -267,11 +267,12 @@ final class StoreTest extends TestCase
 
     public function testAppendUsesExclusiveLockAndLoadDayStreams(): void
     {
-        // The LOCK_EX flag and fgets() streaming are not runtime-observable, so
-        // assert on the source as a revert-proof seam: dropping LOCK_EX or going
+        // The lock door and fgets() streaming are not runtime-observable, so
+        // assert on the source as a revert-proof seam: dropping the exclusive
+        // non-blocking take (CT-S63: bounded, never the forever kind) or going
         // back to file_get_contents() slurping fails this guard.
         $src = (string) file_get_contents(dirname(__DIR__) . '/src/Store.php');
-        $this->assertStringContainsString('FILE_APPEND | LOCK_EX', $src);
+        $this->assertStringContainsString('LOCK_EX | LOCK_NB', $src);
         $this->assertStringContainsString('fgets(', $src);
         $this->assertStringNotContainsString('file_get_contents(', $src);
     }
@@ -454,12 +455,87 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         // still redden a test. The guarded body must count the whole line,
         // not merely reject `false`.
         $src = (string) file_get_contents(dirname(__DIR__) . '/src/Store.php');
-        $start = strpos($src, '$written = @file_put_contents(');
-        $this->assertNotFalse($start, 'append() must write via @file_put_contents with errors surfaced for the message');
+        $start = strpos($src, '$written = fwrite($handle, $line);');
+        $this->assertNotFalse($start, 'append() must count what the locked handle wrote');
         $tail = substr($src, $start, 1400);
         $this->assertStringContainsString('if ($written !== strlen($line)) {', $tail,
             'the write check must catch partial writes too, not just === false');
         $this->assertStringContainsString('failed to append heartbeat', $tail);
+    }
+
+    public function testAWedgedLockHolderAnswersWithABoundedErrorNotAHang(): void
+    {
+        // Finding 088, deterministically in-process: a second open file
+        // description holding the exclusive lock makes append()'s non-blocking
+        // take fail on every tick, so the wait must end at the deadline with
+        // the hand-raise — never with a hung CLI.
+        $day = new \DateTimeImmutable('2026-05-08');
+        $store = new Store($this->tmp);
+        $file = $this->tmp . '/2026-05-08.jsonl';
+        file_put_contents($file, '');
+        $holder = fopen($file, 'ab');
+        $this->assertNotFalse(flock($holder, LOCK_EX | LOCK_NB));
+
+        $beat = new Heartbeat($day->getTimestamp(), 'proj', 'php', 'a.php', 60);
+        $startedAt = microtime(true);
+        try {
+            $store->append($beat, null, 150);
+            $this->fail('the wedged holder must end the wait with an error');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('stayed locked by another appender for 150 ms', $error->getMessage());
+            $this->assertStringContainsString('2026-05-08.jsonl', $error->getMessage());
+        }
+        $this->assertLessThan(3.0, microtime(true) - $startedAt, 'the door is bounded, not decorative');
+        $this->assertSame('', (string) file_get_contents($file), 'a refused append writes nothing');
+
+        // Same store, lock released: the ordinary path is untouched.
+        flock($holder, LOCK_UN);
+        fclose($holder);
+        $store->append($beat);
+        $this->assertCount(1, $store->loadDay($day));
+    }
+
+    public function testASecondLongHolderIsWaitedOutAndTheBeatStillLands(): void
+    {
+        // The wait leg across processes: a child takes the lock for ~0.4 s and
+        // releases, the parent's default-timeout append must wait it out and
+        // write — a deadline of zero would error instead, so this pins the
+        // poll loop actually polling.
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl_fork is required to park a holder');
+        }
+        $day = new \DateTimeImmutable('2026-05-09');
+        $store = new Store($this->tmp);
+        $file = $this->tmp . '/2026-05-09.jsonl';
+        file_put_contents($file, '');
+        $sentinel = $file . '.held';
+        @unlink($sentinel);
+
+        $pid = pcntl_fork();
+        $this->assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            $handle = fopen($file, 'ab');
+            if ($handle === false || !flock($handle, LOCK_EX | LOCK_NB)) {
+                exit(1);
+            }
+            file_put_contents($sentinel, 'held');
+            usleep(400_000);
+            fclose($handle);
+            exit(0);
+        }
+
+        $deadline = microtime(true) + 5.0;
+        while (!is_file($sentinel)) {
+            if (microtime(true) >= $deadline) {
+                pcntl_waitpid($pid, $status);
+                $this->fail('the lock holder never announced itself');
+            }
+            usleep(10_000);
+        }
+        $store->append(new Heartbeat($day->getTimestamp(), 'proj', 'php', 'b.php', 60));
+        pcntl_waitpid($pid, $status);
+        @unlink($sentinel);
+        $this->assertCount(1, $store->loadDay($day), 'the beat rode out the wait');
     }
 
     public function testAppendReportsAFailedWriteLoudly(): void

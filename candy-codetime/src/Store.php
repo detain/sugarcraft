@@ -56,6 +56,15 @@ final class Store implements HeartbeatReader
      */
     public const MAX_RANGE_BEATS = 500_000;
 
+    /**
+     * Milliseconds append() will wait for another appender's lock on the day
+     * file. The same asymmetry law SqliteBackend::BUSY_TIMEOUT_MS serves: a
+     * plain blocking flock waits FOREVER, so one wedged holder (a crashed
+     * plugin process whose inherited fd never closed) would turn every push
+     * into a hung CLI instead of a one-line error. Bounded, then hand-raise.
+     */
+    public const APPEND_LOCK_TIMEOUT_MS = 5000;
+
     // memoization, not observable state
     private array $dayCache = [];
 
@@ -543,15 +552,20 @@ final class Store implements HeartbeatReader
      *
      * @param Heartbeat $hb
      * @param CancellationToken|null $token  Optional cancellation token to abort the write
-     * @throws \RuntimeException  If the write is cancelled, the data dir cannot be
-     *                            made private, the heartbeat cannot be encoded, or
+     * @param int $lockTimeoutMs  How long to wait for another appender's lock
+     *                            before giving up (self::APPEND_LOCK_TIMEOUT_MS)
+     * @throws \RuntimeException  If the write is cancelled or times out waiting
+     *                            for the lock, the data dir cannot be made
+     *                            private, the heartbeat cannot be encoded, or
      *                            the write itself fails
      *
-     * @note CancellationToken is checked immediately before the write.
-     *       If cancelled at that point the write is skipped and an exception is thrown.
-     *       PHP cannot interrupt a blocking `file_put_contents()` mid-write.
+     * @note CancellationToken is checked before the write and on every tick of
+     *       the lock wait; a cancel answers 'Heartbeat append cancelled', a
+     *       wedged holder answers the same exception class with the waited
+     *       span named. PHP cannot interrupt a write mid-flight; the lock door
+     *       at least makes the WAIT bounded.
      */
-    public function append(Heartbeat $hb, ?CancellationToken $token = null): void
+    public function append(Heartbeat $hb, ?CancellationToken $token = null, int $lockTimeoutMs = self::APPEND_LOCK_TIMEOUT_MS): void
     {
         if ($token !== null && $token->isCancelled()) {
             throw new \RuntimeException('Heartbeat append cancelled');
@@ -598,8 +612,38 @@ final class Store implements HeartbeatReader
         }
 
         // LOCK_EX serialises concurrent appenders (editor plugin + CLI + cron)
-        // so their lines can't interleave into a torn write.
-        $written = @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
+        // so their lines can't interleave into a torn write — taken NON-BLOCKING
+        // and polled to a deadline, because the blocking form waits forever:
+        // one wedged holder (a crashed plugin process whose inherited fd never
+        // closed) used to turn every later push into a hung CLI. Same asymmetry
+        // law as the sqlite door (finding 088).
+        $handle = @fopen($file, 'ab');
+        if ($handle === false) {
+            $last = error_get_last();
+            throw new \RuntimeException(
+                'failed to append heartbeat to ' . $file
+                . (isset($last['message']) ? ': ' . $last['message'] : ''),
+            );
+        }
+        try {
+            $deadline = microtime(true) + max(0, $lockTimeoutMs) / 1000;
+            while (!@flock($handle, LOCK_EX | LOCK_NB)) {
+                if ($token !== null && $token->isCancelled()) {
+                    throw new \RuntimeException('Heartbeat append cancelled');
+                }
+                if (microtime(true) >= $deadline) {
+                    throw new \RuntimeException(
+                        'Heartbeat append cancelled: ' . $file
+                        . ' stayed locked by another appender for ' . $lockTimeoutMs . ' ms',
+                    );
+                }
+                usleep(10_000);
+            }
+            $written = fwrite($handle, $line);
+        } finally {
+            @flock($handle, LOCK_UN);
+            fclose($handle);
+        }
         if ($written !== strlen($line)) {
             // Catches BOTH shapes of loss: a hard failure (false) and a short
             // write (a partial count — what an RLIMIT_FSIZE child actually
