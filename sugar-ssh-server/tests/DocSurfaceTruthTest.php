@@ -38,7 +38,7 @@ final class DocSurfaceTruthTest extends TestCase
         );
         // The code: silence is the default, and the reason is on the class.
         self::assertStringContainsString('bool $announce = false', $src);
-        self::assertStringContainsString('opt-in, and off by default (audit MAJOR 7)', $src);
+        self::assertStringContainsString('opt-in, and off by default (2026-11 audit)', $src);
 
         $readme = $this->readme();
         if ($readme === null) {
@@ -437,7 +437,7 @@ final class DocSurfaceTruthTest extends TestCase
     {
         $source = (string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware/Auth/KeyboardInteractive.php');
         $flatSource = (string) \preg_replace('/\s+/', ' ', $source);
-        $this->assertStringContainsString('Echo is a label, not terminal state (audit MAJOR 6)', $flatSource);
+        $this->assertStringContainsString('Echo is a label, not terminal state (2026-11 audit)', $flatSource);
         $this->assertStringContainsString('MAX_RESPONSE_BYTES', $flatSource);
         $this->assertStringContainsString('makeRaw()', $flatSource);
 
@@ -580,7 +580,7 @@ final class DocSurfaceTruthTest extends TestCase
         );
         $this->assertStringContainsString("'sshserver'` namespace baked in", $lang);
         $this->assertStringNotContainsString("'wish'`", $lang, 'audit MINOR 19: the facade must not teach a namespace that was renamed away');
-        $this->assertStringContainsString('Nothing here selects a locale implicitly (audit MAJOR 15)', $lang);
+        $this->assertStringContainsString('Nothing here selects a locale implicitly (2026-11 audit)', $lang);
         $this->assertStringContainsString('Server::withLocale()', $lang, 'the facade docblock must point at the shipped arming door');
         $this->assertStringContainsString('Do not reach for `T::detect()`', $lang);
 

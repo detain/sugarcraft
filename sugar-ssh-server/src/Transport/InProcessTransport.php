@@ -288,8 +288,8 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
             }
         }
 
-        // Protocol metadata, best-effort from the environment (audit MAJOR 3
-        // and MAJOR 21). This transport performs no SSH handshake and speaks
+        // Protocol metadata, best-effort from the environment (the 2026-11
+        // audit's two metadata findings). This transport performs no SSH handshake and speaks
         // no wire protocol, so nothing here is a fact about the peer's
         // negotiation: the session id is MINTED for this process and is good
         // for tying this run's own lines together and nothing more; the auth
@@ -356,7 +356,7 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
      * pid-scoped — RFC 4254 signals name a process, not a group.
      *
      * The two streams are not treated alike, and the asymmetry is the
-     * contract (audit K9): STDIN and the PTY master are flipped to
+     * contract (2026-11 audit): STDIN and the PTY master are flipped to
      * non-blocking below because the pump polls them with
      * `stream_select()`, while `$stdout` is deliberately LEFT BLOCKING,
      * because the pump writes whatever it reads from the master in one
@@ -549,7 +549,7 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
                     SignalForwarder::reset(\SIGWINCH);
                 }
                 // Give the caller's stream back the way we found it
-                // (audit MINOR 3). We flipped STDIN non-blocking because the
+                // (2026-11 audit). We flipped STDIN non-blocking because the
                 // pump selects on it; a host that keeps using that handle
                 // after serve() - a shell script, a later `read()` in the
                 // entry point - would otherwise be reading a descriptor it
@@ -754,7 +754,7 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
      * returns ENOTTY there and we don't want to surface that as a
      * "size went to 0" event.
      *
-     * The broad `\Throwable` catch is not sloppiness (audit MINOR 12). The
+     * The broad `\Throwable` catch is not sloppiness (2026-11 audit). The
      * ioctl request code is resolved per platform, and a libc binding that
      * cannot answer it raises rather than returns — and it would raise on
      * every idle tick, not once at boot. A resize probe is a bonus on top of

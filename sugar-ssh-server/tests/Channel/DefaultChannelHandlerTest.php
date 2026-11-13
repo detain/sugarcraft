@@ -1234,7 +1234,7 @@ final class DefaultChannelHandlerTest extends TestCase
             (string) \file_get_contents(\dirname(__DIR__, 2) . '/README.md'),
         );
 
-        $this->assertStringContainsString('audit K1', $doc);
+        $this->assertStringContainsString('wire today (2026-11 audit)', $doc);
         $this->assertStringContainsString('WindowChangeMsg', $doc);
         $this->assertStringContainsString('SSH_ORIGINAL_COMMAND', $doc);
         $this->assertStringNotContainsString('ChannelHandler dispatch are complete', $readme);

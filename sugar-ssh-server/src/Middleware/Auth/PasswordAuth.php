@@ -29,16 +29,16 @@ use SugarCraft\SshServer\StreamHelper;
  * the walk can still show the bytes. If that threat model matters to you,
  * do not put the secret in the environment at all - have the wrapper hand it
  * to the entry script over a pipe and inject it as a constructor argument.
- * (audit MINOR 2)
+ * (2026-11 audit)
  *
  * **Presence is not emptiness.** A session whose environment carries no
  * `SSH_PASSWORD` at all is refused without consulting the validator. An
  * empty string that was actually delivered still reaches it, because
  * "nobody sent a password" and "the password sent is empty" are different
- * facts and only the second is the caller's to judge. (audit MINOR 6)
+ * facts and only the second is the caller's to judge. (2026-11 audit)
  *
  * On rejection writes a one-line message to stderr, marks the session
- * refused for the exit code (audit MAJOR 9), and returns without invoking
+ * refused for the exit code (2026-11 audit), and returns without invoking
  * `$next`.
  */
 final class PasswordAuth implements Middleware

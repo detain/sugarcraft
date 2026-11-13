@@ -23,7 +23,7 @@ use SugarCraft\SshServer\StreamHelper;
  * line -- which makes the value peer-asserted, never proven, and is why
  * this gate is only as strong as whoever exported it.
  *
- * Both missing-certificate paths announce (audit K6). Passing silently
+ * Both missing-certificate paths announce (2026-11 audit). Passing silently
  * when `required` is false made a security control that is a no-op on a
  * stock sshd look configured; denying at `required: true` with a bare
  * "none presented" gave no hint that the environment, not the client,
@@ -75,7 +75,7 @@ final class CertificateAuth implements Middleware
         $pem = $this->certFromEnv();
 
         if ($pem === null || $pem === '') {
-            // Loud either way (audit K6): an unconfigured environment must
+            // Loud either way (2026-11 audit): an unconfigured environment must
             // not read as an authenticated connection, and a deny must say
             // why nothing could be checked.
             fwrite($this->stderr, Lang::t('certificateauth.env_missing', [

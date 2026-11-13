@@ -90,7 +90,7 @@ final class Server
      * picked because it cannot collide with anything a served program
      * exits with (0-127 is the useful range, 128+ is the shell's) and
      * because `1` would be indistinguishable from a script that simply
-     * failed. Audit MAJOR 9: a refused login used to answer `0`, so
+     * failed. The 2026-11 audit: a refused login used to answer `0`, so
      * `ssh host backup.sh` looked like a successful backup to the cron
      * job and the CI step that ran it.
      */
@@ -331,7 +331,7 @@ final class Server
      *
      * Both transports read the stack's result through here, so a refusal
      * and a completion cannot drift apart by transport the way they did
-     * before audit MAJOR 9. Precedence is deliberate: a child that
+     * before the 2026-11 audit. Precedence is deliberate: a child that
      * actually ran wins, because its number is the most specific truth
      * available.
      */

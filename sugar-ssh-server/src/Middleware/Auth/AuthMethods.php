@@ -33,7 +33,7 @@ use SugarCraft\SshServer\StreamHelper;
  *
  *          SSH_AUTH_METHODS publickey password keyboard-interactive
  *
- * **The banner is opt-in, and off by default (audit MAJOR 7).** Under
+ * **The banner is opt-in, and off by default (2026-11 audit).** Under
  * `ForceCommand` stdout is the client's data channel (see the Logger
  * note on sinks), so a line printed here is not a protocol banner an
  * SSH client interprets — it is text the user sees before their shell

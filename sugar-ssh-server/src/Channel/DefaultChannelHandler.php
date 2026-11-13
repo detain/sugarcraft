@@ -51,7 +51,7 @@ use SugarCraft\SshServer\Transport\ChildSpawner;
  * in {@see DANGEROUS_VARS}) so a peer cannot choose what it gets exec'd
  * into ({@see resolveShell()}).
  *
- * **Nothing feeds these messages from the wire today (audit K1).** The
+ * **Nothing feeds these messages from the wire today (2026-11 audit).** The
  * only {@see ChannelMsg} this repository ever constructs in production
  * is {@see WindowChangeMsg}, from a SIGWINCH inside
  * {@see \SugarCraft\SshServer\Transport\InProcessTransport}; the
@@ -96,7 +96,7 @@ final class DefaultChannelHandler implements ChannelHandler
 
     /**
      * Names the child never learns from the peer, even when an operator
-     * lists them in `$acceptEnv` (audit MINOR 5).
+     * lists them in `$acceptEnv` (2026-11 audit).
      *
      * This is a deny-list, not a threat model, and it is deliberately
      * boring: every entry is a variable whose VALUE changes what code runs,
@@ -389,7 +389,7 @@ final class DefaultChannelHandler implements ChannelHandler
         // — which is exactly why each name is probed through \defined() first:
         // a platform that numbers a signal differently resolves to its own
         // constant, and a literal is reached only where no extension defines
-        // the name at all (audit NIT 10).
+        // the name at all (2026-11 audit).
         $map = [
             'INT'   => \defined('SIGINT') ? \SIGINT : 2,
             'TERM'  => \defined('SIGTERM') ? \SIGTERM : 15,
@@ -446,7 +446,7 @@ final class DefaultChannelHandler implements ChannelHandler
      * stream stays untouched, the child's terminal state stays as it was, and
      * the only faithful local action would be to invent an event the child
      * never asked for. Silence is the correct handler, so this method is empty
-     * on purpose (audit NIT 13). It stays rather than disappearing because
+     * on purpose (2026-11 audit). It stays rather than disappearing because
      * {@see ChannelHandler} is the seam a wire decoder feeds, and a decoder
      * needs every message named.
      */
@@ -567,7 +567,7 @@ final class DefaultChannelHandler implements ChannelHandler
         // Build the child's environment from a floor of our own naming.
         //
         // Two entries are honest exceptions to that sentence, and both are
-        // deliberate (audit MINOR 14). `PATH` is taken from the daemon on
+        // deliberate (2026-11 audit). `PATH` is taken from the daemon on
         // purpose: a child with no search path cannot find /bin/sh, so the
         // alternative to inheriting it is a hardcoded default that breaks
         // any deployment that installs elsewhere - the value is the

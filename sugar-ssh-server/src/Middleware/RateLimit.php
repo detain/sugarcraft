@@ -66,14 +66,14 @@ use SugarCraft\SshServer\StreamHelper;
  * shape fixes — the rename replaces the inode, so a sibling that was
  * blocked on `flock()` wakes up holding a lock over a file nobody can
  * any longer reach, while the next newcomer locks the fresh inode
- * independently and sees a full bucket (audit K2: N parallel connects
+ * independently and sees a full bucket (2026-11 audit: N parallel connects
  * each got the whole burst). Sidecar locks survive renames.
  *
  * Buckets are PRUNED: any bucket that is not the current session's own
  * and has refilled back to its burst is dropped when the map is next
  * persisted. Dropping a full bucket is behaviour-identical to keeping it
  * ({@see refill()} treats a missing entry as full), so an attacker
- * cycling source IPs cannot grow this file without bound (audit M4).
+ * cycling source IPs cannot grow this file without bound (2026-11 audit).
  * For genuinely high-volume deployments swap in Redis (this class is
  * intentionally dependency-light).
  */
@@ -161,7 +161,7 @@ final class RateLimit implements Middleware
      * A session with no client address is not exempt: it lands in a single
      * shared `ip:_unknown` bucket together with every other such session,
      * which behind a proxy or on a transport that never learned the peer is
-     * one global throttle, not a per-client one (audit MINOR 8).
+     * one global throttle, not a per-client one (2026-11 audit).
      * The failure direction is worth naming: a shared bucket is strict, not
      * safe. One noisy client that arrived without an address can burn the
      * burst and lock out every other address-less client behind it, which is
@@ -253,7 +253,7 @@ final class RateLimit implements Middleware
      * it costs nothing. That makes the prune a pure memory-reclamation step
      * — an attacker cycling source IPs (each minting an `ip:` entry) no
      * longer grows the state file, and the file's rewrite cost stops
-     * growing with it (audit M4: the 'bounded state' claim was only true
+     * growing with it (2026-11 audit: the 'bounded state' claim was only true
      * while nobody was looking).
      *
      * Entries written by an older build carry no `burst`/`rate`; they are
@@ -329,7 +329,7 @@ final class RateLimit implements Middleware
      * entry that is not an array, or whose `tokens`/`last` (the fields
      * {@see refill()} reads) are not numeric, would be read by that
      * method's absent-means-full default as a freshly refilled bucket —
-     * the silent restart M5 made whole-file corruption loud, smuggled
+     * the silent restart the audit made whole-file corruption loud, smuggled
      * through at entry granularity. Such an entry is therefore a
      * state-layer error, decided by the same fail-open/fail-closed
      * policy. `burst`/`rate` need not be present: {@see limitsFor()}
@@ -376,7 +376,7 @@ final class RateLimit implements Middleware
             try {
                 $data = $this->store()->read();
             } catch (\Throwable $e) {
-                // A present-but-corrupt map is LOUD (audit M5): the previous
+                // A present-but-corrupt map is LOUD (2026-11 audit): the previous
                 // `json_decode(...) ?: []` turned garbage into a full burst
                 // for everyone, silently. The failClosed policy decides what
                 // a corrupt file means; it is never "start over at full
@@ -456,7 +456,7 @@ final class RateLimit implements Middleware
      * decision: allow (true) unless `$failClosed`, in which case deny
      * (false). This replaces the previous silent fail-open.
      *
-     * Deliberately path-free (audit K3): under `ForceCommand` this stream
+     * Deliberately path-free (2026-11 audit): under `ForceCommand` this stream
      * reaches the connecting client, and an unauthenticated prober has no
      * business learning where the bucket map lives.
      */

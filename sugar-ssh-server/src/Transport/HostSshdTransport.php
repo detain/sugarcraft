@@ -30,7 +30,7 @@ final class HostSshdTransport implements Transport
     {
         // No child of ours exists under the inline transport, but the
         // chain can still refuse: an Auth gate that says no must not
-        // answer 0 just because nothing was spawned (audit MAJOR 9).
+        // answer 0 just because nothing was spawned (2026-11 audit).
         // A BubbleTea Program's own status still never crosses the sshd
         // PTY boundary — that remains the documented difference from a
         // spawner transport.

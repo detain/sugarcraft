@@ -28,7 +28,7 @@ use SugarCraft\SshServer\Session;
  * alike surface at the dispatch frame, keeping the sync-caller contract that
  * PromiseDispatchTest pins: transport `run()` throws).
  *
- * The walk also ANSWERS: since audit MAJOR 9 it returns the status the
+ * The walk also ANSWERS: since the 2026-11 audit it returns the status the
  * session ended with, read through {@see Server::resolveStatus()} — the
  * spawned child's code when a spawner ran one, `Server::EXIT_DENIED`
  * when a middleware refused the session or the context died, and `0`

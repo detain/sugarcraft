@@ -20,7 +20,7 @@ use SugarCraft\SshServer\Session;
  * The interface lets the `Spawn` middleware unit-test against a
  * fake without needing a real PTY.
  *
- * It is deliberately narrower than the class behind it (audit MAJOR 18).
+ * It is deliberately narrower than the class behind it (2026-11 audit).
  * `InProcessTransport::runChild()` takes two more parameters -- `$stdin`
  * and `$stdout` -- because injecting streams is what makes the transport
  * testable at all. They are not part of this contract, so a caller holding

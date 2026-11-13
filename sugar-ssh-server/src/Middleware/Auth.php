@@ -34,7 +34,7 @@ use SugarCraft\SshServer\StreamHelper;
  *     `keyFingerprints` admits all four combinations: with `users`
  *     `['alice','bob']` and `keyFingerprints` `['alice-key','bob-key']`
  *     BOB PRESENTING ALICE'S KEY IS ADMITTED AS alice. That is the
- *     audited defect (K4); it is behaviour, not a bug you can flip
+ *     audited defect (the cross-product finding); it is behaviour, not a bug you can flip
  *     silently. Use `userKeys` below when the point of the allowlist is
  *     "whose key is this".
  *   - `userKeys` — map of `Session::$user` => list of that user's
@@ -103,7 +103,7 @@ final class Auth implements Middleware
      * asserted; the notice they end up inside is read by a human and,
      * under ForceCommand, by the peer. A name is not a place to paste an
      * 8 KiB payload, so anything longer arrives truncated with an
-     * ellipsis. (audit MINOR 1)
+     * ellipsis. (2026-11 audit)
      */
     public const MAX_ECHOED_BYTES = 128;
 
@@ -125,7 +125,7 @@ final class Auth implements Middleware
      * @param list<string>                          $users                Allowed `Session::$user` values; [] = any
      * @param list<string>                          $keyFingerprints      Allowed `SHA256:...` fingerprints; [] = skip.
      *                                                                    NOT paired with $users — see class docblock
-     *                                                                    (K4): prefer $userKeys for a real binding.
+     *                                                                    (cross-product finding): prefer $userKeys for a real binding.
      * @param resource|null                         $stderr               Stream for the rejection notice
      * @param (callable(string, Session): bool)|null $fingerprintValidator Optional real verifier: receives the
      *                                                                    presented fingerprint (or '' if none) plus
@@ -333,7 +333,7 @@ final class Auth implements Middleware
      * an invalid byte in any field is what makes `json_encode` refuse a
      * log record (see the Logger's own recovery path). It matched only
      * the CSI shape too, so an OSC payload (`ESC ] 0 ; … BEL`) sailed
-     * through as literal text. (audit MINOR 1)
+     * through as literal text. (2026-11 audit)
      *
      * This now delegates the strip to sugar-core's canonical
      * {@see Sanitize::untrusted()}, which removes CSI *and* OSC in both
@@ -363,9 +363,9 @@ final class Auth implements Middleware
 
     private function reject(Session $session, string $reason): void
     {
-        // The notice goes to whoever can see it (audit K3: under
+        // The notice goes to whoever can see it (2026-11 audit: under
         // ForceCommand that is the peer); the mark goes to the exit code,
-        // which is what a cron entry or CI step reads (audit MAJOR 9).
+        // which is what a cron entry or CI step reads (2026-11 audit).
         $session->markRefused();
         fwrite($this->stderr, Lang::t('auth.unauthorized', ['reason' => $reason]) . "\n");
     }

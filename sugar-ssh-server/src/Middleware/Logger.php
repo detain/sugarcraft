@@ -239,7 +239,7 @@ final class Logger implements Middleware
      * Append one record, whatever it contains.
      *
      * The naive shape here - encode, and `return` when the encoder says no -
-     * was audit MAJOR 3's third finding. `json_encode()` refuses the WHOLE
+     * was the 2026-11 audit's third finding. `json_encode()` refuses the WHOLE
      * document on a single malformed UTF-8 byte, and the fields this row
      * carries are mostly peer-supplied strings: `TERM`,
      * `SSH_ORIGINAL_COMMAND`, a username a wrapper exported. So one odd byte

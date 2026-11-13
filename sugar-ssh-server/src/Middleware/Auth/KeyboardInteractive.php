@@ -40,7 +40,7 @@ use SugarCraft\SshServer\StreamHelper;
  *      stderr; a validator that returns `true` (or no validator)
  *      passes control to `$next`.
  *
- * **Echo is a label, not terminal state (audit MAJOR 6).** `echo: false`
+ * **Echo is a label, not terminal state (2026-11 audit).** `echo: false`
  * changes nothing about how the characters reach you: the terminal that
  * `sshd` allocated for this session is still in its own echo state, so a
  * password typed at a `echo: false` prompt is written onto the user's
@@ -81,7 +81,7 @@ use SugarCraft\SshServer\StreamHelper;
 final class KeyboardInteractive implements Middleware
 {
     /**
-     * Longest answer this middleware will accept, in bytes (audit MAJOR 6).
+     * Longest answer this middleware will accept, in bytes (2026-11 audit).
      *
      * `fgets()` without a limit will happily read as much as a peer is
      * willing to write, and the exchange runs before any of the transport's
@@ -113,7 +113,7 @@ final class KeyboardInteractive implements Middleware
 
     /**
      * @param list<array{prompt: string, echo?: bool}|string> $challenges Prompt list; a bare
-     *        string is the prompt with `echo: true` (audit MAJOR 6: shapes
+     *        string is the prompt with `echo: true` (2026-11 audit: shapes
      *        that used to be silently skipped at write time are refused
      *        here instead)
      * @param callable(list<string>): bool|null        $validate   Receives responses, returns true to accept
@@ -149,7 +149,7 @@ final class KeyboardInteractive implements Middleware
      *
      * Reading `$challenge['prompt']` on an entry shaped differently used to
      * produce nothing at all: the count line promised N prompts, the loop
-     * emitted fewer, and the exchange could not complete (audit MINOR 22).
+     * emitted fewer, and the exchange could not complete (2026-11 audit).
      * A prompt list is operator-authored configuration, so a malformed
      * entry is a programming error and is raised at construction.
      *
@@ -211,7 +211,7 @@ final class KeyboardInteractive implements Middleware
      *
      * Emits: Name, Instruction, Count, then per-challenge Prompt and Echo
      * flag; when any challenge asks for hidden input, one more line saying
-     * that this prompt cannot actually hide it (audit MAJOR 6).
+     * that this prompt cannot actually hide it (2026-11 audit).
      */
     private function writeChallenges(): void
     {
@@ -252,7 +252,7 @@ final class KeyboardInteractive implements Middleware
      *     ceiling.
      *
      * Nothing else is imposed here, and the honest statement of what that
-     * means (audit MAJOR 6): a dead-but-connected peer that never sends a
+     * means (2026-11 audit): a dead-but-connected peer that never sends a
      * newline and never disconnects holds this process open indefinitely.
      * `sshd`'s `LoginGraceTime` does NOT cover it — that timer belongs to
      * the pre-authentication exchange and has already expired by the time

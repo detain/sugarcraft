@@ -11,10 +11,10 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
  * `'sshserver'` namespace baked in. Translated strings live in
- * {@see ../lang/en.php} and its fifteen siblings. (audit MINOR 19 named the
+ * {@see ../lang/en.php} and its fifteen siblings. (the 2026-11 audit named the
  * old namespace here, which had been renamed away with the library.)
  *
- * **Nothing here selects a locale implicitly (audit MAJOR 15).** The base
+ * **Nothing here selects a locale implicitly (2026-11 audit).** The base
  * class threads no locale argument, so an unarmed server renders every
  * message this facade produces in English whatever the sixteen catalogues
  * on disk contain. The one shipped code path that calls `T::setLocale()`

@@ -15,7 +15,7 @@ use SugarCraft\SshServer\Lang;
  * Drives a promise to synchronously settle using the event loop. The
  * ceiling is enforced twice over: a ceiling timer armed by this class
  * rejects the await with react/promise-timer's TimeoutException, and —
- * since audit K10 — the spin this call starts is ENDED by that
+ * since the 2026-11 audit — the spin this call starts is ENDED by that
  * rejection instead of being left to whatever else the loop happens to
  * have registered. The timer is armed, cancelled, and owned here (not
  * inside a third-party wrapper promise) because audit 015 proved a
@@ -28,7 +28,7 @@ use SugarCraft\SshServer\Lang;
  * **Law 1: this call owns the loop while it runs.** It calls `run()`, and
  * it calls {@see \React\EventLoop\LoopInterface::stop()} as soon as the
  * awaited promise is decided (and at the ceiling, via a watchdog timer
- * cancelled before returning). Before K10 the spin ran until the loop was
+ * cancelled before returning). Before the fix the spin ran until the loop was
  * *quiescent*, which is a different thing: a panel that keeps a listening
  * socket or a repeating timer registered never goes quiescent, so an await
  * that had already been answered — or already timed out — kept spinning.
@@ -170,7 +170,7 @@ final class PromiseAwait
         // through one pair of handlers (audit 015; the old code attached
         // to the raw promise as well, where an inner stop() could strand
         // the wrapper undecided). Either way the await has its answer, so
-        // end the spin this class started (K10) — driving everybody
+        // end the spin this class started (the 2026-11 fix) — driving everybody
         // else's registrations to quiescence is not this call's business.
         $decision->then(
             function () use (&$done, $loop): void {

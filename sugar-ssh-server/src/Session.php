@@ -123,7 +123,7 @@ final class Session
         // These reads are NOT cached. The comment that used to sit here
         // claimed a memo per key that this closure never had - and a snapshot
         // would be wrong anyway, because a gate later in the walk scrubs
-        // credentials out of the same environment. (audit NIT 9)
+        // credentials out of the same environment. (2026-11 audit)
         $env = static function(string $k): ?string {
             if (isset($_SERVER[$k]) && $_SERVER[$k] !== '') {
                 return (string) $_SERVER[$k];
@@ -144,7 +144,7 @@ final class Session
         // stored the server's PORT in `serverHost` on every SSH_CLIENT-only
         // deployment and left `serverPort` at zero, so the audit fields were
         // wrong in exactly the two cases where they were populated at all.
-        // (audit MINOR 15)
+        // (2026-11 audit)
         $serverHost = '';
         $serverPort = 0;
         if (count($parts) >= 4) {
@@ -186,7 +186,7 @@ final class Session
      * can smuggle `COLUMNS=100000`, and row-buffer-hungry child TUIs then
      * allocate against a geometry nobody typed. Values above the maximum are
      * clamped — the channel stays disclosed in the README env table, the
-     * amplification vector is capped here. (audit MINOR 11, MINOR 16)
+     * amplification vector is capped here. (2026-11 audit, two findings)
      */
     private static function declaredSize(?string $value, int $default, int $max): int
     {
@@ -209,14 +209,14 @@ final class Session
      *
      * There is no handshake to wait for: this library speaks no SSH, so the
      * transports call this once, on the way into the stack, with values they
-     * derived locally (audit MAJOR 3). What each of the five actually means:
+     * derived locally (2026-11 audit). What each of the five actually means:
      * `$sessionId` is minted per process (`bin2hex(random_bytes(16))`), not
      * issued by a daemon, so it correlates lines within one login and nothing
      * beyond it; `$authMethod` is sniffed from `SSH_USER_AUTH` where a wrapper
      * exported that; `$keyFingerprint` has no producer in this library today,
      * so a stack that wants pairing supplies it through `Auth`'s validator;
      * and the two version fields read environment names stock OpenSSH never
-     * exports (audit MAJOR 21), which is why they arrive here null on an
+     * exports (2026-11 audit), which is why they arrive here null on an
      * ordinary host. Middleware sees the fields either way — an empty column
      * is information about the delivery, not a broken reader.
      */
@@ -254,7 +254,7 @@ final class Session
      * deliberately mutable: the transports hand ONE of these objects down
      * the middleware stack, and every `with*()` rebuild clones from the
      * wire fields, so a fluent `withExitStatus()` would be discarded by
-     * the next hop. Audit MAJOR 9 is exactly that failure - a refused
+     * the next hop. The 2026-11 refusal finding is exactly that failure - a refused
      * login used to answer `0`, so a denied `ssh host backup.sh`
      * 'succeeded' for the cron job and the CI step that ran it.
      */
@@ -326,7 +326,7 @@ final class Session
     /**
      * The fields a session-start/end record is made of.
      *
-     * Before this method returned six keys (audit MAJOR 3): the three
+     * Before this method returned six keys (2026-11 audit): the three
      * protocol fields were dropped, which meant a log line could not be
      * tied back to an authentication decision at all — 'who got in, and
      * how' was unanswerable from the file, and the admin guide's
@@ -334,7 +334,7 @@ final class Session
      *
      * Every value here is a string, and '-' means 'not carried': the
      * guide's grep-able shapes are the same whether or not sshd delivered
-     * the slot. Remember what K6 established about provenance — sessionId
+     * the slot. Remember what the audit established about provenance — sessionId
      * is minted per process by the transport, authMethod is sniffed from
      * `SSH_USER_AUTH` where a wrapper exported it, and keyFingerprint has
      * no producer in this library today.
