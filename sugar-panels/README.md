@@ -31,6 +31,27 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 - **Stateful diff renderer** — first paint and every resize emit the full frame; later same-size renders emit only diff ops from the per-instance frame cache. Every frame with at least one column is self-positioning (see *Frame protocol*). Call `resetPreviousFrame()` whenever terminal state may be unknown (clear, alt-screen switch, text capture). Outputs plain ANSI strings; works with any TUI framework
 - **Immutable nodes** — every `with*()` returns a *new* `Node`; an existing node is never modified, so keep the chained result
 
+## Where it fits
+
+Nothing in this monorepo requires sugar-panels today — the in-repo consumer
+count is zero, and the only sibling references are comments (a sugar-image
+block-rendering regression test, the sugar-flexbox test parity roster, and a
+sugar-table docblock using a panels content box as its example). It ships for
+*your* application, as the pane composer of the ecosystem.
+
+When an adjacent library does a similar-looking job:
+
+- Need the **CSS flexbox computation** itself (a node tree solved for boxes,
+  no painting) → `sugar-flexbox`. sugar-panels carries its own lighter H/V +
+  flex split and paints the result.
+- Need **modal foregrounds over existing content** (dimming, zone hit-testing)
+  → `sugar-overlay`. It composites layers; sugar-panels tiles one region.
+- Need a **tabular data grid** (row cursor, scrolling, per-cell styling) →
+  `sugar-table`. It renders the table; sugar-panels frames the panes around it.
+
+For nested horizontal/vertical panes with borders, titles and flex weights,
+painted as plain ANSI strings, sugar-panels is the library.
+
 ## Install
 
 ```bash
