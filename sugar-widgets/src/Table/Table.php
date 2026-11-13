@@ -235,7 +235,8 @@ final class Table implements Model
                 ? min($this->pageSize, $this->height)
                 : $this->pageSize;
         } else {
-            $windowSize = $this->height;
+            // W-35 law: height 0 = unbounded (every row), like Tree/Tabs.
+            $windowSize = $this->height > 0 ? $this->height : null;
         }
         $window = array_slice($filteredRows, $top, $windowSize);
         foreach ($window as $i => $row) {
@@ -475,11 +476,10 @@ final class Table implements Model
     /**
      * Viewport in cells; negatives throw. Zero contracts (W-35):
      * `width 0` = auto — each column takes the widest of its cells;
-     * `height 0` = paints ZERO body rows (header only) — the opposite
-     * of {@see \SugarCraft\Widgets\Tree\Tree::withSize()}, where 0 is
-     * unbounded. The README dimension table enumerates every surface's
-     * `0` meaning; unifying them into one law is a gated product call
-     * (DimensionPolicy pass — see W-14's clamp and W-36's minimums).
+     * `height 0` = unbounded: every row paints (the one law shared with
+     * {@see \SugarCraft\Widgets\Tree\Tree::withSize()} and Tabs width —
+     * 0 means auto/unbounded, negatives throw). The README dimension
+     * table enumerates every surface.
      * The sane width minimum is (cols − 1) gutters plus at least one
      * cell per column; below that the gutters collapse to '' so no
      * rendered line ever exceeds the configured width (W-36/056).

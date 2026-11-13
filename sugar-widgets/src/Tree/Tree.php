@@ -309,10 +309,9 @@ final class Tree implements Model
     /**
      * Render window in cells; negatives throw. ZERO contract (W-35):
      * `width 0` = unbounded (labels are never truncated) and `height 0`
-     * = ALL rows render — the opposite of
-     * {@see \SugarCraft\Widgets\Table\Table::withSize()}, where a zero
-     * height paints no body rows at all. See the README dimension table
-     * for the per-surface `0` law.
+     * = ALL rows render — the same law as
+     * {@see \SugarCraft\Widgets\Table\Table::withSize()} (0 = unbounded).
+     * See the README dimension table.
      */
     public function withSize(int $width, int $height): self
     {

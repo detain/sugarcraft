@@ -20,8 +20,6 @@ final class WidthBudgetTest extends TestCase
     /** @param list<list<string>> $rows @param list<string> $headers */
     private function table(array $headers, array $rows, int $width): Table
     {
-        // height 10 = the natural default window; height 0 would drop all
-        // body rows (W-35 law) and defeat the per-line budget sweep.
         return Table::new($headers, $rows)->withSize($width, 10);
     }
 

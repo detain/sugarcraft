@@ -201,17 +201,17 @@ behind an owner ruling (W-40/063); it is deliberately not invented here.
 
 ### The `0` dimension sentinel — one table, per-surface meanings
 
-There is no repo-wide `DimensionPolicy` yet (unifying the behaviour is a
-gated product call, not yet ruled — each surface below documents its own
-law next to its setter). A fresh probe of each, November 2026:
+One law (W-35): `0` means auto / unbounded; a negative throws. Each
+surface below applies it next to its setter and is pinned by
+`tests/DimensionLawTest.php`:
 
 | Surface | `0` means |
 | --- | --- |
 | `Table::withSize()` width | auto — columns take their content width |
-| `Table::withSize()` height | header only — ZERO body rows paint |
+| `Table::withSize()` height | unbounded — every row paints (`withPageSize()` still caps the window) |
 | `Table::withPageSize()` | pagination disabled — all rows are one page |
 | `Tree::withSize()` either axis | unbounded — all rows, no truncation |
-| `Tabs` `width:` / `withWidth()` | no clip — the full bar renders (`::new()` defaults to **80**, unlike Table's 0-auto) |
+| `Tabs` `width:` / `withWidth()` | no clip — the full bar renders (`::new()` defaults to 0, like Table) |
 | `TextEdit::view(limit)` | `<= 0` = unlimited cells |
 | `Progress::withWidth()` | bar collapses to its label text only |
 | `Help::withWidth()` | no cap on either view (the W-17 clamp idles) |
