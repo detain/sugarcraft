@@ -8,6 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
@@ -48,6 +49,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         public readonly int $min,
         public readonly int $max,
         public readonly ?string $error,
+        public readonly int $width = 0,
     ) {}
 
     public static function new(string $key): self
@@ -70,6 +72,9 @@ final class MultiSelect implements \SugarCraft\Forms\Field
     {
         return $this->mutate(options: array_values($options), cursor: 0, selected: []);
     }
+
+    /** Choice lines budget in terminal cells (0 = natural width). */
+    public function withWidth(int $w): self         { return $this->mutate(width: max(0, $w)); }
 
     public function withTitle(string $t): self       { return $this->mutate(title: $t); }
     public function withDescription(string $d): self { return $this->mutate(description: $d); }
@@ -208,6 +213,17 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             foreach ($showErrors ? $this->errorHelpLines() : [] as $helpLine) {
                 $lines[] = $helpLine;
             }
+        }
+        if ($this->width > 0) {
+            // SF-8 (sugar-forms-028): withWidth budgets the WHOLE block —
+            // option lines, title/description and error rows alike. The
+            // clip is SGR-aware, so a reverse-video row loses cells, never
+            // half an escape sequence.
+            $budget = $this->width;
+            $lines  = array_map(
+                static fn (string $line): string => Width::truncateAnsi($line, $budget),
+                $lines,
+            );
         }
         return implode("\n", $lines);
     }
@@ -352,6 +368,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         ?int $max = null,
         ?string $error = null,
         bool $touchError = false,
+        ?int $width = null,
     ): self {
         return $this->carryNonCtorState(new self(
             key:         $this->key,
@@ -364,6 +381,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             min:         $min         ?? $this->min,
             max:         $max         ?? $this->max,
             error:       $touchError ? $error : $this->error,
+            width:       $width       ?? $this->width,
         ));
     }
 }

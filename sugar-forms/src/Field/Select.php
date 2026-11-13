@@ -202,6 +202,12 @@ final class Select implements \SugarCraft\Forms\Field
     public function withHeight(int $h): self          { return $this->mutate(list: $this->list->setSize($this->list->width, max(1, $h))); }
 
     /**
+     * Clip list lines to this cell budget (ItemList honours it in view —
+     * SF-05's per-line clip). The height slot rides through untouched.
+     */
+    public function withWidth(int $w): self           { return $this->mutate(list: $this->list->setSize(max(1, $w), $this->list->height)); }
+
+    /**
      * Pre-select an option by its 0-based index. Negative indices clamp
      * to 0; the inner {@see ItemList} clamps the upper bound. Handy for
      * showing a form's current value before the user touches it.
@@ -242,6 +248,7 @@ final class Select implements \SugarCraft\Forms\Field
     public function title(string $t): self                { return $this->withTitle($t); }
     public function desc(string $d): self                 { return $this->withDescription($d); }
     public function height(int $h): self                  { return $this->withHeight($h); }
+    public function width(int $w): self                   { return $this->withWidth($w); }
     public function options(string ...$options): self    { return $this->withOptions(...$options); }
     public function fuzzy(array $candidates): self         { return $this->withFuzzySuggestions($candidates); }
     public function enum(string $enumClass): self         { return $this->withEnum($enumClass); }

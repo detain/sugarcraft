@@ -11,7 +11,16 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Constraints\Constraint\Constraint;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Field\MultiSelect;
+use SugarCraft\Forms\Field\NumberField;
+use SugarCraft\Forms\Field\RadioPills;
+use SugarCraft\Forms\Field\Select;
+use SugarCraft\Forms\Field\Slider;
+use SugarCraft\Forms\Field\Text;
+use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Forms\Util\RenderSafe;
 
 /**
@@ -195,9 +204,18 @@ final class Form implements Model
     }
 
     /**
-     * Pin the rendered width to `$cells` cells (clamped to 0). The
-     * field views are wrapped at this budget when they support
-     * width caps. Default 0 = no cap. Mirrors huh's `WithWidth`.
+     * Pin the rendered width to `$cells` cells (clamped to 0). The budget
+     * is a CEILING, never an enlargement: each width-aware field keeps its
+     * own narrower budget where it set one. Choice lists cap and clip their
+     * lines at it, text fields scroll inside it, Slider/RadioPills size
+     * their track/row to it; every rendered line of a width-aware field —
+     * including its title, description and error rows — never exceeds it.
+     * The form's own chrome (group title/description, help footer, error
+     * summary) is clipped to it as well. Confirm, Note, Date, Color and
+     * FilePicker render at natural width: they carry no meaningful width
+     * knob, so the budget does not bind them (documented exemption, not a
+     * silent surprise). Default 0 = no budget: every line ships exactly as
+     * the field painted it. Mirrors huh's `WithWidth`.
      */
     public function withWidth(int $cells): self
     {
@@ -472,10 +490,10 @@ final class Form implements Model
         $theme = $group->theme ?? $this->theme;
         $blocks = [];
         if ($group->title !== '') {
-            $blocks[] = $theme->title->render($group->title);
+            $blocks[] = $this->clipToWidth($theme->title->render($group->title));
         }
         if ($group->description !== '') {
-            $blocks[] = $theme->description->render($group->description);
+            $blocks[] = $this->clipToWidth($theme->description->render($group->description));
         }
         $hidden = $this->hiddenFieldsIn($this->groupIndex);
         foreach ($this->fieldsByGroup[$this->groupIndex] as $i => $f) {
@@ -485,15 +503,23 @@ final class Form implements Model
             if (isset($hidden[$i]) && $i !== $this->focusedIndex) {
                 continue;
             }
-            $blocks[] = $f->view($this->showErrors);
+            if (self::widthAware($f) && $this->width > 0) {
+                // SF-8 (sugar-forms-006): the form budget threads into the
+                // field's native knob (clamped, never enlarged), and every
+                // line of the composed block is clipped as a safety net —
+                // title/description/error rows included.
+                $blocks[] = $this->clipToWidth($this->applyFormWidth($f)->view($this->showErrors));
+            } else {
+                $blocks[] = $f->view($this->showErrors);
+            }
         }
         if (count($this->groups) > 1 && $this->showHelp && $group->showHelp) {
-            $blocks[] = $theme->help->render(
+            $blocks[] = $this->clipToWidth($theme->help->render(
                 sprintf('Step %d of %d', $this->groupIndex + 1, count($this->groups))
-            );
+            ));
         }
         if ($this->errorSummary && $this->hasErrors()) {
-            $blocks[] = $this->renderErrorSummary($theme);
+            $blocks[] = $this->clipToWidth($this->renderErrorSummary($theme));
         }
         $body = implode("\n\n", $blocks);
         if ($this->submitted) {
@@ -535,6 +561,79 @@ final class Form implements Model
      * Render error summary as a formatted block using the theme's
      * error styling for each entry.
      */
+    /** Fields that carry a real width knob (the SF-8 thread set). */
+    private static function widthAware(Field $f): bool
+    {
+        return $f instanceof Input
+            || $f instanceof Text
+            || $f instanceof NumberField
+            || $f instanceof Select
+            || $f instanceof MultiSelect
+            || $f instanceof Slider
+            || $f instanceof RadioPills;
+    }
+
+    /**
+     * Thread the form's width budget into one width-aware field, keeping
+     * the field's own narrower budget where it set one. Unbounded encodings
+     * differ per field (0 for the text inputs and MultiSelect, null for
+     * RadioPills, always-concrete for Slider and ItemList) and normalise to
+     * "adopt the ceiling" here.
+     */
+    private function applyFormWidth(Field $f): Field
+    {
+        $current = match (true) {
+            $f instanceof Input       => $f->input->width,
+            $f instanceof Text        => $f->area->width,
+            $f instanceof NumberField => $f->text->width,
+            $f instanceof Select      => $f->list->width,
+            $f instanceof MultiSelect => $f->width,
+            $f instanceof Slider      => $f->width,
+            $f instanceof RadioPills  => $f->width ?? 0,
+            default                   => 0,
+        };
+        // The text fields measure their scroll window on the BUFFER TEXT
+        // alone — the prompt/prefix/suffix (and TextArea's line-number
+        // gutter) ride on top of it. Thread the budget minus that chrome
+        // so the composed caret row fits the ceiling; a clip-only thread
+        // would lop the caret off the tail of the row. clipToWidth stays
+        // the safety net for rows no knob can bound (titles, errors).
+        $budget = max(1, match (true) {
+            $f instanceof Input       => $this->width - self::inputChrome($f->input),
+            $f instanceof NumberField => $this->width - self::inputChrome($f->text),
+            $f instanceof Text        => $this->width - self::areaChrome($f->area),
+            default                   => $this->width,
+        });
+        return $f->withWidth($current > 0 ? min($current, $budget) : $budget);
+    }
+
+    /** Zero-cell chrome a TextInput paints outside its width-measured window. */
+    private static function inputChrome(TextInput $input): int
+    {
+        return Width::of($input->prompt) + Width::of($input->prefix) + Width::of($input->suffix);
+    }
+
+    /** Zero-cell chrome around TextArea's wrap window (static prompt + gutter). */
+    private static function areaChrome(TextArea $area): int
+    {
+        $gutter = $area->showLineNumbers
+            ? max(2, strlen((string) count($area->lines)) + 1) + 1
+            : 0;
+        return Width::of($area->prompt) + $gutter;
+    }
+
+    /** Per-line cell-clip (SGR-aware) — no-op while the form has no width budget. */
+    private function clipToWidth(string $block): string
+    {
+        if ($this->width <= 0 || $block === '') {
+            return $block;
+        }
+        return implode("\n", array_map(
+            fn (string $line): string => Width::truncateAnsi($line, $this->width),
+            explode("\n", $block),
+        ));
+    }
+
     private function renderErrorSummary(Theme $theme): string
     {
         $lines = [];
