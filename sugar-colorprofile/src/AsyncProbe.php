@@ -53,6 +53,11 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * abandoned the loop are reclaimed — child killed AND reaped — by the next
  * call, so the static slot table can never wedge permanently.
  *
+ * A child that RUNS TO COMPLETION settles its verdict into a per-TERM memo
+ * (CP-13 — the async twin of the sync face's dump memo): a repeat call for
+ * the same TERM answers from memory without re-spawning, so the two faces
+ * keep one cache policy for one question.
+ *
  * Probe results are ADVISORY ONLY: the terminfo snapshot answers "what could
  * this terminal type advertise", not "what will the renderer emit" — callers
  * that must honour user suppression should read DetectionChain themselves.
@@ -114,6 +119,47 @@ final class AsyncProbe
     private static int $nextToken = 1;
 
     /**
+     * Ceiling on {@see self::$settledMemo} — the twin of
+     * {@see InfocmpBinary::MEMO_MAX_ENTRIES} (256): a long-lived process
+     * honoring attacker-influenced TERM shapes must not creep the table for
+     * its lifetime. Value-coupled, deliberately not a shared constant —
+     * InfocmpBinary's is private to the exec face that owns it; the two
+     * tables bound the same TERM-cardinality risk and must be edited
+     * together if either ever moves.
+     */
+    private const MEMO_MAX_ENTRIES = 256;
+
+    /**
+     * Settled answers of COMPLETED infocmp children, keyed by lowercased
+     * TERM (CP-13, sugar-colorprofile-050).
+     *
+     * The sync face memoizes per TERM (the dump table inside
+     * {@see InfocmpBinary}); until this entry the async pump re-spawned a
+     * real child on every Ansi/Ansi256-rung call — two cache policies on
+     * one question, and on Termux-class hardware the repeated spawn is a
+     * battery/thermal cost, not a scheduling nicety.
+     *
+     * The memo stores the ANSWER, never the pending promise: holding a
+     * promise would let an abandoned-loop caller (spawned, loop never run,
+     * slot later reclaimed by a different call) poison the table with a
+     * never-settling entry — exactly the class of stall memoizing the
+     * answer instead cannot create. Values are the child-specific verdict
+     * only: {@see ColorProfile::TrueColor} when the completed child found
+     * a promotion cap, or a NULL sentinel when it completed cleanly
+     * without one (the terminfo verdict is TERM-static — the dump the sync
+     * face caches carries the same property, and its table mints entries
+     * for clean misses too). The ENV-side half of any negative answer is
+     * re-derived from the CURRENT chain per call, so env drift after the
+     * first probe can never be served stale. A child that died nonzero or
+     * was ladder-killed proves nothing: only a zero exit mints an entry.
+     * Cap-full/no-binary/unsettled-shape early returns never consulted the
+     * child, so they never write.
+     *
+     * @var array<string, ColorProfile|null>
+     */
+    private static array $settledMemo = [];
+
+    /**
      * Detect the terminal color profile asynchronously.
      *
      * With an explicit {@see LoopInterface} the infocmp leg runs as a child
@@ -173,6 +219,16 @@ final class AsyncProbe
         // infocmp would parse as its own option never reaches the child.
         if (!InfocmpBinary::isSafeTermName($term)) {
             return \React\Promise\resolve(self::settleFromChain($chain));
+        }
+
+        // CP-13 memo: a completed child already gave a TERM-static verdict
+        // for this TERM in this process. Checked after every safety gate so
+        // a shape the child would never consult can neither read nor grow
+        // the table. A NULL entry (clean no-promotion) re-derives only the
+        // env-side answer from the CURRENT chain — see $settledMemo.
+        $memoKey = \strtolower($term);
+        if (\array_key_exists($memoKey, self::$settledMemo)) {
+            return \React\Promise\resolve(self::$settledMemo[$memoKey] ?? self::settleFromChain($chain));
         }
 
         $deferred = new Deferred();
@@ -267,15 +323,16 @@ final class AsyncProbe
         // $stdout must be captured BY REFERENCE: the accumulator is filled by
         // the data pump after this closure is built, and a by-value copy would
         // hand the exit handler the empty string it had at registration time.
-        $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, &$stdout, $release, $cancelLadder, $chain): void {
+        $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, &$stdout, $release, $cancelLadder, $chain, $term): void {
             $cancelLadder();
             $release();
-            if ($exitCode === 0 && TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES)) {
-                $deferred->resolve(ColorProfile::TrueColor);
-
-                return;
+            $promoted = $exitCode === 0 && TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES);
+            if ($exitCode === 0) {
+                // TERM-static verdict from a cleanly completed child only
+                // (CP-13): promotion, or the NULL negative sentinel.
+                self::memoWrite(\strtolower($term), $promoted ? ColorProfile::TrueColor : null);
             }
-            $deferred->resolve(self::settleFromChain($chain));
+            $deferred->resolve($promoted ? ColorProfile::TrueColor : self::settleFromChain($chain));
         });
 
         // There is deliberately no 'error' listener: react/child-process
@@ -288,15 +345,18 @@ final class AsyncProbe
     }
 
     /**
-     * Drop the static slot table (test seam).
+     * Drop the static slot table and the settled-answer memo (test seam).
      *
      * @internal Suites that plant in-flight slots clear them between cases so
-     *           the concurrency cap cannot leak across tests.
+     *           the concurrency cap cannot leak across tests; the CP-13 memo
+     *           drains here too so a planted child binary in one case can
+     *           never seed another case's answer.
      */
     public static function _reset(): void
     {
         self::$inFlight = [];
         self::$nextToken = 1;
+        self::$settledMemo = [];
     }
 
     /**
@@ -311,6 +371,21 @@ final class AsyncProbe
     private static function settleFromChain(DetectionChain $chain): ColorProfile
     {
         return $chain->toColorProfile();
+    }
+
+    /**
+     * Sole write site of the settled-answer memo, enforcing the cardinality
+     * ceiling: at {@see self::MEMO_MAX_ENTRIES} the table clears before the
+     * write (same bulk-reset shape as InfocmpBinary's dump memo — one clear,
+     * not an LRU).
+     */
+    private static function memoWrite(string $key, ?ColorProfile $profile): void
+    {
+        if (\count(self::$settledMemo) >= self::MEMO_MAX_ENTRIES) {
+            self::$settledMemo = [];
+        }
+
+        self::$settledMemo[$key] = $profile;
     }
 
     /**

@@ -45,6 +45,10 @@ final class AsyncProbeTest extends TestCase
     {
         parent::tearDown();
 
+        // CP-13: the settled-answer memo must never ride across cases — a
+        // planted child binary in one test would otherwise seed another.
+        AsyncProbe::_reset();
+
         foreach ($this->savedEnv as $key => $value) {
             if ($value === null) {
                 unset($_ENV[$key]);
@@ -598,11 +602,178 @@ final class AsyncProbeTest extends TestCase
         }
     }
 
+    // ─── CP-13: settled-answer memo (sugar-colorprofile-050) ───────────────
+
+    public function testCompletedChildSettlesTheNextCallWithoutASpawn(): void
+    {
+        AsyncProbe::_reset();
+        $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $slots->setValue(null, []);
+
+        $script = $this->plantProbe('#!/bin/sh' . "\n" . "printf '\\tTc,\\n'\n");
+        $_ENV['TERM'] = 'xterm';
+        putenv('TERM=xterm');
+
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            $first = null;
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$first): void {
+                $first = $p;
+            });
+            $this->runUntilSettled($loop, $first);
+            $this->assertSame(ColorProfile::TrueColor, $first, 'the planted child promotes once');
+
+            // Swap in a child that would answer differently (and exit
+            // nonzero, proving nothing). A memo hit must never consult it:
+            // an UNRUN loop cannot tick, so a synchronously-settled second
+            // call is observable without reflection.
+            \file_put_contents($script, "#!/bin/sh\nprintf '\\tFx,\\n'\nexit 7\n");
+
+            $second = null;
+            AsyncProbe::colorProfile(new \React\EventLoop\StreamSelectLoop())->then(function (ColorProfile $p) use (&$second): void {
+                $second = $p;
+            });
+            $this->assertSame(
+                ColorProfile::TrueColor,
+                $second,
+                'the settled TrueColor verdict answers in place — no second child, no loop tick',
+            );
+            $this->assertCount(0, $slots->getValue(), 'a memo answer books no slot');
+        } finally {
+            $this->disarmTerm();
+            $slots->setValue(null, []);
+            AsyncProbe::_reset();
+            @\unlink($script);
+        }
+    }
+
+    public function testNegativeVerdictIsTermStaticWhileTheEnvRungIsReDerived(): void
+    {
+        // The child proved this TERM advertises no promotion; the ANSWER to
+        // a later call still comes from the CURRENT chain — env drift must
+        // never be served stale (that is why negatives store the sentinel,
+        // not a frozen profile).
+        AsyncProbe::_reset();
+        $script = $this->plantProbe("#!/bin/sh\nprintf '\\tFx,\\n'\n");
+        $_ENV['TERM'] = 'VT100';
+        putenv('TERM=VT100');
+
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            $first = null;
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$first): void {
+                $first = $p;
+            });
+            $this->runUntilSettled($loop, $first);
+            $this->assertSame(ColorProfile::Ansi, $first, 'VT100 known family, no Tc in the dump');
+
+            $_ENV['COLORTERM'] = 'yes';
+            putenv('COLORTERM=yes');
+            // A Tc-printing replacement: if a fresh child ran it, the
+            // answer would be TrueColor; the negative memo re-derives the
+            // env rung from the current chain instead — Ansi256.
+            \file_put_contents($script, "#!/bin/sh\nprintf '\\tTc,\\n'\n");
+
+            $second = null;
+            AsyncProbe::colorProfile(new \React\EventLoop\StreamSelectLoop())->then(function (ColorProfile $p) use (&$second): void {
+                $second = $p;
+            });
+            $this->assertSame(
+                ColorProfile::Ansi256,
+                $second,
+                'memoized no-promotion + current chain (yes=256 post CP-09): fresh env, same verdict',
+            );
+        } finally {
+            unset($_ENV['COLORTERM']);
+            putenv('COLORTERM');
+            $this->disarmTerm();
+            AsyncProbe::_reset();
+            @\unlink($script);
+        }
+    }
+
+    public function testMemoKeysAreCaseFoldedAcrossTermSpellings(): void
+    {
+        AsyncProbe::_reset();
+        $script = $this->plantProbe("#!/bin/sh\nprintf '\\tTc,\\n'\n");
+        $_ENV['TERM'] = 'XTTERM-256COLOR';
+        putenv('TERM=XTTERM-256COLOR');
+
+        try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
+            $first = null;
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$first): void {
+                $first = $p;
+            });
+            $this->runUntilSettled($loop, $first);
+            $this->assertSame(ColorProfile::TrueColor, $first);
+
+            $_ENV['TERM'] = 'xtterm-256color';
+            putenv('TERM=xtterm-256color');
+            \file_put_contents($script, "#!/bin/sh\nprintf '\\tFx,\\n'\nexit 7\n");
+
+            $second = null;
+            AsyncProbe::colorProfile(new \React\EventLoop\StreamSelectLoop())->then(function (ColorProfile $p) use (&$second): void {
+                $second = $p;
+            });
+            $this->assertSame(
+                ColorProfile::TrueColor,
+                $second,
+                'the lowercase re-spelling hits the case-folded entry (InfocmpBinary dump-memo idiom)',
+            );
+        } finally {
+            $this->disarmTerm();
+            AsyncProbe::_reset();
+            @\unlink($script);
+        }
+    }
+
+    private function plantProbe(string $body): string
+    {
+        // House binary-stub shape (M10 precedent): tempnam script + the
+        // InfocmpBinary path seam stuffed by reflection.
+        $path = \tempnam(\sys_get_temp_dir(), 'cp13');
+        $this->assertIsString($path);
+        \file_put_contents($path, $body);
+        \chmod($path, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $path);
+
+        return $path;
+    }
+
+    private function disarmTerm(): void
+    {
+        unset($_ENV['TERM']);
+        putenv('TERM');
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, null);
+    }
+
+    private function runUntilSettled(\React\EventLoop\StreamSelectLoop $loop, mixed &$resolved, float $budget = 8.0): void
+    {
+        if ($resolved !== null) {
+            return;
+        }
+        $poll = null;
+        $watchdog = $loop->addTimer($budget, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $poll = $loop->addPeriodicTimer(0.005, static function () use ($loop, &$resolved, &$poll, $watchdog): void {
+            if ($resolved === null) {
+                return;
+            }
+            $loop->cancelTimer($watchdog);
+            if ($poll !== null) {
+                $loop->cancelTimer($poll);
+            }
+            $loop->stop();
+        });
+        $loop->run();
+    }
+
     /**
      * @return array<int, array{process: \\React\\ChildProcess\\Process, deadline: float}>
      */
-    private static function fakeSlots(int $count, float $deadline): array
-    {
+    private static function fakeSlots(int $count, float $deadline): array    {
         $slots = [];
         for ($i = 0; $i < $count; $i++) {
             $slots[$i + 1] = ['process' => new \React\ChildProcess\Process('sleep 30'), 'deadline' => $deadline];

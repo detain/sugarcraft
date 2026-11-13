@@ -62,6 +62,10 @@ final class InfocmpTermNameGateTest extends TestCase
     protected function tearDown(): void
     {
         Probe::_reset();
+        // CP-13: these fixtures swap the planted child binary between cases
+        // while reusing a TERM — the async settled-answer memo must drain
+        // with the sync dump memo or a case inherits a foreign verdict.
+        AsyncProbe::_reset();
         $this->releaseAsyncSlots();
         foreach ($this->cleanup as $file) {
             @unlink($file);
