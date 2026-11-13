@@ -35,7 +35,7 @@ use SugarCraft\Code\Server\StateDir;
 require_once __DIR__ . '/autoload.php';
 
 /**
- * The @candy/discord bundle's channel (§11 P2, spec §7): Discord accounts
+ * The sugarcraft/candy-discord bundle's channel (§11 P2, spec §7): Discord accounts
  * in, served candy-code sessions out, all inside the candy-code process.
  *
  * Shape law: the bundle dials the LOCAL serve over the same WebSocket the
