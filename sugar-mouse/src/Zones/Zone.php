@@ -24,8 +24,9 @@ use SugarCraft\Mouse\Zone as MouseZone;
  * plus {@see contains()}), but delegates the point-in-rect / width / height
  * math to a wrapped {@see \SugarCraft\Mouse\Zone} built from the same bounds.
  * That keeps the geometry engine in exactly one place (the primitive layer)
- * while consumers of this package (sugar-widgets, sugar-gallery)
- * keep reading `->id`, `->startCol`, … and passing `MouseMsg`s unchanged.
+ * while consumers of this package (sugar-widgets, sugar-gallery) keep
+ * reading `->id` and `->startCol` and pass `MouseMsg` instances through
+ * unchanged.
  */
 final class Zone
 {

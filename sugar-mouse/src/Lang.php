@@ -9,8 +9,8 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
 /**
  * Per-library translation facade for sugar-mouse.
  *
- * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
- * 'mouse' namespace baked in. Translated strings live in
+ * Adds the 'mouse' namespace to the shared {@see \SugarCraft\Core\I18n\T}
+ * registry so callers pass bare keys. Translated strings live in
  * {@see ../lang/en.php}.
  *
  * @extends BaseLang

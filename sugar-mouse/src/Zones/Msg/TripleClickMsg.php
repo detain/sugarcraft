@@ -8,8 +8,8 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Mouse\Zones\Zone;
 
 /**
- * Emitted when a third click occurs inside the same zone within the
- * click interval (default 500ms).
+ * Emitted when a third press lands inside the same zone within the
+ * click interval (default 500 ms).
  *
  * Extends bubblezone — upstream ships no multi-click machinery and no
  * such event.

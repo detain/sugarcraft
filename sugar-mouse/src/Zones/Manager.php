@@ -33,18 +33,19 @@ use SugarCraft\Mouse\Scan;
  * are what keep foreign PUA bytes from forging a zone; sweeping untrusted
  * content is the consumer's duty (see {@see \SugarCraft\Mouse\Sentinel}).
  * Ids must match the primitive's charset `\A[A-Za-z0-9._:-]+\z` (letters,
- * digits, and `._:-`) — an id carrying
- * a sentinel/control/whitespace byte would desync scanning and is rejected by
- * {@see mark()} with an \InvalidArgumentException. The combined
- * `prefix() . $id` is what gets validated.
+ * digits, and `._:-`) — the single statement of this rule; the helpers below
+ * cross-reference it instead of repeating it. An id carrying a sentinel,
+ * control, or whitespace byte would desync scanning, so {@see mark()} rejects
+ * it with an InvalidArgumentException. The combined `prefix() . $id` is what
+ * gets validated.
  *
  * Zones discovered during the most recent {@see scan()} replace any
- * previously known zones for the same id (other ids persist). A recorded
+ * previously known zones for the same id; other ids persist. A recorded
  * zone stays queryable until a later scan replaces its id, {@see clear()}
- * drops it, or {@see close()} empties the registry — zones from an
- * off-screen frame are NOT forgotten on their own, so a consumer whose
- * layout reuses ids must re-scan every frame it renders (or clear) before
- * trusting {@see get()} / {@see anyInBounds()} results.
+ * drops it, or {@see close()} empties the registry. Zones from an
+ * off-screen frame are NOT forgotten on their own. A consumer whose
+ * layout reuses ids must therefore re-scan every frame it renders (or
+ * clear) before trusting {@see get()} / {@see anyInBounds()} results.
  */
 final class Manager
 {
@@ -89,8 +90,9 @@ final class Manager
      *
      * Mirrors bubblezone's `NewPrefix`. Pass an explicit `$prefix` to
      * fix the namespace; omit (or pass empty) to auto-generate one
-     * from a monotonic counter. The generated prefix uses the
-     * primitive's charset (`<n>-`), so `prefix() . $id` stays valid.
+     * from a monotonic counter. The generated prefix `<n>-` is legal id
+     * material by construction (see the id law in the class docblock), so
+     * `prefix() . $id` stays valid.
      * An explicit numeric prefix that collides with the auto shape is
      * RESERVED: the counter jumps past it, so a later auto-generated
      * manager never silently merges the two registries.
@@ -142,7 +144,7 @@ final class Manager
      * reporting (mode 1006); when false, the LIFO disable pair.
      * ("SGR" names 1006 — the report byte format — not 1003.)
      * Bare 1003 would leave coordinates on legacy X10 single-byte
-     * encoding, where everything past row/col 223 saturates — the
+     * encoding, where everything beyond row/col 223 saturates — the
      * exact failure this package's own mode table warns about.
      *
      * The bytes delegate to sugar-core's canonical helpers
@@ -153,8 +155,8 @@ final class Manager
      * The caller writes the returned string to the terminal to
      * activate/deactivate motion reporting. This manager does not
      * directly emit to the TTY — it is a text-processing component.
-     * This is unrelated to the zone markers. Whoever enables is also
-     * responsible for disabling on every exit path — see the
+     * Motion tracking is unrelated to the zone markers: whoever enables it
+     * is also responsible for disabling it on every exit path — see the
      * lifecycle note in README's Mouse-tracking modes section.
      *
      * Mirrors bubblezone's `Manager::SetMotionTracking` (which emits
@@ -192,10 +194,10 @@ final class Manager
      * validated, so disabling the manager cannot smuggle an illegal id
      * through the emit path.
      *
-     * @throws \InvalidArgumentException When `prefix() . $id` contains a byte
-     *         outside the primitive's `\A[A-Za-z0-9._:-]+\z` charset (validated by
-     *         Mark::wrap). This package's own prefixes and real consumer ids
-     *         (`tab-N`, `cell:N`, `item:N`) already comply.
+     * @throws \InvalidArgumentException When `prefix() . $id` falls outside the
+     *         id law stated in the class docblock (the check runs in
+     *         Mark::wrap). This package's own prefixes and the id shapes
+     *         real consumers use (`tab-N`, `cell:N`, `item:N`) comply.
      */
     public function mark(string $id, string $content): string
     {
@@ -252,9 +254,9 @@ final class Manager
      * tried first) as well as the WIRE id stored in a hit result
      * (`$zone->id`, already prefixed) — the trackers hand back wire ids, so
      * both spellings must round-trip on a prefixed manager.
-     *      *
-     *      * Staleness: an id from a frame that scrolled off resolves until it is
-     *      * re-scanned or cleared (see class docs; {@see idsAbsentFromFrame()}).
+     *
+     * Staleness: an id from a frame that scrolled off resolves until it is
+     * re-scanned or cleared (see class docs; {@see idsAbsentFromFrame()}).
      */
     public function get(string $id): ?Zone
     {
@@ -343,11 +345,11 @@ final class Manager
      * overlay contract in README's Zones section before scanning a
      * full-screen modal over a live registry. Returns null if no zone
      * matches (or if the Msg isn't a {@see MouseMsg} to begin with — handy
-     * when models blanket-route every Msg through this helper).
-     *      *
-     *      * Staleness: reflects the last scan() — zones from frames that scrolled
-     *      * off stay hit-eligible until their id is re-scanned or cleared; prune
-     *      * with {@see idsAbsentFromFrame()}.
+     * when an update() loop routes every Msg here without filtering first).
+     *
+     * Staleness: reflects the last scan() — zones from frames that scrolled
+     * off stay hit-eligible until their id is re-scanned or cleared; prune
+     * with {@see idsAbsentFromFrame()}.
      *
      * Mirrors bubblezone's `Manager::AnyInBounds()`.
      */
@@ -376,8 +378,8 @@ final class Manager
      * {@see anyInBounds()}). Lets a consumer route a click to ALL owners
      * of a cell — e.g. a container and the button inside it — instead of
      * only the smallest.
-     *      *
-     *      * Staleness: same last-scan() contract as {@see anyInBounds()}.
+     *
+     * Staleness: same last-scan() contract as {@see anyInBounds()}.
      *
      * @return list<Zone>
      */
@@ -402,8 +404,8 @@ final class Manager
      * ($col, $row), 1-based — same area/tie rule as {@see anyInBounds()}.
      * Lets consumers resolve what is under the wheel, the caret, or an
      * arbitrary position without fabricating a MouseMsg.
-     *      *
-     *      * Staleness: same last-scan() contract as {@see anyInBounds()}.
+     *
+     * Staleness: same last-scan() contract as {@see anyInBounds()}.
      */
     public function zoneAt(int $col, int $row): ?Zone
     {

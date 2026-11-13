@@ -26,11 +26,12 @@ use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
  * Extends bubblezone — upstream ships no double/triple-click machinery
  * (its own gap table records click count as not built-in).
  *
- * Renamed from `ClickCounter`: the old name mirrored upstream's own
- * `NewZoneClickTracker` (a single-click dedup machine) while this lib's
- * `ZoneClickTracker` — the primitive it shadows — is a different one.
- * The neutral name says what it counts (a multi-click streak). The old
- * class name survives as a deprecated alias; see `ClickCounter.php`.
+ * This class was renamed from `ClickCounter`: the old name echoed
+ * upstream's `NewZoneClickTracker` — a single-click dedup machine — but
+ * this lib's `ZoneClickTracker` already fills that role, and it is a
+ * different one. The neutral name says what this counter counts: a
+ * multi-click streak. The old class name survives as a deprecated
+ * alias; see `ClickCounter.php`.
  *
  * dedup overlap with {@see \SugarCraft\Mouse\ZoneClickTracker} deferred: the
  * primitive's ZoneClickTracker does Press+Release single-click dedup, NOT the
@@ -68,18 +69,20 @@ final class MultiClickTracker
 
     /**
      * @param Manager $manager Zone manager that has already run scan().
-     * @param int $clickIntervalMs Window in milliseconds within which successive
-     *                              clicks count toward a double/triple (default 500ms).
-     *                              The window is a pointer-timing tolerance: apps
-     *                              should expose it as a setting so users with tremor
-     *                              or reduced dexterity can widen the streak (README,
-     *                              Accessibility).
+     * @param int $clickIntervalMs Click interval in milliseconds within
+     *                              which successive clicks count toward a
+     *                              double/triple (default 500 ms). The
+     *                              interval is a pointer-timing tolerance:
+     *                              apps should expose it as a setting so
+     *                              users with tremor or reduced dexterity
+     *                              can widen it (README, Accessibility).
      * @param ?callable $now Clock returning "now" in seconds as a float.
      *                       Defaults to a monotonic clock
      *                       ({@see hrtime()}) when null. The seam lets
      *                       tests drive interval expiry deterministically
      *                       instead of sleeping (a real-sleep test is CI
      *                       noise waiting to happen under co-shard load).
+     *
      *                       The default is deliberately NOT wall-clock:
      *                       an NTP step during a streak could otherwise
      *                       jump the elapsed figure backwards (swallowing

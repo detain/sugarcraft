@@ -13,11 +13,10 @@ use SugarCraft\Core\Msg;
  * Mirrors upstream bubblezone's package-level surface:
  * `bubblezone.DefaultManager` (the singleton) plus the free functions
  * `NewPrefix`, `Mark`, `Clear`, `Get`, `Scan`, `Close`, `SetEnabled`,
- * `Enabled`. PHP doesn't have free functions in arbitrary namespaces
- * (well, it does — but they aren't autoloadable without a tiny
- * `files: []` shim), so we expose them as static methods on this
- * class. The semantics are identical: every call routes through the
- * shared manager returned by {@see defaultManager()}.
+ * `Enabled`. PHP has no autoloadable free functions in arbitrary
+ * namespaces, so the surface ships as static methods on this class.
+ * The semantics are identical: every call routes through the shared
+ * manager returned by {@see defaultManager()}.
  *
  * ```php
  * use SugarCraft\Mouse\Zones\Zones;

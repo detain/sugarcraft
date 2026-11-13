@@ -50,8 +50,9 @@ $frame = implode("\n", $frameRows);
 
 // Each manager needs its own scan() call against the original
 // marker-bearing frame so its zone map gets populated. Both managers
-// see every marker (the protocol is prefix-agnostic) but each one's
-// `get('item-0')` resolves via its own prefix → no collision.
+// see every marker (the protocol is prefix-agnostic), but each manager
+// stores the id as `prefix() . 'item-0'` — identical row labels from
+// different components never collide.
 // scan() returns the cleaned frame, so capture it for display instead
 // of paying for a third parse of the same bytes.
 $leftDisplayable = $leftMgr->scan($frame);
