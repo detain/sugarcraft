@@ -110,10 +110,11 @@ final class ConfigFailLoudTest extends TestCase
 
     public function testBooleanNameIsRefusedNotStringifiedToOne(): void
     {
-        // C5: `name: yes` maps to bool via the YAML subset; the old code
-        // accepted it (is_scalar) and ssh received user/host strings
-        // polluted with the literal "1".
-        $raw = "- name: yes\n  host: prod.example.com\n";
+        // C5 (rewritten -013): `name: true` is a core YAML bool; the old
+        // code accepted it (is_scalar) and ssh received user/host strings
+        // polluted with the literal "1". `name: yes` is NOT a bool under
+        // 1.2 core — see testYesNoLoadAsLiteralStrings.
+        $raw = "- name: true\n  host: prod.example.com\n";
 
         try {
             Config::parse($raw, 'wishlist.yml');
@@ -124,9 +125,19 @@ final class ConfigFailLoudTest extends TestCase
         }
     }
 
+    public function testYesNoLoadAsLiteralStrings(): void
+    {
+        // -013: YAML 1.2 core resolves only true/false. `name: yes` is
+        // the host genuinely named "yes" — an honest literal beats the
+        // 1.1 boolifier that turned it into "1" at the argv.
+        $endpoints = Config::parse("- name: yes\n  host: on.test\n  user: no\n", 'wishlist.yml');
+        self::assertSame('yes', $endpoints[0]->name);
+        self::assertSame('no', $endpoints[0]->user);
+    }
+
     public function testBooleanHostAndUserAreRefusedToo(): void
     {
-        foreach (['host' => "- name: prod\n  host: no\n", 'user' => "- name: prod\n  host: p.test\n  user: no\n"] as $field => $raw) {
+        foreach (['host' => "- name: prod\n  host: false\n", 'user' => "- name: prod\n  host: p.test\n  user: FALSE\n"] as $field => $raw) {
             try {
                 Config::parse($raw, 'wishlist.yml');
                 self::fail("expected {$field} to be refused");

@@ -24,6 +24,7 @@ return [
     'config.field_not_scalar'  => 'wishlist-invoer: veld [{field}] moet een scalair zijn, ontvangen {type}',
     'config.too_large'          => 'wishlist-configuratie is groter dan de limiet van {limit} bytes: {path}',
     'config.list_too_long'      => 'wishlist-item: veld [{field}] bevat meer dan de {limit} items die de lader toestaat',
+    'config.field_not_list'       => 'wishlist-item: veld [{field}] moet een lijst met waarden zijn, geen sleutel-waardetabel',
     'config.unreadable'       => 'wishlist-configuratie kon niet worden gelezen: {path}',
     'config.home_unset'       => 'kan ~ niet uitvouwen zonder $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: inline flow-verzameling niet ondersteund: {value} (gebruik een geneste lijst)',

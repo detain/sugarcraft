@@ -162,8 +162,8 @@ YAML;
 
     public function testYamlScalarYesNoBoolean(): void
     {
-        // YAML yes/no are booleans, not strings.
-        // But our tiny parser treats them as scalar strings via yamlScalar.
+        // -013: yes/no are NOT booleans under YAML 1.2 core — they arrive
+        // as the literal strings this test's rows show for options.
         $raw = <<<YAML
 - name: prod
   host: prod.example.com
@@ -319,5 +319,62 @@ YAML;
 YAML;
         $endpoints = Config::parse($raw, 'wishlist.yml');
         $this->assertSame('  keep # inside  ', $endpoints[0]->description);
+    }
+
+    public function testCoreBoolSpellingsBoolifyAcrossCases(): void
+    {
+        // -013: YAML 1.2 core resolves true/True/TRUE (and the false
+        // family) to bool — assertScalar is the refusal net below, so the
+        // observable is the named bool rejection for every casing.
+        foreach (['true', 'True', 'TRUE', 'false', 'False', 'FALSE'] as $spelling) {
+            try {
+                Config::parse("- name: prod\n  host: p.test\n  description: {$spelling}\n", 'wishlist.yml');
+                $this->fail("expected {$spelling} to resolve to bool and be refused");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('bool', $e->getMessage(), $spelling);
+            }
+        }
+    }
+
+    public function testDigitRunsStayStringsAndPortStillParses(): void
+    {
+        // -013: no invented ints. description: 42 is the TEXT '42' (it
+        // always reached ssh as the text form through the (string) cast);
+        // port is the one numeric consumer and parsePort validates its
+        // digit string itself.
+        $endpoints = Config::parse(
+            "- name: prod\n  host: p.test\n  port: 2222\n  description: 42\n",
+            'wishlist.yml'
+        );
+        $this->assertSame(2222, $endpoints[0]->port);
+        $this->assertSame('42', $endpoints[0]->description);
+    }
+
+    public function testOptionsMapShapeIsRefusedByField(): void
+    {
+        // -013: a key-value map under a list field used to survive with
+        // its keys discarded (values became bare options — a silent
+        // re-spelling of the config). The refusal names the field.
+        $json = json_encode([['name' => 'p', 'host' => 'p.test', 'options' => ['ServerAlive' => '30', 'B' => 'C']]]);
+
+        try {
+            Config::parse((string) $json, 'wishlist.json');
+            $this->fail('expected the map-shaped options list to be refused');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('[options]', $e->getMessage());
+            $this->assertStringContainsString('not a key-value map', $e->getMessage());
+        }
+    }
+
+    public function testIdentityFilesMapShapeIsRefusedToo(): void
+    {
+        $json = json_encode([['name' => 'p', 'host' => 'p.test', 'identityFiles' => ['a' => '~/.ssh/id']]]);
+
+        try {
+            Config::parse((string) $json, 'wishlist.json');
+            $this->fail('expected the map-shaped identityFiles list to be refused');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('[identityFiles]', $e->getMessage());
+        }
     }
 }

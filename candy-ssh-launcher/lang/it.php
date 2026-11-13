@@ -24,6 +24,7 @@ return [
     'config.field_not_scalar'  => 'voce wishlist: il campo [{field}] deve essere uno scalare, ottenuto {type}',
     'config.too_large'          => 'la configurazione wishlist supera il limite di {limit} byte: {path}',
     'config.list_too_long'      => 'voce wishlist: il campo [{field}] contiene più dei {limit} elementi consentiti dal caricatore',
+    'config.field_not_list'       => 'voce wishlist: il campo [{field}] deve essere un elenco di valori, non una mappa chiave-valore',
     'config.unreadable'       => 'impossibile leggere la configurazione wishlist: {path}',
     'config.home_unset'       => 'impossibile espandere ~ senza $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: raccolta di flusso inline non supportata: {value} (usa un elenco annidato)',

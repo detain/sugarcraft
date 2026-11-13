@@ -24,6 +24,7 @@ return [
     'config.field_not_scalar'  => 'wishlist 항목: 필드 [{field}]는 스칼라여야 하며, {type}를 받음',
     'config.too_large'          => '\uc704\uc2dc\ub9ac\uc2a4\ud2b8 \uc124\uc815 \ud30c\uc77c\uc774 \uc81c\ud55c {limit}\ubc14\uc774\ud2b8\ub97c \ucd08\uacfc\ud569\ub2c8\ub2e4: {path}',
     'config.list_too_long'      => '\uc704\uc2dc\ub9ac\uc2a4\ud2b8 \ud56d\ubaa9: [{field}] \ud544\ub4dc\uac00 \ub85c\ub354\uc758 {limit}\uac1c \ucd08\uacfc \ud56d\ubaa9\uc744 \ub450\uace0 \uc788\uc2b5\ub2c8\ub2e4',
+    'config.field_not_list'       => '위시리스트 항목: [{field}] 필드는 키-값 지도가 아니라 값의 목록이어야 합니다',
     'config.unreadable'       => 'wishlist 구성을 읽을 수 없음: {path}',
     'config.home_unset'       => 'HOME 없이 ~ 확장 불가: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: 인라인 플로우 컬렉션 미지원: {value} (중첩 목록 사용)',

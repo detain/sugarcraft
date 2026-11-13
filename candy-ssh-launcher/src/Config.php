@@ -257,7 +257,9 @@ final class Config
      * (used for `options:` lists), and `#` line comments.
      * Anything more sophisticated (anchors, multi-doc, nested
      * mappings) belongs in a real YAML lib; we don't need it for
-     * a hosts directory.
+     * a hosts directory. Scalar resolution follows YAML 1.2 CORE
+     * (-013): only the true/false family means bool, yes/no are
+     * strings, and digit runs stay strings for parsePort to validate.
      *
      * @return list<array<string,mixed>>
      */
@@ -520,11 +522,20 @@ final class Config
         if (str_starts_with($v, '[') || str_starts_with($v, '{')) {
             throw new \RuntimeException(Lang::t('config.yaml_inline_flow', ['value' => $v]));
         }
-        if (preg_match('/^-?\d+$/', $v)) {
-            return (int) $v;
+        // -013: YAML 1.2 CORE scalar resolution — the 1.1 habits this
+        // reader used to carry invented types the schema never declared.
+        // Booleans are the true/false family in any casing; yes/no (and
+        // on/off) are plain strings, so `name: yes` loads as the literal
+        // host named "yes" instead of a bool that would have reached ssh
+        // as "1" through the old cast lane. Bare digit runs stay STRINGS
+        // too: the loader's only numeric consumer is parsePort, which
+        // validates its digit string itself — every other field is text.
+        if ($v === 'true' || $v === 'True' || $v === 'TRUE') {
+            return true;
         }
-        if ($v === 'true' || $v === 'yes')  return true;
-        if ($v === 'false' || $v === 'no')  return false;
+        if ($v === 'false' || $v === 'False' || $v === 'FALSE') {
+            return false;
+        }
         return $v;
     }
 
@@ -563,7 +574,7 @@ final class Config
             self::assertScalar('proxyJump', $proxyJump);
         }
         $opts = [];
-        foreach (self::normalizeList($row['options'] ?? null) as $o) {
+        foreach (self::normalizeList($row['options'] ?? null, 'options') as $o) {
             self::assertScalar('options', $o);
             $opts[] = (string) $o;
         }
@@ -571,7 +582,7 @@ final class Config
         // entries are ssh(1) flag LETTERS (`t`, `N`) — the dash is added at
         // argv build, where the leading-dash guard rejects payload smuggling.
         $flags = [];
-        foreach (self::normalizeList($row['flags'] ?? null) as $f) {
+        foreach (self::normalizeList($row['flags'] ?? null, 'flags') as $f) {
             self::assertScalar('flags', $f);
             $flags[] = (string) $f;
         }
@@ -589,12 +600,12 @@ final class Config
         // importer applies, now shared via IdentityPath. Everything else,
         // including every other field, passes verbatim to the argv.
         if (isset($row['identityFiles']) && $row['identityFiles'] !== null) {
-            foreach (self::normalizeList($row['identityFiles']) as $f) {
+            foreach (self::normalizeList($row['identityFiles'], 'identityFiles') as $f) {
                 self::assertScalar('identityFiles', $f);
                 $identityFiles[] = IdentityPath::expand((string) $f);
             }
         } elseif (isset($row['identity_files']) && $row['identity_files'] !== null) {
-            foreach (self::normalizeList($row['identity_files']) as $f) {
+            foreach (self::normalizeList($row['identity_files'], 'identity_files') as $f) {
                 self::assertScalar('identity_files', $f);
                 $identityFiles[] = IdentityPath::expand((string) $f);
             }
@@ -628,8 +639,9 @@ final class Config
      * is a config-injection footgun; throw loudly instead.
      *
      * Booleans are `is_scalar` but have no sane string form here: the tiny
-     * YAML parser maps `yes`/`no` to bool, and without this leg a config
-     * `name: yes` reached ssh as the literal host user "1" (2026-10-23).
+     * YAML parser maps the true/false family to bool (YAML 1.2 core —
+     * -013 dropped the 1.1 yes/no habit), and without this leg a config
+     * `name: true` reached ssh as the literal host user "1" (2026-10-23).
      * Numeric fields go through parsePort which rejects bools too.
      *
      * @throws \InvalidArgumentException when $value is not a usable scalar
@@ -650,11 +662,19 @@ final class Config
      * (2026-10-23 ruling: previously a scalar value here vanished without a
      * word — a documented config key must never no-op silently).
      *
+     * -013: list SHAPE is part of the contract. A key-value map under a
+     * list field used to survive this function with its keys discarded —
+     * the items became bare VALUES, silently re-spelling the user's
+     * config. Refuse the shape, naming the field.
+     *
      * @return list<mixed>
      */
-    private static function normalizeList(mixed $value): array
+    private static function normalizeList(mixed $value, string $field): array
     {
         if (is_array($value)) {
+            if (!array_is_list($value)) {
+                throw new \InvalidArgumentException(Lang::t('config.field_not_list', ['field' => $field]));
+            }
             return $value;
         }
         if ($value === null) {
