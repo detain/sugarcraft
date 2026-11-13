@@ -153,12 +153,20 @@ final class Toast
         return $this->mutate(['maxWidth' => $w]);
     }
 
+    /**
+     * Minimum box width in cells — a MASTER SWITCH, not just a floor:
+     * 0 (default) keeps the box FIXED at full width (maxWidth, capped by the
+     * frame); ANY positive value engages fit-content sizing, where the box
+     * shrinks toward its message between this floor and maxWidth. A caller
+     * setting withMinWidth(20) "to allow narrow alerts" flips the whole width
+     * model — that is the switch engaging, not a side effect.
+     */
     public function withMinWidth(int $w): self
     {
         if ($w < 0) {
             throw new \InvalidArgumentException(
-                'withMinWidth(): 0 is the FIXED-WIDTH sentinel (box sizes to its content, no floor), '
-                . 'positive cells are the minimum width floor — only NEGATIVE is meaningless here'
+                'withMinWidth(): 0 is the FIXED-WIDTH sentinel (box holds its full width cap, no fit-content), '
+                . 'positive cells enable fit-content between this floor and maxWidth — only NEGATIVE is meaningless here'
             );
         }
         return $this->mutate(['minWidth' => $w]);
@@ -1978,6 +1986,10 @@ final class Toast
      * Box width for a message of $messageLen display cells, capped by BOTH
      * maxWidth and the render canvas ($capWidth) — a box may never exceed the
      * frame it is blitted onto.
+     *
+     * NOTE (master-switch law, see withMinWidth()): minWidth <= 0
+     * short-circuits to the cap — FIXED full-width mode. Fit-content sizing
+     * engages ONLY at minWidth > 0.
      */
     private function resolveWidth(int $messageLen, int $capWidth): int
     {

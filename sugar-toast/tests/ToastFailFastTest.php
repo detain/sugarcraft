@@ -219,6 +219,10 @@ final class ToastFailFastTest extends TestCase
             $this->fail('withMinWidth(-1) must throw');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringContainsString('FIXED-WIDTH sentinel', $e->getMessage());
+            // TST-MINFIT: the message must carry the master-switch truth —
+            // 0 holds the full width cap; positives ENGAGE fit-content.
+            $this->assertStringContainsString('no fit-content', $e->getMessage());
+            $this->assertStringContainsString('positive cells enable fit-content', $e->getMessage());
         }
     }
 }

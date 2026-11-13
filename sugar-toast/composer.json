@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-toast",
-    "description": "Floating alert notification component for terminal UIs (design antecedent: DaltonSW/bubbleup). Supports error/warning/info/success alerts at 9 screen positions, dynamic width, NerdFont/Unicode/Ascii symbols, host-driven auto-dismiss.",
+    "description": "Floating alert notification component for terminal UIs (design antecedent: DaltonSW/bubbleup). Supports error/warning/info/success alerts at 9 screen positions, fixed or content-fit width (via minWidth), NerdFont/Unicode/Ascii symbols, host-driven auto-dismiss.",
     "type": "library",
     "license": "MIT",
     "keywords": [
