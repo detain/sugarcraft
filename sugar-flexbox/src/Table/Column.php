@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox\Table;
 
+use SugarCraft\Flexbox\Flex\Align;
 use SugarCraft\Flexbox\Support\Sgr;
 
 /**
@@ -26,6 +27,9 @@ final class Column
     /** Sanitized column title, rendered into the header line. */
     public readonly string $title;
 
+    /** Padding vocabulary the renderer implements: 'left' | 'right' | 'center'. */
+    public readonly string $align;
+
     /** @var callable(string $value, int $rowIndex): string|null */
     private $formatter;
 
@@ -36,10 +40,11 @@ final class Column
     private function __construct(
         string $title,
         public readonly int $width,
-        public readonly string $align = 'left',
+        Align|string $align = 'left',
         public readonly string $ansiStyle = '',
         ?callable $formatter = null,
     ) {
+        $this->align = self::alignOf($align);
         // Width is a cell budget consumed by str_repeat/Width padding: a
         // negative value produced negative-count repeats (ValueError at
         // render, far from the cause). 0 = a hidden column, legal.
@@ -89,20 +94,42 @@ final class Column
     public static function make(string $title, int $width): self { return self::new($title, $width); }
 
     /**
-     * @param string $align one of 'left', 'right', 'center' — the padding
-     *                      vocabulary the renderer implements. Other
-     *                      spellings used to fall through to 'left'
-     *                      silently; they now throw.
+     * Place cells of this column. The SHARED vocabulary is the Align
+     * enum (FBX-25) — the same cases FlexBox::withAlign() takes — and
+     * the legacy 'left'/'right'/'center' strings still ride through a
+     * coercion at the door; they retire with 2.0.0. Anything outside
+     * both spellings throws (they used to fall through to 'left'
+     * silently).
      */
-    public function withAlign(string $align): self
+    public function withAlign(Align|string $align): self
     {
+        return self::fromState($this->title, $this->width, self::alignOf($align), $this->ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
+    }
+
+    /**
+     * Resolve either alignment vocabulary to the renderer's padding
+     * string. Start/Center/End map onto left/center/right; Stretch is
+     * FlexBox sizing language with no cell meaning here and refuses.
+     */
+    public static function alignOf(Align|string $align): string
+    {
+        if ($align instanceof Align) {
+            return match ($align) {
+                Align::Start => 'left',
+                Align::Center => 'center',
+                Align::End => 'right',
+                Align::Stretch => throw new \InvalidArgumentException(
+                    'Column alignment takes Start, Center or End — Align::Stretch is FlexBox sizing language and has no cell placement.'
+                ),
+            };
+        }
         if (!\in_array($align, self::ALIGNMENTS, true)) {
             $vocab = \implode("', '", self::ALIGNMENTS);
             throw new \InvalidArgumentException(
-                "Column align must be one of '{$vocab}'; got '{$align}'."
+                "Column align must be an Align case (Start/Center/End) or one of '{$vocab}'; got '{$align}'."
             );
         }
-        return self::fromState($this->title, $this->width, $align, $this->ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
+        return $align;
     }
 
     /**

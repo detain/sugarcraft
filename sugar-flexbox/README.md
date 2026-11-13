@@ -141,9 +141,11 @@ To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the p
 `withRatio(1)`. There is no center-a-dialog primitive in this lib — pad with fixed-ratio
 spacers (`withRatio(1)` on each side, content `withRatio(n)`) instead.
 
-The alignment cases come from the `Align` enum: `FlexBox::withAlign()` takes the enum,
-not a bare string (passing `'center'` is a `TypeError`; the string-taking method is
-`Column::withAlign()`).
+The alignment cases come from the shared `Align` enum: `FlexBox::withAlign()` takes it,
+and `Column::withAlign()` takes it too (`Start`/`Center`/`End` place the cells;
+`Stretch` is sizing-only and refuses at the column door). Columns additionally still
+accept the legacy `'left'`/`'right'`/`'center'` strings — same placement, coerced at
+the door, retiring with 2.0.0.
 
 ```php
 use SugarCraft\Flexbox\Flex\{Align, FlexBox, FlexItem};
@@ -162,11 +164,12 @@ Table and Column are immutable: every builder returns a NEW instance, so the
 result must be assigned (or chained) — calling a method for effect discards it.
 
 ```php
+use SugarCraft\Flexbox\Flex\Align;
 use SugarCraft\Flexbox\Table\{Table, Column};
 
 $table = Table::new()
     ->withColumn(Column::new('Name', 20))
-    ->withColumn(Column::new('Age', 5)->withAlign('right'))
+    ->withColumn(Column::new('Age', 5)->withAlign(Align::End))
     ->withColumn(Column::new('City', 15))
     ->withRow(['Alice', '30', 'NYC'])
     ->withRow(['Bob', '25', 'LA'])

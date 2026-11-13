@@ -10,13 +10,14 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Flexbox\Flex\Align;
 use SugarCraft\Flexbox\Table\{Column, Table};
 
 $t = (new Table())
     ->withColumn(Column::new('Name',    15))
-    ->withColumn(Column::new('Age',      5)->withAlign('right'))
+    ->withColumn(Column::new('Age',      5)->withAlign(Align::End))
     ->withColumn(Column::new('City',    15))
-    ->withColumn(Column::new('Score',    6)->withAlign('right'))
+    ->withColumn(Column::new('Score',    6)->withAlign(Align::End))
     ->withRow(['Alice',   30, 'New York',     95.5])
     ->withRow(['Bob',     25, 'Los Angeles',  82.3])
     ->withRow(['Carol',   35, 'Chicago',      91.0])

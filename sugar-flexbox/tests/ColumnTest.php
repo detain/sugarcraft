@@ -6,6 +6,7 @@ namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use SugarCraft\Flexbox\Flex\Align;
 use SugarCraft\Flexbox\Table\{Column, Table};
 
 /**
@@ -286,8 +287,38 @@ final class ColumnTest extends TestCase
     public function testWithAlignRefusesSpellingsOutsideTheVocabulary(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("Column align must be one of 'left', 'right', 'center'; got 'middle'");
+        $this->expectExceptionMessage("Column align must be an Align case (Start/Center/End) or one of 'left', 'right', 'center'; got 'middle'");
         Column::new('X', 4)->withAlign('middle');
+    }
+
+    public function testAlignIsTheSharedEnumVocabulary(): void
+    {
+        // FBX-25: one alignment language across the lib. The enum rides
+        // the door, the legacy strings keep working through coercion,
+        // and both spellings land on the same renderer vocabulary.
+        $pairs = [
+            [Align::Start, 'left'],
+            [Align::Center, 'center'],
+            [Align::End, 'right'],
+        ];
+        foreach ($pairs as [$case, $vocab]) {
+            $fromEnum = Column::new('X', 4)->withAlign($case);
+            $this->assertSame($vocab, $fromEnum->align, $case->name . ' must place as ' . $vocab);
+            $this->assertEquals($fromEnum, Column::new('X', 4)->withAlign($vocab), $case->name . ' and the legacy string are the same column');
+        }
+
+        // The withers take the enum (the 2-arg new() default stays 'left').
+        $this->assertSame('center', Column::new('X', 4)->withAlign(Align::Center)->align);
+    }
+
+    public function testStretchIsRefusedAtTheColumnDoor(): void
+    {
+        // Stretch is FlexBox sizing language; a column cell never grows
+        // a container by aligning, so the case that cannot mean anything
+        // refuses rather than coercing to 'left'.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Align::Stretch is FlexBox sizing language');
+        Column::new('X', 4)->withAlign(Align::Stretch);
     }
 
     public function testWithAlignAcceptsTheFullVocabulary(): void
