@@ -1270,4 +1270,256 @@ final class GameTest extends TestCase
         $this->assertNull($cmd, 'a stale lock tick may never close a live window');
         $this->assertSame(2, $after->lockWindowGeneration, 'the live window stays the only armed generation');
     }
+
+    // ------------------------------------------------------------------
+    // Bonus-name ladder + level-scaled arithmetic (findings 010/046)
+    // ------------------------------------------------------------------
+
+    /**
+     * The bottom $height rows filled solid, optionally with one open
+     * column (the shaft a vertical I threads). With $openCol null the
+     * rows arrive already complete — the flat I resting on top of a full
+     * wall is how the shipped 1846 B2B pin earns its Tetris, and the
+     * resting piece guarantees leftovers, so it can never read PC.
+     *
+     * @return array<int, array<int, ?Tetromino>>
+     */
+    private function filledBottomRows(int $height, ?int $openCol = null): array
+    {
+        $rows = $this->emptyGrid();
+        for ($row = Board::ROWS - $height; $row < Board::ROWS; $row++) {
+            for ($col = 0; $col < Board::COLS; $col++) {
+                if ($col === $openCol) {
+                    continue;
+                }
+                $rows[$row][$col] = Tetromino::I;
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Rows 22-23 filled except the two-cell well at columns 1-2 — the O
+     * piece's perfect-clear shaft (both rows empty out completely below).
+     *
+     * @return array<int, array<int, ?Tetromino>>
+     */
+    private function wellGrid(): array
+    {
+        $rows = $this->emptyGrid();
+        for ($col = 0; $col < Board::COLS; $col++) {
+            if ($col === 1 || $col === 2) {
+                continue;
+            }
+            $rows[22][$col] = Tetromino::I;
+            $rows[23][$col] = Tetromino::I;
+        }
+        return $rows;
+    }
+
+    /**
+     * Floor notch sized for the rotation-2 (nub-down) T at x = $gap:
+     * row 22 open at $gap..$gap+2 (the flat row) and row 23 open only at
+     * $gap+1 (the nub). The flanking row-23 cells are exactly the front
+     * corners BL/BR of the T's centre, and row 21 stays clear, so the
+     * guideline read is a 2-corner FRONT touch — a Mini whose cleared
+     * line count alone decides Mini vs promoted full spin.
+     *
+     * @return array<int, array<int, ?Tetromino>>
+     */
+    private function notchGrid(int $gap): array
+    {
+        $rows = $this->emptyGrid();
+        for ($col = 0; $col < Board::COLS; $col++) {
+            $rows[22][$col] = Tetromino::I;
+            $rows[23][$col] = Tetromino::I;
+        }
+        $rows[22][$gap] = null;
+        $rows[22][$gap + 1] = null;
+        $rows[22][$gap + 2] = null;
+        $rows[23][$gap + 1] = null;
+        return $rows;
+    }
+
+    public function testQuietTetrisOnAFourthRowEarnsTheTetrisBadge(): void
+    {
+        // Ladder state 1 (finding 010): a 4-line clear with spin inputs off
+        // must name itself plain TETRIS — the base rung every compound arm
+        // of the Game match() is ordered against. Resting flat I on a
+        // complete wall: leftovers in row 19 keep it out of PC territory.
+        $game = $this->deterministicGame()->mutate([
+            'board' => new Board($this->filledBottomRows(4)),
+            'piece' => new Piece(Tetromino::I, 0, 0, 18), // row-19 span, grounded
+            'lastActionWasRotation' => false,
+        ]);
+        [$locked] = $game->update($this->gravity());
+
+        $this->assertSame(1210, $locked->score->points - $game->score->points,
+            '1200 base + 10 combo, level 0, no spin credit');
+        $this->assertSame('TETRIS', $locked->lastAward, 'a quiet 4-line clear is a TETRIS');
+        $this->assertTrue($locked->backToBack, 'a Tetris arms back-to-back');
+    }
+
+    public function testTetrisThatEmptiesTheBoardEarnsTetrisPlusPC(): void
+    {
+        // Ladder state 2 (finding 010): the vertical I threads the shaft
+        // and the LAST cells leave with all four rows — the compound name
+        // TETRIS+PC, a README headline no test produced before this (a
+        // rename or match-order swap would have shipped red in the docs
+        // and green in CI).
+        $game = $this->deterministicGame()->mutate([
+            'board' => new Board($this->filledBottomRows(4, 1)),
+            'piece' => new Piece(Tetromino::I, 3, 0, 20), // column 1, rows 20-23, grounded
+            'lastActionWasRotation' => false,
+        ]);
+        [$locked] = $game->update($this->gravity());
+
+        $this->assertSame(6210, $locked->score->points - $game->score->points,
+            '1200 base + 5000 PC + 10 combo, level 0');
+        $this->assertSame('TETRIS+PC', $locked->lastAward, 'a Tetris that empties the board compounds to TETRIS+PC');
+    }
+
+    public function testQuietDropIntoTheWellIsAPerfectClear(): void
+    {
+        // Ladder state 3 (finding 010): the same emptying finish played
+        // with a plain drop — under the Tetris and spin rungs the match()
+        // must name the bare clear PERFECT CLEAR.
+        $game = $this->deterministicGame()->mutate([
+            'board' => new Board($this->wellGrid()),
+            'piece' => new Piece(Tetromino::O, 0, 0, 22), // covers cells (1-2, 22-23)
+            'lastActionWasRotation' => false,
+        ]);
+        [$locked] = $game->update($this->gravity());
+
+        $this->assertSame(2, $locked->score->lines - $game->score->lines, 'fixture premise: two lines went');
+        $this->assertSame(5110, $locked->score->points - $game->score->points,
+            '100 base + 5000 PC + 10 combo, level 0');
+        $this->assertSame('PERFECT CLEAR', $locked->lastAward, 'a non-compound clear of the whole board is a PERFECT CLEAR');
+    }
+
+    public function testTwoCornerFrontMiniPromotesToFullTSpinAndCompoundsWithPC(): void
+    {
+        // Ladder state 4 (finding 010, promotion law): the notch credits
+        // only the BL/BR front corners — a Mini by the 2-corner rule — but
+        // it clears TWO lines, so the promotion gate fires: badge T-SPIN
+        // (never T-SPIN MINI), award 400 (never 100), the empty board
+        // compounds it to the rarest name T-SPIN+PC, and only the promoted
+        // full spin — not the raw mini — may arm back-to-back.
+        $game = $this->deterministicGame()->mutate([
+            'board' => new Board($this->notchGrid(5)),
+            'piece' => new Piece(Tetromino::T, 2, 5, 21), // flat row 22, nub (6,23)
+            'lastActionWasRotation' => true,
+        ]);
+        [$locked] = $game->update($this->gravity());
+
+        $this->assertSame(5510, $locked->score->points - $game->score->points,
+            '100 base + 400 PROMOTED award + 5000 PC + 10 combo, level 0 (an un-promoted mini would pay 100)');
+        $this->assertSame('T-SPIN+PC', $locked->lastAward, 'the promoted spin compounds with the perfect clear');
+        $this->assertTrue($locked->backToBack, 'a promoted spin that cleared arms the chain');
+    }
+
+    public function testTwoCornerFrontMiniClearingOneLineStaysAMini(): void
+    {
+        // The promotion gate's other side: open one more cell in the flat
+        // row (column $gap-1) and the spin clears a single line instead of
+        // two — count < 2 keeps the Mini small: badge T-SPIN MINI, award
+        // 100, and a mini never arms back-to-back.
+        $rows = $this->notchGrid(5);
+        $rows[22][4] = null;
+        $game = $this->deterministicGame()->mutate([
+            'board' => new Board($rows),
+            'piece' => new Piece(Tetromino::T, 2, 5, 21),
+            'lastActionWasRotation' => true,
+        ]);
+        [$locked] = $game->update($this->gravity());
+
+        $this->assertSame(150, $locked->score->points - $game->score->points,
+            '40 base + 100 MINI award + 10 combo, level 0 (a promoted full spin would pay 450 here)');
+        $this->assertSame('T-SPIN MINI', $locked->lastAward, 'a one-line front mini keeps its modest name');
+        $this->assertFalse($locked->backToBack, 'a mini never arms back-to-back');
+    }
+
+    public function testBonusLegsScaleWithOldLevelPlusOne(): void
+    {
+        // Finding 046: every exact arithmetic pin in this file sat at level
+        // 0 — multiplier 1 — so the shipped old-level+1 law (Game.php pays
+        // with the level AT WHICH THE CLEAR HAPPENED, not the post-clear
+        // level the score object re-levels to) was one intdiv() slip away
+        // from silently becoming new-level+1. Every leg runs at
+        // lines=29/level=2 where the clear re-levels the score to 3: a
+        // new-level law would pay x4 on the base and x4 on the PC bonus
+        // for different totals than the pinned ones below.
+        $levelled = new Score(0, 29, 2);
+
+        $comboGrid = $this->emptyGrid();
+        for ($col = 4; $col < Board::COLS; $col++) {
+            $comboGrid[23][$col] = Tetromino::I;
+        }
+        $comboGrid[22][0] = Tetromino::I; // leftover so the single clear is no PC
+
+        $legs = [
+            'back-to-back extra' => [
+                'board' => new Board($this->filledBottomRows(4)),
+                'piece' => new Piece(Tetromino::I, 0, 0, 18),
+                'backToBack' => true,
+                'combo' => 0,
+                'expected' => 5430, // 3600 base + 1800 extra + 30 combo
+            ],
+            'combo chain' => [
+                'board' => new Board($comboGrid),
+                'piece' => new Piece(Tetromino::I, 0, 0, 22), // row-23 span, grounded
+                'backToBack' => false,
+                'combo' => 5,
+                'expected' => 300, // 120 base + 6x10x3 combo
+            ],
+            'perfect clear' => [
+                'board' => new Board($this->wellGrid()),
+                'piece' => new Piece(Tetromino::O, 0, 0, 22),
+                'backToBack' => false,
+                'combo' => 0,
+                'expected' => 15330, // 300 base + 15000 PC + 30 combo
+            ],
+        ];
+        foreach ($legs as $name => $leg) {
+            $game = $this->deterministicGame()->mutate([
+                'board' => $leg['board'],
+                'piece' => $leg['piece'],
+                'score' => $levelled,
+                'backToBack' => $leg['backToBack'],
+                'combo' => $leg['combo'],
+                'lastActionWasRotation' => false,
+            ]);
+            [$locked] = $game->update($this->gravity());
+            $this->assertSame($leg['expected'], $locked->score->points - $game->score->points,
+                "the $name leg rides the level at which the clear happened (x3), not the re-levelled x4");
+        }
+    }
+
+    public function testHumanTSpinAwardScalesWithOldLevelPlusOne(): void
+    {
+        // The spin-award leg of the same law, driven through the real key
+        // path: the pinned level-0 shape (rotate at (5,12), gravity settles
+        // it into the slot, a TSS of 40+400+10 = 450) at lines=29/level=2
+        // must pay (40 + 400 + 10) x 3 = 1350. The slot locks on the first
+        // gravity tick after the rotation, so no fall can disarm the spin
+        // credit and the total is a closed form.
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($this->tspinSlotGrid()),
+            'piece' => new Piece(Tetromino::T, 0, 5, 12),
+            'score' => new Score(0, 29, 2),
+        ]);
+        [$spun] = $g->update($this->key('up'));
+        $this->assertTrue($spun->lastActionWasRotation, 'the rotate arms the credit the lock will cash');
+
+        $state = $spun;
+        for ($i = 0; $i < 40; $i++) {
+            [$state, ] = $state->update($this->gravity());
+            if ($state->score->points !== $spun->score->points) {
+                break;
+            }
+        }
+        $this->assertSame(1350, $state->score->points - $spun->score->points,
+            '40 base + 400 award + 10 combo, every leg x(old level + 1) = x3');
+        $this->assertSame('T-SPIN', $state->lastAward, 'the 3-corner spin names itself T-SPIN at level 2 too');
+    }
 }
