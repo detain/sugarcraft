@@ -344,9 +344,9 @@ Context rules, following btop's input handling:
 <!-- BEGIN generated:keys -->
 | Key | Action | btop key names |
 |---|---|---|
-| `Mouse 1` | Clicks buttons and selects in process list. | `mouse_click`, `mouse_drag`, `mouse_release` |
-| `Mouse scroll` | Scrolls any scrollable list/text under cursor. | `mouse_scroll_up`, `mouse_scroll_down` |
-| `Esc, m` | Toggles main menu. | `escape`, `m` |
+| `Mouse 1` | Click buttons and select in process list. | `mouse_click`, `mouse_drag`, `mouse_release` |
+| `Mouse scroll` | Scroll any scrollable list/text under cursor. | `mouse_scroll_up`, `mouse_scroll_down` |
+| `Esc, m` | Toggle main menu. | `escape`, `m` |
 | `p` | Cycle view presets forwards. | `p` |
 | `Shift+P` | Cycle view presets backwards. | `P` |
 | `1` | Toggle CPU box. | `1` |
@@ -360,10 +360,10 @@ Context rules, following btop's input handling:
 | `s, S` | Next/previous VM card order (VM dashboard). | — (candy-top only) |
 | `Shift+I` | Toggle the ipmi box (BMC power, fans, temps; root). | — (candy-top only) |
 | `d` | Toggle disks view in MEM box. | `d` |
-| `F2, o` | Shows options. | `f2`, `o` |
-| `F1, ?, h` | Shows this window. | `f1`, `?`, `h` |
-| `Ctrl+R` | Reloads config file from disk. | `ctrl+r` |
-| `q, Ctrl+C` | Quits program. | `q`, `ctrl+c` |
+| `F2, o` | Show options. | `f2`, `o` |
+| `F1, ?, h` | Show this window. | `f1`, `?`, `h` |
+| `Ctrl+R` | Reload config file from disk. | `ctrl+r` |
+| `q, Ctrl+C` | Quit program. | `q`, `ctrl+c` |
 | `+, -, =` | Add/Subtract 100 ms to/from update timer. | `+`, `-`, `=` |
 | `Up, Down` | Select in process list. | `up`, `down` |
 | `Enter` | Show detailed information for selected process. | `enter` |
@@ -385,7 +385,7 @@ Context rules, following btop's input handling:
 | `r` | Reverse sorting order in processes box. | `r` |
 | `e` | Toggle processes tree view. | `e` |
 | `E` | Collapse/expand all processes in tree view. | `E` |
-| `%` | Toggles memory display mode in processes box. | `%` |
+| `%` | Toggle memory display mode in processes box. | `%` |
 | `O` | Toggle hiding containers and VMs in process list. | `O` |
 | `g, Ctrl+G` | Toggle GPU-only process filter (vim_keys: Ctrl+G). | `g`, `ctrl+g` |
 | `Selected +, -` | Expand/collapse the selected process in tree view. | `+`, `-`, `=` |

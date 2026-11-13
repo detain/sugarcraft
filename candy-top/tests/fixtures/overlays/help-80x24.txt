@@ -7,11 +7,11 @@
 ╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
 │        Key:        Description:                                            │─╯
 │╭─┐General┌─────────────────────────╮  ╭─┐Panels & views┌──────────────────╮│─╮
-││       Esc, m       Toggles main   │  │          p         Cycle view     ││%│
+││       Esc, m       Toggle main    │  │          p         Cycle view     ││%│
 ││                    menu.          │  │                    presets        ││8│
-││       Ctrl+R       Reloads config │  │                    forwards.      ││0│
+││       Ctrl+R       Reload config  │  │                    forwards.      ││0│
 ││                    file from disk.│  │       Shift+P      Cycle view     ││6│
-││      q, Ctrl+C     Quits program. │  │                    presets        ││5│
+││      q, Ctrl+C     Quit program.  │  │                    presets        ││5│
 ││       +, -, =      Add/Subtract   │  │                    backwards.     ││9│
 ││                    100 ms to/from │  │          1         Toggle CPU box.││2│
 ││                    update timer.  │  │          2         Toggle MEM box.││6│

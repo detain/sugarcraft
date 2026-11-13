@@ -7,9 +7,9 @@
 ╭─┐help┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────╮││
 │        Key:        Description:                                                                                    │││
 │╭─┐General┌─────────────────────────────────────────────╮  ╭─┐Panels & views┌──────────────────────────────────────╮│││
-││       Esc, m       Toggles main menu.                 │  │          p         Cycle view presets forwards.       ││││
-││       Ctrl+R       Reloads config file from disk.     │  │       Shift+P      Cycle view presets backwards.      ││╯│
-││      q, Ctrl+C     Quits program.                     │  │          1         Toggle CPU box.                    ││ │
+││       Esc, m       Toggle main menu.                  │  │          p         Cycle view presets forwards.       ││││
+││       Ctrl+R       Reload config file from disk.      │  │       Shift+P      Cycle view presets backwards.      ││╯│
+││      q, Ctrl+C     Quit program.                      │  │          1         Toggle CPU box.                    ││ │
 ││       +, -, =      Add/Subtract 100 ms to/from update │  │          2         Toggle MEM box.                    ││─╯
 ││                    timer.                             │  │          3         Toggle NET box.                    ││─╮
 │╰───────────────────────────────────────────────────────╯  │          4         Toggle PROC box.                   ││%│
@@ -24,7 +24,7 @@
 ││          e         Toggle processes tree view.        │  │       Shift+I      Toggle the ipmi box (BMC power,    ││ │
 ││          E         Collapse/expand all processes in   │  ╰───────────────────────────────────────────────────────╯│ │
 ││                    tree view.                         │                                                           │ │
-││          %         Toggles memory display mode in     │  ╭─┐Navigation & scrolling┌──────────────────────────────╮│ │
+││          %         Toggle memory display mode in      │  ╭─┐Navigation & scrolling┌──────────────────────────────╮│ │
 ││                    processes box.                     │  │      Up, Down      Select in process list.            ││ │
 ││          O         Toggle hiding containers and VMs in│  │   Pg Up, Pg Down   Jump 1 page in process list.       ││ │
 ││                    process list.                      │  │      Home, End     Jump to first or last page in      ││ │
