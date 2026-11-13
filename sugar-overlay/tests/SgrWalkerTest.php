@@ -65,7 +65,7 @@ final class SgrWalkerTest extends TestCase
 
     public function testUnknownExtendedModeIsANoOpAndDoesNotSwallowFollowingLegs(): void
     {
-        // "38;7;1": mode 7 is no colour space — the leg no-ops, and 1 lands
+        // "38;7;1": mode 7 is no color space — the leg no-ops, and 1 lands
         // as bold. (The old pen walk's `$i = $count` dropped the bold too;
         // "keep scanning" is the rule one parser can promise both callers.)
         $pen = self::fold('38;7;1');

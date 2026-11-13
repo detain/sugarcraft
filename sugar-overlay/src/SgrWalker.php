@@ -21,18 +21,18 @@ use SugarCraft\CellBuffer\Style as BufferStyle;
  * cannot be made in one without the other noticing: the rules live once.
  *
  * Rules the fold encodes:
- * - Colon sub-parameters parse per ECMA-48/T.416: an extended-colour leg may
- *   carry its operands inside one leg (`38:2:1:2:3`, and the colour-space-id
+ * - Colon sub-parameters parse per ECMA-48/T.416: an extended-color leg may
+ *   carry its operands inside one leg (`38:2:1:2:3`, and the color-space-id
  *   form `38:2::1:2:3` — a fourth operand or an empty first operand means a
- *   colour-space id and is skipped). Attribute legs ignore trailing colon
+ *   color-space id and is skipped). Attribute legs ignore trailing colon
  *   operands (there is nothing to model — `4:3` underlines).
  * - Semicolon forms gather their operands from the FOLLOWING legs with the
  *   exact arity of the mode they name (`38;5;n` takes one, `38;2;r;g;b`
  *   three) — never more, so the legs after a palette color stay live.
- * - A malformed or incomplete extended-colour leg is a NO-OP: the prior pen
+ * - A malformed or incomplete extended-color leg is a NO-OP: the prior pen
  *   stands and scanning CONTINUES. (The old pen walk's `$i = $count` silently
  *   discarded every later parameter in the same sequence; the old isolation
- *   walk armed a reset for colours it never held.)
+ *   walk armed a reset for colors it never held.)
  * - Colour means: 0 resets fg, bg and attrs; 39/49 restore one default;
  *   30-37/40-47/90-97/100-107 the base-16 palette (bright black 0x7f7f7f);
  *   38/48 with mode 2 truecolor, mode 5 the xterm 256 index — every operand
@@ -64,7 +64,7 @@ final class SgrWalker
                 if ($operands === []) {
                     // Semicolon form: the operands ride on the FOLLOWING
                     // legs, exactly `target` of them — gathering stops at the
-                    // arity, so a palette colour never swallows `;1;7` behind it.
+                    // arity, so a palette color never swallows `;1;7` behind it.
                     while ($i + 1 < $count && $legs[$i + 1][1] === [] && \count($operands) < self::semitarget($operands)) {
                         $operands[] = (string) $legs[++$i][0];
                     }
@@ -148,7 +148,7 @@ final class SgrWalker
     }
 
     /**
-     * Resolve an extended-colour leg's operands to 0xRRGGBB, or null when
+     * Resolve an extended-color leg's operands to 0xRRGGBB, or null when
      * the leg is malformed (unknown mode, missing operands). Non-numeric
      * operands intval to 0 exactly as the old walkers did; out-of-range
      * channels saturate via channel(), never wrap.
@@ -167,7 +167,7 @@ final class SgrWalker
         $rest = \array_slice($operands, 1);
 
         if ($mode === '2') {
-            // T.416 colon form may carry a colour-space id as the first
+            // T.416 colon form may carry a color-space id as the first
             // operand — `38:2::1:2:3` (empty id) and `38:2:1:2:3:4` alike.
             // Four-or-more trailing operands mean the first is the id.
             if ($colonForm && \count($rest) >= 4) {
@@ -191,7 +191,7 @@ final class SgrWalker
     }
 
     /**
-     * How many semicolon legs an extended-colour sequence named by the
+     * How many semicolon legs an extended-color sequence named by the
      * operands gathered so far still needs: the mode decides — 4 legs for
      * `2;r;g;b`, 2 for `5;n`, and 1 for an unknown mode (consume the mode,
      * no-op, leave the following legs live).

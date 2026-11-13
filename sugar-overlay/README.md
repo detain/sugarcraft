@@ -188,14 +188,15 @@ cells, and the region reads at the backdrop's opacity, not the modal's.
 Do not rely on stacked veils to reach a contrast target — dim once, at
 the strength you need.
 
-`composite()` anchors horizontally with a deliberate asymmetry: `baseX` is
-**not** clamped, so an overlay wider than the canvas at `LEFT` keeps its
-left cells and loses its right edge (the reverse at `RIGHT`). A
+`composite()` anchors horizontally with a deliberate asymmetry: **the
+left/right placement is never clamped**, so an overlay wider than the
+canvas keeps its anchor-side edge and loses the far one (left cells kept,
+right edge clipped at `LEFT`; the reverse at `RIGHT`). A
 "shrink-to-fit-the-canvas" mode is a design decision this library does not
-make for you. Vertically there is one clamp: `baseY` is floored at `0`, so
-an overlay taller than the canvas and anchored `BOTTOM` is pinned to the
-top row — the anchor tells you where the overlay wanted to sit, not which
-of its edges survives.
+make for you. Vertically there is one clamp: **placement above row one is
+pinned to row one**, so an overlay taller than the canvas and anchored
+`BOTTOM` sits at the top row — the anchor tells you where the overlay
+wanted to sit, not which of its edges survives.
 
 ## Animations
 
@@ -210,13 +211,13 @@ block's full extent outside the anchored edge — a whole foreground-width of
 columns at `LEFT`/`RIGHT`, a whole foreground-height of rows at
 `TOP`/`BOTTOM` — so clipping paints nothing but the backdrop, never a
 sliver. The fade pen and the scrim are emitted as truecolor `38;2` pens: a
-16- or 256-colour-only host ignores or requantises them, so a fade can
+16- or 256-color-only host ignores or requantizes them, so a fade can
 read as an on/off step and a dim as a jump there — the motion is a
 truecolor feature with a graceful, visible degradation.
 
 | Kind | Default easing | Motion |
 |---|---|---|
-| `AnimationKind::SLIDE` | `CubicBezier::easeOut()` | enters from the anchored edge; a CENTER anchor has no edge to slide from, so SLIDE is a no-op there (only the scrim ramps) |
+| `AnimationKind::SLIDE` | `CubicBezier::easeOut()` | enters from the anchored edge; `CENTER` on an axis contributes no displacement, so a slide anchored `CENTER` there animates only the scrim |
 | `AnimationKind::FADE` | `CubicBezier::easeInOut()` | truecolor dim pen over the foreground, lifting to full brightness |
 | `AnimationKind::SCALE` | `CubicBezier::easeOut()` | lines reveal from the middle outward (vertical, whole lines only) |
 
@@ -478,14 +479,13 @@ Notes:
   made *after* the scan carry the zones forward — the scanner rides the
   clone — while the pre-scan original stays unscanned. `hit()` returns
   the `Zone` at a cell or `null`; `Zone::$id` is the public id. Both
-  `hit()` and `isClickOutside()` are **1-based**: `isClickOutside()`
-  forwards `MouseMsg::$x/$y` straight into `hit()`, and SGR mouse
-  reports — what terminals emit and what sugar-core's `InputReader`
-  decodes — are already 1-based and passed through unshifted, so
-  construct the message from the report as-is. Only convert if your own
-  event source counts from zero; subtracting one blindly shifts every
-  edge click onto the wrong cell and makes a click on the canvas border
-  self-dismiss the modal.
+  `hit()` and `isClickOutside()` are **1-based**. `isClickOutside()`
+  forwards `MouseMsg::$x/$y` straight into `hit()`, and SGR mouse reports
+  — what terminals emit and sugar-core's `InputReader` decodes — are
+  already 1-based, so construct the message from the report as-is.
+  Convert only if your own event source counts from zero, and subtract
+  one in that case. Shifting blindly puts every edge click one cell off,
+  and a click on the canvas border then self-dismisses the modal.
 - `scan()` throws `InvalidArgumentException` when the frame carries two
   zones with the same id (`sugar-mouse` refuses ambiguous zones) — keep
   `mark()` ids unique per frame.
@@ -552,7 +552,7 @@ from. (These three figures are pinned live by `tests/ReadmeByteFigureTest.php`
 Extended color operands saturate before any arithmetic runs: a `38;5;n`
 palette index is clamped to 0–255 and `38;2;r;g;b` components to 0–255
 each, so a hostile `38;5;300` cannot push the grayscale-ramp formula
-(38;5;232-255 is the grey ramp, not the 6×6×6 colour cube) past the
+(38;5;232-255 is the grey ramp, not the 6×6×6 color cube) past the
 `0xRRGGBB` range the cell model stores (unclamped, it would have run the
 ramp to 688 per channel — a value no frame can round-trip).
 
@@ -647,11 +647,11 @@ The two sweeps differ deliberately:
   `Sanitize::untrustedForDisplay()` plus `stripZoneSentinels()` and
   folds TAB to its measured four cells. The frames-channel sanitizer is
   wrong here because its contract KEEPS CR and TAB — and both are
-  geometry lies downstream: a bare CR repaints over cells the width math
-  already counted (the diff model and the screen desync), and terminals
-  stop TAB at the next 8-column tab stop while `Width` reports four
-  cells, so every clip and anchor computed from the measured width cuts
-  the row short or past its end.
+  geometry lies downstream. A bare CR repaints over cells the width math
+  has already counted, desyncing the diff model from the screen. And a
+  TAB stops at the terminal's next 8-column tab stop while `Width`
+  reports four cells, so every clip and anchor computed from the
+  measured width cuts the row short or past its end.
 
 The law, exactly: **sweep the raw payload at the boundary, then mark,
 then render.** Marked frames go through
@@ -713,14 +713,15 @@ box-glyph noise for terminal screen readers, so never treat it as the
 announcement. Return focus to the underlying pane when it closes.
 
 For motion, call `withReducedMotion()` whenever the user has asked their
-platform to reduce it (sugar-colorprofile's `Probe::reducedMotion()` is
-the fleet-standard read — note it sees only the `REDUCE_MOTION` /
-`PREFERS_REDUCED_MOTION` environment variables: a desktop accessibility
-toggle reaches a terminal process only when exported into its
-environment, so offer an in-app setting as well): `animate()` then treats every progress as 1.0
-and paints the settled frame in one shot, with no dim-pen sweep and no
-travel. During ordinary animation the scrim ramps with the animation
-instead of snapping to full opacity at frame one.
+platform to reduce it. The fleet-standard read is sugar-colorprofile's
+`Probe::reducedMotion()` — but it sees only the `REDUCE_MOTION` /
+`PREFERS_REDUCED_MOTION` environment variables, and a desktop
+accessibility toggle reaches a terminal process only when exported into
+its environment, so offer an in-app setting as well. With the flag set,
+`animate()` treats every progress as 1.0 and paints the settled frame in
+one shot: no dim-pen sweep, no travel. Without it — ordinary animation —
+the scrim ramps with the animation instead of snapping to full opacity
+at frame one.
 
 ## Shared foundations
 

@@ -412,8 +412,8 @@ final class MarkedFrame
      *
      * The walk IS the pen: it folds through {@see SgrWalker} exactly like
      * the compositor's own pen merge, so the neutralizer can never arm a
-     * reset for a colour the diff model never holds (sugar-overlay-071: a
-     * line ending `\e[38m` — an incomplete extended-colour leg is a no-op
+     * reset for a color the diff model never holds (sugar-overlay-071: a
+     * line ending `\e[38m` — an incomplete extended-color leg is a no-op
      * for BOTH sides now, no phantom 39/49). Colour only: attributes
      * (bold/underline/reverse…) deliberately RIDE ACROSS segment
      * boundaries — widening the neutralizer to `0` would clobber link pens

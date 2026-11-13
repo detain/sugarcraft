@@ -20,9 +20,11 @@ use SugarCraft\Overlay\Position;
  * away by Veil::composite(), so progress 0 shows nothing rather than a
  * sliver.
  *
- * A CENTER (or axis-centred) anchor has no edge to enter from, so SLIDE
- * is a deliberate no-op there — both offsets stay 0 at every progress.
- * Anchor at an edge (TOP/LEFT/RIGHT/BOTTOM or a corner) to get a slide.
+ * `CENTER` on an axis contributes no displacement on THAT axis — the
+ * other axis still travels; a slide anchored `CENTER` on both axes is the
+ * deliberate no-op (content parked at its final cells, scrim still
+ * ramps). Anchor at an edge (TOP/LEFT/RIGHT/BOTTOM or a corner) to get
+ * movement on that axis.
  *
  * The offset is applied via the returned vertical/horizontal offsets
  * which should be added to the composite() call's xOffset/yOffset.

@@ -28,7 +28,7 @@
 
 ### Fade Animation
 
-- Terminal emulators do not support true per-character alpha blending, so `Fade::apply()` renders opacity as a truecolor gray pen (`\e[38;2;L;L;Lm`, L = 255 × opacity/100), the same blend the backdrop dim uses
+- Terminal emulators do not support true per-character alpha blending, so `Fade::apply()` renders opacity as a truecolor gray pen (`\e[38;2;L;L;Lm`, L = 255 × opacity/100) — the same ramp the backdrop dim uses, at the OPPOSITE end: the fade pen brightens as opacity rises (L = 255 × opacity/100) while the dim darkens as it rises (brightness = 255 × (1 − opacity/100)). Matching the ramp, inverting the ends, is why one gray-pen machine serves both
 - The pen is re-applied after every SGR sequence inside a line so content colors / resets cannot punch through; background colors and attributes are untouched
 - Opacity 0 → `''` (nothing painted, like Scale at 0); opacity 100 → foreground byte-for-byte
 - Two units, one ramp: animation PROGRESS is the float 0.0–1.0, pen OPACITY is the integer percent 0–100 it produces (`opacity() = round(easedProgress × 100)`); name each one, never "opacity 0…1" or "progress 0–100" (sugar-overlay-056)

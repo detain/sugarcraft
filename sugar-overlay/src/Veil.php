@@ -333,8 +333,8 @@ final class Veil
      * composed afterwards).
      *
      * Replayed TERMINAL output is in scope on the SGR side: the pen parser
-     * is a full ECMA-48 fold — colon sub-parameter colours (`38:2:1:2:3`
-     * and the colour-space form `38:2::1:2:3`) arm a pen exactly like the
+     * is a full ECMA-48 fold — colon sub-parameter colors (`38:2:1:2:3`
+     * and the color-space form `38:2::1:2:3`) arm a pen exactly like the
      * semicolon spelling — so attacker-SGR reaches the grid on purpose (a
      * painted cell must match what the emitting emulator showed). The
      * defense for a line left mid-style is the splice isolation and the dim
