@@ -80,6 +80,27 @@ final class Column
         return $col;
     }
 
+    /**
+     * The class's single copy path (FBX-23): every mutator rebuilds
+     * through fromState with its delta applied — the readonly face
+     * cannot be written on a clone, so rebuild is the honest one-way
+     * door, and the delta map states exactly what each mutator owns.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes = []): self
+    {
+        return self::fromState(
+            $changes['title'] ?? $this->title,
+            $changes['width'] ?? $this->width,
+            $changes['align'] ?? $this->align,
+            $changes['ansiStyle'] ?? $this->ansiStyle,
+            \array_key_exists('formatter', $changes) ? $changes['formatter'] : $this->formatter,
+            $changes['sortDir'] ?? $this->sortDir,
+            $changes['sortPriority'] ?? $this->sortPriority,
+        );
+    }
+
     public static function new(string $title, int $width): self
     {
         return new self($title, $width);
@@ -103,7 +124,7 @@ final class Column
      */
     public function withAlign(Align|string $align): self
     {
-        return self::fromState($this->title, $this->width, self::alignOf($align), $this->ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
+        return $this->mutate(['align' => self::alignOf($align)]);
     }
 
     /**
@@ -148,8 +169,7 @@ final class Column
      */
     public function withStyle(string $ansiStyle): self
     {
-        $style = Sgr::normalize($ansiStyle, 'Column style');
-        return self::fromState($this->title, $this->width, $this->align, $style, $this->formatter, $this->sortDir, $this->sortPriority);
+        return $this->mutate(['ansiStyle' => Sgr::normalize($ansiStyle, 'Column style')]);
     }
 
 
@@ -163,9 +183,7 @@ final class Column
      */
     public function withFormatter(callable $fn): self
     {
-        $clone = clone $this;
-        $clone->formatter = $fn;
-        return $clone;
+        return $this->mutate(['formatter' => $fn]);
     }
 
     /**
@@ -184,18 +202,15 @@ final class Column
      */
     public function sorted(int $direction = 1, int $priority = 0): self
     {
-        $clone = clone $this;
-        $clone->sortDir = $direction > 0 ? 1 : ($direction < 0 ? -1 : 0);
-        $clone->sortPriority = $priority;
-        return $clone;
+        return $this->mutate([
+            'sortDir' => $direction > 0 ? 1 : ($direction < 0 ? -1 : 0),
+            'sortPriority' => $priority,
+        ]);
     }
 
     public function unsorted(): self
     {
-        $clone = clone $this;
-        $clone->sortDir = 0;
-        $clone->sortPriority = 0;
-        return $clone;
+        return $this->mutate(['sortDir' => 0, 'sortPriority' => 0]);
     }
 
     public function format(string $value, int $rowIndex): string

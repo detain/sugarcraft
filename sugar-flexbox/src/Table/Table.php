@@ -130,11 +130,11 @@ final class Table
      */
     public function withColumn(Column $col): self
     {
-        $clone = clone $this;
-        $clone->columns[] = $col;
         // Every row gains a cell: the line memo is about the old shape.
-        $clone->layoutVersion++;
-        return $clone;
+        return $this->mutate([
+            'columns' => [...$this->columns, $col],
+            'layoutVersion' => $this->layoutVersion + 1,
+        ]);
     }
 
     /**
@@ -201,14 +201,14 @@ final class Table
             );
         }
 
-        $clone = clone $this;
-        $clone->allRows[] = \array_map(\strval(...), $values);
-        $clone->viewDirty = true;
         // The fold cache is index-addressed over allRows; appends cannot
         // invalidate an existing index, but the dependency is stated
         // here so a future row REWRITE busts it too.
-        $clone->foldedCells = null;
-        return $clone;
+        return $this->mutate([
+            'allRows' => [...$this->allRows, \array_map(\strval(...), $values)],
+            'viewDirty' => true,
+            'foldedCells' => null,
+        ]);
     }
 
     /**
@@ -252,7 +252,7 @@ final class Table
             );
         }
         $this->ensureView();
-        $clone = clone $this;
+        $clone = $this->mutate();
         $clone->followSelection();
         $clone->sortColIndex = $colIndex;
         $clone->sortAscending = $ascending;
@@ -301,7 +301,7 @@ final class Table
     public function withFilter(string $text): self
     {
         $this->ensureView();
-        $clone = clone $this;
+        $clone = $this->mutate();
         $clone->followSelection();
         $clone->filterText = $text;
         $clone->viewDirty  = true;
@@ -340,9 +340,7 @@ final class Table
                 "Cursor row {$rowIndex} is out of range for a settled view of {$visible} row(s); indexes run 0.." . max(0, $visible - 1) . '.'
             );
         }
-        $clone = clone $this;
-        $clone->cursorRow = $rowIndex;
-        return $clone;
+        return $this->mutate(['cursorRow' => $rowIndex]);
     }
 
     /**
@@ -354,10 +352,7 @@ final class Table
 
     public function withCursorStyle(string $ansiStyle): self
     {
-        $style = Sgr::normalize($ansiStyle, 'Table cursor style');
-        $clone = clone $this;
-        $clone->cursorStyle = $style;
-        return $clone;
+        return $this->mutate(['cursorStyle' => Sgr::normalize($ansiStyle, 'Table cursor style')]);
     }
 
     /**
@@ -373,17 +368,12 @@ final class Table
      */
     public function withCursorMarker(string $prefix): self
     {
-        $clone = clone $this;
-        $clone->cursorMarker = \SugarCraft\Core\Util\Sanitize::untrusted($prefix);
-        return $clone;
+        return $this->mutate(['cursorMarker' => \SugarCraft\Core\Util\Sanitize::untrusted($prefix)]);
     }
 
     public function withHeaderStyle(string $ansiStyle): self
     {
-        $style = Sgr::normalize($ansiStyle, 'Table header style');
-        $clone = clone $this;
-        $clone->headerStyle = $style;
-        return $clone;
+        return $this->mutate(['headerStyle' => Sgr::normalize($ansiStyle, 'Table header style')]);
     }
 
     /**
@@ -395,11 +385,11 @@ final class Table
      */
     public function withSeparator(string $s): self
     {
-        $clone = clone $this;
-        $clone->separator = \SugarCraft\Core\Util\Sanitize::untrusted($s);
         // The joint rides inside every data row: retire the memo's keys.
-        $clone->layoutVersion++;
-        return $clone;
+        return $this->mutate([
+            'separator' => \SugarCraft\Core\Util\Sanitize::untrusted($s),
+            'layoutVersion' => $this->layoutVersion + 1,
+        ]);
     }
 
     /**
@@ -416,11 +406,11 @@ final class Table
     {
         $cleanFill   = self::assertRulerRune($fill, 'ruler fill');
         $cleanJoint  = self::assertRulerRune($joint, 'ruler joint');
-        $clone = clone $this;
-        $clone->rulerFill = $cleanFill;
-        $clone->rulerJointChar = $cleanJoint;
-        $clone->layoutVersion++;
-        return $clone;
+        return $this->mutate([
+            'rulerFill' => $cleanFill,
+            'rulerJointChar' => $cleanJoint,
+            'layoutVersion' => $this->layoutVersion + 1,
+        ]);
     }
 
     private static function assertRulerRune(string $rune, string $what): string
@@ -461,11 +451,9 @@ final class Table
      */
     public function withEmptyText(?string $text): self
     {
-        $clone = clone $this;
-        $clone->emptyText = $text === null
+        return $this->mutate(['emptyText' => $text === null
             ? null
-            : \SugarCraft\Core\Util\Sanitize::untrusted($text);
-        return $clone;
+            : \SugarCraft\Core\Util\Sanitize::untrusted($text)]);
     }
 
     public function withVisibleRange(int $from, ?int $to = null): self
@@ -480,10 +468,7 @@ final class Table
                 "Visible range end {$to} must be greater than its start {$from} (or null for open-ended)."
             );
         }
-        $clone = clone $this;
-        $clone->visibleFrom = $from;
-        $clone->visibleTo = $to;
-        return $clone;
+        return $this->mutate(['visibleFrom' => $from, 'visibleTo' => $to]);
     }
 
     // -------------------------------------------------------------------------
@@ -980,6 +965,26 @@ final class Table
             }
         }
         return 0;
+    }
+
+    /**
+     * The class's single copy path (FBX-23). Table's constructor takes
+     * no arguments, so the core Mutable trait's spread cannot apply —
+     * cloning IS the full-fidelity copy: every field, caches included,
+     * rides the clone by construction instead of by hand. The two
+     * selection-anchoring writers (withSort/withFilter) call
+     * mutate() first and follow with their capture, so even they never
+     * hand-write a `clone $this`.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes = []): static
+    {
+        $copy = clone $this;
+        foreach ($changes as $field => $value) {
+            $copy->{$field} = $value;
+        }
+        return $copy;
     }
 
     /**
