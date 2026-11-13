@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\McpClient\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\McpClient\McpMessage;
 use SugarCraft\McpClient\McpRouter;
 use SugarCraft\McpClient\McpServer;
 use SugarCraft\McpClient\McpTool;
@@ -48,6 +49,18 @@ final class McpRouterTest extends TestCase
             public function callTool(string $name, array $arguments): array
             {
                 return [];
+            }
+
+            public function request(string $method, ?array $params = null, ?float $deadline = null): ?McpMessage
+            {
+                // The router filters rosters; it never proxies raw RPC. A
+                // leg that calls these is a behavior change, not a typo.
+                throw new \BadMethodCallException('raw request() is not part of routing');
+            }
+
+            public function notify(string $method, ?array $params = null, ?float $deadline = null): bool
+            {
+                throw new \BadMethodCallException('raw notify() is not part of routing');
             }
         };
     }

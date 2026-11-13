@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\McpClient;
 
 /**
- * The lifecycle every MCP server transport must honour: start, expose its
- * tool table, answer tool calls, stop.
+ * The contract every MCP server transport must honour: start, expose its
+ * tool table, answer tool calls, stop — plus the two raw RPC legs
+ * (`request()`/`notify()`) every transport speaks, so code typed against
+ * this interface can reach protocol traffic beyond the tool surface
+ * without growing a second type per transport family.
  *
  * Extracted from the candy-code MCP stack (src/MCP/McpServer.php). One
  * implementation ships today (StdioMcpServer); HTTP/SSE transports remain
@@ -59,10 +62,42 @@ interface McpServer
      * `onServerMessage:`), but those are concrete-class opt-ins: code typed
      * to this interface sees exactly this signature — including the parameter
      * NAMES, so `callTool(name: ..., arguments: ...)` binds on every
-     * implementation.
+     * implementation. The order of anything trailing the shared pair is
+     * concrete-class API: on `StdioMcpServer`, `onWait:` is third and
+     * `timeoutSeconds:` fourth — positional callers past the shared pair
+     * write against that class, never against this contract.
      *
      * @param array<string,mixed> $arguments
      * @return array<string,mixed>
      */
     public function callTool(string $name, array $arguments): array;
+
+    /**
+     * One raw request/response round trip — the leg `callTool()` rides,
+     * exposed for protocol traffic beyond the tool surface (resources,
+     * prompts, completion) without this contract growing speculative
+     * convenience methods.
+     *
+     * `$deadline` is an ABSOLUTE monotonic instant (`hrtime` basis), never a
+     * duration and never wall clock; transports that bound waits refuse
+     * implausible magnitudes loudly. The answer is the reply as parsed
+     * JSON-RPC — a server's own error REPLY is not a failure: it arrives as
+     * an error-bearing message so the caller can read the server's
+     * diagnosis — while `null` means the exchange itself did not complete
+     * (not started, dead pipe, deadline lost).
+     *
+     * @param array<string,mixed>|null $params
+     */
+    public function request(string $method, ?array $params = null, ?float $deadline = null): ?McpMessage;
+
+    /**
+     * One-way leg: send a notification, await nothing (JSON-RPC promises no
+     * reply). Same absolute-monotonic `$deadline` law as
+     * {@see self::request()}.
+     *
+     * @param array<string,mixed>|null $params
+     * @return bool true once the frame went out whole; false when it did not
+     *         (not started, dead pipe, deadline lost)
+     */
+    public function notify(string $method, ?array $params = null, ?float $deadline = null): bool;
 }
