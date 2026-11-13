@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'خطأ ترجمة',
     'log.fatal_user' => 'خطأ المستخدم',
     'log.fatal_shutdown' => 'خطأ الإيقاف',
+    'logger.unopenable_stream' => 'لا يمكن فتح ملف السجل \'{path}\'',
 ];

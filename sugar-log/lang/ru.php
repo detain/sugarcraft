@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Ошибка компиляции',
     'log.fatal_user' => 'Ошибка пользователя',
     'log.fatal_shutdown' => 'Ошибка завершения',
+    'logger.unopenable_stream' => 'не удалось открыть файл журнала \'{path}\'',
 ];

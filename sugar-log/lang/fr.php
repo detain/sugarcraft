@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Erreur de compilation',
     'log.fatal_user' => 'Erreur utilisateur',
     'log.fatal_shutdown' => 'Erreur d\'arrêt',
+    'logger.unopenable_stream' => 'impossible d\'ouvrir le fichier de journal \'{path}\'',
 ];

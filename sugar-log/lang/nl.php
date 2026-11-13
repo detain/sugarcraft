@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Compileerfout',
     'log.fatal_user' => 'Gebruikersfout',
     'log.fatal_shutdown' => 'Stopfout',
+    'logger.unopenable_stream' => 'logbestand \'{path}\' kan niet geopend worden',
 ];

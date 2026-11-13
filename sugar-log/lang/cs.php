@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Chyba kompilace',
     'log.fatal_user' => 'Uživatelská chyba',
     'log.fatal_shutdown' => 'Chyba ukončení',
+    'logger.unopenable_stream' => 'nelze otevřít soubor protokolu \'{path}\'',
 ];

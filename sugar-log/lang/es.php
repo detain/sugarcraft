@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Error de compilación',
     'log.fatal_user' => 'Error de usuario',
     'log.fatal_shutdown' => 'Error de apagado',
+    'logger.unopenable_stream' => 'no se puede abrir el archivo de registro \'{path}\'',
 ];

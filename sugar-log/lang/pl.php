@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Błąd kompilacji',
     'log.fatal_user' => 'Błąd użytkownika',
     'log.fatal_shutdown' => 'Błąd zamykania',
+    'logger.unopenable_stream' => 'nie można otworzyć pliku dziennika \'{path}\'',
 ];

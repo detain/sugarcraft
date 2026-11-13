@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Derleme hatası',
     'log.fatal_user' => 'Kullanıcı hatası',
     'log.fatal_shutdown' => 'Kapatma hatası',
+    'logger.unopenable_stream' => 'günlük dosyası \'{path}\' açılamıyor',
 ];

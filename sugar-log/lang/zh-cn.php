@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => '编译错误',
     'log.fatal_user' => '用户错误',
     'log.fatal_shutdown' => '关闭错误',
+    'logger.unopenable_stream' => '无法打开日志文件 \'{path}\'',
 ];

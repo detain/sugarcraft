@@ -84,11 +84,11 @@ final class Logger
      * @param bool           $reportTimestamp Show a timestamp (main stream).
      * @param string|null    $timeFormat  PHP date format string (default: Y/m/d H:i:s).
      * @param bool           $reportCaller Show file:line of log call site.
-     * @param resource|null  $stream    Main output stream (default STDOUT). Must be a
-     *                                   stream resource; anything else throws.
-     * @param resource|null  $errorStream Optional secondary stream: records at or
+     * @param resource|string|null $stream Main output stream (default STDOUT). A
+     *                                   string is a file path, opened append-mode.
+     * @param resource|string|null $errorStream Secondary stream: records at or
      *                                   above $errorStreamAt are written here instead
-     *                                   of $stream (e.g. STDERR for errors+fatals).
+     *                                   of $stream (e.g. STDERR, or a log path).
      * @param Level|null     $errorStreamAt Routing threshold; defaults to
      *                                   {@see Level::Error} when $errorStream is given.
      *
@@ -97,7 +97,7 @@ final class Logger
      * rebuild produces). A custom $formatter ignores them — pass your own
      * flags to JsonFormatter/LogfmtFormatter/etc.
      *
-     * @throws \InvalidArgumentException If $stream or $errorStream is not a resource.
+     * @throws \InvalidArgumentException If either stream is neither a resource nor an openable path.
      */
     public function __construct(
         ?Formatter $formatter = null,
@@ -555,7 +555,7 @@ final class Logger
     /**
      * Set the main output stream in-place (the error stream, if any, is kept).
      *
-     * @param resource $stream A valid output stream resource.
+     * @param resource|string $stream A stream resource or a file path (opened append-mode).
      * @throws \InvalidArgumentException If $stream is not a resource.
      */
     public function setOutput(mixed $stream): void
@@ -566,7 +566,7 @@ final class Logger
     /**
      * Create a child logger with a different main output stream.
      *
-     * @param resource $stream A valid output stream resource.
+     * @param resource|string $stream A stream resource or a file path (opened append-mode).
      * @throws \InvalidArgumentException If $stream is not a resource.
      */
     public function withOutput(mixed $stream): self
@@ -582,7 +582,8 @@ final class Logger
      * Records whose level is at or above $errorStreamAt go to this stream
      * instead of the main one; pass null to disable routing again.
      *
-     * @param resource|null $stream A stream resource, or null to disable.
+     * @param resource|string|null $stream A resource, a file path (opened
+     *                                      append-mode), or null to disable.
      * @throws \InvalidArgumentException If a non-null $stream is not a resource.
      */
     public function setErrorStream(mixed $stream, ?Level $errorStreamAt = null): void
@@ -682,14 +683,24 @@ final class Logger
     /**
      * Boundary guard: an output must be a stream resource before it is stored.
      *
-     * @return resource The validated stream.
-     * @throws \InvalidArgumentException If $stream is not a resource.
+     * @return resource The validated (or freshly opened) stream.
+     * @throws \InvalidArgumentException If $stream is neither a resource nor an openable path.
      */
     private static function requireStream(mixed $stream): mixed
     {
-        if (!\is_resource($stream)) {
-            throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));
+        if (\is_resource($stream)) {
+            return $stream;
         }
-        return $stream;
+        if (\is_string($stream) && $stream !== '') {
+            // Path arm: append mode so a logger never truncates an existing
+            // log. Each assignment opens its own handle (resources stay
+            // caller-managed; we close only what we opened, never).
+            $opened = @\fopen($stream, 'a');
+            if (\is_resource($opened)) {
+                return $opened;
+            }
+            throw new \InvalidArgumentException(Lang::t('logger.unopenable_stream', ['path' => $stream]));
+        }
+        throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));
     }
 }

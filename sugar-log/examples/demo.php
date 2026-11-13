@@ -60,4 +60,8 @@ try {
     echo "(fatal contract: {$e->getMessage()})\n";
 }
 
+// A stream may also be a file path: sugar-log opens it append-mode itself.
+Logger::new(prefix: '🍪', stream: sys_get_temp_dir() . '/sugar-log-demo.log')
+    ->info('this record lives in the temp log file, not on stdout');
+
 echo "\nDone.\n";

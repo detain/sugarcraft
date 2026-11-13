@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Erro de compilação',
     'log.fatal_user' => 'Erro de usuário',
     'log.fatal_shutdown' => 'Erro de encerramento',
+    'logger.unopenable_stream' => 'não é possível abrir o ficheiro de registo \'{path}\'',
 ];

@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'コンパイルエラー',
     'log.fatal_user' => 'ユーザエラー',
     'log.fatal_shutdown' => 'シャットダウンエラー',
+    'logger.unopenable_stream' => 'ログファイル \'{path}\' を開けません',
 ];

@@ -360,7 +360,7 @@ records optionally split). Under a web SAPI (php-fpm)
 those constants are not defined at all: every STDIO touch resolves lazily to
 `php://stdout` / `php://stderr` (never `php://output` — output buffering would
 capture the notice channel) and degrades to silence when the stream cannot be
-opened, rather than crashing on an undefined constant. Two knobs change where
+opened, rather than crashing on an undefined constant. Either knob also accepts a file path string, which is opened append-mode on assignment (each assignment opens its own handle); an unopenable path throws with the path named. Two knobs change where
 records go:
 
 ```php
@@ -374,7 +374,8 @@ $log = Logger::new();
 // leaves world-readable 0644; set umask 0077 (or chmod after) for a 0600 log.
 // The mode arithmetic is POSIX: on Windows, log ACLs come from the parent
 // directory instead.
-$fh  = fopen(sys_get_temp_dir() . '/sugar-log-app.log', 'a');   // plain bytes on files: styling is auto-dropped
+$fh  = fopen(sys_get_temp_dir() . '/sugar-log-app.log', 'a');   // or pass the path string directly, below
+$log = Logger::new(stream: sys_get_temp_dir() . '/sugar-log-app.log');  // append-mode, self-opened
 $out = $log->withOutput($fh);
 
 // 2. Error-stream routing — severe records go to a second stream
@@ -386,8 +387,8 @@ $one = $log->withErrorStream(null);                                // back to a 
 
 Routing is decided per record when it is emitted; `Fatal` still throws
 `RuntimeException` after writing. Constructor and `setOutput()`/
-`withOutput()`/`setErrorStream()`/`withErrorStream()` reject non-resource
-streams with an `InvalidArgumentException`. A record that cannot be written
+`withOutput()`/`setErrorStream()`/`withErrorStream()` reject streams that are
+neither resources nor openable paths with an `InvalidArgumentException`. A record that cannot be written
 (closed or unwritable handle) never throws: it is retried once after a flush
 and the loss is announced as a sanitized `[sugar-log] log write failed:`
 notice on STDERR — including a sanitized single-line copy of the dropped
@@ -639,7 +640,7 @@ time=2026-11-03T07:15:04+00:00 level=INFO msg="Starting oven" prefix=bakery degr
 
 Error-path prose — the messages thrown by `Logger`, `PsrBridge`, `PartsOrder` and `Log`'s
 fatal labels (`logger.fatal`,
-`logger.invalid_stream`, `psrbridge.not_string`, `psrbridge.unknown_level`,
+`logger.invalid_stream`, `logger.unopenable_stream`, `psrbridge.not_string`, `psrbridge.unknown_level`,
 `parts.unknown`, `parts.duplicate` and the `log.fatal_*` labels) — is resolved through `sugar-core`'s `Lang` lookup in
 `en` plus 15 locales (exact → base → `en` → raw). Log content (level labels,
 timestamps, field text) is never translated. Selection is the **host

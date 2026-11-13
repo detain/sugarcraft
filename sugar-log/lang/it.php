@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Errore di compilazione',
     'log.fatal_user' => 'Errore utente',
     'log.fatal_shutdown' => 'Errore di spegnimento',
+    'logger.unopenable_stream' => 'impossibile aprire il file di log \'{path}\'',
 ];

@@ -21,4 +21,5 @@ return [
     'log.fatal_compile' => 'Compile-Fehler',
     'log.fatal_user' => 'Benutzerfehler',
     'log.fatal_shutdown' => 'Shutdown-Fehler',
+    'logger.unopenable_stream' => 'Protokolldatei \'{path}\' kann nicht geöffnet werden',
 ];

@@ -15,6 +15,9 @@ use PHPUnit\Framework\TestCase;
 
 final class LoggerTest extends TestCase
 {
+    /** @var list<string> temp files used as unopenable-path blockers */
+    private static array $pathBlockers = [];
+
     private $tempFile;
     private string $tempPath;
 
@@ -511,7 +514,7 @@ final class LoggerTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('stream must be a valid resource');
-        $log->setOutput('not a resource');
+        $log->setOutput(42);
     }
 
     // -------------------------------------------------------------------------
@@ -725,7 +728,7 @@ final class LoggerTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('stream must be a valid resource');
-        $log->withOutput('not a resource');
+        $log->withOutput(42);
     }
 
     // -------------------------------------------------------------------------
@@ -736,7 +739,7 @@ final class LoggerTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('stream must be a valid resource');
-        Logger::new(stream: 'not-a-resource');
+        Logger::new(stream: 42);
     }
 
     public function testConstructorAcceptsNullStreamDefaultingToStdout(): void
@@ -921,5 +924,60 @@ final class LoggerTest extends TestCase
         $bare = Logger::new(stream: $stream);
         $this->assertSame(Level::Info, $bare->level());
         $this->assertNull($bare->prefix());
+    }
+    // -------------------------------------------------------------------------
+    // Path-string streams (SL-39)
+    // -------------------------------------------------------------------------
+
+    public function testPathStringStreamOpensAppendModeAndRoutesErrors(): void
+    {
+        $dir = \sys_get_temp_dir();
+        $main = $dir . '/sugar-log-main-' . \uniqid('', true) . '.log';
+        $err = $dir . '/sugar-log-err-' . \uniqid('', true) . '.log';
+        try {
+            $log = Logger::new(stream: $main, errorStream: $err, reportTimestamp: false);
+            $log->info('first-light');
+            $log->info('second-light');
+            $log->error('boom-level');
+
+            // A second logger on the same path must append, never truncate.
+            Logger::new(stream: $main, reportTimestamp: false)
+                ->info('reopened-light');
+            $mainText = \file_get_contents($main);
+            $errText = \file_get_contents($err);
+            self::assertSame("INF first-light\nINF second-light\nINF reopened-light\n", $mainText, 'append-mode: lines kept, later openers join the end');
+            self::assertSame("ERR boom-level\n", $errText, 'error arm routes to its own path handle');
+        } finally {
+            @\unlink($main);
+            @\unlink($err);
+        }
+    }
+
+    public function testUnopenablePathThrowsNamingThePath(): void
+    {
+        $path = $this->uncreatableLogPath();
+        try {
+            Logger::new(stream: $path);
+            self::fail('an unopenable path must throw at assignment, not write silently');
+        } catch (\InvalidArgumentException $e) {
+            self::assertSame("cannot open log file '" . $path . "'", $e->getMessage());
+        }
+    }
+
+    public function testEmptyStringStreamIsRejectedAsInvalidType(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('stream must be a valid resource');
+        Logger::new(stream: '');
+    }
+
+    private function uncreatableLogPath(): string
+    {
+        // A path whose parent is an existing regular file: no user, not even
+        // root, gets fopen() past that.
+        $blocker = \tempnam(\sys_get_temp_dir(), 'sugar-log-blocker-');
+        self::$pathBlockers[] = $blocker;
+
+        return $blocker . '/deeper/nested.log';
     }
 }

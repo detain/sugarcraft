@@ -110,6 +110,7 @@ final class LangTest extends TestCase
         $roster = [
             'logger.fatal'             => 'fatal log: {message}',
             'logger.invalid_stream'    => 'stream must be a valid resource',
+            'logger.unopenable_stream' => "cannot open log file '{path}'",
             'psrbridge.not_string'     => 'Log level must be one of the PSR-3 LogLevel constants; got {got}',
             'psrbridge.unknown_level'  => "Unknown log level '{level}'; expected one of the PSR-3 LogLevel constants",
             'parts.unknown'            => 'unknown log line part(s): {parts}',
