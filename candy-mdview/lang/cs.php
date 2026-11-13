@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'neznámé téma: {name}',
     'render.theme_config_unreadable' => 'konfigurace motivu nečitelná: {path}',
     'render.theme_config_too_large' => 'konfigurace motivu překračuje {limit} bajtů: {path}',
+    'render.theme_config_unrecognized' => 'konfigurace motivu neodpovídá ani plochému, ani glamour schématu: {path}',
     'glamour.json_invalid' => 'konfigurace motivu není platný JSON',
     'glamour.json_object' => 'konfigurace motivu musí být objekt JSON',
     'glamour.decoration_unsafe' => 'pole motivu {slot} musí obsahovat pouze konce řádků, tabulátory a mezery',

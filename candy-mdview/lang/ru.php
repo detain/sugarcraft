@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'неизвестная тема: {name}',
     'render.theme_config_unreadable' => 'конфигурация темы нечитабельна: {path}',
     'render.theme_config_too_large' => 'конфигурация темы превышает {limit} байт: {path}',
+    'render.theme_config_unrecognized' => 'конфигурация темы не соответствует ни плоской, ни glamour-схеме: {path}',
     'glamour.json_invalid' => 'конфигурация темы не является допустимым JSON',
     'glamour.json_object' => 'конфигурация темы должна быть объектом JSON',
     'glamour.decoration_unsafe' => 'поле темы {slot} должно содержать только переводы строк, табуляции и пробелы',

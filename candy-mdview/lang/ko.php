@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => '알 수 없는 테마: {name}',
     'render.theme_config_unreadable' => '테마 설정을 읽을 수 없습니다: {path}',
     'render.theme_config_too_large' => '테마 설정이 {limit}바이트를 초과합니다: {path}',
+    'render.theme_config_unrecognized' => '테마 구성이 플랫 스키마와 글래머 스키마 모두에 일치하지 않습니다: {path}',
     'glamour.json_invalid' => '테마 설정이 유효한 JSON이 아닙니다',
     'glamour.json_object' => '테마 설정은 JSON 객체여야 합니다',
     'glamour.decoration_unsafe' => '테마 {slot}에는 줄 바꿈, 탭, 공백만 사용할 수 있습니다',

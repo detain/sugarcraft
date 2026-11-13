@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'unbekanntes Theme: {name}',
     'render.theme_config_unreadable' => 'Themenkonfiguration nicht lesbar: {path}',
     'render.theme_config_too_large' => 'Themenkonfiguration überschreitet {limit} Bytes: {path}',
+    'render.theme_config_unrecognized' => 'Theme-Konfiguration entspricht weder dem flachen noch dem Glamour-Schema: {path}',
     'glamour.json_invalid' => 'Themenkonfiguration ist kein gültiges JSON',
     'glamour.json_object' => 'Themenkonfiguration muss ein JSON-Objekt sein',
     'glamour.decoration_unsafe' => 'Theme-Feld {slot} darf nur Zeilenumbrüche, Tabs und Leerzeichen enthalten',

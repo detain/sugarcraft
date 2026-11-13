@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'سمة غير معروفة: {name}',
     'render.theme_config_unreadable' => 'إعدادات السمة غير قابلة للقراءة: {path}',
     'render.theme_config_too_large' => 'إعدادات السمة تتجاوز {limit} بايت: {path}',
+    'render.theme_config_unrecognized' => 'تكوين السمة لا يطابق المخطط المسطح ولا مخطط غلامور: {path}',
     'glamour.json_invalid' => 'إعدادات السمة ليست JSON صالحًا',
     'glamour.json_object' => 'إعدادات السمة يجب أن تكون كائن JSON',
     'glamour.decoration_unsafe' => 'حقل السمة {slot} يجب ألّا يحتوي سوى على أسطر جديدة ومحاذات وفراغات',

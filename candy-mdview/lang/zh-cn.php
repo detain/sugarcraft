@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => '未知主题：{name}',
     'render.theme_config_unreadable' => '主题配置不可读：{path}',
     'render.theme_config_too_large' => '主题配置超过 {limit} 字节：{path}',
+    'render.theme_config_unrecognized' => '主题配置既不匹配扁平 schema 也不匹配 glamour schema：{path}',
     'glamour.json_invalid' => '主题配置不是有效的 JSON',
     'glamour.json_object' => '主题配置必须是 JSON 对象',
     'glamour.decoration_unsafe' => '主题 {slot} 只能包含换行、制表符和空格',

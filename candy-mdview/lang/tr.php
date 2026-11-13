@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'bilinmeyen tema: {name}',
     'render.theme_config_unreadable' => 'tema yapılandırması okunamıyor: {path}',
     'render.theme_config_too_large' => 'tema yapılandırması {limit} baytı aşıyor: {path}',
+    'render.theme_config_unrecognized' => 'tema yapılandırması düz şemayla da glamour şemasıyla da eşleşmiyor: {path}',
     'glamour.json_invalid' => 'tema yapılandırması geçerli bir JSON değil',
     'glamour.json_object' => 'tema yapılandırması bir JSON nesnesi olmalı',
     'glamour.decoration_unsafe' => 'tema alanı {slot} yalnızca satır sonu, sekme ve boşluk içerebilir',

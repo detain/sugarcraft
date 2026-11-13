@@ -63,7 +63,12 @@ Flags:
   block with nested element/chroma maps) is mapped by `GlamourTheme` onto a
   SugarMarkdown `Theme`; the historic flat colour map goes through
   `Theme::fromJsonString`. (`Theme::fromJson` takes a *path* and is used for
-  the three bundled JSON themes.) Overrides `--theme`.
+  the three bundled JSON themes.) Overrides `--theme`. The path must be a
+  regular file — a directory, FIFO or device refuses under the same heading
+  instead of warning, reading unbounded, or hanging — and the payload must
+  satisfy one of the two shapes: scalars, JSON lists and objects that match
+  neither schema (a typo'd top-level container) refuse with exit 2 rather
+  than silently rendering the stock theme.
 - `--width` / `-w <N>` — word-wrap paragraphs / blockquotes / list bodies at
   N columns (1–9999). `0` disables wrapping; unwrapped lines are truncated by
   the pager, so scroll horizontally with `h`/`l`. Anything non-numeric is a

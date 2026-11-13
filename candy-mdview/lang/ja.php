@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => '不明なテーマ：{name}',
     'render.theme_config_unreadable' => 'テーマ設定が読み取れません：{path}',
     'render.theme_config_too_large' => 'テーマ設定が{limit}バイトを超えています：{path}',
+    'render.theme_config_unrecognized' => 'テーマ設定はフラットスキーマにもglamourスキーマにも一致しません: {path}',
     'glamour.json_invalid' => 'テーマ設定が有効な JSON ではありません',
     'glamour.json_object' => 'テーマ設定は JSON オブジェクトでなければなりません',
     'glamour.decoration_unsafe' => 'テーマ {slot} には改行・タブ・スペースのみ使用可能です',

@@ -446,6 +446,16 @@ final class GlamourThemeTest extends TestCase
         self::assertSame($cap, GlamourTheme::fromDecoded($edge)->documentMargin);
     }
 
+    public function testFromFileRefusesNonRegularFilesByNamedDoor(): void
+    {
+        // Finding 015 at the library door too: is_readable() passes for
+        // directories and the filesize() cap skips when size is unknowable
+        // — the guard refuses before either hole can open.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('theme config not readable: /tmp');
+        GlamourTheme::fromFile('/tmp');
+    }
+
     public function testDroppedTableAndImageStylesStayAddressable(): void
     {
         // Finding 085's default arm: the drop-list is DISCLOSED, not

@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'unknown theme: {name}',
     'render.theme_config_unreadable' => 'theme config not readable: {path}',
     'render.theme_config_too_large' => 'theme config exceeds {limit} bytes: {path}',
+    'render.theme_config_unrecognized' => 'theme config matches neither the flat nor the glamour schema: {path}',
     'glamour.json_invalid' => 'glamour theme config is not valid JSON',
     'glamour.json_object' => 'glamour theme config must be a JSON object',
     'glamour.decoration_unsafe' => 'theme {slot} must contain only newlines, tabs and spaces',

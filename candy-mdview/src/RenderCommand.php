@@ -550,6 +550,16 @@ final class RenderCommand extends Command
      */
     private static function loadThemeConfig(string $path): Theme
     {
+        // The door speaks before it reads (finding 015): is_readable()
+        // passes for directories, FIFOs and devices, @filesize() returns
+        // false exactly when the size is unknowable (skipping the cap), and
+        // the windowed read of a FIFO with no writer blocks forever
+        // (FUZZ-proved rc=124). A regular file or a named refusal — the
+        // same law DocumentGate brought to the document doors.
+        if (is_file($path) === false) {
+            throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $path]));
+        }
+
         $raw = @file_get_contents($path, false, null, 0, self::MAX_THEME_CONFIG_BYTES + 1);
         if ($raw === false) {
             throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $path]));
@@ -566,7 +576,34 @@ final class RenderCommand extends Command
             return GlamourTheme::fromDecoded($decoded)->toMarkdownTheme();
         }
 
+        // Explicit means explicit (finding 020): an object that feeds
+        // NEITHER schema — a typo'd container like {"documnet": …} — used
+        // to render the fully stock theme at exit 0, silently losing the
+        // whole look the user just asked for. The flat reader below already
+        // refuses scalars and JSON lists; a schema-less object gets the
+        // same fail-fast its neighbours practice.
+        if (is_array($decoded) && array_is_list($decoded) === false && array_intersect_key($decoded, array_flip(self::themeSlotNames())) === []) {
+            throw new \InvalidArgumentException(Lang::t('render.theme_config_unrecognized', ['path' => $path]));
+        }
+
         return Theme::fromJsonString($raw);
+    }
+
+    /**
+     * Names the flat `--theme-config` schema may consume: the sugar-markdown
+     * Theme constructor's own parameter roster, read by reflection so this
+     * door can never drift from what the library actually accepts.
+     *
+     * @return list<string>
+     */
+    private static function themeSlotNames(): array
+    {
+        static $names = null;
+
+        return $names ??= array_map(
+            static fn (\ReflectionParameter $p): string => $p->getName(),
+            (new \ReflectionMethod(Theme::class, '__construct'))->getParameters(),
+        );
     }
 
     /**

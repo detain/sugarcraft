@@ -313,6 +313,86 @@ final class RenderCommandTest extends TestCase
         }
     }
 
+    public function testThemeConfigDirectoryRefusesByNamedDoor(): void
+    {
+        // Finding 015: --theme-config /tmp used to answer with a raw PHP
+        // warning (path interpolated, sanitizer bypassed) or 'invalid
+        // JSON'; the door now speaks before it reads.
+        [$rc, $msg] = $this->runUsageRun("# doc\n", $this->optionMap(['theme-config' => '/tmp']));
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('theme config not readable: /tmp', $msg);
+    }
+
+    public function testThemeConfigFifoRefusesWithoutReadingIt(): void
+    {
+        // The hang leg of 015: an unwritten FIFO blocked the read forever
+        // (FUZZ-proved rc=124). is_file() refuses it up front — this test
+        // passing AT ALL is the instant-refusal proof.
+        if (!function_exists('posix_mkfifo')) {
+            self::markTestSkipped('POSIX FIFOs unavailable on this host');
+        }
+
+        $fifo = sys_get_temp_dir() . '/mdview-s12-' . uniqid('', true) . '.fifo';
+        $this->assertTrue(posix_mkfifo($fifo, 0600));
+        try {
+            [$rc, $msg] = $this->runUsageRun("# doc\n", $this->optionMap(['theme-config' => $fifo]));
+            $this->assertSame(Command::INVALID, $rc);
+            $this->assertStringContainsString('theme config not readable', $msg);
+        } finally {
+            unlink($fifo);
+        }
+    }
+
+    public function testThemeConfigJsonListRefusesAsNonObject(): void
+    {
+        // '[1,2,3]' decodes to a list: the flat reader would ignore integer
+        // keys and answer an all-plain theme at rc 0.
+        $configTmp = tempnam(sys_get_temp_dir(), 'mdview-list-');
+        $this->assertNotFalse($configTmp);
+        file_put_contents($configTmp, '[1,2,3]');
+        try {
+            [$rc, $msg] = $this->runUsageRun("# doc\n", $this->optionMap(['theme-config' => $configTmp]));
+            $this->assertSame(Command::INVALID, $rc);
+            $this->assertStringContainsString('must decode to an object', $msg);
+        } finally {
+            unlink($configTmp);
+        }
+    }
+
+    public function testThemeConfigTypoContainerRefusesInsteadOfDefaultingSilently(): void
+    {
+        // Finding 020: a whole config under a misspelled container fed
+        // neither schema and rendered the stock theme at exit 0 — the
+        // explicit door now refuses rather than discarding the request.
+        $configTmp = tempnam(sys_get_temp_dir(), 'mdview-typo-');
+        $this->assertNotFalse($configTmp);
+        file_put_contents($configTmp, '{"documnet":{"block_prefix":"x","color":"228"}}');
+        try {
+            [$rc, $msg] = $this->runUsageRun("# doc\n", $this->optionMap(['theme-config' => $configTmp]));
+            $this->assertSame(Command::INVALID, $rc);
+            $this->assertStringContainsString('neither the flat nor the glamour schema', $msg);
+            $this->assertStringContainsString('mdview-typo', $msg, 'the refusal names the path');
+        } finally {
+            unlink($configTmp);
+        }
+    }
+
+    public function testThemeConfigSingleKnownFlatSlotStillLoads(): void
+    {
+        // Guard against over-eager refusal: one recognised flat key is a
+        // legitimate config, not a typo.
+        $configTmp = tempnam(sys_get_temp_dir(), 'mdview-flat-');
+        $this->assertNotFalse($configTmp);
+        file_put_contents($configTmp, '{"bold":{"bold":true}}');
+        try {
+            [$rc, $payload] = $this->runPrint("# doc\n", $this->optionMap(['theme-config' => $configTmp]));
+            $this->assertSame(Command::SUCCESS, $rc);
+            $this->assertStringContainsString('doc', $payload);
+        } finally {
+            unlink($configTmp);
+        }
+    }
+
     public function testGlamourConfigWithInjectedDecorationExitsTwoAndPaintsNothing(): void
     {
         // Finding 005 across the CLI door: the evil style file used to

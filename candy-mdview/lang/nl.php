@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'onbekend thema: {name}',
     'render.theme_config_unreadable' => 'thema-configuratie niet leesbaar: {path}',
     'render.theme_config_too_large' => 'thema-configuratie overschrijdt {limit} bytes: {path}',
+    'render.theme_config_unrecognized' => 'themaconfiguratie voldoet niet aan het platte of het glamour-schema: {path}',
     'glamour.json_invalid' => 'thema-configuratie is geen geldige JSON',
     'glamour.json_object' => 'thema-configuratie moet een JSON-object zijn',
     'glamour.decoration_unsafe' => 'thema-veld {slot} mag alleen newlines, tabs en spaties bevatten',

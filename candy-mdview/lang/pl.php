@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'nieznany motyw: {name}',
     'render.theme_config_unreadable' => 'konfiguracja motywu nieczytelna: {path}',
     'render.theme_config_too_large' => 'konfiguracja motywu przekracza {limit} bajtów: {path}',
+    'render.theme_config_unrecognized' => 'konfiguracja motywu nie pasuje ani do płaskiego schematu, ani do schematu glamour: {path}',
     'glamour.json_invalid' => 'konfiguracja motywu nie jest prawidłowym JSON-em',
     'glamour.json_object' => 'konfiguracja motywu musi być obiektem JSON',
     'glamour.decoration_unsafe' => 'pole {slot} motywu może zawierać tylko nowe wiersze, tabulatory i spacje',

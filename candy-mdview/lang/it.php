@@ -12,6 +12,7 @@ return [
     'render.unknown_theme' => 'tema sconosciuto: {name}',
     'render.theme_config_unreadable' => 'configurazione del tema non leggibile: {path}',
     'render.theme_config_too_large' => 'la configurazione del tema supera {limit} byte: {path}',
+    'render.theme_config_unrecognized' => 'la configurazione del tema non corrisponde né allo schema piano né allo schema glamour: {path}',
     'glamour.json_invalid' => 'la configurazione del tema non è un JSON valido',
     'glamour.json_object' => 'la configurazione del tema deve essere un oggetto JSON',
     'glamour.decoration_unsafe' => 'il campo {slot} del tema può contenere solo a capo, tab e spazi',

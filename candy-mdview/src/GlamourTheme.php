@@ -103,6 +103,13 @@ final class GlamourTheme
      */
     public static function fromFile(string $path): self
     {
+        // Same file-type law as the CLI door (finding 015): a directory,
+        // FIFO or device refuses by name before any read — is_readable()
+        // alone passes for all three, and filesize() going false is exactly
+        // the cap-unknowable case.
+        if (is_file($path) === false) {
+            throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $path]));
+        }
         if (is_readable($path) === false) {
             throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $path]));
         }
