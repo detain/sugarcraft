@@ -154,7 +154,7 @@ $master->write("\x03");              // Ctrl+C → SIGINT to bash
 Costs ~5–50 ms of shim startup per spawn — opt-in because most
 non-interactive callers don't need it. See
 [`CALIBER_LEARNINGS.md`](../CALIBER_LEARNINGS.md) entry
-`[pattern:tioscctty-shim]` for the post-mortem.
+`[pattern:tiocsctty-shim]` for the post-mortem.
 
 ## SIGWINCH propagation
 
@@ -292,7 +292,7 @@ Two reasons:
 2. **Windows ConPTY.** `Windows\ConPtySystem` implements the same
    contract and ships today: `PtySystemFactory::new()` resolves it on
    Windows (and on an explicit `conpty` selection), while application
-   code calling `PtySystemFactory::new()->open()` doesn't change - the
+   code calling `PtySystemFactory::new()->open()` doesn't change — the
    factory's `match` on `PHP_OS_FAMILY` already carries that arm.
 
 The contracts are intentionally narrow — read, write, resize, size,
