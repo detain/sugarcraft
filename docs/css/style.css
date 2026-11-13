@@ -1389,7 +1389,11 @@ pre.code .num  { color: #fcd5b4; }
 .prose pre { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55; font-size: .92em; }
 .prose code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: .92em; }
 .prose pre code { background: none; border: 0; padding: 0; }
-.prose table { width: 100%; border-collapse: collapse; margin: 0 0 20px; }
+/* LAW-026 pair, mirroring .docs-body table above: a wide table must
+   scroll inside the content column, never widen (or spill out of) the
+   page. The table box becomes a horizontal scroll container; cells keep
+   the collapsed-border model. */
+.prose table { display: block; overflow-x: auto; width: 100%; border-collapse: collapse; margin: 0 0 20px; }
 .prose th, .prose td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; }
 .prose a { color: var(--link); }
 .prose a:hover { text-decoration: underline; }
