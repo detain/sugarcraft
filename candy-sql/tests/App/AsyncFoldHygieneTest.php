@@ -49,7 +49,7 @@ final class AsyncFoldHygieneTest extends TestCase
     /** Register a fake async connection under the key the fetch derives for FakeDatabase. */
     private function seedConnection(AsyncConnection $connection): void
     {
-        AdminQueryCache::instance()->connection('mysql||', static fn (): AsyncConnection => $connection);
+        AdminQueryCache::instance()->connection('mysql||' . '|' . hash('sha256', ''), static fn (): AsyncConnection => $connection);
     }
 
     public function testAnErroredDrainLegIsMarkedNotCachedEmpty(): void
@@ -62,6 +62,10 @@ final class AsyncFoldHygieneTest extends TestCase
             public function query(string $sql, ?\SugarCraft\Async\CancellationToken $cancellation = null): PromiseInterface
             {
                 return \React\Promise\reject(new \RuntimeException('ERROR 1054: Unknown column THREAD_ID'));
+            }
+
+            public function close(): void
+            {
             }
         });
         AdminQueryCache::instance()->lookup(self::PROCESSLIST);
@@ -90,6 +94,10 @@ final class AsyncFoldHygieneTest extends TestCase
             {
                 throw new \RuntimeException('write EPIPE');
             }
+
+            public function close(): void
+            {
+            }
         });
         AdminQueryCache::instance()->lookup(self::PROCESSLIST);
 
@@ -105,6 +113,10 @@ final class AsyncFoldHygieneTest extends TestCase
             public function query(string $sql, ?\SugarCraft\Async\CancellationToken $cancellation = null): PromiseInterface
             {
                 return \React\Promise\reject(new \RuntimeException('first attempt died'));
+            }
+
+            public function close(): void
+            {
             }
         });
         AdminQueryCache::instance()->lookup(self::PROCESSLIST);

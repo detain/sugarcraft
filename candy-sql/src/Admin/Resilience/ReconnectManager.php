@@ -59,9 +59,9 @@ final class ReconnectManager implements ReconnectManagerInterface
 
         if ($connection !== false && $connection->ping()) {
             // A reconnect means the server went away, so the async admin
-            // connection (whose cache key is only flavor+DSN+user and thus
-            // unchanged) is a dead socket too — drop it so the next admin
-            // tick lazily rebuilds it. Done here, not in
+            // connection (whose cache key — flavor+DSN+user+credential
+            // fingerprint — survives the restart unchanged) is a dead socket
+            // too — drop it so the next admin tick lazily rebuilds it. Done here, not in
             // MysqlDatabase::reconnect(): the Db layer must not depend on
             // Admin (see tests/Db/LayeringTest.php), and every reconnect
             // flows through this Admin-layer manager.

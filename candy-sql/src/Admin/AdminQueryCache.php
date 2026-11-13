@@ -180,7 +180,15 @@ final class AdminQueryCache
      */
     public function connection(string $key, \Closure $factory): AsyncConnection
     {
-        if ($this->connection === null || $this->connectionKey !== $key) {
+        if ($this->connection === null) {
+            $this->connection = $factory();
+            $this->connectionKey = $key;
+        } elseif ($this->connectionKey !== $key) {
+            // admindata-004: a live session is being replaced — retire it
+            // (close + purge its rows) before the new dial takes the slot;
+            // the first-ever dial must NOT purge, because A03's adoption
+            // path can legitimately store rows before any async leg ran.
+            $this->invalidateConnection();
             $this->connection = $factory();
             $this->connectionKey = $key;
         }
@@ -229,14 +237,39 @@ final class AdminQueryCache
      * rebuilds it via its factory.
      *
      * Needed after a synchronous-side reconnect: the connection key encodes
-     * only flavor + DSN + user, which do not change across a server restart,
-     * so without an explicit invalidation the cache would keep handing out an
-     * async connection whose socket died with the old server process.
+     * only flavor + DSN + user + credential fingerprint, which do not change
+     * across a server restart, so without an explicit invalidation the cache
+     * would keep handing out an async connection whose socket died with the
+     * old server process.
+     *
+     * admindata-004: the dropped wrapper owns a live server session — it is
+     * CLOSE()d, not merely unreferenced (a dropped-but-open client holds an fd
+     * and loop watchers until the server's wait_timeout expires).
+     * admindata-007: the rows it produced are retired too. Entries are keyed
+     * by SQL TEXT alone, so after a reconnect/failover behind the same DSN the
+     * old session's rows would otherwise keep serving with no TTL floor —
+     * clearing $results/$storedAt/$pending makes every value slot a true
+     * miss that the next drain re-fetches over the new session. ($errors is
+     * deliberately kept: each entry records the last drain attempt, which is
+     * a true statement regardless of session identity, and store() clears it
+     * on the next success.)
      */
     public function invalidateConnection(): void
     {
+        if ($this->connection !== null) {
+            try {
+                $this->connection->close();
+            } catch (\Throwable) {
+                // The session may already be dead (that is often why this
+                // runs); a refusal to close must not strand the rest.
+            }
+        }
+
         $this->connection = null;
         $this->connectionKey = '';
+        $this->results = [];
+        $this->storedAt = [];
+        $this->pending = [];
     }
 
     /**

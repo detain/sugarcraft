@@ -247,6 +247,20 @@ final class ReactMysqlConnection implements AsyncConnection
     }
 
     /**
+     * Retire the server session (admindata-004).
+     *
+     * Force-close is the right arm here, not `quit()`: the drop paths that
+     * call this are key swaps and post-reconnect invalidation, where the
+     * session is stale or already suspect — nothing is owed to it. react/mysql
+     * closes idempotently (its `closed` flag short-circuits repeats) and
+     * rejects any outstanding queued commands on the way down.
+     */
+    public function close(): void
+    {
+        $this->client->close();
+    }
+
+    /**
      * Convert PDO-style DSN to react/mysql URI format.
      *
      * PDO:         mysql:host=db.example.com;port=3306;dbname=test

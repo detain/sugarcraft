@@ -728,6 +728,20 @@ final class App implements Model
     }
 
     /**
+     * Cache key for the pooled async admin/query connection.
+     *
+     * The credential belongs in the identity (admindata-010): flavor, DSN and
+     * user can all survive a password rotation while the old authenticated
+     * session they warmed must not — without the fingerprint every post-
+     * rotation leg rode the stale session. sha256 of the secret, never the
+     * secret: the key can surface in a dump without leaking the credential.
+     */
+    private static function adminConnKey(bool $isPostgres, string $dsn, string $username, string $password): string
+    {
+        return ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username . '|' . hash('sha256', $password);
+    }
+
+    /**
      * Build the async query execution promise for MySQL/Postgres.
      *
      * Runs the query on the React loop via the same pooled async connection
@@ -755,7 +769,7 @@ final class App implements Model
         $isPostgres = $context instanceof PostgresServerContext;
 
         $cache = AdminQueryCache::instance();
-        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connKey = self::adminConnKey($isPostgres, $dsn, $username, $password);
         $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
             return $isPostgres
                 ? new ReactPostgresConnection($dsn, $username, $password)
@@ -962,7 +976,7 @@ final class App implements Model
         $flavor = $isPostgres ? Flavor::Postgres : $this->connection->flavor;
 
         $cache = AdminQueryCache::instance();
-        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connKey = self::adminConnKey($isPostgres, $dsn, $username, $password);
         $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
             return $isPostgres
                 ? new ReactPostgresConnection($dsn, $username, $password)
@@ -1371,7 +1385,7 @@ final class App implements Model
         // Reuse a single async connection across ticks (lazy connect — avoids
         // opening a fresh TCP/auth connection every poll).
         $cache = AdminQueryCache::instance();
-        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connKey = self::adminConnKey($isPostgres, $dsn, $username, $password);
         $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
             return $isPostgres
                 ? new ReactPostgresConnection($dsn, $username, $password)

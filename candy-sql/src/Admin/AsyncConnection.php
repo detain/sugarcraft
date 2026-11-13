@@ -29,4 +29,15 @@ interface AsyncConnection
      * @return PromiseInterface<list<array<string,mixed>>> Rows as assoc arrays
      */
     public function query(string $sql, ?CancellationToken $cancellation = null): PromiseInterface;
+
+    /**
+     * Retire the server session this wrapper holds.
+     *
+     * admindata-004: caches that recycle wrappers (AdminQueryCache on key
+     * swap / invalidation) MUST be able to close them — dropping a wrapper
+     * without closing it orphans a live server session (fd + watchers until
+     * the server's wait_timeout). Implementations close idempotently and
+     * never throw at drop sites.
+     */
+    public function close(): void;
 }

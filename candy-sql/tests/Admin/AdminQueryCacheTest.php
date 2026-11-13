@@ -13,10 +13,11 @@ use SugarCraft\Sql\Admin\ServerContext;
 /**
  * Guards the cache's two audit-driven contracts: it must be constructible for
  * injection (isolated instances, not just the process-global singleton), and
- * invalidateConnection() must force the lazily-cached async connection to be
- * rebuilt — the connection key encodes only flavor+DSN+user, which does not
- * change across a server restart, so without invalidation a reconnect would
- * keep serving admin queries on a dead socket.
+ * dropping a connection must both CLOSE the wrapper and retire the rows its
+ * session produced (admindata-004/-007). The key encodes flavor + DSN + user +
+ * credential fingerprint (admindata-010), which still does not change across a
+ * server restart — so without explicit invalidation a reconnect would keep
+ * serving admin queries on a dead socket.
  */
 final class AdminQueryCacheTest extends TestCase
 {
@@ -77,6 +78,91 @@ final class AdminQueryCacheTest extends TestCase
 
         $this->assertNotSame($stale, $fresh, 'the post-invalidation connection must be a new instance');
         $this->assertSame(2, $calls);
+    }
+
+    // ---------------------------------------------------------------
+    // admindata-004 + -007: dropping a wrapper is not retiring it. The
+    // held AsyncConnection must be CLOSE()d on every drop path (key swap
+    // and invalidation), and the rows its session produced must not
+    // survive as if they belonged to the new one.
+    // ---------------------------------------------------------------
+
+    private function spyConnection(): AsyncConnection
+    {
+        return new class implements AsyncConnection {
+            public bool $closed = false;
+
+            public function query(string $sql, ?\SugarCraft\Async\CancellationToken $cancellation = null): \React\Promise\PromiseInterface
+            {
+                return \React\Promise\resolve([]);
+            }
+
+            public function close(): void
+            {
+                $this->closed = true;
+            }
+        };
+    }
+
+    public function testInvalidateConnectionClosesTheHeldConnection(): void
+    {
+        $spy = $this->spyConnection();
+        $cache = new AdminQueryCache();
+        $cache->connection('mysql|dsn|user', static fn () => $spy);
+
+        $cache->invalidateConnection();
+
+        $this->assertTrue($spy->closed, 'the retired wrapper must not linger as a live server session');
+    }
+
+    public function testKeySwapClosesThePreviousConnection(): void
+    {
+        $old = $this->spyConnection();
+        $new = $this->spyConnection();
+        $cache = new AdminQueryCache();
+        $cache->connection('mysql|dsn|user', static fn () => $old);
+
+        $returned = $cache->connection('pgsql|other|admin', static fn () => $new);
+
+        $this->assertSame($new, $returned);
+        $this->assertTrue($old->closed, 'the displaced session is closed, not dropped');
+        $this->assertFalse($new->closed, 'the surviving session stays open');
+    }
+
+    public function testConnectionDropClearsSessionRows(): void
+    {
+        $cache = new AdminQueryCache();
+        $cache->store('SELECT 1', [['x' => 'keep']]);
+        $cache->connection('mysql|dsn|user', fn () => $this->spyConnection());
+
+        $cache->invalidateConnection();
+
+        $this->assertSame([], $cache->takePending(), 'old pending fetches belong to the dead session too');
+        $this->assertNull($cache->lookup('SELECT 1'), 'rows from the retired session must not be served behind the new dial');
+    }
+
+    public function testKeySwapClearsRowsFromTheOtherServer(): void
+    {
+        $cache = new AdminQueryCache();
+        $cache->connection('mysql|dsnA|user', fn () => $this->spyConnection());
+        $cache->store('SELECT 1', [['x' => 'from-A']]);
+
+        $cache->connection('mysql|dsnB|user', fn () => $this->spyConnection());
+
+        $this->assertNull($cache->lookup('SELECT 1'), 'server B must not inherit server A\'s rows under the same SQL text');
+    }
+
+    public function testFirstDialNeverPurgesAdoptedRows(): void
+    {
+        // A03's adoption path legitimately stores snapshots BEFORE any async
+        // leg has dialed; the first-ever connection() must not treat that
+        // warm data as belonging to a dead session.
+        $cache = new AdminQueryCache();
+        $cache->store('status', [['Variable_name' => 'Uptime', 'Value' => '9']]);
+
+        $cache->connection('mysql|dsn|user', fn () => $this->spyConnection());
+
+        $this->assertNotNull($cache->lookup('status'), 'the first dial must keep pre-adopted snapshots');
     }
 
     // ---------------------------------------------------------------

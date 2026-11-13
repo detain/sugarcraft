@@ -117,6 +117,20 @@ final class ReactPostgresConnection implements AsyncConnection
     }
 
     /**
+     * Retire the server session (admindata-004).
+     *
+     * Client::closeNow() is vendor-deprecated with no Client-level
+     * replacement on voryx/pgasync — it is still the only teardown the pool
+     * exposes, and with `auto_disconnect` there is at most the one live
+     * connection for it to drop. Keep an eye on the vendor surface when the
+     * pin is revisited.
+     */
+    public function close(): void
+    {
+        $this->client->closeNow();
+    }
+
+    /**
      * Convert PDO-style DSN to a PgAsync connection-parameter array.
      *
      * PDO:     pgsql:host=localhost;port=5432;dbname=test

@@ -114,7 +114,7 @@ final class AdminTickThrottleTest extends TestCase
     private function seedFakeConnection(array $rows = [['Id' => '1']]): void
     {
         $test = $this;
-        AdminQueryCache::instance()->connection('mysql||', function () use ($rows, $test): AsyncConnection {
+        AdminQueryCache::instance()->connection('mysql||' . '|' . hash('sha256', ''), function () use ($rows, $test): AsyncConnection {
             return new class ($rows, $test) implements AsyncConnection {
                 /** @param list<array<string,mixed>> $rows */
                 public function __construct(
@@ -126,6 +126,10 @@ final class AdminTickThrottleTest extends TestCase
                 {
                     $this->test->recordSql($sql);
                     return \React\Promise\resolve($this->rows);
+                }
+
+                public function close(): void
+                {
                 }
             };
         });

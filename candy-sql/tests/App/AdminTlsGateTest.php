@@ -86,7 +86,7 @@ final class AdminTlsGateTest extends TestCase
     private function seedFakeConnection(): void
     {
         $test = $this;
-        AdminQueryCache::instance()->connection('mysql||', function () use ($test): AsyncConnection {
+        AdminQueryCache::instance()->connection('mysql||' . '|' . hash('sha256', ''), function () use ($test): AsyncConnection {
             return new class ($test) implements AsyncConnection {
                 public function __construct(private readonly AdminTlsGateTest $test) {}
 
@@ -94,6 +94,10 @@ final class AdminTlsGateTest extends TestCase
                 {
                     $this->test->recordSql($sql);
                     return \React\Promise\resolve([['Id' => '1']]);
+                }
+
+                public function close(): void
+                {
                 }
             };
         });
