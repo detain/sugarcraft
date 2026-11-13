@@ -296,4 +296,82 @@ final class ZoneHoverTrackerTest extends TestCase
         $this->assertNull($msg);
         $this->assertSame('a', $next->currentZoneId());
     }
+
+    /**
+     * Probe sequence from the review: hover A -> clear('a') -> move out.
+     * Polarity (documented in README + update() docblock): no Exit fires —
+     * an Exit must name a live Zone — but the state clears, so the tracker
+     * re-arms. The old branch returned $this unmutated and wedged hover on
+     * the dangling id: a later move into A (or a re-scan reintroducing it)
+     * had to produce the re-entry.
+     */
+    public function testVanishedHoveredZoneClearsSilentlyAndReArms(): void
+    {
+        $m = $this->buildManager();
+        [$tracker, $msg] = (new ZoneHoverTracker($m))->update($this->move(2, 1));
+        $this->assertInstanceOf(ZoneEnterMsg::class, $msg);
+
+        $m->clear('a');
+        [$tracker, $msg] = $tracker->update($this->move(9, 5));
+        $this->assertNull($msg, 'vanished zone exits silently');
+        $this->assertNull($tracker->currentZoneId(), 'dangling id must clear');
+
+        // Re-scan reintroducing 'a': entering it emits a fresh Enter.
+        $m->scan($m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB'));
+        [$tracker, $msg] = $tracker->update($this->move(2, 1));
+        $this->assertInstanceOf(ZoneEnterMsg::class, $msg, 'tracker re-armed');
+        $this->assertSame('a', $msg->zone->id);
+
+        // And moving into B after the silent clear pairs cleanly.
+        [$tracker, $msg] = $tracker->update($this->move(6, 1));
+        $this->assertInstanceOf(ZoneExitMsg::class, $msg);
+        [$tracker, $msg] = $tracker->update($this->move(6, 1));
+        $this->assertInstanceOf(ZoneEnterMsg::class, $msg);
+        $this->assertSame('b', $msg->zone->id);
+    }
+
+    public function testPendingEnterReportsOwedZoneWithoutConsuming(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new ZoneHoverTracker($m);
+
+        [$tracker, $msg] = $tracker->update($this->move(2, 1));
+        $this->assertInstanceOf(ZoneEnterMsg::class, $msg);
+        $this->assertNull($tracker->pendingEnter());
+
+        // Direct A -> B: lone Exit(A); the Enter(B) is owed.
+        [$tracker, $msg] = $tracker->update($this->move(6, 1));
+        $this->assertInstanceOf(ZoneExitMsg::class, $msg);
+        $owed = $tracker->pendingEnter();
+        $this->assertInstanceOf(Zone::class, $owed);
+        $this->assertSame('b', $owed->id);
+        $this->assertSame('b', $tracker->pendingEnter()->id, 'read must not consume');
+
+        // Re-feed emits the Enter and clears the owed state.
+        [$tracker, $msg] = $tracker->update($this->move(6, 1));
+        $this->assertInstanceOf(ZoneEnterMsg::class, $msg);
+        $this->assertNull($tracker->pendingEnter());
+    }
+
+    public function testPendingEnterDroppedWhenCursorLeavesOrIdRestored(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new ZoneHoverTracker($m);
+
+        [$tracker, $msg] = $tracker->update($this->move(2, 1));
+        [$tracker, $msg] = $tracker->update($this->move(6, 1));
+        $this->assertInstanceOf(ZoneExitMsg::class, $msg);
+        $this->assertNotNull($tracker->pendingEnter());
+
+        // Cursor leaves to open space before the re-feed: owed enter drops.
+        [$tracker, $msg] = $tracker->update($this->move(9, 5));
+        $this->assertNull($msg);
+        $this->assertNull($tracker->pendingEnter());
+
+        // And a restored id replaces the flow instead of continuing it.
+        [$tracker, $msg] = $tracker->update($this->move(2, 1));
+        [$tracker, $msg] = $tracker->update($this->move(6, 1));
+        $this->assertNotNull($tracker->pendingEnter());
+        $this->assertNull($tracker->withCurrentZoneId('b')->pendingEnter());
+    }
 }

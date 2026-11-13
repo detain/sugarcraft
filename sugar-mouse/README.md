@@ -497,16 +497,26 @@ if ($msg instanceof ZoneEnterMsg) {
 **Boundary crossing:** moving directly from zone A to zone B produces
 an exit for A first; call `update()` again to receive the enter for B.
 This two-step pattern lets the Program animate the exit before routing
-the enter. `DragTracker` is deliberately the opposite: one boundary
+the enter. If a re-feed is awkward (the pointer already sits on B and no
+further motion will arrive), read `pendingEnter()` — it reports the owed
+zone without consuming it — or re-invoke `update()` with a synthetic
+motion at the same coordinates; the emitted `ZoneEnterMsg` then matches.
+**Vanished zones clear silently:** if the hovered zone is removed from
+the registry before its exit can be built, no message is emitted (an
+Exit must name a live `Zone`) but the tracker state clears, so the next
+in-zone event correctly re-enters. `DragTracker` is deliberately the opposite: one boundary
 crossing emits its `ZoneDragMoveMsg` in the same call — do not re-feed
 the event there or you will spin.
 
 **State accessors:**
 - `currentZoneId()` — id of the hovered zone, or null
 - `currentZone()` — `Zone` object, or null
+- `pendingEnter()` — the `Zone` whose Enter is owed after a lone Exit(A),
+  reported without consuming it (null when nothing is pending)
 - `withManager(Manager)` — rebind to a different manager (e.g. a
   prefixed manager in a sub-component)
-- `withCurrentZoneId(?string)` — restore from a serialized state; null clears the hovered state
+- `withCurrentZoneId(?string)` — restore from a serialized state; null
+  clears the hovered state (and drops any owed enter)
 
 ### Drag tracking
 
