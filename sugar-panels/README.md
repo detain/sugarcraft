@@ -78,6 +78,11 @@ $layout = $panels->vertical(
 echo $panels->render($layout, 40, 5);
 ```
 
+The `Node` statics (`Node::leaf()`, `Node::horizontal()`,
+`Node::vertical()`) are the canonical constructors; the `$panels->leaf()`
+helpers used above are sugar over them, so tree-building is never
+renderer-dependent.
+
 That prints (protocol and styling stripped — see *Frame protocol*):
 
 ```text

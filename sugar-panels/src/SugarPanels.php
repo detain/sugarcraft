@@ -179,7 +179,9 @@ final class SugarPanels
     }
 
     // -------------------------------------------------------------------------
-    // Node factory helpers (delegated to Node statics for ergonomics)
+    // Node factory helpers — sugar over the Node::leaf()/horizontal()/vertical()
+    // statics, which remain the canonical constructors: the node tree is never
+    // renderer-dependent, and both spellings build identical nodes.
     // -------------------------------------------------------------------------
 
     public function leaf(string $content = ''): Node
