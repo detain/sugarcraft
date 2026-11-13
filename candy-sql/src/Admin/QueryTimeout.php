@@ -9,6 +9,7 @@ use React\Promise\PromiseInterface;
 use React\Promise\Timer\TimeoutException;
 
 use function React\Promise\Timer\timeout;
+use SugarCraft\Sql\Lang;
 
 /**
  * Deadline wrapper for async admin/query promises.
@@ -71,7 +72,7 @@ final class QueryTimeout
                         }
                     }
                     throw new \RuntimeException(
-                        sprintf('Async query timed out after %.1fs', $seconds),
+                        Lang::t('query.timed_out', ['seconds' => sprintf('%.1f', $seconds)]),
                         0,
                         $e,
                     );

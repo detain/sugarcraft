@@ -102,7 +102,7 @@ try {
     // checked after the dial so every input-refusal leg above still answers
     // with ITS own sentence first.
     if (!stream_isatty(STDOUT)) {
-        fwrite(STDERR, "candy-sql: this launcher drives an interactive terminal and refuses to stream ANSI onto a pipe (exit 2) — run it under a pty (e.g. script -qec 'candy-sql app.sqlite' /dev/null), or render headless from library code (ResultTable::renderPlain()).\n");
+        fwrite(STDERR, 'candy-sql: ' . Lang::t('cli.err_not_tty') . "\n");
         exit(2);
     }
 
@@ -128,9 +128,11 @@ try {
             $historyRecorder = new HistoryRecorder(new SqliteHistoryStore($historyPath));
         } catch (\Throwable $e) {
             fwrite(STDERR, sprintf(
-                "candy-sql: history recording DISABLED (%s): %s\n",
-                CellValue::sanitize($historyPath),
-                CellValue::sanitize($e->getMessage() !== '' ? $e->getMessage() : $e::class),
+                "candy-sql: %s\n",
+                Lang::t('cli.history_disabled', [
+                    'path' => CellValue::sanitize($historyPath),
+                    'error' => CellValue::sanitize($e->getMessage() !== '' ? $e->getMessage() : $e::class),
+                ]),
             ));
         }
     }
@@ -142,9 +144,8 @@ try {
     // state visible for the whole session).
     if ($database instanceof MysqlDatabase && MysqlDatabase::requiresVerifiedTls($database->sslMode())) {
         fwrite(STDERR, sprintf(
-            "candy-sql: ssl-mode '%s' demands verified TLS — the ReactPHP admin transport cannot honour it,"
-            . " so admin live-refresh is DISABLED and queries/table loads run synchronously over the TLS connection.\n",
-            $database->sslMode(),
+            "candy-sql: %s\n",
+            Lang::t('cli.tls_sync', ['mode' => $database->sslMode()]),
         ));
     }
 
@@ -439,15 +440,15 @@ function buildDatabase(array $argv): DatabaseInterface
             }
             $picked = $final->pickedName();
             if ($picked === null) {
-                fwrite(STDERR, "candy-sql: no connection selected — pass a path, a DSN or --connect=<name>\n");
+                fwrite(STDERR, 'candy-sql: ' . Lang::t('cli.no_connection_selected') . "\n");
                 exit(2);
             }
             return ConnectionFactory::fromArgv(injectPasswordFromEnv($store->argv($picked)));
         }
-        fwrite(STDOUT, "USAGE: candy-sql [OPTIONS] [path-or-dsn]\n");
-        fwrite(STDOUT, "       candy-sql --help   # for full usage information\n");
+        fwrite(STDOUT, Lang::t('cli.usage_line') . "\n");
+        fwrite(STDOUT, Lang::t('cli.usage_help_line') . "\n");
         if ($store !== null && $store->names() === []) {
-            fwrite(STDOUT, "       Tip: save named connections in {$store->path()} and launch with --connect=<name>.\n");
+            fwrite(STDOUT, Lang::t('cli.tip_saved_connections', ['path' => $store->path()]) . "\n");
         }
         exit(2);
     }

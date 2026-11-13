@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Admin\Alerts;
 
 use SugarCraft\Toast\Position;
+use SugarCraft\Sql\Lang;
 
 /**
  * Immutable threshold configuration for alert conditions.
@@ -108,7 +109,7 @@ final class AlertThresholds
     public function withConnectionWarningThreshold(float $value): self
     {
         if ($value < 0.0 || $value > 1.0) {
-            throw new \InvalidArgumentException('Connection warning threshold must be between 0.0 and 1.0');
+            throw new \InvalidArgumentException(Lang::t('alert.threshold_ratio_connection_warning'));
         }
         return $this->mutate([
             'connectionWarningThreshold' => $value,
@@ -131,7 +132,7 @@ final class AlertThresholds
     public function withConnectionCriticalThreshold(float $value): self
     {
         if ($value < 0.0 || $value > 1.0) {
-            throw new \InvalidArgumentException('Connection critical threshold must be between 0.0 and 1.0');
+            throw new \InvalidArgumentException(Lang::t('alert.threshold_ratio_connection_critical'));
         }
         return $this->mutate([
             'connectionCriticalThreshold' => $value,
@@ -157,7 +158,7 @@ final class AlertThresholds
     public function withAbortedRateThreshold(float $value): self
     {
         if ($value < 0.0) {
-            throw new \InvalidArgumentException('Aborted rate threshold must be >= 0.0');
+            throw new \InvalidArgumentException(Lang::t('alert.threshold_aborted_rate'));
         }
         return $this->mutate([
             'abortedRateThreshold' => $value,
@@ -181,7 +182,7 @@ final class AlertThresholds
     public function withSlowQueryThreshold(float $value): self
     {
         if ($value < 0.0) {
-            throw new \InvalidArgumentException('Slow query threshold must be >= 0.0');
+            throw new \InvalidArgumentException(Lang::t('alert.threshold_slow_query'));
         }
         return $this->mutate([
             'slowQueryThreshold' => $value,
@@ -206,7 +207,7 @@ final class AlertThresholds
     public function withThreadRunningThreshold(float $value): self
     {
         if ($value < 0.0 || $value > 1.0) {
-            throw new \InvalidArgumentException('Thread running threshold must be between 0.0 and 1.0');
+            throw new \InvalidArgumentException(Lang::t('alert.threshold_ratio_thread_running'));
         }
         return $this->mutate([
             'threadRunningThreshold' => $value,
@@ -231,7 +232,7 @@ final class AlertThresholds
     public function withConnectionErrorsThreshold(int $value): self
     {
         if ($value < 0) {
-            throw new \InvalidArgumentException('Connection errors threshold must be >= 0');
+            throw new \InvalidArgumentException(Lang::t('alert.threshold_connection_errors'));
         }
         return $this->mutate([
             'connectionErrorsThreshold' => $value,

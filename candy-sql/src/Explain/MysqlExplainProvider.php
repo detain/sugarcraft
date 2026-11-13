@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Explain;
 
 use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Lang;
 
 /**
  * MySQL EXPLAIN provider.
@@ -117,7 +118,7 @@ final class MysqlExplainProvider implements ExplainProviderInterface
         $selectId = $block['select_id'] ?? '?';
         $cost = $block['cost_info']['evaluated_cost'] ?? 'unknown';
 
-        return "QUERY BLOCK #{$selectId} (cost: {$cost})";
+        return Lang::t('explain.query_block', ['id' => $selectId, 'cost' => $cost]);
     }
 
     /**

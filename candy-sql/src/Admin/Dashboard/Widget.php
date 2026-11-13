@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Dashboard;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Immutable dashboard widget descriptor.
  *
@@ -33,6 +35,16 @@ final readonly class Widget
         public string $tooltip = '',
         public ?array $serverVarsKeys = null,
     ) {}
+
+    /**
+     * Localized display label. `caption` stays the English identity token the
+     * dashboard keys counters, series and panel compositions on; only what is
+     * drawn is translated.
+     */
+    public function title(): string
+    {
+        return Lang::caption($this->caption);
+    }
 
     /**
      * Compute the widget's current value.

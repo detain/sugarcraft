@@ -22,6 +22,7 @@ use SugarCraft\Style\Layout;
 use SugarCraft\Style\Position;
 use SugarCraft\Style\Style;
 use SugarCraft\Sql\CellValue;
+use SugarCraft\Sql\Lang;
 
 /**
  * Server Status page displaying connection info, features, directories, SSL, replication, and firewall.
@@ -299,7 +300,7 @@ final class ServerStatusPage extends PageBase
         $version = CellValue::sanitize($this->context->versionString());
         $flavor = $this->context->flavor();
 
-        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Server Status');
+        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render(Lang::t('srv.title'));
 
         // Workbench puts the play-arrow liveness label ABOVE the tab title
         // (query_dashboard.md line 45), so it reads as the page's status
@@ -322,12 +323,12 @@ final class ServerStatusPage extends PageBase
             ['SSL', $this->tristate($this->hasSsl($serverVars))],
             ['Fulltext', $this->tristate($this->hasFulltext($serverVars))],
             ['Events', $this->tristate($this->hasEvents($serverVars))],
-            ['Stored Programs', $this->tristate($this->hasStoredPrograms())],
+            [Lang::t('srv.stored_programs'), $this->tristate($this->hasStoredPrograms())],
             ['Partitioning', $this->tristate($this->hasPartitioning($serverVars))],
             ['X Plugin', $this->tristate($this->hasXPlugin($serverVars))],
         ]);
 
-        return Card::titled($list, 'Features')->render();
+        return Card::titled($list, Lang::t('srv.features'))->render();
     }
 
     private function renderDirectoryPanel(): string
@@ -337,13 +338,13 @@ final class ServerStatusPage extends PageBase
         $list = DefinitionList::new()
             ->withPlaceholder('-')
             ->withRows([
-                ['Data Directory', $this->resolveDir($serverVars['datadir'] ?? null)],
-                ['Temp Directory', $this->resolveDir($serverVars['tmpdir'] ?? null)],
-                ['Log Directory', $this->resolveDir($serverVars['log_error'] ?? null)],
-                ['PID File', $this->resolveDir($serverVars['pid_file'] ?? null)],
+                [Lang::t('srv.data_directory'), $this->resolveDir($serverVars['datadir'] ?? null)],
+                [Lang::t('srv.temp_directory'), $this->resolveDir($serverVars['tmpdir'] ?? null)],
+                [Lang::t('srv.log_directory'), $this->resolveDir($serverVars['log_error'] ?? null)],
+                [Lang::t('srv.pid_file'), $this->resolveDir($serverVars['pid_file'] ?? null)],
             ]);
 
-        return Card::titled($list, 'Directories')->render();
+        return Card::titled($list, Lang::t('srv.directories'))->render();
     }
 
     private function renderSslPanel(): string
@@ -353,16 +354,16 @@ final class ServerStatusPage extends PageBase
         $list = DefinitionList::new()
             ->withPlaceholder('-')
             ->withRows([
-                ['TLS Active', $this->tristate($this->hasSsl($serverVars))],
-                ['TLS Cipher', $this->resolveValue($serverVars['ssl_cipher'] ?? null)],
-                ['TLS Version', $this->resolveValue($serverVars['tls_version'] ?? null)],
-                ['SSL support', $this->tristate($this->tristateValue($serverVars['have_ssl'] ?? null))],
-                ['SSL CA', $this->resolveDir($serverVars['ssl_ca'] ?? null)],
-                ['SSL Cert', $this->resolveDir($serverVars['ssl_cert'] ?? null)],
-                ['SSL Key', $this->resolveDir($serverVars['ssl_key'] ?? null)],
+                [Lang::t('srv.tls_active'), $this->tristate($this->hasSsl($serverVars))],
+                [Lang::t('srv.tls_cipher'), $this->resolveValue($serverVars['ssl_cipher'] ?? null)],
+                [Lang::t('srv.tls_version'), $this->resolveValue($serverVars['tls_version'] ?? null)],
+                [Lang::t('srv.ssl_support'), $this->tristate($this->tristateValue($serverVars['have_ssl'] ?? null))],
+                [Lang::t('srv.ssl_ca'), $this->resolveDir($serverVars['ssl_ca'] ?? null)],
+                [Lang::t('srv.ssl_cert'), $this->resolveDir($serverVars['ssl_cert'] ?? null)],
+                [Lang::t('srv.ssl_key'), $this->resolveDir($serverVars['ssl_key'] ?? null)],
             ]);
 
-        return Card::titled($list, 'TLS / Secure Connection')->render();
+        return Card::titled($list, Lang::t('srv.tls_secure'))->render();
     }
 
     private function renderReplicaPanel(): string
@@ -372,15 +373,15 @@ final class ServerStatusPage extends PageBase
 
         // Distinct states for the replica panel
         if ($kind === ReplicaStatusKind::PermissionDenied) {
-            return Card::titled('Insufficient privileges (REPLICATION CLIENT)', 'Replication')->render();
+            return Card::titled(Lang::t('srv.repl_denied'), Lang::t('srv.replication'))->render();
         }
 
         if ($kind === ReplicaStatusKind::Error) {
-            return Card::titled('Error accessing replication status', 'Replication')->render();
+            return Card::titled(Lang::t('srv.repl_error'), Lang::t('srv.replication'))->render();
         }
 
         if ($kind === ReplicaStatusKind::NotConfigured || count($rows) === 0) {
-            return Card::titled('Not configured', 'Replication')->render();
+            return Card::titled(Lang::t('srv.not_configured'), Lang::t('srv.replication'))->render();
         }
 
         // Build a card per channel (multi-channel support)
@@ -389,18 +390,18 @@ final class ServerStatusPage extends PageBase
             $list = DefinitionList::new()
                 ->withPlaceholder('-')
                 ->withRows([
-                    ['Channel', $this->resolveValue($channelRow['Channel_name'] ?? $channelRow['Connection_name'] ?? null)],
-                    ['Source Host', $this->resolveValue($channelRow['Master_Host'] ?? $channelRow['Source_Host'] ?? null)],
-                    ['Source Port', $this->resolveValue($channelRow['Master_Port'] ?? $channelRow['Source_Port'] ?? null)],
-                    ['Replica IO Running', $this->replicaState($channelRow['Slave_IO_Running'] ?? $channelRow['Replica_IO_Running'] ?? null)],
-                    ['Replica SQL Running', $this->replicaState($channelRow['Slave_SQL_Running'] ?? $channelRow['Replica_SQL_Running'] ?? null)],
-                    ['Seconds Behind Source', $this->secondsBehind($channelRow['Seconds_Behind_Master'] ?? $channelRow['Seconds_Behind_Source'] ?? null)],
-                    ['Relay Log File', $this->resolveValue($channelRow['Relay_Log_File'] ?? null)],
-                    ['Relay Pos', $this->resolveValue($channelRow['Relay_Log_Pos'] ?? null)],
+                    [Lang::t('srv.channel'), $this->resolveValue($channelRow['Channel_name'] ?? $channelRow['Connection_name'] ?? null)],
+                    [Lang::t('srv.source_host'), $this->resolveValue($channelRow['Master_Host'] ?? $channelRow['Source_Host'] ?? null)],
+                    [Lang::t('srv.source_port'), $this->resolveValue($channelRow['Master_Port'] ?? $channelRow['Source_Port'] ?? null)],
+                    [Lang::t('srv.replica_io'), $this->replicaState($channelRow['Slave_IO_Running'] ?? $channelRow['Replica_IO_Running'] ?? null)],
+                    [Lang::t('srv.replica_sql'), $this->replicaState($channelRow['Slave_SQL_Running'] ?? $channelRow['Replica_SQL_Running'] ?? null)],
+                    [Lang::t('srv.seconds_behind'), $this->secondsBehind($channelRow['Seconds_Behind_Master'] ?? $channelRow['Seconds_Behind_Source'] ?? null)],
+                    [Lang::t('srv.relay_log_file'), $this->resolveValue($channelRow['Relay_Log_File'] ?? null)],
+                    [Lang::t('srv.relay_pos'), $this->resolveValue($channelRow['Relay_Log_Pos'] ?? null)],
                 ]);
 
-            $channelLabel = $channelRow['Channel_name'] ?? $channelRow['Connection_name'] ?? 'Default';
-            $cards[] = Card::titled($list, "Replication › {$channelLabel}")->render();
+            $channelLabel = $channelRow['Channel_name'] ?? $channelRow['Connection_name'] ?? Lang::t('srv.default');
+            $cards[] = Card::titled($list, Lang::t('srv.repl_channel_title', ['channel' => $channelLabel]))->render();
         }
 
         return implode("\n\n", $cards);
@@ -413,10 +414,10 @@ final class ServerStatusPage extends PageBase
         $hasFirewall = $this->hasFirewall($serverVars);
 
         $list = DefinitionList::new()->withRows([
-            ['MySQL Firewall', $this->tristate($hasFirewall)],
+            [Lang::t('srv.mysql_firewall'), $this->tristate($hasFirewall)],
         ]);
 
-        return Card::titled($list, 'Firewall')->render();
+        return Card::titled($list, Lang::t('srv.firewall'))->render();
     }
 
     /**
@@ -565,7 +566,7 @@ final class ServerStatusPage extends PageBase
 
         $seconds = (int) $value;
         if ($seconds === 0) {
-            return '0s (caught up)';
+            return Lang::t('srv.caught_up');
         }
 
         return Format::duration($seconds);
@@ -781,14 +782,14 @@ final class ServerStatusPage extends PageBase
     {
         if ($this->context->flavor() === Flavor::MariaDB) {
             $refused = clone $this;
-            $refused->gtidRefusal = 'GTID_MODE is not available: MariaDB has no gtid_mode variable.';
+            $refused->gtidRefusal = Lang::t('status.gtid_mariadb');
             return [$refused, null];
         }
 
         $version = $this->context->version();
         if (!$version->isAtLeast(5, 7, 6)) {
             $refused = clone $this;
-            $refused->gtidRefusal = 'GTID_MODE requires MySQL 5.7.6 or newer (server is ' . $version->raw . ').';
+            $refused->gtidRefusal = Lang::t('status.gtid_version', ['version' => $version->raw]);
             return [$refused, null];
         }
 

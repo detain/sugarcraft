@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Dashboard\Foundation\Threshold;
 use SugarCraft\Dashboard\Plot\Chart\Gauge;
+use SugarCraft\Sql\Lang;
 
 /**
  * A single sidebar gauge displaying a metric with threshold coloring.
@@ -53,9 +54,9 @@ final class SidebarGauge
     public function label(): string
     {
         return match ($this->type) {
-            GaugeType::Connections   => 'Connections',
-            GaugeType::Traffic       => 'Traffic',
-            GaugeType::KeyEfficiency => 'Key Efficiency',
+            GaugeType::Connections   => Lang::t('caption.connections'),
+            GaugeType::Traffic       => Lang::t('caption.traffic'),
+            GaugeType::KeyEfficiency => Lang::t('caption.key_efficiency'),
             GaugeType::Qps           => 'QPS',
             GaugeType::InnoDB        => 'InnoDB',
         };

@@ -156,7 +156,8 @@ final class SqliteHistoryStoreModesTest extends TestCase
         $source = (string) \file_get_contents(__DIR__ . '/../../../src/Admin/History/SqliteHistoryStore.php');
 
         $this->assertSame(0, \substr_count($source, "'History store is unusable: ' . \$this->db->lastErrorMsg()")); // inline copies gone
-        $this->assertSame(1, \substr_count($source, 'History store is unusable: %s'));
+        $this->assertSame(1, \substr_count($source, "Lang::t('history.err_unusable'"));
+        $this->assertSame(0, \substr_count($source, 'History store is unusable'));
         $this->assertSame(6, \substr_count($source, 'throw $this->unusable();'));
     }
 }

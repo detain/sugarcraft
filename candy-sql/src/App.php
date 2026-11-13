@@ -2100,7 +2100,7 @@ final class App implements Model
         }
         if (in_array($trimmed, $this->query->favorites, true)) {
             return $this->mutate(['ui' => $this->ui->withStatus(
-                'already saved (' . count($this->query->favorites) . ')'
+                Lang::t('status.already_saved', ['count' => count($this->query->favorites)])
             )->withError(null)]);
         }
         $favorites = $this->query->favorites;
@@ -2118,7 +2118,7 @@ final class App implements Model
         $trimmed = trim($this->editor()->value());
         if (!in_array($trimmed, $this->query->favorites, true)) {
             return $this->mutate(['ui' => $this->ui->withStatus(
-                'not in favorites (' . count($this->query->favorites) . ')'
+                Lang::t('status.not_in_favorites', ['count' => count($this->query->favorites)])
             )->withError(null)]);
         }
         $favorites = array_values(array_filter(

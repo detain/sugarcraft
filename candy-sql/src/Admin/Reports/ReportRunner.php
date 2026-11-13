@@ -7,6 +7,7 @@ namespace SugarCraft\Sql\Admin\Reports;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Identifier;
+use SugarCraft\Sql\Lang;
 
 /**
  * Executes performance report queries against the MySQL sys schema.
@@ -76,13 +77,13 @@ final class ReportRunner
         $report = $this->catalog->get($viewName);
         if ($report === null) {
             throw new \InvalidArgumentException(
-                "Report not found in catalog: " . htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')
+                Lang::t('reports.err_not_in_catalog', ['name' => htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')])
             );
         }
 
         if (!$this->availability->isViewAvailable($viewName)) {
             throw new \RuntimeException(
-                "View not available on this server: " . htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')
+                Lang::t('reports.err_view_unavailable', ['name' => htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')])
             );
         }
     }
@@ -118,7 +119,7 @@ final class ReportRunner
         $report = $this->catalog->get($viewName);
         if ($report === null) {
             throw new \InvalidArgumentException(
-                "Report not found in catalog: " . htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')
+                Lang::t('reports.err_not_in_catalog', ['name' => htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')])
             );
         }
 

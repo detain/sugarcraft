@@ -10,6 +10,7 @@ use React\Mysql\MysqlClient;
 use React\Mysql\MysqlResult;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\CancellationToken;
+use SugarCraft\Sql\Lang;
 
 /**
  * Async MySQL connection wrapper using react/mysql.
@@ -292,7 +293,7 @@ final class ReactMysqlConnection implements AsyncConnection
             // powerful local identity. Refusing is the whole point: the
             // caller must say who it is before we say it to the server.
             throw new \InvalidArgumentException(
-                'ReactMysqlConnection: empty username — refusing to dial MySQL as the guessed "root" identity; pass an explicit user',
+                Lang::t('conn.err_empty_user_mysql'),
             );
         }
 

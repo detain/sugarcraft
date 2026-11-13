@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Sql\Admin\Sampler;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Style\Style;
+use SugarCraft\Sql\Lang;
 
 /**
  * Collection of all sidebar gauges for the Server Status page.
@@ -91,7 +92,7 @@ final class SidebarGaugeSet
     {
         $lines = [];
 
-        $lines[] = Style::new()->bold()->foreground(Color::ansi(6))->render('Server Metrics');
+        $lines[] = Style::new()->bold()->foreground(Color::ansi(6))->render(Lang::t('metrics.server_metrics'));
         $lines[] = Style::new()->foreground(Color::ansi(6))->render(str_repeat('─', 18));
 
         foreach ($this->gauges as $gauge) {

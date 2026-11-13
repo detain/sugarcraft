@@ -295,8 +295,17 @@ final class ServerStatusPageTest extends TestCase
             $this->assertSame(0, \substr_count($source, $stale), "stale label still present: {$stale}");
         }
 
-        foreach (["['TLS Active'", "'SSL support'", "'Replica IO Running'", "'Replica SQL Running'", "'TLS / Secure Connection'"] as $canonical) {
-            $this->assertGreaterThanOrEqual(1, \substr_count($source, $canonical), "canonical label missing: {$canonical}");
+        // The canonical labels now live behind Lang keys (SQL-O05): the page
+        // source names the key, and the English catalog carries the wording.
+        foreach ([
+            'srv.tls_active' => 'TLS Active',
+            'srv.ssl_support' => 'SSL support',
+            'srv.replica_io' => 'Replica IO Running',
+            'srv.replica_sql' => 'Replica SQL Running',
+            'srv.tls_secure' => 'TLS / Secure Connection',
+        ] as $key => $english) {
+            $this->assertGreaterThanOrEqual(1, \substr_count($source, "Lang::t('{$key}')"), "canonical label key missing: {$key}");
+            $this->assertSame($english, \SugarCraft\Sql\Lang::t($key));
         }
     }
 }

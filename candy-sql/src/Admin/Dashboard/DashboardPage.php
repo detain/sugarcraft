@@ -475,7 +475,7 @@ final class DashboardPage extends PageBase
             $color = $widget->color;
             $caption = Style::new()
                 ->foreground(Color::rgb($color['r'], $color['g'], $color['b']))
-                ->render($widget->caption);
+                ->render($widget->title());
             $lines[] = $caption;
 
             foreach ($this->renderWidgetBlock($widget, $panelWidth, $consumed) as $row) {
@@ -583,7 +583,7 @@ final class DashboardPage extends PageBase
         }
         $kb = $bytes !== null && $bytes->hasValue() ? $bytes->lastValue() / 1024.0 : null;
         if ($kb !== null) {
-            $lines[] = sprintf('data written %.1f kB/s', $kb);
+            $lines[] = Lang::t('dash.data_written', ['kb' => sprintf('%.1f', $kb)]);
         }
 
         $writes = $this->counterCells['Disk Write Requests:counter'] ?? null;
@@ -591,7 +591,7 @@ final class DashboardPage extends PageBase
             $consumed['Disk Write Requests:counter'] = true;
             if ($writes->hasValue()) {
                 // The `#` glyph was unique to this line — name the unit.
-                $lines[] = sprintf('writes %s ops/s', $writes->scaledFormatted());
+                $lines[] = Lang::t('dash.writes_ops', ['n' => $writes->scaledFormatted()]);
             }
         }
 
@@ -602,7 +602,7 @@ final class DashboardPage extends PageBase
         if ($log !== null) {
             $consumed['Redo Log Bytes Written:counter'] = true;
             if ($log->hasValue()) {
-                $lines[] = sprintf('log written %.1f kB/s', $log->lastValue() / 1024.0);
+                $lines[] = Lang::t('dash.log_written', ['kb' => sprintf('%.1f', $log->lastValue() / 1024.0)]);
             }
         }
 
@@ -680,17 +680,17 @@ final class DashboardPage extends PageBase
         $lines = $this->rows($meter->viewRound());
 
         foreach ([
-            ['Buffer Pool Read Reqs', 'read reqs %s pages/s'],
-            ['Buffer Pool Write Reqs', 'write reqs %s pages/s'],
-            ['Disk Reads (not from pool)', 'disk reads %s /s'],
-        ] as [$caption, $format]) {
+            ['Buffer Pool Read Reqs', 'dash.read_reqs'],
+            ['Buffer Pool Write Reqs', 'dash.write_reqs'],
+            ['Disk Reads (not from pool)', 'dash.disk_reads'],
+        ] as [$caption, $labelKey]) {
             $counterId = $caption . ':counter';
             $counter = $this->counterCells[$counterId] ?? null;
             if ($counter === null) {
                 continue;
             }
             $consumed[$counterId] = true;
-            $lines[] = sprintf($format, $counter->hasValue() ? $counter->scaledFormatted() : '0');
+            $lines[] = Lang::t($labelKey, ['n' => $counter->hasValue() ? $counter->scaledFormatted() : '0']);
         }
 
         return $lines;

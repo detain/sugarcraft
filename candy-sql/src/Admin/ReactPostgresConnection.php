@@ -9,6 +9,7 @@ use React\EventLoop\Loop as ReactLoop;
 use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\CancellationToken;
+use SugarCraft\Sql\Lang;
 
 /**
  * Async PostgreSQL connection wrapper using voryx/pgasync.
@@ -156,7 +157,7 @@ final class ReactPostgresConnection implements AsyncConnection
             // own the cluster's superuser role. Identity is caller-supplied or
             // the dial does not happen.
             throw new \InvalidArgumentException(
-                'ReactPostgresConnection: empty username — refusing to dial PostgreSQL as the guessed "postgres" identity; pass an explicit user',
+                Lang::t('conn.err_empty_user_pg'),
             );
         }
 
@@ -180,9 +181,7 @@ final class ReactPostgresConnection implements AsyncConnection
             // downgrade the class docblock argues against. The value is
             // refused at our door instead of silently un-sent.
             throw new \InvalidArgumentException(
-                'ReactPostgresConnection: unrecognised sslmode "' . $sslMode . '"; expected one of '
-                . implode(', ', self::PGSQL_TLS_MODES)
-                . ' — silently dropping a typo would downgrade to plaintext-capable "prefer"',
+                Lang::t('conn.err_sslmode_unrecognised', ['mode' => $sslMode, 'allowed' => implode(', ', self::PGSQL_TLS_MODES)]),
             );
         }
 

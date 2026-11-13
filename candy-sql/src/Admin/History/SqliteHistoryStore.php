@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Admin\History;
 
 use SugarCraft\Sql\Admin\StatusSnapshot;
+use SugarCraft\Sql\Lang;
 
 /**
  * SQLite-backed HistoryStore.
@@ -52,7 +53,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         $dirCreated = false;
         if (!\is_dir($dir)) {
             if (!\mkdir($dir, 0700, true) && !\is_dir($dir)) {
-                throw new \RuntimeException("Cannot create history directory: {$dir}");
+                throw new \RuntimeException(Lang::t('history.err_mkdir', ['dir' => $dir]));
             }
             $dirCreated = true;
         }
@@ -122,7 +123,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         }
         if (!\chmod($path, $target)) {
             throw new \RuntimeException(
-                "Cannot secure history store file: {$path} (mode " . \substr(\sprintf('%o', $target), -4) . ')'
+                Lang::t('history.err_chmod', ['path' => $path, 'mode' => \substr(\sprintf('%o', $target), -4)])
             );
         }
     }
@@ -316,9 +317,6 @@ final class SqliteHistoryStore implements HistoryStoreInterface
      */
     private function unusable(): \RuntimeException
     {
-        return new \RuntimeException(sprintf(
-            'History store is unusable: %s — delete the history file or fix its permissions to recover.',
-            $this->db->lastErrorMsg(),
-        ));
+        return new \RuntimeException(Lang::t('history.err_unusable', ['error' => $this->db->lastErrorMsg()]));
     }
 }

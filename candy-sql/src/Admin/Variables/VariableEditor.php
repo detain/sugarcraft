@@ -8,6 +8,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Identifier;
+use SugarCraft\Sql\Lang;
 
 /**
  * Inline editor for modifying MySQL variables via SET GLOBAL / SET PERSIST.
@@ -33,7 +34,10 @@ final class VariableEditor
      * five sites that said bare "Prepare failed" named neither the statement
      * position nor the connection the user is staring at.
      */
-    private const PREPARE_FAILURE = 'Could not prepare the statement on this connection';
+    private static function prepareFailure(): string
+    {
+        return Lang::t('variables.err_prepare');
+    }
 
     private DatabaseInterface $db;
 
@@ -67,7 +71,7 @@ final class VariableEditor
     {
         // Validate variable is editable before attempting
         if (!$this->isEditable($variableName)) {
-            return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Variable not editable'];
+            return ['success' => false, 'errorCode' => null, 'errorMessage' => Lang::t('variables.err_not_editable')];
         }
 
         // Backtick-escape the variable name (it comes from catalog, not user)
@@ -79,7 +83,7 @@ final class VariableEditor
         try {
             $stmt = $this->db->prepare($sql);
             if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::PREPARE_FAILURE];
+                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::prepareFailure()];
             }
 
             $result = $stmt->execute([$newValue]);
@@ -133,7 +137,7 @@ final class VariableEditor
         }
 
         if (!$this->isEditable($variableName)) {
-            return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Variable not editable'];
+            return ['success' => false, 'errorCode' => null, 'errorMessage' => Lang::t('variables.err_not_editable')];
         }
 
         $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
@@ -142,7 +146,7 @@ final class VariableEditor
         try {
             $stmt = $this->db->prepare($sql);
             if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::PREPARE_FAILURE];
+                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::prepareFailure()];
             }
 
             $result = $stmt->execute([$newValue]);
@@ -174,7 +178,7 @@ final class VariableEditor
         }
 
         if (!$this->isEditable($variableName)) {
-            return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Variable not editable'];
+            return ['success' => false, 'errorCode' => null, 'errorMessage' => Lang::t('variables.err_not_editable')];
         }
 
         $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
@@ -183,7 +187,7 @@ final class VariableEditor
         try {
             $stmt = $this->db->prepare($sql);
             if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::PREPARE_FAILURE];
+                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::prepareFailure()];
             }
 
             $result = $stmt->execute([$newValue]);
@@ -222,7 +226,7 @@ final class VariableEditor
         try {
             $stmt = $this->db->prepare($sql);
             if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::PREPARE_FAILURE];
+                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::prepareFailure()];
             }
 
             $result = $stmt->execute([]);
@@ -351,12 +355,12 @@ final class VariableEditor
         if ($version->isMariaDb()) {
             return $version->isAtLeast(11, 1)
                 ? null
-                : 'Persisting requires MariaDB 11.1+ — this server does not implement SET PERSIST.';
+                : Lang::t('variables.err_persist_mariadb');
         }
 
         return $version->isAtLeast(8, 0, 16)
             ? null
-            : 'Persisting requires MySQL 8.0.16+ — this server does not implement SET PERSIST.';
+            : Lang::t('variables.err_persist_mysql');
     }
 
     private function handleError(\PDOException $e): array

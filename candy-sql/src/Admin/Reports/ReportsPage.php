@@ -839,7 +839,7 @@ final class ReportsPage extends PageBase implements RowNavigable
 
             if ($viewName === null) {
                 $this->currentResult = null;
-                $this->errorMessage = "Report not found in catalog: {$this->selectedReport}";
+                $this->errorMessage = Lang::t('reports.err_not_in_catalog', ['name' => $this->selectedReport]);
 
                 return;
             }
@@ -882,7 +882,7 @@ final class ReportsPage extends PageBase implements RowNavigable
             // retries instead of riding a stale guard.
             $this->reloadedView = null;
             $this->reloadedRows = null;
-            $this->errorMessage = "Error loading report: {$e->getMessage()}";
+            $this->errorMessage = Lang::t('reports.err_loading', ['error' => $e->getMessage()]);
         }
     }
 

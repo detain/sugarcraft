@@ -7,6 +7,7 @@ namespace SugarCraft\Sql\Admin;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\CancellationToken;
+use SugarCraft\Sql\Lang;
 
 /**
  * Bridges sugar-async's {@see CancellationToken} onto a ReactPHP query promise.
@@ -68,7 +69,7 @@ final class CancellableQuery
         // behaves exactly like cancelling through the token.
         $deferred = new Deferred(static function () use ($abort): never {
             $abort();
-            throw new QueryCancelledException('Async query cancelled');
+            throw new QueryCancelledException(Lang::t('query.cancelled'));
         });
 
         // onCancel fires synchronously when the token is already cancelled,
@@ -78,7 +79,7 @@ final class CancellableQuery
                 return;
             }
             $abort();
-            $deferred->reject(new QueryCancelledException('Async query cancelled'));
+            $deferred->reject(new QueryCancelledException(Lang::t('query.cancelled')));
         });
 
         $promise->then(

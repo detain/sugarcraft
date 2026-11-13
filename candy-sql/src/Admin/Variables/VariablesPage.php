@@ -1078,14 +1078,14 @@ final class VariablesPage extends PageBase implements RowNavigable
         // grid has rows to edit — "f:filter-style action copy on a No data
         // page" was the chrome lie this leg fixes.
         $parts = $this->categories === []
-            ? [$this->categoryFocused ? '[j/k] tree' : '[j/k] rows']
-            : ['[c] categories', $this->categoryFocused ? '[j/k] tree' : '[j/k] rows'];
+            ? [$this->categoryFocused ? Lang::t('variables.footer_tree') : Lang::t('variables.footer_rows')]
+            : [Lang::t('variables.footer_categories'), $this->categoryFocused ? Lang::t('variables.footer_tree') : Lang::t('variables.footer_rows')];
         if ($this->getFilteredVariableNames() !== []) {
-            $parts[] = '[Enter/e] edit(dynamic)';
+            $parts[] = Lang::t('variables.footer_edit');
         }
-        $parts[] = '[w] rw filter';
-        $parts[] = '[s] search';
-        $parts[] = '[q] back';
+        $parts[] = Lang::t('variables.footer_rw_filter');
+        $parts[] = Lang::t('variables.footer_search');
+        $parts[] = Lang::t('variables.footer_back');
 
         return Style::new()->foreground(Color::hex('#6b7280'))
             ->render(implode('  ', $parts));

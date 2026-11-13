@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Components\Card\DefinitionList;
 use SugarCraft\Sql\Admin\Format;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\CellValue;
+use SugarCraft\Sql\Lang;
 
 /**
  * Info card displaying server connection details and uptime.
@@ -60,17 +61,17 @@ final class ServerInfoCard
         $uptime = $uptimeStr !== null ? (int) $uptimeStr : null;
 
         $list = DefinitionList::new()
-            ->withPlaceholder('Unknown')
+            ->withPlaceholder(Lang::t('srv.unknown'))
             ->withRows([
-                ['Host', $host],
-                ['Socket', $socket],
-                ['Port', $port],
-                ['Version', $version],
-                ['Uptime', $uptime !== null ? $this->formatUptime($uptime) : null],
-                ['Running Since', $uptime !== null ? date('Y-m-d H:i:s', time() - $uptime) : null],
+                [Lang::t('srv.host'), $host],
+                [Lang::t('srv.socket'), $socket],
+                [Lang::t('srv.port'), $port],
+                [Lang::t('srv.version'), $version],
+                [Lang::t('srv.uptime'), $uptime !== null ? $this->formatUptime($uptime) : null],
+                [Lang::t('srv.running_since'), $uptime !== null ? date('Y-m-d H:i:s', time() - $uptime) : null],
             ]);
 
-        return Card::titled($list, 'Server Information')->render();
+        return Card::titled($list, Lang::t('srv.server_information'))->render();
     }
 
     /**

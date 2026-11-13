@@ -16,6 +16,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Position;
 use SugarCraft\Style\Style;
+use SugarCraft\Sql\Lang;
 
 /**
  * Right-hand metric column of the Server Status page — the Workbench
@@ -240,9 +241,9 @@ final class MetricsColumn
         $isProxy = $this->hostLoad->mode() === HostLoadMode::BusyProxy;
 
         $label = match (true) {
-            $isProxy => sprintf('busy proxy %.1f%%', $ratio * 100),
-            ($load = $this->hostLoad->latestLoad()) !== null => sprintf('cpu load %.2f', $load),
-            default => 'no samples yet',
+            $isProxy => Lang::t('metrics.busy_proxy', ['pct' => sprintf('%.1f', $ratio * 100)]),
+            ($load = $this->hostLoad->latestLoad()) !== null => Lang::t('metrics.cpu_load', ['load' => sprintf('%.2f', $load)]),
+            default => Lang::t('metrics.no_samples'),
         };
 
         $bar = $rows < self::MIN_ROWS_FOR_VERTICAL_BAR
@@ -281,7 +282,7 @@ final class MetricsColumn
     private function graphFrame(StatusGraphCell $cell, int $frameWidth, int $chartHeight): string
     {
         return $this->frameShell(
-            $cell->caption,
+            Lang::caption($cell->caption),
             $this->labelFor($cell),
             $cell->view($frameWidth, $chartHeight),
             $frameWidth,
@@ -312,7 +313,7 @@ final class MetricsColumn
     private function labelFor(StatusGraphCell $cell): string
     {
         if (!$cell->hasSamples()) {
-            return 'no samples yet';
+            return Lang::t('metrics.no_samples');
         }
 
         return $this->labelForName($cell, $this->lastStatusVars ?? [], $this->lastRates, $cell->latest());
@@ -326,11 +327,8 @@ final class MetricsColumn
     private function labelForName(StatusGraphCell $cell, array $vars, array $rates, array $latest): string
     {
         return match ($cell->caption) {
-            'Connections' => sprintf('%d connections', (int) ($latest['threads'] ?? 0)),
-            'Traffic' => sprintf(
-                '%.2f kb/s',
-                (($rates['Bytes_received'] ?? 0.0) + ($rates['Bytes_sent'] ?? 0.0)) / 1024.0,
-            ),
+            'Connections' => Lang::t('metrics.connections_count', ['count' => (int) ($latest['threads'] ?? 0)]),
+            'Traffic' => Lang::t('metrics.traffic_rate', ['kb' => sprintf('%.2f', (($rates['Bytes_received'] ?? 0.0) + ($rates['Bytes_sent'] ?? 0.0)) / 1024.0)]),
             'Key Efficiency' => sprintf(
                 '%.1f%%',
                 SidebarGaugeSet::computeKeyEfficiencyRatio($vars) * 100,

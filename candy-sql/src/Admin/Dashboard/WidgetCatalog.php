@@ -9,6 +9,7 @@ use SugarCraft\Sql\Admin\Calc\StatusVar;
 use SugarCraft\Sql\Admin\Calc\MakeTuple;
 use SugarCraft\Sql\Admin\Calc\TableOpenCacheHitRate;
 use SugarCraft\Sql\Admin\Calc\InnoDBBufferPoolUsageBytes;
+use SugarCraft\Sql\Lang;
 
 /**
  * Declarative widget tables for the Performance Dashboard.
@@ -80,7 +81,7 @@ final class WidgetCatalog
                 new RatePerSecond('Bytes_received'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'Incoming traffic: {Bytes_received} bytes total',
+                Lang::t('widget.tip.bytes_in'),
                 null,
             ],
             [
@@ -98,7 +99,7 @@ final class WidgetCatalog
                 new RatePerSecond('Bytes_sent'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Outgoing traffic: {Bytes_sent} bytes total',
+                Lang::t('widget.tip.bytes_out'),
                 null,
             ],
             [
@@ -116,7 +117,7 @@ final class WidgetCatalog
                 new StatusVar('Threads_connected'),
                 '%d',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Client connections: {Threads_connected}',
+                Lang::t('widget.tip.client_connections'),
                 null,
             ],
             [
@@ -125,7 +126,7 @@ final class WidgetCatalog
                 new StatusVar('Threads_connected'),
                 '%d / %d',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Connections level vs max_connections',
+                Lang::t('widget.tip.connections_level'),
                 ['max' => 'max_connections'],
             ],
         ];
@@ -199,7 +200,7 @@ final class WidgetCatalog
                 new TableOpenCacheHitRate(),
                 '%.0f%%',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Table open cache hit ratio',
+                Lang::t('widget.tip.table_open_cache'),
                 null,
             ],
             [
@@ -208,7 +209,7 @@ final class WidgetCatalog
                 $statements(),
                 '%s/s',
                 ['r' => 255, 'g' => 215, 'b' => 0],
-                'SQL statement rates: select / insert / update / delete / create / alter / drop',
+                Lang::t('widget.tip.sql_statements'),
                 null,
             ],
             [
@@ -217,7 +218,7 @@ final class WidgetCatalog
                 new RatePerSecond('Com_select'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'SELECT rate',
+                Lang::t('widget.tip.select_rate'),
                 null,
             ],
             [
@@ -226,7 +227,7 @@ final class WidgetCatalog
                 new RatePerSecond('Com_insert'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'INSERT rate',
+                Lang::t('widget.tip.insert_rate'),
                 null,
             ],
             [
@@ -235,7 +236,7 @@ final class WidgetCatalog
                 new RatePerSecond('Com_update'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'UPDATE rate',
+                Lang::t('widget.tip.update_rate'),
                 null,
             ],
             [
@@ -244,7 +245,7 @@ final class WidgetCatalog
                 new RatePerSecond('Com_delete'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'DELETE rate',
+                Lang::t('widget.tip.delete_rate'),
                 null,
             ],
             [
@@ -253,7 +254,7 @@ final class WidgetCatalog
                 (new MakeTuple(','))->addRateSum('create', ...$createKeys),
                 '%s/s',
                 ['r' => 155, 'g' => 89, 'b' => 182],
-                'CREATE command rate (all Com_create_* verbs)',
+                Lang::t('widget.tip.create_rate'),
                 null,
             ],
             [
@@ -262,7 +263,7 @@ final class WidgetCatalog
                 (new MakeTuple(','))->addRateSum('alter', ...$alterKeys),
                 '%s/s',
                 ['r' => 155, 'g' => 89, 'b' => 182],
-                'ALTER command rate (all Com_alter_* verbs)',
+                Lang::t('widget.tip.alter_rate'),
                 null,
             ],
             [
@@ -271,7 +272,7 @@ final class WidgetCatalog
                 (new MakeTuple(','))->addRateSum('drop', ...$dropKeys),
                 '%s/s',
                 ['r' => 155, 'g' => 89, 'b' => 182],
-                'DROP command rate (all Com_drop_* verbs)',
+                Lang::t('widget.tip.drop_rate'),
                 null,
             ],
         ];
@@ -297,7 +298,7 @@ final class WidgetCatalog
                 new InnoDBBufferPoolUsageBytes(),
                 '%.0f%%',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'InnoDB buffer pool usage percentage (bytes-based)',
+                Lang::t('widget.tip.buffer_pool_usage'),
                 null,
             ],
             [
@@ -306,7 +307,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_buffer_pool_read_requests'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'InnoDB buffer pool read requests per second',
+                Lang::t('widget.tip.buffer_pool_read_reqs'),
                 null,
             ],
             [
@@ -315,7 +316,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_buffer_pool_write_requests'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB buffer pool write requests per second',
+                Lang::t('widget.tip.buffer_pool_write_reqs'),
                 null,
             ],
             [
@@ -324,7 +325,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_buffer_pool_reads'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB buffer pool reads from disk per second',
+                Lang::t('widget.tip.disk_reads_not_from_pool'),
                 null,
             ],
             [
@@ -333,7 +334,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_data_written'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB data bytes written to disk per second',
+                Lang::t('widget.tip.innodb_disk_writes'),
                 null,
             ],
             [
@@ -355,7 +356,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_data_writes'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB data file write requests per second',
+                Lang::t('widget.tip.disk_write_requests'),
                 null,
             ],
             [
@@ -364,7 +365,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_data_read'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'InnoDB data bytes read from disk per second',
+                Lang::t('widget.tip.innodb_disk_reads'),
                 null,
             ],
             [
@@ -382,7 +383,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_row_lock_waits'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB row lock waits per second',
+                Lang::t('widget.tip.row_lock_waits'),
                 null,
             ],
             [
@@ -391,7 +392,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_row_lock_time'),
                 '%s ms/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB row lock time per second (milliseconds)',
+                Lang::t('widget.tip.row_lock_time'),
                 null,
             ],
             [
@@ -400,7 +401,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_pages_flushed'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB pages flushed per second',
+                Lang::t('widget.tip.pages_flushed'),
                 null,
             ],
             [
@@ -409,7 +410,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_pages_created'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'InnoDB pages created per second',
+                Lang::t('widget.tip.pages_created'),
                 null,
             ],
             [
@@ -418,7 +419,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_pages_read'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'InnoDB pages read per second',
+                Lang::t('widget.tip.pages_read'),
                 null,
             ],
             [
@@ -427,7 +428,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_ibuf_size'),
                 '%s',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'InnoDB insert buffer size (pages)',
+                Lang::t('widget.tip.insert_buffer'),
                 null,
             ],
             [
@@ -436,7 +437,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_buffer_pool_read_ahead'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'InnoDB buffer pool read-ahead per second',
+                Lang::t('widget.tip.read_ahead'),
                 null,
             ],
             [
@@ -445,7 +446,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_os_log_written'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB redo log bytes written per second',
+                Lang::t('widget.tip.redo_log_bytes_written'),
                 null,
             ],
             [
@@ -454,7 +455,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_log_writes'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB redo log writes per second',
+                Lang::t('widget.tip.redo_log_writes'),
                 null,
             ],
             [
@@ -463,7 +464,7 @@ final class WidgetCatalog
                 new RatePerSecond('Innodb_dblwr_writes'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB doublewrite writes per second',
+                Lang::t('widget.tip.doublewrite_writes'),
                 null,
             ],
         ];

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * PostgreSQL implementation of DatabaseInterface using PDO.
  *
@@ -38,7 +40,7 @@ final class PostgresDatabase implements DatabaseInterface
     {
         if ($config->driver !== 'pgsql') {
             throw new \InvalidArgumentException(
-                'Cannot connect to non-PostgreSQL driver using PostgreSQL connector',
+                Lang::t('db.err_pg_driver'),
             );
         }
 
@@ -158,7 +160,7 @@ final class PostgresDatabase implements DatabaseInterface
     public function quote(string $value): string
     {
         if ($this->pdo === null) {
-            throw new \RuntimeException('Cannot quote without connection');
+            throw new \RuntimeException(Lang::t('db.err_quote_no_connection'));
         }
 
         return $this->pdo->quote($value);

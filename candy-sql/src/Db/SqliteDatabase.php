@@ -138,7 +138,7 @@ final class SqliteDatabase implements DatabaseInterface
     public function quote(string $value): string
     {
         if ($this->pdo === null) {
-            throw new \RuntimeException('Cannot quote without connection');
+            throw new \RuntimeException(Lang::t('db.err_quote_no_connection'));
         }
 
         return $this->pdo->quote($value);

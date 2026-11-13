@@ -1,0 +1,336 @@
+{
+    "Admin/AdminQueryCache.php": {
+        "reason": "Programmer-error LogicException naming an internal API contract; unreachable from user input.",
+        "dated": "2026-11-13",
+        "literals": {
+            "AdminQueryCache::store() takes row-lists keyed by SQL text; a flattened name=>value map belongs in storeStatusSnapshot()/storeServerSnapshot().": 1
+        }
+    },
+    "Admin/Calc/HostLoadMode.php": {
+        "reason": "Machine-readable enum backing values, not prose.",
+        "dated": "2026-11-13",
+        "literals": {
+            "host-proc": 1,
+            "busy-proxy": 1
+        }
+    },
+    "Admin/Connections/ConnectionActions.php": {
+        "reason": "Substrings matched against server error text, not authored copy.",
+        "dated": "2026-11-13",
+        "literals": {
+            "lost connection": 1,
+            "connection refused": 1,
+            "unknown thread": 1
+        }
+    },
+    "Admin/Connections/ConnectionsPage.php": {
+        "reason": "Programmer-error LogicException (provider wiring contract); unreachable from user input.",
+        "dated": "2026-11-13",
+        "literals": {
+            "ConnectionsPage rendered before its processlist provider was wired.": 1
+        }
+    },
+    "Admin/Connections/ProcesslistProvider.php": {
+        "reason": "Substrings matched against server error text, not authored copy.",
+        "dated": "2026-11-13",
+        "literals": {
+            "lost connection": 1,
+            "connection refused": 1
+        }
+    },
+    "Admin/Dashboard/DashboardPage.php": {
+        "reason": "Caption/\"caption:kind\" strings are identity lookups into the counter-cell map and the panel match, never drawn as written (drawn text uses Widget::title()).",
+        "dated": "2026-11-13",
+        "literals": {
+            "Bytes In": 1,
+            "Bytes In:counter": 1,
+            "Bytes Out": 1,
+            "Bytes Out:counter": 1,
+            "SQL Statements": 1,
+            "InnoDB Disk Writes": 1,
+            "InnoDB Disk Reads": 1,
+            "InnoDB Disk Reads:counter": 1,
+            "Buffer Pool Usage": 1,
+            "InnoDB Disk Writes:counter": 2,
+            "Disk Write Requests:counter": 2,
+            "Redo Log Bytes Written:counter": 2,
+            "Buffer Pool Read Reqs": 1,
+            "Buffer Pool Write Reqs": 1,
+            "Disk Reads (not from pool)": 1
+        }
+    },
+    "Admin/Dashboard/PostgresWidgetCatalog.php": {
+        "reason": "Widget captions are English identity tokens; display goes through Widget::title() -> Lang::caption().",
+        "dated": "2026-11-13",
+        "literals": {
+            "Tuples Fetched": 2,
+            "Tuples Returned": 2,
+            "Blocks Read": 2,
+            "Blocks Hit": 2,
+            "Shared Buffers": 1,
+            "Cache Hit Rate": 1,
+            "Temp Files": 1,
+            "Temp Bytes": 1
+        }
+    },
+    "Admin/Dashboard/WidgetCatalog.php": {
+        "reason": "Widget captions are English identity tokens (counter ids, series keys and panel compositions match on them); display goes through Widget::title() -> Lang::caption() with caption.* keys in all 16 locales.",
+        "dated": "2026-11-13",
+        "literals": {
+            "Bytes In": 2,
+            "Bytes Out": 2,
+            "Table Open Cache": 1,
+            "SQL Statements": 1,
+            "Buffer Pool Usage": 1,
+            "Buffer Pool Read Reqs": 1,
+            "Buffer Pool Write Reqs": 1,
+            "Disk Reads (not from pool)": 1,
+            "InnoDB Disk Writes": 2,
+            "Disk Write Requests": 1,
+            "InnoDB Disk Reads": 2,
+            "Row Lock Waits": 1,
+            "Row Lock Time": 1,
+            "Pages Flushed": 1,
+            "Pages Created": 1,
+            "Pages Read": 1,
+            "Read Ahead": 1,
+            "Redo Log Bytes Written": 1,
+            "Redo Log Writes": 1,
+            "Doublewrite Writes": 1
+        }
+    },
+    "Admin/History/HistoryRecorder.php": {
+        "reason": "Internal job-kind tag, not shown.",
+        "dated": "2026-11-13",
+        "literals": {
+            "history-record": 1
+        }
+    },
+    "Admin/PerfSchema/ChangeTracker.php": {
+        "reason": "Dev-only LogicException for an impossible item class (SQL-P18 adminpages-040); never user-reachable.",
+        "dated": "2026-11-13",
+        "literals": {
+            "Unknown item type: ": 1
+        }
+    },
+    "Admin/PerfSchema/EasySetup.php": {
+        "reason": "SQL fragment.",
+        "dated": "2026-11-13",
+        "literals": {
+            "`NAME` NOT LIKE '%s'": 1
+        }
+    },
+    "Admin/PerfSchema/EasySetupDetector.php": {
+        "reason": "SQL fragment.",
+        "dated": "2026-11-13",
+        "literals": {
+            "), `ENABLED` != 'YES', 0)) AS default_disabled,\n                SUM(IF(NOT (": 1,
+            "), `ENABLED` = 'YES', 0)) AS non_default_enabled\n            FROM `performance_schema`.`setup_consumers`\n": 1
+        }
+    },
+    "Admin/PerfSchema/InstrumentTree.php": {
+        "reason": "Debug dump() output for developers, not a user surface.",
+        "dated": "2026-11-13",
+        "literals": {
+            "no instrument": 1
+        }
+    },
+    "Admin/PostgresServerContext.php": {
+        "reason": "Version string whose \"PostgreSQL ...\" shape is parsed by Flavor/ServerVersion; a contract, not prose.",
+        "dated": "2026-11-13",
+        "literals": {
+            "PostgreSQL unknown": 1
+        }
+    },
+    "Admin/ReactPostgresConnection.php": {
+        "reason": "libpq sslmode spellings (protocol tokens).",
+        "dated": "2026-11-13",
+        "literals": {
+            "verify-ca": 1,
+            "verify-full": 1
+        }
+    },
+    "Admin/Reports/Catalog.php": {
+        "reason": "Programmer-error LogicException (load() ordering contract); unreachable from user input.",
+        "dated": "2026-11-13",
+        "literals": {
+            "Catalog has not been loaded. Call load() first.": 1
+        }
+    },
+    "Admin/Resilience/ReconnectManager.php": {
+        "reason": "Substrings matched against the MySQL server/driver error text; the server speaks English, so these must stay verbatim.",
+        "dated": "2026-11-13",
+        "literals": {
+            "Can\\'t connect to local MySQL server": 1,
+            "Can\\'t connect to MySQL server": 1,
+            "Lost connection to MySQL server during query": 1
+        }
+    },
+    "Admin/ServerStatus/MetricsColumn.php": {
+        "reason": "StatusGraphCell captions are identity tokens matched in labelForName(); the frame draws Lang::caption($cell->caption).",
+        "dated": "2026-11-13",
+        "literals": {
+            "Key Efficiency": 2,
+            "Selects per Second": 2,
+            "InnoDB Buffer Usage": 2,
+            "InnoDB Reads per Second": 2,
+            "InnoDB Writes per Second": 2
+        }
+    },
+    "Admin/ServerStatus/ReplicaStatusProvider.php": {
+        "reason": "Matches a server-supplied error string, not authored copy.",
+        "dated": "2026-11-13",
+        "literals": {
+            "command denied": 1
+        }
+    },
+    "Admin/Variables/Catalog.php": {
+        "reason": "Programmer-error LogicException (load() ordering contract); unreachable from user input.",
+        "dated": "2026-11-13",
+        "literals": {
+            "Catalog has not been loaded. Call load() first.": 1
+        }
+    },
+    "App.php": {
+        "reason": "Log/subscription tags (QueryLogger kind, tick id), not shown to users.",
+        "dated": "2026-11-13",
+        "literals": {
+            "admin-fetch": 1,
+            "admin drain": 1,
+            "admin fetch": 1
+        }
+    },
+    "App/AppBuilder.php": {
+        "reason": "Programmer-error LogicException (builder misuse); unreachable from user input.",
+        "dated": "2026-11-13",
+        "literals": {
+            "db is required": 1
+        }
+    },
+    "App/ConnectionPicker.php": {
+        "reason": "Product name used as a window title token.",
+        "dated": "2026-11-13",
+        "literals": {
+            "candy-sql": 1
+        }
+    },
+    "App/ExportState.php": {
+        "reason": "Machine field ids of the export/import dialog, not prose.",
+        "dated": "2026-11-13",
+        "literals": {
+            "export-path": 1,
+            "export-overwrite": 1,
+            "import-path": 1,
+            "import-table": 1
+        }
+    },
+    "Db/ConnectionConfig.php": {
+        "reason": "libpq ssl-mode spellings (protocol tokens).",
+        "dated": "2026-11-13",
+        "literals": {
+            "verify-ca": 1,
+            "verify-full": 2,
+            "verify-identity": 1
+        }
+    },
+    "Db/ConnectionFactory.php": {
+        "reason": "CLI/DSN option names (ssl-mode), machine tokens.",
+        "dated": "2026-11-13",
+        "literals": {
+            "ssl-mode": 4
+        }
+    },
+    "Db/ConnectionStore.php": {
+        "reason": "connections.json field names, flags and file paths, machine tokens.",
+        "dated": "2026-11-13",
+        "literals": {
+            "ssl-mode": 2,
+            "pass-env": 6,
+            "/candy-sql/connections.json": 1,
+            "/.config/candy-sql/connections.json": 1,
+            "--ssl-mode=": 1
+        }
+    },
+    "Db/DmlBuilder.php": {
+        "reason": "SQL fragment.",
+        "dated": "2026-11-13",
+        "literals": {
+            " DEFAULT VALUES": 1
+        }
+    },
+    "Db/Export/SqlExporter.php": {
+        "reason": "Header comment emitted INTO the SQL dump file; part of the dump format, not UI copy.",
+        "dated": "2026-11-13",
+        "literals": {
+            "-- SugarCraft Database Dump\\n": 1
+        }
+    },
+    "Db/MysqlDatabase.php": {
+        "reason": "serverVersion() wording is parsed back by Flavor::fromVersionString(); a contract, not prose.",
+        "dated": "2026-11-13",
+        "literals": {
+            "MySQL version unknown": 2,
+            "MySQL version ": 1
+        }
+    },
+    "Db/PostgresDatabase.php": {
+        "reason": "serverVersion() wording is parsed back by Flavor::fromVersionString(); a contract, not prose.",
+        "dated": "2026-11-13",
+        "literals": {
+            "PostgreSQL version unknown": 2
+        }
+    },
+    "Db/SqliteDatabase.php": {
+        "reason": "serverVersion() wording is parsed back by Flavor::fromVersionString(); a contract, not prose.",
+        "dated": "2026-11-13",
+        "literals": {
+            "SQLite version unknown": 1,
+            "SQLite version ": 1
+        }
+    },
+    "Explain/PostgresExplainProvider.php": {
+        "reason": "PostgreSQL EXPLAIN JSON keys (protocol identifiers).",
+        "dated": "2026-11-13",
+        "literals": {
+            "Node Type": 2,
+            "Total Cost": 1,
+            "Plan Rows": 1,
+            "Relation Name": 1,
+            "Actual Rows": 1,
+            "Actual Loops": 1
+        }
+    },
+    "Schema/MysqlSchemaProvider.php": {
+        "reason": "SQL fragment.",
+        "dated": "2026-11-13",
+        "literals": {
+            "rc.update_rule AS on_update, rc.delete_rule AS on_delete ": 1
+        }
+    },
+    "Schema/PostgresSchemaProvider.php": {
+        "reason": "SQL fragment.",
+        "dated": "2026-11-13",
+        "literals": {
+            "con.confrelid::regclass AS foreign_table_name, ": 1,
+            "a.attname AS column_name, ": 1,
+            "fa.attname AS foreign_column_name, ": 1,
+            "CASE con.confupdtype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END AS on_update, ": 1,
+            "CASE con.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END AS on_delete ": 1
+        }
+    },
+    "Terminal/BorderFrame.php": {
+        "reason": "Product name used as a frame title token.",
+        "dated": "2026-11-13",
+        "literals": {
+            "candy-sql": 1
+        }
+    },
+    "Version.php": {
+        "reason": "Build-stamp and composer package identifiers, not prose.",
+        "dated": "2026-11-13",
+        "literals": {
+            "dev-build": 1,
+            "sugarcraft/candy-sql": 2
+        }
+    }
+}

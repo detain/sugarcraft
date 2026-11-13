@@ -7,6 +7,7 @@ namespace SugarCraft\Sql\Admin\Alerts;
 use SugarCraft\Sql\Admin\Connections\ConnectionCounters;
 use SugarCraft\Sql\Admin\Format;
 use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Lang;
 
 /**
  * Stateless alert checker — evaluates metrics against thresholds.
@@ -114,7 +115,7 @@ final class AlertManager
             if ($ratio >= $this->thresholds->connectionCriticalThreshold()) {
                 $alerts['connection_critical'] = Alert::critical(
                     'connection_usage',
-                    'Connection usage critically high',
+                    Lang::t('alert.connection_critical'),
                     $ratio,
                     $this->thresholds->connectionCriticalThreshold(),
                     MetricKind::Ratio,
@@ -122,7 +123,7 @@ final class AlertManager
             } elseif ($ratio >= $this->thresholds->connectionWarningThreshold()) {
                 $alerts['connection_warning'] = Alert::warning(
                     'connection_usage',
-                    'Connection usage elevated',
+                    Lang::t('alert.connection_elevated'),
                     $ratio,
                     $this->thresholds->connectionWarningThreshold(),
                     MetricKind::Ratio,
@@ -137,7 +138,7 @@ final class AlertManager
             if ($abortedRate >= $this->thresholds->abortedRateThreshold()) {
                 $alerts['aborted_rate'] = Alert::warning(
                     'aborted_rate',
-                    'Aborted connection rate elevated',
+                    Lang::t('alert.aborted_elevated'),
                     $abortedRate,
                     $this->thresholds->abortedRateThreshold(),
                     MetricKind::Ratio,
@@ -154,7 +155,7 @@ final class AlertManager
             if ($threadRunningRatio >= $this->thresholds->threadRunningThreshold()) {
                 $alerts['thread_running'] = Alert::warning(
                     'thread_running',
-                    'Thread running count elevated',
+                    Lang::t('alert.thread_elevated'),
                     $threadRunningRatio,
                     $this->thresholds->threadRunningThreshold(),
                     MetricKind::Ratio,
@@ -199,7 +200,7 @@ final class AlertManager
             if ($slowQueryTime > 0 && $slowQueryTime >= $slowQueryThreshold) {
                 $alerts['slow_query'] = Alert::warning(
                     'slow_query',
-                    sprintf('Slow query time set to %.1fs', $slowQueryTime),
+                    Lang::t('alert.slow_query_time', ['seconds' => sprintf('%.1f', $slowQueryTime)]),
                     $slowQueryTime,
                     $slowQueryThreshold,
                     MetricKind::Seconds,
@@ -216,7 +217,7 @@ final class AlertManager
             if ($connectionErrorsTotal >= $errorThreshold) {
                 $alerts['connection_errors'] = Alert::warning(
                     'connection_errors',
-                    sprintf('%s detected', Format::plural($connectionErrorsTotal, 'connection error')),
+                    Lang::t($connectionErrorsTotal === 1 ? 'alert.connection_error_one' : 'alert.connection_error_other', ['count' => $connectionErrorsTotal]),
                     (float) $connectionErrorsTotal,
                     (float) $errorThreshold,
                     MetricKind::Count,
@@ -260,7 +261,7 @@ final class AlertManager
             if ($ms > 0 && $seconds >= $threshold) {
                 $alerts['slow_query'] = Alert::warning(
                     'slow_query',
-                    sprintf('Slow query time set to %.1fs', $seconds),
+                    Lang::t('alert.slow_query_time', ['seconds' => sprintf('%.1f', $seconds)]),
                     $seconds,
                     $threshold,
                     MetricKind::Seconds,
@@ -302,7 +303,7 @@ final class AlertManager
         return new Alert(
             $severity,
             'max_connections',
-            sprintf('Connections at %.1f%% of max (%d/%d)', $ratio * 100, $connected, $max),
+            Lang::t('alert.connections_at', ['pct' => sprintf('%.1f', $ratio * 100), 'connected' => $connected, 'max' => $max]),
             $ratio,
             $this->thresholds->connectionCriticalThreshold(),
             new \DateTimeImmutable(),

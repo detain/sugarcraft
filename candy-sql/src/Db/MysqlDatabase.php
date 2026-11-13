@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * MySQL implementation of DatabaseInterface using PDO.
  *
@@ -36,7 +38,7 @@ final class MysqlDatabase implements DatabaseInterface
     {
         if ($config->driver !== 'mysql') {
             throw new \InvalidArgumentException(
-                "The MySQL connector only accepts the mysql driver (got '{$config->driver}')",
+                Lang::t('db.err_mysql_driver', ['driver' => $config->driver]),
             );
         }
 
@@ -141,7 +143,7 @@ final class MysqlDatabase implements DatabaseInterface
                 \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => true,
             ],
             default => throw new \InvalidArgumentException(
-                'Unknown MySQL ssl-mode: ' . $sslMode,
+                Lang::t('db.err_unknown_mysql_ssl', ['mode' => $sslMode]),
             ),
         };
     }
@@ -164,7 +166,7 @@ final class MysqlDatabase implements DatabaseInterface
             'require', 'required', 'verify_ca', 'verify_identity' => true,
             '', 'allow', 'prefer', 'preferred' => false,
             default => throw new \InvalidArgumentException(
-                'Unknown MySQL ssl-mode: ' . $sslMode,
+                Lang::t('db.err_unknown_mysql_ssl', ['mode' => $sslMode]),
             ),
         };
     }
@@ -273,7 +275,7 @@ final class MysqlDatabase implements DatabaseInterface
                     return null;
                 }
                 throw new ReconnectException(
-                    'Failed to reconnect after connection error: ' . $e->getMessage(),
+                    Lang::t('db.err_reconnect', ['error' => $e->getMessage()]),
                     $e,
                 );
             }
@@ -293,7 +295,7 @@ final class MysqlDatabase implements DatabaseInterface
     public function quote(string $value): string
     {
         if ($this->pdo === null) {
-            throw new \RuntimeException('Cannot quote without connection');
+            throw new \RuntimeException(Lang::t('db.err_quote_no_connection'));
         }
 
         return $this->pdo->quote($value);

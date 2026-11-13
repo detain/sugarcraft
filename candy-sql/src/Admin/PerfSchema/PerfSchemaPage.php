@@ -28,6 +28,7 @@ use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;
 use SugarCraft\Table\Table;
 use SugarCraft\Sql\CellValue;
+use SugarCraft\Sql\Lang;
 
 /**
  * Performance Schema configuration page with tabbed interface.
@@ -119,15 +120,15 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         self::TAB_OPTIONS,
     ];
 
-    /** @var array<string, string> Tab display labels (TAB_* key => label) */
+    /** @var array<string, string> Tab label lang keys (TAB_* key => Lang key) */
     private const TAB_LABELS = [
-        self::TAB_EASY_SETUP => 'Easy Setup',
-        self::TAB_INSTRUMENTS => 'Instruments',
-        self::TAB_CONSUMERS => 'Consumers',
-        self::TAB_ACTORS => 'Actors',
-        self::TAB_OBJECTS => 'Objects',
-        self::TAB_THREADS => 'Threads',
-        self::TAB_OPTIONS => 'Options',
+        self::TAB_EASY_SETUP => 'perf.tab_easy_setup',
+        self::TAB_INSTRUMENTS => 'perf.tab_instruments',
+        self::TAB_CONSUMERS => 'perf.tab_consumers',
+        self::TAB_ACTORS => 'perf.tab_actors',
+        self::TAB_OBJECTS => 'perf.tab_objects',
+        self::TAB_THREADS => 'perf.tab_threads',
+        self::TAB_OPTIONS => 'perf.tab_options',
     ];
 
     private string $activeTab = self::TAB_EASY_SETUP;
@@ -572,12 +573,12 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         try {
             $statements = $planner->commitAll();
         } catch (\Throwable $e) {
-            $this->errorMessage = 'Commit planning failed: ' . $e->getMessage();
+            $this->errorMessage = Lang::t('perf.commit_planning_failed', ['error' => $e->getMessage()]);
             return [$this, null];
         }
 
         if ($statements === []) {
-            return [$this->withClearedCommitPrompt('Nothing to commit'), null];
+            return [$this->withClearedCommitPrompt(Lang::t('perf.nothing_to_commit')), null];
         }
 
         $clone = clone $this;
@@ -628,7 +629,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
                 $guard->run(function () use ($db, $sql, $params): void {
                     $prepared = $db->prepare($sql);
                     if ($prepared === null) {
-                        throw new \PDOException('Failed to prepare statement: ' . $sql);
+                        throw new \PDOException(Lang::t('perf.err_prepare', ['sql' => $sql]));
                     }
                     $prepared->execute($params);
                 });
@@ -637,9 +638,10 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             // Reload data after commit
             $clone = clone $this;
             $clone->pendingCommit = null;
+            $one = count($statements) === 1;
             $clone->actionMessage = $label === 'Commit'
-                ? sprintf('Committed %d statement%s', count($statements), count($statements) === 1 ? '' : 's')
-                : sprintf('%s applied — %d statement%s', $label, count($statements), count($statements) === 1 ? '' : 's');
+                ? Lang::t($one ? 'perf.committed_one' : 'perf.committed_other', ['count' => count($statements)])
+                : Lang::t($one ? 'perf.applied_one' : 'perf.applied_other', ['label' => $label, 'count' => count($statements)]);
             $clone->loadData();
             if ($clone->changeTracker !== null) {
                 $clone->changeTracker->commit();
@@ -649,13 +651,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         } catch (\PDOException | StatementTimeoutException $e) {
             $clone = clone $this;
             $clone->pendingCommit = null;
-            $clone->errorMessage = sprintf(
-                '%s failed at statement %d of %d: %s — earlier statements were applied, server state is partial.',
-                $label,
-                $position,
-                count($statements),
-                $e->getMessage(),
-            );
+            $clone->errorMessage = Lang::t('perf.commit_failed', ['label' => $label, 'position' => $position, 'total' => count($statements), 'error' => $e->getMessage()]);
             // The applied prefix moved server truth: re-arm the arrival gate
             // so the next render shows what actually got through, not the
             // pre-commit snapshot the failed batch was planned from.
@@ -701,7 +697,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
                 static fn (string $sql): array => ['sql' => $sql, 'params' => []],
                 $statements,
             ),
-            'Easy Setup',
+            Lang::t('perf.tab_easy_setup'),
         );
     }
 
@@ -1137,9 +1133,9 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         $code = (string) $e->getCode();
 
         return match ($code) {
-            '1142', '1227' => 'Access denied: missing required privileges',
-            '1146', '42S02' => 'Performance Schema is not enabled',
-            '2002', '2003', '2013', '08000', '08006' => 'Cannot connect to database',
+            '1142', '1227' => Lang::t('perf.err_access_denied'),
+            '1146', '42S02' => Lang::t('perf.err_not_enabled'),
+            '2002', '2003', '2013', '08000', '08006' => Lang::t('perf.err_cannot_connect'),
             default => 'Error: ' . $e->getMessage(),
         };
     }
@@ -1195,13 +1191,13 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
 
     private function renderHeader(): string
     {
-        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Performance Schema');
+        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render(Lang::t('perf.title'));
 
         // NB: the old code built the READ-ONLY marker with a single-quoted
         // escape sequence — i.e. a literal backslash-x string, not a real SGR —
         // so it printed garbage. Routing through Style emits a proper sequence.
         $readOnly = $this->readOnlyMode
-            ? ' ' . Style::new()->foreground(Color::hex('#f38ba8'))->render('[READ ONLY]')
+            ? ' ' . Style::new()->foreground(Color::hex('#f38ba8'))->render(Lang::t('perf.read_only'))
             : '';
 
         return "{$title} | {$this->stateBadge()}{$readOnly}";
@@ -1230,7 +1226,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         // disables the widget's truncation guards (the final one clips on
         // ANSI-inclusive byte length); the 7 labels + '│' dividers come to ~77
         // visible cells, which fits an 80-column terminal like the old bar did.
-        $tabs = Tabs::new(array_values(self::TAB_LABELS), 0)
+        $tabs = Tabs::new(array_map(static fn (string $key): string => Lang::t($key), array_values(self::TAB_LABELS)), 0)
             ->withActive($activeIndex === false ? 0 : $activeIndex)
             ->withDivider('│')
             ->withActiveStyle(Style::new()->bold()->foreground(Color::hex('#fde047')))
@@ -1258,28 +1254,28 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         $muted = Style::new()->foreground(Color::hex('#6b7280'));
 
         $stateLabel = match ($this->setupState) {
-            'fully' => Style::new()->foreground(Color::hex('#a6e3a1'))->render('Fully Enabled'),
-            'default' => Style::new()->foreground(Color::hex('#f9e2af'))->render('Default Setup'),
-            'custom' => Style::new()->foreground(Color::hex('#89b4fa'))->render('Custom Setup'),
-            'disabled' => Style::new()->foreground(Color::hex('#f38ba8'))->render('Disabled'),
-            default => $muted->render('Unknown'),
+            'fully' => Style::new()->foreground(Color::hex('#a6e3a1'))->render(Lang::t('perf.state_fully')),
+            'default' => Style::new()->foreground(Color::hex('#f9e2af'))->render(Lang::t('perf.state_default')),
+            'custom' => Style::new()->foreground(Color::hex('#89b4fa'))->render(Lang::t('perf.state_custom')),
+            'disabled' => Style::new()->foreground(Color::hex('#f38ba8'))->render(Lang::t('perf.state_disabled')),
+            default => $muted->render(Lang::t('perf.state_unknown')),
         };
 
         $lines = [];
-        $lines[] = $this->tabTitle('Easy Setup');
+        $lines[] = $this->tabTitle(Lang::t('perf.tab_easy_setup'));
         $lines[] = Divider::h()->render();
-        $lines[] = sprintf('  Current State: %s', $stateLabel);
+        $lines[] = '  ' . Lang::t('perf.current_state', ['state' => $stateLabel]);
         $lines[] = '';
 
         if ($this->readOnlyMode) {
-            $lines[] = $muted->render('  (Read-only mode - no privileges to modify)');
+            $lines[] = $muted->render('  ' . Lang::t('perf.readonly_note'));
         } else {
-            $lines[] = '  Key "[" Enable Full Performance Schema   Key "]" Disable   Key "." Reset to Defaults';
+            $lines[] = '  ' . Lang::t('perf.keys_hint');
         }
 
         $lines[] = '';
-        $lines[] = $muted->render('  Default instruments: stage/%, statement/%, wait/%');
-        $lines[] = $muted->render('  Default consumers: events_statements_history, events_waits_history, etc.');
+        $lines[] = $muted->render('  ' . Lang::t('perf.default_instruments'));
+        $lines[] = $muted->render('  ' . Lang::t('perf.default_consumers'));
 
         return implode("\n", $lines);
     }
@@ -1333,10 +1329,10 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         }
 
         return $this->renderToggleList(
-            'Instruments',
+            Lang::t('perf.tab_instruments'),
             $rows,
-            '(no instruments available)',
-            sprintf('Total: %s', Format::plural(count($this->instruments), 'instrument')),
+            Lang::t('perf.none_instruments'),
+            Lang::t(count($this->instruments) === 1 ? 'perf.total_instruments_one' : 'perf.total_instruments_other', ['count' => count($this->instruments)]),
             $start,
         );
     }
@@ -1349,10 +1345,10 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         }
 
         return $this->renderToggleList(
-            'Consumers',
+            Lang::t('perf.tab_consumers'),
             $rows,
-            '(no consumers available)',
-            sprintf('Total: %s', Format::plural(count($this->consumers), 'consumer')),
+            Lang::t('perf.none_consumers'),
+            Lang::t(count($this->consumers) === 1 ? 'perf.total_consumers_one' : 'perf.total_consumers_other', ['count' => count($this->consumers)]),
         );
     }
 
@@ -1365,10 +1361,10 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         }
 
         return $this->renderToggleList(
-            'Actors',
+            Lang::t('perf.tab_actors'),
             $rows,
-            '(no actors configured)',
-            sprintf('Total: %s', Format::plural(count($this->actors), 'actor')),
+            Lang::t('perf.none_actors'),
+            Lang::t(count($this->actors) === 1 ? 'perf.total_actors_one' : 'perf.total_actors_other', ['count' => count($this->actors)]),
         );
     }
 
@@ -1381,10 +1377,10 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         }
 
         return $this->renderToggleList(
-            'Objects',
+            Lang::t('perf.tab_objects'),
             $rows,
-            '(no object rules configured)',
-            sprintf('Total: %s', Format::plural(count($this->objects), 'object rule')),
+            Lang::t('perf.none_objects'),
+            Lang::t(count($this->objects) === 1 ? 'perf.total_objects_one' : 'perf.total_objects_other', ['count' => count($this->objects)]),
         );
     }
 
@@ -1392,19 +1388,19 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     {
         if ($this->threads === []) {
             return implode("\n", [
-                $this->tabTitle('Threads'),
+                $this->tabTitle(Lang::t('perf.tab_threads')),
                 Divider::h()->render(),
-                Style::new()->faint()->render('  (no threads available)'),
+                Style::new()->faint()->render('  ' . Lang::t('perf.none_threads')),
             ]);
         }
 
         // sugar-table draws the column header + selectable highlight; the query
         // already caps at 100 rows, so no hand-rolled "… and N more" needed.
         $columns = [
-            Column::new('id', 'Thread ID', 10)->withAlignLeft(true),
-            Column::new('name', 'Name', 30)->withAlignLeft(true),
-            Column::new('type', 'Type', 12)->withAlignLeft(true),
-            Column::new('user', 'User', 12)->withAlignLeft(true),
+            Column::new('id', Lang::t('perf.col_thread_id'), 10)->withAlignLeft(true),
+            Column::new('name', Lang::t('perf.col_name'), 30)->withAlignLeft(true),
+            Column::new('type', Lang::t('perf.col_type'), 12)->withAlignLeft(true),
+            Column::new('user', Lang::t('perf.col_user'), 12)->withAlignLeft(true),
         ];
 
         $rows = [];
@@ -1425,11 +1421,11 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             ->View();
 
         return implode("\n", [
-            $this->tabTitle('Threads'),
+            $this->tabTitle(Lang::t('perf.tab_threads')),
             Divider::h()->render(),
             $table,
             '',
-            Style::new()->foreground(Color::hex('#6b7280'))->render(sprintf('Total: %s', Format::plural(count($this->threads), 'thread'))),
+            Style::new()->foreground(Color::hex('#6b7280'))->render(Lang::t(count($this->threads) === 1 ? 'perf.total_threads_one' : 'perf.total_threads_other', ['count' => count($this->threads)])),
         ]);
     }
 
@@ -1437,16 +1433,16 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     {
         if ($this->timers === []) {
             return implode("\n", [
-                $this->tabTitle('Timer Options'),
+                $this->tabTitle(Lang::t('perf.timer_options')),
                 Divider::h()->render(),
-                Style::new()->faint()->render('  (no timers available - read-only)'),
+                Style::new()->faint()->render('  ' . Lang::t('perf.none_timers')),
             ]);
         }
 
         $columns = [
-            Column::new('name', 'Timer Name', 14)->withAlignLeft(true),
-            Column::new('impl', 'Implementation', 22)->withAlignLeft(true),
-            Column::new('scale', 'Scale Factor', 14),
+            Column::new('name', Lang::t('perf.col_timer_name'), 14)->withAlignLeft(true),
+            Column::new('impl', Lang::t('perf.col_implementation'), 22)->withAlignLeft(true),
+            Column::new('scale', Lang::t('perf.col_scale_factor'), 14),
         ];
 
         $rows = [];
@@ -1467,11 +1463,11 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         $table = Table::fromColumns($columns)->withRows($rows)->withShowFooter(false)->View();
 
         return implode("\n", [
-            $this->tabTitle('Timer Options'),
+            $this->tabTitle(Lang::t('perf.timer_options')),
             Divider::h()->render(),
             $table,
             '',
-            Style::new()->foreground(Color::hex('#6b7280'))->render('Timer configuration is read-only (determined by server build)'),
+            Style::new()->foreground(Color::hex('#6b7280'))->render(Lang::t('perf.timer_readonly_note')),
         ]);
     }
 
@@ -1540,9 +1536,9 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
 
     private function renderFooter(): string
     {
-        $navHint = '[j/k] nav  [Space] toggle';
-        $actionHint = $this->isDirty() ? '  [c] stage commit ([y] to fire)  [r] revert' : '';
-        $quitHint = '  [q] back';
+        $navHint = Lang::t('perf.footer_nav');
+        $actionHint = $this->isDirty() ? Lang::t('perf.footer_actions') : '';
+        $quitHint = Lang::t('perf.footer_back');
         $base = Style::new()->foreground(Color::hex('#6b7280'))->render($navHint . $actionHint . $quitHint);
 
         // These two indicators used single-quoted escape literals before, i.e.
@@ -1550,11 +1546,11 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         $dirtyCount = $this->countDirty();
         $dirtyIndicator = $dirtyCount > 0
             ? '  ' . Style::new()->foreground(Color::hex('#f9e2af'))
-                ->render(sprintf('Pending: %d change%s', $dirtyCount, $dirtyCount === 1 ? '' : 's'))
+                ->render(Lang::t($dirtyCount === 1 ? 'perf.pending_one' : 'perf.pending_other', ['count' => $dirtyCount]))
             : '';
 
         $readOnlyIndicator = $this->readOnlyMode
-            ? '  ' . Style::new()->foreground(Color::hex('#f38ba8'))->render('[READ ONLY]')
+            ? '  ' . Style::new()->foreground(Color::hex('#f38ba8'))->render(Lang::t('perf.read_only'))
             : '';
 
         return $base . $dirtyIndicator . $readOnlyIndicator;

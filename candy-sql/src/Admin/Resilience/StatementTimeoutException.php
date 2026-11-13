@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Resilience;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Thrown when a statement exceeds its wall-clock timeout.
  *
@@ -14,10 +16,10 @@ namespace SugarCraft\Sql\Admin\Resilience;
 final class StatementTimeoutException extends \RuntimeException
 {
     public function __construct(
-        string $message = 'Statement execution timed out',
+        ?string $message = null,
         int $code = 0,
         ?\Throwable $previous = null,
     ) {
-        parent::__construct($message, $code, $previous);
+        parent::__construct($message ?? Lang::t('resilience.statement_timeout_default'), $code, $previous);
     }
 }

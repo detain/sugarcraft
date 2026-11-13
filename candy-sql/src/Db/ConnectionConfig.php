@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Readonly value object representing database connection configuration.
  *
@@ -67,7 +69,7 @@ final readonly class ConnectionConfig
         // worth dialing.
         if (str_contains($host, ';') || str_contains($dbname, ';')) {
             throw new \InvalidArgumentException(
-                'Database host and name must not contain \';\' — it is the PDO DSN option separator',
+                Lang::t('db.err_dsn_semicolon'),
             );
         }
 
@@ -120,7 +122,7 @@ final readonly class ConnectionConfig
             'verify-ca',
             'verify-full', 'verify-identity' => 'verify-full',
             default => throw new \InvalidArgumentException(
-                'Unknown PostgreSQL ssl-mode: ' . $sslMode,
+                Lang::t('db.err_unknown_pg_ssl', ['mode' => $sslMode]),
             ),
         };
 

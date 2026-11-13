@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Builds the single-row writes behind the Rows pane's cell editor (SQL-O03).
  *
@@ -33,8 +35,8 @@ final class DmlBuilder
      */
     public function update(string $table, array $key, string $column, ?string $value): DmlStatement
     {
-        $this->nonEmpty($table, 'table');
-        $this->nonEmpty($column, 'column');
+        $this->nonEmpty($table, 'dml.err_empty_table');
+        $this->nonEmpty($column, 'dml.err_empty_column');
         [$where, $whereParams, $whereDisplay] = $this->where($key);
 
         return new DmlStatement(
@@ -54,7 +56,7 @@ final class DmlBuilder
      */
     public function insert(string $table, array $values): DmlStatement
     {
-        $this->nonEmpty($table, 'table');
+        $this->nonEmpty($table, 'dml.err_empty_table');
         if ($values === []) {
             $sql = $this->flavor === Flavor::MySQL || $this->flavor === Flavor::MariaDB || $this->flavor === Flavor::Percona
                 ? 'INSERT INTO ' . $this->q($table) . ' () VALUES ()'
@@ -68,7 +70,7 @@ final class DmlBuilder
         $params = [];
         $lits = [];
         foreach ($values as $col => $val) {
-            $this->nonEmpty((string) $col, 'column');
+            $this->nonEmpty((string) $col, 'dml.err_empty_column');
             $cols[] = $this->q((string) $col);
             $marks[] = '?';
             $params[] = $val;
@@ -91,7 +93,7 @@ final class DmlBuilder
      */
     public function delete(string $table, array $key): DmlStatement
     {
-        $this->nonEmpty($table, 'table');
+        $this->nonEmpty($table, 'dml.err_empty_table');
         [$where, $whereParams, $whereDisplay] = $this->where($key);
 
         return new DmlStatement(
@@ -109,15 +111,15 @@ final class DmlBuilder
     private function where(array $key): array
     {
         if ($key === []) {
-            throw new \InvalidArgumentException('a row key is required: refusing a statement that could touch more than one row');
+            throw new \InvalidArgumentException(Lang::t('dml.err_key_required'));
         }
         $sql = [];
         $display = [];
         $params = [];
         foreach ($key as $col => $val) {
-            $this->nonEmpty((string) $col, 'key column');
+            $this->nonEmpty((string) $col, 'dml.err_empty_key_column');
             if ($val === null) {
-                throw new \InvalidArgumentException('key column ' . $col . ' is NULL: the row cannot be addressed');
+                throw new \InvalidArgumentException(Lang::t('dml.err_key_null', ['column' => $col]));
             }
             $val = is_bool($val) ? (int) $val : (is_scalar($val) ? $val : (string) json_encode($val));
             $sql[] = $this->q((string) $col) . ' = ?';
@@ -142,10 +144,10 @@ final class DmlBuilder
         };
     }
 
-    private function nonEmpty(string $v, string $what): void
+    private function nonEmpty(string $v, string $messageKey): void
     {
         if ($v === '') {
-            throw new \InvalidArgumentException($what . ' name must not be empty');
+            throw new \InvalidArgumentException(Lang::t($messageKey));
         }
     }
 }

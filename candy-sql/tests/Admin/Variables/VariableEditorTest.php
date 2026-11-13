@@ -219,7 +219,8 @@ final class VariableEditorTest extends TestCase
         $source = file_get_contents(__DIR__ . '/../../../src/Admin/Variables/VariableEditor.php');
         $this->assertNotFalse($source);
         $this->assertSame(0, substr_count($source, "'errorMessage' => 'Prepare failed'"));
-        $this->assertStringContainsString('Could not prepare the statement on this connection', $source);
+        $this->assertStringContainsString("Lang::t('variables.err_prepare')", $source);
+        $this->assertSame('Could not prepare the statement on this connection', \SugarCraft\Sql\Lang::t('variables.err_prepare'));
     }
 
     public function testEditReturnsErrorResultOnPDOException(): void

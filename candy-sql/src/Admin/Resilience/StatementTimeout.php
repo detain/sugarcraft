@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Resilience;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Enforces a wall-clock timeout on synchronous DB work.
  *
@@ -99,7 +101,7 @@ final class StatementTimeout
         $handler = function (int $signo): void {
             if ($signo === SIGALRM) {
                 throw new StatementTimeoutException(
-                    'Statement execution timed out after ' . $this->timeoutSeconds . ' s',
+                    Lang::t('resilience.statement_timeout_after', ['seconds' => $this->timeoutSeconds]),
                 );
             }
         };

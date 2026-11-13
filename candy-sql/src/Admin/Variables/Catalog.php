@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Variables;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Catalog loader for MySQL variable metadata.
  *
@@ -46,14 +48,14 @@ final class Catalog
 
         if (!is_readable($filePath)) {
             throw new \RuntimeException(
-                "Variable metadata file not found: " . htmlspecialchars($filePath, ENT_QUOTES, 'UTF-8')
+                Lang::t('variables.err_meta_missing', ['path' => htmlspecialchars($filePath, ENT_QUOTES, 'UTF-8')])
             );
         }
 
         $json = file_get_contents($filePath);
         if ($json === false) {
             throw new \RuntimeException(
-                "Failed to read variable metadata file: " . htmlspecialchars($filePath, ENT_QUOTES, 'UTF-8')
+                Lang::t('variables.err_meta_read', ['path' => htmlspecialchars($filePath, ENT_QUOTES, 'UTF-8')])
             );
         }
 

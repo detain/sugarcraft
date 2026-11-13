@@ -8,6 +8,7 @@ use SugarCraft\Sql\Admin\Calc\CacheHitRate;
 use SugarCraft\Sql\Admin\Calc\RatePerSecond;
 use SugarCraft\Sql\Admin\Calc\StatusVar;
 use SugarCraft\Sql\Admin\Calc\MakeTuple;
+use SugarCraft\Sql\Lang;
 
 /**
  * PostgreSQL widget catalog for the Performance Dashboard.
@@ -49,7 +50,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_fetched'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'Rows fetched from DB: {tup_fetched} total',
+                Lang::t('widget.tip.tuples_fetched_total'),
                 null,
             ],
             [
@@ -58,7 +59,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_fetched'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'Row fetch rate',
+                Lang::t('widget.tip.tuples_fetched_rate'),
                 null,
             ],
             [
@@ -67,7 +68,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_returned'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Rows returned to client: {tup_returned} total',
+                Lang::t('widget.tip.tuples_returned_total'),
                 null,
             ],
             [
@@ -76,7 +77,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_returned'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Row return rate',
+                Lang::t('widget.tip.tuples_returned_rate'),
                 null,
             ],
             [
@@ -85,7 +86,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.blks_read'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'Disk blocks read: {blks_read} total',
+                Lang::t('widget.tip.blocks_read_total'),
                 null,
             ],
             [
@@ -103,7 +104,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.blks_hit'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Buffer cache hits: {blks_hit} total',
+                Lang::t('widget.tip.blocks_hit_total'),
                 null,
             ],
             [
@@ -121,7 +122,7 @@ final class PostgresWidgetCatalog
                 new StatusVar('pg_stat_database.numbackends'),
                 '%d',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Active backends: {numbackends}',
+                Lang::t('widget.tip.active_backends'),
                 null,
             ],
             [
@@ -130,7 +131,7 @@ final class PostgresWidgetCatalog
                 new StatusVar('pg_stat_database.numbackends'),
                 '%d / %d',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Connections level vs max_connections',
+                Lang::t('widget.tip.connections_level'),
                 ['max' => 'max_connections'],
             ],
         ];
@@ -154,7 +155,7 @@ final class PostgresWidgetCatalog
                     ->addRate('pg_stat_database.xact_rollback'),
                 '%s/s',
                 ['r' => 255, 'g' => 215, 'b' => 0],
-                'Transaction rates: commits / rollbacks',
+                Lang::t('widget.tip.transaction_rates'),
                 null,
             ],
             [
@@ -163,7 +164,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.xact_commit'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'Transaction commit rate',
+                Lang::t('widget.tip.commit_rate'),
                 null,
             ],
             [
@@ -172,7 +173,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.xact_rollback'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Transaction rollback rate',
+                Lang::t('widget.tip.rollback_rate'),
                 null,
             ],
             [
@@ -181,7 +182,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_inserted'),
                 '%s/s',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Tuple insert rate',
+                Lang::t('widget.tip.tuple_insert_rate'),
                 null,
             ],
             [
@@ -190,7 +191,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_updated'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Tuple update rate',
+                Lang::t('widget.tip.tuple_update_rate'),
                 null,
             ],
             [
@@ -199,7 +200,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_deleted'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Tuple delete rate',
+                Lang::t('widget.tip.tuple_delete_rate'),
                 null,
             ],
             [
@@ -208,7 +209,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.deadlocks'),
                 '%s/s',
                 ['r' => 238, 'g' => 75, 'b' => 130],
-                'Deadlock rate',
+                Lang::t('widget.tip.deadlock_rate'),
                 null,
             ],
         ];
@@ -231,7 +232,7 @@ final class PostgresWidgetCatalog
                 new StatusVar('pg_settings.shared_buffers'),
                 '%.0f B',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'PostgreSQL shared_buffers configuration (buffer pool size)',
+                Lang::t('widget.tip.shared_buffers'),
                 null,
             ],
             [
@@ -240,7 +241,7 @@ final class PostgresWidgetCatalog
                 new CacheHitRate('pg_stat_database.blks_hit', 'pg_stat_database.blks_read'),
                 '%.1f%%',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Buffer cache hit ratio: blks_hit / (blks_hit + blks_read)',
+                Lang::t('widget.tip.cache_hit_rate'),
                 null,
             ],
             [
@@ -249,7 +250,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.temp_files'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Temp file creation rate',
+                Lang::t('widget.tip.temp_files'),
                 null,
             ],
             [
@@ -258,7 +259,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.temp_bytes'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Bytes written to temp files per second',
+                Lang::t('widget.tip.temp_bytes'),
                 null,
             ],
         ];

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * On-disk registry of named connections (SQL-O02, candy-sql-once-002).
  *
@@ -92,7 +94,7 @@ final class ConnectionStore
         $raw = file_get_contents($this->path);
         if ($raw === false) {
             throw new \RuntimeException(
-                "Cannot read the connections file: {$this->path} (delete it or fix its permissions to recover)",
+                Lang::t('store.err_read', ['path' => $this->path]),
             );
         }
 
@@ -100,18 +102,18 @@ final class ConnectionStore
             $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
             throw new \RuntimeException(
-                "The connections file is not valid JSON ({$e->getMessage()}): {$this->path}",
+                Lang::t('store.err_json', ['error' => $e->getMessage(), 'path' => $this->path]),
             );
         }
 
         if (!is_array($decoded) || !array_key_exists('connections', $decoded)) {
             throw new \RuntimeException(
-                "The connections file must be a JSON object with a \"connections\" map: {$this->path}",
+                Lang::t('store.err_shape', ['path' => $this->path]),
             );
         }
         if (!is_array($decoded['connections'])) {
             throw new \RuntimeException(
-                "The \"connections\" value must be a JSON object of name -> settings: {$this->path}",
+                Lang::t('store.err_connections_type', ['path' => $this->path]),
             );
         }
 
@@ -146,8 +148,7 @@ final class ConnectionStore
         if (!isset($entries[$name])) {
             $saved = array_keys($entries);
             throw new \RuntimeException(
-                "Unknown connection '{$name}' — saved connections: "
-                . ($saved === [] ? '(none)' : implode(', ', $saved)),
+                Lang::t('store.err_unknown', ['name' => $name, 'saved' => $saved === [] ? Lang::t('store.none') : implode(', ', $saved)]),
             );
         }
         $entry = $entries[$name];
@@ -163,7 +164,7 @@ final class ConnectionStore
             $secret = getenv($entry['pass-env']);
             if (!is_string($secret) || $secret === '') {
                 throw new \RuntimeException(
-                    "Connection '{$name}' reads its password from \${$entry['pass-env']} — export it before dialing",
+                    Lang::t('store.err_pass_env_unset', ['name' => $name, 'var' => $entry['pass-env']]),
                 );
             }
             $args[] = '--pass=' . $secret;
@@ -190,7 +191,7 @@ final class ConnectionStore
 
         $dir = dirname($this->path);
         if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
-            throw new \RuntimeException("Cannot create the connections directory: {$dir}");
+            throw new \RuntimeException(Lang::t('store.err_mkdir', ['dir' => $dir]));
         }
         self::forcePrivateMode($dir);
 
@@ -201,11 +202,11 @@ final class ConnectionStore
         $temp = $this->path . '.tmp';
         if (file_put_contents($temp, $json . "\n") === false || !chmod($temp, 0600)) {
             @unlink($temp);
-            throw new \RuntimeException("Cannot write the connections file: {$this->path}");
+            throw new \RuntimeException(Lang::t('store.err_write', ['path' => $this->path]));
         }
         if (!rename($temp, $this->path)) {
             @unlink($temp);
-            throw new \RuntimeException("Cannot replace the connections file: {$this->path}");
+            throw new \RuntimeException(Lang::t('store.err_replace', ['path' => $this->path]));
         }
     }
 
@@ -215,12 +216,11 @@ final class ConnectionStore
     private static function validateEntry(string $name, mixed $fields): array
     {
         if (!is_array($fields)) {
-            throw new \RuntimeException("Connection '{$name}' must map to a JSON object of settings");
+            throw new \RuntimeException(Lang::t('store.err_entry_type', ['name' => $name]));
         }
         if (array_key_exists('pass', $fields)) {
             throw new \RuntimeException(
-                "Connection '{$name}' stores a plaintext 'pass' — connections.json never holds"
-                . " secrets: replace it with \"pass-env\": \"VAR_NAME\"",
+                Lang::t('store.err_plaintext_pass', ['name' => $name]),
             );
         }
 
@@ -228,35 +228,33 @@ final class ConnectionStore
         foreach ($fields as $field => $value) {
             if (!in_array((string) $field, self::ALLOWED_FIELDS, true)) {
                 throw new \RuntimeException(
-                    "Connection '{$name}' has an unknown setting '{$field}' — allowed: "
-                    . implode(', ', self::ALLOWED_FIELDS),
+                    Lang::t('store.err_unknown_setting', ['name' => $name, 'field' => $field, 'allowed' => implode(', ', self::ALLOWED_FIELDS)]),
                 );
             }
             if (!is_string($value) && !is_int($value)) {
-                throw new \RuntimeException("Setting '{$field}' of connection '{$name}' must be a string or number");
+                throw new \RuntimeException(Lang::t('store.err_setting_type', ['field' => $field, 'name' => $name]));
             }
             $value = (string) $value;
             if ($value === '') {
-                throw new \RuntimeException("Setting '{$field}' of connection '{$name}' must not be empty");
+                throw new \RuntimeException(Lang::t('store.err_setting_empty', ['field' => $field, 'name' => $name]));
             }
             $clean[(string) $field] = $value;
         }
 
         if (!isset($clean['driver'])) {
-            throw new \RuntimeException("Connection '{$name}' needs a 'driver'");
+            throw new \RuntimeException(Lang::t('store.err_needs_driver', ['name' => $name]));
         }
         if (!in_array($clean['driver'], self::SUPPORTED_DRIVERS, true)) {
             throw new \RuntimeException(
-                "Connection '{$name}' uses an unsupported driver '{$clean['driver']}' — choose one of: "
-                . implode(', ', self::SUPPORTED_DRIVERS),
+                Lang::t('store.err_driver', ['name' => $name, 'driver' => $clean['driver'], 'allowed' => implode(', ', self::SUPPORTED_DRIVERS)]),
             );
         }
         if (isset($clean['port']) && !ctype_digit($clean['port'])) {
-            throw new \RuntimeException("Setting 'port' of connection '{$name}' must be a number");
+            throw new \RuntimeException(Lang::t('store.err_port', ['name' => $name]));
         }
         if (isset($clean['pass-env']) && !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $clean['pass-env'])) {
             throw new \RuntimeException(
-                "Setting 'pass-env' of connection '{$name}' must be an environment variable name",
+                Lang::t('store.err_pass_env', ['name' => $name]),
             );
         }
 
@@ -267,7 +265,7 @@ final class ConnectionStore
     {
         if ($name === '' || !preg_match('/^[A-Za-z0-9._-]{1,64}$/', $name)) {
             throw new \RuntimeException(
-                "Invalid connection name '{$name}' — use letters, digits, dot, dash or underscore (1-64 chars)",
+                Lang::t('store.err_name', ['name' => $name]),
             );
         }
         return $name;
@@ -295,7 +293,7 @@ final class ConnectionStore
         }
         if (!chmod($path, $target)) {
             throw new \RuntimeException(
-                "Cannot secure {$path} (mode " . substr(sprintf('%o', $target), -4) . ')',
+                Lang::t('store.err_secure', ['path' => $path, 'mode' => substr(sprintf('%o', $target), -4)]),
             );
         }
     }
