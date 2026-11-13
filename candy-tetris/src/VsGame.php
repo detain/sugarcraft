@@ -150,7 +150,8 @@ final class VsGame implements Model
             return [$this, null];
         }
 
-        // If game is over, only accept quit
+        // If game is over, accept only quit or restart (the 'r' arm below
+        // mirrors the solo game's post-over restart parity).
         if ($this->over === true) {
             if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
                 return [$this, Cmd::quit()];
@@ -400,7 +401,11 @@ final class VsGame implements Model
             $changes['player'] ?? $this->player,
             $changes['computer'] ?? $this->computer,
             $changes['over'] ?? $this->over,
-            $changes['winner'] ?? $this->winner,
+            // Nullable: presence, not truthiness, decides — a future
+            // ['winner' => null] must be able to CLEAR the recorded winner;
+            // ?? would silently keep the old one (same law as the
+            // colorProfile leg below).
+            array_key_exists('winner', $changes) ? $changes['winner'] : $this->winner,
             $this->computerAI,
             $changes['hasComputerPlan'] ?? $this->hasComputerPlan,
             $changes['computerRotationsLeft'] ?? $this->computerRotationsLeft,
