@@ -37,6 +37,7 @@ use SugarCraft\Top\Panel\PlaceholderPanel;
 use SugarCraft\Top\Theme\ThemeRegistry;
 use SugarCraft\Top\Tests\Support\ClaimingPanel;
 use SugarCraft\Top\Tests\Support\Cmds;
+use SugarCraft\Top\View\FrameBuilder;
 use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\SizeError;
 use SugarCraft\Top\View\Surface;
@@ -299,6 +300,38 @@ final class AppTest extends TestCase
         $this->assertCount(20, $plain);
         $this->assertStringContainsString('Terminal size too small:', $plain[7]);
         $this->assertStringContainsString('Width = 80 Height = 24', $plain[11]);
+    }
+
+    /**
+     * S-N20: a shown-but-non-fitting VM dashboard must never paint half-commissioned
+     * cards or graphs around the size notice. The grid spans the boundary both ways:
+     * a non-fitting roster paints EXACTLY the full-screen notice (the same equality
+     * the plain-btop test pins, so nothing leaks beside it), a fitting one paints
+     * the dashboard box. The survey found no reproducible leak on current disk;
+     * this pin keeps that true.
+     */
+    public function testTheVmsDashboardNeverPaintsAroundTheSizeNotice(): void
+    {
+        $boxes = ['cpu', 'mem', 'net', 'proc', 'vms'];
+        $config = Config::new()->with('shown_boxes', implode(' ', $boxes));
+        [$minW, $minH] = FrameBuilder::minSize($boxes);
+
+        foreach ([[80, 14], [90, 15], [50, 16], [60, 14]] as [$w, $h]) {
+            $this->assertFalse(FrameBuilder::fits($w, $h, $boxes), "{$w}x{$h} must not fit");
+            $app = self::booted($w, $h, $config);
+            $this->assertSame(
+                SizeError::render($w, $h, $minW, $minH),
+                $app->view(),
+                "the notice alone answers at {$w}x{$h}: no dashboard chrome around it",
+            );
+        }
+
+        foreach ([[80, 16], [60, 16], [90, 16], [100, 18]] as [$w, $h]) {
+            $this->assertTrue(FrameBuilder::fits($w, $h, $boxes), "{$w}x{$h} must fit");
+            $plain = implode('|', self::booted($w, $h, $config)->surface()?->plainLines() ?? []);
+            $this->assertStringNotContainsString('too small', $plain, "the frame paints at {$w}x{$h}");
+            $this->assertStringContainsString('vms', $plain, "the dashboard box is laid out at {$w}x{$h}");
+        }
     }
 
     /**
