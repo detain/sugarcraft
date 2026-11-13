@@ -103,6 +103,20 @@ func (m Model) Frame() (tea.Model, tea.Cmd) {
 | Physics lib | None (manual) | SugarSpring Projectile |
 | Collision | `abs(y-rightmost.Y) <= radius` | `row < top || row > bottom` |
 | Bird glyph | `*` | `^` / `v` / `>` (velocity-following pitch) |
+| Bird column | 2 | 8 (`Game::BIRD_COL`) |
+| Playfield rows | 9 | 18 (`Game::HEIGHT`) |
+| Pipe spawn cadence | probabilistic | every `Game::PIPE_EVERY` = 18 ticks |
+
+Three further divergences, each a sane individual choice that had never been
+written down collectively: the bird sits at column 8 rather than flapioca's 2
+— far enough off the left wall that scored pipes do not crowd the border,
+still leaving 51 columns of runway (a pipe entering at the right edge takes
+about 1.7 s to reach the bird at 30 cells/s); the field is twice as tall
+(18 rows vs 9) because SugarSpring's continuous physics wants room for the
+parabola, not per-tick hops; and the spawn cadence is deterministic (one pipe
+every 18 ticks) instead of probabilistic, which is what makes the score
+lattice — every pipe scores at the same interval — and byte-exact golden
+frames both possible.
 
 The 6× scroll pacing is THE core game-feel choice: the same "one column per
 tick" rule simply runs on a 6× faster clock, turning flapioca's patience game
