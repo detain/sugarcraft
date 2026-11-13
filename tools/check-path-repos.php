@@ -281,6 +281,12 @@ if ($noLibPathRepos) {
             exit(2);
         }
         $scanned++;
+        if (\array_key_exists('repositories', $decoded) && !\is_array($decoded['repositories'])) {
+            \fwrite(\STDERR, "check-path-repos: $slug/composer.json declares 'repositories' as "
+                . \get_debug_type($decoded['repositories']) . ", expected a list\n");
+            exit(2);
+        }
+
         foreach ($decoded['repositories'] ?? [] as $repo) {
             if (($repo['type'] ?? '') !== 'path' || !isset($repo['url'])) {
                 continue;
@@ -353,6 +359,16 @@ foreach ($libs as $manifestPath) {
     if (!\is_array($manifest)) {
         $issues[] = "{$slug}: invalid JSON in composer.json";
         continue;
+    }
+    // RT-13 (018): a scalar `repositories` used to survive decode checks
+    // and detonate later as a TypeError inside pass 2 (exit 255, off the
+    // documented 0/1/2 contract), while --unused merely shrugged it off
+    // with an is_array guard. Refuse it HERE, once, naming the manifest
+    // and the key, so every consumer sees a list or the tool stops.
+    if (\array_key_exists('repositories', $manifest) && !\is_array($manifest['repositories'])) {
+        \fwrite(\STDERR, "check-path-repos: $slug/composer.json declares 'repositories' as "
+            . \get_debug_type($manifest['repositories']) . ", expected a list\n");
+        exit(2);
     }
 
     // Collect sugarcraft/* dev-pinned deps from a require block: slug=>constraint.
@@ -497,13 +513,30 @@ if ($unused) {
         return \array_values(\array_filter(\array_keys($psr4), 'is_string'));
     };
 
-    // Recursively collect *.php files under $dir that reference ANY of $prefixes
-    // (literal substring). Returns matching paths so callers can eyeball them.
-    $namespaceHits = static function (string $dir, array $prefixes): array {
-        if ($prefixes === [] || !\is_dir($dir)) {
-            return [];
+    // One walk of $dir answers the reference question for EVERY dep at
+    // once: depSlug => literal PSR-4 needles in, depSlug => referenced? out.
+    // The old namespaceHits() returned hit PATHS that no caller consumed -
+    // all three call sites only asked `!== []` - while re-reading every .php
+    // under $dir once PER DEP of the lib (candy-code alone burned ~384 MB
+    // of file reads per --unused run). Same needles, same answers, one read.
+    //
+    // @param array<string, list<string>> $depPrefixes
+    // @return array<string, bool>
+    $anyNamespaceRefs = static function (string $dir, array $depPrefixes): array {
+        $refs = [];
+        $pending = [];
+
+        foreach ($depPrefixes as $dep => $prefixes) {
+            $refs[$dep] = false;
+            if ($prefixes !== []) {
+                $pending[$dep] = $prefixes;
+            }
         }
-        $hits = [];
+
+        if ($pending === [] || !\is_dir($dir)) {
+            return $refs;
+        }
+
         $it = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
         );
@@ -515,14 +548,21 @@ if ($unused) {
             if ($contents === false) {
                 continue;
             }
-            foreach ($prefixes as $prefix) {
-                if (\str_contains($contents, $prefix)) {
-                    $hits[] = $file->getPathname();
-                    break;
+            foreach ($pending as $dep => $prefixes) {
+                foreach ($prefixes as $prefix) {
+                    if (\str_contains($contents, $prefix)) {
+                        $refs[$dep] = true;
+                        unset($pending[$dep]);
+                        break;
+                    }
                 }
             }
+            if ($pending === []) {
+                break;
+            }
         }
-        return $hits;
+
+        return $refs;
     };
 
     // dep slug => url for every type=path repositories[] entry in a lib.
@@ -599,6 +639,16 @@ if ($unused) {
         $neededSet = $reachablePaths(\array_merge($directDeps, $testRoots), $graph);
 
         $lines = [];
+
+        // RT-13 (008): one src/ walk per lib, every dep answered from it.
+        $prefixMap = [];
+        foreach ($directDeps as $depSlug) {
+            $prefixMap[$depSlug] = $psr4PrefixesOf($depSlug);
+        }
+        $srcRefs = $anyNamespaceRefs($srcDir, $prefixMap);
+        // tests/ is only interesting once a dep is src-dead; first such dep
+        // pays one batched walk, later ones read the memo.
+        $testsRefs = null;
 
         // A dependency whose absence from src/ has already been CONFIRMED BY
         // HAND, in the direction of keeping it, and the reason recorded in the
@@ -690,7 +740,7 @@ if ($unused) {
                     if ($prefixes === []) {
                         $why = 'the dep declares no autoload.psr-4, so "unused" was never decided '
                             . 'for it and the row suppresses nothing';
-                    } elseif ($namespaceHits($srcDir, $prefixes) !== []) {
+                    } elseif ($srcRefs[$depSlug]) {
                         $why = 'src/ already references it - THE WIRING HAS LANDED, so delete '
                             . 'the row; a deferral is a record, not an exemption';
                     }
@@ -715,7 +765,7 @@ if ($unused) {
                 $unusedFindings++;
                 continue;
             }
-            if ($namespaceHits($srcDir, $prefixes) !== []) {
+            if ($srcRefs[$depSlug]) {
                 continue; // referenced in src/ — genuinely used.
             }
             $deferred = $deferredWiring($data['manifest'], $depSlug);
@@ -744,7 +794,8 @@ if ($unused) {
             $reach = $reachablePaths($otherRoots, $prunedGraph);
             $keepRepo = isset($reach[$depSlug]);
             $class = $keepRepo ? 'PRUNE_REQUIRE_KEEP_REPO' : 'PRUNE_REQUIRE_AND_REPO';
-            $testsUses = $namespaceHits($testsDir, $prefixes) !== [] ? 'yes' : 'no';
+            $testsRefs ??= $anyNamespaceRefs($testsDir, $prefixMap);
+            $testsUses = $testsRefs[$depSlug] ? 'yes' : 'no';
             if ($keepRepo) {
                 $path = $reach[$depSlug] ?? '?';
                 $viaTestDep = isset($data['testDeps'][\explode(' -> ', $path)[0]]);

@@ -812,6 +812,30 @@ final class CheckPathReposTest extends TestCase
         return $commands;
     }
 
+    public function testScalarRepositoriesRefusesWithTwoOnEveryPass(): void
+    {
+        // RT-13 (018): a string `repositories` used to detonate in pass 2
+        // as an uncaught array_keys() TypeError - exit 255, off the
+        // documented 0/1/2 contract - while --unused is_array-guarded it
+        // into silence. Both passes now refuse at decode, exit 2, naming
+        // the manifest and the key.
+        $root = $this->twoLibFixture(self::A_USES_B);
+        $manifestPath = "$root/lib-a/composer.json";
+        $manifest = \json_decode((string) \file_get_contents($manifestPath), true);
+        $manifest['repositories'] = 'oops-a-string';
+        \file_put_contents($manifestPath, (string) \json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        foreach ([['--no-network'], ['--no-lib-path-repos'], ['--unused']] as $args) {
+            $result = $this->runScript($root, $args);
+            $this->assertSame(2, $result['exit'], \implode(' ', $args) . ":\n" . $result['output']);
+            $this->assertStringContainsString(
+                "lib-a/composer.json declares 'repositories' as string, expected a list",
+                $result['output'],
+                \implode(' ', $args),
+            );
+        }
+    }
+
     public function testIdempotentWithoutFixFlag(): void
     {
         // Set up lib-b (sugarcraft prefix so the script cares about it).
