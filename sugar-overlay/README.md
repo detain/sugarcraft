@@ -462,6 +462,14 @@ remembered output and emitted as a **diff** — cursor-move sequences
 touching only changed cells. An unchanged re-composite emits the empty
 string: nothing changed, nothing is sent.
 
+Direct session drivers get one extra cold-start rule: the first
+`RenderSession::diff()` call returns the empty string — the frame is
+remembered but never emitted. Print your own initial full frame (from
+`lastFullFrame()`) or gate emission on `shouldEmitFull()` first, or frame
+one stays invisible and the screen desyncs silently. Later deltas are
+diffed against the rebuilt frame one, so a cell frame one painted and a
+later frame leaves blank is properly erased.
+
 That is bandwidth-correct for a terminal redraw loop and surprising in a
 demo: to force a full frame, use a fresh `Veil::new()`, call
 `withoutSession()` (a copy with a brand-new session), or

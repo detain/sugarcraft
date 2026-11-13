@@ -246,6 +246,24 @@ final class RenderSessionTest extends TestCase
         $this->assertSame('cold-frame', $session->lastFullFrame());
     }
 
+    public function testSecondColdDeltaErasesCellsTheFirstFramePainted(): void
+    {
+        // SO-01 (sugar-overlay-001): the cold prime used to store a BLANK
+        // buffer while previousOutput held the real frame — `??=` then never
+        // rebuilt it, so cells frame 1 painted and frame 2 left blank were
+        // judged blank->blank and NEVER erased: persistent on-screen ghosts
+        // for direct session drivers. The frame-2 delta must carry the erase.
+        $session = new RenderSession();
+        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+
+        $this->assertSame('', $session->diff('A', 10, 2, $factory));
+        $delta = $session->diff('', 10, 2, $factory);
+
+        $this->assertNotSame('', $delta, 'frame 1 must be rebuilt from previousOutput so its painted cell is erased, not ghosted');
+        $this->assertStringContainsString(' ', $delta, 'the erase is a blank written over the ghosted cell');
+        $this->assertSame('', $session->diff('', 10, 2, $factory), 'two genuinely blank frames must still diff to nothing');
+    }
+
     public function testResetClearsTheFullFrame(): void
     {
         $session = new RenderSession();

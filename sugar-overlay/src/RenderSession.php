@@ -10,7 +10,7 @@ use SugarCraft\CellBuffer\Diff\DiffEncoder;
 /**
  * Mutable render-session state for diff-based frame emission.
  *
- * Holds the four frame-cache fields that Veil::composite() mutates on
+ * Holds the frame-cache fields that Veil::composite() mutates on
  * subsequent same-dimension calls. This object is intentionally mutable —
  * it is the mutable companion to the immutable Veil, allowing Veil itself
  * to remain truly readonly while still preserving diff state across frames.
@@ -127,8 +127,13 @@ final class RenderSession
     {
         $this->diffWasCalled = true;
 
-        // First diff call with no prior output: return empty diff but prime
-        // previousFrame so the NEXT call can diff properly.
+        // First diff call with no prior output: remember the frame and return
+        // an empty diff — but leave previousFrame null so the NEXT call's
+        // `??=` rebuilds THIS frame from previousOutput. Priming a blank
+        // buffer here was the ghost-paint bug (sugar-overlay-001): a non-null
+        // blank beat the `??=` and frame 1 could never be reconstructed, so
+        // cells frame 1 painted and frame 2 left blank diffed blank->blank
+        // and were never erased.
         //
         // TRUTH OF THE PRIME: the caller gets '' back, which paints nothing —
         // the frame is REMEMBERED (so later diffs measure against it) but not
@@ -137,7 +142,6 @@ final class RenderSession
         // for direct session drivers, which must then print their own initial
         // full frame from lastFullFrame() or the screen desyncs silently.
         if ($this->previousOutput === null) {
-            $this->previousFrame = $bufferFactory('', $width, $height);
             $this->previousOutput = $output;
             $this->prevWidth = $width;
             $this->prevHeight = $height;
