@@ -53,6 +53,7 @@ use SugarCraft\CodeTime\Ignore\IgnoreFileTooLargeException;
 use SugarCraft\CodeTime\Ignore\SugarTrackIgnore;
 use SugarCraft\CodeTime\Lang;
 use SugarCraft\CodeTime\Report\GapsReport;
+use SugarCraft\CodeTime\Stats;
 use SugarCraft\CodeTime\Storage\SqliteBackend;
 use SugarCraft\CodeTime\Store;
 use SugarCraft\CodeTime\Theme;
@@ -155,6 +156,8 @@ $themeNext = false;
 $projectFilter = null;
 $tagFilter = null;
 $minSecondsOpt = null;
+// CT-S54 (finding 068): --format=<text|md> picks the summary digest shape.
+$formatOpt = null;
 $envTheme = getenv('CANDY_CODETIME_THEME');
 if (is_string($envTheme) && $envTheme !== '') {
     $themeOpt = $envTheme;
@@ -214,6 +217,10 @@ foreach (array_slice($argv, 1) as $arg) {
         $minSecondsOpt = substr($arg, strlen('--min='));
         continue;
     }
+    if (str_starts_with($arg, '--format=')) {
+        $formatOpt = substr($arg, strlen('--format='));
+        continue;
+    }
     $positional[] = $arg;
 }
 if ($backendNext) {
@@ -221,7 +228,7 @@ if ($backendNext) {
     fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
     exit(1);
 }
-foreach ([['--project', $projectFilter], ['--tag', $tagFilter], ['--min', $minSecondsOpt]] as [$filterFlag, $filterValue]) {
+foreach ([['--project', $projectFilter], ['--tag', $tagFilter], ['--min', $minSecondsOpt], ['--format', $formatOpt]] as [$filterFlag, $filterValue]) {
     if ($filterValue !== null && trim($filterValue) === '') {
         fwrite(STDERR, Lang::t('cli.export_missing_filter', ['flag' => $filterFlag]) . "\n");
         exit(1);
@@ -923,6 +930,65 @@ if ($cmd === 'forget') {
         exit(0);
     }
     fwrite(STDOUT, Lang::t('cli.forget_done', ['files' => $filesRemoved, 'db' => $dbRemoved]) . "\n");
+    exit(0);
+}
+
+// CT-S54 (finding 068): the headless digest. Upstream answers this with a
+// third binary (taka-report) plus a GitHub Action recipe; badge and cron
+// users here get one command that folds the same window doors and filters
+// through Stats — deliberately no Action.
+if ($cmd === 'summary') {
+    [$fromDay, $endDay] = $resolveWindow(array_slice($positional, 1), 'summary');
+    $format = 'text';
+    if ($formatOpt !== null) {
+        if ($formatOpt !== 'text' && $formatOpt !== 'md') {
+            fwrite(STDERR, Lang::t('cli.summary_invalid_format', ['value' => Sanitize::untrusted($formatOpt)]) . "\n");
+            exit(1);
+        }
+        $format = $formatOpt;
+    }
+    try {
+        $beats = $backend === 'sqlite'
+            ? $sqlite()->query(
+                (int) $fromDay->setTime(0, 0)->getTimestamp(),
+                (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
+            )
+            : $store->loadRange($fromDay, $endDay);
+    } catch (\Throwable $e) {
+        $storageError($e);
+    }
+    $beats = $applyFilters($beats, $projectFilter, $tagFilter);
+    if ($beats === []) {
+        fwrite(STDOUT, Lang::t('cli.summary_empty') . "\n");
+        exit(0);
+    }
+    $stats = Stats::compute($beats, $fromDay, $endDay);
+    $span = [$fromDay->format('Y-m-d'), $endDay->format('Y-m-d')];
+    $total = Stats::formatHours($stats->totalSeconds());
+    $out = '';
+    if ($format === 'md') {
+        $out .= Lang::t('cli.summary_md_heading', ['start' => $span[0], 'end' => $span[1]]) . "\n\n";
+        $out .= Lang::t('cli.summary_md_total', ['time' => $total]) . "\n\n";
+        foreach ($stats->perProject() as $project => $seconds) {
+            $out .= '- ' . Sanitize::untrusted((string) $project) . ': ' . Stats::formatHours((int) $seconds) . "\n";
+        }
+        $out .= "\n" . Lang::t('cli.summary_md_languages') . "\n\n";
+        foreach ($stats->perLanguage() as $language => $seconds) {
+            $out .= '- ' . Sanitize::untrusted((string) $language) . ': ' . Stats::formatHours((int) $seconds) . "\n";
+        }
+    } else {
+        $out .= Lang::t('cli.summary_heading', ['start' => $span[0], 'end' => $span[1]]) . "\n";
+        $out .= Lang::t('cli.summary_total', ['time' => $total]) . "\n";
+        $out .= Lang::t('cli.summary_projects') . "\n";
+        foreach ($stats->perProject() as $project => $seconds) {
+            $out .= '  ' . Sanitize::untrusted((string) $project) . '  ' . Stats::formatHours((int) $seconds) . "\n";
+        }
+        $out .= Lang::t('cli.summary_languages') . "\n";
+        foreach ($stats->perLanguage() as $language => $seconds) {
+            $out .= '  ' . Sanitize::untrusted((string) $language) . '  ' . Stats::formatHours((int) $seconds) . "\n";
+        }
+    }
+    fwrite(STDOUT, $out);
     exit(0);
 }
 

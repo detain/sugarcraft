@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '已记录 {duration}s：{project} ({language})',
-    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   [<project> <language>] <file> [duration] [tags] | --  记录心跳 (秒为单位，默认 60)\n  milestone              add <name> [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days | from [to]]  导出心跳 (默认 7 天)\n  gaps                   [days | from [to]] [--min=<secs>]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  删除匹配筛选的存储心跳（不加 --apply 仅预演）\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  --time=<unix>          push: 将心跳记录到指定的 unix 秒，而不是现在\n  --sqlite               backup：用 VACUUM INTO 归档 SQLite 数据库（崩溃安全快照）\n  --theme=<name>         仪表盘：使用命名调色板绘制 (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   以环境变量给出同样选择（命令行开关优先）\n  --project=<name>       export/gaps：仅保留此项目的记录\n  --tag=<label>          export/gaps：仅保留带此标签的记录\n  --min=<secs>           gaps：仅报告不少于该秒数的未跟踪空档（默认 300）\n  --file-prefix=<path>   forget：仅存储路径以此前缀开头的心跳\n  --apply                forget：实际删除匹配的心跳，而非预演\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime，未设置时用 \$HOME/.local/share/candy-codetime，HOME 也未设置时用 ./.local/share/candy-codetime)",
+    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   [<project> <language>] <file> [duration] [tags] | --  记录心跳 (秒为单位，默认 60)\n  milestone              add <name> [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days | from [to]]  导出心跳 (默认 7 天)\n  gaps                   [days | from [to]] [--min=<secs>]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  summary                [days | from [to]] [--format=text|md]  打印非交互式的编码时间摘要\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  删除匹配筛选的存储心跳（不加 --apply 仅预演）\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  --time=<unix>          push: 将心跳记录到指定的 unix 秒，而不是现在\n  --sqlite               backup：用 VACUUM INTO 归档 SQLite 数据库（崩溃安全快照）\n  --theme=<name>         仪表盘：使用命名调色板绘制 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   以环境变量给出同样选择（命令行开关优先）\n  --project=<name>       export/gaps：仅保留此项目的记录\n  --tag=<label>          export/gaps：仅保留带此标签的记录\n  --min=<secs>           gaps：仅报告不少于该秒数的未跟踪空档（默认 300）\n  --format=<text|md>     summary: 选择摘要格式 (默认: text)\n  --file-prefix=<path>   forget：仅存储路径以此前缀开头的心跳\n  --apply                forget：实际删除匹配的心跳，而非预演\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime，未设置时用 \$HOME/.local/share/candy-codetime，HOME 也未设置时用 ./.local/share/candy-codetime)",
     'cli.push_usage' => '用法: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin 批量 JSON 行)',
     'cli.push_missing_args' => "candy-codetime: push: 缺少必需参数 (project, language, file)",
     'cli.push_ignored' => "push: {file} 匹配 .sugartrackignore — 已跳过",
@@ -48,6 +48,15 @@ return [
     'cli.export_missing_filter' => 'candy-codetime: {flag} 需要在等号后提供值',
     'cli.gaps_no_data' => "未发现空档。",
     'cli.gaps_empty' => 'gaps: 该时间段没有跟踪数据',
+    'cli.summary_invalid_format' => 'candy-codetime: summary: --format 必须是 text 或 md - 收到 "{value}"',
+    'cli.summary_empty' => 'summary: 该时间段没有跟踪数据',
+    'cli.summary_heading' => 'summary: {start} – {end}',
+    'cli.summary_total' => '总计: {time}',
+    'cli.summary_projects' => '按项目:',
+    'cli.summary_languages' => '按语言:',
+    'cli.summary_md_heading' => '### 编码时间 ({start} – {end})',
+    'cli.summary_md_total' => '**总计: {time}**',
+    'cli.summary_md_languages' => '#### 按语言',
     'cli.gaps_header' => "未跟踪的时间空档:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: 已归档 {count} 个文件",

@@ -1582,4 +1582,63 @@ final class CliTest extends TestCase
         $this->assertSame(0, $after['exit'], $after['stderr']);
         $this->assertStringContainsString('No gaps', $after['stdout'], 'a tracked window with no gap keeps the old line');
     }
+
+    // CT-S54 (finding 068): the headless digest — badge and cron users get
+    // one command instead of re-implementing Stats in awk.
+
+    public function testTheSummaryDigestFoldsTheWindowThroughStatsForBothBackendsOfText(): void
+    {
+        $this->seedWindowDays();
+        $res = $this->runCli(['summary', '2025-06-01', '2025-06-30']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $dash = chr(226) . chr(128) . chr(147);
+        $this->assertStringContainsString('summary: 2025-06-01 ' . $dash . ' 2025-06-30', $res['stdout']);
+        $this->assertStringContainsString('total: 0h 01m', $res['stdout']);
+        $this->assertStringContainsString('by project:', $res['stdout']);
+        $this->assertStringContainsString('  june-proj  0h 01m', $res['stdout']);
+        $this->assertStringContainsString('by language:', $res['stdout']);
+        $this->assertStringContainsString('  js  0h 01m', $res['stdout']);
+        $this->assertStringNotContainsString('may-proj', $res['stdout'], 'the dated window must bound the digest');
+        $this->assertStringNotContainsString('july-proj', $res['stdout']);
+    }
+
+    public function testTheSummaryMarkdownFormatAnswersWithHeadingsAndBullets(): void
+    {
+        $this->seedWindowDays();
+        $res = $this->runCli(['summary', '2025-06-01', '2025-06-30', '--format=md']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $dash = chr(226) . chr(128) . chr(147);
+        $this->assertStringContainsString('### Coding time (2025-06-01 ' . $dash . ' 2025-06-30)', $res['stdout']);
+        $this->assertStringContainsString('**Total: 0h 01m**', $res['stdout']);
+        $this->assertStringContainsString('- june-proj: 0h 01m', $res['stdout']);
+        $this->assertStringContainsString('#### By language', $res['stdout']);
+        $this->assertStringContainsString('- js: 0h 01m', $res['stdout']);
+    }
+
+    public function testTheSummaryOnAnEmptyStoreSaysThereIsNoData(): void
+    {
+        $res = $this->runCli(['summary']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('no tracked data', $res['stdout']);
+        $this->assertStringNotContainsString('by project', $res['stdout']);
+    }
+
+    public function testTheSummaryFormatDoorRefusesJunkWithoutPrinting(): void
+    {
+        $this->seedWindowDays();
+        $res = $this->runCli(['summary', '--format=lunch']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('--format must be text or md', $res['stderr']);
+        $this->assertSame('', $res['stdout']);
+    }
+
+    public function testTheSummaryHonoursTheProjectFilterAcrossWindowedRows(): void
+    {
+        $this->seedWindowDays();
+        $res = $this->runCli(['summary', '2025-05-01', '2025-07-31', '--project=june-proj']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('  june-proj  0h 01m', $res['stdout']);
+        $this->assertStringNotContainsString('may-proj', $res['stdout']);
+        $this->assertStringNotContainsString('july-proj', $res['stdout']);
+    }
 }

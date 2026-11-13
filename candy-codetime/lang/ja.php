@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s を記録: {project} ({language})',
-    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   [<project> <language>] <file> [duration] [tags] | --  ハートビートを記録 (秒単位、既定 60)\n  milestone              add <name> [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days | from [to]]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days | from [to]] [--min=<secs>]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  フィルタに一致する保存ビートを削除 (--apply なしは試行)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  --theme=<name>         ダッシュボード: 名前付きパレットで描画 (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   同じ選択を環境変数で (フラグが優先)\n  --project=<name>       export/gaps: このプロジェクトのハートビートのみ保持\n  --tag=<label>          export/gaps: このタグ付きのハートビートのみ保持\n  --min=<secs>           gaps: この秒数以上の未記録区間のみ表示（既定 300）\n  --file-prefix=<path>   forget: 保存パスがこの接頭辞で始まるビートのみ\n  --apply                forget: 試行ではなく一致ビートを実際に削除\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
+    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   [<project> <language>] <file> [duration] [tags] | --  ハートビートを記録 (秒単位、既定 60)\n  milestone              add <name> [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days | from [to]]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days | from [to]] [--min=<secs>]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  summary                [days | from [to]] [--format=text|md]  記録した時間の非対話要約を出力\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  フィルタに一致する保存ビートを削除 (--apply なしは試行)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  --theme=<name>         ダッシュボード: 名前付きパレットで描画 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   同じ選択を環境変数で (フラグが優先)\n  --project=<name>       export/gaps: このプロジェクトのハートビートのみ保持\n  --tag=<label>          export/gaps: このタグ付きのハートビートのみ保持\n  --min=<secs>           gaps: この秒数以上の未記録区間のみ表示（既定 300）\n  --format=<text|md>     summary: 要約の形式を選択 (既定: text)\n  --file-prefix=<path>   forget: 保存パスがこの接頭辞で始まるビートのみ\n  --apply                forget: 試行ではなく一致ビートを実際に削除\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
     'cli.push_usage' => '使用法: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin からの JSON 一括)',
     'cli.push_missing_args' => "candy-codetime: push: 必須引数が不足しています (project, language, file)",
     'cli.push_ignored' => "push: {file} は .sugartrackignore に一致したためスキップしました",
@@ -48,6 +48,15 @@ return [
     'cli.export_missing_filter' => 'candy-codetime: {flag} は等号の後に値が必要です',
     'cli.gaps_no_data' => "ギャップは見つかりませんでした。",
     'cli.gaps_empty' => 'gaps: その期間の追跡データはありません',
+    'cli.summary_invalid_format' => 'candy-codetime: summary: --format は text か md の指定 (指定: "{value}")',
+    'cli.summary_empty' => 'summary: この期間の記録はありません',
+    'cli.summary_heading' => 'summary: {start} – {end}',
+    'cli.summary_total' => '合計: {time}',
+    'cli.summary_projects' => 'プロジェクト別:',
+    'cli.summary_languages' => '言語別:',
+    'cli.summary_md_heading' => '### コーディング時間 ({start} – {end})',
+    'cli.summary_md_total' => '**合計: {time}**',
+    'cli.summary_md_languages' => '#### 言語別',
     'cli.gaps_header' => "未追跡の時間ギャップ:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} 個のファイルをアーカイブしました",

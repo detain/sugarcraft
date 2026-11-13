@@ -143,6 +143,7 @@ final class LangParityTest extends TestCase
         'milestone' => 'add <name> [description] | list',
         'export' => '<csv|json|ics> [days | from [to]]',
         'gaps' => '[days | from [to]] [--min=<secs>]',
+        'summary' => '[days | from [to]] [--format=text|md]',
         'backup' => '',
         'forget' => '--project=<name> [--file-prefix=<path>] [--apply]',
         'help' => '',
@@ -174,7 +175,7 @@ final class LangParityTest extends TestCase
 
         foreach (self::usageRows() as $locale => $commands) {
             $this->assertSame(
-                ['dashboard', 'push', 'milestone', 'export', 'gaps', 'backup', 'forget', 'help', '--version'],
+                ['dashboard', 'push', 'milestone', 'export', 'gaps', 'summary', 'backup', 'forget', 'help', '--version'],
                 array_keys($commands),
                 "locale {$locale}: the usage command rows drifted out of shape",
             );

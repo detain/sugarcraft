@@ -114,7 +114,7 @@ final class CliUsageTest extends TestCase
         $dispatched = self::dispatchedCommands();
         $advertised = [];
         foreach (explode("\n", self::usage()) as $line) {
-            if (preg_match('/^  (dashboard|push|milestone|export|gaps|backup|help|--version|-v)(?:,|  |\s)/u', $line, $m)) {
+            if (preg_match('/^  (dashboard|push|milestone|export|gaps|summary|backup|help|--version|-v)(?:,|  |\s)/u', $line, $m)) {
                 $advertised[] = $m[1];
             }
         }

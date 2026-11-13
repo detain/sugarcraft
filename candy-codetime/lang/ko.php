@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s 기록됨: {project} ({language})',
-    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   [<project> <language>] <file> [duration] [tags] | --  하트비트 기록 (초 단위, 기본 60)\n  milestone              add <name> [description] | list  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days | from [to]]  하트비트 내보내기 (기본 7일)\n  gaps                   [days | from [to]] [--min=<secs>]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  필터와 일치하는 저장 비트 삭제 (--apply 없으면 미리보기)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  --time=<unix>          push: 지금 대신 지정 unix 초에 하트비트 기록\n  --sqlite               backup: SQLite 데이터베이스를 VACUUM INTO로 보관 (충격에 안전한 스냅샷)\n  --theme=<name>         대시보드: 이름이 지정된 팔레트로 칠하기 (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   동일한 선택을 환경 변수로 (플래그가 우선)\n  --project=<name>       export/gaps: 이 프로젝트의 하트비트만 유지\n  --tag=<label>          export/gaps: 이 태그가 있는 하트비트만 유지\n  --min=<secs>           gaps: 이 초 수 이상의 미기록 구간만 표시 (기본값 300)\n  --file-prefix=<path>   forget: 저장 경로가 이 접두사로 시작하는 비트만\n  --apply                forget: 미리보기 대신 일치하는 비트를 실제로 삭제\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime, 미설정 시 \$HOME/.local/share/candy-codetime, HOME도 미설정 시 ./.local/share/candy-codetime)",
+    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   [<project> <language>] <file> [duration] [tags] | --  하트비트 기록 (초 단위, 기본 60)\n  milestone              add <name> [description] | list  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days | from [to]]  하트비트 내보내기 (기본 7일)\n  gaps                   [days | from [to]] [--min=<secs>]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  summary                [days | from [to]] [--format=text|md]  추적된 시간의 비대화 요약 출력\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  필터와 일치하는 저장 비트 삭제 (--apply 없으면 미리보기)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  --time=<unix>          push: 지금 대신 지정 unix 초에 하트비트 기록\n  --sqlite               backup: SQLite 데이터베이스를 VACUUM INTO로 보관 (충격에 안전한 스냅샷)\n  --theme=<name>         대시보드: 이름이 지정된 팔레트로 칠하기 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   동일한 선택을 환경 변수로 (플래그가 우선)\n  --project=<name>       export/gaps: 이 프로젝트의 하트비트만 유지\n  --tag=<label>          export/gaps: 이 태그가 있는 하트비트만 유지\n  --min=<secs>           gaps: 이 초 수 이상의 미기록 구간만 표시 (기본값 300)\n  --format=<text|md>     summary: 요약 형식 선택 (기본: text)\n  --file-prefix=<path>   forget: 저장 경로가 이 접두사로 시작하는 비트만\n  --apply                forget: 미리보기 대신 일치하는 비트를 실제로 삭제\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime, 미설정 시 \$HOME/.local/share/candy-codetime, HOME도 미설정 시 ./.local/share/candy-codetime)",
     'cli.push_usage' => '사용법: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin 일괄 JSON 줄)',
     'cli.push_missing_args' => "candy-codetime: push: 필수 인자가 없습니다 (project, language, file)",
     'cli.push_ignored' => "push: {file} 이 .sugartrackignore 와 일치하여 건너뛰었습니다",
@@ -48,6 +48,15 @@ return [
     'cli.export_missing_filter' => 'candy-codetime: {flag}는 등호 뒤에 값이 필요합니다',
     'cli.gaps_no_data' => "공백을 찾지 못했습니다.",
     'cli.gaps_empty' => 'gaps: 해당 기간에 추적된 데이터가 없습니다',
+    'cli.summary_invalid_format' => 'candy-codetime: summary: --format은 text 또는 md여야 합니다 - "{value}" 입력됨',
+    'cli.summary_empty' => 'summary: 해당 기간의 추적된 데이터 없음',
+    'cli.summary_heading' => 'summary: {start} – {end}',
+    'cli.summary_total' => '총 {time}',
+    'cli.summary_projects' => '프로젝트별:',
+    'cli.summary_languages' => '언어별:',
+    'cli.summary_md_heading' => '### 코딩 시간 ({start} – {end})',
+    'cli.summary_md_total' => '**총 {time}**',
+    'cli.summary_md_languages' => '#### 언어별',
     'cli.gaps_header' => "추적되지 않은 시간 공백:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: 파일 {count} 개를 보관했습니다",
