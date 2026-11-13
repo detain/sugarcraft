@@ -340,6 +340,9 @@ final class Heatmap
         }
         $min ??= 0.0;
         $max ??= 1.0;
+        // sugar-charts-056: the pinned/autoValueRange fold can leave a lone
+        // pinned end above the whole grid — same refuse-the-domain rule.
+        Range::pin($min, $max, 'value');
         if ($max == $min) { $max = $min + 1.0; }
 
         $canvas = new Canvas($this->width, $this->height);

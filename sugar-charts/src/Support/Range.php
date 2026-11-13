@@ -46,4 +46,32 @@ final class Range
             ));
         }
     }
+
+    /**
+     * Combine pinned ends with the scanned data extents BEFORE anything
+     * normalizes by (max − min) (sugar-charts-056). A lone pinned end is
+     * legal at the door, but if the resolved pair comes out inverted —
+     * e.g. a pinned min above every sample — the old silent clamp drew
+     * all-zero bars, flat candles, and a misleading steady mid-glyph.
+     * Fail loudly instead: the chart refuses to render a domain that
+     * cannot contain its own data.
+     *
+     * @return array{0: float, 1: float} the effective [min, max] pair
+     *
+     * @throws \InvalidArgumentException when the resolved min exceeds the resolved max
+     */
+    public static function resolve(?float $pinMin, ?float $pinMax, float $scanMin, float $scanMax, string $axis): array
+    {
+        $min = $pinMin ?? $scanMin;
+        $max = $pinMax ?? $scanMax;
+        if ($min > $max) {
+            throw new \InvalidArgumentException(sprintf(
+                'Invalid %s range: min (%s) must not exceed max (%s) — a lone pinned end that excludes the whole data set leaves no drawable domain',
+                $axis,
+                (string) $min,
+                (string) $max,
+            ));
+        }
+        return [$min, $max];
+    }
 }

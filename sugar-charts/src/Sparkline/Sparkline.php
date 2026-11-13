@@ -204,14 +204,16 @@ final class Sparkline
             return $this->styled(str_repeat(self::GLYPHS[0], $w));
         }
 
-        $min = $this->min ?? min($points);
+        // sugar-charts-056: the effective pair is resolved against the
+        // scanned window BEFORE normalization — a lone pinned end that
+        // excludes the data now throws instead of drawing a fake flat line.
+        [$min, $max] = Range::resolve($this->min, $this->max, min($points), max($points), 'value');
         // A pinned max is used verbatim; with no pin the window's
         // max rescales. The autoMaxValue toggle cannot change either
         // outcome — with a pin it is ignored, without one the inner
         // guard computes max(points) against itself — so it is kept
         // purely for ntcharts WithNoAutoMaxValue API parity (its
         // docblock says so). Behaviour is byte-identical.
-        $max = $this->max ?? max($points);
         $range = $max - $min;
 
         return $this->renderBuffer($w, $points, (float) $min, $range);

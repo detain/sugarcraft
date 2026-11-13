@@ -170,10 +170,8 @@ final class Waveline
         $xs = array_map(static fn(array $p): float => (float) $p[0], $this->points);
         $ys = array_map(static fn(array $p): float => (float) $p[1], $this->points);
 
-        $xMin = $this->xMin ?? min($xs);
-        $xMax = $this->xMax ?? max($xs);
-        $yMin = $this->yMin ?? min($ys);
-        $yMax = $this->yMax ?? max($ys);
+        [$xMin, $xMax] = Range::resolve($this->xMin, $this->xMax, min($xs), max($xs), 'X');
+        [$yMin, $yMax] = Range::resolve($this->yMin, $this->yMax, min($ys), max($ys), 'Y');
         if ($xMax == $xMin) { $xMax = $xMin + 1.0; }
         if ($yMax == $yMin) { $yMax = $yMin + 1.0; }
 

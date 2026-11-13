@@ -254,6 +254,10 @@ final class Scatter implements ChromeAccessors
                 $maxY = $maxY === null ? $y : max($maxY, $y);
             }
         }
+        // sugar-charts-056: immune by construction — the fold above widens
+        // any lone pinned seed toward the data, and full-end inversions
+        // are refused at the constructor door (Range::pin in the ctor and
+        // every copy() rebuild). Nothing here can be inverted by render.
         if ($maxX == $minX) { $maxX = $minX + 1.0; }
         if ($maxY == $minY) { $maxY = $minY + 1.0; }
 

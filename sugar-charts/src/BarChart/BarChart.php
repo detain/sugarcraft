@@ -474,8 +474,7 @@ final class BarChart implements ChromeAccessors
             return '';
         }
 
-        $min = $this->min ?? min(min($values), 0.0);
-        $max = $this->max ?? max($values);
+        [$min, $max] = Range::resolve($this->min, $this->max, min(min($values), 0.0), max($values), 'value');
         if ($max === $min) {
             $max = $min + 1.0;
         }
@@ -588,8 +587,7 @@ final class BarChart implements ChromeAccessors
         $bars   = array_slice($bars, 0, $count);
         $values = array_map(static fn(Bar $b): float => $b->value, $bars);
 
-        $min = $this->min ?? min(min($values), 0.0);
-        $max = $this->max ?? max($values);
+        [$min, $max] = Range::resolve($this->min, $this->max, min(min($values), 0.0), max($values), 'value');
         if ($max === $min) {
             $max = $min + 1.0;
         }

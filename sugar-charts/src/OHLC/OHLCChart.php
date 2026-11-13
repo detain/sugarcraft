@@ -275,8 +275,7 @@ final class OHLCChart implements ChromeAccessors
             $values[] = $b->high;
             $values[] = $b->low;
         }
-        $min = $this->min ?? min($values);
-        $max = $this->max ?? max($values);
+        [$min, $max] = Range::resolve($this->min, $this->max, min($values), max($values), 'Y');
         if ($max == $min) { $max = $min + 1.0; }
 
         $canvas = new Canvas($this->width, $this->height);

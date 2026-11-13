@@ -726,8 +726,7 @@ final class LineChart extends Chart
         if ($dataMin === null) {
             return $canvas->view();
         }
-        $min = $this->min ?? $dataMin;
-        $max = $this->max ?? $dataMax;
+        [$min, $max] = Range::resolve($this->min, $this->max, $dataMin, $dataMax, 'Y');
         if ($max == $min) {
             $max = $min + 1.0;
         }
