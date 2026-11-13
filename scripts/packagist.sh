@@ -11,8 +11,9 @@
 # supplied from the environment at run time only:
 #   PACKAGIST_TOKEN=<token — the line after 'packagist.org:' in the mystage
 #                   credentials file> \
-#   PACKAGIST_USERNAME=<your Packagist account — same value CI reads from the
-#                   PACKAGIST_USERNAME secret> \
+#   PACKAGIST_USERNAME=<your Packagist account — CI pins this as the literal
+#                   `detain` (sync-sugarcraft.yml `PACKAGIST_USERNAME: detain`;
+#                   there is no PACKAGIST_USERNAME secret)> \
 #   bash scripts/packagist.sh create <slug>
 # Auth shapes differ per endpoint (both live-proven):
 #   create  — `Authorization: Bearer <username>:<token>` header to
@@ -65,7 +66,7 @@ require_creds() {
         missing=1
     fi
     if [ -z "${PACKAGIST_USERNAME:-}" ]; then
-        echo "packagist: PACKAGIST_USERNAME is not set — the Packagist account owning the token (CI reads it from the PACKAGIST_USERNAME secret)" >&2
+        echo "packagist: PACKAGIST_USERNAME is not set — the Packagist account owning the token (CI pins the literal `detain`, see sync-sugarcraft.yml)" >&2
         missing=1
     fi
     [ "$missing" -eq 0 ] || exit 2
@@ -126,10 +127,25 @@ cmd_update() { # <slug>
     # shellcheck disable=SC2064  # freeze $body_file now, not at trap time
     trap "rm -f '$body_file'" EXIT
 
-    http_code="$(curl -sS -o "$body_file" -w '%{http_code}' --max-time 20 -XPOST \
-        -H 'content-type: application/json' \
-        "$API_BASE/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
-        -d "{\"repository\":{\"url\":\"https://github.com/$ORG/$slug\"}}")" ||
+    # The update-package contract authenticates via the username/apiToken
+    # QUERY STRING, so we cannot move the secret off the wire — but we can
+    # keep it out of argv: curl -K - consumes the whole request (URL included)
+    # from stdin, so `ps`/exec-logging on the shared mystage host never sees
+    # the token (RT-09; mask_tokens() below only scrubs echoes).
+    local curl_config
+    curl_config=$(cat <<EOF
+silent
+show-error
+max-time = 20
+output = "$body_file"
+write-out = "%{http_code}"
+url = "$API_BASE/update-package?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_TOKEN"
+header = "content-type: application/json"
+request = "POST"
+data = "{\"repository\":{\"url\":\"https://github.com/$ORG/$slug\"}}"
+EOF
+)
+    http_code="$(printf '%s\n' "$curl_config" | curl -K -)" ||
         fail "curl to $API_BASE/update-package failed (network?)"
 
     report "update-package for $ORG/$slug" "$http_code" "$body_file"

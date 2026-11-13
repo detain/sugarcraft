@@ -327,6 +327,13 @@ jobs:
             echo "✓ synced $lib ($sha)"
 
             # Belt-and-suspenders Packagist re-crawl (see env note above).
+            # Auth channel note (RT-09, 2026-11-12): packagist's documented
+            # update-package contract takes username/apiToken as QUERY
+            # PARAMETERS, so the token rides the URL by design here. The
+            # compensating control is GitHub Actions secret masking: the
+            # PACKAGIST_API_TOKEN value is masked in all step logs and argv
+            # is not logged; the local scripts/packagist.sh twin of this call
+            # additionally keeps the URL out of argv via `curl -K -`.
             # Guarded on the token so a fork/secret-less run skips it cleanly;
             # the `|| true` keeps a transient Packagist hiccup from failing the
             # whole sync (the per-repo webhook is still the primary path).
