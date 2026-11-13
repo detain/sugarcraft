@@ -18,9 +18,11 @@ The badges above track the upstream monorepo, [`detain/sugarcraft`](https://gith
 composer require sugarcraft/sugar-ansi-parser
 ```
 
-PHP `^8.3`. `ext-mbstring` is a hard composer requirement; at runtime it is
+PHP `^8.3`. `ext-mbstring` is a composer *suggestion*: at runtime it is
 consulted only by the `$replaceMalformed = true` UTF-8 mode (see
-[Limits & hostile input](#limits--hostile-input)).
+[Limits & hostile input](#limits--hostile-input)) — default parsing never
+touches it, and constructing with the flag but without the extension fails
+loud at the constructor, not mid-stream.
 
 ECMA-48 VT500 ANSI parser state machine — the shared byte-stream interpreter extracted from `sugar-vterm`. Feeds raw bytes through the Paul-Williams state machine, dispatching abstract `Handler` events. Handles partial input naturally; multi-byte UTF-8 runes arrive at the handler as complete **codepoints** (the parser's unit is a rune, not a grapheme cluster — clustering, where a base character plus combining marks must stay together, is the handler's concern).
 
@@ -261,8 +263,9 @@ product:
   surrogate and >U+10FFFF encodings included. A handler relying on the
   interface's "one rune" contract should pass `$replaceMalformed = true`
   (constructor arg 2) for U+FFFD replacement instead; that mode calls
-  `mb_check_encoding()` (the lib already requires ext-mbstring via composer
-  regardless, because the flag must work when flipped). Dropped with **no**
+  `mb_check_encoding()`, whose `ext-mbstring` is declared as a composer
+  *suggest* — with the extension absent the constructor throws when the flag
+  is requested, so flipping it is never a mid-stream surprise. Dropped with **no**
   replacement in either mode: lone continuation bytes 0xA0-0xBF and invalid
   lead bytes 0xC0, 0xC1 and 0xF5-0xFF — the state table owns the raw byte
   space before UTF-8 is consulted, so those bytes never assemble a rune.

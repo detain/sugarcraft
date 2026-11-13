@@ -183,8 +183,10 @@ final class Parser
      *                               validation at all: completed rune bytes ride
      *                               through verbatim to printChar(). When true,
      *                               validation calls mb_check_encoding(), so
-     *                               ext-mbstring (declared in composer.json) is
-     *                               required by this mode.
+     *                               it needs ext-mbstring — declared in
+     *                               composer.json as a suggestion and
+     *                               fail-loud at this constructor when the
+     *                               mode is requested without it.
      * @throws \InvalidArgumentException if $maxStringBuffer is less than 1 (a
      *                                  zero/negative cap cannot accumulate any
      *                                  payload and is always a mistake) or if
