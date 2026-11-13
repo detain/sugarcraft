@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Browse-row widgets for media terminal UIs: a 2-D virtualized <strong>PosterGrid</strong> for large libraries, a horizontal <strong>Rail</strong> carousel for browse rows, and a single <strong>PosterCard</strong> tile. The grid is <em>sparse</em> — it knows the total item count up front but holds only the cards that have been fetched, keyed by their <strong>absolute index</strong>, so a 50,000-item library renders as cheaply as a 50-item one; missing indices draw as skeletons and only the rows inside the viewport are ever rendered. Paging is owner-driven: after every cursor move the owner reads <code>visibleRange()</code> (the absolute-index window now on screen — the terminal analogue of the web grid's <code>need-range</code> event) and splices the covering page back in with <code>withItems()</code>. The widgets are <strong>renderer-agnostic</strong>: a card holds <em>already-rendered</em> poster bytes (produce them however you like, e.g. <a href="sugar-image.html">sugar-image</a>), so this lib pulls in no image decoder. Original SugarCraft component — inspired by terminal list/viewport UX and web media-grid browsing.</p>
+<p class="lede" style="margin-top: 28px;">Browse-row widgets for media terminal UIs: a 2-D virtualized <strong>PosterGrid</strong> for large libraries, a horizontal <strong>Rail</strong> browse strip (carousel) for browse rows, and a single <strong>PosterCard</strong> tile. The grid is <em>sparse</em> — it knows the total item count up front but holds only the cards that have been fetched, keyed by their <strong>absolute index</strong>, so a 50,000-item library renders as cheaply as a 50-item one; missing indices draw as skeletons and only the rows inside the viewport are ever rendered. Paging is owner-driven: after every cursor move the owner reads <code>visibleRange()</code> (the absolute-index window now on screen — the terminal analogue of the web grid's <code>need-range</code> event) and splices the covering page back in with <code>withItems()</code>. The widgets are <strong>renderer-agnostic</strong>: a card holds <em>already-rendered</em> poster bytes (produce them however you like, e.g. <a href="sugar-image.html">sugar-image</a>), so this lib pulls in no image decoder. Original SugarCraft component — inspired by terminal list/viewport UX and web media-grid browsing.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-gallery</code></pre>
@@ -43,7 +43,7 @@ $frame = $grid->render(true, $zones);
 $clean = $zones->scan($frame);                 // strip markers, record bounds
 $zone  = $zones->anyInBounds($mouseMsg);       // → Zone|null — read $zone-&gt;id ("cell:42")</code></pre>
 
-    <h3 style="margin-top: 32px;">Rail — horizontal carousel</h3>
+    <h3 style="margin-top: 32px;">Rail — horizontal browse strip</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\Rail;
 
 $rail = Rail::new('Continue Watching', $cards);
@@ -79,7 +79,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Large media libraries</strong> — a browse grid over thousands of posters fetched lazily a page at a time.</li>
-      <li><strong>Browse rows</strong> — horizontal Rail carousels (Continue Watching, per-library rows) with their own cursor and scroll.</li>
+      <li><strong>Browse rows</strong> — horizontal Rail browse strips (Continue Watching, per-library rows) with their own cursor and scroll.</li>
       <li><strong>A–Z / letter jumps</strong> — <code>moveTo()</code> to an absolute offset, then page in whatever the visible window now covers.</li>
       <li><strong>Async posters</strong> — start with skeleton cells, then <code>withItem()</code> / <code>withPoster()</code> each tile as its render resolves.</li>
       <li><strong>Mouse-clickable grids</strong> — wire sugar-mouse to resolve <code>cell:&lt;index&gt;</code> clicks back to items.</li>
@@ -130,7 +130,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>PosterGrid</td><td>fitsViewport(?int $cols = null, ?int $rows = null): bool</td><td>Whether the cell geometry actually fits a viewport — <code>columns()</code> and <code>visibleRows()</code> floor at one, so a sub-cell viewport renders yet silently lies about what is visible; defaults to the grid's own current viewport</td></tr>
 <tr><td>PosterGrid</td><td>static emptyMessage(): string</td><td>The localised empty-grid notice (lang key <code>grid.empty</code>) — <code>render()</code> itself stays silent on an empty grid, so this is the seam for an owner-painted message; resolves live, honouring a mid-session locale switch</td></tr>
 <tr><td>PosterGrid</td><td>static clearBoxCache(): int</td><td>Drop the shared boxed-cell memo, returning how many entries were cleared — purely an optimization, never changes a single rendered byte</td></tr>
-<tr><td>Rail</td><td>__construct(string $title, array $cards = [], int $cursor = 0, int $scroll = 0)</td><td>A horizontal carousel of PosterCards with a title, cursor, and scroll offset; a stale pair is clamped, not restored verbatim</td></tr>
+<tr><td>Rail</td><td>__construct(string $title, array $cards = [], int $cursor = 0, int $scroll = 0)</td><td>A horizontal browse strip of PosterCards with a title, cursor, and scroll offset; a stale pair is clamped, not restored verbatim</td></tr>
 <tr><td>Rail</td><td>static new(string $title, array $cards = [], int $cursor = 0, int $scroll = 0): self</td><td>Canonical factory — mirrors the public constructor</td></tr>
 <tr><td>Rail</td><td>withCards(array $cards): self</td><td>Replace the card list, clamping cursor/scroll into range</td></tr>
 <tr><td>Rail</td><td>withCard(PosterCard $card): self</td><td>Replace a single card by id (e.g. when its poster finishes loading)</td></tr>

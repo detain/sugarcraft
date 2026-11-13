@@ -1,7 +1,7 @@
 # sugar-gallery
 
 Poster **grids** and **rails** for media TUIs — a 2-D virtualized `PosterGrid`
-for large libraries, a horizontal `Rail` browse strip for rows like "Continue
+for large libraries, a horizontal `Rail` browse strip (carousel) for rows like "Continue
 Watching", and a
 `PosterCard` tile. The widgets are **renderer-agnostic**: a card holds
 *already-rendered* poster bytes (produce them however you like — e.g.
