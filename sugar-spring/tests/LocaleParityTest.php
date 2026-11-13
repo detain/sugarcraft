@@ -104,17 +104,43 @@ final class LocaleParityTest extends TestCase
         $this->assertSame($keys, array_keys($referenced), 'en.php keys and Lang::t() call sites drifted apart');
     }
 
-    public function testProjectileFailFastGuardsAreTranslatedNotRawEnglish(): void
+    /**
+     * SPR-28 (finding 062): the raw-English guard used to scan Projectile.php
+     * with a double-quoted pattern only — a single-quoted thrower anywhere
+     * else in src/ sailed through. Now: every src file, both quote styles,
+     * any Exception/Error class. P2's claim ("all throws already translated")
+     * is what this guard now enforces tree-wide instead of at one door; the
+     * offender list must stay EMPTY — if a future change adds one, the
+     * message names file:line. (trigger_error deprecation strings are NOT
+     * throws and stay exempt by the documented 055 ruling; if that exemption
+     * is ever reversed, these quote-style arms already cover it.)
+     */
+    public function testFailFastGuardsAcrossSrcAreTranslatedNotRawEnglish(): void
     {
-        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Projectile.php');
+        // The original Projectile arms, kept: the half-landed i18n sin this
+        // genre was born from must stay pinned at its door.
+        $projectile = (string) file_get_contents(dirname(__DIR__) . '/src/Projectile.php');
 
-        $this->assertStringContainsString("Lang::t('projectile.dt_finite'", $src);
-        $this->assertStringContainsString("Lang::t('projectile.negative_dt'", $src);
-        $this->assertStringContainsString("Lang::t('projectile.components_finite'", $src);
-        $this->assertStringNotContainsString(
-            'new \InvalidArgumentException("',
-            $src,
-            'Projectile must not throw raw-English literals; route messages through Lang::t',
+        $this->assertStringContainsString("Lang::t('projectile.dt_finite'", $projectile);
+        $this->assertStringContainsString("Lang::t('projectile.negative_dt'", $projectile);
+        $this->assertStringContainsString("Lang::t('projectile.components_finite'", $projectile);
+
+        $root      = dirname(__DIR__);
+        $offenders = [];
+        foreach (self::sourceFiles() as $file) {
+            $src = (string) file_get_contents($file);
+            if (preg_match_all('/new\s+\\\\?\w*(?:Exception|Error)\s*\(\s*([\'"])/', $src, $hits, PREG_OFFSET_CAPTURE)) {
+                foreach ($hits[0] as $hit) {
+                    $line      = substr_count(substr($src, 0, $hit[1]), "\n") + 1;
+                    $offenders[] = substr($file, strlen($root) + 1) . ':' . $line . ' -> ' . $hit[0];
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            'raw-English throw constructions route around the 16-locale fan-out; wrap the message in Lang::t',
         );
     }
 
