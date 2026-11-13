@@ -180,14 +180,31 @@ final class BreadcrumbTest extends TestCase
         $this->assertSame('Home › Settings', $result);
     }
 
-    public function testItemRendererReturningNonStringThrows(): void
+    public function testItemRendererReturningNonStringRejectedAtAssignment(): void
+    {
+        // NS-17: the smoke call moves the catch from first paint to the
+        // misconfiguration itself.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('itemRenderer rejected by smoke call: renderer returned int, expected string|null');
+        (new Breadcrumb())->setItemRenderer(
+            fn($item, $i) => 42 // invalid: must return string|null
+        );
+    }
+
+    public function testLazyItemRendererStillThrowsAtRenderTime(): void
     {
         $s = new NavStack();
         $s->push('Home');
 
+        $state = 'ok';
         $bc = (new Breadcrumb())->setItemRenderer(
-            fn($item, $i) => 42 // invalid: must return string|null
+            static function ($item, $i) use (&$state) {
+                return $state;
+            }
         );
+        // Probe passed ('ok'); the renderer breaks only later — the
+        // render-time throw stays as the second line of defense.
+        $state = 123;
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('itemRenderer must return string|null');
@@ -616,6 +633,7 @@ final class BreadcrumbTest extends TestCase
                 return 'T' . $i;
             }
         );
+        $seen = []; // reset past the assignment probe (NS-17)
         $bc->setFocusedIndex(1);
 
         $this->assertSame('T0 › T1 › T2', $bc->render($stack));
@@ -633,6 +651,7 @@ final class BreadcrumbTest extends TestCase
                 return $focused ? 'SEL' : 'x';
             }
         );
+        $flags = []; // reset past the assignment probe (NS-17)
         $bc->setFocusedIndex(1);
 
         $this->assertSame('x › SEL › x', $bc->render($stack));
@@ -650,6 +669,7 @@ final class BreadcrumbTest extends TestCase
                 $flags[] = [$i, $focused];
                 return $focused ? 'SEL' : $item->title;
             });
+        $flags = []; // reset past the assignment probe (NS-17)
         $bc->setFocusedIndex(0);
 
         // The renderer still runs for every stack item (the flag marks the
@@ -676,6 +696,7 @@ final class BreadcrumbTest extends TestCase
                 return 'x';
             }
         );
+        $flags = []; // reset past the assignment probe (NS-17)
 
         $this->assertStringNotContainsString('SEL', $bc->render($stack));
         $this->assertSame([false, false], $flags);

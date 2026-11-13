@@ -212,6 +212,16 @@ final class Breadcrumb
      * fn(NavigationItem $item, int $index, bool $focused): ?string.
      * Return null to fall back to the default (sanitized) title rendering.
      *
+     * SMOKE CALL (NS-17): assignment probes the closure once with a
+     * SYNTHETIC item — `new NavigationItem('probe', null)`, index 0, focus
+     * false — and refuses a non-string/non-null answer right there, instead
+     * of letting a misconfiguration surface at first paint. The probe is a
+     * documented contract, not an accident: renderers must be side-effect
+     * free (repo law) and must not assume real stack data on argument one.
+     * `null` is ALWAYS a legal answer, so no legitimately-correct closure
+     * can fail the probe; a closure that THROWS during the probe is
+     * rejected with its own exception, uncaught and unmodified.
+     *
      * The third argument is the focus flag from {@see setFocusedIndex()}
      * (NS-16) — true for exactly the one crumb whose stack index matches
      * the intent at call time; 2-arg closures keep working, PHP ignores
@@ -229,14 +239,22 @@ final class Breadcrumb
      * untouched. A code-side SGR re-open after the cut would be a
      * sugar-core-shaped design change — follow-up candidate, not shipped.
      *
-     * @throws \InvalidArgumentException Raised at RENDER time (view()/
-     *                                   render()) when the closure returns
-     *                                   a non-string, non-null value — NOT
-     *                                   at assignment; setItemRenderer()
-     *                                   itself accepts any Closure
+     * @throws \InvalidArgumentException Raised at ASSIGNMENT when the smoke
+     *                                   call answers with a non-string,
+     *                                   non-null value (NS-17); the same
+     *                                   violation at RENDER time still
+     *                                   throws (second line of defense for
+     *                                   closures that break lazily)
      */
     public function setItemRenderer(\Closure $fn): self
     {
+        $probe = $fn(new NavigationItem('probe', null), 0, false);
+        if ($probe !== null && \is_string($probe) === false) {
+            throw new \InvalidArgumentException(
+                'itemRenderer rejected by smoke call: renderer returned ' . \get_debug_type($probe) . ', expected string|null'
+            );
+        }
+
         $this->itemRenderer = $fn;
         return $this;
     }

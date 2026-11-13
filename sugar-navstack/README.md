@@ -161,7 +161,9 @@ titles still cost N crumbs of width math (the trust notes under `Url` spell
 out why).
 `setItemRenderer(fn(NavigationItem, int, bool $focused): ?string)` customizes
 each crumb (the third argument is the `setFocusedIndex()` flag; 2-arg
-closures keep working)
+closures keep working). A renderer answering the assignment-time smoke call
+with anything but string|null is REJECTED there, not at first paint — and
+because `null` is always legal, no correct closure can fail the probe
 (`null` falls back to the SANITIZED title, not the raw one) — width math runs
 on VISIBLE CELLS, so SGR escape bytes are excluded and a styled trail elides
 exactly where the plain one does. The honest exception is the cut: when the cap
