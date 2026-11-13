@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Tape;
 
+use SugarCraft\Vcr\Event;
+
 /**
  * Line-oriented tape tokenizer.
  *
@@ -153,12 +155,20 @@ final readonly class Lexer
 
         if (preg_match('/^Sleep\s+(\d+(?:\.\d+)?)\s*(s|ms|m)(?=\s|$)/i', $s, $m)) {
             $seconds = $this->durationSeconds((float) $m[1], strtolower($m[2]));
-            return [new Token(self::TOKEN_SLEEP, (string) $seconds, $lineNum), strlen($m[0])];
+            // Trust door (finding 001): an absurd duration never becomes a
+            // token — the line falls to the UNKNOWN path (and with it, to
+            // the parser's gates) instead of advancing the tape clock to
+            // geological time.
+            if (is_finite($seconds) && $seconds >= 0.0 && $seconds <= Event::MAX_TIMESTAMP_SECONDS) {
+                return [new Token(self::TOKEN_SLEEP, (string) $seconds, $lineNum), strlen($m[0])];
+            }
         }
 
         if (preg_match('/^Wait\s+(\d+(?:\.\d+)?)\s*(s|ms|m)?(?=\s|$)/i', $s, $m)) {
             $seconds = $this->durationSeconds((float) $m[1], isset($m[2]) ? strtolower($m[2]) : 's');
-            return [new Token(self::TOKEN_WAIT, (string) $seconds, $lineNum), strlen($m[0])];
+            if (is_finite($seconds) && $seconds >= 0.0 && $seconds <= Event::MAX_TIMESTAMP_SECONDS) {
+                return [new Token(self::TOKEN_WAIT, (string) $seconds, $lineNum), strlen($m[0])];
+            }
         }
 
         if (preg_match('/^Ctrl\+([A-Za-z@\[\]\\\\^_])(?=\s|$)/', $s, $m)) {

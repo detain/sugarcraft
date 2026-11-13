@@ -90,6 +90,54 @@ final class Scalars
     }
 
     /**
+     * Timestamp/duration coercion for the trust doors (findings 001/002):
+     * numeric literals and numeric strings only — no silent PHP cast table
+     * behind a garbage value. `float("abc") === 0.0` would rewrite a corrupt
+     * timestamp into a valid frame at t=0, the exact laundering this door
+     * forbids; a non-numeric scalar is rejected by name instead.
+     *
+     * Bounds mirror {@see \SugarCraft\Vcr\Event::MAX_TIMESTAMP_SECONDS}:
+     * finite, non-negative, within the 24 h cassette ceiling.
+     *
+     * @throws \InvalidArgumentException When $value is not a numeric scalar
+     *   within the seconds bounds, or is a container.
+     */
+    public static function seconds(mixed $value, string $where): float
+    {
+        $reject = static function () use ($where, $value): never {
+            if (\is_string($value)) {
+                $shown = "'" . (strlen($value) > 40 ? substr($value, 0, 40) . '…' : $value) . "'";
+            } elseif (\is_scalar($value) || $value === null) {
+                $shown = var_export($value, true);
+            } else {
+                $shown = get_debug_type($value);
+            }
+            throw new \InvalidArgumentException(sprintf(
+                '%s must be a finite non-negative number of seconds at most %s, %s given',
+                $where,
+                (string) \SugarCraft\Vcr\Event::MAX_TIMESTAMP_SECONDS,
+                $shown,
+            ));
+        };
+
+        if (\is_int($value)) {
+            $seconds = (float) $value;
+        } elseif (\is_float($value)) {
+            $seconds = $value;
+        } elseif (\is_string($value) && \is_numeric($value)) {
+            $seconds = (float) $value;
+        } else {
+            $reject();
+        }
+
+        if (!\is_finite($seconds) || $seconds < 0.0 || $seconds > \SugarCraft\Vcr\Event::MAX_TIMESTAMP_SECONDS) {
+            $reject();
+        }
+
+        return $seconds;
+    }
+
+    /**
      * @throws \InvalidArgumentException Always — containers cannot be scalars.
      */
     private static function reject(string $where, string $want, mixed $value): never

@@ -175,16 +175,17 @@ final class FrameStreamTimingTest extends TestCase
     }
 
     /**
-     * Finding 001 (corrupted clock): a tape with a 1e17-second timestamp —
-     * the exact shape that used to hang CI for 120s under rc=124 — dies at
-     * the runtime cap on its first breach.
+     * Finding 001 (corrupted clock): a tape whose END rides past the runtime
+     * cap — legal per-event timestamps whose trailing time still overflows
+     * the ceiling — dies at the runtime cap, never at the harness timeout.
+     * (A corrupted per-event `t` is rejected earlier, at the Event door; the
+     * format-side edges live in tests/EventTest.php.)
      */
     public function testRuntimeCapRejectsCorruptedTimestamp(): void
     {
         $cassette = new Cassette(self::header(), [
             new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'a']),
-            new Event(t: 1.0e17, kind: EventKind::Output, payload: ['b' => 'b']),
-        ]);
+        ], endTime: 200_000.0);
 
         $stream = new FrameStream(new Player($cassette), Terminal::new(80, 24), 30.0);
 

@@ -286,7 +286,7 @@ final class JsonlFormat implements Format
         if ($kind === null) {
             throw new \RuntimeException("event on line {$lineNo} has unknown kind '" . Scalars::string($data['k'], 'event k') . "'");
         }
-        $t = Scalars::float($data['t'], 'event t');
+        $t = Scalars::seconds($data['t'], "event t on line {$lineNo}");
         unset($data['t'], $data['k']);
 
         return new Event(t: $t, kind: $kind, payload: ObjectMap::of($data, "event on line {$lineNo} payload"));

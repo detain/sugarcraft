@@ -236,11 +236,16 @@ final class RelativeFormat implements Format
             $bad = Scalars::string($data['k'], 'event k');
             throw new \RuntimeException("event on line {$lineNo} has unknown kind '{$bad}'");
         }
-        $dt = Scalars::float($data['dt'], 'event dt');
-        if ($dt < 0) {
-            throw new \InvalidArgumentException("negative dt on line {$lineNo}");
-        }
+        $dt = Scalars::seconds($data['dt'], "event dt on line {$lineNo}");
         $absoluteT = round($cumulativeBase + $dt, self::T_PRECISION);
+        // The cumulative sum is the real blast radius of a stack of legal-
+        // looking deltas: no single dt breaches the door, yet the running
+        // total slides off the edge of the tape (finding 001 door leg).
+        if ($absoluteT > Event::MAX_TIMESTAMP_SECONDS) {
+            throw new \RuntimeException(
+                "event dt on line {$lineNo} pushes the tape past the 24h ceiling ({$absoluteT}s)"
+            );
+        }
         unset($data['dt'], $data['k']);
 
         return new Event(t: $absoluteT, kind: $kind, payload: ObjectMap::of($data, "event on line {$lineNo} payload"));

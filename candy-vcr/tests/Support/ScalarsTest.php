@@ -79,4 +79,49 @@ final class ScalarsTest extends TestCase
         $this->expectExceptionMessage('payload.t must be float, stdClass given');
         Scalars::float(new \stdClass(), 'payload.t');
     }
+
+    public function testSecondsAcceptsNumericLiteralsAndNumericStrings(): void
+    {
+        self::assertSame(0.0, Scalars::seconds(0, 't'));
+        self::assertSame(42.5, Scalars::seconds(42.5, 't'));
+        self::assertSame(12.0, Scalars::seconds('12', 't'));
+        self::assertSame(1.5, Scalars::seconds('1.5', 't'));
+        self::assertSame(1000.0, Scalars::seconds('1e3', 't'));
+    }
+
+    /**
+     * The laundering shape of finding 001: (float) "abc" === 0.0, which
+     * would rewrite a corrupt timestamp into a legal frame at tape start.
+     * The seconds door names it instead.
+     */
+    public function testSecondsRejectsGarbageStringsNotZero(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("event t must be a finite non-negative number of seconds at most 86400, 'abc' given");
+        Scalars::seconds('abc', 'event t');
+    }
+
+    public function testSecondsRejectsInfinityNanNegativeAndOversized(): void
+    {
+        foreach ([\INF, -\INF, \NAN, -1.0, '1e17', 86401.0] as $bad) {
+            try {
+                Scalars::seconds($bad, 'event t');
+                self::fail('expected rejection for ' . var_export($bad, true));
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('must be a finite non-negative number of seconds', $e->getMessage());
+            }
+        }
+    }
+
+    public function testSecondsRejectsContainersAndBools(): void
+    {
+        foreach ([[], true] as $bad) {
+            try {
+                Scalars::seconds($bad, 'event t');
+                self::fail('expected rejection for ' . get_debug_type($bad));
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('must be a finite non-negative number of seconds', $e->getMessage());
+            }
+        }
+    }
 }

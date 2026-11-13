@@ -190,7 +190,7 @@ final class YamlFormat implements Format
             $bad = Scalars::string($data['k'], 'YAML event k');
             throw new \RuntimeException("YAML event #{$eventNo} has unknown kind '{$bad}'");
         }
-        $t = Scalars::float($data['t'], 'YAML event t');
+        $t = Scalars::seconds($data['t'], "YAML event t #{$eventNo}");
         unset($data['t'], $data['k']);
 
         return new Event(t: $t, kind: $kind, payload: ObjectMap::of($data, "YAML event #{$eventNo} payload"));
