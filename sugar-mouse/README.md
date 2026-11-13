@@ -81,6 +81,47 @@ if ($click !== null) {
 | `ClickResult` | The agreed press+release pair `ZoneClickTracker::track()` returns on a confirmed click |
 | `Lang` | Refusal-message lookup for this package's catalogue (`lang/`, five bare keys under Lang namespace `mouse`; the `sugar-mouse:` label rides inside each message) |
 | `Zones\MsgZoneInBounds` | Zone-bound Msg emitted by `Manager::anyInBoundsAndUpdate()` into a Model's `update()` — the only Zones-layer message that lives outside the `Msg\` namespace |
+### Primitive API (member census)
+
+| Class | Member | When to use it |
+|---|---|---|
+| `Mark` | `new()` / `disabled()` | Marking-enabled / marking-off instance |
+| `Mark` | `zone(id, content)` | Static one-shot wrap through an always-enabled marker |
+| `Mark` | `wrap(id, content)` | Encode one zone on an instance (honours its enabled flag) |
+| `Mark` | `withEnabled(bool)` | Fork with the emit flag flipped (bytes still validated) |
+| `Mark` | `isValidId(id)` | The id grammar predicate shared by encoder and decoder |
+| `Mark` | `untrusted(text)` | Sweep foreign sentinel framing bytes off labels you did not render |
+| `Mark` | `escapeForMessage(id)` | Render a hostile id safely inside an error message |
+| `Scan` | `parse(rendered, ?width)` | Static decode: `id => Zone` bounding boxes (width clamps, zero-paint rects drop) |
+| `Scan` | `strip(rendered)` | Byte-wise tag removal — same rule `parse()` decodes, so bounds and bytes stay in lock-step |
+| `Scanner` | `new()` | House factory for the registry-backed reverse-lookup |
+| `Scanner` | `scan(frame, ?width)` | Record the frame's zones (replaces previously recorded ids) |
+| `Scanner` | `get(id)` | One zone by id |
+| `Scanner` | `hit(col, row)` | Smallest zone under a cell (col-first!) |
+| `Scanner` | `all()` | Every recorded zone (ids this frame and earlier registered) |
+| `Scanner` | `idsStartingWith(prefix)` | The reading side of the prefix vocabulary (`newPrefix()` stamps, this selects) |
+| `Scanner` | `prefixed(prefix)` | @deprecated alias of `idsStartingWith()`; kept for live external callers |
+| `Scanner` | `clear()` | Empty the registry |
+| `Zone` | `inBounds(event)` | Cell containment for a `MouseEvent` |
+| `Zone` | `pos(event)` | `[col, row]` offset from the zone's top-left, 0-based, negative outside |
+| `Zone` | `width()` / `height()` | Cell extents |
+| `Zone` | `isZero()` | Degenerate zone (no cell painted) — scans drop these |
+| `MouseEvent` | `press/release/drag/scroll(col, row, button)` | Statics for the four actions |
+| `ZoneClickTracker` | `track(event, ?zone)` | Press arms, release confirms — `?ClickResult` |
+| `ZoneClickTracker` | `observeRelease(event, ?zone)` | Non-consuming agreement predicate (see Two-call click confirmation) |
+| `ZoneClickTracker` | `setPressZone(zone)` | @deprecated order-coupled vestige of the two-call setter flow; prefer `track()`'s zone argument |
+| `Selection` | `new(rowFrom, ..., colTo)` | Private ctor, static factory (row-first!) |
+| `Selection` | `begin(row, col)` / `dragTo(row, col)` | Press anchors; move extends (row-first!) |
+| `Selection` | `beginEvent(event, select)` / `dragToEvent(event, select)` | MouseMsg-shaped doors onto the same two steps (transpose col-first internally) |
+| `Selection` | `clear()` | End the gesture (anchor and head released) |
+| `Selection` | `range()` | The covered `SelectionRange` while active, else null |
+| `Selection` | `active()` | A gesture holds an anchor (press until `clear()`) |
+| `Selection` | `dragging()` | Head left the anchor — GEOMETRIC truth; a there-and-back sweep un-drags. Apps wanting a latched flag past a click tolerance latch their own (candy-code's adapter does) |
+| `SelectionRange` | `new(rowA, colA, rowB, colB, ?edgeFrom, ?edgeTo)` | Normalize the pair; edges may widen, never cross (see Edge cells); 0/negative cells throw `selection.off_terminal` naming the parameter |
+| `SelectionRange` | `spanOnRow(row)` | `[from, to]` cells cut on this row's own start/end, or null outside the range |
+| `SelectionRange` | `cellContains(row, col)` | Is this cell selected |
+| `SelectionRange` | `cells()` | Generator over every selected `[row, col]` in reading order |
+| `SelectionRange` | `extract(lines)` | The copied text out of a painted frame (row R is `lines[R - 1]`) |
 
 ### Choosing your tracker idiom
 
@@ -825,6 +866,19 @@ you can tell the first cause from the other two. The two-call
 | `MultiClickTracker` | `__construct(manager, clickIntervalMs)` | Track double/triple click streaks |
 | `MultiClickTracker` | `update(mouseMsg)` | Process press event, return double/triple msg |
 | `MultiClickTracker` | `clickCount()` | Current streak count (0 = no streak) |
+| `MultiClickTracker` | `withManager(manager)` | Rebind hit-testing, carry the streak across |
+| `ZoneHoverTracker` | `withManager(manager)` | Rebind hit-testing, carry the hovered zone and owed enter |
+| `ZoneHoverTracker` | `withCurrentZoneId(?id)` | Restore (or clear) hover from a serialized id — drops any owed enter |
+| `ZoneHoverTracker` | `pendingEnter()` | The enter owed after a boundary crossing, reported without consuming |
+| `DragTracker` | `withManager(manager)` | Rebind hit-testing, carry the open gesture |
+| `DragTracker` | `withZoneIds(?origin, ?current)` | Restore an open drag from serialized ids (zones re-resolved from the registry) |
+| `DragTracker` | `dragButton()` | The `MouseButton` the open drag was pressed with (null when idle) |
+| `DragTracker` | `originZoneId()` / `currentZoneId()` | Id spellings of the two zone accessors (survive zone re-resolution) |
+| `Zones\Zone` | `fromMouseZone(zone)` | Adapt a primitive `Zone` into the hit-testable adapter (bridge, not copy) |
+| `Zones\Zone` | `contains(other)` | Does this zone's rect fully cover another's |
+| `Zones\Zone` | `width()` / `height()` / `isZero()` | Geometry straight off the wrapped rect |
+| `Zones\Zone` | `pos(mouseMsg)` | `[col, row]` from the zone's top-left, 0-based |
+| `MsgZoneInBounds` | `zone` / `mouse` | The hit zone and the event that hit it (payload properties) |
 | `DoubleClickMsg` | `zone` | Zone of the second press |
 | `TripleClickMsg` | `zone` | Zone of the third press |
 
