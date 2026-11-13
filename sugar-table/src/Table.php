@@ -300,10 +300,17 @@ final class Table
         // under the table can no longer be expanded, and retaining the stale
         // objects would pin them forever (audit M12: the leak was released
         // only by re-toggling the SAME object, which a refresh makes
-        // impossible). Prune to the identities that still exist.
+        // impossible). Prune to the identities that still exist — ST-64: one
+        // spl_object_id key set per call instead of in_array×N. A Row object
+        // passed in survives normalizeRows() as the very instance stored at
+        // its slot, so the post-normalization ids match the old scan exactly.
+        $liveIds = [];
+        foreach ($rows as $row) {
+            $liveIds[\spl_object_id($row)] = true;
+        }
         $clone->expandedRows = \array_values(\array_filter(
             $clone->expandedRows,
-            static fn (Row $r): bool => \in_array($r, $rows, true),
+            static fn (Row $r): bool => isset($liveIds[\spl_object_id($r)]),
         ));
         $clone->resetCursor();
         $clone->invalidateRenderCaches();
