@@ -42,6 +42,13 @@ final class Env
     /**
      * Resolve the effective environment map for one detection run.
      *
+     * Keys are matched case-exactly — an intentional policy, not an accident
+     * of array lookup. On Windows the environment block is case-insensitive
+     * at the OS layer, so an unusual spelling (`No_Color`, `term`) can be
+     * present in the shell's view and still miss every rung here; aliasing
+     * keys would reorder resolution on POSIX to fix an unverifiable-from-CI
+     * platform, so the caveat is documented instead (CP-40, sugar-colorprofile-049).
+     *
      * @param array<array-key, string|null> $injected Hermetic override map; [] = ambient.
      * @return array<string, string|null>
      */
@@ -60,6 +67,9 @@ final class Env
 
     /**
      * Read one variable from a resolved map, normalizing absent/false/null to null.
+     *
+     * The lookup is case-exact like {@see self::resolve()} — see the CP-40
+     * platform caveat there (`No_Color` misses on Windows by design).
      *
      * @param array<string, string|null> $resolved
      */

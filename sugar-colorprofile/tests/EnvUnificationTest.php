@@ -326,4 +326,29 @@ final class EnvUnificationTest extends TestCase
             unset($_ENV['TERM']);
         }
     }
+
+    public function testEnvKeysAreMatchedCaseExactlyTheDocumentedCp40Policy(): void
+    {
+        // CP-40 statement pin (sugar-colorprofile-049): resolution is
+        // case-exact BY POLICY. On POSIX `No_Color` is simply a different
+        // name and suppresses nothing; the finding's Windows consequence
+        // (case-insensitive OS block + case-exact lookup = silent miss) is
+        // documented in Env::resolve and not reproducible on this runner.
+        // The alias map the finding proposed would reorder POSIX resolution
+        // for an unverifiable gain, so option (b) shipped instead.
+        $this->arm('No_Color', '1');
+        try {
+            $resolved = Env::resolve([]);
+            $this->assertSame('1', $resolved['No_Color'] ?? null, 'the odd casing rides the ambient snapshot as its own key');
+            $this->assertNull(Env::value($resolved, 'NO_COLOR'), 'the exact-key lookup must not alias-match');
+            $this->assertSame(
+                DetectionChain::LEVEL_ANSI,
+                DetectionChain::detect([])->level(),
+                'No_Color suppresses nothing: the NO_COLOR leg stays dark',
+            );
+        } finally {
+            putenv('No_Color');
+            unset($_ENV['No_Color']);
+        }
+    }
 }

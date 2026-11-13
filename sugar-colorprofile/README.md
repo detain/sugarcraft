@@ -41,6 +41,17 @@ Requires PHP 8.3+ and no PHP extensions — the probes' optional `posix_*` calls
 are feature-detected, and an absent/unreadable `infocmp` child degrades the
 phase-2 answer instead of failing.
 
+**Supported targets: POSIX terminals.** The phase-2 `infocmp` consult is
+POSIX-only by design — it queries the compiled terminfo database. The env
+ladder's Windows/macOS legs (`WT_SESSION`, the iTerm/Apple_Terminal hints)
+are untested by this repository's CI, whose ladder legs run on Linux only;
+on Windows the library answers from the env ladder alone. Case matters more
+there than anywhere else: env keys are matched **case-exactly**, while the
+Windows environment block is case-insensitive at the OS layer — an unusual
+spelling such as `No_Color` can exist in the shell's view and still miss
+detection, because the library deliberately does not alias-match env keys
+(`Env::resolve`).
+
 ## Quickstart
 
 ```php
@@ -402,7 +413,7 @@ if (Probe::reducedMotion()) {
 
 Detection's inputs are the env vars in the precedence table above — and,
 through phase 2, the terminfo database the `infocmp` child consults. The
-binary is launched from a fixed absolute-path roster, and every exec surface hands the child a minimal environment built in one place (`Probe\InfocmpBinary::childEnvironment()`: the queried `TERM` and a fixed `PATH` only). `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer `infocmp`'s lookup (a search path you can inspect with `infocmp -1 -D`), and inheriting them from a parent whose environment an attacker controls would hand that attacker the database; they are therefore never passed. What remains outside this library's reach is the database itself: an attacker who can write to the system terminfo directories still owns the answer, so the name-position guard in `Probe\TerminfoParser` protects the *parse* from a hostile database but cannot vouch for the *source*. Treat every detection answer as a rendering hint, never as an authorization signal: enabling a feature, granting trust, or selecting a transport on the basis of a `Tc`/`RGB`/`Sixel` capability names a privilege the environment holds, not one this library holds.
+binary is launched from a fixed absolute-path roster, and every exec surface hands the child a minimal environment built in one place (`Probe\InfocmpBinary::childEnvironment()`: the queried `TERM` and a fixed `PATH` only). `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer `infocmp`'s lookup (a search path you can inspect with `infocmp -1 -D`), and inheriting them from a parent whose environment an attacker controls would hand that attacker the database; they are therefore never passed. The stripped child environment is the correct security default, but it also silently defeats the classic `tic`-compiled TrueColor entry living in `~/.terminfo`: the child's search will not find it, so export `COLORTERM=truecolor` instead — that rides the env ladder directly (step 7). What remains outside this library's reach is the database itself: an attacker who can write to the system terminfo directories still owns the answer, so the name-position guard in `Probe\TerminfoParser` protects the *parse* from a hostile database but cannot vouch for the *source*. Treat every detection answer as a rendering hint, never as an authorization signal: enabling a feature, granting trust, or selecting a transport on the basis of a `Tc`/`RGB`/`Sixel` capability names a privilege the environment holds, not one this library holds.
 
 ## ColorProfile Enum
 
