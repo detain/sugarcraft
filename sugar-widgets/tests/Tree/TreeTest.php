@@ -285,4 +285,29 @@ final class TreeTest extends TestCase
         $focused = $tree->focus();
         $this->assertStringNotContainsString("\x1b[2m", $focused->view(), 'focused bytes carry the prefix, never the dim');
     }
+
+    public function testDeepIndentAtNarrowWidthTruncatesButKeepsTheLabel(): void
+    {
+        $node = Node::leaf('deep-label');
+        for ($d = 1; $d <= 20; $d++) {
+            $node = Node::branch('lvl' . $d, $node);
+        }
+        $lines = explode("\n", Tree::new($node)->withSize(40, 0)->view());
+        $this->assertCount(21, $lines);
+        $plain = \SugarCraft\Core\Util\Ansi::strip($lines[20]);
+        // The annotation's contract: a depth-20 row in a width-40 frame
+        // renders the label TRUNCATED BUT PRESENT (pre-W-16 the gutter ate
+        // it whole); the gutter shows the `…` continuation marker.
+        $this->assertStringContainsString('deep', $plain, 'label survives the deep-indent budget');
+        $this->assertStringContainsString('…', $plain, 'the overflowing gutter collapses to a continuation marker');
+        $this->assertLessThanOrEqual(40, \SugarCraft\Core\Util\Width::string($lines[20]));
+    }
+
+    public function testShallowIndentIsUncapped(): void
+    {
+        $tree = Tree::new(Node::branch('a', Node::leaf('b')));
+        // Well under the cap: the narrow-frame bytes equal the auto-width
+        // bytes exactly (regression pin for the W-16 cap being a no-op shallow).
+        $this->assertSame($tree->view(), $tree->withSize(40, 0)->view());
+    }
 }

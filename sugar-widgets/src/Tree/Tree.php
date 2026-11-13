@@ -247,7 +247,17 @@ final class Tree implements Model
             $glyph = $row['leaf']
                 ? $this->leafGlyph
                 : ($row['expanded'] ? $this->expandedGlyph : $this->collapsedGlyph);
-            $indent = str_repeat('  ', $row['depth']);
+            // W-16/018: the indent gutter is capped so at least 8 cells
+            // (prefix + glyph + a readable label) always survive the width
+            // budget; an overflowing gutter collapses to a `…` continuation
+            // marker instead of eating the label whole.
+            $depthCells = 2 * $row['depth'];
+            $cap        = max(0, $this->width - 8);
+            if ($this->width > 0 && $depthCells > $cap) {
+                $indent = $cap > 0 ? '…' . str_repeat(' ', $cap - 1) : '';
+            } else {
+                $indent = str_repeat('  ', $row['depth']);
+            }
             $label = Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($row['label']));
             $line = $cursor . $indent . $glyph . $label;
             if ($this->width > 0) {
