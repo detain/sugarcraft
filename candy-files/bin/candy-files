@@ -98,4 +98,4 @@ foreach (['left' => $leftCwd, 'right' => $rightCwd] as $side => $dir) {
     }
 }
 
-(new Program(Manager::start($leftCwd, $rightCwd), new ProgramOptions(useAltScreen: true)))->run();
+(new Program(Manager::start($leftCwd, $rightCwd), new ProgramOptions(useAltScreen: true, bracketedPaste: true)))->run();

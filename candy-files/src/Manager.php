@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ExecMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
+use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Editor;
 use SugarCraft\Core\Subscriptions;
@@ -237,6 +238,14 @@ final class Manager implements Model
         }
 
         if (($msg instanceof KeyMsg) === false) {
+            // CF-49 (closes 096): bracketed paste is the one non-key Msg
+            // with a home here — with mode 2004 on (the bin now asks for
+            // it), a pasted line can no longer stream in as a keystroke
+            // burst, so the collecting buffers take it as one atomic
+            // edit. Every other non-key Msg keeps falling through.
+            if ($msg instanceof PasteMsg) {
+                return [$this->applyPaste($msg), null];
+            }
             return [$this, null];
         }
 
@@ -1935,6 +1944,50 @@ final class Manager implements Model
     }
 
     /** Handle keys while in search mode */
+    /**
+     * CF-49 (closes 096): route a bracketed-paste payload into whichever
+     * text buffer owns the keyboard — the sugar-core input reader has
+     * already stripped escape bytes when sanitizePaste is on (its
+     * default), and the whole paste is ONE edit: multi-line and tab
+     * bytes flatten to spaces exactly like the in-repo candy-git
+     * precedent, so a pasted shell snippet can never smuggle an
+     * Enter-equivalent commit (or a k/j burst) through a one-line
+     * buffer. A paste that arrives with no collecting buffer is
+     * dropped: outside rename/mkdir/path/pattern/search the clipboard
+     * has no meaning in this UI, and re-typing it as keystrokes is the
+     * hijack this mode exists to prevent.
+     */
+    private function applyPaste(PasteMsg $msg): self
+    {
+        $text = self::flattenPaste($msg->content);
+        if ($text === '') {
+            return $this;
+        }
+        // The four text-entry submodes collect a buffer; the armed
+        // y/n gates (copy/move/delete) do not, and a paste must not
+        // answer one on the user's behalf any more than a typed 'y'
+        // would — anatomic: drop it.
+        $inTextEntry = $this->confirm === ConfirmState::RenameSelected
+            || $this->confirm === ConfirmState::MkdirPrompt
+            || $this->confirm === ConfirmState::PathPrompt
+            || $this->confirm === ConfirmState::SelectPattern;
+        if ($inTextEntry) {
+            return $this->withInputBuffer((string) $this->inputBuffer . $text);
+        }
+        if ($this->searchQuery !== null) {
+            // The same rebuild a typed char gets — results and cursor
+            // are re-derived, never patched.
+            return $this->search(($this->searchQuery ?? '') . $text);
+        }
+        return $this;
+    }
+
+    /** candy-git App::flattenPaste shape: runs of CR/LF/TAB to one space. */
+    private static function flattenPaste(string $content): string
+    {
+        return preg_replace('/[\r\n\t]+/', ' ', $content) ?? '';
+    }
+
     private function handleSearchKey(KeyMsg $msg): self
     {
         // Escape exits search
