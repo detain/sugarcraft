@@ -116,6 +116,11 @@ final class Counter implements Model
     // package's README "Trust boundary" section.
     // Mirrors charmbracelet/bubbletea-app-template/Model.view — the
     // current frame, rendered as a plain string here.
+    // The frame's English literals are a deliberate teaching boundary, not
+    // an oversight: the template must stay copy-paste-runnable with zero
+    // i18n wiring. A real app wraps user-facing text in Lang::t() — the
+    // README's "Common next steps" table names the row ("Translate your UI
+    // strings").
     public function view(): string
     {
         $body = sprintf("count: %d\n↑ ↓ to change · q / Esc / Ctrl+C quit", $this->n);
