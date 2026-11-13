@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'standard.ansi16_out_of_range' => 'O índice de cor ANSI 16 deve ser 0–15, obtido: {index}',
     'standard.ansi256_out_of_range' => 'O índice de cor ANSI 256 deve ser 0–255, obtido: {index}',
+    'standard.color_name_unknown' => 'nome de cor desconhecido: {name}',
+    'standard.ansi8_out_of_range' => 'O índice de cor ANSI 8 deve ser 0-7, obtido: {index}',
     'color.invalid_hex' => 'cor hexadecimal inválida: {hex}',
     'colormath.invalid_xyz' => 'O componente XYZ {key} está ausente ou não é um número finito',
     'deltae.invalid_lab' => 'A matriz Lab {label} não possui o componente numérico "{key}"',

@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'standard.ansi16_out_of_range' => 'ANSI 16-Farben-Index muss 0–15 sein, erhalten: {index}',
     'standard.ansi256_out_of_range' => 'ANSI 256-Farben-Index muss 0–255 sein, erhalten: {index}',
+    'standard.color_name_unknown' => 'unbekannter Farbname: {name}',
+    'standard.ansi8_out_of_range' => 'ANSI 8-Farben-Index muss 0-7 sein, erhalten: {index}',
     'color.invalid_hex' => 'ungültige Hex-Farbe: {hex}',
     'colormath.invalid_xyz' => 'Die XYZ-Komponente {key} fehlt oder ist keine endliche Zahl',
     'deltae.invalid_lab' => 'Dem Lab-Feld {label} fehlt die numerische Komponente "{key}"',

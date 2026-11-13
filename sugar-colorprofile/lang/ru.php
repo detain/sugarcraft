@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'standard.ansi16_out_of_range' => 'Индекс цвета ANSI 16 должен быть 0–15, получено: {index}',
     'standard.ansi256_out_of_range' => 'Индекс цвета ANSI 256 должен быть 0–255, получено: {index}',
+    'standard.color_name_unknown' => 'неизвестное название цвета: {name}',
+    'standard.ansi8_out_of_range' => 'Индекс цвета ANSI 8 должен быть 0-7, получено: {index}',
     'color.invalid_hex' => 'недопустимый шестнадцатеричный цвет: {hex}',
     'colormath.invalid_xyz' => 'Компонент XYZ {key} отсутствует или не является конечным числом',
     'deltae.invalid_lab' => 'В массиве Lab {label} отсутствует числовой компонент "{key}"',

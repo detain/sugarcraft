@@ -414,4 +414,133 @@ final class ColorTest extends TestCase
         $noTty = $exact128->convert(ColorProfile::NoTTY);
         $this->assertSame([255, 255, 255], [$noTty->r, $noTty->g, $noTty->b]);
     }
+
+    // -------------------------------------------------------------------------
+    // CP-17 — indexed-rung constructors and truecolor owners
+    // -------------------------------------------------------------------------
+
+    public function testFromNameResolvesEveryCatalogEntry(): void
+    {
+        foreach (Color::namedColors() as $idx => $name) {
+            $this->assertTrue(
+                Color::fromName($name)->equals(StandardColors::fromIndex($idx)),
+                "$name resolves through the blessed fromIndex() door",
+            );
+        }
+    }
+
+    public function testFromNameIsCaseInsensitive(): void
+    {
+        foreach (['red', 'Red', 'RED', 'rEd'] as $spelling) {
+            $c = Color::fromName($spelling);
+            $this->assertSame([0xcd, 0x00, 0x00], [$c->r, $c->g, $c->b], $spelling);
+        }
+        $c = Color::fromName('BRIGHTBLACK');
+        $this->assertSame([0x7f, 0x7f, 0x7f], [$c->r, $c->g, $c->b]);
+    }
+
+    public function testFromNameFollowsTheLiveSlotLikeFromIndex(): void
+    {
+        $original = StandardColors::$red;
+        try {
+            StandardColors::$red = new Color(1, 2, 3);
+            $c = Color::fromName('red');
+            $this->assertSame([1, 2, 3], [$c->r, $c->g, $c->b], 'live-slot semantics');
+        } finally {
+            StandardColors::$red = $original;
+        }
+    }
+
+    public function testFromNameRejectsUnknownName(): void
+    {
+        $this->expectException(\OutOfBoundsException::class);
+        $this->expectExceptionMessage('unknown color name: chartreuse');
+        Color::fromName('chartreuse');
+    }
+
+    public function testFromAnsi16IndexMatchesTheReferenceTable(): void
+    {
+        foreach (Color::ANSI16_RGB as $idx => [$r, $g, $b]) {
+            $c = Color::fromAnsi16Index($idx);
+            $this->assertSame([$r, $g, $b], [$c->r, $c->g, $c->b], "slot $idx");
+        }
+    }
+
+    public function testFromAnsi16IndexIsFrozenUnderSlotOverrides(): void
+    {
+        $original = StandardColors::$red;
+        try {
+            StandardColors::$red = new Color(1, 2, 3);
+            $c = Color::fromAnsi16Index(1);
+            $this->assertSame([0xcd, 0x00, 0x00], [$c->r, $c->g, $c->b], 'table-sourced, not live-slot');
+        } finally {
+            StandardColors::$red = $original;
+        }
+    }
+
+    /**
+     * @return array<string, array{int}>
+     */
+    public static function outOfRange16Indices(): array
+    {
+        return ['below' => [-1], 'one past' => [16], 'far past' => [255]];
+    }
+
+    #[DataProvider('outOfRange16Indices')]
+    public function testFromAnsi16IndexRejectsIndicesOutsideTheRung(int $idx): void
+    {
+        $this->expectException(\OutOfBoundsException::class);
+        Color::fromAnsi16Index($idx);
+    }
+
+    #[DataProvider('outOfRange16Indices')]
+    public function testFromAnsi16IndexThrowNamesTheOffendingIndex(int $idx): void
+    {
+        $this->expectExceptionMessage('0–15, got ' . $idx);
+        Color::fromAnsi16Index($idx);
+    }
+
+    public function testFromAnsi8IndexCoversTheBaseRungs(): void
+    {
+        for ($idx = 0; $idx <= 7; $idx++) {
+            [$r, $g, $b] = Color::ANSI16_RGB[$idx];
+            $c = Color::fromAnsi8Index($idx);
+            $this->assertSame([$r, $g, $b], [$c->r, $c->g, $c->b], "base slot $idx");
+        }
+    }
+
+    public function testFromAnsi8IndexRejectsBrightSlots(): void
+    {
+        $this->expectException(\OutOfBoundsException::class);
+        $this->expectExceptionMessage('0-7, got 8');
+        Color::fromAnsi8Index(8);
+    }
+
+    public function testFromAnsi8IndexRejectsNegativeIndices(): void
+    {
+        $this->expectException(\OutOfBoundsException::class);
+        Color::fromAnsi8Index(-1);
+    }
+
+    public function testToTrueColorEmittersCarryTheReferenceRgb(): void
+    {
+        $c = new Color(10, 20, 30);
+        $this->assertSame("\x1b[38;2;10;20;30m", $c->toTrueColorForeground());
+        $this->assertSame("\x1b[48;2;10;20;30m", $c->toTrueColorBackground());
+    }
+
+    public function testDeprecatedAnsiNamedBridgesStayByteIdentical(): void
+    {
+        $c = new Color(255, 128, 0);
+        $this->assertSame($c->toTrueColorForeground(), $c->toAnsiForeground());
+        $this->assertSame($c->toTrueColorBackground(), $c->toAnsiBackground());
+    }
+
+    public function testToAnsi256BackgroundCompletesTheRung(): void
+    {
+        $c = new Color(100, 50, 255);
+        $idx = $c->toAnsi256Index();
+        $this->assertSame("\x1b[48;5;{$idx}m", $c->toAnsi256Background());
+        $this->assertSame("\x1b[38;5;{$idx}m", $c->toAnsi256Foreground());
+    }
 }

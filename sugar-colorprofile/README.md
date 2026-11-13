@@ -312,10 +312,30 @@ $ansi256 = Palette::toProfile($color, ColorProfile::Ansi256); // nearest cube/gr
 $ansi    = Palette::toProfile($color, ColorProfile::Ansi);    // nearest of the 16 slots
 
 echo $ansi256->toAnsi256Foreground(); // "\x1b[38;5;…m"
+echo $ansi256->toAnsi256Background(); // "\x1b[48;5;…m"
 echo $ansi->toAnsi16Foreground();     // "\x1b[…m" — 4-bit SGR
+echo $color->toTrueColorForeground(); // "\x1b[38;2;…m" — honest name; the old
+//                                      toAnsiForeground()/toAnsiBackground()
+//                                      pair emitted these same 24-bit bytes
+//                                      under an "ANSI" misnomer and now bridge
+//                                      here (deprecated, REMOVED-IN: 2.0.0)
 
 // Or convert against the detected terminal
 $auto = (new Palette())->convert($color);
+```
+
+**Constructors from the indexed rungs.** The writers that turn a `Color` into
+SGR now have exact inverse doors (CP-17):
+
+```php
+Color::fromName('BrightRed');       // case-insensitive over StandardColors::catalog();
+                                    // reads the LIVE slot (a process override of
+                                    // StandardColors::$brightRed is reflected) — throws
+                                    // OutOfBoundsException on an unknown name
+Color::fromAnsi16Index(9);          // reference palette value of slot 9 — table-sourced,
+                                    // NOT affected by slot overrides (the frozen sibling of
+                                    // StandardColors::fromIndex()); throws outside 0-15
+Color::fromAnsi8Index(3);           // base-8 half, slots 0-7 only; throws outside 0-7
 ```
 
 **The two "no color" rungs differ.** Since CP-05 the suppression variables
@@ -680,7 +700,7 @@ Use the non-mutating read API instead (not deprecated):
 | `StandardColors::$brightBlack` | `StandardColors::fromIndex(8)` |
 | enumerating the palette | `StandardColors::all()` (indexed 0–15) · `StandardColors::catalog()` (names) |
 | a private/global override table | build your own `array` from `all()` — the `Color` values are immutable, so a local array is already isolated |
-| constructing fresh standard colors | `new Color(0xcd, 0x00, 0x00)`, `Color::parse('#cd0000')` or `Color::fromAnsi256Index(1)` |
+| constructing fresh standard colors | `new Color(0xcd, 0x00, 0x00)`, `Color::parse('#cd0000')`, `Color::fromName('red')` (a `fromIndex()` read in disguise) or `Color::fromAnsi256Index(1)` |
 
 `fromIndex(int)` is bounds-checked and throws `OutOfBoundsException` outside
 `0..15`. A structural test pins both halves of the window: every deprecated

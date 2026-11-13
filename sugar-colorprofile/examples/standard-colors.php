@@ -36,7 +36,7 @@ echo str_repeat('-', 72) . "\n";
 
 foreach (StandardColors::all() as $i => $color) {
     $name = $names[$i];
-    $bg   = $color->toAnsiBackground();
+    $bg   = $color->toTrueColorBackground();
     $hex  = $color->toHex();
     printf("%5d  %-15s %s%-10s%s %-8s %3d %3d %3d\n",
         $i,
@@ -52,8 +52,8 @@ foreach (StandardColors::all() as $i => $color) {
 echo "\n--- Rendered swatches (foreground) ---\n";
 foreach (StandardColors::all() as $i => $color) {
     $name = $names[$i];
-    $fg   = $color->toAnsiForeground();
-    $bg   = StandardColors::fromIndex(0)->toAnsiBackground(); // black, non-mutating read API
+    $fg   = $color->toTrueColorForeground();
+    $bg   = StandardColors::fromIndex(0)->toTrueColorBackground(); // black, non-mutating read API
     echo "{$bg}{$fg} {$name} \x1b[0m ";
 }
 echo "\n";

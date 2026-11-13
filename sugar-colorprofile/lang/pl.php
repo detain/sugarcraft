@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'standard.ansi16_out_of_range' => 'Indeks koloru ANSI 16 musi wynosić 0–15, otrzymano: {index}',
     'standard.ansi256_out_of_range' => 'Indeks koloru ANSI 256 musi wynosić 0–255, otrzymano: {index}',
+    'standard.color_name_unknown' => 'nieznana nazwa koloru: {name}',
+    'standard.ansi8_out_of_range' => 'Indeks koloru ANSI 8 musi wynosić 0-7, otrzymano: {index}',
     'color.invalid_hex' => 'nieprawidłowy kolor szesnastkowy: {hex}',
     'colormath.invalid_xyz' => 'Składowa XYZ {key} brak lub nie jest liczbą skończoną',
     'deltae.invalid_lab' => 'Tablica Lab {label} nie zawiera numerycznej składowej "{key}"',

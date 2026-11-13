@@ -11,6 +11,8 @@ declare(strict_types=1);
 return [
     'standard.ansi16_out_of_range' => 'L\'index de couleur ANSI 16 doit être entre 0 et 15, reçu : {index}',
     'standard.ansi256_out_of_range' => 'L\'index de couleur ANSI 256 doit être entre 0 et 255, reçu : {index}',
+    'standard.color_name_unknown' => 'nom de couleur inconnu : {name}',
+    'standard.ansi8_out_of_range' => 'L\'index de couleur ANSI 8 doit être entre 0 et 7, reçu : {index}',
     'color.invalid_hex' => 'couleur hexadécimale invalide : {hex}',
     'colormath.invalid_xyz' => 'Le composant XYZ {key} est manquant ou n’est pas un nombre fini',
     'deltae.invalid_lab' => 'Le tableau Lab {label} est dépourvu du composant numérique « {key} »',

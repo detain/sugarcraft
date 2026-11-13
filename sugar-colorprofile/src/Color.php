@@ -162,7 +162,7 @@ final class Color
      * the 4-bit SGR index ({@see toAnsi16Foreground()}/
      * toAnsi16Background() — slot 4 renders as `ESC [ 34 m`), so the terminal
      * supplies its own theme for slots 0-15. Use the wider writers knowing what
-     * they send: {@see toAnsiForeground()} emits the reference RGB itself
+     * they send: {@see toTrueColorForeground()} emits the reference RGB itself
      * (`ESC [ 38 ; 2 ; 0 ; 0 ; 238 m` for slot 4) and {@see
      * toAnsi256Foreground()} emits the nearest cube index (21) rather than the
      * themeable slot — both bypass the user's own slot-4 theme.
@@ -295,19 +295,50 @@ final class Color
     }
 
     /**
-     * Render as a 24-bit SGR foreground escape: \x1b[38;2;R;G;Bm
+     * Render as a 24-bit truecolor SGR foreground escape: \x1b[38;2;R;G;Bm
+     *
+     * The honest name for what these bytes are: a 24-bit truecolor SGR, not
+     * an "ANSI" code — the ANSI ladder rungs are the indexed emitters below.
+     * (The misnomer {@see self::toAnsiForeground()} shipped first and now
+     * bridges here; CP-17.)
+     *
+     * Mirrors the escape xterm-style terminals accept for direct RGB;
+     * no upstream Go method emits these from colorprofile itself.
      */
-    public function toAnsiForeground(): string
+    public function toTrueColorForeground(): string
     {
         return "\x1b[38;2;{$this->r};{$this->g};{$this->b}m";
     }
 
     /**
-     * Render as a 24-bit SGR background escape: \x1b[48;2;R;G;Bm
+     * Render as a 24-bit truecolor SGR background escape: \x1b[48;2;R;G;Bm
+     *
+     * @see self::toTrueColorForeground() — same ladder honesty, background half
+     */
+    public function toTrueColorBackground(): string
+    {
+        return "\x1b[48;2;{$this->r};{$this->g};{$this->b}m";
+    }
+
+    /**
+     * @deprecated Misnomer — these emit 24-bit truecolor SGR, not ANSI-indexed
+     *             codes. {@see self::toTrueColorForeground()} is the honest
+     *             owner; kept byte-identical for BC, replaced no earlier than
+     *             2.0.0. REMOVED-IN: 2.0.0
+     */
+    public function toAnsiForeground(): string
+    {
+        return $this->toTrueColorForeground();
+    }
+
+    /**
+     * @deprecated Misnomer — see {@see self::toAnsiForeground()}; the honest
+     *             owner is {@see self::toTrueColorBackground()}.
+     *             REMOVED-IN: 2.0.0
      */
     public function toAnsiBackground(): string
     {
-        return "\x1b[48;2;{$this->r};{$this->g};{$this->b}m";
+        return $this->toTrueColorBackground();
     }
 
     /**
@@ -317,6 +348,19 @@ final class Color
     {
         $idx = $this->toAnsi256Index();
         return "\x1b[38;5;{$idx}m";
+    }
+
+    /**
+     * Emit a 256-color ANSI background escape.
+     *
+     * The background half of {@see self::toAnsi256Foreground()} — present so
+     * the 256-color rung is as symmetric as the 16-color and truecolor rungs
+     * (CP-17: consumers previously hand-rolled the `48;5;` bytes).
+     */
+    public function toAnsi256Background(): string
+    {
+        $idx = $this->toAnsi256Index();
+        return "\x1b[48;5;{$idx}m";
     }
 
     /**
@@ -516,6 +560,68 @@ final class Color
     public static function namedColors(): array
     {
         return StandardColors::catalog();
+    }
+
+    /**
+     * Resolve a standard color by name (case-insensitive).
+     *
+     * Reads the LIVE slot through the blessed non-mutating door
+     * {@see StandardColors::fromIndex()} — so if a process overrode
+     * `StandardColors::$red`, `fromName('red')` reflects that override,
+     * matching how `fromIndex()` itself behaves. Fail loud on a name that is
+     * not in {@see StandardColors::catalog()}: a typo is not black.
+     *
+     * @throws \OutOfBoundsException when $name is not a standard color name
+     */
+    public static function fromName(string $name): self
+    {
+        $catalog = StandardColors::catalog();
+        foreach ($catalog as $idx => $candidate) {
+            if (\strcasecmp($candidate, $name) === 0) {
+                return StandardColors::fromIndex($idx);
+            }
+        }
+        throw new \OutOfBoundsException(Lang::t('standard.color_name_unknown', ['name' => $name]));
+    }
+
+    /**
+     * Decode an ANSI 16-color index (0-15) to its reference RGB color.
+     *
+     * The color-object sibling of {@see self::ansi16Sgr()} and the frozen
+     * table-sourced inverse of {@see self::toAnsi16Index()}: reads
+     * {@see self::ANSI16_RGB} directly, so unlike
+     * {@see StandardColors::fromIndex()} it is NOT affected by process-global
+     * slot overrides — it answers "what does the reference palette call slot
+     * N", not "what does this process currently render slot N as". Slots 0-15
+     * are themeable in real terminals; these RGBs are reference values.
+     *
+     * @throws \OutOfBoundsException when $idx is not an ANSI 16 slot
+     */
+    public static function fromAnsi16Index(int $idx): self
+    {
+        if ($idx < 0 || $idx > 15) {
+            throw new \OutOfBoundsException(Lang::t('standard.ansi16_out_of_range', ['index' => $idx]));
+        }
+        [$r, $g, $b] = self::ANSI16_RGB[$idx];
+        return new self($r, $g, $b);
+    }
+
+    /**
+     * Decode an ANSI 8-color index (0-7) to its reference RGB color.
+     *
+     * The base-8 half of {@see self::fromAnsi16Index()} — the non-bright rungs
+     * emitted by {@see self::toAnsi8Index()}. Fail loud outside 0-7: bright
+     * slots are not "close enough" to their base twins.
+     *
+     * @throws \OutOfBoundsException when $idx is not an ANSI 8 slot
+     */
+    public static function fromAnsi8Index(int $idx): self
+    {
+        if ($idx < 0 || $idx > 7) {
+            throw new \OutOfBoundsException(Lang::t('standard.ansi8_out_of_range', ['index' => $idx]));
+        }
+        [$r, $g, $b] = self::ANSI16_RGB[$idx];
+        return new self($r, $g, $b);
     }
 
     public function equals(Color $other): bool
