@@ -23,4 +23,10 @@ return [
 
     // Notification counter
     'count' => '알림 {count}개',
+
+    // Action-fold row: buttons past the per-alert cap; {count} is a contract.
+    'more' => '+{count}개 더',
+
+    // Over-long message marker; the code prepends one space. Keep the leading ellipsis.
+    'truncated' => '…[잘림]',
 ];

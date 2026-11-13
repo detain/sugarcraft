@@ -1523,10 +1523,9 @@ final class Toast
             // the frame says so instead of growing a row per button. The
             // row is prose, NOT affordance: buttons paint as '[Label]', so
             // the fold wears no brackets and rides dim, and actionRects()
-            // never lists it — a click there hits nothing. '+N more' is
-            // locale-neutral chrome (README i18n section), byte-stable
-            // across every locale.
-            $more = '+' . $hiddenActions . ' more';
+            // never lists it — a click there hits nothing. The wording rides
+            // the 'more' lang key (README i18n section).
+            $more = Lang::t('more', ['count' => $hiddenActions]);
             $middleLines[] = $v . "\x1b[2m" . Width::padRight(
                 Width::truncateMiddle($more, $inner),
                 $inner
@@ -1547,10 +1546,10 @@ final class Toast
         if ($message === null || Width::string($message) <= self::MAX_MESSAGE_CELLS) {
             return $message;
         }
-        $marker = ' …[truncated]';
+        $marker = ' ' . Lang::t('truncated');
         $cut = Width::truncateAnsi($message, self::MAX_MESSAGE_CELLS - Width::string($marker));
         // truncateAnsi may leave inline styling open; close it before the
-        // marker so ' …[truncated]' never inherits hostile colour.
+        // marker so the truncation marker never inherits hostile colour.
         return $cut . Ansi::reset() . $marker;
     }
 

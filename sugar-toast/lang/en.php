@@ -21,4 +21,10 @@ return [
     // Notification counter - count-neutral phrasing; the {count}
     // placeholder is a contract, only values translate.
     'count' => 'Notifications: {count}',
+
+    // Action-fold row: buttons past the per-alert cap; {count} is a contract.
+    'more' => '+{count} more',
+
+    // Over-long message marker; the code prepends one space. Keep the leading ellipsis.
+    'truncated' => '…[truncated]',
 ];

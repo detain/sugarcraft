@@ -24,4 +24,10 @@ return [
     // Notification counter - count-neutral phrasing (pl cannot carry three
     // plural forms in a parenthetical); {count} is a contract.
     'count' => 'Powiadomienia: {count}',
+
+    // Action-fold row: buttons past the per-alert cap; {count} is a contract.
+    'more' => '+{count} więcej',
+
+    // Over-long message marker; the code prepends one space. Keep the leading ellipsis.
+    'truncated' => '…[ucięto]',
 ];

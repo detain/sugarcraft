@@ -24,4 +24,10 @@ return [
     // Notification counter - count-neutral phrasing (ar 3-10 needs the
     // plural إشعارات, never carried by a singular stem); {count} is a contract.
     'count' => 'عدد الإشعارات: {count}',
+
+    // Action-fold row: buttons past the per-alert cap; {count} is a contract.
+    'more' => '+{count} أخرى',
+
+    // Over-long message marker; the code prepends one space. Keep the leading ellipsis.
+    'truncated' => '…[مقتطع]',
 ];

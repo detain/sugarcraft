@@ -23,4 +23,10 @@ return [
 
     // Notification counter
     'count' => '{count} bildirim',
+
+    // Action-fold row: buttons past the per-alert cap; {count} is a contract.
+    'more' => '+{count} daha',
+
+    // Over-long message marker; the code prepends one space. Keep the leading ellipsis.
+    'truncated' => '…[kesildi]',
 ];

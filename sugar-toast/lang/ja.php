@@ -23,4 +23,10 @@ return [
 
     // Notification counter
     'count' => '通知 {count} 件',
+
+    // Action-fold row: buttons past the per-alert cap; {count} is a contract.
+    'more' => '他{count}件',
+
+    // Over-long message marker; the code prepends one space. Keep the leading ellipsis.
+    'truncated' => '…[省略]',
 ];

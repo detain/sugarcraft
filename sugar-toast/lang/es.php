@@ -23,4 +23,10 @@ return [
 
     // Notification counter
     'count' => '{count} notificación(es)',
+
+    // Action-fold row: buttons past the per-alert cap; {count} is a contract.
+    'more' => '+{count} más',
+
+    // Over-long message marker; the code prepends one space. Keep the leading ellipsis.
+    'truncated' => '…[truncado]',
 ];

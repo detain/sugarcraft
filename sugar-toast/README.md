@@ -300,15 +300,14 @@ if ($msg instanceof RepaintMsg) {
 
 ## Internationalization
 
-The translatable chrome — type labels and any host-supplied body text — is
-internationalized via `SugarCraft\Toast\Lang::t()`. All translatable strings
-live as bare keys in `lang/en.php`; the `toast` lookup namespace is baked into
-`src/Lang.php`, not a nesting level inside the arrays.
-
-The fold and truncation markers (`+N more`, ` …[truncated]`) are
-deliberately **not** lang keys: they are locale-neutral chrome, in the same
-class as the border glyphs that frame the overlay. They stay byte-stable
-across every locale, which is what lets the cap tests pin them exactly.
+Every user-facing string the renderer emits — type labels, the `+N more` action
+fold, the `…[truncated]` message marker and the `+N hidden` stack fold — is
+internationalized via `SugarCraft\Toast\Lang::t()`; host-supplied message and
+label text passes through untouched. All translatable strings live as bare keys
+in `lang/en.php`; the `toast` lookup namespace is baked into `src/Lang.php`,
+not a nesting level inside the arrays. Border and bar glyphs are not text and
+stay locale-neutral. The English bytes are pinned by the cap tests; every other
+locale is pinned by the locale-parity guard (`LangCoverageTest`).
 
 **Available keys** (`lang/en.php`):
 
@@ -320,6 +319,8 @@ across every locale, which is what lets the cap tests pin them exactly.
 | `type.success`    | `Success`                         | —            |
 | `dismiss`         | `Press any key to dismiss`        | —            |
 | `count`           | `Notifications: {count}`          | `{count}`    |
+| `more`            | `+{count} more`                   | `{count}`    |
+| `truncated`       | `…[truncated]`                    | —            |
 
 > **Note:** The `dismiss` and `count` keys are provided as convenience strings
 > for host-rendered dismiss-hint and counter UI. They are **not** emitted or
@@ -599,7 +600,7 @@ already over the new cap survive until the next push evicts them.
 | `->actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action` | The dispatch door: which Action (if any) covers a frame cell — top-most (newest) box wins where rows overlap |
 | `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — the full viewport-sized frame; use `placeAt()` for the box rectangle alone |
 | `ToastFrame::placeAt(int $col, int $row): ToastFrame` | Re-anchor the painted boxes at a host-chosen cell (inset): a frame whose `boxRows()` are only the boxes' bounding rectangle, background stripped, with `x`/`y`/`bounds` and every hit rect translated to the new origin |
-| `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'type.*') — see Internationalization |
+| `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'more', 'truncated', 'type.*') — see Internationalization |
 | `->view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string` | Render the toast layer over the background — frame bounds and ellipsize laws in Stacking & The Frame |
 
 | Class | Method | Description |

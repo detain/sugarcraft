@@ -350,7 +350,7 @@ final class ToastDocApiCensusTest extends TestCase
         // (they are language keys, verified by LangCoverageTest instead).
         return array_values(array_filter(
             $rows,
-            static fn(array $r): bool => !preg_match('/^(type\.|dismiss$|count$|Key\b)/', $r[0])
+            static fn(array $r): bool => !preg_match('/^(type\.|dismiss$|count$|more$|truncated$|hidden$|Key\b)/', $r[0])
         ));
     }
 }

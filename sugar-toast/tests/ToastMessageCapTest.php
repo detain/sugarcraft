@@ -118,4 +118,26 @@ final class ToastMessageCapTest extends TestCase
         $window = \substr($out, \max(0, $pos - 12), 12);
         $this->assertStringNotContainsString("\x1b[31", $window, 'reset must precede the marker');
     }
+
+    public function testFoldAndTruncationMarkersFollowTheActiveLocale(): void
+    {
+        // TST-CHROME code leg: 'more' / 'truncated' are lang keys, not
+        // hardcoded English; English bytes stay pinned by the tests above.
+        $actions = [];
+        for ($i = 1; $i <= 67; $i++) {
+            $actions[] = Action::new("A{$i}", static function () {});
+        }
+        try {
+            \SugarCraft\Core\I18n\T::setLocale('de');
+            $out = $this->got('many doors', $actions)->view('', 120, 240);
+            $this->assertStringContainsString('+3 weitere', $out);
+            $this->assertStringNotContainsString('+3 more', $out);
+
+            $cut = $this->got(\str_repeat('word ', self::WORDS))->view('', 80, 24);
+            $this->assertStringContainsString('…[gekürzt]', $cut);
+            $this->assertStringNotContainsString('[truncated]', $cut);
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale('en');
+        }
+    }
 }
