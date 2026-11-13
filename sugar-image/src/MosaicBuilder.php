@@ -37,7 +37,9 @@ final class MosaicBuilder
 
     /**
      * Set the dither algorithm for the Sixel renderer.
-     * Only takes effect when the built renderer is a SixelRenderer.
+     * Only takes effect when the built renderer is a SixelRenderer;
+     * consult the result with {@see Mosaic::acceptsDither()} /
+     * {@see Mosaic::ignoredDials()} instead of guessing the backend.
      */
     public function withDither(Dither $dither): self
     {

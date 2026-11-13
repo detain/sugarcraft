@@ -18,6 +18,7 @@ use SugarCraft\Image\Renderer\Iterm2Renderer;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\Scale;
+use SugarCraft\Image\Symbol\CanvasMode;
 use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
@@ -184,6 +185,71 @@ final class MosaicTest extends TestCase
 
         // Returns same instance since halfblock doesn't use dither
         $this->assertSame($m, $m2);
+    }
+
+    // ─── Consultable dial silence (finding 038) ──────────────────────────────
+
+    public function testPredicateMatrixPerTier(): void
+    {
+        // Which backend hears which dial, pinned per tier: [mosaic, dither,
+        // canvas, work, selectors]. ignoredDials must agree with the four
+        // booleans in its own fixed order.
+        $matrix = [
+            'sixel'        => [Mosaic::sixel(),        true,  false, false, false],
+            'symbols'      => [Mosaic::symbols(),      false, true,  true,  true],
+            'quarterBlock' => [Mosaic::quarterBlock(), false, true,  false, false],
+            'halfBlock'    => [Mosaic::halfBlock(),    false, false, false, false],
+            'ascii'        => [Mosaic::ascii(),        false, false, false, false],
+            'kitty'        => [Mosaic::kitty(),        false, false, false, false],
+            'iterm2'       => [Mosaic::iterm2(),       false, false, false, false],
+            'chafa'        => [Mosaic::chafa(),        false, false, false, false],
+        ];
+
+        foreach ($matrix as $tier => [$m, $dither, $canvas, $work, $selectors]) {
+            $this->assertSame($dither, $m->acceptsDither(), "$tier dither");
+            $this->assertSame($canvas, $m->acceptsCanvasMode(), "$tier canvas");
+            $this->assertSame($work, $m->acceptsWorkFactor(), "$tier work");
+            $this->assertSame($selectors, $m->acceptsSymbolSelectors(), "$tier selectors");
+
+            $expected = [];
+            if (!$dither) {
+                $expected[] = 'dither';
+            }
+            if (!$canvas) {
+                $expected[] = 'canvasMode';
+            }
+            if (!$work) {
+                $expected[] = 'workFactor';
+            }
+            if (!$selectors) {
+                $expected[] = 'symbolSelectors';
+            }
+            $this->assertSame($expected, $m->ignoredDials(), "$tier ignoredDials");
+        }
+    }
+
+    public function testPredicatesAnswerThroughThePassthroughEnvelope(): void
+    {
+        // A Sixel renderer wrapped in the tmux envelope still hears its
+        // dither — the consultation unwraps exactly like the with* doors.
+        $sixel = new SixelRenderer(Dither::FloydSteinberg, 16, 12, 24);
+        $m     = new Mosaic(new TmuxPassthroughDecorator($sixel), Capability::universal(), null, null, null);
+
+        $this->assertTrue($m->acceptsDither());
+        $this->assertSame(['canvasMode', 'workFactor', 'symbolSelectors'], $m->ignoredDials());
+    }
+
+    public function testEveryDialDoorAgreesWithItsPredicate(): void
+    {
+        // The consultation must not drift from the doors it describes:
+        // turning a dial yields a different mosaic exactly when its
+        // predicate says the backend has an ear.
+        foreach ([Mosaic::halfBlock(), Mosaic::symbols(), Mosaic::quarterBlock(), Mosaic::sixel()] as $i => $m) {
+            $this->assertSame($m->acceptsDither(), $m->withDither(Dither::Atkinson) !== $m, "tier $i dither door");
+            $this->assertSame($m->acceptsCanvasMode(), $m->withCanvasMode(CanvasMode::Ansi256) !== $m, "tier $i canvas door");
+            $this->assertSame($m->acceptsWorkFactor(), $m->withWorkFactor(0.5) !== $m, "tier $i work door");
+            $this->assertSame($m->acceptsSymbolSelectors(), $m->withSymbolSelectors('braille') !== $m, "tier $i selectors door");
+        }
     }
 
     public function testCapabilityReturnsCapabilityObject(): void

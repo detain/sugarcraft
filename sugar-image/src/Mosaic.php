@@ -472,6 +472,88 @@ final class Mosaic implements IncrementalRenderer
     }
 
     /**
+     * Whether the live backend hears the dither dial at all
+     * ({@see withDither()} and the builder's dither/sixel dials take
+     * effect). Answered through a passthrough envelope.
+     */
+    public function acceptsDither(): bool
+    {
+        return $this->tunableRenderer() instanceof SixelRenderer;
+    }
+
+    /**
+     * Whether the live backend speaks {@see CanvasModeConfigurable}
+     * — i.e. {@see withCanvasMode()} has an ear.
+     */
+    public function acceptsCanvasMode(): bool
+    {
+        return $this->tunableRenderer() instanceof CanvasModeConfigurable;
+    }
+
+    /**
+     * Whether the live backend speaks {@see WorkFactorConfigurable}
+     * — i.e. {@see withWorkFactor()} has an ear.
+     */
+    public function acceptsWorkFactor(): bool
+    {
+        return $this->tunableRenderer() instanceof WorkFactorConfigurable;
+    }
+
+    /**
+     * Whether the live backend is the symbol-map renderer whose
+     * chafa `--symbols=` corpus {@see withSymbolSelectors()} selects.
+     */
+    public function acceptsSymbolSelectors(): bool
+    {
+        return $this->tunableRenderer() instanceof SymbolMapRenderer;
+    }
+
+    /**
+     * The dial categories the live backend cannot hear, in the fixed
+     * order dither, canvasMode, workFactor, symbolSelectors. The tuning
+     * doors are silent no-ops on backends without an ear (the
+     * silence-law of this facade); this is their consultation surface —
+     * a doctor panel or the candy-code route asks which knobs would be
+     * ignored BEFORE offering them, instead of letting a user tune a
+     * dead dial. An empty list means every dial is live.
+     *
+     * @return list<string>
+     */
+    public function ignoredDials(): array
+    {
+        $ignored = [];
+
+        if (!$this->acceptsDither()) {
+            $ignored[] = 'dither';
+        }
+
+        if (!$this->acceptsCanvasMode()) {
+            $ignored[] = 'canvasMode';
+        }
+
+        if (!$this->acceptsWorkFactor()) {
+            $ignored[] = 'workFactor';
+        }
+
+        if (!$this->acceptsSymbolSelectors()) {
+            $ignored[] = 'symbolSelectors';
+        }
+
+        return $ignored;
+    }
+
+    /**
+     * The renderer the tuning dials address: the live one, unwrapped
+     * through a passthrough envelope exactly as the with* doors see it.
+     */
+    private function tunableRenderer(): Renderer
+    {
+        return $this->renderer instanceof PassthroughDecorator
+            ? $this->renderer->inner()
+            : $this->renderer;
+    }
+
+    /**
      * Return a new Mosaic configured with optimization levels
      * (chafa CHAFA_OPTIMIZATIONS ladder parity).
      *

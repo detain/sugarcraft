@@ -531,7 +531,12 @@ ASCII ramp and the chafa CLI tier are explicit-selection only. Canvas mode is
 not universal: `QuarterBlockRenderer` and `SymbolMapRenderer` implement
 `withCanvasMode()`, `SymbolMapRenderer` alone implements `withWorkFactor()`, and
 every other backend hands back the same instance, because it has no canvas to
-reinterpret and no search window to widen.
+reinterpret and no search window to widen. The silence is consultable, not
+guesswork: `acceptsDither()`, `acceptsCanvasMode()`, `acceptsWorkFactor()` and
+`acceptsSymbolSelectors()` answer for the live renderer (through a passthrough
+envelope too), and `ignoredDials()` returns the fixed-order list of dial names
+that backend cannot hear — a doctor panel or pane host asks before offering a
+knob instead of letting someone tune a dead dial.
 
 ## Limited-colour and no-colour terminals
 
