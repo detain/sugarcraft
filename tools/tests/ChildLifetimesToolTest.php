@@ -115,6 +115,15 @@ final class ChildLifetimesToolTest extends TestCase
         // without minting a replacement.
         // 29 -> 30 re-derived live with the tool on 2026-11-12: scriptui-01
         // minted the candy-scriptui RealProcess::spawn site described above.
+        // 30 -> 31 re-derived live with the tool on 2026-11-12: sugar-releases
+        // f6ce2d310 shipped WindowsSwap::launch, the detached swap helper
+        // extracted from candy-code (same commit as the findings 13 -> 14 row).
+        // NOTE (repo-tooling 2026-11-12, late session): the live scan answered
+        // 30 twice with no committed proc_open delta in the window — foreign
+        // lanes are mid-work in this shared tree (colorprofile runBounded
+        // consolidation visibly churning). Per the author/census law the flip
+        // belongs to the commit that removes or mints a site, not to whoever
+        // notices; this lane refused to guess the number red into green.
         $this->assertStringContainsString('31 proc_open sites', $out);
     }
 
