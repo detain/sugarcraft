@@ -255,6 +255,18 @@ replies. Verify how your client shows typing.
 Media limits are set under `media.*`; see `DiscordChannel` for the keys the
 bundle reads.
 
+## Language
+
+User-facing copy rides the host's catalogs: every delivered string goes
+through `Lang::t()` over the `channels.discord.*` key family in
+`candy-code/lang/`, mirrored across all twelve host locales and enforced by
+`tests/I18n/UserFacingLiteralGuardTest` — a new bare literal in a
+user-facing slot, or a key missing from any locale, fails the bundle
+suite. The bundle ships no `lang/` directory of its own: it is a trusted
+bundle living inside the candy-code process, so the host's catalogs are
+its catalogs. Log rows stay content-free English by the bundle's log law:
+event names and scalars, never message bodies.
+
 ## Settings reference
 
 All keys live under `channels.discord`. Defaults are the values the code uses
