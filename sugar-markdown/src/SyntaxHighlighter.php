@@ -46,8 +46,18 @@ final class SyntaxHighlighter
     private const MAX_HIGHLIGHT_BYTES = 1_000_000;
 
     /**
+     * The line-number gutter separator: a box rule flanked by spaces —
+     * `1 │ code`. One measurable cell plus two, never a bare tab: a tab
+     * has no fixed display width, so width-budgeting consumers cannot
+     * account for a tab-joined line (the case candy-code's DiffGutter
+     * documents; SM-S34, 2026-11).
+     */
+    public const GUTTER_SEPARATOR = ' │ ';
+
+    /**
      * @param bool $lineNumbers When true, each line is prefixed with its 1-based
-     *                          line number styled using the theme's comment slot.
+     *                          line number styled using the theme's comment slot,
+     *                          joined to the code by {@see GUTTER_SEPARATOR}.
      */
     public static function highlight(string $code, string $language, Theme $theme, bool $lineNumbers = false): string
     {
@@ -72,7 +82,7 @@ final class SyntaxHighlighter
             static function (string $line, int $i) use ($commentStyle, $paddedWidth): string {
                 $padded = str_pad((string) ($i + 1), $paddedWidth, ' ', STR_PAD_LEFT);
                 $styled = $commentStyle?->render($padded) ?? $padded;
-                return $styled . "\t" . $line;
+                return $styled . self::GUTTER_SEPARATOR . $line;
             },
             $lines,
             array_keys($lines),

@@ -25,7 +25,7 @@ composer require sugarcraft/sugar-markdown
 
 > Every `with*()` builder on the `Renderer` has a short-form method
 > alias: `theme` / `sanitize` / `rawControlChars` / `wordWrap` /
-> `hyperlinks` / `baseURL` /
+> `lineNumbers` / `hyperlinks` / `baseURL` /
 > `tableWrap` / `inlineTableLinks` / `tableColumnBudget` /
 > `fenceColumnBudget` / `preservedNewLines` / `emoji` / `standardStyle` /
 > `styleSheet`. The long-form `with*` names still work — pick whichever
@@ -407,6 +407,8 @@ $renderer = (new Renderer(Theme::dark()))
     ->withInlineTableLinks(false)    // cells drop BOTH (url) + envelope
     ->withTableColumnBudget(true)    // scale table columns into the wrap
     ->withFenceColumnBudget(true)    // clip fenced lines to the wrap
+    ->withLineNumbers(true)          // number highlighted fence lines
+                                     // (gutter consumes the fence budget)
     ->withPreservedNewLines(true)    // keep source blank-line runs between blocks
     ->withStandardStyle('dracula')   // re-pick the stock theme
     ->withEmoji(true)                // expand `:smile:` shortcodes
@@ -440,13 +442,14 @@ object.
 
 ### API at a glance
 
-- Constructors / factories: the full 12-slot signature —
+- Constructors / factories: the full 13-slot signature —
   `new Renderer(?Theme $theme = null, ?int $wrapWidth = null,
   bool $emitHyperlinks = true, ?string $baseUrl = null,
   bool $tableWrap = false, bool $inlineTableLinks = true,
   bool $tableColumnBudget = false, bool $preservedNewLines = false,
   bool $expandEmoji = false, bool $sanitize = true,
-  bool $fenceColumnBudget = false, ?StyleSheet $styleSheetOverride = null)`;
+  bool $fenceColumnBudget = false, ?StyleSheet $styleSheetOverride = null,
+  bool $lineNumbers = false)`;
   plus `Renderer::ansi()`, `Renderer::plain()`, `Renderer::ascii()`,
   `Renderer::fromEnvironment()`, one-shot `Renderer::renderMarkdown($md, ?Theme)`.
 - Channels: `render()` (whole string), `stream()` (chunk generator),

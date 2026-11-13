@@ -608,7 +608,7 @@ final class SyntaxHighlighterTest extends TestCase
         $code = "if (\$x) return 1;\nreturn 0;";
         $out  = SyntaxHighlighter::highlight($code, 'php', self::themed());
 
-        $this->assertStringNotContainsString('1' . "\t", $out);
+        $this->assertStringNotContainsString('1' . SyntaxHighlighter::GUTTER_SEPARATOR, $out);
     }
 
     public function testLineNumbersEnabledAddsLineNumbers(): void
@@ -616,6 +616,9 @@ final class SyntaxHighlighterTest extends TestCase
         $code = "if (\$x) return 1;\nreturn 0;";
         $out  = SyntaxHighlighter::highlight($code, 'php', self::themed(), lineNumbers: true);
 
+        // SM-S34 re-pin: the gutter joins with the measurable box-rule
+        // separator (a tab has no fixed display width for the frame).
+        $this->assertStringContainsString(SyntaxHighlighter::GUTTER_SEPARATOR, $out);
         // Line 1 should have styled line number 1 (italic + grey ANSI 8 = 127,127,127).
         $this->assertMatchesRegularExpression('/\x1b\[3m\x1b\[90m1\x1b\[0m/', $out);
         // Line 2 should have styled line number 2.
@@ -649,8 +652,8 @@ final class SyntaxHighlighterTest extends TestCase
 
         // For 10 lines, line numbers should be padded to width 2 (1-9 padded with leading space).
         // Line 1 → " 1", Line 10 → "10"
-        $this->assertStringContainsString(" 1\t", $out);
-        $this->assertStringContainsString("10\t", $out);
+        $this->assertStringContainsString(' 1' . SyntaxHighlighter::GUTTER_SEPARATOR, $out);
+        $this->assertStringContainsString('10' . SyntaxHighlighter::GUTTER_SEPARATOR, $out);
     }
 
     // -------------------------------------------------------------------------

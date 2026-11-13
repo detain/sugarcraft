@@ -70,6 +70,7 @@ final class ShortAliasesTest extends TestCase
         yield 'standard-style' => ['withStandardStyle', 'standardStyle', 'dracula', self::SAMPLE];
         yield 'sanitize' => ['withSanitize', 'sanitize', false, "hi\x1b[31mred\x1b[0m\n"];
         yield 'raw-control-chars' => ['withRawControlChars', 'rawControlChars', true, "hi\x1b[31mred\x1b[0m\n"];
+        yield 'line-numbers' => ['withLineNumbers', 'lineNumbers', true, "```php\n\$a = 1;\n```\n"];
         yield 'style-sheet' => ['withStyleSheet', 'styleSheet', StyleSheet::base(), self::SAMPLE];
     }
 

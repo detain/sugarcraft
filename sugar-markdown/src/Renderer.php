@@ -158,6 +158,9 @@ final class Renderer
     public readonly bool $preservedNewLines;
     public readonly bool $expandEmoji;
     public readonly bool $sanitize;
+
+    /** Prefix fence lines with a padded, measurable line-number gutter ({@see withLineNumbers()}). */
+    public readonly bool $lineNumbers;
     private readonly bool $textIsPlain;
     private bool $inTableCell = false;
 
@@ -199,6 +202,7 @@ final class Renderer
         bool $sanitize = true,
         bool $fenceColumnBudget = false,
         ?StyleSheet $styleSheetOverride = null,
+        bool $lineNumbers = false,
     ) {
         $this->theme = $theme ?? Theme::ansi();
         // SM-S50: a zero/negative width is not "off" — off is null. Fail
@@ -219,6 +223,7 @@ final class Renderer
         $this->sanitize = $sanitize;
         $this->fenceColumnBudget = $fenceColumnBudget;
         $this->styleSheetOverride = $styleSheetOverride;
+        $this->lineNumbers = $lineNumbers;
         $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
     }
 
@@ -721,6 +726,25 @@ final class Renderer
     }
 
     /**
+     * Prefix every line of a SYNTAX-HIGHLIGHTED fence with its 1-based
+     * number in a padded gutter (default OFF — every existing byte
+     * snapshot holds). Mirrors glamour's code-block `line_number`
+     * decoration; the gutter number rides the theme's muted `comment`
+     * slot and joins the code with {@see SyntaxHighlighter::GUTTER_SEPARATOR}
+     * — a measurable 1-cell box rule plus a space, never a bare tab
+     * (2026-11, SM-S34: candy-code's DiffGutter documents why a tab
+     * cannot survive a width-measured frame). The gutter interacts with
+     * {@see withFenceColumnBudget()}: numbers consume the budget — with
+     * both on, a clip can start eating the gutter itself once the number
+     * column exceeds the available width, so pair the flag with a wrap
+     * width that leaves room for it.
+     */
+    public function withLineNumbers(bool $on = true): self
+    {
+        return $this->mutate(lineNumbers: $on);
+    }
+
+    /**
      * Use a caller-supplied block cascade instead of {@see StyleSheet::base()}
      * (M7). The sheet styles whole block kinds per nesting depth; the renderer
      * seeds it fresh at each channel entry, so the default (null) keeps every
@@ -822,7 +846,8 @@ final class Renderer
     public function inlineTableLinks(bool $on = true): self { return $this->withInlineTableLinks($on); }
     public function tableColumnBudget(bool $on = true): self { return $this->withTableColumnBudget($on); }
 
-    public function fenceColumnBudget(bool $on = true): self { return $this->withFenceColumnBudget($on); }
+    public function fenceColumnBudget(bool $on = true): self  { return $this->withFenceColumnBudget($on); }
+    public function lineNumbers(bool $on = true): self         { return $this->withLineNumbers($on); }
     public function preservedNewLines(bool $on = true): self { return $this->withPreservedNewLines($on); }
     public function emoji(bool $on = true): self         { return $this->withEmoji($on); }
     public function standardStyle(string $name): self    { return $this->withStandardStyle($name); }
@@ -842,6 +867,7 @@ final class Renderer
         ?bool $sanitize = null,
         ?bool $fenceColumnBudget = null,
         ?StyleSheet $styleSheetOverride = null,
+        ?bool $lineNumbers = null,
     ): self {
         return new self(
             $theme            ?? $this->theme,
@@ -856,6 +882,7 @@ final class Renderer
             $sanitize         ?? $this->sanitize,
             $fenceColumnBudget ?? $this->fenceColumnBudget,
             $styleSheetOverride ?? $this->styleSheetOverride,
+            $lineNumbers      ?? $this->lineNumbers,
         );
     }
 
@@ -1443,7 +1470,7 @@ final class Renderer
         // also fall through to the plain code-block style.
         $rendered = $lang === ''
             ? $this->theme->codeBlock->render($body)
-            : SyntaxHighlighter::highlight($body, $lang, $this->theme);
+            : SyntaxHighlighter::highlight($body, $lang, $this->theme, $this->lineNumbers);
 
         return $this->clipFenceToWidth($rendered);
     }
