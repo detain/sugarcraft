@@ -28,7 +28,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 - **Pagination**: page size, page navigation, auto footer
 - **Sorting**: asc/desc, multi-column sort, numeric + string sort
 - **Filtering**: filter by column text
-- **Frozen columns**: pin a contiguous prefix of columns from the left (any other index set throws)
+- **Frozen columns**: pin a contiguous prefix of columns from the left; an index set outside that rule raises `InvalidArgumentException`
 - **Horizontal scroll**: max width with overflow, frozen columns stay visible
 - **Missing data indicator**: configurable placeholder for absent cells — the default `-` is a lone hyphen that reads ambiguously beside dashes inside your data, so `withMissingIndicator('(empty)')` gives an unmistakable absent-cell signal
 - **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Style\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
@@ -44,7 +44,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
   silently rendering narrower than `$cols`. Lines are clamped at the frame
   edge, never padded past it
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
-- **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped and hold one `Table` across frames (see Keeping a Table Across Frames)
+- **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width calculation scans the full row set once per width memo — keep large datasets viewport-scoped and hold one `Table` across frames (see Keeping a Table Across Frames)
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content, Flex
 - **Cell text wrapping**: `WrapMode` enum — None, WordWrap, Character
 - **Multi-line row rendering**: `withMultilineMode(bool $multiline)` — when enabled, rows expand to the maximum height of any cell; when disabled (default), cells are clamped to one line (backward compatible)
@@ -144,9 +144,9 @@ $t = Table::fromColumns([
         ->withWidthMode(ColumnWidth::Percent, 25.0),  // always 25% of table
 ])->withRows([...]);
 
-echo $t->View();  // pct takes 25% of the table width, id stays 5, the three border
-                  // gaps come off first — name (Dynamic) and note (Content) share
-                  // what remains
+echo $t->View();  // pct takes 25% of the table width, id stays 5, the three
+                  // interior gaps (4 columns -> 3 gaps) come off first — name
+                  // (Dynamic) and note (Content) share what remains
 ```
 
 ### WrapMode Enum
@@ -163,7 +163,7 @@ echo $t->View();  // pct takes 25% of the table width, id stays 5, the three bor
 use SugarCraft\Table\{Column, WrapMode};
 
 $col = Column::new('desc', 'Description', 20)
-    ->withWrapMode(WrapMode::WordWrap);  // or Character or None
+    ->withWrapMode(WrapMode::WordWrap);  // or WrapMode::Character or WrapMode::None
 ```
 
 ## Rows
@@ -726,7 +726,7 @@ The resolver computes widths in several passes:
 ## Keeping a Table Across Frames
 
 The render path memoizes its expensive work — the per-column content-width
-scan, the width solve, the filter/sort rebuild — inside the `Table` value
+scan, the width calculation, the filter/sort rebuild — inside the `Table` value
 itself, and every wither that does not change the data carries those caches
 into the new value. The immutable builder is therefore a *persistent* object,
 not a disposable one: hold **one** `Table` in your application state and
@@ -1121,7 +1121,7 @@ and the roster in that test drift apart. Rename-era history lives in
 
 sugar-table adopts `sugar-cellbuffer` for all buffer-based rendering. Layout fills a flat mutable
 `RenderCanvas` grid in a single pass; it is materialized into an immutable `Buffer` exactly once per
-`View()` call. `View()` writes only internal render memos (width solve, filter/sort cache, style
+`View()` call. `View()` writes only internal render memos (width calculation, filter/sort cache, style
 parse) — never visible state.
 
 ### styleFunc Signature
