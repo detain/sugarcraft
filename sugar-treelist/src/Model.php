@@ -1263,8 +1263,11 @@ final class Model
         $value = self::normalizeItem($value, 'Model::' . $door . '()', 'the value');
 
         if ($this->equalsFunc === null) {
+            // A computed Stringable needle pays its __toString once per
+            // search, not once per item (sugar-treelist-059).
+            $needle = (string) $value;
             foreach ($this->items as $i => $item) {
-                if ((string) $item->value === (string) $value) {
+                if ((string) $item->value === $needle) {
                     return $i;
                 }
             }
@@ -1326,12 +1329,15 @@ final class Model
         // --- Lines above the cursor, collected nearest-first, capped at $topGap.
         // $walkIndex/$walkLine remember how far upward the window could still
         // grow, so the scroll-end backfill below continues this walk instead of
-        // re-deriving it. ---
+        // re-deriving it; $rendered completes that promise (sugar-treelist-057):
+        // an item the walk laid out is memo'd for the call, so the backfill
+        // reuses its lines rather than paying renderItem twice. ---
         $above = [];
+        $rendered = [];
         $walkIndex = $this->cursorIndex - 1;
         $walkLine = null; // null = all of $walkIndex still unconsumed
         while ($walkIndex >= 0 && \count($above) < $topGap) {
-            $itemLines = $this->renderItem($walkIndex);
+            $itemLines = $rendered[$walkIndex] ??= $this->renderItem($walkIndex);
             $start = $walkLine ?? (\count($itemLines) - 1);
             $i = $start;
             for (; $i >= 0 && \count($above) < $topGap; $i--) {
@@ -1350,7 +1356,7 @@ final class Model
         // --- Cursor item and everything below it, capped by the frame. ---
         $count = \count($this->items);
         for ($index = $this->cursorIndex; $index < $count && \count($allLines) < $this->height; $index++) {
-            foreach ($this->renderItem($index) as $line) {
+            foreach ($rendered[$index] ??= $this->renderItem($index) as $line) {
                 if (\count($allLines) >= $this->height) {
                     break 2;
                 }
@@ -1364,7 +1370,7 @@ final class Model
         // list head is reached. This is what keeps the cursor from being
         // stranded on a one-line frame at the end of the list. ---
         while (\count($allLines) < $this->height && $walkIndex >= 0) {
-            $itemLines = $this->renderItem($walkIndex);
+            $itemLines = $rendered[$walkIndex] ??= $this->renderItem($walkIndex);
             $available = ($walkLine ?? (\count($itemLines) - 1)) + 1;
             $take = \min($this->height - \count($allLines), $available);
             $firstLine = $available - $take; // first unconsumed line still needed
@@ -1438,6 +1444,15 @@ final class Model
      */
     public function view(?LoggerInterface $logger = null): string
     {
+        // An empty list is a NORMAL filter-as-you-type state, not an
+        // exception to throw, catch and sweep on every render
+        // (sugar-treelist-060): the identical height-filled prose frame is
+        // built directly. lines() keeps throwing — that door promises
+        // content; view() promises a frame.
+        if ($this->isEmpty()) {
+            return $this->proseFrame(Lang::t('list.no_items'));
+        }
+
         try {
             // Detect window resize — reset the row memo so we emit a full frame.
             if ($this->prevWidth !== null && ($this->prevWidth !== $this->width || $this->prevHeight !== $this->height)) {
@@ -1473,40 +1488,50 @@ final class Model
 
             return $delta;
         } catch (\Throwable $e) {
-            // A failed frame never reached the screen as CONTENT, so its rows
-            // must not sit in the memo — a stale memo would make every later
-            // delta skip rows the terminal never saw. Drop the memo (and the
-            // size stamp) and the next successful view() repaints in full.
-            $this->previousRows = null;
-            $this->prevWidth = null;
-            $this->prevHeight = null;
             $logger?->warning('View rendering failed: {message}', ['message' => $e->getMessage()]);
-            // Exception prose is untrusted text and this return value is
-            // frame content: it goes through the same frame sweep (sanitize
-            // + CR fold) as item values so no control byte, forged zone
-            // sentinel, or cursor-return overwrite can ride the error sink.
-            $messageLines = \explode("\n", self::sweepForFrame($e->getMessage()));
-            // A caught frame must be as tall as the viewport it replaces:
-            // the old one-line return left rows 2..height of the previous
-            // frame untouched, so a list that shrinks to empty (clear(), or
-            // a filter matching nothing) painted its message over a ghost
-            // of the old rows. Emit exactly $height rows reusing the delta
-            // path's per-row addressing — CUP homes the row, swept message
-            // (or nothing) writes it, CSI K erases the stale tail — so every
-            // viewport row is rewritten or cleared regardless of where the
-            // cursor sits. With no usable height (a zero viewport is itself
-            // a refusal) the message stands alone.
-            if ($this->height < 1) {
-                return \implode("\n", $messageLines) . "\n";
-            }
-            $messageCount = \min(\count($messageLines), $this->height);
-            $frame = '';
-            for ($row = 1; $row <= $this->height; $row++) {
-                $content = $row <= $messageCount ? $messageLines[$row - 1] : '';
-                $frame .= Ansi::CSI . $row . ';1H' . $content . Ansi::CSI . 'K' . "\n";
-            }
-            return $frame;
+            return $this->proseFrame($e->getMessage());
         }
+    }
+
+    /**
+     * Builds a full-viewport frame that carries prose instead of items —
+     * the no-items frame (view()'s exception-free empty arm,
+     * sugar-treelist-060) and every failed/zero-viewport frame share it, so
+     * both read byte-identically to the t03-era pins.
+     *
+     * Prose is untrusted text and this return value is frame content: it
+     * goes through the same frame sweep (sanitize + CR fold) as item values
+     * so no control byte, forged zone sentinel, or cursor-return overwrite
+     * can ride the error sink. The delta memo is dropped — this frame never
+     * reached the screen as CONTENT rows, so a stale memo would make every
+     * later delta skip rows the terminal never saw; the next successful
+     * view() repaints in full.
+     *
+     * The frame is as tall as the viewport it replaces: a one-line return
+     * left rows 2..height of the previous frame untouched, so a list that
+     * shrinks to empty (clear(), or a filter matching nothing) painted its
+     * message over a ghost of the old rows. Each row reuses the delta
+     * path's addressing — CUP homes the row, swept prose (or nothing)
+     * writes it, CSI K erases the stale tail. With no usable height (a zero
+     * viewport is itself a refusal) the message stands alone.
+     */
+    private function proseFrame(string $message): string
+    {
+        $this->previousRows = null;
+        $this->prevWidth = null;
+        $this->prevHeight = null;
+
+        $messageLines = \explode("\n", self::sweepForFrame($message));
+        if ($this->height < 1) {
+            return \implode("\n", $messageLines) . "\n";
+        }
+        $messageCount = \min(\count($messageLines), $this->height);
+        $frame = '';
+        for ($row = 1; $row <= $this->height; $row++) {
+            $content = $row <= $messageCount ? $messageLines[$row - 1] : '';
+            $frame .= Ansi::CSI . $row . ';1H' . $content . Ansi::CSI . 'K' . "\n";
+        }
+        return $frame;
     }
 
     // -------------------------------------------------------------------------

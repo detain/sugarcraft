@@ -1876,6 +1876,93 @@ final class ModelTest extends TestCase
         \iterator_to_array($m->eachLine());
     }
 
+    /**
+     * sugar-treelist-057: the scroll-end backfill continues the upward walk
+     * on the SAME call's render memo — the stop-mid-item boundary line was
+     * laid out twice per frame (walk + backfill). The counter item's
+     * __toString runs exactly once for a fully reused render; dropping the
+     * ??= memo doubles it.
+     */
+    public function testBackfillReusesTheWalksRenderedLines(): void
+    {
+        $counter = new class implements \Stringable {
+            public int $casts = 0;
+            public function __toString(): string
+            {
+                $this->casts++;
+                return "head\nfoot";
+            }
+        };
+
+        // Geometry that forces walk+backfill overlap: one 2-line item above
+        // a 1-line cursor at the list end, height 3, topGap 1 (the default
+        // cursorOffset 5 would let the walk consume the whole item and the
+        // backfill never runs) — the walk takes only "foot", the backfill
+        // later needs "head" from the SAME item index.
+        $m = Model::new()->withItem($counter)->withItem(new StringItem('cur'))
+            ->withViewport(20, 3)->withCursorOffset(1)->withCursor(1);
+
+        $lines = $m->lines();
+        $this->assertSame(['head', 'foot', 'cur'], $lines);
+        $this->assertSame(1, $counter->casts, 'one renderItem per index per lines() call');
+    }
+
+    /**
+     * sugar-treelist-059: a computed Stringable needle pays its cast once
+     * per find()/tryFind(), not once per item compared. Re-casting inside
+     * the loop makes the worst case O(n) __toString calls.
+     */
+    public function testComputedNeedleIsCastOncePerSearch(): void
+    {
+        $needle = new class implements \Stringable {
+            public int $casts = 0;
+            public function __toString(): string
+            {
+                $this->casts++;
+                return 'c';
+            }
+        };
+
+        $m = $this->model->withItems('a', 'b', 'c', 'd', 'e');
+
+        $this->assertSame(2, $m->find($needle));
+        $this->assertSame(1, $needle->casts, 'find() hoists the needle cast');
+
+        $this->assertSame(2, $m->tryFind($needle));
+        $this->assertSame(2, $needle->casts, 'tryFind() shares the hoisted door');
+    }
+
+    /**
+     * sugar-treelist-060: view() on an empty list builds the height-filled
+     * prose frame directly — no throw/catch machinery on a normal
+     * filter-as-you-type state — while lines() KEEPS throwing on the same
+     * state: the array door promises content, the frame door promises a
+     * frame. Byte contract is the t03-era golden above.
+     */
+    public function testEmptyViewAndThrowingLinesRemainPairedDoors(): void
+    {
+        $m = $this->model->withViewport(20, 3)->withItem(new StringItem('solo'));
+        $m->view(); // seed the delta memo so the empty arm must drop it, as the caught arm did
+
+        $empty = $m->clear();
+        $rows = \explode("\n", $empty->view());
+        $this->assertCount(4, $rows, 'the direct empty arm keeps the viewport-height invariant');
+        $this->assertSame(
+            "\x1b[1;1H" . Lang::t('list.no_items') . "\x1b[K",
+            $rows[0],
+            'row 1 carries the localized sentence, byte-identical to the caught-frame golden',
+        );
+
+        // Refilling after an empty frame must repaint in full (memo dropped
+        // by the empty arm too), exactly like the pre-060 caught path.
+        $refill = $empty->withItem(new StringItem('back'));
+        $this->assertSame("back\n", $refill->view(), 'the memo drop forces a full repaint — bare line bytes, no CUP addressing');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(Lang::t('list.no_items'));
+        $empty->lines();
+    }
+
     public function testSingleContentColumnAtTheBoundaryStillRenders(): void
     {
         // Boundary geometry: width 8 with shipped gutters leaves exactly one
