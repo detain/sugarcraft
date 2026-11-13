@@ -906,6 +906,41 @@ final class DatePicker
         return Navigation::gridIndexToDate($this->cursorIndex, $this->viewMonth, $this->viewYear);
     }
 
+    /**
+     * Map a character coordinate in a rendered view to the date under it, or
+     * null (dp-34). This is the click-to-select seam: a host that receives
+     * mouse cells from its framework hits them here instead of reimplementing
+     * the grid math — no cell is ever "selected" by a coordinate that renders
+     * a blank lead-in/trailing cell, a header, the day-name row, the separator,
+     * or out-of-grid padding. NEVER throws.
+     *
+     * Columns are counted on a view of $this (same week-column geometry the
+     * week flag state or argument selects); the total width only stretches
+     * header/padding rows, never the seven-cell band, so it cannot change a
+     * hit outcome. Zone-marking (which cells are clickable chrome vs content)
+     * stays host-side — this helper only answers "what day is at (col,row)".
+     */
+    public function hitTest(int $col, int $row, ?bool $showWeekNumbers = null): ?\DateTimeImmutable
+    {
+        $showWeekNumbers ??= $this->showWeekNumbers;
+
+        // Rows: 0 header, 1 day-names, 2 separator; 3-8 are week rows.
+        if ($row < 3 || $row > 8) {
+            return null;
+        }
+
+        $weekColWidth = $showWeekNumbers ? self::WEEK_COL_CHARS : 0;
+        $gridCol      = intdiv($col - $weekColWidth, self::CELL_CHARS);
+        if ($col < $weekColWidth || $gridCol < 0 || $gridCol >= self::DAYS_IN_WEEK) {
+            return null;
+        }
+
+        // Shared grid law (Navigation::gridIndexToDate): blanks are null, and
+        // the view is floored to a representable month, so this cannot throw.
+        return Navigation::gridIndexToDate(($row - 3) * self::DAYS_IN_WEEK + $gridCol,
+            $this->viewMonth, $this->viewYear);
+    }
+
     private function firstOfViewMonth(): ?\DateTimeImmutable
     {
         // Leading "!" zeroes time-of-day so cursor dates are at 00:00:00

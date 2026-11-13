@@ -127,4 +127,49 @@ final class NavigationTest extends TestCase
         $date = Navigation::gridIndexToDate(5, 5, 2026);
         $this->assertSame('2026-05-01 00:00:00', $date?->format('Y-m-d H:i:s'));
     }
+
+    /**
+     * dp-34 parity law: DatePicker::hitTest() over the cell of a grid index
+     * must answer exactly what Navigation::gridIndexToDate() says for that
+     * index — one grid law, two spellings (coordinate and index).
+     *
+     * @return array<string, array{0: string, 1: int}> month seed => firstDow
+     */
+    public static function hitParityMonthProvider(): array
+    {
+        return [
+            'May 2026 (Friday-start, 31d)' => ['2026-05-01', 5],
+            'Feb 2026 (Sunday-start, 28d)' => ['2026-02-01', 0],
+            'Jan 2027 (Friday-start, 31d)' => ['2027-01-01', 5],
+        ];
+    }
+
+    /**
+     * @dataProvider hitParityMonthProvider
+     */
+    public function testHitTestAgreesWithGridIndexToDateOverAll42Cells(string $seed, int $firstDow): void
+    {
+        $dp = \SugarCraft\DatePicker\DatePicker::new(new \DateTimeImmutable($seed));
+
+        foreach ([false, true] as $week) {
+            $weekCol = $week ? 4 : 0;
+            for ($index = 0; $index < 42; $index++) {
+                $expected = Navigation::gridIndexToDate($index, (int) $dp->viewMonth(), (int) $dp->viewYear());
+                for ($k = 0; $k < 3; $k++) {
+                    $col = $weekCol + ($index % 7) * 3 + $k;
+                    $row = 3 + intdiv($index, 7);
+                    $actual = $dp->hitTest($col, $row, $week);
+
+                    $this->assertSame(
+                        $expected?->format('Y-m-d'),
+                        $actual?->format('Y-m-d'),
+                        "index {$index} col {$col} row {$row} (week " . ($week ? 'on' : 'off') . ') must agree'
+                    );
+                }
+            }
+        }
+
+        $this->assertSame($firstDow, (int) (new \DateTimeImmutable($seed))->format('w'),
+            'provider month actually starts on the claimed weekday');
+    }
 }

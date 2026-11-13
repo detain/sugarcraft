@@ -237,6 +237,15 @@ The band's endpoints are published too: `DatePicker::MIN_TOTAL_WIDTH` (21,
 plus the 4-cell week column when enabled) and `DatePicker::MAX_TOTAL_WIDTH`
 (63).
 
+**Mouse seam.** `hitTest($col, $row)` maps a character coordinate of a
+rendered view to the `DateTimeImmutable` under it, or `null` — header,
+day-name row, separator, the week-number gutter, blank lead-in/trailing cells,
+and out-of-band padding all answer `null` and never throw. It mirrors the
+picker's week-column state (third argument overrides it), so a host with a
+mouse-aware framework converts its click cells and hits this seam instead of
+re-deriving the grid math; which coordinates are even clickable (chrome vs
+content zone-marking) stays host-side.
+
 ## Styling
 
 Seven style setters accept bare SGR digit strings (e.g. `'7'`, `'1;31'`,
@@ -389,7 +398,8 @@ Beyond `DatePicker` itself, the shipped public classes are:
   uses them; an explicit `picker()->view($width, $showWeekNumbers)` still
   wins per call (a null argument falls back to state either way).
 - **`DatePicker` accessors** — `minDate()`, `maxDate()`, `isRangeMode()`,
-  `cursorIndex()`, `viewMonth()`, `viewYear()`, `dateAtCursor()`, and
+  `cursorIndex()`, `viewMonth()`, `viewYear()`, `dateAtCursor()`,
+  `todayHidden()`, `hitTest()` (see Mouse seam), and
   `moveToDate()` (aim the cursor at an existing value).
 - **Naming** — camelCase is the house API (AGENTS.md). The picker's verbs
   and accessors are declared in camelCase (`goTo*()`, `setTime()`,

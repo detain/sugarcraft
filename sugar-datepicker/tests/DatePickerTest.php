@@ -1171,6 +1171,44 @@ final class DatePickerTest extends TestCase
             'no green today marker may render while hidden');
     }
 
+    public function testHitTestRejectsNonDayZonesAndNeverThrows(): void
+    {
+        // dp-34: header/day-names/separator rows, row band overshoot, negative
+        // columns, the week-number column itself, and the padding right of the
+        // seven-cell band are all NULL — never an exception, never a date.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+
+        foreach ([0, 1, 2, 9, 42] as $row) {
+            $this->assertNull($dp->hitTest(5, $row), "row {$row} is not a day band");
+        }
+        foreach ([-1, -100] as $col) {
+            $this->assertNull($dp->hitTest($col, 4), "col {$col} is left of grid");
+        }
+        $this->assertNull($dp->hitTest(21, 4), 'col 21 is padding right of the base band');
+        $this->assertNull($dp->hitTest(100, 5), 'far-out columns answer null');
+
+        // Week column (cols 0-3 when shown) never maps to a day.
+        foreach ([0, 1, 2, 3] as $col) {
+            $this->assertNull($dp->hitTest($col, 3, true), "week gutter col {$col} answers null");
+        }
+        // Same coordinate WITHOUT the flag is a day (geometry mirror proof).
+        $this->assertNull($dp->hitTest(1, 4, true));
+        $this->assertSame('2026-05-03', $dp->hitTest(1, 4, false)?->format('Y-m-d'));
+    }
+
+    public function testHitTestFollowsWeekColumnStateWithoutArguments(): void
+    {
+        // dp-03 state law applied to dp-34: a picker configured to show week
+        // numbers shifts the hit geometry by the same four columns.
+        $base = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        $week = $base->withShowWeekNumbers(true);
+
+        $this->assertNull($week->hitTest(1, 3), 'col 1 is the week gutter in state');
+        $this->assertSame('2026-05-02', $base->hitTest(19, 3)?->format('Y-m-d'));
+        $this->assertSame('2026-05-01', $week->hitTest(19, 3)?->format('Y-m-d'),
+            'the same column resolves one day earlier when the gutter eats four columns');
+    }
+
     public function testSelectDateOnEmptyCellIsRefused(): void
     {
         // dp-26: the single-mode first-of-month fallback that let Enter on a
