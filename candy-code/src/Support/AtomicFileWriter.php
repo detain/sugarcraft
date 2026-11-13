@@ -97,7 +97,9 @@ final class AtomicFileWriter
             throw new \RuntimeException(sprintf('Failed to create directory "%s" for atomic write.', $dir));
         }
 
-        self::publish($path, $contents, $mode, null, false, null, false);
+        // fsync: a rename that reaches disk before the data does leaves a
+        // zero-length live file after a power cut (delayed allocation).
+        self::publish($path, $contents, $mode, null, true, null, false);
     }
 
     /**

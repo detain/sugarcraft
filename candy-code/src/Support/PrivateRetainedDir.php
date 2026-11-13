@@ -209,7 +209,15 @@ final class PrivateRetainedDir
         $previous = umask(self::FOREIGN_ACCESS_BITS);
 
         try {
-            if (@file_put_contents($partial, $text) !== strlen($text)) {
+            $handle = @fopen($partial, 'wb');
+            $ok = $handle !== false
+                && fwrite($handle, $text) === strlen($text)
+                && fflush($handle)
+                && (!\function_exists('fsync') || fsync($handle));
+            if ($handle !== false) {
+                fclose($handle);
+            }
+            if (!$ok) {
                 throw new \RuntimeException('unable to write ' . $label . ' partial: ' . $partial);
             }
         } catch (\RuntimeException $failure) {

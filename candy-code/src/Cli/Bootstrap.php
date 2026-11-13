@@ -5362,7 +5362,18 @@ public static function useMaxCost(?string $maxCost): void
                 return;
             }
 
-            if (@file_put_contents($temp, $json) !== strlen($json) || !@rename($temp, $target)) {
+            // fsync the temp inode before the rename: otherwise a crash can
+            // publish a zero-length config.json that outlives the reboot.
+            $tempHandle = @fopen($temp, 'wb');
+            $durable = $tempHandle !== false
+                && fwrite($tempHandle, $json) === strlen($json)
+                && fflush($tempHandle)
+                && fsync($tempHandle);
+            if ($tempHandle !== false) {
+                fclose($tempHandle);
+            }
+
+            if (!$durable || !@rename($temp, $target)) {
                 // Losing the setting is the correct outcome of a failed write.
                 // Leaving the previous config intact is the important half.
                 @unlink($temp);
@@ -5459,7 +5470,15 @@ public static function useMaxCost(?string $maxCost): void
         }
 
         if (trim($contents) === '') {
-            return [];
+            // A zero-length config.json is the torn-write signature, not "no
+            // settings": merging onto [] would overwrite whatever it held.
+            // Refuse and say so; the operator deletes or restores the file.
+            try {
+                Log::raw('refusing to persist a setting: ' . $target . ' is empty (a torn write?); restore or delete it');
+            } catch (\Throwable) {
+            }
+
+            return null;
         }
 
         $data = json_decode($contents, true);
@@ -9167,6 +9186,16 @@ public static function useMaxCost(?string $maxCost): void
         // refused until `candy-code mcp trust` approves it.
         $trustRoot = (string) $decision['canonicalRoot'];
         $pins = McpTrustPins::load(self::trustedConfigDirPath() . '/' . McpTrustPins::FILENAME);
+        if ($pins->damaged()) {
+            // An empty pin file is a torn write, and defaulting it to "first
+            // launch" would re-trust every server unseen (TOFU reset).
+            try {
+                Log::raw('refusing to start MCP servers: ' . $pins->path() . ' is empty or unreadable; run `candy-code mcp trust` to re-approve');
+            } catch (\Throwable) {
+            }
+
+            return null;
+        }
         $recorded = $pins->forRoot($trustRoot);
         $admitted = [];
         $refused = [];

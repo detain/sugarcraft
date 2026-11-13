@@ -67,6 +67,7 @@ final class McpTrustPins
         private readonly string $path,
         private readonly array $roots,
         private readonly array $replaced = [],
+        private readonly bool $damaged = false,
     ) {}
 
     /** The record at $path, or an empty one when it is absent or unusable. */
@@ -91,7 +92,17 @@ final class McpTrustPins
             }
         }
 
-        return new self($path, $roots);
+        // Present but zero-length: a crash between rename and data. Not the
+        // first-launch case, so callers must not treat it as "no record".
+        $damaged = $raw === '' || (is_string($raw) && trim($raw) === '');
+
+        return new self($path, $roots, [], $damaged);
+    }
+
+    /** True when the file exists but is empty — refuse rather than re-trust. */
+    public function damaged(): bool
+    {
+        return $this->damaged;
     }
 
     /** Where this record is read from and written to. */
@@ -123,7 +134,7 @@ final class McpTrustPins
         $roots[$root] = $servers;
         ksort($roots, \SORT_STRING);
 
-        return new self($this->path, $roots, [...$this->replaced, $root => true]);
+        return new self($this->path, $roots, [...$this->replaced, $root => true], $this->damaged);
     }
 
     /**

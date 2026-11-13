@@ -73,6 +73,24 @@ final class BootstrapUserConfigTest extends TestCase
         $this->assertSame('dracula', $config['theme']);
     }
 
+    public function testZeroLengthConfigRefusesTheWriteInsteadOfDefaulting(): void
+    {
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+        file_put_contents(Bootstrap::userConfigPath(), '');
+
+        Bootstrap::writeUserConfig(['provider' => 'x']);
+
+        $this->assertSame('', file_get_contents(Bootstrap::userConfigPath()));
+    }
+
+    public function testPersistedConfigIsNonEmptyAndLeavesNoTemp(): void
+    {
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+
+        $this->assertNotSame('', (string) file_get_contents(Bootstrap::userConfigPath()));
+        $this->assertSame([], glob(dirname(Bootstrap::userConfigPath()) . '/.config.json.??????') ?: []);
+    }
+
     public function testReadUserConfigToleratesInvalidJson(): void
     {
         Bootstrap::writeUserConfig(['theme' => 'dracula']);

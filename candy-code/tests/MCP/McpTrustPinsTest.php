@@ -87,4 +87,23 @@ final class McpTrustPinsTest extends TestCase
             @unlink($path);
         }
     }
+
+    public function testZeroLengthPinFileIsDamagedNotFirstLaunch(): void
+    {
+        $dir = sys_get_temp_dir() . '/mcp_pins_' . bin2hex(random_bytes(4));
+        mkdir($dir, 0700, true);
+        $path = $dir . '/mcp-trust.json';
+
+        self::assertFalse(McpTrustPins::load($path)->damaged(), 'absent file is a first launch');
+        file_put_contents($path, '');
+        self::assertTrue(McpTrustPins::load($path)->damaged());
+
+        $pins = McpTrustPins::load($path)->withRoot('/r', []);
+        $pins->save();
+        self::assertFalse(McpTrustPins::load($path)->damaged(), 'explicit save repairs it');
+
+        @unlink($path);
+        @unlink($path . '.lock');
+        @rmdir($dir);
+    }
 }
