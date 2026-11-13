@@ -20,30 +20,71 @@ final class SgrDoorTest extends TestCase
 {
     public function testTheDoorAcceptsTheEmptyAndNullNoStyle(): void
     {
-        Sgr::assertParameterString('', 'style');
-        Sgr::assertParameterString(null, 'style');
-        $this->assertTrue(true); // reached without throwing
+        $this->assertSame('', Sgr::normalize('', 'style'));
+        $this->assertNull(Sgr::normalize(null, 'style'));
     }
 
     public function testTheDoorAcceptsWellFormedParameterStrings(): void
     {
         foreach (['1', '31;1', '38;5;196', '38;2;255;0;0', '255', '1;255;38;2;0;0;0'] as $ok) {
-            Sgr::assertParameterString($ok, 'style');
+            $this->assertSame($ok, Sgr::normalize($ok, 'style'), 'canonical input is returned untouched');
         }
-        $this->assertTrue(true);
     }
 
     public function testTheDoorRefusesMalformedShapesWithoutEchoingTheValue(): void
     {
         foreach (['1;;2', ';1', '1;', '9999', '256', '999', '007', '1;2m', "\x1b[31", 'abc'] as $bad) {
             try {
-                Sgr::assertParameterString($bad, 'myProp');
+                Sgr::normalize($bad, 'myProp');
                 $this->fail('door accepted ' . addcslashes($bad, "\x00..\x1f"));
             } catch (\InvalidArgumentException $e) {
                 $this->assertStringStartsWith('myProp must be a bare SGR parameter string', $e->getMessage());
                 $this->assertStringNotContainsString("\x1b", $e->getMessage());
                 $this->assertStringNotContainsString('1;2m', $e->getMessage());
             }
+        }
+    }
+
+    // ---- colon sub-param canonicalization (finding 035, FBX-32) ----------
+
+    public function testTheDoorCanonicalizesTheColonSubParamGrammar(): void
+    {
+        $cases = [
+            // T.416 truecolor with colorspace id → dropped (the ';' grammar
+            // the renderer speaks carries no CS slot)
+            '38:2:0:10:20:30' => '38;2;10;20;30',
+            '48:2:0:10:20:30' => '48;2;10;20;30',
+            '38:2::10:20:30'  => '38;2;10;20;30',   // empty CS, same shape
+            '38:2:10:20:30'   => '38;2;10;20;30',   // CS-less 5-part form
+            '38:5:196'        => '38;5;196',
+            '48:5:244'        => '48;5;244',
+            '1;38:2:1:2:3;31' => '1;38;2;1;2;3;31', // mixed mid-string
+        ];
+        foreach ($cases as $colon => $canonical) {
+            $this->assertSame($canonical, Sgr::normalize($colon, 'style'), $colon . ' must canonicalize');
+        }
+    }
+
+    public function testTheDoorRefusesColonGrammarItCouldNotRead(): void
+    {
+        // Colons anywhere the parser has no arm are smuggling channels: non
+        // -38/48 introducers, unknown kinds, wrong arity, out-of-range parts.
+        foreach (['31:1', '39:5:1', '22:0', '38:9:5', '38:5:256', '38:5:1:2', '38:2:10:20', '38:2:1:2:3:4:5', '38::5', '38:2:x:1:2:3'] as $bad) {
+            try {
+                Sgr::normalize($bad, 'myProp');
+                $this->fail('door accepted ' . $bad);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringStartsWith('myProp must be a bare SGR parameter string', $e->getMessage());
+                $this->assertStringNotContainsString($bad, $e->getMessage(), 'the refused value is never echoed');
+            }
+        }
+    }
+
+    public function testNormalizeIsIdempotentOnCanonicalOutput(): void
+    {
+        foreach (['38:2:0:10:20:30', '38:5:196', '1;38:2:1:2:3;31'] as $colon) {
+            $once = Sgr::normalize($colon, 'style');
+            $this->assertSame($once, Sgr::normalize($once, 'style'), 'the door must be a fixed point on its own output');
         }
     }
 
@@ -83,5 +124,23 @@ final class SgrDoorTest extends TestCase
         $this->assertSame('x', $item->content);
         $this->assertSame('T', $col->title);
         $this->assertSame(0, $t->rowCount());
+    }
+
+    public function testEverySurfaceAcceptsAndCanonicalizesTheColonForm(): void
+    {
+        // The door is the single ingress: whatever surface carries the
+        // colon form, the bytes that reach frames are semicolon grammar,
+        // proven through the rendered output itself (no internal getters).
+        $colon = '38:2:0:10:20:30';
+        FlexItem::new('x')->withStyle($colon);
+        Column::make('T', 5)->withStyle($colon);
+        $frame = Table::new()
+            ->addColumn(Column::new('H', 3)->withStyle($colon))
+            ->withHeaderStyle($colon)
+            ->withCursorStyle($colon)
+            ->addRow(['ab'])
+            ->render();
+        $this->assertStringContainsString("\x1b[38;2;10;20;30m", $frame);
+        $this->assertStringNotContainsString("\x1b[38:", $frame, 'a colon must never ride into a frame');
     }
 }

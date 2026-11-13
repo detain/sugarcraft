@@ -607,4 +607,92 @@ final class TableRendererTest extends TestCase
             $this->assertNotSame([], $visible, "line {$i} carries content clusters");
         }
     }
+
+    // ---- SGR grammar coupling (finding 035/036, FBX-32) -------------------
+
+    public function testSgr28LiftsInvisibleMidLine(): void
+    {
+        // 8/28 must be symmetric like 9/29: the old table cleared everything
+        // except INVISIBLE, a documented asymmetry pinned zero ways.
+        $invisible = \SugarCraft\CellBuffer\Style::ATTR_INVISIBLE;
+        [$g, $s] = $this->splitLine("A\x1b[8mB\x1b[28mC");
+        $this->assertSame(['A', 'B', 'C'], $g);
+        $this->assertNull($s[0]);
+        $this->assertNotNull($s[1], 'the invisible run materializes a Style');
+        $this->assertSame($invisible, $s[1]->attrs() & $invisible);
+        $this->assertNull($s[2], '28 lifts 8 without a full reset');
+    }
+
+    public function testXterm256MaterializesThroughTheCanonicalPalette(): void
+    {
+        // 38;5;n / 48;5;n must land on the grid as real colors (the palette
+        // mapping is the diff-visible representation), greys and cube arms
+        // both exercised — the grey ramp 244 is 8+12*10 = 128³.
+        [$g, $s] = $this->splitLine("\x1b[38;5;244mG\x1b[38;5;196mR\x1b[48;5;226mY");
+        $this->assertSame(['G', 'R', 'Y'], $g);
+        $this->assertEquals(\SugarCraft\CellBuffer\Style::new(0x808080, null, 0), $s[0], 'grey ramp 244');
+        $this->assertEquals(\SugarCraft\CellBuffer\Style::new(0xff0000, null, 0), $s[1], 'system color 196');
+        $this->assertEquals(\SugarCraft\CellBuffer\Style::new(0xff0000, 0xffff00, 0), $s[2], 'cube 226 bg rides along');
+    }
+
+    public function testColonBytesThatBypassTheDoorStayInvisibleToTheParser(): void
+    {
+        // Coupling half 1: the door canonicalizes, so the parser NEVER has
+        // to speak colon grammar. A hand-built line that smuggles a colon
+        // past every setter is consumed by the walk but changes no state —
+        // identical to the pre-canonicalization contract, pinned so a
+        // future "parser colon support" shortcut cannot desync the pair.
+        [$g, $s] = $this->splitLine("A\x1b[38:2:0:10:20:30mB");
+        $this->assertSame(['A', 'B'], $g);
+        $this->assertNull($s[0]);
+        $this->assertNull($s[1], 'a colon SGR never reaches applySgr through the door');
+
+        // The door-fed equivalent DOES materialize the same color on the
+        // grid (full-frame bytes and parser state agree by construction).
+        [$g2, $s2] = $this->splitLine("A\x1b[38;2;10;20;30mB");
+        $this->assertEquals(
+            \SugarCraft\CellBuffer\Style::new(0x0a141e, null, 0),
+            $s2[1],
+            'the canonicalized form materializes fg 10,20,30 = 0x0a141e'
+        );
+    }
+
+    public function testEmittedGrammarAlwaysMatchesTheParserGrammar(): void
+    {
+        // Coupling half 2 (structural, finding 035's "emitted-SGR set ==
+        // parsed set over the corpus"): every escape sequence the library
+        // writes into a frame must be exactly the form applySgr reads.
+        // Colon grammar may only exist at the door's INPUT side.
+        $tables = [
+            'plain+styles' => Table::new()
+                ->withColumn(Column::new('H', 6)->withStyle('38:5:196'))
+                ->withHeaderStyle('1;38:2:0:255:0:0')
+                ->withCursorStyle('48:5:244')
+                ->withCursorMarker('> ')
+                ->withRow(['a'])->withRow(['b'])->withCursor(1),
+            'truecolor+basic' => Table::new()
+                ->withColumn(Column::new('X', 4)->withStyle('38;2;1;2;3'))
+                ->addColumn(Column::new('Y', 4)->withStyle('91'))
+                ->withHeaderStyle('4;93')
+                ->withRow(['p', 'q']),
+            'attrs' => Table::new()
+                ->withColumn(Column::new('Z', 4))
+                ->withHeaderStyle('8;28;9;29;7;27')
+                ->withCursorStyle('2;22')
+                ->withRow(['w']),
+        ];
+        $parserGrammar = '/^\x1b\[([0-9;]*)m$/';
+        $seen = 0;
+        foreach ($tables as $label => $table) {
+            foreach ($table->buildLines() as $line) {
+                $this->assertNotNull($this->gridFrom($line, \max(1, $table->computeTotalWidth()), 1), $label . ': every emitted line builds a grid');
+                \preg_match_all('/\x1b\[[0-9:;]*m/', $line, $found);
+                foreach ($found[0] as $sgr) {
+                    $seen++;
+                    $this->assertSame(1, \preg_match($parserGrammar, $sgr), $label . ': emitted ' . addcslashes($sgr, "\x1b") . ' is parsable grammar');
+                }
+            }
+        }
+        $this->assertGreaterThan(10, $seen, 'the corpus actually carried SGR sequences to compare');
+    }
 }

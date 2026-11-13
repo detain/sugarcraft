@@ -86,8 +86,8 @@ final class FlexItem
 
     public function withStyle(string $ansiStyle): self
     {
-        Sgr::assertParameterString($ansiStyle, 'FlexItem style');
-        return new self($this->content, $this->ratio, $this->basis, $ansiStyle);
+        $style = Sgr::normalize($ansiStyle, 'FlexItem style');
+        return new self($this->content, $this->ratio, $this->basis, $style);
     }
 
     /**

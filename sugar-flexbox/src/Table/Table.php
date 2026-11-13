@@ -268,9 +268,9 @@ final class Table
 
     public function withCursorStyle(string $ansiStyle): self
     {
-        Sgr::assertParameterString($ansiStyle, 'Table cursor style');
+        $style = Sgr::normalize($ansiStyle, 'Table cursor style');
         $clone = clone $this;
-        $clone->cursorStyle = $ansiStyle;
+        $clone->cursorStyle = $style;
         return $clone;
     }
 
@@ -294,9 +294,9 @@ final class Table
 
     public function withHeaderStyle(string $ansiStyle): self
     {
-        Sgr::assertParameterString($ansiStyle, 'Table header style');
+        $style = Sgr::normalize($ansiStyle, 'Table header style');
         $clone = clone $this;
-        $clone->headerStyle = $ansiStyle;
+        $clone->headerStyle = $style;
         return $clone;
     }
 

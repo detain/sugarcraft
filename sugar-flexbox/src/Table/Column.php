@@ -115,13 +115,15 @@ final class Column
      *     joined by single ';' ('' clears the style). Everything else —
      *     an ESC, a letter, an out-of-range or zero-padded code, a
      *     doubled or trailing ';', a value above 255 — throws
-     *     InvalidArgumentException at this door (Sgr::assertParameterString),
-     *     so the knob cannot be repurposed as an escape channel.
+     *     InvalidArgumentException at this door (Sgr::normalize), which
+     *     also canonicalizes the colon sub-param form (38:5:N, 38:2:R:G:B)
+     *     to ';' grammar before storing, so the knob cannot be repurposed
+     *     as an escape channel and the frame parser never sees a colon.
      */
     public function withStyle(string $ansiStyle): self
     {
-        Sgr::assertParameterString($ansiStyle, 'Column style');
-        return self::fromState($this->title, $this->width, $this->align, $ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
+        $style = Sgr::normalize($ansiStyle, 'Column style');
+        return self::fromState($this->title, $this->width, $this->align, $style, $this->formatter, $this->sortDir, $this->sortPriority);
     }
 
 
