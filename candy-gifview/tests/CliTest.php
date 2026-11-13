@@ -624,6 +624,12 @@ final class CliTest extends TestCase
             'word speed'    => ['--speed=lots', 'invalid value'],
             'empty value'   => ['--duration=', 'invalid value'],
             'negative time' => ['--duration=-2', 'invalid value'],
+            // gifview-18: the bare flags' `=`-form with an EMPTY value is a
+            // value-claim too — the old hole let `--watch=` silently arm the
+            // watcher (exit 0 through the play seam). It refuses like every
+            // other `=`-form now; flipping the guard back reddens these.
+            'watch armed by empty value' => ['--watch=', 'takes no value'],
+            'paused armed by empty value' => ['--paused=', 'takes no value'],
         ];
     }
 

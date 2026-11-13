@@ -177,10 +177,15 @@ final class Cli
                     return 1;
                 }
 
-                // --watch and --paused are the only bare (value-less) flags;
-                // the value-taking flags below keep their bad_value refusal.
+                // --watch and --paused are the only bare (value-less) flags.
+                // EVERY `=` form of them — including the empty one — refuses
+                // with unexpected_value: `--watch=` is a value-claim for a
+                // flag that takes none, so arming the watcher from a
+                // shell-expanded empty string was a silent contract break,
+                // not a tolerated spelling (gifview-18 closes the hole). The
+                // value-taking flags below keep their bad_value refusal.
                 if ($flag === 'watch' || $flag === 'paused') {
-                    if ($raw !== null && $raw !== '') {
+                    if ($raw !== null) {
                         \fwrite($stderr, Lang::t('cli.unexpected_value', ['flag' => $flag]) . "\n");
 
                         return 1;
