@@ -26,7 +26,10 @@ use SugarCraft\AnsiParser\Parser\State;
  * bytes it ignores inside an OSC payload, the sequence it cancels on an illegal
  * parameter byte or on CAN/SUB while the parser is in a control-sequence state
  * (nothing of the sequence reaches this handler then; the cancel byte itself
- * arrives as an Execute echo), CAN/SUB arriving inside a string payload state —
+ * arrives as an Execute echo — the abandoned prelude is still over-reported by
+ * {@see recoverCancelledResidue()} whenever a later dispatch can observe it,
+ * which also covers the undocumented fourth member of that family, the
+ * anywhere-ESC cancel), CAN/SUB arriving inside a string payload state —
  * OSC, DCS after its final byte, SOS, PM, APC — where the sequence now reaches
  * this handler truncated at the cancel byte and the cancel byte is consumed
  * un-echoed as the terminator (sugar-ansi-parser 35dda61c0; README deviation 11), a
@@ -307,8 +310,6 @@ final class AnsiHandler implements Handler
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
     {
         $this->awaitingStringTerminator = false;
-        $this->flushPendingSs3();
-        $this->flushText();
 
         $prefixStr = $prefix !== 0 ? chr($prefix) : '';
         $intermediateStr = $intermediate !== 0 ? chr($intermediate) : '';
@@ -320,6 +321,9 @@ final class AnsiHandler implements Handler
         }
 
         $rawBytes = "\x1b[{$paramsStr}{$intermediateStr}" . $finalChar;
+        $this->recoverCancelledResidue($rawBytes);
+        $this->flushPendingSs3();
+        $this->flushText();
         $isSgr = $finalChar === 'm';
         $paramsForDescribe = $isSgr ? $paramsStr : $paramsStr . $intermediateStr;
         $label = Inspector::describeCsi($paramsForDescribe, $finalChar);
@@ -359,10 +363,12 @@ final class AnsiHandler implements Handler
 
     public function escDispatch(int $final, int $intermediate): void
     {
-        $this->flushPendingSs3();
-        $this->flushText();
-
         if ($final === ord('O')) {
+            $this->recoverCancelledResidue(
+                "\x1b" . ($intermediate !== 0 ? chr($intermediate) . 'O' : 'O'),
+            );
+            $this->flushPendingSs3();
+            $this->flushText();
             $this->ss3Buffered = true;
             $this->ss3Intermediate = $intermediate !== 0 ? $intermediate : ord('O');
             $this->inFlightBytes = '';
@@ -373,14 +379,23 @@ final class AnsiHandler implements Handler
         // part of that sequence's raw bytes; consuming it here keeps it from
         // leaking out a second time as a phantom `ESC \` segment.
         $terminatesOpenString = $final === ord('\\') && $this->awaitingStringTerminator;
-        $this->awaitingStringTerminator = false;
         if ($terminatesOpenString === true) {
+            $this->flushPendingSs3();
+            $this->flushText();
+            $this->awaitingStringTerminator = false;
             $this->inFlightBytes = '';
             return;
         }
+        $this->awaitingStringTerminator = false;
 
         $intermediateStr = $intermediate !== 0 ? chr($intermediate) : '';
         $rawBytes = "\x1b{$intermediateStr}" . chr($final);
+        // The residue check runs BEFORE the flushes on purpose: it has to see
+        // the still-pending text buffer to know which window bytes are already
+        // accounted for by the segments the flushes are about to create.
+        $this->recoverCancelledResidue($rawBytes);
+        $this->flushPendingSs3();
+        $this->flushText();
         $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeEsc(chr($final)));
         $this->inFlightBytes = '';
     }
@@ -388,6 +403,11 @@ final class AnsiHandler implements Handler
     public function oscDispatch(string $data): void
     {
         $this->awaitingStringTerminator = false;
+        // Residue check before the flushes: it must see the still-pending
+        // text/SS3 buffers to attribute window bytes. The ST-pending spelling
+        // is a second candidate because sugar-ansi-parser dispatches the OSC on
+        // the ESC of `ESC \` and delivers the backslash next.
+        $this->recoverCancelledResidue("\x1b]{$data}\x07", "\x1b]{$data}\x1b");
         $this->flushPendingSs3();
         $this->flushText();
         // OSC terminator normalized to BEL; original ST (\x1b\\) is not
@@ -403,8 +423,6 @@ final class AnsiHandler implements Handler
     public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
     {
         $this->awaitingStringTerminator = false;
-        $this->flushPendingSs3();
-        $this->flushText();
 
         $prefixStr = $prefix !== 0 ? chr($prefix) : '';
         $intermediateStr = $intermediate !== 0 ? chr($intermediate) : '';
@@ -416,6 +434,12 @@ final class AnsiHandler implements Handler
 
         $fullPayload = $intermediateStr . $prefixStr . $paramsStr . $data;
         $rawBytes = "\x1bP{$fullPayload}\x1b\\";
+        // The DCS dispatches on the ESC of its ST, so the window tail carries
+        // only `…ESC` when the backslash has not been fed yet — the second
+        // candidate.
+        $this->recoverCancelledResidue($rawBytes, substr($rawBytes, 0, -1));
+        $this->flushPendingSs3();
+        $this->flushText();
         // 2026-10-23 (r1024/inspect): classify from the parser's true dispatch
         // fields via the shared sugar-ansi-parser Codec\Dcs decoder instead of
         // re-peeling the payload string — a sixel body that begins with '$'
@@ -432,9 +456,24 @@ final class AnsiHandler implements Handler
     public function sosPmApcDispatch(string $kind, string $data): void
     {
         $this->awaitingStringTerminator = false;
-        $this->flushPendingSs3();
 
         $isSosPm = $kind === 'sos' || $kind === 'pm';
+        $introducer = match ($kind) {
+            'sos' => "\x1bX",
+            'pm'  => "\x1b^",
+            'apc' => "\x1b_",
+            default => '',
+        };
+        if ($introducer === '') {
+            $this->recoverCancelledResidue();
+        } elseif ($data === '') {
+            $this->recoverCancelledResidue($introducer, $introducer);
+        } else {
+            $full = "{$introducer}{$data}\x1b\\\\";
+            $this->recoverCancelledResidue($full, substr($full, 0, -1));
+        }
+        $this->flushPendingSs3();
+
         if ($isSosPm === true && $data === '') {
             // An empty SOS/PM string with no payload byte to carry: report the
             // introducer alone and leave its ST to be dispatched on its own.
@@ -464,6 +503,80 @@ final class AnsiHandler implements Handler
         $this->segments[] = new SequenceSegment($rawBytes, $label);
         $this->awaitingStringTerminator = true;
         $this->inFlightBytes = '';
+    }
+
+    /**
+     * Report the bytes a parser-side cancel abandoned, before the sequence
+     * that ends up dispatching consumes the shared byte window.
+     *
+     * ECMA-48 anywhere-ESC (and the CAN/SUB and illegal-parameter cancels
+     * that leave no callback at all) discards the sequence in flight without
+     * a handler dispatch — but the handler's {@see $inFlightBytes} window
+     * kept every fed byte. When the next real dispatch fires, the window
+     * therefore holds `[maybe-text][abandoned prelude][this dispatch's own
+     * bytes]`. Attributing the dispatch's true bytes from the tail (each
+     * `$candidates` spelling is one way the rebuilt raw can appear — the
+     * ST-pending forms carry only the ESC because sugar-ansi-parser delivers
+     * the backslash one byte later) and subtracting the buffers a following
+     * flush will account for leaves exactly the abandoned prelude.
+     *
+     * Over-report, never under-report (the house philosophy of README
+     * deviation 7): the prelude surfaces as a `truncated … — cancelled`
+     * segment ordered ahead of the dispatch that revealed it. When a match
+     * cannot be anchored at the window tail — the fabricated-bytes deviations
+     * README lists (`ESC[1<2m`-class, 8-bit replays) — no residue is invented
+     * and the existing pinned deviation stands untouched.
+     *
+     * @param string ...$candidates possible window-tail spellings of the dispatch's own bytes
+     */
+    private function recoverCancelledResidue(string ...$candidates): void
+    {
+        $window = $this->inFlightBytes;
+        $tail = '';
+        foreach ($candidates as $candidate) {
+            if ($candidate !== '' && str_ends_with($window, $candidate)) {
+                $tail = $candidate;
+                break;
+            }
+        }
+        if ($tail === '') {
+            return;
+        }
+
+        $residue = substr($window, 0, strlen($window) - strlen($tail));
+        if ($residue === '') {
+            return;
+        }
+
+        // Bytes the pending (not yet flushed) segments will account for —
+        // strip one occurrence of each so no byte is reported twice.
+        if ($this->ss3Buffered === true) {
+            $residue = self::stripOnce($residue, "\x1b" . chr($this->ss3Intermediate));
+        }
+        $textAhead = $this->textBuf !== '' && str_starts_with($residue, $this->textBuf);
+        if ($this->textBuf !== '') {
+            $residue = self::stripOnce($residue, $this->textBuf);
+        }
+        if ($residue === '') {
+            return;
+        }
+
+        if ($textAhead === true) {
+            // The pending text fed in ahead of the abandoned sequence: report
+            // it in stream position, before the cancelled segment.
+            $this->flushPendingSs3();
+            $this->flushText();
+        }
+        $this->segments[] = new SequenceSegment($residue, Inspector::describeTruncated($residue) . ' — cancelled');
+    }
+
+    /**
+     * Remove the first occurrence of $needle from $haystack (binary-safe).
+     */
+    private static function stripOnce(string $haystack, string $needle): string
+    {
+        $pos = strpos($haystack, $needle);
+        return $pos === false ? $haystack : substr_replace($haystack, '', $pos, strlen($needle));
     }
 
     /**

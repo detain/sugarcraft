@@ -747,18 +747,24 @@ final class ByteFidelityTest extends TestCase
 
     public function testCancelledSequenceIsLostExactlyAsTheParserLosesIt(): void
     {
-        // Candy-ansi cancels a CSI on an illegal parameter byte or on CAN/SUB and
-        // discards the bytes collected so far, per the ECMA-48 general form. The
-        // exact shape of the loss is pinned: no segment may be invented for a
-        // sequence that never dispatched, and a cancelled sequence's bytes may not
-        // leak into a later *completed* one. They do survive into a later truncated
-        // tail, because nothing tells the handler to reset its byte window when the
-        // parser abandons a prelude without a callback - the two last cases pin that
-        // asymmetry (over-report, never an under-report). The first six shapes reach
-        // this handler byte-identically to `master`; the last two cannot be compared
-        // with it, because the truncated tail they pin is exactly what `master`
-        // dropped (SP-R1) - on `master` those two inputs yield only `m` and only CAN.
-        // A deliberate guard on the `inFlightBytes` bookkeeping, not a fix claimed here.
+        // Candy-ansi cancels a CSI on an illegal parameter byte, on the
+        // anywhere-ESC edge, or on CAN/SUB and discards the sequence in flight;
+        // no segment is ever invented for a sequence that never dispatched.
+        // The handler's byte window, however, kept every fed byte, so the
+        // next dispatch re-reads it and reports the abandoned prelude ahead of
+        // itself as a `truncated … — cancelled` segment (AIP-01; see
+        // testEscCancelledSequenceIsReportedAsCancelledResidue for the pure
+        // ESC-cancel shapes). The shapes below pin the asymmetric survivors:
+        // a cancel whose residue never reaches a later dispatch or tail still
+        // ends unreported (`mX` cases), because CAN's `execute` callback
+        // flushes the window and end-of-stream in Ground drops it — README
+        // deviation 7's documented floor. A cancelled prelude followed by a
+        // truncated tail replays inside that tail (nothing told the handler
+        // to reset the window); a cancel followed by CAN does not, because
+        // `execute` flushes the window and an illegal byte leaves no callback
+        // behind. The truncated tail itself is exactly what `master` dropped
+        // (SP-R1) — on `master` the two last inputs yielded only `m` and only
+        // CAN. A deliberate guard on the `inFlightBytes` bookkeeping.
         $cases = [
             // Cancelled mid-CSI; the final byte falls through to Ground as text.
             "\x1b[31;-2mX" => ['mX'],
@@ -768,9 +774,10 @@ final class ByteFidelityTest extends TestCase
             "\x1b[31\x18mX" => ["\x18", 'mX'],
             "\x1b[31\x1amX" => ["\x1a", 'mX'],
             // The case that actually guards the byte account: after a cancellation
-            // the next sequence must still report cleanly, with none of the
-            // discarded bytes leaking into it.
-            "\x1b[31;-2m\x1b[32mY" => ['m', "\x1b[32m", 'Y'],
+            // the next sequence must still report cleanly — and from AIP-01 on it
+            // also reports the cancelled residue ahead of itself, so no byte of
+            // the discarded prelude is lost.
+            "\x1b[31;-2m\x1b[32mY" => ["\x1b[31;-2", 'm', "\x1b[32m", 'Y'],
             // A cancel followed by a truncated CSI replays the cancelled prelude in
             // the tail report; a cancel followed by CAN does not, because `execute`
             // flushes the window and an illegal byte leaves no callback behind.
@@ -785,6 +792,41 @@ final class ByteFidelityTest extends TestCase
                 $expected,
                 array_map(static fn($segment): string => $segment->raw(), $segments),
                 bin2hex($input),
+            );
+        }
+    }
+
+    public function testEscCancelledSequenceIsReportedAsCancelledResidue(): void
+    {
+        // AIP-01 / finding 001: the anywhere-ESC edge cancels an in-flight
+        // CSI/DCS with no handler callback, but the byte window holds the
+        // abandoned prelude until the next dispatch reads it back. Every byte
+        // of every shape below reaches the report: a `truncated … — cancelled`
+        // residue segment ordered ahead of the dispatch that revealed it.
+        $cases = [
+            "\x1b[31\em"      => ["\x1b[31", "\x1bm"],
+            "\x1b[?1;2\x1bZ"  => ["\x1b[?1;2", "\x1bZ"],
+            "\x1bP12;3\x1bX"  => ["\x1bP12;3", "\x1bX"],
+            "\x1b[1;2\x1b7"   => ["\x1b[1;2", "\x1b7"],
+        ];
+
+        foreach ($cases as $input => $expected) {
+            $segments = Inspector::parse($input);
+
+            $this->assertSame(
+                $expected,
+                array_map(static fn($segment): string => $segment->raw(), $segments),
+                bin2hex($input),
+            );
+            $this->assertSame(
+                $input,
+                implode('', array_map(static fn($segment): string => $segment->raw(), $segments)),
+                bin2hex($input) . ' byte-for-byte',
+            );
+            $this->assertStringEndsWith(
+                ' — cancelled',
+                $segments[0]->describe(),
+                bin2hex($input) . ' residue is labelled cancelled',
             );
         }
     }

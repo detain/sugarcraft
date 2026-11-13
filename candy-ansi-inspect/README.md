@@ -169,18 +169,25 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
    `ESC]0;a<EOT>b BEL` re-emits as `ESC]0;ab BEL`. The same byte does survive in a
    DCS, SOS, PM or APC payload. (4–6:
    `testIgnoredControlBytesAndParserCapsArriveAsTheParserRewroteThem`)
-7. An illegal parameter byte (`-`), and CAN/SUB while the parser sits in a
-   control-sequence state (a CSI state, or a DCS prelude before its final
-   byte), cancels the sequence and discards the bytes collected so far:
-   `ESC[31;-2mX` reaches the segmenter as only `mX` — no segment is invented
-   for a sequence that never dispatched. The one exception is a
-   cancelled prelude followed by a truncated tail: the tail reports the raw bytes
-   still in flight, so it replays the cancelled prelude too (`ESC[31;-2m` +
-   `ESC[3` arrives as one 11-byte `truncated CSI`). That over-reports rather than
-   under-reports, and CAN does not leak because its `execute` callback flushes the
-   byte window while an illegal byte leaves no callback at all. A CAN/SUB inside a
+7. A cancel discards the sequence in flight: an illegal parameter byte (`-`),
+   CAN/SUB while the parser sits in a control-sequence state (a CSI state, or a
+   DCS prelude before its final byte), and the anywhere-ESC edge all abandon the
+   sequence — and no segment is ever invented for the never-dispatched sequence
+   itself. The abandoned bytes still reach the report whenever a later byte can
+   observe them: the next dispatch re-reads the byte window and re-emits the
+   leading residue ahead of itself as a `truncated … — cancelled` segment
+   (`ESC[31 ESC m` reports the 4-byte `ESC[31` residue plus the `ESC m`
+   dispatch — every byte accounted), and a cancelled prelude followed by a
+   truncated tail replays inside that tail (`ESC[31;-2m` + `ESC[3` arrives as
+   one 11-byte `truncated CSI`). The documented floor is a cancel whose residue
+   is never observed before end of stream: `ESC[31;-2mX` reaches the segmenter
+   as only `mX`, and `ESC[31 CAN mX` as CAN + `mX` — CAN's `execute` callback
+   flushes the byte window while an illegal byte leaves no callback at all, and
+   a Ground-state window at EOF is dropped. Over-report for as long as the
+   stream continues; enumerate-and-pin the survivors. A CAN/SUB inside a
    *string payload* state is item 11, not this one.
-   (`testCancelledSequenceIsLostExactlyAsTheParserLosesIt`)
+   (`testCancelledSequenceIsLostExactlyAsTheParserLosesIt`,
+   `testEscCancelledSequenceIsReportedAsCancelledResidue`)
 8. A truncated UTF-8 rune at end of stream is dropped, because that is not an
    escape-sequence state for `Parser::flush()` to report.
    (`testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt`)
