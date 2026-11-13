@@ -1,6 +1,8 @@
-# Sugar-Boxer Library Research
+# Sugar-Panels Library Research
 
-**Date:** 2026-05-13
+**Date:** 2026-05-13 (title corrected 2026-11-13 — the library was `Sugar-Boxer`
+when this survey was written; it was renamed to sugar-panels in ecaf1a640,
+2026-10-16, and every later section already used the new name)
 **Context:** ASCII box drawing library comparison for sugar-panels improvement
 **Upstream:** treilik/bubbleboxer (Go)
 
@@ -243,6 +245,25 @@ let flexbox = Flexbox::new(Orientation::Horizontal, false)
 | H/V composition | ✅ | ❌ (single box) | ❌ | ✅ Flexbox | ✅ | ✅ Implemented |
 | Dynamic sizing | SizeFunc | ❌ | ✅ Closures | ✅ | minWidth/minHeight | Partial |
 | Proportional distribution | Even split | N/A | N/A | expand() | weights | ✅ Implemented |
+
+**Re-verification 2026-11-13 (rows above are the 2026-05-13 snapshot, kept as
+written; these gaps have since closed in sugar-panels):**
+
+- Multiple border styles — **shipped**: `->withBorderStyle(?Border)` with the
+  sugar-style presets (`Border::normal/rounded/thick/double/block/ascii/hidden`)
+- Text alignment — **shipped**: `->withAlignH(?Align)` / `->withAlignV(?VAlign)`
+- Box titles — **shipped (top border only)**: `->withTitle(string)`; upstream's
+  Top/Bottom/Inside placement variants remain unmapped
+- Colors — **shipped**: `->withStyle(?Style)` carries sugar-style colours and
+  attributes into the grid
+- Margin (outer) — **shipped**: `->withMargin(top, right, bottom, left)`, and
+  the cap semantics keep margin outside `max*` (see README API table)
+- Dynamic sizing — **shipped as weights**: `->withFlex(int)` / `->withGrow()`
+  fill the leftover; upstream's caller-supplied `SizeFunc` callback has no
+  port — the flex weights are its mapping (see README *Flex / grow children*)
+
+The improvement proposals in section 3 below are the 2026-05 plan list, kept
+verbatim as history; the shipped list above supersedes them.
 
 ---
 
