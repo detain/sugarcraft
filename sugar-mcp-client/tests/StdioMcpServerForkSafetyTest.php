@@ -54,7 +54,7 @@ final class StdioMcpServerForkSafetyTest extends TestCase
 
         // Turn 1: calls `slow`, and is SIGKILLed mid-call (Esc / watchdog).
         $turn1 = $this->fork(static fn (): array => $server->callTool('slow', []));
-        usleep(300_000);
+        $this->awaitExchangePhase($server, ExchangeLock::PHASE_READING, $turn1);
         posix_kill($turn1, SIGKILL);
         $this->reapKilled($turn1);
 
@@ -212,6 +212,36 @@ final class StdioMcpServerForkSafetyTest extends TestCase
     private static function deadline(float $seconds = 5.0): float
     {
         return hrtime(true) / 1_000_000_000.0 + $seconds;
+    }
+
+    /**
+     * Wait until the shared lock file carries $phase — the exchange the
+     * forked $pid started has reached that marker — with a named bounded
+     * failure. A fixed sleep in its place passes vacuously on a slow box
+     * (killed before the marker exists) and burns wall clock on a fast one;
+     * the marker is what the scenario actually depends on.
+     */
+    private function awaitExchangePhase(StdioMcpServer $server, string $phase, int $pid, float $seconds = 5.0): void
+    {
+        $lockPath = $this->lockPath($server);
+        $pollDeadline = hrtime(true) + (int) ($seconds * 1e9);
+
+        while (true) {
+            $contents = (string) @file_get_contents($lockPath);
+            if ($contents !== '' && $contents[0] === $phase) {
+                return;
+            }
+            if (hrtime(true) >= $pollDeadline) {
+                self::fail(sprintf(
+                    'child %d never moved the exchange marker to phase %s within %.1F s (lock carried %s)',
+                    $pid,
+                    $phase,
+                    $seconds,
+                    $contents === '' ? 'nothing' : 'phase ' . $contents[0],
+                ));
+            }
+            usleep(10_000);
+        }
     }
 
     private function lockPath(StdioMcpServer $server): string
