@@ -2553,7 +2553,13 @@ final class Table
             // The cluster is atomic, so the fit arm is the announcing '…':
             // visible mark when there is a slot for it, then the fill stops
             // and the space-padding below completes the frame.
-            $remaining = $cellWidth - ($col - $startCol);
+            // Audit ST-58: the fit budget is the tighter of the cell space
+            // and the BUFFER space — a width-2 cluster whose second slot
+            // would fall past the right edge used to be stored as a width-2
+            // cell with its continuation silently skipped, overrunning the
+            // visual line by a column (borderless final-column case; framed
+            // paths keep borders inside the buffer, so they cannot reach it).
+            $remaining = \min($cellWidth - ($col - $startCol), $bufWidth - $col);
             if ($gw > $remaining || $remaining <= 0) {
                 if ($gw > $remaining && $remaining >= 1) {
                     $canvas->put($col, $row, new Cell('…', $style, null, 1));
@@ -2585,7 +2591,7 @@ final class Table
         // as one batched run Cell (ST-07): the spaces live in the origin
         // cell's own rune string, so the emitted bytes match the per-space
         // fill exactly — the interior slots become width-0 empties.
-        $pad = \min($startCol + $cellWidth, $bufWidth) - $col;
+        $pad = $col < $bufWidth ? \min($startCol + $cellWidth, $bufWidth) - $col : 0;
         if ($pad > 0) {
             $canvas->put($col, $row, new Cell(\str_repeat(' ', $pad), $style, null, $pad));
             for ($c = 1; $c < $pad; $c++) {

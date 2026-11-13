@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Table\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Table\{Column, Row, RowData, Table, WrapMode};
+use SugarCraft\Table\{Column, RenderCanvas, Row, RowData, Table, WrapMode};
 
 /**
  * Audit ST-17 (finding 17 / QA-04 + TUI-03): wrapped paths must never emit
@@ -139,5 +139,43 @@ final class TableMultilineCjkTest extends TestCase
             $this->assertSame($widths[0], $w, "line $i desynced from the frame");
         }
         $this->assertStringContainsString('…', $view);
+    }
+
+    // ---- ST-58: width-2 cluster at the canvas right edge -------------------
+
+    public function testWideClusterStraddlingTheBufferEdgeDowngradesToEllipsis(): void
+    {
+        // Defensive shape (only a too-narrow misconfiguration can produce
+        // it, which is why the framed/borderless public paths pin as
+        // uniform-width instead): a 3-cell canvas whose declared cell space
+        // reaches past the buffer used to store a width-2 cell at the final
+        // slot with its continuation silently skipped, overrunning the
+        // visual line by a column. ST-58 budgets the fit against the buffer
+        // too, so the edge announces '…' inside the frame.
+        $canvas = new RenderCanvas(3, 1);
+        $table = Table::fromColumns([Column::new('c', 'C', 4)]);
+        $fill = new \ReflectionMethod(Table::class, 'fillCellContent');
+        $fill->invoke($table, $canvas, 0, 0, 'ab漢', 6, null);
+
+        $this->assertSame('…', $canvas->at(2, 0)?->rune);
+        $this->assertSame(1, $canvas->at(2, 0)?->width());
+        $view = self::stripAnsi($canvas->toBuffer()->toAnsi());
+        foreach (self::lineWidths($view) as $i => $w) {
+            $this->assertSame(3, $w, "line $i overran the 3-cell buffer");
+        }
+    }
+
+    public function testWideClusterWithItsContinuationInsideTheBufferStillPlaces(): void
+    {
+        // The other arm of the same budget: when the second slot exists,
+        // the wide cluster places unchanged (no downgrade, no regression).
+        $canvas = new RenderCanvas(4, 1);
+        $table = Table::fromColumns([Column::new('c', 'C', 4)]);
+        $fill = new \ReflectionMethod(Table::class, 'fillCellContent');
+        $fill->invoke($table, $canvas, 0, 0, 'ab漢', 4, null);
+
+        $this->assertSame('漢', $canvas->at(2, 0)?->rune);
+        $this->assertSame(2, $canvas->at(2, 0)?->width());
+        $this->assertSame(0, $canvas->at(3, 0)?->width());
     }
 }
