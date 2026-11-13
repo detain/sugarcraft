@@ -1594,6 +1594,59 @@ PHP;
     }
 
     /**
+     * @testdox SV-SEC1 (074): the other CLI media tools' credential channels are swept too
+     */
+    public function testTheScrubAlsoDropsMysqlPgpassNetrcAndPswdNames(): void
+    {
+        $hostile = [
+            'MYSQL_PWD' => 'nope',
+            'PGPASSFILE' => '/home/u/.pgpass',
+            'NETRC' => '/home/u/.netrc',
+            'SAP_APS_PSWD' => 'nope',
+            'pgpassfile' => 'lowercase-shape-still-gone',
+        ];
+        $saved = [];
+        foreach ($hostile as $name => $value) {
+            $saved[$name] = getenv($name);
+            putenv($name . '=' . $value);
+        }
+
+        try {
+            $env = \SugarCraft\Video\Support\FfmpegCommandBuilder::scrubbedEnv();
+            foreach (array_keys($hostile) as $name) {
+                $this->assertArrayNotHasKey($name, $env, $name . ' must never reach a media child');
+            }
+        } finally {
+            foreach ($saved as $name => $value) {
+                putenv($value === false ? $name : $name . '=' . $value);
+            }
+        }
+    }
+
+    /**
+     * @testdox SV-SEC1 (093): the last-resort PATH is OS-aware; SV-SEC1 (098): the docblock counts four binaries
+     */
+    public function testTheFallbackPathSetMatchesTheHostFamily(): void
+    {
+        $savedPath = getenv('PATH');
+        putenv('PATH'); // unset it — the fallback branch must answer
+
+        try {
+            $env = \SugarCraft\Video\Support\FfmpegCommandBuilder::scrubbedEnv();
+            if (\PHP_OS_FAMILY === 'Windows') {
+                $this->assertStringContainsString('System32', $env['PATH'], 'a Windows child needs Windows directories');
+            } else {
+                $this->assertSame('/usr/local/bin:/usr/bin:/bin', $env['PATH'], 'the Unix string is unchanged');
+            }
+        } finally {
+            putenv($savedPath === false ? 'PATH' : 'PATH=' . $savedPath);
+        }
+
+        $src = (string) file_get_contents(\dirname(__DIR__) . '/src/Support/FfmpegCommandBuilder.php');
+        $this->assertMatchesRegularExpression('/drives four separate\s*\n?\s*\* binaries.*ffprobe/', $src, 'SV-SEC1 (098): the enumeration must match the four child kinds the library actually spawns');
+    }
+
+    /**
      * @testdox SV-L83 (house law): the stderr sink lives in a process-owned 0700 dir, not shared /tmp root
      */
     public function testTheStderrSinkRidesAnOwnedPrivateDirectory(): void

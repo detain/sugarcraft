@@ -13,8 +13,9 @@ use SugarCraft\Video\Source\HttpHeaders;
  * `Decode/FfmpegDecoder::buildCommand()` and `AudioPlayer::buildCommand()`
  * the flags themselves mirror those binaries' own CLI docs.
  *
- * WHY THIS CLASS EXISTS. The library drives three separate
- * binaries — `ffmpeg` (decode), `ffplay` and `mpv` (audio companion) — and each
+ * WHY THIS CLASS EXISTS. The library drives four separate
+ * binaries — `ffmpeg` (decode), `ffprobe` (metadata probe), `ffplay` and `mpv`
+ * (audio companion) — and each
  * one used to build its own argument list inline. The pieces that are genuinely
  * the same knowledge (which sources are network sources, which reconnect options
  * a dropped Wi-Fi needs, how validated HTTP headers reach a demuxer, how a
@@ -64,14 +65,26 @@ final class FfmpegCommandBuilder
         $inherited = getenv();
         $env = is_array($inherited) ? $inherited : [];
 
+        // SV-SEC1 (074): the deny-list is MYSQL_PWD/PGPASSFILE/NETRC/*_PSWD on
+        // top of the proxy/secret/token/key/credential/password families — the
+        // other CLI media tools' well-known credential channels (ffmpeg's
+        // environment-reading siblings and any libcurl-embedded build honor
+        // these). Substring matching deliberately over-strips (KNETRC_* loses
+        // too): the accepted trade is an innocuous extra drop over ONE leaked
+        // credential reaching a child that echoes its env into logs.
         foreach (array_keys($env) as $name) {
-            if (preg_match('/(?:PROXY|SECRET|TOKEN|KEY|CREDENTIAL|PASSWORD)/i', (string) $name) === 1) {
+            if (preg_match('/(?:PROXY|SECRET|TOKEN|KEY|CREDENTIAL|PASSWORD|MYSQL_PWD|PGPASSFILE|NETRC|PSWD)/i', (string) $name) === 1) {
                 unset($env[(string) $name]);
             }
         }
 
         if (!isset($env['PATH']) || $env['PATH'] === '') {
-            $env['PATH'] = '/usr/local/bin:/usr/bin:/bin';
+            // SV-SEC1 (093): the last-resort PATH must be executable on the
+            // host it names — the old Unix-only string would leave a Windows
+            // child with a PATH of directories that do not exist there.
+            $env['PATH'] = \PHP_OS_FAMILY === 'Windows'
+                ? 'C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\Wbem'
+                : '/usr/local/bin:/usr/bin:/bin';
         }
 
         return $env;
