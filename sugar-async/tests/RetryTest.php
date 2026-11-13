@@ -32,6 +32,16 @@ final class RetryTest extends TestCase
         return [$now, $sleep, $slept];
     }
 
+    /** Spin the shared loop until $done, however many stray timers stop() it early. */
+    private function runUntil(\React\EventLoop\LoopInterface $loop, callable $done): void
+    {
+        $give = microtime(true) + 5.0;
+        while (!$done() && microtime(true) < $give) {
+            $loop->addTimer(0.05, static fn () => $loop->stop());
+            $loop->run();
+        }
+    }
+
     public function testBoundedReturnsFirstFinalResultWithoutSleeping(): void
     {
         [$now, $sleep, $slept] = $this->fakeTime();
@@ -155,12 +165,12 @@ final class RetryTest extends TestCase
             },
         );
         $out = null;
-        $p->then(function ($v) use (&$out, $loop): void {
+        $p->then(function ($v) use (&$out): void {
             $out = $v;
-            $loop->stop();
         });
-        $loop->addTimer(5.0, fn () => $loop->stop());
-        $loop->run();
+        $this->runUntil($loop, function () use (&$out): bool {
+            return $out !== null;
+        });
         $this->assertSame('up', $out);
         $this->assertSame([[1, 1, 'down 1'], [2, 2, 'down 2'], [3, 4, 'down 3'], [4, 4, 'down 4']], $delays);
     }
@@ -178,12 +188,12 @@ final class RetryTest extends TestCase
             $loop,
         );
         $err = null;
-        $p->then(null, function (\Throwable $e) use (&$err, $loop): void {
+        $p->then(null, function (\Throwable $e) use (&$err): void {
             $err = $e;
-            $loop->stop();
         });
-        $loop->addTimer(5.0, fn () => $loop->stop());
-        $loop->run();
+        $this->runUntil($loop, function () use (&$err): bool {
+            return $err !== null;
+        });
         $this->assertSame('fail 3', $err?->getMessage());
         $this->assertSame(3, $n);
     }
@@ -199,12 +209,12 @@ final class RetryTest extends TestCase
             return resolve(1);
         }, Backoff::new(1), null, $loop);
         $out = null;
-        $p->then(function ($v) use (&$out, $loop): void {
+        $p->then(function ($v) use (&$out): void {
             $out = $v;
-            $loop->stop();
         });
-        $loop->addTimer(5.0, fn () => $loop->stop());
-        $loop->run();
+        $this->runUntil($loop, function () use (&$out): bool {
+            return $out !== null;
+        });
         $this->assertSame(1, $out);
     }
 
