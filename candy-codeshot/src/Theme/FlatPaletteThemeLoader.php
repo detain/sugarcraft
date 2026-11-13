@@ -23,6 +23,7 @@ use SugarCraft\CodeShot\Theme;
 final class FlatPaletteThemeLoader
 {
     use NormalizesHexColor;
+    use SanitizesFontFamily;
 
     /**
      * Maps flat-palette token names to Theme syntax-token slots (cs-07) — never
@@ -128,7 +129,13 @@ final class FlatPaletteThemeLoader
         // `editorBackgroundColor` fallback was a VS Code key leaking into a
         // format that has no such thing — a genuine palette file never
         // carries it, and a VS Code file belongs to VsCodeThemeLoader.
-        $border = self::coerceColor($data['border'] ?? $data['background'] ?? null)
+        // Each candidate is coerced on its own merit (candy-codeshot-054):
+        // the old `$data['border'] ?? $data['background']` chain keyed on
+        // isset, so a present-but-invalid "border":"red" null-coalesced to
+        // the next key as if absent — but coerceColor had already decided,
+        // and the jump skipped a perfectly good background fallback.
+        $border = self::coerceColor($data['border'] ?? null)
+            ?? self::coerceColor($data['background'] ?? null)
             ?? '#30363d';
 
         // Chrome from UI keys only (cs-07); the comment token stays a gutter
@@ -144,7 +151,7 @@ final class FlatPaletteThemeLoader
         // to the house default instead of reaching the sanitizer or the wire.
         $fontFamily = $data['fontFamily'] ?? null;
         if (!is_string($fontFamily)) {
-            $fontFamily = 'Hack, "JetBrains Mono", Menlo, Consolas, monospace';
+            $fontFamily = self::HOUSE_FONT_FAMILY;
         }
 
         return new Theme(
@@ -181,20 +188,5 @@ final class FlatPaletteThemeLoader
         }
         $normalized = self::normalizeHex($value);
         return self::isValidHexColor($normalized) ? $normalized : null;
-    }
-
-    /**
-     * Font family names are echoed into SVG attributes and CSS by the
-     * renderers; keep them to a plainly-safe charset and fall back to the
-     * house default instead of trusting theme files (docs-fix era).
-     */
-    private static function sanitizeFontFamily(string $family): string
-    {
-        $p = '/^[A-Za-z0-9 ,"\'\-]+$/';
-        if (preg_match($p, $family) !== 1) {
-            return 'Hack, "JetBrains Mono", Menlo, Consolas, monospace';
-        }
-
-        return $family;
     }
 }

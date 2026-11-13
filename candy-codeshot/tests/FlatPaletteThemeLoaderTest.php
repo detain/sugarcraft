@@ -289,4 +289,18 @@ final class FlatPaletteThemeLoaderTest extends TestCase
         ]);
         $this->assertSame('#30363d', $theme->border);
     }
+
+    public function testPresentButInvalidBorderStillTriesTheBackgroundFallback(): void
+    {
+        // candy-codeshot-054 (cs-28): `??` fires on isset, so the old chain let a
+        // present-but-invalid "border":"red" decide the whole lookup — coerceColor
+        // returned null and the fallback jumped straight to the default, skipping
+        // a perfectly valid background. Candidates are coerced on their own merit
+        // now: `red` is rejected, the `background` beneath it still answers.
+        $theme = FlatPaletteThemeLoader::fromArray([
+            'border'     => 'red',
+            'background' => '#282a36',
+        ]);
+        $this->assertSame('#282a36', $theme->border);
+    }
 }

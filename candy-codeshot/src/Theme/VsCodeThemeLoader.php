@@ -21,6 +21,7 @@ use SugarCraft\CodeShot\Theme;
 final class VsCodeThemeLoader
 {
     use NormalizesHexColor;
+    use SanitizesFontFamily;
 
     /**
      * Maps TextMate scope roots to Theme syntax-token slots (cs-07).
@@ -134,8 +135,7 @@ final class VsCodeThemeLoader
             'editorLineNumber.foreground',
         ], $propertyMap['comment'] ?? '#6e7681');
 
-        $fontFamily = $propertyMap['fontFamily']
-            ?? 'Hack, "JetBrains Mono", Menlo, Consolas, monospace';
+        $fontFamily = $propertyMap['fontFamily'] ?? self::HOUSE_FONT_FAMILY;
 
         return new Theme(
             background:     $background,
@@ -252,20 +252,5 @@ final class VsCodeThemeLoader
     {
         $dot = strpos($scope, '.');
         return $dot !== false ? substr($scope, 0, $dot) : $scope;
-    }
-
-    /**
-     * Font family names are echoed into SVG attributes and CSS by the
-     * renderers; keep them to a plainly-safe charset and fall back to the
-     * house default instead of trusting theme files (docs-fix era).
-     */
-    private static function sanitizeFontFamily(string $family): string
-    {
-        $p = '/^[A-Za-z0-9 ,"\'\-]+$/';
-        if (preg_match($p, $family) !== 1) {
-            return 'Hack, "JetBrains Mono", Menlo, Consolas, monospace';
-        }
-
-        return $family;
     }
 }
