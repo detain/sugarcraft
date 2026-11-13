@@ -39,6 +39,21 @@ namespace SugarCraft\Image\Renderer;
  * call sees is the layout every later call reports. {@see reset()}
  * clears the memo (test isolation, and long-running tools that install
  * chafa mid-session via {@see ChafaRenderer::reset()}).
+ *
+ * The grammar is POSIX-only, deliberately (finding 019, G1 ruling:
+ * doc-truth, not a Windows roster): "absolute" means a leading slash,
+ * the roster names three POSIX homes, and there is no PATHEXT-style
+ * suffix walk. On Windows every door answers `null`: the roster cannot
+ * exist there, a `C:/…`-style override is refused as a slash-bearing
+ * relative name, a backslash `C:\…` override reads as one oversized
+ * "bare name" that the PATH composition can never materialise into a
+ * real file, and even that PATH leg only accepts absolute POSIX-style
+ * entries. The chafa tier is therefore unselectable on Windows and
+ * {@see ENV_OVERRIDE} is a dead knob. That is
+ * the honest behaviour: an embedder there gets `chafa.not_found` and
+ * the README's "Chafa binary discovery" section, not a half-supported
+ * spawn surface. The same grammar governs tmux and stty via
+ * `Support\TmuxBinary` / `Support\SttyBinary`.
  */
 final class ChafaBinary
 {

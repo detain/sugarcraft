@@ -193,16 +193,33 @@ executed:
    binary always did: `ChafaRenderer::available()` answers `false` and
    `render()` throws the same `chafa.not_found` failure.
 
-Two terminal *consults* do spawn a program by name, and they are stated here
-rather than folded into the sentence above: `Detect` asks a live tmux for its
+The grammar is POSIX-shaped by construction: absolute means leading `/`,
+and the roster is three fixed POSIX paths. **The chafa tier is therefore
+POSIX-only.** On Windows nothing in the roster can exist, a `C:/…`
+override is refused as a slash-bearing relative name, a backslash
+`C:\…` override reads as one unresolvable "bare name" the PATH
+composition can never materialise, and the PATH leg itself only accepts
+absolute POSIX-style entries. `SUGAR_IMAGE_CHAFA` is a dead knob there — say it plainly so an
+embedder learns it from this page instead of from an unexplained
+`chafa.not_found`: use one of the pure-PHP tiers on Windows hosts.
+
+Two terminal *consults* also spawn a program, and since SI-01 they resolve
+through the same doctrine — `src/Support/TmuxBinary.php` and
+`src/Support/SttyBinary.php` apply this section's grammar to `tmux`
+(new `SUGAR_IMAGE_TMUX` override) and `stty`: `Detect` asks a live tmux for its
 client features (`tmux display-message`, `src/Detect.php`) and
 `TmuxPassthrough` drives tmux subcommands to wrap a frame for the mux
 (`src/TmuxPassthrough.php`). Both are argv-array `proc_open` calls with no shell
-in between, both are reached only when the environment already says we are
+in between, no bare `tmux` argv[0] survives this gate (an unresolvable
+binary means no transaction, never a PATH gamble), both are reached only
+when the environment already says we are
 inside that tmux session, and neither one feeds the bytes that are rendered —
-they report capabilities and manage the passthrough transaction. The three
-`stty` calls that park and restore the terminal state around a probe do run
-through `/bin/sh`, with the saved state quoted by `escapeshellarg`. No pure-PHP
+they report capabilities and manage the passthrough transaction. The `stty`
+calls that park and restore the terminal state around a probe run their
+resolved absolute binary through `/bin/sh` as fixed literal words, with the
+saved state quoted by `escapeshellarg`, and the restore is now verified —
+re-read after write, one retry, then `stty sane` plus a one-line stderr
+notice rather than a silent strand in raw mode. No pure-PHP
 tier ever shells out for pixel data.
 
 `ChafaRenderer::reset()` re-arms both memos for long-running processes
