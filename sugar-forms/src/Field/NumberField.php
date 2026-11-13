@@ -6,6 +6,8 @@ namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Forms\CarriesNonCtorState;
@@ -70,6 +72,8 @@ use SugarCraft\Forms\Util\RenderSafe;
  */
 final class NumberField implements Field
 {
+    use HasThemeChrome;
+
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -231,13 +235,13 @@ final class NumberField implements Field
     }
 
     /** Render title/description, the draft line, then any parse error. */
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') {
-            $lines[] = $title . $this->readonlyTitleSuffix();
+            $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix();
         }
         if ($desc !== '') {
             $lines[] = $desc;
@@ -246,7 +250,7 @@ final class NumberField implements Field
         if ($showErrors && $this->error !== null) {
             // Parse messages quote the offending draft — clean at the
             // display site (getError() stays raw, Input::view() precedent).
-            $lines[] = '! ' . RenderSafe::clean($this->error);
+            $lines[] = self::themedErrorRow(RenderSafe::clean($this->error), $theme);
         }
         return implode("\n", $lines);
     }

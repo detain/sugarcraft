@@ -508,9 +508,9 @@ final class Form implements Model
                 // field's native knob (clamped, never enlarged), and every
                 // line of the composed block is clipped as a safety net —
                 // title/description/error rows included.
-                $blocks[] = $this->clipToWidth($this->applyFormWidth($f)->view($this->showErrors));
+                $blocks[] = $this->clipToWidth($this->applyFormWidth($f)->view($this->showErrors, $theme));
             } else {
-                $blocks[] = $f->view($this->showErrors);
+                $blocks[] = $f->view($this->showErrors, $theme);
             }
         }
         if (count($this->groups) > 1 && $this->showHelp && $group->showHelp) {
@@ -643,7 +643,9 @@ final class Form implements Model
             // SF-3 (M8): validator error strings are built from untrusted
             // input — clean before styling so the theme's own SGR is the
             // only escape sequence that reaches the terminal.
-            $lines[] = $theme->error->render(RenderSafe::clean($title . ': ' . $error));
+            // SF-9 (sugar-forms-094): the per-field bullet rides the split
+            // errorSummaryItem slot (huh's pair), not the field-error slot.
+            $lines[] = $theme->errorSummaryItem->render(RenderSafe::clean($title . ': ' . $error));
         }
         return implode("\n", $lines);
     }

@@ -52,8 +52,15 @@ interface Field
      * satellite (the form's error SUMMARY is a separate composer, always
      * rendered when enabled). Default true keeps a standalone field's
      * render byte-identical to the pre-SF-7 shape.
+     *
+     * SF-9 (sugar-forms-007): `$theme` is the form's resolved render
+     * context (group override, else form-level) — Form::view() passes it
+     * so theme slots reach the field body (titles, highlights, option
+     * rows, caret, inline error). `null` is the standalone contract: the
+     * field paints its plain legacy bytes, byte-identical to pre-SF-9
+     * renders (mirrors huh applying the form theme inside each View()).
      */
-    public function view(bool $showErrors = true): string;
+    public function view(bool $showErrors = true, ?Theme $theme = null): string;
 
     /** True while this field currently holds keyboard focus. */
     public function isFocused(): bool;

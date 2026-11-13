@@ -61,19 +61,32 @@ final class ThemeTest extends TestCase
         $this->assertStringContainsString('Hello', $rendered);
     }
 
-    public function testAnsiThemeRendersFocusedTitleWithBold(): void
+    /**
+     * SF-9 (sugar-forms-007) dated re-pin: ansi()'s FIELD title slots are
+     * deliberately plain — the shipped default preset must not move any
+     * existing render's bytes; focus visibility at default comes from the
+     * structural signals (blurred-list dim, focused-Select caret). The
+     * bold/faint pair now rides the other presets (pinned at Base16).
+     */
+    public function testAnsiThemeFieldTitleSlotsArePlainByDefault(): void
     {
         $theme = Theme::ansi();
+        $this->assertSame('Focused', $theme->focusedTitle->render('Focused'));
+        $this->assertSame('Blurred', $theme->blurredTitle->render('Blurred'));
+    }
+
+    public function testBase16ThemeRendersFocusedTitleWithBold(): void
+    {
+        $theme = Theme::base16();
         $rendered = $theme->focusedTitle->render('Focused');
         $this->assertStringStartsWith("\x1b[1m", $rendered);
         $this->assertStringContainsString('Focused', $rendered);
     }
 
-    public function testAnsiThemeRendersBlurredTitleFaintly(): void
+    public function testBase16ThemeRendersBlurredTitleFaintly(): void
     {
-        $theme = Theme::ansi();
+        $theme = Theme::base16();
         $rendered = $theme->blurredTitle->render('Blurred');
-        // Faint emits SGR code 2
         $this->assertStringStartsWith("\x1b[2m", $rendered);
         $this->assertStringContainsString('Blurred', $rendered);
     }

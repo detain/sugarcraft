@@ -142,10 +142,15 @@ final class FormShowErrorsTest extends TestCase
     {
         $ref = new \ReflectionMethod(Field::class, 'view');
         $params = $ref->getParameters();
-        $this->assertCount(1, $params);
+        $this->assertCount(2, $params);
         $this->assertSame('showErrors', $params[0]->getName());
         $this->assertTrue($params[0]->isDefaultValueAvailable());
         $this->assertTrue($params[0]->getDefaultValue());
+        // SF-9 (sugar-forms-007): the second context parameter is the
+        // resolved theme; null is the standalone legacy-byte contract.
+        $this->assertSame('theme', $params[1]->getName());
+        $this->assertTrue($params[1]->isDefaultValueAvailable());
+        $this->assertNull($params[1]->getDefaultValue());
 
         $classes = [
             Input::class,
@@ -164,9 +169,12 @@ final class FormShowErrorsTest extends TestCase
         foreach ($classes as $class) {
             $m = new \ReflectionMethod($class, 'view');
             $p = $m->getParameters();
-            $this->assertCount(1, $p, $class);
+            $this->assertCount(2, $p, $class);
             $this->assertSame('showErrors', $p[0]->getName(), $class);
             $this->assertTrue($p[0]->getDefaultValue(), $class);
+            $this->assertSame('theme', $p[1]->getName(), $class);
+            $this->assertTrue($p[1]->isDefaultValueAvailable(), $class);
+            $this->assertNull($p[1]->getDefaultValue(), $class);
         }
     }
 }

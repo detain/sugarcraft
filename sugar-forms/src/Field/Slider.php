@@ -7,6 +7,8 @@ namespace SugarCraft\Forms\Field;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
@@ -57,6 +59,8 @@ use SugarCraft\Forms\Validator\Validator;
  */
 final class Slider implements \SugarCraft\Forms\Field
 {
+    use HasThemeChrome;
+
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -285,12 +289,12 @@ final class Slider implements \SugarCraft\Forms\Field
      * like Confirm's raw-reverse pills — these widgets carry no themeable
      * style slots (E736 3.9 rationale).
      */
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
+        if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
 
         $cells  = $this->width - 1;

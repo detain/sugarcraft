@@ -6,6 +6,8 @@ namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\CarriesNonCtorState;
@@ -54,6 +56,8 @@ use SugarCraft\Forms\Lang;
  */
 final class Color implements \SugarCraft\Forms\Field
 {
+    use HasThemeChrome;
+
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -183,12 +187,12 @@ final class Color implements \SugarCraft\Forms\Field
      * its background code but adds REVERSE, so it renders as a hollow slot
      * punched out of the painted plane.
      */
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
+        if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
 
         for ($b = 0; $b <= 5; $b++) {

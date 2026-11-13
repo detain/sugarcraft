@@ -6,6 +6,8 @@ namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
@@ -24,6 +26,8 @@ use SugarCraft\Forms\Util\RenderSafe;
  */
 final class Note implements \SugarCraft\Forms\Field
 {
+    use HasThemeChrome;
+
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -113,12 +117,12 @@ final class Note implements \SugarCraft\Forms\Field
     public function blur(): Field         { return $this->carryNonCtorState(new self($this->key, $this->title, $this->description, $this->height, $this->next, $this->nextLabel, false)); }
     public function update(Msg $msg): array { return [$this, null]; }
 
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $parts = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $parts[] = $title . $this->readonlyTitleSuffix(); }
+        if ($title !== '') { $parts[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $parts[] = $desc; }
         if ($this->next) {
             $marker = $this->focused ? '> ' : '  ';

@@ -240,7 +240,17 @@ a fallback. For inspecting state during a run use `errors()`, `hasErrors()`,
 
 Stock themes ship as static factories on `SugarCraft\Forms\Theme`:
 `ansi()` (default), `plain()`, `charm()`, `dracula()`, `catppuccin()`,
-`base16()`, `base()`. Pass one to `Form::withTheme(...)`. The accessibility
+`base16()`, `base()`. Pass one to `Form::withTheme(...)` — the theme is a
+render context: `Form::view()` threads it into every field, so the slots
+paint the field bodies too: focused/blurred titles, the cursor surface
+(list rows, Confirm/RadioPills pills, the Date cursor cell), option rows,
+the focused-Select caret (prompt slot), checked boxes (selectedOption),
+the inline `! error` row (error), and the summary bullets
+(errorSummaryItem — split from the errorSummary block slot). The shipped
+`ansi()` default keeps every existing field-body byte identical (its field
+slots are the plain styles the legacy code hard-coded); pick any other
+preset — or `Theme::plain()` for a zero-SGR render — and the body
+repaints. The accessibility
 mode flips the entire form to plain-text rendering — useful when you detect
 `NO_COLOR=1` or `TERM=dumb`. The accessible line is scoped to the focused
 field only — no group titles, no `Step X of Y` pagination, no error-summary

@@ -14,6 +14,8 @@ use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Core\WorkerPool;
@@ -32,6 +34,8 @@ use SugarCraft\Forms\ItemList\StringItem;
  */
 final class Select implements \SugarCraft\Forms\Field
 {
+    use HasThemeChrome;
+
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -436,14 +440,19 @@ final class Select implements \SugarCraft\Forms\Field
         };
     }
 
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
+        // SF-9 (sugar-forms-029): a focused Select gains the caret glyph
+        // through the theme prompt slot — focus used to paint no mark at
+        // all on the collapsed/expanded title row. Unthemed keeps the
+        // legacy plain bytes.
+        $caret = ($theme !== null && $this->list->focused) ? $theme->prompt->render('❯ ') : '';
+        if ($title !== '') { $lines[] = $caret . $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
-        $lines[] = $this->list->view();
+        $lines[] = $this->list->view($theme);
         return implode("\n", $lines);
     }
 

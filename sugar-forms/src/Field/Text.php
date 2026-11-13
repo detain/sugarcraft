@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Forms\AsyncValidatable;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
@@ -24,6 +26,8 @@ use SugarCraft\Forms\Util\RenderSafe;
  */
 final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncValidatable
 {
+    use HasThemeChrome;
+
     use HasAsyncValidation;
     use HasErrorHelp;
     use HasHideFunc;
@@ -157,16 +161,16 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
         return [$next, $cmd];
     }
 
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
+        if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
         $lines[] = $this->area->view();
         // Validator messages can echo user input — clean at the display site.
-        if ($showErrors && $this->error !== null) { $lines[] = '! ' . RenderSafe::clean($this->error); }
+        if ($showErrors && $this->error !== null) { $lines[] = self::themedErrorRow(RenderSafe::clean($this->error), $theme); }
         foreach ($showErrors ? $this->errorHelpLines() : [] as $helpLine) {
             $lines[] = $helpLine;
         }

@@ -12,6 +12,8 @@ use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\TimeoutException;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Core\WorkerPool;
 use SugarCraft\Forms\AsyncValidatable;
@@ -34,6 +36,8 @@ use SugarCraft\Forms\Validator\Validator;
  */
 final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncValidatable
 {
+    use HasThemeChrome;
+
     use HasAsyncValidation;
     use HasErrorHelp;
     use HasHideFunc;
@@ -649,13 +653,13 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
         };
     }
 
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') {
-            $lines[] = $title . $this->readonlyTitleSuffix();
+            $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix();
         }
         if ($desc !== '') {
             $lines[] = $desc;
@@ -665,7 +669,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             // Validator messages can echo user input — clean at the display
             // site (the stored $this->error / getError() stay raw).
             if ($showErrors) {
-                $lines[] = '! ' . RenderSafe::clean($this->error);
+                $lines[] = self::themedErrorRow(RenderSafe::clean($this->error), $theme);
             }
         }
         foreach ($showErrors ? $this->errorHelpLines() : [] as $helpLine) {

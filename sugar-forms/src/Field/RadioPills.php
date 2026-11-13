@@ -8,6 +8,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
@@ -55,6 +57,8 @@ use SugarCraft\Forms\Util\RenderSafe;
  */
 final class RadioPills implements Field
 {
+    use HasThemeChrome;
+
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -270,15 +274,15 @@ final class RadioPills implements Field
      * Confirm idiom, deliberately unpainted: E736 3.9 — these widgets carry
      * no themeable style slots).
      */
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
+        if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
 
-        $lines[] = $this->buildPillRow();
+        $lines[] = $this->buildPillRow($theme);
         return implode("\n", $lines);
     }
 
@@ -327,7 +331,7 @@ final class RadioPills implements Field
      * from {@see pillWindow()} plus an ellipsis on each clipped side, cut to
      * the budget as a final guarantee.
      */
-    private function buildPillRow(): string
+    private function buildPillRow(?Theme $theme = null): string
     {
         $gap = str_repeat(' ', self::GAP);
         [$first, $last, $head, $tail] = $this->pillWindow();
@@ -336,7 +340,7 @@ final class RadioPills implements Field
             foreach ($this->options as $index => $label) {
                 $pill = ' ' . RenderSafe::clean($label) . ' ';
                 $cells[] = $index === $this->cursor
-                    ? Ansi::sgr(Ansi::REVERSE) . $pill . Ansi::reset()
+                    ? self::themedHighlight($pill, $theme)
                     : $pill;
             }
             return implode($gap, $cells);
@@ -349,7 +353,7 @@ final class RadioPills implements Field
         for ($index = $first; $index <= $last; ++$index) {
             $pill = ' ' . RenderSafe::clean($this->options[$index]) . ' ';
             $parts[] = $index === $this->cursor
-                ? Ansi::sgr(Ansi::REVERSE) . $pill . Ansi::reset()
+                ? self::themedHighlight($pill, $theme)
                 : $pill;
         }
         if ($tail) {

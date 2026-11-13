@@ -9,6 +9,8 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Forms\Util\ViewportPan;
@@ -31,6 +33,8 @@ use SugarCraft\Forms\Util\ViewportPan;
  */
 final class FilePicker implements Model
 {
+    use HasThemeChrome;
+
     private function __construct(
         public readonly string $cwd,
         /** @var list<Entry> */ public readonly array $entries,
@@ -117,8 +121,13 @@ final class FilePicker implements Model
         };
     }
 
-    /** Render the component as a multi-line ANSI string. */
-    public function view(): string
+    /**
+     * Render the component as a multi-line ANSI string. SF-9: the theme
+     * threads through from the FilePicker field — cursor rows ride the
+     * theme cursor slot, entry rows the option slot, the error row the
+     * error slot; null keeps the legacy hard-coded bytes.
+     */
+    public function view(?Theme $theme = null): string
     {
         $lines = [RenderSafe::clean($this->cwd)];
         if ($this->error !== null) {
@@ -126,7 +135,7 @@ final class FilePicker implements Model
             // every sibling '! error' site in the lib renders it through
             // the sanitizer — this was the one unclean surface, letting
             // OSC-8/CSI smuggled via a crafted dir name paint the row.
-            $lines[] = '! ' . RenderSafe::clean($this->error);
+            $lines[] = self::themedErrorRow(RenderSafe::clean($this->error), $theme);
         }
         if ($this->entries === []) {
             $lines[] = '(empty)';
@@ -140,9 +149,10 @@ final class FilePicker implements Model
             $iconPart = $this->showIcons ? $entry->icon() . ' ' : '';
             $sizePart = $this->showSize  ? '  ' . $entry->formatSize() : '';
             $body     = $iconPart . RenderSafe::clean($entry->display()) . $sizePart;
-            $line = ($idx === $this->cursor && $this->focused ? '> ' : '  ') . $body;
-            if ($idx === $this->cursor && $this->focused) {
-                $line = Ansi::sgr(Ansi::REVERSE) . $line . Ansi::reset();
+            $onCursor = $idx === $this->cursor && $this->focused;
+            $line = ($onCursor ? '> ' : '  ') . self::themedOption($body, $theme);
+            if ($onCursor) {
+                $line = self::themedHighlight($line, $theme);
             }
             $lines[] = $line;
         }

@@ -6,6 +6,8 @@ namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
@@ -28,6 +30,8 @@ use SugarCraft\Forms\Util\RenderSafe;
  */
 final class MultiSelect implements \SugarCraft\Forms\Field
 {
+    use HasThemeChrome;
+
     use HasErrorHelp;
     use HasHideFunc;
     use HasDynamicLabels;
@@ -188,19 +192,25 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         };
     }
 
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
+        if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
         foreach ($this->options as $i => $opt) {
-            $box   = empty($this->selected[$i]) ? '[ ]' : '[x]';
+            $checked = !empty($this->selected[$i]);
+            // SF-9 (sugar-forms-007): the checked box rides the theme's
+            // selectedOption slot (bold pink under ansi(); themed per
+            // preset) — previously the slot had zero consumers.
+            $box   = $checked
+                ? ($theme === null ? '[x]' : $theme->selectedOption->render('[x]'))
+                : '[ ]';
             $marker = ($i === $this->cursor && $this->focused) ? '>' : ' ';
             $line  = $marker . ' ' . $box . ' ' . RenderSafe::clean($opt);
             if ($i === $this->cursor && $this->focused) {
-                $line = Ansi::sgr(Ansi::REVERSE) . $line . Ansi::reset();
+                $line = self::themedHighlight($line, $theme);
             }
             $lines[] = $line;
         }
@@ -208,7 +218,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             // Constraint/validator messages can echo user input — clean at the
             // display site (the stored $this->error / getError() stay raw).
             if ($showErrors) {
-                $lines[] = '! ' . RenderSafe::clean($this->error);
+                $lines[] = self::themedErrorRow(RenderSafe::clean($this->error), $theme);
             }
             foreach ($showErrors ? $this->errorHelpLines() : [] as $helpLine) {
                 $lines[] = $helpLine;

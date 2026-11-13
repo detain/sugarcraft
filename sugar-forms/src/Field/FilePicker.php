@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\FilePicker\FilePicker as PickerWidget;
 use SugarCraft\Forms\CarriesNonCtorState;
@@ -23,6 +25,8 @@ use SugarCraft\Forms\Util\RenderSafe;
  */
 final class FilePicker implements \SugarCraft\Forms\Field
 {
+    use HasThemeChrome;
+
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -87,14 +91,14 @@ final class FilePicker implements \SugarCraft\Forms\Field
         return [$this->mutate(picker: $p), $cmd];
     }
 
-    public function view(bool $showErrors = true): string
+    public function view(bool $showErrors = true, ?Theme $theme = null): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
+        if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
-        $lines[] = $this->picker->view();
+        $lines[] = $this->picker->view($theme);
         if ($this->picker->selected() !== null) {
             // The selected path is attacker-influenceable display text (a
             // crafted filename carries ESC sequences straight into the

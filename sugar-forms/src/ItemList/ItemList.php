@@ -16,8 +16,9 @@ use SugarCraft\Core\Msg\MouseMotionMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Theme;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Forms\Util\ViewportPan;
 
@@ -50,6 +51,8 @@ use SugarCraft\Forms\Util\ViewportPan;
  */
 final class ItemList implements Model
 {
+    use HasThemeChrome;
+
     private function __construct(
         /** @var list<Item> */
         public readonly array $items,
@@ -181,9 +184,9 @@ final class ItemList implements Model
     }
 
     /** Render the component as a multi-line ANSI string. */
-    public function view(): string
+    public function view(?Theme $theme = null): string
     {
-        return implode("\n", $this->clip($this->renderLines()));
+        return implode("\n", $this->clip($this->renderLines($theme)));
     }
 
     /**
@@ -212,9 +215,15 @@ final class ItemList implements Model
     }
 
     /**
+     * SF-9 (sugar-forms-007/-029): with a theme the cursor row rides the
+     * theme cursor slot, plain rows the option slot, and a BLURRED list
+     * dims its highlight to the option style — focus becomes visible
+     * (the widget already carried $focused; nothing read it). Null theme
+     * is the standalone contract: the legacy hard-coded reverse bytes.
+     *
      * @return list<string>
      */
-    private function renderLines(): array
+    private function renderLines(?Theme $theme = null): array
     {
         $visible = $this->visibleItems();
         $count   = count($visible);
@@ -251,9 +260,12 @@ final class ItemList implements Model
             $itemTitle = RenderSafe::clean($item->title());
             // For selected, render the cursor prefix; for others, the unselected prefix.
             if ($sel) {
-                $title = $this->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $itemTitle . Ansi::reset();
+                $title = $this->cursorPrefix
+                    . ($this->focused || $theme === null
+                        ? self::themedHighlight($itemTitle, $theme)
+                        : self::themedOption($itemTitle, $theme));
             } else {
-                $title = $this->unselectedPrefix . $itemTitle;
+                $title = $this->unselectedPrefix . self::themedOption($itemTitle, $theme);
             }
             $lines[] = $title;
             if ($this->showDescription && $item->description() !== '') {
