@@ -295,6 +295,48 @@ final class BinArgvTest extends TestCase
         $this->assertNotEmpty($out);
     }
 
+    // ---- msw-32: POSIX end-of-options and the -v alias (finding -070) ----
+
+    public function testEndOfOptionsMarkerIsAcceptedInsteadOfRefused(): void
+    {
+        // The old answer to a bare '--' was 'unknown option --'. It now ends
+        // option parsing; with nothing behind the door the boot marches on
+        // to the no-TTY gate — the play grammar for pipes is unchanged.
+        [$code, , $err] = self::runBinary(['--']);
+        $this->assertSame(1, $code, 'stderr was: ' . $err);
+        $this->assertStringNotContainsString('unknown option', $err);
+        $this->assertStringContainsString('stdin is not a terminal', $err, 'the parse must pass the door and reach the boot gate');
+    }
+
+    public function testPositionalsAfterEndOfOptionsStayPositional(): void
+    {
+        [$code, , $err] = self::runBinary(['--', '16', '10']);
+        $this->assertSame(1, $code);
+        $this->assertStringNotContainsString('unknown option', $err);
+        $this->assertStringNotContainsString('must be a plain integer', $err);
+        $this->assertStringContainsString('stdin is not a terminal', $err, '16 10 must parse as the board shape behind the door');
+    }
+
+    public function testTokensBehindEndOfOptionsAreNeverFlags(): void
+    {
+        // The POSIX symmetry leg: --version behind the door is a WORD, and
+        // words in the width slot refuse as non-numeric positionals — the
+        // diagnostic must NOT fire.
+        [$code, $out, $err] = self::runBinary(['--', '--version']);
+        $this->assertSame(1, $code);
+        $this->assertSame('', $out, 'the word must not trigger the version diagnostic');
+        $this->assertStringContainsString("must be a plain integer (got '--version')", $err);
+    }
+
+    public function testShortVersionAliasAnswersWithTheLongFlagVerbatim(): void
+    {
+        [$vcode, $vout] = self::runBinary(['-v']);
+        $this->assertSame(0, $vcode, '-v beside -h: the version must answer on a pipe');
+        [$lcode, $lout] = self::runBinary(['--version']);
+        $this->assertSame(0, $lcode);
+        $this->assertSame($lout, $vout, '-v is the alias of --version, byte for byte');
+    }
+
     // ---- msw-07: the ACCEPTED boot grammar (finding -009) -----------------
     //
     // Every older fixture that refuses is symmetric, so a transposition

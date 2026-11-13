@@ -147,14 +147,20 @@ $args   = array_slice($argv ?? [], 1);
 
 // Diagnostic flags answer before any board or stats file is touched, and
 // bypass the unknown-option refusal below — that door exists for game flags.
-if (in_array('--version', $args, true)) {
+// msw-32 (finding -070): they honour the POSIX end-of-options door too —
+// after a standalone '--' every token is positional, so '-v' back there is
+// a word, not a flag.
+$endOfOptions = array_search('--', $args, true);
+$flagTokens   = $endOfOptions === false ? $args : array_slice($args, 0, $endOfOptions);
+if (in_array('--version', $flagTokens, true) || in_array('-v', $flagTokens, true)) {
     fwrite(STDOUT, Version::line());
     exit(0);
 }
-if (in_array('--help', $args, true) || in_array('-h', $args, true)) {
+if (in_array('--help', $flagTokens, true) || in_array('-h', $flagTokens, true)) {
     fwrite(STDOUT, $usage
-        . "       candy-minesweeper --version  Print the version\n"
-        . "       candy-minesweeper --help     Show this help\n"
+        . "       candy-minesweeper -v | --version  Print the version\n"
+        . "       candy-minesweeper -h | --help     Show this help\n"
+        . "       a standalone -- ends option parsing (positional-only after it)\n"
         . "       no pause; plain launch plays the 10x10 board (G5-b ruling — press n\n"
         . "       in-game to pick a preset or type a custom shape; no mid-session resize re-fit)\n");
     exit(0);
@@ -229,7 +235,20 @@ $presets = [
     '--medium'   => Difficulty::MEDIUM,
     '--expert'   => Difficulty::EXPERT,
 ];
+// msw-32 (finding -070): a standalone '--' closes the option grammar and
+// every token after it is positional. Digit positionals can never start
+// with '-', so the tail is normally ordinary numbers; what the door fixes
+// is the old 'unknown option --' refusal that punished the POSIX reflex.
+$afterOptions = false;
 foreach ($args as $arg) {
+    if ($afterOptions) {
+        $positional[] = $arg;
+        continue;
+    }
+    if ($arg === '--') {
+        $afterOptions = true;
+        continue;
+    }
     if (isset($presets[$arg])) {
         if ($preset !== null) {
             // Two presets is a contradiction, not a last-wins rule.
