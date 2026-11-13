@@ -66,8 +66,9 @@ take `candy-` or `sugar-` by role.
 > Bento · Pretzel · Strawberry · Berry · Cherry · Peach · Apricot · Plum
 
 **Avoid** sweet words that already have strong unrelated meanings in
-software (`Cookie` reads as HTTP cookies; `Crumb` is fine because we
-already use it for breadcrumbs).
+software (`Cookie` reads as HTTP cookies — and do not revive `Crumb`:
+the breadcrumb-trail package took its structural name, `sugar-navstack`,
+in the 2026-10 rename).
 
 ### Domain cheat sheet — functional words
 
@@ -154,8 +155,16 @@ survives under the well-known-term clause.
 ## Renamed in 2026-10
 
 The full old → new map, generated from `tools/renames.json` (single source of
-truth — regenerate with the `php -r` walk in `plan_rename.md` Phase 9 #1,
+truth — regenerate with the `php -r` walk in `docs/old/plan_rename.md` Phase 9 #1,
 never hand-edit rows):
+> Batch codes are the campaign's execution waves as recorded in
+> `tools/renames.json`'s `batch` field: letters A-F are the 2026-10
+> rename phases (A pilot, B apps, C components, D media/rendering,
+> E foundation, F the sugar-crush to candy-code pair), while the numeric
+> 1 and 1.3 are the post-rename structural steps — 1 folds or absorbs
+> predecessor packages into siblings (candy-zone, sugar-prompt), 1.3
+> splits `candy-gifview` out of `sugar-animation`.
+
 
 | Old package | New package | Batch | What happened |
 |---|---|:---:|---|
@@ -215,7 +224,7 @@ never hand-edit rows):
 
 Old slugs keep working: every Packagist name above was redirected, every
 GitHub repo moved or archived, and `docs/lib/<old>.html` serves a redirect
-stub (plan_rename.md step 2.3). The pre-rename project/home runtime dirs (`~/.sugar-crush`, `.sugar-crush/`) are migrated on first launch by the `sugar-core` legacy-path handling. <!-- @rename-keep -->
+stub (docs/old/plan_rename.md step 2.3). The pre-rename project/home runtime dirs (`~/.sugar-crush`, `.sugar-crush/`) are migrated on first launch by the `sugar-core` legacy-path handling. <!-- @rename-keep -->
 
 ---
 
@@ -223,49 +232,49 @@ stub (plan_rename.md step 2.3). The pre-rename project/home runtime dirs (`~/.su
 
 | Name | Why it works |
 |---|---|
-| **SugarCraft** | umbrella brand — vague is correct here, it's the meta |
-| **SugarSpring** | spring = spring physics, literally. (It shed its original math-family prefix in the 2026-10 rename; `sugar-` now marks it as the library it is.) |
-| **SugarCharts** | sugar + charts = charts. literal. |
-| **SugarTable** | sugar + table = data table. literal. |
-| **SugarDatepicker** | sugar + datepicker = date picker. literal. |
-| **SugarQuickpick** | sugar + quickpick = fuzzy quick-pick / filter overlay component. "quickpick" says the function plainly, matching the established terminal picker concept (was CandyHermit — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
-| **SugarReleases** | sugar + releases = release-fetch / self-update engine. literal: it selects, verifies and swaps in published releases (extracted from candy-code's `self-update`, 2026-11, owner decision G-10). |
-| **SugarIgnore** | sugar + ignore = gitignore-style ignore-rule engine. literal: it answers "is this path ignored?" from injected ignore-file contents (extracted from candy-code, 2026-11, owner decision G-10). |
-| **SugarToast** | toast = notification metaphor IS the function. delightful. |
-| **SugarNavstack** | nav stack = push/pop navigation stack + breadcrumb trail IS the function. delightful. (renamed from SugarCrumbs 2026-10). <!-- @rename-keep --> |
-| **SugarAnsiParser** | ansi + parser = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from sugar-vterm. |
-| **CandyScriptui** | candy + script UI = scriptable one-shot terminal widgets callable from shell scripts (renamed from CandyShell 2026-10). <!-- @rename-keep --> |
-| **CandyGitServer** | candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->
-| **CandyKv** | candy + kv = personal key/value store app. `kv` says the domain plainly (was SugarSkate — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep --> |
-| **CandyCodeshot** | candy + codeshot = code → SVG screenshots, literally. Took this name in the 2026-10 rename; the upstream-inherited `freeze` pun retired with it. | <!-- @rename-keep -->
-| **CandyGit** | candy + git = the git TUI. took this name in the 2026-10 rename; the original stash = the git verb wordplay retired with the old placement. |
+| **SugarCraft** | Umbrella brand — vague is correct here, it's the meta |
+| **SugarSpring** | Spring = spring physics, literally. (It shed its original math-family prefix in the 2026-10 rename; `sugar-` now marks it as the library it is.) |
+| **SugarCharts** | Sugar + charts = charts. Literal. |
+| **SugarTable** | Sugar + table = data table. Literal. |
+| **SugarDatepicker** | Sugar + datepicker = date picker. Literal. |
+| **SugarQuickpick** | Sugar + quickpick = fuzzy quick-pick / filter overlay component. "quickpick" says the function plainly, matching the established terminal picker concept (was CandyHermit — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
+| **SugarReleases** | Sugar + releases = release-fetch / self-update engine. Literal: it selects, verifies and swaps in published releases (extracted from candy-code's `self-update`, 2026-11, owner decision G-10). |
+| **SugarIgnore** | Sugar + ignore = gitignore-style ignore-rule engine. Literal: it answers "is this path ignored?" from injected ignore-file contents (extracted from candy-code, 2026-11, owner decision G-10). |
+| **SugarToast** | Toast = notification metaphor IS the function. Delightful. |
+| **SugarNavstack** | Nav stack = push/pop navigation stack + breadcrumb trail IS the function. Delightful. (renamed from SugarCrumbs 2026-10). <!-- @rename-keep --> |
+| **SugarAnsiParser** | Ansi + parser = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from sugar-vterm. |
+| **CandyScriptui** | Candy + script UI = scriptable one-shot terminal widgets callable from shell scripts (renamed from CandyShell 2026-10). <!-- @rename-keep --> |
+| **CandyGitServer** | Candy + Git server = self-hostable Git server app (was CandyServe). | <!-- @rename-keep -->
+| **CandyKv** | Candy + kv = personal key/value store app. `kv` says the domain plainly (was SugarSkate — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep --> |
+| **CandyCodeshot** | Candy + codeshot = code → SVG screenshots, literally. Took this name in the 2026-10 rename; the upstream-inherited `freeze` pun retired with it. | <!-- @rename-keep -->
+| **CandyGit** | Candy + git = the git TUI. Took this name in the 2026-10 rename; the original stash = the git verb wordplay retired with the old placement. |
 | **CandyFlappy** | Flappy-Bird clone — took this name in the 2026-10 rename; the original bee-and-flap wordplay retired with the old math-family prefix. |
-| **CandyStarter** | candy + starter = the create-project skeleton you start from. ✓✓ |
-| **SugarImage** | image = image-to-cell renderer. "mosaic" was the technical term behind the old name; `image` is the plainer one. clear and literal. |
-| **SugarVterm**     | vterm = virtual terminal emulator. "vt" is the established term inside the namespace (`SugarCraft\Vterm`). |
-| **CandyVcr**    | candy + vcr = record + replay terminal sessions — shipped as a CLI (cassettes, player). "vcr" carries the cassette / playback metaphor for free. |
-| **SugarAnimation**   | animation = flip-book frames — the GIF member of the visual family beside SugarImage (still images) and SugarVideo (video). "flip" carried the frame-by-frame metaphor in the old name. |
-| **CandyGifView** | candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/sugar-animation`, split into its own package (rename campaign step 1.3). "view" states the app role beside the SugarAnimation toolkit. |
-| **SugarPty**    | pty = pseudo-terminal primitive. "pty" is the Unix term of art; no package-namespace prefixes. Foundation lib for spawning child processes wired to a controlled PTY. |
-| **SugarForms** | sugar + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-widgets. |
-| **SugarFocus** | sugar + focus = the focus-management component. dependency-free ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dashboard first used here.
-| **SugarGallery** | sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
-| **SugarFuzzy** | sugar + fuzzy = fuzzy string matching with scored matched indices. extracted from sugar-forms; adds indices output unblocking filter-highlighting UI. two algorithms: Smith-Waterman (local alignment) + Sahilm (filter-as-you-type).
-| **SugarCellBuffer** | cell buffer = cell-grid value objects. The shared Buffer/Cell foundation for terminal rendering across the ecosystem. |
-| **SugarAsync** | sugar + async = shared async vocabulary for ReactPHP. Original — CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose(), AsyncOps static helpers (withTimeout, retry, debounce, throttle). Unifies ReactPHP usage scattered across sugar-core, sugar-forms, sugar-ssh-server. |
-| **SugarConstraints** | constraints = layout solver. Greedy layout solver behind a LayoutSolver interface: GreedySolver (supported engine) + CassowarySolver (deprecated shim, simplex retired). Consumed by sugar-style/panels; Dock surface for candy-code. |
-| **SugarTesting** | sugar + testing = test harness for SugarCraft apps. ProgramSimulator drives Programs with scripted input; Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals; TapeRecorder emits VHS .tape files. |
-| **SugarInput** | input = terminal escape sequence decoder. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline's move to real-TTY input. |
-| **SugarMouse** | plain descriptive — took this name in the 2026-10 rename; the “candy + mouse” wordplay retired with it. Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker. No external Manager wiring — the scanner is owned by each consumer. |
-| **CandyMinesweeper** | plain descriptive — took this name in the 2026-10 rename; the “candy + mines” wordplay retired with it. |
-| **SugarTreelist** | tree + list = scrollable tree/list view component. literal. |
-| **CandyTop** | candy + top = the `top`/`btop` family of system monitors. Design antecedent [aristocratos/btop](https://github.com/aristocratos/btop); `top` kept as the well-known term, `candy-` by the 2026-10 apps law (it was the owner's prefix ruling before the law existed — see the historical note above). |
-| **CandySql** | candy + sql = terminal SQL client. literal pairing (was candy-query — the query-editor framing retired with the 2026-10 rename); multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. | <!-- @rename-keep -->
-| **SugarVideo** | video = terminal video player. sits beside SugarAnimation (GIF) and SugarImage (images) as the video member of the family. |
-| **SugarDiff** | sugar + diff = unified-diff engine. library per the role law; extracted from candy-code (BuildsUnifiedDiff + DiffGutter numbering model); first-party PHP. |
-| **Sugar MCP Client** | sugar + mcp = Model Context Protocol client core. library per the role law; extracted from candy-code (src/MCP stdio stack + McpMessage codec); first-party PHP — MCP is an open protocol spec. |
-| **CandyCodeWeb** | app satellite of CandyCode — the browser UI for `candy-code serve`. Three words by the `<app>-<surface>` exception above; first-party PHP + Vue. |
-| **CandyCode** | candy + code = TUI AI coding assistant, shipped as a CLI binary. Multi-provider (OpenAI, SGLang, Claude Code, etc.), multi-agent, skill-aware. |
+| **CandyStarter** | Candy + starter = the create-project skeleton you start from. ✓✓ |
+| **SugarImage** | Image = image-to-cell renderer. "mosaic" was the technical term behind the old name; `image` is the plainer one. Clear and literal. |
+| **SugarVterm**     | Vterm = virtual terminal emulator. "vt" is the established term inside the namespace (`SugarCraft\Vterm`). |
+| **CandyVcr**    | Candy + vcr = record + replay terminal sessions — shipped as a CLI (cassettes, player). "vcr" carries the cassette / playback metaphor for free. |
+| **SugarAnimation**   | Animation = flip-book frames — the GIF member of the visual family beside SugarImage (still images) and SugarVideo (video). "flip" carried the frame-by-frame metaphor in the old name. |
+| **CandyGifView** | Candy + gif + view = the terminal GIF/.ansi-art viewer app — the command formerly `bin/sugar-animation`, split into its own package (rename campaign step 1.3). "view" states the app role beside the SugarAnimation toolkit. |
+| **SugarPty**    | Pty = pseudo-terminal primitive. "pty" is the Unix term of art; no package-namespace prefixes. Foundation lib for spawning child processes wired to a controlled PTY. |
+| **SugarForms** | Sugar + forms = form primitives foundation. Extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-widgets. |
+| **SugarFocus** | Sugar + focus = the focus-management component. Dependency-free ring: an ordered set of focusable regions with one focused member + wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Original design; it generalizes the one-focused-region approach sugar-dashboard first used here.
+| **SugarGallery** | Sugar + gallery = a poster gallery / grid for media TUIs. 2-D virtualized, sparse PosterGrid for large libraries + owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile. Original — the web media-shelf pattern, rebuilt for the terminal. |
+| **SugarFuzzy** | Sugar + fuzzy = fuzzy string matching with scored matched indices. Extracted from sugar-forms; adds indices output unblocking filter-highlighting UI. Two algorithms: Smith-Waterman (local alignment) + Sahilm (filter-as-you-type).
+| **SugarCellBuffer** | Cell buffer = cell-grid value objects. The shared Buffer/Cell foundation for terminal rendering across the ecosystem. |
+| **SugarAsync** | Sugar + async = shared async vocabulary for ReactPHP. Original — CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose(), AsyncOps static helpers (withTimeout, retry, debounce, throttle). Unifies ReactPHP usage scattered across sugar-core, sugar-forms, sugar-ssh-server. |
+| **SugarConstraints** | Constraints = layout solver. Greedy layout solver behind a LayoutSolver interface: GreedySolver (supported engine) + CassowarySolver (deprecated shim, simplex retired). Consumed by sugar-style/panels; Dock surface for candy-code. |
+| **SugarTesting** | Sugar + testing = test harness for SugarCraft apps. ProgramSimulator drives Programs with scripted input; Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals; TapeRecorder emits VHS .tape files. |
+| **SugarInput** | Input = terminal escape sequence decoder. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline's move to real-TTY input. |
+| **SugarMouse** | Plain descriptive — took this name in the 2026-10 rename; the “candy + mouse” wordplay retired with it. Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker. No external Manager wiring — the scanner is owned by each consumer. |
+| **CandyMinesweeper** | Plain descriptive — took this name in the 2026-10 rename; the “candy + mines” wordplay retired with it. |
+| **SugarTreelist** | Tree + list = scrollable tree/list view component. Literal. |
+| **CandyTop** | Candy + top = the `top`/`btop` family of system monitors. Design antecedent [aristocratos/btop](https://github.com/aristocratos/btop); `top` kept as the well-known term, `candy-` by the 2026-10 apps law (it was the owner's prefix ruling before the law existed — see the historical note above). |
+| **CandySql** | Candy + sql = terminal SQL client. Literal pairing (was candy-query — the query-editor framing retired with the 2026-10 rename); multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. | <!-- @rename-keep -->
+| **SugarVideo** | Video = terminal video player. Sits beside SugarAnimation (GIF) and SugarImage (images) as the video member of the family. |
+| **SugarDiff** | Sugar + diff = unified-diff engine. Library per the role law; extracted from candy-code (BuildsUnifiedDiff + DiffGutter numbering model); first-party PHP. |
+| **SugarMCPClient** | Sugar + mcp = Model Context Protocol client core. Library per the role law; extracted from candy-code (src/MCP stdio stack + McpMessage codec); first-party PHP — MCP is an open protocol spec. |
+| **CandyCodeWeb** | App satellite of CandyCode — the browser UI for `candy-code serve`. Three words by the `<app>-<surface>` exception above; first-party PHP + Vue. |
+| **CandyCode** | Candy + code = TUI AI coding assistant, shipped as a CLI binary. Multi-provider (OpenAI, SGLang, Claude Code, etc.), multi-agent, skill-aware. |
 
 ## ⚠️ Functional half is weak / vague
 
@@ -279,8 +288,10 @@ stub (plan_rename.md step 2.3). The pre-rename project/home runtime dirs (`~/.su
 | **CandySshLauncher** | piggybacked on the old server name; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |
 | **CandyFiles** | "Files" describes the app | `FilePane`, `DualPane`, `FileMan` |
 
-> The names in the right column are sketches, not commitments — see the
-> proposals section in PRs to pick what gets adopted.
+> The names in the right column are sketches, not commitments — a name
+> is adopted by a rename PR that appends the old-to-new pair (with its
+> batch code) to `tools/renames.json`, the source of truth; the table
+> above then regenerates from it.
 
 ---
 
