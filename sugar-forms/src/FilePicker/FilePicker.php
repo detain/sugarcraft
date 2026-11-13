@@ -13,6 +13,7 @@ use SugarCraft\Forms\HasThemeChrome;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Util\RenderSafe;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Util\ViewportPan;
 
 /**
@@ -53,6 +54,8 @@ final class FilePicker implements Model
         public readonly SortMode $sortBy     = SortMode::Name,
         public readonly bool $reverseSort    = false,
         public readonly ?string $error    = null,
+        /** Horizontal budget in cells; 0 == natural width (uncapped). */
+        public readonly int $width       = 0,
     ) {}
 
     /**
@@ -129,13 +132,20 @@ final class FilePicker implements Model
      */
     public function view(?Theme $theme = null): string
     {
-        $lines = [RenderSafe::clean($this->cwd)];
+        $cap = $this->width;
+        $fit = static fn(string $line): string => $cap > 0 && Width::of($line) > $cap
+            ? Width::truncateMiddle($line, $cap)
+            : $line;
+        $lines = [$fit(RenderSafe::clean($this->cwd))];
         if ($this->error !== null) {
             // SF-008: the error carries a user-/filesystem-sourced path;
             // every sibling '! error' site in the lib renders it through
             // the sanitizer — this was the one unclean surface, letting
             // OSC-8/CSI smuggled via a crafted dir name paint the row.
-            $lines[] = self::themedErrorRow(RenderSafe::clean($this->error), $theme);
+            // Cap the message text before the theme wrap: truncateMiddle
+            // is a strip-and-rebuild helper, so an SGR-carrying row must
+            // not be handed to it already painted.
+            $lines[] = self::themedErrorRow($fit(RenderSafe::clean($this->error)), $theme);
         }
         if ($this->entries === []) {
             $lines[] = '(empty)';
@@ -149,6 +159,11 @@ final class FilePicker implements Model
             $iconPart = $this->showIcons ? $entry->icon() . ' ' : '';
             $sizePart = $this->showSize  ? '  ' . $entry->formatSize() : '';
             $body     = $iconPart . RenderSafe::clean($entry->display()) . $sizePart;
+            if ($cap > 0 && Width::of($body) > $cap - 2) {
+                // Two prefix cells ('> ' / '  ') ride on top of the body
+                // budget; the mid-truncation keeps the visible tail.
+                $body = Width::truncateMiddle($body, max(1, $cap - 2));
+            }
             $onCursor = $idx === $this->cursor && $this->focused;
             $line = ($onCursor ? '> ' : '  ') . self::themedOption($body, $theme);
             if ($onCursor) {
@@ -185,10 +200,10 @@ final class FilePicker implements Model
         return $this->height;
     }
 
-    /** Configured viewport width (currently unused — kept for API parity). */
+    /** Configured viewport width in cells (0 = natural). Mirrors upstream `Width()`. */
     public function width(): int
     {
-        return 0;
+        return $this->width;
     }
 
     /**
@@ -255,6 +270,17 @@ final class FilePicker implements Model
     public function withDirAllowed(bool $on): self  { return $this->mutate(dirAllowed: $on); }
     public function withFileAllowed(bool $on): self { return $this->mutate(fileAllowed: $on); }
     public function withHeight(int $h): self        { return $this->mutate(height: max(1, $h))->reclamp(); }
+
+    /**
+     * Cap every rendered row at $cells terminal cells (0 restores the
+     * natural width). Long paths are MIDDLE-truncated so the filename
+     * tail — the part that identifies the entry — stays visible
+      (sugar-forms-076, the Bubbles recipe).
+     */
+    public function withWidth(int $cells): self
+    {
+        return $this->mutate(width: max(0, $cells));
+    }
 
     /** Render a per-entry icon glyph. Off by default. */
     public function withShowIcons(bool $on = true): self { return $this->mutate(showIcons: $on); }
@@ -402,6 +428,7 @@ final class FilePicker implements Model
         ?SortMode $sortBy = null,
         ?bool $reverseSort = null,
         ?string $error = null, bool $errorSet = false,
+        ?int $width = null,
     ): self {
         return new self(
             cwd:               $cwd               ?? $this->cwd,
@@ -421,6 +448,7 @@ final class FilePicker implements Model
             sortBy:            $sortBy            ?? $this->sortBy,
             reverseSort:       $reverseSort       ?? $this->reverseSort,
             error:             $errorSet ? $error : $this->error,
+            width:             $width            ?? $this->width,
         );
     }
 
