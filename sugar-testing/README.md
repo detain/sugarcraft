@@ -126,6 +126,9 @@ Assertions::assertGoldenAnsi($golden, $result->view);
 `addMsgs()` takes one message or many — pairing `ScriptedInput` with the
 simulator is a single spread: `$sim->addMsgs(...$input->build());`
 (equivalently, a `foreach` of `addMsgs()` calls over `$input->build()`).
+Two runnable examples live under [`examples/`](examples/):
+`program-simulator.php` drives a model headlessly, `tape-recorder.php`
+composes a `.tape` script.
 
 ## API
 

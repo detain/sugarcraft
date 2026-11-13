@@ -9,8 +9,7 @@ declare(strict_types=1);
  *
  * The generated tape is saved to a unique temporary path and printed, then
  * removed so concurrent or repeat runs cannot collide on a shared name.
- * Note the
- * escaped second Type line: control bytes inside typed text are
+ * Note the escaped second Type line: control bytes inside typed text are
  * neutralized so they can never forge a standalone directive line — a
  * raw "\nSet FontSize 4242" payload would otherwise be executed by the
  * CI GIF renderer.
