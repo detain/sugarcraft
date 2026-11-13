@@ -227,6 +227,22 @@ final class BinDispatchTest extends TestCase
         $this->assertLessThan($parseAt, $armed);
     }
 
+    public function testSuccessBannerSanitisesTheTransportValue(): void
+    {
+        // CM-48: every other echo of non-constant text in the bin rides
+        // Sanitize::untrusted; the success banner was the fifth egress left
+        // unswept. A custom Transport implementation (the Mailer accepts any
+        // Transport) can return a control-byte-laden name() — the CLI cannot
+        // drive one in-process, so the wrap is pinned by source shape:
+        // unwrapping the echo reddens this test.
+        $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
+        $this->assertMatchesRegularExpression(
+            '/echo\s+Sanitize::untrusted\(\s*Lang::t\(\s*' . "'cli\\.email_sent'" . '/m',
+            $src,
+            'the success banner must sanitize its interpolated transport value',
+        );
+    }
+
     public function testUnknownOptionMessageFollowsTheUserLocale(): void
     {
         $de = require __DIR__ . '/../lang/de.php';

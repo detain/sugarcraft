@@ -298,7 +298,10 @@ function main(array $argv): int
 
     try {
         $mailer->send($email);
-        echo Lang::t('cli.email_sent', ['transport' => $mailer->transportName()]) . "\n";
+        // CM-48: the fifth egress. name() is free-form for any Transport
+        // implementation the Mailer accepts, so the success line sanitizes
+        // like the error paths beside it — sweep at the egress choke.
+        echo Sanitize::untrusted(Lang::t('cli.email_sent', ['transport' => $mailer->transportName()])) . "\n";
     } catch (\RuntimeException $e) {
         // Protocol/transport failures announce themselves — SmtpTransport
         // wraps its whole conversation in smtp.send_failed and the Resend
