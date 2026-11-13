@@ -68,7 +68,8 @@ declare(strict_types=1);
  * composer-mode change, and so every `__DIR__`-relative DATA read keeps the
  * layout it was written against: the theme catalogue (ThemeRegistry,
  * scandir), the logo corpus and its jsonl index (sugar-animation ArtLibrary,
- * scandir + is_file) and the lang page (T::register's file read) are all
+ * scandir + is_file — the corpus ships .ansi + jsonl only, see
+ * LOGO_SHIP_PATTERN) and the lang page (T::register's file read) are all
  * stream-wrapper-safe. The only glob() in src/ reads HOST paths under /sys
  * (AmdGpuIds) — packaging has nothing to do with it.
  *
@@ -155,6 +156,15 @@ if (!is_file($package . '/vendor/autoload.php')) {
 
 /** Roots packaged at the archive, verbatim. Everything else stays out. */
 const INCLUDE_ROOTS = ['bin', 'src', 'lang', 'themes', 'logo', 'vendor'];
+/**
+ * The logo/ root is narrowed to what the runtime actually reads: the .ansi
+ * art files (sugar-animation ArtLibrary::FILE_PATTERN consumes exactly this
+ * name shape) and the logos.jsonl index the phar smoke pins. The PNG/GIF
+ * rasters and the logo/tools/ generators are authoring inputs — ~9.3 MB of
+ * dead weight riding on every download. Guard 4 still walks EVERY entry at
+ * full depth, so a symlink hidden inside the excluded half still refuses.
+ */
+const LOGO_SHIP_PATTERN = '/^(?:logos\.jsonl|logo-.*\.ansi)$/';
 /** Loose files packaged at the archive root. */
 const INCLUDE_FILES = ['LICENSE'];
 /** Never shipped, at any depth. */
@@ -179,7 +189,10 @@ foreach (INCLUDE_ROOTS as $root) {
 }
 
 $files = [];
-$walk = static function (string $dir) use (&$walk, &$files, $package): void {
+/** Only the logo/ root is narrowed (LOGO_SHIP_PATTERN); every other file ships verbatim. */
+$ships = static fn (string $path): bool => !str_starts_with($path, $package . '/logo/')
+    || preg_match(LOGO_SHIP_PATTERN, basename($path)) === 1;
+$walk = static function (string $dir) use (&$walk, &$files, $package, $ships): void {
     foreach (scandir($dir) ?: [] as $name) {
         if ($name === '.' || $name === '..') {
             continue;
@@ -196,7 +209,9 @@ $walk = static function (string $dir) use (&$walk, &$files, $package): void {
             $walk($path);
             continue;
         }
-        $files[] = $path;
+        if ($ships($path)) {
+            $files[] = $path;
+        }
     }
 };
 foreach ($roots as $root) {
