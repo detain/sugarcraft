@@ -473,11 +473,13 @@ echo $pid->text();                 // "123" — non-digit input is rejected whol
 ### `Menu\OptionRow` — btop options-menu geometry
 
 `OptionRow::renderRow(...)` is the primary API: the single-line btop
-option row `← label … value ↵ →` sized to exactly the field width the
-caller provides — label and value share the budget, and values are
-clipped with `Width::truncateAnsi()` so caller ANSI survives. The field
-width is floored at 16 cells (`max(16, $field)`), so a row always
-renders into at least 16 columns even when the caller budgets less.
+option row `← label … value ↵ →` sized to the field width the caller
+provides, floored at 16 cells (`max(16, $field)`) so a row always
+renders into at least 16 columns even when the caller budgets less —
+label and value share the budget. Caller-supplied label/value data is
+run through the lib-wide marked-frames sanitizer (raw ESC and forged
+zone sentinels are neutralized, and clipping preserves ANSI emitted
+for the row), so styles belong in the `Style` slots, not in the data.
 
 > `OptionRow::render(...)` — the older two-line form (bold name centred
 > in `$nameCol`, value line centred in `$valueCol`) — is **deprecated**:
@@ -488,11 +490,11 @@ renders into at least 16 columns even when the caller budgets less.
 > default pair) and stays supported for candy-top, but prefer
 > `renderRow()`.
 
-With `←` / `→` on the selected row (while not editing) when
-`$hasArrows` and `↵` (or `E` with `tty: true`) only when the row is
-*both* selected and `$editable`. Passing a
-`TextEdit` with `editing: true` renders its underline-caret view in
-`valueCol - 1` cells.
+The row draws `←` / `→` on the selected row while it is not editing and
+`$hasArrows` is set; it draws `↵` (or `E` with `tty: true`) only when
+the row is *both* selected and `$editable`. Passing a
+`TextEdit` with `editing: true` renders its underline-caret view inline
+in the value band (clipped to its slot; the arrows hide while editing).
 
 ```php
 use SugarCraft\Widgets\Input\TextEdit;
@@ -500,7 +502,7 @@ use SugarCraft\Widgets\Menu\OptionRow;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Style\Style;
 
-echo OptionRow::render(
+echo OptionRow::renderRow(
     'Update ms',
     TextEdit::new('2000', numeric: true),
     selected: true,
@@ -511,6 +513,7 @@ echo OptionRow::render(
     selFg: Style::new()->foreground(Color::hex('#ffffff')),
 );
 ```
+`render()` remains supported as the legacy two-line shim above.
 
 Centering follows btop `cjust` (the odd spare column goes on the left,
 the opposite of `Width::padCenter()`); over-wide text truncates to the

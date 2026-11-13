@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Widgets\Menu;
 
 use SugarCraft\Widgets\Input\TextEdit;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
@@ -26,8 +27,9 @@ use SugarCraft\Style\Style;
  * ```
  *
  * With the defaults (29/25) that is btop's exact layout: `←` at column 1,
- * `→` at 27, `↵` at 27 — or at 25 when the arrows are showing, which in btop
- * is the int option case (ints are both 2D and editable) so the two glyphs
+ * `→` at 27. The `↵` is drawn at column 27 by default; when `←`/`→` are
+ * showing they take 27 and `↵` shifts to 25, which in btop is the int
+ * option case (ints are both 2D and editable) so the two glyphs
  * do not collide. Arrows only draw on the selected row while not editing;
  * `↵` only on the selected row of an editable option.
  *
@@ -92,6 +94,7 @@ final class OptionRow
         $nameCol = max(0, $nameCol);
         $valueCol = max(2, $valueCol);
         $editing = $editing && $selected;
+        $name = self::safe($name);
 
         $sel = ($selFg ?? Style::new())->inherit($selBg ?? Style::new());
         $nameStyle = ($selected ? $sel : ($title ?? Style::new()))->bold();
@@ -114,7 +117,7 @@ final class OptionRow
         if ($editing && $value instanceof TextEdit) {
             $middle = [[self::cjust($value->view($valueCol - 1), $valueCol), false]];
         } else {
-            $plain = $value instanceof TextEdit ? $value->text : $value;
+            $plain = self::safe($value instanceof TextEdit ? $value->text : $value);
             $middle = self::cells(self::cjust($plain, $valueCol));
             if ($enterInValue) {
                 $middle = self::overlay($middle, $valueCol - 2, $enter);
@@ -142,8 +145,10 @@ final class OptionRow
     private const ROW_LABEL_MIN = 6;
 
     /**
-     * One-line row: `← label … value ↵ →` on a single row of exactly $field
-     * cells, so the whole selected row reads as one highlighted block.
+     * One-line row: `← label … value ↵ →` on a single row of
+     * `max(16, $field)` cells — the field width is floored at 16, so a
+     * caller budgeting less still gets a 16-cell row — so the whole
+     * selected row reads as one highlighted block.
      *
      * ```
      * col 0        blank margin
@@ -185,7 +190,7 @@ final class OptionRow
         $field = max(16, $field);
         $band = $field - 7;
         $editing = $editing && $selected;
-
+        $name = self::safe($name);
         $sel = ($selFg ?? Style::new())->inherit($selBg ?? Style::new());
         $nameStyle = ($selected ? $sel : ($title ?? Style::new()))->bold();
         $valueStyle = $selected ? $sel : ($main ?? Style::new());
@@ -200,7 +205,7 @@ final class OptionRow
             $vw = $band - 2 - $lw;
             $shown = self::rjustWidth($value->view(max(1, $vw - 1)), $vw);
         } else {
-            $plain = $value instanceof TextEdit ? $value->text : $value;
+            $plain = self::safe($value instanceof TextEdit ? $value->text : $value);
             $vwFull = min(self::VALUE_MAX, Width::string($plain));
             $lw = min($lwFull, max(self::ROW_LABEL_MIN, $band - 2 - $vwFull));
             $vw = max(1, min($vwFull, $band - 2 - $lw));
@@ -219,9 +224,20 @@ final class OptionRow
             . $valueStyle->render(' ');
     }
 
-    /** Left-align $text in $width cells (ANSI preserved, over-wide already cut). */
-    private static function ljustWidth(string $text, int $width): string
+    /**
+     * The lib-wide marked-frames law: caller-supplied label/value data is
+     * untrusted, so raw control bytes and ESC sequences (including forged
+     * U+E000/U+E001 zone sentinels) are neutralized before they reach the
+     * frame — the exact idiom Table/Tree/TextEdit/Help/Tabs hold. Styling
+     * rides the Style slots, never bytes smuggled through the strings.
+     */
+    private static function safe(string $s): string
     {
+        return Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($s));
+    }
+
+    /** Left-align $text in $width cells (ANSI preserved, over-wide already cut). */
+    private static function ljustWidth(string $text, int $width): string    {
         return $text . str_repeat(' ', max(0, $width - Width::string($text)));
     }
 

@@ -261,4 +261,58 @@ final class OptionRowTest extends TestCase
         $tiny = OptionRow::renderRow('Name', 'value', false, false, false, field: 10, title: Style::new(), main: Style::new());
         $this->assertSame(16, Width::string($tiny), 'field floors at 16');
     }
+
+    // ─── untrusted data (marked-frames law) ──────────────────────────
+
+    public function testRenderNeutralizesEscAndZoneSentinelsInData(): void
+    {
+        $out = OptionRow::render(
+            "\x1b[31mRED" . "\u{E000}zone\u{E001}",
+            "1\x1b]0;title\x07",
+            true,
+            false,
+            true,
+            editable: true,
+        );
+        // Style slots still emit their own SGR, but no injected sequence
+        // survives: neither the red, the OSC, nor the forged zone pair.
+        $this->assertStringNotContainsString("\x1b[31m", $out);
+        $this->assertStringNotContainsString("\x1b]", $out);
+        $this->assertStringNotContainsString("\u{E000}", $out);
+        $this->assertStringNotContainsString("\u{E001}", $out);
+        [$a] = self::lines($out);
+        $this->assertStringContainsString('REDzone', Ansi::strip($a));
+    }
+
+    public function testRenderRowNeutralizesEscAndZoneSentinelsInData(): void
+    {
+        $row = OptionRow::renderRow(
+            "\u{E000}\x1b[1mName",
+            "v\u{E001}\x00alue",
+            true,
+            false,
+            true,
+            editable: true,
+        );
+        $this->assertStringNotContainsString("\u{E000}", $row);
+        $this->assertStringNotContainsString("\u{E001}", $row);
+        $this->assertStringNotContainsString("\x00", $row);
+        // A surviving injected bold would double the \x1b[1m count beyond the
+        // control glyphs' own runs; instead the value reads plain:
+        $this->assertStringContainsString('Name', Ansi::strip($row));
+        $this->assertStringContainsString('value', Ansi::strip($row));
+    }
+
+    public function testRenderRowWideGlyphBandStaysAligned(): void
+    {
+        // The label/value band is measured in display cells, not codepoints:
+        // a 12-cell label + 2-cell CJK value sit exactly in a 29-cell row,
+        // with the control glyphs landing in their documented slots.
+        $row = OptionRow::renderRow('アップデート', '秒', true, false, true, field: 29, editable: true);
+        $this->assertSame(29, Width::string($row));
+        $plain = Ansi::strip($row);
+        $this->assertSame(' ← ', \mb_substr($plain, 0, 3));
+        $this->assertSame('アップデート', \mb_substr($plain, 3, 6), 'CJK label survives whole');
+        $this->assertSame(' 秒' . OptionRow::ENTER . ' ' . OptionRow::RIGHT . ' ', \mb_substr($plain, -6), 'value ends at the band right edge');
+    }
 }
