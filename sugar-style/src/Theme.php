@@ -299,26 +299,44 @@ final class Theme
     // ─── Fluent withers ──────────────────────────────────────────────────
 
     /**
+     * The single copy door — every wither declares only the slot it
+     * replaces and rides this choke (mirrors the private `with()` idiom
+     * of {@see Style}).
+     *
+     * Threading each of the 13 fields by hand through 13 withers was
+     * correct today but structurally open to the 14th-field drop: add a
+     * slot and every wither must remember it, with no test forcing the
+     * update (finding 037). Here a new field costs exactly one `??=`
+     * row of this method.
+     *
+     * @param array<string, Color> $overrides slot name => replacement colour
+     */
+    private function with(array $overrides): self
+    {
+        return new self(
+            foreground: $overrides['foreground'] ?? $this->foreground,
+            background: $overrides['background'] ?? $this->background,
+            primary:    $overrides['primary'] ?? $this->primary,
+            secondary:  $overrides['secondary'] ?? $this->secondary,
+            accent:     $overrides['accent'] ?? $this->accent,
+            muted:      $overrides['muted'] ?? $this->muted,
+            error:      $overrides['error'] ?? $this->error,
+            warning:    $overrides['warning'] ?? $this->warning,
+            success:    $overrides['success'] ?? $this->success,
+            info:       $overrides['info'] ?? $this->info,
+            border:     $overrides['border'] ?? $this->border,
+            separator:  $overrides['separator'] ?? $this->separator,
+            cursor:     $overrides['cursor'] ?? $this->cursor,
+        );
+    }
+
+    /**
      * Returns a new Theme with the foreground colour replaced.
      * @return self
      */
     public function withForeground(Color $foreground): self
     {
-        return new self(
-            foreground:  $foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['foreground' => $foreground]);
     }
 
     /**
@@ -327,21 +345,7 @@ final class Theme
      */
     public function withBackground(Color $background): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['background' => $background]);
     }
 
     /**
@@ -350,21 +354,7 @@ final class Theme
      */
     public function withPrimary(Color $primary): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['primary' => $primary]);
     }
 
     /**
@@ -373,21 +363,7 @@ final class Theme
      */
     public function withSecondary(Color $secondary): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['secondary' => $secondary]);
     }
 
     /**
@@ -396,21 +372,7 @@ final class Theme
      */
     public function withAccent(Color $accent): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['accent' => $accent]);
     }
 
     /**
@@ -419,21 +381,7 @@ final class Theme
      */
     public function withMuted(Color $muted): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['muted' => $muted]);
     }
 
     /**
@@ -442,21 +390,7 @@ final class Theme
      */
     public function withError(Color $error): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['error' => $error]);
     }
 
     /**
@@ -465,21 +399,7 @@ final class Theme
      */
     public function withWarning(Color $warning): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['warning' => $warning]);
     }
 
     /**
@@ -488,21 +408,7 @@ final class Theme
      */
     public function withSuccess(Color $success): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['success' => $success]);
     }
 
     /**
@@ -511,21 +417,7 @@ final class Theme
      */
     public function withInfo(Color $info): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['info' => $info]);
     }
 
     /**
@@ -534,21 +426,7 @@ final class Theme
      */
     public function withBorder(Color $border): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $border,
-            separator:   $this->separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['border' => $border]);
     }
 
     /**
@@ -557,21 +435,7 @@ final class Theme
      */
     public function withSeparator(Color $separator): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $separator,
-            cursor:      $this->cursor,
-        );
+        return $this->with(['separator' => $separator]);
     }
 
     /**
@@ -580,20 +444,6 @@ final class Theme
      */
     public function withCursor(Color $cursor): self
     {
-        return new self(
-            foreground:  $this->foreground,
-            background:  $this->background,
-            primary:     $this->primary,
-            secondary:   $this->secondary,
-            accent:      $this->accent,
-            muted:       $this->muted,
-            error:       $this->error,
-            warning:     $this->warning,
-            success:     $this->success,
-            info:        $this->info,
-            border:      $this->border,
-            separator:   $this->separator,
-            cursor:      $cursor,
-        );
+        return $this->with(['cursor' => $cursor]);
     }
 }

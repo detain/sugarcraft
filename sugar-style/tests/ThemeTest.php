@@ -515,4 +515,74 @@ final class ThemeTest extends TestCase
         $this->assertSame($p['separator'], $t->separator->toHex());
         $this->assertSame($p['blue'], $t->cursor->toHex());
     }
+
+    // ─── Wither choke (finding 037) ────────────────────────────────────────
+
+    /**
+     * @return array<string,array{string,string}>
+     */
+    public static function witherSlotProvider(): array
+    {
+        return [
+            'foreground' => ['withForeground', 'foreground'],
+            'background' => ['withBackground', 'background'],
+            'primary' => ['withPrimary', 'primary'],
+            'secondary' => ['withSecondary', 'secondary'],
+            'accent' => ['withAccent', 'accent'],
+            'muted' => ['withMuted', 'muted'],
+            'error' => ['withError', 'error'],
+            'warning' => ['withWarning', 'warning'],
+            'success' => ['withSuccess', 'success'],
+            'info' => ['withInfo', 'info'],
+            'border' => ['withBorder', 'border'],
+            'separator' => ['withSeparator', 'separator'],
+            'cursor' => ['withCursor', 'cursor'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('witherSlotProvider')]
+    public function testWitherReplacesItsSlotAndCarriesEveryOtherSlot(string $wither, string $slot): void
+    {
+        // The with() choke is the only legal copy door: a wither that drops
+        // one of the other 12 fields passed the old one-field asserts while
+        // silently reverting themed colours. Full-matrix carry check.
+        $base = Theme::dark();
+        $result = $base->{$wither}(Color::hex('#123456'));
+
+        foreach (array_column(self::witherSlotProvider(), 1) as $name) {
+            if ($name === $slot) {
+                $this->assertSame('#123456', $result->$name->toHex(), "{$wither} must replace {$slot}");
+            } else {
+                $this->assertSame($base->$name->toHex(), $result->$name->toHex(), "{$wither} must carry {$name}");
+            }
+        }
+    }
+
+    public function testWithersRouteThroughTheCopyDoorNotDirectConstruction(): void
+    {
+        // Structural guard (house precedent: sugar-spring SPR-13): every
+        // public wither must call $this->with([...]) and never re-thread
+        // the constructor by hand — re-introducing `new self(` in a wither
+        // re-opens the 14th-field-drop class this row closed.
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Theme.php');
+        preg_match_all(
+            '/public function with([A-Z]\w*)\([^)]*\): self\s*\{([^}]*)\}/s',
+            $src,
+            $matches,
+            PREG_SET_ORDER,
+        );
+        $this->assertCount(13, $matches, 'expected all 13 public withers');
+        foreach ($matches as [, $name, $body]) {
+            $this->assertStringContainsString(
+                '$this->with([',
+                $body,
+                "with{$name} bypassed the copy door",
+            );
+            $this->assertStringNotContainsString(
+                'new self(',
+                $body,
+                "with{$name} constructs directly — field drops would go unnoticed again",
+            );
+        }
+    }
 }
