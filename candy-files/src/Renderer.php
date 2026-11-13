@@ -31,7 +31,20 @@ final class Renderer
         // frame says which pane answers the keyboard.
         $focus  = Lang::t('status.focus', ['side' => $active === 0 ? Lang::t('side.left') : Lang::t('side.right')]);
         $status = $focus . ' · ' . ($m->status === '' ? self::keyHelp() : $m->status);
-        return $search . $tabBar . $body . "\n" . self::statusBar($status);
+        $frame = $search . $tabBar . $body . "\n" . self::statusBar($status);
+        if ($m->termCols > 0) {
+            // CF-01 belt: once a live width is known, no composed line may
+            // exceed it. The status line in particular carries the full
+            // key-help string (269 cells at en) until its tiering lands;
+            // clipping the composed frame keeps every row inside the
+            // terminal instead of letting the runtime wrap borders.
+            $lines = array_map(
+                static fn(string $line): string => Width::truncateAnsi($line, $m->termCols),
+                explode("\n", $frame),
+            );
+            $frame = implode("\n", $lines);
+        }
+        return $frame;
     }
 
     /** The pane the tabs structure holds for the current tab, or the flat one. */
@@ -71,26 +84,29 @@ final class Renderer
     /**
      * Render one pane box.
      *
-     * Width derivation: with a live terminal width
-     * the two panes split it (minus the 2-cell gutter), floored at the
-     * historical 40 cells; without one ($termCols === 0 — unit tests, or a
-     * Model built before the first WindowSizeMsg) every column keeps its
-     * legacy constant, so the pre-responsive layout is byte-preserved.
-     * All inner columns derive from the SAME width: at the 40-cell floor
-     * the formulas reproduce the old hardcodes exactly (inner 36, name 26,
-     * header 30, separator 36).
+     * Width derivation (CF-01 cure): `Style::width()` is the CONTENT
+     * width — border (2 cells) and padding (2 cells) are added on top of
+     * it. Passing the outer split there used to make every pane render 4
+     * cells wider than its share, so an 80-col terminal got a 90-cell
+     * frame that wrapped mid-border. The pane box now measures exactly
+     * $outer: the content gets $outer - 4 and every inner column derives
+     * from that same content width, so the separator fills the pane and
+     * two boxes plus the 2-cell gutter land on termCols. Without a live
+     * width ($termCols === 0 — unit tests, or a Model built before the
+     * first WindowSizeMsg) the historical 40-cell box is preserved
+     * (content 36, separator 36, name 25, header cap 30).
      */
     private static function renderPane(Pane $pane, bool $active, int $termCols = 0): string
     {
-        $outer = $termCols > 0 ? max(40, intdiv($termCols - 2, 2)) : 40;
-        $inner = $outer - 4;                 // borders (2) + padding (2)
-        $nameCol = max(10, $inner - 10);     // arrow+marker+2 spaces+size(7)
-        $headCap = max(6, $inner - 6);       // '  [sort]' tail keeps 6 cells
+        $outer = $termCols > 0 ? intdiv($termCols - 2, 2) : 40;
+        $inner = max(6, $outer - 4);             // content cells: border(2) + padding(2)
+        $nameCol = max(10, $inner - 11);         // arrow+marker+space+name+space+size(7)
+        $headCap = max(6, $inner - 6);           // '  [sort]' tail keeps 6 cells
 
         $style = Style::new()
             ->border($active ? Border::thick() : Border::normal())
             ->padding(0, 1)
-            ->width($outer);
+            ->width($inner);
 
         $header = sprintf(
             "%s  [%s%s]",

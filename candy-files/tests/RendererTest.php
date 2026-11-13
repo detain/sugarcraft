@@ -6,6 +6,8 @@ namespace SugarCraft\Files\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Files\Entry;
 use SugarCraft\Files\Manager;
 use SugarCraft\Files\Pane;
@@ -45,12 +47,12 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * MAJOR-2 (docs-fix-1023): pane widths derive from the live terminal
-     * width captured via WindowSizeMsg. At 120 cols each pane gets
-     * intdiv(118, 2) = 59 outer cells → 55 inner, and the in-pane separator
-     * row is exactly that wide. At termCols === 0 (no size seen yet — unit
-     * shape) the legacy 40-cell pane and its 36-cell separator survive
-     * byte-identically.
+     * MAJOR-2 (docs-fix-1023) / CF-01: pane boxes derive from the live
+     * terminal width captured via WindowSizeMsg. At 120 cols each pane box
+     * is intdiv(118, 2) = 59 outer cells (content 55, separator 55) and the
+     * two boxes plus the 2-cell gutter fill the frame exactly. At
+     * termCols === 0 (no size seen yet — unit shape) the legacy 40-cell
+     * box survives byte-identically, content 36 and all.
      */
     public function testPanesWidenWithTheTerminalAndDefaultToLegacyWidth(): void
     {
@@ -58,9 +60,13 @@ final class RendererTest extends TestCase
         $legacy = Renderer::render($m);
         // Full-row equality (WELD-H cure for review M1): the legacy
         // separator must survive as ONE byte-exact frame row, not merely a
-        // 36-dash substring.
+        // 36-dash substring. CF-01 re-derives the row: the separator now
+        // FILLS the content width (36 dashes, no trailing fill), so each
+        // pane box is exactly the historical 40 cells and the whole frame
+        // is 40 + 2 + 40 = 82 (was 90 — the old row overflowed its own
+        // 40-cell split by 4 cells per pane).
         $this->assertContains(
-            sprintf('┃ %s     ┃  │ %s     │', str_repeat('─', 36), str_repeat('─', 36)),
+            sprintf('┃ %s ┃  │ %s │', str_repeat('─', 36), str_repeat('─', 36)),
             explode("\n", $legacy),
             'the legacy separator row must survive byte-exact'
         );
@@ -68,8 +74,57 @@ final class RendererTest extends TestCase
 
         [$m] = $m->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
         $wide = Renderer::render($m);
-        $this->assertStringContainsString(str_repeat('─', 55), $wide, 'resize must widen the pane separator');
+        $this->assertContains(
+            sprintf('┃ %s ┃  │ %s │', str_repeat('─', 55), str_repeat('─', 55)),
+            explode("\n", $wide),
+            'resize must widen the pane separator to the live split'
+        );
         $this->assertStringNotContainsString(str_repeat('─', 36) . '│', $wide, 'the legacy 36-cell rule must not survive a 120-col frame');
+    }
+
+    /**
+     * CF-01 property guard: with a live terminal width, NO composed frame
+     * line may exceed termCols display cells — in any UI state. The
+     * pre-cure frame measured 90 cells on an 80-col terminal (every pane
+     * rendered 4 cells past its split), and the unclamped status line
+     * carries the full key-help regardless.
+     */
+    public function testNoFrameLineEverExceedsTerminalWidth(): void
+    {
+        $tree = [
+            '/' => [
+                new Entry(str_repeat('x', 200), false, 1234567, 0),
+                new Entry('日本語のとても長いファイル名です.txt', false, 42, 0),
+                new Entry('短', true, 0, 0),
+                new Entry('a moderately long directory name that still has to fit', true, 0, 0),
+            ],
+            '/短' => [],
+        ];
+        $lister = static fn(string $p): array => $tree[$p] ?? [];
+        foreach ([40, 80, 120, 200] as $cols) {
+            [$m] = Manager::start('/', '/', $lister)->update(new \SugarCraft\Core\Msg\WindowSizeMsg($cols, 24));
+            $states = ['default' => $m];
+            // armed confirm (selection + d)
+            [$arm] = $m->update(new KeyMsg(KeyType::Char, ' '));
+            [$arm] = $arm->update(new KeyMsg(KeyType::Char, 'd'));
+            $states['confirm-armed'] = $arm;
+            // open search with results
+            [$s] = $m->update(new KeyMsg(KeyType::Char, '/'));
+            foreach (['x', 'y', 'z'] as $ch) {
+                [$s] = $s->update(new KeyMsg(KeyType::Char, $ch));
+            }
+            $states['search-open'] = $s;
+            foreach ($states as $label => $state) {
+                foreach (explode("\n", Renderer::render($state)) as $line) {
+                    $cells = Width::of(Ansi::strip($line));
+                    $this->assertLessThanOrEqual(
+                        $cols,
+                        $cells,
+                        "CF-01: {$label} at {$cols} cols has a {$cells}-cell line: " . substr(Ansi::strip($line), 0, 60)
+                    );
+                }
+            }
+        }
     }
 
     public function testRenderShowsSelectedEntries(): void
