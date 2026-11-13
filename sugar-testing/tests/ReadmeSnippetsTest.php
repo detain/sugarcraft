@@ -309,7 +309,7 @@ final class ReadmeSnippetsTest extends TestCase
                 'to', 'header', 'type', 'enter', 'sleep', 'resize', 'comment', 'line', 'save', 'keyMsgToVhs',
             ],
             \SugarCraft\Testing\TestResult::class => ['assertCmdCount', 'assertCmdContains', 'assertNoCmds'],
-            \SugarCraft\Testing\Concerns\TemporaryDirectoryTrait::class => ['setUpTemporaryDirectory', 'tearDownTemporaryDirectory', 'getTempDirSuffix'],
+            \SugarCraft\Testing\Concerns\TemporaryDirectoryTrait::class => ['setUpTemporaryDirectory', 'tearDownTemporaryDirectory', 'tempDirPrefix'],
             \SugarCraft\Testing\LoopPin::class => ['pinStableClock'],
         ];
         foreach ($methods as $class => $names) {

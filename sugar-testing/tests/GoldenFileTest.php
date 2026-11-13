@@ -17,7 +17,7 @@ final class GoldenFileTest extends TestCase
 
     private string $tmpFile;
 
-    protected function getTempDirSuffix(): string
+    protected function tempDirPrefix(): string
     {
         return 'golden';
     }
@@ -262,5 +262,12 @@ final class GoldenFileTest extends TestCase
         $this->expectExceptionMessage('Is a directory');
 
         GoldenFile::update($occupied, 'payload');
+    }
+
+    public function testThePrefixHookLabelsTheScratchDirectory(): void
+    {
+        // Pins the trait actually consults tempDirPrefix() — a stale or
+        // bypassed hook would silently mint the default 'test' label.
+        $this->assertStringContainsString('/sugar-testing-golden-', $this->tmpDir);
     }
 }

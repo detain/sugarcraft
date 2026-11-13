@@ -17,7 +17,7 @@ use SugarCraft\Testing\Lang;
  * after {@see setUpTemporaryDirectory()}.
  *
  * Each setup call mints a fresh, process-unique directory (pid + a random
- * component), so two test classes sharing a suffix — or a class rerun in
+ * component), so two test classes sharing a prefix — or a class rerun in
  * the same process — never collide on one directory, and teardown never
  * needs to "recover" a sibling class's state.
  *
@@ -32,7 +32,7 @@ trait TemporaryDirectoryTrait
      * E.g. 'assertions', 'tape', 'golden'. It is a prefix only — the
      * directory stays unique regardless.
      */
-    protected function getTempDirSuffix(): string
+    protected function tempDirPrefix(): string
     {
         return 'test';
     }
@@ -44,8 +44,8 @@ trait TemporaryDirectoryTrait
      */
     protected function setUpTemporaryDirectory(): void
     {
-        $suffix = $this->getTempDirSuffix();
-        $base   = sys_get_temp_dir() . '/sugar-testing-' . $suffix . '-' . getmypid()
+        $prefix = $this->tempDirPrefix();
+        $base   = sys_get_temp_dir() . '/sugar-testing-' . $prefix . '-' . getmypid()
             . '-' . bin2hex(random_bytes(4));
 
         // '@' + is_dir rescue keeps the concurrent-creation shape warning-free.

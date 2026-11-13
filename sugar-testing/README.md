@@ -500,7 +500,8 @@ ever following a planted symlink into someone else's tree. The trait **owns**
 the `$tmpDir` property — do not re-declare it in your class (that is a
 fatal). Call `$this->setUpTemporaryDirectory()` from `setUp()` and
 `$this->tearDownTemporaryDirectory()` from `tearDown()`; override
-`getTempDirSuffix()` to name the directory after your test class.
+`tempDirPrefix()` to label the directory with your suite's name (it is a
+mid-name label — uniqueness comes from the pid and random parts regardless).
 
 ### LoopPin
 

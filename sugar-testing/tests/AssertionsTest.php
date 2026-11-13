@@ -20,7 +20,7 @@ final class AssertionsTest extends TestCase
 
     private string $fixturesDir;
 
-    protected function getTempDirSuffix(): string
+    protected function tempDirPrefix(): string
     {
         return 'assertions';
     }
@@ -362,5 +362,12 @@ final class AssertionsTest extends TestCase
                 putenv("UPDATE_GOLDENS={$oldEnv}");
             }
         }
+    }
+
+    public function testThePrefixHookLabelsTheScratchDirectory(): void
+    {
+        // Pins the trait actually consults tempDirPrefix() — a stale or
+        // bypassed hook would silently mint the default 'test' label.
+        $this->assertStringContainsString('/sugar-testing-assertions-', $this->tmpDir);
     }
 }

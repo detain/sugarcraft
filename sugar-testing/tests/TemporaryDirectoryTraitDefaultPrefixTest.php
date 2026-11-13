@@ -8,17 +8,17 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Testing\Concerns\TemporaryDirectoryTrait;
 
 /**
- * Test TemporaryDirectoryTrait using the default getTempDirSuffix().
+ * Test TemporaryDirectoryTrait using the default tempDirPrefix().
  *
- * This ensures the base implementation of getTempDirSuffix() (which returns
+ * This ensures the base implementation of tempDirPrefix() (which returns
  * 'test') is covered by tests. All other test classes override this method,
  * so the base implementation would be uncovered otherwise.
  */
-final class TemporaryDirectoryTraitDefaultSuffixTest extends TestCase
+final class TemporaryDirectoryTraitDefaultPrefixTest extends TestCase
 {
     use TemporaryDirectoryTrait;
 
-    // Do NOT override getTempDirSuffix() - use the default from the trait.
+    // Do NOT override tempDirPrefix() - use the default from the trait.
     // This is intentional to test the base implementation.
 
     protected function setUp(): void
@@ -31,10 +31,10 @@ final class TemporaryDirectoryTraitDefaultSuffixTest extends TestCase
         $this->tearDownTemporaryDirectory();
     }
 
-    public function testDefaultSuffixIsTest(): void
+    public function testDefaultPrefixIsTest(): void
     {
-        // The default getTempDirSuffix() returns 'test'.
-        // Verify the temp directory was created with the correct suffix pattern.
+        // The default tempDirPrefix() returns 'test'.
+        // Verify the temp directory was created with the correct prefix pattern.
         $this->assertStringContainsString('sugar-testing-test-', $this->tmpDir);
     }
 

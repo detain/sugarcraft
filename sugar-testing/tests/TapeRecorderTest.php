@@ -19,7 +19,7 @@ final class TapeRecorderTest extends TestCase
 
     private string $tapePath;
 
-    protected function getTempDirSuffix(): string
+    protected function tempDirPrefix(): string
     {
         return 'tape';
     }
@@ -527,5 +527,12 @@ final class TapeRecorderTest extends TestCase
         $this->expectExceptionMessage('Is a directory');
 
         TapeRecorder::new($occupied)->header()->save();
+    }
+
+    public function testThePrefixHookLabelsTheScratchDirectory(): void
+    {
+        // Pins the trait actually consults tempDirPrefix() — a stale or
+        // bypassed hook would silently mint the default 'test' label.
+        $this->assertStringContainsString('/sugar-testing-tape-', $this->tmpDir);
     }
 }
