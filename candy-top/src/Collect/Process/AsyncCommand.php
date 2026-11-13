@@ -33,7 +33,10 @@ use function React\Promise\resolve;
  * exits. Cleanup is bounded, not absolute: a child stuck in
  * uninterruptible sleep ignores even SIGKILL, so after the shutdown wait
  * ({@see REAP_WAIT}) it is left to init, which reaps it once the kernel
- * lets it die. While candy-top runs, no exited child stays a zombie.
+ * lets it die. While candy-top runs, an exited child is closed by the
+ * next spawn, by any liveCount() call, or by the shutdown hook — a child
+ * abandoned without a successor spawn (the GPU-went-absent shape) stays
+ * a zombie until that hook, nothing polls it on a timer (candy-top-042).
  *
  * Descriptors: the spec maps 0-2 only, so the child inherits the parent's
  * other open descriptors for its (bounded, ≤ timeout) life. The tools run
@@ -106,10 +109,22 @@ final class AsyncCommand
             return CommandResult::absent();
         }
         $deadline = $child->started + $timeout;
+        // candy-top-044: if stream_select hard-errors every round (EBADF
+        // class), the deadline loop would spin at 100 % CPU for the whole
+        // timeout. Floor each error round and give up after a streak —
+        // the give-up path below kills and reports Timeout honestly.
+        $selectErrors = 0;
         while (!$child->drain() && ($left = $deadline - self::now()) > 0) {
             $read = [$child->stdout];
             $write = $except = null;
-            @stream_select($read, $write, $except, 0, (int) max(1000, min(200000, $left * 1e6)));
+            if (@stream_select($read, $write, $except, 0, (int) max(1000, min(200000, $left * 1e6))) === false) {
+                if (++$selectErrors >= 100) {
+                    break;
+                }
+                usleep(1000);
+            } else {
+                $selectErrors = 0;
+            }
         }
         $child->closeStdout();
         if ($child->overflow) {
@@ -161,8 +176,18 @@ final class AsyncCommand
         $deadline = $child->started + $timeout;
         $stdout = $child->stdout;
         $timer = null;
+        // candy-top-043: one settlement ticket for every arm. The deadline
+        // timer and a read callback can fire inside the same loop iteration,
+        // and after closeStdout() the OS recycles the fd — a second pass
+        // through these closures would removeReadStream a resource id that
+        // now belongs to ANOTHER child's fresh stdout (cross-talk stall).
+        $settled = false;
 
-        $timedOut = static function () use ($child, $loop, $deferred, $stdout): void {
+        $timedOut = static function () use ($child, $loop, $deferred, $stdout, &$settled): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
             $loop->removeReadStream($stdout);
             $child->closeStdout();
             $child->kill();
@@ -175,7 +200,10 @@ final class AsyncCommand
         // kill reaches the direct child only: argv is exec'd without a shell, so that
         // child IS the tool.
         $timer = $loop->addTimer($timeout, $timedOut);
-        $loop->addReadStream($stdout, static function () use ($child, $loop, $deferred, $stdout, $deadline, &$timer, $timedOut): void {
+        $loop->addReadStream($stdout, static function () use ($child, $loop, $deferred, $stdout, $deadline, &$timer, $timedOut, &$settled): void {
+            if ($settled) {
+                return; // the deadline arm already tore this child down
+            }
             if (!$child->drain()) {
                 return;
             }
@@ -185,6 +213,7 @@ final class AsyncCommand
             }
             $child->closeStdout();
             if ($child->overflow) {
+                $settled = true;
                 $child->kill();
                 $child->reapOnLoop($loop);
                 $deferred->resolve($child->tooLarge());
@@ -192,14 +221,16 @@ final class AsyncCommand
                 return;
             }
             if ($child->exited()) {
+                $settled = true;
                 $deferred->resolve($child->finish());
 
                 return;
             }
             // EOF before exit: poll (WNOHANG) for the rest of the budget.
             $poll = null;
-            $poll = $loop->addPeriodicTimer(self::REAP_POLL, static function () use ($child, $loop, $deferred, $deadline, &$poll, $timedOut): void {
+            $poll = $loop->addPeriodicTimer(self::REAP_POLL, static function () use ($child, $loop, $deferred, $deadline, &$poll, $timedOut, &$settled): void {
                 if ($child->exited()) {
+                    $settled = true;
                     $loop->cancelTimer($poll);
                     $deferred->resolve($child->finish());
                 } elseif (self::now() >= $deadline) {
