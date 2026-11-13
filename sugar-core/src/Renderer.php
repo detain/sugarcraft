@@ -259,6 +259,11 @@ final class Renderer
     {
         $max = max(count($prev), count($curr));
         $payload = '';
+        // The erase bytes are row-independent; the full-repaint payload is
+        // assembled only when it actually wins the comparison (PERF-05:
+        // measuring `strlen($partial) <= strlen($full)` previously built
+        // the loser string every divergent row, every frame).
+        $erase = Ansi::eraseLine();
         for ($i = 0; $i < $max; $i++) {
             $a = $prev[$i] ?? null;
             $b = $curr[$i] ?? null;
@@ -266,15 +271,17 @@ final class Renderer
                 continue;
             }
             if ($a === null || $b === null) {
-                $payload .= Ansi::cursorTo($i + 1, 1) . Ansi::eraseLine();
+                $payload .= Ansi::cursorTo($i + 1, 1) . $erase;
                 if ($b !== null) {
                     $payload .= $b;
                 }
                 continue;
             }
             $partial = $this->repaintLine($i + 1, $a, $b);
-            $full    = Ansi::cursorTo($i + 1, 1) . Ansi::eraseLine() . $b;
-            $payload .= strlen($partial) <= strlen($full) ? $partial : $full;
+            $prefix  = Ansi::cursorTo($i + 1, 1) . $erase;
+            $payload .= strlen($partial) <= strlen($prefix) + strlen($b)
+                ? $partial
+                : $prefix . $b;
         }
         return $payload;
     }
@@ -326,6 +333,13 @@ final class Renderer
     /**
      * Longest common UTF-8 grapheme-aware prefix between two text
      * runs. Returns `[byte_count, cell_count]`.
+     *
+     * The walk is O(min(len(a), len(b))) codepoints and consults
+     * `Width::string()` per cluster — that is the honest cost centre of
+     * a partial repaint (PERF leg sc-18: kept, not hidden). A memo
+     * table is deliberately NOT added: keyed by arbitrary user-content
+     * substrings it would be unbounded, and the walk ends at the first
+     * differing token, which in practice is within the row's prefix.
      *
      * @return array{0:int,1:int}
      */

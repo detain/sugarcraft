@@ -18,6 +18,20 @@ use SugarCraft\Core\Util\Token;
  * for fg, 48 variants for bg, etc.) are captured as literal SGR
  * substrings so they round-trip cleanly.
  *
+ * Both SGR dialects are observed: the semicolon-flattened form
+ * (`38;2;r;g;b`, what this library emits) and the ITU T.416 colon
+ * sub-parameter form (`38:2:r:g:b`, what real terminals and tools
+ * emit). Groups split on `;`, sub-parameters on `:`; a colon group
+ * carries its color inside the group, so it never reads across into
+ * the NEXT group's parameters. Decorative sub-parameters on codes
+ * this state does not model (underline styles `4:0`–`4:3`, intensity
+ * `1:0`/`1:2`) are recognised-but-unmodelled: the base code's effect
+ * applies and the sub is dropped, exactly what the pre-colon parser
+ * did when intval() truncated `4:0` to `4` — the wire contract for
+ * every existing tape and golden is therefore byte-frozen; only
+ * malformed-adjacent colon input changes reading (from "swallow the
+ * next group" to "parse the color").
+ *
  * The class OBSERVES the two styles a row-wise prefix could lose:
  * SGR 58 (underline colour) and OSC 8 hyperlinks. Read
  * it via {@see underlineColor()}, {@see linkUri()} and
@@ -71,7 +85,17 @@ final class SgrState
         if ($t->type !== Token::CSI || $t->final !== 'm') {
             return;
         }
-        $params = $t->params === '' ? [0] : array_map('intval', explode(';', $t->params));
+        // Split groups on ';' and sub-parameters on ':' (ITU T.416
+        // colon dialect, see class docblock). Semicolon-only input
+        // produces exactly the old $params list plus empty sub-arms.
+        $groups = $t->params === '' ? ['0'] : explode(';', $t->params);
+        $params = [];
+        $subs = [];
+        foreach ($groups as $group) {
+            $pieces = explode(':', $group);
+            $params[] = (int) $pieces[0];
+            $subs[] = array_map('intval', array_slice($pieces, 1));
+        }
         $count = count($params);
         for ($i = 0; $i < $count; $i++) {
             $p = $params[$i];
@@ -115,47 +139,73 @@ final class SgrState
                         $this->bg = "\x1b[{$p}m";
                         break;
                     }
-                    if ($p === 38 && isset($params[$i + 1])) {
-                        $mode = $params[$i + 1];
-                        if ($mode === 5 && isset($params[$i + 2])) {
-                            $this->fg = "\x1b[38;5;{$params[$i + 2]}m";
-                            $i += 2;
+                    if ($p === 38 || $p === 48 || $p === 58) {
+                        $ext = self::extendedColor($p, $subs[$i] ?? [], $params, $i);
+                        if ($ext === null) {
+                            // Incomplete in either dialect: the code is
+                            // skipped and the walk continues — the exact
+                            // pre-fix shape (no consumption, no state change).
                             break;
                         }
-                        if ($mode === 2 && isset($params[$i + 2], $params[$i + 3], $params[$i + 4])) {
-                            $this->fg = "\x1b[38;2;{$params[$i + 2]};{$params[$i + 3]};{$params[$i + 4]}m";
-                            $i += 4;
-                            break;
-                        }
-                    }
-                    if ($p === 48 && isset($params[$i + 1])) {
-                        $mode = $params[$i + 1];
-                        if ($mode === 5 && isset($params[$i + 2])) {
-                            $this->bg = "\x1b[48;5;{$params[$i + 2]}m";
-                            $i += 2;
-                            break;
-                        }
-                        if ($mode === 2 && isset($params[$i + 2], $params[$i + 3], $params[$i + 4])) {
-                            $this->bg = "\x1b[48;2;{$params[$i + 2]};{$params[$i + 3]};{$params[$i + 4]}m";
-                            $i += 4;
-                            break;
-                        }
-                    }
-                    if ($p === 58 && isset($params[$i + 1])) {
-                        $mode = $params[$i + 1];
-                        if ($mode === 5 && isset($params[$i + 2])) {
-                            $this->underlineColor = "\x1b[58;5;{$params[$i + 2]}m";
-                            $i += 2;
-                            break;
-                        }
-                        if ($mode === 2 && isset($params[$i + 2], $params[$i + 3], $params[$i + 4])) {
-                            $this->underlineColor = "\x1b[58;2;{$params[$i + 2]};{$params[$i + 3]};{$params[$i + 4]}m";
-                            $i += 4;
-                            break;
-                        }
+                        [$advance, $sequence] = $ext;
+                        match ($p) {
+                            38 => $this->fg = $sequence,
+                            48 => $this->bg = $sequence,
+                            default => $this->underlineColor = $sequence,
+                        };
+                        $i += $advance;
+                        break;
                     }
             }
         }
+    }
+
+    /**
+     * Parse an extended-colour parameter (38 fg / 48 bg / 58 underline)
+     * in either dialect, returning [parameters-consumed-after-the-code,
+     * normalised-semi-colon-sequence] or null when the parameter is
+     * incomplete — the skip-the-code behaviour the pre-fix parser had.
+     *
+     * Colon form: the whole colour rides inside its own group, sub-params
+     * `[mode, values…]`; `38:2::r:g:b` carries a colour-space ID slot
+     * between mode and the RGB triple (five subs), which is dropped —
+     * this state round-trips the raw sequence, it does not colour-manage.
+     * Semicolon form (the shipped dialect): the group has no subs and the
+     * values continue in the flat list after the code.
+     *
+     * @param list<int> $subs    sub-parameters of this code's group
+     * @param list<int> $params  the flat code list (semicolon dialect reads past $index)
+     * @return array{0:int,1:string}|null
+     */
+    private static function extendedColor(int $code, array $subs, array $params, int $index): ?array
+    {
+        if ($subs !== []) {
+            $mode = $subs[0];
+            if ($mode === 5 && isset($subs[1])) {
+                return [0, "\x1b[{$code};5;{$subs[1]}m"];
+            }
+            if ($mode === 2) {
+                $offset = count($subs) === 5 ? 2 : 1;
+                if (isset($subs[$offset + 2])) {
+                    return [0, "\x1b[{$code};2;{$subs[$offset]};{$subs[$offset + 1]};{$subs[$offset + 2]}m"];
+                }
+            }
+            return null;
+        }
+        $mode = $params[$index + 1] ?? null;
+        if ($mode === 5) {
+            if (!isset($params[$index + 2])) {
+                return null;
+            }
+            return [2, "\x1b[{$code};5;{$params[$index + 2]}m"];
+        }
+        if ($mode === 2) {
+            if (!isset($params[$index + 4])) {
+                return null;
+            }
+            return [4, "\x1b[{$code};2;{$params[$index + 2]};{$params[$index + 3]};{$params[$index + 4]}m"];
+        }
+        return null;
     }
 
     /**
@@ -291,9 +341,20 @@ final class SgrState
         return $out;
     }
 
+    /**
+     * True when the state emits nothing: exactly the conjunction
+     * {@see toPrefix()} guards its early return, evaluated per-field.
+     * The previous implementation rebuilt the whole prefix string just
+     * to strlen it — rowClose() calls this once per row, so the
+     * allocation sat on the frame hot path for a boolean answer.
+     * Underline colour and open links are deliberately absent, matching
+     * the byte contract (they ride {@see rowOpen()}/{@see rowClose()}).
+     */
     public function isDefault(): bool
     {
-        return $this->toPrefix() === '';
+        return !$this->bold && !$this->italic && !$this->underline && !$this->strike
+            && !$this->faint && !$this->blink && !$this->reverse && !$this->conceal
+            && $this->fg === '' && $this->bg === '';
     }
 
     /**

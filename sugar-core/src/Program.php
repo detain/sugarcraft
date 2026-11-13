@@ -1169,12 +1169,17 @@ final class Program
             return;
         }
         $remaining = $cmds;
+        // sc-18 (PERF-05): drain with a cursor instead of array_shift.
+        // A sequence can only shrink from the front, and array_shift
+        // re-indexed the whole tail on every step — O(n^2) for an
+        // n-Cmd sequence, paid on the tick path.
+        $cursor = 0;
         $runNext = null;
-        $runNext = function () use (&$remaining, &$runNext): void {
-            if ($remaining === []) {
+        $runNext = function () use (&$remaining, &$cursor, &$runNext): void {
+            if ($cursor >= count($remaining)) {
                 return;
             }
-            $cmd = array_shift($remaining);
+            $cmd = $remaining[$cursor++];
             try {
                 $msg = $cmd();
             } catch (\Throwable $t) {

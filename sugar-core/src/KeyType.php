@@ -188,7 +188,12 @@ enum KeyType: string
      */
     public static function kittyFunctionalKeys(): array
     {
-        return [
+        // sc-18 (PERF-08): memoised. The table is constant and the input
+        // parser reaches it on every Kitty disambiguation, so rebuilding
+        // a 111-entry literal per key event was pure allocator noise. PHP
+        // arrays are copied on return, so callers cannot mutate the cache.
+        static $map = null;
+        return $map ??= [
             // Editing keys (some redundant with C0 controls; Kitty also
             // emits these PUA codepoints in disambiguation mode).
             57344 => self::Escape,

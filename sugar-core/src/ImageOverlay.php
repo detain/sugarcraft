@@ -244,6 +244,16 @@ final class ImageOverlay
      * A stable signature of a paint list — same positions + footprints + blobs →
      * same string. Lets a caller skip re-emitting identical images frame to frame.
      *
+     * DECISION (sc-18, PERF-02): the blob digest stays `crc32`, not a wider
+     * hash. The signature only gates a redundant redraw, never correctness:
+     * a collision between two different 32-bit digests means one changed
+     * image keeps its previous bytes on screen until any other field moves.
+     * That risk was weighed and taken — a stronger digest changes every
+     * signature string the goldens pin, re-taping committed GIFs, which
+     * this fleet treats as a hard no (zero-undisclosed-golden-move law).
+     * The collision assumption is stated here so a future reader who does
+     * re-tape can widen it deliberately.
+     *
      * @param list<array{row: int, col: int, bytes: string, w: int, h: int}> $paints
      */
     public static function signature(array $paints): string
@@ -307,7 +317,17 @@ final class ImageOverlay
         return $id < self::MAX_IMAGES ? $id : null;
     }
 
-    /** Byte length of the escape sequence starting at $i (CSI / OSC / DCS / simple). */
+    /**
+     * Byte length of the escape sequence starting at $i (CSI / OSC / DCS / simple).
+     *
+     * Unterminated sequences SWALLOW the rest of the line (the walk hits
+     * end-of-string and returns everything consumed): a truncated escape
+     * at a row's tail has no further visible columns to account for, and
+     * stopping the walk at the truncation would re-interpret its private
+     * bytes as text and miscount the row. The caller passes the eaten
+     * bytes through verbatim unless they authenticate as a marker, so
+     * the wire keeps whatever the frame actually carried.
+     */
     private static function escapeLength(string $s, int $i): int
     {
         $len = strlen($s);
