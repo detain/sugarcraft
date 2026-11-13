@@ -212,10 +212,11 @@ checkout the launch stood in.
   and the write side and ends the wait with a named cause.
 - `request()` and `notify()` take a `$deadline` as an **absolute monotonic
   instant** — the same `hrtime` basis as `StdioMcpServer::monotonicNow()` —
-  not a duration and not wall clock. Pass `monotonicNow() + 30.0` for "30
-  seconds"; a past instant gives up silently (`null`/`false`), and a
-  wall-clock-magnitude value would never fire, so the magnitude is refused
-  with an `InvalidArgumentException` instead.
+  not a duration and not wall clock. Build one with
+  `StdioMcpServer::deadlineAfter(30.0)` for "30 seconds from now" (it refuses
+  a negative bound at its own door); a past instant gives up silently
+  (`null`/`false`), and a wall-clock-magnitude value would never fire, so the
+  magnitude is refused with an `InvalidArgumentException` instead.
   `callTool(timeoutSeconds:)` remains the relative-duration spelling.
 - One frame never outgrows the read buffer: bytes past `MAX_FRAME_BYTES`
   (64 MiB) with no newline are not NDJSON whatever they eventually say, and

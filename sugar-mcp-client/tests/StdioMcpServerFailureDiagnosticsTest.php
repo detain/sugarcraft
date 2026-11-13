@@ -186,8 +186,53 @@ final class StdioMcpServerFailureDiagnosticsTest extends TestCase
         self::assertIsString($thrown, 'a microtime-magnitude deadline must throw');
         self::assertStringContainsString('wall-clock', $thrown);
 
-        $reply = $server->request('tools/list', null, StdioMcpServer::monotonicNow() + 5.0);
+        $reply = $server->request('tools/list', null, StdioMcpServer::deadlineAfter(5.0));
         self::assertNotNull($reply, 'a legitimate monotonic instant must still work');
+        self::assertStringContainsString(
+            'Compute it with StdioMcpServer::deadlineAfter',
+            $thrown,
+            'the refusal names the seatbelt, not the hand-added idiom',
+        );
+    }
+
+    public function testDeadlineAfterIsTheOneDurationToInstantSeatbelt(): void
+    {
+        // The absolute-instant idiom on request()/notify() and the relative
+        // duration on callTool() mix silently and fatally; deadlineAfter() is
+        // the documented conversion. Its arithmetic must land on this class's
+        // hrtime basis, which monotonicNow() sandwiches.
+        $before = StdioMcpServer::monotonicNow();
+        $instant = StdioMcpServer::deadlineAfter(30.0);
+        $after = StdioMcpServer::monotonicNow();
+
+        self::assertGreaterThan($before + 29.0, $instant);
+        self::assertLessThan($after + 31.0, $instant);
+        self::assertLessThan(1.0e9, $instant, 'a boot-relative magnitude, never wall-clock sized');
+
+        foreach ([-0.5, -30.0] as $negative) {
+            $thrown = null;
+            try {
+                StdioMcpServer::deadlineAfter($negative);
+            } catch (\InvalidArgumentException $e) {
+                $thrown = $e->getMessage();
+            }
+
+            self::assertIsString($thrown, sprintf('a negative bound (%s) must refuse at the door', var_export($negative, true)));
+            self::assertStringContainsString('refuses a negative bound', $thrown);
+        }
+
+        // Zero is legal and means "already expired" — the documented silent
+        // give-up shape, proven against a live server that would answer otherwise.
+        $server = $this->spawn('hostile_handshake_server.php');
+        $server->start();
+        self::assertNull(
+            $server->request('tools/list', null, StdioMcpServer::deadlineAfter(0.0)),
+            'an already-expired instant gives up without a reply',
+        );
+
+        $readme = (string) file_get_contents(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('StdioMcpServer::deadlineAfter(30.0)', $readme);
+        self::assertStringContainsString('a negative bound at its own door', $readme);
     }
 
     public function testRosterClearsAndStderrSurvivesTheStop(): void

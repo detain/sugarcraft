@@ -663,7 +663,7 @@ final class StdioMcpServer implements McpServer
         $this->malformedToolDefs = [];
         $this->malformedToolDefsTotal = 0;
 
-        $deadline = self::nowSeconds() + $this->startTimeoutSeconds;
+        $deadline = self::deadlineAfter($this->startTimeoutSeconds);
 
         $previousBeat = $this->onWait;
         $this->onWait = $onWait;
@@ -1078,7 +1078,7 @@ final class StdioMcpServer implements McpServer
     private function callToolWaiting(string $name, array $arguments, ?float $timeoutSeconds): array
     {
         $bounded = $timeoutSeconds !== null && is_finite($timeoutSeconds) && $timeoutSeconds > 0.0;
-        $deadline = $bounded ? self::nowSeconds() + $timeoutSeconds : null;
+        $deadline = $bounded ? self::deadlineAfter($timeoutSeconds) : null;
         $id = (string) $this->ids->next();
         $this->lastFailureCause = null;
 
@@ -1223,7 +1223,7 @@ final class StdioMcpServer implements McpServer
             $this->notify('notifications/cancelled', [
                 'requestId' => $id,
                 'reason' => 'client timeout',
-            ], self::nowSeconds() + self::CANCEL_NOTICE_SECONDS);
+            ], self::deadlineAfter(self::CANCEL_NOTICE_SECONDS));
         } finally {
             $this->onWait = $previous;
         }
@@ -1264,8 +1264,8 @@ final class StdioMcpServer implements McpServer
      *        can never be reached and the bounded wait degenerates to an
      *        unbounded one on a silent server. The magnitude is therefore
      *        refused outright (below), and legitimate instants up to ~31
-     *        years of uptime still pass. Compute one as
-     *        `StdioMcpServer::monotonicNow() + $seconds`.
+     *        years of uptime still pass. Compute one with
+     *        {@see self::deadlineAfter()}.
      * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $onServerMessage
      *        per-call override of the connection's server-request handler
      *        (the server-request law), live for this round trip only.
@@ -1299,7 +1299,7 @@ final class StdioMcpServer implements McpServer
      * from the WHOLE budget, not just from the leg that paused. Public
      * request()/notify() keep the by-VALUE signature on purpose — making a
      * public parameter by-reference would forbid the documented call shape
-     * `request($m, $p, monotonicNow() + 5)` (PHP fatals on expressions
+     * `request($m, $p, deadlineAfter(5.0))` (PHP fatals on expressions
      * passed by reference), and per-call credit confined to one call is the
      * honest public semantics.
      *
@@ -1389,7 +1389,7 @@ final class StdioMcpServer implements McpServer
      * shape, which is why this validates and delegates instead of replacing).
      *
      * @param float|null $deadline absolute monotonic instant, same law as
-     *        {@see self::notify()}: compute it from {@see self::monotonicNow()}
+     *        {@see self::notify()}: compute it with {@see self::deadlineAfter()}
      * @return bool true once the whole frame went out; false when it did not
      *         (not started, dead pipe, deadline lost)
      * @throws \InvalidArgumentException when $json embeds a carriage return
@@ -1507,21 +1507,42 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * Monotonic seconds for deadline arithmetic. Wall clock (microtime) steps
-     * with NTP/manual date changes; a handshake bound must ride a clock that
-     * only moves forward, matching sugar-core BoundedShutdown's own hrtime basis.
-     */
-    /**
      * The clock every `$deadline` in this class is measured on: monotonic
      * seconds since an arbitrary boot-relative origin (`hrtime`), never wall
-     * clock, never rewound by an NTP step. Public so embedders can compute
-     * `StdioMcpServer::monotonicNow() + $seconds` instead of guessing the
-     * basis of the deadline parameters on {@see self::request()} and
-     * {@see self::notify()}.
+     * clock, never rewound by an NTP step (a handshake bound must ride a
+     * clock that only moves forward, matching sugar-core BoundedShutdown's
+     * own hrtime basis). Public so elapsed-time arithmetic is possible; to
+     * BOUND a wait, prefer {@see self::deadlineAfter()} over hand-adding.
      */
     public static function monotonicNow(): float
     {
         return self::nowSeconds();
+    }
+
+    /**
+     * The seatbelt for the two deadline idioms: {@see self::request()} and
+     * {@see self::notify()} take an ABSOLUTE monotonic instant while
+     * {@see self::callTool()} takes a RELATIVE duration — mixing them up
+     * (passing a duration where an instant belongs) fails quietly, because a
+     * small boot-relative instant sits in the past and the wait simply never
+     * starts, or a wall-clock magnitude can never be reached. This helper
+     * turns "how long" into "until when" on the one basis this class reads,
+     * so embedders never hand-combine the idioms.
+     *
+     * @throws \InvalidArgumentException when $seconds is negative — a
+     *         negative bound is a caller arithmetic bug, and feeding it to
+     *         the past-instant path would silently write nothing
+     */
+    public static function deadlineAfter(float $seconds): float
+    {
+        if ($seconds < 0.0) {
+            throw new \InvalidArgumentException(sprintf(
+                'deadlineAfter() refuses a negative bound (%.6F seconds); pass 0.0 for an already-expired instant or null for no bound.',
+                $seconds,
+            ));
+        }
+
+        return self::nowSeconds() + $seconds;
     }
 
     /**
@@ -1535,7 +1556,7 @@ final class StdioMcpServer implements McpServer
     {
         if ($deadline !== null && is_finite($deadline) && $deadline > 1.0e9) {
             throw new \InvalidArgumentException(sprintf(
-                'MCP deadline %.6F is not a monotonic instant (hrtime clocks stay under 1e9 seconds ~ 31 years of uptime); this looks like wall-clock seconds. Compute it as StdioMcpServer::monotonicNow() + the seconds to wait, or pass null for no bound.',
+                'MCP deadline %.6F is not a monotonic instant (hrtime clocks stay under 1e9 seconds ~ 31 years of uptime); this looks like wall-clock seconds. Compute it with StdioMcpServer::deadlineAfter(the seconds to wait), or pass null for no bound.',
                 $deadline,
             ));
         }
