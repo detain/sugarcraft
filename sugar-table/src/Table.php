@@ -450,6 +450,14 @@ final class Table
      * size (gotoPage clamps into [0, TotalPages-1] and parks the cursor on
      * the page's first row).
      */
+    /**
+     * Rows per page. $n <= 0 disables pagination entirely — the whole view
+     * renders as one frame and the footer disappears (the negative value is
+     * stored verbatim; every page read is gated on > 0, so it behaves as
+     * off). Positive sizes re-anchor the current page and cursor via
+     * gotoPage(). Policy pointer: README "Numeric setters: coercion vs
+     * throw" (audit ST-62, finding 078).
+     */
     public function withPageSize(int $n): self
     {
         $clone = clone $this;
@@ -573,6 +581,12 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Visible-row window for viewport virtualization. Negatives clamp to 0
+     * and 0 means virtualization off (all rows render) — coercion, not
+     * throw, per README "Numeric setters: coercion vs throw" (audit ST-62,
+     * finding 078).
+     */
     public function withViewportHeight(int $height): self
     {
         $clone = clone $this;
