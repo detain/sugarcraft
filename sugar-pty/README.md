@@ -285,10 +285,13 @@ master and frees the slot; `inFlight()` / `available()` /
 `totalAcquired()` report; `drain()` closes every outstanding pair.
 In-flight slots are weak references, so a pair abandoned *without*
 `release()` stops occupying a slot once collected (dead slots are swept
-at the head of every bookkeeping call) — but `PosixPtyPair` is a plain
-value object with no destructor, so an abandoned pair leaks its master
-fd until the process exits even though its slot frees. `release()` (or
-`drain()` at shutdown) is the contract, not the collector.
+at the head of every bookkeeping call, and the pool sweeps again on
+destruct). Since PTY-38 the sweep also closes the master fd of a
+pool-created POSIX pair that is *fully* abandoned — both pair and
+master unreachable — guarded by a readlink so a recycled descriptor
+number is never reaped. Ownership law: a caller who still holds the
+master holds the close obligation; for non-POSIX backends the
+`release()` / `drain()` contract is unchanged.
 
 ### `PtyInputDecoder` — key/mouse events straight off the master
 

@@ -335,6 +335,19 @@ final class PosixMasterPty implements MasterPty
         return $this->closed;
     }
 
+    /**
+     * Close a bare master fd when no instance is left to do it — the
+     * orphan leg of PtyPool's sweep (PTY-38). The caller has already
+     * proved the descriptor still names a /dev/ptmx; the rc is
+     * returned, not thrown, because an orphan sweep must never raise.
+     *
+     * @internal
+     */
+    public static function closeRawFd(int $fd): int
+    {
+        return self::libc()->close($fd);
+    }
+
     public function fd(): int
     {
         $this->assertOpen();
