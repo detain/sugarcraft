@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Style;
+use SugarCraft\Files\Support\GlyphSet;
 
 /**
  * Pure view function for {@see Manager}. Lays out the two panes
@@ -18,8 +19,12 @@ final class Renderer
 {
     public static function render(Manager $m): string
     {
+        // CF-35 (closes 048): one tier decision per frame; every chrome
+        // glyph below comes from it. The unicode tier reproduces the
+        // historical bytes exactly.
+        $glyphs = GlyphSet::current();
         $active = self::activeIdx($m);
-        $tabBar = self::renderTabBar($m);
+        $tabBar = self::renderTabBar($m, $glyphs);
         $search = self::renderSearch($m);
 
         // CF-02: the entry list is windowed to the live height. Frame
@@ -36,8 +41,8 @@ final class Renderer
             $capacity = max(1, $m->termRows - $chromeRows);
         }
 
-        $left  = self::renderPane(self::paneOf($m, 'left'),  $active === 0, $m->termCols, $capacity);
-        $right = self::renderPane(self::paneOf($m, 'right'), $active === 1, $m->termCols, $capacity);
+        $left  = self::renderPane(self::paneOf($m, 'left'),  $active === 0, $m->termCols, $capacity, $glyphs);
+        $right = self::renderPane(self::paneOf($m, 'right'), $active === 1, $m->termCols, $capacity, $glyphs);
         $body  = Layout::joinHorizontal(0.0, $left, '  ', $right);
 
         // N-16: the active-pane cue used to be border weight alone (thick
@@ -45,7 +50,10 @@ final class Renderer
         // text. Lead the status line with a localized focus label so every
         // frame says which pane answers the keyboard.
         $focus  = Lang::t('status.focus', ['side' => $active === 0 ? Lang::t('side.left') : Lang::t('side.right')]);
-        $status = $focus . ' · ' . ($m->status === '' ? self::keyHelp($m->termCols, Width::of($focus)) : $m->status);
+        // CF-35: key-help (pure catalogue chrome) rides the tier; the live
+        // status does NOT — it interpolates {name}/{dir} filesystem data,
+        // and chrome tiers never rewrite user bytes (same law as pane rows).
+        $status = $focus . ' ' . $glyphs->sep . ' ' . ($m->status === '' ? self::keyHelp($m->termCols, Width::of($focus), $glyphs) : $m->status);
         $frame = $search . $tabBar . $body . "\n" . self::statusBar($status);
         if ($m->termCols > 0) {
             // CF-01 belt: once a live width is known, no composed line may
@@ -92,7 +100,7 @@ final class Renderer
         return (int) (($m->tabs[$m->tabIndex]['activeIdx'] ?? 0));
     }
 
-    private static function renderTabBar(Manager $m): string
+    private static function renderTabBar(Manager $m, GlyphSet $glyphs): string
     {
         if ($m->tabs === [] || count($m->tabs) <= 1) {
             return '';
@@ -100,7 +108,7 @@ final class Renderer
         $parts = [];
         foreach ($m->tabs as $i => $tab) {
             // cwd is filesystem data like any name — sanitize before render.
-            $label = self::truncate(Entry::sanitizeName($tab['left']->cwd), 20);
+            $label = self::truncate(Entry::sanitizeName($tab['left']->cwd), 20, $glyphs);
             $prefix = $i === $m->tabIndex ? '[' : ' ';
             $suffix = $i === $m->tabIndex ? ']' : ' ';
             $parts[] = "{$prefix}{$label}{$suffix}";
@@ -123,7 +131,7 @@ final class Renderer
      * first WindowSizeMsg) the historical 40-cell box is preserved
      * (content 36, separator 36, name 25, header cap 30).
      */
-    private static function renderPane(Pane $pane, bool $active, int $termCols = 0, int $capacity = 0): string
+    private static function renderPane(Pane $pane, bool $active, int $termCols, int $capacity, GlyphSet $glyphs): string
     {
         $outer = $termCols > 0 ? intdiv($termCols - 2, 2) : 40;
         $inner = max(6, $outer - 4);             // content cells: border(2) + padding(2)
@@ -136,8 +144,12 @@ final class Renderer
         $nameCol = max(10, $inner - 4 - $sizeCol);
         $headCap = max(6, $inner - 6);           // '  [sort]' tail keeps 6 cells
 
+        // CF-35: the ascii tier has no thick variant to lean on (box
+        // drawing is exactly the Ambiguous band that doubles), so both
+        // panes wear the ascii set and the status line's focus label is
+        // the active cue — a promise N-16 already made universal.
         $style = Style::new()
-            ->border($active ? Border::thick() : Border::normal())
+            ->border($glyphs->asciiBorders ? Border::ascii() : ($active ? Border::thick() : Border::normal()))
             ->padding(0, 1)
             ->width($inner);
 
@@ -152,9 +164,9 @@ final class Renderer
         // used to sit in user chrome untranslated in all 16 locales.
         $header = sprintf(
             "%s  [%s %s%s]",
-            self::truncate($dirLabel, $headCap),
+            self::truncate($dirLabel, $headCap, $glyphs),
             $pane->sort->label(),
-            $pane->sort->isAscending() ? '↑' : '↓',
+            $pane->sort->isAscending() ? $glyphs->up : $glyphs->down,
             $pane->showHidden ? ' ' . Lang::t('pane.hidden_suffix') : '',
         );
 
@@ -163,12 +175,12 @@ final class Renderer
         if ($above > 0) {
             // Fold hint: the cursor row can never sit off-window (rowWindow
             // follows it), so the hidden head is purely a scroll affordance.
-            $rows[] = '  ↑ ' . Lang::t('pane.more_above', ['count' => $above]);
+            $rows[] = '  ' . $glyphs->up . ' ' . Lang::t('pane.more_above', ['count' => $above]);
         }
         foreach (array_slice($pane->entries, $start, $end - $start) as $offset => $entry) {
             $i = $start + $offset;
-            $marker  = isset($pane->selected[$entry->name]) ? '✓' : ' ';
-            $arrow   = ($i === $pane->cursor) ? '▸' : ' ';
+            $marker  = isset($pane->selected[$entry->name]) ? $glyphs->mark : ' ';
+            $arrow   = ($i === $pane->cursor) ? $glyphs->cursor : ' ';
             $name    = $entry->isDir ? $entry->name . '/' : $entry->name;
             $name    = Entry::sanitizeName($name);
             $size    = $entry->displaySize();
@@ -176,14 +188,14 @@ final class Renderer
             // drifts for every double-width (CJK/emoji) name and for the
             // localized size tokens CF-16 introduces.
             $rows[] = $arrow . $marker . ' '
-                . Width::padRight(self::truncate($name, $nameCol), $nameCol) . ' '
+                . Width::padRight(self::truncate($name, $nameCol, $glyphs), $nameCol) . ' '
                 . Width::padRight($size, $sizeCol);
         }
         if ($below > 0) {
-            $rows[] = '  ↓ ' . Lang::t('pane.more_below', ['count' => $below]);
+            $rows[] = '  ' . $glyphs->down . ' ' . Lang::t('pane.more_below', ['count' => $below]);
         }
 
-        $body = $header . "\n" . str_repeat('─', $inner) . "\n" . implode("\n", $rows);
+        $body = $header . "\n" . str_repeat($glyphs->rule, $inner) . "\n" . implode("\n", $rows);
         return $style->render($body);
     }
 
@@ -226,21 +238,22 @@ final class Renderer
      * @param int $termCols    live terminal width, 0 when unknown
      * @param int $focusCells  cells the focus prefix + separator already took
      */
-    private static function keyHelp(int $termCols = 0, int $focusCells = 0): string
+    private static function keyHelp(int $termCols, int $focusCells, GlyphSet $glyphs): string
     {
-        $default = Lang::t('keyhelp.default');
+        $default = $glyphs->substitute(Lang::t('keyhelp.default'));
         if ($termCols <= 0) {
             return $default;
         }
         $budget = $termCols - $focusCells - 3;
-        foreach ([$default, Lang::t('keyhelp.terse'), Lang::t('keyhelp.minimal')] as $tier) {
+        foreach ([$default, $glyphs->substitute(Lang::t('keyhelp.terse')), $glyphs->substitute(Lang::t('keyhelp.minimal'))] as $tier) {
             if (Width::of($tier) <= $budget) {
                 return $tier;
             }
         }
+
         // Even minimal overflows (comically narrow terminal): the frame
         // clamp in render() cuts the tail, status stays a single row.
-        return Lang::t('keyhelp.minimal');
+        return $glyphs->substitute(Lang::t('keyhelp.minimal'));
     }
 
     private static function renderSearch(Manager $m): string
@@ -274,15 +287,18 @@ final class Renderer
     /**
      * Clip $s to $cells DISPLAY cells keeping the tail (the leaf of a path
      * or the extension of a name is the meaningful end), prefixed with the
-     * one-cell ellipsis. Byte math (strlen/substr) drifted CJK names by
+     * tier's ellipsis. Byte math (strlen/substr) drifted CJK names by
      * their double-width cells and could split a codepoint mid-sequence.
+     * The ascii tier's '...' costs three cells, not one — the head-drop
+     * math follows Width::of(ellipsis), never a hard-coded 1.
      */
-    private static function truncate(string $s, int $cells): string
+    private static function truncate(string $s, int $cells, GlyphSet $glyphs): string
     {
         $width = Width::of($s);
         if ($width <= $cells) {
             return $s;
         }
-        return '…' . Width::dropAnsi($s, $width - ($cells - 1));
+
+        return $glyphs->ellipsis . Width::dropAnsi($s, $width - ($cells - Width::of($glyphs->ellipsis)));
     }
 }

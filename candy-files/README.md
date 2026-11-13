@@ -136,6 +136,10 @@ The two panes split the live terminal width (`WindowSizeMsg`, reported at startu
 
 The vertical axis is windowed too: the frame is clipped to the terminal's live row count, each pane scrolls a window that follows the cursor (fold hints `↑ N more` / `↓ N more` mark the hidden head and tail), and border, status line and any confirmation prompt are ALWAYS on screen. `Home`/`End`/`g`/`G` and search jump past the window edges.
 
+### Glyph tiers
+
+The chrome glyphs (`▸ ✓ ─ ↑ ↓ ·`) are East Asian Width "Ambiguous": some terminals paint them one cell, some two. CandyFiles renders them one-cell (the fleet-wide `Width` law) unless it detects a surface that doubles them — a `zh`/`ja`/`ko` locale, a legacy CJK codepage (`CP932`/`GBK`/`EUC-JP`/`BIG5`…), or the Linux console — and then the frame falls back to strictly-ASCII chrome (`> v - ^ v |`, plain `+--+` borders; the status line's focus label remains the active-pane cue). Force either tier with `CANDY_FILES_GLYPHS=ascii|unicode`. User filenames are data and are never rewritten by the tier.
+
 ## Architecture
 
 The whole transition layer is pure — filesystem I/O is injected as a `Closure(string $path): list<Entry>` so every transition is unit-testable without tmp dirs or stat fixtures.
@@ -159,7 +163,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Test plan
 
-- 350 tests / 5022 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
+- 368 tests / 5610 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
 - Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / relist-with-selection-preservation / navigate / move / select / sort / hidden toggle / parent-path / join)
 - Lister contract (CF-22): `null` answers "cannot read" and is never collapsed to "empty" — a refused `navigate`/`goUp` keeps the last honest listing, `relist` preserves cursor + selection through the outage, the pane header carries the localized `(unreadable)` marker, `r` names the refusal instead of lying `refreshed`, the launcher refuses a missing or unreadable argv directory (`Support\LaunchDir`), and `FsLister` splits an empty dir (`[]`) from a 0000 one (`null`)
 - `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` or the prompt's taught localized affirmative confirms, anything else cancels; modified chords never confirm), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths **and rows**, other non-key Msgs dropped)
@@ -168,6 +172,8 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 - Status-line injection defense: filenames carrying raw ESC/OSC bytes render inert in every rename/copy/move message (adversarial pins), plus the structural pins for the rename containment boundary and the single copyDir home
 - Renderer: cell-width math for CJK names (size column stays aligned), tab-bar clipping never splits a codepoint, search echo is sanitized, pane widths follow the terminal
 - `LangCoverageTest` enforces translation-key coverage in both directions (every used key exists; no unused key lingers); `LocaleParityTest` pins all 16 shipped locales to the English key set with identical placeholder tokens
+- Localized chrome (CF-16): search prompt, DIR/LINK size tokens and the sort header label ride the catalogues (dynamic size-column width, byte-stable at `en`), and the launcher activates the detected locale before its first printed byte (order-pinned; German `--help` proven in a pinned child environment)
+- Glyph tiers (CF-35): `Support\GlyphSet` picks unicode vs strictly-ASCII chrome from lang/charset/TERM (deterministic table units, `CANDY_FILES_GLYPHS` escape hatch), the ascii frame carries no Ambiguous glyph and fits `termCols`, and user filenames keep their bytes on every tier
 
 ## Demos
 
