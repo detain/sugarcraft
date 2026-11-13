@@ -154,6 +154,14 @@ default `0` DISABLES the cap entirely (negatives throw). If even the single
 newest crumb overflows, it is ellipsis-truncated — and when the truncated
 crumb alone fills the width, the marker itself is dropped. Above zero,
 `setMaxWidth()` is a hard cap.
+
+Two ellipsis vocabularies share the renderer on purpose: the configurable
+`setTruncator()` marker ANNOUNCES left-elision (whole crumbs dropped, and it
+rides outside the clickable zones), while the lone `…` that
+`truncateSegment()` appends is a byte-budget CUT marker inside the single
+surviving crumb — a mid-word trim, not an elision announcement. The default
+stays `…` regardless of the truncator setting (byte stability; the values
+merely agree by default).
 `renderTitles(list<string>)` renders a bare title list without a stack — each
 title is bound by `MAX_TITLE_BYTES` here as well (an oversized one throws just
 as on the stack path), but the list LENGTH stays the host's duty: N capped

@@ -566,12 +566,17 @@ final class Breadcrumb
                     $titles = [$this->truncateSegment($titles[0], $this->maxWidth)];
                 }
             } else {
-                // Unreachable via truncate() (its loop only grows while the
-                // marker-prefixed join fits; the >1-crumbs breach corner is
-                // pinned in ZoneGeometryTest). This is a belt-brace against a
-                // future truncate() change, NOT the operative guard: the
-                // branch drops the prefix without re-clamping the survivors.
-                $prefix = '';
+                // Unreachable by construction: whenever two or more crumbs
+                // survive, truncate()'s last accepted candidate IS exactly
+                // this prefix+join string, so the guard cannot breach the
+                // cap. The old belt-brace silently DROPPED the prefix with
+                // the survivors still un-clamped (NS-19); a fail-loud
+                // LogicException means any future truncate() change that
+                // breaks the invariant goes red on first render instead of
+                // shipping an overflowing bar. The degenerate corners that
+                // legitimately drop the prefix live in the count === 1 arm
+                // above and stay pinned in ZoneGeometryTest.
+                throw new \LogicException('unreachable: truncate() kept ' . \count($titles) . ' crumbs yet the cap is breached');
             }
             $result = $prefix . \implode($this->separator, $titles);
         }
@@ -637,22 +642,34 @@ final class Breadcrumb
      */
     private function truncate(array $titles): array
     {
-        // Start from the end (most recent) and prepend older items until we fit
-        $out = [\end($titles)];
-        for ($i = \count($titles) - 2; $i >= 0; $i--) {
-            $candidate = $this->truncator . \implode($this->separator, \array_merge([$titles[$i]], \array_reverse($out)));
-            if ($this->effectiveWidth($candidate) <= $this->maxWidth) {
-                $out[] = $titles[$i];
-            } else {
+        // Single right-to-left running-sum walk (NS-19). The old loop
+        // re-imploded, re-reversed and re-measured the whole candidate on
+        // every iteration, O(n^2) cell math at MAX_STACK_DEPTH (measured
+        // worst case ~850 ms for a 10k stack at a cap that keeps ~450
+        // crumbs). Width is additive across well-formed segments —
+        // Width::string strips SGR, and balanced escape sequences strip
+        // identically before and after concatenation — so accumulating
+        // per-title widths keeps the fit decisions identical: whenever two
+        // or more crumbs survive, the truncator plus this sum IS the string
+        // doRender() re-measures (its hard-cap LogicException is the
+        // tripwire if that invariant ever breaks).
+        $truncatorWidth = $this->effectiveWidth($this->truncator);
+        $separatorWidth = $this->effectiveWidth($this->separator);
+
+        $total     = \count($titles);
+        $joinWidth = $this->effectiveWidth($titles[$total - 1]);
+        $first     = $total - 1;
+
+        for ($i = $total - 2; $i >= 0; $i--) {
+            $grown = $joinWidth + $separatorWidth + $this->effectiveWidth($titles[$i]);
+            if ($truncatorWidth + $grown > $this->maxWidth) {
                 break;
             }
+            $joinWidth = $grown;
+            $first     = $i;
         }
 
-        // $out is ordered newest→oldest; reverse to oldest→newest for output
-        $reversed = \array_reverse($out);
-        $elided = \count($out) < \count($titles);
-
-        return [$reversed, $elided];
+        return [\array_slice($titles, $first), $first > 0];
     }
 
     /**

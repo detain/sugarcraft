@@ -713,4 +713,78 @@ final class BreadcrumbTest extends TestCase
         $bc->render(new NavStack()); // empty stack
         $this->assertNull($bc->focusedIndex());
     }
+
+    /**
+     * NS-19: the right-to-left running-sum rewrite of truncate() must make
+     * EXACTLY the same keep/elide decisions as the old O(n^2) whole-string
+     * loop — same survivors, same suffix boundary — across plain, empty,
+     * accented, CJK and balanced-SGR titles at every cap, plus a seeded
+     * fuzz. The parity property is why the rewrite is byte-safe (zero
+     * golden moves); the 10k-stack counts are pinned separately as the
+     * complexity-shape anchors quoted in the landing commit.
+     */
+    public function testTruncateRunningSumMatchesLegacyLoop(): void
+    {
+        $sep   = ' › ';
+        $trunc = '… ';
+        $legacy = static function (array $titles, int $cap) use ($sep, $trunc): array {
+            $out = [\end($titles)];
+            for ($i = \count($titles) - 2; $i >= 0; $i--) {
+                $candidate = $trunc . \implode($sep, \array_merge([$titles[$i]], \array_reverse($out)));
+                if (Width::string($candidate) <= $cap) {
+                    $out[] = $titles[$i];
+                } else {
+                    break;
+                }
+            }
+            return [\array_reverse($out), \count($out) < \count($titles)];
+        };
+
+        $corpus = [
+            ['Home', 'Settings', 'Display', 'Sub'],
+            ['セクション', '設定', 'A', '日本語テスト'],
+            ['Alpha', '', 'Beta', '', 'Gamma'],
+            ["\x1b[31mRed\x1b[0m", "\x1b[1mBold Blue\x1b[0m", 'plain', "\x1b[32m項 目\x1b[0m"],
+            ['Éclair', 'naïve', '😀 emoji face', 'x'],
+        ];
+        $mt = new \ReflectionMethod(Breadcrumb::class, 'truncate');
+
+        foreach ($corpus as $titles) {
+            foreach ([1, 2, 3, 5, 8, 13, 21, 40, 100, 10_000] as $cap) {
+                $bc = new Breadcrumb();
+                $bc->setMaxWidth($cap);
+                $this->assertSame($legacy($titles, $cap), $mt->invoke($bc, $titles), "cap {$cap} over " . json_encode($titles, JSON_UNESCAPED_UNICODE));
+                // The observable path must not trip the hard-cap LogicException either.
+                $bc->renderTitles($titles);
+            }
+        }
+
+        mt_srand(7);
+        $pool = ['a', 'ab', 'abc', '', '①', 'カ', "\x1b[31mx\x1b[0m", 'longcrumbname', 'x y'];
+        for ($round = 0; $round < 200; $round++) {
+            $titles = [];
+            for ($n = mt_rand(1, 8); $n > 0; $n--) {
+                $titles[] = $pool[mt_rand(0, \count($pool) - 1)];
+            }
+            $cap = mt_rand(1, 60);
+            $bc  = new Breadcrumb();
+            $bc->setMaxWidth($cap);
+            $this->assertSame($legacy($titles, $cap), $mt->invoke($bc, $titles), 'fuzz ' . json_encode($titles, JSON_UNESCAPED_UNICODE) . " cap {$cap}");
+            $bc->renderTitles($titles);
+        }
+    }
+
+    public function testTruncateComplexityShapeSurvivorAnchors(): void
+    {
+        $titles = [];
+        for ($i = 0; $i < 10_000; $i++) {
+            $titles[] = 'Item' . $i;
+        }
+        foreach ([200_000 => 10_000, 5_000 => 454, 40 => 3] as $cap => $kept) {
+            $bc = new Breadcrumb();
+            $bc->setMaxWidth($cap);
+            $bc->renderTitles($titles);
+            $this->assertCount($kept, $bc->visibleIndices(), "survivor count drifted at cap {$cap}");
+        }
+    }
 }
