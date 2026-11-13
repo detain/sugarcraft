@@ -298,6 +298,12 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         return new self($ids, $index, $disabled, $enabledPositions);
     }
 
+    /** Open a modal {@see FocusTrap} over this ring; call guarding() then release(). */
+    public function trap(): FocusTrap
+    {
+        return FocusTrap::new($this);
+    }
+
     /**
      * Focus a specific registered, ENABLED region. A no-op if it is not
      * registered, is disabled, or is already focused.

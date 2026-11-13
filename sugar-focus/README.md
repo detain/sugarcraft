@@ -175,25 +175,20 @@ zone at paint time.
 
 ## Modals and focus traps
 
-The ring has no built-in layer concept: a modal dialog is just more regions,
-and the trap is the disabled set. The recipe:
+A modal dialog is just more regions, and the trap is the disabled set.
+`FocusTrap` owns that ritual, holding its own saved id and background list, so
+release takes no argument:
 
 ```php
-$saved = $ring->current();                       // what the dialog interrupts (null on an empty ring)
-$background = $ring->enabledIds();               // capture BEFORE the dialog: every id Tab can reach
-$ring = $ring->register('dialog-field')          // the dialog's focusables
-    ->focus('dialog-field');
-foreach ($background as $id) {
-    $ring = $ring->disable($id);                 // background unreachable
-}
-
-// On close — re-enable the background first, then drop the dialog:
-foreach ($background as $id) {
-    $ring = $ring->enable($id);
-}
-$ring = $ring->unregister('dialog-field');
-$ring = $saved === null ? $ring->focusFirst() : $ring->focus($saved);
+$trap = $ring->trap()->guarding('dialog-ok', 'dialog-cancel'); // background unreachable
+$trap = $trap->withRing($trap->ring()->next());                // Tab inside the dialog
+$ring = $trap->release();                                      // background back, dialog gone, focus restored
 ```
+
+`release()` re-enables the background, unregisters the dialog ids, then
+restores focus to the saved region when it is still enabled, else the first
+enabled one (empty ring or parked-at-open). `guarding()` throws on an id that
+is already registered.
 
 `current()` is `null` when nothing was focused — a dialog opened over an
 empty ring must restore via `focusFirst()` (or accept where `unregister()`
@@ -204,9 +199,7 @@ enabled survivor, so bring the background back before removing the dialog
 when you want the saved region exactly; and `reorder()` drops the disabled
 flags of any id it removes — rebuilding background order through `reorder()`
 deliberately clears stale state, re-disable afterwards if the panels were
-meant to stay out of traversal. A first-class `suspend()` / `ofLayer()`
-primitive is a deliberate omission for now; this disable/enable dance is the
-supported path.
+meant to stay out of traversal. `FocusTrap` encodes the safe order once.
 
 ### Non-visual access
 

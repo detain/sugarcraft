@@ -35,3 +35,4 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   as thin wrappers over the one `step()` so the directions cannot drift.
 - **Never `array_keys()` a set keyed by region id for output.** PHP coerces
   numeric-string keys ("1") to int; derive id lists from `$ids` values instead.
+- **Modal traps go through `FocusTrap`.** `FocusRing::trap()` captures saved id + enabled ids BEFORE disabling; `release()` (no arg) enables background, unregisters dialog ids, then `isEnabled($saved) ? focus($saved) : focusFirst()`. Don't re-hand-roll the order.
