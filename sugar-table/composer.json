@@ -10,7 +10,8 @@
         "interactive",
         "pagination",
         "sorting",
-        "sugarcraft"
+        "sugarcraft",
+        "bubble-table"
     ],
     "homepage": "https://github.com/sugarcraft/sugar-table",
     "authors": [
