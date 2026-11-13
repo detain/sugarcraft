@@ -43,7 +43,7 @@ composer require sugarcraft/sugar-mcp-client
 | `McpTool` | Tool definition value object with a well-typedness gate (`tryFromArray`) |
 | `ArgumentShape` | Restores `{}` vs `[]` in decoded tool-call arguments against the tool's `inputSchema` |
 | `McpServer` | Transport contract: `start` / `stop` / `listTools` / `callTool` |
-| `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture (also drainable between exchanges via `pumpStderr()`), skipped-definition reporting (`malformedToolDefinitions()` / `malformedToolDefinitionsReport()`), `BoundedShutdown` teardown, `__destruct` back-stop (the SIGKILLed-owner residual is named in *Fork safety*), and the resources/prompts convenience quartet (`listResources` / `readResource` / `listPrompts` / `getPrompt`, sharing callTool's array-or-error shape) |
+| `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture (also drainable between exchanges via `pumpStderr()`), skipped-definition reporting (`malformedToolDefinitions()` / `malformedToolDefinitionsReport()`), `BoundedShutdown` teardown, `__destruct` back-stop (the SIGKILLed-owner residual is named in *Fork safety*), and the resources/prompts convenience quartet (`listResources` / `readResource` / `listPrompts` / `getPrompt`, sharing callTool's array-or-error shape), plus the kept handshake result (`serverInfo()` / `serverCapabilities()` / `initializeResultDefects()` — survives `stop()` like the other post-mortem evidence) |
 | `McpRouter` | Deny-before-allow SERVER narrowing over raw config keys (tool rosters follow servers); empty allow-list means allow-all |
 | `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere; the transport stringifies what it sends, so an outbound request carries `"5"` on the wire, never a bare `5` |
 | `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
@@ -381,13 +381,16 @@ policy to write, not a behaviour to inherit.
   above arrives inside a message string. The readable surface is
   `listTools()` (declared on `McpServer`) and, on `StdioMcpServer` only,
   `isUp()`, `stderrTail()`, `malformedToolDefinitions()` /
-  `malformedToolDefinitionsReport()`, plus the `pumpStderr()` seam and the
-  `onWait:` liveness beats. Frame-strike counts, consecutive `select`
-  failures and swallowed stderr bytes surface only in the messages they
+  `malformedToolDefinitionsReport()`, the kept handshake result
+  (`serverInfo()` / `serverCapabilities()`, with `initializeResultDefects()`
+  naming any spec-required member the server omitted), plus the
+  `pumpStderr()` seam and the `onWait:` liveness beats. Frame-strike counts,
+  consecutive `select` failures and swallowed stderr bytes surface only in
+  the messages they
   produced — nothing exposes them as counters — so code that must branch on
   failure should key on the signals above rather than parse prose (and the
-  text `stderrTail()` returns is server-authored and UNTRUSTED, render it
-  through a sanitizer).
+  text `stderrTail()` and the `serverInfo()` / `serverCapabilities()` maps
+  return is server-authored and UNTRUSTED, render it through a sanitizer).
 
 ## Wire shape
 

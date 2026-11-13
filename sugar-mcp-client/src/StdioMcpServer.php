@@ -302,6 +302,22 @@ final class StdioMcpServer implements McpServer
     private int $malformedToolDefsTotal = 0;
 
     /**
+     * The server's full InitializeResult, kept from the one handshake it will
+     * ever perform: `serverInfo` is the identity of the connection, and
+     * `capabilities` is what lets an embedder GATE behaviour (listChanged,
+     * elicitation, resources/*, prompts/*) instead of guessing. Post-mortem
+     * evidence like the stderr tail and the malformed ledger: cleared at every
+     * start(), deliberately kept by stop(), so "which server was this, and
+     * what did it advertise" stays answerable after teardown. Tolerant store:
+     * the spec makes both members required, and an absent one is REPORTED
+     * ({@see initializeResultDefects()}), not boot-fatal — the handshake has
+     * already proven the server can negotiate and answer tools/list.
+     *
+     * @var array<string,mixed>|null
+     */
+    private ?array $initializeResult = null;
+
+    /**
      * The identity this client advertises in the initialize handshake. The
      * version literal is only the FALLBACK: an installed copy announces its
      * real package version (see {@see defaultClientInfo()}); the literal
@@ -776,6 +792,7 @@ final class StdioMcpServer implements McpServer
         $this->lastFailureCause = null;
         $this->malformedToolDefs = [];
         $this->malformedToolDefsTotal = 0;
+        $this->initializeResult = null;
 
         $deadline = self::deadlineAfter($this->startTimeoutSeconds);
 
@@ -830,6 +847,11 @@ final class StdioMcpServer implements McpServer
                     self::printableDiagnostic($negotiated),
                 ) . $diagnostics);
             }
+
+            // Keep what the server advertised: server-authored data handed
+            // out verbatim by the accessors, for the consumer to sanitize.
+            // Judging-and-discarding used to leave the identity unrecoverable.
+            $this->initializeResult = is_array($response->result) ? $response->result : null;
 
             // The spec's method name. A bare `initialized` is ignored by the TS
             // SDK (its oninitialized hook never fires) and only tolerated by
@@ -921,8 +943,8 @@ final class StdioMcpServer implements McpServer
         // The roster belongs to the connection that just died: isUp() is
         // false while listTools() served a table of dead tools.
         $this->tools = [];
-        // stderrTail/stderrTruncated/lastFailureCause/malformedToolDefs
-        // deliberately SURVIVE
+        // stderrTail/stderrTruncated/lastFailureCause/malformedToolDefs/
+        // initializeResult deliberately SURVIVE
         // stop() — the captured evidence is exactly what a post-mortem of
         // the server you just lost needs. start() clears them afresh.
     }
@@ -1107,6 +1129,66 @@ final class StdioMcpServer implements McpServer
             implode(', ', array_slice($this->malformedToolDefs, 0, 5)),
             $overflow > 0 ? sprintf(' [+%d more]', $overflow) : '',
         );
+    }
+
+    /**
+     * The server's advertised `serverInfo` (`name`, `version`, optional
+     * `title`) exactly as it answered the handshake — UNTRUSTED
+     * server-authored text: route it through Sanitize::untrusted before it
+     * reaches a terminal. Null before the first successful start(), after a
+     * start that never reached the judgement, or when the server omitted the
+     * member (see {@see self::initializeResultDefects()}). Survives stop():
+     * "which server was this?" stays answerable post-mortem.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function serverInfo(): ?array
+    {
+        $info = $this->initializeResult['serverInfo'] ?? null;
+
+        return is_array($info) ? $info : null;
+    }
+
+    /**
+     * The server's advertised capability map — the gate an embedder reads
+     * before trying `resources/*`, `prompts/*`, elicitation, or trusting a
+     * listChanged notification: `null`/absent means the server never claimed
+     * the feature. Same survival and untrusted-text laws as
+     * {@see self::serverInfo()}.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function serverCapabilities(): ?array
+    {
+        $caps = $this->initializeResult['capabilities'] ?? null;
+
+        return is_array($caps) ? $caps : null;
+    }
+
+    /**
+     * Spec-required InitializeResult members the server failed to send
+     * (`serverInfo`, `capabilities`). The store is deliberately tolerant —
+     * a server that negotiated and listed tools boots, and these names tell
+     * the embedder WHY the accessors come back empty instead of leaving the
+     * omission unannounced. Empty list means the handshake was whole.
+     *
+     * @return list<string>
+     */
+    public function initializeResultDefects(): array
+    {
+        if ($this->initializeResult === null) {
+            return [];
+        }
+
+        $defects = [];
+        if (!isset($this->initializeResult['serverInfo']) || !is_array($this->initializeResult['serverInfo'])) {
+            $defects[] = 'serverInfo (required by the spec; serverInfo() returns null)';
+        }
+        if (!isset($this->initializeResult['capabilities']) || !is_array($this->initializeResult['capabilities'])) {
+            $defects[] = 'capabilities (required by the spec; serverCapabilities() returns null)';
+        }
+
+        return $defects;
     }
 
     /** Budget for delivering `notifications/cancelled` after a timed-out call. */

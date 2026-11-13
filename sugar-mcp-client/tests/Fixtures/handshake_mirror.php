@@ -42,11 +42,18 @@ while (($line = fgets(STDIN)) !== false) {
             $write([
                 'jsonrpc' => '2.0',
                 'id' => $id,
-                'result' => [
+                'result' => array_filter([
                     'protocolVersion' => '2024-11-05',
-                    'capabilities' => new stdClass(),
-                    'serverInfo' => ['name' => 'fixture-mirror', 'version' => '0.0.1'],
-                ],
+                    // MIRROR_BARE_INITIALIZE strips the two spec-required
+                    // members so the tolerant store and the defect report
+                    // are testable against an otherwise honest server.
+                    'capabilities' => getenv('MIRROR_BARE_INITIALIZE') ? null : (object) [
+                        'tools' => new stdClass(),
+                        'resources' => new stdClass(),
+                        'prompts' => new stdClass(),
+                    ],
+                    'serverInfo' => getenv('MIRROR_BARE_INITIALIZE') ? null : ['name' => 'fixture-mirror', 'version' => '0.0.1'],
+                ], static fn (mixed $v): bool => $v !== null),
             ]);
             break;
 
