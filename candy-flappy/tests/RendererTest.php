@@ -6,7 +6,9 @@ namespace SugarCraft\Flappy\Tests;
 
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Flappy\Bird;
 use SugarCraft\Flappy\Game;
 use SugarCraft\Flappy\Renderer;
 use PHPUnit\Framework\TestCase;
@@ -28,8 +30,43 @@ final class RendererTest extends TestCase
 
     public function testRenderHasBirdGlyph(): void
     {
+        // flappy-32: game() flaps, so the bird is CLIMBING and points up —
+        // the velocity matrix test below owns all three buckets.
         $out = Renderer::render($this->game());
-        $this->assertStringContainsString('>', $out);
+        $this->assertStringContainsString('^', $out);
+    }
+
+    public function testBirdGlyphPointsItsVelocity(): void
+    {
+        // flappy-32 (finding -035): climbing '^', level '>', falling 'v' —
+        // the view finally reads the velocity the physics computes every
+        // tick. ASCII posture so the cells are bare bytes.
+        $spawn = Bird::spawn(Game::BIRD_COL, 9.0);
+        $climbing = $spawn->flap();
+        $falling = $climbing;
+        // GRAVITY 18/s at 30 tps = +0.6 cells/s per tick; 17 ticks off the
+        // -10 kick lands at +0.2 — just past the apex.
+        for ($i = 0; $i < 17; $i++) {
+            $falling = $falling->tick();
+        }
+        $this->assertGreaterThan(0.0, $falling->body->velocity->y, 'fixture must be past the apex');
+
+        foreach ([
+            '>' => $spawn,
+            '^' => $climbing,
+            'v' => $falling,
+        ] as $glyph => $bird) {
+            $g = new Game(
+                bird: $bird,
+                pipes: [],
+                started: true,
+                configDir: $this->hermeticConfigDir(),
+                colorProfile: ColorProfile::Ascii,
+            );
+            $lines = explode("\n", $g->view());
+            $cell = substr((string) $lines[1 + $bird->row()], Game::BIRD_COL + 1, 1);
+            $this->assertSame($glyph, $cell, 'bird glyph for velocity ' . $bird->body->velocity->y);
+        }
     }
 
     public function testRenderShowsScore(): void

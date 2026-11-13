@@ -38,16 +38,35 @@ final class Renderer
      * rebuilt a Style/Color chain producing the SAME bytes every time. The
      * fully-styled glyph strings are process-static memos — one build per
      * glyph, ever. The goldens pin that the memo bytes equal the old
-     * per-call bytes.
+     * per-call bytes. flappy-32: the bird memo became a per-glyph map
+     * (climb/level/fall), same law, keyed by the glyph.
      */
-    private static ?string $birdCell = null;
+    private static array $birdCells = [];
+
     private static ?string $crashCell = null;
     private static ?string $pipeCell = null;
     private static ?string $dotCell = null;
 
-    private static function birdCell(): string
+    private static function birdCell(string $glyph): string
     {
-        return self::$birdCell ??= Style::new()->foreground(Color::hex(self::AMBER))->bold()->render('>');
+        return self::$birdCells[$glyph] ??= Style::new()->foreground(Color::hex(self::AMBER))->bold()->render($glyph);
+    }
+
+    /**
+     * flappy-32 (finding -035): the bird points the way it is moving —
+     * climbing '^', level '>', falling 'v'. The physics has computed the
+     * vertical velocity every tick since M2; this is Tier-1 game feel
+     * with zero new state, glyph from the velocity sign alone.
+     */
+    private static function pitchGlyph(float $velocityY): string
+    {
+        if ($velocityY < 0.0) {
+            return '^';
+        }
+        if ($velocityY > 0.0) {
+            return 'v';
+        }
+        return '>';
     }
 
     /**
@@ -230,7 +249,7 @@ final class Renderer
             $line = '|';
             for ($x = 0; $x < $w; $x++) {
                 if ($x === $birdX && $y === $birdRow) {
-                    $line .= $g->crashed === true ? 'x' : '>';
+                    $line .= $g->crashed === true ? 'x' : self::pitchGlyph($g->bird->body->velocity->y);
                     continue;
                 }
                 $cell = isset($wallRows[$x]) && $wallRows[$x][$y] === true ? '#' : ' ';
@@ -401,7 +420,7 @@ final class Renderer
         // bird cell renders the crash burst — a half-width ✕, see crashCell
         // for why the board cannot carry the hint's full-width 💥 at 62 cols).
         if ($x === $birdX && $y === $birdRow) {
-            return $g->crashed === true ? self::crashCell() : self::birdCell();
+            return $g->crashed === true ? self::crashCell() : self::birdCell(self::pitchGlyph($g->bird->body->velocity->y));
         }
         // Pipe walls; inside the gap it is just air.
         if (isset($wallRows[$x])) {

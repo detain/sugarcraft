@@ -47,6 +47,22 @@ final class GoldenRenderTest extends TestCase
         $this->assertSame($output, file_get_contents(self::FIXTURE_DIR . '/render-alive.golden'));
     }
 
+    public function testClimbingFrameIsByteExact(): void
+    {
+        // flappy-32 (finding -035): the '^' bucket earns its own golden —
+        // alive pins the falling 'v', ready pins the level '>'. One tick
+        // off the flap: velocity -10 + 0.6, still climbing.
+        $rand = static fn(int $max): int => 3;
+        [$g, ] = Game::start($rand, $this->hermeticConfigDir())
+            ->update(new KeyMsg(KeyType::Space));
+        $g = $g->tickN(1);
+
+        $output = Renderer::render($g);
+
+        Assertions::assertGoldenAnsi(self::FIXTURE_DIR . '/render-climbing.golden', $output);
+        $this->assertSame($output, file_get_contents(self::FIXTURE_DIR . '/render-climbing.golden'));
+    }
+
     public function testCrashedFrameIsByteExact(): void
     {
         // Deterministic seed, start, tick until crash.
