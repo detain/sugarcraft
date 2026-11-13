@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Tests\Agents\Live;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
+use SugarCraft\Code\Support\ForkedChild;
+use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * candy-code-agents-004 / S-A03: pins the lost-update law of the card's
@@ -14,6 +16,8 @@ use SugarCraft\Code\Agents\Live\AgentRunCards;
  */
 final class AgentRunCardsLostUpdateTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private string $root = '';
 
     protected function setUp(): void
@@ -24,6 +28,7 @@ final class AgentRunCardsLostUpdateTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->root, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST) as $f) {
             $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
         }
@@ -40,7 +45,7 @@ final class AgentRunCardsLostUpdateTest extends TestCase
         $n = 8;
         $pids = [];
         for ($i = 0; $i < $n; $i++) {
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             if ($pid === 0) {
                 AgentRunCards::updateRun('s1', 'r1', static function (array $c) use ($i): array {
                     usleep(2000);
@@ -48,7 +53,7 @@ final class AgentRunCardsLostUpdateTest extends TestCase
 
                     return $c;
                 }, $this->root);
-                exit(0);
+                ForkedChild::exitNow(0);
             }
             $pids[] = $pid;
         }
