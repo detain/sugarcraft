@@ -47,6 +47,9 @@
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
+    "suggest": {
+        "ext-pcntl": "Install ext-pcntl so SIGINT/SIGTERM are caught and mapped to the conventional 130/143 exits with graceful child teardown (scriptui-07). Without it signals take the default disposition: the process dies instantly, skipping the exit mapping — the try/finally ladders and the 124-timeout verdict still run for their own paths."
+    },
     "autoload": {
         "psr-4": {
             "SugarCraft\\ScriptUi\\": "src/"

@@ -34,6 +34,7 @@ return [
     'runtime.no_terminal' => '{command} precisa de um terminal interativo; nenhum terminal de controle disponível.',
     'runtime.bad_timeout' => 'Valor de --timeout inválido \'{value}\' — esperado um número não negativo de segundos (0 desativa o prazo).',
     'runtime.bad_number' => 'Valor de {flag} inválido: \'{value}\' — espera-se um número inteiro não negativo.',
+    'runtime.pcntl_missing' => 'ext-pcntl não está carregado: SIGINT/SIGTERM matarão este programa sem o mapeamento de saída 130/143.',
     'runtime.unknown_choice' => 'Valor inválido para {option}: \'{value}\'. Permitidos: {allowed}.',
     'hints.choose' => '↑/↓ mover · espaço alterna (múltiplo) · enter selecionar · esc cancelar',
     'hints.filter' => 'digite para filtrar · ↑/↓ mover · tab alterna (múltiplo) · enter selecionar · esc cancelar',

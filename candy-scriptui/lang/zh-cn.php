@@ -34,6 +34,7 @@ return [
     'runtime.no_terminal' => '{command} 需要交互式终端；没有可用的控制终端。',
     'runtime.bad_timeout' => '--timeout 值“{value}”无效——需要非负秒数（0 表示不限）。',
     'runtime.bad_number' => '{flag} 值 \'{value}\' 无效 — 需要非负整数。',
+    'runtime.pcntl_missing' => '未加载 ext-pcntl：SIGINT/SIGTERM 将在没有 130/143 退出码映射的情况下终止本程序。',
     'runtime.unknown_choice' => '{option} 的值“{value}”无效。允许：{allowed}。',
     'hints.choose' => '↑/↓ 移动 · space 切换 (多选) · enter 选择 · esc 取消',
     'hints.filter' => '输入以筛选 · ↑/↓ 移动 · tab 切换 (多选) · enter 选择 · esc 取消',

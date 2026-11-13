@@ -6,6 +6,7 @@ namespace SugarCraft\ScriptUi\Runtime;
 
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty;
+use SugarCraft\ScriptUi\Lang;
 
 /**
  * Single launch chokepoint for every interactive {@see \SugarCraft\Core\Program}
@@ -29,6 +30,8 @@ use SugarCraft\Core\Util\Tty;
  */
 final class InteractiveRuntime
 {
+    /** @var bool One-time latch for the {@see signalNotice()} warning (scriptui-07). */
+    private static bool $pcntlWarned = false;
     /**
      * Program options for an interactive run, or null when NO usable input
      * terminal exists (pipes on both ends and no /dev/tty) — callers must
@@ -51,14 +54,14 @@ final class InteractiveRuntime
         if (self::stdoutIsTerminal()) {
             // Keys via /dev/tty when stdin is a pipe; sugar-core falls back
             // to STDIN/STDOUT itself when /dev/tty is unavailable.
-            return new ProgramOptions(
+            return self::warnIfPcntlAbsent(new ProgramOptions(
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
                 inlineMode:      $dumb,
                 catchInterrupts: true,
                 openTty:         true,
                 loop:            \React\EventLoop\Loop::get(),
-            );
+            ));
         }
 
         $paint = self::paintStream();
@@ -66,7 +69,7 @@ final class InteractiveRuntime
         if ($tty !== null) {
             // Only the READ side comes from /dev/tty: the write side must be
             // the user's stderr, never the archive-captured stdout.
-            return new ProgramOptions(
+            return self::warnIfPcntlAbsent(new ProgramOptions(
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
                 inlineMode:      $dumb,
@@ -74,23 +77,63 @@ final class InteractiveRuntime
                 input:           $tty[0],
                 output:          $paint,
                 loop:            \React\EventLoop\Loop::get(),
-            );
+            ));
         }
 
         if (self::stdinIsTerminal()) {
             // stdout redirected but stdin is the terminal — still viable:
             // keys from STDIN, frame to STDERR.
-            return new ProgramOptions(
+            return self::warnIfPcntlAbsent(new ProgramOptions(
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
                 inlineMode:      $dumb,
                 catchInterrupts: true,
                 output:          $paint,
                 loop:            \React\EventLoop\Loop::get(),
-            );
+            ));
         }
 
         return null;
+    }
+
+    /**
+     * scriptui-07 (candy-scriptui-036): the options above request
+     * signal-mapped cancellation (`catchInterrupts: true`), but sugar-core
+     * can only install the handler when ext-pcntl is loaded — without it
+     * SIGINT/SIGTERM take the default disposition (instant death: no 130/143
+     * mapping, no teardown unwind). Surface that once on the diagnostic
+     * channel instead of letting the documented promise silently vanish.
+     * The returned sentence is the notice to print, or null when there is
+     * nothing to say (pcntl present, or already warned this run).
+     *
+     * @param ?bool $pcntlLoaded Test seam: override the extension probe.
+     */
+    public static function signalNotice(?bool $pcntlLoaded = null): ?string
+    {
+        if ($pcntlLoaded ?? extension_loaded('pcntl')) {
+            return null;
+        }
+
+        if (self::$pcntlWarned) {
+            return null;
+        }
+        self::$pcntlWarned = true;
+
+        return Lang::t('runtime.pcntl_missing');
+    }
+
+    /**
+     * Print {@see signalNotice()} once to STDERR (never STDOUT — the data
+     * channel) and pass the options through.
+     */
+    private static function warnIfPcntlAbsent(ProgramOptions $options): ProgramOptions
+    {
+        $notice = self::signalNotice();
+        if ($notice !== null) {
+            \fwrite(\STDERR, $notice . "\n");
+        }
+
+        return $options;
     }
 
     /**

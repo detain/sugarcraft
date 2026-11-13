@@ -34,6 +34,7 @@ return [
     'runtime.no_terminal' => '{command} heeft een interactieve terminal nodig; geen sturende terminal beschikbaar.',
     'runtime.bad_timeout' => 'Ongeldige --timeout-waarde \'{value}\' — verwacht een niet-negatief aantal seconden (0 schakelt de deadline uit).',
     'runtime.bad_number' => 'Ongeldige waarde voor {flag}: \'{value}\' — een niet-negatief getal wordt verwacht.',
+    'runtime.pcntl_missing' => 'ext-pcntl is niet geladen: SIGINT/SIGTERM beëindigen dit programma zonder de 130/143-exit-mapping.',
     'runtime.unknown_choice' => 'Ongeldige waarde voor {option}: \'{value}\'. Toegestaan: {allowed}.',
     'hints.choose' => '↑/↓ verplaats · spatie wisselt (multi) · enter selecteren · esc annuleren',
     'hints.filter' => 'typ om te filteren · ↑/↓ verplaats · tab wisselt (multi) · enter selecteren · esc annuleren',

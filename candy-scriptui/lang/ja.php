@@ -34,6 +34,7 @@ return [
     'runtime.no_terminal' => '{command} にはインタラクティブな端末が必要です。制御端末を利用できません。',
     'runtime.bad_timeout' => '--timeout の値 \'{value}\' が不正です — 非負の秒数を指定してください (0 で期限無効)。',
     'runtime.bad_number' => '{flag} の値 \'{value}\' が不正です — 非負の整数を指定してください。',
+    'runtime.pcntl_missing' => 'ext-pcntl が読み込まれていないため、SIGINT/SIGTERM は 130/143 の終了コード変換なしでこのプログラムを終了させます。',
     'runtime.unknown_choice' => '{option} の値 \'{value}\' が不正です。使用可能: {allowed}。',
     'hints.choose' => '↑/↓ 移動 · space 切替 (複数) · enter 選択 · esc キャンセル',
     'hints.filter' => '入力でフィルタ · ↑/↓ 移動 · tab 切替 (複数) · enter 選択 · esc キャンセル',

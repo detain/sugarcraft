@@ -47,6 +47,7 @@ return [
     'runtime.no_terminal' => '{command} nécessite un terminal interactif ; aucun terminal de contrôle disponible.',
     'runtime.bad_timeout' => 'Valeur de --timeout invalide « {value} » — attendu : un nombre de secondes positif ou nul (0 désactive le délai).',
     'runtime.bad_number' => 'Valeur de {flag} invalide « {value} » — un entier non négatif est attendu.',
+    'runtime.pcntl_missing' => 'ext-pcntl n\'est pas chargé : SIGINT/SIGTERM tuent ce programme sans la correspondance de code de sortie 130/143.',
     'runtime.unknown_choice' => 'Valeur invalide pour {option} : « {value} ». Autorisées : {allowed}.',
     'hints.choose' => '↑/↓ déplacer · espace bascule (multi) · entrée sélectionner · échap annuler',
     'hints.filter' => ' taper pour filtrer · ↑/↓ déplacer · tabulation bascule (multi) · entrée sélectionner · échap annuler',

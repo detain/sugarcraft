@@ -34,6 +34,7 @@ return [
     'runtime.no_terminal' => '{command} vyžaduje interaktivní terminál; řídicí terminál není dostupný.',
     'runtime.bad_timeout' => 'Neplatná hodnota --timeout \'{value}\' — očekává se nezáporný počet sekund (0 deadline vypíná).',
     'runtime.bad_number' => 'Neplatná hodnota {flag} \'{value}\' — očekáváno nezáporné celé číslo.',
+    'runtime.pcntl_missing' => 'ext-pcntl není načten: SIGINT/SIGTERM ukončí tento program bez mapování ukončovacího kódu 130/143.',
     'runtime.unknown_choice' => 'Neplatná hodnota pro {option}: \'{value}\'. Pouze: {allowed}.',
     'hints.choose' => '↑/↓ posun · mezerník přepíná (více) · enter vybrat · esc zrušit',
     'hints.filter' => 'psít pro filtrování · ↑/↓ posun · tabulátor přepíná (více) · enter vybrat · esc zrušit',
