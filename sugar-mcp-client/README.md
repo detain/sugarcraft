@@ -19,10 +19,10 @@ server that answers the handshake claiming a different revision (a legacy
 server that omits the field is allowed to proceed). Later revisions' optional
 `annotations` members on tool definitions are parsed and carried verbatim on
 purpose — forward-compat with spec `2025-03-26` is deliberate, and this
-client consults none of them. The Quick start below
-launches the reference server through `npx`, so running it verbatim needs
-Node.js on PATH; for a trial with nothing to install or download,
-`php examples/echo.php` completes the same round trip (see *Examples*).
+client consults none of them. (The Quick start below launches the reference
+server through `npx`; the note there states the Node.js requirement — for a
+trial with nothing to install or download, `php examples/echo.php` completes
+the same round trip. See *Examples*.)
 
 Extracted from the [candy-code](https://github.com/sugarcraft/candy-code)
 MCP stack, where these classes carry its entire stdio server lifecycle. The
@@ -81,7 +81,7 @@ installed.
 
 `callTool()` answers with the tool's result envelope — normally
 `['content' => [['type' => 'text', 'text' => ...], ...], 'isError' => bool]`
-as the server shaped it (a non-array (scalar) result is wrapped into a
+as the server shaped it (a scalar result is wrapped into a
 one-item `content` list for you) — or, on failure, `['error' => 'why']`. It never
 throws for a call that merely failed; see *Failure shapes*.
 
@@ -182,7 +182,7 @@ echo, as the quick start does.
 The child's working directory is the embedder's decision, not an accident of
 where the parent happened to be standing: pass `cwd:` to start the server in a
 specific absolute directory (`new StdioMcpServer(name: …, cwd: $home)`), and
-the default `null` keeps the historic inherited spawn byte-identical. The move
+the default `null` reproduces the inherited-directory spawn exactly as before. The move
 is `proc_open`'s own cwd argument, so it lands on the child at exec time and
 the parent's directory is never touched — and it composes with a spawn
 planner: the planner decides *what* runs, `cwd` decides *where*. `candy-code`
@@ -249,8 +249,8 @@ checkout the launch stood in.
   not a duration and not wall clock. Build one with
   `StdioMcpServer::deadlineAfter(30.0)` for "30 seconds from now" (it refuses
   a negative bound at its own door); a past instant gives up silently
-  (`null`/`false`), and a wall-clock-magnitude value would never fire, so the
-  magnitude is refused by throwing an `InvalidArgumentException` instead.
+  (`null`/`false`), and a raw duration passed as an instant would never fire,
+  so it is refused by throwing an `InvalidArgumentException` instead.
   `callTool(timeoutSeconds:)` remains the relative-duration spelling.
 - One frame never outgrows the read buffer: bytes past `MAX_FRAME_BYTES`
   (64 MiB) with no newline are not NDJSON whatever they eventually say, and
@@ -268,7 +268,7 @@ is a guard against a pathological server, not a working budget:
 
 | Limit | Value | Why |
 |---|---|---|
-| Whole pending read buffer | 64 MiB (`MAX_FRAME_BYTES`) | A stream with no newline for 64 MiB is not speaking NDJSON; the buffer is dropped, never truncated (see the bullet above) |
+| Whole pending read buffer | 64 MiB (`MAX_FRAME_BYTES`) | A stream with no newline for 64 MiB is not speaking NDJSON; the buffer is dropped, never truncated (see *Timeout discipline*: an oversized frame is dropped, not truncated) |
 | stderr tail retained | 64 KiB (`MAX_STDERR_BYTES`) | Bounded diagnostic memory; the tail rides every failure payload, flagged `[stderr truncated]` once it overflowed |
 | `tools/list` pages | 32 (`MAX_TOOL_PAGES`) | ~3,000 entries at a typical hundred per page, far past any real server; the repeated-cursor refusal catches a lying pager, this catches the fast-lying one before it eats the whole handshake budget |
 | Unattributable frames per exchange | 8 (`UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL`) | Bounds a deadline-less call against a server whose every frame is junk to us; one genuine reply ends the read and clears the count |
