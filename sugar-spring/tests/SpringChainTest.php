@@ -144,6 +144,28 @@ final class SpringChainTest extends TestCase
     }
 
     /**
+     * SPR-14 (finding 010): tick()'s rebuild must ride the private parsed
+     * door — the constructor's arity/instanceof/coercion sweep belongs at
+     * the boundary, not once per stage per frame. Source-level pin: a
+     * future "simplify" back to `new self(...)` inside tick() reddens here
+     * even though every behavioural test stays green.
+     */
+    public function testTickRebuildsThroughTheParsedDoorNotTheConstructorSweep(): void
+    {
+        $tick = new \ReflectionMethod(SpringChain::class, 'tick');
+        $lines = array_slice(
+            file($tick->getFileName()),
+            $tick->getStartLine() - 1,
+            $tick->getEndLine() - $tick->getStartLine() + 1,
+        );
+        $body = implode('', $lines);
+
+        $this->assertStringNotContainsString('new self(', $body);
+        $this->assertStringNotContainsString('new SpringChain(', $body);
+        $this->assertStringContainsString('self::fromParsed(', $body);
+    }
+
+    /**
      * Copy-on-write parity: a single tick must advance ONLY the active stage
      * and leave every later stage at its initial position. This is what the
      * clone-once refactor (replace one index instead of rebuilding the array)

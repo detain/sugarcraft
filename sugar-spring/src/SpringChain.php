@@ -140,8 +140,8 @@ final class SpringChain
 
         [$spring, $pos, $vel, $target] = $this->stages[$this->activeIndex];
 
-        if ($this->isSettled($pos, $vel, $target) === true) {
-            return new self($this->stages, $this->activeIndex + 1);
+        if ($this->isSettled($pos, $vel, $target)) {
+            return self::fromParsed($this->stages, $this->activeIndex + 1);
         }
 
         [$newPos, $newVel] = $spring->update($pos, $vel, $target);
@@ -151,7 +151,25 @@ final class SpringChain
         $newStages = $this->stages;
         $newStages[$this->activeIndex] = [$spring, $newPos, $newVel, $target];
 
-        return new self($newStages, $this->activeIndex);
+        return self::fromParsed($newStages, $this->activeIndex);
+    }
+
+    /**
+     * Rebuild from an ALREADY-PARSED stage list, skipping the constructor's
+     * per-frame re-validation: every list that reaches here was born either
+     * at the construction door or inside tick() itself, which only ever
+     * writes floats back into slots the door already checked. The hot path
+     * pays a list copy, not an arity/instanceof/coercion sweep per stage.
+     *
+     * @param list<array{0: Spring, 1: float, 2: float, 3: float}> $stages
+     */
+    private static function fromParsed(array $stages, int $activeIndex): self
+    {
+        $chain = new self([]);
+        $chain->stages = $stages;
+        $chain->activeIndex = $activeIndex;
+
+        return $chain;
     }
 
     /**
@@ -162,7 +180,7 @@ final class SpringChain
     public function currentPositions(): array
     {
         $positions = [];
-        foreach ($this->stages as [, $pos, $vel, $target]) {
+        foreach ($this->stages as [, $pos]) {
             $positions[] = $pos;
         }
         return $positions;
