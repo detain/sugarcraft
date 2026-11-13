@@ -213,9 +213,20 @@ if ($slugs === []) {
 
 $drift = 0;
 $written = 0;
+$orphanProblems = [];
 foreach ($slugs as $slug) {
     if (!isset($types[$slug])) {
-        fwrite(STDERR, "warning: $slug has no MATCHUPS row — skipping\n");
+        // RT-15 (repo-tooling-015): this used to warn and continue EVEN IN
+        // --check, so a slug whose MATCHUPS row was removed kept publishing
+        // its stale committed page under a green gate. Check mode now calls
+        // it a named orphan and dies 2; generate mode still skips.
+        if ($mode === '--check') {
+            $orphanProblems[] = "gen-docs: orphan: $slug has docs/_data but no MATCHUPS row — "
+                . 'its committed page can never be regenerated correctly; add the row or remove '
+                . "docs/_data/$slug.{json,body.html} and docs/lib/$slug.html";
+        } else {
+            fwrite(STDERR, "warning: $slug has no MATCHUPS row — skipping\n");
+        }
         continue;
     }
     $meta = json_decode((string) file_get_contents("$dataDir/$slug.json"), true, 512, JSON_THROW_ON_ERROR);
@@ -260,6 +271,31 @@ foreach ($stubs as $old => $final) {
         exit(2);
     }
     $written++;
+}
+
+// RT-15 other direction: a page under docs/lib/ that is neither a rendered
+// _data page nor a redirect stub outlived its source. --check refuses it
+// (auto-deleting committed pages from a generator run is deliberately NOT
+// chosen — deletion is a human call in a shared tree); generate leaves it
+// alone and says nothing, because --check is the publishing gate.
+if ($mode === '--check') {
+    $sources = array_fill_keys($slugs, true);
+    foreach (array_keys($stubs) as $old) {
+        $sources[$old] = true;
+    }
+    foreach (glob("$libDir/*.html") ?: [] as $pageFile) {
+        $stem = basename($pageFile, '.html');
+        if (!isset($sources[$stem])) {
+            $orphanProblems[] = "gen-docs: orphan: docs/lib/$stem.html has no docs/_data source "
+                . 'and is not a redirect stub — delete the stale page';
+        }
+    }
+    if ($orphanProblems !== []) {
+        foreach ($orphanProblems as $problem) {
+            fwrite(STDERR, "$problem\n");
+        }
+        exit(2);
+    }
 }
 
 // Catalogue count patch — the generator OWNS the library/app counts on the

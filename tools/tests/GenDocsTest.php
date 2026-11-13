@@ -286,6 +286,37 @@ final class GenDocsTest extends TestCase
     // Generation
     // -----------------------------------------------------------------
 
+    public function testCheckRefusesDataWhoseMatchupsRowDisappeared(): void
+    {
+        // RT-15: a _data slug without a MATCHUPS row used to warn-and-skip
+        // EVEN in --check - the stale page kept publishing under a green
+        // gate. Check now names it and exits 2; generate still skips.
+        $root = $this->makeFixtureRoot(['fixture-alpha', 'fixture-appy', 'fixture-ghost']);
+        $generated = $this->runScript($root);
+        $this->assertSame(0, $generated['exit'], $generated['output']);
+        $this->assertStringContainsString('warning: fixture-ghost has no MATCHUPS row', $generated['output']);
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-ghost.html");
+
+        $checked = $this->runScript($root, ['--check']);
+        $this->assertSame(2, $checked['exit'], $checked['output']);
+        $this->assertStringContainsString('orphan: fixture-ghost', $checked['output']);
+    }
+
+    public function testCheckRefusesAPageThatOutlivedItsSource(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $this->assertSame(0, $this->runScript($root)['exit']);
+        \copy("$root/docs/lib/fixture-alpha.html", "$root/docs/lib/fixture-zombie.html");
+
+        $checked = $this->runScript($root, ['--check']);
+        $this->assertSame(2, $checked['exit'], $checked['output']);
+        $this->assertStringContainsString('orphan: docs/lib/fixture-zombie.html', $checked['output']);
+
+        \unlink("$root/docs/lib/fixture-zombie.html");
+        $again = $this->runScript($root, ['--check']);
+        $this->assertSame(0, $again['exit'], $again['output']);
+    }
+
     public function testAWriteFailureExitsTwoNamingThePath(): void
     {
         // RT-14 (014): a faulted docs/ still printed "generated N file(s)"
@@ -871,8 +902,13 @@ final class GenDocsTest extends TestCase
         $this->assertFileExists("$root/docs/_data/fixture-shadow.json");
         $shadow = (string) \file_get_contents("$root/docs/_data/fixture-shadow.json");
         $this->assertStringContainsString('Fixture description for fixture-shadow.', $shadow);
-        // And --check agrees with this state (the slug left the stub map).
-        $this->assertSame(0, $this->runScript($root, ['--check'])['exit']);
+        // RT-15 flipped THIS state's check verdict: _data with no MATCHUPS
+        // row is exactly the orphan class that must not stay green while a
+        // stale (or ungeneratable) page ships. Generate still warns and
+        // skips; --check refuses and names the slug.
+        $checked = $this->runScript($root, ['--check']);
+        $this->assertSame(2, $checked['exit'], $checked['output']);
+        $this->assertStringContainsString('orphan: fixture-shadow', $checked['output']);
     }
 
     /**
