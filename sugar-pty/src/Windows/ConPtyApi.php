@@ -85,6 +85,8 @@ interface ConPtyApi
 
     /** `CREATE_NO_WINDOW` — a ConPTY child must not get its own console window. */
     public const CREATE_NO_WINDOW = 0x08000000;
+    /** Start the child suspended so containment can be fitted before it runs. */
+    public const CREATE_SUSPENDED = 0x00000004;
 
     /** `STARTF_USESTDHANDLES` — honour `hStdInput`/`hStdOutput`/`hStdError`. */
     public const STARTF_USESTDHANDLES = 0x00000100;
@@ -291,14 +293,22 @@ interface ConPtyApi
      *                                                   {@see initializeAttributeList()}
      * @param array<string, string>     $environment     encoded via {@see EnvBlock};
      *                                                   an empty array inherits this process's block
-     * @param int                       $creationFlags   additional `CREATE_*` bits
+     * @param int                       $creationFlags   additional `CREATE_*` bits;
+     *                                                   `CREATE_SUSPENDED` is added by
+     *                                                   this call itself and need not
+     *                                                   be passed (see throws: nothing
+     *                                                   is left running on failure)
      * @param int|null                  $job             a {@see createJobObject()} id to
      *                                                   place the child in, giving
      *                                                   tree containment
      * @return array{process:int, processId:int} the process handle and pid; the
      *         primary thread handle is closed by this call
      * @throws \SugarCraft\Pty\PtyException when the call fails, carrying the
-     *         win32 error code — never a silently absent child
+     *         win32 error code — never a silently absent child. The child is
+     *         created suspended, assigned to `$job`, and only then resumed: a
+     *         failure at or after creation terminates the child and closes
+     *         both handles before this throws, so a rejected spawn never
+     *         leaves a running orphan or a leaked process handle.
      */
     public function createProcess(
         string $applicationName,

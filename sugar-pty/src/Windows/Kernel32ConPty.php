@@ -184,6 +184,8 @@ void *HeapAlloc(intptr_t hHeap, DWORD dwFlags, SIZE_T dwBytes);
 BOOL HeapFree(intptr_t hHeap, DWORD dwFlags, void *lpMem);
 
 BOOL CreateProcessW(const void *lpApplicationName, const void *lpCommandLine, void *lpProcessAttributes, void *lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, const void *lpEnvironment, const void *lpCurrentDirectory, STARTUPINFOEXW *lpStartupInfo, PROCESS_INFORMATION *lpProcessInformation);
+DWORD ResumeThread(intptr_t hThread);
+BOOL TerminateProcess(intptr_t hProcess, UINT uExitCode);
 
 DWORD WaitForSingleObject(intptr_t hHandle, DWORD dwMilliseconds);
 BOOL  GetExitCodeProcess(intptr_t hProcess, DWORD *lpExitCode);
@@ -737,7 +739,7 @@ CDEF;
         // flag from ever disagreeing — a UTF-16 block handed over without
         // CREATE_UNICODE_ENVIRONMENT arrives as ANSI shredded by NULs, and a
         // caller assembling both halves by hand is how that bug is born.
-        $flags = $creationFlags | self::EXTENDED_STARTUPINFO_PRESENT;
+        $flags = $creationFlags | self::EXTENDED_STARTUPINFO_PRESENT | self::CREATE_SUSPENDED;
         $envBuffer = null;
 
         if ($environment !== []) {
@@ -783,18 +785,63 @@ CDEF;
         $process = (int) $info->hProcess;
         $thread = (int) $info->hThread;
 
-        // CreateProcessW hands back two handles and a PTY backend needs one of
-        // them. The primary thread handle is closed HERE rather than returned,
-        // because a caller that is not told it exists will certainly leak it, and
-        // a process whose thread handle is still open cannot be waited on for
-        // free anywhere else.
-        $this->closeHandle($thread);
-
+        // CREATE_SUSPENDED (forced in $flags above) is what makes the window
+        // between CreateProcessW and AssignProcessToJobObject safe: the child
+        // exists but no thread of it runs, so there is never a moment where a
+        // spawn can leak a GRANDCHILD that outlives the job. The order is the
+        // portable-pty / MSDN recipe — create suspended, fit containment,
+        // release, then drop the thread handle. The primary thread handle is
+        // closed HERE rather than returned, because a caller that is not told
+        // it exists will certainly leak it, and a process whose thread handle
+        // is still open cannot be waited on for free anywhere else.
         if ($job !== null) {
-            $this->assignProcessToJob($job, $process);
+            try {
+                $this->assignProcessToJob($job, $process);
+            } catch (\Throwable $e) {
+                // The child sits suspended and unassigned: the job's
+                // KILL_ON_JOB_CLOSE cannot reach it, and the caller never
+                // receives the handle — so this call is the only thing that
+                // can clean it up. Terminate first (already-dead tolerates:
+                // a rejected TerminateProcess is the state we wanted anyway),
+                // then close BOTH handles so no HWND of a kind leaks, then
+                // rethrow with the assign cause intact.
+                $this->terminateAndClose($process, $thread);
+                throw $e;
+            }
         }
 
+        if ((int) $ffi->ResumeThread($thread) === 0xFFFFFFFF) {
+            // (DWORD)-1: nothing released. A child that refuses to resume
+            // while suspended is not a child the caller can ever use — same
+            // destroy-the-evidence-cleanly arm as the assign failure.
+            $detail = $this->lastError();
+            $this->terminateAndClose($process, $thread);
+            throw new PtyException(\sprintf(
+                'ResumeThread failed with win32 error %d; the suspended child was terminated',
+                $detail,
+            ));
+        }
+
+        $this->closeHandle($thread);
+
         return ['process' => $process, 'processId' => (int) $info->dwProcessId];
+    }
+
+    /**
+     * Failure-arm cleanup: kill, tolerate the already-dead, close everything.
+     *
+     * The exit code is the one the platform uses for externally killed
+     * processes (portable-pty passes the same). TerminateProcess failing is
+     * not worth a second exception: the child is already gone (access denied
+     * on a reaped process) or nothing we do next can undo it — the handle
+     * close below is the leg that matters for leak accounting.
+     */
+    private function terminateAndClose(int $process, int $thread): void
+    {
+        $ffi = $this->ffi();
+        @$ffi->TerminateProcess($process, 1);
+        $this->closeHandle($thread);
+        $this->closeHandle($process);
     }
 
     // ─── Process state ──────────────────────────────────────────────────────

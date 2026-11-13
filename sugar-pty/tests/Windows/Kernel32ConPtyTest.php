@@ -151,6 +151,8 @@ final class Kernel32ConPtyTest extends TestCase
         'HeapAlloc',
         'HeapFree',
         'CreateProcessW',
+        'ResumeThread',
+        'TerminateProcess',
         'WaitForSingleObject',
         'GetExitCodeProcess',
         'CloseHandle',
@@ -242,9 +244,11 @@ final class Kernel32ConPtyTest extends TestCase
         }
 
         // The two-phase evidence described in the class doc-block: reaching symbol
-        // resolution means the PARSER ACCEPTED all twenty prototypes, including the
-        // ones after the first. A ParserException here is a syntax error in the
-        // declaration block, on any host.
+        // resolution means the PARSER ACCEPTED every prototype in the block,
+        // including the ones after the first. A ParserException here is a syntax
+        // error in the declaration block, on any host. The roster leg below
+        // (testEveryNamedExportIsDeclaredExactlyOnce) carries the count, so this
+        // sentence never needs renumbering when a call is added.
         try {
             \FFI::cdef(Kernel32ConPty::cdef(), \PHP_OS_FAMILY === 'Windows' ? Kernel32ConPty::LIBRARY : null);
 
@@ -502,6 +506,62 @@ final class Kernel32ConPtyTest extends TestCase
             'cb is not being set to the size of the outer STARTUPINFOEXW',
         );
         self::assertStringNotContainsString('sizeof($startup->StartupInfo)', $body);
+    }
+
+    public function testCreateProcessFitsContainmentBeforeTheChildCanRun(): void
+    {
+        // PTY-06/013's shape law, pinned as source order because this class is
+        // final and binds the real kernel32 (no behavioural seam short of a
+        // Windows runner, named in the commit): the child is created SUSPENDED,
+        // assigned to the job, and only then resumed; every failure arm at or
+        // after creation terminates the child and closes BOTH handles before
+        // rethrowing, so a rejected spawn can never leave a running orphan
+        // outside the job or a process handle nobody owns.
+        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Windows/Kernel32ConPty.php');
+        $body = self::methodBody($source, 'createProcess');
+
+        self::assertMatchesRegularExpression(
+            '/\$flags\s*=\s*\$creationFlags\s*\|\s*self::EXTENDED_STARTUPINFO_PRESENT\s*\|\s*self::CREATE_SUSPENDED/',
+            $body,
+            'CREATE_SUSPENDED is no longer forced in the flags — the assign window reopened',
+        );
+
+        $assign = \strpos($body, '$this->assignProcessToJob(');
+        $resume = \strpos($body, '$ffi->ResumeThread($thread)');
+        $threadClose = \strpos($body, '$this->closeHandle($thread);');
+        self::assertNotFalse($assign);
+        self::assertNotFalse($resume);
+        self::assertNotFalse($threadClose);
+        self::assertLessThan($resume, $assign, 'the child is resumed before it is assigned');
+        self::assertLessThan($threadClose, $resume, 'the thread handle is closed before resume can fail');
+
+        // Assign-failure arm: destroy, then rethrow the original cause.
+        $cleanup = \strpos($body, '$this->terminateAndClose($process, $thread);');
+        $rethrow = \strpos($body, 'throw $e;');
+        self::assertNotFalse($cleanup, 'no terminate-and-close arm exists at all');
+        self::assertNotFalse($rethrow);
+        self::assertLessThan($rethrow, $cleanup, 'the assign failure rethrows without destroying the child');
+
+        // Resume sentinel leg ((DWORD)-1) must ride the same arm.
+        self::assertMatchesRegularExpression(
+            '/ResumeThread\(\$thread\).*?===\s*0xFFFFFFFF/s',
+            $body,
+            'the ResumeThread result is no longer checked against (DWORD)-1',
+        );
+
+        // The cleanup helper itself: tolerate already-dead, close both slots.
+        $tail = self::methodBody($source, 'terminateAndClose');
+        self::assertStringContainsString('@$ffi->TerminateProcess($process, 1);', $tail);
+        self::assertStringContainsString('$this->closeHandle($thread);', $tail);
+        self::assertStringContainsString('$this->closeHandle($process);', $tail);
+
+        // And no path may close the thread handle before the assignment can
+        // still fail — the old unconditional close is the leak this replaced.
+        self::assertSame(
+            1,
+            \substr_count($body, '$this->closeHandle($thread);'),
+            'createProcess must close $thread exactly once, on the success leg after resume',
+        );
     }
 
     public function testHandleSlotsAreDeclaredPointerSizedIntegersAndReadAsSuch(): void
