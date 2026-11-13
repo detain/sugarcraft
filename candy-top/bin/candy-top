@@ -378,6 +378,9 @@ try {
         if ($state instanceof TreeStateSavedMsg && !$state->ok) {
             $report($state->error);
         }
+        if ($state instanceof TreeStateSavedMsg && $state->note !== '') {
+            $report($state->note);
+        }
     }
 
     throw $e;
@@ -402,6 +405,9 @@ if ($final instanceof App) {
     $state = ($final->stateSave())?->__invoke();
     if ($state instanceof TreeStateSavedMsg && !$state->ok) {
         $report($state->error);
+    }
+    if ($state instanceof TreeStateSavedMsg && $state->note !== '') {
+        $report($state->note);
     }
     if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
         exit(1);

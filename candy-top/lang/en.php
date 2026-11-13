@@ -601,6 +601,7 @@ return [
     'config.desc.proc_tree_persist_state' => "Persist manual tree expand/collapse choices by process-name ancestry across runs.\nStored in \$XDG_STATE_HOME/candy-top/tree-state.json, not in this file.",
     'options.desc.proc_tree_persist_state' => "Remember manual tree expansion.\n\nSave manual expand/collapse choices across\ncandy-top runs using process-name ancestry.\n\nPIDs are not saved because they change.\n\nStored in \$XDG_STATE_HOME/candy-top/\ntree-state.json (else ~/.local/state).",
     'state.warn.write_failed' => 'Could not save tree state to {path}: {reason}',
+    'state.warn.pruned' => 'Tree state saved after dropping {paths} least recently used paths to stay under {bytes} bytes',
     // ---- gpu boxes (U4 #1730/#1881/#985/#1839) ----
     'config.desc.gpu_box_columns' => "How many gpu boxes to place side by side instead of stacking them vertically.\n\"Auto\" uses as many columns as the terminal width allows, or set a number (1-6) to force it.",
     'options.desc.gpu_box_columns' => "GPU boxes side by side.\n\nHow many gpu boxes to place in one row\ninstead of stacking them vertically.\n\n\"Auto\" uses as many columns as the\nterminal width allows (a box is at least\n34 columns wide).\n\nOr a number 1 - 6 to force it.",

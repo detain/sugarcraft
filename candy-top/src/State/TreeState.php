@@ -133,6 +133,42 @@ final class TreeState
         return ['version' => self::VERSION, 'entries' => $out];
     }
 
+    /**
+     * A copy that encodes within `$maxBytes` under {@see toArray()} at `$now`:
+     * the file budget is spent by dropping from the oldest end of the
+     * oldest-first store — the least recently used choices go first, the same
+     * order {@see capped()} enforces. Fits is monotone in the number of kept
+     * entries, so a binary search over the keep-newest-`k` count pins the
+     * largest safe k in log2(n) encodes instead of a full re-encode per drop.
+     *
+     * @return array{self, int} the fitted state and the number of dropped entries
+     */
+    public function withinBytes(int $maxBytes, int $now): array
+    {
+        $count = count($this->entries);
+        $fits = function (int $keep) use ($maxBytes, $now, $count): bool {
+            $slice = $keep >= $count ? $this->entries : array_slice($this->entries, $count - $keep);
+            $encoded = json_encode((new self($slice))->toArray($now), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+            return $encoded !== false && strlen($encoded) <= $maxBytes;
+        };
+        if ($fits($count)) {
+            return [$this, 0];
+        }
+        $low = 0;
+        $high = $count;
+        while ($low < $high) {
+            $mid = intdiv($low + $high + 1, 2);
+            if ($fits($mid)) {
+                $low = $mid;
+            } else {
+                $high = $mid - 1;
+            }
+        }
+
+        return [new self(array_slice($this->entries, $count - $low)), $count - $low];
+    }
+
     /** The remembered choice for `$key`, or null when there is none. */
     public function lookup(string $key): ?bool
     {

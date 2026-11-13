@@ -96,15 +96,25 @@ final class TreeStateFile
 
     /**
      * Atomically store `$state`, stamping entries touched this session with `$now`.
+     * A payload too large for the read-side {@see MAX_BYTES} gate is never left
+     * to land and be silently discarded by the next start: the least recently
+     * used head is pruned first (the binary-search leg of
+     * {@see TreeState::withinBytes()}), and the number of dropped entries is
+     * returned so the caller can report the reason.
+     *
+     * @return int entries dropped to fit the budget (0 when nothing was pruned)
      *
      * @throws \RuntimeException On any filesystem or encoding failure; the old file is left intact.
      */
-    public function write(TreeState $state, int $now): void
+    public function write(TreeState $state, int $now): int
     {
+        [$fitted, $dropped] = $state->withinBytes(self::MAX_BYTES, $now);
         try {
-            AtomicJsonFile::new($this->path)->withPermissions(0600)->write($state->toArray($now));
+            AtomicJsonFile::new($this->path)->withPermissions(0600)->write($fitted->toArray($now));
         } catch (\Throwable $e) {
             throw new \RuntimeException(Lang::t('state.warn.write_failed', ['path' => $this->path, 'reason' => $e->getMessage()]), 0, $e);
         }
+
+        return $dropped;
     }
 }

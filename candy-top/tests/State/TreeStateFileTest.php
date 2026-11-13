@@ -46,12 +46,45 @@ final class TreeStateFileTest extends TestCase
         $this->assertSame(0, TreeStateFile::new($this->dir . '/none.json')->load(self::NOW)->count());
     }
 
+    /**
+     * S-X02: a state larger than the read-side MAX_BYTES gate is pruned to the
+     * file's own budget at write time instead of landing whole and being
+     * silently discarded by the next start. The dropped entries are the
+     * oldest head of the least-recently-used store, and the count surfaces
+     * through the write's return (treeStateSave turns it into the msg note).
+     */
+    public function testOversizedStateIsPrunedAtWriteNotDiscardedAtLoad(): void
+    {
+        $make = static function (int $i): string {
+            $names = [];
+            for ($d = 0; $d < 32; $d++) {
+                $names[] = str_pad("e{$i}-{$d}-", 255, 'x');
+            }
+
+            return implode(TreeState::SEPARATOR, $names);
+        };
+        $state = TreeState::empty();
+        for ($i = 0; $i < 160; $i++) {
+            $state = $state->remember($make($i), true);
+        }
+        $file = TreeStateFile::new($this->dir . '/big.json');
+        $dropped = $file->write($state, self::NOW);
+
+        $this->assertGreaterThan(0, $dropped, 'the oversized least-recently-used head is pruned');
+        $this->assertLessThanOrEqual(TreeStateFile::MAX_BYTES, filesize($this->dir . '/big.json'));
+        $back = $file->load(self::NOW);
+        $this->assertGreaterThan(0, $back->count(), 'the next start still reads it');
+        $this->assertSame($state->count() - $dropped, $back->count());
+        $this->assertNull($back->lookup($make(0)), 'the oldest choice went first');
+        $this->assertNotNull($back->lookup($make(159)), 'the newest survives');
+    }
+
     public function testRoundTripCreatesPrivateDirectoryAndFile(): void
     {
         $path = $this->dir . '/state/candy-top/tree-state.json';
         $file = TreeStateFile::new($path);
         $this->assertSame($path, $file->path());
-        $file->write(TreeState::empty()->remember("systemd\x1fchromium", true), self::NOW);
+        $this->assertSame(0, $file->write(TreeState::empty()->remember("systemd\x1fchromium", true), self::NOW), 'a payload inside the budget is written untouched');
 
         $this->assertFileExists($path);
         $this->assertSame(0600, fileperms($path) & 0777);

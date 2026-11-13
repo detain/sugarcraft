@@ -21,6 +21,7 @@ use SugarCraft\Top\Collect\TunableProcList;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\InvalidOptionValue;
 use SugarCraft\Top\Config\Schema;
+use SugarCraft\Top\Lang;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Overlay\Menus;
 use SugarCraft\Top\Overlay\Overlay;
@@ -268,12 +269,12 @@ final class ProcPanel implements Panel, ClickCapture
 
         return static function () use ($file, $state, $rev): Msg {
             try {
-                $file->write($state, time());
+                $dropped = $file->write($state, time());
             } catch (\RuntimeException $e) {
                 return new TreeStateSavedMsg($rev, false, $e->getMessage());
             }
 
-            return new TreeStateSavedMsg($rev, true);
+            return new TreeStateSavedMsg($rev, true, '', $dropped > 0 ? Lang::t('state.warn.pruned', ['paths' => $dropped, 'bytes' => TreeStateFile::MAX_BYTES]) : '');
         };
     }
 
