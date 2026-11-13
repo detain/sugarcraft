@@ -55,7 +55,7 @@ $log->warn('Almost ready', ['batch' => 2]);
 $log->error('Temperature too low', ['err' => 'underheated']);
 ```
 
-Every `Logger` constructor call also takes `formatter:`/`stream:`/`prefix:` — see [Output and streams](#output-and-streams).
+Every `Logger` constructor call also takes `formatter:`/`stream:`/`prefix:` — see [Output and streams](#output-and-streams). The `err` field has sugar: `withError()` writes the same shape from a string (as-is) or a `Throwable` (rendered `Class: message`) — as a persistent field the record context may still override.
 
 ## Levels
 

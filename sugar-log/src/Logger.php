@@ -450,6 +450,28 @@ final class Logger
         return $child;
     }
 
+    /**
+     * Create a child logger carrying $err under the house-named `err` field
+     * (parity with charm's WithError).
+     *
+     * A string passes through unchanged — the Quick Start's hand-passed
+     * `['err' => 'underheated']` shape is exactly what this writes. A
+     * Throwable renders as `Class: message`, because the value coercion
+     * layer never digs messages out of objects. The field name is a
+     * convention, not a RecordKeys::RESERVED envelope name, so claim() leaves
+     * it verbatim; and like any persistent field a same-named key in the
+     * record's own context hides it at write time (last-write wins). The
+     * parent is untouched; this returns a child.
+     */
+    public function withError(string|\Throwable $err): self
+    {
+        $value = $err instanceof \Throwable
+            ? \get_class($err) . ': ' . $err->getMessage()
+            : $err;
+
+        return $this->with(['err' => $value]);
+    }
+
     public function withPrefix(string $prefix): self
     {
         $child = clone $this;

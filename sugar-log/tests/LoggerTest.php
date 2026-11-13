@@ -981,6 +981,43 @@ final class LoggerTest extends TestCase
         return $blocker . '/deeper/nested.log';
     }
 
+    public function testWithErrorAppendsTheHouseErrFieldBothShapes(): void
+    {
+        $stream = \fopen('php://memory', 'w+');
+        $parent = Logger::new(stream: $stream, reportTimestamp: false);
+        $child = $parent->withError('underheated');
+        $child->error('Temperature too low');
+        // A write through the ORIGINAL logger between the two withError()
+        // calls must stay field-free: an in-place withError would leak
+        // 'err=underheated' into this line.
+        $parent->info('mid sanity');
+        $thrown = $parent->withError(new \RuntimeException('boom'));
+        $thrown->warn('throwable shape');
+
+        \rewind($stream);
+        $bytes = \stream_get_contents($stream);
+
+        $this->assertSame(
+            "ERR Temperature too low err=underheated\n"
+            . "INF mid sanity\n"
+            . "WRN throwable shape err=RuntimeException: boom\n",
+            $bytes,
+        );
+    }
+
+    public function testErrIsAConventionNotAReservedNameAndContextLastWriteWins(): void
+    {
+        $stream = \fopen('php://memory', 'w+');
+        $logger = Logger::new(stream: $stream, reportTimestamp: false)->withError('underheated');
+        $logger->error('ctx collision', ['err' => 'other', 'stage' => 2]);
+        \rewind($stream);
+
+        // 'err' is not in RecordKeys::RESERVED: the context copy keeps the
+        // plain name and, through the ordinary array_merge in emit(), hides
+        // the persistent value. No rename machinery fires either way.
+        $this->assertSame("ERR ctx collision err=other stage=2\n", \stream_get_contents($stream));
+    }
+
     public function testSetTimeFormatSwitchesTheActiveTextFormatterMidProcess(): void
     {
         $stream = \fopen('php://memory', 'w+');
