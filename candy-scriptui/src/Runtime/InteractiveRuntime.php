@@ -94,6 +94,21 @@ final class InteractiveRuntime
     }
 
     /**
+     * scriptui-06 (candy-scriptui-002/-005): true exactly when
+     * {@see programOptions()} would refuse — no stdout terminal, no
+     * /dev/tty, no stdin terminal — i.e. the only honest spin shape is
+     * the direct-run arm (no key reader, no renderer, no DEC-mode
+     * writer). Callers must not paper over this null with a raw-STDIN
+     * Program fallback: that is how one 0x1B byte in the child's DATA
+     * stream once became a forged ESC cancellation, and how 38 bytes of
+     * `?25l/?2027h` chrome once corrupted a redirected data channel.
+     */
+    public static function isHeadless(): bool
+    {
+        return self::programOptions(useAltScreen: false, hideCursor: false) === null;
+    }
+
+    /**
      * True when the UI frame will be painted somewhere OTHER than stdout —
      * used to route pre-launch chrome (headers, prompts) onto the same
      * stream the Program paints to.

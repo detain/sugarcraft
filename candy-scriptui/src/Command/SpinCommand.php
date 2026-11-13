@@ -8,7 +8,6 @@ use React\EventLoop\LoopInterface;
 use SugarCraft\Forms\Spinner\Style as SpinStyle;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\SpinModel;
 use SugarCraft\ScriptUi\Process\Process;
@@ -49,6 +48,9 @@ final class SpinCommand extends Command
     /** @var \Closure(Model, LoopInterface): Program builds the spinner runtime */
     private readonly \Closure $programFactory;
 
+    /** scriptui-06 seam: true only in production (no test injects a default program factory). */
+    private readonly bool $usesDefaultProgram;
+
     /**
      * The class is `final`, so the child-process spawn and the {@see Program}
      * construction are injected as optional factory closures rather than
@@ -71,16 +73,23 @@ final class SpinCommand extends Command
             ?? static fn (array $argv, bool $captureStdout, bool $captureStderr): Process
                 => RealProcess::spawn($argv, captureStdout: $captureStdout, captureStderr: $captureStderr);
 
+        $this->usesDefaultProgram = $programFactory === null;
+
         $this->programFactory = $programFactory
             ?? static function (Model $model, LoopInterface $loop): Program {
                 $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: true);
-                return new Program($model, $options ?? new ProgramOptions(
-                    useAltScreen:    false,
-                    hideCursor:      true,
-                    catchInterrupts: true,
-                    loop:            $loop,
-                    withoutRenderer: true,
-                ));
+                if ($options === null) {
+                    // The old headless `?? new ProgramOptions(...)` fallback
+                    // (scriptui-06, candy-scriptui-002/-005) seeded raw
+                    // STDIN as a KEY channel and painted DEC-private modes
+                    // onto a redirected data channel. A headless spin now
+                    // never reaches a Program at all — execute() routes
+                    // that shape to the direct-run arm. This throw is
+                    // deliberately unreachable-by-construction: it stays so
+                    // a future caller cannot revive the unsafe fallback.
+                    throw new PtyException(Lang::t('runtime.no_terminal', ['command' => 'spin']));
+                }
+                return new Program($model, $options);
             };
     }
 
@@ -161,9 +170,89 @@ final class SpinCommand extends Command
             return Command::FAILURE;
         }
 
-        $model   = SpinModel::spawn($process, $title, $style, $align);
+        $loop = \React\EventLoop\Loop::get();
 
-        $loop    = \React\EventLoop\Loop::get();
+        // scriptui-06 (candy-scriptui-002/-005): with no terminal anywhere
+        // (no stdout TTY, no /dev/tty, no stdin TTY) the spinner has nothing
+        // honest to paint on and no safe place for a key reader — run the
+        // child directly. Piped bytes stay DATA forever, and DEC-private
+        // modes never touch a redirected data channel. Injected program
+        // factories (every deterministic test) keep the Program arm exactly
+        // as before.
+        $code = $this->usesDefaultProgram && InteractiveRuntime::isHeadless()
+            ? $this->runHeadless($process, $loop, $timeoutSeconds)
+            : $this->runSpinner($process, $loop, $timeoutSeconds, $title, $style, $align);
+
+        // Flush captured output on EVERY exit path — including the
+        // timeout — so `spin --timeout N --show-output` never swallows
+        // what the child managed to print.
+        if ($showOutput) {
+            $output->write($process->stdout(), false, OutputInterface::OUTPUT_RAW);
+        }
+        if ($showError) {
+            fwrite(STDERR, $process->stderr());
+        }
+        $process->close();
+        return $code;
+    }
+
+    /**
+     * The terminal-less direct-run arm (scriptui-06): no Program, no reader
+     * on STDIN, no renderer. Exit codes match the spinner arm — deadline
+     * 124 first, the child's own status next, and a no-verdict fallback
+     * that kills the child and returns 130.
+     */
+    private function runHeadless(Process $process, LoopInterface $loop, float $timeoutSeconds): int
+    {
+        $guard = TimeoutGuard::arm(
+            $loop,
+            $timeoutSeconds,
+            // Two statements on fire, so a real closure (not an arrow fn).
+            // A TERM-ignoring child must not spin this loop forever: the
+            // grace timer stops it, and close() escalates to KILL after the
+            // same grace the spinner arm's reap ladder uses.
+            function () use ($process, $loop): void {
+                $process->terminate();
+                $loop->addTimer(RealProcess::TERM_GRACE_SECONDS + 0.5, static function () use ($loop): void {
+                    $loop->stop();
+                });
+            },
+        );
+        $process->attachPump($loop);
+
+        $watch = $loop->addPeriodicTimer(0.05, function () use ($process, $loop): void {
+            $process->drain(); // polling belt behind the pump (scriptui-02 pairing)
+            if ($process->exited()) {
+                $loop->stop();
+            }
+        });
+
+        $loop->run();
+        $loop->cancelTimer($watch);
+        $process->detachPump();
+
+        $fired = $guard->fired();
+        $guard->disarm();
+        if ($fired) {
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
+        $code = $process->exitCode();
+        if ($code === null) {
+            // Loop settled with no child verdict — same posture as the
+            // spinner arm: treat it as cancellation and kill the child.
+            $process->terminate();
+            $code = self::EXIT_INTERRUPTED;
+        }
+        return $code;
+    }
+
+    /**
+     * The interactive Program arm — the pre-scriptui-06 shape, now with no
+     * unsafe headless fallback behind it.
+     */
+    private function runSpinner(Process $process, LoopInterface $loop, float $timeoutSeconds, string $title, SpinStyle $style, string $align): int
+    {
+        $model   = SpinModel::spawn($process, $title, $style, $align);
         $program = ($this->programFactory)($model, $loop);
         // Two statements on fire, so a real closure (not an arrow fn): the
         // deadline must both signal the child AND stop the loop — killing
@@ -214,17 +303,6 @@ final class SpinCommand extends Command
                 }
             }
         }
-
-        // Flush captured output on EVERY exit path — including the
-        // timeout — so `spin --timeout N --show-output` never swallows
-        // what the child managed to print.
-        if ($showOutput) {
-            $output->write($process->stdout(), false, OutputInterface::OUTPUT_RAW);
-        }
-        if ($showError) {
-            fwrite(STDERR, $process->stderr());
-        }
-        $process->close();
         return $code;
     }
 
