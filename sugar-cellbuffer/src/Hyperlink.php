@@ -112,9 +112,27 @@ final class Hyperlink implements \JsonSerializable
      */
     private static function containsForbiddenControls(string $value): bool
     {
-        return preg_match('/[\x00-\x1f\x7f]|\xC2[\x80-\x9F]/', $value) === 1
-            || Ansi::strip($value) !== $value;
+        if (preg_match('/[\x00-\x1f\x7f]|\xC2[\x80-\x9F]/', $value) === 1) {
+            return true;
+        }
+        // Fast path for the common clean URL: leg 2 (Ansi::strip) can only
+        // differ on a LONE raw 0x80-0x9F byte (ESC and every C2 xx spelling
+        // are already refused above), so a value carrying no byte in that
+        // range needs no strip-copy built to be accepted. Strings that do
+        // carry one still take the full double-leg decision unchanged.
+        if (strpbrk($value, self::C1_RAW_BYTES) === false) {
+            return false;
+        }
+
+        return Ansi::strip($value) !== $value;
     }
+
+    /** Raw 8-bit C1 bytes 0x80-0x9F, the only alphabet Ansi::strip's
+     *  second leg can act on once the regex leg has passed. */
+    private const C1_RAW_BYTES = "\x80\x81\x82\x83\x84\x85\x86\x87"
+        . "\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f"
+        . "\x90\x91\x92\x93\x94\x95\x96\x97"
+        . "\x98\x99\x9a\x9b\x9c\x9d\x9e\x9f";
 
     /**
      * Serialization hook for caching/IPC use cases.

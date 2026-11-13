@@ -306,4 +306,31 @@ final class HyperlinkTest extends TestCase
         // does); readonly promoted properties may only be written once.
         return (new \ReflectionClass(Hyperlink::class))->newInstanceWithoutConstructor();
     }
+
+    public function testTheCheapPrefilterKeepsEveryVerdictItSkips(): void
+    {
+        // Fast path (no byte in 0x80-0x9F at all): pure-ASCII values accept
+        // without Ansi::strip ever building a copy.
+        foreach (['https://example.com/a?b=1#f', 'urn:x-oath:demo'] as $clean) {
+            new Hyperlink($clean);
+        }
+        // Slow path but ACCEPTED: valid multibyte whose continuation bytes
+        // land numerically inside the C1 range — U+0440 Cyrillic ER (D1 80), U+02CB MODIFIER LETTER CARON (CB 8B), U+2192 RIGHTWARDS
+        // ARROW (E2 86 92). A prefilter that rejected on any raw 0x80-0x9F
+        // byte would refuse these; the byte-presence gate defers to the
+        // double-leg decision instead.
+        new Hyperlink('https://кириллица.test/па');
+        new Hyperlink('https://example.com/ʋ→');
+        new Hyperlink('https://example.com/😀');
+        // Slow path and REFUSED: a lone raw C1 byte survives neither leg.
+        foreach (["https://example.com/\x8b", "\x80", "\x9f tail"] as $forged) {
+            $threw = false;
+            try {
+                new Hyperlink($forged);
+            } catch (\InvalidArgumentException) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, 'lone C1 byte must be refused: ' . bin2hex($forged));
+        }
+    }
 }
