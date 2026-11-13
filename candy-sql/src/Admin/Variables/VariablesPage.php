@@ -129,15 +129,16 @@ final class VariablesPage extends PageBase implements RowNavigable
     /**
      * Create a new VariablesPage from the server context.
      *
-     * Note: the no-arg form creates a page without Catalog or VariableEditor,
-     * which means no category tree, no [rw] indicators, and editing disabled.
-     * For a fully-equipped page with collaborators, use
-     * App::buildVariablesPage() which wires in the eagerly-loaded Catalog
-     * and a properly-configured VariableEditor.
+     * SQL-C02 (client-002): this factory used to accept ONLY the context, so
+     * App::buildVariablesPage()'s loaded Catalog and VariableEditor were
+     * silently discarded as extra positional args — the category tree, [rw]
+     * indicators and the editor died at the wire while every page-side test
+     * (which used the 3-arg constructor directly) stayed green. The signature
+     * now mirrors the constructor; pass collaborators or get the plain page.
      */
-    public static function new(ServerContextInterface $context): self
+    public static function new(ServerContextInterface $context, ?Catalog $catalog = null, ?VariableEditor $editor = null): self
     {
-        return new self($context);
+        return new self($context, $catalog, $editor);
     }
 
     /**

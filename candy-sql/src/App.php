@@ -1039,6 +1039,13 @@ final class App implements Model
     /**
      * Build a VariablesPage with its Catalog and VariableEditor collaborators.
      *
+     * SQL-C02 (client-002 + adminpages-030 merged): the collaborators must
+     * actually REACH the page — and the edit bridge is MySQL-family only.
+     * VariableEditor issues SET GLOBAL / SET PERSIST with backtick names,
+     * which PostgreSQL answers 42601; off the MySQL family the page runs in
+     * its existing read-only no-edit mode (editor=null), while the Catalog —
+     * pure metadata — still powers the category tree and [rw] display.
+     *
      * The catalog is loaded eagerly so loadCategories() and isEditable() work
      * immediately. If loading fails (e.g., missing metadata file), the page
      * still renders — it just shows an empty category tree and [rw] will be
@@ -1053,9 +1060,12 @@ final class App implements Model
             // Missing metadata is non-fatal — page renders without categories.
         }
 
-        $editor = VariableEditor::new($context, $catalog);
+        $editor = match ($context->flavor()) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => VariableEditor::new($context, $catalog),
+            default => null,
+        };
 
-        return VariablesPage::new($context, $catalog, $editor);
+        return new VariablesPage($context, $catalog, $editor);
     }
 
     /**
