@@ -636,6 +636,10 @@ cd sugar-widgets && composer install && vendor/bin/phpunit
 
 ![timer](.vhs/timer.gif)
 
+For a tick-driven countdown on a real event loop — the
+`Subscriptions::withTick` → `TickMsg` → `update()` chain — see
+[`examples/timer-loop.php`](examples/timer-loop.php).
+
 ### Tree
 
 ![tree](.vhs/tree.gif)
