@@ -59,11 +59,17 @@ final class VsRenderer
         // plain refusal, sub-floor terminals a resize notice, and overlays
         // are painted INTO the fixed frame — never appended below it.
         if ($game->colorProfile === ColorProfile::NoTty) {
-            return self::refusal();
+            return Support\Paint::refusal();
         }
 
         if ($game->tooSmall() === true) {
-            return self::tooSmallNotice($game->frameCols, $game->frameRows);
+            return Support\Paint::tooSmallNotice(
+                'cli.too_small_vs',
+                self::MIN_COLS,
+                self::MIN_ROWS,
+                $game->frameCols,
+                $game->frameRows,
+            );
         }
 
         // MA-12 colour posture, mirror of Renderer (see its comment).
@@ -80,7 +86,7 @@ final class VsRenderer
         $body   = Layout::joinVertical(0.0, $boards, self::renderStrip($game->player, $game->computer));
 
         if ($game->over === true) {
-            return self::paintBanner($body, self::overLines($game));
+            return Support\Paint::banner($body, self::overLines($game));
         }
 
         // MA-8: the VS pair has a p binding (README promises it) and a
@@ -88,7 +94,7 @@ final class VsRenderer
         // was indistinguishable from a hang: zero on-frame evidence.
         if ($game->player->paused === true) {
             // candy-tetris-005: the overlay names the live pause binding.
-            return self::paintBanner($body, [Lang::t('paused', ['keys' => $game->player->keyLabel('pause')])]);
+            return Support\Paint::banner($body, [Lang::t('paused', ['keys' => $game->player->keyLabel('pause')])]);
         }
 
         return $body;
@@ -134,74 +140,6 @@ final class VsRenderer
     }
 
     /**
-     * Replace the vertically-centred board band rows with plain-text
-     * banner lines, centred across the body (see Renderer::paintBanner —
-     * identical posture so solo and VS overlay the same way).
-     *
-     * @param list<string> $lines
-     */
-    private static function paintBanner(string $body, array $lines): string
-    {
-        $rows = explode("\n", $body);
-        $width = 0;
-        foreach ($rows as $row) {
-            $width = max($width, Width::of($row));
-        }
-
-        $top = intdiv(Board::VISIBLE_ROWS - count($lines), 2);
-        foreach ($lines as $i => $line) {
-            $row = $top + $i;
-            if ($row < 0 || $row >= count($rows)) {
-                continue;
-            }
-            $text = Width::of($line) > $width
-                ? Width::truncateAnsi($line, $width)
-                : $line;
-            $left = max(0, intdiv($width - Width::of($text), 2));
-            $rows[$row] = \str_repeat(' ', $left) . $text;
-        }
-
-        return implode("\n", $rows);
-    }
-
-    /**
-     * No-TTY refusal — one plain line, zero SGR bytes. Kept verbatim with
-     * {@see Renderer::refusal()}; colour is optional, the TTY is not
-     * (candy-tetris-041).
-     */
-    private static function refusal(): string
-    {
-        return Lang::t('cli.refusal') . "\n";
-    }
-
-    private static function tooSmallNotice(int $cols, int $rows): string
-    {
-        $notice = Lang::t('cli.too_small_vs', [
-            'size' => self::MIN_COLS . 'x' . self::MIN_ROWS,
-            'actual' => $cols . 'x' . $rows,
-        ]) . "\n";
-        $width = max(20, $cols);
-        $out = [];
-        foreach (explode("\n", $notice) as $paragraph) {
-            $line = '';
-            foreach (preg_split('/ +/', $paragraph) ?: [] as $word) {
-                if ($word === '') {
-                    continue;
-                }
-                $candidate = $line === '' ? $word : $line . ' ' . $word;
-                if (Width::of($candidate) > $width && $line !== '') {
-                    $out[] = $line;
-                    $line = $word;
-                } else {
-                    $line = $candidate;
-                }
-            }
-            $out[] = $line;
-        }
-        return implode("\n", $out) . "\n";
-    }
-
-    /**
      * Render a single board for VS mode.
      *
      * @param Game $game The game to render
@@ -213,8 +151,8 @@ final class VsRenderer
         $rows = $game->board->rows();
         $piece = $game->piece;
         $ghost = $game->board->dropPiece($piece);
-        $pieceCells = self::cellMap($piece->cells());
-        $ghostCells = self::cellMap($ghost->cells());
+        $pieceCells = Support\Paint::cellMap($piece->cells());
+        $ghostCells = Support\Paint::cellMap($ghost->cells());
 
         $lines = [];
         for ($y = Board::HIDDEN_ROWS; $y < Board::ROWS; $y++) {
@@ -338,19 +276,6 @@ final class VsRenderer
             . ' ' . Lang::t('vs.strip.lines') . ' ' . str_pad((string) $score->lines, $figures[1])
             . ' ' . Lang::t('vs.strip.level') . ' ' . $score->level
             . $award;
-    }
-
-    /**
-     * @param list<array{int,int}> $cells
-     * @return array<string,true>
-     */
-    private static function cellMap(array $cells): array
-    {
-        $out = [];
-        foreach ($cells as [$x, $y]) {
-            $out["$x,$y"] = true;
-        }
-        return $out;
     }
 
     /**

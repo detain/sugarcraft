@@ -84,11 +84,17 @@ final class Renderer
         // append-below-fold posture pushed the game-over banner and the
         // paused line off an 80x24 terminal — invisible and unrecoverable).
         if ($game->colorProfile === ColorProfile::NoTty) {
-            return self::refusal();
+            return Support\Paint::refusal();
         }
 
         if ($game->tooSmall() === true) {
-            return self::tooSmallNotice($game->frameCols, $game->frameRows);
+            return Support\Paint::tooSmallNotice(
+                'cli.too_small',
+                self::MIN_COLS,
+                self::MIN_ROWS,
+                $game->frameCols,
+                $game->frameRows,
+            );
         }
 
         // MA-12 colour posture: Ascii (NO_COLOR / CLICOLOR=0 / plain ANSI)
@@ -104,22 +110,22 @@ final class Renderer
 
         if ($game->introPending === true) {
             // MA-24: the on-ramp card overlays the fresh board it teaches.
-            return self::paintBanner($body, self::introLines($game));
+            return Support\Paint::banner($body, self::introLines($game));
         }
         if ($game->helpOpen === true) {
             // candy-tetris-006: the reachable key reference — the FULL
             // derived card painted over the frame, on any posture, even
             // where the sidebar budget had to drop it.
-            return self::paintBanner($body, self::helpLines($game));
+            return Support\Paint::banner($body, self::helpLines($game));
         }
         if ($game->over === true) {
-            return self::paintBanner($body, self::overLines($game));
+            return Support\Paint::banner($body, self::overLines($game));
         }
         if ($game->paused === true) {
             // candy-tetris-005: the overlay names the LIVE pause binding —
             // a remapped table must not strand the player under a key the
             // game no longer answers.
-            return self::paintBanner($body, [Lang::t('paused', ['keys' => $game->keyLabel('pause')])]);
+            return Support\Paint::banner($body, [Lang::t('paused', ['keys' => $game->keyLabel('pause')])]);
         }
         return $body;
     }
@@ -235,95 +241,13 @@ final class Renderer
         };
     }
 
-    /**
-     * Replace the vertically-centred band of the board region with the
-     * given plain-text lines, each centred across the full body width.
-     * The frame's row and column counts NEVER change — an overlay is a
-     * stripe over the playfield, not content appended past the fold.
-     *
-     * @param list<string> $lines
-     */
-    private static function paintBanner(string $body, array $lines): string
-    {
-        $rows = explode("\n", $body);
-        $width = 0;
-        foreach ($rows as $row) {
-            $width = max($width, Width::of($row));
-        }
-
-        $top = intdiv(Board::VISIBLE_ROWS - count($lines), 2);
-        foreach ($lines as $i => $line) {
-            $row = $top + $i;
-            if ($row < 0 || $row >= count($rows)) {
-                continue;
-            }
-            $text = Width::of($line) > $width
-                ? Width::truncateAnsi($line, $width)
-                : $line;
-            $left = max(0, intdiv($width - Width::of($text), 2));
-            $rows[$row] = \str_repeat(' ', $left) . $text;
-        }
-
-        return implode("\n", $rows);
-    }
-
-    /**
-     * Plain-text refusal for a terminal with no rendering capability at
-     * all (MA-12): zero SGR bytes, nothing to misparse. The floor is the
-     * TTY itself — colour is optional (NO_COLOR/CLICOLOR=0 play fine),
-     * so the copy must not demand colour (candy-tetris-041); the same
-     * line is kept verbatim in VsRenderer (candy-tetris-027 family).
-     */
-    private static function refusal(): string
-    {
-        return Lang::t('cli.refusal') . "\n";
-    }
-
-    /**
-     * Notice shown below the frame floor; wrapped so it stays readable on
-     * the very terminal that cannot host the game.
-     */
-    private static function tooSmallNotice(int $cols, int $rows): string
-    {
-        $notice = Lang::t('cli.too_small', [
-            'size' => self::MIN_COLS . 'x' . self::MIN_ROWS,
-            'actual' => $cols . 'x' . $rows,
-        ]) . "\n";
-        return self::wrapPlain($notice, max(20, $cols));
-    }
-
-    /**
-     * Greedy word wrap of plain text honouring existing newlines.
-     */
-    private static function wrapPlain(string $text, int $width): string
-    {
-        $out = [];
-        foreach (explode("\n", $text) as $paragraph) {
-            $line = '';
-            foreach (preg_split('/ +/', $paragraph) ?: [] as $word) {
-                if ($word === '') {
-                    continue;
-                }
-                $candidate = $line === '' ? $word : $line . ' ' . $word;
-                if (Width::of($candidate) > $width && $line !== '') {
-                    $out[] = $line;
-                    $line = $word;
-                } else {
-                    $line = $candidate;
-                }
-            }
-            $out[] = $line;
-        }
-        return implode("\n", $out) . "\n";
-    }
-
     private static function renderBoard(Game $game, bool $plain = false): string
     {
         $rows = $game->board->rows();
         $piece = $game->piece;
         $ghost = $game->board->dropPiece($piece);
-        $pieceCells = self::cellMap($piece->cells());
-        $ghostCells = self::cellMap($ghost->cells());
+        $pieceCells = Support\Paint::cellMap($piece->cells());
+        $ghostCells = Support\Paint::cellMap($ghost->cells());
 
         // Build a Buffer-backed interior, then frame it with the sugar-style border.
         $boardBuf = Buffer::new(Board::COLS, Board::VISIBLE_ROWS);
@@ -507,7 +431,7 @@ final class Renderer
 
     private static function renderMini(Tetromino $kind, bool $plain = false): string
     {
-        $cells = self::cellMap($kind->cells(0));
+        $cells = Support\Paint::cellMap($kind->cells(0));
 
         // 4×2 preview grid, two Buffer columns per tetromino cell so the
         // mini blocks keep the playfield's width. Rendered through a Buffer
@@ -545,19 +469,6 @@ final class Renderer
     private static function renderMiniPlaceholder(): string
     {
         return "────────\n────────";
-    }
-
-    /**
-     * @param list<array{int,int}> $cells
-     * @return array<string,true>
-     */
-    private static function cellMap(array $cells): array
-    {
-        $out = [];
-        foreach ($cells as [$x, $y]) {
-            $out["$x,$y"] = true;
-        }
-        return $out;
     }
 
     /**
