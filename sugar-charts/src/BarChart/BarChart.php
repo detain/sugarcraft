@@ -469,15 +469,6 @@ final class BarChart implements ChromeAccessors
                 $count = $maxCount;
             }
         }
-        $values = array_map(static fn(Bar $b): float => $b->value, $bars);
-        if ($values === []) {
-            return '';
-        }
-
-        [$min, $max] = Range::resolve($this->min, $this->max, min(min($values), 0.0), max($values), 'value');
-        if ($max === $min) {
-            $max = $min + 1.0;
-        }
 
         if ($this->barGap !== null) {
             $gap = $this->barGap;
@@ -493,12 +484,43 @@ final class BarChart implements ChromeAccessors
             $colW  = max(1, intdiv($avail, max(1, $count)));
         }
 
+        // sugar-charts-032: the default-geometry guard above cannot see a
+        // configured shape — with withBarWidth(2)/withBarGap(2) the run
+        // `count*colW + (count-1)*gap` overran the declared width and bars
+        // painted past the frame. With an explicit geometry configured,
+        // recompute the max renderable count from the configured colW+gap
+        // (same budget math, gutter column included) and drop the tail.
+        if (($this->barWidth !== null || $this->barGap !== null) && $colW + $gap > 0) {
+            $plotW      = max(0, $this->width - ($this->showAxis ? 1 : 0));
+            $capacity   = intdiv($plotW + $gap, $colW + $gap);
+            if ($count > $capacity) {
+                $bars  = array_slice($bars, 0, $capacity);
+                $count = $capacity;
+            }
+        }
+
+        $values = array_map(static fn(Bar $b): float => $b->value, $bars);
+        if ($values === []) {
+            return '';
+        }
+
+        [$min, $max] = Range::resolve($this->min, $this->max, min(min($values), 0.0), max($values), 'value');
+        // sugar-charts-098: all-equal NEGATIVE data made the synthesized
+        // v..v+1 range normalize every bar to 0 — an invisible plot of
+        // existing data. Adopt Sparkline's steady mid-bar honesty for the
+        // constant case. All-equal zero keeps height 0: there, zero is the
+        // truth, not a swallowed range.
+        $flat = $max === $min && $min < 0.0;
+        if ($max === $min) {
+            $max = $min + 1.0;
+        }
+
         $renderLabels = $this->showLabels && $this->height >= 2;
         $bodyHeight   = $renderLabels ? $this->height - 1 : $this->height;
         $heights = [];
         $caps    = [];
         foreach ($values as $v) {
-            $norm = ($v - $min) / ($max - $min);
+            $norm = $flat ? 0.5 : ($v - $min) / ($max - $min);
             $norm = max(0.0, min(1.0, $norm));
             if (!$this->fractionalHeights) {
                 $heights[] = (int) round($norm * $bodyHeight);
@@ -547,7 +569,10 @@ final class BarChart implements ChromeAccessors
         }
 
         if ($renderLabels) {
-            $labelRow = '';
+            // sugar-charts-017: body rows start with the '┤' gutter and the
+            // data-label row pads a matching space — the category row must
+            // too, or every bar label sits one column LEFT of its bar.
+            $labelRow = $this->showAxis ? ' ' : '';
             foreach ($bars as $i => $bar) {
                 $label = self::truncate($bar->label, $colW);
                 $label = str_pad($label, $colW, ' ', STR_PAD_RIGHT);
@@ -588,6 +613,9 @@ final class BarChart implements ChromeAccessors
         $values = array_map(static fn(Bar $b): float => $b->value, $bars);
 
         [$min, $max] = Range::resolve($this->min, $this->max, min(min($values), 0.0), max($values), 'value');
+        // sugar-charts-098 family parity: same steady-mid posture as the
+        // vertical path for all-equal negative data.
+        $flat = $max === $min && $min < 0.0;
         if ($max === $min) {
             $max = $min + 1.0;
         }
@@ -605,7 +633,7 @@ final class BarChart implements ChromeAccessors
         $styles = $this->barStyles($bars);
         $rows = [];
         foreach ($bars as $i => $bar) {
-            $norm = ($bar->value - $min) / ($max - $min);
+            $norm = $flat ? 0.5 : ($bar->value - $min) / ($max - $min);
             $norm = max(0.0, min(1.0, $norm));
             $cap  = '';
             if ($this->fractionalHeights) {
