@@ -13,8 +13,9 @@ namespace SugarCraft\GitServer\Git;
  * advertisement half of receive-pack, `git receive-pack --stateless-rpc`)
  * per request, exactly the way git's own http-backend does. Spawns go
  * through proc_open ARGV ARRAYS — never a shell string — per house law; the
- * repo path is trusted server config (docs/TRUST-BOUNDARY.md doctrine for
- * this package), never client input.
+ * repo path is trusted server config (the doctrine lives at the MONOREPO
+ * ROOT's docs/TRUST-BOUNDARY.md — that path is not shipped inside this
+ * package, so the citation names its home), never client input.
  *
  * Child-lifetime discipline: every spawn
  * function carries its own request-scoped reap — a bounded stdin write and
@@ -468,7 +469,12 @@ final class StatelessRpc
             }
 
             $null  = null;
-            $ready = @\stream_select($read, $null, $null, 0, (int) \min(1_000_000, $remainingNs));
+            // S19 (finding 035): the remainder is in NANOSECONDS and
+            // stream_select's last parameter is MICROSECONDS — passing the
+            // raw remainder made the final tick sleep up to ~1000x past
+            // the deadline (a ~1 s overshoot per poll once under a
+            // millisecond remained). Convert, then clamp to one second.
+            $ready = @\stream_select($read, $null, $null, 0, (int) \min(1_000_000, \intdiv((int) $remainingNs, 1000)));
             if ($ready === false) {
                 \usleep(1000); // interrupted (signal): re-check the deadline next turn
                 continue;

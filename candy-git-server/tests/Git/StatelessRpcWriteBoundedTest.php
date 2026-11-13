@@ -117,6 +117,38 @@ final class StatelessRpcWriteBoundedTest extends TestCase
         self::assertStringContainsString('self::drainBounded($pipes[1], $pipes[2], $deadline', $body, 'drain must inherit the write deadline budget');
     }
 
+    /**
+     * S19 (finding 035): stream_select's microsecond parameter was fed a
+     * NANOSECOND remainder, so every poll with more than a second of
+     * budget left slept the full 1 s clamp and the final tick fired up to
+     * ~1000x late. A silent child under a 0.3 s deadline now ends the
+     * drain at the deadline — not a second past it.
+     */
+    public function testASilentChildEndsTheDrainAtTheDeadlineNotASecondPastIt(): void
+    {
+        $pipes = [];
+        $proc = \proc_open(['/bin/sh', '-c', 'exec sleep 5'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($proc);
+        @\fclose($pipes[0]);
+        $started  = \hrtime(true);
+        $deadline = $started + 300_000_000;
+        $tail     = '';
+        try {
+            (new \ReflectionMethod(StatelessRpc::class, 'drainBounded'))->invokeArgs(
+                null,
+                [&$pipes[1], &$pipes[2], $deadline, 1024, &$tail]
+            );
+        } finally {
+            @\proc_terminate($proc, 9);
+            @\fclose($pipes[1]);
+            @\fclose($pipes[2]);
+            \proc_close($proc);
+        }
+
+        $elapsed = (\hrtime(true) - $started) / 1e9;
+        self::assertLessThan(0.6, $elapsed, 'the deadline tick must be computed in microseconds; a nanosecond remainder slept ~1 s per poll');
+    }
+
     /** @param resource $writer */
     private static function invokeWriteBounded($writer, string $bytes, int $deadlineNs): void
     {
