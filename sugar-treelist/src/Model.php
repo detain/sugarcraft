@@ -2046,8 +2046,11 @@ final class Model
         // ("m1;3", "[;1"), so those parse as the same SGR parameters. That is
         // cosmetic acceptance, never injection — anything beyond [0-9;] that
         // survives the trim is rejected below, which is what the README's
-        // "reject non-SGR escapes" promise rests on.
-        $codes = \trim($style, "\e\x1b[]m");
+        // "reject non-SGR escapes" promise rests on. The charlist names ESC
+        // once (sugar-treelist-040; it used to carry both \e and \x1b — the
+        // same 0x1B byte twice); the C1 CSI byte (0x9B) is deliberately NOT
+        // trimmed — it survives the trim only to be refused by the gate.
+        $codes = \trim($style, "\e[]m");
         if (\preg_match('/^[0-9;]*$/', $codes) !== 1) {
             throw new \InvalidArgumentException(
                 'Style must contain only ANSI SGR parameters (digits and semicolons); '
