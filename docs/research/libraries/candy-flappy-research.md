@@ -87,9 +87,15 @@ func (m Model) Frame() (tea.Model, tea.Cmd) {
 |--------|----------|------------|
 | Gravity | 1 cell/tick (discrete) | 70.0 cells/sec² (continuous) |
 | Tick rate | 5 Hz | 30 Hz |
+| World scroll | 5 cells/s (1 cell per 5 Hz tick) | 30 cells/s (1 cell per 30 Hz tick) |
 | Physics lib | None (manual) | SugarSpring Projectile |
 | Collision | `abs(y-rightmost.Y) <= radius` | `row < top || row > bottom` |
-| Bird glyph | `*` | `>` |
+| Bird glyph | `*` | `^` / `v` / `>` (velocity-following pitch) |
+
+The 6× scroll pacing is THE core game-feel choice: the same "one column per
+tick" rule simply runs on a 6× faster clock, turning flapioca's patience game
+into a timing game — and candy-flappy's gap-shrink difficulty curve is tuned
+against that faster clock, so pacing and difficulty are one coherent decision.
 
 ---
 
