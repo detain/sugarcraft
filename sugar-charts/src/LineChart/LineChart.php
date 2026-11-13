@@ -755,7 +755,12 @@ final class LineChart extends Chart
 
         // Resolve labels — explicit lists win, formatters fill in
         // when no list was supplied.
-        $xLabels = $this->resolveXLabels(count($this->data));
+        // X-tick domain spans every series, not just the primary one
+        // (sugar-charts-060): the value/range scan already covers
+        // withDataset() series, so ticks derived from a shorter (or empty)
+        // primary mispositioned the auto domain.
+        $domain = max(array_merge([count($this->data)], array_map(static fn(array $s): int => count($s), $this->datasets)));
+        $xLabels = $this->resolveXLabels($domain);
         $yLabels = $this->resolveYLabels((float) $min, (float) $max);
 
         // When axes are on, reserve a 2-cell left gutter (Y labels +
@@ -817,9 +822,11 @@ final class LineChart extends Chart
                             ? self::DATASET_RUNES[($seriesIndex - 1) % count(self::DATASET_RUNES)]
                             : $this->point));
 
-                // Compute max point index based on animation progress
-                // Clamp to [0, count] to ensure we don't try to access beyond array bounds
-                $maxPointIndex = min($count, max(0, (int) floor($count * $progress)));
+                // Compute max point index based on animation progress.
+                // Clamp to [0, count]; once progress is positive the frame
+                // shows at least one point (sugar-charts-059 — the first
+                // frames were floor()-empty no matter the duration).
+                $maxPointIndex = $progress > 0 ? min($count, max(1, (int) round($count * $progress))) : 0;
                 // Tail-slicing drops leading samples; resolver x stays the
                 // sample's index in the full series.
                 $xOffset = count($values) - $count;
@@ -969,7 +976,7 @@ final class LineChart extends Chart
             }
             $points = count($values) > $dotW ? array_slice($values, -$dotW) : $values;
             $count  = count($points);
-            $maxPointIndex = min($count, max(0, (int) floor($count * $progress)));
+            $maxPointIndex = $progress > 0 ? min($count, max(1, (int) round($count * $progress))) : 0;
 
             $xOffset = count($values) - $count;
 
