@@ -17,7 +17,7 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 ## Features
 
 - **Leveled logging** — `Debug`, `Info`, `Warn`, `Error`, `Fatal` levels
-- **Colorful human-readable output** — styled when the destination is a color-capable terminal (the per-write gate honors `NO_COLOR`, force with `CLICOLOR_FORCE` — exactly `1`; plain bytes on files and pipes by design — the construction-time color probe additionally reads `FORCE_COLOR`, see [Styling](#styling))
+- **Colorful human-readable output** — styled when the destination is a color-capable terminal; the per-write gate is tty-ness plus `CLICOLOR_FORCE` (exactly `1`), while `NO_COLOR` and `FORCE_COLOR` act at construction time through the color-profile probe — see [Styling](#styling)
 - **Multiple formatters** — `TextFormatter` (default), `JsonFormatter`, `LogfmtFormatter`
 - **Structured key/value pairs** — pass arbitrary context with every log call
 - **Sub-loggers** — `with([...])` creates a child logger with persistent fields (a channel analogue: give each subsystem its own `withPrefix()`/`with()` child)
@@ -192,16 +192,22 @@ associative keys not shown — use JSON or logfmt when key names matter.
 
 ## Styling
 
-Styles are applied only when the destination can render them. A `Logger`
-consults `sugar-colorprofile`'s Probe and — for each write — the stream it is
-about to use: `TextFormatter` output reaches a file or a piped stream as plain
-bytes, never as baked-in ANSI escapes. Set `NO_COLOR` to force plain output on
-terminals, or `CLICOLOR_FORCE=1` (exactly `1` — any other value is ignored) to
-opt styling back in for captured output
-(`FORCE_COLOR` is **not** a knob the per-write destination gate reads; the construction-time `Probe::colorProfile()` consults sugar-colorprofile's detection chain, which does read `FORCE_COLOR` — and ranks it above `NO_COLOR` there). The construction-time probe runs once when the `Logger`
-is built — changing `FORCE_COLOR` mid-process does not re-probe an existing
-logger (the per-write `NO_COLOR`/`CLICOLOR_FORCE` gate keeps reading the
-current environment on each write). A standalone
+Styles are applied only when the destination can render them, and two
+different layers decide that — they read different variables:
+
+- **Construction (once, per logger/formatter):** `Probe::colorProfile()` from
+  `sugar-colorprofile` evaluates the detection chain — `CLICOLOR_FORCE` and
+  `FORCE_COLOR` each outrank `NO_COLOR` there — to pick the styled or plain
+  default. Changing the environment afterwards does not re-probe an existing
+  logger.
+- **Per write (the destination gate):** `ColorGate` looks at exactly two
+  things: `CLICOLOR_FORCE=1` (the exact value `1`; anything else is ignored)
+  and whether the stream is a TTY. It never reads `NO_COLOR` or
+  `FORCE_COLOR` — plain bytes reach files and pipes by design, and a TTY user
+  who exports `NO_COLOR` after construction is not plain-ified per write.
+
+In short: `NO_COLOR` is honored at construction (and at panic-handler
+install, which re-probes), never inside the per-write gate. A standalone
 `new TextFormatter(useColors: true)` still emits SGR by contract — the gate
 lives in the `Logger`, not in the formatter.
 
