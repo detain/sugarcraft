@@ -223,4 +223,44 @@ final class LangCoverageTest extends TestCase
             }
         }
     }
+
+    /**
+     * TST-PARITY: key-parity guard across every locale. A key landing in
+     * en.php only (or drifting out in one locale) previously stayed green
+     * and silently English-fallbacks for that locale's users. The manual
+     * array_diff_key sweep (6 keys x 17 locales) says the tree is clean
+     * today; this arm keeps it clean by construction (house LangParity
+     * family — the candy-code exists for exactly this).
+     */
+    public function testEveryLocaleCarriesExactlyTheEnKeySet(): void
+    {
+        $enPath = __DIR__ . '/../lang/en.php';
+        $enKeys = require $enPath;
+        $this->assertIsArray($enKeys, 'lang/en.php must return an array');
+        $enKeys = array_keys($enKeys);
+
+        $locales = glob(__DIR__ . '/../lang/*.php');
+        $this->assertGreaterThanOrEqual(17, count($locales), 'locale glob fell off the lang dir');
+
+        $offenders = [];
+        foreach ($locales as $path) {
+            $code = basename($path, '.php');
+            if ($code === 'en') {
+                continue;
+            }
+            $keys = array_keys(require $path);
+            $missing = array_diff($enKeys, $keys);
+            $extra = array_diff($keys, $enKeys);
+            foreach ($missing as $key) {
+                $offenders[] = "{$code}: missing '{$key}' (silently English-fallbacks)";
+            }
+            foreach ($extra as $key) {
+                $offenders[] = "{$code}: extra '{$key}' (no en source of truth)";
+            }
+        }
+
+        // Fail-loud once with the full roster — one red lists every drift,
+        // not just the first (audit-one-shy test-suite law).
+        $this->assertSame([], $offenders, "locale key-parity drift:\n" . implode("\n", $offenders));
+    }
 }
