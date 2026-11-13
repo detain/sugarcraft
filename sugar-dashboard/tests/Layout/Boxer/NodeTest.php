@@ -106,16 +106,40 @@ final class NodeTest extends TestCase
         $withBorder = $node->withBorder(true);
 
         $this->assertNotSame($node, $withBorder);
-        $this->assertTrue($withBorder->hasNoBorder());
+        // withBorder(true) ENABLES the border (finding sugar-dashboard-123:
+        // the old parameter carried the internal $noBorder polarity, so the
+        // API did the opposite of its name and these pins froze the inversion).
+        $this->assertFalse($withBorder->hasNoBorder());
     }
 
     public function testWithBorderTrueToFalse(): void
     {
         $node = Node::horizontal(Node::leaf('0'));
-        $noBorder = $node->withBorder(true);
-        $withBorder = $noBorder->withBorder(false);
+        $bordered = $node->withBorder(true);
+        $unbordered = $bordered->withBorder(false);
 
-        $this->assertFalse($withBorder->hasNoBorder());
+        $this->assertTrue($unbordered->hasNoBorder());
+    }
+
+    public function testWithBorderPolarityReachesTheRenderedSeparator(): void
+    {
+        $item = new class implements Item {
+            public function render(): string
+            {
+                return 'ab';
+            }
+        };
+        $tree = Node::vertical(Node::leaf('0'), Node::leaf('1'))->withBorder(true);
+        $sized = $tree->updateSizeRecursive(4, 5);
+        $bordered = implode("\n", (array) $sized->renderTree(['0' => $item, '1' => $item], 4, 5));
+        $this->assertStringContainsString(Node::VERTICAL_SEPARATOR, $bordered);
+
+        $bare = $tree->withBorder(false);
+        $bareSized = $bare->updateSizeRecursive(4, 5);
+        $plain = implode("\n", (array) $bareSized->renderTree(['0' => $item, '1' => $item], 4, 5));
+        $this->assertStringNotContainsString(Node::VERTICAL_SEPARATOR, $plain);
+        // Content survives on both sides of the polarity pin.
+        $this->assertStringContainsString('ab', $plain);
     }
 
     public function testHasNoBorderDefaultHorizontal(): void

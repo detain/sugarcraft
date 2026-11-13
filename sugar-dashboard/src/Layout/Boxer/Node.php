@@ -99,8 +99,6 @@ final class Node implements Item
      */
     public static function noBorder(Node ...$children): self
     {
-        $node = new self($children, false);
-        // We need a different approach since noBorder needs to be set
         return new self(
             children: $children,
             verticalStacked: false,
@@ -259,14 +257,20 @@ final class Node implements Item
 
     /**
      * Create a new node with borders enabled or disabled between children.
+     *
+     * The parameter is the border itself: withBorder(true) draws the
+     * separators, withBorder(false) removes them. Before finding
+     * sugar-dashboard-123 the parameter carried the internal $noBorder
+     * polarity unchanged, so withBorder(true) silently REMOVED the border —
+     * the API did the opposite of its name.
      */
-    public function withBorder(bool $noBorder): self
+    public function withBorder(bool $border): self
     {
         return new self(
             children: $this->children,
             verticalStacked: $this->verticalStacked,
             sizeFunc: $this->sizeFunc,
-            noBorder: $noBorder,
+            noBorder: !$border,
             address: $this->address,
             width: $this->width,
             height: $this->height,
