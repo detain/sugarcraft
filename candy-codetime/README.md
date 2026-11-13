@@ -148,7 +148,7 @@ other way to walk the window, and not every keyboard has them.
 The two ranking panes render side by side from 62 columns up (two 30-cell
 frames plus a gap) and stack vertically below that. Every dashboard line is
 clipped to the terminal width and never wraps: the timeline frame fills the
-width, while the ranking panes keep their budgeted 62-cell band, and days
+width, while the ranking panes keep the 62-column budget described above, and days
 that cannot be drawn are counted
 ("+N earlier") rather than silently dropped. When `CANDY_CODETIME_GOAL` is set the header gains a `today 2h01 / 1h00` cell and days that reach the goal render as shaded blocks in the band.
 
@@ -180,7 +180,7 @@ nothing ever moves on its own.
 
 | Command | Arguments | What it does |
 |---------|-----------|--------------|
-| `dashboard` | `[days]` | Open the TUI (reads the selected backend), showing a `[days]`-day window ending today (default 7). Inside the TUI, `+`/`-` step the window through 7, 14, 30, 90 days. Without an interactive terminal it refuses with a pointer to `export` instead of hanging. |
+| `dashboard` | `[days]` | Open the TUI (reads the selected backend), showing a `[days]`-day window ending today (default 7). Inside the TUI, `+`/`-` step the window through 7, 14, 30, 90 days. Without an interactive terminal it exits with an error naming `export` as the headless way out, instead of hanging. |
 | `push` | `[<project> <language>] <file> [duration] [tags]` \| `--` | Record heartbeats. `duration` is whole seconds, 0 and up (default 60); anything else, negatives included, is refused with exit 1 and never silently read as 0; durations above one year are clamped to 31,536,000 s. `--time=<unix>` files a single beat at a past (or future) instant instead of `now` — a malformed value is refused, never coerced. `push --` reads a batch: one JSON heartbeat per line on stdin, each with its own `time`; a malformed line is named with its line number on STDERR and the run exits 1 after the well-formed rows still land. `tags` is a comma-list (`work,review`) stored with the beat and carried by every export format; blank members are dropped. When project and language are omitted (the first slot contains a path separator or a known extension), they are detected: project is the nearest `.git` ancestor's name (else the first path segment relative to the working directory, else `unknown`), language is the extension map (`php`, `js`, `ts`, `python`, …, else `unknown`). Typed slots always win. Both forms pass the same allow/deny door and the same clamps. |
 | `milestone` | `add <name> [description]` \| `list` | Manage milestones. `name` is required; `description` is optional. Milestones live only in SQLite, so this command uses the sqlite backend regardless of `--backend` (a `milestone add` into a file-only data dir says so on stderr before it creates the database); the sqlite dashboard marks the milestone days with `*` under the weekday row. |
 | `export` | `<csv\|json\|ics> [days]` \| `from [to]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1), or for an explicit dated window: `from`/`to` are `YYYY-MM` or `YYYY-MM-DD` — `export json 2025-06 2025-06` is June 2025, a lone `from` runs through today. A window wider than 3660 days is refused like any oversized range. `--project=<name>` / `--tag=<label>` keep only the rows they match (same filter on both backends). Output goes to STDOUT — redirect it to a file to save it. |
@@ -289,7 +289,7 @@ test), so such patterns are caught by probe-matching, not just by shape.
 When the loaded file carries such a pattern,
 the skip is no longer a quiet stdout line: `push` reports it on **stderr**
 with the ignore file's path, its pattern count, and the affected project —
-then still exits 0, because the opt-out is honored, not refused. To undo a
+then still exits 0, because the opt-out is honoured, not refused. To undo a
 file supplied by the repository, delete or narrow the file the notice names;
 to override a directory-level ignore file instead, run `push` from a working
 directory whose own `.sugartrackignore` (checked first) carries only the
@@ -299,7 +299,7 @@ patterns you chose.
 
 ```
 $CANDY_CODETIME_DIR/
-  2026-10-23.jsonl      One appendable line per heartbeat.
+  2026-10-23.jsonl      One line appended per heartbeat.
   candy-codetime.db     Created by --backend=sqlite, and by `milestone` (which always uses SQLite).
   candy-codetime.db-wal WAL sidecar: recent commits live here until checkpointed.
   candy-codetime.db-shm WAL index header (shared memory).
@@ -330,7 +330,7 @@ yours to manage (delete day files, or archive-and-remove by hand).
 Each line of a day file is one JSON object:
 `{"time": <unix seconds>, "project": <string>, "language": <string>, "file":
 <path as supplied>, "duration": <seconds>, "tags": <array>}`. The CLI never
-sets tags; a plugin-written tag is honored on read and export. Readers should
+sets tags; a plugin-written tag is honoured on read and export. Readers should
 ignore unknown keys — `editor` is exactly such a key: upstream TakaTime heartbeats carry it, this schema deliberately omits it, so a plugin-written `editor` value survives the JSONL round-trip untouched but nothing here reads it (no per-editor view exists). Timestamps are part of the payload, not the envelope: a
 line fed through the `push --` stdin door **without** `time` gets stamped at
 the moment it is read *in*, so a batch pushed after the fact files every beat
@@ -351,7 +351,7 @@ timeline re-buckets heartbeats by their timestamps in the *current* zone,
 used, and `gaps` works from the raw stamps — so the same store can show a
 beat in a different day column than the file that holds it. Nothing is lost
 or corrupted; it is only "which day was this" resolving three ways. Nothing
-is ever deleted: beats accumulate until you remove them by hand or
+is ever deleted: heartbeats accumulate until you remove them by hand or
 archive them with `backup` (which copies and never trims).
 
 ### Fixing a bad entry
@@ -359,7 +359,7 @@ archive them with `backup` (which copies and never trims).
 There is no edit command, and that is deliberate — the store is plain files.
 With the file backend, fix or drop the offending JSON line in the day file,
 then press `r` in the dashboard to reload it (or `q` and reopen). With the
-sqlite backend, open the database with `sqlite3` and fix the row in
+SQLite backend, open the database with `sqlite3` and fix the row in
 `heartbeats`.
 
 To *remove* rather than fix, there is a supported door: `forget
@@ -434,15 +434,15 @@ the frame under the stored profile.
 | `Report\GapsReport` | Pure gap detection over sorted heartbeats (threshold 300 s). |
 | `Backup\AutoBackup` | Copy-only archiver; temp-file-plus-rename copies under a run lock; throws loudly on any failure. |
 | `Ignore\SugarTrackIgnore` | `.sugartrackignore` matcher used by `push`. |
-| `Milestone` | Value object for sqlite markers. |
+| `Milestone` | Value object for SQLite markers. |
 | `Export\CsvExporter` / `JsonExporter` / `IcalExporter` | `export` formats behind `ExporterInterface` (the tabular pair shares `TabularExporterInterface`). |
 | `Support\Version` | Single-source version constant. |
 | `Lang` | i18n facade (16 locales under `lang/`). |
 
 The Store is intentionally append-only at the file level, so editor hooks can
-`>>` echo a JSON line directly without coordinating with the dashboard (no
+append a JSON line with `>>` without coordinating with the dashboard (no
 plugins ship — see *Automating collection* for the worked example) — the
-trade-off is honest: raw `>>` redirection does not take the advisory lock
+trade-off is stated plainly: raw `>>` redirection does not take the advisory lock
 `push` uses, so a hand-echoed line could theoretically interleave, and it runs
 none of the privacy-mode doors — the next CLI launch sweeps such files to
 `0600`, but write under `umask 077` meanwhile; plugin integrations should
