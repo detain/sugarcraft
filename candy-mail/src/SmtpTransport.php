@@ -1145,6 +1145,20 @@ final class SmtpTransport implements Transport
 
         $this->lastResponse = \implode("\n", $lines);
 
+        $firstCode = \substr($lines[0], 0, 3);
+        foreach ($lines as $replyLine) {
+            // RFC 5321 4.2: every line of a multi-line reply repeats the same
+            // code. Recorded choice (CM-51): agreement is required with the
+            // FIRST line's code — the accepted-set check below judges that
+            // one. A continuation line wearing a different code ("250-..."
+            // followed by "554 bye") is a forged conversation dressed as a
+            // reply, so it refuses as unexpected_response rather than being
+            // swallowed into lastResponse text.
+            if (\substr($replyLine, 0, 3) !== $firstCode) {
+                throw new \RuntimeException(Lang::t('smtp.unexpected_response', ['response' => $this->lastResponse]));
+            }
+        }
+
         $code = (int) \substr($lines[0], 0, 3);
         if (!\in_array($code, $accepted, true)) {
             throw new \RuntimeException(Lang::t('smtp.unexpected_response', ['response' => $this->lastResponse]));

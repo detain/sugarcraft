@@ -386,4 +386,61 @@ final class SmtpTransportErrorTest extends TestCase
             @\fclose($server);
         }
     }
+
+    /**
+     * CM-51: a multi-line reply whose continuation line wears a DIFFERENT
+     * code ("250-STARTTLS" then "554 bye") is a forged conversation, not a
+     * greeting - a server that can interleave arbitrary lines can end the
+     * handshake early with a rejection the client would read as success.
+     * On the pre-fix bytes the first line's 250 satisfied the check and the
+     * test found no exception at all.
+     */
+    public function testSplitMultiLineReplyCannotHideADifferentCode(): void
+    {
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        [$client, $server] = $pair;
+
+        try {
+            $transport = new SmtpTransport('smtp.example.com', 587, timeout: 1);
+            $socketProp = new \ReflectionProperty($transport, 'socket');
+            $socketProp->setAccessible(true);
+            $socketProp->setValue($transport, $client);
+
+            \fwrite($server, "250-smtp.example.com\r\n250-STARTTLS\r\n554 bye\r\n");
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Unexpected');
+            $this->invokePrivate($transport, 'readResponseAny', [[250]]);
+        } finally {
+            @\fclose($client);
+            @\fclose($server);
+        }
+    }
+
+    /**
+     * CM-51 companion: a legitimate all-250 greeting must still pass - the
+     * agreement check must not turn EHLO itself into a refusal.
+     */
+    public function testConsistentMultiLineGreetingStillAccepted(): void
+    {
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        [$client, $server] = $pair;
+
+        try {
+            $transport = new SmtpTransport('smtp.example.com', 587, timeout: 1);
+            $socketProp = new \ReflectionProperty($transport, 'socket');
+            $socketProp->setAccessible(true);
+            $socketProp->setValue($transport, $client);
+
+            \fwrite($server, "250-smtp.example.com\r\n250-SIZE 1024\r\n250 STARTTLS\r\n");
+            $this->invokePrivate($transport, 'readResponseAny', [[250]]);
+            $resp = new \ReflectionProperty($transport, 'lastResponse');
+            $resp->setAccessible(true);
+            $this->assertStringContainsString('STARTTLS', (string) $resp->getValue($transport));
+        } finally {
+            @\fclose($client);
+            @\fclose($server);
+        }
+    }
 }
