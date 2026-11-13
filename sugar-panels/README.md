@@ -287,6 +287,22 @@ There is no focus or active-panel facet — see
 | `->withAlignH(?Align)` | Horizontal text alignment (null clears) |
 | `->withAlignV(?VAlign)` | Vertical text alignment (null clears) |
 
+### `Sanitize`
+
+Applied on every node in — `Node::leaf()` / `withContent()` / `withTitle()` normalise their text through it before it reaches the grid.
+
+| Method | Description |
+|--------|-------------|
+| `Sanitize::painted(string)` | Normalise content destined for the grid (UTF-8 repair, CR/TAB collapse, unpaintable-control removal) |
+| `Sanitize::paintedTitle(string)` | Same, with line feeds additionally flattened to spaces — a title paints on one row |
+| both | Idempotent: feeding output back in changes nothing, so a host may pre-sanitise and round-trip content unchanged |
+
+### `Lang`
+
+| Entry | Description |
+|-------|-------------|
+| `Lang` | Dormant translation facade (namespace `panels`, keys pre-wired in `lang/en.php`) — the render path emits no user-facing strings, so no production `Lang::t()` caller exists today; see *Internationalization* |
+
 ## Border Characters
 
 ```
