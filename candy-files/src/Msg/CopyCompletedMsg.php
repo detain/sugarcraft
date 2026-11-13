@@ -24,11 +24,14 @@ final readonly class CopyCompletedMsg implements Msg
      * @param int $errors Number of items that failed to copy
      * @param int $skipped Number of names filtered before scheduling (null/'..'/'' entries)
      * @param int $overwrote Number of successful legs that replaced a destination already existing at schedule time
+     * @param ?string $errorReason CF-21: first exception diagnostic (class: message)
+     *        from the batch, if any leg threw instead of being disk-refused
      */
     public function __construct(
         public array $copiedItems,
         public int $errors,
         public int $skipped,
         public int $overwrote,
+        public ?string $errorReason = null,
     ) {}
 }

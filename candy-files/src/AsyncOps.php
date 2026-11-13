@@ -33,6 +33,17 @@ use React\Promise\PromiseInterface;
 final class AsyncOps
 {
     /**
+     * @param \Closure(string,string):bool|null $engine CF-21 test seam: replaces
+     *        the synchronous copy engine inside copyAsync()/copyManyAsync() so a
+     *        diagnostic-bearing failure can be injected without abusing the real
+     *        filesystem. Production never passes one — the default stays
+     *        {@see self::copyPath()}'s cycle-guarded engine.
+     */
+    public function __construct(private readonly ?\Closure $engine = null)
+    {
+    }
+
+    /**
      * The ONE synchronous copy engine: file, symlink, or depth-capped and
      * cycle-guarded directory tree. Shared by every path that copies —
      * the async tick and Manager::copy's sync face alike. (Manager used to
@@ -49,19 +60,23 @@ final class AsyncOps
      *
      * @param string $src Source path
      * @param string $dst Destination path
-     * @return PromiseInterface<bool> Resolves true on success, false on failure
+     * @return PromiseInterface<bool|string> true = landed; false = disk refused; string = exception diagnostic (class: message), CF-21
      */
     public function copyAsync(string $src, string $dst): PromiseInterface
     {
         $deferred = new Deferred();
 
         // Defer to next tick so the TUI loop can process events in the meantime
-        \React\EventLoop\Loop::futureTick(static function () use ($src, $dst, $deferred): void {
+        \React\EventLoop\Loop::futureTick(function () use ($src, $dst, $deferred): void {
             try {
-                $result = self::doCopy($src, $dst);
+                $result = $this->engine !== null ? ($this->engine)($src, $dst) : self::doCopy($src, $dst);
                 $deferred->resolve($result);
             } catch (\Throwable $e) {
-                $deferred->resolve(false);
+                // CF-21 (audit 029): bare false annihilated diagnostics — a
+                // TypeError from the leg code was indistinguishable from
+                // 'disk said no'. The reason rides the result; false is now
+                // reserved for honest disk refusals.
+                $deferred->resolve($e::class . ': ' . $e->getMessage());
             }
         });
 
@@ -79,7 +94,7 @@ final class AsyncOps
      *
      * @param string $src Source path
      * @param string $dst Destination path
-     * @return PromiseInterface<bool> Resolves true on success, false on failure
+     * @return PromiseInterface<bool|string> true = landed; false = disk refused; string = exception diagnostic (class: message), CF-21
      */
     public function moveAsync(string $src, string $dst): PromiseInterface
     {
@@ -90,7 +105,8 @@ final class AsyncOps
                 $result = @rename($src, $dst);
                 $deferred->resolve($result);
             } catch (\Throwable $e) {
-                $deferred->resolve(false);
+                // CF-21: reason-bearing resolution (see copyAsync).
+                $deferred->resolve($e::class . ': ' . $e->getMessage());
             }
         });
 
@@ -106,7 +122,7 @@ final class AsyncOps
      *
      * @param string $src    Source path
      * @param string $newName New base name (not a full path)
-     * @return PromiseInterface<bool> Resolves true on success, false on failure
+     * @return PromiseInterface<bool|string> true = landed; false = disk refused; string = exception diagnostic (class: message), CF-21
      */
     public function renameAsync(string $src, string $newName): PromiseInterface
     {
@@ -119,7 +135,8 @@ final class AsyncOps
                 $result = @rename($src, $dst);
                 $deferred->resolve($result);
             } catch (\Throwable $e) {
-                $deferred->resolve(false);
+                // CF-21: reason-bearing resolution (see copyAsync).
+                $deferred->resolve($e::class . ': ' . $e->getMessage());
             }
         });
 
@@ -136,7 +153,7 @@ final class AsyncOps
      *
      * @param array<string, string> $map Source → Destination mapping
      * @param int $concurrency Maximum queued copy operations (default 4)
-     * @return PromiseInterface<array<string, bool>> Map of source → success
+     * @return PromiseInterface<array<string, bool|string>> source → true | false | exception diagnostic (CF-21)
      */
     public function copyManyAsync(array $map, int $concurrency = 4): PromiseInterface
     {
@@ -173,8 +190,11 @@ final class AsyncOps
                             $deferred->resolve($results);
                         }
                     },
-                    function (\Throwable $_e) use ($src, &$pending, &$index, &$results, $deferred, $total, &$startNext): void {
-                        $results[$src] = false;
+                    function (\Throwable $e) use ($src, &$pending, &$index, &$results, $deferred, $total, &$startNext): void {
+                        // Defensive: copyAsync() catches in-tick and resolves
+                        // a reason instead of rejecting; this arm keeps the
+                        // same CF-21 contract if that polarity ever changes.
+                        $results[$src] = $e::class . ': ' . $e->getMessage();
                         --$pending;
                         // Continue the pipeline by starting next pending copy
                         $startNext();
@@ -207,7 +227,7 @@ final class AsyncOps
      *           for the CF-11 follow-up.
      *
      * @param array<string, string> $map Source → Destination mapping
-     * @return PromiseInterface<array<string, bool>> Map of source → success
+     * @return PromiseInterface<array<string, bool|string>> source → true | false | exception diagnostic (CF-21)
      */
     public function moveManyAsync(array $map): PromiseInterface
     {

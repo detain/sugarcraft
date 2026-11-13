@@ -461,4 +461,41 @@ final class ManagerCopyTest extends TestCase
         $this->assertSame('bytes', file_get_contents($file), 'the self-leg must not touch the bytes');
         $this->assertFalse($final->canUndo(), 'no undo action may enter history for a self-leg');
     }
+
+    /**
+     * CF-21 (audit 029): every Throwable used to collapse into bare false,
+     * so a TypeError in the leg code was indistinguishable from 'disk said
+     * no'. The completion status now carries the first reason after the
+     * localized count frame.
+     */
+    public function testCompletedCopyStatusCarriesFirstErrorReason(): void
+    {
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$done] = $m->update(new CopyCompletedMsg(['/a' => '/b'], 1, 0, 0, 'TypeError: must be of type string, int given'));
+        $this->assertSame(
+            'copied 1 entries with 1 errors: TypeError: must be of type string, int given',
+            $done->status,
+        );
+    }
+
+    public function testCompletedCopyWithoutReasonKeepsBareCountFrame(): void
+    {
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$done] = $m->update(new CopyCompletedMsg([], 1, 0, 0));
+        $this->assertSame('copied 0 entries with 1 errors', $done->status,
+            'a pure disk-refusal batch stays at the count frame - no fabricated reason');
+    }
+
+    /**
+     * An exception message can echo attacker-writable paths, so the reason
+     * passes the same sanitize choke as every other name-bearing write.
+     */
+    public function testErrorReasonIsSanitizedInStatus(): void
+    {
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$done] = $m->update(new CopyCompletedMsg([], 1, 0, 0, "RuntimeException: cannot read \x1b]0;pwned\x07evil.txt"));
+        $this->assertStringNotContainsString("\x1b", $done->status);
+        $this->assertStringNotContainsString("\x07", $done->status);
+        $this->assertStringContainsString('RuntimeException: cannot read evil.txt', $done->status);
+    }
 }

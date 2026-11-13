@@ -451,4 +451,48 @@ final class AsyncOpsTest extends TestCase
             'copyAsync is the production copy engine on a tick - a stale @internal here is drift too',
         );
     }
+
+    /**
+     * CF-21 (audit 029): the catch arms used to resolve a bare false,
+     * annihilating every diagnostic. Through the test-seam engine the thrown
+     * class+message now rides the resolution; false stays reserved for real
+     * disk refusals (pinned by testCopyAsyncResolvesFalseOnFailure).
+     */
+    public function testCopyAsyncSurfacesExceptionReasonNotBareFalse(): void
+    {
+        $ops = new AsyncOps(static function (string $src, string $dst): bool {
+            throw new \LogicException('disk on fire');
+        });
+        $resolved = null;
+        $ops->copyAsync('/whatever', '/elsewhere')->then(
+            static function (mixed $value) use (&$resolved): void {
+                $resolved = $value;
+                Loop::stop();
+            }
+        );
+        Loop::run();
+        self::assertSame('LogicException: disk on fire', $resolved);
+    }
+
+    public function testCopyManyAsyncCarriesReasonPerLegAlongsideSuccesses(): void
+    {
+        $ok = $this->tmpDir . '/good.txt';
+        file_put_contents($ok, 'payload');
+        $ops = new AsyncOps(static function (string $src, string $dst) use ($ok): bool {
+            if ($src === $ok) {
+                return copy($src, $dst);
+            }
+            throw new \RuntimeException('kaboom on ' . basename($src));
+        });
+        $resolved = null;
+        $ops->copyManyAsync([$ok => $this->tmpDir . '/good-copy.txt', $this->tmpDir . '/doomed' => $this->tmpDir . '/never'])
+            ->then(static function (mixed $results) use (&$resolved): void {
+                $resolved = $results;
+                Loop::stop();
+            });
+        Loop::run();
+        self::assertIsArray($resolved);
+        self::assertTrue($resolved[$ok], 'the healthy leg keeps its bool true');
+        self::assertSame('RuntimeException: kaboom on doomed', $resolved[$this->tmpDir . '/doomed']);
+    }
 }

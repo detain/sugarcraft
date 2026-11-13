@@ -192,18 +192,38 @@ final class Dispatcher implements MessageHandler
             return;
         }
         $loop = $this->context->loop();
-        $this->pumpTimer ??= $loop->addPeriodicTimer(self::PUMP_INTERVAL_SECONDS, fn () => $this->context->pump());
+        $this->pumpTimer ??= $loop->addPeriodicTimer(self::PUMP_INTERVAL_SECONDS, fn () => $this->guarded('pump tick', fn () => $this->context->pump()));
         $background = $this->context->background();
         if ($background !== null && $this->backgroundTimer === null) {
             $background->boot();
-            $this->backgroundTimer = $loop->addPeriodicTimer(BackgroundEvents::POLL_SECONDS, static fn () => $background->poll());
+            $this->backgroundTimer = $loop->addPeriodicTimer(BackgroundEvents::POLL_SECONDS, fn () => $this->guarded('background poll', static fn () => $background->poll()));
         }
-        $this->tickTimer ??= $loop->addPeriodicTimer(self::TICK_INTERVAL_SECONDS, function (): void {
+        $this->tickTimer ??= $loop->addPeriodicTimer(self::TICK_INTERVAL_SECONDS, fn () => $this->guarded('server tick', function (): void {
             $this->context->broadcast(EventEnvelope::server(EventType::SERVER_TICK, [
                 'now' => (int) \floor(($this->context->clock())() * 1000),
                 'turnsRunning' => $this->context->turnsRunning(),
             ]), false);
-        });
+        }));
+    }
+
+    /**
+     * A Loop-registered callback must never unwind `Loop::run()`: one throw
+     * would end the daemon for every client. The cause goes to the server log
+     * and this tick's work is dropped; the timer stays armed for the next one.
+     *
+     * @param \Closure(): void $body
+     */
+    private function guarded(string $where, \Closure $body): void
+    {
+        try {
+            $body();
+        } catch (\Throwable $e) {
+            try {
+                $this->context->logError($e, $where . ' failed');
+            } catch (\Throwable) {
+                // A failing log sink must not take the loop down either.
+            }
+        }
     }
 
     /**
@@ -238,7 +258,7 @@ final class Dispatcher implements MessageHandler
         $this->context->broadcast(EventEnvelope::server(EventType::SERVER_SHUTDOWN, ['reason' => $reason, 'graceSeconds' => $seconds]), false);
         $clock = $this->context->clock();
         $deadline = $clock() + $seconds;
-        $this->drainTimer = $this->context->loop()->addPeriodicTimer(self::DRAIN_POLL_SECONDS, function () use ($then, $clock, $deadline): void {
+        $this->drainTimer = $this->context->loop()->addPeriodicTimer(self::DRAIN_POLL_SECONDS, fn () => $this->guarded('drain poll', function () use ($then, $clock, $deadline): void {
             $idle = $this->context->turnsRunning() === 0;
             if (!$idle && $clock() < $deadline) {
                 return;
@@ -248,7 +268,7 @@ final class Dispatcher implements MessageHandler
                 $this->drainTimer = null;
             }
             $then($idle);
-        });
+        }));
     }
 
     /** Whether a drain is waiting on running turns. */

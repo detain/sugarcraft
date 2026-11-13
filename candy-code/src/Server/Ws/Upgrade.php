@@ -13,6 +13,7 @@ use React\EventLoop\Loop;
 use React\Http\Message\Response;
 use React\Stream\CompositeStream;
 use React\Stream\ThroughStream;
+use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Server\Http\AuthMiddleware;
 use SugarCraft\Code\Server\Http\Responses;
 use SugarCraft\Code\Server\ServerConfig;
@@ -115,8 +116,17 @@ final class Upgrade
         // the handler sent from onOpen would be emitted before react/http
         // pipes this body onto the socket — and lost.
         Loop::futureTick(function () use ($connection): void {
-            if ($connection->isOpen()) {
+            if (!$connection->isOpen()) {
+                return;
+            }
+            try {
                 $this->handler->onOpen($connection);
+            } catch (\Throwable $e) {
+                // Must not unwind Loop::run(): log, then drop this one socket.
+                if ($this->log !== null) {
+                    ($this->log)(ErrorLog::line($e, 'socket ' . $connection->id() . ' onOpen'));
+                }
+                $connection->close();
             }
         });
 

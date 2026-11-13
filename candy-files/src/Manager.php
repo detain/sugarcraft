@@ -241,7 +241,12 @@ final class Manager implements Model
     {
         $applied = count($msg->copiedItems);
         $status = match (true) {
-            $msg->errors > 0 => Lang::t('status.copied_with_errors', ['count' => $applied, 'errors' => $msg->errors]),
+            // CF-21: a thrown leg names its first reason after the localized
+            // count frame (the diagnostic itself is untranslated technical
+            // text; exception messages can echo paths, so it passes through
+            // the same sanitize choke as every other name-bearing write).
+            $msg->errors > 0 => Lang::t('status.copied_with_errors', ['count' => $applied, 'errors' => $msg->errors])
+                . ($msg->errorReason !== null ? ': ' . Entry::sanitizeName($msg->errorReason) : ''),
             $msg->skipped > 0 => Lang::t('status.copied_skipped', ['count' => $applied, 'skipped' => $msg->skipped]),
             $msg->overwrote > 0 => Lang::t('status.copied_overwrote', ['count' => $applied, 'overwrote' => $msg->overwrote]),
             default => Lang::t('status.copied', ['count' => $applied]),
@@ -1185,8 +1190,18 @@ final class Manager implements Model
                     // pretended to have copied bytes that never landed.
                     $okItems = array_filter($results, static fn($ok): bool => $ok === true);
                     $errors = count($results) - count($okItems);
+                    // CF-21 (audit 029): the first exception diagnostic rides
+                    // to the status line. Disk refusals carry no reason, so a
+                    // plain-error batch keeps the bare count frame.
+                    $reason = null;
+                    foreach ($results as $r) {
+                        if (is_string($r)) {
+                            $reason = $r;
+                            break;
+                        }
+                    }
                     $overwrote = count(array_intersect_key($okItems, $existedSrcs));
-                    return new CopyCompletedMsg($okItems, $errors, $skipped, $overwrote);
+                    return new CopyCompletedMsg($okItems, $errors, $skipped, $overwrote, $reason);
                 });
         });
 

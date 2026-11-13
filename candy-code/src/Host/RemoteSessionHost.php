@@ -884,7 +884,13 @@ final class RemoteSessionHost
             });
         };
         $after($delay, function (): void {
-            $this->tryAttempt();
+            try {
+                $this->tryAttempt();
+            } catch (\Throwable $e) {
+                // Runs from a Loop timer: a throw here would unwind Loop::run()
+                // and strand the attachment half-open. End it instead.
+                $this->gone($this->dropReason . ' ' . \SugarCraft\Code\Server\ErrorLog::flatten($e->getMessage()), true);
+            }
         });
     }
 

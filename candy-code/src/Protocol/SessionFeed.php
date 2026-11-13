@@ -652,7 +652,15 @@ final class SessionFeed
         $seconds = $this->askTimeoutSeconds;
         $this->askTimers[$askId] = $this->loop->addTimer($seconds, function () use ($askId, $seconds): void {
             unset($this->askTimers[$askId]);
-            $this->host->answer($askId, PermissionReply::Reject, \sprintf('timed out after %s s', \rtrim(\rtrim(\sprintf('%.3f', $seconds), '0'), '.')));
+            try {
+                $this->host->answer($askId, PermissionReply::Reject, \sprintf('timed out after %s s', \rtrim(\rtrim(\sprintf('%.3f', $seconds), '0'), '.')));
+            } catch (\Throwable $fault) {
+                // A Loop callback must not unwind Loop::run(): the ask stays
+                // unanswered, its timer is already spent, the cause is logged.
+                if ($this->log !== null) {
+                    ($this->log)(ErrorLog::line($fault, \sprintf('session %s ask timeout %s', $this->host->sessionId(), $askId)));
+                }
+            }
         });
     }
 
