@@ -426,7 +426,9 @@ final class SettingsWriter
     private function mutateTier(SettingsTier $tier, \Closure $change, bool $validate): ?string
     {
         $landed = null;
-        $run = function (array $existing) use ($tier, $change, $validate, &$landed): ?array {
+        $consulted = false;
+        $run = function (array $existing) use ($tier, $change, $validate, &$landed, &$consulted): ?array {
+            $consulted = true;
             $decided = $change($existing);
             if ($decided === null) {
                 return null;
@@ -457,6 +459,13 @@ final class SettingsWriter
         if ($tier === SettingsTier::You) {
             if ($this->userConfigMutate !== null) {
                 ($this->userConfigMutate)($run);
+                // The door never asked the closure: its lock, target or merge base
+                // was refused and it soft-failed (that is its contract for a
+                // setting that is merely lost). A trust grant answered "granted"
+                // over that would be a lie, so say it was not written.
+                if (!$consulted) {
+                    throw new \RuntimeException("{$path} could not be written (its lock or file was unavailable)");
+                }
             } else {
                 $decided = $run($this->current($tier));
                 if ($decided !== null) {
