@@ -23,10 +23,12 @@ final class CliTest extends TestCase
     /**
      * @param array<string, string>|null $env Full replacement environment for the
      *                                        child (null = inherit the parent's)
+     * @param string|null                $cwd Working directory for the child
+     *                                        (null = inherit the parent's)
      *
      * @return array{0: int, 1: string, 2: string} [exitCode, stdout, stderr]
      */
-    private static function runCli(string $arg, ?array $env = null): array
+    private static function runCli(string $arg, ?array $env = null, ?string $cwd = null): array
     {
         $cmd = escapeshellarg(PHP_BINARY) . ' '
             . escapeshellarg(self::bin()) . ' '
@@ -36,7 +38,7 @@ final class CliTest extends TestCase
             $cmd,
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
-            null,
+            $cwd,
             $env,
         );
         self::assertIsResource($proc);
@@ -65,6 +67,36 @@ final class CliTest extends TestCase
         [$code, , $stderr] = self::runCli('/no/such/candy-ansi-inspect/input/file');
         $this->assertSame(1, $code);
         $this->assertStringContainsString('not a readable file', $stderr);
+    }
+
+    public function testFileLiterallyNamedZeroIsInspectedNotDemotedToStdin(): void
+    {
+        // Finding 012: empty("0") is true, so the old truthiness gate skipped
+        // the argument entirely and read the (closed, empty) stdin pipe — the
+        // file named `0` went uninspected. Presence is the gate now.
+        $dir = sys_get_temp_dir() . '/aip05-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        file_put_contents($dir . '/0', "\x1b[31mred\x1b[0m");
+        try {
+            [$code, $stdout, $stderr] = self::runCli('0', null, $dir);
+            $this->assertSame(0, $code, $stderr);
+            $this->assertStringContainsString('SGR foreground red', $stdout);
+            $this->assertStringContainsString('SGR reset', $stdout);
+        } finally {
+            unlink($dir . '/0');
+            rmdir($dir);
+        }
+    }
+
+    public function testEmptyStringArgumentIsRefusedNotDemotedToStdin(): void
+    {
+        // The other half of finding 012: `""` is a PRESENT argument, so it may
+        // not quietly fall through to the pipe — refusing beats reading data
+        // the caller never named.
+        [$code, $stdout, $stderr] = self::runCliWithStdin("piped \x1b[31m text", ['']);
+        $this->assertSame(1, $code, $stderr);
+        $this->assertStringContainsString('not a readable file', $stderr);
+        $this->assertSame('', $stdout);
     }
 
     public function testRefusalTokenizesControlBytesInThePathArgument(): void

@@ -32,7 +32,11 @@ $input = '';
 // "No source at all" (interactive TTY, no argument) is misuse and answers with
 // usage; a source that happens to be empty is a legitimate report of nothing.
 $sawSource = false;
-if (!empty($argv[1])) {
+// The gate is PRESENCE, not truthiness (finding 012): empty() treats the
+// string "0" as empty, so `candy-ansi-inspect 0` demoted a file literally
+// named `0` to a stdin read. Any present argument names the source; a
+// present-but-empty one is a refusal, never a silent demotion to stdin.
+if (isset($argv[1]) && $argv[1] !== '') {
     // m2-fresh ruling (a): `--help` / `-h` is a request for usage, not a path.
     // Same Lang::t('cli.usage') string the empty-source misuse arm prints; the
     // stream differs by intent — asked-for usage rides stdout with exit 0,
@@ -70,6 +74,12 @@ if (!empty($argv[1])) {
     }
     $sawSource = true;
     $input = (string) file_get_contents($argv[1]);
+} elseif (($argv[1] ?? null) === '') {
+    // `candy-ansi-inspect ""` — a present-but-empty argument names the source
+    // as the empty string, which is never a file: refuse it (exit 1) rather
+    // than quietly demoting to a stdin the caller never asked to read.
+    fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => '']) . "\n");
+    exit(1);
 } elseif (!stream_isatty(STDIN)) {
     $sawSource = true;
     // Stream, do not slurp: a slow producer (`tail -f log | candy-ansi-inspect`)
