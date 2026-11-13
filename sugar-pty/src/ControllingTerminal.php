@@ -13,7 +13,11 @@ use SugarCraft\Pty\Concerns\LibcAccess;
  * After {@see claim()} the given fd is the session leader's ctty,
  * enabling the kernel to deliver job-control signals (SIGINT on
  * Ctrl+C, SIGWINCH on resize, SIGHUP when master closes) to the
- * process group connected to that fd.
+ * process group connected to that fd. The SIGHUP-on-master-close
+ * cascade is a ctty property: it holds only for sessions that claimed
+ * one (controllingTerminal:true) — a child without a ctty never sees
+ * the hangup, which is why the POSIX close paths treat the no-ctty
+ * case as the leak-prone one.
  *
  * Mirrors charmbracelet/x/xpty.claimControllingTerminal.
  */

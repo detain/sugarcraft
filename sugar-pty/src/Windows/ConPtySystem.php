@@ -98,6 +98,13 @@ final class ConPtySystem implements PtySystem
      * The honest capability map: true is limited to what this pair can
      * actually do, so feature-detection at the call site is meaningful.
      *
+     * One asymmetry the map cannot express and every caller should know:
+     * TEARDOWN CONTAINMENT DIFFERS BY BACKEND. An abandoned ConPTY child is
+     * tree-killed at destructor time (closing the job fires KILL_ON_JOB_CLOSE);
+     * an abandoned POSIX proc_open child is ORPHANED — it keeps running, and
+     * PosixChild's destructor only reaps already-dead children. Neither side
+     * mirrors the other; see the README limitations row.
+     *
      * @return array<string, bool>
      */
     public function capabilities(): array

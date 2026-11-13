@@ -118,7 +118,7 @@ exceptions at the package root.
 | Call | What it does |
 |---|---|
 | `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet on -1; on Linux `posix_openpt + grantpt + unlockpt + ptsname_r`. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open best-effort — a refused ioctl surfaces as 0×0 until the next resize rather than failing the open. Returns a `PtyPair` exposing `master()` and `slave()`: on the contract path `master()` is a `PosixMasterPty` (`fd()` / `isClosed()`; the slave path lives on the pair — `slavePath()` / `slave()` — the master object carries none), while the legacy `Master` value object (readonly fd + slavePath) belongs to the deprecated `Pty` facade. A `0 x 0` request is kernel-legal and yields an actual 0x0 geometry until something resizes it — children that query the size then see zeros, so pass real dimensions (or `resize()` once known). The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
-| `$pty->spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child` *(facade)* | `proc_open` with slave-path descriptors, same geometry rule as `$pair->slave()->spawn(...)` — omit `$cols`/`$rows` to keep the current winsize (the facade no longer stomps it with 80×24 defaults). `$env` follows proc_open semantics: `null` inherits the full parent environment, a non-null array REPLACES it entirely (merge explicitly — see Quickstart; on Windows an EMPTY array reverts to full inheritance, see Known limitations). TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
+| `$pty->spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child` *(facade)* | `proc_open` with slave-path descriptors, same geometry rule as `$pair->slave()->spawn(...)` — omit `$cols`/`$rows` to keep the current winsize (the facade no longer stomps it with 80×24 defaults). `$env` follows proc_open semantics: `null` inherits the full parent environment, a non-null array REPLACES it entirely (merge explicitly — see Quickstart; an EMPTY array means an EMPTY environment on every backend, Windows included). TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
 | `$pair->slave()->spawn(array $cmd, ?array $env, ?int $cols=null, ?int $rows=null, bool $controllingTerminal=false): Child` | Same `$env` replace-vs-null semantics. Window size is a property of the pty, not of the controlling-terminal relationship, so an explicit `$cols`/`$rows` is applied on every spawn (before it, throwing with no child on failure, then re-asserted best-effort after it for macOS) — like `creack/pty.StartWithSize()`. Omit both to keep the size the pair was opened or last resized with (`creack/pty.Start()`, portable-pty `spawn_command()`); pass one to keep the other half. The parent's slave handle is opened `O_CLOEXEC`, so the child holds the slave only at fds 0-2. |
 | `$master->read(int $len=8192, ?float $timeout=0.05): ?string` | `null` on timeout (idle), `''` on confirmed EOF, bytes otherwise. EINTR-safe. The default is finite on purpose — pass `null` explicitly for a mode-governed blocking read that parks until data or EOF arrives. |
 | `$master->write(string $bytes): int` | Returns bytes written. |
@@ -683,7 +683,7 @@ environment variable to select which PTY backend to use:
 | Value | Behaviour |
 |---|---|
 | _(unset)_ / `auto` | Platform-appropriate default — `posix-ffi` on the POSIX families, `conpty` on Windows |
-| `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS). Note this value resolves *platform-wise*, it is not a hard pin: selecting it on Windows is not refused — the factory silently answers `ConPtySystem`, so a caller asking for POSIX FFI gets ConPTY semantics instead (no `fd()`/`stream()`, `kill(2)` collapse, empty-`$env` full-parent inversion — see [Known limitations](#known-limitations)). The asymmetry with `conpty` (which throws on a POSIX host) is one-directional. FFI-backed: distro PHP with `ffi.enable=0` fails at first bind — see [Install](#install). |
+| `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS). Note this value resolves *platform-wise*, it is not a hard pin: selecting it on Windows is not refused — the factory silently answers `ConPtySystem`, so a caller asking for POSIX FFI gets ConPTY semantics instead (no `fd()`/`stream()`, `kill(2)` collapse — see [Known limitations](#known-limitations)). The asymmetry with `conpty` (which throws on a POSIX host) is one-directional. FFI-backed: distro PHP with `ffi.enable=0` fails at first bind — see [Install](#install). |
 | `conpty` | `Windows\ConPtySystem` — FFI into the kernel32 pseudo-console APIs (Windows 10 1809+ / PHP 8.4+). On a non-Windows host it throws `UnsupportedPlatformException` naming the probe's reason; the FFI load itself is deferred to `open()`. FFI-backed: same `ffi.enable` dependency. |
 | `sidecar` | Not implemented in this release — throws `UnsupportedPlatformException` |
 | `pecl` | Not implemented in this release — throws `UnsupportedPlatformException` |
@@ -808,13 +808,15 @@ private arrow-key or Ctrl-key buffering.
   not a PTY: `capabilities()` reports `controllingTerminal`, `signals` and
   `fd` as false, `Child::kill()` collapses every signal into one
   `TerminateJobObject` (exit surfaces as `128 + signal` by convention),
-  `MasterPty::stream()` and `fd()` throw; and an **empty** `$env` array
-  inverts the replace semantics — ConPTY builds an environment block only
-  for a non-empty map, so `spawn($cmd, [])` passes a NULL
-  `lpEnvironment` and the child inherits the FULL parent environment
-  (on POSIX an empty array means an empty environment). Pass a
-  non-empty explicit map when you mean a restricted environment on
-  Windows.
+  `MasterPty::stream()` and `fd()` throw; and teardown containment is
+  asymmetric by design — an abandoned ConPTY child is TREE-KILLED at
+  destructor time (closing the job fires `KILL_ON_JOB_CLOSE`), while an
+  abandoned POSIX `proc_open` child is ORPHANED (it keeps running).
+  `$env` now follows the unified law on every backend: `null` inherits
+  the parent, an EMPTY array is an EMPTY environment — PTY-20 closed the
+  old empty-array full-parent inversion, so `spawn($cmd, [])` builds a
+  zero-entry block with `CREATE_UNICODE_ENVIRONMENT` instead of a NULL
+  `lpEnvironment`.
   So `PosixPump`, `ReactPump` and
   `MultiPump` stay POSIX-only and ConPTY masters are pumped by polling
   `read($len, $timeout)` — and `size()` answers the cached geometry with

@@ -155,16 +155,29 @@ final class ConPtyChild implements Child
     }
 
     /**
-     * Containment at teardown, matching the POSIX side: a child nobody
-     * waited for is still not allowed to outlive the session. Closing the
-     * job handle fires its kill-on-close flag, which is exactly what
-     * dropping a proc_open resource does on POSIX. Failures are swallowed
-     * HERE and only here — engine shutdown is not a place to throw from,
-     * and a leaked job handle dies with the process anyway.
+     * Containment at teardown — and the POSIX asymmetry, named.
+     *
+     * Dropping a POSIX proc_open resource ORPHANS: the child keeps running,
+     * and PosixChild's destructor only reaps already-dead children. This one
+     * does the opposite — closing the job handle fires its KILL_ON_JOB_CLOSE
+     * limit and TREE-KILLS the whole process group wherever it got to. Both
+     * designs are defensible; they are not the same, and the previous text
+     * claiming this was "exactly what dropping a proc_open resource does on
+     * POSIX" misstated it (the disclosure lives in
+     * {@see ConPtySystem::capabilities()} and the README limitations row).
+     *
+     * The guard is $released alone. The old `|| $this->exitCode !== null`
+     * leg leaked BOTH handles for the exited-but-never-wait()ed shape —
+     * supervision that polls exited() caches the code without releasing
+     * (the onPollTick pattern), and PTY-05's -1 law makes that state a
+     * deliberate destination. release() is idempotent, so destruct after
+     * wait() is a no-op. Failures are swallowed HERE and only here — engine
+     * shutdown is not a place to throw from, and a leaked job handle dies
+     * with the process anyway.
      */
     public function __destruct()
     {
-        if ($this->released || $this->exitCode !== null) {
+        if ($this->released) {
             return;
         }
 

@@ -167,6 +167,24 @@ final class ConPtyChildTest extends TestCase
         self::assertSame(ConPtyApi::WAIT_FAILED, $this->api->waitForSingleObject($process, 0));
     }
 
+    public function testExitedButNeverWaitedChildReleasesAtTeardown(): void
+    {
+        [$child, $process, $job] = $this->spawnOne();
+
+        $this->api->setExitCode($process, 0);
+        self::assertTrue($child->exited());
+
+        unset($child);
+        \gc_collect_cycles();
+
+        // exited() CACHED the status without releasing — the old guard
+        // (`released || exitCode !== null`) read that as settled and leaked
+        // both handles. Supervision loops poll exited() exactly this way
+        // (the onPollTick pattern), so containment keys on $released alone.
+        self::assertNotEmpty($this->api->callsMatching('closeHandle(' . $process . ')'));
+        self::assertNotEmpty($this->api->callsMatching('closeJob(' . $job . ')'));
+    }
+
     public function testSettledChildAtTeardownChangesNothing(): void
     {
         [$child, $process, $job] = $this->spawnOne();
