@@ -183,25 +183,17 @@ trait ServeStartup
 
         if ($report === null) {
             $seconds = (int) self::DETACH_REPORT_SECONDS;
-            if ($daemonPid === null || !\function_exists('posix_kill') || !@\posix_kill($daemonPid, 0)) {
+            $gone = self::stopUnreportedDaemon($daemonPid);
+            if ($gone === null) {
                 return self::failStart($args, $config, Lang::t('cli.serve.no_report', [
                     'seconds' => $seconds,
                     'log' => $state->logPath(),
                 ]));
             }
-            // No report, but the daemon is alive: failing the start while it
-            // keeps running (holding the lock and, once bound, the port)
-            // leaves a server the caller was told does not exist. Stop it —
-            // TERM then KILL, the same ladder every reaper here uses.
-            $pid = $daemonPid;
-            $gone = ProcessReaper::escalate(
-                static fn (int $signal): bool => @\posix_kill($pid, $signal),
-                static fn (): bool => !@\posix_kill($pid, 0),
-            );
 
             return self::failStart($args, $config, Lang::t($gone ? 'cli.serve.no_report_stopped' : 'cli.serve.no_report_unstopped', [
                 'seconds' => $seconds,
-                'pid' => $pid,
+                'pid' => $daemonPid,
                 'log' => $state->logPath(),
             ]));
         }
@@ -704,6 +696,30 @@ trait ServeStartup
         });
 
         return $listener;
+    }
+
+    /**
+     * The report never came: stop the daemon that greeted with its pid.
+     *
+     * No report, but the daemon is alive: failing the start while it keeps
+     * running (holding the lock and, once bound, the port) leaves a server the
+     * caller was told does not exist. TERM then KILL, the same ladder every
+     * reaper here uses.
+     *
+     * @return bool|null null when there is nothing alive to stop (no greeting,
+     *                   no ext-posix, or the daemon already died); otherwise
+     *                   whether the daemon is gone after the ladder
+     */
+    private static function stopUnreportedDaemon(?int $pid): ?bool
+    {
+        if ($pid === null || !\function_exists('posix_kill') || !@\posix_kill($pid, 0)) {
+            return null;
+        }
+
+        return ProcessReaper::escalate(
+            static fn (int $signal): bool => @\posix_kill($pid, $signal),
+            static fn (): bool => !@\posix_kill($pid, 0),
+        );
     }
 
     /**

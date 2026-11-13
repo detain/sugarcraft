@@ -64,7 +64,43 @@ final class ServeDetachReapTest extends TestCase
         $source = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Cli/Serve/ServeStartup.php');
 
         self::assertStringContainsString("'hello' => true, 'pid' => \\getmypid()", $source);
-        self::assertStringContainsString('ProcessReaper::escalate(', $source);
+        self::assertStringContainsString('self::stopUnreportedDaemon(', $source);
         self::assertStringContainsString("'cli.serve.no_report_stopped'", $source);
+    }
+
+    /**
+     * The live kill path: a real orphan (reparented to init, exactly what a
+     * detached daemon is) that never reports is TERMed by the ladder and is
+     * gone afterwards — not a source grep.
+     */
+    public function testALiveOrphanedDaemonIsStoppedByTheTimeoutLadder(): void
+    {
+        if (!\function_exists('posix_kill')) {
+            self::markTestSkipped('needs ext-posix');
+        }
+        $spawn = proc_open(['sh', '-c', 'sleep 60 >/dev/null 2>&1 & echo $!'], [1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+        self::assertIsResource($spawn);
+        $pid = (int) trim((string) stream_get_contents($pipes[1]));
+        fclose($pipes[1]);
+        proc_close($spawn);
+        self::assertGreaterThan(1, $pid);
+        self::assertTrue(posix_kill($pid, 0), 'fixture: the orphan is alive');
+
+        try {
+            $gone = (new \ReflectionMethod(ServeStartup::class, 'stopUnreportedDaemon'))->invoke(null, $pid);
+
+            self::assertTrue($gone, 'TERM landed and the orphan is gone');
+            self::assertFalse(@posix_kill($pid, 0), 'nothing is left holding the lock or the port');
+        } finally {
+            @posix_kill($pid, 9);
+        }
+    }
+
+    public function testNothingAliveToStopIsNullSoTheMessageStaysTheHonestNoReport(): void
+    {
+        $m = new \ReflectionMethod(ServeStartup::class, 'stopUnreportedDaemon');
+
+        self::assertNull($m->invoke(null, null), 'no greeting, no pid');
+        self::assertNull($m->invoke(null, 2_000_000_000), 'a pid that is not running');
     }
 }
