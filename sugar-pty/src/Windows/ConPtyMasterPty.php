@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Windows;
 
 use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Lang;
 use SugarCraft\Pty\PtyException;
 
 /**
@@ -158,7 +159,7 @@ final class ConPtyMasterPty implements MasterPty
         $written = $this->api->writeFile($this->inputPipe['write'], $bytes);
 
         if ($written === false) {
-            throw new PtyException('ConPTY master write failed: the input pipe is no longer writable');
+            throw new PtyException(Lang::t('windows.master.write_unwritable'));
         }
 
         return $written;
@@ -204,14 +205,14 @@ final class ConPtyMasterPty implements MasterPty
     public function stream(): mixed
     {
         throw new PtyException(
-            'a ConPTY master has no PHP stream resource; pump it with read($len, $timeout) polling',
+            Lang::t('windows.master.no_stream'),
         );
     }
 
     public function setBlocking(bool $blocking): void
     {
         throw new PtyException(
-            'a ConPTY master has no POSIX blocking mode; bound your pumps with read($len, $timeout) polling',
+            Lang::t('windows.master.no_blocking'),
         );
     }
 
@@ -222,7 +223,7 @@ final class ConPtyMasterPty implements MasterPty
      */
     public function fd(): int
     {
-        throw new PtyException('a ConPTY master has no POSIX file descriptor (Win32 pipe handles are not fds)');
+        throw new PtyException(Lang::t('windows.master.no_fd'));
     }
 
     /**
@@ -252,7 +253,7 @@ final class ConPtyMasterPty implements MasterPty
     private function assertOpen(): void
     {
         if ($this->closed) {
-            throw new PtyException('the ConPTY master is closed');
+            throw new PtyException(Lang::t('windows.master.closed'));
         }
     }
 }

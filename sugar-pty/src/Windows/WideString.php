@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Windows;
 
+use SugarCraft\Pty\Lang;
 use SugarCraft\Pty\PtyException;
 
 /**
@@ -71,7 +72,7 @@ final class WideString
         // keeps a future PHP build without it from silently handing callers a
         // '' where a converted string was promised.
         if ($wide === false) {
-            throw new PtyException('PHP cannot convert to UTF-16LE on this build');
+            throw new PtyException(Lang::t('windows.wide.to_utf16_unavailable'));
         }
 
         return $wide;
@@ -101,10 +102,9 @@ final class WideString
     public static function toUtf8(string $utf16le): string
     {
         if (($len = \strlen($utf16le)) % 2 !== 0) {
-            throw new PtyException(\sprintf(
-                'cannot decode UTF-16LE: %d bytes is not a whole number of 2-byte code units',
-                $len,
-            ));
+            throw new PtyException(
+                Lang::t('windows.wide.decode_odd', ['length' => $len]),
+            );
         }
 
         if ($len >= 2 && \substr($utf16le, -2) === self::NUL_UNIT) {
@@ -116,13 +116,13 @@ final class WideString
         }
 
         if (self::hasLoneSurrogate($utf16le)) {
-            throw new PtyException('cannot decode UTF-16LE: an unpaired surrogate code unit cannot name a UTF-8 string');
+            throw new PtyException(Lang::t('windows.wide.decode_unpaired'));
         }
 
         $utf8 = \mb_convert_encoding($utf16le, 'UTF-8', 'UTF-16LE');
 
         if ($utf8 === false) {
-            throw new PtyException('PHP cannot convert from UTF-16LE on this build');
+            throw new PtyException(Lang::t('windows.wide.from_utf16_unavailable'));
         }
 
         return $utf8;
@@ -175,10 +175,9 @@ final class WideString
     private static function requireValidUtf8(string $utf8): void
     {
         if ($utf8 !== '' && !\mb_check_encoding($utf8, 'UTF-8')) {
-            throw new PtyException(\sprintf(
-                'cannot encode a path or command line as UTF-16LE: the value is not valid UTF-8 (%d bytes)',
-                \strlen($utf8),
-            ));
+            throw new PtyException(
+                Lang::t('windows.wide.encode_invalid', ['length' => \strlen($utf8)]),
+            );
         }
     }
 

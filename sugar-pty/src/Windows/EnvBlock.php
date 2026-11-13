@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Windows;
 
+use SugarCraft\Pty\Lang;
 use SugarCraft\Pty\PtyException;
 
 /**
@@ -83,11 +84,9 @@ final class EnvBlock
 
         foreach ($variables as $name => $value) {
             if (!\is_string($value)) {
-                throw new PtyException(\sprintf(
-                    'environment value for "%s" must be a string, %s given',
-                    (string) $name,
-                    \get_debug_type($value),
-                ));
+                throw new PtyException(
+                    Lang::t('windows.env.value_type', ['name' => (string) $name, 'type' => \get_debug_type($value)]),
+                );
             }
 
             self::guardName((string) $name);
@@ -203,33 +202,28 @@ final class EnvBlock
     private static function guardName(string $name): void
     {
         if ($name === '') {
-            throw new PtyException('an environment variable name cannot be empty');
+            throw new PtyException(Lang::t('windows.env.name_empty'));
         }
 
         if (\str_contains($name, "\0")) {
-            throw new PtyException(\sprintf(
-                'environment variable name "%s" contains a NUL byte, which is also the block\'s entry terminator',
-                $name,
-            ));
+            throw new PtyException(
+                Lang::t('windows.env.name_nul', ['name' => $name]),
+            );
         }
 
         if (\str_contains($name, '=')) {
-            throw new PtyException(\sprintf(
-                'environment variable name "%s" contains "="; the first "=" is the name/value split, '
-                . 'so this entry would reach the child under a different name than the one given',
-                $name,
-            ));
+            throw new PtyException(
+                Lang::t('windows.env.name_equals', ['name' => $name]),
+            );
         }
     }
 
     private static function guardValue(string $name, string $value): void
     {
         if (\str_contains($value, "\0")) {
-            throw new PtyException(\sprintf(
-                'environment value for "%s" contains a NUL byte, which would end the entry where '
-                . 'the child reads it and leave the remainder of the block unaccounted for',
-                $name,
-            ));
+            throw new PtyException(
+                Lang::t('windows.env.value_nul', ['name' => $name]),
+            );
         }
     }
 

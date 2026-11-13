@@ -6,6 +6,7 @@ namespace SugarCraft\Pty\Windows;
 
 use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\Contract\SlavePty;
+use SugarCraft\Pty\Lang;
 use SugarCraft\Pty\PtyException;
 
 /**
@@ -75,13 +76,12 @@ final class ConPtySlavePty implements SlavePty
 
         if ($controllingTerminal) {
             throw new PtyException(
-                'ConPTY has no controlling terminal; Ctrl+C is delivered as console input by the pseudo '
-                . 'console itself, so controllingTerminal cannot be honoured (capabilities() says so)',
+                Lang::t('windows.slave.no_ctty'),
             );
         }
 
         if ($this->master->isClosed()) {
-            throw new PtyException('cannot spawn: the ConPTY master is closed');
+            throw new PtyException(Lang::t('windows.slave.closed_spawn'));
         }
 
         if ($cols !== null || $rows !== null) {

@@ -97,6 +97,27 @@ final class LangTest extends TestCase
         );
     }
 
+    public function testEveryWindowsThrowSiteSpeaksThroughLang(): void
+    {
+        // PTY-26 side B: src/Windows carries no hand-rolled operator
+        // messages any more — every PtyException site routes through
+        // Lang::t (programmer-guard InvalidArgumentException sites are
+        // raw by the PTY-25 policy and out of this census). A fresh
+        // literal message here goes red until it gets a windows.* key.
+        $offenders = [];
+        foreach (glob(\dirname(__DIR__) . '/src/Windows/*.php') ?: [] as $file) {
+            $src = (string) \file_get_contents($file);
+            if (\preg_match_all('/new PtyException\(\s*((?:[^;]|\n)*)\);/', $src, $m, \PREG_SET_ORDER)) {
+                foreach ($m as $set) {
+                    if (!\str_contains($set[1], 'Lang::t(')) {
+                        $offenders[] = \basename($file) . ': ' . \substr(\trim($set[1]), 0, 60);
+                    }
+                }
+            }
+        }
+        $this->assertSame([], $offenders, 'untranslated PtyException message(s) in src/Windows');
+    }
+
     public function testTWithPlaceholderSubstitution(): void
     {
         T::reset();

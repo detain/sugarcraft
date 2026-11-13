@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Windows;
 
 use SugarCraft\Pty\Contract\Child;
+use SugarCraft\Pty\Lang;
 use SugarCraft\Pty\PtyException;
 
 /**
@@ -68,10 +69,9 @@ final class ConPtyChild implements Child
     public function __get(string $name): int
     {
         if ($name !== 'pid') {
-            throw new PtyException(\sprintf(
-                'ConPtyChild exposes only the pid property bridge, got $%s',
-                $name,
-            ));
+            throw new PtyException(
+                Lang::t('windows.child.bridge_only', ['name' => $name]),
+            );
         }
 
         return $this->pid;
@@ -95,10 +95,9 @@ final class ConPtyChild implements Child
         }
 
         if ($result !== ConPtyApi::WAIT_OBJECT_0) {
-            throw new PtyException(\sprintf(
-                'waiting on child process handle %d failed (WAIT_FAILED)',
-                $this->process,
-            ));
+            throw new PtyException(
+                Lang::t('windows.child.wait_failed', ['handle' => $this->process]),
+            );
         }
 
         $this->exitCode = $this->api->getExitCodeProcess($this->process);
@@ -127,17 +126,15 @@ final class ConPtyChild implements Child
             // An INFINITE wait cannot time out on a real host; a binding that answers
             // otherwise is lying about the wait, and reading STILL_ACTIVE as an exit
             // code would forge success. Fail loud.
-            throw new PtyException(\sprintf(
-                'the INFINITE wait on child process handle %d unexpectedly returned WAIT_TIMEOUT',
-                $this->process,
-            ));
+            throw new PtyException(
+                Lang::t('windows.child.infinite_timeout', ['handle' => $this->process]),
+            );
         }
 
         if ($result === ConPtyApi::WAIT_FAILED) {
-            throw new PtyException(\sprintf(
-                'waiting on child process handle %d failed (WAIT_FAILED)',
-                $this->process,
-            ));
+            throw new PtyException(
+                Lang::t('windows.child.wait_failed', ['handle' => $this->process]),
+            );
         }
 
         // Order matters: the code is read BEFORE closeJob, whose

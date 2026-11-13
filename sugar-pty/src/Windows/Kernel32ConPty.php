@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Windows;
 
 use SugarCraft\Pty\Exception\UnsupportedPlatformException;
+use SugarCraft\Pty\Lang;
 use SugarCraft\Pty\PtyException;
 
 /**
@@ -335,9 +336,7 @@ CDEF;
             self::$ffi = \FFI::cdef(self::cdef(), self::LIBRARY);
         } catch (\FFI\Exception $e) {
             throw new PtyException(
-                \sprintf('cannot bind %s for ConPTY: %s', self::LIBRARY, $e->getMessage()),
-                0,
-                $e,
+                Lang::t('windows.k32.bind_failed', ['library' => self::LIBRARY, 'detail' => $e->getMessage()]),
             );
         }
 
@@ -365,15 +364,9 @@ CDEF;
     public static function checkGeometry(int $width, int $height): void
     {
         if ($width < 1 || $width > 32767 || $height < 1 || $height > 32767) {
-            throw new PtyException(\sprintf(
-                'ConPTY geometry %dx%d is out of range: COORD is a pair of signed shorts, '
-                . 'so 1..32767 is all a pseudo console can carry; packing these numbers would '
-                . 'silently become %dx%d',
-                $width,
-                $height,
-                ($width + 32768) % 65536 - 32768,
-                ($height + 32768) % 65536 - 32768,
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.geometry_range', ['width' => $width, 'height' => $height, 'packsWidth' => ($width + 32768) % 65536 - 32768, 'packsHeight' => ($height + 32768) % 65536 - 32768]),
+            );
         }
     }
 
@@ -390,13 +383,9 @@ CDEF;
         $hresult = $ffi->CreatePseudoConsole($size, $input, $output, 0, \FFI::addr($out));
 
         if ((int) $hresult !== self::S_OK) {
-            throw new PtyException(\sprintf(
-                'CreatePseudoConsole(%dx%d) failed with HRESULT 0x%08X (win32 error %d)',
-                $width,
-                $height,
-                $hresult & 0xFFFFFFFF,
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.create_pseudoconsole', ['width' => $width, 'height' => $height, 'hr' => \sprintf('%08X', $hresult & 0xFFFFFFFF), 'error' => $this->lastError()]),
+            );
         }
 
         return (int) $out->cdata;
@@ -418,12 +407,9 @@ CDEF;
         $hresult = $ffi->ResizePseudoConsole($pseudoConsole, $size);
 
         if ((int) $hresult !== self::S_OK) {
-            throw new PtyException(\sprintf(
-                'ResizePseudoConsole(%dx%d) failed with HRESULT 0x%08X',
-                $width,
-                $height,
-                $hresult & 0xFFFFFFFF,
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.resize_pseudoconsole', ['width' => $width, 'height' => $height, 'hr' => \sprintf('%08X', $hresult & 0xFFFFFFFF)]),
+            );
         }
     }
 
@@ -451,11 +437,9 @@ CDEF;
         $ok = $ffi->CreatePipe(\FFI::addr($read), \FFI::addr($write), null, $bufferSize);
 
         if (!$ok) {
-            throw new PtyException(\sprintf(
-                'CreatePipe(size=%d) failed with win32 error %d',
-                $bufferSize,
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.create_pipe', ['size' => $bufferSize, 'error' => $this->lastError()]),
+            );
         }
 
         // Scalar out-params from FFI::new() are readable ONLY through ->cdata:
@@ -562,11 +546,9 @@ CDEF;
         $queryError = $this->lastError();
 
         if ((int) $size->cdata <= 0) {
-            throw new PtyException(\sprintf(
-                'InitializeProcThreadAttributeList(%d) reported no size (win32 error %d)',
-                $attributeCount,
-                $queryError,
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.attrlist_no_size', ['count' => $attributeCount, 'error' => $queryError]),
+            );
         }
 
         $bytes = (int) $size->cdata;
@@ -579,11 +561,9 @@ CDEF;
         $list = $ffi->HeapAlloc($this->heap(), 0, $bytes);
 
         if ($list === null) {
-            throw new PtyException(\sprintf(
-                'HeapAlloc(%d bytes) for the attribute list failed with win32 error %d',
-                $bytes,
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.heap_alloc', ['bytes' => $bytes, 'error' => $this->lastError()]),
+            );
         }
 
         $size2 = $ffi->new('SIZE_T');
@@ -599,12 +579,9 @@ CDEF;
         if (!$ok) {
             $ffi->HeapFree($this->heap(), 0, $list);
 
-            throw new PtyException(\sprintf(
-                'InitializeProcThreadAttributeList(%d, %d bytes) failed with win32 error %d',
-                $attributeCount,
-                $bytes,
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.attrlist_init', ['count' => $attributeCount, 'bytes' => $bytes, 'error' => $this->lastError()]),
+            );
         }
 
         $id = $this->nextId++;
@@ -618,10 +595,9 @@ CDEF;
     public function setPseudoConsoleAttribute(int $attributeList, int $pseudoConsole): void
     {
         if (!isset($this->attributeLists[$attributeList])) {
-            throw new PtyException(\sprintf(
-                'attribute list id %d is not live; it was never created or was already deleted',
-                $attributeList,
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.attrlist_dead', ['id' => $attributeList]),
+            );
         }
 
         $ffi = $this->ffi();
@@ -692,18 +668,9 @@ CDEF;
             $probeResult = (int) $ffi->ResizePseudoConsole($pseudoConsole, $coord);
             $probeError = $this->lastError();
 
-            throw new PtyException(\sprintf(
-                'UpdateProcThreadAttribute(PSEUDOCONSOLE) failed with win32 error %d [byPtr err=%d, blobAddr=0x%016X, align=%d, magic=0x%016X, hpcn=0x%016X, probeHr=0x%08X, probeErr=%d, cbSize=%d]',
-                $byValueError,
-                $byPtrError,
-                $blobAddr,
-                $blobAddr % 16,
-                (int) $magicWord->cdata,
-                $pseudoConsole,
-                $probeResult,
-                $probeError,
-                $cbSize,
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.update_attr_forensics', ['error' => $byValueError, 'byPtrError' => $byPtrError, 'blobAddr' => \sprintf('%016X', $blobAddr), 'align' => $blobAddr % 16, 'magic' => \sprintf('%016X', (int) $magicWord->cdata), 'hpcn' => \sprintf('%016X', $pseudoConsole), 'probeHr' => \sprintf('%08X', $probeResult), 'probeErr' => $probeError, 'cbSize' => $cbSize]),
+            );
         }
     }
 
@@ -733,15 +700,13 @@ CDEF;
         $list = $this->attributeLists[$attributeList] ?? null;
 
         if ($list === null) {
-            throw new PtyException(\sprintf(
-                'createProcess needs a live attribute list id; %d is not one, so the child would '
-                . 'have started with no pseudo-console and appeared to hang',
-                $attributeList,
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.createprocess_needs_list', ['id' => $attributeList]),
+            );
         }
 
         if ($commandLine === '' && $applicationName === '') {
-            throw new PtyException('createProcess needs an application name or a command line');
+            throw new PtyException(Lang::t('windows.k32.createprocess_needs_target'));
         }
 
         $ffi = $this->ffi();
@@ -802,11 +767,9 @@ CDEF;
         );
 
         if (!$ok) {
-            throw new PtyException(\sprintf(
-                'CreateProcessW failed for %s with win32 error %d',
-                \SugarCraft\Pty\Argv::describeWide($applicationName, $commandLine),
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.createprocessw', ['target' => \SugarCraft\Pty\Argv::describeWide($applicationName, $commandLine), 'error' => $this->lastError()]),
+            );
         }
 
         // MAJOR-2, cured at the declaration: `(int)` applied to a POINTER-typed
@@ -856,10 +819,9 @@ CDEF;
             // destroy-the-evidence-cleanly arm as the assign failure.
             $detail = $this->lastError();
             $this->terminateAndClose($process, $thread);
-            throw new PtyException(\sprintf(
-                'ResumeThread failed with win32 error %d; the suspended child was terminated',
-                $detail,
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.resume_thread', ['error' => $detail]),
+            );
         }
 
         $this->closeHandle($thread);
@@ -897,10 +859,9 @@ CDEF;
         $code = $ffi->new('DWORD');
 
         if (!$ffi->GetExitCodeProcess($handle, \FFI::addr($code))) {
-            throw new PtyException(\sprintf(
-                'GetExitCodeProcess failed with win32 error %d',
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.get_exit_code', ['error' => $this->lastError()]),
+            );
         }
 
         return (int) $code->cdata;
@@ -936,10 +897,9 @@ CDEF;
             $handle = (int) $this->ffi()->GetProcessHeap();
 
             if ($handle === 0) {
-                throw new PtyException(\sprintf(
-                    'GetProcessHeap failed with win32 error %d',
-                    $this->lastError(),
-                ));
+                throw new PtyException(
+                    Lang::t('windows.k32.get_process_heap', ['error' => $this->lastError()]),
+                );
             }
 
             $this->processHeap = $handle;
@@ -958,10 +918,9 @@ CDEF;
         $handle = (int) $ffi->CreateJobObjectW(null, null);
 
         if ($handle === 0) {
-            throw new PtyException(\sprintf(
-                'CreateJobObjectW failed with win32 error %d',
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.create_job', ['error' => $this->lastError()]),
+            );
         }
 
         $info = $ffi->new('JOBOBJECT_EXTENDED_LIMIT_INFORMATION');
@@ -979,10 +938,9 @@ CDEF;
             // process tree would survive us.
             $this->closeHandle($handle);
 
-            throw new PtyException(\sprintf(
-                'SetInformationJobObject(KILL_ON_JOB_CLOSE) failed with win32 error %d',
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.set_job_info', ['error' => $this->lastError()]),
+            );
         }
 
         $id = $this->nextId++;
@@ -998,11 +956,9 @@ CDEF;
         $this->guardJob($job, __METHOD__);
 
         if (!$this->ffi()->AssignProcessToJobObject($this->jobs[$job]['handle'], $process)) {
-            throw new PtyException(\sprintf(
-                'AssignProcessToJobObject failed with win32 error %d; the child would run outside '
-                . 'the job and survive its termination',
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.assign_job', ['error' => $this->lastError()]),
+            );
         }
     }
 
@@ -1011,10 +967,9 @@ CDEF;
         $this->guardJob($job, __METHOD__);
 
         if (!$this->ffi()->TerminateJobObject($this->jobs[$job]['handle'], $exitCode)) {
-            throw new PtyException(\sprintf(
-                'TerminateJobObject failed with win32 error %d',
-                $this->lastError(),
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.terminate_job', ['error' => $this->lastError()]),
+            );
         }
     }
 
@@ -1036,11 +991,9 @@ CDEF;
     private function guardJob(int $job, string $from): void
     {
         if (!isset($this->jobs[$job])) {
-            throw new PtyException(\sprintf(
-                '%s: job id %d is not live; it was never created or was already closed',
-                $from,
-                $job,
-            ));
+            throw new PtyException(
+                Lang::t('windows.k32.job_dead', ['from' => $from, 'job' => $job]),
+            );
         }
     }
 

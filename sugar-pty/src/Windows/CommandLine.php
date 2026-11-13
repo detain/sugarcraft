@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Windows;
 
+use SugarCraft\Pty\Lang;
 use SugarCraft\Pty\PtyException;
 
 /**
@@ -87,10 +88,9 @@ final class CommandLine
 
         foreach ($argv as $argument) {
             if (!\is_string($argument)) {
-                throw new PtyException(\sprintf(
-                    'a command-line argument must be a string, %s given',
-                    \get_debug_type($argument),
-                ));
+                throw new PtyException(
+                    Lang::t('windows.cmdline.arg_type', ['type' => \get_debug_type($argument)]),
+                );
             }
 
             $parts[] = self::escape($argument);
@@ -108,8 +108,7 @@ final class CommandLine
     {
         if (\str_contains($argument, "\0")) {
             throw new PtyException(
-                'a command-line argument cannot contain a NUL byte: CreateProcessW ends the '
-                . 'command line there, so everything after it would silently vanish',
+                Lang::t('windows.cmdline.arg_nul'),
             );
         }
 
@@ -172,8 +171,7 @@ final class CommandLine
     {
         if (\str_contains($commandLine, "\0")) {
             throw new PtyException(
-                'a command line cannot contain a NUL byte; a real one is truncated at that point '
-                . 'by CreateProcessW and would have reached here as a shorter string',
+                Lang::t('windows.cmdline.line_nul'),
             );
         }
 
