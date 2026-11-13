@@ -71,4 +71,26 @@ final class RendererFactoryMethodsTest extends TestCase
         $out = $r->render('# Hello');
         $this->assertSame('# Hello', $out);
     }
+
+    /**
+     * SM-S48: the refusal carries the glamour-faithful canonical slug
+     * (the message derives from Theme::names(); this pin keeps a
+     * reintroduced literal 'tokyonight' list from silently returning),
+     * while the alias spelling still resolves through normalisation.
+     */
+    public function testStandardStyleRefusalSpellsTokyoNightCanonically(): void
+    {
+        try {
+            Renderer::plain()->withStandardStyle('nope');
+            $this->fail('unknown standard style must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('tokyo-night', $e->getMessage());
+            $this->assertStringNotContainsString('tokyonight', $e->getMessage());
+        }
+        $this->assertInstanceOf(
+            Renderer::class,
+            Renderer::plain()->withStandardStyle('tokyonight'),
+            'the alias spelling stays accepted'
+        );
+    }
 }
