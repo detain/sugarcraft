@@ -29,7 +29,7 @@ final class Binding
      * Construct a disabled-from-the-start binding. Equivalent to
      * `(new Binding($keys, $help))->disable()` — kept as a factory so
      * callers configuring a KeyMap up front can express the intent
-     * inline. Mirrors upstream Bubbles' `key.WithDisabled`.
+     * inline. Mirrors charmbracelet/bubbles `key.WithDisabled`.
      *
      * @param list<string> $keys
      */
@@ -64,9 +64,9 @@ final class Binding
     }
 
     /**
-     * Variadic top-level helper: `Binding::any($key, $up, $down)`
+     * Variadic top-level helper: `Binding::any($msg, $up, $down)`
      * returns true when `$key` matches any of the supplied bindings.
-     * Mirrors upstream `Matches(KeyMsg, ...Binding)`.
+     * Mirrors charmbracelet/bubbles `Matches(KeyMsg, ...Binding)`.
      */
     public static function any(KeyMsg $msg, self ...$bindings): bool
     {
@@ -89,7 +89,7 @@ final class Binding
     }
 
     /**
-     * Replace the matched key list. Mirrors upstream `SetKeys`.
+     * Replace the matched key list. Mirrors charmbracelet/bubbles `SetKeys`.
      *
      * @param list<string> $keys
      */
@@ -99,7 +99,7 @@ final class Binding
     }
 
     /**
-     * Replace the help label. Mirrors upstream `SetHelp` — `withHelp`
+     * Replace the help label. Mirrors charmbracelet/bubbles `SetHelp` — `withHelp`
      * returns the same shape, kept as the historical name.
      */
     public function setHelp(string $key, string $desc): self

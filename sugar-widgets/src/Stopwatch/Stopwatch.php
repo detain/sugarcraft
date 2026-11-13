@@ -135,7 +135,7 @@ final class Stopwatch implements Model
 
     /**
      * Stable per-instance ID — used by {@see StopwatchTick} to route the
-     * matching update events. Mirrors the upstream Bubbles `ID()`.
+     * matching update events. Mirrors charmbracelet/bubbles `ID()`.
      */
     public function id(): int { return $this->id; }
 
@@ -148,14 +148,14 @@ final class Stopwatch implements Model
     public function elapsed(): float { return $this->elapsed; }
 
     /**
-     * Tick cadence in seconds. Mirrors the upstream `Interval` field
+     * Tick cadence in seconds. Mirrors charmbracelet/bubbles `Interval` field
      * which Bubbles exposes for inspection by surrounding code.
      */
     public function interval(): float { return $this->interval; }
 
     /**
      * Recreate the stopwatch with a new interval. Elapsed time and
-     * running state are preserved. Mirrors upstream's mutable
+     * running state are preserved. Mirrors charmbracelet/bubbles' mutable
      * `Interval` field assignment (rendered immutable here so
      * snapshot-based tests stay deterministic).
      */

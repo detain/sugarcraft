@@ -193,7 +193,7 @@ final class Paginator implements Model
      * 1-based current page and total page count, in that order.
      * Default `'%d/%d'` (e.g. `"3/8"`); upstream Bubbles defaults to
      * `'%d/%d'` for ASCII contexts but lets callers swap it for e.g.
-     * `'Page %d of %d'`. Mirrors `ArabicFormat`.
+     * `'Page %d of %d'`. Mirrors charmbracelet/bubbles `ArabicFormat`.
      *
      * The format is parsed at the boundary: it must be a valid sprintf
      * template consuming at most two integer arguments, so view() can
@@ -220,7 +220,7 @@ final class Paginator implements Model
      * or when the total isn't yet known and the caller wants to
      * reserve N dots up-front. The total reflects through to
      * {@see totalPages()} by setting `totalItems = pages * perPage`,
-     * which keeps the existing arithmetic consistent. Mirrors
+     * which keeps the existing arithmetic consistent. Mirrors charmbracelet/bubbles
      * `SetTotalPages`.
      */
     public function withTotalPages(int $pages): self
@@ -244,7 +244,7 @@ final class Paginator implements Model
     /**
      * Number of items rendered on the current page. Equivalent to
      * `min(perPage, totalItems - perPage * page)` clamped at 0.
-     * Mirrors `ItemsOnPage(totalItems)` minus the redundant arg.
+     * Mirrors charmbracelet/bubbles `ItemsOnPage(totalItems)` minus the redundant arg.
      */
     public function itemsOnPage(): int
     {

@@ -169,7 +169,7 @@ final class AnimatedProgress implements Model
         return [$next, $next->scheduleTick()];
     }
 
-    /** Value verb; see {@see setPercent()}. Mirrors Bubbles' `IncrPercent`. */
+    /** Value verb; see {@see setPercent()}. Mirrors charmbracelet/bubbles `IncrPercent`. */
     public function incrPercent(float $delta): self
     {
         return $this->setPercent($this->target + $delta);
@@ -181,7 +181,7 @@ final class AnimatedProgress implements Model
         return $this->setPercentWithCmd($this->target + $delta);
     }
 
-    /** Value verb; see {@see setPercent()}. Mirrors Bubbles' `DecrPercent`. */
+    /** Value verb; see {@see setPercent()}. Mirrors charmbracelet/bubbles `DecrPercent`. */
     public function decrPercent(float $delta): self
     {
         return $this->setPercent($this->target - $delta);

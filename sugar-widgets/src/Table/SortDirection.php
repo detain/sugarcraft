@@ -24,8 +24,8 @@ enum SortDirection: string
     }
 
     /**
-     * The header glyph for this direction (M5 sort indicator). Mirrors
-     * bubbles-table's default arrow pair; U+2191/U+2193 are single-cell
+     * The header glyph for this direction (M5 sort indicator). Mirrors charmbracelet/bubbles
+     * table's default arrow pair; U+2191/U+2193 are single-cell
      * everywhere (Width::string = 1).
      */
     public function marker(): string

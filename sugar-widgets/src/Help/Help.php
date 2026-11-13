@@ -83,7 +83,7 @@ final class Help
 
     /**
      * Override the rendered colour / styling of every visible help
-     * element. Mirrors upstream Bubbles' `help.Styles` struct. Default
+     * element. Mirrors charmbracelet/bubbles `help.Styles` struct. Default
      * null means "no styling" (every binding rendered verbatim) so
      * existing callers / snapshots are unchanged.
      */
@@ -111,7 +111,7 @@ final class Help
     /**
      * Toggle the unified {@see view()} entry between short and full
      * rendering. `false` (default) → short row; `true` → full block.
-     * Mirrors Bubbles' `Help.ShowAll` field.
+     * Mirrors charmbracelet/bubbles `Help.ShowAll` field.
      */
     public function withShowAll(bool $on = true): self
     {
@@ -148,7 +148,7 @@ final class Help
      * Full (W-17): below ~40 cells the column matrix stacks into a single
      * column, and every row is clamped to the same SGR-balanced
      * truncation, so no row overruns the cap. Pass `0` (default) to
-     * disable truncation. Mirrors Bubbles' `Help.SetWidth` / `Help.Width`.
+     * disable truncation. Mirrors charmbracelet/bubbles `Help.SetWidth` / `Help.Width`.
      */
     public function withWidth(int $cells): self
     {
@@ -258,7 +258,7 @@ final class Help
 
     /**
      * Unified entry: render short or full according to {@see $showAll}.
-     * Mirrors Bubbles' `Help.View(KeyMap)`.
+     * Mirrors charmbracelet/bubbles `Help.View(KeyMap)`.
      */
     public function view(KeyMap $map): string
     {
@@ -281,7 +281,7 @@ final class Help
 
     /**
      * Render an arbitrary list of {@see Binding}s as a short row,
-     * bypassing the KeyMap. Mirrors Bubbles'
+     * bypassing the KeyMap. Mirrors charmbracelet/bubbles
      * `Help.ShortHelpView([]Binding)`.
      *
      * @param list<Binding> $bindings
@@ -307,7 +307,7 @@ final class Help
 
     /**
      * Render an arbitrary multi-column matrix of {@see Binding}s as a
-     * full block, bypassing the KeyMap. Mirrors Bubbles'
+     * full block, bypassing the KeyMap. Mirrors charmbracelet/bubbles
      * `Help.FullHelpView([][]Binding)`.
      *
      * @param list<list<Binding>> $columns

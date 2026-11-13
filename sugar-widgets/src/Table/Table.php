@@ -96,7 +96,7 @@ final class Table implements Model
     /**
      * Replace headers + per-column explicit widths in one call. Each
      * `Column` carries a title and an optional fixed width; passing
-     * `width=0` lets the column auto-size. Mirrors Bubbles' `WithColumns`.
+     * `width=0` lets the column auto-size. Mirrors charmbracelet/bubbles `WithColumns`.
      *
      * @param list<Column> $columns
      */
@@ -304,7 +304,7 @@ final class Table implements Model
         return $out;
     }
 
-    /** Read-only accessor for the rows. Mirrors Bubbles' `Rows()`. */
+    /** Read-only accessor for the rows. Mirrors charmbracelet/bubbles `Rows()`. */
     public function rowsList(): array { return $this->rows; }
 
     /** Read-only accessor for the headers. */
@@ -312,7 +312,7 @@ final class Table implements Model
 
     /**
      * Cursor position (0-indexed) within the visible (sorted → filtered)
-     * row projection. Mirrors Bubbles' `Cursor()`.
+     * row projection. Mirrors charmbracelet/bubbles `Cursor()`.
      */
     public function cursor(): int { return $this->cursor; }
 
@@ -329,7 +329,7 @@ final class Table implements Model
     /**
      * Apply the supplied {@see Styles} to header / cell / selected
      * rendering. Pass null to fall back to the default reverse-video
-     * highlight + underlined header. Mirrors Bubbles' `SetStyles`.
+     * highlight + underlined header. Mirrors charmbracelet/bubbles `SetStyles`.
      */
     public function withStyles(?Styles $styles): self
     {
@@ -365,7 +365,7 @@ final class Table implements Model
      *
      * Pass null to clear the override.
      *
-     * Mirrors charmbracelet/bubbles #246 (long-requested upstream
+     * Mirrors charmbracelet/bubbles issue 246 (https://github.com/charmbracelet/bubbles/issues/246) (long-requested upstream
      * feature) and lipgloss / sugar-style `Table::styleFunc()`.
      *
      * @param ?\Closure(int $row, int $col): \SugarCraft\Style\Style $fn
@@ -478,9 +478,9 @@ final class Table implements Model
         return $this->withSize($width, $height);
     }
 
-    /** Move the cursor to row 0. Mirrors Bubbles' `GotoTop`. */
+    /** Move the cursor to row 0. Mirrors charmbracelet/bubbles `GotoTop`. */
     public function gotoTop(): self    { return $this->moveCursor(0); }
-    /** Move the cursor to the last row. Mirrors `GotoBottom`. */
+    /** Move the cursor to the last row. Mirrors charmbracelet/bubbles `GotoBottom`. */
     public function gotoBottom(): self { return $this->moveCursor(PHP_INT_MAX); }
     /** Move cursor up `$n` rows. Default 1. */
     public function moveUp(int $n = 1): self   { return $this->moveCursor($this->cursor - max(1, $n)); }

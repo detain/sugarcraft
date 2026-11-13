@@ -19,7 +19,7 @@ use SugarCraft\Style\Style;
  * scroll window.
  *
  * Mirrors the long-requested upstream charmbracelet/bubbles `Tree`
- * (issue #233). The static (non-interactive) tree renderer stays at
+ * (issue 233 (https://github.com/charmbracelet/bubbles/issues/233)). The static (non-interactive) tree renderer stays at
  * `\SugarCraft\Style\Tree\Tree`; this component is the
  * Bubble-Tea-shaped Model wrapper.
  *

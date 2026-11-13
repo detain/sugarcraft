@@ -11,7 +11,7 @@ use SugarCraft\Widgets\Lang;
  * table auto-size the column to fit its widest cell; any positive
  * value forces that cell width (truncating longer values).
  *
- * Mirrors Bubbles' `Column{Title, Width}` struct.
+ * Mirrors charmbracelet/bubbles `Column{Title, Width}` struct.
  */
 final class Column
 {

@@ -171,19 +171,19 @@ final class Timer implements Model
 
     /**
      * Stable per-instance ID — used by {@see TimerTick} / {@see TimeoutMsg}
-     * routing. Mirrors upstream Bubbles `ID()`.
+     * routing. Mirrors charmbracelet/bubbles `ID()`.
      */
     public function id(): int { return $this->id; }
 
     /**
-     * Tick cadence in seconds. Mirrors the upstream `Interval` field
+     * Tick cadence in seconds. Mirrors charmbracelet/bubbles `Interval` field
      * which Bubbles exposes for inspection by surrounding code (e.g.
      * progress bars syncing animation frames to the tick interval).
      */
     public function interval(): float { return $this->interval; }
 
     /**
-     * Remaining duration in seconds. Mirrors the upstream `Timeout`
+     * Remaining duration in seconds. Mirrors charmbracelet/bubbles `Timeout`
      * field. Returns 0 for a timer that has fired its
      * {@see TimeoutMsg}; returns the original duration before
      * {@see start()} is called.
@@ -192,7 +192,7 @@ final class Timer implements Model
 
     /**
      * Recreate the timer with a new interval. Stopped/running state and
-     * the remaining duration are preserved. Mirrors upstream's mutable
+     * the remaining duration are preserved. Mirrors charmbracelet/bubbles' mutable
      * `Interval` field assignment (which we render immutable here so
      * snapshot-based tests stay deterministic).
      */

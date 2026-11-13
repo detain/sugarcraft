@@ -163,13 +163,13 @@ final class Progress
         return $this->mutate(percent: self::clampPercent($p));
     }
 
-    /** Increase percent by delta. Mirrors Bubbles' `IncrPercent`. */
+    /** Increase percent by delta. Mirrors charmbracelet/bubbles `IncrPercent`. */
     public function incrPercent(float $delta): self
     {
         return $this->withPercent($this->percent + $delta);
     }
 
-    /** Decrease percent by delta. Mirrors Bubbles' `DecrPercent`. */
+    /** Decrease percent by delta. Mirrors charmbracelet/bubbles `DecrPercent`. */
     public function decrPercent(float $delta): self
     {
         return $this->withPercent($this->percent - $delta);
@@ -212,7 +212,7 @@ final class Progress
 
     /**
      * Render a smooth gradient across the filled cells from `$start`
-     * to `$end`. Mirrors Bubbles' `WithGradient`. Overrides any flat
+     * to `$end`. Mirrors charmbracelet/bubbles `WithGradient`. Overrides any flat
      * `fillColor` set previously. Pass either side as null to clear
      * the gradient and revert to the flat fill colour.
      */
@@ -226,7 +226,7 @@ final class Progress
 
     /**
      * Disable gradient rendering and fall back to a flat `$color`.
-     * Mirrors Bubbles' `WithSolidFill`.
+     * Mirrors charmbracelet/bubbles `WithSolidFill`.
      */
     public function withSolidFill(Color $color): self
     {
@@ -281,7 +281,7 @@ final class Progress
     /**
      * Closure invoked per filled cell to produce a {@see Color}:
      * `fn(int $cell, int $filledCells, float $percent, int $barWidth): Color`.
-     * Wins over every other colour setting when set. Mirrors
+     * Wins over every other colour setting when set. Mirrors charmbracelet/bubbles
      * upstream `WithColorFunc`.
      *
      * `$filledCells` is the FILLED count, not the bar width — so the
@@ -304,7 +304,7 @@ final class Progress
     /**
      * Custom format string for the percent suffix. Receives the
      * 0-100 integer via printf, e.g. `'%3d%%'` (default), `'%5.1f%%'`,
-     * or `'(%d%%)'`. Mirrors Bubbles' `PercentFormat`.
+     * or `'(%d%%)'`. Mirrors charmbracelet/bubbles `PercentFormat`.
      *
      * @throws \InvalidArgumentException when the format is not a valid
      *         sprintf consuming one integer — checked at store time so
@@ -339,7 +339,7 @@ final class Progress
 
     /**
      * Render the bar at an explicit percent without mutating state.
-     * Mirrors Bubbles' `ViewAs`.
+     * Mirrors charmbracelet/bubbles `ViewAs`.
      */
     public function viewAs(float $percent): string
     {

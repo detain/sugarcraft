@@ -10,7 +10,7 @@ use SugarCraft\Style\Style;
  * Styles for {@see Help}: one slot per visible help element. All
  * default to a no-op {@see Style} so existing snapshot tests keep
  * passing; pass non-default styles to {@see Help::withStyles()} to
- * customise. Mirrors upstream Bubbles' `help.Styles`.
+ * customise. Mirrors charmbracelet/bubbles `help.Styles`.
  */
 final class Styles
 {

@@ -17,6 +17,6 @@ enum ProgressRenderMode
     /** Single-line: filled ━ (U+2501), empty ─ (U+2500), no percentage text. */
     case Line;
 
-    /** Thin gauge: filled ▌ (U+2592), empty ▒ (U+2592), with percent text like Block. */
+    /** Thin gauge: filled ▌ (U+258C), empty ▒ (U+2592), with percent text like Block. */
     case Slim;
 }

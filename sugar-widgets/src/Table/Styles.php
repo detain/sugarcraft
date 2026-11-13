@@ -16,7 +16,7 @@ use SugarCraft\Style\Style;
  * before, every unset slot defaulted to a no-op Style and the selection
  * highlight vanished the moment any style object was passed).
  * {@see Table::withStyles()} carries them; pass `null` to drop the object
- * entirely (same bytes via the fallback path). Mirrors upstream Bubbles'
+ * entirely (same bytes via the fallback path). Mirrors charmbracelet/bubbles
  * `table.Styles`, whose unset fields keep the default renderer's look.
  */
 final class Styles
