@@ -265,14 +265,14 @@ final class StageCondition
             throw new \InvalidArgumentException(sprintf(
                 'when "%s" must be a non-empty list of conditions, got %s',
                 $combinator,
-                get_debug_type($children),
+                self::plainKind($children),
             ));
         }
 
         $unknown = array_values(array_diff(array_keys($node), [$combinator]));
         if ($unknown !== []) {
             throw new \InvalidArgumentException(sprintf(
-                'when node carrying "%s" has unknown key "%s"; supported spellings: %s, all, any',
+                'when node carrying "%s" also holds "%s", which is not a condition key (expected one of: %s, all, any)',
                 $combinator,
                 $unknown[0],
                 implode(', ', self::leafSpellings($allowLoopLeaves)),
@@ -286,7 +286,7 @@ final class StageCondition
                     'when "%s" entry #%d must be a condition map, got %s',
                     $combinator,
                     $index,
-                    get_debug_type($child),
+                    self::plainKind($child),
                 ));
             }
             $conditions[] = self::parseNode($child, $depth + 1, $allowLoopLeaves);
@@ -316,7 +316,7 @@ final class StageCondition
         if ($allOps === []) {
             $offender = array_key_first($node);
             throw new \InvalidArgumentException(sprintf(
-                'when leaf needs one of %s; got unknown key "%s" where a condition belongs',
+                'when leaf needs one of %s; "%s" is not a condition key',
                 implode(', ', self::leafSpellings($allowLoopLeaves)),
                 is_string($offender) ? $offender : (string) $offender,
             ));
@@ -342,7 +342,7 @@ final class StageCondition
         $unknown = array_values(array_diff($keys, ['stage', 'pointer', $op]));
         if ($unknown !== []) {
             throw new \InvalidArgumentException(sprintf(
-                'when leaf for stage "%s" has unknown key "%s"; supported spellings: stage, pointer, %s',
+                'when leaf for stage "%s" also holds "%s", which is not a condition key (expected one of: stage, pointer, %s)',
                 $stage,
                 $unknown[0],
                 $op,
@@ -356,7 +356,7 @@ final class StageCondition
                 throw new \InvalidArgumentException(sprintf(
                     'when "pointer" for stage "%s" must be a non-empty string (an RFC 6901 pointer such as /verdict), got %s',
                     $stage,
-                    is_string($pointer) ? 'an empty string' : get_debug_type($pointer),
+                    is_string($pointer) ? 'an empty string' : self::plainKind($pointer),
                 ));
             }
             if (!JsonPointer::isWellFormed($pointer)) {
@@ -374,7 +374,7 @@ final class StageCondition
                 throw new \InvalidArgumentException(sprintf(
                     'when "empty" value for stage "%s" must be true or false, got %s',
                     $stage,
-                    get_debug_type($value),
+                    self::plainKind($value),
                 ));
             }
         } elseif (!is_string($value)) {
@@ -382,7 +382,7 @@ final class StageCondition
                 'when "%s" value for stage "%s" must be a string, got %s',
                 $op,
                 $stage,
-                get_debug_type($value),
+                self::plainKind($value),
             ));
         }
 
@@ -408,7 +408,7 @@ final class StageCondition
         $unknown = array_values(array_diff(array_keys($node), [$op]));
         if ($unknown !== []) {
             throw new \InvalidArgumentException(sprintf(
-                'loop leaf "%s" has unknown key "%s"; it is a whole condition on its own, e.g. {%s: 2}',
+                'loop leaf "%s" also holds "%s", which is not allowed; it is a whole condition on its own, e.g. {%s: 2}',
                 $op,
                 $unknown[0],
                 $op,
@@ -420,7 +420,7 @@ final class StageCondition
             throw new \InvalidArgumentException(sprintf(
                 'loop leaf "%s" must be a whole number >= 1, got %s',
                 $op,
-                is_int($value) ? (string) $value : get_debug_type($value),
+                is_int($value) ? (string) $value : self::plainKind($value),
             ));
         }
 
@@ -517,6 +517,23 @@ final class StageCondition
             is_bool($leaf) => $leaf ? 'true' : 'false',
             is_int($leaf), is_float($leaf) => (string) $leaf,
             default => ($encoded = json_encode($leaf, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) === false ? null : $encoded,
+        };
+    }
+
+    /**
+     * Plain-language phrase for a value's kind, so an authoring error reads
+     * "got text" rather than leaking PHP's type names ("string", "array").
+     */
+    private static function plainKind(mixed $value): string
+    {
+        return match (true) {
+            $value === null => 'nothing',
+            is_bool($value) => 'true or false',
+            is_int($value) => 'a whole number',
+            is_float($value) => 'a decimal number',
+            is_string($value) => 'text',
+            is_array($value) => array_is_list($value) ? 'a list' : 'a map',
+            default => 'a value of another kind',
         };
     }
 }

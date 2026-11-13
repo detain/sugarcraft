@@ -567,7 +567,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             $this->fail('the grammar must not admit a made-up op');
         } catch (WorkflowLoadException $error) {
             $this->assertStringContainsString("stage 'one'", $error->getMessage());
-            $this->assertStringContainsString('where a condition belongs', $error->getMessage());
+            $this->assertStringContainsString('is not a condition key', $error->getMessage());
         }
     }
 

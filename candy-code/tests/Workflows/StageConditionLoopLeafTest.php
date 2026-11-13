@@ -70,10 +70,10 @@ final class StageConditionLoopLeafTest extends TestCase
         $cases = [
             [0, 'got 0'],
             [-3, 'got -3'],
-            [1.5, 'got float'],
-            ['2', 'got string'],
-            [true, 'got bool'],
-            [null, 'got null'],
+            [1.5, 'got a decimal number'],
+            ['2', 'got text'],
+            [true, 'got true or false'],
+            [null, 'got nothing'],
         ];
         foreach (['dry', 'budgetBelow'] as $op) {
             foreach ($cases as [$value, $tail]) {
@@ -88,11 +88,11 @@ final class StageConditionLoopLeafTest extends TestCase
     public function testLoopLeavesTakeNoOtherKey(): void
     {
         $this->assertSame(
-            'loop leaf "dry" has unknown key "stage"; it is a whole condition on its own, e.g. {dry: 2}',
+            'loop leaf "dry" also holds "stage", which is not allowed; it is a whole condition on its own, e.g. {dry: 2}',
             $this->refusal(['stage' => 'find', 'dry' => 2], true),
         );
         $this->assertStringContainsString(
-            'loop leaf "budgetBelow" has unknown key "pointer"',
+            'loop leaf "budgetBelow" also holds "pointer"',
             $this->refusal(['budgetBelow' => 5, 'pointer' => '/x'], true),
         );
     }

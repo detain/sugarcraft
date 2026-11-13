@@ -78,11 +78,11 @@ final class StageConditionPointerTest extends TestCase
             $this->refusal(['stage' => 'review', 'pointer' => '', 'equals' => 'x']),
         );
         $this->assertStringContainsString(
-            'must be a non-empty string (an RFC 6901 pointer such as /verdict), got int',
+            'must be a non-empty string (an RFC 6901 pointer such as /verdict), got a whole number',
             $this->refusal(['stage' => 'review', 'pointer' => 3, 'equals' => 'x']),
         );
         $this->assertStringContainsString(
-            'got null',
+            'got nothing',
             $this->refusal(['stage' => 'review', 'pointer' => null, 'equals' => 'x']),
         );
         $this->assertStringContainsString(
@@ -94,11 +94,11 @@ final class StageConditionPointerTest extends TestCase
     public function testParseRefusesANonBoolEmptyValue(): void
     {
         $this->assertStringContainsString(
-            'when "empty" value for stage "plain" must be true or false, got string',
+            'when "empty" value for stage "plain" must be true or false, got text',
             $this->refusal(['stage' => 'plain', 'empty' => 'true']),
         );
         $this->assertStringContainsString(
-            'must be true or false, got int',
+            'must be true or false, got a whole number',
             $this->refusal(['stage' => 'plain', 'empty' => 1]),
         );
     }
@@ -107,7 +107,7 @@ final class StageConditionPointerTest extends TestCase
     {
         // No coercion: a YAML `equals: true` is a bool and is refused — quote it.
         $this->assertStringContainsString(
-            'when "equals" value for stage "review" must be a string, got bool',
+            'when "equals" value for stage "review" must be a string, got true or false',
             $this->refusal(['stage' => 'review', 'pointer' => '/ok', 'equals' => true]),
         );
     }
@@ -130,7 +130,7 @@ final class StageConditionPointerTest extends TestCase
     public function testParseNamesPointerAmongTheLeafSpellings(): void
     {
         $this->assertStringContainsString(
-            'unknown key "path"; supported spellings: stage, pointer, equals',
+            'also holds "path", which is not a condition key (expected one of: stage, pointer, equals)',
             $this->refusal(['stage' => 'review', 'path' => '/verdict', 'equals' => 'x']),
         );
     }

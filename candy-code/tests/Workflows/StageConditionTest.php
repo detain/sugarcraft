@@ -113,7 +113,7 @@ final class StageConditionTest extends TestCase
     public function testParseRefusesAnEmptyCombinatorList(): void
     {
         $this->assertStringContainsString(
-            'must be a non-empty list of conditions, got array',
+            'must be a non-empty list of conditions, got a list',
             $this->refusalMessage(['all' => []]),
         );
     }
@@ -121,7 +121,7 @@ final class StageConditionTest extends TestCase
     public function testParseRefusesACombinatorHoldingSomethingElseThanAList(): void
     {
         $this->assertStringContainsString(
-            'must be a non-empty list of conditions, got string',
+            'must be a non-empty list of conditions, got text',
             $this->refusalMessage(['all' => 'stage a says GO']),
         );
     }
@@ -129,7 +129,7 @@ final class StageConditionTest extends TestCase
     public function testParseRefusesANonConditionEntry(): void
     {
         $this->assertStringContainsString(
-            'entry #0 must be a condition map, got int',
+            'entry #0 must be a condition map, got a whole number',
             $this->refusalMessage(['all' => [7]]),
         );
     }
@@ -140,7 +140,7 @@ final class StageConditionTest extends TestCase
             'all' => [['stage' => 'a', 'equals' => 'x']],
             'stage' => 'b',
         ]);
-        $this->assertStringContainsString('when node carrying "all" has unknown key "stage"', $message);
+        $this->assertStringContainsString('when node carrying "all" also holds "stage", which is not a condition key', $message);
     }
 
     public function testParseRefusesALeafWithNoOp(): void
@@ -148,7 +148,7 @@ final class StageConditionTest extends TestCase
         // A bare stage name is not a condition — there is nothing to answer.
         $message = $this->refusalMessage(['stage' => 'a']);
         $this->assertStringContainsString('when leaf needs one of equals, contains, matches', $message);
-        $this->assertStringContainsString('where a condition belongs', $message);
+        $this->assertStringContainsString('is not a condition key', $message);
     }
 
     public function testParseRefusesALeafWithMoreThanOneOp(): void
@@ -178,7 +178,7 @@ final class StageConditionTest extends TestCase
     public function testParseRefusesAUnknownKeyInALeaf(): void
     {
         $this->assertStringContainsString(
-            'has unknown key "gt"',
+            'also holds "gt", which is not a condition key',
             $this->refusalMessage(['stage' => 'a', 'equals' => 'x', 'gt' => 'y']),
         );
     }
@@ -186,7 +186,7 @@ final class StageConditionTest extends TestCase
     public function testParseRefusesANonStringComparisonValue(): void
     {
         $this->assertStringContainsString(
-            'value for stage "a" must be a string, got int',
+            'value for stage "a" must be a string, got a whole number',
             $this->refusalMessage(['stage' => 'a', 'equals' => 3]),
         );
     }

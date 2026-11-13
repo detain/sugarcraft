@@ -2010,7 +2010,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $workflowPath = $data['workflowPath'] ?? null;
         if (!is_string($workflowPath) || $workflowPath === '') {
             throw new WorkflowNotRunningException(
-                "Pause file for '{$workflowId}' is corrupt: missing 'workflowPath' field"
+                "The pause record for workflow '{$workflowId}' is corrupt: missing 'workflowPath' field"
             );
         }
 
@@ -2248,7 +2248,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         if ($statusValue === null) {
             throw new WorkflowNotRunningException(
-                "Pause file for '{$workflowId}' is corrupt: missing 'status' field"
+                "The pause record for workflow '{$workflowId}' is corrupt: missing 'status' field"
             );
         }
 
@@ -2262,8 +2262,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // engine Errors keep propagating untouched.
         if (!is_string($statusValue)) {
             throw new WorkflowNotRunningException(
-                "Pause file for '{$workflowId}' is corrupt: status value is "
-                . get_debug_type($statusValue) . ', expected string'
+                "The pause record for workflow '{$workflowId}' is corrupt: its 'status' is not text"
+                . ' (expected one of the status names)'
             );
         }
 
@@ -2271,7 +2271,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $recorded = WorkflowStatus::from($statusValue);
         } catch (\ValueError) {
             throw new WorkflowNotRunningException(
-                "Pause file for '{$workflowId}' is corrupt: invalid status value '{$statusValue}'"
+                "The pause record for workflow '{$workflowId}' is corrupt: invalid status value '{$statusValue}'"
             );
         }
 
