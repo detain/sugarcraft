@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'Nessuna partita da caricare',
     'ui.load_refused' => 'Partita rifiutata (illeggibile o manomessa)',
     'ui.save_failed' => 'Salvataggio non riuscito',
+    'ui.chord_not_ready' => 'il chord richiede bandiere pari al numero',
     'ui.resume' => 'Una partita ti aspetta — premi L per caricarla',
     'ui.new_best' => 'NUOVO RECORD',
     'ui.fit_notice' => 'candy-minesweeper richiede un terminale alto {need} righe; questo ne ha {have}. Ingrandisci la finestra: il gioco riprende appena lo spazio basta. q per uscire.',

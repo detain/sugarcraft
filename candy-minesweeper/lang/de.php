@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'Kein Spielstand zum Laden',
     'ui.load_refused' => 'Spielstand abgelehnt (unlesbar oder manipuliert)',
     'ui.save_failed' => 'Speichern fehlgeschlagen',
+    'ui.chord_not_ready' => 'Chord braucht Flaggen passend zur Zahl',
     'ui.resume' => 'Ein Spielstand wartet — mit L laden',
     'ui.new_best' => 'NEUER REKORD',
     'ui.fit_notice' => 'candy-minesweeper benötigt einen Terminal mit {need} Zeilen; dieser hat {have}. Vergrößern Sie das Fenster — das Spiel setzt ein, sobald es passt. q beendet.',

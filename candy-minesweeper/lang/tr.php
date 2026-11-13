@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'Yüklenecek kayıt yok',
     'ui.load_refused' => 'Kayıt reddedildi (okunamıyor veya değiştirilmiş)',
     'ui.save_failed' => 'Kaydetme başarısız',
+    'ui.chord_not_ready' => 'çevre açma için bayraklar sayıyla eşit olmalı',
     'ui.resume' => 'Bir kayıt bekliyor — yüklemek için L tuşuna bas',
     'ui.new_best' => 'YENİ REKOR',
     'ui.fit_notice' => 'candy-minesweeper {need} satır yüksekliğinde bir terminal ister; bu terminal {have} satır. Pencereyi büyütün — oyun sığdığı anda devam eder. q çıkar.',

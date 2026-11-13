@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'Nenhum jogo para carregar',
     'ui.load_refused' => 'Jogo recusado (ilegível ou adulterado)',
     'ui.save_failed' => 'Falha ao salvar',
+    'ui.chord_not_ready' => 'o acorde exige bandeiras iguais ao número',
     'ui.resume' => 'Há um jogo aguardando — pressione L para carregá-lo',
     'ui.new_best' => 'NOVO RECORDE',
     'ui.fit_notice' => 'o candy-minesweeper precisa de um terminal com {need} linhas; este tem {have}. Aumente a janela — o jogo retoma assim que couber. q para sair.',

@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'Aucune sauvegarde à charger',
     'ui.load_refused' => 'Sauvegarde refusée (illisible ou altérée)',
     'ui.save_failed' => 'Échec de la sauvegarde',
+    'ui.chord_not_ready' => 'le groupement exige des drapeaux égalant le chiffre',
     'ui.resume' => 'Une sauvegarde attend — appuyez sur L pour la charger',
     'ui.new_best' => 'NOUVEAU RECORD',
     'ui.fit_notice' => 'candy-minesweeper nécessite un terminal de {need} lignes ; celui-ci en a {have}. Agrandissez la fenêtre — la partie reprend dès qu’elle tient. q pour quitter.',

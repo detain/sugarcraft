@@ -31,6 +31,7 @@ return [
     'ui.no_save' => '没有可读取的存档',
     'ui.load_refused' => '已拒绝存档(不可读或被篡改)',
     'ui.save_failed' => '保存失败',
+    'ui.chord_not_ready' => '开周围需插旗数与数字一致',
     'ui.resume' => '有存档等待 — 按 L 读取',
     'ui.new_best' => '新纪录',
     'ui.fit_notice' => 'candy-minesweeper 需要 {need} 行高的终端；当前只有 {have} 行。放大窗口即可继续游戏。按 q 退出。',

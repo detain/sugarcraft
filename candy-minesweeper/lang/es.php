@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'No hay partida que cargar',
     'ui.load_refused' => 'Partida rechazada (ilegible o manipulada)',
     'ui.save_failed' => 'Error al guardar',
+    'ui.chord_not_ready' => 'el acorde necesita banderas que coincidan con el número',
     'ui.resume' => 'Hay una partida esperándote — pulsa L para cargarla',
     'ui.new_best' => 'NUEVO RÉCORD',
     'ui.fit_notice' => 'candy-minesweeper necesita una terminal de {need} filas; esta tiene {have}. Amplía la ventana: la partida se reanuda en cuanto quepa. Pulsa q para salir.',

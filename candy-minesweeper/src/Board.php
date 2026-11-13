@@ -142,6 +142,13 @@ final class Board
         }
         $rows = $this->rows;
         $rows[$y][$x] = $cell->toggleFlag();
+        // Cell::toggleFlag no-ops on a revealed cell (and returns the same
+        // object when it does); answer the same identity back so callers can
+        // tell a real flag change from a dud press — Game's notice rule and
+        // the over-flag gate both key on it.
+        if ($rows[$y][$x] === $cell) {
+            return $this;
+        }
         // Track the flag count incrementally so flagCount() stays O(1) and the
         // renderer never scans the grid per frame. A revealed cell can't flag
         // (Cell::toggleFlag() no-ops), so the delta is derived from the cell's

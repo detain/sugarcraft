@@ -31,6 +31,7 @@ return [
     'ui.no_save' => '로드할 세이브 없음',
     'ui.load_refused' => '세이브 거부됨(읽을 수 없거나 변조됨)',
     'ui.save_failed' => '저장 실패',
+    'ui.chord_not_ready' => '주변 열려면 깃발 수가 숫자와 맞아야 함',
     'ui.resume' => '세이브가 기다리는 중 — L로 로드',
     'ui.new_best' => '신기록',
     'ui.fit_notice' => 'candy-minesweeper에는 {need}줄 높이의 터미널이 필요합니다. 현재 {have}줄입니다. 창을 키우면 게임이 곧바로 재개됩니다. q로 종료.',

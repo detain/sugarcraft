@@ -179,4 +179,90 @@ final class NoticeToastTest extends TestCase
         $this->assertSame(Lang::t('ui.resume'), $g->notice);
         $this->assertStringContainsString('» ' . Lang::t('ui.resume'), $g->view());
     }
+
+    // ---- msw-14 (finding 063): real-change-only clearing + chord refusal toast ----
+
+    /** A board whose (3,3) cell is a revealed number with no flags around it. */
+    private static function boardWithUnsatisfiedNumber(int $number = 2): Board
+    {
+        $rows = [];
+        for ($y = 0; $y < 6; $y++) {
+            $row = [];
+            for ($x = 0; $x < 6; $x++) {
+                $atNumber = $x === 3 && $y === 3;
+                $row[] = new Cell(
+                    mine: false,
+                    revealed: $atNumber,
+                    adjacent: $atNumber ? $number : 0,
+                );
+            }
+            $rows[] = $row;
+        }
+        return Board::fromRows(6, 6, 2, $rows, minesPlaced: true, revealedCount: 1);
+    }
+
+    private static function gameOnNumber(?string $notice = null): Game
+    {
+        return new Game(
+            board: self::boardWithUnsatisfiedNumber(),
+            cursorX: 3,
+            cursorY: 3,
+            rand: static fn(int $_max): int => 0,
+            notice: $notice,
+        );
+    }
+
+    public function testUnmappedKeyDoesNotEraseTheNotice(): void
+    {
+        $g = Game::start(6, 6, 2, static fn(int $_max): int => 0, notice: 'hold me');
+        [$next, ] = $g->update(self::press(KeyType::Char, 'x'));
+        $this->assertSame('hold me', $next->notice, 'a dead keypress must not wipe the hint');
+    }
+
+    public function testSpaceOnRevealedCellDoesNotEraseTheNotice(): void
+    {
+        $g = self::gameOnNumber('hold me');
+        [$next, ] = $g->update(self::press(KeyType::Space));
+        $this->assertSame('hold me', $next->notice, 'a dud reveal is not a state change');
+        $this->assertNull($next->startedAt, 'a dud reveal must not arm the clock');
+    }
+
+    public function testFlagOnRevealedCellIsAnIdentityNoOp(): void
+    {
+        $board = self::boardWithUnsatisfiedNumber();
+        $this->assertSame($board, $board->toggleFlag(3, 3), 'a revealed cell cannot hold a flag');
+
+        $g = self::gameOnNumber('hold me');
+        [$next, ] = $g->update(self::press(KeyType::Char, 'f'));
+        $this->assertSame('hold me', $next->notice, 'a dud flag press is not a state change');
+    }
+
+    public function testRefusedChordOnUnsatisfiedNumberToasts(): void
+    {
+        $g = self::gameOnNumber();
+        [$next, ] = $g->update(self::press(KeyType::Char, 'c'));
+        $this->assertSame(Lang::t('ui.chord_not_ready'), $next->notice);
+        $this->assertSame($g->board, $next->board, 'the refusal changes no state');
+        $this->assertNull($next->startedAt, 'a refused chord must not arm the clock');
+    }
+
+    public function testRefusedChordOnHiddenCellStaysSilent(): void
+    {
+        $g = Game::start(6, 6, 2, static fn(int $_max): int => 0, notice: 'hold me');
+        [$next, ] = $g->update(self::press(KeyType::Char, 'c'));
+        $this->assertSame('hold me', $next->notice, 'chording unexplored ground teaches nothing');
+    }
+
+    public function testChordToastSurvivesDeadPressesAndDiesOnARealChange(): void
+    {
+        $g = self::gameOnNumber();
+        [$toasted, ] = $g->update(self::press(KeyType::Char, 'c'));
+        $this->assertSame(Lang::t('ui.chord_not_ready'), $toasted->notice);
+
+        [$held, ] = $toasted->update(self::press(KeyType::Char, 'x'));
+        $this->assertSame(Lang::t('ui.chord_not_ready'), $held->notice);
+
+        [$cleared, ] = $held->update(self::press(KeyType::Up));
+        $this->assertNull($cleared->notice, 'a real cursor move dismisses it');
+    }
 }

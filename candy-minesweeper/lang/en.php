@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'no savegame to load',
     'ui.load_refused' => 'savegame refused (unreadable or tampered)',
     'ui.save_failed' => 'save failed',
+    'ui.chord_not_ready' => 'chord needs the flags to match the number',
     'ui.resume' => 'a savegame is waiting — press L to load it',
     'ui.new_best' => 'NEW BEST',
     'ui.fit_notice' => 'candy-minesweeper needs a terminal {need} rows tall; this one has {have}. Enlarge the window — the game resumes the moment it fits. Press q to quit.',

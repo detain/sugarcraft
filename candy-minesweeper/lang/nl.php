@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'Geen opgeslagen spel om te laden',
     'ui.load_refused' => 'Opslag geweigerd (onleesbaar of gemanipuleerd)',
     'ui.save_failed' => 'Opslaan mislukt',
+    'ui.chord_not_ready' => 'midden-klik vraagt vlaggen gelijk aan het getal',
     'ui.resume' => 'Er wacht een opgeslagen spel — druk op L om het te laden',
     'ui.new_best' => 'NIEUW RECORD',
     'ui.fit_notice' => 'candy-minesweeper heeft een terminal van {need} regels nodig; deze heeft {have}. Vergroot het venster — het spel hervat zodra het past. Druk op q om te stoppen.',

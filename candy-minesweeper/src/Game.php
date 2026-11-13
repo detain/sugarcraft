@@ -310,8 +310,15 @@ final class Game implements Model
     {
         // A toast announced by S/L/r lives until the next STATE-CHANGE action
         // dismisses it; ticks never route through here, so the message stays
-        // readable while the clock pulses.
-        if ($next->notice !== null) {
+        // readable while the clock pulses. Dead inputs must not count: space
+        // on a revealed cell, an unmapped key and a click on finished ground
+        // leave the board and cursor exactly where they were, and wiping the
+        // boot "savegame is waiting" hint on such a press made the hint
+        // vanish under the first stray keystroke (finding 063's live probe).
+        $changed = $next->board !== $this->board
+            || $next->cursorX !== $this->cursorX
+            || $next->cursorY !== $this->cursorY;
+        if ($changed && $next->notice !== null) {
             $next = $next->mutate(['notice' => null]);
         }
         if ($wasOver) {
@@ -555,13 +562,29 @@ final class Game implements Model
         // leave the clock disarmed.
         $board = $this->board->chord($this->cursorX, $this->cursorY);
         if ($board === $this->board) {
-            return $this;
+            return $this->withChordNotice($this->cursorX, $this->cursorY);
         }
         return $this->mutate([
             'board'          => $board,
             'startedAt'      => $this->startedAt ?? microtime(true),
             'elapsedSeconds' => null,
         ]);
+    }
+
+    /**
+     * The one refusal worth teaching: a chord attempted on a REVEALED number
+     * whose flag count does not match it. Silence there reads as "the key is
+     * broken" (finding 063); a named toast teaches the satisfaction rule at
+     * the exact moment the player needs it. Chording unexplored ground or a
+     * zero cell stays silent — there is no rule there to learn.
+     */
+    private function withChordNotice(int $x, int $y): self
+    {
+        $cell = $this->board->cell($x, $y);
+        if ($cell !== null && $cell->revealed && $cell->adjacent > 0) {
+            return $this->withNotice(Lang::t('ui.chord_not_ready'));
+        }
+        return $this;
     }
 
     /**
@@ -634,10 +657,11 @@ final class Game implements Model
 
     private function chordAt(int $x, int $y): self
     {
-        // No-op chord = no-op click (see revealAt()).
+        // No-op chord = no-op click (see revealAt()), with the same
+        // educational refusal toast as the keyboard route.
         $board = $this->board->chord($x, $y);
         if ($board === $this->board) {
-            return $this;
+            return $this->withChordNotice($x, $y);
         }
         return $this->mutate([
             'board'          => $board,

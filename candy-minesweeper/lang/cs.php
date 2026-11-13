@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'Žádná uložená hra k načtení',
     'ui.load_refused' => 'Uložení zamítnuto (nečitelné nebo padělané)',
     'ui.save_failed' => 'Uložení selhalo',
+    'ui.chord_not_ready' => 'pro open-around musí vlajky odpovídat číslu',
     'ui.resume' => 'Uložená hra čeká — stiskni L pro načtení',
     'ui.new_best' => 'NOVÝ REKORD',
     'ui.fit_notice' => 'candy-minesweeper potřebuje terminál vysoký {need} řádků; tento má {have}. Zvětšete okno — hra se obnoví, jakmile se board vejde. Q skončí.',

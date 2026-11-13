@@ -31,6 +31,7 @@ return [
     'ui.no_save' => 'ロードするセーブデータがありません',
     'ui.load_refused' => 'セーブデータを拒否しました（読込不能または改ざん）',
     'ui.save_failed' => '保存に失敗しました',
+    'ui.chord_not_ready' => '周囲を開くには旗数が数字と一致する必要がある',
     'ui.resume' => 'セーブデータがあります — L でロード',
     'ui.new_best' => '新記録',
     'ui.fit_notice' => 'candy-minesweeper には高さ {need} 行のターミナルが必要です。現在は {have} 行です。ウィンドウを広げると、収まり次第ゲームに復帰します。q で終了。',
