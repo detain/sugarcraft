@@ -193,15 +193,17 @@ deviation.
 
 ## Localization
 
-Seventeen locale files ship in `lang/`, and the two messages the tool prints
-itself (usage, the not-a-file refusal) route through `Lang::t()`. The bin
-entry calls `T::setLocale(T::detect())`, so locale *selection* is live
-(`LC_ALL` → `LC_MESSAGES` → `LANG`, `fr_FR.UTF-8` normalises to `fr`, fallback
-`en`): `LANG=de.UTF-8 candy-ansi-inspect` answers German. The decoded labels
-inside a report are English-built in `Inspector`, so report bytes never depend
-on the caller's locale. Activating detection was an owner-gated decision,
-executed 2026-11-06; the decision record lives at
-`prompt_kit/findings/docs-reviews-1104/plan-review/candy-ansi-inspect-owner-gate.md`.
+Seventeen locale files ship in `lang/`, and every message the tool prints
+itself — the usage line, the unreadable-source refusal, the stream-wrapper
+note appended to it, and the exec-mode PTY refusal — routes through
+`Lang::t()`. The bin entry calls `T::setLocale(T::detect())`, so locale
+*selection* is live: detection walks `LC_ALL` → `LC_MESSAGES` → `LANG` and
+the first usable variable wins (when you set `LANG`, make sure the others
+are unset). Values are normalised — `fr_FR.UTF-8` becomes `fr-fr`, which
+resolves through the base-language lookup to `fr`; anything unknown falls
+back to `en`. So `LC_ALL=de.UTF-8 candy-ansi-inspect` answers German. The
+decoded labels inside a report are English-built in `Inspector`, so report
+bytes never depend on the caller's locale.
 
 ## Test
 

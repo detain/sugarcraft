@@ -259,6 +259,18 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString($french, $stderr);
     }
 
+    public function testRegionalLocaleResolvesThroughTheBaseLanguageLookup(): void
+    {
+        // README's Localization section promises `fr_FR.UTF-8` normalises to
+        // `fr-fr` and lands on `fr.php` via the base-language fallback. Pin
+        // it through the real CLI so the sentence cannot rot.
+        $usage = rtrim((string) (require dirname(__DIR__) . '/lang/fr.php')['cli.usage'], "\n");
+
+        [$code, $stdout] = self::runCli('--help', ['LANG' => 'fr_FR.UTF-8']);
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString($usage, $stdout);
+    }
+
     public function testHelpFlagAnswersInTheDetectedLocale(): void
     {
         // The --help leg goes through Lang::t('cli.usage') like the other
