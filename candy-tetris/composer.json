@@ -1,17 +1,18 @@
 {
     "name": "sugarcraft/candy-tetris",
-    "description": "Tetris clone built on the SugarCraft stack \u2014 SugarCraft runtime, SugarStyle styling. Standard SRS rules (7-bag RNG, ghost piece, hard drop, hold, level/speed curve, line-clear scoring). A real demo of the runtime, not a toy.",
+    "description": "Tetris clone built on the SugarCraft stack — SugarCraft runtime, SugarStyle styling. Standard SRS rules (7-bag RNG, ghost piece, hard drop, hold, level/speed curve, line-clear scoring). A real demo of the runtime, not a toy.",
     "type": "project",
     "license": "MIT",
     "keywords": [
         "sugarcraft",
         "tetris",
+        "tetrigo",
         "game",
         "tui",
         "demo",
         "example"
     ],
-    "homepage": "https://github.com/sugarcraft/candy-tetris",
+    "homepage": "https://github.com/detain/sugarcraft/tree/master/candy-tetris",
     "authors": [
         {
             "name": "Joe Huss",
@@ -20,8 +21,8 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/sugarcraft/candy-tetris/issues",
-        "source": "https://github.com/sugarcraft/candy-tetris",
+        "issues": "https://github.com/detain/sugarcraft/issues",
+        "source": "https://github.com/detain/sugarcraft/tree/master/candy-tetris",
         "docs": "https://sugarcraft.github.io/lib/candy-tetris.html"
     },
     "bin": [
@@ -29,6 +30,8 @@
     ],
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
+        "ext-intl": "*",
         "sugarcraft/sugar-cellbuffer": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-style": "dev-master"

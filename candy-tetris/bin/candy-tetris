@@ -16,22 +16,53 @@ use SugarCraft\Tetris\Support\Scores;
 use SugarCraft\Tetris\VsGame;
 
 (static function () {
+    // Extension floor (candy-tetris-057): a downloaded phar runs through
+    // no composer gate, and the width/segmentation math in sugar-core
+    // (INTL + ICU) fatals obscurely mid-boot on a bare host. Name the
+    // missing extensions in one plain line before anything loads. The
+    // manifest now self-describes the same floor (require ext-mbstring
+    // + ext-intl), so composer installs refuse at the door instead.
+    $missing = array_values(array_filter(
+        ['mbstring', 'intl'],
+        static fn (string $ext): bool => !extension_loaded($ext),
+    ));
+    if ($missing !== []) {
+        fwrite(STDERR, 'candy-tetris needs the PHP extension(s): ' . implode(', ', $missing) . ".\n");
+        exit(1);
+    }
+
     // Guard shape ported from candy-code/candy-top (measured on PHP
     // 8.3.6): when `php candy-tetris.phar` runs, THIS file is the archive's
     // stub and the process is NOT inside the archive — Phar::running()
     // answers '' there, and a bare '/x.phar/entry' path fails
-    // is_file()/require for every caller. Two identities cover the two phar
-    // shapes: the stub names itself in __FILE__, and a require-from-inside
-    // names the archive in Phar::running(). Both are addressed the only way
-    // that works, as a phar:// URI. When an archive identity exists, the
+    // is_file()/require for every caller. Three identities cover the phar
+    // shapes: the require-from-inside answer in Phar::running(), the stub
+    // self-naming a genuine .phar in __FILE__, and — for a RENAMED phar
+    // (`mv candy-tetris.phar tetris`, the shape many users pick) — the
+    // magic bytes, which Phar::loadPhar() reads without trusting any
+    // suffix (candy-tetris-056). When an archive identity exists, the
     // archive's own vendor is the ONLY root — a stray vendor beside (or
     // above) a downloaded phar must never boot the app with code from
-    // outside the frozen archive. In every composer-mode checkout both
-    // probes answer nothing and the filesystem candidates are untouched.
+    // outside the frozen archive. In every composer-mode checkout all
+    // three probes answer nothing and the filesystem candidates are untouched.
     $candidates = [__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
-    $archive = \Phar::running(false) !== ''
-        ? 'phar://' . \Phar::running(false)
+    $running = \Phar::running(false);
+    $archive = $running !== ''
+        ? 'phar://' . $running
         : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    if ($archive === '') {
+        try {
+            // Magic-bytes probe: loadPhar answers true only for real
+            // archives; on a plain checkout file it THROWS PharException
+            // ("__HALT_COMPILER(); not found") — that refusal is the
+            // expected composer-mode answer, swallowed here.
+            if (@\Phar::loadPhar(__FILE__, 'candy-tetris') === true) {
+                $archive = 'phar://' . __FILE__;
+            }
+        } catch (\Throwable) {
+            $archive = '';
+        }
+    }
     if ($archive !== '') {
         $candidates = [$archive . '/vendor/autoload.php'];
     }
