@@ -35,12 +35,14 @@ final class GameTest extends TestCase
     }
 
     /**
-     * A guideline T-Spin Single slot: a T piece rotating into (5,15)
-     * rotation 1 rests on the (7,17) nub blocker with three of the four
-     * centre-diagonal corners filled — TL (5,15), BL (5,17), BR (7,17) —
-     * while the open TR (7,15) keeps it a spin rather than a plain slot.
-     * The T's body ((6,15),(6,16),(7,16),(6,17)) completes row 16, so the
-     * lock clears exactly one line: a real TSS, not a quiet 3-corner lock.
+     * The guideline KICK-OUT slot (candy-tetris-022): a T piece rotating
+     * into (5,15) rotation 1 rests on the (7,17) nub blocker with three of
+     * the four centre-diagonal corners filled — TL (5,15), BL (5,17),
+     * BR (7,17) — but only ONE of them is a front (nub-side) corner: TR
+     * (7,15) stays open, so the nub pair is incomplete and the guideline
+     * scores this as a T-Spin Mini, never the full 400. The T's body
+     * ((6,15),(6,16),(7,16),(6,17)) completes row 16, so the lock clears
+     * exactly one line: a real kick-out single.
      *
      * @return array<int, array<int, ?Tetromino>>
      */
@@ -53,6 +55,55 @@ final class GameTest extends TestCase
             }
         }
         foreach ([0, 1, 2, 4, 5, 7, 8, 9] as $col) {
+            $rows[17][$col] = Tetromino::I;
+        }
+        return $rows;
+    }
+
+    /**
+     * The same seated rot-1 position, but as a FULL nub-pair pocket: the
+     * TR (7,15) front corner joins the base slot's three so all four
+     * centre diagonals are filled — both nub-side corners included — and
+     * the guideline pays the full award. Row 15 keeps a shelf escape at
+     * (0,15) and row 16 is opened per test, so the pocket's clears are
+     * controlled by each caller, never by the corner paint itself.
+     *
+     * @return array<int, array<int, ?Tetromino>>
+     */
+    private function tspinFullSlotGrid(): array
+    {
+        $rows = $this->tspinSlotGrid();
+        $rows[15][7] = Tetromino::I;  // TR — second front corner
+        $rows[15][0] = null;          // shelf escape: the filled TR must not complete row 15
+        return $rows;
+    }
+
+    /**
+     * A full T-Spin pocket the REAL key path can drive: a nub-down slot
+     * below a right-facing fall corridor. Rows 11-14 keep cols 3-6 open so
+     * the piece can pass; row 15 seals the corridor except (4,15),(5,15);
+     * the final rot-2 seat at box (3,15) sees three filled corners around
+     * its centre (4,16) — TL (3,15), BL (3,17), BR (5,17) — with BOTH
+     * rotation-2 front corners (the bottom pair) filled. The bar row 16
+     * completes; the nub row 17 keeps its hole at col 6.
+     *
+     * @return array<int, array<int, ?Tetromino>>
+     */
+    private function tspinNubCorridorGrid(): array
+    {
+        $rows = $this->emptyGrid();
+        foreach ([11, 12, 13, 14] as $row) {
+            foreach ([0, 1, 2, 7, 8, 9] as $col) {
+                $rows[$row][$col] = Tetromino::I;
+            }
+        }
+        foreach ([0, 1, 2, 3, 6, 7, 8, 9] as $col) {
+            $rows[15][$col] = Tetromino::I;
+        }
+        foreach ([0, 1, 2, 6, 7, 8, 9] as $col) {
+            $rows[16][$col] = Tetromino::I;
+        }
+        foreach ([0, 1, 2, 3, 5, 7, 8, 9] as $col) {
             $rows[17][$col] = Tetromino::I;
         }
         return $rows;
@@ -944,12 +995,16 @@ final class GameTest extends TestCase
         $this->assertFalse($afterMove->lastActionWasRotation, 'a later successful move disarms it');
     }
 
-    public function testHumanTSpinScoresWhenRotationIsLastInput(): void
+    public function testHumanKickOutSettlesAsMiniSpin(): void
     {
         // MAJ(3): rotation → settle → lock through the REAL key path. The
         // piece rotates at (5,12), gravity (not an input) settles it into the
-        // guideline slot at (5,15) rotation 1 with three centre-diagonal
-        // corners filled; the T body completes row 16 → a true T-Spin Single.
+        // slot at (5,15) rotation 1 with three centre-diagonal corners
+        // filled — but only one of them is a front corner: the kick-out
+        // shape candy-tetris-022 demotes from full (450) to Mini. The flag
+        // riding the gravity settle still earns the spin bonus (that was the
+        // MAJ(3) bug), and the nub-pair gate keeps it honest: 40 line base
+        // + 100 mini award + 10 first-clear combo, level 0, no B2B arm.
         $g = $this->deterministicGame()->mutate([
             'board' => new Board($this->tspinSlotGrid()),
             'piece' => new Piece(Tetromino::T, 0, 5, 12),
@@ -968,9 +1023,51 @@ final class GameTest extends TestCase
                 break;
             }
         }
-        // 40 line base + 400 spin award + 10 first-clear combo, level 0.
-        $this->assertSame(450, $state->score->points - $startPoints, 'a human T-Spin Single pays 40+400+combo at level 0');
-        $this->assertSame(1, $state->score->lines, 'the slot carve makes it a real T-Spin Single');
+        $this->assertSame(150, $state->score->points - $startPoints, 'a human kick-out settles as a Mini: 40+100+combo at level 0');
+        $this->assertSame(1, $state->score->lines, 'the slot carve makes it a real spin single');
+        $this->assertSame('T-SPIN MINI', $state->lastAward, 'the one-front pocket names itself a Mini');
+        $this->assertFalse($state->backToBack, 'a mini that clears one line never arms back-to-back');
+    }
+
+    public function testHumanFullTSpinArmsBackToBackViaRealInputs(): void
+    {
+        // The full-award sibling of the kick-out pin, driven through the
+        // real key path: rot 0 falls to (3,13), rotates right-facing in
+        // the corridor, settles to box (3,15), rotates once more (nub
+        // down) and locks there — three filled corners around the centre
+        // (4,16) with BOTH nub-side corners (BL, BR) painted, so the
+        // nub-pair gate pays the full award. 40 + 400 + 10, level 0.
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($this->tspinNubCorridorGrid()),
+            'piece' => new Piece(Tetromino::T, 0, 3, 12),
+            'score' => new Score(),
+        ]);
+        [$state] = $g->update($this->gravity());
+        $this->assertSame(13, $state->piece->y, 'rot 0 settles on the painted row-15 shelf');
+
+        [$state] = $state->update($this->key('up'));
+        $this->assertSame(1, $state->piece->rotation, 'the corridor takes the first rotation');
+        for ($i = 0; $i < 30; $i++) {
+            [$state] = $state->update($this->gravity());
+            if ($state->piece !== null && $state->piece->y >= 15) {
+                break;
+            }
+        }
+        $this->assertSame(15, $state->piece->y, 'the right-facing piece rests with its nub in the row-17 hole');
+
+        [$state] = $state->update($this->key('up'));
+        $this->assertSame(2, $state->piece->rotation, 'the grounded rotation seats the nub-down spin');
+        $this->assertTrue($state->lastActionWasRotation);
+
+        $startPoints = $state->score->points;
+        for ($i = 0; $i < 30; $i++) {
+            [$state] = $state->update($this->gravity());
+            if ($state->score->points !== $startPoints) {
+                break;
+            }
+        }
+        $this->assertSame(450, $state->score->points - $startPoints, 'a nub-pair-complete spin pays 40+400+combo at level 0');
+        $this->assertSame('T-SPIN', $state->lastAward, 'the full pocket names itself T-SPIN');
         $this->assertTrue($state->backToBack, 'a full T-Spin that CLEARED arms back-to-back');
     }
 
@@ -1033,13 +1130,15 @@ final class GameTest extends TestCase
     public function testB2BTSpinRidesTheMultiplier(): void
     {
         // MED(7) implemented: README advertises B2B × T-Spin = base × 1.5.
-        // At level 0 in the clearing slot: 600 spin award (400 × 1.5) + 40
-        // line base + 20 line-clear B2B extra (40 × 0.5) + 10 first-clear
-        // combo = 670. The old shape never cleared a line and leaned on the
-        // farm gate this commit closes; a real TSS rides the same multiplier.
+        // At level 0 in the nub-pair-complete pocket (candy-tetris-022:
+        // the kick-out slot would only be a Mini and a Mini never rides
+        // the chain): 600 spin award (400 × 1.5) + 40 line base + 20
+        // line-clear B2B extra (40 × 0.5) + 10 first-clear combo = 670.
+        // The old shape never cleared a line and leaned on the farm gate
+        // this commit closes; a real full TSS rides the same multiplier.
         $g = $this->deterministicGame()->mutate([
-            'board' => new Board($this->tspinSlotGrid()),
-            'piece' => new Piece(Tetromino::T, 1, 5, 15), // pre-spun, grounded in the slot
+            'board' => new Board($this->tspinFullSlotGrid()),
+            'piece' => new Piece(Tetromino::T, 1, 5, 15), // pre-spun, grounded in the pocket
             'backToBack' => true,
             'lastActionWasRotation' => true,
             'score' => new Score(),
@@ -1076,11 +1175,13 @@ final class GameTest extends TestCase
 
     public function testTSpinBonusWithoutAClearNeverArmsBackToBack(): void
     {
-        // The guideline pays the 3-corner bonus even on a quiet lock, so the
-        // award survives; but ONLY a difficult CLEAR arms (or keeps alive) a
-        // back-to-back chain. Under the pre-fix Game gate this lock paid 400
-        // AND armed b2b — the farming exploit this commit closes.
-        $rows = $this->tspinSlotGrid();
+        // The guideline pays the nub-pair rotation bonus even on a quiet
+        // lock, so the award survives; but ONLY a difficult CLEAR arms (or
+        // keeps alive) a back-to-back chain. Under the pre-fix Game gate
+        // this lock paid 400 AND armed b2b — the farming exploit this
+        // commit closes. The pocket is the full nub-pair shape: a kick-out
+        // would only earn its 100 here and prove nothing about arming.
+        $rows = $this->tspinFullSlotGrid();
         $rows[16][0] = null; // escape cell outside the T's reach: row 16 can never complete
         $g = $this->deterministicGame()->mutate([
             'board' => new Board($rows),
@@ -1090,7 +1191,7 @@ final class GameTest extends TestCase
         ]);
         [$locked] = $g->update($this->gravity());
         $this->assertSame(400, $locked->score->points - $g->score->points,
-            'the quiet 3-corner spin still earns its 400 award');
+            'the quiet nub-pair spin still earns its 400 award');
         $this->assertSame(0, $locked->score->lines, 'nothing cleared');
         $this->assertFalse($locked->backToBack, 'a clear-less spin never arms the chain');
     }
@@ -1497,29 +1598,22 @@ final class GameTest extends TestCase
 
     public function testHumanTSpinAwardScalesWithOldLevelPlusOne(): void
     {
-        // The spin-award leg of the same law, driven through the real key
-        // path: the pinned level-0 shape (rotate at (5,12), gravity settles
-        // it into the slot, a TSS of 40+400+10 = 450) at lines=29/level=2
-        // must pay (40 + 400 + 10) x 3 = 1350. The slot locks on the first
-        // gravity tick after the rotation, so no fall can disarm the spin
-        // credit and the total is a closed form.
+        // The spin-award leg of the same law on a FULL nub-pair pocket
+        // (candy-tetris-022 shape, seated the way the B2B pin seats it):
+        // the level-0 form pays 40 + 400 + 10 = 450, so at lines=29/
+        // level=2 the lock must pay (40 + 400 + 10) x 3 = 1350. The first
+        // gravity tick after the rotation locks the grounded piece, so
+        // the total is a closed form.
         $g = $this->deterministicGame()->mutate([
-            'board' => new Board($this->tspinSlotGrid()),
-            'piece' => new Piece(Tetromino::T, 0, 5, 12),
+            'board' => new Board($this->tspinFullSlotGrid()),
+            'piece' => new Piece(Tetromino::T, 1, 5, 15),
+            'lastActionWasRotation' => true,
             'score' => new Score(0, 29, 2),
         ]);
-        [$spun] = $g->update($this->key('up'));
-        $this->assertTrue($spun->lastActionWasRotation, 'the rotate arms the credit the lock will cash');
-
-        $state = $spun;
-        for ($i = 0; $i < 40; $i++) {
-            [$state, ] = $state->update($this->gravity());
-            if ($state->score->points !== $spun->score->points) {
-                break;
-            }
-        }
-        $this->assertSame(1350, $state->score->points - $spun->score->points,
+        $startPoints = $g->score->points;
+        [$state] = $g->update($this->gravity());
+        $this->assertSame(1350, $state->score->points - $startPoints,
             '40 base + 400 award + 10 combo, every leg x(old level + 1) = x3');
-        $this->assertSame('T-SPIN', $state->lastAward, 'the 3-corner spin names itself T-SPIN at level 2 too');
+        $this->assertSame('T-SPIN', $state->lastAward, 'the nub-pair spin names itself T-SPIN at level 2 too');
     }
 }

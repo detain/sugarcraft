@@ -65,7 +65,7 @@ final class GoldenRenderTest extends TestCase
             $rows[$y] = $row;
         }
 
-        // Guideline T-Spin Single slot (matches GameTest::tspinSlotGrid):
+        // Guideline kick-out T-Spin slot (matches GameTest::tspinSlotGrid):
         // rows 14-16 leave the T's column open, row 17 walls both bottom
         // corners; the rot-1 T seated at (5,15) completes row 16.
         foreach ([14, 15, 16] as $y) {

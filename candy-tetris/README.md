@@ -281,21 +281,24 @@ awards are applied in `src/Game.php` (`softDrop()` / `hardDrop()`) through
 
 When the **last successful input before a T piece locks was a rotation** (moves,
 drops and holds clear that flag; gravity's fall neither sets nor clears it, so a
-rotate-then-settle spin is legal) and the guideline **three-corner rule** holds
-— at least three of the four cells diagonal to the T's centre are filled, walls
-and floor counting as filled — it scores as a **T-Spin**:
+rotate-then-settle spin is legal) and the guideline **nub-pair three-corner rule**
+holds — at least three of the four cells diagonal to the T's centre are filled,
+walls and floor counting as filled, and both **nub-side** corners are among
+them — it scores as a **T-Spin**:
 
 | Type     | Base points |
 |----------|-------------|
 | T-Spin   | 400 × (level + 1) |
 | T-Spin Mini | 100 × (level + 1) |
 
-T-Spin Mini is detected when **exactly two** of the centre-diagonal corners are
-filled and at least one of them sits on the **nub side** of the T: the top pair
-at rotation 0, the right pair at rotation R, the bottom pair at rotation 2, the
-left pair at rotation L. Two filled corners with no nub-side corner score
-nothing — the spin never engaged the slot. A mini that clears two or more lines
-is promoted to a full T-Spin (difficulty parity).
+The nub side is the corner pair the T's nub points between: the top pair at
+rotation 0, the right pair at rotation R, the bottom pair at rotation 2, the
+left pair at rotation L. A **T-Spin Mini** is detected when exactly two corners
+are filled and at least one sits on the nub side, **or** when three corners are
+filled but only one nub-side corner is engaged — the classic kick-out shape,
+which competitive rules deny the full award. Two filled corners with no
+nub-side corner score nothing — the spin never engaged the slot. A mini that
+clears two or more lines is promoted to a full T-Spin (difficulty parity).
 
 **Last-input rule:** the flag is `Game::$lastActionWasRotation` — set by
 rotate, cleared by move/soft drop/hard drop; gravity steps leave it alone. The

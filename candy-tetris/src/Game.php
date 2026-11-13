@@ -926,10 +926,11 @@ final class Game implements Model
         $tspin = TSpin::detect($this->board, $this->piece, $this->lastActionWasRotation);
 
         // B2B-eligible clear: Tetris, or a T-Spin that actually cleared
-        // lines. The guideline pays a 3-corner rotation bonus even without a
-        // clear, but a difficult CLEAR is what arms back-to-back — never a
-        // quiet lock. A mini shape that clears two or more lines is promoted
-        // to a full T-Spin (guideline: mini double = full difficulty).
+        // lines. The guideline pays a nub-pair rotation bonus even without
+        // a clear, but a difficult CLEAR is what arms back-to-back — never
+        // a quiet lock. A mini shape (including the one-front kick-out of
+        // candy-tetris-022) that clears two or more lines is promoted to a
+        // full T-Spin (guideline: mini double = full difficulty).
         $tspinFull = $tspin->active === true && ($tspin->mini === false || $count >= 2);
         $b2bEligible = $count >= 4 || ($tspinFull && $count > 0);
         $b2bActive = $this->backToBack && $b2bEligible;

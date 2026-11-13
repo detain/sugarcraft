@@ -25,10 +25,17 @@ use SugarCraft\Tetris\Tetromino;
  *   - $lastActionWasRotation is true (a slide, soft drop, hard drop or
  *     hold into the slot is NOT a spin; gravity steps never clear the
  *     flag), AND
- *   - at least 3 of the 4 centre diagonals are filled → full T-Spin; or
- *     exactly 2 are filled and at least one of them is a FRONT corner
- *     (the nub side for the current rotation) → T-Spin Mini.
- *   Exactly 2 filled with only BACK corners → not a spin at all.
+ *   - at least 2 of the 4 centre diagonals are filled and at least one
+ *     of them is a FRONT corner — the nub-side pair for the current
+ *     rotation (two back corners never engaged the slot: not a spin).
+ *
+ * The full/mini split follows the guideline NUB-PAIR rule
+ * (candy-tetris-022): a full T-Spin needs at least 3 filled corners AND
+ * BOTH front corners. The classic kick-out — 3 corners where only one
+ * front is filled (two backs + one nub-side) — is the shape competitive
+ * implementations score as T-Spin Mini, and it must not farm the 400
+ * award or arm back-to-back. `Game` still promotes a Mini that clears
+ * two or more lines to full difficulty.
  */
 final class TSpin
 {
@@ -63,20 +70,21 @@ final class TSpin
         }
 
         $filled = self::filledCorners($board, $piece);
+        $frontCount = count(array_intersect(self::frontPair($piece->rotation), $filled));
 
-        if (count($filled) >= 3) {
+        // Fewer than two corners, or no nub-side touch at all, never
+        // engaged the slot — not a spin of any kind (TET-GX-03).
+        if (count($filled) < 2 || $frontCount === 0) {
+            return new self();
+        }
+
+        // Guideline nub-pair rule: FULL requires 3+ corners with BOTH
+        // front corners filled; one front (the kick-out pocket) is a Mini.
+        if (count($filled) >= 3 && $frontCount === 2) {
             return new self(true, false);
         }
 
-        if (count($filled) === 2) {
-            // Exactly two corners filled: a Mini only when at least one of
-            // them is on the FRONT (nub) side; two back corners is nothing.
-            $mini = self::touchesFrontCorner($piece->rotation, $filled);
-
-            return new self($mini, $mini);
-        }
-
-        return new self(false, false);
+        return new self(true, true);
     }
 
     /**
@@ -111,20 +119,18 @@ final class TSpin
     }
 
     /**
-     * Whether $filled contains at least one "front" corner — the nub side
-     * of the T for the current rotation state.
+     * The FRONT (nub-side) corner pair for a rotation state: the two
+     * centre diagonals the T's nub points between.
      *
-     * @param list<string> $filled
+     * @return list<string> the two front corner names
      */
-    private static function touchesFrontCorner(int $rotation, array $filled): bool
+    private static function frontPair(int $rotation): array
     {
-        $front = match ($rotation) {
+        return match ($rotation) {
             0 => ['TL', 'TR'], // nub up  → front is the top pair
             1 => ['TR', 'BR'], // nub right → front is the right pair
             2 => ['BL', 'BR'], // nub down → front is the bottom pair
             default => ['TL', 'BL'], // nub left → front is the left pair
         };
-
-        return array_intersect($front, $filled) !== [];
     }
 }
