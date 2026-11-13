@@ -356,7 +356,8 @@ hand-rolled cache plumbing:
 
 ## KittyOptions — virtual-image placement and compression
 
-The Kitty renderer supports two advanced options via `KittyOptions`:
+The Kitty renderer exposes three options via `KittyOptions`: two that
+control placement and one that controls the payload encoding:
 
 - **Virtual-image placement**: a plain transmit draws the image with `a=T`
   (the default) and is *not* kept around for referencing. Transmit combined
@@ -469,12 +470,22 @@ parsing, so a GD-less box with no arguments exits 2, not 1):
 
 
 
-Every renderer implements `Renderer::delete(string $imageId): string`
-which emits the protocol-specific sequence to remove a previously
-rendered image. The `$imageId` is the numeric image identifier passed
-during rendering — the interface takes it as a string (`delete('1')`)
-— (Kitty) or a placeholder for interface compatibility
-(iTerm2 Pop ignores it).
+## Deleting images
+
+Every renderer implements `Renderer::delete(string $imageId): string`,
+which returns the escape sequence that removes a previously rendered
+image (or `''` when the protocol has nothing to remove). The interface
+types `$imageId` as a string — `delete('1')` — even where the protocol
+addresses images numerically: the numeric id Kitty's wire uses is
+assigned at render time and handed to `KittyOptions::place()` or
+`KittyOptions::transmit()` there, and `delete()` simply formats it into
+the APC `a=d;I=<id>` control sequence (the id alone does nothing
+without a number qualifier). iTerm2's Pop carries no id at all — it
+removes the most recent image from the cursor, so its `delete()` returns
+a constant Pop and ignores the argument — and every text-protocol tier
+(Sixel, HalfBlock, QuarterBlock, Chafa, Ascii, SymbolMap) has no stored
+image to address: its `delete()` returns `''`, clears nothing, and the
+argument is a placeholder for interface uniformity.
 
 | Renderer | Sequence | Notes |
 |---------|----------|-------|
