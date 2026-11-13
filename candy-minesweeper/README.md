@@ -21,6 +21,10 @@ Minesweeper on the SugarCraft stack for PHP 8.3+. Customisable board, iterative 
 
 Difficulty presets are available via `Game::withDifficulty()`, passing a `Difficulty` case — `Difficulty::EASY` (9×9, 10 mines), `Difficulty::STANDARD` (10×10, 12 mines — the shape the CLI defaults to), `Difficulty::MEDIUM` (16×16, 40 mines), `Difficulty::EXPERT` (30×16, 99 mines).
 
+## Requirements
+
+PHP 8.3+ with **ext-mbstring** and **ext-intl**. Both are load-bearing: the cell-width math that positions every glyph in the grid rides mbstring, and the locale machinery behind the 16-locale interface rides intl — sugar-core declares both in its own manifest (`composer.json:34-35`), so the **composer path enforces them transitively**: an install on a host that cannot provide them is refused before anything ships. The **phar path is different**: a downloaded `candy-minesweeper.phar` installs nothing through composer, so the binary carries its own boot preflight (`Support\Requirements`) — a missing extension is named on stderr (`candy-minesweeper requires ext-mbstring`) with exit 1 before the first frame paints, never a half-rendered board dying on an undefined function inside frozen vendor code. If the preflight ever fires, `php -m` shows what is missing; on Debian/Ubuntu the packages are `php8.3-mbstring` and `php8.3-intl`.
+
 ## Run it
 
 ```bash

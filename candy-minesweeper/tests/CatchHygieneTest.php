@@ -18,7 +18,7 @@ final class CatchHygieneTest extends TestCase
 {
     public function testGameAndVersionNameTheirFaultFamilies(): void
     {
-        foreach (['src/Game.php', 'src/Support/Version.php'] as $relative) {
+        foreach (['src/Game.php', 'src/Support/Version.php', 'src/Support/Requirements.php'] as $relative) {
             $path = \dirname(__DIR__) . '/' . $relative;
             self::assertFileExists($path, 'sanity: ' . $relative . ' is on disk');
             self::assertStringNotContainsString(

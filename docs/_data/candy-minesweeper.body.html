@@ -1,5 +1,8 @@
 <p class="lede" style="margin-top: 28px;">Customisable board (width / height / mine count), iterative zero-flood-fill, win / lose detection. Pure-state Board class so every reveal is unit-testable without touching the runtime.</p>
 
+    <h3 style="margin-top: 32px;">Requirements</h3>
+    <p>PHP 8.3+ with <code>ext-mbstring</code> (the cell-width math behind every glyph) and <code>ext-intl</code> (the locale machinery behind the 16-locale interface). The composer path enforces both transitively through sugar-core's manifest; the standalone phar installs nothing through composer, so the binary preflights them itself and refuses with a named exit-1 message (<code>candy-minesweeper requires ext-mbstring</code>) before the first frame, never a half-rendered board dying on an undefined function.</p>
+
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-minesweeper
 ./vendor/bin/candy-minesweeper       # play straight from the dependency

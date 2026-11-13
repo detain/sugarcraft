@@ -54,6 +54,24 @@ declare(strict_types=1);
     exit(1);
 })();
 
+// Extension preflight (msw-23, finding candy-minesweeper-018): the composer
+// path installs ext-intl + ext-mbstring transitively (sugar-core declares
+// both), but the phar channel bypasses composer entirely — on a host that
+// lacks either, the app must be NAMED-refused here, at boot, rather than
+// semi-die on an undefined-function Error inside frozen vendor code mid-
+// render. The require above only registers class maps, so this closure is
+// the first vendor callable boot runs, and the guard it loads is pure
+// array math — safe on a bare host by construction. The refusal prose is
+// an English literal like the usage text above: it must stay parseable
+// even when the terminal's locale is broken.
+(static function (): void {
+    $missing = \SugarCraft\Minesweeper\Support\Requirements::firstMissing(\get_loaded_extensions());
+    if ($missing !== null) {
+        fwrite(STDERR, \SugarCraft\Minesweeper\Support\Requirements::refuseMessage($missing) . "\n");
+        exit(1);
+    }
+})();
+
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
