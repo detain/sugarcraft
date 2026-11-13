@@ -341,7 +341,7 @@ final class Theme
         return match ($key) {
             'ansi'                  => self::ansi(),
             'plain'                 => self::plain(),
-            'notty', 'no-tty'       => self::notty(),
+            'notty'                 => self::notty(),
             'ascii'                 => self::ascii(),
             'dark'                  => self::dark(),
             'light'                 => self::light(),
