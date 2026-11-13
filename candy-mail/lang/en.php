@@ -38,6 +38,8 @@ return [
     'email.invalid_address' => 'Invalid email address: {addr}',
     'email.crlf_in_header' => 'CRLF injection detected in {field} header',
     'email.invalid_mime_type' => 'Invalid attachment MIME type (expected type/subtype): {mime}',
+    'email.invalid_header_name' => "Invalid header name: {name} (letters, digits, and the characters !#$%&'*+-.^_`|~ only)",
+    'email.reserved_header' => 'The {field} header belongs to the fixed set and cannot be set via withHeader',
     'email.invalid_header_char' => 'The {field} header contains forbidden control characters (printable text only)',
 
     // ResendTransport.php

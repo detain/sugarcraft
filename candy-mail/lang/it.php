@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => 'Indirizzo e-mail non valido: {addr}',
     'email.crlf_in_header' => 'Rilevata iniezione CRLF nell’intestazione {field}',
     'email.invalid_mime_type' => 'Tipo MIME allegato non valido (previsto tipo/sottotipo): {mime}',
+    'email.invalid_header_name' => "Nome header non valido: {name} (solo lettere, cifre e i caratteri !#$%&'*+-.^_`|~)",
+    'email.reserved_header' => 'L’header {field} appartiene al set fisso e non può essere impostato con withHeader',
     'email.invalid_header_char' => 'L’intestazione {field} contiene caratteri di controllo non ammessi (solo testo stampabile)',
     'resend.send_cancelled' => 'Invio Resend annullato prima dell’inizio',
     'resend.curl_missing' => 'ext-curl è obbligatorio per il trasporto Resend (il trasporto SMTP non richiede estensioni per SMTP in chiaro; ext-openssl per TLS)',

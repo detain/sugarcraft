@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => '无效的电子邮件地址：{addr}',
     'email.crlf_in_header' => '在 {field} 标头中检测到 CRLF 注入',
     'email.invalid_mime_type' => '附件 MIME 类型无效（应为 类型/子类型）：{mime}',
+    'email.invalid_header_name' => "无效的标题名称：{name}（仅限字母、数字和字符 !#$%&'*+-.^_`|~）",
+    'email.reserved_header' => '标题 {field} 属于固定集合，无法通过 withHeader 设置',
     'email.invalid_header_char' => '{field} 标头包含禁止的控制字符（仅限可打印文本）',
     'resend.send_cancelled' => 'Resend 发送开始前已取消',
     'resend.curl_missing' => 'Resend 传输需要 ext-curl（SMTP 传输使用普通 SMTP 时无需扩展；使用 TLS 时需要 ext-openssl）',

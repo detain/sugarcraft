@@ -51,6 +51,8 @@ return [
     'email.invalid_address' => 'Ungültige E-Mail-Adresse: {addr}',
     'email.crlf_in_header' => 'CRLF-Injection im {field}-Header erkannt',
     'email.invalid_mime_type' => 'Ungültiger Anhang-MIME-Typ (erwartet Typ/Subtyp): {mime}',
+    'email.invalid_header_name' => "Ungültiger Header-Name: {name} (nur Buchstaben, Ziffern und die Zeichen !#$%&'*+-.^_`|~)",
+    'email.reserved_header' => 'Der Header {field} gehört zur festen Menge und kann über withHeader nicht gesetzt werden',
     'email.invalid_header_char' => 'Der {field}-Header enthält unzulässige Steuerzeichen (nur druckbarer Text)',
     'resend.send_cancelled' => 'Resend-Versand vor dem Start abgebrochen',
     'resend.curl_missing' => 'ext-curl wird für den Resend-Transport benötigt (der SMTP-Transport benötigt für einfaches SMTP keine Erweiterungen; für TLS ext-openssl)',

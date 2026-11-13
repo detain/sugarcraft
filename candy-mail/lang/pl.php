@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => 'Nieprawidłowy adres e-mail: {addr}',
     'email.crlf_in_header' => 'Wykryto wstrzyknięcie CRLF w nagłówku {field}',
     'email.invalid_mime_type' => 'Nieprawidłowy typ MIME załącznika (oczekiwano typu/podtypu): {mime}',
+    'email.invalid_header_name' => "Nieprawidłowa nazwa nagłówka: {name} (dozwolone tylko litery, cyfry oraz znaki !#$%&'*+-.^_`|~)",
+    'email.reserved_header' => 'Nagłówek {field} należy do stałego zbioru i nie może być ustawiony przez withHeader',
     'email.invalid_header_char' => 'Nagłówek {field} zawiera niedozwolone znaki sterujące (tylko tekst drukowalny)',
     'resend.send_cancelled' => 'Wysyłanie Resend anulowane przed rozpoczęciem',
     'resend.curl_missing' => 'ext-curl jest wymagany dla transportu Resend (transport SMTP nie potrzebuje rozszerzeń dla zwykłego SMTP; ext-openssl dla TLS)',

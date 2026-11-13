@@ -51,6 +51,8 @@ return [
     'email.invalid_address' => 'Adresse e-mail invalide : {addr}',
     'email.crlf_in_header' => 'Injection CRLF détectée dans l’en-tête {field}',
     'email.invalid_mime_type' => 'Type MIME de pièce jointe invalide (type/sous-type attendu) : {mime}',
+    'email.invalid_header_name' => "Nom d’en-tête invalide : {name} (lettres, chiffres et caractères !#$%&'*+-.^_`|~ uniquement)",
+    'email.reserved_header' => 'L’en-tête {field} appartient au jeu fixe et ne peut pas être défini via withHeader',
     'email.invalid_header_char' => 'L’en-tête {field} contient des caractères de contrôle non autorisés (texte imprimable uniquement)',
     'resend.send_cancelled' => 'Envoi Resend annulé avant le démarrage',
     'resend.curl_missing' => 'ext-curl est requis pour le transport Resend (le transport SMTP ne nécessite aucune extension pour SMTP simple ; ext-openssl est requis pour TLS)',

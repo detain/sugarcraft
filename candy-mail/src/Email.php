@@ -33,6 +33,8 @@ final class Email
     public readonly array $attachments;
     /** @var string|null Signature appended to the plain-text body (HTML-only mails ignore it — see bodyWithSignature()). */
     public readonly ?string $signature;
+    /** @var array<string,string> Caller-supplied headers, original name => value, insertion-ordered. */
+    public readonly array $headers;
 
     /**
      * @param list<string>      $from
@@ -52,6 +54,7 @@ final class Email
         ?string $replyTo = null,
         array $attachments = [],
         ?string $signature = null,
+        array $headers = [],
     ) {
         $this->from         = $this->sanitizeAddressList($from);
         $this->to           = $this->sanitizeAddressList($to);
@@ -68,6 +71,7 @@ final class Email
         $this->replyTo      = $replyTo !== null ? $this->sanitizeAddr($replyTo) : null;
         $this->attachments  = $attachments;
         $this->signature    = self::stripStrayControl($signature);
+        $this->headers      = self::sanitizeHeaderList($headers);
     }
 
     /**
@@ -121,6 +125,56 @@ final class Email
      * @param array<array-key, string> $addrs
      * @return list<string>
      */
+    /**
+     * Name-grammar gate + fixed-set ban + value control gate for the
+     * withHeader escape hatch. Returns the original-case name => value pairs
+     * in insertion order (later duplicates overwrite values in place).
+     *
+     * @param array<string,string> $headers
+     * @return array<string,string>
+     */
+    private static function sanitizeHeaderList(array $headers): array
+    {
+        $fixed  = ['from', 'to', 'cc', 'bcc', 'subject', 'reply-to', 'date',
+                   'message-id', 'mime-version', 'content-type', 'content-transfer-encoding'];
+        $clean  = [];
+        $byKey  = [];
+        foreach ($headers as $name => $value) {
+            if (\preg_match('/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$/', $name) !== 1) {
+                throw new \InvalidArgumentException(Lang::t('email.invalid_header_name', ['name' => $name]));
+            }
+            $key = \strtolower($name);
+            if (\in_array($key, $fixed, true)) {
+                throw new \InvalidArgumentException(Lang::t('email.reserved_header', ['field' => $name]));
+            }
+            $value = self::refuseHeaderControl($value, $name);
+            if (isset($byKey[$key])) {
+                $clean[$byKey[$key]] = $value;
+                continue;
+            }
+            $byKey[$key]   = $name;
+            $clean[$name]  = $value;
+        }
+        return $clean;
+    }
+
+    /**
+     * CRLF first (its own named refusal), then the full C0 + DEL class — the
+     * same two-stage doctrine the subject gate has carried since the header
+     * injection sweep; a value with no place on a header line is refused, not
+     * folded.
+     */
+    private static function refuseHeaderControl(string $value, string $field): string
+    {
+        if (\preg_match('/[\r\n]/', $value)) {
+            throw new \InvalidArgumentException(Lang::t('email.crlf_in_header', ['field' => $field]));
+        }
+        if (\preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $value)) {
+            throw new \InvalidArgumentException(Lang::t('email.invalid_header_char', ['field' => $field]));
+        }
+        return $value;
+    }
+
     private function sanitizeAddressList(array $addrs): array
     {
         // Empty arrays are allowed; filter out empty strings first
@@ -299,6 +353,25 @@ final class Email
     public function withSignature(string $signature): self
     {
         return $this->mutate(['signature' => $signature]);
+    }
+
+    /**
+     * Escape hatch for arbitrary headers (RFC 5322 §3.6 optional-field set):
+     * List-Unsubscribe, In-Reply-To, X-… anything the fixed message fields do
+     * not already own. Names are validated against the RFC 9110 token grammar,
+     * values ride the SAME CRLF + C0 refusal class the subject gate uses, and
+     * the pair accumulates in insertion order (a later same-name header
+     * overwrites the value but keeps its original position; the comparison is
+     * case-insensitive per RFC 5321 §2.3.1 — X- prefixed names are always
+     * open, the fixed set below is what this class and the transports compose
+     * themselves and cannot be overridden from here):
+     * From, To, Cc, Bcc (never travels as a header at all), Subject,
+     * Reply-To, Date, Message-ID, MIME-Version, Content-Type,
+     * Content-Transfer-Encoding.
+     */
+    public function withHeader(string $name, string $value): self
+    {
+        return $this->mutate(['headers' => array_merge($this->headers, self::sanitizeHeaderList([$name => $value]))]);
     }
 
     // -------------------------------------------------------------------------

@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => 'عنوان بريد إلكتروني غير صالح: {addr}',
     'email.crlf_in_header' => 'تم رصد حقن CRLF في الترويسة {field}',
     'email.invalid_mime_type' => 'نوع MIME للمرفق غير صالح (المطلوب نوع/نوع فرعي): {mime}',
+    'email.invalid_header_name' => "اسم ترويسة غير صالح: {name} (يُسمح بالحروف والأرقام والرموز !#$%&'*+-.^_`|~ فقط)",
+    'email.reserved_header' => 'الترويسة {field} تنتمي إلى المجموعة الثابتة ولا يمكن تعيينها عبر withHeader',
     'email.invalid_header_char' => 'ترويسة {field} تحتوي على أحرف تحكم غير مسموح بها (نص قابل للطباعة فقط)',
     'resend.send_cancelled' => 'تم إلغاء إرسال Resend قبل بدئه',
     'resend.curl_missing' => 'مطلوب ext-curl لنقل Resend (نقل SMTP لا يحتاج امتدادات لبريد SMTP العادي; TLS يتطلب ext-openssl)',

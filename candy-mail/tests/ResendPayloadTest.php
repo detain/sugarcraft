@@ -176,4 +176,21 @@ final class ResendPayloadTest extends TestCase
 
         return $method->invoke($transport, $email);
     }
+
+    public function testPayloadCarriesCustomHeaders(): void
+    {
+        $email = new Email(
+            from:    ['a@b.example'],
+            to:      ['c@d.example'],
+            subject: 'H',
+            body:    'text',
+            headers: ['X-Priority' => '3 (normal)', 'In-Reply-To' => '<m1@refs.test>'],
+        );
+        $transport = new ResendTransport('re_test_key');
+        $payload = $this->invokeBuildPayload($transport, $email);
+        $this->assertSame(['X-Priority' => '3 (normal)', 'In-Reply-To' => '<m1@refs.test>'], $payload['headers']);
+
+        $plain = $this->invokeBuildPayload($transport, new Email(from: ['a@b.example'], to: ['c@d.example'], body: 'x'));
+        $this->assertArrayNotHasKey('headers', $plain);
+    }
 }

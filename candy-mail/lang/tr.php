@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => 'Geçersiz e-posta adresi: {addr}',
     'email.crlf_in_header' => '{field} başlığında CRLF enjeksiyonu algılandı',
     'email.invalid_mime_type' => 'Ek MIME türü geçersiz (beklenen tür/alttür): {mime}',
+    'email.invalid_header_name' => "Geçersiz üstbilgi adı: {name} (yalnızca harfler, rakamlar ve !#$%&'*+-.^_`|~ karakterleri)",
+    'email.reserved_header' => '{field} üstbilgisi sabit kümeye aittir ve withHeader ile ayarlanamaz',
     'email.invalid_header_char' => '{field} üstbilgisi yasaklanan denetim karakterleri içeriyor (yalnızca yazılabilir metin)',
     'resend.send_cancelled' => 'Resend gönderimi başlamadan önce iptal edildi',
     'resend.curl_missing' => 'Resend taşıyıcısı için ext-curl gerekiyor (SMTP taşıyıcısı düz SMTP için eklenti gerektirmez; TLS için ext-openssl)',

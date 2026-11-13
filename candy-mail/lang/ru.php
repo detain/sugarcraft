@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => 'Недопустимый адрес электронной почты: {addr}',
     'email.crlf_in_header' => 'Обнаружена CRLF-инъекция в заголовке {field}',
     'email.invalid_mime_type' => 'Недопустимый MIME-тип вложения (ожидается тип/подтип): {mime}',
+    'email.invalid_header_name' => "Недопустимое имя заголовка: {name} (только буквы, цифры и символы !#$%&'*+-.^_`|~)",
+    'email.reserved_header' => 'Заголовок {field} входит в фиксированный набор и не может быть задан через withHeader',
     'email.invalid_header_char' => 'Заголовок {field} содержит запрещённые управляющие символы (только печатный текст)',
     'resend.send_cancelled' => 'Отправка Resend отменена до начала',
     'resend.curl_missing' => 'Для транспорта Resend требуется ext-curl (транспорт SMTP не требует расширений для обычного SMTP; для TLS требуется ext-openssl)',

@@ -208,6 +208,12 @@ final class ResendTransport implements Transport
         if ($email->replyTo !== null) {
             $payload['reply_to'] = $email->replyTo;
         }
+        // The provider documents an arbitrary `headers` map on the send
+        // payload (https://resend.com/docs/api-reference/emails/send-email);
+        // the escape-hatch names ride it verbatim.
+        if ($email->headers !== []) {
+            $payload['headers'] = $email->headers;
+        }
 
         // Attachments (Resend accepts base64-encoded content)
         $resendAtts = [];

@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => '無効なメールアドレス: {addr}',
     'email.crlf_in_header' => '{field}ヘッダーにCRLFインジェクションが検出されました',
     'email.invalid_mime_type' => '添付ファイルのMIMEタイプが無効です（タイプ/サブタイプ形式が必要）: {mime}',
+    'email.invalid_header_name' => "無効なヘッダー名: {name} (使用可能: 英数字と記号 !#$%&'*+-.^_`|~ のみ)",
+    'email.reserved_header' => 'ヘッダー {field} は固定セットに属するため、withHeader では設定できません',
     'email.invalid_header_char' => '{field} ヘッダーに禁止されている制御文字が含まれています（印刷可能なテキストのみ）',
     'resend.send_cancelled' => 'Resend送信を開始する前にキャンセルされました',
     'resend.curl_missing' => 'Resendトランスポートにはext-curlが必要です (SMTPトランスポートは平文SMTPでは拡張機能を必要としません; TLSにはext-opensslが必要です)',

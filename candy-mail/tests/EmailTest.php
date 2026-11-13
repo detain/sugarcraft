@@ -383,4 +383,76 @@ final class EmailTest extends TestCase
         $keep = new Email(from: ['a@b.example'], to: ['c@d.example'], body: "keep\tme\nas-is");
         $this->assertSame("keep\tme\nas-is", $keep->body);
     }
+
+    public function testWithHeaderAccumulatesInInsertionOrderWithCaseInsensitiveOverwrite(): void
+    {
+        $email = new Email(
+            from:    ['a@b.example'],
+            to:      ['c@d.example'],
+            headers: ['X-Entity-Ref' => 'seed'],
+        );
+        $base = $email
+            ->withHeader('X-Priority', '3 (normal)')
+            ->withHeader('List-Unsubscribe', '<https://lists.example.com/unsub>');
+        $again = $base->withHeader('x-priority', '1 (urgent)');
+
+        $this->assertSame(['X-Entity-Ref', 'X-Priority', 'List-Unsubscribe'], array_keys($again->headers));
+        $this->assertSame('1 (urgent)', $again->headers['X-Priority']);
+        $this->assertSame(
+            ['X-Entity-Ref' => 'seed', 'X-Priority' => '1 (urgent)', 'List-Unsubscribe' => '<https://lists.example.com/unsub>'],
+            $again->headers,
+        );
+        $this->assertSame('3 (normal)', $base->headers['X-Priority']); // immutability
+        $this->assertSame(['X-Entity-Ref' => 'seed'], $email->headers); // seed-only original untouched
+    }
+
+    public function testWithHeaderRefusesMalformedNames(): void
+    {
+        $email = new Email(from: ['a@b.example'], to: ['c@d.example']);
+        foreach (["X Bad:", "X\r\nEvil: bogus", "", "x=y", "header\ttab"] as $name) {
+            try {
+                $email->withHeader($name, 'v');
+                $this->fail("malformed name accepted: [$name]");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('Invalid header name', $e->getMessage());
+            }
+        }
+    }
+
+    public function testWithHeaderRefusesTheFixedSetButOpensExtensionNames(): void
+    {
+        $email = new Email(from: ['a@b.example'], to: ['c@d.example']);
+        foreach (['From', 'subject', 'BCC', 'Message-ID', 'MIME-Version', 'Content-Type', 'Reply-To'] as $name) {
+            try {
+                $email->withHeader($name, 'v');
+                $this->fail("reserved name accepted: [$name]");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('fixed set', $e->getMessage());
+            }
+        }
+        // X- names can never collide with the fixed set:
+        $this->assertSame(
+            ['X-Subject-Line' => 'ok'],
+            $email->withHeader('X-Subject-Line', 'ok')->headers,
+        );
+    }
+
+    public function testWithHeaderRoutesValuesThroughTheControlGate(): void
+    {
+        $email = new Email(from: ['a@b.example'], to: ['c@d.example']);
+        try {
+            $email->withHeader('X-Foo', "bar\x1b]0;evil\x07");
+            $this->fail("C0-bearing value accepted");
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('control characters', $e->getMessage());
+        }
+        try {
+            $email->withHeader('X-Foo', "line1\r\nX-Bogus: 1");
+            $this->fail("CRLF-bearing value accepted");
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('CRLF injection', $e->getMessage());
+        }
+        // TAB is legal header whitespace and stays admissible:
+        $this->assertSame("a\tb", $email->withHeader('X-Tab', "a\tb")->headers['X-Tab']);
+    }
 }

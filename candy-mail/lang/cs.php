@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => 'Neplatná e-mailová adresa: {addr}',
     'email.crlf_in_header' => 'V hlavičce {field} zjištěno vložení CRLF',
     'email.invalid_mime_type' => 'Neplatný MIME typ přílohy (očekáván typ/podtyp): {mime}',
+    'email.invalid_header_name' => "Neplatný název hlavičky: {name} (povoleny pouze písmena, číslice a znaky !#$%&'*+-.^_`|~)",
+    'email.reserved_header' => 'Hlavička {field} patří do pevné sady a nelze ji nastavit přes withHeader',
     'email.invalid_header_char' => 'Hlavička {field} obsahuje nepovolené řídicí znaky (pouze tisknutelný text)',
     'resend.send_cancelled' => 'Odeslání Resend zrušeno před zahájením',
     'resend.curl_missing' => 'Pro transport Resend je vyžadován ext-curl (SMTP transport žádné extenze pro obyčejné SMTP nevyžaduje; pro TLS ext-openssl)',

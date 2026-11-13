@@ -282,6 +282,54 @@ final class SmtpSecurityTest extends TestCase
         $this->assertSame([], $parse("250-AUTHX FAKED\r\n250 HELP"), 'an AUTH-prefixed keyword is not AUTH');
     }
 
+    public function testCustomHeadersRideTheWireFoldedAndOrdered(): void
+    {
+        $this->requireFork();
+        [$port, $pid, $log] = $this->forkFakeServer(false);
+        $long = 'a@b.example';
+        $filler = str_repeat('ref ', 260); // enough words to push the value past the 998-octet line budget
+        $email = new Email(
+            from:    ['me@sender.test'],
+            to:      ['you@rcpt.test'],
+            subject: 'Custom',
+            body:    'plain body',
+            headers: [
+                'List-Unsubscribe' => '<https://lists.example.com/unsub?m=adc>',
+                'X-Priority'       => '3 (normal)',
+                'In-Reply-To'      => '<' . $long . '> ' . $filler . 'tail@refs.test',
+            ],
+        );
+
+        try {
+            $transport = (new SmtpTransport('127.0.0.1', $port))->withRequireTls(false);
+            $transport->send($email);
+        } finally {
+            $this->reap($pid);
+        }
+
+        $wire = (string) file_get_contents($log);
+        @unlink($log);
+
+        $this->assertMatchesRegularExpression('/^List-Unsubscribe: <https:\/\/lists\.example\.com\/unsub\?m=adc>\r?$/mi', $wire);
+        $this->assertMatchesRegularExpression('/^X-Priority: 3 \(normal\)\r?$/mi', $wire);
+        $this->assertMatchesRegularExpression('/^In-Reply-To: <[^\r>]+>/mi', $wire);
+        // Insertion order holds on the wire: List-Unsubscribe precedes X-Priority,
+        // which precedes In-Reply-To, and all ride AFTER the fixed set.
+        $lu  = (int) preg_match('/^List-Unsubscribe:.*$/mi', $wire);
+        $pos = strpos($wire, 'List-Unsubscribe:');
+        $xpo = strpos($wire, 'X-Priority:');
+        $irp = strpos($wire, 'In-Reply-To:');
+        $ctp = strpos($wire, "Content-Type: multipart");
+        $this->assertGreaterThan($ctp, $pos, 'custom headers ride after the fixed set');
+        $this->assertLessThan($xpo, $pos);
+        $this->assertLessThan($irp, $xpo);
+        // The over-long In-Reply-To value was folded, no wire line exceeds 998 octets:
+        foreach (explode("\r\n", substr($wire, 0, $ctp)) as $line) {
+            $this->assertLessThanOrEqual(998, strlen($line), 'header line over the 998-octet budget: ' . substr($line, 0, 40));
+        }
+        $this->assertMatchesRegularExpression("/^\s+ref /m", $wire); // continuation lines present
+    }
+
     public function testEnvelopeWireContractDedupeNoBccAndDotStuffing(): void
     {
         // CM-10 (closes 010): the envelope semantics the transport promises —

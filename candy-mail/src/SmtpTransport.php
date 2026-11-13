@@ -706,6 +706,11 @@ final class SmtpTransport implements Transport
         if ($email->replyTo !== null) {
             $lines[] = self::foldHeader('Reply-To', $this->addrListHeader([$email->replyTo]));
         }
+        // Caller-supplied headers ride after the fixed set in insertion
+        // order; foldHeader applies the same 998-octet discipline to them.
+        foreach ($email->headers as $name => $value) {
+            $lines[] = self::foldHeader($name, $value);
+        }
         return $lines;
     }
 

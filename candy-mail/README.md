@@ -29,6 +29,11 @@ store, or manage an inbox.
   documented SMTP endpoints rather than a second API transport.
 - **Email value object** — from, to, cc, bcc, subject, body, HTML body, reply-to, attachments,
   signature (the signature joins the plain-text body only — an HTML-only mail silently drops it)
+- **Custom headers** — `withHeader()` accumulates arbitrary extension headers (List-Unsubscribe,
+  In-Reply-To, `X-…`) in insertion order behind the fixed set; the names the message and the
+  transports compose themselves (From, To, Cc, Bcc, Subject, Reply-To, Date, Message-ID,
+  MIME-Version, Content-Type, Content-Transfer-Encoding) are refused, and every value rides the
+  same CRLF/control-byte gate as the subject
 - **HTML accessibility** — the authored HTML is embedded verbatim (nothing post-processes it),
   so set `<html lang="…">`, give images alt text, and keep a meaningful plain-text body: it is
   the reader-equivalent leg of the `multipart/alternative` for anyone your HTML does not reach.

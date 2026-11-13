@@ -51,6 +51,8 @@ return [
     'email.invalid_address' => 'Dirección de correo electrónico no válida: {addr}',
     'email.crlf_in_header' => 'Se detectó inyección CRLF en la cabecera {field}',
     'email.invalid_mime_type' => 'Tipo MIME de adjunto no válido (se esperaba tipo/subtipo): {mime}',
+    'email.invalid_header_name' => "Nombre de encabezado no válido: {name} (solo letras, dígitos y los caracteres !#$%&'*+-.^_`|~)",
+    'email.reserved_header' => 'El encabezado {field} pertenece al conjunto fijo y no puede establecerse con withHeader',
     'email.invalid_header_char' => 'La cabecera {field} contiene caracteres de control no permitidos (solo texto imprimible)',
     'resend.send_cancelled' => 'Envío de Resend cancelado antes de comenzar',
     'resend.curl_missing' => 'ext-curl es necesario para el transporte de Resend (el transporte SMTP no necesita extensioñes para SMTP sin cifrar; ext-openssl para TLS)',

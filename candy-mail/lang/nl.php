@@ -44,6 +44,8 @@ return [
     'email.invalid_address' => 'Ongeldig e-mailadres: {addr}',
     'email.crlf_in_header' => 'CRLF-injectie gedetecteerd in {field}-header',
     'email.invalid_mime_type' => 'Ongeldig MIME-type voor bijlage (verwacht type/subtype): {mime}',
+    'email.invalid_header_name' => "Ongeldige headernaam: {name} (alleen letters, cijfers en de tekens !#$%&'*+-.^_`|~)",
+    'email.reserved_header' => 'De header {field} behoort tot de vaste set en kan niet met withHeader worden ingesteld',
     'email.invalid_header_char' => 'De {field}-header bevat verboden stuurcodes (alleen printbare tekst)',
     'resend.send_cancelled' => 'Resend-verzending geannuleerd voordat deze begon',
     'resend.curl_missing' => 'ext-curl is vereist voor de Resend-transport (SMTP-transport heeft geen extensies nodig voor onbeveiligd SMTP; ext-openssl voor TLS)',
