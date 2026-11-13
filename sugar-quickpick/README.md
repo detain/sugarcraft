@@ -123,7 +123,10 @@ says so: a `N hidden by anchor bias` row counts what the rule dropped.
 These are deliberate — deep matches are usually noise — and `setRanker()` is
 the escape hatch: plug in a
 [sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) ranker to switch to **true subsequence matching**,
-ordering the list by descending fuzzy score and highlighting the scored runes:
+ordering the list by descending fuzzy score and highlighting the scored runes.
+A ranker alone only REORDERS — emphasis is a separate switch: nothing is
+painted until you also set `setMatchStyle()` with an SGR string — the example
+below ships both switches:
 
 ```php
 use SugarCraft\QuickPick\QuickPick;

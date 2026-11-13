@@ -377,6 +377,13 @@ final class QuickPick
      * highlighting follows the scored indices. The custom filterFn still applies
      * as a predicate. Pass null to restore the default substring behaviour.
      *
+     * Coupling rule (-050): ranking and emphasis are separate switches. A
+     * ranker alone REORDERS and scores — nothing is painted until a match
+     * style is set via setMatchStyle(); with a ranker installed but an empty
+     * style, the scored indices simply go unrendered. Ship both together
+     * (`->setRanker($m)->setMatchStyle("\e[33m")`) unless the reordering is
+     * the whole point.
+     *
      * Cost: the ranker re-scores the ENTIRE visible corpus on every keystroke
      * (distinct values only — duplicates share one scoring pass). Measured on a
      * 20k-item corpus that is several hundred milliseconds per key against low
@@ -959,6 +966,9 @@ final class QuickPick
             $guarded     = UntrustedText::guard($rawValue);
             $itemStr     = ($this->itemFormatter)($guarded, $isSelected, $items[$actualIndex]->number());
 
+            // Emphasis is a two-key switch (-050): a filter must exist AND
+            // the host must have asked for a style — a ranker alone only
+            // reorders, so scored indices go unrendered without one.
             if ($filter !== '' && $this->matchStyle !== '') {
                 $itemStr = $this->ranker !== null
                     ? $this->highlightFuzzy($itemStr, $guarded, $rawValue, $items[$actualIndex])
