@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Markdown\Tests\Render;
 
+use League\CommonMark\Reference\Reference;
+use League\CommonMark\Reference\ReferenceInterface;
+use League\CommonMark\Reference\ReferenceMap;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use SugarCraft\Markdown\Render\SectionStream;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
@@ -221,9 +225,11 @@ final class SectionStreamTest extends TestCase
         // per-entry watch-list fix; a held section now only re-renders when
         // a definition names one of its own unresolved labels. The cap is
         // machine-relative (the absolute term fails the quadratic shape on
-        // any box while leaving the fixed path a 10x margin); what remains
-        // of the factor over render() is the per-section definition seeding
-        // SM-S07 owns.
+        // any box while leaving the fixed path a 10x margin); SM-S07 then
+        // narrowed the per-section definition seeding to the section's own
+        // bracket spans, so the factor left over render() is the held-entry
+        // retry machinery — the 8x cap keeps SM-S07's narrowing (13x before
+        // it) and SM-S01's watch lists (120x before those) both pinned out.
         $renderer = $this->renderer();
         $doc = '';
         for ($i = 0; $i < 1600; $i++) {
@@ -245,6 +251,134 @@ final class SectionStreamTest extends TestCase
         $streamTime = microtime(true) - $start;
 
         $this->assertSame($rendered, $streamed, 'the ladder streams byte-identical to render()');
-        $this->assertLessThan(max(20.0, 20 * $renderTime), $streamTime, 'unrelated definitions must not re-render held sections');
+        $this->assertLessThan(max(4.0, 8 * $renderTime), $streamTime, 'unrelated definitions must not re-render or re-seed held sections');
+    }
+
+    public function testABracketlessStreamRunsNearRenderParity(): void
+    {
+        // SM-S07: 800 bracket-free sections over a trailing block of 300
+        // definitions. Each section parse used to copy the whole seed map
+        // into its fresh environment — O(sections x defs) of pure seeding
+        // work; narrowed to each section's own bracket spans the copy set
+        // is empty and the stream runs at render() parity.
+        $renderer = $this->renderer();
+        $doc = '';
+        for ($i = 0; $i < 800; $i++) {
+            $doc .= "# S$i\n\nprose section without any references\n\n";
+        }
+        for ($i = 0; $i < 300; $i++) {
+            $doc .= "# D$i\n\n[q$i]: /u$i\n\n";
+        }
+
+        $start = microtime(true);
+        $rendered = $renderer->render($doc);
+        $renderTime = microtime(true) - $start;
+
+        $start = microtime(true);
+        $streamed = '';
+        foreach ($renderer->stream(str_split($doc, 600)) as $body) {
+            $streamed .= $body;
+        }
+        $streamTime = microtime(true) - $start;
+
+        $this->assertSame($rendered, $streamed, 'a bracket-free ladder streams byte-identical to render()');
+        $this->assertLessThan(max(2.0, 3 * $renderTime), $streamTime, 'bracket-free sections must not pay for the document definition count');
+    }
+
+    public function testMultiLineLabelResolvesAcrossStreamedSections(): void
+    {
+        // End-to-end SM-S07: a label defined across lines in one section
+        // and used across lines (and case/whitespace-folded) in the next
+        // must still resolve — the narrowing keys lookups through the
+        // same normalizer the reference map itself uses.
+        $renderer = $this->renderer();
+        $doc = "[Foo\nBar]: /url\n\nSee [foo   \nbar].\n\n# X\n";
+
+        $streamed = '';
+        foreach ($renderer->stream(str_split($doc, 400)) as $body) {
+            $streamed .= $body;
+        }
+
+        $this->assertSame($renderer->render($doc), $streamed, 'the folded label streams byte-identical to render()');
+        $this->assertStringContainsString('/url', $streamed, 'the cross-section reference resolved');
+    }
+
+    /** @return list<ReferenceInterface> */
+    private function narrow(string $section, ReferenceMap $seed): array
+    {
+        return (new ReflectionMethod(Renderer::class, 'narrowSeed'))->invoke(null, $section, $seed);
+    }
+
+    private function seedWith(string ...$labels): ReferenceMap
+    {
+        $map = new ReferenceMap();
+        foreach ($labels as $label) {
+            $map->add(new Reference($label, '/u/' . rawurlencode($label), ''));
+        }
+
+        return $map;
+    }
+
+    /** @param list<ReferenceInterface> $kept */
+    private static function labelsOf(array $kept): array
+    {
+        $labels = array_map(static fn (ReferenceInterface $r): string => $r->getLabel(), $kept);
+        sort($labels);
+
+        return $labels;
+    }
+
+    public function testNarrowSeedKeepsOnlyLabelsTheSectionCanResolve(): void
+    {
+        $kept = $this->narrow("See [foo   \nbar] and [a&b] here.\n", $this->seedWith('Foo Bar', 'unused', 'a&b'));
+        $this->assertSame(
+            ['Foo Bar', 'a&b'],
+            self::labelsOf($kept),
+            'case/whitespace-folded spans and literal-ampersand labels resolve while unrelated definitions drop',
+        );
+    }
+
+    public function testNarrowSeedCoversCollapsedFullFormAndEscapes(): void
+    {
+        $kept = $this->narrow("![img][L1] plus \\[no\\] but [real]\n", $this->seedWith('L1', 'no', 'real'));
+        $this->assertSame(
+            ['L1', 'real'],
+            self::labelsOf($kept),
+            'the full-form second span resolves; an escaped bracket pair is not a label',
+        );
+    }
+
+    public function testNarrowSeedHandlesNumericLabels(): void
+    {
+        // A prose indexer over-matches the span '0'; numeric labels must
+        // survive candidate dedup — PHP casts numeric-string array keys to
+        // int, and an int reaching ReferenceMap::get() is a TypeError.
+        $kept = $this->narrow("\$array[0] is fine, see [0].\n", $this->seedWith('0'));
+        $this->assertCount(1, $kept);
+        $this->assertSame('0', $kept[0]->getLabel());
+    }
+
+    public function testNarrowSeedSkipsOverlongCandidates(): void
+    {
+        // A label may not exceed 999 characters, so an overlong span can
+        // never hit — skipping it must not disturb the spans that can.
+        $long = str_repeat('x', 1000);
+        $kept = $this->narrow("[$long] and [short]\n", $this->seedWith('short'));
+        $this->assertSame(['short'], self::labelsOf($kept));
+    }
+
+    public function testNarrowSeedFallsBackToFullSeedOnDenseText(): void
+    {
+        $section = '';
+        for ($i = 0; $i < 5000; $i++) {
+            $section .= "[z$i]";
+        }
+        $kept = $this->narrow($section . "\n", $this->seedWith('a', 'b'));
+        $this->assertCount(2, $kept, 'past the span guard the full map seeds, as before narrowing');
+    }
+
+    public function testNarrowSeedIsEmptyOnBracketlessText(): void
+    {
+        $this->assertSame([], $this->narrow("nothing referenced here\n", $this->seedWith('a')));
     }
 }

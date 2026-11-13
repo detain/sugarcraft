@@ -193,7 +193,10 @@ section that still holds an unresolved `[label]` pair is held (its
 source and first render both kept) and re-rendered only when a later
 definition names one of the labels it left unresolved, so
 definition-first documents stream correctly at the cost of that hold,
-and a definition unrelated to a held section costs it nothing.
+and a definition unrelated to a held section costs it nothing. Seeding
+across sections is per-section priced too: a section is seeded only
+with the definitions its own bracket spans could look up, so the
+document's definition count is not a per-section cost.
 
 `Writer` is the push-side twin: `Writer::toPath($renderer, $path)` or
 `Writer::toStream($renderer, $resource)` accept chunks through

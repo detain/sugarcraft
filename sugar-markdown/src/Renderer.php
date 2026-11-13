@@ -57,6 +57,7 @@ use League\CommonMark\Node\Inline\Newline;
 use League\CommonMark\Node\Inline\Text;
 use League\CommonMark\Node\Node;
 use League\CommonMark\Parser\MarkdownParser;
+use League\CommonMark\Reference\ReferenceInterface;
 use League\CommonMark\Reference\ReferenceMapInterface;
 
 /**
@@ -118,9 +119,13 @@ final class Renderer
 
     /**
      * Link reference definitions {@see parseSection()} seeds into the parse
-     * in flight, null outside one. Only the stream family sets it.
+     * in flight, null outside one. Only the stream family sets it, and only
+     * after narrowing to the labels the section could look up
+     * ({@see narrowSeed()}).
+     *
+     * @var list<ReferenceInterface>|null
      */
-    private ?ReferenceMapInterface $seedReferences = null;
+    private ?array $seedReferences = null;
     private readonly ?int $wrapWidth;
     private readonly bool $emitHyperlinks;
     private readonly ?string $baseUrl;
@@ -443,12 +448,73 @@ final class Renderer
         // the stream channel and the whole-document channel see the same
         // nodes and stay byte-identical.
 
-        $this->seedReferences = $seed;
+        $this->seedReferences = $seed === null ? null : self::narrowSeed($section, $seed);
         try {
             return $this->parser()->parse($section);
         } finally {
             $this->seedReferences = null;
         }
+    }
+
+    /**
+     * Narrow a seed map to the entries this section's text could resolve.
+     *
+     * Every reference lookup the parser performs is keyed by a bracket span
+     * from the section's own raw text, normalized exactly the way
+     * {@see ReferenceMap::get()} normalizes its argument — so copying only
+     * spans the map answers gives byte-identical parses while the seeding
+     * loop drops from O(defs) to O(spans) per section (SM-S07: the 6.7 s
+     * residual of a streamed 1,600-definition document was this loop, once
+     * per section, dominating every parse).
+     *
+     * @return list<ReferenceInterface>
+     */
+    private static function narrowSeed(string $section, ReferenceMapInterface $seed): array
+    {
+        $spans = self::bracketSpans($section);
+        if ($spans === null) {
+            // Deliberately unfiltered (pathological bracket density, or a
+            // scanner failure): full seeding keeps bytes, costs the old O(D).
+            return \iterator_to_array($seed, false);
+        }
+        $found = [];
+        foreach ($spans as $span) {
+            $reference = $seed->get($span);
+            if ($reference !== null) {
+                $found[$reference->getLabel()] = $reference;
+            }
+        }
+        return \array_values($found);
+    }
+
+    /**
+     * Every bracket span in the section's raw text, as candidate labels.
+     *
+     * One regex pass over the bytes (innermost spans only — a label can
+     * never hold an unescaped bracket, so `[[a]: /u` yields the label `a`,
+     * never the outer `[a`). Code spans and autolinks also yield spans,
+     * which only ever over-matches: a label the parser will not look up is
+     * copied harmlessly.
+     *
+     * @return list<string>|null null when the text emits more candidate
+     *                           spans than the guard allows or the scan
+     *                           fails — callers must seed the full map
+     */
+    private static function bracketSpans(string $section): ?array
+    {
+        $spans = [];
+        $offset = 0;
+        while (\preg_match('/\[((?:[^\\\\\[\]]|\\\\.)*)\]/s', $section, $match, \PREG_OFFSET_CAPTURE, $offset)) {
+            $span = $match[1][0];
+            if ($span !== '' && \trim($span) !== '' && \mb_strlen($span) <= 999 && !isset($spans[$span])) {
+                $spans[$span] = $span;
+                if (\count($spans) > 4096) {
+                    return null;
+                }
+            }
+            $offset = $match[0][1] + \strlen($match[0][0]);
+        }
+        return \array_values($spans);
     }
 
     /**
