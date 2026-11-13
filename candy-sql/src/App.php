@@ -38,6 +38,8 @@ use SugarCraft\Sql\Admin\ServerContext;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Admin\ServerStatus\ServerStatusPage;
 use SugarCraft\Sql\Admin\ServerStatusSnapshotAdapter;
+use SugarCraft\Sql\Admin\Resilience\StatementTimeout;
+use SugarCraft\Sql\Admin\Resilience\StatementTimeoutException;
 use SugarCraft\Sql\Admin\Variables\Catalog;
 use SugarCraft\Sql\Admin\Variables\VariableEditor;
 use SugarCraft\Sql\Admin\Variables\VariablesPage;
@@ -111,6 +113,22 @@ final class App implements Model
     ) {}
 
     /**
+     * Shared wall-clock cap for the synchronous remote legs (SQL-C11).
+     *
+     * Transport policy, not user state. The TLS-refused run/browse legs and
+     * the boot table list execute on the UI loop, and before this seam a
+     * stalled server froze the app indefinitely; now each leg fails with a
+     * named StatementTimeoutException inside
+     * {@see StatementTimeout::DEFAULT_SECONDS} (or, without pcntl, at the
+     * driver's network timeout — see {@see MysqlDatabase::NETWORK_TIMEOUT_SECONDS}).
+     * AdminState carries an injected instance as the test seam.
+     */
+    private function syncTimeout(): StatementTimeout
+    {
+        return $this->admin->syncTimeoutGuard ?? new StatementTimeout();
+    }
+
+    /**
      * @param Flavor::* $flavor Database flavor for driver-specific behavior
      * @param HistoryRecorder|null $historyRecorder When set, admin polls append
      *     snapshots to the history store (wired by bin/candy-sql; the matching
@@ -129,7 +147,11 @@ final class App implements Model
         ?string $sslMode = null,
     ): self {
         $sslMode ??= ($db instanceof MysqlDatabase ? $db->sslMode() : '');
-        $tables = $db->tables();
+        // SQL-C11: bootstrap reads the table list on the UI loop too — the
+        // first screen must inherit the same stall bound as every later leg.
+        $tables = (new StatementTimeout())->run(
+            static fn (): array => $db->tables(),
+        );
         $a = new self(
             ConnectionState::new($db, $flavor, null, $sslMode),
             BrowseState::new()->withTables($tables),
@@ -589,7 +611,12 @@ final class App implements Model
         // place, QueryState::withRecordedQuery (client-016).
         $query = $this->query->withRecordedQuery($trimmed);
         try {
-            $rows = $this->connection->db->query($sql);
+            // SQL-C11: the sync leg runs on the UI loop (that is what "sync
+            // transport" means here) — the shared wall-clock cap turns an
+            // unbounded server stall into a named error inside 30 s.
+            $rows = $this->syncTimeout()->run(
+                fn (): ?array => $this->connection->db->query($sql),
+            );
             // Guard against null (e.g., connection lost after handled reconnect).
             if ($rows === null) {
                 return $this->mutate([
@@ -608,7 +635,7 @@ final class App implements Model
                 'query' => $query->withEditor($this->editor()->reset()),
                 'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($rows))),
             ]);
-        } catch (\PDOException | ReconnectException $e) {
+        } catch (\PDOException | ReconnectException | StatementTimeoutException $e) {
             return $this->mutate([
                 'query' => $query,
                 'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
@@ -1019,11 +1046,17 @@ final class App implements Model
     private function loadTable(string $name): self
     {
         try {
+            // SQL-C11: the startup/SQLite browse legs join the run leg under
+            // the same wall-clock cap — one stall class, one bound.
             $columns = PreviewQuery::classify(
                 $this->connection->flavor,
-                $this->connection->db->query(PreviewQuery::columnsSql($this->connection->flavor, $name)) ?? [],
+                $this->syncTimeout()->run(
+                    fn (): ?array => $this->connection->db->query(PreviewQuery::columnsSql($this->connection->flavor, $name)),
+                ) ?? [],
             );
-            $rows = $this->connection->db->query(PreviewQuery::build($this->connection->flavor, $name, $columns)) ?? [];
+            $rows = $this->syncTimeout()->run(
+                fn (): ?array => $this->connection->db->query(PreviewQuery::build($this->connection->flavor, $name, $columns)),
+            ) ?? [];
             return $this->mutate([
                 'browse' => $this->browse
                     ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
@@ -1037,7 +1070,7 @@ final class App implements Model
                     ->withRowsLoading(false),
                 'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($rows))),
             ]);
-        } catch (\PDOException | ReconnectException $e) {
+        } catch (\PDOException | ReconnectException | StatementTimeoutException $e) {
             return $this->mutate([
                 'browse' => $this->browse->withRowsLoading(false),
                 'ui' => $this->ui->withError($e->getMessage())->withStatus(null),

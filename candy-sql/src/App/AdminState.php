@@ -36,7 +36,22 @@ final class AdminState
         public readonly bool $loading = false,
         public readonly float $lastFetchAt = 0.0,
         public readonly ?HistoryRecorder $historyRecorder = null,
+        /**
+         * Wall-clock cap for the synchronous remote legs (SQL-C11). Null =
+         * production default (a fresh 30 s StatementTimeout per leg); a set
+         * instance is the transport-policy seam tests inject. Infrastructure
+         * rides here next to the HistoryRecorder — it is not user state.
+         */
+        public readonly ?\SugarCraft\Sql\Admin\Resilience\StatementTimeout $syncTimeoutGuard = null,
     ) {}
+
+    /**
+     * Install the sync-leg wall-clock cap override (see the constructor note).
+     */
+    public function withSyncTimeoutGuard(?\SugarCraft\Sql\Admin\Resilience\StatementTimeout $guard): self
+    {
+        return $this->mutate(['syncTimeoutGuard' => $guard]);
+    }
 
     public static function new(): self
     {

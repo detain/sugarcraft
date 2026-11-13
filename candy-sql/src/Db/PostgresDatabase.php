@@ -21,6 +21,17 @@ final class PostgresDatabase implements DatabaseInterface
     }
 
     /**
+     * The wall-clock budget (seconds) for the PostgreSQL connect phase.
+     *
+     * SQL-C11: a dropped route used to leave the connect attempt blocked
+     * indefinitely. libpq's own `connect_timeout` parameter is the dial-time
+     * lever (pdo_pgsql has no network read/write attrs), so it rides the DSN
+     * handed to the constructor — never {@see ConnectionConfig::$dsn} itself,
+     * which is the connection identity pinned elsewhere.
+     */
+    public const CONNECT_TIMEOUT_SECONDS = 30;
+
+    /**
      * Connect to a PostgreSQL database using connection configuration.
      */
     public static function connect(ConnectionConfig $config): self
@@ -31,7 +42,7 @@ final class PostgresDatabase implements DatabaseInterface
             );
         }
 
-        $pdo = new \PDO($config->dsn, $config->user, $config->pass, [
+        $pdo = new \PDO(self::dialDsn($config->dsn), $config->user, $config->pass, [
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
         ]);
@@ -40,6 +51,21 @@ final class PostgresDatabase implements DatabaseInterface
         $instance->connectionConfig = $config;
 
         return $instance;
+    }
+
+    /**
+     * The stored DSN plus the connect-phase timeout.
+     *
+     * An explicit connect_timeout already in the DSN wins — no silent
+     * override of a value the operator chose.
+     */
+    private static function dialDsn(string $dsn): string
+    {
+        if (str_contains($dsn, 'connect_timeout=')) {
+            return $dsn;
+        }
+
+        return $dsn . ';connect_timeout=' . self::CONNECT_TIMEOUT_SECONDS;
     }
 
     /** @return list<string> */

@@ -27,7 +27,9 @@ final class MysqlDatabase implements DatabaseInterface
      * Connect to a MySQL database using connection configuration.
      *
      * SSL is configured via PDO driver options, not the DSN string — the mode
-     * semantics live in {@see self::sslDriverOptions()}.
+     * semantics live in {@see self::sslDriverOptions()}. Every option group
+     * (modes, TLS, C11 network timeouts) is assembled in {@see
+     * self::pdoOptions()} so the connect and reconnect legs dial identically.
      */
     public static function connect(ConnectionConfig $config): self
     {
@@ -37,18 +39,53 @@ final class MysqlDatabase implements DatabaseInterface
             );
         }
 
-        $pdoOptions = [
-            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-        ];
-        $pdoOptions += self::sslDriverOptions($config->sslMode);
-
-        $pdo = new \PDO($config->dsn, $config->user, $config->pass, $pdoOptions);
+        $pdo = new \PDO($config->dsn, $config->user, $config->pass, self::pdoOptions($config->sslMode));
 
         $instance = new self($pdo);
         $instance->connectionConfig = $config;
 
         return $instance;
+    }
+
+    /**
+     * The wall-clock budget (seconds) for every remote MySQL network leg.
+     *
+     * SQL-C11: before this, a stalled server could freeze the whole UI on
+     * any synchronous leg — the TLS-refused transport's run/browse path, the
+     * admin wrapper's write-throughs — with no bound at any layer.
+     */
+    public const NETWORK_TIMEOUT_SECONDS = 30;
+
+    /**
+     * The complete option set one remote MySQL dial needs.
+     *
+     * ATTR_TIMEOUT caps the connect phase; MYSQL_ATTR_READ_TIMEOUT/
+     * WRITE_TIMEOUT cap every mid-flight network leg (a lock-waiting server
+     * that keeps the socket open and never answers is exactly this class of
+     * stall). Driver timeouts apply with or without pcntl, so they are also
+     * the floor the Admin-layer {@see \SugarCraft\Sql\Admin\Resilience\StatementTimeout}
+     * alarm degrades to on Windows — where the timeout then surfaces as a
+     * PDOException from the transport instead of a named timeout error.
+     *
+     * @return array<int, mixed>
+     */
+    private static function pdoOptions(string $sslMode): array
+    {
+        $options = [
+            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+            \PDO::ATTR_TIMEOUT => self::NETWORK_TIMEOUT_SECONDS,
+        ];
+        // mysqlnd declares the network attrs with the pdo_mysql driver; the
+        // class loads on builds without it, so guard the constant refs.
+        if (defined('PDO::MYSQL_ATTR_READ_TIMEOUT')) {
+            $options[\constant('PDO::MYSQL_ATTR_READ_TIMEOUT')] = self::NETWORK_TIMEOUT_SECONDS;
+        }
+        if (defined('PDO::MYSQL_ATTR_WRITE_TIMEOUT')) {
+            $options[\constant('PDO::MYSQL_ATTR_WRITE_TIMEOUT')] = self::NETWORK_TIMEOUT_SECONDS;
+        }
+
+        return $options + self::sslDriverOptions($sslMode);
     }
 
     /**
@@ -375,18 +412,13 @@ final class MysqlDatabase implements DatabaseInterface
         }
 
         $config = $this->connectionConfig;
-        $pdoOptions = [
-            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-        ];
-        $pdoOptions += self::sslDriverOptions($config->sslMode);
 
         try {
             $pdo = new \PDO(
                 $config->dsn,
                 $config->user,
                 $config->pass,
-                $pdoOptions,
+                self::pdoOptions($config->sslMode),
             );
             $this->pdo = $pdo;
             return $this;

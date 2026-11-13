@@ -211,8 +211,8 @@ these tables.
 | `Admin\Calc\TableOpenCacheHitRate` | Computes Table Open Cache hit ratio: `hits / (hits + misses) * 100` from `Table_open_cache_hits/misses`. Mirrors MySQL Workbench dashboard expression. |
 | `Admin\Resilience\ReconnectManager` | Detects MySQL errors 2002/2003/2013 (connection lost), stores `ConnectionConfig`, and retries via `attemptReconnect()`. Throws `ReconnectException` on failure. |
 | `Db\ReconnectException` | Exception thrown when reconnection fails after a MySQL connection error. |
-| `Admin\Resilience\StatementTimeout` | Wraps `PDOStatement::execute()` with a wall-clock timeout via `pcntl_alarm()`. When pcntl is unavailable the wrapper is transparent: the statement executes with no enforcement and no diagnostic. Throws `StatementTimeoutException`. |
-| `Admin\Resilience\StatementTimeoutException` | Thrown when a statement exceeds its wall-clock timeout and is cancelled via `KILL CONNECTION_ID()`. |
+| `Admin\Resilience\StatementTimeout` | Wall-clock cap for synchronous DB work. `run(callable)` bounds any blocking leg; `execute(PDOStatement)` is the statement-shaped shim over it. Production consumers: `App`'s sync run/browse/boot legs, `AsyncCachedConnection`'s write-through delegation. Uses `pcntl_alarm()`; without pcntl the alarm is transparent — the driver network timeouts (`Db\MysqlDatabase::NETWORK_TIMEOUT_SECONDS`, `Db\PostgresDatabase::CONNECT_TIMEOUT_SECONDS`) remain as the transport-level bound. Throws `StatementTimeoutException` naming the budget. |
+| `Admin\Resilience\StatementTimeoutException` | Thrown when a capped synchronous leg exceeds its wall-clock budget. The message names the budget; the statement itself is abandoned with the connection (the async transport's cancel path is the `ReactMysqlConnection` `KILL QUERY` leg, not this class). |
 | `Admin\Alerts\Severity` | Enum: `Info`, `Warning`, `Critical`. Maps to `ToastType` via `toToastType()` — `Info→Info`, `Warning→Warning`, `Critical→Error`. |
 | `Admin\Alerts\Alert` | Immutable alert value object: severity, metric, message, value, threshold, firedAt, metricKind. Factory helpers: `::warning()`, `::critical()`, `::info()`. `toToastMessage()` formats based on `MetricKind` — `Ratio` multiplies by 100 (percentage), `Seconds` appends "s", `Count` renders as integer. |
 | `Admin\Alerts\AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::standard()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
@@ -686,9 +686,12 @@ $db->setReconnectManager(new ReconnectManager());
 
 `App::subscriptions()` declares a plain 1s admin tick (it also gates on the active pane and the TLS transport refusal — facts immutable per decision, safe to test at declaration time). The refresh throttle is applied **per fire** in `App::handleAdminTick()`: the elapsed window is measured against `AdminState::$lastFetchAt`, a public readonly property on the per-App state value object (carried via `withLastFetchAt()` — no static, so concurrent App instances cannot stomp each other's cadence), and compared to `CacheTtl::DASHBOARD` (1.0s, the Workbench dashboard rate). The guard is per-fire rather than declaration-time because `Program::reconcileSubscriptions()` diffs subscriptions by tick id and would lock whichever closure installed first; `AsyncOps::throttle()` returns a void callable that cannot be awaited as a Promise in the `Cmd::promise` flow, so an elapsed-time guard is used instead.
 
-### Statement timeout
+### Bounded sync transport
 
-`StatementTimeout` enforces a wall-clock timeout on heavy report queries using `pcntl_alarm()`. If the timeout fires, it cancels the query via `KILL CONNECTION_ID()` and throws `StatementTimeoutException`:
+Every synchronous database leg runs under a wall-clock budget (SQL-C11). The bound lives at two layers so no single mechanism's absence means an unbounded freeze:
+
+- **Transport level (always on):** `MysqlDatabase` dials with `PDO::ATTR_TIMEOUT` (connect) and the mysqlnd `MYSQL_ATTR_READ_TIMEOUT`/`WRITE_TIMEOUT` network attrs (`MysqlDatabase::NETWORK_TIMEOUT_SECONDS` = 30 s per network leg). `PostgresDatabase` dials with libpq's `connect_timeout` (`CONNECT_TIMEOUT_SECONDS`). These work with or without `pcntl`.
+- **Application level (`pcntl` hosts):** `StatementTimeout::run()` caps whole synchronous calls via `pcntl_alarm()` — `App`'s TLS-refused run/browse legs and the boot table list, and `AsyncCachedConnection`'s synchronous write-throughs (`exec`/`prepare`/`rows`). On expiry it throws `StatementTimeoutException` naming the budget; the pane shows it as an error line. On non-pcntl hosts (the Windows rider) this alarm layer is transparent and the transport timeouts are the remaining bound — the failure then surfaces as a `PDOException` from the driver rather than a named timeout error.
 
 ```php
 use SugarCraft\Sql\Admin\Resilience\StatementTimeout;
@@ -696,14 +699,13 @@ use SugarCraft\Sql\Admin\Resilience\StatementTimeoutException;
 
 $timeout = new StatementTimeout(timeoutSeconds: 60);
 try {
-    $stmt = $pdo->prepare('SELECT * FROM big_table WHERE conditions');
-    $timeout->execute($stmt);
+    $rows = $timeout->run(fn (): array => $db->query('SELECT * FROM big_table WHERE conditions'));
 } catch (StatementTimeoutException) {
-    echo 'Query exceeded 60s timeout and was cancelled';
+    echo 'Query exceeded its 60 s budget';
 }
 ```
 
-When `pcntl` is unavailable, `StatementTimeout::execute()` runs the statement with no enforcement — silently. The degraded state is decided once in the constructor (`function_exists` probes), and neither construction nor execution logs anything; a host without pcntl has simply-uncapped queries, and the caller cannot tell the difference from the return value.
+`StatementTimeout` is production-wired: the seams above are its consumers. The `execute(PDOStatement)` form remains for hosts that hold a raw statement.
 
 ## Status-Snapshot History (default-on in the launcher)
 
