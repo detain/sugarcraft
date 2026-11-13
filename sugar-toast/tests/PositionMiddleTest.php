@@ -27,6 +27,35 @@ final class PositionMiddleTest extends TestCase
         $this->assertSame(60, Position::MiddleRight->xOffset(20, 80));
     }
 
+    public function testOversizeAlertNegativeXOffsetLawIsPinnedForAllNineAnchors(): void
+    {
+        // TST-XOFF (findings 040/055, pin-the-negative leg): the
+        // right/centre arms INTENTIONALLY report a negative offset when the
+        // box outgrows the viewport — view() clamps via max(0). A future
+        // 'convenience clamp' inside the accessor would flip the documented
+        // public semantics while every render test stayed green, so the raw
+        // values are pinned per anchor here. alertWidth 100 vs viewport 80:
+        // left 0, centre floor((80-100)/2) = -10, right 80-100 = -20.
+        $cases = [
+            [Position::TopLeft, 0],
+            [Position::TopCenter, -10],
+            [Position::TopRight, -20],
+            [Position::MiddleLeft, 0],
+            [Position::MiddleCenter, -10],
+            [Position::MiddleRight, -20],
+            [Position::BottomLeft, 0],
+            [Position::BottomCenter, -10],
+            [Position::BottomRight, -20],
+        ];
+        foreach ($cases as [$position, $expected]) {
+            $this->assertSame(
+                $expected,
+                $position->xOffset(100, 80),
+                $position->name . ' must report the raw (possibly negative) offset; hosts clamp, not the accessor'
+            );
+        }
+    }
+
     public function testMiddleLeftYOffsetWithoutStacking(): void
     {
         // MiddleLeft with no stacking: vertically centered
