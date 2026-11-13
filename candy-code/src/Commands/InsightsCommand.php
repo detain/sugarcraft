@@ -59,13 +59,6 @@ final class InsightsCommand
     /** The shared grid format — same widths as `UsageCommand::ROW_FORMAT`, one sprintf for header and rows. */
     private const GRID_FORMAT = '  %-11s %-22s %6s %9s %11s';
 
-    /** Fixed constants by law: a heading the store can influence is a heading a store row can forge. */
-    private const COLS_SPEND = '  Date        Model                    Calls    Tokens       Spend';
-
-    private const COLS_PER_DAY = '  Date        Sessions   Turns';
-
-    private const COLS_PROJECT = '  Project                                     Sessions   Turns';
-
     private const PER_DAY_FORMAT = '  %-11s %8s %7s';
 
     private const PROJECT_FORMAT = '  %-42s %8s %7s';
@@ -101,6 +94,43 @@ final class InsightsCommand
     /** `blank + unpriced share + imported share`. */
     private const SHARE_LINES = 3;
 
+    /**
+     * Grid headings are built from the locale catalogue through the same
+     * padded formats the rows use; the catalogue is operator-authored, never
+     * store-derived, so a heading still cannot be forged by a store row.
+     */
+    private static function colsSpend(): string
+    {
+        return sprintf(
+            self::GRID_FORMAT,
+            Lang::t('cmd.insights.col.day'),
+            Lang::t('cmd.insights.col.model'),
+            Lang::t('cmd.insights.col.calls'),
+            Lang::t('cmd.insights.col.tokens'),
+            Lang::t('cmd.insights.col.spend'),
+        );
+    }
+
+    private static function colsPerDay(): string
+    {
+        return sprintf(
+            self::PER_DAY_FORMAT,
+            Lang::t('cmd.insights.col.day'),
+            Lang::t('cmd.insights.col.sessions'),
+            Lang::t('cmd.insights.col.turns'),
+        );
+    }
+
+    private static function colsProject(): string
+    {
+        return sprintf(
+            self::PROJECT_FORMAT,
+            Lang::t('cmd.insights.col.project'),
+            Lang::t('cmd.insights.col.sessions'),
+            Lang::t('cmd.insights.col.turns'),
+        );
+    }
+
     private function __construct()
     {
     }
@@ -129,14 +159,14 @@ final class InsightsCommand
         ];
 
         if (!$blind) {
-            $lines[] = self::COLS_SPEND;
+            $lines[] = self::colsSpend();
             foreach ($facts['spendModels'] as $row) {
                 $lines[] = self::spendRow('', $row);
             }
 
             $lines[] = '';
             $lines[] = Lang::t('cmd.insights.spend-day', ['count' => (string) count($facts['spendDays'])]);
-            $lines[] = self::COLS_SPEND;
+            $lines[] = self::colsSpend();
             foreach ($facts['spendDays'] as $row) {
                 $lines[] = self::spendRow((string) ($row['day'] ?? ''), $row);
             }
@@ -144,7 +174,7 @@ final class InsightsCommand
 
         $lines[] = '';
         $lines[] = Lang::t('cmd.insights.per-day', ['count' => (string) $fold['dayCounts']]);
-        $lines[] = self::COLS_PER_DAY;
+        $lines[] = self::colsPerDay();
         if ($fold['dayCounts'] === 0) {
             $lines[] = '  ' . Lang::t('cmd.insights.none');
         }
@@ -154,7 +184,7 @@ final class InsightsCommand
 
         $lines[] = '';
         $lines[] = Lang::t('cmd.insights.projects', ['count' => (string) $fold['projectCounts']]);
-        $lines[] = self::COLS_PROJECT;
+        $lines[] = self::colsProject();
         if ($fold['projectCounts'] === 0) {
             $lines[] = '  ' . Lang::t('cmd.insights.none');
         }

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\InsightsCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Core\I18n\T;
 
 /**
  * Insights (C-SES-8.c, GAP-OBS-06): the report core — a pure text page and
@@ -108,12 +109,12 @@ final class InsightsCommandTest extends TestCase
             'Totals: 5 sessions, 23 turns, 31 calls, 40,007 tokens, ≥$1.5000',
             '',
             'Spend by model: 2 groups',
-            '  Date        Model                    Calls    Tokens       Spend',
+            '  Date        Model                   Calls    Tokens       Spend',
             '              alpha-model                30    40,000     $1.5000',
             '              (unrecorded)                1         7  ≥$0.0000',
             '',
             'Spend by day (UTC): 3 groups',
-            '  Date        Model                    Calls    Tokens       Spend',
+            '  Date        Model                   Calls    Tokens       Spend',
             '  ' . $yesterday . '  alpha-model                12    15,000     $0.7500',
             '  ' . $today . '  alpha-model                18    25,000     $0.7500',
             '  ' . $today . '  (unrecorded)                1         7  ≥$0.0000',
@@ -124,7 +125,7 @@ final class InsightsCommandTest extends TestCase
             '  ' . $yesterday . '         3       8',
             '',
             'Busiest projects: 3',
-            '  Project                                     Sessions   Turns',
+            '  Project                                    Sessions   Turns',
             '  /home/me/alpha                                    3      16',
             '  /home/me/beta-dir                                 1       5',
             '  /home/me/gamma                                    1       2',
@@ -303,5 +304,23 @@ final class InsightsCommandTest extends TestCase
             ->getValue();
 
         self::assertContains('insights', $allowlist, '/insights reads the stores and writes only a shelf file — it must answer in a read-only session, the way /export does');
+    }
+
+    public function testTextGridHeadersFollowTheActiveLocale(): void
+    {
+        $before = T::locale();
+        T::setLocale('de');
+        try {
+            $page = InsightsCommand::compose(self::insightsFullWindow());
+        } finally {
+            T::setLocale($before);
+        }
+
+        self::assertStringContainsString('  ' . Lang::t('cmd.insights.col.day') . '  ', str_replace('Datum', Lang::t('cmd.insights.col.day'), $page));
+        self::assertStringContainsString('  Datum', $page);
+        self::assertStringContainsString('Modell', $page);
+        self::assertStringContainsString('Sitzungen', $page);
+        self::assertStringNotContainsString('  Date  ', $page);
+        self::assertStringNotContainsString('Sessions   Turns', $page);
     }
 }
