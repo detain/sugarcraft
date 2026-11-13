@@ -131,7 +131,10 @@ final class BinNoTtyPreflightTest extends TestCase
         fclose($pipes[2]);
         $exit = proc_close($proc);
 
-        self::assertStringContainsString('interactive terminal', $out, 'the refusal frame must render: ' . $out);
+        // flappy-11: the in-band refusal now folds at 38 cells, so the pin
+        // tracks the intact first fragment of line1 (the bin's stderr refusal
+        // above is not width-constrained and keeps its full phrase).
+        self::assertStringContainsString('needs an interactive', $out, 'the refusal frame must render: ' . $out);
         self::assertStringNotContainsString("\x1b[?1049", $out, 'no alternate-screen switch for a refused game');
         self::assertStringNotContainsString("\x1b[?25l", $out, 'no cursor-hide for a refused game');
         self::assertSame(1, $exit, 'a dumb-terminal refusal exits 1, never a signal death');

@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'spatie start . q stop',
     'ui.plain_live_full'     => 'spatie/Enter/^/w slag . r opnieuw . q stop',
     'ui.plain_live_short'    => 'spatie slaat . q stop',
+    'ui.quit_hint' => 'druk op q om te stoppen.',
     'notty.line1'            => 'candy-flappy heeft een interactieve terminal nodig.',
     'notty.line2'            => 'Geen bruikbare kleurcapabiliteit gevonden (geen-TTY stdout of TERM=dumb).',
     'size.notice'            => 'candy-flappy heeft een {need}-terminal nodig; deze is {have}.',

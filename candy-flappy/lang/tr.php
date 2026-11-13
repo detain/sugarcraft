@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'baslamak icin bosluk . q cik',
     'ui.plain_live_full'     => 'cirpma icin bosluk/Enter/^/w . r yeniden . q cik',
     'ui.plain_live_short'    => 'cirpma icin bosluk . q cik',
+    'ui.quit_hint' => 'çıkmak için q tuşuna basın.',
     'notty.line1'            => 'candy-flappy etkileşimli bir terminal gerektirir.',
     'notty.line2'            => 'Kullanılabilir renk yeteneği algılanmadı (stdout TTY değil veya TERM=dumb).',
     'size.notice'            => 'candy-flappy {need} bir terminal ister; bu {have}.',

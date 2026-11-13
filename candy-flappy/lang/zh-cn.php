@@ -27,6 +27,7 @@ return [
     'ui.plain_ready_short'   => '空格开始 . q 退出',
     'ui.plain_live_full'     => '空格/Enter/^/w 拍翅 . r 重新开始 . q 退出',
     'ui.plain_live_short'    => '空格拍翅 . q 退出',
+    'ui.quit_hint' => '按 q 退出。',
     'notty.line1'            => 'candy-flappy 需要交互式终端。',
     'notty.line2'            => '未检测到可用的颜色能力（stdout 非 TTY 或 TERM=dumb）。',
     'size.notice'            => 'candy-flappy 需要 {need} 的终端；当前是 {have}。',

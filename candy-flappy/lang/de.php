@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'Leertaste startet . q quit',
     'ui.plain_live_full'     => 'Leertaste/Enter/^/w Fluegelschlag . r neu . q quit',
     'ui.plain_live_short'    => 'Leertaste schlaegt . q quit',
+    'ui.quit_hint' => 'q drücken zum Beenden.',
     'notty.line1'            => 'candy-flappy braucht ein interaktives Terminal.',
     'notty.line2'            => 'Keine nutzbare Farbfaehigkeit erkannt (kein TTY auf stdout oder TERM=dumb).',
     'size.notice'            => 'candy-flappy braucht ein {need}-Terminal; dieses hier ist {have}.',

@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'пробел - старт . q - выход',
     'ui.plain_live_full'     => 'пробел/Enter/^/w - взмах . r - заново . q - выход',
     'ui.plain_live_short'    => 'пробел - взмах . q - выход',
+    'ui.quit_hint' => 'нажмите q для выхода.',
     'notty.line1'            => 'candy-flappy нужен интерактивный терминал.',
     'notty.line2'            => 'Пригодная цветовая способность не обнаружена (stdout без TTY или TERM=dumb).',
     'size.notice'            => 'candy-flappy нужен терминал {need}; этот — {have}.',

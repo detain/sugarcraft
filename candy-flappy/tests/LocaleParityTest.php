@@ -62,6 +62,7 @@ final class LocaleParityTest extends TestCase
                 'plain_crash_full', 'plain_crash_short',
                 'plain_ready_full', 'plain_ready_short',
                 'plain_live_full', 'plain_live_short',
+                'quit_hint',
             ] as $suffix
         ) {
             $this->assertArrayHasKey("ui.$suffix", $en);

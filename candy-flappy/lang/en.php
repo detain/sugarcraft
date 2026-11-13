@@ -35,6 +35,7 @@ return [
     'ui.plain_ready_short'   => 'space to start . q quit',
     'ui.plain_live_full'     => 'space/Enter/^/w flap . r restart . q quit',
     'ui.plain_live_short'    => 'space flap . q quit',
+    'ui.quit_hint' => 'press q to quit.',
     'notty.line1'            => 'candy-flappy needs an interactive terminal.',
     'notty.line2'            => 'No usable colour capability was detected (non-TTY stdout or TERM=dumb).',
     'size.notice'            => 'candy-flappy needs a {need} terminal; this one is {have}.',

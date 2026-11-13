@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'spacja zaczyna . q wyjdz',
     'ui.plain_live_full'     => 'spacja/Enter/^/w macha . r ponow . q wyjdz',
     'ui.plain_live_short'    => 'spacja macha . q wyjdz',
+    'ui.quit_hint' => 'naciśnij q, aby zakończyć.',
     'notty.line1'            => 'candy-flappy potrzebuje interaktywnego terminala.',
     'notty.line2'            => 'Nie wykryto użytecznych możliwości kolorów (stdout bez TTY albo TERM=dumb).',
     'size.notice'            => 'candy-flappy potrzebuje terminala {need}; ten ma {have}.',

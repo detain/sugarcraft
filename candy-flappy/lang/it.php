@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'spazio per iniziare . q uscire',
     'ui.plain_live_full'     => 'spazio/Enter/^/w batte . r ripartire . q uscire',
     'ui.plain_live_short'    => 'spazio batte . q uscire',
+    'ui.quit_hint' => 'premi q per uscire.',
     'notty.line1'            => 'candy-flappy richiede un terminale interattivo.',
     'notty.line2'            => 'Nessuna capacità colore utilizzabile rilevata (stdout non-TTY o TERM=dumb).',
     'size.notice'            => 'candy-flappy richiede un terminale {need}; questo è {have}.',

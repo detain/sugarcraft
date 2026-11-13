@@ -63,6 +63,13 @@ final class TerminalPostureTest extends TestCase
         $this->assertStringContainsString('needs a 62x21 terminal', $view);
         $this->assertStringContainsString('40x10', $view);
         $this->assertStringNotContainsString('score:', $view);
+        // flappy-11: every notice line fits a 40-column terminal on its own
+        // (first line <= 38 cells at the narrowest plausible window) and the
+        // notice names the one key that works from it.
+        $this->assertStringContainsString('press q to quit', $view);
+        foreach (explode("\n", rtrim($view, "\n")) as $line) {
+            $this->assertLessThanOrEqual(40, Width::of($line), 'notice line too wide: ' . $line);
+        }
         // M6: nothing to see, nothing to simulate — the tick stands down.
         $this->assertNull($g->subscriptions());
     }
@@ -91,8 +98,16 @@ final class TerminalPostureTest extends TestCase
         // nothing else, i.e. a game only Ctrl+C ends).
         [$g, $cmd] = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())
             ->update(new ColorProfileMsg(ColorProfile::NoTty));
-        $this->assertStringContainsString('interactive terminal', $g->view());
+        // flappy-11: line1 now folds at 38 cells ("interactive" stays on the
+        // first fragment), so the pin tracks the intact head of the sentence.
+        $this->assertStringContainsString('needs an interactive', $g->view());
         $this->assertStringNotContainsString("\x1b[", $g->view());
+        // flappy-11: the refusal must survive a 40-column terminal without
+        // the terminal's own invisible reflow, and it must name q.
+        $this->assertStringContainsString('press q to quit', $g->view());
+        foreach (explode("\n", rtrim($g->view(), "\n")) as $line) {
+            $this->assertLessThanOrEqual(40, Width::of($line), 'refusal line too wide: ' . $line);
+        }
         // flappy-19: the stand-down is allocation-free null now (the board
         // is both ready AND refused — either clause answers "arm nothing").
         $this->assertNull($g->subscriptions());

@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'المسافة للبدء . q خروج',
     'ui.plain_live_full'     => 'مسافة/Enter/^/w رفرفة . r إعادة . q خروج',
     'ui.plain_live_short'    => 'المسافة ترفرف . q خروج',
+    'ui.quit_hint' => 'اضغط على q للخروج.',
     'notty.line1'            => 'يحتاج candy-flappy إلى طرفية تفاعلية.',
     'notty.line2'            => 'لم يُكتشف أي دعم ألوان صالح (stdout غير طرفية أو TERM=dumb).',
     'size.notice'            => 'يحتاج candy-flappy إلى طرفية بمقاس {need}؛ هذه بمقاس {have}.',

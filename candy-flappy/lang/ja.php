@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'スペースでスタート . q 終了',
     'ui.plain_live_full'     => 'スペース/Enter/^/w はばたく . r 再起動 . q 終了',
     'ui.plain_live_short'    => 'スペースではばたく . q 終了',
+    'ui.quit_hint' => 'q キーで終了します。',
     'notty.line1'            => 'candy-flappy には対話型ターミナルが必要です。',
     'notty.line2'            => '利用できる色機能が検出できませんでした (stdout が TTY でないか TERM=dumb)。',
     'size.notice'            => 'candy-flappy には {need} のターミナルが必要です。現在は {have} です。',

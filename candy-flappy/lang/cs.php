@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'mezernik startuje . q konec',
     'ui.plain_live_full'     => 'mezernik/Enter/^/w mava . r znovu . q konec',
     'ui.plain_live_short'    => 'mezernik mava . q konec',
+    'ui.quit_hint' => 'stiskněte q pro ukončení.',
     'notty.line1'            => 'candy-flappy potřebuje interaktivní terminál.',
     'notty.line2'            => 'Nezjistila se žádná použitelná barevná způsobilost (stdout není TTY nebo TERM=dumb).',
     'size.notice'            => 'candy-flappy potřebuje terminál {need}; tento má {have}.',

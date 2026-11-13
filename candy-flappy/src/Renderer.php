@@ -265,17 +265,58 @@ final class Renderer
 
     private static function refusal(): string
     {
-        return Lang::t('notty.line1') . "\n"
-            . Lang::t('notty.line2') . "\n";
+        // flappy-11: the notices are the only text a user sees on a dead or
+        // dumb terminal, and the terminal may itself be as narrow as 40
+        // columns — fold every line so nothing wraps unpredictably, and end
+        // with the single key that can leave the program (q or Ctrl-C).
+        $lines = array_merge(
+            self::foldNoticeLine(Lang::t('notty.line1')),
+            self::foldNoticeLine(Lang::t('notty.line2')),
+            [Lang::t('ui.quit_hint')],
+        );
+        return implode("\n", $lines) . "\n";
     }
 
     private static function tooSmallNotice(Game $g): string
     {
-        return Lang::t('size.notice', [
-            'need' => Game::MIN_COLS . 'x' . Game::MIN_ROWS,
-            'have' => "{$g->frameCols}x{$g->frameRows}",
-        ]) . "\n"
-            . Lang::t('size.resume') . "\n";
+        $lines = array_merge(
+            self::foldNoticeLine(Lang::t('size.notice', [
+                'need' => Game::MIN_COLS . 'x' . Game::MIN_ROWS,
+                'have' => "{$g->frameCols}x{$g->frameRows}",
+            ])),
+            self::foldNoticeLine(Lang::t('size.resume')),
+            [Lang::t('ui.quit_hint')],
+        );
+        return implode("\n", $lines) . "\n";
+    }
+
+    /**
+     * Word-wrap one notice line to at most 38 cells so it survives a 40
+     * column terminal without the terminal's own (invisible, uncooperative)
+     * reflow (flappy-11; tetris wraps its notice for the same reason).
+     *
+     * @return list<string>
+     */
+    private static function foldNoticeLine(string $text, int $width = 38): array
+    {
+        $lines = [];
+        $current = '';
+        foreach (preg_split('/\s+/u', trim($text)) ?: [] as $word) {
+            if ($word === '') {
+                continue;
+            }
+            $trial = $current === '' ? $word : $current . ' ' . $word;
+            if ($current !== '' && Width::of($trial) > $width) {
+                $lines[] = $current;
+                $current = $word;
+            } else {
+                $current = $trial;
+            }
+        }
+        if ($current !== '') {
+            $lines[] = $current;
+        }
+        return $lines;
     }
 
     /**

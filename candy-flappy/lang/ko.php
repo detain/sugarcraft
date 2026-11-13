@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'space로 시작 . q 종료',
     'ui.plain_live_full'     => 'space/Enter/^/w 날갯짓 . r 재시작 . q 종료',
     'ui.plain_live_short'    => 'space로 날갯짓 . q 종료',
+    'ui.quit_hint' => 'q를 눌러 종료합니다.',
     'notty.line1'            => 'candy-flappy에는 대화형 터미널이 필요합니다.',
     'notty.line2'            => '사용할 수 있는 색상 기능을 찾지 못했습니다 (stdout이 TTY가 아니거나 TERM=dumb).',
     'size.notice'            => 'candy-flappy에는 {need} 터미널이 필요합니다; 이 터미널은 {have}입니다.',

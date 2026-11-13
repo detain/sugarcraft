@@ -26,6 +26,7 @@ return [
     'ui.plain_ready_short'   => 'espace pour demarrer . q quitter',
     'ui.plain_live_full'     => 'espace/Enter/^/w battement . r rejouer . q quitter',
     'ui.plain_live_short'    => 'espace bat l\'aile . q quitter',
+    'ui.quit_hint' => 'appuyez sur q pour quitter.',
     'notty.line1'            => 'candy-flappy a besoin d’un terminal interactif.',
     'notty.line2'            => 'Aucune capacité couleur utilisable détectée (stdout non-TTY ou TERM=dumb).',
     'size.notice'            => 'candy-flappy exige un terminal {need} ; celui-ci fait {have}.',
