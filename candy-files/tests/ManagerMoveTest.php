@@ -228,4 +228,56 @@ final class ManagerMoveTest extends TestCase
         $this->assertSame('bytes', file_get_contents($file), 'the self-leg must not touch the bytes');
         $this->assertFalse($done->canUndo(), 'no undo action may enter history for a self-leg');
     }
+
+    /**
+     * CF-20 (closes audit 028): a cross-pane move lands bytes inside the
+     * INACTIVE pane's listing. Before the fix only the active pane re-read,
+     * so the destination pane kept showing a phantom until Tab + `r`.
+     */
+    public function testCrossPaneMoveRefreshesInactivePane(): void
+    {
+        $left = $this->tmpDir . '/left';
+        $right = $this->tmpDir . '/right';
+        mkdir($left, 0755, true);
+        mkdir($right, 0755, true);
+        file_put_contents($left . '/a.txt', 'x');
+
+        $m = Manager::start($left, $right, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // onto a.txt
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'm'));
+        $this->assertSame(ConfirmState::MoveSelected, $armed->confirm);
+        [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $rightNames = array_map(static fn(Entry $e): string => $e->name, $done->right->entries);
+        $leftNames = array_map(static fn(Entry $e): string => $e->name, $done->left->entries);
+        $this->assertContains('a.txt', $rightNames, 'destination pane must re-list through the move');
+        $this->assertNotContains('a.txt', $leftNames, 'source pane must lose the phantom');
+    }
+
+    /**
+     * CF-20 undo twin: undo re-homes bytes OUT of the destination pane,
+     * which was never re-read before the fix — it kept showing the moved
+     * file as a phantom. relistAllPanes preserves the cursor (unlike the
+     * Pane::open tail shape used by the mutating legs).
+     */
+    public function testUndoOfCrossPaneMoveRefreshesInactivePane(): void
+    {
+        $left = $this->tmpDir . '/left';
+        $right = $this->tmpDir . '/right';
+        mkdir($left, 0755, true);
+        mkdir($right, 0755, true);
+        file_put_contents($left . '/a.txt', 'x');
+
+        $m = Manager::start($left, $right, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'm'));
+        [$moved] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+        [$undone] = $moved->update(new KeyMsg(KeyType::Char, 'u'));
+
+        $rightNames = array_map(static fn(Entry $e): string => $e->name, $undone->right->entries);
+        $leftNames = array_map(static fn(Entry $e): string => $e->name, $undone->left->entries);
+        $this->assertNotContains('a.txt', $rightNames, 'undone destination must not show a phantom');
+        $this->assertContains('a.txt', $leftNames, 'undo re-homed the bytes, the source pane shows them');
+        $this->assertFileExists($left . '/a.txt');
+    }
 }

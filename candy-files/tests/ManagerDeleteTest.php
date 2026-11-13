@@ -7,6 +7,7 @@ namespace SugarCraft\Files\Tests;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Files\ConfirmState;
+use SugarCraft\Files\Entry;
 use SugarCraft\Files\Manager;
 use PHPUnit\Framework\TestCase;
 
@@ -428,5 +429,30 @@ final class ManagerDeleteTest extends TestCase
         $this->assertFileExists($file, 'undo must restore the full-length original name');
         $this->assertSame('long-name payload', file_get_contents($file));
         $this->assertStringNotContainsString('error', $restored->status, 'status: ' . $restored->status);
+    }
+
+    /**
+     * CF-20 (closes audit 028): with both panes on one cwd (the startup
+     * default) a delete re-homes bytes that BOTH twins list — before the
+     * fix only the active pane re-read and its twin kept rendering the
+     * deleted file until Tab + `r`.
+     */
+    public function testDeleteWithTwinCwdRefreshesBothPanes(): void
+    {
+        $dir = $this->tmpDir . '/twin';
+        mkdir($dir, 0755, true);
+        file_put_contents($dir . '/gone.txt', 'x');
+
+        $m = Manager::start($dir, $dir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // onto gone.txt
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame(ConfirmState::DeleteSelected, $armed->confirm);
+        [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $leftNames = array_map(static fn(Entry $e): string => $e->name, $done->left->entries);
+        $rightNames = array_map(static fn(Entry $e): string => $e->name, $done->right->entries);
+        $this->assertNotContains('gone.txt', $leftNames);
+        $this->assertNotContains('gone.txt', $rightNames, 'the twin pane must not keep showing a deleted file');
     }
 }

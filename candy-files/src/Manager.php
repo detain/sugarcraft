@@ -273,6 +273,27 @@ final class Manager implements Model
         return $this->mutate(['left' => $reopen($this->left), 'right' => $reopen($this->right)]);
     }
 
+    /**
+     * CF-20 (closes audit 028): the cursor-preserving twin of
+     * refreshAllPanes for the undo/redo tails — relist (not Pane::open) so
+     * a re-read does not silently wipe cursor positions or the entries of
+     * the selection that survived, and so BOTH panes re-read: an undo that
+     * re-homes bytes out of the inactive pane must not leave it showing a
+     * phantom.
+     */
+    private function relistAllPanes(): self
+    {
+        $lister = $this->lister;
+        $relist = static fn(Pane $p): Pane => $p->relist($lister);
+        if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            $newTab = ['left' => $relist($tab['left']), 'right' => $relist($tab['right']), 'activeIdx' => $tab['activeIdx']];
+            $newTabs = $this->tabs;
+            $newTabs[$this->tabIndex] = $newTab;
+            return $this->mutate(['left' => $newTab['left'], 'right' => $newTab['right'], 'tabs' => $newTabs]);
+        }
+        return $this->mutate(['left' => $relist($this->left), 'right' => $relist($this->right)]);
+    }
+
     public function view(): string
     {
         return Renderer::render($this);
@@ -866,8 +887,8 @@ final class Manager implements Model
             $newUndoStack[] = UndoAction::delete($deletedItems);
         }
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
-        return $this->withActivePane(fn(Pane $p) =>
-            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+        // CF-20: a delete re-homes bytes (trash) — both panes re-read.
+        return $this->refreshAllPanes()
             ->withConfirm(ConfirmState::None, $msg)
             ->withUndoRedoStacks($newUndoStack, []); // Clear redo on new action
     }
@@ -1039,8 +1060,8 @@ final class Manager implements Model
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         $msg = Lang::t('status.created', ['count' => 1]);
 
-        return $this->withActivePane(fn(Pane $p) =>
-            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+        // CF-20: the new directory is visible through the twin cwd too.
+        return $this->refreshAllPanes()
             ->withConfirm(ConfirmState::None, $msg)
             ->withInputBuffer(null)
             ->withUndoRedoStacks($newUndoStack, []);
@@ -1223,8 +1244,9 @@ final class Manager implements Model
             $newUndoStack[] = UndoAction::move($movedItems);
         }
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
-        return $this->withActivePane(fn(Pane $p) =>
-            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+        // CF-20: a move lands bytes in the (possibly inactive) destination
+        // pane — both panes re-read, no Tab+`r` dance to chase a phantom.
+        return $this->refreshAllPanes()
             ->withConfirm(ConfirmState::None, $msg)
             ->withUndoRedoStacks($newUndoStack, []);
     }
@@ -1311,8 +1333,8 @@ final class Manager implements Model
                 'new' => Entry::sanitizeName($newName),
             ]);
 
-        return $this->withActivePane(fn(Pane $p) =>
-            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+        // CF-20: the rename mutates the shared cwd listing — both twins.
+        return $this->refreshAllPanes()
             ->withConfirm(ConfirmState::None, $msg)
             ->withInputBuffer(null)
             ->withUndoRedoStacks($newUndoStack, []);
@@ -1689,7 +1711,7 @@ final class Manager implements Model
             $msg = Lang::t('status.copy_undo_noop');
             $newRedoStack = [...$this->redoStack, $action];
             return $this
-                ->refresh()
+                ->relistAllPanes()
                 ->withStatus($msg)
                 ->withUndoRedoStacks($newUndoStack, $newRedoStack);
         }
@@ -1700,7 +1722,7 @@ final class Manager implements Model
             // after clearing an occupied target); already-restored legs
             // report goal-state and the rest is re-attempted honestly.
             return $this
-                ->refresh()
+                ->relistAllPanes()
                 ->withStatus($occupied > 0
                     ? Lang::t('status.undo_target_occupied', ['description' => $action->description, 'occupied' => $occupied])
                     : Lang::t('status.undo_with_errors', ['description' => $action->description, 'errors' => $errors]))
@@ -1710,7 +1732,7 @@ final class Manager implements Model
         // Full success only: now the action may move to the redo stack.
         $newRedoStack = [...$this->redoStack, $action];
         return $this
-            ->refresh()
+            ->relistAllPanes()
             ->withStatus($msg)
             ->withUndoRedoStacks($newUndoStack, $newRedoStack);
     }
@@ -1732,7 +1754,7 @@ final class Manager implements Model
             // it stays retryable and no half-completed replay is claimed
             // done by pushing it back for another undo cycle.
             return $this
-                ->refresh()
+                ->relistAllPanes()
                 ->withStatus(Lang::t('status.redo_with_errors', ['description' => $action->description, 'errors' => $errors]))
                 ->withUndoRedoStacks($this->undoStack, $this->redoStack);
         }
@@ -1741,7 +1763,7 @@ final class Manager implements Model
         $newUndoStack = [...$this->undoStack, $action];
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         return $this
-            ->refresh()
+            ->relistAllPanes()
             ->withStatus($msg)
             ->withUndoRedoStacks($newUndoStack, $newRedoStack);
     }
