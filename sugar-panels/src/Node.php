@@ -14,6 +14,12 @@ use SugarCraft\Style\VAlign;
 /**
  * Immutable layout tree node.
  *
+ * Design antecedent: the kind vocabulary (leaf / horizontal / vertical /
+ * noBorder) is modelled on the Node shape in treilik/bubbleboxer's boxer.go —
+ * a port of that vocabulary, not of its code. {@see SugarPanels} carries the
+ * same antecedent cite, and README *Border Characters* records where the port
+ * deliberately diverges (per-node frames vs upstream shared separators).
+ *
  * Every public dimension/style facet is a declared `readonly` property below;
  * the `with*()` builders return new instances. (An earlier @property mirror
  * block drifted and cited a phantom `NodeKind` type — the declared properties
