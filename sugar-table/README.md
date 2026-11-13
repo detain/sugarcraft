@@ -157,7 +157,7 @@ echo $t->View();  // pct takes 25% of the table width, id stays 5, the three bor
 |-------------|----------------------------------------------------------|
 | `None`      | Truncate at column width, appending a trailing … (U+2026) |
 | `WordWrap`  | Break at word boundaries                                  |
-| `Character` | Break at any character, no padding on last line          |
+| `Character` | Break at any character (grapheme) boundary, no padding on last line |
 
 ```php
 use SugarCraft\Table\{Column, WrapMode};
@@ -963,7 +963,7 @@ When disabled (the default), cells are clamped to one line for backward compatib
 
 ### Interaction with WrapMode
 
-A literal newline in a value splits the cell into multiple lines even under `WrapMode::None` (each segment is still clipped to the column width). `WrapMode` controls *flowing* of content that exceeds one line: `WordWrap` breaks at spaces, `Character` at cell boundaries. `withMultilineMode(true)` grows rows to the tallest cell; disabled (default) clips to the first line.
+A literal newline in a value splits the cell into multiple lines even under `WrapMode::None` (each segment is still clipped to the column width). `WrapMode` controls *flowing* of content that exceeds one line: `WordWrap` breaks at spaces, `Character` at any character (grapheme) boundary. `withMultilineMode(true)` grows rows to the tallest cell; disabled (default) clips to the first line.
 
 ```php
 // Word wrap example — breaks at word boundaries within 8 characters
@@ -977,8 +977,10 @@ Column::new('code', 'Code', 5)->withWrapMode(WrapMode::Character);
 
 ## Row Expansion
 
-Expand a row to render it as one full-width detail line spanning the table
-(clip marks at the table edge only when even that cannot fit):
+Expand a row to render it as one full-width detail line spanning the table.
+The joined line is clipped to that span with an announcing trailing `…` — and
+only when the joined text cannot fit it; ordinary cells keep truncating at
+their own column widths:
 
 ```php
 use SugarCraft\Table\{Table, Column, Row, RowData};
