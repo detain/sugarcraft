@@ -50,4 +50,5 @@ return [
 'modifiers.unknown_bit' => 'unknown modifier bit {modifier}: expected one of Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL',
 'worker.string_task_removed' => 'string worker task `{name}` is not supported: the global-function channel was removed (sc-29) — pass a serializable callable such as [Class::class, method] or an invokable object',
 'worker.malformed_response' => 'malformed worker response: {length} bytes, digest {digest} (frame contents withheld: response lines embed serialized task data)',
+    'worker.stdin_write_timeout' => 'worker stdin write timed out after {seconds}s: only {written} of {total} bytes handed off (the child never drained the pipe)',
 ];

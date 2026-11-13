@@ -31,27 +31,32 @@ final class WorkerPoolRemediationTest extends TestCase
         $id1 = $this->waitForResult($promise1);
         $this->assertSame(0, $id1->workerId);
 
-        // Kill the worker behind the pool's back, then spin the loop until
-        // the pool's poll tick reaps it (feof on the worker's stdout).
+        // Kill the worker behind the pool's back. sc-30 moved idle-death
+        // discovery from the (now released when drained) 20 Hz poll to the
+        // next dispatch: the pool must NOT be ticking while nothing is in
+        // flight — the corpse stays parked until use, costing no CPU — and
+        // the next dispatch prunes it and spawns a live replacement.
         $prop = new \ReflectionProperty(WorkerPool::class, 'workers');
         $workers = $prop->getValue($pool);
         $worker = reset($workers);
+        $deadId = $worker->id;
         \proc_terminate($worker->process, 9);
 
-        $deadline = \microtime(true) + 5.0;
-        $timer = $this->loop->addPeriodicTimer(0.05, function () use ($pool, $prop, $deadline): void {
-            if ($prop->getValue($pool) === [] || \microtime(true) > $deadline) {
-                $this->loop->stop();
-            }
+        $tickProp = new \ReflectionProperty(WorkerPool::class, 'tickTimer');
+        $this->assertNull($tickProp->getValue($pool), 'a drained pool does not poll (sc-30)');
+
+        // A short spin proves nothing reaps it behind dispatch's back:
+        $idleProbe = $this->loop->addTimer(0.25, function (): void {
+            $this->loop->stop();
         });
         $this->loop->run();
-        $this->loop->cancelTimer($timer);
-        $this->assertSame([], $prop->getValue($pool), 'pool must reap the killed worker');
+        $this->loop->cancelTimer($idleProbe);
+        $this->assertCount(1, $prop->getValue($pool), 'parked corpse survives an idle spin — discovery is at dispatch');
 
         // The replacement worker gets a fresh id — ids are never reused.
         $promise2 = $pool->dispatch([WorkerPoolTasks::class, 'pid']);
         $id2 = $this->waitForResult($promise2);
-        $this->assertNotSame($id1->workerId, $id2->workerId);
+        $this->assertNotSame($deadId, $id2->workerId, 'prune spawned a fresh id, never reused');
 
         $pool->stop();
     }

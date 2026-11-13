@@ -36,6 +36,13 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
  * task's class allow-list travels WITH the task rather than being
  * guessed at.
  *
+ * Pipe and timer hygiene (sc-30): stdin writes drain NON-BLOCKING against
+ * a hard deadline instead of freezing the event loop once a payload
+ * outruns the ~64 KiB kernel pipe; the 20 Hz stdout poll timer is armed
+ * only while work is in flight and released when the pool drains, so a
+ * created-and-forgotten pool costs nothing; and each worker keeps a
+ * bounded stderr tail that failure rejections surface verbatim.
+ *
  * Mirrors the worker-pool pattern of charmbracelet/bubbletea, the machinery for offloading heavy
  * computation off the UI thread.
  *
@@ -59,6 +66,20 @@ final class WorkerPool
 
     /** Poll granularity for the reap ladder, in microseconds. */
     private const REAP_TICK_MICROS = 10_000;
+
+    /**
+     * sc-30: ceiling on how long a stdin write may drain before the worker
+     * is declared dead. Bounded on purpose — the old blocking fwrite froze
+     * the WHOLE event loop forever once a >64 KiB payload outran the pipe
+     * buffer (the kernel pipe capacity) with a child that was not reading.
+     */
+    private const WRITE_DEADLINE_SECONDS = 10.0;
+
+    /** Retry granularity for the non-blocking stdin drain loop, in microseconds. */
+    private const WRITE_POLL_MICROS = 2_000;
+
+    /** sc-30: how much of a worker's stderr the pool keeps for failure reports. */
+    private const STDERR_TAIL_BYTES = 4096;
 
     /** Literal signal numbers: sugar-core does not require ext-pcntl and proc_terminate() takes the number directly. */
     private const SIGTERM = 15;
@@ -123,6 +144,14 @@ final class WorkerPool
             $this->start();
         }
 
+        // sc-30: a child that dies while parked is discovered HERE, at the
+        // next use, not by a poll timer — the released tick deliberately
+        // costs an idle pool nothing. Pruning the corpse first keeps both
+        // promises the old eager poll made: the concurrency slot is freed
+        // for a live replacement, and worker ids stay unique across death
+        // (workerCounter never rewinds).
+        $this->pruneDeadIdleWorkers();
+
         $jobId = (string) ++$this->jobCounter;
         $deferred = new Deferred();
         $this->pending[$jobId] = $deferred;
@@ -135,6 +164,12 @@ final class WorkerPool
         } else {
             $this->queue[] = [$jobId, $task];
         }
+
+        // sc-30: the poll tick exists to advance IN-FLIGHT work. Arm it here
+        // (idempotently) instead of for-good in start(): a pool that is
+        // created and left alone — every example program that never calls
+        // stop() — no longer burns a 20 Hz wake forever.
+        $this->armTick();
 
         return $deferred->promise();
     }
@@ -175,10 +210,35 @@ final class WorkerPool
 
     private function start(): void
     {
+        // sc-30: the tick timer is armed/released by dispatch() and the
+        // completion paths (armTick/releaseTickIfIdle), not here — see the
+        // idle-20 Hz leak this removed. start() now only records liveness.
         $this->started = true;
-        $this->tickTimer = $this->loop->addPeriodicTimer(0.05, function (): void {
-            $this->tick();
-        });
+    }
+
+    /** Idempotent: (re-)arm the 20 Hz stdout poll while work is in flight. */
+    private function armTick(): void
+    {
+        if ($this->tickTimer === null) {
+            $this->tickTimer = $this->loop->addPeriodicTimer(0.05, function (): void {
+                $this->tick();
+            });
+        }
+    }
+
+    /**
+     * sc-30: once nothing is pending or queued, no response can arrive that
+     * needs polling — release the timer. Idle pooled children stay alive and
+     * silent; their death while parked is discovered at the next dispatch
+     * (a write failure or feof takes the same death path), which is cheaper
+     * than paying a perpetual 20 Hz wake for a fact with no observers.
+     */
+    private function releaseTickIfIdle(): void
+    {
+        if ($this->pending === [] && $this->queue === [] && $this->tickTimer !== null) {
+            $this->loop->cancelTimer($this->tickTimer);
+            $this->tickTimer = null;
+        }
     }
 
     private function tick(): void
@@ -302,6 +362,11 @@ final class WorkerPool
             $worker->idle = true;
             $this->workers[$worker->id] = $worker;
         }
+
+        // sc-30: this is the drain point — if the job we just settled (and
+        // any hand-off above) left nothing in flight, the poll is no longer
+        // doing anything.
+        $this->releaseTickIfIdle();
     }
 
     /**
@@ -345,16 +410,39 @@ final class WorkerPool
             return;
         }
 
-        $written = @fwrite($worker->stdin, $serialized . "\n");
-        if ($written === false || $written === 0) {
-            $this->handleWorkerDeath($worker, 'Failed to write to worker stdin', $jobId);
-            return;
+        // sc-30: the payload goes out through a NON-BLOCKING drain loop with
+        // a hard deadline. The kernel pipe holds ~64 KiB; the old blocking
+        // fwrite on a child that had not started reading (or a task whose
+        // serialized envelope simply exceeded the pipe) stalled the entire
+        // ReactPHP event loop — UI, timers, every other worker — until the
+        // child drained it, i.e. indefinitely for a wedged boot. Now: write
+        // what fits, retry on a 2 ms poll, and after WRITE_DEADLINE_SECONDS
+        // declare the worker dead with a named error — bounded, diagnosable,
+        // and the promise settles either way.
+        $data = $serialized . "\n";
+        $length = strlen($data);
+        $offset = 0;
+        $deadline = microtime(true) + self::WRITE_DEADLINE_SECONDS;
+        while (true) {
+            $written = @fwrite($worker->stdin, substr($data, $offset));
+            if ($written === false) {
+                $this->handleWorkerDeath($worker, 'Failed to write to worker stdin' . $this->stderrDetail($worker), $jobId);
+                return;
+            }
+            $offset += $written;
+            if ($offset >= $length) {
+                break;
+            }
+            if (microtime(true) >= $deadline) {
+                $this->handleWorkerDeath($worker, Lang::t('worker.stdin_write_timeout', [
+                    'seconds'   => self::WRITE_DEADLINE_SECONDS,
+                    'written'   => $offset,
+                    'total'     => $length,
+                ]) . $this->stderrDetail($worker), $jobId);
+                return;
+            }
+            usleep(self::WRITE_POLL_MICROS);
         }
-        // Unchecked on purpose: stdin is a blocking pipe (spawnWorker), so fwrite
-        // has already handed the payload to the kernel unless the pipe broke —
-        // and a broken pipe is exactly what the next poll tick's feof(stdout)
-        // catches, rejecting this job through the death path. Checking fflush's
-        // bool here would only race the same condition twice.
         @fflush($worker->stdin);
     }
 
@@ -398,13 +486,33 @@ final class WorkerPool
     {
         $jobId = $jobIdOverride ?? $worker->currentJobId;
 
+        // sc-30: the child's stderr used to be drained and thrown away, so a
+        // fatal in the worker reached the caller as 'died unexpectedly' with
+        // zero diagnosis. The bounded tail rides into the rejection now.
+        // Drain synchronously BEFORE reading the tail: death is detected on
+        // the stdout feof, and a last-second stderr write may still be
+        // sitting unread in the pipe — the watcher and the poll race.
+        if ($worker->stderr !== null && is_resource($worker->stderr)) {
+            while (true) {
+                $chunk = @fread($worker->stderr, 4096);
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                $worker->stderrTail .= $chunk;
+                $cap = self::STDERR_TAIL_BYTES;
+                if (strlen($worker->stderrTail) > $cap) {
+                    $worker->stderrTail = substr($worker->stderrTail, -$cap);
+                }
+            }
+        }
+        $detail = $this->stderrDetail($worker);
         $this->closeWorker($worker);
         unset($this->workers[$worker->id]);
 
         if ($jobId !== null && isset($this->pending[$jobId])) {
             $deferred = $this->pending[$jobId];
             unset($this->pending[$jobId]);
-            $deferred->reject(new \RuntimeException($reason));
+            $deferred->reject(new \RuntimeException($reason . $detail));
         }
 
         if ($this->hasQueuedJob()) {
@@ -415,6 +523,19 @@ final class WorkerPool
                 $this->queue[] = [$nextJobId, $nextTask];
             }
         }
+
+        $this->releaseTickIfIdle();
+    }
+
+    /**
+     * The kept stderr tail of one worker, formatted for a failure message
+     * ('' when the child was silent). Bounded by STDERR_TAIL_BYTES at the
+     * source, so this string has a ceiling.
+     */
+    private function stderrDetail(WorkerState $worker): string
+    {
+        $tail = trim($worker->stderrTail);
+        return $tail === '' ? '' : ' (worker stderr: ' . $tail . ')';
     }
 
     private function spawnWorker(string $currentJobId, callable|string $task): void
@@ -457,10 +578,12 @@ final class WorkerPool
             return;
         }
 
+        // sc-30: every pipe stays NON-BLOCKING. The old re-block of stdin fed
+        // the freeze fixed in sendToWorker(); stdout/stderr were already
+        // non-blocking for the poll read side.
         foreach ($pipes as $pipe) {
             stream_set_blocking($pipe, false);
         }
-        stream_set_blocking($pipes[0], true);
 
         $stdin = $pipes[0];
         $stdout = $pipes[1];
@@ -475,8 +598,21 @@ final class WorkerPool
         );
         $worker->scriptPath = $scriptPath;
 
-        $this->loop->addReadStream($stderr, function ($stream): void {
+        // sc-30: the stderr drain kept the 64 KiB pipe from ever backing up
+        // (a child that wrote to stderr would freeze on its own write, which
+        // is how pool death used to look) but discarded everything it read.
+        // Now the bytes land in a bounded keep-last tail on the state, and
+        // handleWorkerDeath surfaces it — child fatal text is finally visible
+        // to whoever owns the promise.
+        $this->loop->addReadStream($stderr, function ($stream) use ($worker): void {
             $chunk = fread($stream, 4096);
+            if ($chunk !== false && $chunk !== '') {
+                $worker->stderrTail .= $chunk;
+                $cap = self::STDERR_TAIL_BYTES;
+                if (strlen($worker->stderrTail) > $cap) {
+                    $worker->stderrTail = substr($worker->stderrTail, -$cap);
+                }
+            }
             if (feof($stream)) {
                 $this->loop->removeReadStream($stream);
             }
@@ -580,6 +716,36 @@ PHP;
             }
         }
         return false;
+    }
+
+    /**
+     * Drop parked workers whose child has died. One non-blocking read per
+     * idle stdout is what sets PHP's EOF flag — feof() alone only reports a
+     * previously-seen EOF — so the probe read doubles as the liveness test,
+     * and any real bytes it catches are pushed back onto the worker buffer
+     * untouched (idle-with-pending is protocol-wise impossible; if it ever
+     * happens the bytes die with the corpse, which is the honest outcome).
+     */
+    private function pruneDeadIdleWorkers(): void
+    {
+        foreach ($this->workers as $id => $worker) {
+            if (!$worker->idle || $worker->currentJobId !== null || $worker->stdout === null) {
+                continue;
+            }
+            if (!is_resource($worker->stdout)) {
+                $this->closeWorker($worker);
+                unset($this->workers[$id]);
+                continue;
+            }
+            $probe = @fread($worker->stdout, 4096);
+            if ($probe !== false && $probe !== '') {
+                $worker->buffer = $probe . $worker->buffer;
+            }
+            if (feof($worker->stdout)) {
+                $this->closeWorker($worker);
+                unset($this->workers[$id]);
+            }
+        }
     }
 
     private function popIdleWorker(): WorkerState

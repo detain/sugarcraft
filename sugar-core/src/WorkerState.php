@@ -24,6 +24,14 @@ final class WorkerState
 
     public string $buffer = '';
 
+    /**
+     * sc-30: bounded keep-last capture of this worker's stderr (the pool
+     * appends at most until WorkerPool::STDERR_TAIL_BYTES and slides the
+     * window), surfaced by handleWorkerDeath so a child-side fatal is no
+     * longer invisible to the caller holding the rejected promise.
+     */
+    public string $stderrTail = '';
+
     /** Path to the worker's temp script, for cleanup on close. */
     public ?string $scriptPath = null;
 

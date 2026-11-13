@@ -48,6 +48,26 @@ final class WorkerPoolTasks
         return (string) (getenv('HOME') ?: '');
     }
 
+    /**
+     * sc-30 drain-leg payload carrier: a serialized instance with a large
+     * string property exceeds the ~64 KiB kernel pipe, so dispatching it
+     * against a not-yet-reading child exercises the non-blocking drain loop.
+     */
+    public string $blob = '';
+
+    /**
+     * sc-30 stderr-tail leg: writes diagnosis text to the CHILD's stderr
+     * and then terminates the whole subprocess (exit, not throw — a thrown
+     * exception is caught by the worker loop and round-trips as a normal
+     * error response, which would never take the parent's death path).
+     */
+    public static function noisyDeath(): void
+    {
+        fwrite(STDERR, "worker-noise-7c31\n");
+        fflush(STDERR);
+        exit(7);
+    }
+
     /** Error round-trip arm. */
     public static function boom(): void
     {
@@ -78,6 +98,6 @@ final class WorkerPoolTasks
 
     public function __invoke(): string
     {
-        return 'invoked';
+        return $this->blob === '' ? 'invoked' : 'big:' . strlen($this->blob);
     }
 }

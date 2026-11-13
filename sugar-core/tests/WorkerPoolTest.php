@@ -371,6 +371,165 @@ final class WorkerPoolTest extends TestCase
         $pool->stop();
     }
 
+    public function testLargePayloadRoundTripsThroughTheDrainLoop(): void
+    {
+        // sc-30 functional leg: a serialized task larger than the ~64 KiB
+        // kernel pipe must drain cooperatively (partial writes + poll) and
+        // still round-trip exactly.
+        $pool = new WorkerPool($this->loop, 1);
+        $task = new WorkerPoolTasks();
+        $task->blob = str_repeat('A', 200_000);
+
+        $resolved = null;
+        $pool->dispatch($task)
+            ->then(function (WorkerResultMsg $msg) use (&$resolved): void {
+                $resolved = $msg;
+                $this->loop->stop();
+            }, function (\Throwable $e): void {
+                $this->loop->stop();
+                $this->fail('large dispatch rejected: ' . $e->getMessage());
+            });
+        $this->loop->addTimer(20.0, function (): void {
+            $this->loop->stop();
+            $this->fail('large payload never drained');
+        });
+        $this->spinLoop();
+
+        $this->assertInstanceOf(WorkerResultMsg::class, $resolved);
+        $this->assertSame('big:200000', $resolved->result);
+        $pool->stop();
+    }
+
+    public function testWriteDeadlineRejectsADeafPipe(): void
+    {
+        // sc-30 deadline leg, made deterministic: the idle pooled worker's
+        // stdin is swapped for the write end of a socketpair whose send
+        // buffer is pinned small (SO_SNDBUF; the stream API's
+        // stream_set_write_buffer refuses to shrink AF_UNIX pairs) and whose
+        // read end is held but never drained. A blob payload then outruns
+        // the buffer, the drain loop spins to WRITE_DEADLINE_SECONDS (10 s,
+        // + the bounded reap ladder), and the job is REJECTED with the named
+        // timeout — the old blocking fwrite froze the whole event loop
+        // forever in exactly this situation. The promise is already settled
+        // when dispatch() returns, so its rejection reaches a handler
+        // attached afterwards synchronously; no second loop spin is needed.
+        $pool = new WorkerPool($this->loop, 1);
+
+        if (!function_exists('socket_import_stream')) {
+            $pool->stop();
+            $this->markTestSkipped('ext-sockets is needed to pin SO_SNDBUF on the deaf-pipe swap');
+        }
+
+        $first = null;
+        $pool->dispatch([WorkerPoolTasks::class, 'pi'])
+            ->then(function (WorkerResultMsg $msg) use (&$first): void {
+                $first = $msg;
+                $this->loop->stop();
+            });
+        $setupTimeout = $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('setup job timed out');
+        });
+        $this->spinLoop();
+        $this->loop->cancelTimer($setupTimeout);
+        $this->assertInstanceOf(WorkerResultMsg::class, $first);
+
+        $workersProp = new \ReflectionProperty(WorkerPool::class, 'workers');
+        $pooled = $workersProp->getValue($pool);
+        $worker = reset($pooled);
+        [$keep, $sink] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        $this->assertNotFalse(stream_set_blocking($sink, false));
+        $sock = \socket_import_stream($sink);
+        $this->assertNotFalse($sock);
+        $this->assertTrue(\socket_set_option($sock, SOL_SOCKET, SO_SNDBUF, 8192));
+        $oldStdin = $worker->stdin;
+        $worker->stdin = $sink;
+
+        $task = new WorkerPoolTasks();
+        $task->blob = str_repeat('B', 400_000);
+
+        $started = microtime(true);
+        $rejected = null;
+        $pool->dispatch($task)
+            ->then(null, function (\Throwable $e) use (&$rejected): void {
+                $rejected = $e;
+            });
+        $elapsed = microtime(true) - $started;
+
+        $this->assertInstanceOf(\RuntimeException::class, $rejected, 'the write deadline settled the job');
+        $this->assertStringContainsString('timed out', $rejected->getMessage());
+        $this->assertStringContainsString('bytes handed off', $rejected->getMessage(), 'the partial progress is named');
+        $this->assertGreaterThan(9.5, $elapsed, 'the deadline is actually waited out');
+        $this->assertLessThan(16.0, $elapsed, 'the whole bounded path (deadline + reap ladder) completes');
+
+        // The swap is surgical: the real child pipe was never written to by
+        // this job; closeWorker took the sink and proc_close reclaims the
+        // real stdin (it closes whatever pipes are still open), so an
+        // explicit close here is a courtesy guarded by liveness.
+        if (is_resource($oldStdin)) {
+            fclose($oldStdin);
+        }
+        fclose($keep);
+        $pool->stop();
+    }
+
+    public function testPollTimerReleasedWhenPoolDrains(): void
+    {
+        // sc-30: the 20 Hz poll exists only while work is in flight. An idle
+        // created-but-unused pool, and a fully drained one, must carry NO
+        // periodic timer — a host that never calls stop() no longer leaks a
+        // perpetual 20 Hz wake.
+        $pool = new WorkerPool($this->loop, 1);
+        $timerProp = new \ReflectionProperty(WorkerPool::class, 'tickTimer');
+        $this->assertNull($timerProp->getValue($pool), 'construction arms nothing');
+
+        $resolved = null;
+        $pool->dispatch([WorkerPoolTasks::class, 'pi'])
+            ->then(function (WorkerResultMsg $msg) use (&$resolved): void {
+                $resolved = $msg;
+                $this->loop->stop();
+            });
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('timed out waiting for pi');
+        });
+        $this->spinLoop();
+
+        $this->assertInstanceOf(WorkerResultMsg::class, $resolved);
+        $this->assertNull($timerProp->getValue($pool), 'a drained pool releases the poll timer');
+
+        // And it comes back for the next job, then stop() clears everything.
+        $pool->dispatch([WorkerPoolTasks::class, 'pi'])->then(null, static function (): void {
+        });
+        $this->assertNotNull($timerProp->getValue($pool), 'dispatch re-arms the poll');
+        $pool->stop();
+        $this->assertNull($timerProp->getValue($pool), 'stop leaves no timer behind');
+    }
+
+    public function testChildStderrTailSurfacedOnDeath(): void
+    {
+        // sc-30: a child that writes diagnosis text to stderr and dies must
+        // surface that text in the rejection — the old pool drained stderr
+        // into the bit bucket and reported only 'died unexpectedly'.
+        $pool = new WorkerPool($this->loop, 1);
+        $rejected = null;
+        $pool->dispatch([WorkerPoolTasks::class, 'noisyDeath'])
+            ->then(null, function (\Throwable $e) use (&$rejected): void {
+                $rejected = $e;
+                $this->loop->stop();
+            });
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('worker death was never noticed');
+        });
+        $this->spinLoop();
+
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertStringContainsString('died unexpectedly', $rejected->getMessage());
+        $this->assertStringContainsString('worker-noise-7c31', $rejected->getMessage(), 'child stderr rides into the rejection');
+        $pool->stop();
+    }
+
     private function spinLoop(): void
     {
         $this->loop->run();
