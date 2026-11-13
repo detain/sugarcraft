@@ -63,7 +63,10 @@ final class CliTest extends TestCase
      * Run `bin/candy-codetime` with the given args.
      *
      * @param list<string>          $args
-     * @param array<string, string> $env  extra env vars (merged over the parent env)
+     * @param array<string, string|null> $env  extra env vars (merged over the parent
+     *                                       env; a null value REMOVES the variable —
+     *                                       the legacy-name arms must run with
+     *                                       CANDY_CODETIME_DIR absent altogether)
      * @return array{stdout: string, stderr: string, exit: int}
      */
     private function runCli(array $args, ?string $cwd = null, array $env = [], ?string $stdin = null): array
@@ -81,6 +84,11 @@ final class CliTest extends TestCase
             'LANG' => 'C',
             'CANDY_CODETIME_DIR' => $this->dataDir,
         ], $env);
+        foreach ($fullEnv as $key => $value) {
+            if ($value === null) {
+                unset($fullEnv[$key]);
+            }
+        }
 
         // 086: an unmapped stdin is inherited from the runner; 087: the
         // drains must be concurrent, not stdout-to-EOF-then-hope.
@@ -876,6 +884,76 @@ final class CliTest extends TestCase
         $res = $this->runCli(['--backend=sqlite', 'push', "\xff\xfebad", 'php', 'src/x.php', '60']);
         $this->assertSame(1, $res['exit'], 'the sqlite door must refuse what the file door refuses: ' . $res['stdout'] . $res['stderr']);
         $this->assertStringContainsString('storage error', $res['stderr']);
+    }
+
+    // ---- CT-S37 (finding 043): the shipped legacy rename arms are exercised
+    // end to end. Both arms are mode-agnostic (plain mkdir + rename), so they
+    // run identically as root — no posix_geteuid skip is needed.
+
+    public function testTheLegacyEnvNameStillDrivesTheStoreWithADeprecationNotice(): void
+    {
+        $legacyDir = $this->dataDir . '-legacy';
+        mkdir($legacyDir, 0755, true);
+        $legacy = ['SUGARTICK_DIR' => $legacyDir, 'CANDY_CODETIME_DIR' => null];
+
+        $push = $this->runCli(['push', 'legacy-proj', 'php', '/srv/tick/a.php', '60'], null, $legacy);
+        self::assertSame(0, $push['exit'], $push['stderr']);
+        self::assertStringContainsString('SUGARTICK_DIR is deprecated', $push['stderr']);
+
+        $res = $this->runCli(['export', 'json', '3'], null, $legacy);
+        self::assertSame(0, $res['exit'], $res['stderr']);
+        self::assertStringContainsString('legacy-proj', $res['stdout']);
+        self::assertFileExists($legacyDir . '/' . date('Y-m-d') . '.jsonl');
+
+        // The new name wins when both are present: rows keep landing in the
+        // directory the explicit variable names, not the legacy one.
+        $both = $this->runCli(['push', 'wins-proj', 'php', '/srv/tick/b.php', '60'], null, [
+            'SUGARTICK_DIR' => $legacyDir,
+        ]);
+        self::assertSame(0, $both['exit'], $both['stderr']);
+        self::assertStringNotContainsString('wins-proj', (string) @file_get_contents($legacyDir . '/' . date('Y-m-d') . '.jsonl'));
+        self::assertStringContainsString('wins-proj', (string) @file_get_contents($this->dataDir . '/' . date('Y-m-d') . '.jsonl'));
+
+        foreach (glob($legacyDir . '/*') ?: [] as $f) {
+            unlink($f);
+        }
+        @rmdir($legacyDir);
+    }
+
+    public function testAPreRenameDefaultDirectoryIsMovedOnceAndReadThroughTheNewName(): void
+    {
+        $xdg = $this->dataDir . '-xdg';
+        mkdir($xdg . '/sugar-tick', 0755, true);
+        $day = date('Y-m-d', time() - 86400);
+        $beat = json_encode([
+            'time' => strtotime($day . ' 10:00:00'),
+            'project' => 'old-tick',
+            'language' => 'php',
+            'file' => '/srv/tick/old.php',
+            'duration' => 60,
+            'tags' => [],
+        ], JSON_THROW_ON_ERROR);
+        file_put_contents($xdg . '/sugar-tick/' . $day . '.jsonl', $beat . "\n");
+
+        $env = ['CANDY_CODETIME_DIR' => null, 'XDG_DATA_HOME' => $xdg];
+        $res = $this->runCli(['export', 'json', '3'], null, $env);
+
+        self::assertSame(0, $res['exit'], $res['stderr']);
+        self::assertStringContainsString('moved ' . $xdg . '/sugar-tick -> ' . $xdg . '/candy-codetime', $res['stderr']);
+        self::assertStringContainsString('old-tick', $res['stdout']);
+        self::assertDirectoryDoesNotExist($xdg . '/sugar-tick');
+        self::assertFileExists($xdg . '/candy-codetime/' . $day . '.jsonl');
+
+        // A second launch has nothing to move and stays silent about migration.
+        $again = $this->runCli(['export', 'json', '3'], null, $env);
+        self::assertSame(0, $again['exit'], $again['stderr']);
+        self::assertStringNotContainsString('moved ', $again['stderr']);
+
+        foreach (glob($xdg . '/candy-codetime/*') ?: [] as $f) {
+            unlink($f);
+        }
+        @rmdir($xdg . '/candy-codetime');
+        @rmdir($xdg);
     }
 
     public function testExportOfPoisonedLegacyDatabaseIsALineErrorNeverAFatal(): void
