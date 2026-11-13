@@ -302,7 +302,7 @@ final readonly class PosterCard
      * {@see render()} actually draws: an overlay blob with no id has no marker to
      * paint, renders as a skeleton, and must count as unfilled so the owner re-queues it.
      *
-     * Two more shapes are UNFILLED under the same law:
+     * Three more shapes are UNFILLED under the same law:
      *  - an empty inline poster — `withPoster('')` is the shape a cache or HTTP
      *    layer leaves behind when it stored nothing, and reading it as "loaded"
      *    would park the cell as a blank filled frame forever, outside the
