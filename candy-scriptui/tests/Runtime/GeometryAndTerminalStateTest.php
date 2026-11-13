@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\ScriptUi\Tests\Runtime;
 
+use React\EventLoop\Loop;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
@@ -159,7 +160,7 @@ final class GeometryAndTerminalStateTest extends TestCase
             'tty'    => null,
         ]);
         try {
-            $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+            $options = InteractiveRuntime::programOptions(loop: Loop::get(), useAltScreen: true, hideCursor: true);
             self::assertNotNull($options, 'a tty-backed dumb terminal must still host a frame');
             self::assertFalse($options->useAltScreen);
             self::assertFalse($options->hideCursor);
@@ -174,14 +175,14 @@ final class GeometryAndTerminalStateTest extends TestCase
                 'stdin'  => false,
                 'tty'    => null,
             ]);
-            self::assertNull(InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true));
+            self::assertNull(InteractiveRuntime::programOptions(loop: Loop::get(), useAltScreen: true, hideCursor: true));
         } finally {
             InteractiveRuntime::setTerminalProbesForTesting(null);
         }
 
         // Opt-in real-controlling-terminal variant: runs only where a ctty
         // exists, so it never masquerades as coverage on CI.
-        $real = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        $real = InteractiveRuntime::programOptions(loop: Loop::get(), useAltScreen: true, hideCursor: true);
         if ($real !== null) {
             self::assertFalse($real->useAltScreen);
             self::assertFalse($real->hideCursor);

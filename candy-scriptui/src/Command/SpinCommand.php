@@ -77,7 +77,7 @@ final class SpinCommand extends Command
 
         $this->programFactory = $programFactory
             ?? static function (Model $model, LoopInterface $loop): Program {
-                $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: true);
+                $options = InteractiveRuntime::programOptions(loop: $loop, useAltScreen: false, hideCursor: true);
                 if ($options === null) {
                     // The old headless `?? new ProgramOptions(...)` fallback
                     // (scriptui-06, candy-scriptui-002/-005) seeded raw

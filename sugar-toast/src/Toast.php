@@ -22,7 +22,10 @@ use SugarCraft\Core\Util\Width;
  * are bounded by maxConcurrent + the Overflow strategy; runnable demos live
  * in examples/ (basic.php, types.php, accessibility.php).
  *
- * Design antecedent: DaltonSW/bubbleup.
+ * Design antecedent: DaltonSW/bubbleup. Custom alert types (its
+ * RegisterNewAlertType seam) are unsupported here by design: string types
+ * resolve only to the four built-ins, and styled built-ins plus per-Alert
+ * colour overrides are the parity path (README 'Alert Types').
  *
  * @see https://github.com/DaltonSW/bubbleup
  */

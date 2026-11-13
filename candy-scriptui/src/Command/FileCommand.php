@@ -89,7 +89,7 @@ final class FileCommand extends Command
             showSize:   (bool) $input->getOption('show-size'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(
+        $options = InteractiveRuntime::programOptions(loop: $loop, 
             useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
             hideCursor:   true,
         );

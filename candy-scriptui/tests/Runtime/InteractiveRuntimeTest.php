@@ -26,7 +26,7 @@ final class InteractiveRuntimeTest extends TestCase
     public function testProgramOptionsRoutesPaintToStderrWhenStdoutIsCaptured(): void
     {
         $stdoutIsTty = @stream_isatty(STDOUT);
-        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true, loop: \React\EventLoop\Loop::get());
 
         if (!$stdoutIsTty) {
             // Two honest shapes under a captured stdout: paint-to-STDERR when

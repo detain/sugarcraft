@@ -82,7 +82,7 @@ final class InputCommand extends Command
             header:      (string) $input->getOption('header'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: CursorMode::hidesCursor($cursorMode));
+        $options = InteractiveRuntime::programOptions(loop: $loop, useAltScreen: false, hideCursor: CursorMode::hidesCursor($cursorMode));
         if ($options === null) {
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'input']) . "\n");
             return Command::FAILURE;

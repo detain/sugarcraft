@@ -7,6 +7,8 @@ namespace SugarCraft\ScriptUi\Runtime;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty;
 use SugarCraft\ScriptUi\Lang;
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
 
 /**
  * Single launch chokepoint for every interactive {@see \SugarCraft\Core\Program}
@@ -37,8 +39,13 @@ final class InteractiveRuntime
      * terminal exists (pipes on both ends and no /dev/tty) — callers must
      * then refuse with a diagnostic on stderr rather than start a Program
      * that can only deadlock or consume piped bytes as keystrokes.
+     *
+     * scriptui-51 (finding 095): the loop arrives from the caller — the SAME
+     * instance the command armed its timeout on. Resolving it a second time
+     * here would let a future swap of the shared singleton between the reads
+     * arm a deadline on a loop nobody runs: fail-open with zero symptom.
      */
-    public static function programOptions(bool $useAltScreen, bool $hideCursor): ?ProgramOptions
+    public static function programOptions(bool $useAltScreen, bool $hideCursor, LoopInterface $loop): ?ProgramOptions
     {
         // Dumb terminals cannot survive the DEC-private modes the renderer
         // emits for alt-screen and cursor hiding (ColourGate already lowers
@@ -65,7 +72,7 @@ final class InteractiveRuntime
                 unicodeMode:     !$dumb,
                 catchInterrupts: true,
                 openTty:         true,
-                loop:            \React\EventLoop\Loop::get(),
+                loop:            $loop,
             ));
         }
 
@@ -106,7 +113,7 @@ final class InteractiveRuntime
                 catchInterrupts: true,
                 input:           $tty[0],
                 output:          $paint,
-                loop:            \React\EventLoop\Loop::get(),
+                loop:            $loop,
             ));
         }
 
@@ -122,7 +129,7 @@ final class InteractiveRuntime
                 unicodeMode:     !$dumb,
                 catchInterrupts: true,
                 output:          STDERR,
-                loop:            \React\EventLoop\Loop::get(),
+                loop:            $loop,
             ));
         }
 
@@ -181,7 +188,10 @@ final class InteractiveRuntime
      */
     public static function isHeadless(): bool
     {
-        return self::programOptions(useAltScreen: false, hideCursor: false) === null;
+        // scriptui-51: this nullness probe runs no Program, so it resolves
+        // the singleton once for its own call — no deadline loop can ever
+        // disagree with it.
+        return self::programOptions(useAltScreen: false, hideCursor: false, loop: Loop::get()) === null;
     }
 
     /**

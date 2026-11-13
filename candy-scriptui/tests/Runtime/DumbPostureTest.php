@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\ScriptUi\Tests\Runtime;
 
+use React\EventLoop\Loop;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\ScriptUi\Runtime\ColourGate;
@@ -113,7 +114,7 @@ final class DumbPostureTest extends TestCase
             'tty'    => null,
         ]);
 
-        $options = InteractiveRuntime::programOptions(true, true);
+        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true, loop: Loop::get());
 
         self::assertNotNull($options);
         self::assertTrue($options->inlineMode, 'empty TERM paints inline');
@@ -132,7 +133,7 @@ final class DumbPostureTest extends TestCase
             'tty'    => null,
         ]);
 
-        $options = InteractiveRuntime::programOptions(true, true);
+        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true, loop: Loop::get());
 
         self::assertNotNull($options);
         self::assertFalse($options->inlineMode);

@@ -116,7 +116,7 @@ final class FilterCommand extends Command
             placeholder:      (string) $input->getOption('placeholder'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(
+        $options = InteractiveRuntime::programOptions(loop: $loop, 
             useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
             hideCursor:   true,
         );

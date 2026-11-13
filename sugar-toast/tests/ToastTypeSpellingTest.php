@@ -7,7 +7,12 @@ namespace SugarCraft\Toast\Tests;
 use SugarCraft\Toast\{Toast, ToastType};
 use PHPUnit\Framework\TestCase;
 
-final class ToastCustomTypeTest extends TestCase
+/**
+ * The string-type ingress exercises the FOUR built-in spellings only —
+ * custom alert types are unsupported by design (see README 'Alert Types'
+ * for the upstream parity note).
+ */
+final class ToastTypeSpellingTest extends TestCase
 {
     public function testAlertWithStringTypeSuccess(): void
     {

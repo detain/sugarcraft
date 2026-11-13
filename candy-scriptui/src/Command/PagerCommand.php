@@ -89,7 +89,7 @@ final class PagerCommand extends Command
             (string) $input->getOption('match'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(
+        $options = InteractiveRuntime::programOptions(loop: $loop, 
             useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
             hideCursor:   true,
         );

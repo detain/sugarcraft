@@ -90,7 +90,7 @@ final class WriteCommand extends Command
                 : (string) $input->getOption('end-of-buffer-character'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(
+        $options = InteractiveRuntime::programOptions(loop: $loop, 
             useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
             hideCursor:   CursorMode::hidesCursor($cursorMode),
         );

@@ -85,7 +85,7 @@ final class SpinHeadlessPurityTest extends TestCase
 
         $rt = (string) file_get_contents(__DIR__ . '/../../src/Runtime/InteractiveRuntime.php');
         self::assertStringContainsString('public static function isHeadless(): bool', $rt);
-        self::assertStringContainsString('programOptions(useAltScreen: false, hideCursor: false)', $rt, 'isHeadless must ride the SAME decision the siblings use to refuse');
+        self::assertStringContainsString('programOptions(useAltScreen: false, hideCursor: false, loop: Loop::get())', $rt, 'isHeadless must ride the SAME decision the siblings use to refuse');
     }
 
     /**

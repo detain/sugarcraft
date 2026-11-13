@@ -85,7 +85,7 @@ final class ConfirmCommand extends Command
             negative:    $negate,
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: false);
+        $options = InteractiveRuntime::programOptions(loop: $loop, useAltScreen: false, hideCursor: false);
         if ($options === null) {
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'confirm']) . "\n");
             return Command::FAILURE;

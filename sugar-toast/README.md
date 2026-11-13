@@ -96,6 +96,18 @@ Each type also provides a localised label via `ToastType::label()` (e.g.
 (`"error"`/`"ERROR"`, `"warning"`, `"info"`, `"success"`). Passing an unknown
 string throws `InvalidArgumentException`.
 
+**These four are the whole vocabulary — custom alert types are unsupported.**
+Upstream bubbleup registers custom types
+(`RegisterNewAlertType(AlertDefinition{Key, ForeColor, Prefix})`); sugar-toast
+deliberately dropped that seam, so no key/glyph/prefix can be added at
+runtime and an unknown name is a hard throw, not a registration hook. The
+parity path for a bespoke look is a styled built-in: choose the severity you
+want the icon and label to carry, then override its colours per alert with
+`withBackgroundColor()`/`withForegroundColor()`/`withBorderColor()` (see
+Styled Alerts). If you are migrating from bubbleup with custom types, map
+each `AlertDefinition` onto the nearest built-in plus colour overrides
+before you hit the throw.
+
 ## Positions
 
 ```php

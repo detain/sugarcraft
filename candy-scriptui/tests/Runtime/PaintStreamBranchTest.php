@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\ScriptUi\Tests\Runtime;
 
+use React\EventLoop\Loop;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 
@@ -40,7 +41,7 @@ final class PaintStreamBranchTest extends TestCase
     public function testStdoutTerminalKeepsTheOpenTtyPosture(): void
     {
         InteractiveRuntime::setTerminalProbesForTesting(['stdout' => true]);
-        $options = InteractiveRuntime::programOptions(false, false);
+        $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: false, loop: Loop::get());
 
         self::assertNotNull($options);
         self::assertTrue($options->openTty);
@@ -54,7 +55,7 @@ final class PaintStreamBranchTest extends TestCase
             'stdin'  => false,
             'tty'    => $this->ttyPair,
         ]);
-        $options = InteractiveRuntime::programOptions(false, false);
+        $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: false, loop: Loop::get());
 
         self::assertNotNull($options);
         self::assertSame($this->ttyPair[0], $options->input, 'keys come from /dev/tty');
@@ -77,7 +78,7 @@ final class PaintStreamBranchTest extends TestCase
             'stdin'  => true,
             'tty'    => $this->ttyPair,
         ]);
-        $options = InteractiveRuntime::programOptions(true, true);
+        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true, loop: Loop::get());
 
         self::assertNotNull($options);
         self::assertSame($this->ttyPair[0], $options->input);
@@ -104,7 +105,7 @@ final class PaintStreamBranchTest extends TestCase
             'tty'    => null,
         ]);
 
-        self::assertNull(InteractiveRuntime::programOptions(false, false));
+        self::assertNull(InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: false, loop: Loop::get()));
         self::assertTrue(InteractiveRuntime::isHeadless());
     }
 
