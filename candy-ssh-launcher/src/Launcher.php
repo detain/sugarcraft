@@ -28,6 +28,13 @@ use SugarCraft\Core\Util\Sanitize;
  *
  * For tests, `executor` is a callable receiving the argv list —
  * defaults to `pcntl_exec` but tests can swap it for a recorder.
+ *
+ * Mirrors the connect hand-off of charmbracelet/wishlist — the moment the
+ * chosen endpoint becomes an ssh session — while diverging on purpose:
+ * upstream proxies the bytes through its own in-process SSH server, this
+ * replaces the process so the user's ssh binary owns prompts, keys and
+ * exit status (the directory-server clause of README ## Divergences
+ * explains why a port without a daemon cannot embed upstream's design).
  */
 final class Launcher
 {

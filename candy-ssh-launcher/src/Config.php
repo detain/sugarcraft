@@ -11,6 +11,14 @@ use SugarCraft\SshLauncher\Support\CommentStrip;
 /**
  * Loads a wishlist directory from disk.
  *
+ * Mirrors charmbracelet/wishlist `store.Get`: the where-semantics carry —
+ * the caller names the file and this reads exactly that file, nothing
+ * else; the discovery ladder (CLI flag ▸ current directory ▸ home) belongs
+ * to the entry point, as it does upstream where flag resolution happens
+ * before the store is built. The schema divergence (flat top-level list,
+ * not endpoint-name-keyed nesting) is deliberate — see README
+ * ## Divergences.
+ *
  * Two formats are accepted (detected by extension, then content-sniffed):
  *
  *   - **JSON** (`wishlist.json`) — a top-level array of objects:

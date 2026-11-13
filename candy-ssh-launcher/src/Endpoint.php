@@ -13,6 +13,12 @@ use SugarCraft\Core\Concerns\Mutable;
  *
  * `name` is what's shown in the picker; everything else feeds the
  * `ssh(1)` argv when {@see Launcher} dispatches.
+ *
+ * Mirrors the `Endpoint` record of charmbracelet/wishlist (wishlist.go):
+ * one config row's worth of data, assembled at load and consumed at
+ * connect. Deliberate divergences live in the guard family (leading-dash
+ * refusal, not stripping) and the schema lanes (`flags`, `remoteCommand`,
+ * `command`) — see README ## Divergences.
  */
 final class Endpoint
 {

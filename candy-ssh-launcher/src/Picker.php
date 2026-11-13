@@ -28,6 +28,12 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * This class only needs to draw a static list, read a few keys,
  * and exit fast — no event loop, no full Program lifecycle.
  *
+ * Mirrors charmbracelet/wishlist's selection interaction (the `wishlist`
+ * TUI's fuzzy list it renders before connecting): move, filter, confirm.
+ * Deliberate divergence: upstream builds on charmbracelet/bubbletea and a
+ * server-backed store; this is a one-shot local picker with no event loop,
+ * which is why the `List` widget is not reused (see README ## Divergences).
+ *
  * Test seam: the streams are constructor arguments and tests subclass
  * this class overriding {@see setRawMode()} (and {@see detectSize()}
  * for the geometry pins) — there is no
