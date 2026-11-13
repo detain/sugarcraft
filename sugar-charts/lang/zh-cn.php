@@ -30,6 +30,8 @@ return [
     'chart.dim_nonneg'         => '图表宽度/高度必须 >= 0',
     'chart.duration_nonneg'     => '图表动画时长必须 >= 0 毫秒',
     'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+        'resample.output_cap' => 'Upsample would emit {points} rows, above the {cap} ceiling; raise it with withMaxPoints() or use a larger interval.',
+        'resample.max_points_positive' => 'Max points must be > 0, got {given}',
     'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
     'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => '图表值必须是有限值，实际为 {value}',

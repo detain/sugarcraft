@@ -49,6 +49,8 @@ return [
     'chart.dim_nonneg'         => 'chart width/height must be >= 0',
     'chart.duration_nonneg'     => 'chart animation duration must be >= 0 milliseconds',
     'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+        'resample.output_cap' => 'Upsample would emit {points} rows, above the {cap} ceiling; raise it with withMaxPoints() or use a larger interval.',
+        'resample.max_points_positive' => 'Max points must be > 0, got {given}',
     'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
     'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
 

@@ -30,6 +30,8 @@ return [
     'chart.dim_nonneg'         => 'チャートの幅/高さは >= 0 である必要があります',
     'chart.duration_nonneg'     => 'チャートのアニメーション長は 0 ミリ秒以上である必要があります',
     'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+        'resample.output_cap' => 'Upsample would emit {points} rows, above the {cap} ceiling; raise it with withMaxPoints() or use a larger interval.',
+        'resample.max_points_positive' => 'Max points must be > 0, got {given}',
     'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
     'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => 'チャートの値は有限である必要があります。取得値: {value}',

@@ -30,6 +30,8 @@ return [
     'chart.dim_nonneg'         => '차트 너비/높이는 0 이상이어야 합니다',
     'chart.duration_nonneg'     => '차트 애니메이션 시간은 0 밀리초 이상이어야 합니다',
     'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+        'resample.output_cap' => 'Upsample would emit {points} rows, above the {cap} ceiling; raise it with withMaxPoints() or use a larger interval.',
+        'resample.max_points_positive' => 'Max points must be > 0, got {given}',
     'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
     'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => '차트 값은 유한해야 하며, 다음 값을 받았습니다: {value}',

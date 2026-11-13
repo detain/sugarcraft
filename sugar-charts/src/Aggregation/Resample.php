@@ -16,12 +16,24 @@ use SugarCraft\Charts\Support\Finite;
  */
 final class Resample
 {
+    /**
+     * Hard ceiling on the number of rows an upsample may build, mirroring
+     * the {@see \SugarCraft\Charts\Canvas\Graph::MAX_TARGET_TICKS}
+     * belt-guard precedent: the walk increment is caller-chosen, so a
+     * two-point series spanning a decade at interval=1 second is a
+     * 315-million-row allocation unless something says "stop" first.
+     * Callers who genuinely want big output raise it via
+     * {@see self::withMaxPoints()}.
+     */
+    public const MAX_RESAMPLE_POINTS = 100_000;
+
     /** @var list<array{ts: int, value: int|float}> */
     private array $points = [];
 
     private function __construct(
         public readonly int $targetIntervalSeconds,
         public readonly int $startTimestamp = 0,
+        public readonly ?int $maxPoints = null,
     ) {
         // The bucket-advance and upsample walks increment by this interval;
         // zero or negative would spin their while loops forever. Siblings
@@ -86,9 +98,48 @@ final class Resample
     /**
      * Canonical factory — mirrors the SugarCraft `::new()` convention.
      */
-    public static function new(int $targetIntervalSeconds, int $startTimestamp = 0): self
+    public static function new(int $targetIntervalSeconds, int $startTimestamp = 0, ?int $maxPoints = null): self
     {
-        return new self($targetIntervalSeconds, $startTimestamp);
+        return new self($targetIntervalSeconds, $startTimestamp, $maxPoints);
+    }
+
+    /**
+     * Raise (or lower) the {@see MAX_RESAMPLE_POINTS} ceiling for this
+     * instance's upsample passes. Must be > 0; the default (null) applies
+     * the class ceiling.
+     */
+    public function withMaxPoints(?int $maxPoints): self
+    {
+        if ($maxPoints !== null && $maxPoints <= 0) {
+            throw new \InvalidArgumentException(Lang::t('resample.max_points_positive', [
+                'given' => (string) $maxPoints,
+            ]));
+        }
+        return new self($this->targetIntervalSeconds, $this->startTimestamp, $maxPoints);
+    }
+
+    private function effectiveCap(): int
+    {
+        return $this->maxPoints ?? self::MAX_RESAMPLE_POINTS;
+    }
+
+    /**
+     * Row-count estimate an upsample walk from $firstTs to $lastTs would
+     * emit at the target interval (both endpoints inclusive).
+     */
+    private function projectedRows(int $firstTs, int $lastTs): int
+    {
+        return intdiv($lastTs - $firstTs, $this->targetIntervalSeconds) + 1;
+    }
+
+    private function assertWithinCap(int $rows): void
+    {
+        if ($rows > $this->effectiveCap()) {
+            throw new \RuntimeException(Lang::t('resample.output_cap', [
+                'points' => (string) $rows,
+                'cap' => (string) $this->effectiveCap(),
+            ]));
+        }
     }
 
         /**
@@ -121,15 +172,6 @@ final class Resample
         return $clone;
     }
 
-    /**
-     * @param list<array{ts: int, value: int|float}> $timestampedValues
-     */
-    private static function assertPoints(array $timestampedValues): void
-    {
-        foreach ($timestampedValues as $pt) {
-            Finite::assert($pt['value']);
-        }
-    }
 
     /**
      * Row-shape door (sugar-charts-028): validate the shape once, at
@@ -220,11 +262,14 @@ final class Resample
                 if ($lastInBucket !== null) {
                     $result[] = ['ts' => $bucketStart, 'value' => $lastInBucket['value']];
                 }
-                // Advance bucket to include this point
+                // Advance bucket to include this point (sugar-charts-040):
+                // jump straight to the containing bucket arithmetically —
+                // the old per-empty-bucket walk turned a sparse range
+                // (timestamps a epoch apart at interval=1) into billions
+                // of pointless iterations. Same landing bucket: start is
+                // the largest aligned offset with pt < start + interval.
                 $bucketStart = $bucketEnd;
-                while ($pt['ts'] >= $bucketStart + $this->targetIntervalSeconds) {
-                    $bucketStart += $this->targetIntervalSeconds;
-                }
+                $bucketStart += intdiv($pt['ts'] - $bucketStart, $this->targetIntervalSeconds) * $this->targetIntervalSeconds;
                 $lastInBucket = $pt;
             }
         }
@@ -266,9 +311,9 @@ final class Resample
                     $result[] = ['ts' => $bucketStart, 'value' => array_sum($bucketVals) / count($bucketVals)];
                 }
                 $bucketStart = $bucketEnd;
-                while ($pt['ts'] >= $bucketStart + $this->targetIntervalSeconds) {
-                    $bucketStart += $this->targetIntervalSeconds;
-                }
+                // (sugar-charts-040) arithmetic bucket jump, see the
+                // matching note in downsampleLast().
+                $bucketStart += intdiv($pt['ts'] - $bucketStart, $this->targetIntervalSeconds) * $this->targetIntervalSeconds;
                 $bucketVals = [$pt['value']];
                 $bucketTs = $pt['ts'];
             }
@@ -299,6 +344,13 @@ final class Resample
         $count = count($timestampedValues);
         $currTs = $this->startTimestamp > 0 ? $this->startTimestamp : $timestampedValues[0]['ts'];
         $endTs = $timestampedValues[$count - 1]['ts'];
+
+        // (sugar-charts-040) estimate before allocating: the walk below is
+        // exactly projectedRows() long, so a caller-tiny interval over a
+        // huge span is caught here instead of in the OOM killer.
+        if ($endTs >= $currTs) {
+            $this->assertWithinCap($this->projectedRows($currTs, $endTs));
+        }
 
         while ($currTs <= $endTs) {
             // Find the two input points that bracket currTs
@@ -340,6 +392,11 @@ final class Resample
         $result = [];
         $currTs = $this->startTimestamp > 0 ? $this->startTimestamp : $timestampedValues[0]['ts'];
         $endTs = $timestampedValues[count($timestampedValues) - 1]['ts'];
+
+        // (sugar-charts-040) same pre-allocation estimate as upsampleLinear.
+        if ($endTs >= $currTs) {
+            $this->assertWithinCap($this->projectedRows($currTs, $endTs));
+        }
 
         $i = 0;
         $count = count($timestampedValues);

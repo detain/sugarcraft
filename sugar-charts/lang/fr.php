@@ -47,6 +47,8 @@ return [
     'chart.dim_nonneg'         => 'la largeur/hauteur du graphique doit être >= 0',
     'chart.duration_nonneg'     => 'la durée d\'animation du graphique doit être >= 0 millisecondes',
     'resample.row_shape' => 'Resample attend une liste de lignes [\'ts\'=>..,\'value\'=>..] ou de tuples [ts,valeur] ; la ligne #{index} a une forme non prise en charge ({given})',
+        'resample.output_cap' => 'Le reechantillonnage emettrait {points} lignes, au-dessus du plafond {cap}; relevez-le avec withMaxPoints() ou utilisez un intervalle plus grand.',
+        'resample.max_points_positive' => 'Le nombre max de points doit etre > 0, recu {given}',
     'bucket.row_shape' => 'Binning attend une liste de lignes [\'ts\'=>..,\'value\'=>..] ou de tuples [ts,valeur] ; la ligne #{index} a une forme non prise en charge ({given})',
     'legend.item_shape' => 'Legend attend des entrees de forme [\'label\'=>string,\'color\'=>string] ; l\'entree #{index} a une forme non prise en charge ({given})',
     'finite.non_finite'        => 'la valeur du graphique doit être finie, valeur reçue : {value}',

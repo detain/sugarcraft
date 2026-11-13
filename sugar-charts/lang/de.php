@@ -47,6 +47,8 @@ return [
     'chart.dim_nonneg'         => 'Diagrammbreite/-höhe muss >= 0 sein',
     'chart.duration_nonneg'     => 'Animationsdauer des Diagramms muss >= 0 Millisekunden sein',
     'resample.row_shape' => 'Resample erwartet eine Liste von [\'ts\'=>..,\'value\'=>..]-Zeilen oder [ts,value]-Tupeln; Zeile #{index} hat eine nicht unterstuetzte Form ({given})',
+        'resample.output_cap' => 'Die Hochrechnung wuerde {points} Zeilen erzeugen, ueber der Grenze von {cap}; mit withMaxPoints() erhoehen oder ein groesseres Intervall waehlen.',
+        'resample.max_points_positive' => 'Maximale Punkte müssen > 0 sein, erhalten {given}',
     'bucket.row_shape' => 'Binning erwartet eine Liste von [\'ts\'=>..,\'value\'=>..]-Zeilen oder [ts,value]-Tupeln; Zeile #{index} hat eine nicht unterstuetzte Form ({given})',
     'legend.item_shape' => 'Legend erwartet Eintraege der Form [\'label\'=>string,\'color\'=>string]; Eintrag #{index} hat eine nicht unterstuetzte Form ({given})',
     'finite.non_finite'        => 'Diagrammwert muss endlich sein, erhalten: {value}',
