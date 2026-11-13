@@ -43,4 +43,24 @@ final class BorderBlendTest extends TestCase
             ->render('x');
         $this->assertStringContainsString('38;2;255;95;135', $rendered);
     }
+
+    /**
+     * Finding 056: the blend endpoints accept the fg() coercion family —
+     * hex strings seed the four sides byte-identically to Color objects,
+     * and bad strings refuse with the house InvalidArgumentException.
+     */
+    public function testHexStringsBlendIdenticallyToColorObjects(): void
+    {
+        $fromStrings = Style::new()->border(Border::normal())
+            ->borderForegroundBlend('#ff0000', '#0000ff')->render('x');
+        $fromObjects = Style::new()->border(Border::normal())
+            ->borderForegroundBlend(Color::hex('#ff0000'), Color::hex('#0000ff'))->render('x');
+        $this->assertSame($fromObjects, $fromStrings);
+    }
+
+    public function testBlendRefusesBadStringsLikeFg(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->borderForegroundBlend('zzz', '#0000ff');
+    }
 }

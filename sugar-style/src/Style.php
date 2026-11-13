@@ -189,14 +189,17 @@ final class Style
     /**
      * Coloured underline, separate from the foreground colour. Mirrors
      * lipgloss's `UnderlineColor`. Emits SGR `58;...` (xterm-256
-     * extension) when underlining is active. Pass null to clear.
+     * extension) when underlining is active. Accepts the same input
+     * shape as {@see fg()} — a `Color`, a 3- or 6-digit hex string, or
+     * `null` to clear; a bad string refuses with the shared
+     * `InvalidArgumentException` path, not a TypeError.
      * Tier caveat: SGR 58 has no 4-bit form, so at the Ansi profile the
      * colour falls back to the FOREGROUND slot and recolours the glyphs
      * themselves (`Color::toUnderline()`), rather than tinting the line.
      */
-    public function underlineColor(?Color $c): self
+    public function underlineColor(Color|string|null $c): self
     {
-        return $this->with(underlineColor: $c, underlineColorSet: true, propsAdded: ['underlineColor']);
+        return $this->with(underlineColor: self::asColor($c), underlineColorSet: true, propsAdded: ['underlineColor']);
     }
 
     /**
@@ -665,11 +668,18 @@ final class Style
      * Mirrors lipgloss `BorderForegroundBlend(start, end)`. The blend
      * picks four points along the gradient (t=0 / 0.33 / 0.66 / 1.0)
      * to seed the four sides — terminals see flat colour per side, but
-     * the eye reads it as a gradient. Pair with
+     * the eye reads it as a gradient. Both endpoints accept the same
+     * input shape as {@see fg()} — a `Color` or a 3-/6-digit hex string,
+     * bad strings refusing with `InvalidArgumentException`. Pair with
      * {@see borderTopForeground()} et al. when you need finer control.
      */
-    public function borderForegroundBlend(Color $start, Color $end): self
+    public function borderForegroundBlend(Color|string $start, Color|string $end): self
     {
+        // asColor refuses bad strings with the house InvalidArgumentException
+        // (same path as fg()); it returns null only for null input, which
+        // the non-nullable signature above excludes.
+        $start = self::asColor($start);
+        $end = self::asColor($end);
         $sides = [
             $start->blend($end, 0.0),
             $start->blend($end, 1.0 / 3.0),

@@ -119,4 +119,26 @@ final class StyleColorProfileTest extends TestCase
             $base->colorProfile(ColorProfile::NoTty)->colorProfile(ColorProfile::Ascii)->render('z'),
         );
     }
+
+    /**
+     * Finding 056: underlineColor accepts the fg() coercion family — a
+     * hex string styles the slot byte-identically to the Color object,
+     * and a bad string refuses with the house InvalidArgumentException
+     * instead of an uncaught TypeError.
+     */
+    public function testUnderlineColorCoercesHexStrings(): void
+    {
+        $out = Style::new()->underline()->underlineColor('#ff0000')->render('hi');
+        $this->assertSame("\x1b[4m\x1b[58;2;255;0;0mhi\x1b[0m", $out);
+        $this->assertSame(
+            $out,
+            Style::new()->underline()->underlineColor(Color::hex('#ff0000'))->render('hi'),
+        );
+    }
+
+    public function testUnderlineColorRefusesBadStringsLikeFg(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->underlineColor('not-a-colour');
+    }
 }
