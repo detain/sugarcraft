@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Top\Collect\Process\AbsoluteSearchPath;
+use SugarCraft\Top\Collect\Process\AsyncCommand;
+use SugarCraft\Top\Collect\Process\CommandOutcome;
+use SugarCraft\Top\Collect\Process\CommandResult;
+
+use function React\Promise\resolve;
 
 /**
  * The live FreeBSD host: sysctl(8) and the base-system tools, each run as
@@ -95,6 +101,28 @@ final class LiveProbe implements Probe
     public static function sysctlArgv(array $names): array
     {
         return ['sysctl', '-i', '-e', ...$names];
+    }
+
+    /**
+     * The non-blocking form of {@see run()} over AsyncCommand, which owns
+     * the spawn, the timeout, the byte cap, the reaping and the shutdown
+     * hook. Same answers: stdout on exit 0, null for anything else.
+     */
+    public function launchAsync(array $argv): PromiseInterface
+    {
+        if ($argv === []) {
+            return resolve(null);
+        }
+        $binary = self::resolve($argv[0]);
+        if ($binary === null) {
+            return resolve(null);
+        }
+        $argv[0] = $binary;
+
+        return AsyncCommand::launch($argv, null, self::TIMEOUT, self::MAX_OUTPUT, ['LC_ALL' => 'C'])->then(
+            static fn (CommandResult $r): ?string => $r->outcome === CommandOutcome::Ok ? $r->stdout : null,
+            static fn (): ?string => null,
+        );
     }
 
     public function run(array $argv): ?string

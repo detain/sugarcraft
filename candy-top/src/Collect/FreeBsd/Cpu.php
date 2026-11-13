@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\CpuSnapshot;
 use SugarCraft\Top\Collect\Sentinel;
 
@@ -36,8 +37,10 @@ use SugarCraft\Top\Collect\Sentinel;
  * Immutable: sample() returns the snapshot and the collector carrying the
  * new baseline.
  */
-final class Cpu
+final class Cpu implements AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     /** CPUSTATES order (sys/resource.h) → the Linux collector's field names. */
     public const array FIELDS = ['user', 'nice', 'system', 'irq', 'idle'];
 

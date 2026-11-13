@@ -198,26 +198,42 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         $sampling = $sampling->with('freq', self::tuneFreq($sampling->get('freq'), $perCore));
         $sampling = $sampling->with('battery', $this->battery?->source($context));
 
-        return static function () use ($sampling, $feed, $demand): Msg {
-            [$snapshot, $next] = $sampling->sample();
-            if ($feed === null || !$snapshot instanceof Samples) {
-                return new SampledMsg('cpu', $snapshot, $next);
-            }
-            $gpu = $feed->request('cpu', $demand);
-            [$settled, $value] = Settled::peek($gpu);
-            if ($settled) {
-                return new SampledMsg('cpu', new Samples([...$snapshot->snapshots, 'gpu' => $value]), $next);
-            }
-            // nvidia-smi is running: the cpu part now, the GPU part when it lands.
-            $now = new SampledMsg('cpu', $snapshot, $next);
+        // S-P02: a live FreeBSD host forks sysctl/ps-class children per sample;
+        // those run on the loop, so input and rendering never wait on them.
+        $async = $sampling->isAsync();
 
-            return Cmd::batch(
-                static fn (): Msg => $now,
-                Cmd::promise(static fn () => $gpu->then(
-                    static fn (GpuSnapshot $s): Msg => new SampledMsg('cpu', new Samples(['gpu' => $s]), NamedSources::of([])),
-                )),
-            )();
+        return static function () use ($sampling, $feed, $demand, $async): Msg {
+            if ($async) {
+                return Cmd::promise(static fn () => $sampling->sampleAsync()->then(
+                    static fn (array $r): Msg => self::joinGpu($r[0], $r[1], $feed, $demand),
+                ))();
+            }
+            [$snapshot, $next] = $sampling->sample();
+
+            return self::joinGpu($snapshot, $next, $feed, $demand);
         };
+    }
+
+    /** The cpu sample plus the GPU part: at once when settled, as a second message when nvidia-smi lands. */
+    private static function joinGpu(object $snapshot, object $next, ?GpuFeed $feed, GpuDemand $demand): Msg
+    {
+        if ($feed === null || !$snapshot instanceof Samples) {
+            return new SampledMsg('cpu', $snapshot, $next);
+        }
+        $gpu = $feed->request('cpu', $demand);
+        [$settled, $value] = Settled::peek($gpu);
+        if ($settled) {
+            return new SampledMsg('cpu', new Samples([...$snapshot->snapshots, 'gpu' => $value]), $next);
+        }
+        // nvidia-smi is running: the cpu part now, the GPU part when it lands.
+        $now = new SampledMsg('cpu', $snapshot, $next);
+
+        return Cmd::batch(
+            static fn (): Msg => $now,
+            Cmd::promise(static fn () => $gpu->then(
+                static fn (GpuSnapshot $s): Msg => new SampledMsg('cpu', new Samples(['gpu' => $s]), NamedSources::of([])),
+            )),
+        )();
     }
 
     /** The cpu box never owns input. */

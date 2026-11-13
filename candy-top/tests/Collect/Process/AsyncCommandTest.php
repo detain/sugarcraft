@@ -130,7 +130,7 @@ final class AsyncCommandTest extends TestCase
     {
         $source = (string) file_get_contents(\dirname(__DIR__, 3) . '/src/Collect/Process/AsyncCommand.php');
         $this->assertMatchesRegularExpression(
-            '/proc_open\(\$argv,.*?\$pipes, null, self::childEnv\(\)\)/s',
+            '/proc_open\(\$argv,.*?\$pipes, null, self::childEnv\(\$env\)\)/s',
             $source,
             'proc_open without an environment inherits every parent variable',
         );

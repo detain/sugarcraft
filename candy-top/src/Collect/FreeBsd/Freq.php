@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\Freq as LinuxFreq;
 use SugarCraft\Top\Collect\FreqMode;
 use SugarCraft\Top\Collect\FreqSnapshot;
@@ -33,8 +34,10 @@ use SugarCraft\Top\Collect\TunableFreq;
  * every one with withPerCore — in one sysctl child, and none at all on a
  * host without cpufreq. A discovery that got no answer is retried.
  */
-final class Freq implements TunableFreq
+final class Freq implements TunableFreq, AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     /**
      * @param array{ncpu: int, levels: array<int, array{0: float, 1: float}>, freq: list<int>}|null $static discovered once
      */

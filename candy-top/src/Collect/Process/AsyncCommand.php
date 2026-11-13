@@ -166,11 +166,13 @@ final class AsyncCommand
      * @param list<string> $argv argv[0] must be an executable path — a bare
      *        name is refused at the spawn gate and reports Absent, never
      *        resolved through execvp's own PATH search
+     * @param array<string, string> $env extra child-environment entries layered over the allowlist
+     *        (a collector that parses text pins LC_ALL=C here); never the parent's whole environment
      * @return PromiseInterface<CommandResult>
      */
-    public static function launch(array $argv, ?LoopInterface $loop = null, float $timeout = self::TIMEOUT, int $maxBytes = self::MAX_OUTPUT): PromiseInterface
+    public static function launch(array $argv, ?LoopInterface $loop = null, float $timeout = self::TIMEOUT, int $maxBytes = self::MAX_OUTPUT, array $env = []): PromiseInterface
     {
-        $child = self::spawn($argv, $maxBytes);
+        $child = self::spawn($argv, $maxBytes, $env);
         if ($child === null) {
             return resolve(CommandResult::absent());
         }
@@ -311,9 +313,10 @@ final class AsyncCommand
     ];
 
     /**
+     * @param array<string, string> $extra entries layered over the allowlist (a caller's own pins, e.g. LC_ALL=C)
      * @return array<string,string> the child environment, rebuilt from {@see ENV_KEYS}
      */
-    private static function childEnv(): array
+    private static function childEnv(array $extra = []): array
     {
         $env = [];
         foreach (\getenv() as $key => $value) {
@@ -330,7 +333,7 @@ final class AsyncCommand
             ? ((\getenv('SystemRoot') ?: 'C:\\Windows') . '\\System32')
             : '/usr/bin:/bin';
 
-        return $env;
+        return [...$env, ...$extra];
     }
 
     /**
@@ -355,7 +358,7 @@ final class AsyncCommand
         self::$spawnFactory = $factory === null ? null : \Closure::fromCallable($factory);
     }
 
-    private static function spawn(array $argv, int $maxBytes = self::MAX_OUTPUT): ?self
+    private static function spawn(array $argv, int $maxBytes = self::MAX_OUTPUT, array $env = []): ?self
     {
         // The argv-array form hands argv[0] to execvp, which searches PATH —
         // the very resolution the collectors' absolute sweeps ({@see
@@ -373,7 +376,7 @@ final class AsyncCommand
             register_shutdown_function(static fn () => self::shutdown());
         }
         if (self::$spawnFactory !== null) {
-            $pair = (self::$spawnFactory)($argv, self::childEnv());
+            $pair = (self::$spawnFactory)($argv, self::childEnv($env));
             if ($pair === null) {
                 return null;
             }
@@ -389,7 +392,7 @@ final class AsyncCommand
             // (candy-top-058) — name the device per OS instead.
             $devnull = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
             try {
-                $process = @proc_open($argv, [0 => ['file', $devnull, 'r'], 1 => ['pipe', 'w'], 2 => ['file', $devnull, 'w']], $pipes, null, self::childEnv());
+                $process = @proc_open($argv, [0 => ['file', $devnull, 'r'], 1 => ['pipe', 'w'], 2 => ['file', $devnull, 'w']], $pipes, null, self::childEnv($env));
             } catch (\Error) {
                 return null; // proc_open listed in disable_functions
             }

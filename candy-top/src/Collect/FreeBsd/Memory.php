@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\MemorySnapshot;
 use SugarCraft\Top\Collect\Sentinel;
 
@@ -42,8 +43,10 @@ use SugarCraft\Top\Collect\Sentinel;
  * read with the first successful sample and carried forward (STATIC_OIDS),
  * so later samples batch only the counters that move (DYNAMIC_OIDS).
  */
-final class Memory
+final class Memory implements AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     public const array STATIC_OIDS = ['hw.pagesize', 'hw.physmem', 'vm.stats.vm.v_page_count'];
 
     public const array DYNAMIC_OIDS = [

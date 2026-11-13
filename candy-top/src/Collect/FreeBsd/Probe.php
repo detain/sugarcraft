@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use React\Promise\PromiseInterface;
+
 /**
  * Everything a FreeBSD collector asks the machine, behind one seam.
  *
@@ -37,6 +39,17 @@ interface Probe
      * @return string|null stdout on exit status 0, else null
      */
     public function run(array $argv): ?string;
+
+    /**
+     * {@see run()} without blocking: the same text or null, delivered by
+     * the event loop (S-P02). Never rejects. Implementations that cannot
+     * do better than the blocking form (fixtures) answer with an already
+     * resolved promise.
+     *
+     * @param list<string> $argv
+     * @return PromiseInterface<string|null>
+     */
+    public function launchAsync(array $argv): PromiseInterface;
 
     /** A regular file's contents (e.g. /etc/fstab); null when unreadable. */
     public function file(string $path): ?string;

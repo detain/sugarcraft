@@ -56,7 +56,7 @@ final class Platform
     {
         $freeBsd = strcasecmp($os, 'FreeBSD') === 0;
 
-        return new self($os, $freeBsd ? ($probe ?? FreeBsd\LiveProbe::new()) : $probe);
+        return new self($os, $freeBsd ? ($probe ?? FreeBsd\ReplayProbe::over(FreeBsd\LiveProbe::new())) : $probe);
     }
 
     public function isFreeBsd(): bool

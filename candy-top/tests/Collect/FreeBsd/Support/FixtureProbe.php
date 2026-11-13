@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Collect\FreeBsd\Support;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Top\Collect\FreeBsd\Probe;
 use SugarCraft\Top\Collect\FreeBsd\Sysctl;
+
+use function React\Promise\resolve;
 
 /**
  * A FreeBSD host made of captured text: tests never touch a real machine.
@@ -86,6 +89,11 @@ final class FixtureProbe implements Probe
         }
 
         return array_key_exists($argv[0], $this->commands) ? $this->pick($this->commands[$argv[0]]) : null;
+    }
+
+    public function launchAsync(array $argv): PromiseInterface
+    {
+        return resolve($this->run($argv));
     }
 
     public function file(string $path): ?string

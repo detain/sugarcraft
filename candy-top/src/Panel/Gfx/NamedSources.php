@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Gfx;
 
+use React\Promise\PromiseInterface;
+use SugarCraft\Top\Source\AsyncSource;
 use SugarCraft\Top\Source\Samples;
 use SugarCraft\Top\Source\Source;
+
+use function React\Promise\all;
+use function React\Promise\resolve;
 
 /**
  * A {@see Source} over several named sources that a panel can still take
@@ -14,7 +19,7 @@ use SugarCraft\Top\Source\Source;
  * (show_core_freq) and hands its battery source to the battery badge, so it
  * needs each member back from the `next` of a sample.
  */
-final class NamedSources implements Source
+final class NamedSources implements AsyncSource
 {
     /** @param array<string, Source> $sources */
     private function __construct(
@@ -61,6 +66,41 @@ final class NamedSources implements Source
     public function names(): array
     {
         return array_keys($this->sources);
+    }
+
+    public function isAsync(): bool
+    {
+        foreach ($this->sources as $source) {
+            if ($source instanceof AsyncSource && $source->isAsync()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Every member sampled at once: the async ones on the loop, the rest
+     * synchronously as they always were.
+     *
+     * @return PromiseInterface<array{0: Samples, 1: self}>
+     */
+    public function sampleAsync(): PromiseInterface
+    {
+        $pending = [];
+        foreach ($this->sources as $name => $source) {
+            $pending[$name] = $source instanceof AsyncSource ? $source->sampleAsync() : resolve($source->sample());
+        }
+
+        return all($pending)->then(static function (array $results): array {
+            $snapshots = [];
+            $next = [];
+            foreach ($results as $name => $pair) {
+                [$snapshots[$name], $next[$name]] = $pair;
+            }
+
+            return [new Samples($snapshots), new self($next)];
+        });
     }
 
     /** @return array{0: Samples, 1: self} */

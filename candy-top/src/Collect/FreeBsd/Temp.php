@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\Sensor;
 use SugarCraft\Top\Collect\Sentinel;
 use SugarCraft\Top\Collect\TempSnapshot;
@@ -34,8 +35,10 @@ use SugarCraft\Top\Collect\TempSnapshot;
  * sensor at all → an empty TempSnapshot (cpu() UNMEASURED), never a
  * failure.
  */
-final class Temp
+final class Temp implements AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     private const float HIGH = 80.0;
     private const float CRIT = 95.0;
     public const string AVERAGE = 'coretemp/Average';
