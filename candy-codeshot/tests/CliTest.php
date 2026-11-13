@@ -622,6 +622,49 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString('Uncaught', $result['stderr']);
     }
 
+    public function testNonHexHighlightColourIsRefusedNotPaintedBlank(): void
+    {
+        // candy-codeshot-067 (cs-32): the third slot used to accept any
+        // token — `3:7:banana.svg` landed XML-escaped in the fill and painted
+        // NOTHING, a silent failure with zero diagnostics. The hex family is
+        // the contract; everything else answers with the bad-highlight line.
+        $result = $this->runCli(['--no-window', '--no-shadow', '--highlight', '3:7:banana.svg'], "x\n");
+
+        $this->assertSame(2, $result['exitCode'], $result['stderr']);
+        $this->assertStringContainsString("invalid highlight format '3:7:banana.svg'", $result['stderr']);
+        $this->assertSame('', $result['stdout']);
+    }
+
+    public function testSaturatingHighlightNumbersAreRefused(): void
+    {
+        // -067: 18-digit endpoints saturated to PHP_INT_MAX and passed
+        // end >= start by accident. Ten or more digits are now a parse-time
+        // refusal, so the int cast never sees them.
+        $result = $this->runCli(['--no-window', '--no-shadow', '--highlight', '1:99999999999999999999'], "x\n");
+
+        $this->assertSame(2, $result['exitCode'], $result['stderr']);
+        $this->assertStringContainsString('invalid highlight format', $result['stderr']);
+    }
+
+    public function testThreeDigitHexHighlightColourStillPaints(): void
+    {
+        // Polarity: the cap must jail junk, not the documented shorthand.
+        $result = $this->runCli(['--no-window', '--no-shadow', '--highlight', '1:1:#abc'], "x\n");
+
+        $this->assertSame(0, $result['exitCode'], $result['stderr']);
+        $this->assertStringContainsString('fill="#abc"', $result['stdout']);
+    }
+
+    public function testPngBranchRefusesNonHexHighlightAtParseTime(): void
+    {
+        // Same parse-time door as the range gate — before any ext-gd need.
+        $result = $this->runCli(['--format', 'png', '--highlight', '1:2:banana'], "x\n");
+
+        $this->assertSame(2, $result['exitCode'], $result['stderr']);
+        $this->assertStringContainsString("invalid highlight format '1:2:banana'", $result['stderr']);
+        $this->assertStringNotContainsString('Uncaught', $result['stderr']);
+    }
+
     public function testPngOutputAnnouncesIgnoredSvgOnlyOptions(): void
     {
         if (!extension_loaded('gd')) {

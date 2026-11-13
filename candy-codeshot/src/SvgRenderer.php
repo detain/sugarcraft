@@ -151,9 +151,18 @@ final class SvgRenderer
      *
      * @param int $start 1-based start line (inclusive)
      * @param int $end   1-based end line (inclusive)
-     * @param ?string $color CSS colour string; null (default) resolves to the
-     *                       theme's {@see Theme::$highlight} band, falling back
-     *                       to #fffbe6 on themes that carry no band colour.
+     * @param ?string $color hex colour of the family the library paints
+     *                       (#rgb / #rrggbb / #rrggbbaa); null (default)
+     *                       resolves to the theme's
+     *                       {@see Theme::$highlight} band, falling back to
+     *                       #fffbe6 on themes that carry no band colour.
+     *                       CSS names were the old documented promise and the
+     *                       silent-failure door (candy-codeshot-067): any
+     *                       non-hex string escaped into the fill and painted
+     *                       nothing. The contract is hex-only now.
+     *
+     * @throws \InvalidArgumentException on an impossible range or a colour
+     *                                  outside the hex family.
      */
     public function withHighlight(int $start, int $end, ?string $color = null): self
     {
@@ -162,6 +171,13 @@ final class SvgRenderer
         }
         if ($end < $start) {
             throw new \InvalidArgumentException("Highlight end must be >= start, got {$end} < {$start}");
+        }
+        // Trust boundary, not decoration: the bin refuses junk at parse time
+        // (candy-codeshot-067), but the renderer is public API — a library
+        // caller may bypass it, and an escaped no-colour stripe is exactly
+        // the silent failure the finding named.
+        if ($color !== null && preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $color) !== 1) {
+            throw new \InvalidArgumentException("Highlight colour must be a #rgb, #rrggbb or #rrggbbaa hex value, got {$color}");
         }
         return $this->copy(highlight: ['range' => [$start, $end], 'color' => $color]);
     }

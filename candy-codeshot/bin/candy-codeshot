@@ -313,13 +313,25 @@ while (($arg = array_shift($argv)) !== null) {
             break;
         case '--highlight':
             $hlFormat = candy_codeshot_flag_value('--highlight', array_shift($argv));
-            if (!preg_match('/^(\d+):(\d+)(?::([^:]+))?$/', $hlFormat, $m)) {
+            // candy-codeshot-067: the old shape accepted anything in the three
+            // slots — `3:7:banana.svg` parsed, landed XML-escaped in the fill
+            // and painted NOTHING (silent failure, zero diagnostics), while
+            // 18-digit numbers saturated to PHP_INT_MAX and passed end>=start
+            // by accident. Digits are capped at 9 (int-safe on every PHP
+            // build) and the colour slot must be a hex colour of the family
+            // the library paints everywhere else (#rgb/#rrggbb/#rrggbbaa);
+            // anything else is a refusal, not a blank stripe.
+            if (!preg_match('/^(\d{1,9}):(\d{1,9})(?::([^:]+))?$/', $hlFormat, $m)) {
                 fwrite(STDERR, Lang::t('cli.bad_highlight', ['format' => $hlFormat]) . "\n");
                 exit(2);
             }
             $start = (int) $m[1];
             $end   = (int) $m[2];
             $color = $m[3] ?? null;
+            if ($color !== null && preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $color) !== 1) {
+                fwrite(STDERR, Lang::t('cli.bad_highlight', ['format' => $hlFormat]) . "\n");
+                exit(2);
+            }
             // The renderer contract is start >= 1 && end >= start. Enforce it
             // at parse time so BOTH output formats fail closed: the PNG branch
             // drops --highlight as unsupported and used to exit 0 on an

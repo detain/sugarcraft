@@ -252,6 +252,18 @@ final class FontEmbedLineHighlightTest extends TestCase
         $this->assertSame('19.60', $m[4][0]);
     }
 
+    public function testWithHighlightRejectsNonHexColourAtTheTrustBoundary(): void
+    {
+        // candy-codeshot-067 (cs-32): the bin refuses junk, but withHighlight
+        // is public API and a library caller skips the bin. The old promise
+        // ("CSS colour string") let `banana` escape into the fill and paint
+        // nothing; the setter now answers with a typed refusal.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/must be a #rgb, #rrggbb or #rrggbbaa hex value/');
+
+        SvgRenderer::dark()->withHighlight(1, 1, 'banana');
+    }
+
     public function testHighlightAndFontEmbeddingTogether(): void
     {
         $tmp = tempnam(sys_get_temp_dir(), 'font_');

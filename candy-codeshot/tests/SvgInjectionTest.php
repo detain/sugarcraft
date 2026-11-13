@@ -89,18 +89,18 @@ final class SvgInjectionTest extends TestCase
         $this->assertStringNotContainsString('<![CDATA[]]>', $svg);
     }
 
-    public function testHighlightColourChannelIsEscaped(): void
+    public function testHighlightColourChannelIsRefusedAtTheDoor(): void
     {
-        $svg = SvgRenderer::dark()
-            ->withHighlight(1, 2, '#fff" onmouseover=\'x&y<z\'')
-            ->withWindow(false)
-            ->render("a\nb\nc\n");
+        // cs-32 (candy-codeshot-067) raised this defence a layer: the hostile
+        // colour no longer reaches the escaper — withHighlight refuses any
+        // value outside the hex family at the boundary, so the escape-leg
+        // render of the old pin is unreachable by design. Keep the classic
+        // payload as the probe; the typed refusal is the new contract. The
+        // xmlEscape in the fill sprintf stays as depth for theme bands.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/must be a #rgb, #rrggbb or #rrggbbaa hex value/');
 
-        SvgOracle::assertWellFormed($svg, 'a hostile highlight colour must not break the document');
-        $this->assertStringContainsString('&apos;', $svg, 'ENT_QUOTES leg of the highlight colour');
-        $this->assertStringContainsString('&quot;', $svg);
-        $this->assertStringNotContainsString('" onmouseover=', $svg);
-        $this->assertStringNotContainsString('<z', $svg);
+        SvgRenderer::dark()->withHighlight(1, 2, '#fff" onmouseover=\'x&y<z\'');
     }
 
     // ---------------------------------------------------------------------
