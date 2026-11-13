@@ -112,3 +112,4 @@ Source: findings/plan_sugar-mouse.md — Item 5.3
   `AnyInBounds`, `AnyInBoundsAndUpdate`), and the package-level facade.
   Cites must be self-contained — always name bubblezone, never a bare
   "Mirrors `SetEnabled`" without the upstream qualifier.
+- **[shared-index-absorption:SM-S30]** The `ClickCounter` -> `MultiClickTracker` rename (2026-11-13) landed across two sibling sugar-panels commits by shared-index absorption: `e3eac6252` carried the two `git mv` path moves (R100 pairs), `4def79268` carried the final content of all six paths (shim, renamed class, flipped test + alias pin, README/CALIBER/research-doc). Both verified byte-intact; the lane owns the content, the siblings own the commit objects. The SM-S28 MarkTest static-flip fixup is `21a298ce2`.
