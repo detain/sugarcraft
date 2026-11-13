@@ -138,7 +138,8 @@ where it lives (for example candy-code's is pinned by
 <a href="https://github.com/detain/sugarcraft/blob/master/candy-code/tests/Commands/KeyBindingDriftTest.php"><code>KeyBindingDriftTest</code></a>
 against its registry), and restating a table here would fork it — the fork
 would drift, and the drift would lie. So grab the chord list from the
-authoritative page, never from a copy.</p>
+authoritative page, never from a copy. Chords are written <code>Modifier+Key</code>
+(<code>Ctrl+k</code>, <code>Shift+Tab</code>, <code>Alt+letter</code>) throughout.</p>
 <h2><a id="apps" href="#apps" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Apps</h2>
 <table>
 <thead>
@@ -170,7 +171,7 @@ authoritative page, never from a copy.</p>
 </tr>
 <tr>
 <td><strong>candy-mdview</strong></td>
-<td><a href="/lib/candy-mdview.html">README §Pager keys</a>.</td>
+<td><a href="/lib/candy-mdview.html">README §Pager</a>.</td>
 </tr>
 <tr>
 <td><strong>candy-tetris</strong></td>
@@ -196,22 +197,47 @@ authoritative page, never from a copy.</p>
 <td><strong>candy-image</strong></td>
 <td><a href="/lib/candy-image.html">README §Keys</a> — only while <code>--animate</code> plays.</td>
 </tr>
+<tr>
+<td><strong>candy-ssh-launcher</strong></td>
+<td><a href="/lib/candy-ssh-launcher.html">README §Keybindings</a>.</td>
+</tr>
+<tr>
+<td><strong>candy-scriptui</strong></td>
+<td><a href="/lib/candy-scriptui.html">README §Keyboard map</a> — plus its editing-keys sub-table.</td>
+</tr>
+<tr>
+<td><strong>candy-code-web</strong></td>
+<td><a href="/lib/candy-code-web.html">README</a> — browser chords live in the <em>Keyboard</em> bullet; <code>?</code> opens the in-app overlay listing the live chords, and palette / help / tab-chord are rebindable (<code>src-web/lib/keymap.ts</code>).</td>
+</tr>
+<tr>
+<td><strong>candy-starter</strong></td>
+<td><a href="/lib/candy-starter.html">README</a> — scaffold demo: the counter exits on <code>q</code>, <code>Esc</code> or <code>Ctrl+C</code>; your own keys start there.</td>
+</tr>
 </tbody>
 </table>
+<p>Apps deliberately not listed: <code>candy-ansi-inspect</code>, <code>candy-codeshot</code>,
+<code>candy-mail</code> and <code>candy-kv</code> are one-shot CLIs, <code>candy-discord</code>,
+<code>candy-msteams</code> and <code>candy-git-server</code> run headless (plugin / daemon — no
+key input of their own), and <code>candy-vcr</code> is driven by a recorded script, not
+keystrokes. If a candy-* app reads keys, it belongs in the table above.</p>
 <h2><a id="making-chords-arrive-at-all" href="#making-chords-arrive-at-all" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Making chords arrive at all</h2>
 <p>Whether <code>Ctrl+Tab</code>, <code>Ctrl+Enter</code>, or Alt+letter ever reach an app as
 <em>themselves</em> is a terminal question, not an app question:</p>
 <ul>
 <li><strong>Kitty progressive keyboard protocol</strong> (<code>CSI &gt;1u</code> flags, disambiguate
-mode) — negotiated by apps like candy-code and candy-files at startup;
-support it or not, terminals either send the chord or send nothing new.</li>
+mode) — negotiated by apps like candy-code and candy-files at startup. A
+terminal that supports it reports each chord as its own event; one that
+does not sends the legacy bare-key bytes instead, so the app sees the
+plain key and nothing new — never a half-recognised chord.</li>
 <li><strong>xterm <code>modifyOtherKeys</code></strong> — the older fallback for the same problem.</li>
 <li>Both (and the legacy encodings) are decoded in
 <a href="/lib/sugar-input.html">sugar-input</a>; the byte-level state machine is
 <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>.</li>
 <li>Mouse: apps enable button+motion tracking (<code>?1002h</code>) with SGR encoding
-(<code>?1006h</code>); terminals without SGR mouse simply never answer — see
-candy-top's <a href="/lib/candy-top.html">mouse section</a>.</li>
+(<code>?1006h</code>); a terminal without SGR mouse reporting simply never answers —
+nothing breaks and no coordinates arrive, and every mouse affordance
+keeps a keyboard equivalent. See candy-top's
+<a href="/lib/candy-top.html">mouse section</a>.</li>
 </ul>
 <p>Every app that draws a menu bar keeps keyboard equivalents for every mouse
 affordance — if you find one that doesn't, that's a bug report, not a
