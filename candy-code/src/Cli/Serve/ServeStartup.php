@@ -394,6 +394,12 @@ trait ServeStartup
 
         try {
             $server->start();
+            // Backstop until the loop owns the signals (see ServeResidueGuard).
+            ServeResidueGuard::arm(static function () use ($state): void {
+                @\unlink($state->discoveryPath());
+                @\unlink($state->controlSocketPath());
+                $state->releaseLock();
+            });
             $record = DiscoveryFile::forThisProcess(
                 Help::versionString(),
                 $server->url(),
@@ -408,6 +414,7 @@ trait ServeStartup
             );
             $record->write($state);
         } catch (\RuntimeException $e) {
+            ServeResidueGuard::disarm();
             $server->stop();
             $gateway->stop($e->getMessage());
             $protocol->stop();
@@ -509,6 +516,7 @@ trait ServeStartup
             };
             Loop::addSignal($signal, $handlers[$signal]);
         }
+        ServeResidueGuard::disarm();
         $watchdog?->arm($loop, static function (int $pid) use ($stop): void {
             $stop(\sprintf('parent process %d is gone', $pid));
         });

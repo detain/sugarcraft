@@ -84,7 +84,10 @@ use SugarCraft\Code\Support\HomeDirectory;
  * control socket in the 0700 state directory ({@see StateDir}). SIGTERM or
  * SIGINT drains it: tell every client (`server.shutdown`), stop accepting,
  * close every WebSocket with 1001, release every session, remove the record
- * and the socket, release the lock.
+ * and the socket, release the lock. Guaranteed half: the record and socket
+ * never outlive a SIGTERM/SIGINT ({@see Serve\ServeResidueGuard} covers the
+ * boot window before the loop owns the signals); the `server.shutdown` frame
+ * and 1001 closes need the loop to reach its drain handler.
  */
 final class Serve
 {
