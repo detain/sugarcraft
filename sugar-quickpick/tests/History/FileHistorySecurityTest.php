@@ -245,6 +245,44 @@ final class FileHistorySecurityTest extends TestCase
     }
 
     /**
+     * S-18/-011: a planted 5 MB single-line row must not be slurped whole by
+     * an unbounded fgets(). all() reads with a fixed buffer and DROPS rows
+     * beyond it (counted), rather than parsing a truncated prefix.
+     */
+    public function testOversizedLineIsDroppedNotParsed(): void
+    {
+        $path = $this->tempPath();
+        $monster = (string) \json_encode(['n' => 7, 'v' => \str_repeat('x', 5 * 1024 * 1024)]);
+        \file_put_contents($path, $monster . "\n");
+        chmod($path, 0600); // S-16 fd-trust: hand-planted fixtures must be private
+
+        $history = new FileHistory($path);
+        self::assertSame([], $history->all());
+        self::assertSame(1, $history->droppedOversizedLines());
+    }
+
+    /**
+     * S-18/-011 acceptance: after dropping the monster, the drain must have
+     * consumed exactly its remainder — following good rows still parse.
+     */
+    public function testOversizedLineDrainKeepsFollowingRowsReadable(): void
+    {
+        $path = $this->tempPath();
+        $monster = (string) \json_encode(['n' => 9, 'v' => \str_repeat('y', 5 * 1024 * 1024)]);
+        \file_put_contents($path, implode("\n", [
+            (string) \json_encode(['n' => 1, 'v' => 'first']),
+            $monster,
+            (string) \json_encode(['n' => 2, 'v' => 'second']),
+        ]) . "\n");
+        chmod($path, 0600);
+
+        $history = new FileHistory($path);
+        $items = $history->all();
+        self::assertSame(['first', 'second'], array_map(static fn($i) => $i->value(), $items));
+        self::assertSame(1, $history->droppedOversizedLines());
+    }
+
+    /**
      * S-16/-008: the pre-open symlink check cannot speak for the inode the
      * open LANDS on. A regular-but-readable-by-others file (the classic
      * shared-/tmp pre-plant: attacker creates the path first, world can

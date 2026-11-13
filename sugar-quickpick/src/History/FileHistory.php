@@ -48,8 +48,19 @@ use SugarCraft\QuickPick\Item;
  */
 final class FileHistory
 {
+    /**
+     * Byte budget for a single history line as read by all(): fgets() with
+     * this length returns at most READ_CHUNK_BYTES-1 bytes, so a line that
+     * fills the budget without a trailing newline is oversized and gets
+     * dropped whole (see {@see self::drainRemainder()}).
+     */
+    private const READ_CHUNK_BYTES = 65536;
+
     /** @var string */
     private string $path;
+
+    /** @var int rows the last all() dropped as oversized (see droppedOversizedLines()) */
+    private int $droppedOversized = 0;
 
     /**
      * @param string      $path    Path to the history file (created lazily on first append(),
@@ -298,6 +309,11 @@ final class FileHistory
      * the silent `[]` as "empty history", which is exactly how corruption on
      * a shared box goes unnoticed (-016).
      *
+     * Oversized lines (those beyond {@see self::READ_CHUNK_BYTES}) are
+     * DROPPED, never parsed: their remainder is drained so following rows
+     * still read cleanly, and the drop is counted by
+     * {@see self::droppedOversizedLines()} (-011).
+     *
      * @return list<Item>
      *
      * @throws \RuntimeException when the path is a symlink (reading through
@@ -325,10 +341,21 @@ final class FileHistory
         }
 
         $items = [];
+        $this->droppedOversized = 0;
         try {
             $this->verifyHandle($handle, 'read');
             \flock($handle, \LOCK_SH);
-            while (($line = \fgets($handle)) !== false) {
+            while (($line = \fgets($handle, self::READ_CHUNK_BYTES)) !== false) {
+                if (\strlen($line) === self::READ_CHUNK_BYTES - 1 && \substr($line, -1) !== "\n") {
+                    // Cap hit: the line does not fit the read buffer. An
+                    // unbounded fgets let one hostile 200 MB "history row"
+                    // be slurped whole into memory while a live frame
+                    // waited (-011); we refuse the row outright and drain
+                    // its remainder so the NEXT line starts clean.
+                    self::drainRemainder($handle);
+                    ++$this->droppedOversized;
+                    continue;
+                }
                 $line = \trim($line);
                 if ($line === '') {
                     continue;
@@ -353,6 +380,43 @@ final class FileHistory
         }
 
         return $items;
+    }
+
+    /**
+     * Consume and discard the remainder of an oversized line.
+     *
+     * fgets() handed back a full READ_CHUNK_BYTES-1 buffer with no newline,
+     * so the row continues past the budget; we keep pulling chunks until a
+     * newline (or EOF) so the NEXT fgets() starts at the next row instead of
+     * mid-token. The oversized row is dropped, not parsed: a truncated JSON
+     * prefix is indistinguishable from a hostile one, and guessing would
+     * mint items from half-read data.
+     *
+     * @param resource $handle open read handle, positioned mid-line
+     */
+    private static function drainRemainder($handle): void
+    {
+        while (\feof($handle) === false) {
+            $chunk = \fgets($handle, self::READ_CHUNK_BYTES);
+            if ($chunk === false) {
+                return;
+            }
+            if (\substr($chunk, -1) === "\n") {
+                return;
+            }
+        }
+    }
+
+    /**
+     * How many rows the last all() call dropped as oversized.
+     *
+     * Observability seam, not telemetry: a host that shows "history loaded"
+     * can add "…N entries ignored (unreadably large)" instead of silently
+     * short-listing. Zero until all() has run.
+     */
+    public function droppedOversizedLines(): int
+    {
+        return $this->droppedOversized;
     }
 
     /**
