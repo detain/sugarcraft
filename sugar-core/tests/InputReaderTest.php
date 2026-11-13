@@ -530,6 +530,58 @@ final class InputReaderTest extends TestCase
         $this->assertSame(MouseButton::WheelDown, $msgs[0]->button);
     }
 
+    /**
+     * sc-03 / sugar-core-005: the full SGR wheel press/release pin matrix.
+     *
+     * The shipped decoder forced `MouseAction::Press` on every wheel code
+     * and read direction from TWO low bits, so a wheel-up release (66/68
+     * dialects) surfaced as a phantom Press AND an inverted WheelDown —
+     * double-scroll in every consumer.  Direction is bit 0x01 alone; the
+     * final byte (M/m) owns press-vs-release.
+     *
+     * @return array<string, array{0:int, 1:string, 2:MouseButton, 3:MouseAction}>
+     */
+    public static function sgrWheelMatrix(): array
+    {
+        return [
+            '64 press up'    => [64, 'M', MouseButton::WheelUp, MouseAction::Press],
+            '65 press down'  => [65, 'M', MouseButton::WheelDown, MouseAction::Press],
+            '66 code as press = up'   => [66, 'M', MouseButton::WheelUp, MouseAction::Press],
+            '67 code as press = down' => [67, 'M', MouseButton::WheelDown, MouseAction::Press],
+            '66 release up (xterm dialect)'   => [66, 'm', MouseButton::WheelUp, MouseAction::Release],
+            '67 release down (xterm dialect)' => [67, 'm', MouseButton::WheelDown, MouseAction::Release],
+            '68 release up (64/68 pair)'      => [68, 'm', MouseButton::WheelUp, MouseAction::Release],
+            '69 release down (65/69 pair)'    => [69, 'm', MouseButton::WheelDown, MouseAction::Release],
+        ];
+    }
+
+    #[DataProvider('sgrWheelMatrix')]
+    public function testSgrWheelCodesDecodeDirectionAndActionFromProtocol(
+        int $b,
+        string $final,
+        MouseButton $button,
+        MouseAction $action,
+    ): void {
+        $msgs = (new InputReader())->parse("\x1b[<{$b};3;7{$final}");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(MouseWheelMsg::class, $msgs[0], "wheel events stay wheel msgs on release too");
+        $this->assertSame($button, $msgs[0]->button, "code {$b}{$final} direction");
+        $this->assertSame($action, $msgs[0]->action, "code {$b}{$final} action");
+        $this->assertSame(3, $msgs[0]->x);
+        $this->assertSame(7, $msgs[0]->y);
+    }
+
+    public function testSgrWheelReleaseCarriesModifierBits(): void
+    {
+        // 68 | 0x08 (alt) with 'm' — release still reports the modifiers.
+        $msgs = (new InputReader())->parse("\x1b[<76;2;9m");
+        $this->assertInstanceOf(MouseWheelMsg::class, $msgs[0]);
+        $this->assertSame(MouseButton::WheelUp, $msgs[0]->button);
+        $this->assertSame(MouseAction::Release, $msgs[0]->action);
+        $this->assertTrue($msgs[0]->alt);
+        $this->assertFalse($msgs[0]->ctrl);
+    }
+
     public function testMouseExtraBackward(): void
     {
         // 128 = extra btn 0 (backward)

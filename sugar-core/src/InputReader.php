@@ -880,8 +880,15 @@ final class InputReader
         $btnBits  = $b & 0x03;
 
         if ($isWheel) {
-            $button = $btnBits === 0 ? MouseButton::WheelUp : MouseButton::WheelDown;
-            $action = MouseAction::Press;
+            /* Direction is the LOW bit alone (xterm SGR: 64/66/68 = up,
+             * 65/67/69 = down).  The old `$btnBits === 0` test read two
+             * bits, so a wheel-up release sent as 66 (bits == 2) decoded
+             * as WheelDown — every scroll-up emitted a phantom Press
+             * (the forced action below) plus an INVERTED release.
+             * Release is the terminator's business (`m` ⇒ Release), not a
+             * hard-coded Press. */
+            $button = ($b & 0x01) === 0 ? MouseButton::WheelUp : MouseButton::WheelDown;
+            $action = $press ? MouseAction::Press : MouseAction::Release;
         } elseif ($isExtra) {
             $button = $btnBits === 0 ? MouseButton::Backward : MouseButton::Forward;
             $action = $isMotion ? MouseAction::Motion : ($press ? MouseAction::Press : MouseAction::Release);
