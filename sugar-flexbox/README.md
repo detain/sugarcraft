@@ -49,7 +49,8 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
   (the `sugar-widgets` symbol is a deprecated `class_alias` façade onto it)
 - **Keyboard navigation** — line-up/down, page-up/down, half-page-up/down (`halfPageUp()`/`halfPageDown()`), goto-top/bottom
 - **Sticky regions** — `withStickyHeader($rows)` / `withStickyFooter($rows)` pin lines across scrolling; a row can never appear
-  in both regions (the footer is clamped when the document is shorter than header + footer)
+  in both regions (the footer is clamped when the document is shorter than header + footer), and a document that FITS the box —
+  nothing scrolled out — renders the plain streaming frame instead of reserving blank bands for pinned rows
 - **Sync partner** — `syncWith($other)` is a decorative association: it marks the viewport as synced and is readable via
   `isSynced()`, but propagates nothing (scroll state never crosses to the partner)
 - **Mouse wheel** support with configurable delta

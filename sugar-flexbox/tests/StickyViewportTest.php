@@ -285,36 +285,76 @@ final class StickyViewportTest extends TestCase
         // With sticky regions on a one-line document, the old footer clamp
         // ignored the document length and repeated the same line as header
         // AND footer — the screen reader read it twice.
-        $v = Viewport::fromContent('only line', 20, 6)
+        // FBX-44 addendum: a one-line document in a six-row box has nothing
+        // scrolled out, so the frame is the PLAIN streaming frame — the dedup
+        // law holds, now with the blank band gone too.
+        $content = 'only line';
+        $v = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(1)
             ->withStickyFooter(1);
         $view = $v->view();
-        $lines = explode("\n", $view);
-        $this->assertCount(6, $lines);
         $this->assertSame(1, substr_count($view, 'only line'));
+        $this->assertSame(
+            Viewport::fromContent($content, 20, 6)->view(),
+            $view,
+            'a fitting document renders the plain streaming frame (finding-052)'
+        );
     }
 
-    public function testMiddleWindowStopsBeforeFooterRegionOnShortDocument(): void
+    public function testMiddleWindowStopsBeforeFooterRegion(): void
     {
         // The middle slice was bounded only by the scrollable HEIGHT, never
-        // by the rows that remain before the footer region starts: a 3-line
-        // document in a 10-row frame with header 2 + footer 2 rendered the
-        // last line as both the middle window's entry AND the footer's —
-        // breaking the absolute claim in the feature list ("a row can never
-        // appear in both regions"). The middle must stop at total - footer
-        // and blank padding fills the rest.
-        $v = Viewport::fromContent("l1\nl2\nl3", 20, 10)
+        // by the rows that remain before the footer region starts, so the
+        // last line rendered in BOTH regions — breaking the absolute claim
+        // in the feature list ("a row can never appear in both regions").
+        // FBX-44 moved fitting documents onto the plain face, so the law is
+        // pinned where it still binds: a document that actually scrolls.
+        $content = implode("\n", ['h1', 'h2', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'f1', 'f2']);
+        $v = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(2)
-            ->withStickyFooter(2);
+            ->withStickyFooter(2)
+            ->setYOffset(4); // scrolled to the end
+
         $view = $v->view();
         $lines = explode("\n", $view);
-        $this->assertCount(10, $lines);
-        $this->assertSame(1, substr_count($view, 'l1'));
-        $this->assertSame(1, substr_count($view, 'l2'));
-        $this->assertSame(1, substr_count($view, 'l3'));
-        // l3 belongs to the FOOTER region (the bottom rows), not the middle.
-        $this->assertStringContainsString('l3', $lines[9]);
-        $this->assertSame('', trim($lines[8]));
+        $this->assertCount(6, $lines);
+        foreach (['h1', 'h2', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'f1', 'f2'] as $label) {
+            $this->assertLessThanOrEqual(1, substr_count($view, $label), "{$label} appears in at most one region");
+        }
+        $this->assertStringContainsString('h1', $lines[0]);
+        // The footer region owns the bottom rows; the 2-row middle window
+        // stopped before f1's index (rows 6..7 = m5, m6 — not the footer).
+        $this->assertStringContainsString('f2', $lines[5]);
+        $this->assertStringNotContainsString('f1', $lines[2]);
+        $this->assertStringNotContainsString('f1', $lines[3]);
+    }
+
+    public function testFittingDocumentWithStickyFooterRendersThePlainFrame(): void
+    {
+        // finding-052 verbatim: a 5-line doc in a 10-row frame with
+        // footer 1 painted lines 1-4, FIVE blanks, then line 5 —
+        // 'always visible at bottom' honoured literally, which reads as
+        // corruption. Nothing is scrolled out, so the plain streaming
+        // frame rules; the sticky region stays armed for growth.
+        $content = "l1\nl2\nl3\nl4\nl5";
+        $sticky = Viewport::fromContent($content, 20, 10)->withStickyFooter(1);
+        $plain = Viewport::fromContent($content, 20, 10);
+        $this->assertSame($plain->view(), $sticky->view());
+        $this->assertSame(['l1', 'l2', 'l3', 'l4', 'l5'], array_map('trim', explode("\n", $sticky->view())));
+    }
+
+    public function testStickyRegionsStayArmedWhenTheDocumentGrowsPastTheBox(): void
+    {
+        // The fallback is per-document, not per-config: once content
+        // exceeds the frame, the sticky face returns at every offset.
+        $grown = Viewport::fromContent("a\nb", 20, 4)
+            ->withStickyFooter(1)
+            ->setContent("a\nb\nc\nd\ne");
+
+        foreach ([0, 1] as $offset) {
+            $lines = explode("\n", $grown->setYOffset($offset)->view());
+            $this->assertSame('e', trim($lines[count($lines) - 1]), "footer pinned at offset {$offset}");
+        }
     }
 
     public function testFooterOnlyStickyWindowNeverReachesIntoFooterRows(): void
@@ -322,15 +362,16 @@ final class StickyViewportTest extends TestCase
         // Same defect without any header: 4 lines in a 5-row frame with
         // footer 3 let the 2-row middle window slice rows 0..1 while the
         // footer re-rendered rows 1..3 — l2 appeared twice.
+        // FBX-44 addendum: this doc fits the frame, so the whole output is
+        // now the plain streaming face — the dedup law survives, and the
+        // plain identity names the face that answered it.
         $v = Viewport::fromContent("l1\nl2\nl3\nl4", 20, 5)
             ->withStickyFooter(3);
         $view = $v->view();
-        $lines = explode("\n", $view);
-        $this->assertCount(5, $lines);
-        $this->assertSame(1, substr_count($view, 'l1'));
-        $this->assertSame(1, substr_count($view, 'l2'));
-        $this->assertSame(1, substr_count($view, 'l3'));
-        $this->assertSame(1, substr_count($view, 'l4'));
+        foreach (['l1', 'l2', 'l3', 'l4'] as $label) {
+            $this->assertSame(1, substr_count($view, $label), "{$label} rendered exactly once");
+        }
+        $this->assertSame(Viewport::fromContent("l1\nl2\nl3\nl4", 20, 5)->view(), $view);
     }
 
     public function testStickyTruncatesOverlongLinesToViewportWidth(): void

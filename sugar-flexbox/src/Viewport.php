@@ -271,6 +271,13 @@ final readonly class Viewport
 
     /**
      * Render the viewport with sticky header/footer regions.
+     *
+     * The contract binds WHERE STICKY MEANING EXISTS: a document longer
+     * than the frame (finding-052). A fitting document has nothing
+     * scrolled out, and honouring 'always visible at the bottom'
+     * literally there painted the tail line across a reserved blank
+     * band — the plain streaming frame answers that shape instead; the
+     * regions stay armed for growth.
      */
     private function renderWithSticky(): string
     {
@@ -278,6 +285,20 @@ final readonly class Viewport
         $total = count($lines);
         $height = $this->inner->height;
         $yOffset = $this->inner->yOffset;
+
+        // A document that fits the box has nothing scrolled out (every
+        // cursor is clamped to zero), so honouring the sticky contract
+        // LITERALLY here painted lines 1-4, a blank band, then the
+        // footer line — reads as corruption. When nothing can scroll
+        // out, fall back to the plain streaming layout: the sticky
+        // regions stay armed for growth, the rows simply render in
+        // order with trailing padding (finding-052). total <= height
+        // covers the degenerate region-overflow shapes too.
+        if ($total <= $height) {
+            return $this->inner->showScrollbar
+                ? $this->renderWithScrollbarPlain()
+                : $this->inner->view();
+        }
 
         $headerCount = min($this->stickyHeader, max(0, $height - $this->stickyFooter));
         // A footer row must not re-pin a row the header already shows: when
