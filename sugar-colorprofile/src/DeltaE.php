@@ -7,9 +7,14 @@ namespace SugarCraft\ColorProfile;
 /**
  * CIE color-difference (delta-E) metrics computed on CIE L*a*b* (D65) triples.
  *
- * Every method takes the Lab pairs as `array{l: float, a: float, b: float}` —
- * the shape produced by {@see ColorMath::toLab()} — and validates that shape at
- * the boundary before any math runs. Higher-penalty differences:
+ * Every array-form method takes the Lab pairs as
+ * `array{l: float, a: float, b: float}` — the shape produced by
+ * {@see ColorMath::toLab()} — and validates that shape at the boundary before
+ * any math runs. The Lab triples are the internal hot-loop currency (see
+ * {@see ColorDistance::betweenLab()}); {@see self::between()} is the public
+ * Color-level door for callers holding Colors, which converts once instead of
+ * re-inviting the hand-built array literals that xyzToLab's throw exists to
+ * catch. Higher-penalty differences:
  *
  * - {@see cie76()} — plain Euclidean distance in Lab; ignores perceptual
  *   non-uniformity (overestimates blues, underestimates greens).
@@ -145,6 +150,25 @@ final class DeltaE
             + $hTerm * $hTerm
             + $rotationTerm * $cTerm * $hTerm
         );
+    }
+
+    /**
+     * Public Color-level door: convert each Color to Lab exactly once, then
+     * dispatch to the array-form trio by metric.
+     *
+     * The array triples stay the internal hot-loop currency — per-candidate
+     * scans must convert once outside the loop and use
+     * {@see ColorDistance::betweenLab()}, never hand-convert per candidate.
+     * {@see ColorDistance::Euclidean} is an sRGB-space metric with no Lab
+     * meaning and fails loudly through the same door (CP-19's documented
+     * split: {@see ColorDistance::DEFAULT_METRIC} keeps the legacy matcher on
+     * Euclidean; the delta-E family's own default here is Cie76). The
+     * formula seats deliberately stay the array-form statics above, each
+     * carrying its own upstream citation.
+     */
+    public static function between(Color $a, Color $b, ColorDistance $metric = ColorDistance::Cie76): float
+    {
+        return $metric->betweenLab($a->toLab(), $b->toLab());
     }
 
     /**

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ColorProfile\Color;
+use SugarCraft\ColorProfile\ColorDistance;
+use SugarCraft\ColorProfile\ColorMath;
 use SugarCraft\ColorProfile\DeltaE;
 
 /**
@@ -215,5 +218,44 @@ final class DeltaETest extends TestCase
         $a = ['l' => '50', 'a' => 2.6772, 'b' => -79.7751];
         $b = ['l' => 50.0, 'a' => 0.0, 'b' => -82.7485];
         self::assertEqualsWithDelta(2.0425, DeltaE::cie2000($a, $b), 1e-4);
+    }
+
+    /**
+     * CP-50 door pin: one arm per metric — the Color-level door must answer
+     * exactly like the hand-converted array form it replaces (nothing about
+     * the math moved; only the conversion burden did).
+     */
+    public function testBetweenDoorAnswersLikeTheArrayFormForEveryLabMetric(): void
+    {
+        $red = Color::fromHex(0xDC283C);
+        $teal = Color::fromHex(0x008080);
+
+        foreach ([ColorDistance::Cie76, ColorDistance::Cie94, ColorDistance::Cie2000] as $metric) {
+            $handConverted = $metric->betweenLab(
+                ColorMath::toLab($red->r, $red->g, $red->b),
+                ColorMath::toLab($teal->r, $teal->g, $teal->b),
+            );
+            self::assertSame($handConverted, DeltaE::between($red, $teal, $metric), $metric->name);
+        }
+    }
+
+    public function testBetweenDoorDefaultsToCie76(): void
+    {
+        // The delta-E family's own seat defaults to Cie76; the legacy
+        // matcher's Euclidean default lives at ColorDistance::DEFAULT_METRIC
+        // (CP-19) — the documented split, not an accident.
+        $a = Color::fromHex(0xFF0000);
+        $b = Color::fromHex(0x0AC85A);
+
+        self::assertSame(DeltaE::between($a, $b, ColorDistance::Cie76), DeltaE::between($a, $b));
+    }
+
+    public function testBetweenDoorRefusesTheRgbSpaceMetricLoudly(): void
+    {
+        // Euclidean has no Lab meaning; the door reuses the betweenLab
+        // refusal instead of silently substituting RGB magnitudes.
+        $this->expectException(\LogicException::class);
+
+        DeltaE::between(Color::fromHex(0x010203), Color::fromHex(0x040506), ColorDistance::Euclidean);
     }
 }
