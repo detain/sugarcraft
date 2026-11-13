@@ -232,6 +232,38 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString($german, $english);
     }
 
+    public function testLocalePrecedenceIsLcAllThenLcMessagesThenLang(): void
+    {
+        // README + bin advertise LC_ALL → LC_MESSAGES → LANG (the chain
+        // T::detect() walks). Pin both decisive edges: LC_ALL must beat a
+        // contradicting LANG, and LC_MESSAGES must beat LANG when LC_ALL
+        // is absent. Catalogues are read from disk so the pins track the
+        // translations, not fossilised prose.
+        $french = str_replace('{path}', '/no/such/prec-probe', (string) (require dirname(__DIR__) . '/lang/fr.php')['cli.not_a_file']);
+        $german = str_replace('{path}', '/no/such/prec-probe', (string) (require dirname(__DIR__) . '/lang/de.php')['cli.not_a_file']);
+
+        [, , $stderr] = self::runCli('/no/such/prec-probe', ['LC_ALL' => 'fr', 'LANG' => 'de']);
+        $this->assertStringContainsString($french, $stderr);
+        $this->assertStringNotContainsString($german, $stderr);
+
+        [, , $stderr] = self::runCli('/no/such/prec-probe', ['LC_MESSAGES' => 'de', 'LANG' => 'fr']);
+        $this->assertStringContainsString($german, $stderr);
+        $this->assertStringNotContainsString($french, $stderr);
+    }
+
+    public function testHelpFlagAnswersInTheDetectedLocale(): void
+    {
+        // The --help leg goes through Lang::t('cli.usage') like the other
+        // tool prints — a non-English invocation must print the non-English
+        // usage line (and never the English one).
+        $usage = rtrim((string) (require dirname(__DIR__) . '/lang/de.php')['cli.usage'], "\n");
+
+        [$code, $stdout] = self::runCli('--help', ['LC_ALL' => 'de']);
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString($usage, $stdout);
+        $this->assertStringNotContainsString('usage: candy-ansi-inspect [file]', $stdout);
+    }
+
     public function testHelpFlagPrintsUsageOnStdoutAndExitsZero(): void
     {
         // m2-fresh ruling (a): `--help`/`-h` is a request for usage, not a
