@@ -59,6 +59,19 @@ final class SvgRenderer
      */
     private const FONT_UNSET = "\0font-path-unset";
 
+    /**
+     * The bytes {@see xmlEscape()} provably leaves untouched: TAB/LF/CR,
+     * printable ASCII except the five characters htmlspecialchars()
+     * rewrites under ENT_XML1|ENT_QUOTES (" & < > '), and nothing above
+     * 0x7E. A string wholly built from these takes the -046 fast path —
+     * the sweep below is what would run on it, and every stage of that
+     * sweep is identity on these bytes (DEL and the C1 pair need >= 0x7F,
+     * the /u class needs >= 0x80, the noncharacter band lives above
+     * 0xFDD0). Everything else — invalid UTF-8 included — still walks
+     * the full fail-closed pipeline unchanged.
+     */
+    private const XML_ESCAPE_SAFE = "\t\n\r !#$%()*+,-./0123456789:;=@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+
     /** @param array{range: array{0:int,1:int}, color:string}|null $highlight */
     public function __construct(
         public readonly Theme $theme       = new Theme(
@@ -342,15 +355,28 @@ final class SvgRenderer
               . 'fill="' . self::xmlEscape($this->theme->foreground) . '"'
               . $ligatureAttr . ' xml:space="preserve">' . "\n";
 
+        // cs-25 (-045): loop-invariants hoisted. The highlight band range,
+        // its resolved colour and the escape of it, the gutter pad width
+        // (which carries the strlen((string)count($lines)) walk), and the
+        // escaped line-number fill are fixed for the whole document — the
+        // old code recomputed every one of them for every line.
+        $highlightRange = null;
+        $highlightFill  = null;
+        if ($this->highlight !== null) {
+            $highlightRange = $this->highlight['range'];
+            $highlightFill  = self::xmlEscape($this->highlight['color'] ?? $this->theme->highlight ?? '#fffbe6');
+        }
+        $lineNumberFill = $this->lineNumbers ? self::xmlEscape($this->theme->lineNumber) : '';
+        $numberPad      = $this->lineNumbers ? max(2, strlen((string) count($lines))) : 0;
+
         $sgrCarry = null;
         foreach ($lines as $i => $line) {
             $lineNumber = $i + 1;
             $y = $textY0 + $i * $cellH;
 
             // Line-highlight background (--highlight range).
-            if ($this->highlight !== null) {
-                [$start, $end] = $this->highlight['range'];
-                $hlColor = $this->highlight['color'] ?? $this->theme->highlight ?? '#fffbe6';
+            if ($highlightRange !== null) {
+                [$start, $end] = $highlightRange;
                 if ($lineNumber >= $start && $lineNumber <= $end) {
                     $svg .= sprintf(
                         '<rect x="%d" y="%.2f" width="%d" height="%.2f" fill="%s" />' . "\n",
@@ -358,7 +384,7 @@ final class SvgRenderer
                         $y - $this->theme->fontSize,
                         $contentWidth,
                         $cellH,
-                        self::xmlEscape($hlColor),
+                        $highlightFill,
                     );
                 }
             }
@@ -368,8 +394,8 @@ final class SvgRenderer
                     '<text x="%.2f" y="%.2f" fill="%s">%s</text>' . "\n",
                     $textX0,
                     $y,
-                    self::xmlEscape($this->theme->lineNumber),
-                    self::xmlEscape(str_pad((string) ($i + 1), max(2, strlen((string) count($lines))), ' ', STR_PAD_LEFT)),
+                    $lineNumberFill,
+                    self::xmlEscape(str_pad((string) ($i + 1), $numberPad, ' ', STR_PAD_LEFT)),
                 );
             }
             $segments = AnsiParser::parse($line, $sgrCarry);
@@ -519,6 +545,13 @@ final class SvgRenderer
 
     private static function xmlEscape(string $s): string
     {
+        // -046 fast path: wholly-safe bytes are identity under the sweep
+        // below (see XML_ESCAPE_SAFE), so skip five engine calls for the
+        // overwhelmingly common case — theme hex colours, plain ASCII code.
+        if (strspn($s, self::XML_ESCAPE_SAFE) === strlen($s)) {
+            return $s;
+        }
+
         // Byte-level sweep — NO /u (byte semantics: the subject may be
         // invalid UTF-8 and must still be swept). DEL and the C1 controls in
         // their two-byte UTF-8 form (U+0080-U+009F) are dropped, not emitted,

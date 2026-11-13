@@ -47,6 +47,14 @@ final class AnsiParser
     /**
      * Parse one line of ANSI text into a list of styled segments.
      *
+     * Adjacent runs that end up carrying the *same* style merge into one
+     * segment (cs-25, -047): a sender that re-emits an unchanged colour —
+     * `SGR 32` after `SGR 32`, or any no-op parameter in between — used to
+     * inflate the markup 5-15x with per-token repaint elements that paint
+     * exactly what one element paints. The merge is style-exact (fg, bg,
+     * bold, italic, underline all equal), so no consumer can tell the
+     * difference beyond element count; text order is untouched.
+     *
      * @return list<Segment>
      */
     public static function parse(string $line, ?SgrState &$carry = null): array
@@ -58,14 +66,35 @@ final class AnsiParser
             if ($textBuf === '') {
                 return;
             }
-            $segments[] = new Segment(
-                text:      $textBuf,
-                fg:        $state->fg,
-                bold:      $state->bold,
-                italic:    $state->italic,
-                underline: $state->underline,
-                bg:        $state->bg,
-            );
+            $last = $segments === [] ? null : $segments[count($segments) - 1];
+            if ($last !== null
+                && $last->fg === $state->fg
+                && $last->bg === $state->bg
+                && $last->bold === $state->bold
+                && $last->italic === $state->italic
+                && $last->underline === $state->underline
+            ) {
+                // Segment is readonly-by-contract; replace the tail entry
+                // rather than mutate it (the by-reference array view sees
+                // the same slot).
+                $segments[count($segments) - 1] = new Segment(
+                    text:      $last->text . $textBuf,
+                    fg:        $last->fg,
+                    bold:      $last->bold,
+                    italic:    $last->italic,
+                    underline: $last->underline,
+                    bg:        $last->bg,
+                );
+            } else {
+                $segments[] = new Segment(
+                    text:      $textBuf,
+                    fg:        $state->fg,
+                    bold:      $state->bold,
+                    italic:    $state->italic,
+                    underline: $state->underline,
+                    bg:        $state->bg,
+                );
+            }
             $textBuf = '';
         };
 

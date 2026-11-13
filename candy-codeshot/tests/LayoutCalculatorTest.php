@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot\Tests;
 
 use SugarCraft\CodeShot\LayoutCalculator;
+use SugarCraft\CodeShot\SvgRenderer;
 use PHPUnit\Framework\TestCase;
 
 final class LayoutCalculatorTest extends TestCase
@@ -285,5 +286,32 @@ final class LayoutCalculatorTest extends TestCase
         );
 
         $this->assertSame($spaced[0], $tabbed[0]);
+    }
+
+    /**
+     * cs-25 (-045) measured pass-count pin: layout walks every line ONCE.
+     * Restoring any second maxCols walk — in the calculator or around it in
+     * a renderer — shifts the delta even though the output bytes stay
+     * identical, which is exactly why bytes alone cannot pin this.
+     */
+    public function testCalculateWalksEveryLineExactlyOnce(): void
+    {
+        $before = LayoutCalculator::paintedColumnScanCount();
+        LayoutCalculator::calculate(
+            lines: ['aaa', 'bb', 'dddd', 'e', 'ff'],
+            lineNumbers: true, padding: 4, window: true,
+            shadow: true, cellW: 8.0, cellH: 17.0,
+        );
+        $this->assertSame(5, LayoutCalculator::paintedColumnScanCount() - $before);
+    }
+
+    public function testSvgRenderSharesTheSingleLayoutWalkWithoutReWalking(): void
+    {
+        $lines = array_fill(0, 40, 'x');
+        $before = LayoutCalculator::paintedColumnScanCount();
+        (new SvgRenderer())->withLineNumbers(true)->render(implode("\n", $lines));
+        // 40 lines, one walk each — paint consumes layout's numbers and only
+        // measures the per-segment widths it needs for x advancement.
+        $this->assertSame(40, LayoutCalculator::paintedColumnScanCount() - $before);
     }
 }

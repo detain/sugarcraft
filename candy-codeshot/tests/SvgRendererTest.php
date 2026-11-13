@@ -348,6 +348,27 @@ final class SvgRendererTest extends TestCase
         SvgOracle::assertNoSurvivorBytes($svg);
     }
 
+    /**
+     * -046 fast-path semantic boundary: every escaped-under-sweep byte must
+     * stay escaped when it appears in a string that is otherwise wholly
+     * fast-path-safe — the exact shape a poisoned safe-set would leak.
+     * (Mutation proof M2: adding `&` to XML_ESCAPE_SAFE reddens this test
+     * while the old suite stayed green; restored set keeps it green on the
+     * full fail-closed sweep.)
+     */
+    public function testEachEscapableByteSurvivesAnOtherwiseSafeString(): void
+    {
+        $r = new SvgRenderer();
+        self::assertStringContainsString('a &amp; b', $r->render('a & b'));
+        self::assertStringContainsString('&quot;hi&quot;', $r->render('say "hi"'));
+        self::assertStringContainsString('it&apos;s', $r->render("it's"));
+        self::assertStringContainsString('x &lt; y', $r->render('x < y'));
+        self::assertStringContainsString('a &gt; b', $r->render('a > b'));
+        // And the genuinely safe case passes through raw, quotes intact in
+        // the element, text byte-identical:
+        self::assertStringContainsString('>plain_safe-text { 1 }<', $r->render('plain_safe-text { 1 }'));
+    }
+
     private static function rootWidth(string $svg): string
     {
         $count = preg_match('/<svg\b[^>]*\bwidth="([^"]+)"/', $svg, $matches);

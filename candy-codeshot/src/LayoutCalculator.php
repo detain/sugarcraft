@@ -13,6 +13,22 @@ use SugarCraft\Core\Util\Width;
 final class LayoutCalculator
 {
     /**
+     * Cumulative count of painted-column walks ever run (cs-25, -045).
+     * Layout vs paint share ONE width walk: every line is measured here,
+     * once, and the segment paint loop only advances x by per-segment
+     * widths it already needs. The counter is the pass-count pin
+     * {@see \SugarCraft\CodeShot\Tests\LayoutCalculatorTest} asserts
+     * against — restoring a second maxCols walk anywhere in the render
+     * path shifts the delta, even though the bytes stay identical.
+     */
+    private static int $paintedColumnScans = 0;
+
+    public static function paintedColumnScanCount(): int
+    {
+        return self::$paintedColumnScans;
+    }
+
+    /**
      * @param bool $chrome When false, the 36px window-title band is collapsed:
      *                     `--window-style none` (WindowStyle::None) keeps the
      *                     framed look but paints no title bar, and must not
@@ -66,6 +82,7 @@ final class LayoutCalculator
      */
     private static function paintedColumns(string $stripped): int
     {
+        self::$paintedColumnScans++;
         $column = 0;
         foreach (explode("\t", $stripped) as $index => $chunk) {
             if ($index > 0) {

@@ -310,4 +310,51 @@ final class AnsiParserTest extends TestCase
         self::assertStringNotContainsString('fn(', $body, 'applySgr must not build closures per parameter (cs-24)');
         self::assertStringNotContainsString('$$', $body, 'applySgr must not write state through variable-vars (cs-24)');
     }
+
+    /**
+     * cs-25 (-047): a sender that re-emits an unchanged SGR must not inflate
+     * the segment list — adjacent runs with an identical style merge.
+     */
+    public function testAdjacentIdenticallyStyledRunsCoalesce(): void
+    {
+        $segments = AnsiParser::parse("aaa\x1b[31mb\x1b[31mc");
+        self::assertCount(2, $segments);
+        self::assertSame('aaa', $segments[0]->text);
+        self::assertSame('bc', $segments[1]->text);
+        self::assertSame('#cd0000', $segments[1]->fg);
+    }
+
+    public function testCoalescingSplitsOnEveryStyleDimension(): void
+    {
+        // fg differs
+        self::assertCount(2, AnsiParser::parse("a\x1b[31mb"));
+        // bg differs
+        self::assertCount(2, AnsiParser::parse("a\x1b[41mb"));
+        // bold differs
+        self::assertCount(2, AnsiParser::parse("a\x1b[1mb"));
+        // italic differs
+        self::assertCount(2, AnsiParser::parse("a\x1b[3mb"));
+        // underline differs
+        self::assertCount(2, AnsiParser::parse("a\x1b[4mb"));
+    }
+
+    public function testNoopSgrBetweenEqualRunsCoalescesAcrossTheDispatch(): void
+    {
+        // SGR 7 (inverse) is untracked: state unchanged, one merged run.
+        $segments = AnsiParser::parse("\x1b[32mx\x1b[7my\x1b[32mz");
+        self::assertCount(1, $segments);
+        self::assertSame('xyz', $segments[0]->text);
+    }
+
+    public function testCoalescingNeverExceedsStyledRunCount(): void
+    {
+        // Segment count is bounded by the number of DISTINCT adjacent styles,
+        // the -047 inflation measure: repeated same-style emissions collapse.
+        $segments = AnsiParser::parse(
+            "\x1b[38;5;204mstr\x1b[38;5;204ming\x1b[38;5;204mify\x1b[0m(\x1b[0m)\x1b[0m1"
+        );
+        self::assertCount(2, $segments);
+        self::assertSame('stringify', $segments[0]->text);
+        self::assertSame('()1', $segments[1]->text);
+    }
 }

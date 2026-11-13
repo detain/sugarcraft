@@ -104,9 +104,14 @@ final class TabExpansionPerfTest extends TestCase
         self::assertSame(str_repeat(' ', 5) . 'b', $segments[1]->text);
 
         // Two flushes before the tab: 2 + 3 cells, pad 3.
+        // cs-25 DISCLOSED re-pin: `SGR 7` (inverse) is untracked, so the
+        // state does not change at that dispatch — the run after it is
+        // style-identical to the bold "bbb" and merges into it (-047).
+        // The cell accounting above is untouched: the flush pays its cells
+        // before the merge decision.
         $segments = AnsiParser::parse("aa\u{1b}[1mbbb\u{1b}[7m\tc");
-        self::assertCount(3, $segments);
-        self::assertSame(str_repeat(' ', 3) . 'c', $segments[2]->text);
+        self::assertCount(2, $segments);
+        self::assertSame('bbb' . str_repeat(' ', 3) . 'c', $segments[1]->text);
     }
 
     public function testWideCharactersAdvanceTheColumnByTwoCellsPerCluster(): void
