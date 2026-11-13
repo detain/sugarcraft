@@ -41,6 +41,7 @@ return [
     'runtime.empty_input' => '输入没有产生任何行；不执行操作。',
     'runtime.empty_input_filter' => '没有可过滤的内容；标准输入未产生任何行。',
     'runtime.empty_input_pager' => '没有可分页的内容；标准输入未产生任何行。',
+    'runtime.empty_items' => '未提供条目；请将它们作为位置参数传递或使用 --item。',
     'runtime.conflicting_flags' => '不能将 {first} 与 {second} 以不同的值同时使用。',
     'runtime.empty_selection' => '未选择任何条目——请在按 Enter 前用空格键勾选至少一个条目。',
 ];

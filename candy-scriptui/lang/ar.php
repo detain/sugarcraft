@@ -41,6 +41,7 @@ return [
     'runtime.empty_input' => 'المدخل لا يحتوي على أسطر؛ لا شيء للقيام به.',
     'runtime.empty_input_filter' => 'لا شيء للتصفية؛ لم يُنتج الدخل أي أسطر.',
     'runtime.empty_input_pager' => 'لا شيء للتصفح؛ لم يُنتج الدخل أي أسطر.',
+    'runtime.empty_items' => 'لم يتم توفير عناصر؛ مررها كوسائط أو عبر --item.',
     'runtime.conflicting_flags' => 'لا يمكن دمج الخيارين {first} و{second} بقيم مختلفة.',
     'runtime.empty_selection' => 'لم يتم تحديد أي عنصر — اضغط مسافة لتحديد عنصر واحد على الأقل قبل الإدخال.',
 ];

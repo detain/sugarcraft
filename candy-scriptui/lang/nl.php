@@ -41,6 +41,7 @@ return [
     'runtime.empty_input' => 'De invoer bevatte geen regels; niets te doen.',
     'runtime.empty_input_filter' => 'Niets te filteren; de invoer bevatte geen regels.',
     'runtime.empty_input_pager' => 'Niets te bladeren; de invoer bevatte geen regels.',
+    'runtime.empty_items' => 'Geen items opgegeven; geef ze als argumenten of met --item.',
     'runtime.conflicting_flags' => 'De opties {first} en {second} kunnen niet worden gecombineerd met verschillende waarden.',
     'runtime.empty_selection' => 'Geen item geselecteerd — druk op Spatie om minstens één item aan te vinken vóór Enter.',
 ];

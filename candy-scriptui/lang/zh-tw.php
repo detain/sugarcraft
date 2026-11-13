@@ -45,6 +45,7 @@ return [
     'runtime.empty_input' => '輸入沒有產生任何行；不執行操作。',
     'runtime.empty_input_filter' => '沒有可過濾的內容；標準輸入未產生任何行。',
     'runtime.empty_input_pager' => '沒有可分頁的內容；標準輸入未產生任何行。',
+    'runtime.empty_items' => '未提供項目；請將它們作為位置參數傳遞或使用 --item。',
     'runtime.conflicting_flags' => '不能將 {first} 與 {second} 以不同的值同時使用。',
     'runtime.empty_selection' => '未選擇任何條目——請在按 Enter 前用空格鍵勾選至少一個條目。',
 ];

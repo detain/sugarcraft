@@ -41,6 +41,7 @@ return [
     'runtime.empty_input' => 'Vstup neobsahoval žádné řádky; nic k dispozici.',
     'runtime.empty_input_filter' => 'Nic ke filtrování; vstup neobsahoval žádné řádky.',
     'runtime.empty_input_pager' => 'Nic k stránkování; vstup neobsahoval žádné řádky.',
+    'runtime.empty_items' => 'Nebyly zadány žádné položky; zadejte je jako argumenty nebo s --item.',
     'runtime.conflicting_flags' => 'Příznaky {first} a {second} nelze kombinovat s různými hodnotami.',
     'runtime.empty_selection' => 'Není vybrána žádná položka — před stiskem Enter alespoň jednu označte mezníkem.',
 ];

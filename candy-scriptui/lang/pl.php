@@ -41,6 +41,7 @@ return [
     'runtime.empty_input' => 'Wejście nie zawierało linii; nic do zrobienia.',
     'runtime.empty_input_filter' => 'Brak czego filtrować; wejście nie zawierało linii.',
     'runtime.empty_input_pager' => 'Brak treści do przeglądania; wejście nie zawierało linii.',
+    'runtime.empty_items' => 'Nie podano elementów — przekaż je jako argumenty lub opcją --item.',
     'runtime.conflicting_flags' => 'Opcji {first} i {second} nie można łączyć z różnymi wartościami.',
     'runtime.empty_selection' => 'Nie wybrano żadnego elementu — naciśnij Spację, aby zaznaczyć co najmniej jeden element przed Enterem.',
 ];

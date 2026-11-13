@@ -56,6 +56,7 @@ return [
     'runtime.empty_input' => 'Input produced no lines; nothing to do.',
     'runtime.empty_input_filter' => 'Nothing to filter: standard input produced no lines.',
     'runtime.empty_input_pager' => 'Nothing to page: standard input produced no lines.',
+    'runtime.empty_items' => 'No items supplied — pass them as arguments or repeat --item.',
     'runtime.conflicting_flags' => 'Flags {first} and {second} cannot be combined with different values.',
     'runtime.empty_selection' => 'No item selected — press Space to tick at least one item before Enter.',
 ];

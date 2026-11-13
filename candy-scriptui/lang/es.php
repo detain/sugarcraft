@@ -54,6 +54,7 @@ return [
     'runtime.empty_input' => 'La entrada no contenía líneas; nada que hacer.',
     'runtime.empty_input_filter' => 'Nada que filtrar; la entrada no contenía líneas.',
     'runtime.empty_input_pager' => 'Nada que paginar; la entrada no contenía líneas.',
+    'runtime.empty_items' => 'No se proporcionaron elementos; páselos como argumentos o con --item.',
     'runtime.conflicting_flags' => 'Las opciones {first} y {second} no se pueden combinar con valores diferentes.',
     'runtime.empty_selection' => 'Ningún elemento seleccionado — pulse Espacio para marcar al menos un elemento antes de Intro.',
 ];

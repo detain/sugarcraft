@@ -41,6 +41,7 @@ return [
     'runtime.empty_input' => '입력에 줄이 없습니다. 작업을 수행하지 않습니다.',
     'runtime.empty_input_filter' => '필터할 항목이 없습니다. 표준 입력에 줄이 없습니다.',
     'runtime.empty_input_pager' => '페이지할 항목이 없습니다. 표준 입력에 줄이 없습니다.',
+    'runtime.empty_items' => '항목이 없습니다. 인자 또는 --item으로 전달하세요.',
     'runtime.conflicting_flags' => '{first} 및 {second} 플래그는 다른 값과 함께 사용할 수 없습니다.',
     'runtime.empty_selection' => '선택된 항목이 없습니다 — Enter 전에 Space로 최소 한 항목을 표시하십시오.',
 ];

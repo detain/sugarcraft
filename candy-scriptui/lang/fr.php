@@ -54,6 +54,7 @@ return [
     'runtime.empty_input' => "L'entrée ne contenait aucune ligne; rien à faire.",
     'runtime.empty_input_filter' => "Rien à filtrer; l'entrée ne contenait aucune ligne.",
     'runtime.empty_input_pager' => "Rien à paginer; l'entrée ne contenait aucune ligne.",
+    'runtime.empty_items' => 'Aucun élément fourni — passez-les en arguments ou avec --item.',
     'runtime.conflicting_flags' => 'Les options {first} et {second} ne peuvent pas être combinées avec des valeurs différentes.',
     'runtime.empty_selection' => 'Aucun élément sélectionné — appuyez sur Espace pour cocher au moins un élément avant Entrée.',
 ];

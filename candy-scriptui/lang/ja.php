@@ -41,6 +41,7 @@ return [
     'runtime.empty_input' => '入力行がありません。何も実行しません。',
     'runtime.empty_input_filter' => 'フィルターする行がありません：標準入力に行がありませんでした。',
     'runtime.empty_input_pager' => 'ページングする行がありません：標準入力に行がありませんでした。',
+    'runtime.empty_items' => '項目が指定されていません。引数または --item で指定してください。',
     'runtime.conflicting_flags' => 'フラグ {first} と {second} は異なる値と同時に指定できません。',
     'runtime.empty_selection' => '項目が選択されていません — Enterの前にスペースキーで少なくとも1項目をマークしてください。',
 ];
