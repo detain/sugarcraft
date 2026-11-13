@@ -334,8 +334,27 @@ final class Table
      */
     public function withColumns(array $columns): self
     {
+        $count = \count($columns);
+
+        // ST-13: the index sets are column-count contracts, not re-pin hints.
+        // A stale frozen index used to silently freeze whatever column landed
+        // at that slot (the QA probe: frozen [0,1] shrunk to one column made
+        // withScrollX(1) render empty); hidden slots for removed columns are
+        // inert, so those intersect away.
+        foreach ($this->frozenCols as $index) {
+            if ($index >= $count) {
+                throw new \InvalidArgumentException(
+                    "Frozen column index {$index} does not exist in the new column set ({$count} columns)"
+                );
+            }
+        }
+
         $clone = clone $this;
         $clone->columns = $columns;
+        $clone->hiddenCols = \array_values(\array_filter(
+            $this->hiddenCols,
+            static fn (int $index): bool => $index < $count,
+        ));
         $clone->invalidateRenderCaches();
         return $clone;
     }
@@ -667,12 +686,46 @@ final class Table
                 'Hidden column indices [' . \implode(',', $overlap) . '] cannot be frozen'
             );
         }
+        $normalized = $this->normalizeHiddenIndexes($indices, \count($this->columns));
         $clone = clone $this;
-        $clone->hiddenCols = $indices;
+        $clone->hiddenCols = $normalized;
         // The hidden set is a solve input — swapping it must re-solve, the
         // same way replacing rows does (ST-11 cache-bust leg).
         $clone->invalidateRenderCaches();
         return $clone;
+    }
+
+    /**
+     * Sort + unique + range-validate a hidden-column index set, symmetric to
+     * the withFrozenCols guards (finding 059): the raw set was a divergence
+     * seed for any positional iteration of hiddenCols.
+     *
+     * @param array<array-key, mixed> $indices
+     * @return list<int>
+     */
+    private function normalizeHiddenIndexes(array $indices, int $count): array
+    {
+        foreach ($indices as $index) {
+            if (!\is_int($index)) {
+                throw new \InvalidArgumentException(
+                    'Hidden column index must be int, got ' . \get_debug_type($index)
+                );
+            }
+        }
+
+        $sorted = $indices;
+        \sort($sorted);
+        $sorted = \array_values(\array_unique($sorted));
+
+        foreach ($sorted as $index) {
+            if ($index < 0 || $index >= $count) {
+                throw new \InvalidArgumentException(
+                    "Hidden column index {$index} out of range (table has {$count} columns)"
+                );
+            }
+        }
+
+        return $sorted;
     }
 
     // -------------------------------------------------------------------------

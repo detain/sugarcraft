@@ -547,4 +547,90 @@ final class TableFrozenColsTest extends TestCase
             'All frozen columns should all be visible regardless of scrollX'
         );
     }
+
+    // -------------------------------------------------------------------------
+    // ST-13 — withColumns revalidates the index sets; hiddenCols normalized
+    // -------------------------------------------------------------------------
+
+    public function testWithColumnsRejectsStaleFrozenIndex(): void
+    {
+        // The QA probe (finding 013): frozen [0,1] carried onto a one-column
+        // set used to survive silently and make withScrollX(1) render empty.
+        $t = Table::fromColumns([
+            Column::new('id', 'ID', 5),
+            Column::new('name', 'Name', 10),
+        ])->withFrozenCols([0, 1]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Frozen column index 1 does not exist in the new column set (1 columns)');
+
+        $t->withColumns([Column::new('id', 'ID', 5)]);
+    }
+
+    public function testWithColumnsIntersectsStaleHiddenIndices(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('id', 'ID', 5),
+            Column::new('name', 'Name', 10),
+            Column::new('city', 'City', 7),
+        ])->withHiddenCols([0, 2]);
+
+        $shrunk = $t->withColumns([
+            Column::new('id', 'ID', 5),
+            Column::new('name', 'Name', 10),
+        ]);
+
+        $this->assertSame([0], $this->hiddenOf($shrunk),
+            'Hidden slots pointing at removed columns intersect away; live slots persist'
+        );
+    }
+
+    public function testWithHiddenColsNormalizesSortAndUnique(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('id', 'ID', 5),
+            Column::new('name', 'Name', 10),
+            Column::new('city', 'City', 7),
+        ])->withHiddenCols([2, 0, 0, 1]);
+
+        $this->assertSame([0, 1, 2], $this->hiddenOf($t),
+            'Hidden set must be stored sorted + de-duplicated, symmetric to frozen (finding 059)'
+        );
+    }
+
+    /**
+     * @dataProvider outOfRangeHiddenIndices
+     */
+    public function testWithHiddenColsRejectsOutOfRange(int $index): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $t->withHiddenCols([$index]);
+    }
+
+    /**
+     * @return array<string, array{int}>
+     */
+    public static function outOfRangeHiddenIndices(): array
+    {
+        return ['too-high' => [1], 'negative' => [-1]];
+    }
+
+    public function testWithHiddenColsRejectsNonIntIndex(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be int, got string');
+
+        $t->withHiddenCols(['0']);
+    }
+
+    private function hiddenOf(Table $t): array
+    {
+        $property = new \ReflectionProperty($t, 'hiddenCols');
+
+        return $property->getValue($t);
+    }
 }
