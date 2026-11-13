@@ -97,6 +97,29 @@ final class SgrStateHandler implements SubparamsAwareHandler
         }
 
         ($this->flush)();
+        // ECMA-48 default-parameter rule: an omitted parameter takes its
+        // initial value, so the bare SGR forms all mean a full reset —
+        // `ESC[m` (the shape `tput sgr0` actually ships) and `ESC[;m` are
+        // `ESC[0m`. The sugar-ansi-parser front end flattens an omitted
+        // slot to a -1 sentinel (its Parser.php docblock); a slot-less
+        // dispatch arrives as the empty list. Only TOP-LEVEL slots default
+        // to 0: -1 inside a `:` group is the skip marker extendedColour's
+        // count rule consumes (a clamped `38:2:::5:6:7` would paint
+        // '#000506', and a clamped `38:2::1` would repaint on the flat
+        // re-read — both pinned by AnsiParserColonSubparametersTest).
+        // `$subparams[$i] === true` means slot $i continues into slot $i+1
+        // (a colon followed it), so slot $i is top level exactly when the
+        // flag before it is not true.
+        if ($params === []) {
+            $params = [0];
+        } else {
+            foreach ($params as $index => $value) {
+                $isTopLevel = $index === 0 || ($this->subparams[$index - 1] ?? false) !== true;
+                if ($value < 0 && $isTopLevel) {
+                    $params[$index] = 0;
+                }
+            }
+        }
         $this->state = $this->applySgr($params, $this->state, $this->subparams);
     }
 

@@ -712,6 +712,18 @@ final class CliTest extends TestCase
         }
     }
 
+    public function testBareSgrResetSurvivesTheCliCapturePath(): void
+    {
+        // cs-06 CLI arm — the P2 repro driven through the real bin: `tput
+        // sgr0` ships the bare 'ESC[m' form, and pre-cure bold+red stuck to
+        // the end of the captured document.
+        $result = $this->runCli(['--no-window', '--no-shadow'], "\x1b[1;31mRED\x1b[mPLAIN\n");
+
+        $this->assertSame(0, $result['exitCode'], $result['stderr']);
+        $this->assertMatchesRegularExpression('#<text x="\d+\.\d+" y="\d+\.\d+">PLAIN</text>#', $result['stdout']);
+        $this->assertStringNotContainsString('bold">PLAIN', $result['stdout']);
+    }
+
     private function makeTempDir(): string
     {
         $dir = sys_get_temp_dir() . '/codeshot_cwd_' . uniqid('', true);

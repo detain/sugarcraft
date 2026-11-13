@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot\Tests;
 
 use SugarCraft\CodeShot\SgrState;
+use SugarCraft\CodeShot\SvgRenderer;
 use PHPUnit\Framework\TestCase;
 
 final class SgrStateTest extends TestCase
@@ -100,5 +101,35 @@ final class SgrStateTest extends TestCase
         $this->assertTrue($state->bold);
         $this->assertTrue($state->italic);
         $this->assertTrue($state->underline);
+    }
+
+    // -------------------------------------------------------------------------
+    // cs-06 ECMA-48 default parameters: the bare SGR forms must reset.
+    // Pre-cure, NO test could fail this — bold+red stuck to end of document
+    // on 'ESC[m' (the form `tput sgr0` actually ships).
+    // -------------------------------------------------------------------------
+
+    /** @return array<string, array{0:string}> */
+    public static function bareSgrForms(): array
+    {
+        return [
+            'bare ESC[m (no params)'      => ["\x1b[m"],
+            'empty slot ESC[;m'           => ["\x1b[;m"],
+            'trailing empty ESC[1;m'      => ["\x1b[1;m"],
+            'explicit ESC[0m regression'  => ["\x1b[0m"],
+        ];
+    }
+
+    /**
+     * @dataProvider bareSgrForms
+     */
+    public function testBareSgrFormsResetAttributes(string $reset): void
+    {
+        $svg = SvgRenderer::dark()->withWindow(false)->render("\x1b[1;31mRED" . $reset . "PLAIN\n");
+
+        // PLAIN must be a plain <text> element: no fill override, no bold.
+        $this->assertMatchesRegularExpression('#<text x="\d+\.\d+" y="\d+\.\d+">PLAIN</text>#', $svg);
+        // The reset must not eat the earlier styling either: RED stays styled.
+        $this->assertStringContainsString('font-weight="bold">RED</text>', $svg);
     }
 }
