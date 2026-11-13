@@ -27,7 +27,7 @@ final class UptimeModule extends BaseModule
 
     public function init(): ?\Closure
     {
-        return Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new TickMsg());
+        return $this->selfTickCmd();
     }
 
     public function update(Msg $msg): array
@@ -35,9 +35,20 @@ final class UptimeModule extends BaseModule
         $newUptime = $this->readUptimeFromProc();
         $nextModule = $this->withUptime($newUptime);
         if ($msg instanceof TickMsg) {
-            return [$nextModule, Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new TickMsg())];
+            return [$nextModule, $this->selfTickCmd()];
         }
         return [$nextModule, null];
+    }
+
+    protected function tickIntervalSeconds(): ?float
+    {
+        return self::TICK_INTERVAL;
+    }
+
+    protected function tickProducer(): ?\Closure
+    {
+        static $produce = null;
+        return $produce ??= static fn(): Msg => new TickMsg();
     }
 
     public function view(): string

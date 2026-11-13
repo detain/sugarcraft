@@ -62,7 +62,7 @@ final class SystemModule extends BaseModule
 
     public function init(): ?\Closure
     {
-        return Cmd::tick($this->refreshSeconds, static fn(): Msg => new RefreshMsg());
+        return $this->selfTickCmd();
     }
 
     public function update(Msg $msg): array
@@ -75,8 +75,19 @@ final class SystemModule extends BaseModule
 
         return [
             $this->withSystemState(),
-            Cmd::tick($this->refreshSeconds, static fn(): Msg => new RefreshMsg()),
+            $this->selfTickCmd(),
         ];
+    }
+
+    protected function tickIntervalSeconds(): ?float
+    {
+        return $this->refreshSeconds;
+    }
+
+    protected function tickProducer(): ?\Closure
+    {
+        static $produce = null;
+        return $produce ??= static fn(): Msg => new RefreshMsg();
     }
 
     public function view(): string

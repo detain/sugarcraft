@@ -49,7 +49,7 @@ final class GenericModule extends BaseModule
 
     public function init(): ?\Closure
     {
-        return Cmd::tick((float) $this->intervalSeconds, static fn(): Msg => new TickMsg());
+        return $this->selfTickCmd();
     }
 
     public function update(Msg $msg): array
@@ -57,9 +57,20 @@ final class GenericModule extends BaseModule
         if ($msg instanceof TickMsg) {
             $newOutput = $this->runCommand();
             $nextModule = $this->withOutput($newOutput);
-            return [$nextModule, Cmd::tick((float) $this->intervalSeconds, static fn(): Msg => new TickMsg())];
+            return [$nextModule, $this->selfTickCmd()];
         }
         return [$this, null];
+    }
+
+    protected function tickIntervalSeconds(): ?float
+    {
+        return (float) $this->intervalSeconds;
+    }
+
+    protected function tickProducer(): ?\Closure
+    {
+        static $produce = null;
+        return $produce ??= static fn(): Msg => new TickMsg();
     }
 
     public function view(): string

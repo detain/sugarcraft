@@ -32,16 +32,27 @@ final class ClockModule extends BaseModule
 
     public function init(): ?\Closure
     {
-        return Cmd::tick(1.0, static fn(): Msg => new TickMsg());
+        return $this->selfTickCmd();
     }
 
     public function update(Msg $msg): array
     {
         $newTime = $this->createTime();
         if ($msg instanceof TickMsg) {
-            return [$this->withTime($newTime), Cmd::tick(1.0, static fn(): Msg => new TickMsg())];
+            return [$this->withTime($newTime), $this->selfTickCmd()];
         }
         return [$this->withTime($newTime), null];
+    }
+
+    protected function tickIntervalSeconds(): ?float
+    {
+        return 1.0;
+    }
+
+    protected function tickProducer(): ?\Closure
+    {
+        static $produce = null;
+        return $produce ??= static fn(): Msg => new TickMsg();
     }
 
     public function view(): string

@@ -218,9 +218,20 @@ class WeatherModule extends BaseModule
         return $deferred->promise();
     }
 
-    private function makeTickCmd(): \Closure
+    private function makeTickCmd(): ?\Closure
     {
-        return Cmd::tick($this->tickSeconds, static fn(): Msg => new TickMsg());
+        return $this->selfTickCmd();
+    }
+
+    protected function tickIntervalSeconds(): ?float
+    {
+        return $this->tickSeconds;
+    }
+
+    protected function tickProducer(): ?\Closure
+    {
+        static $produce = null;
+        return $produce ??= static fn(): Msg => new TickMsg();
     }
 
     private function loadCache(): ?WeatherSnapshot
