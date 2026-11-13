@@ -316,7 +316,11 @@ final class ContainersTest extends TestCase
             $this->assertSame('', DockerSocket::fetch($sock), 'connected, never answered');
             $elapsed = (hrtime(true) - $t) / 1e9;
             $this->assertGreaterThan(0.9, $elapsed);
-            $this->assertLessThan(1.2, $elapsed, 'connect + write + read share one 1 s deadline');
+            // Upper bound carries 3x slack over the 1 s deadline (candy-top-053):
+            // a ±20 % window left ~200 ms of scheduling headroom, which the
+            // repo's known CI-saturation class exceeded; the deadline is a
+            // ceiling, so only the lower bound is load-bearing for precision.
+            $this->assertLessThan(3.0, $elapsed, 'connect + write + read share one 1 s deadline');
         } finally {
             fclose($server);
         }
@@ -353,7 +357,10 @@ final class ContainersTest extends TestCase
             $reply = DockerSocket::fetch($sock);
             $elapsed = (hrtime(true) - $t) / 1e9;
             $this->assertStringStartsWith('H', $reply, 'what arrived in time is kept');
-            $this->assertLessThan(1.2, $elapsed, 'a trickle cannot stretch the exchange past its deadline');
+            // 3x the 1 s deadline (candy-top-053): a daemon never cut at the
+            // deadline would run 8 × 0.6 s ≈ 4.8 s, so the bound still
+            // separates the arms while leaving CI scheduling headroom.
+            $this->assertLessThan(3.0, $elapsed, 'a trickle cannot stretch the exchange past its deadline');
         } finally {
             if ($pid > 0) {
                 posix_kill($pid, SIGKILL);

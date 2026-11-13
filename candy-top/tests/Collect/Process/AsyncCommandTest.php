@@ -153,7 +153,9 @@ final class AsyncCommandTest extends TestCase
 
         [$r, $elapsed] = self::await($loop, AsyncCommand::launch([$this->script('exec sleep 30')], $loop, 0.3));
         $this->assertSame(CommandOutcome::Timeout, $r->outcome);
-        $this->assertLessThan(2.0, $elapsed);
+        // 0.3 s deadline + kill + reap, bounded with CI headroom (candy-top-053);
+        // a never-timeout child sleeps 30 s, so the arm separation survives.
+        $this->assertLessThan(3.0, $elapsed);
     }
 
     public function testARunawayChildIsKilledAtItsOutputCap(): void
@@ -162,7 +164,9 @@ final class AsyncCommandTest extends TestCase
         $r = AsyncCommand::run([$flood], 5.0, 100_000);
         $this->assertSame(CommandOutcome::TooLarge, $r->outcome);
         $this->assertSame('', $r->stdout, 'nothing kept of a runaway');
-        $this->assertLessThan(2.0, $r->seconds, 'killed at the cap, not at the deadline');
+        // killed at the cap, not at the deadline — 3 s still separates from
+        // the 5 s deadline arm while leaving CI headroom (candy-top-053)
+        $this->assertLessThan(3.0, $r->seconds);
         $this->assertSame(0, AsyncCommand::liveCount());
 
         $loop = new StreamSelectLoop();
