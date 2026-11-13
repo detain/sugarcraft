@@ -344,6 +344,29 @@ final class QuickPickTest extends TestCase
         $this->assertSame(0, $h->cursor());
     }
 
+    public function testFactorySeedsTheFilterFnDoor(): void
+    {
+        // -056: the ctor's third parameter was factory-invisible — new()
+        // forwarded only two. With the door widened, a host predicate
+        // seeded through the FACTORY must gate the typed filter pass. The
+        // status-quo show() reset still surfaces allItems unfiltered (an
+        // empty-text show bypasses the predicate); the first keystroke is
+        // where both rules meet.
+        $items = ['apple', 'banana', 'cherry', 'date', 'elderberry'];
+        $h = QuickPick::new(
+            $items,
+            null,
+            static fn(Item $item): bool => \strlen($item->value()) > 5
+        )->show()->type('a');
+
+        // 'a' substring matches apple/banana/date; the host predicate keeps
+        // only the >5-cell one — banana. (elderberry has no 'a'.) The
+        // default predicate would answer 3, so this pins that the closure
+        // travelled through the factory.
+        $this->assertSame(1, $h->itemCount(), 'factory-seeded predicate must gate the survivors');
+        $this->assertSame('banana', $h->selected()?->value());
+    }
+
     /**
      * withBorder()/withStyle() used to be inert storage: the frame renderer
      * never read them (C3). These pins are render tests — they fail loud if

@@ -202,8 +202,9 @@ final class QuickPick
     private ?\Closure $onResize = null;
 
     /**
-     * The third parameter is the only constructor-level way to seed a custom
-     * filter predicate; the fluent path is setFilterFn() and new() exposes neither.
+     * All three seeds are factory-reachable through {@see new()} as well
+     * (S-28/-056); the fluent path is the filterFn builder — setFilterFn()
+     * today, canonically withFilterFn() after the naming sweep (S-24).
      *
      * @param array<array-key, string|Item> $items
      * @param \Closure(string $item, bool $isSelected, int $number = 0): string|null $itemFormatter
@@ -231,9 +232,12 @@ final class QuickPick
     // Factory
     // -------------------------------------------------------------------------
 
-    public static function new(array $items = [], ?\Closure $itemFormatter = null): self
-    {
-        return new self($items, $itemFormatter);
+    public static function new(
+        array $items = [],
+        ?\Closure $itemFormatter = null,
+        ?\Closure $filterFn = null,
+    ): self {
+        return new self($items, $itemFormatter, $filterFn);
     }
 
     // -------------------------------------------------------------------------
