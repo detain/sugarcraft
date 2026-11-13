@@ -24,6 +24,9 @@ store, or manage an inbox.
   2026-11-12 (owner ruling 6a) because the pop-parity surface this app commits to is
   composing and dispatching mail (CLI + library), not an interactive client; a TUI
   would duplicate the sugar-widgets surface instead of deepening the send path.
+  Likewise the Mailgun leg is deliberately descoped 2026-11-12 (same ruling): the
+  transport roster stays SMTP + Resend, and Mailgun accounts relay through their
+  documented SMTP endpoints rather than a second API transport.
 - **Email value object** — from, to, cc, bcc, subject, body, HTML body, reply-to, attachments,
   signature (the signature joins the plain-text body only — an HTML-only mail silently drops it)
 - **HTML accessibility** — the authored HTML is embedded verbatim (nothing post-processes it),
