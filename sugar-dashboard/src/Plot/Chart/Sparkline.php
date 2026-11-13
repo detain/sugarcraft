@@ -14,6 +14,15 @@ use SugarCraft\Dashboard\Plot\RingBuffer;
  *
  * Mirrors Homedash internal_ui_components_sparkline.go (8-block scaling).
  * Mirrors Homedash ring buffer but with O(1) push instead of O(n) slice-shift.
+ *
+ * Sibling sparkline shapes share a name prefix and DIFFERENT first-arg
+ * semantics (finding sugar-dashboard-196) — route data through the matching
+ * entry point:
+ *   Sparkline      first ctor arg / new() arg = WIDTH (int); data arrives
+ *                  via push()/pushAll(), there is NO withData()
+ *   SparklineBar   first arg = DATA (list<float>); bar blocks, width via withWidth()
+ *   SparklineArea  first arg = DATA (list<float>); line + fill
+ *   SparkArea      first arg = VALUES (list<float>); minimal area, no width arg
  */
 final class Sparkline implements \SugarCraft\Dashboard\Foundation\SizedItem
 {

@@ -161,10 +161,10 @@ its `Layout\Grid\` option value parts.
 | `HeatMapChart` | 2D heatmap with color gradient | `new(data)`, `sample()`, `withRowLabels()`, `withColumnLabels()`, `withLowColor()`, `withHighColor()` | |
 | `Heatmap` | Heat map visualization with legend | `new(data)`, `sample()`, `withLegend()`, `withValues()`, `withLowColor()`, `withHighColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/heatmap.gif) |
 | `RadarChart` | Radar/spider chart for multi-axis data | `new(labels, series)`, `withSize()`, `withGridLines()`, `withShowLabels()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/radar-chart.gif) |
-| `Sparkline` | Inline sparkline chart | `new(data)`, `withData()`, `withWidth()`, `withHeight()`, `withDataPoints()`, `withFill()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline.gif) |
-| `SparklineBar` | Bar-style sparkline | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-bar.gif) |
-| `SparklineArea` | Area-style sparkline | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-area.gif) |
-| `SparkArea` | Spark area chart | | |
+| `Sparkline` | Inline sparkline chart (ring buffer) | `new(int $width = 40)` with data via `push()`/`pushAll()` (no ctor data), `withWidth()`, `withHeight()`, `withDataPoints()`, `withFill()`, `withDimEdge()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline.gif) |
+| `SparklineBar` | Bar-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowValues()`, `withColor()`, `withMaxColor()`, `withMinColor()`, `withBarGaps()`, `withSeparator()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-bar.gif) |
+| `SparklineArea` | Area-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowLine()`, `withShowFill()`, `withLineColor()`, `withFillColor()`, `withMaxColor()`, `withMinColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-area.gif) |
+| `SparkArea` | Spark area chart | `new(array $values)`, `withHeight()`, `withColor()`, `withShowMinMax()`, `withGradient()` | |
 | `FunnelChart` | Funnel chart visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/funnel-chart.gif) |
 | `Funnel` | Funnel visualization component | | |
 | `Meter` | Meter/gauge component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/meter.gif) |

@@ -20,6 +20,14 @@ use SugarCraft\Dashboard\Foundation\ColorMode;
  * - Single color for minimalism
  *
  * Mirrors sparkline/area patterns adapted to PHP with wither-style immutable setters.
+ *
+ * Sibling sparkline shapes share a name prefix and DIFFERENT first-arg
+ * semantics (finding sugar-dashboard-196) — route data through the matching
+ * entry point:
+ *   Sparkline      first ctor arg / new() arg = WIDTH (int); data arrives via push()/pushAll()
+ *   SparklineBar   first arg = DATA (list<float>); bar blocks, width via withWidth()
+ *   SparklineArea  first arg = DATA (list<float>); line + fill
+ *   SparkArea      first arg = VALUES (list<float>); minimal area, no width arg
  */
 final class SparkArea implements \SugarCraft\Dashboard\Foundation\SizedItem
 {

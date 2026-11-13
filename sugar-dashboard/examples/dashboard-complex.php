@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Dashboard\Plot\Chart\ChartDataPoint;
-use SugarCraft\Dashboard\Plot\Chart\SparklineBar as Sparkline;
+use SugarCraft\Dashboard\Plot\Chart\SparklineBar;
 use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
 use SugarCraft\Dashboard\Layout\Grid\Options;
 use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
@@ -76,7 +76,7 @@ $donut = Donut::mocha([
 ]);
 $donutFrame = Card::titled($donut, 'Traffic Sources');
 
-$sparkline = Sparkline::new([3.0, 5.0, 2.0, 8.0, 6.0, 4.0, 7.0, 5.0, 9.0, 6.0, 8.0, 7.0], 40);
+$sparkline = SparklineBar::new([3.0, 5.0, 2.0, 8.0, 6.0, 4.0, 7.0, 5.0, 9.0, 6.0, 8.0, 7.0])->withWidth(40);
 $sparkFrame = Card::titled($sparkline, 'Activity Trend');
 
 // Charts in 2x2 grid

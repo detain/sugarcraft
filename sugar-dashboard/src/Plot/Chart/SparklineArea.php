@@ -18,6 +18,14 @@ use SugarCraft\Dashboard\Foundation\ColorMode;
  *
  * Mirrors area sparkline rendering from bubbletea/sparkline but adapted
  * to PHP with wither-style immutable setters.
+ *
+ * Sibling sparkline shapes share a name prefix and DIFFERENT first-arg
+ * semantics (finding sugar-dashboard-196) — route data through the matching
+ * entry point:
+ *   Sparkline      first ctor arg / new() arg = WIDTH (int); data arrives via push()/pushAll()
+ *   SparklineBar   first arg = DATA (list<float>); bar blocks, width via withWidth()
+ *   SparklineArea  first arg = DATA (list<float>); line + fill, width via withWidth()
+ *   SparkArea      first arg = VALUES (list<float>); minimal area, no width arg
  */
 final class SparklineArea implements \SugarCraft\Dashboard\Foundation\SizedItem
 {
