@@ -93,7 +93,7 @@ final class Cursor implements Model
         if (!$this->focused || $this->mode !== Mode::Blink) {
             return [$this, null];
         }
-        $next = new self($this->char, $this->mode, true, !$this->blinkOn, $this->blinkSpeed, $this->id);
+        $next = $this->mutate(focused: true, blinkOn: !$this->blinkOn);
         return [$next, $next->blink()];
     }
 
@@ -128,7 +128,7 @@ final class Cursor implements Model
      */
     public function focus(): array
     {
-        $next = new self($this->char, $this->mode, true, true, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
+        $next = $this->mutate(focused: true, blinkOn: true);
         $cmd = $this->mode === Mode::Blink ? $next->blink() : null;
         return [$next, $cmd];
     }
@@ -136,17 +136,17 @@ final class Cursor implements Model
     /** Release focus; companion to { focus()}. */
     public function blur(): self
     {
-        return new self($this->char, $this->mode, false, true, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
+        return $this->mutate(focused: false, blinkOn: true);
     }
 
     public function setChar(string $c): self
     {
-        return new self($c, $this->mode, $this->focused, $this->blinkOn, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
+        return $this->mutate(char: $c);
     }
 
     public function setMode(Mode $m): self
     {
-        return new self($this->char, $m, $this->focused, true, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
+        return $this->mutate(mode: $m, blinkOn: true);
     }
 
     /**
@@ -155,7 +155,7 @@ final class Cursor implements Model
      */
     public function withStyle(?Style $s): self
     {
-        return new self($this->char, $this->mode, $this->focused, $this->blinkOn, $this->blinkSpeed, $this->id, $s, $this->textStyle);
+        return $this->mutate(style: $s, styleSet: true);
     }
 
     /**
@@ -164,7 +164,7 @@ final class Cursor implements Model
      */
     public function withTextStyle(?Style $s): self
     {
-        return new self($this->char, $this->mode, $this->focused, $this->blinkOn, $this->blinkSpeed, $this->id, $this->style, $s);
+        return $this->mutate(textStyle: $s, textStyleSet: true);
     }
 
     /**
@@ -202,5 +202,40 @@ final class Cursor implements Model
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
         return null;
+    }
+
+    /**
+     * Single rebuild site (SF-41 / sugar-forms-057): every state transition
+     * funnels through here, so the readonly snapshot can only be re-formed
+     * one way — same law the field classes already obey. The lineage id is
+     * carried explicitly (a rebuild is the SAME cursor, unlike __clone's
+     * re-keyed fresh lineage).
+     *
+     * Disclosed behavior close: the old blink arm silently dropped
+     * `$style`/`$textStyle` (they defaulted to null at the ctor); the funnel
+     * carries them, which is the sane blink semantics — a blink toggle must
+     * not erase a caller-supplied style. No pin defended the erasure.
+     */
+    private function mutate(
+        ?string $char = null,
+        ?Mode $mode = null,
+        ?bool $focused = null,
+        ?bool $blinkOn = null,
+        ?float $blinkSpeed = null,
+        ?Style $style = null,
+        bool $styleSet = false,
+        ?Style $textStyle = null,
+        bool $textStyleSet = false,
+    ): self {
+        return new self(
+            $char ?? $this->char,
+            $mode ?? $this->mode,
+            $focused ?? $this->focused,
+            $blinkOn ?? $this->blinkOn,
+            $blinkSpeed ?? $this->blinkSpeed,
+            $this->id,
+            $styleSet ? $style : $this->style,
+            $textStyleSet ? $textStyle : $this->textStyle,
+        );
     }
 }

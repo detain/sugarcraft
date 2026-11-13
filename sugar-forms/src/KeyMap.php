@@ -149,25 +149,49 @@ final class KeyMap
     /** Replace the `next` binding list. */
     public function withNext(array $entries): self
     {
-        return new self($entries, $this->prev, $this->submit, $this->abort);
+        return $this->mutate(next: $entries);
     }
 
     /** Replace the `prev` binding list. */
     public function withPrev(array $entries): self
     {
-        return new self($this->next, $entries, $this->submit, $this->abort);
+        return $this->mutate(prev: $entries);
     }
 
     /** Replace the `submit` binding list. */
     public function withSubmit(array $entries): self
     {
-        return new self($this->next, $this->prev, $entries, $this->abort);
+        return $this->mutate(submit: $entries);
     }
 
     /** Replace the `abort` binding list. */
     public function withAbort(array $entries): self
     {
-        return new self($this->next, $this->prev, $this->submit, $entries);
+        return $this->mutate(abort: $entries);
+    }
+
+    /**
+     * Single rebuild site (SF-41 / sugar-forms-057): the four binding-list
+     * setters funnel here so the immutable snapshot has exactly one
+     * construction path outside the canonical {@see self::new()} factory.
+     *
+     * @param list<array{type: KeyType, alt?: bool, ctrl?: bool, shift?: bool}>|null $next
+     * @param list<array{type: KeyType, alt?: bool, ctrl?: bool, shift?: bool}>|null $prev
+     * @param list<array{type: KeyType, alt?: bool, ctrl?: bool, shift?: bool}>|null $submit
+     * @param list<array{type: KeyType, alt?: bool, ctrl?: bool, shift?: bool}>|null $abort
+     */
+    private function mutate(
+        ?array $next = null,
+        ?array $prev = null,
+        ?array $submit = null,
+        ?array $abort = null,
+    ): self {
+        return new self(
+            $next ?? $this->next,
+            $prev ?? $this->prev,
+            $submit ?? $this->submit,
+            $abort ?? $this->abort,
+        );
     }
 
     /**

@@ -106,3 +106,21 @@ setter boundary rides `Lang::t` with a literal key string (`keys.unknown_binding
 localizes too, because a straggler makes the policy incoherent at the exact
 surface a coverage audit greps. A new raw-string throw at a boundary is a defect
 to fix, not style to flag twice.
+### 2026-11-13 — Widget mutate() funnel (SF-41 / sugar-forms-057)
+
+Pattern: the widget classes Cursor and KeyMap now carry the same private
+`mutate()` single-rebuild-site funnel the field classes use — every state
+transition names the changed slots and the funnel threads the rest (`?? $this-
+prop`; nullable-legal fields like `Cursor::$style` pair a `bool $styleSet`
+sentinel per the field convention). A rebuild keeps the lineage `id`
+explicitly — unlike `__clone()` re-keying, a rebuild is the same cursor.
+Viewport, TextArea and Scrollbar were already compliant (their `new self`
+counts at write time were factory sites + the mutate body itself), so the
+finding's five-class scope closed on two files; grep of the five files shows
+only roster-style sites.
+Anti-pattern: the old blink arm omitted `$style`/`$textStyle`, so a BlinkMsg
+silently erased caller-supplied cursor styles — one rebuild site per class
+makes exactly this class of drift impossible. No pin defended the erasure;
+the funnel carries the styles and the suite passed untouched.
+
+Source: sugar-forms: SF-41
