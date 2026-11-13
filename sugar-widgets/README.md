@@ -59,11 +59,11 @@ The counted inventory lives once, in the intro at the top of this file.
 |---|---|---|
 | `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
 | `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the public constructor is deprecated BC — removal at 2.0); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()`; `withShowDisabled()` pins greyed-out bindings into the footer so a host can document commands that exist but are inactive (off by default; a disabled toggle never flips show-all) | — |
-| `Key\Binding` | One key + label + help row; `Binding::new(...)`, `Binding::withDisabled(...)` factories | — |
+| `Key\Binding` | One key list + label + help row: readonly `keys`/`help`/`disabled`, `matches()` / static `any()` for dispatch, `withHelp()`, `disable()`/`setEnabled()` (plus legacy `setKeys()`/`setHelp()`), `unbind()`; factories `Binding::new(...)`, `Binding::withDisabled(...)` | — |
 | `Key\KeyMap` | Interface — implement it so `Help` can render your bindings: `shortHelp(): list<Binding>` for the inline row, `fullHelp(): list<list<Binding>>` for the expanded pane (one inner list per column); `Tabs\TabsKeyMap` is the shipped example. Note `Key\Help` — the small `{key, desc}` value object bindings render through — is a *different* type from the `Help\Help` component | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |
 | `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`; render modes via `withRenderMode(ProgressRenderMode)` — `Block` / `Line` / `Slim` — and custom percent copy via `withPercentFormat(string)`) | — |
-| `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); honours `REDUCE_MOTION` *and* `PREFERS_REDUCED_MOTION` (read through the sugar-colorprofile probe — any value outside `''`/`0`/`false`/`no`/`off`) by snapping to the target percent within one tick | `SpringTickMsg` |
+| `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); reduced motion is honoured BY THE ENGINE — every `Spring` consults `Probe::reducedMotion()` (`sugar-colorprofile`; any value outside `''`/`0`/`false`/`no`/`off`) and snaps to target, a per-spring override always winning — not by widget code | `SpringTickMsg` |
 | `Timer\Timer` | Countdown timer — `Timer::new($duration, $interval = 1.0)` (duration is required); `remaining` / `interval` are promoted readonly properties, the methods are `interval(): float`, `timeout(): float` (remaining seconds — `0` once `TimeoutMsg` has fired) and `withInterval(float)`; there is no `remaining()` method. When not running, `view()` appends a dim state tag (`paused`, or `timeout` once `TimeoutMsg` has fired) so the state is visible in the frame — running bytes are byte-identical; hosts style it themselves from the plain-text `stateLabel()`. In-flight ticks from stopped generations are refused via the tick `epoch` | `Timer\TimerTick` (deprecated alias `TickMsg`), `TimeoutMsg` |
 | `Stopwatch\Stopwatch` | Count-up timer; `elapsed`, `interval()`, `withInterval(float)`. `elapsed` is a **tick-count accumulator** (ticks × interval), not wall-clock — it advances only while `update()` consumes ticks. Same dim state tag as `Timer` while not running, with `not started` and `paused` distinct (`stateLabel()`) | `Stopwatch\StopwatchTick` (deprecated alias `TickMsg`) |
 | `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` _(deprecated alias — re-exported from `SugarCraft\Forms\TextInput`)_ | — |
@@ -71,7 +71,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | `ViewportTickMsg` |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values — `list<Item>` is a phpdoc contract, there is no runtime element guard _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
-| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values (`Node::branch($label, ...$children)` / `Node::leaf($label)` — the constructor's second parameter is `$value`, not children, so a 2-arg `new Node(...)` silently parks the child list in the value slot and renders flat); chrome glyphs and prefixes are immutable via `withStyle(...)` — `withStyle` knobs are checked at ingress, while node labels are sanitised at RENDER (control characters stripped and `Sanitize::untrustedForMarkedFrames()` applied), not stored raw. | — |
+| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values: `Node::branch($label, ...$children)` / `Node::leaf($label)`. Mind the raw constructor — its second parameter is `$value`, not children, so a 2-arg `new Node(...)` parks the child list in the value slot and renders flat; prefer the factories. Chrome glyphs and prefixes are immutable via `withStyle(...)`, checked at ingress; node labels are sanitised at RENDER (control characters stripped, `Sanitize::untrustedForMarkedFrames()` applied). | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
 | `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then clicks find nothing. While focused, the active tab renders underlined; blurred it renders plain — the focus state is visible in the frame bytes, and forward selection scrolls the window by the minimum that reveals the new tab (no paging) | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
@@ -101,7 +101,7 @@ the authoritative, kept-current key source is the sugar-forms README:
 
 | Component | Keys |
 |---|---|
-| `Viewport` _(alias)_ | `↑`/`k` line up, `↓`/`j` line down, `←`/`h` scroll left, `→`/`l` scroll right, `PageUp`/`b`, `PageDown`/`f`/`Space`, `Ctrl+u`/`Ctrl+d` half pages, `Home`/`g`, `End`/`G` |
+| `Viewport` _(alias)_ | `↑`/`k` line up, `↓`/`j` line down, `←`/`h` scroll left, `→`/`l` scroll right, `PageUp`/`b`, `PageDown`/`f`/`Space`, `Ctrl+u`/`Ctrl+d` half pages, `Home`/`g`, `End`/`G` (decoded by `sugar-forms` — verified against `sugar-forms` dev-master, 2026-11) |
 | `TextInput` / `TextArea` / `ItemList` / `FilePicker` / `Cursor` / `Spinner` / `Scrollbar` _(aliases)_ | decoded in `sugar-forms` — see its Keyboard section; `TextInput` vim-mode bindings are the shared `VimKeyHandler` (next section) |
 
 ### Vim mode
@@ -144,11 +144,18 @@ double-counted. Ticks are per-widget types: `TimerTick` and
 spellings are deprecated aliases, removal at 2.0), and feeding one
 widget's tick into the other's `update()` raises `TypeError` at the
 loop instead of silently no-oping.
-Reduced motion is gated per component: `AnimatedProgress` honours
-`REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` itself, but
+Reduced motion in animated progress is an ENGINE guarantee, not a
+widget one: `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` (any value
+outside `''`/`0`/`false`/`no`/`off`) are read by `sugar-spring` — every
+`Spring` consults `Probe::reducedMotion()` (`sugar-colorprofile`,
+probed once per process
+— `Spring::resetReducedMotionProbe()` is the test seam) and snaps
+straight to its target; a per-spring `$reducedMotionOverride` always
+wins over the environment. The alias components are different:
 `Cursor\BlinkMsg` and `Spinner\TickMsg` are not gated in the widget —
-hosts that follow WCAG 2.2.2 must stop forwarding those ticks when the
-user asks for reduced motion.
+hosts that follow WCAG 2.2.2 (Pause, Stop, Hide: moving content that
+starts automatically needs a pause/stop/hide mechanism) must stop
+forwarding those ticks when the user asks for reduced motion.
 
 ### Colour on constrained terminals (NO_COLOR / TERM=dumb)
 
