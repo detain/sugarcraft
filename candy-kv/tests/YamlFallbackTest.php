@@ -7,6 +7,7 @@ namespace SugarCraft\Kv\Tests;
 use SugarCraft\Kv\Cli\ExportCommand;
 use SugarCraft\Kv\Import\YamlImporter;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\YamlDialect;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -267,5 +268,199 @@ final class YamlFallbackTest extends TestCase
         $this->assertSame(2, $count);
         $this->assertSame('alice', $this->store->get('user.name'));
         $this->assertSame('stable', $this->store->get('api.v2'));
+    }
+
+    // ─── KV-S12 dialect laws (forced fallback — no symfony dependency) ───────
+
+    public function testFallbackDecodesNullSentinelsLikeSymfony(): void
+    {
+        // kv-017: bare empty/~/null/Null/NULL decode to NULL so the
+        // importer's refuse-null law fires identically under both engines;
+        // quoted forms stay deliberate strings.
+        $parsed = YamlDialect::parseFallback("e:\nt: ~\nn: null\nN: Null\nq: \"~\"\nz: \"\"\n");
+
+        $this->assertSame(['e' => null, 't' => null, 'n' => null, 'N' => null, 'q' => '~', 'z' => ''], $parsed);
+    }
+
+    public function testFallbackImportRefusesNullSentinelNamingTheEntry(): void
+    {
+        // The engine parity the law promises: on either engine the same
+        // document refuses with the same message.
+        $importer = new YamlImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "tilde" has a null value; only strings and numbers round-trip.');
+        $importer->importFromString("tilde: ~\n", false);
+    }
+
+    public function testFallbackStripsValueCommentsKeepsLiteralHashes(): void
+    {
+        // kv-018: a '#' introduced by whitespace starts a comment (plain or
+        // after a closing quote); 'plain#keep' has no space before the hash
+        // and keeps it.
+        $parsed = YamlDialect::parseFallback("k: foo # bar\nj: plain#keep\nh: # c\nqt: \"v\" # tail\n");
+
+        $this->assertSame(['k' => 'foo', 'j' => 'plain#keep', 'h' => null, 'qt' => 'v'], $parsed);
+    }
+
+    public function testFallbackAndParseRefuseMidLineCarriageReturn(): void
+    {
+        // kv-012: a lone CR is a LINE BREAK to symfony and invisible
+        // garbage to the fallback — the same file meant two different
+        // imports. Refused on both routes now, naming the line; whole-file
+        // CRLF stays legal (trim eats the trailing CR).
+        $doc = "a: 1\rb: 2\r";
+        foreach ([YamlDialect::parseFallback(...), YamlDialect::parse(...)] as $route) {
+            try {
+                $route($doc);
+                $this->fail('expected RuntimeException for mid-line CR');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('carriage return', $e->getMessage());
+                $this->assertStringContainsString('line 1', $e->getMessage());
+            }
+        }
+
+        $this->assertSame(
+            ['a' => '1', 'b' => '2'],
+            YamlDialect::parseFallback("a: 1\r\nb: 2\r\n"),
+            'CRLF documents must keep importing',
+        );
+    }
+
+    public function testFallbackImportOfCrDocumentRefusesNamingTheLine(): void
+    {
+        // The acceptance shape: importFromString("a: 1\rb: 2\r") errors.
+        $importer = new YamlImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('line 1');
+        $importer->importFromString("a: 1\rb: 2\r", false);
+    }
+
+    public function testFallbackRefusesDuplicateKeyNamingBothLines(): void
+    {
+        // kv-078: repeated keys silently last-won on the fallback while
+        // symfony throws — the file imported different values depending on
+        // an optional package.
+        try {
+            YamlDialect::parseFallback("k: 1\nj: 2\nk: 3");
+            $this->fail('expected RuntimeException');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('duplicate key "k"', $e->getMessage());
+            $this->assertStringContainsString('line 3', $e->getMessage());
+            $this->assertStringContainsString('line 1', $e->getMessage());
+        }
+    }
+
+    public function testParseRouteAlsoRefusesDuplicateKeys(): void
+    {
+        // Engine-independent: symfony throws its own duplicate-key error and
+        // the wrapper keeps it a 'Syntax error'; the fallback refuses above.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Syntax error');
+        YamlDialect::parse("k: 1\nj: 2\nk: 3");
+    }
+
+    public static function indicatorCorpus(): array
+    {
+        return [
+            'sequence' => ['- x'],
+            'bare-dash' => ['-'],
+            'flow-map' => ['{a: 1}'],
+            'flow-seq' => ['[a]'],
+            'alias' => ['*anc'],
+            'anchor' => ['&anc v'],
+            'folded' => ['>'],
+            'literal' => ['|'],
+            'percent' => ['%directive'],
+            'at' => ['@reserved'],
+            'backtick' => ['`reserved'],
+            'tag' => ['!!str x'],
+        ];
+    }
+
+    /**
+     * @param string $value
+     * @dataProvider indicatorCorpus
+     */
+    public function testFallbackRefusesIndicatorStructureValues(string $value): void
+    {
+        // kv-071: structure to one engine, literal text to the other —
+        // refused before the engine is chosen. Quoting is the escape hatch.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('is YAML structure');
+        YamlDialect::parseFallback("k: $value");
+    }
+
+    public function testIndicatorLawCoversKeyPositionToo(): void
+    {
+        // '- a: b' is a block sequence wrapping a mapping to symfony and a
+        // literal key '- a' to the old fallback.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('a key starting with "-"');
+        YamlDialect::parseFallback('- a: b');
+    }
+
+    public function testNegativeNumbersAreNotSequences(): void
+    {
+        // The dash only indicts when followed by space/end, so '-5' keeps
+        // its plain-scalar reading on both engines.
+        $parsed = YamlDialect::parseFallback("k: -5\nj: -3.25");
+
+        $this->assertSame(['k' => '-5', 'j' => '-3.25'], $parsed);
+    }
+
+    public function testFallbackDecodesFullDoubleQuoteEscapeSet(): void
+    {
+        // kv-072: the old machine re-emitted unknown escapes as literal
+        // \q (symfony refuses) and only knew six escapes.
+        $parsed = YamlDialect::parseFallback(
+            'k: "\0\a\b\t\n\v\f\r\e\ \"\/\\\\\N\_\L\P\x41\u00e9\U0001F600"'
+        );
+
+        $expected = "\x00\x07\x08\t\n\x0B\x0C\r\x1B" . ' ' . '"' . '/' . "\\"
+            . "\u{0085}\u{00A0}\u{2028}\u{2029}" . 'Aé😀';
+        $this->assertSame($expected, $parsed['k']);
+    }
+
+    public function testFallbackPairsSurrogatesAndRefusesBadOnes(): void
+    {
+        // JSON surrogate rules: high+low pair to a real codepoint; an
+        // unpaired high, a lone low, or >U+10FFFF all throw.
+        $paired = YamlDialect::parseFallback('k: "\ud83d\ude00"');
+        $this->assertSame('😀', $paired['k']);
+
+        foreach (['k: "\ud83d"', 'k: "\udeee"', 'k: "\U00110000"', 'k: "\ud83dx"', 'k: "a\"'] as $doc) {
+            try {
+                YamlDialect::parseFallback($doc);
+                $this->fail("expected refusal for $doc");
+            } catch (\RuntimeException) {
+                $this->assertTrue(true);
+            }
+        }
+    }
+
+    public function testFallbackRefusesUnknownAndMalformedEscapes(): void
+    {
+        // The old machine RE-EMITTED '\\q' as literal text where symfony
+        // refuses the document — two values for one file.
+        foreach (['k: "a\\qb"', 'k: "x\\uZZZZ"', 'k: "\\u{1}"'] as $doc) {
+            try {
+                YamlDialect::parseFallback($doc);
+                $this->fail("expected refusal for $doc");
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('escape', $e->getMessage());
+            }
+        }
+    }
+
+    public function testFallbackReadsSymfonyBinaryTagButRefusesOtherTags(): void
+    {
+        // !!binary is symfony's inline control-byte shape and must keep
+        // working; every other tag means coercion the dialect never offers.
+        $parsed = YamlDialect::parseFallback("ctl: !!binary YQFi\n");
+        $this->assertSame(['ctl' => "a\x01b"], $parsed);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Syntax error on line 1');
+        YamlDialect::parseFallback("k: !!str x\n");
     }
 }

@@ -19,16 +19,21 @@ namespace SugarCraft\Kv;
  * implement exactly this dialect — including proper double-quote escaping
  * (backslashes, newlines, control characters) and quoted-key support — so
  * an export of `C:\temp` or a multi-line value reimports intact instead of
- * corrupting. The two engines are NOT interchangeable parsers, though each
- * reads its own output exactly: the fallback refuses an unquoted
- * colon-containing key that symfony accepts (`e:f: hey` is the key `e:f`
- * under symfony), it keeps `true`-style value tokens as literal text where
- * symfony decodes them to a bool (the importer refuses bools, so such a
- * document imports on the fallback and is refused under symfony; a decoded
- * int stringifies on import and lands identically either way), and symfony
- * may wrap very long plain scalars across lines, which the fallback
- * refuses loudly rather than half-parses. A single process always uses one
- * engine for both directions, so its own round-trips are exact.
+ * corrupting. The two engines are NOT interchangeable parsers, but the
+ * file-level dialect laws — one document (no extra `---`/`...`), no merge
+ * keys, no bare CR inside a line, no structural-indicator plain values,
+ * no duplicate keys, null sentinels (`~`/`null`/empty) decoding to null —
+ * are enforced BEFORE the engine is chosen, so a hostile or mistyped file
+ * is refused identically either way. What still differs: the fallback
+ * refuses an unquoted colon-containing key that symfony accepts (`e:f: hey`
+ * is the key `e:f` under symfony), it keeps `true`-style value tokens as
+ * literal text where symfony decodes them to a bool (the importer refuses
+ * bools, so such a document imports on the fallback and is refused under
+ * symfony; a decoded int stringifies on import and lands identically
+ * either way), and symfony may wrap very long plain scalars across lines,
+ * which the fallback refuses loudly rather than half-parses. A single
+ * process always uses one engine for both directions, so its own
+ * round-trips are exact.
  * {@see \SugarCraft\Kv\Import\YamlImporter::importFromString()} is where
  * the bool refusal lands.
  *
@@ -76,7 +81,138 @@ final class YamlDialect
             return [];
         }
 
+        self::refuseDialectLaws($yaml);
+
         return self::parseFlat($yaml);
+    }
+
+    /**
+     * File-level dialect laws shared by BOTH engines (kv-020, kv-012,
+     * kv-071): the flat dialect is one mapping of pairs. `Yaml::parse`
+     * hands multi-document streams to the first document only (or throws
+     * "Multiple documents"), `<<` merge keys inject entries that are not
+     * lines of the file, and the fallback historically FUSED a post-`...`
+     * document into the first. A bare CR inside a line is a line break to
+     * symfony and invisible garbage to the fallback, and an indicator-led
+     * plain value (`&anchor v`, `[a]`, `*alias`) means structure to one
+     * engine and a literal string to the other. Every one of these is a
+     * smuggling door for a hostile file — refuse up front so the engine
+     * choice cannot change the outcome.
+     *
+     * @throws \RuntimeException naming the construct (and line where known).
+     */
+    private static function refuseDialectLaws(string $yaml): void
+    {
+        if (\preg_match_all('/^[ \t]*---[ \t]*$/m', $yaml) > 1) {
+            throw new \RuntimeException(
+                'Syntax error: more than one document start marker (---); this dialect is a single mapping.'
+            );
+        }
+        // Any content line after a document-end marker is a second document
+        // the old marker-strip fused into the first.
+        if (\preg_match('/^[ \t]*\.\.\.[ \t]*$\n(?:[ \t]*(?:#.*)?\n)*[ \t]*[^ \t\r\n#]/', $yaml) === 1) {
+            throw new \RuntimeException(
+                'Syntax error: content after a document end marker (...); this dialect is a single mapping.'
+            );
+        }
+        if (\preg_match('/^[ \t]*<<[ \t]*:(?:[ \t]|$)/m', $yaml) === 1) {
+            throw new \RuntimeException(
+                'Syntax error: merge keys (<<) are not part of this dialect — they inject entries the file never names.'
+            );
+        }
+
+        foreach (\explode("\n", $yaml) as $index => $line) {
+            self::refuseLineLaws(\trim($line), $index + 1);
+        }
+    }
+
+    /**
+     * Per-line dialect laws (see refuseDialectLaws). A CRLF file stays
+     * legal: trim() eats the trailing CR, so only a CR left INSIDE the
+     * trimmed line is the illegal shape.
+     */
+    private static function refuseLineLaws(string $trimmed, int $lineNo): void
+    {
+        if ($trimmed === '' || $trimmed[0] === '#' || $trimmed === '---' || $trimmed === '...') {
+            return;
+        }
+
+        if (\strpos($trimmed, "\x0D") !== false) {
+            throw new \RuntimeException(\sprintf(
+                'Syntax error on line %d: a bare carriage return inside a line; end lines with LF (whole-file CRLF is fine) or spell CR as \\r inside a double-quoted scalar.',
+                $lineNo,
+            ));
+        }
+
+        $pair = self::pairPositions($trimmed);
+        if ($pair === null) {
+            return; // not a pair line; splitPair or the engine refuses garbage itself
+        }
+        self::refuseIndicatorToken($pair[0], 'key', $lineNo);
+        self::refuseIndicatorToken($pair[1], 'value', $lineNo);
+    }
+
+    /**
+     * The raw source text of a line's key and value positions (null for a
+     * quoted key — its quotes ARE the shape law), or null when the line is
+     * not a pair at all (structural garbage — splitPair or the engine will
+     * refuse it on their own). Mirrors splitPair's key syntax exactly so
+     * the preflight cannot disagree with the parser.
+     *
+     * @return array{0: ?string, 1: ?string}|null
+     */
+    private static function pairPositions(string $trimmed): ?array
+    {
+        if ($trimmed[0] === '"' || $trimmed[0] === "'") {
+            try {
+                $end = self::findClosingQuote($trimmed, 0, $trimmed[0]);
+            } catch (\RuntimeException) {
+                return null;
+            }
+            $rest = \trim(\substr($trimmed, $end + 1));
+            if ($rest === '' || $rest[0] !== ':') {
+                return null;
+            }
+
+            return [null, \ltrim(\substr($rest, 1))];
+        }
+
+        if (\preg_match('/^([^:]+):(?:\s+(.*))?$/', $trimmed, $m) === 1) {
+            return [\rtrim($m[1]), \ltrim($m[2] ?? '')];
+        }
+
+        return null;
+    }
+
+    /**
+     * kv-071: an unquoted token starting with a YAML indicator character
+     * means STRUCTURE to one engine and a literal string to the other —
+     * `- a`/`-` is a sequence entry, `[`/`{` a flow collection, `*`/`&` an
+     * alias/anchor, `>`/`|` a block scalar, `!` a tag, `%` a directive,
+     * `@`/backtick reserved. symfony's own dumper never emits such a lead
+     * unquoted (isPlainSafe quotes it), so refusing here costs nothing the
+     * dialect ever writes. `!!binary ` stays legal — it is symfony's
+     * inline control-byte shape that the fallback reads verbatim.
+     */
+    private static function refuseIndicatorToken(?string $token, string $position, int $lineNo): void
+    {
+        if ($token === null || $token === '' || $token[0] === '#') {
+            return; // absent, or only a comment
+        }
+        if (\str_starts_with($token, '!!binary ')) {
+            return;
+        }
+
+        $first = $token[0];
+        $sequenceDash = $first === '-' && ($token === '-' || $token[1] === ' ' || $token[1] === "\t");
+        if ($sequenceDash || \strpos('[{*&>|%@`!', $first) !== false) {
+            throw new \RuntimeException(\sprintf(
+                'Syntax error on line %d: a %s starting with "%s" is YAML structure, not this flat dialect — double-quote it to keep the literal.',
+                $lineNo,
+                $position,
+                $first,
+            ));
+        }
     }
 
     public static function build(array $flat): string
@@ -103,6 +239,12 @@ final class YamlDialect
         if (\trim($yaml) === '') {
             return [];
         }
+
+        // Refuse the file-level dialect violations BEFORE choosing an engine
+        // — under symfony a second document, a fused '...' tail, an
+        // indicator-led value or a lone CR used to parse (or fail) in ways
+        // the fallback never would (kv-012, kv-020, kv-071).
+        self::refuseDialectLaws($yaml);
 
         if (\class_exists(\Symfony\Component\Yaml\Yaml::class)) {
             // The dialect is one flat document; the fallback has always
@@ -266,6 +408,7 @@ final class YamlDialect
     private static function parseFlat(string $yaml): array
     {
         $result = [];
+        $firstSeen = [];
         $lineNo = 0;
         foreach (\explode("\n", $yaml) as $line) {
             $lineNo++;
@@ -292,6 +435,20 @@ final class YamlDialect
                     $e,
                 );
             }
+
+            // kv-078: a repeated key silently LAST-WON on the old fallback
+            // while symfony throws, so the same file imported different
+            // values depending on an optional package. Refuse it here too.
+            if (\array_key_exists($key, $firstSeen)) {
+                throw new \RuntimeException(\sprintf(
+                    'Syntax error on line %d: duplicate key "%s" (first defined on line %d); the last line would silently win.',
+                    $lineNo,
+                    $key,
+                    $firstSeen[$key],
+                ));
+            }
+            $firstSeen[$key] = $lineNo;
+
             $result[$key] = $val;
         }
 
@@ -301,7 +458,7 @@ final class YamlDialect
     /**
      * Split a `key: value` line, honouring quoted keys and values.
      *
-     * @return array{0: string, 1: string}
+     * @return array{0: string, 1: string|null}
      * @throws \RuntimeException when the line is not a flat pair (the
      *         message names the defect; parseFlat prepends the line number).
      */
@@ -346,30 +503,48 @@ final class YamlDialect
     /**
      * Resolve a value token (plain / single-quoted / double-quoted).
      *
-     * The null sentinels (`~`, bare `null`) and integer coercion apply ONLY
-     * to plain tokens — a quoted `"~"` or `"3600"` is a deliberate string
-     * and must survive verbatim, which is exactly what the emitter promises
-     * when it quotes those shapes.
+     * The plain null sentinels (`~`, `null`/`Null`/`NULL`, empty — kv-017)
+     * decode to null EXACTLY like symfony's engine does, so the importer's
+     * refuse-null law fires identically whichever parser read the file; the
+     * old fallback silently turned them into `""`. A quoted `"~"` is a
+     * deliberate string and must survive verbatim, which is exactly what
+     * the emitter promises when it quotes those shapes. A `#` introduced by
+     * whitespace opens a trailing comment on a plain token and after a
+     * closing quote (kv-018 — the old fallback kept both as literal value
+     * text that symfony drops); `foo#bar` has no space before the hash and
+     * keeps it.
      */
-    private static function parseValueToken(string $token): string
+    private static function parseValueToken(string $token): ?string
     {
         if ($token === '') {
-            return '';
+            return null;
         }
 
         if ($token[0] === '"' || $token[0] === "'") {
             $end = self::findClosingQuote($token, 0, $token[0]);
-            if ($end !== \strlen($token) - 1) {
+            $tail = \trim(\substr($token, $end + 1));
+            if ($tail !== '' && $tail[0] !== '#') {
                 // Trailing junk after the closing quote: refuse rather than
-                // silently truncating.
+                // silently truncating. A '#'-led tail is a comment.
                 throw new \RuntimeException('unexpected text after the closing quote');
             }
 
-            return self::unescapeQuoted($token);
+            return self::unescapeQuoted(\substr($token, 0, $end + 1));
         }
 
-        if ($token === '~' || $token === 'null') {
-            return '';
+        if ($token[0] === '#') {
+            return null; // the 'value' was a comment all along
+        }
+
+        if (\preg_match('/\s+#/', $token, $cm, \PREG_OFFSET_CAPTURE) === 1) {
+            $token = \rtrim(\substr($token, 0, $cm[0][1]));
+            if ($token === '') {
+                return null;
+            }
+        }
+
+        if ($token === '~' || $token === 'null' || $token === 'Null' || $token === 'NULL') {
+            return null;
         }
 
         // Symfony's dumper tags control-byte strings as `!!binary <base64>`
@@ -384,8 +559,10 @@ final class YamlDialect
             return $decoded;
         }
 
-        if (\str_starts_with($token, '!!')) {
-            // Any other explicit tag is beyond this dialect — refuse loudly.
+        if ($token[0] === '!') {
+            // Any other explicit tag (`!!str`, `!foo`) is beyond this
+            // dialect — symfony coerces or throws depending on the tag, so
+            // the line preflight already refused the shape on both routes.
             throw new \RuntimeException('unsupported YAML tag');
         }
 
@@ -418,6 +595,17 @@ final class YamlDialect
         throw new \RuntimeException('unterminated quoted string');
     }
 
+    /**
+     * Unwrap and unescape a quoted scalar.
+     *
+     * Single quotes: doubling only (`''` → `'`). Double quotes: the FULL
+     * YAML escape set (kv-072) — `\0 \a \b \t \n \v \f \r \e \<space> \" \/
+     * \\` plus the named marks `\N` (NEL) `\_` (NBSP) `\L` (LS) `\P` (PS)
+     * and `\xHH`/`\uXXXX`/`\UXXXXXXXX` with JSON surrogate pairing. The old
+     * machine re-EMITTED an unrecognised `\q` as literal `\q` while symfony
+     * refuses the document, so the same file decoded to two different
+     * values depending on an optional package; unknown escapes now throw.
+     */
     private static function unescapeQuoted(string $quoted): string
     {
         $quote = $quoted[0];
@@ -431,20 +619,39 @@ final class YamlDialect
         $len = \strlen($inner);
         for ($i = 0; $i < $len; $i++) {
             $c = $inner[$i];
-            if ($c !== '\\' || $i + 1 >= $len) {
+            if ($c !== '\\') {
                 $out .= $c;
                 continue;
             }
+            if ($i + 1 >= $len) {
+                throw new \RuntimeException('a double-quoted scalar ends with an incomplete escape sequence');
+            }
             $next = $inner[++$i];
             $out .= match ($next) {
-                'n' => "\n",
-                'r' => "\r",
-                't' => "\t",
                 '0' => "\0",
-                '\\' => '\\',
+                'a' => "\x07",
+                'b' => "\x08",
+                't' => "\t",
+                'n' => "\n",
+                'v' => "\x0B",
+                'f' => "\x0C",
+                'r' => "\r",
+                'e' => "\x1B",
+                ' ' => ' ',
                 '"' => '"',
-                'x' => self::expandHex($inner, $i),
-                default => '\\' . $next,
+                '/' => '/',
+                '\\' => '\\',
+                'N' => self::utf8(0x85),
+                '_' => self::utf8(0xA0),
+                'L' => self::utf8(0x2028),
+                'P' => self::utf8(0x2029),
+                'x' => self::expandCode($inner, $i, 2),
+                'u' => self::expandCode($inner, $i, 4),
+                'U' => self::expandCode($inner, $i, 8),
+                default => throw new \RuntimeException(\sprintf(
+                    'unknown escape sequence "\\%s" in a double-quoted scalar',
+                    $next,
+                )),
             };
         }
 
@@ -452,16 +659,65 @@ final class YamlDialect
     }
 
     /**
-     * Read \xHH starting just after the 'x' marker (index advanced by caller).
+     * Read a `\x`/`\u`/`\U` escape starting just after its marker letter
+     * ($i points at the letter; it advances past every consumed digit).
+     * Surrogate pairing follows JSON rules: a high surrogate must be
+     * followed immediately by a `\uDC00..\uDFFF` low half — unpaired,
+     * low-alone, or beyond U+10FFFF all throw.
      */
-    private static function expandHex(string $inner, int &$i): string
+    private static function expandCode(string $inner, int &$i, int $width): string
     {
-        $hex = \substr($inner, $i + 1, 2);
-        if (\preg_match('/^[0-9A-Fa-f]{2}$/', $hex) !== 1) {
-            throw new \RuntimeException('invalid hex escape');
+        $hex = \substr($inner, $i + 1, $width);
+        if (\preg_match('/^[0-9A-Fa-f]{' . $width . '}$/', $hex) !== 1) {
+            throw new \RuntimeException(\sprintf(
+                'invalid \\%s escape: expected %d hex digits',
+                $width === 2 ? 'x' : ($width === 4 ? 'u' : 'U'),
+                $width,
+            ));
         }
-        $i += 2;
+        $i += $width;
+        $cp = (int) \hexdec($hex);
 
-        return \chr((int) \hexdec($hex));
+        if ($cp >= 0xD800 && $cp <= 0xDBFF) {
+            $tail = \substr($inner, $i + 1, 6);
+            if (\preg_match('/^\\\\u([0-9A-Fa-f]{4})$/', $tail, $m) !== 1) {
+                throw new \RuntimeException('unpaired high surrogate in a double-quoted scalar');
+            }
+            $low = (int) \hexdec($m[1]);
+            if ($low < 0xDC00 || $low > 0xDFFF) {
+                throw new \RuntimeException('a high surrogate must be followed by a low-surrogate \\u escape');
+            }
+            $i += 6;
+
+            return self::utf8(0x10000 + (($cp - 0xD800) << 10) + ($low - 0xDC00));
+        }
+        if ($cp >= 0xDC00 && $cp <= 0xDFFF) {
+            throw new \RuntimeException('lone low surrogate in a double-quoted scalar');
+        }
+        if ($cp > 0x10FFFF) {
+            throw new \RuntimeException('an escape beyond U+10FFFF is not a character');
+        }
+
+        return self::utf8($cp);
+    }
+
+    /**
+     * Minimal UTF-8 encoder — the parser carries no ext-mbstring
+     * dependency, so codepoints are built byte by byte.
+     */
+    private static function utf8(int $cp): string
+    {
+        if ($cp < 0x80) {
+            return \chr($cp);
+        }
+        if ($cp < 0x800) {
+            return \chr(0xC0 | ($cp >> 6)) . \chr(0x80 | ($cp & 0x3F));
+        }
+        if ($cp < 0x10000) {
+            return \chr(0xE0 | ($cp >> 12)) . \chr(0x80 | (($cp >> 6) & 0x3F)) . \chr(0x80 | ($cp & 0x3F));
+        }
+
+        return \chr(0xF0 | ($cp >> 18)) . \chr(0x80 | (($cp >> 12) & 0x3F))
+            . \chr(0x80 | (($cp >> 6) & 0x3F)) . \chr(0x80 | ($cp & 0x3F));
     }
 }

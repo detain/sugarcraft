@@ -634,16 +634,30 @@ final class ImportExportTest extends TestCase
         $importer->importFromString($yaml, false);
     }
 
-    public function testYamlParserHandlesDocumentMarkers(): void
+    public function testYamlParserRefusesFusedDocumentMarkers(): void
     {
-        // Document markers --- and ... should be skipped
+        // kv-020 (S12): two documents used to FUSE into one import on the
+        // fallback while symfony called it "Multiple documents" — a hostile
+        // second document smuggled entries the first page never showed.
+        // The dialect is one mapping: refuse.
         $yaml = "---\nkey1: value1\n...\n---\nkey2: value2\n";
+        $importer = new YamlImporter($this->store);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('more than one document start marker (---)');
+        $importer->importFromString($yaml, false);
+    }
+
+    public function testYamlParserSkipsOneMarkerPair(): void
+    {
+        // The legal shape stays legal: a single document may open with ---
+        // and close with ...
+        $yaml = "---\nkey1: value1\n...\n";
         $importer = new YamlImporter($this->store);
         $count = $importer->importFromString($yaml, false);
 
-        $this->assertSame(2, $count);
+        $this->assertSame(1, $count);
         $this->assertSame('value1', $this->store->get('key1'));
-        $this->assertSame('value2', $this->store->get('key2'));
     }
 
     public function testYamlParserHandlesComments(): void
