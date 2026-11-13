@@ -402,6 +402,17 @@ final class TtyStreamArgumentCensusTest extends TestCase
                 . "the run:\n  " . implode("\n  ", $offenders),
         );
 
+        // Adjudicated sites. sugar-input's SignalResizeDriver builds `new Tty(STDOUT)`
+        // as the lazy DEFAULT of its size probe (SIGWINCH handler): STDOUT is PHP's own
+        // descriptor-1 stream there, and the call is `size()` (a TIOCGWINSZ ioctl) —
+        // no Termios is injected and no mode switch is made, so restore() never runs
+        // over descriptor 0. The roster is a set, compared as one, and a row that no
+        // longer matches a site is itself a failure (a stale adjudication).
+        $adjudicated = ['sugar-input/src/Driver/SignalResizeDriver.php: constant:STDOUT'];
+        $unadjudicated = array_values(array_diff($constants, $adjudicated));
+        self::assertSame([], array_values(array_diff($adjudicated, $constants)), 'an adjudicated sibling constant site is gone - delete its row');
+        $constants = $unadjudicated;
+
         self::assertSame(
             [],
             $constants,

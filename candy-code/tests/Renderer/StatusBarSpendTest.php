@@ -76,7 +76,8 @@ final class StatusBarSpendTest extends TestCase
      * picks the widest FORM that fits (see `contextIndicator()` and
      * `fitProcessingHint()`), so the bar jumps when a form becomes affordable.
      *
-     * From 54 columns up these are the four widths the bar always had. Below
+     * From 54 columns up these are the widths the bar always had, plus the
+     * assumed-window tag's steps. Below
      * 54 it used to stay 54 wide and over-run the terminal (audit 15b-09); it
      * now sheds the processing hint's pieces and the context readout's long
      * forms, so it is never wider than the terminal, and under 12 columns,
@@ -99,7 +100,10 @@ final class StatusBarSpendTest extends TestCase
             [
                 1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 => 5, 6 => 6, 7 => 7, 8 => 8, 9 => 9, 10 => 10, 11 => 11, 12 => 12,
                 16 => 16, 24 => 24, 27 => 27, 29 => 29, 37 => 37, 38 => 38, 46 => 46, 49 => 49,
-                54 => 54, 62 => 62, 65 => 65, 75 => 75,
+                54 => 54, 62 => 62, 65 => 65, 71 => 71, 79 => 79, 82 => 82, 92 => 92,
+                // 71 onward: the standing 'assumed window' tag joins as the idle
+                // hint's forms become affordable beside it (the Chat default
+                // backend reports no window, so its figure is a guess).
             ],
             $steps,
             'the idle bar, with no cap and nothing reported: each width starts at the column where the next '

@@ -255,6 +255,8 @@ final class CompactionServiceParityTest extends TestCase
             (new \ReflectionMethod(Chat::class, 'estimateTokenCount'))->getClosure($parked),
             '',
             true,
+            // The landing records WHERE the summary came from; here the model's.
+            \SugarCraft\Code\Context\CompactionSource::model(),
         );
         [$landed] = $parked->update($landing);
 

@@ -423,6 +423,14 @@ d'exécution ; acp exécute des tours pour un éditeur, jusqu'à la déconnexion
   models                 Liste les fournisseurs sélectionnables par cette installation et le
                          modèle par défaut de chacun ; "*" marque le fournisseur
                          sélectionné.
+  config show [--sources] [--json]
+                         Affiche la valeur effective de chaque réglage ;
+                         --sources nomme la couche d'où elle vient, --json
+                         émet un seul document de contrat.
+  permissions list [--json]
+                         Affiche les règles de la porte des permissions,
+                         première correspondance d'abord, avec source et
+                         fichier ; --json émet un seul document de contrat.
   session list [--all|--archived|--children] [--limit N]
                          Liste les sessions stockées, épinglées d'abord puis les plus
                          récentes : id, dernière mise à jour, type, tours,
@@ -3097,8 +3105,6 @@ TXT,
     'host.permissions.saved' => 'Règles enregistrées ({count}) — dans {path}, essayées premier-match-gagne dès le prochain lancement :',
     'host.permissions.saved_hint' => 'Retirez-en une avec `/permissions forget <n>`, ou par son motif exact avec `/permissions forget <pattern>`. L\'oubli prend effet au PROCHAIN lancement — le garde-fou en direct conserve les règles chargées au démarrage de cette session, donc pour resserrer ce qui décide maintenant, utilisez `/permissions mode <name>`.',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => 'projet',
-    'host.permissions.tier.user' => 'utilisateur',
     'host.permissions.unrecorded_source' => 'une source que ce garde-fou n\'a pas enregistrée',
     'host.permissions.write_failed' => 'Impossible de modifier les règles enregistrées ({error}). Rien n\'a été écrit.',
     'host.recap.answer_heading' => '**recap** — non envoyé à l\'agent',
@@ -5183,9 +5189,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  shell {id} · {label} · en cours depuis {age}',
     'host.tasks.shells_heading' => 'Shells en arrière-plan :',
-    'host.tasks.session_row' => '  session {id} · {name} · {state}',
+    'host.tasks.session_row' => '  session {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => 'Sessions :',
-    'host.tasks.agent_row' => '  agent {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  agent {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => 'Sous-agents :',
     'host.tasks.none' => 'Aucun shell, session ni sous-agent en arrière-plan.',
     'host.tasks.tail_empty' => 'Le shell {id} n’a pas encore de sortie.',

@@ -20,14 +20,14 @@ final class ContextAssumedLabelTest extends TestCase
 {
     public function testAnAssumedWindowIsLabelledOnTheBar(): void
     {
-        $bar = $this->bar($this->chat(120));
+        $bar = $this->bar($this->assumedChat(120));
 
         self::assertStringContainsString(Lang::t('tui.status.context_assumed'), $bar);
     }
 
     public function testAWindowTheBackendReportsIsNotLabelled(): void
     {
-        $bar = $this->bar($this->chat(120, new class implements \SugarCraft\Code\Backend, \SugarCraft\Code\Backend\ReportsContextWindow {
+        $bar = $this->bar($this->assumedChat(120, new class implements \SugarCraft\Code\Backend, \SugarCraft\Code\Backend\ReportsContextWindow {
             public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
             {
                 return (new EchoBackend())->complete($history, $onToken, $onEvent);
@@ -47,7 +47,7 @@ final class ContextAssumedLabelTest extends TestCase
         self::assertStringNotContainsString(Lang::t('tui.status.context_assumed'), $bar);
     }
 
-    private function chat(int $cols, ?\SugarCraft\Code\Backend $backend = null): Chat
+    private function assumedChat(int $cols, ?\SugarCraft\Code\Backend $backend = null): Chat
     {
         return (new Chat(
             history: [Message::user('hello'), Message::assistant('hi')],

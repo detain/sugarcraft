@@ -43,8 +43,8 @@ which is the whole of the next warning.
 
 The order in it is deliberate, and its size is whatever `wc -l bin/candy-code`
 says today — this sentence used to carry a line count and quotes none on
-purpose — quoted figures rot within rounds. `--help`, `--version` and the sixteen
-subcommands (`doctor`, `gc`, `import claude`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list`, `lsp install|list`,
+purpose — quoted figures rot within rounds. `--help`, `--version` and the eighteen
+subcommands (`config show`, `doctor`, `gc`, `import claude`, `login <provider>`, `models`, `permissions list`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list`, `lsp install|list`,
 `serve`, `self-update`, `attach`, `acp`, `bundles list|install`, `completion bash|zsh|fish`, `usage [7|30|all]`, `workflow run|status|resume`) are answered **before** `Program`, `Bootstrap::app()`
 or `NonInteractive` is reached, because every one of them but `attach`, `acp` and `workflow` is a question about
 the *install* rather than a turn of conversation: they must answer on a machine
@@ -152,7 +152,7 @@ It is the largest file in the package — well past ten thousand lines; run
 `wc -l src/Chat.php` rather than trusting a figure here, because the one this
 sentence used to carry ("10,381 lines, measured on this checkout") was stale by
 the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
-palette, session tabs, the permission prompt, and the dispatch arms for 70
+palette, session tabs, the permission prompt, and the dispatch arms for 71
 built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to
@@ -1393,7 +1393,7 @@ only through the settings layers like every other key.
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
 `react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
-`candy-code serve`'s HTTP + WebSocket transport), sixteen SugarCraft siblings: `sugar-core` (the MVC-style runtime —
+`candy-code serve`'s HTTP + WebSocket transport), twenty SugarCraft siblings: `sugar-core` (the MVC-style runtime —
 `Program`, `Model`, `Cmd`), `sugar-forms`, `sugar-style` (styles),
 `sugar-markdown`, `sugar-fuzzy`, `sugar-overlay`, `sugar-mcp-client` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),
@@ -1401,7 +1401,11 @@ PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `sugar-video` (the video the player screen renders through),
 `sugar-image`, `sugar-mouse`,
 `sugar-constraints` (dock geometry), `sugar-focus`, `sugar-cli`, `sugar-pty`
-(the pseudo-terminal interactive tool output is captured through).
+(the pseudo-terminal interactive tool output is captured through),
+`sugar-async` (the shared retry/backoff and cancellation primitives),
+`sugar-ansi-parser` (the escape-sequence parser `pty_run` reads output with),
+`sugar-ignore` (the gitignore-style matcher behind `Tools\IgnoreRules`) and `sugar-releases` (the release selection and update engine
+behind `self-update` and the launch-time update notice).
 
 `ext-sqlite3` is declared, and `src/` constructs it in two places: `Agents\TaskList`'s task database and `doctor`'s in-memory extension probe. The session store reaches SQLite through **PDO**; `doctor` reports `pdo_sqlite` and `ext-sqlite3` separately because the task list does not go through PDO.
 

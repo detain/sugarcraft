@@ -423,6 +423,12 @@ CandyCode — 終端機 AI 程式碼助理。
   models                 列出此安裝可選用的供應商及各自預設的
                          模型；"*" 標記已選定的
                          項目。
+  config show [--sources] [--json]
+                         列印每項設定的生效值；--sources
+                         指明其來源層，--json 輸出一份契約文件。
+  permissions list [--json]
+                         依先符合者優先的順序列印權限閘門的規則，並附來源與檔案；--json
+                         輸出一份契約文件。
   session list [--all|--archived|--children] [--limit N]
                          列出已儲存的工作階段，釘選的排最前，再按
                          最新排列：id、最後更新、類型、輪次、provider/model
@@ -3092,8 +3098,6 @@ TXT,
     'host.permissions.saved' => '已儲存規則（{count}）——位於 {path}，下次啟動起以首項相符者決定：',
     'host.permissions.saved_hint' => '使用 `/permissions forget <n>` 移除單項，或以確切模式使用 `/permissions forget <pattern>`。移除效果於下次啟動生效——即時閘門保留此工作階段啟動時載入的規則，因此要收緊目前決策請使用 `/permissions mode <name>`。',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => '專案',
-    'host.permissions.tier.user' => '使用者',
     'host.permissions.unrecorded_source' => '此閘門未記錄的來源',
     'host.permissions.write_failed' => '無法變更已儲存規則（{error}）。未寫入任何內容。',
     'host.recap.answer_heading' => '**摘要**——未傳送至代理',
@@ -5178,9 +5182,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  shell {id} · {label} · 已執行 {age}',
     'host.tasks.shells_heading' => '背景 shell：',
-    'host.tasks.session_row' => '  工作階段 {id} · {name} · {state}',
+    'host.tasks.session_row' => '  工作階段 {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => '工作階段：',
-    'host.tasks.agent_row' => '  代理 {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  代理 {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => '子代理：',
     'host.tasks.none' => '沒有背景 shell、工作階段或子代理。',
     'host.tasks.tail_empty' => 'shell {id} 尚無輸出。',

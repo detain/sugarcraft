@@ -145,7 +145,10 @@ final class DiscordBundleWeldTest extends TestCase
         mkdir($target, 0755, true);
         chmod($target, 0o755); // mkdir is umask-filtered, but stay explicit under the private-bytes gate
         foreach (scandir($source) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..' || $entry === '.phpunit.cache') {
+            // vendor/ is a developer's gitignored install (100+ MB once the
+            // sibling's own deps are resolved), never part of the shipped
+            // bundle bytes this window tests - copying it blew the 60 s guard.
+            if ($entry === '.' || $entry === '..' || $entry === '.phpunit.cache' || $entry === 'vendor') {
                 continue;
             }
             $path = $source . '/' . $entry;

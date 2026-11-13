@@ -1072,8 +1072,8 @@ the UTF-8-safe head plus a marker naming both figures and the file where the
 - they are **never auto-deleted**: a hook's output is treated as audit material
   and outlives the run that produced it;
 - they are deliberately outside the tool-IPC sweep. `ToolIpcFiles::sweep()`
-  matches only its three bare-temp prefixes (`sc_runtime_tool_*`,
-  `sc_chat_tool_*`, `crush-hook-payload-*`), and a glob `*` does not cross the
+  matches only its five bare-temp prefixes (`sc_runtime_tool_*`,
+  `sc_chat_tool_*`, `crush-hook-payload-*`, `sc_cc_sysprompt_*`, `sc_codex_schema_*`), and a glob `*` does not cross the
   directory separator — so nothing under `sc-hook-ctx-<euid>/` can be swept however
   long the notes pile up;
 - if the temp directory will not take the file, the marker says the output

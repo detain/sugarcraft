@@ -423,6 +423,12 @@ CandyCode — 终端 AI 编程助手。
   models                 列出此安装可选的提供商及
                          各提供商的默认模型；"*" 标记当前
                          选中的提供商。
+  config show [--sources] [--json]
+                         打印每项设置的生效值；--sources
+                         指明其来源层，--json 输出一份契约文档。
+  permissions list [--json]
+                         按先匹配者优先的顺序打印权限闸门的规则，并附来源与文件；--json
+                         输出一份契约文档。
   session list [--all|--archived|--children] [--limit N]
                          列出已存储的会话，置顶优先，然后按最新
                          排序：id、最后更新、类型、轮次、provider/model
@@ -3092,8 +3098,6 @@ TXT,
     'host.permissions.saved' => '已保存规则（{count}）——位于 {path}，下次启动起首条匹配即生效：',
     'host.permissions.saved_hint' => '使用 `/permissions forget <n>` 移除单条，或使用 `/permissions forget <pattern>` 按精确模式移除。遗忘在下一次启动生效——实时门控仍保留本会话启动时加载的规则，因此要收紧当前决策，请使用 `/permissions mode <name>`。',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => '项目',
-    'host.permissions.tier.user' => '用户',
     'host.permissions.unrecorded_source' => '此门控未记录的来源',
     'host.permissions.write_failed' => '无法修改已保存规则（{error}）。未写入任何内容。',
     'host.recap.answer_heading' => '**recap**——未发送给代理',
@@ -5178,9 +5182,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  shell {id} · {label} · 已运行 {age}',
     'host.tasks.shells_heading' => '后台 shell：',
-    'host.tasks.session_row' => '  会话 {id} · {name} · {state}',
+    'host.tasks.session_row' => '  会话 {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => '会话：',
-    'host.tasks.agent_row' => '  代理 {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  代理 {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => '子代理：',
     'host.tasks.none' => '没有后台 shell、会话或子代理。',
     'host.tasks.tail_empty' => 'shell {id} 暂无输出。',

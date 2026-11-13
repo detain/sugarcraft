@@ -1095,11 +1095,11 @@ final class PaneWidthInvariantTest extends TestCase
     {
         $history = [Message::user('hi'), Message::assistant('a reply of prose words here')];
 
-        // (1) The palette reaches the last line at rows=20/cols=40, so nothing
+        // (1) The palette reaches the last line at rows=8/cols=40 (S-U01 windows the box above the bar on any taller terminal), so nothing
         // may be dropped as if it were the status bar.
         $frame = Renderer::render(new Chat(
             history: $history,
-            rows: 20,
+            rows: 8,
             cols: 40,
             palette: PaletteState::root(),
         ));

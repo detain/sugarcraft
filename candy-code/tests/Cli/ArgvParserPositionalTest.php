@@ -271,7 +271,10 @@ final class ArgvParserPositionalTest extends TestCase
      */
     public function testAParserUsageErrorIsNotOverwritten(): void
     {
-        $parsed = ArgvParser::parse(['candy-code', '-p', '--verbose', 'fix']);
+        // `-p --verbose fix` is legal since options may sit between -p and its
+        // text; the refusal shape that still leaves a stray operand is a -p that
+        // never receives one, with the bare word standing before it.
+        $parsed = ArgvParser::parse(['candy-code', 'fix', '-p', '--verbose']);
         $args = ArgvParser::resolveOperands($parsed);
 
         $this->assertNotNull($parsed->usageError);

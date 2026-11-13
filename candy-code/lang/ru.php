@@ -423,6 +423,14 @@ acp выполняет ходы для редактора, пока редакт
   models                 Список провайдеров, доступных для выбора в этой установке,
                          и модель по умолчанию для каждого; «*» отмечает
                          выбранный.
+  config show [--sources] [--json]
+                         Выводит действующее значение каждой настройки;
+                         --sources называет слой, откуда оно взято, --json
+                         выдаёт один контрактный документ.
+  permissions list [--json]
+                         Выводит правила шлюза разрешений, сначала первое
+                         совпадение, с источником и файлом; --json выдаёт
+                         один контрактный документ.
   session list [--all|--archived|--children] [--limit N]
                          Список сохранённых сессий, закреплённые первыми, затем
                          по свежести: id, последняя правка, тип, ходы, провайдер/модель
@@ -3096,8 +3104,6 @@ TXT,
     'host.permissions.saved' => 'Сохранённые правила ({count}) — в {path}, с первого совпадения при следующем запуске:',
     'host.permissions.saved_hint' => 'Удалить одно: `/permissions forget <n>`, или по точному правилу: `/permissions forget <pattern>`. Удаление вступает в силу при СЛЕДУЮЩЕМ запуске — живой фильтр хранит правила, загруженные при старте сессии, поэтому для ужесточения текущих решений используйте `/permissions mode <name>`.',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => 'проект',
-    'host.permissions.tier.user' => 'пользователь',
     'host.permissions.unrecorded_source' => 'источник, не записанный этим фильтром',
     'host.permissions.write_failed' => 'Не удалось изменить сохранённые правила ({error}). Ничего не записано.',
     'host.recap.answer_heading' => '**recap** — не отправлено агенту',
@@ -5182,9 +5188,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  shell {id} · {label} · работает {age}',
     'host.tasks.shells_heading' => 'Фоновые shell:',
-    'host.tasks.session_row' => '  сессия {id} · {name} · {state}',
+    'host.tasks.session_row' => '  сессия {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => 'Сессии:',
-    'host.tasks.agent_row' => '  агент {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  агент {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => 'Субагенты:',
     'host.tasks.none' => 'Нет фоновых shell, сессий или субагентов.',
     'host.tasks.tail_empty' => 'В shell {id} пока нет вывода.',

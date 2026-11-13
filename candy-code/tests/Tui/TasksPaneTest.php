@@ -25,11 +25,11 @@ final class TasksPaneTest extends TestCase
 {
     public function testAnEmptySessionSaysNoneAndKeepsTheTitle(): void
     {
-        $plain = self::plain(TasksPane::render(self::app(), 60, 8));
+        $plain = self::plain(TasksPane::render(self::tasksApp(), 60, 8));
 
         $this->assertStringContainsString(Pane::Tasks->icon() . ' tasks', $plain);
         $this->assertStringContainsString(Lang::t('host.tasks.none'), $plain);
-        $this->assertSame([], TasksPane::lines(self::app()));
+        $this->assertSame([], TasksPane::lines(self::tasksApp()));
     }
 
     public function testAPopulatedSessionShowsTheHeadingAndTheAgentRow(): void
@@ -43,7 +43,7 @@ final class TasksPaneTest extends TestCase
             seq: 1,
             tail: '',
         ));
-        $app = self::app(WorkspaceContext::new()->withService(AgentLiveRegistry::class, $agents));
+        $app = self::tasksApp(WorkspaceContext::new()->withService(AgentLiveRegistry::class, $agents));
 
         $lines = TasksPane::lines($app);
         $this->assertSame(Lang::t('host.tasks.agents_heading'), $lines[0] ?? null, 'the sub-agent heading leads its group');
@@ -66,7 +66,7 @@ final class TasksPaneTest extends TestCase
             seq: 1,
             tail: '',
         ));
-        $app = self::app(WorkspaceContext::new()->withService(AgentLiveRegistry::class, $agents));
+        $app = self::tasksApp(WorkspaceContext::new()->withService(AgentLiveRegistry::class, $agents));
 
         $lines = explode("\n", TasksPane::render($app, 24, 6));
         $box = Width::string($lines[0]);
@@ -95,7 +95,7 @@ final class TasksPaneTest extends TestCase
         $this->assertSame(\SugarCraft\Constraints\Dock\Side::Right, Pane::Tasks->dockSide());
     }
 
-    private static function app(?WorkspaceContext $workspace = null): App
+    private static function tasksApp(?WorkspaceContext $workspace = null): App
     {
         return App::new(new EchoProvider(), 'test-model')
             ->withChat((new Chat(history: [], workspace: $workspace))->withSize(120, 30));

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Workflows;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\RunsOutsideAnyRepoTrait;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentWorkerPool;
@@ -34,6 +35,18 @@ use SugarCraft\Code\Workflows\WorkflowStatus;
  */
 final class WorkflowToollessTaskTest extends TestCase
 {
+    use RunsOutsideAnyRepoTrait;
+
+    protected function setUp(): void
+    {
+        $this->enterDirectoryOutsideAnyRepo();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->leaveDirectoryOutsideAnyRepo();
+    }
+
     /** @var array<string, int> tool name => times it ran */
     private array $calls = [];
 

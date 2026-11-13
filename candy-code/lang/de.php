@@ -423,6 +423,14 @@ Sitzung aus; acp führt Runden für einen Editor aus, bis der Editor sich trennt
   models                 Listet die Anbieter dieser Installation und das
                          Standardmodell jedes einzelnen; "*" markiert den
                          ausgewählten.
+  config show [--sources] [--json]
+                         Den wirksamen Wert jeder Einstellung ausgeben;
+                         --sources nennt die Ebene, aus der er stammt,
+                         --json gibt ein Vertragsdokument aus.
+  permissions list [--json]
+                         Die Regeln des Berechtigungs-Gates ausgeben, erste
+                         Übereinstimmung zuerst, mit Quelle und Datei;
+                         --json gibt ein Vertragsdokument aus.
   session list [--all|--archived|--children] [--limit N]
                          Listet gespeicherte Sitzungen, angepinnte zuerst, dann neueste
                          zuerst: ID, letzte Aktualisierung, Typ, Runden, Anbieter/Modell
@@ -3096,8 +3104,6 @@ TXT,
     'host.permissions.saved' => 'Gespeicherte Regeln ({count}) — in {path}, ab dem nächsten Start nach First-Match-Wins geprüft:',
     'host.permissions.saved_hint' => 'Eine entfernen mit `/permissions forget <n>`, oder per exaktem Muster mit `/permissions forget <pattern>`. Das Vergessen wirkt erst beim NÄCHSTEN Start — das aktive Gate behält die Regeln, die es beim Sitzungsstart geladen hat; um das aktuelle Verhalten zu verschärfen, nutze `/permissions mode <name>`.',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => 'Projekt',
-    'host.permissions.tier.user' => 'Benutzer',
     'host.permissions.unrecorded_source' => 'eine Quelle, die dieses Gate nicht aufgezeichnet hat',
     'host.permissions.write_failed' => 'Die gespeicherten Regeln konnten nicht geändert werden ({error}). Es wurde nichts geschrieben.',
     'host.recap.answer_heading' => '**recap** — nicht an den Agenten gesendet',
@@ -5182,9 +5188,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  Shell {id} · {label} · läuft seit {age}',
     'host.tasks.shells_heading' => 'Hintergrund-Shells:',
-    'host.tasks.session_row' => '  Sitzung {id} · {name} · {state}',
+    'host.tasks.session_row' => '  Sitzung {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => 'Sitzungen:',
-    'host.tasks.agent_row' => '  Agent {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  Agent {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => 'Unter-Agenten:',
     'host.tasks.none' => 'Keine Hintergrund-Shells, Sitzungen oder Unter-Agenten.',
     'host.tasks.tail_empty' => 'Shell {id} hat noch keine Ausgabe.',

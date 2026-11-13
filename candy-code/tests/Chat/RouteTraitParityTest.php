@@ -8,6 +8,7 @@ use ReflectionClass;
 use ReflectionMethod;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Chat\Handlers\HandlesKeys;
+use SugarCraft\Code\Chat\Handlers\HandlesPointer;
 use SugarCraft\Code\Chat\Handlers\HandlesRunControl;
 use SugarCraft\Code\Chat\Handlers\HandlesSessionSurface;
 use SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion;
@@ -209,10 +210,14 @@ final class RouteTraitParityTest extends TestCase
         // every copied method. The file the body compiles FROM is the
         // truth, alongside Chat's own use-trait roster.
         $used = (new ReflectionClass(Chat::class))->getTraitNames();
+        // HandlesPointer is the one NON-route trait: the mouse selection /
+        // pane-geometry helpers moved out of Chat.php to hold the size
+        // ratchet. It owns no route arm, so it is rostered here, not in
+        // families().
         self::assertEqualsCanonicalizing(
-            array_values(self::families()),
+            [...array_values(self::families()), HandlesPointer::class],
             $used,
-            'Chat must compose exactly the four family traits',
+            'Chat must compose exactly the four family traits plus HandlesPointer',
         );
 
         foreach (self::families() as $handler => $trait) {

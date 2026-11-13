@@ -436,7 +436,7 @@ all one component tree — not two parallel UIs.
 
 The long claims the table above compresses, in full:
 
-**`?` on a blank draft.** Show the in-app keyboard reference. Blank means `trim()`-empty, i.e. empty or made only of the six bytes `trim()` strips — space, tab, newline, carriage return, `NUL` and vertical tab. Not the same as "whitespace-only", in both directions: a line of non-breaking spaces (`U+00A0`), ideographic spaces (`U+3000`) or a form feed is *not* blank, so `?` types a character there, while `NUL` **is** blank without being whitespace. Only two of those six bytes can be typed — space, and `NUL` via `Ctrl`+`Space`. A newline draft is *composed*, with `Alt`+`Enter` (or `Shift`+`Enter` / `Ctrl`+`Enter`, on terminals that report those distinguishably). The other three (tab, carriage return, vertical tab) have no key at all, and no route you can exercise on purpose: sending a message never puts one in your history either, because `Enter` trims the draft before it is sent. They reach the input box exactly one way, and not in the shipped binary — **`/rewind` to a checkpoint whose transcript contains a tool result, in a `Chat` embedded without a prompt-history file.** Restoring a checkpoint revives every non-`assistant` row as a `user` message with its content unchanged, and a tool row's output is full of tabs; with no prompt file wired, `↑` recalls from the transcript's user rows and so returns that revived message verbatim. `bin/candy-code` always wires `~/.candy-code/prompt_history.jsonl`, whose entries are prompts you typed and sent (trimmed), so there `↑` never produces such a draft. Same for the form feed in the non-blank list above — the chord a legacy terminal sends as `U+000C` is claimed by `Ctrl`+`L` below (registry row `chat.repaint`), so it types neither the letter `l` nor a form feed; and no dropped or delegated ctrl chord types its letter at all — `Ctrl`+`E`/`U`/`K`/`X` edit the draft readline-style, the rest type nothing. The draft is left untouched behind the overlay. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone)
+**`?` on a blank draft.** Show the in-app keyboard reference. Blank means `trim()`-empty, i.e. empty or made only of the six bytes `trim()` strips — space, tab, newline, carriage return, `NUL` and vertical tab. Not the same as "whitespace-only", in both directions: a line of non-breaking spaces (`U+00A0`), ideographic spaces (`U+3000`) or a form feed is *not* blank, so `?` types a character there, while `NUL` **is** blank without being whitespace. Only one of those six bytes can be typed — space (the input decoder drops `NUL`, so `Ctrl`+`Space` types nothing). A newline draft is *composed*, with `Alt`+`Enter` (or `Shift`+`Enter` / `Ctrl`+`Enter`, on terminals that report those distinguishably). The other four (`NUL`, tab, carriage return, vertical tab) have no key at all, and no route you can exercise on purpose: sending a message never puts one in your history either, because `Enter` trims the draft before it is sent. They reach the input box exactly one way, and not in the shipped binary — **`/rewind` to a checkpoint whose transcript contains a tool result, in a `Chat` embedded without a prompt-history file.** Restoring a checkpoint revives every non-`assistant` row as a `user` message with its content unchanged, and a tool row's output is full of tabs; with no prompt file wired, `↑` recalls from the transcript's user rows and so returns that revived message verbatim. `bin/candy-code` always wires `~/.candy-code/prompt_history.jsonl`, whose entries are prompts you typed and sent (trimmed), so there `↑` never produces such a draft. Same for the form feed in the non-blank list above — the chord a legacy terminal sends as `U+000C` is claimed by `Ctrl`+`L` below (registry row `chat.repaint`), so it types neither the letter `l` nor a form feed; and no dropped or delegated ctrl chord types its letter at all — `Ctrl`+`E`/`U`/`K`/`X` edit the draft readline-style, the rest type nothing. The draft is left untouched behind the overlay. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone)
 
 **Two `?` make one letter.** Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed. The box does have cursor movement — one character on `←`/`→` (registry row `chat.cursor`), the line ends on `Home`/`End` (`chat.line-ends`), whole words on `Alt`+`←`/`Alt`+`→` (`chat.word-motion`) — but no motion helps on a blank line: the first `?` is claimed by the overlay before any character reaches the draft, wherever the cursor would be. Works after leading whitespace too: `␣??` leaves `␣?` (here and in the `?` rows, `␣` stands for a literal space)
 
@@ -747,8 +747,8 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/pr` `/pruning` `/recap` `/recompress` `/redo` `/rename` `/rendermode`
 `/review` `/rewind` `/rules` `/schedules` (`/schedule`) `/security-review`
 `/sendto` `/session-delete` `/session-pin` `/sessions` `/settings` (`/config`)
-`/share` `/shells` `/skills` `/status` `/sweep` `/theme` `/undo` `/usage`
-`/websearch` `/workflow`.
+`/share` `/shells` `/skills` `/status` `/sweep` `/tasks` `/theme` `/undo`
+`/usage` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
@@ -2546,6 +2546,10 @@ candy-code gc vacuum [--check]         # report free pages; rewrites only with -
                                        #   --incremental --force flips auto_vacuum once, then drains
 candy-code import claude               # preview the Claude Code settings translation; --project adds the project file, --yes writes the user tier
 candy-code models                    # providers this install can select; * marks the selected one
+candy-code config show               # every setting with its effective value
+                                     #   [--sources] names the layer each value came from, [--json] one contract document
+candy-code permissions list          # the gate's rules, first match first, with source and file
+                                     #   [--json] the same as one contract document
 candy-code login <provider>            # log one in: upstream CLI flow, pasted key, or an owner-naming refusal
                                      #   [--keychain] keeps the pasted key in the OS keychain instead of
                                      #   the config: the secret goes to the backend's stdin (never argv),
@@ -3069,7 +3073,7 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**32,341 tests / 784,562 assertions, 0 failures, 8 skipped** — the whole of
+**32,720 tests / 796,123 assertions, 0 failures, 7 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6.
 The 22m51s serial timing was taken on the earlier 24,863-test tree (2026-10-18);

@@ -154,7 +154,9 @@ final class SseTransportWiringTest extends TestCase
     {
         $source = (string) file_get_contents(__DIR__ . '/../../src/MCP/McpClient.php');
 
-        $startServer = self::methodSpan($source, 'private function startServer(');
+        // The refusal row is recorded where a concurrent start is advanced (the
+        // stdio-concurrency change moved it out of startServer()).
+        $startServer = self::methodSpan($source, 'private function advanceStartup(');
         self::assertStringContainsString(
             "\$server instanceof SseMcpServer ? 'sse' : 'http'",
             $startServer,

@@ -1381,8 +1381,8 @@ final class FeatWiringReachabilityTest extends TestCase
      * / `restoreInterruptHandlers()` → the `WorkflowResult` the command formats.
      * That is the dispatchability claim of this row, and it is the whole claim.
      *
-     * What it does NOT reach: `foreach ($workflow->stages ...)` iterates zero
-     * times, so none of `executeStage()`, `executeParallelStage()`,
+     * What it does NOT reach: the one stage is GATED OFF by a `when:` clause over
+     * a stage that never ran (a skip, not a failure), so none of `executeStage()`, `executeParallelStage()`,
      * `executePipelineStage()` or `executeVerificationStage()` runs, no
      * `AgentWorkerPool` is touched, and none of the six `new Agent(...)` sites is
      * evaluated. Those are covered from `tests/Workflows/WorkflowEngineTest.php`,
@@ -1390,8 +1390,9 @@ final class FeatWiringReachabilityTest extends TestCase
      * `testEachStageTypeDispatchesOnTheEnginesOwnModelAndProvider()` there for
      * the model/provider assertion this test cannot make.
      *
-     * Zero stages is deliberate all the same: a real stage here would fork a
-     * worker from a wiring test. `run()` is no longer called synchronously
+     * The gated stage is deliberate all the same: a real stage here would fork a
+     * worker from a wiring test, and a literally empty plan no longer gets this
+     * far — the TUI lints before dispatch and refuses it (wf-impl P0-4). `run()` is no longer called synchronously
      * inside `Chat::update()` — it goes into a fiber the loop steps — so this
      * has to drive the loop to see the reply at all. `Chat::workflowRun()`'s
      * docblock has the shape; the mid-run frame is proved in
@@ -1399,7 +1400,7 @@ final class FeatWiringReachabilityTest extends TestCase
      */
     public function testWorkflowRunOnTheLaunchedChatCompletesAProjectWorkflow(): void
     {
-        $this->writeProjectWorkflow('run-reach', "name: run-reach\nstages: []\n");
+        $this->writeProjectWorkflow('run-reach', "name: run-reach\nstages:\n  - name: gated\n    prompt: never runs\n    when: {stage: absent, equals: x}\n");
 
         $transcript = $this->transcript($this->submitAndSettle(
             Bootstrap::chat($this->tempDir . '/repo'),

@@ -423,6 +423,13 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
   models                 このインストールが選択可能なプロバイダと、
                          各プロバイダのデフォルトモデルを一覧表示; "*"は
                          選択中を示す。
+  config show [--sources] [--json]
+                         各設定の有効値を表示します。--sources
+                         は値の出どころの層を示し、--json
+                         は契約ドキュメントを 1 つ出力します。
+  permissions list [--json]
+                         権限ゲートのルールを、最初に一致するものから順に、出どころとファイル付きで表示します。--json
+                         は契約ドキュメントを 1 つ出力します。
   session list [--all|--archived|--children] [--limit N]
                          保存済みセッションを一覧表示。ピン留め→新着順:
                          id、最終更新、種別、ターン数、provider/model
@@ -3094,8 +3101,6 @@ TXT,
     'host.permissions.saved' => '保存ルール（{count}）— {path} 内、次回起動から先頭一致優先で評価:',
     'host.permissions.saved_hint' => '`/permissions forget <n>` で個別削除、または `/permissions forget <pattern>` で正確なパターン指定。削除は次回起動に反映 — ライブゲートはセッション開始時ロードのルールを保持するため、現在の判定を厳しくするには `/permissions mode <name>` を使用してください。',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => 'プロジェクト',
-    'host.permissions.tier.user' => 'ユーザー',
     'host.permissions.unrecorded_source' => 'このゲートが記録していない出所',
     'host.permissions.write_failed' => '保存ルールを変更できませんでした（{error}）。書き込みなし。',
     'host.recap.answer_heading' => '**recap** — エージェントには送信されません',
@@ -5180,9 +5185,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  シェル {id} · {label} · 実行時間 {age}',
     'host.tasks.shells_heading' => 'バックグラウンドシェル:',
-    'host.tasks.session_row' => '  セッション {id} · {name} · {state}',
+    'host.tasks.session_row' => '  セッション {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => 'セッション:',
-    'host.tasks.agent_row' => '  エージェント {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  エージェント {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => 'サブエージェント:',
     'host.tasks.none' => 'バックグラウンドのシェル、セッション、サブエージェントはありません。',
     'host.tasks.tail_empty' => 'シェル {id} にはまだ出力がありません。',

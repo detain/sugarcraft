@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\RunsOutsideAnyRepoTrait;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\SuspendedDelegations;
 use SugarCraft\Code\Backend\EngineBackend;
@@ -33,6 +34,8 @@ use SugarCraft\Code\Tests\Support\ScriptedProvider;
  */
 final class TaskToolResumeFinishedRunTest extends TestCase
 {
+    use RunsOutsideAnyRepoTrait;
+
     private const TAIL_BYTES = 3 * TaskTool::ACTIVITY_TAIL_BYTES;
 
     private string $storeDir;
@@ -41,12 +44,14 @@ final class TaskToolResumeFinishedRunTest extends TestCase
 
     protected function setUp(): void
     {
+        $this->enterDirectoryOutsideAnyRepo();
         $this->storeDir = sys_get_temp_dir() . '/sc_task_finished_' . bin2hex(random_bytes(6));
         $this->store = new SuspendedDelegations($this->storeDir);
     }
 
     protected function tearDown(): void
     {
+        $this->leaveDirectoryOutsideAnyRepo();
         foreach (glob($this->storeDir . '/*') ?: [] as $file) {
             @unlink($file);
         }

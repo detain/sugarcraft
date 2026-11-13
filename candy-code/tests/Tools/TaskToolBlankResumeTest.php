@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\RunsOutsideAnyRepoTrait;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\SuspendedDelegations;
@@ -32,18 +33,22 @@ use SugarCraft\Code\Tests\Support\ScriptedProvider;
  */
 final class TaskToolBlankResumeTest extends TestCase
 {
+    use RunsOutsideAnyRepoTrait;
+
     private string $storeDir;
 
     private SuspendedDelegations $store;
 
     protected function setUp(): void
     {
+        $this->enterDirectoryOutsideAnyRepo();
         $this->storeDir = sys_get_temp_dir() . '/sc_task_resume_' . bin2hex(random_bytes(6));
         $this->store = new SuspendedDelegations($this->storeDir);
     }
 
     protected function tearDown(): void
     {
+        $this->leaveDirectoryOutsideAnyRepo();
         foreach (glob($this->storeDir . '/*') ?: [] as $file) {
             @unlink($file);
         }

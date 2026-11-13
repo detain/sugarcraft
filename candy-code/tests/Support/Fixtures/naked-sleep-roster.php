@@ -45,6 +45,8 @@ return [
     'Commands/McpAuthCommandDiscoveryTest.php' => 1,
     'Config/StatusLineCommandTest.php' => 1,
     'Context/EnvironmentBlockGitTimeoutTest.php' => 1,
+    // A deadline-bounded tick (60 s ceiling) waiting on a detached rebuild worker (S-O23).
+    'Context/SymbolMapBlockTest.php' => 1,
     'Diagnostics/RuntimeNoticeSinkDeliveryTest.php' => 1,
     'Diagnostics/RuntimeNoticeSinkStderrTest.php' => 1,
     'Hooks/HookRegistryTest.php' => 2,

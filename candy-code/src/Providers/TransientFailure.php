@@ -608,8 +608,15 @@ final class TransientFailure
             return 0;
         }
 
+        // `providerRetryBaseBackoffMs: 0` is a legal setting ("retry at once");
+        // Backoff refuses a non-positive base, so the zero base is answered here.
+        $baseMicroseconds = self::baseBackoffMicroseconds($config);
+        if ($baseMicroseconds === 0) {
+            return 0;
+        }
+
         // S-P06 (R9): the doubling ladder is Backoff's ceiling schedule.
-        return Backoff::new(self::baseBackoffMicroseconds($config) / 1000.0, 2.0)->ceiling($attempt) * 1000;
+        return Backoff::new($baseMicroseconds / 1000.0, 2.0)->ceiling($attempt) * 1000;
     }
 
     /**

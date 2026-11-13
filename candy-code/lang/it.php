@@ -423,6 +423,14 @@ esecuzione; acp esegue turni per un editor, finché l'editor non si disconnette)
   models                 Elenca i provider che questa installazione può selezionare e i
                          modello predefinito per ciascuno; "*" indica quello selezionato
                          uno.
+  config show [--sources] [--json]
+                         Stampa il valore effettivo di ogni impostazione;
+                         --sources indica il livello da cui proviene,
+                         --json emette un solo documento di contratto.
+  permissions list [--json]
+                         Stampa le regole del gate dei permessi, prima
+                         corrispondenza per prima, con origine e file;
+                         --json emette un solo documento di contratto.
   session list [--all|--archived|--children] [--limit N]
                          Elenca le sessioni salvate, prima le bloccate, poi le più recenti
                          primo: id, ultimo aggiornamento, tipo, turni, provider/modello
@@ -3097,8 +3105,6 @@ TXT,
     'host.permissions.saved' => 'Regole salvate ({count}) — in {path}, provate con primo-match-wins dalla prossima esecuzione:',
     'host.permissions.saved_hint' => 'Rimuovine uno con `/permissions forget <n>`, oppure tramite il suo pattern esatto con `/permissions forget <pattern>`. La rimozione ha effetto alla PROSSIMA apertura — il gate attivo mantiene le regole caricate all\'avvio di questa sessione, quindi per restringere ciò che decide in questo momento, usa `/permissions mode <name>`.',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => 'progetto',
-    'host.permissions.tier.user' => 'utente',
     'host.permissions.unrecorded_source' => 'una fonte che questo gate non ha registrato',
     'host.permissions.write_failed' => 'Impossibile modificare le regole salvate ({error}). Nessuna scrittura eseguita.',
     'host.recap.answer_heading' => '**recap** — non inviato all\'agente',
@@ -5183,9 +5189,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  shell {id} · {label} · in esecuzione da {age}',
     'host.tasks.shells_heading' => 'Shell in background:',
-    'host.tasks.session_row' => '  sessione {id} · {name} · {state}',
+    'host.tasks.session_row' => '  sessione {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => 'Sessioni:',
-    'host.tasks.agent_row' => '  agente {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  agente {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => 'Sub-agenti:',
     'host.tasks.none' => 'Nessuna shell, sessione o sub-agente in background.',
     'host.tasks.tail_empty' => 'La shell {id} non ha ancora output.',

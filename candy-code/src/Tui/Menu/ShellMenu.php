@@ -130,7 +130,7 @@ final class ShellMenu
         'agent' => [
             'model', 'effort', 'fast', 'agents', 'btw',
             self::SEP,
-            ['automate' => ['goal', 'grind', 'loop', 'bg', 'shells', 'schedules',
+            ['automate' => ['goal', 'grind', 'loop', 'bg', 'shells', 'tasks', 'schedules',
                 // C-AGT-6.a carry (W21 loop, family of the /pr cure
                 // 8dab423f0): /commit sits on its registry adjacency, the
                 // write-automation row immediately before pr's 2860.

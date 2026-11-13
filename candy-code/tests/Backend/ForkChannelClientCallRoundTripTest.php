@@ -264,6 +264,16 @@ final class ForkChannelClientCallRoundTripTest extends TestCase
         $previous = Loop::get();
         Loop::set($loop);
         $finished = [];
+        // The forked child gathers git context per provider step. In a big,
+        // dirty monorepo checkout that costs ~0.4 s of wall time, which the
+        // 500x clock reads as 200 virtual seconds - past the 120 s ceiling
+        // the re-armed timer is supposed to merely approach. The ceiling
+        // under test is about frame silence, not host git latency, so the
+        // child runs from a directory that is not a repository.
+        $cwd = (string) \getcwd();
+        $bare = \sys_get_temp_dir() . '/sc_c6h_cwd_' . \bin2hex(\random_bytes(4));
+        \mkdir($bare, 0700);
+        \chdir($bare);
 
         try {
             $backend = EngineBackend::new($provider ?? $this->c6hClientProvider(), 'm')
@@ -284,6 +294,8 @@ final class ForkChannelClientCallRoundTripTest extends TestCase
         } finally {
             // The SUITE's pinned loop, not a fresh one (tests/bootstrap.php).
             Loop::set($previous);
+            \chdir($cwd);
+            \rmdir($bare);
         }
 
         return $state + [

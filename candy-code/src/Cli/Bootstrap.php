@@ -5252,8 +5252,9 @@ public static function useMaxCost(?string $maxCost): void
      * The read callers keep the forgiving answer on purpose: a corrupt config
      * costs a theme on read, never the session. On WRITE the same `[]` is not
      * forgiveness but deletion — it is the merge base, so everything the file
-     * held is gone the moment the rename lands. Missing and zero-byte stay
-     * `[]`, matching {@see permissionConfig()}: there is nothing to lose. A
+     * held is gone the moment the rename lands. Missing stays `[]`, matching
+     * {@see permissionConfig()}: there is nothing to lose; a zero-byte or blank file is refused and announced (S-O09), because it is
+     * the signature of a torn write rather than of an empty config. A
      * top-level JSON list is refused like any other non-object, on the JSON
      * TEXT, because `json_decode()` maps `[]` and `{}` to the same value.
      *

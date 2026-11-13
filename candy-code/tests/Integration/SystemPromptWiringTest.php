@@ -938,7 +938,7 @@ final class SystemPromptWiringTest extends TestCase
 
         $this->assertStringContainsString('FIXTURE AGENTS MARKER', $prompt);
         $this->assertStringContainsString('FIXTURE MEMORY MARKER', $prompt);
-        $this->assertStringContainsString('- src/  ->  Acme\\Fixture\\  (1 files)', $prompt);
+        $this->assertStringContainsString('- src/  ->  Acme\\Fixture\\  (1 file)', $prompt);
         $this->assertStringContainsString('## Skill: fixture-demo-skill', $prompt);
         $this->assertStringContainsString('FIXTURE SKILL BODY', $prompt);
         $this->assertStringContainsString(

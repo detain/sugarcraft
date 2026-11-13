@@ -568,10 +568,10 @@ final class PtyRunBashPermissionParityTest extends TestCase
         $collapsed = implode("\n", $invoke->invoke(null, new ToolCall('Edit', $args, 'c9'), 60, Theme::dark(), $dir, false));
         self::assertStringContainsString(Lang::t('tui.permission.proposed_changes'), $collapsed);
         self::assertStringContainsString('-line 5', $collapsed);
-        self::assertStringContainsString('press v', $collapsed, 'the elision row names the key that lifts the cap');
+        self::assertStringContainsString('press `v`', $collapsed, 'the elision row names the key that lifts the cap');
 
         $expanded = implode("\n", $invoke->invoke(null, new ToolCall('Edit', $args, 'c9'), 60, Theme::dark(), $dir, true));
-        self::assertStringNotContainsString('press v', $expanded);
+        self::assertStringNotContainsString('press `v`', $expanded);
 
         // ApplyPatch rides its own patch text through the same section.
         $patched = implode("\n", $invoke->invoke(null, new ToolCall('ApplyPatch', [

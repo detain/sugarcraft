@@ -610,6 +610,21 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'finding 29 of findings/sugar-image.md. NOT FIXABLE FROM THIS PACKAGE — '
                 . 'sugar-image owns it.',
         ],
+        // sugar-image SI-03/SI-04 gave the availability probe (`chafa --version`)
+        // the same reap ladder as render(): its handle now goes to is_resource()
+        // and self::reap(), which the scanner cannot follow, so the site reads
+        // as unclassified exactly like the render row above.
+        'sugar-image/Renderer/ChafaRenderer.php::available' => [
+            'count' => 1,
+            'reason' => 'the chafa availability probe (`chafa --version`). Unclassified for the '
+                . 'same reason as render(): $proc goes to is_resource() and the cross-function '
+                . 'self::reap() the scanner cannot follow. All three stdio legs are files '
+                . '(/dev/null, a tempnam sink, /dev/null), so no parent descriptor is inherited '
+                . 'and nothing blocks on a pipe; the ladder bounds the child - poll to '
+                . 'REAP_WAIT_MS, TERM(15), grace, KILL(9), proc_close() - and the probe is memoised, '
+                . 'so it runs once per process. Not promoted to a CLOSING_HELPERS row for the '
+                . 'reason the render row gives. NOT FIXABLE FROM THIS PACKAGE - sugar-image owns it.',
+        ],
     ];
 
     /**

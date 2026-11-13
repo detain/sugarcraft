@@ -2666,9 +2666,14 @@ final class Renderer
         // The context figure is a guess when the backend reports no window. The
         // tag is a trailing segment on the same fit rule, so it never widens
         // the context figure or squeezes out the spend beside it.
+        // The tag is standing context and the scroll readout is the most urgent
+        // thing on the bar while it shows, so the tag leaves room for the
+        // readout's widest form (plus its separator) before it claims any.
         if ($chat->contextWindowAssumed()) {
             $segment = ' · ' . Lang::t('tui.status.context_assumed');
-            $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
+            $scrollWidest = self::scrollIndicators($chat, $frame)[0] ?? '';
+            $scrollRoom = $scrollWidest === '' ? 0 : Width::of($scrollWidest) + 3;
+            $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2 + $scrollRoom;
             if ($floor <= $cols) {
                 $processing .= $segment;
             }

@@ -197,8 +197,8 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
             '[{"name":5},'
             . '{"name":"grep","description":"search","inputSchema":{"type":"object"}},'
             . '{"name":"edit","description":false},'
-            . '{"name":"read"},'
-            . '{"name":"write","description":null,"inputSchema":null},'
+            . '{"name":"read","inputSchema":{"type":"object"}},'
+            . '{"name":"write","description":null,"inputSchema":{"type":"object"}},'
             . '"not even an object"]',
         );
 
@@ -211,9 +211,10 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
                 ['grep', 'read', 'write'],
                 $names,
                 'the filter kept the wrong set. `grep` is fully specified, `read` OMITS the '
-                . 'optional keys and `write` sends them as explicit nulls — all three of which '
-                . 'fromArray() supplies typed defaults for; the other three each break a '
-                . 'different one of the three checks',
+                . 'optional description and `write` sends it as an explicit null — both of which '
+                . 'fromArray() supplies a typed default for. inputSchema is spec-required '
+                . '(sugar-mcp-client S-02), so a schema-less entry is no longer a survivor; the '
+                . 'other three each break a different one of the checks',
             );
         } finally {
             $server->stop();

@@ -169,6 +169,14 @@ final class SessionFileStore
 
         $text = $encoded . "\n";
 
+        // PrivateRetainedDir::write() now heals a stale partial on its own and
+        // says nothing; this store's repair is the LOUD one (the operator log
+        // line), so a standing partial is judged here first, by the same gates.
+        // One that fails them is left for write() to refuse, as before.
+        if (@\lstat($dir . '/' . self::FILE . PrivateRetainedDir::PARTIAL_SUFFIX) !== false) {
+            $this->clearStrandedPartial($dir, new \RuntimeException('a stranded partial stood at the write path'));
+        }
+
         try {
             PrivateRetainedDir::write($dir, self::FILE, $text, self::LABEL);
 

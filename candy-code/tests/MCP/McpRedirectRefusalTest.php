@@ -297,13 +297,15 @@ final class McpRedirectRefusalTest extends TestCase
     {
         [$proc, $port, $dir] = $this->startMetadataServer();
         try {
+            $caught = null;
             try {
                 McpAuthCommand::fetchOAuthMetadata("http://127.0.0.1:{$port}/redirect");
-                self::fail('a 3xx metadata answer must throw');
             } catch (\RuntimeException $e) {
-                self::assertStringContainsString('HTTP 302', $e->getMessage());
-                self::assertStringContainsString('does not follow redirects', $e->getMessage());
+                $caught = $e;
             }
+            self::assertNotNull($caught, 'a 3xx metadata answer must throw');
+            self::assertStringContainsString('HTTP 302', $caught->getMessage());
+            self::assertStringContainsString('does not follow redirects', $caught->getMessage());
             self::assertFileDoesNotExist($dir . '/canary-hit', 'the redirect target was contacted');
         } finally {
             $this->stopMetadataServer($proc, $dir);

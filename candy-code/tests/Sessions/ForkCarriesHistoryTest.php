@@ -205,7 +205,10 @@ final class ForkCarriesHistoryTest extends TestCase
         try {
             mkdir($this->dir . '/.candy-code', 0700, true);
             $store = $this->storeWithConversation('sess-src', $this->dir . '/.candy-code/session.db');
-            $chat = new Chat(sessionStore: $store, currentSessionId: 'sess-src', backgroundSupervisor: $supervisor);
+            // A resumed Chat holds the transcript it loaded: the command's own rows are saved
+            // over the session's, so an empty-history Chat would overwrite the very
+            // conversation this case proves untouched.
+            $chat = new Chat(history: Chat::loadTranscript($store, 'sess-src'), sessionStore: $store, currentSessionId: 'sess-src', backgroundSupervisor: $supervisor);
 
             [$chat, $cmd] = $this->submitLine($chat, '/fork now write the tests');
             $this->assertInstanceOf(\Closure::class, $cmd);
@@ -241,7 +244,16 @@ final class ForkCarriesHistoryTest extends TestCase
             $fork = Chat::loadTranscript(new EnhancedSessionStore($this->dir . '/.candy-code/session.db'), $forkId);
             $this->assertSame('FORKDONE', $fork[array_key_last($fork)]->content, 'the answer was saved into the copy');
             $this->assertSame('now write the tests', $fork[count($fork) - 2]->content);
-            $this->assertCount(3, Chat::loadTranscript($store, 'sess-src'), 'the session the user stayed on is unchanged');
+            // The session the user stayed on keeps its conversation, plus the rows the
+            // /fork command itself wrote (the command and its "now running" notice);
+            // the copy's answer never lands in it.
+            $source = Chat::loadTranscript($store, 'sess-src');
+            $this->assertSame(
+                ['port the renderer', 'Ported; the diff renderer is next.', 'Background session started.'],
+                array_map(static fn (Message $m): string => $m->content, array_slice($source, 0, 3)),
+                'the session the user stayed on keeps its conversation',
+            );
+            $this->assertStringNotContainsString('FORKDONE', implode("\n", array_map(static fn (Message $m): string => $m->content, $source)));
         } finally {
             foreach ($saved as $name => $value) {
                 putenv($value === false ? $name : $name . '=' . $value);

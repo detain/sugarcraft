@@ -30,12 +30,14 @@ final class TokenStoreFailClosedTest extends TestCase
         }
         $good = TokenStore::new($this->dir)->token();
         \chmod($this->dir . '/token', 0000);
+        $caught = null;
         try {
             TokenStore::new($this->dir)->token();
-            $this->fail('expected a refusal');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('cannot be read', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'expected a refusal');
+        $this->assertStringContainsString('cannot be read', $caught->getMessage());
         \chmod($this->dir . '/token', 0600);
         $this->assertSame($good, TokenStore::new($this->dir)->token());
     }

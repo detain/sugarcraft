@@ -2679,6 +2679,8 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'CLOSE' => 'The closing fence of the same /copy pair as OPEN; the command suite also pins a fence line riding INSIDE a selection, so the closer is asserted as a shape, not just a terminator — one statement, two entry points, moves together (adjudicated 2026-10-30, batch-16 weld-cure, OPEN family).',
         'STUB_CANDIDATE' => 'The copy-flow pair (C-TUI-3.a: the slash-command suite and the mouse-selection suite) feed the same stubbed tmux argv through SystemClipboard::useCandidatesForTesting; the argv is pinned as-passed, never executed, so it is one statement about the discovery-to-spawn transport both suites exercise — a different stub shape moves the pair together (adjudicated 2026-10-30, batch-16 weld-cure, OPEN family).',
         'HEAVY_CHARS' => 'The resume-cost family pins one heavy-transcript size (the design example 336_000 chars ~ 84k tokens) across the Chat guard suite and the Host estimate suite; the figure is the class of history both doors judge, so a re-roll of the design example moves the pair together (adjudicated 2026-10-30, batch-16 weld-cure, foreign pick f4e747cf0 half).',
+        'RFC_POINT' => 'The three Web Push suites (subscription store, revoke rotation, credential prune) all use the one public P-256 point from the RFC 8291 sample: a published protocol test vector, not a per-suite identity, so a re-roll would move the trio together.',
+        'RFC_AUTH' => 'The auth secret paired with RFC_POINT in the same RFC 8291 sample, shared by the same three Web Push suites for the same reason.',
     ];
 
     /**

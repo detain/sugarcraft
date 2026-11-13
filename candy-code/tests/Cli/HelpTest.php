@@ -65,7 +65,7 @@ final class HelpTest extends TestCase
     public function testTheKitRenderLeavesTheCleanEnglishPageByteIdentical(): void
     {
         $en   = require self::LANG_DIR . '/en.php';
-        $page = (string) $en['cli.help.screen'];
+        $page = \strtr((string) $en['cli.help.screen'], ['{stdin-cap}' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL]);
 
         $screen = Help::screen();
 
@@ -1028,7 +1028,7 @@ final class HelpTest extends TestCase
         // arithmetic: an armed 20 columns (and an armed nonsense value —
         // both resolve to the budget) leave --help byte-for-byte the page.
         $en   = require self::LANG_DIR . '/en.php';
-        $page = (string) $en['cli.help.screen'];
+        $page = \strtr((string) $en['cli.help.screen'], ['{stdin-cap}' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL]);
 
         foreach (['20', 'banana'] as $probed) {
             putenv('COLUMNS=' . $probed);
@@ -1047,7 +1047,7 @@ final class HelpTest extends TestCase
         // the authored budget is the verbatim page, not a re-wrap that
         // happens to fit. COLUMNS=80 is the widest byte-identity shape.
         $en   = require self::LANG_DIR . '/en.php';
-        $page = (string) $en['cli.help.screen'];
+        $page = \strtr((string) $en['cli.help.screen'], ['{stdin-cap}' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL]);
 
         putenv('COLUMNS=80');
 
@@ -1090,7 +1090,7 @@ final class HelpTest extends TestCase
     public function testAWideTerminalRendersTheAuthoredScreenInFarFewerRows(): void
     {
         $en     = require self::LANG_DIR . '/en.php';
-        $page   = (string) $en['cli.help.screen'];
+        $page   = \strtr((string) $en['cli.help.screen'], ['{stdin-cap}' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL]);
         $screen = self::renderScreenWithColumns('160');
 
         $this->assertLessThan(
@@ -1168,7 +1168,7 @@ final class HelpTest extends TestCase
     public function testEveryWideShapeKeepsStructureOrderAndWords(string $probed): void
     {
         $en     = require self::LANG_DIR . '/en.php';
-        $page   = (string) $en['cli.help.screen'];
+        $page   = \strtr((string) $en['cli.help.screen'], ['{stdin-cap}' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL]);
         $screen = self::renderScreenWithColumns($probed);
         $width  = (int) $probed;
 
@@ -1202,7 +1202,7 @@ final class HelpTest extends TestCase
     public function testTheWideScreenStillPresentsKeyRostersAndOpaqueBlocks(): void
     {
         $en     = require self::LANG_DIR . '/en.php';
-        $page   = (string) $en['cli.help.screen'];
+        $page   = \strtr((string) $en['cli.help.screen'], ['{stdin-cap}' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL]);
         $screen = self::renderScreenWithColumns('160');
 
         // Environment entries still ENTER at their three-space column: the
@@ -1300,7 +1300,7 @@ final class HelpTest extends TestCase
         // under the authored page's row count instead of equaling it,
         // with every row inside the ceiling.
         $en   = require self::LANG_DIR . '/en.php';
-        $page = (string) $en['cli.help.screen'];
+        $page = \strtr((string) $en['cli.help.screen'], ['{stdin-cap}' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL]);
 
         $wide = self::renderScreenWithTerminalProbe(225);
 

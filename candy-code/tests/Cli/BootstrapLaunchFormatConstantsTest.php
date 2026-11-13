@@ -554,10 +554,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // picks between; the sentence itself is the named constant, so the only
         // literals in the body are the `''` guard and those two words.
         'attributeInheritedPrompt' => ["''", "'built-in'", "'imported'", "\"\\n\\n\""],
-        // The E653 packer: singular/plural markers, the was/were pick, the two
-        // join separators and the encoding argument. Both sentences it emits
-        // are named constants, so nothing in the body is a format.
-        'grantRows' => ["''", "'s'", "'was'", "'were'", "': '", "'; '", "'UTF-8'"],
+        // The E653 packer: the singular/plural catalogue keys of both sentences
+        // it emits (picked by count, so the grammar lives in the catalogue, not
+        // in `'s'`/`'was'` suffixes here), the `count` parameter name, the two
+        // join separators and the encoding argument.
+        'grantRows' => ["'cli.noticerow.narrowed_grant_one'", "'cli.noticerow.narrowed_grant_other'", "'count'", "': '", "'; '", "'UTF-8'", "'cli.noticerow.narrowed_grant_overflow_one'", "'cli.noticerow.narrowed_grant_overflow_other'"],
         // Audit AG-2's skipped-preset row, in body order: the `path: ` prefix
         // the registry's reason opens with (stripped so the path prints once
         // per row), the two pieces of the interpolated `path (reason)` row,

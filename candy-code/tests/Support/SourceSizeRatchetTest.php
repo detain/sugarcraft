@@ -27,7 +27,7 @@ final class SourceSizeRatchetTest extends TestCase
      * them above the live line count.
      */
     private const CEILINGS = [
-        'src/Chat.php' => 22_250,
+        'src/Chat.php' => 21_900,
         'src/Cli/Bootstrap.php' => 12_032,
     ];
 

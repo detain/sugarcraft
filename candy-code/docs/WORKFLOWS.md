@@ -490,7 +490,7 @@ more. `loop:` means "try up to N times and move on", not "fail if it never
 happens" — the verdict of what was achieved belongs to the output and to the
 stages downstream. Only the final round is recorded: the cache door and the
 pause file see one row per stage, the last round's. A plain loop's round
-number is not persisted, so a resumed plain loop re-runs from round 1 —
+number is not persisted, so a resumed plain loop re-runs from the first round —
 whole-stage granularity, honest and disclosed — rather than replaying a
 half-loop. An `accumulate:` loop is the exception: its settled rounds are
 persisted (see below). A cancel that lands mid-loop ends the loop immediately
@@ -556,8 +556,8 @@ kept.
   this same stage at the same position and its declaration is unchanged; a
   record whose `max:` is already spent or whose `until:` already holds settles
   on the persisted set without dispatching anything. Otherwise the loop starts
-  from round 1 with an empty set. A record written before this
-  state existed resumes exactly as it always did, from round 1. `cache: true`
+  from the first round with an empty set. A record written before this
+  state existed resumes exactly as it always did, from the first round. `cache: true`
   can still carry the recorded `{"items":…}` row. The one kill window left is
   inside a round: a kill while its agents run re-dispatches that round alone,
   and its spend is not recorded again.

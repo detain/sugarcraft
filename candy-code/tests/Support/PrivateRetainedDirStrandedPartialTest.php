@@ -56,11 +56,13 @@ final class PrivateRetainedDirStrandedPartialTest extends TestCase
         $partial = $this->dir . '/f' . PrivateRetainedDir::PARTIAL_SUFFIX;
         symlink('/nonexistent-target', $partial);
 
+        $refused = false;
         try {
             PrivateRetainedDir::write($this->dir, 'f', 'x', 'test');
-            $this->fail('expected refusal');
         } catch (\RuntimeException) {
-            $this->assertTrue(is_link($partial));
+            $refused = true;
         }
+        $this->assertTrue($refused, 'expected refusal');
+        $this->assertTrue(is_link($partial));
     }
 }

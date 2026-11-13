@@ -52,7 +52,7 @@ final class ModelPruneInTurnTest extends TestCase
         $this->assertCount(3, $provider->requests);
         $this->assertSame(RefTag::appendTo(self::bigOutput(), 2), self::sent($provider->requests[1], 'c1'), 'the model read the output, tagged r2 (r1 is the prompt, roadmap 3.B-4)');
         $this->assertSame(
-            RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 2),
+            RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php'], 2, self::bigOutput()), 2),
             self::sent($provider->requests[2], 'c1'),
             'the step after the Prune call is already projected through it',
         );

@@ -423,6 +423,13 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
   models                 이 설치에서 선택 가능한 제공자와 각 기본
                          model을 나열; "*"는 선택된 항목을
                          표시.
+  config show [--sources] [--json]
+                         각 설정의 유효 값을 출력합니다. --sources 는 값이
+                         온 계층을, --json 은 계약 문서 하나를 출력합니다.
+  permissions list [--json]
+                         권한 게이트의 규칙을 먼저 일치하는 순서대로 출처와
+                         파일과 함께 출력합니다. --json 은 계약 문서 하나를
+                         출력합니다.
   session list [--all|--archived|--children] [--limit N]
                          저장된 세션 나열, 고정된 것 먼저 그다음 최신
                          순: id, 마지막 업데이트, kind, turns, provider/model
@@ -3094,8 +3101,6 @@ TXT,
     'host.permissions.saved' => '저장된 규칙 ({count}) — {path}에 저장, 다음 실행부터 첫 일치 우선 적용:',
     'host.permissions.saved_hint' => '`/permissions forget <n>`으로 하나를 삭제하거나, `/permissions forget <pattern>`으로 정확한 패턴을 삭제하세요. 삭제는 다음 실행부터 적용됩니다 — 활성 게이트는 세션 시작 시 로드한 규칙을 유지하므로, 현재 판단 기준을 강화하려면 `/permissions mode <name>`을 사용하세요.',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => '프로젝트',
-    'host.permissions.tier.user' => '사용자',
     'host.permissions.unrecorded_source' => '이 게이트가 기록하지 않은 출처',
     'host.permissions.write_failed' => '저장된 규칙을 변경할 수 없습니다 ({error}). 아무것도 기록되지 않았습니다.',
     'host.recap.answer_heading' => '**recap** — 에이전트에게 전송되지 않음',
@@ -5180,9 +5185,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  셸 {id} · {label} · {age} 동안 실행 중',
     'host.tasks.shells_heading' => '백그라운드 셸:',
-    'host.tasks.session_row' => '  세션 {id} · {name} · {state}',
+    'host.tasks.session_row' => '  세션 {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => '세션:',
-    'host.tasks.agent_row' => '  에이전트 {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  에이전트 {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => '서브 에이전트:',
     'host.tasks.none' => '백그라운드 셸, 세션, 서브 에이전트가 없습니다.',
     'host.tasks.tail_empty' => '셸 {id}에 아직 출력이 없습니다.',

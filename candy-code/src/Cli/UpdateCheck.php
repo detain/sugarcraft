@@ -131,6 +131,13 @@ final class UpdateCheck
         ?int $now = null,
         ?callable $fetcher = null,
     ): ?LibUpdateCheck {
+        // The flag is read here, by name, so the env census sees the read; the
+        // lib derives the same CANDY_CODE_NO_UPDATE_CHECK from the app slug.
+        $optOut = \getenv(self::UPDATE_CHECK_OPT_OUT_ENV);
+        if ($optOut !== false && $optOut !== '' && $optOut !== '0') {
+            return null;
+        }
+
         try {
             $path = $cachePath ?? self::cachePath();
             if ($path === null) {
@@ -145,7 +152,6 @@ final class UpdateCheck
                 ->withPharPath($pharPath)
                 ->withNow($now)
                 ->withFetcher($fetcher)
-                ->withOptOutEnv(self::UPDATE_CHECK_OPT_OUT_ENV)
                 ->withTranslator(static fn(string $key, array $params = []): string => match ($key) {
                     'update.available' => Lang::t('startup.update.available', $params),
                     default => $key,

@@ -62,7 +62,7 @@ final class StatusBarModelAndReadOnlyTest extends TestCase
     {
         $bar = $this->bar($this->chat(200, new EchoBackend()));
 
-        $this->assertStringEndsWith('/exit or ^C to quit', $bar);
+        $this->assertStringEndsWith('/exit or ^C to quit · ' . \SugarCraft\Code\Lang::t('tui.status.context_assumed'), $bar);
     }
 
     /**
@@ -103,29 +103,31 @@ final class StatusBarModelAndReadOnlyTest extends TestCase
         $this->assertSame(
             [
                 1 => '',
-                74 => 'Qwen3…',
+                91 => 'Qwen3…',
+                // Every width is 17 columns higher than before the standing
+                // ' · assumed window' tag joined the bar ahead of the model.
                 // The idle hint's full form ("Enter to send · …") becomes
                 // affordable here and takes the room: the model yields,
                 // because it is the lowest-priority piece.
-                75 => '',
-                84 => 'Qwen3…',
-                85 => 'Qwen3.…',
-                86 => 'Qwen3.8…',
-                87 => 'Qwen3.8-…',
-                88 => 'Qwen3.8-F…',
-                89 => 'Qwen3.8-Fl…',
-                90 => 'Qwen3.8-Fla…',
-                91 => 'Qwen3.8-Flas…',
-                92 => 'Qwen3.8-Flash…',
-                93 => 'Qwen3.8-Flash-…',
-                94 => 'Qwen3.8-Flash-N…',
-                95 => 'Qwen3.8-Flash-Ne…',
-                96 => 'Qwen3.8-Flash-Nex…',
-                97 => 'Qwen3.8-Flash-Next…',
-                98 => 'Qwen3.8-Flash-Next-…',
-                99 => 'Qwen3.8-Flash-Next-F…',
-                100 => 'Qwen3.8-Flash-Next-FP8',
-                105 => self::MODEL,
+                92 => '',
+                101 => 'Qwen3…',
+                102 => 'Qwen3.…',
+                103 => 'Qwen3.8…',
+                104 => 'Qwen3.8-…',
+                105 => 'Qwen3.8-F…',
+                106 => 'Qwen3.8-Fl…',
+                107 => 'Qwen3.8-Fla…',
+                108 => 'Qwen3.8-Flas…',
+                109 => 'Qwen3.8-Flash…',
+                110 => 'Qwen3.8-Flash-…',
+                111 => 'Qwen3.8-Flash-N…',
+                112 => 'Qwen3.8-Flash-Ne…',
+                113 => 'Qwen3.8-Flash-Nex…',
+                114 => 'Qwen3.8-Flash-Next…',
+                115 => 'Qwen3.8-Flash-Next-…',
+                116 => 'Qwen3.8-Flash-Next-F…',
+                117 => 'Qwen3.8-Flash-Next-FP8',
+                122 => self::MODEL,
             ],
             $steps,
         );

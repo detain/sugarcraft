@@ -1853,13 +1853,15 @@ final class ProviderFactoryTest extends TestCase
                 self::assertStringContainsString('`candy-code models`', $e->getMessage());
                 self::assertStringNotContainsString('Unknown provider type', $e->getMessage());
             }
+            $caught = null;
             try {
                 $factory->create(['type' => 'custom']);
-                self::fail('missing key must throw');
             } catch (\RuntimeException $e) {
-                self::assertStringContainsString("'custom'", $e->getMessage());
-                self::assertStringNotContainsString('requires', $e->getMessage());
+                $caught = $e;
             }
+            self::assertNotNull($caught, 'missing key must throw');
+            self::assertStringContainsString("'custom'", $caught->getMessage());
+            self::assertStringNotContainsString('requires', $caught->getMessage());
         } finally {
             \SugarCraft\Core\I18n\T::setLocale($before);
         }

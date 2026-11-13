@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\RunsOutsideAnyRepoTrait;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\BlankReturnResume;
 use SugarCraft\Code\Agents\EngineExecutor;
@@ -33,6 +34,18 @@ use SugarCraft\Code\Tests\Support\ScriptedProvider;
  */
 final class BlankReturnEngineExecutorTest extends TestCase
 {
+    use RunsOutsideAnyRepoTrait;
+
+    protected function setUp(): void
+    {
+        $this->enterDirectoryOutsideAnyRepo();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->leaveDirectoryOutsideAnyRepo();
+    }
+
     public function testABlankCompletionResumesTheSameSessionWithOneContinue(): void
     {
         $stage = self::silentStage();

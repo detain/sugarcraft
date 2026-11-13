@@ -157,7 +157,7 @@ final class SessionPromptMemoTest extends TestCase
         // here capture through the memo like EngineBackend's Runtimes do.
         $first = $fixture->systemPrompt($app, $this->bareRuntime($app)->withSessionPromptMemo($memo));
         $this->assertStringContainsString('ORIGINAL INSTRUCTION', $first);
-        $this->assertStringContainsString('(1 files)', $first, 'the repo map counted the one source file');
+        $this->assertStringContainsString('(1 file)', $first, 'the repo map counted the one source file');
 
         $fixture->write('CLAUDE.md', 'EDITED INSTRUCTION');
         $fixture->write('src/B.php', '<?php');
@@ -175,7 +175,7 @@ final class SessionPromptMemoTest extends TestCase
         $this->assertStringContainsString('(2 files)', $unshared);
 
         // The memo alone freezes the repo map; forget() is the refresh point.
-        $this->assertStringContainsString('(1 files)', $fixture->systemPrompt($app, $this->bareRuntime($app)->withSessionPromptMemo($memo)));
+        $this->assertStringContainsString('(1 file)', $fixture->systemPrompt($app, $this->bareRuntime($app)->withSessionPromptMemo($memo)));
         $memo->forget('session-1');
         $refreshed = $fixture->systemPrompt($fresh, $this->bareRuntime($fresh)->withSessionPromptMemo($memo));
         $this->assertStringContainsString('EDITED INSTRUCTION', $refreshed);

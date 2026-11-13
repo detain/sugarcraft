@@ -423,6 +423,15 @@ parados — e attach, que é a exceção a ambos: executa a TUI na sessão de um
   models                 Lista os provedores que esta instalação pode selecionar e o
                          modelo padrão de cada um; "*" marca o
                          selecionado.
+  config show [--sources] [--json]
+                         Imprime o valor efetivo de cada configuração;
+                         --sources indica a camada de onde veio, --json
+                         emite um único documento de contrato.
+  permissions list [--json]
+                         Imprime as regras do portão de permissões,
+                         primeira correspondência primeiro, com origem e
+                         arquivo; --json emite um único documento de
+                         contrato.
   session list [--all|--archived|--children] [--limit N]
                          Lista sessões armazenadas, fixadas primeiro e depois as mais
                          recentes: id, última atualização, tipo, turnos, provedor/modelo
@@ -3096,8 +3105,6 @@ TXT,
     'host.permissions.saved' => 'Regras salvas ({count}) — em {path}, testadas com primeiro-match-vence a partir da próxima execução:',
     'host.permissions.saved_hint' => 'Remova uma com `/permissions forget <n>`, ou pelo padrão exato com `/permissions forget <pattern>`. Esquecer vale na PRÓXIMA execução — o gate ativo mantém as regras carregadas quando esta sessão começou, então para restringir o que está decidindo agora, use `/permissions mode <name>`.',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => 'projeto',
-    'host.permissions.tier.user' => 'usuário',
     'host.permissions.unrecorded_source' => 'uma fonte que este gate não registrou',
     'host.permissions.write_failed' => 'Não foi possível alterar as regras salvas ({error}). Nada foi gravado.',
     'host.recap.answer_heading' => '**recap** — não enviado ao agente',
@@ -5182,9 +5189,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  shell {id} · {label} · em execução há {age}',
     'host.tasks.shells_heading' => 'Shells em segundo plano:',
-    'host.tasks.session_row' => '  sessão {id} · {name} · {state}',
+    'host.tasks.session_row' => '  sessão {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => 'Sessões:',
-    'host.tasks.agent_row' => '  agente {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  agente {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => 'Subagentes:',
     'host.tasks.none' => 'Nenhum shell, sessão ou subagente em segundo plano.',
     'host.tasks.tail_empty' => 'O shell {id} ainda não tem saída.',

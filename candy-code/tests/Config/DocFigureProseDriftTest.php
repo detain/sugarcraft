@@ -734,7 +734,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/and the (eleven|twelve|thirteen|fourteen|fifteen|sixteen)\s+subcommands \(([^)]*)\)/s', $arch, $m),
+            preg_match('/and the (eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen)\s+subcommands \(([^)]*)\)/s', $arch, $m),
             'the pre-flight paragraph no longer spells its subcommand word-count and list together',
         );
         preg_match_all('/`([^`]+)`/', $m[2], $listed);
@@ -753,7 +753,7 @@ final class DocFigureProseDriftTest extends TestCase
             }
             self::assertTrue($matched, "ParsedArgs::SUBCOMMANDS gained '{$name}' but the pre-flight sentence's list did not");
         }
-        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16];
+        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18];
         self::assertSame(count($names), $wordNumbers[$m[1]] ?? -1, 'the spelled word no longer counts the live SUBCOMMANDS list — flip both together (census-trio lesson)');
     }
 
@@ -2587,16 +2587,25 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
         $hooks = self::markdownProse($hooksRaw);
-        $words = ['three' => 3, 'four' => 4, 'six' => 6];
+        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
 
         self::assertSame(1, preg_match('/retried up to (\d+) consecutive times/', $hooks, $retries), 'the EINTR ride-out sentence no longer states its budget');
         self::assertSame((int) $retries[1], (int) (new \ReflectionClassConstant(ScriptHook::class, 'DRAIN_SELECT_RETRIES'))->getValue(), 'the retry figure drifted from ScriptHook::DRAIN_SELECT_RETRIES');
 
         self::assertSame(1, preg_match('/matches only its (\w+) bare-temp prefixes \(([^)]+)\)/', $hooks, $sweep), 'the never-swept argument no longer counts and names the prefixes in one breath');
-        $sweepBody = self::bodyExcerpt(self::sourceOf('Support/ToolIpcFiles.php'), 'sweep', 900);
-        self::assertSame(1, preg_match('/foreach \(\[([^\]]+)\] as \$prefix\)/', $sweepBody, $list), 'sweep() no longer walks a bracketed constant list — the prose cannot name what the code does not enumerate');
-        preg_match_all('/self::(\w+)/', $list[1], $constNames);
-        $prefixes = array_map(static fn (string $name) => (string) (new \ReflectionClassConstant(ToolIpcFiles::class, $name))->getValue(), $constNames[1]);
+        $sweepBody = self::bodyExcerpt(self::sourceOf('Support/ToolIpcFiles.php'), 'sweep', 2400);
+        self::assertSame(1, preg_match('/\$prefixes = \[(.*?)\n        \];/s', $sweepBody, $list), 'sweep() no longer builds a `$prefixes` map of constants — the prose cannot name what the code does not enumerate');
+        preg_match_all('/(\w+)::(\w+)\s*=>/', $list[1], $constNames, PREG_SET_ORDER);
+        $owners = [
+            'self' => ToolIpcFiles::class,
+            'ClaudeCodeInvocation' => 'SugarCraft\\Code\\Providers\\ClaudeCodeInvocation',
+            'CodexInvocation' => 'SugarCraft\\Code\\Providers\\CodexInvocation',
+        ];
+        $prefixes = array_map(static function (array $pair) use ($owners): string {
+            self::assertArrayHasKey($pair[1], $owners, "sweep() keys a prefix by {$pair[1]}:: — teach this guard the owner");
+
+            return (string) (new \ReflectionClassConstant($owners[$pair[1]], $pair[2]))->getValue();
+        }, $constNames);
         $cells = array_map(static fn (string $cell): string => trim($cell, " `\t"), explode(',', $sweep[2]));
         self::assertSame($words[$sweep[1]] ?? -1, \count($cells), 'the spelled prefix count no longer matches the live sweep() list');
         self::assertSame(\count($prefixes), \count($cells), 'the doc list and the sweep constant list stopped having one entry each');
@@ -2796,7 +2805,7 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/(\w+) SugarCraft siblings: (.*?)\. `ext-sqlite3` is declared/s', $arch, $m),
             'the siblings sentence no longer runs from a spelled count through the named list into the ext-sqlite3 paragraph that follows',
         );
-        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16];
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20];
         self::assertArrayHasKey($m[1], $words, "the spelled count '{$m[1]}' is outside the pinned word map — extend it deliberately");
 
         preg_match_all('/`(candy-[a-z]+|sugar-overlay|sugar-[a-z-]+)`/', $m[2], $named);
@@ -3838,7 +3847,8 @@ final class DocFigureProseDriftTest extends TestCase
         $doctorWords = [
             'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
             'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17,
-            'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20,
+            'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20, 'twenty-one' => 21,
+            'twenty-two' => 22, 'twenty-three' => 23,
         ];
         self::assertGreaterThan(0, \count($probeLabels[1]), 'the probe-label scrape sees none of DoctorChecks::probes()\'s rows — the pin below measures nothing');
         $doctorWord = array_search(\count($probeLabels[1]), $doctorWords, true);
@@ -4154,7 +4164,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $mcp = self::markdownProse($raw);
-        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17];
+        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18, 'nineteen' => 19];
 
         self::assertSame(
             1,
@@ -4183,7 +4193,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(class_exists(ArgvParser::class), 'ArgvParser vanished — ParsedArgs has no loader without it');
         $commands = constant('SugarCraft\Code\Cli\ParsedArgs::SUBCOMMANDS');
         sort($commands);
-        self::assertCount($wordNumbers['sixteen'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
+        self::assertCount($wordNumbers['eighteen'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
 
         // The screen's ENGLISH text (15b-14-2 moved it into the catalogue):
         // the page quotes English, so the lookup pins the locale.
@@ -4192,7 +4202,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame((require \dirname(__DIR__, 2) . '/lang/en.php')['cli.help.screen'], $helpSource, 'the help screen is not the cli.help.screen catalogue entry');
         self::assertSame(
             1,
-            preg_match('/lists exactly sixteen under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
+            preg_match('/lists exactly eighteen under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
             'the exactly-fifteen sentence reworded — the help block below must keep carrying its row per verb',
         );
         $block = (string) preg_replace('/^.*Subcommands \(/s', '', $helpSource);
@@ -4218,7 +4228,7 @@ final class DocFigureProseDriftTest extends TestCase
         // MCP one — the page says which, rather than the old "there is none".
         self::assertTrue(in_array('serve', $commands, true), 'the serve subcommand left the roster — the page still describes it');
         self::assertStringContainsString('`candy-code serve` is not one of them', $mcp, 'the serve-is-not-MCP claim left the page');
-        self::assertStringContainsString('thirteen answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the count of subcommands that exit before the one that does not');
+        self::assertStringContainsString('fifteen answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the count of subcommands that exit before the one that does not');
         foreach (['McpServer', 'GitMcpServer', 'GitCommandHandlers', 'HttpMcpServer', 'SseMcpServer', 'StdioMcpServer'] as $class) {
             $half = 'SugarCraft\Code\MCP\\' . $class;
             self::assertTrue(interface_exists($half) || class_exists($half), "the page enumerates {$class} among the server halves and it is gone");
@@ -4226,7 +4236,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/`run` is a seventeenth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
+            preg_match('/`run` is a nineteenth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
             'the run-is-a-sixteenth sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
         );
         self::assertSame(0, preg_match('/ArgvParser` line \d+/', $mcp), 'a bare line-number anchor came back into the page — E686 law: symbols by name, never by line');
@@ -4238,7 +4248,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the Usage block stopped labelling run as an alias for -p',
         );
         self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
-        self::assertCount($wordNumbers['seventeen'], array_merge($commands, ['run']), 'the roster-overrun arithmetic broke against the live roster');
+        self::assertCount($wordNumbers['nineteen'], array_merge($commands, ['run']), 'the roster-overrun arithmetic broke against the live roster');
 
         // E695 in-step: the auth section's new attachment truth, bound to the
         // code that makes it true — the page may only claim what the request
@@ -5318,7 +5328,8 @@ final class DocFigureProseDriftTest extends TestCase
         $pages = array_values(array_filter(scandir($root . '/docs') ?: [], static fn(string $f): bool => str_ends_with($f, '.md')));
         // 27 as of 2026-11-06: FLEET-DRIVING.md joins the docs/ census (the
         // headless-driver playbook), lifting 26 covered pages to 27.
-        self::assertCount(27, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+        // 28 as of 2026-11-12: SECURITY.md joins the docs/ census.
+        self::assertCount(28, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
         // CCD-DOC-06: the root README.md joins the census. It was never on any
         // target list of this family, so a bare File.php:NNN cite planted there
@@ -7619,7 +7630,7 @@ final class DocFigureProseDriftTest extends TestCase
         $trouble = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md');
         self::assertSame(
             1,
-            preg_match('/# (\w+) checks; exits 1 if any FAILs/', $trouble, $m),
+            preg_match('/# ([\w-]+) checks; exits 1 if any FAILs/', $trouble, $m),
             'the doctor fence no longer carries its check-count word — re-pin this arm with the page'
         );
 

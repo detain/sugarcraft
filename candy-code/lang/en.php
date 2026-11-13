@@ -464,6 +464,14 @@ answers from the pause records alone):
   models                 List the providers this install can select and the
                          model each one defaults to; "*" marks the selected
                          one.
+  config show [--sources] [--json]
+                         Print every setting's effective value; --sources
+                         names the layer each one came from, --json emits
+                         one contract document.
+  permissions list [--json]
+                         Print the permission gate's rules, first match
+                         first, with source and file; --json emits one
+                         contract document.
   session list [--all|--archived|--children] [--limit N]
                          List stored sessions, pinned first then newest
                          first: id, last update, kind, turns, provider/model
@@ -3173,8 +3181,6 @@ TXT,
     'host.permissions.saved' => 'Saved rules ({count}) — in {path}, tried first-match-wins from the next launch:',
     'host.permissions.saved_hint' => 'Take one out with `/permissions forget <n>`, or by its exact pattern with `/permissions forget <pattern>`. Forgetting lands on the NEXT launch — the live gate keeps the rules it loaded when this session started, so to tighten what is deciding right now, use `/permissions mode <name>`.',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => 'project',
-    'host.permissions.tier.user' => 'user',
     'host.permissions.unrecorded_source' => 'a source this gate did not record',
     'host.permissions.write_failed' => 'Could not change the saved rules ({error}). Nothing was written.',
     'host.recap.answer_heading' => '**recap** — not sent to the agent',
@@ -5257,9 +5263,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  shell {id} · {label} · running {age}',
     'host.tasks.shells_heading' => 'Background shells:',
-    'host.tasks.session_row' => '  session {id} · {name} · {state}',
+    'host.tasks.session_row' => '  session {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => 'Sessions:',
-    'host.tasks.agent_row' => '  agent {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  agent {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => 'Sub-agents:',
     'host.tasks.none' => 'No background shells, sessions or sub-agents.',
     'host.tasks.tail_empty' => 'Shell {id} has no output yet.',

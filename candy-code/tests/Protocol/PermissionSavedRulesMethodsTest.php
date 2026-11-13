@@ -76,8 +76,8 @@ final class PermissionSavedRulesMethodsTest extends TestCase
         self::assertTrue($ask->isSettled());
 
         self::assertSame([
-            ['pattern' => 'Bash(git status)', 'action' => 'allow'],
-            ['pattern' => 'Bash(git status *)', 'action' => 'allow'],
+            ['pattern' => 'Bash(git status)', 'action' => 'allow', 'saved' => true],
+            ['pattern' => 'Bash(git status *)', 'action' => 'allow', 'saved' => true],
         ], $this->savedRows(), 'the file carries exactly the TUI `p` pair');
     }
 

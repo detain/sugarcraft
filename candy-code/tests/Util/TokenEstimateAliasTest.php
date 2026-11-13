@@ -12,15 +12,18 @@ use SugarCraft\Code\Util\TokenEstimate;
 use SugarCraft\Core\Util\TokenEstimate as CoreTokenEstimate;
 
 /**
- * S-X09: the app name is an alias of the sugar-core implementation (one body),
+ * S-X09: the app name forwards to the sugar-core implementation (one body),
  * and the two meters that used to spell the +10 role-overhead law twice score
  * an identical fixture identically.
  */
 final class TokenEstimateAliasTest extends TestCase
 {
-    public function testAppNameResolvesToTheCoreClass(): void
+    public function testAppNameForwardsToTheCoreClass(): void
     {
-        self::assertSame(CoreTokenEstimate::class, (new \ReflectionClass(TokenEstimate::class))->getName());
+        self::assertSame(TokenEstimate::class, (new \ReflectionClass(TokenEstimate::class))->getName());
+        self::assertSame(CoreTokenEstimate::MESSAGE_OVERHEAD, TokenEstimate::MESSAGE_OVERHEAD);
+        self::assertSame(CoreTokenEstimate::ofToolSchema('t', 'd', ['type' => 'object']), TokenEstimate::ofToolSchema('t', 'd', ['type' => 'object']));
+        self::assertSame(CoreTokenEstimate::ofMessages(['a', 'bb']), TokenEstimate::ofMessages(['a', 'bb']));
         self::assertSame(CoreTokenEstimate::ofText('Hello 世界 😀'), TokenEstimate::ofText('Hello 世界 😀'));
     }
 

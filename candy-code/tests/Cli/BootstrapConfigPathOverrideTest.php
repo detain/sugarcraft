@@ -337,12 +337,12 @@ final class BootstrapConfigPathOverrideTest extends TestCase
     }
 
     /**
-     * The refusal is for files that HOLD something: a zero-byte or
-     * whitespace-only config is "nothing configured" to the launch, and
-     * refusing to write over it would make the state an older build or a
-     * full disk left behind permanently unpersistable.
+     * S-O09: a zero-byte or whitespace-only config is the torn-write
+     * signature, not "nothing configured" — merging onto [] would overwrite
+     * whatever the file held before the tear. The write is refused (the
+     * operator deletes or restores the file) and the file is left as found.
      */
-    public function testWriteUserConfigStillWritesOverAnEmptyConfig(): void
+    public function testWriteUserConfigRefusesAnEmptyConfigAndLeavesItAlone(): void
     {
         $path = $this->tempDir . '/elsewhere/crush.json';
         \file_put_contents($path, " \n");
@@ -350,7 +350,7 @@ final class BootstrapConfigPathOverrideTest extends TestCase
 
         Bootstrap::writeUserConfig(['theme' => 'dracula']);
 
-        $this->assertSame(['theme' => 'dracula'], \json_decode((string) \file_get_contents($path), true));
+        $this->assertSame(" \n", \file_get_contents($path));
     }
 
     /**

@@ -175,7 +175,7 @@ final class MsTeamsBundleWeldTest extends TestCase
         $creds->writeMsteamsPairing('default', [], ['u-approver'], [
             'appId' => 'app-weld',
             'appPassword' => 'weld-secret-app',
-            'tenantId' => 'ten-weld',
+            'tenantId' => '00000000-0000-4000-8000-000000000a1d',
         ]);
 
         $configDir = \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath();
@@ -191,6 +191,9 @@ final class MsTeamsBundleWeldTest extends TestCase
                     'insecureLoopbackProxy' => true,
                 ],
                 'access' => ['dmPolicy' => 'pairing'],
+                // The pairing door answers only the configured approver roster
+                // (not the store's allowlist), so the operator names one.
+                'approvals' => ['approvers' => ['u-approver']],
             ],
         ]));
 
@@ -245,7 +248,7 @@ final class MsTeamsBundleWeldTest extends TestCase
                 'id' => $id,
                 'serviceUrl' => $serviceUrl,
                 'from' => ['id' => $userId, 'aadObjectId' => $userId, 'name' => 'Welder'],
-                'conversation' => ['id' => $convId, 'conversationType' => 'personal'],
+                'conversation' => ['id' => $convId, 'conversationType' => 'personal', 'tenantId' => '00000000-0000-4000-8000-000000000a1d'],
                 'text' => $text,
                 'entities' => [],
             ];
@@ -334,7 +337,10 @@ final class MsTeamsBundleWeldTest extends TestCase
         mkdir($target, 0755, true);
         chmod($target, 0o755); // mkdir is umask-filtered, but stay explicit under the private-bytes gate
         foreach (scandir($source) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..' || $entry === '.phpunit.cache') {
+            // vendor/ is a developer's gitignored install (100+ MB once the
+            // sibling's own deps are resolved), never part of the shipped
+            // bundle bytes this window tests - copying it blew the 60 s guard.
+            if ($entry === '.' || $entry === '..' || $entry === '.phpunit.cache' || $entry === 'vendor') {
                 continue;
             }
             $path = $source . '/' . $entry;

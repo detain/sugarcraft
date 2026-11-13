@@ -690,7 +690,8 @@ final class HookContextFilesTest extends TestCase
 
         $guard = strpos($body, '@lstat($partial)');
         $try = strpos($body, 'try {');
-        $write = strpos($body, '@file_put_contents($partial');
+        // S-O09: the write opens with fopen('wb') so it can fsync before the rename.
+        $write = strpos($body, '@fopen($partial');
         $unlink = strpos($body, '@unlink($partial)');
 
         self::assertIsInt(

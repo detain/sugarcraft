@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\RunsOutsideAnyRepoTrait;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\Live\AgentInbox;
 use SugarCraft\Code\Agents\Live\AgentMessage;
@@ -40,6 +41,8 @@ use SugarCraft\Code\Tools\ToolResult;
  */
 final class SendMessageToolTest extends TestCase
 {
+    use RunsOutsideAnyRepoTrait;
+
     private string $storeDir;
 
     private SuspendedDelegations $store;
@@ -48,6 +51,7 @@ final class SendMessageToolTest extends TestCase
 
     protected function setUp(): void
     {
+        $this->enterDirectoryOutsideAnyRepo();
         $this->storeDir = sys_get_temp_dir() . '/sc_send_message_' . bin2hex(random_bytes(6));
         $this->store = new SuspendedDelegations($this->storeDir);
         $this->session = 'sm-' . bin2hex(random_bytes(5));
@@ -55,6 +59,7 @@ final class SendMessageToolTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->leaveDirectoryOutsideAnyRepo();
         foreach (glob($this->storeDir . '/*') ?: [] as $file) {
             @unlink($file);
         }

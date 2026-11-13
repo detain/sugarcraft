@@ -351,11 +351,11 @@ final class KeyHelpTest extends TestCase
      *   directions — it over-claimed for those three and under-claimed by omitting
      *   two reachable blank drafts entirely. What holds is the narrower verb:
      *   nothing can TYPE them.
-     *   * TYPED — the `Char` arm. `''`, `' '`, `'  '`, `"\0"`, `"\0\0"` and
-     *     `" \0 "`: measured, `parse("\x00")` yields `KeyType::Char "\0"`
-     *     (Ctrl+Space / Ctrl+@ on most terminals), so `NUL` — the byte the
-     *     README's "blank without being whitespace" sentence rests on — is typed
-     *     like any other rune, and repeats and mixes with spaces like one.
+     *   * TYPED — the `Char` arm. `''`, `' '` and `'  '`. NUL is NOT here any
+     *     more: `parse("\x00")` yields nothing (sugar-core sc-04 pinned that NUL
+     *     never surfaces), so `"\0"`, `"\0\0"` and `" \0 "` — the drafts the
+     *     README's "blank without being whitespace" sentence rests on — reach the
+     *     box by RECALL only.
      *   * COMPOSED — an arm that is not the `Char` arm. `"\n"` and `"\n\n"`:
      *     measured, `parse("\x1b\r")` yields `KeyType::Enter` with `alt`, and
      *     `update()`'s Alt/Shift/Ctrl+Enter arm appends `"\n"` to the buffer.
@@ -419,10 +419,11 @@ final class KeyHelpTest extends TestCase
             'fixture: and a space byte decodes only as KeyType::Space, so driving Char " " too is strictness',
         );
         $this->assertSame(
-            [[KeyType::Char->name, "\0"]],
+            [],
             self::decode("\x00"),
-            'fixture: NUL decodes as an ordinary Char rune (Ctrl+Space / Ctrl+@), so the one byte the '
-            . "README's \"blank without being whitespace\" sentence rests on is TYPED, not synthetic",
+            'fixture: NUL decodes to NOTHING (sugar-core sc-04, finding 029: NUL never surfaces as input), '
+            . "so the one byte the README's \"blank without being whitespace\" sentence rests on is "
+            . 'RECALLED-only now, not typed',
         );
         $this->assertSame(
             [[KeyType::Char->name, 'l']],
@@ -483,9 +484,9 @@ final class KeyHelpTest extends TestCase
             $landed[bin2hex($byte)] = $chat->inputBuf;
         }
         $this->assertSame(
-            ['20' => ' ', '09' => '', '0a' => '', '0d' => '', '00' => "\0", '0b' => ''],
+            ['20' => ' ', '09' => '', '0a' => '', '0d' => '', '00' => '', '0b' => ''],
             $landed,
-            'of the six bytes trim() strips, only space and NUL are TYPEABLE: Tab puts nothing in the box, '
+            'of the six bytes trim() strips, only space is TYPEABLE (the decoder drops NUL, sc-04): Tab puts nothing in the box, '
             . 'CR and LF submit, and Ctrl+K drives a chord instead of typing its letter (ISS-047). The '
             . 'other four reach a draft only through the Up arm, which is what the README row now says',
         );
@@ -519,9 +520,10 @@ final class KeyHelpTest extends TestCase
         // The three routes a draft reaches the box by. Kept apart, and named, so
         // that "no keystroke can produce them" cannot be written again over drafts
         // a user can really hold; the reachability bullet above measures each.
-        $typedBlank = ['', ' ', '  ', "\0", "\0\0", " \0 "];
+        $typedBlank = ['', ' ', '  '];
         $composedBlank = ["\n", "\n\n"];
-        $recalledBlank = ["\t", " \t "];
+        // NUL drafts are recalled-only since the decoder stopped surfacing NUL.
+        $recalledBlank = ["\t", " \t ", "\0", "\0\0", " \0 "];
         $blank = [...$typedBlank, ...$composedBlank, ...$recalledBlank];
         $nonBlank = [
             ' x ', 'why', 'why ', ' why', '  x  ', 'x', '/', '/k',

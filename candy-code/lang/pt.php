@@ -423,6 +423,14 @@ de um servidor em execução; acp executa turnos para um editor, até este se de
   models                 Listar os fornecedores que esta instalação pode selecionar e o
                          modelo predefinido de cada um; "*" marca o
                          selecionado.
+  config show [--sources] [--json]
+                         Imprime o valor efetivo de cada definição;
+                         --sources indica a camada de onde veio, --json
+                         emite um único documento de contrato.
+  permissions list [--json]
+                         Imprime as regras da porta de permissões, primeira
+                         correspondência primeiro, com origem e ficheiro;
+                         --json emite um único documento de contrato.
   session list [--all|--archived|--children] [--limit N]
                          Listar sessões guardadas, fixadas primeiro, depois as mais recentes
                          primeiro: id, última atualização, tipo, turnos, fornecedor/modelo
@@ -3096,8 +3104,6 @@ TXT,
     'host.permissions.saved' => 'Regras guardadas ({count}) — em {path}, tentadas com primeiro-corresponde-vence a partir do próximo arranque:',
     'host.permissions.saved_hint' => 'Remova uma com `/permissions forget <n>`, ou pelo seu padrão exato com `/permissions forget <pattern>`. O esquecimento aplica-se no PRÓXIMO arranque — o filtro ativo mantém as regras carregadas quando esta sessão começou, pelo que para apertar o que decide agora, utilize `/permissions mode <name>`.',
     // C-SEC-6.b: the tier column words on /permissions rule rows.
-    'host.permissions.tier.project' => 'projeto',
-    'host.permissions.tier.user' => 'utilizador',
     'host.permissions.unrecorded_source' => 'uma fonte que este filtro não registou',
     'host.permissions.write_failed' => 'Não foi possível alterar as regras guardadas ({error}). Nada foi escrito.',
     'host.recap.answer_heading' => '**recap** — não enviado ao agente',
@@ -5182,9 +5188,9 @@ TXT,
     // --- end media.voice ---
     'host.tasks.shell_row' => '  shell {id} · {label} · em execução há {age}',
     'host.tasks.shells_heading' => 'Shells em segundo plano:',
-    'host.tasks.session_row' => '  sessão {id} · {name} · {state}',
+    'host.tasks.session_row' => '  sessão {id} · {name} · {state} · {age}',
     'host.tasks.sessions_heading' => 'Sessões:',
-    'host.tasks.agent_row' => '  agente {id} · {name} · {state}',
+    'host.tasks.agent_row' => '  agente {id} · {name} · {state} · {age}',
     'host.tasks.agents_heading' => 'Subagentes:',
     'host.tasks.none' => 'Nenhum shell, sessão ou subagente em segundo plano.',
     'host.tasks.tail_empty' => 'O shell {id} ainda não tem saída.',
