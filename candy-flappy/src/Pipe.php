@@ -9,6 +9,8 @@ namespace SugarCraft\Flappy;
  * between the upper and lower sections (m25: it is not a centre
  * marker's symmetric radius). The band is anchored on `gapY` and,
  * for even heights, tilts one row toward the floor — see collides().
+ * Mirrors the obstacles of kbrgl/flapioca `Model.Obstacles`
+ * (internal/model.go — `obst.Location.X--`).
  */
 final class Pipe
 {

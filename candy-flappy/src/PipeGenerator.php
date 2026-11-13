@@ -9,6 +9,12 @@ namespace SugarCraft\Flappy;
  *
  * Gap shrinks as score increases to raise difficulty, but a floor
  * prevents it from becoming impossible.
+ *
+ * SugarCraft-side structure, not a symbol mirror: it inherits the role
+ * of kbrgl/flapioca's inline spawn clause in `Model.Frame`
+ * (internal/model.go — `gap > 5 || (rand.Intn(100) > 90 && gap > 2)`),
+ * which upstream never factored out; the clause is deterministic and
+ * score-scaled here.
  */
 final class PipeGenerator
 {

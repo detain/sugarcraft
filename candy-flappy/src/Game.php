@@ -678,6 +678,12 @@ final class Game implements Model
         return Renderer::render($this);
     }
 
+    /**
+     * One tick of the world: gravity, pipe slide + spawn cadence,
+     * collision, scoring. Mirrors kbrgl/flapioca `Model.Frame`
+     * (internal/model.go) — upstream ran everything in that one
+     * Bubble-Tea update leg.
+     */
     private function advance(): self
     {
         $bird = $this->bird->tick();

@@ -14,7 +14,8 @@ use SugarCraft\Spring\Vector;
  * gravity pulling down at a constant rate. Tapping `flap` resets the
  * vertical velocity to a fixed upward kick — same trick the original
  * flapioca uses, just expressed as projectile state instead of an
- * ad-hoc accumulator.
+ * ad-hoc accumulator. Mirrors kbrgl/flapioca `Model.Cursor`
+ * (internal/model.go).
  *
  * `x` is the bird's column (constant — the world scrolls past it),
  * `y` is its row in the playfield (0 = top).
