@@ -108,6 +108,10 @@ $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code><
     <tr><td><code>TypoSuggester</code></td><td><code>SugarCraft\ScriptUi\Help\TypoSuggester</code></td><td>Typo suggestions for unknown commands — prefix hits or Levenshtein distance ≤ 2, capped at five</td></tr>
     </table>
 
+    <h3 style="margin-top: 40px;">Output channels &amp; environment</h3>
+    <p>Data (chosen value, rendered table, completion script) goes to STDOUT raw and byte-exact; diagnostics go to STDERR; the interactive frame is painted to the controlling tty (or STDERR when that is the terminal), never into the capture stream. Because STDOUT is raw, quote every capture and never <code>eval</code> it when the input is third-party.</p>
+    <p>Recent additions: <code>cursor</code> mode has a default; <code>pager</code> gains <code>--hard-wrap</code> and <code>--fade</code>; <code>confirm</code> gains <code>--pointer</code>; <code>format</code> gains <code>--code</code>, <code>--foreground</code>, and <code>--background</code>, and its refusals are localized like every other command's; the color tier is derived from <code>TERM</code>; <code>CANDY_SCRIPTUI_NO_DECORATION</code> strips decoration; an intake read that times out exits <code>124</code>; a read-only allow-listed <code>GUM_&lt;COMMAND&gt;_&lt;OPTION&gt;</code> mirror eases migration from gum (the README carries the disclosed table and the warning that names are not command-scoped); and the whole help surface (descriptions, option text, Aliases/Examples labels) is localized through the catalogs.</p>
+
     <h3 style="margin-top: 40px;">Shell completions + version</h3>
     <table class="api-table">
     <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>

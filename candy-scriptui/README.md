@@ -195,6 +195,15 @@ arrive as boxed error blocks. Either shape stays off STDOUT, so a script
 that `eval`s completion output or captures `confirm` answers can never
 consume an error message as data.
 
+The interactive frame is a third stream, neither of the two above: it is
+painted to the terminal itself (the controlling tty, or STDERR when that is
+the terminal) so it never mixes with captured data. Raw STDOUT is
+byte-exact and unescaped by design. When you capture it (`name=$(...)`),
+treat it as data from whoever produced it: quote every capture
+(`"$name"`), never `eval` it or splice it unquoted into a command line,
+especially when the input came from a third party (a `choose` over
+filenames, a `filter` over log lines).
+
 ```php
 use SugarCraft\ScriptUi\Attribute\Flag;
 use Symfony\Component\Console\Command\Command;
