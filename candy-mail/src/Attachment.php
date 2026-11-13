@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mail;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Represents a file attachment on an email.
  */
 final class Attachment
 {
+    use Mutable;
+
     /** @var string Display name of the attachment. */
     public readonly string $filename;
     /** @var string|null Path to the file (if from disk). */
@@ -162,14 +166,7 @@ final class Attachment
      */
     public function withCid(string $cid): self
     {
-        return new self(
-            filename:  $this->filename,
-            path:      $this->path,
-            content:   $this->content,
-            mimeType:  $this->mimeType,
-            encoding:  $this->encoding,
-            cid:       $cid,
-        );
+        return $this->mutate(['cid' => $cid]);
     }
 
     /**

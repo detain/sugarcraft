@@ -177,6 +177,12 @@ final class SmtpTransport implements Transport
      * throws instead of sending credentials/mail in the clear. Pass false to
      * opt back into opportunistic behaviour — trusted networks only.
      * Immutable per repo convention: yields a fresh, unconnected clone.
+     *
+     * CM-64 exemption from the house Mutable-trait pattern, recorded: the TLS
+     * flags are deliberately not constructor parameters (a dialled host must
+     * never inherit an implicit-TLS posture from a parsed port by accident),
+     * so clone-and-reset is the fitting wither - mutate() would route session
+     * state through the ctor's grammar gates it does not belong to.
      */
     public function withRequireTls(bool $require = true): self
     {
@@ -193,6 +199,12 @@ final class SmtpTransport implements Transport
      *
      * Use for servers that speak TLS-from-connect on a non-465 port. Immutable:
      * yields a fresh, unconnected clone.
+     *
+     * CM-64 exemption from the house Mutable-trait pattern, recorded: the TLS
+     * flags are deliberately not constructor parameters (a dialled host must
+     * never inherit an implicit-TLS posture from a parsed port by accident),
+     * so clone-and-reset is the fitting wither - mutate() would route session
+     * state through the ctor's grammar gates it does not belong to.
      */
     public function withImplicitTls(bool $implicit = true): self
     {
