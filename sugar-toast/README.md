@@ -17,7 +17,10 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **9 positions**: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight
 - **4 alert types**: Error, Warning, Info, Success — severity carried by icon + colour (add `withAccessibleText()` for a plain-text word; box shape and border glyphs are the same across types)
 - **Dynamic width**: full `maxWidth` by default; auto-fit to content engages ONLY via `withMinWidth(n>0)` — stacked boxes then anchor at ragged per-message offsets (shrink-to-fit vs stack-alignment trade)
-- **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain text)
+- **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain-text icons).
+  Ascii selects the icon channel only: the frame keeps its box-drawing
+  glyphs (`╭ ─ ╮ │ ╰ ╯`) and the progress bar its blocks (`█ ░`) — sugar-toast
+  renders assume UTF-8 output.
 - **Auto-dismiss**: time-based expiry, pruned by the host tick
 - **Multiple alerts**: queue of toasts rendered in order
 - **Progress toasts**: inline progress bar (0–100%) beneath the message body
@@ -480,7 +483,7 @@ already over the new cap survive until the next push evicts them.
 | `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables. `null` = never expires, positive seconds = TTL: NAN/INF and `<= 0` throw — a zero/negative timer would birth every queued alert already expired (never rendered, `secondsUntilNextExpiry()` pinned at `0.0`) in silence, so the door refuses it like `withMaxConcurrent` does its below-1 cap |
 | `->withMaxWidth(int)` | Maximum alert width in cells. `<= 0` throws `InvalidArgumentException` — positive cells are the cap, a non-positive width would floor silently to an unreadable 1-cell box (the renderer's old 1-cell floor now only guards the `Toast::new(0)` ctor path and raw internal state) |
 | `->withMinWidth(int)` | Minimum alert width in cells — a master switch: `0` is the FIXED-WIDTH sentinel (box holds its full width cap), any positive value engages fit-content between the floor and `maxWidth`; negative throws (only `0` has a meaning below the positive range) |
-| `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or Ascii symbols |
+| `->withSymbolSet(SymbolSet)` | Icon glyph set: NerdFont, Unicode, or Ascii — icons only; borders and bar stay box-drawing |
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
 | `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + numeric percentage on progress rows; default off keeps every frame byte-identical |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited; `< 1` throws `InvalidArgumentException`) |

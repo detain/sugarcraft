@@ -183,7 +183,7 @@ echo $toast-&gt;view($bg);</code></pre>
       <div class="feature"><strong>Four types</strong><span>Error, Warning, Info, Success — severity carried by icon + colour; add <code>withAccessibleText()</code> for a plain-text severity word (box shape and border glyphs are the same across types, so colour is never the sole carrier).</span></div>
             <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight.</span></div>
             <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration. Passing <code>null</code> $expiresAt at the alert()/progressToast() doors means &quot;use the configured duration&quot; — persistence is reached by keeping the toast duration unset or through the explicit sentinel (<code>withCancelledExpiry()</code>, deprecated alias <code>withoutExpiry()</code>, or <code>cancelAlert()</code>).</span></div>
-            <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or Ascii.</span></div>
+            <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or Ascii icons; frames stay box-drawing.</span></div>
             <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
             <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar beneath the message body — by default the bar speaks in glyph and colour; the numeric percentage (0–100%) prints only under <code>withAccessibleText()</code>.</span></div>
             <div class="feature"><strong>Accessible text mode</strong><span><code>withAccessibleText()</code> names the severity in words and prints progress percentages — a text channel beside the frame's colour/glyph language (WCAG 1.4.1). Default off keeps every frame byte-identical.</span></div>
@@ -213,7 +213,7 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Toast</td><td>withAllowEscToClose(bool)</td><td>Set the Escape-dismiss preference flag (the renderer handles no input; the host reads it)</td></tr>
 <tr><td>Toast</td><td>withMaxWidth(int)</td><td>Set maximum alert width in cells; &lt;= 0 throws (positive cells are the cap; a non-positive width would floor silently to an unreadable 1-cell box)</td></tr>
 <tr><td>Toast</td><td>withMinWidth(int)</td><td>Minimum alert width in cells — a master switch: <code>0</code> is the FIXED-WIDTH sentinel (box holds its full width cap), any positive value engages fit-content between the floor and maxWidth; only negative throws</td></tr>
-<tr><td>Toast</td><td>withSymbolSet(SymbolSet)</td><td>NerdFont, Unicode, or Ascii symbol sets</td></tr>
+<tr><td>Toast</td><td>withSymbolSet(SymbolSet)</td><td>Icon glyph set — Ascii selects icons only; borders and progress bar keep box-drawing glyphs</td></tr>
 <tr><td>Toast</td><td>withMaxConcurrent(?int)</td><td>Cap concurrent alerts (<code>null</code> = unlimited; values &lt; 1 throw)</td></tr>
 <tr><td>Toast</td><td>withOverflow(Overflow)</td><td>Strategy when cap exceeded: DropOldest, DropNewest, Enqueue</td></tr>
 <tr><td>Toast</td><td>withHistoryLimit(?int $n)</td><td>Cap history log, oldest evicted first (default 100; <code>null</code> = unbounded)</td></tr>
