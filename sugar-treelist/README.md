@@ -240,7 +240,11 @@ all act on the authoritative list and the projection is re-derived immediately
 stick, and lifting the filter with `withoutFilter()` reveals exactly the
 mutations that happened underneath. `removeItem()` re-anchors the cursor by
 item **identity**: it stays on the same logical item it was on (clamping only
-when that item was itself removed).
+when that item was itself removed). Narrowing or lifting the filter does the
+same — `withFilterFn()` and `withoutFilter()` keep the selection on the item
+it was resting on whenever that item survives (stays visible, or comes back);
+the cursor only falls back to position-clamping when the selected item itself
+is filtered out.
 
 ## Fuzzy Matching
 

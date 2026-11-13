@@ -512,10 +512,13 @@ final class Model
         $clone = clone $this;
         $clone->filterFn = null;
         $clone->filterState = FilterState::unfiltered;
-        $clone->items = $clone->originalItems;
+        // Same identity re-anchor as reapplyFilter() (sugar-treelist-007):
+        // widening the view must keep the selection on the item shown, not
+        // leave the cursor index pointing at whatever now occupies it.
+        $cursorId       = $clone->items[$clone->cursorIndex]->id ?? null;
+        $clone->items   = $clone->originalItems;
         $clone->originalItems = [];
-        // Clamp cursor
-        $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
+        $clone->cursorIndex = self::relocateCursor($clone->items, $cursorId, $clone->cursorIndex);
         // Reset diff state so the next view() emits a full frame, not a delta
         // against the pre-unfilter frame (which has a different line set).
         $clone->previousRows = null;
@@ -531,7 +534,8 @@ final class Model
      * not a second source of truth: every mutation lands on the pristine list
      * first and this runs immediately after, so nothing added, removed,
      * cleared or sorted under a filter can be silently lost, resurrected, or
-     * undone when the filter lifts. The cursor is clamped into the projection.
+     * undone when the filter lifts. The cursor re-anchors by item identity,
+     * clamping by position only when the selected item itself is filtered out.
      *
      * Call only on a clone (inside mutate()) or during a filter transition.
      */
@@ -541,11 +545,18 @@ final class Model
             return;
         }
         $fn = $this->filterFn;
+        // Identity re-anchor (sugar-treelist-007): as the projection shrinks
+        // the cursor must stay on the item the user was looking at, exactly
+        // as remove/sort re-anchor — clamping the raw position teleports the
+        // selection to an unrelated row (items aa,ab,ba,bb with the cursor on
+        // ba, filtered to !a*, used to land on bb). The position clamp is the
+        // fallback only when the selected item itself was filtered out.
+        $cursorId = $this->items[$this->cursorIndex]->id ?? null;
         $this->items = array_values(array_filter(
             $this->originalItems,
             static fn(Item $item): bool => (bool) $fn($item->value),
         ));
-        $this->cursorIndex = min($this->cursorIndex, max(0, count($this->items) - 1));
+        $this->cursorIndex = self::relocateCursor($this->items, $cursorId, $this->cursorIndex);
     }
 
     /**

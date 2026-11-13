@@ -1945,6 +1945,63 @@ final class ModelTest extends TestCase
         }
     }
 
+    public function testNarrowingFilterReAnchorsTheCursorByIdentity(): void
+    {
+        // QA-01 reproducer: aa, ab, ba, bb with the cursor on ba (index 2);
+        // a filter dropping every a* item projects [ba, bb]. Position
+        // clamping used to hand the selection to bb — a silent teleport to an
+        // unrelated item in the search-as-you-type flow. Identity re-anchor:
+        // the cursor now LANDS on ba, at its new index.
+        $m = Model::new()->withViewport(20, 4)
+            ->withItems(
+                new StringItem('aa'), new StringItem('ab'),
+                new StringItem('ba'), new StringItem('bb'),
+            )
+            ->withCursor(2);
+        $this->assertSame('ba', (string) $m->cursorItem());
+
+        $filtered = $m->withFilterFn(
+            static fn(\Stringable $v): bool => !\str_starts_with((string) $v, 'a'),
+        );
+        $this->assertSame(2, $filtered->length());
+        $this->assertSame(0, $filtered->cursorIndex(), 'cursor must ride ba to its new index');
+        $this->assertSame('ba', (string) $filtered->cursorItem());
+
+        // Lifting the filter restores the full list — and the selection
+        // returns to ba, not to whatever occupies the projection index.
+        $restored = $filtered->withoutFilter();
+        $this->assertSame(4, $restored->length());
+        $this->assertSame(2, $restored->cursorIndex());
+        $this->assertSame('ba', (string) $restored->cursorItem());
+    }
+
+    public function testFilterClampsByPositionOnlyWhenTheSelectedItemIsGone(): void
+    {
+        // Fallback leg of the same law: the cursor sits on ab (index 1) and
+        // the predicate drops ab itself — the position clamp then applies and
+        // the cursor lands at index 1 of [ba, bb].
+        $m = Model::new()->withViewport(20, 4)
+            ->withItems(
+                new StringItem('aa'), new StringItem('ab'),
+                new StringItem('ba'), new StringItem('bb'),
+            )
+            ->withCursor(1);
+
+        $filtered = $m->withFilterFn(
+            static fn(\Stringable $v): bool => !\str_starts_with((string) $v, 'a'),
+        );
+        $this->assertSame(1, $filtered->cursorIndex());
+        $this->assertSame('bb', (string) $filtered->cursorItem());
+
+        // And when the selected item is the ONLY survivor past the cursor's
+        // old row, identity still wins over the raw clamp.
+        $kept = $m->withFilterFn(
+            static fn(\Stringable $v): bool => (string) $v === 'ab',
+        );
+        $this->assertSame(0, $kept->cursorIndex());
+        $this->assertSame('ab', (string) $kept->cursorItem());
+    }
+
     public function testRowBudgetCapsLayoutWorkForPathologicalValues(): void
     {
         // 200k logical lines, viewport height 5, wrap 0: the frame shows at
