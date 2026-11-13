@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'tiempo agotado',
     'stopwatch.not_started_tag' => 'sin iniciar',
     'stopwatch.paused_tag' => 'en pausa',
+    'key.bad_binding' => 'combinación de teclas no válida {key}: use un nombre de tecla en minúsculas (ctrl+c, shift+tab, pageup, f5) o un carácter imprimible',
+    'key.bad_binding_type' => 'las teclas de la combinación deben ser cadenas, se obtuvo {key}',
 ];

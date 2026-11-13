@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'przekroczono czas',
     'stopwatch.not_started_tag' => 'nie rozpoczęto',
     'stopwatch.paused_tag' => 'wstrzymane',
+    'key.bad_binding' => 'nieprawidłowe powiązanie klawiszy {key}: użyj małej nazwy klawisza (ctrl+c, shift+tab, pageup, f5) albo jednego znakowi drukowalnego',
+    'key.bad_binding_type' => 'klawisze powiązania muszą być łańcuchami, otrzymano {key}',
 ];

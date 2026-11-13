@@ -33,8 +33,8 @@ final class HelpTest extends TestCase
     public function testShortViewSeparates(): void
     {
         $map = new FakeKeyMap([
-            $this->b('↑/k', 'up'),
-            $this->b('↓/j', 'down'),
+            $this->b('↑/k', 'up', ['up', 'k']),
+            $this->b('↓/j', 'down', ['down', 'j']),
             $this->b('q',   'quit'),
         ], []);
         $this->assertSame('↑/k up • ↓/j down • q quit', (new Help())->shortView($map));
@@ -46,11 +46,11 @@ final class HelpTest extends TestCase
         // rendered rows — with an empty full map both sides collapse to '' and
         // the fullSeparator leg would compare vacuously.
         $map = new FakeKeyMap([
-            $this->b('alpha-key', 'alpha'),
-            $this->b('beta-key',  'beta'),
+            $this->b('alpha-key', 'alpha', ['a']),
+            $this->b('beta-key',  'beta',  ['b']),
             $this->b('q',         'quit'),
         ], [
-            [$this->b('alpha-key', 'alpha'), $this->b('beta-key', 'beta')],
+            [$this->b('alpha-key', 'alpha', ['a']), $this->b('beta-key', 'beta', ['b'])],
             [$this->b('q', 'quit')],
         ]);
         $long  = (new Help())->withSeparator(' • ')->withEllipsis('...')->withFullSeparator("\n\n");
@@ -89,7 +89,7 @@ final class HelpTest extends TestCase
     public function testFullViewAlignsColumns(): void
     {
         $map = new FakeKeyMap([], [
-            [$this->b('↑/k', 'up'),    $this->b('↓/j', 'down')],
+            [$this->b('↑/k', 'up', ['up', 'k']),    $this->b('↓/j', 'down', ['down', 'j'])],
             [$this->b('q',   'quit'),  $this->b('?',   'help')],
         ]);
         $out = (new Help())->fullView($map);

@@ -35,9 +35,9 @@ final class HelpReviewPinsTest extends TestCase
         };
     }
 
-    private function binding(string $key, string $desc): Binding
+    private function binding(string $key, string $desc, array $keys = []): Binding
     {
-        return (new Binding([$key]))->withHelp($key, $desc);
+        return (new Binding($keys ?: [$key]))->withHelp($key, $desc);
     }
 
     /** Feed a whole frame through the house SGR oracle. */
@@ -57,7 +57,7 @@ final class HelpReviewPinsTest extends TestCase
         // bold ON into the host scrollback; post-fix the kept prefix is
         // folded and closed once before the ellipsis glyph (C5).
         $map = $this->map([
-            $this->binding('alpha-key', 'alpha'),
+            $this->binding('alpha-key', 'alpha', ['a']),
             $this->binding('q', 'quit'),
         ]);
         $help = Help::new(styles: new Styles(shortKey: Style::new()->bold()))->withWidth(8);
@@ -81,7 +81,10 @@ final class HelpReviewPinsTest extends TestCase
         // Forged U+E000/U+E001 markers and 8-bit C1 intros must not ride
         // the rendered row into a marked-frame host (C3/M20).
         $map = $this->map([
-            $this->binding("\u{E000}tab-1\u{E001}x\u{009B}", "de\u{E000}/tab-1\u{E001}sc\u{009B}"),
+            // Legal binding key; the forged bytes ride the HELP TEXT — the
+            // injection surface this pin probes (a forged key string is now
+            // refused at construction, which BindingTest pins separately).
+            $this->binding("\u{E000}tab-1\u{E001}x\u{009B}", "de\u{E000}/tab-1\u{E001}sc\u{009B}", ['tab']),
         ]);
         $view = Help::new()->shortView($map);
         $this->assertStringNotContainsString("\u{E000}", $view);

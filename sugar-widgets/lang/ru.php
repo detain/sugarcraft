@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'время истекло',
     'stopwatch.not_started_tag' => 'не запущено',
     'stopwatch.paused_tag' => 'приостановлено',
+    'key.bad_binding' => 'недопустимое сочетание клавиш {key}: используйте строчное имя клавиши (ctrl+c, shift+tab, pageup, f5) или один печатный символ',
+    'key.bad_binding_type' => 'клавиши привязки должны быть строками, получен тип {key}',
 ];

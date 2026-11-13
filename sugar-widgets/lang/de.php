@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'Zeit abgelaufen',
     'stopwatch.not_started_tag' => 'nicht gestartet',
     'stopwatch.paused_tag' => 'pausiert',
+    'key.bad_binding' => 'ungültige Tastenbelegung {key}: bitte kleinen Schlüsselnamen verwenden (ctrl+c, shift+tab, pageup, f5) oder ein druckbares Zeichen',
+    'key.bad_binding_type' => 'Tastenbelegungen müssen Zeichenketten sein, erhalten: {key}',
 ];

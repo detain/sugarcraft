@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'انتهى الوقت',
     'stopwatch.not_started_tag' => 'لم يبدأ',
     'stopwatch.paused_tag' => 'متوقف',
+    'key.bad_binding' => 'ربط المفاتيح غير صالح "{key}": استخدم اسم مفتاح بأحرف صغيرة (ctrl+c، shift+tab، pageup، f5) أو حرفاً واحداً قابلاً للطباعة',
+    'key.bad_binding_type' => 'يجب أن تكون مفاتيح الربط سلاسل نصية، والنوع المستلم هو {key}',
 ];

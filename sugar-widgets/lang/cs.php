@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'čas vypršel',
     'stopwatch.not_started_tag' => 'nezahájeno',
     'stopwatch.paused_tag' => 'pozastaveno',
+    'key.bad_binding' => 'neplatná vazba klávesu {key}: použijte malý název klávesy (ctrl+c, shift+tab, pageup, f5) nebo jeden tisknutelný znak',
+    'key.bad_binding_type' => 'klávesy vazby musí být řetězce, obdrženo {key}',
 ];

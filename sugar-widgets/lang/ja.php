@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'タイムアウト',
     'stopwatch.not_started_tag' => '未開始',
     'stopwatch.paused_tag' => '一時停止',
+    'key.bad_binding' => '無効なキーバインド {key}：小文字のキー名 (ctrl+c, shift+tab, pageup, f5) または印字可能文字1文字を使用してください',
+    'key.bad_binding_type' => 'キーバインドのキーは文字列である必要があります。受け取った型: {key}',
 ];

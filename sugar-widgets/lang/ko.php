@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => '시간 초과',
     'stopwatch.not_started_tag' => '시작되지 않음',
     'stopwatch.paused_tag' => '일시정지',
+    'key.bad_binding' => '잘못된 키 바인딩 {key}: 소문자 키 이름(ctrl+c, shift+tab, pageup, f5) 또는 인쇄 가능한 문자 하나를 사용하세요',
+    'key.bad_binding_type' => '키 바인딩 키는 문자열이어야 하며, 받은 형식: {key}',
 ];

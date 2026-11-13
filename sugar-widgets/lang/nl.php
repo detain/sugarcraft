@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'tijd verstreken',
     'stopwatch.not_started_tag' => 'niet gestart',
     'stopwatch.paused_tag' => 'gepauzeerd',
+    'key.bad_binding' => 'ongeldige toetsenbinding {key}: gebruik een kleine sleutelnaam (ctrl+c, shift+tab, pageup, f5) of één afdrukbaar teken',
+    'key.bad_binding_type' => 'bindingsleutels moeten tekenreeksen zijn, ontvangen: {key}',
 ];

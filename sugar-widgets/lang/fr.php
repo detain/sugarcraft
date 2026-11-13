@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'délai expiré',
     'stopwatch.not_started_tag' => 'non démarré',
     'stopwatch.paused_tag' => 'en pause',
+    'key.bad_binding' => 'liaison de touches invalide {key} : utilisez un nom de touche en minuscules (ctrl+c, shift+tab, pageup, f5) ou un caractère imprimable',
+    'key.bad_binding_type' => 'les touches de la liaison doivent être des chaînes, reçu : {key}',
 ];

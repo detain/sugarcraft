@@ -108,7 +108,7 @@ final class BindingTest extends TestCase
     public function testAnySkipsDisabled(): void
     {
         $down  = (new Binding(['down', 'j']))->disable();
-        $other = new Binding(['other']);
+        $other = new Binding(['x']);
         $j = new KeyMsg(KeyType::Char, 'j');
         $this->assertFalse(Binding::any($j, $down, $other));
     }

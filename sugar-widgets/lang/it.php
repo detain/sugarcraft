@@ -34,4 +34,6 @@ return [
     'timer.timeout_tag' => 'tempo scaduto',
     'stopwatch.not_started_tag' => 'non avviato',
     'stopwatch.paused_tag' => 'in pausa',
+    'key.bad_binding' => 'associazione di tasti non valida {key}: usare un nome tasto minuscolo (ctrl+c, shift+tab, pageup, f5) oppure un singolo carattere stampabile',
+    'key.bad_binding_type' => 'i tasti dell associazione devono essere stringhe, ricevuto {key}',
 ];
