@@ -172,7 +172,15 @@ final class ScriptablePdo extends \PDO
 
     private function looksLikeSelect(string $sql): bool
     {
-        return str_starts_with(ltrim(strtolower($sql)), 'select')
-            || str_starts_with(ltrim(strtolower($sql)), 'show');
+        $head = ltrim(strtolower($sql));
+        // Real PDO reports columnCount()>0 for EXPLAIN/SHOW/SELECT/WITH —
+        // MysqlDatabase::query() branches on columnCount, so the double must
+        // agree or the explain/export paths replay wrong shapes.
+        foreach (['select', 'show', 'explain', 'with'] as $kw) {
+            if (str_starts_with($head, $kw)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

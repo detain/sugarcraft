@@ -194,4 +194,50 @@ final class FlavorTest extends TestCase
 
         $this->assertSame(Flavor::Postgres, $flavor);
     }
+
+    // ===== SQL-C03: the driver name is the authority (client-003) =====
+    //
+    // MysqlDatabase::serverVersion() decorates its answer ('MySQL version
+    // 8.0.33'). The pre-C03 'mysql' arm handed that to detectFromVersionString,
+    // whose anchored /^\d+\.\d+\.\d+/ arm missed the worded form and returned
+    // the SQLite fallback — ExplainView then sent EXPLAIN QUERY PLAN to a live
+    // MySQL server (1064). These pins keep the docblock promise true.
+
+    public function testDetectFromDriverDecoratedMysqlVersionStaysMysql(): void
+    {
+        $this->assertSame(
+            Flavor::MySQL,
+            Flavor::detectFromDriver('mysql', 'MySQL version 8.0.33'),
+        );
+    }
+
+    public function testDetectFromDriverGarbageOrEmptyMysqlVersionStaysMysql(): void
+    {
+        $this->assertSame(Flavor::MySQL, Flavor::detectFromDriver('mysql', 'nonsense'));
+        $this->assertSame(Flavor::MySQL, Flavor::detectFromDriver('mysql', ''));
+        $this->assertSame(
+            Flavor::MySQL,
+            Flavor::detectFromDriver('mysql', 'MySQL version unknown'),
+        );
+    }
+
+    public function testDetectFromDriverMysqlRefinesWithinFamilyFromEmbeddedTokens(): void
+    {
+        $this->assertSame(
+            Flavor::MariaDB,
+            Flavor::detectFromDriver('mysql', '5.5.5-10.11.4-MariaDB-1:10.11.4+maria~ubu2204'),
+        );
+        $this->assertSame(
+            Flavor::Percona,
+            Flavor::detectFromDriver('mysql', '8.0.33-25 Percona Server (GPL)-release'),
+        );
+    }
+
+    public function testDetectFromDriverRawNumberFormStillRefinesAsBefore(): void
+    {
+        // The C03 acceptance pins BOTH forms: raw numeric (pre-existing arm)
+        // and worded (the repaired one).
+        $this->assertSame(Flavor::MySQL, Flavor::detectFromDriver('mysql', '8.0.33'));
+        $this->assertSame(Flavor::MySQL, Flavor::detectFromDriver('mysql', 'MySQL version 8.0.33'));
+    }
 }

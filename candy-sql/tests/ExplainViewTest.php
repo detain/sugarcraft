@@ -6,9 +6,12 @@ namespace SugarCraft\Sql\Tests;
 
 use SugarCraft\Sql\Database;
 use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Explain\ExplainProviderInterface;
+use SugarCraft\Sql\Explain\MysqlExplainProvider;
 use SugarCraft\Sql\ExplainRow;
 use SugarCraft\Sql\ExplainView;
+use SugarCraft\Sql\Tests\Support\ScriptablePdo;
 use PHPUnit\Framework\TestCase;
 
 final class ExplainViewTest extends TestCase
@@ -16,6 +19,47 @@ final class ExplainViewTest extends TestCase
     private function memoryDb(): Database
     {
         return new Database(new \PDO('sqlite::memory:'));
+    }
+
+    /** Wire a connected MysqlDatabase over the replay double (C05 bed). */
+    private function mysqlDb(ScriptablePdo $pdo): MysqlDatabase
+    {
+        $r = new \ReflectionClass(MysqlDatabase::class);
+        $db = $r->newInstanceWithoutConstructor();
+        $p = $r->getProperty('pdo');
+        $p->setValue($db, $pdo);
+        return $db;
+    }
+
+    public function testRunAgainstDecoratedMysqlServerPicksTheMysqlProvider(): void
+    {
+        // SQL-C03 (client-003): serverVersion() answers the worded
+        // 'MySQL version 8.0.33'; the flavor pick must stay in the MySQL
+        // family and ship `EXPLAIN FORMAT=JSON` — never EXPLAIN QUERY PLAN.
+        $pdo = new ScriptablePdo();
+        $pdo->on('VERSION', [['ver' => '8.0.33']]);
+        $pdo->on('EXPLAIN', []);
+        $db = $this->mysqlDb($pdo);
+
+        $view = ExplainView::run($db, 'SELECT * FROM users');
+
+        $flavor = (new \ReflectionProperty(ExplainView::class, 'flavor'))->getValue($view);
+        $provider = (new \ReflectionProperty(ExplainView::class, 'provider'))->getValue($view);
+        $this->assertNotSame(Flavor::Sqlite, $flavor);
+        $this->assertSame(Flavor::MySQL, $flavor);
+        $this->assertInstanceOf(MysqlExplainProvider::class, $provider);
+        $sent = array_column(
+            array_filter($pdo->log, static fn (array $e): bool => $e['op'] === 'query' || $e['op'] === 'prepare'),
+            'sql',
+        );
+        $this->assertFalse(
+            (bool) preg_grep('/QUERY PLAN/', $sent),
+            'mysql driver must never receive EXPLAIN QUERY PLAN',
+        );
+        $this->assertTrue(
+            (bool) array_filter($sent, static fn (string $s): bool => str_contains($s, 'EXPLAIN FORMAT=JSON')),
+            'expected the MySQL explain wire EXPLAIN FORMAT=JSON, saw: ' . implode(' | ', $sent),
+        );
     }
 
     public function testRunExecutesExplainQueryPlan(): void

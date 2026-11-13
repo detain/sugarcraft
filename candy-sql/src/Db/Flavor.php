@@ -74,10 +74,12 @@ enum Flavor: string
     /**
      * Detect the database flavor from driver name.
      *
-     * Uses the driver name (from PDO or DatabaseInterface::driverName()) as the
-     * primary signal, then refines MySQL/MariaDB/Percona using the version string
-     * if provided. This ensures a mysql/pgsql driver never falls back to SQLite
-     * for an unparseable version string.
+     * The driver name is the authority: an unparseable or decorated version
+     * string ('MySQL version 8.0.33' as returned by MysqlDatabase::serverVersion())
+     * refines within the MySQL family but NEVER downgrades a mysql/pgsql driver
+     * to SQLite — that mispick handed EXPLAIN QUERY PLAN to a live MySQL server
+     * (one 1064, client-003). An explicit foreign banner (PostgreSQL/SQLite) in
+     * the version string outvotes a mislabelled driver, as before.
      *
      * @param string $driverName Driver name ('sqlite', 'mysql', 'pgsql')
      * @param string $version    Optional version string for MySQL/MariaDB/Percona refinement
@@ -89,8 +91,28 @@ enum Flavor: string
         return match ($driverName) {
             'sqlite' => self::Sqlite,
             'pgsql' => self::Postgres,
-            'mysql' => self::detectFromVersionString($version, $versionComment),
+            'mysql' => self::refineMysqlFamily($version, $versionComment),
             default => self::Sqlite,
+        };
+    }
+
+    /**
+     * Refine a confirmed 'mysql' driver within the MySQL family.
+     *
+     * MariaDB/Percona advertise themselves in the version comment (SELECT
+     * VERSION()) or inline in the version string; the PostgreSQL/SQLite banner
+     * arms keep the mislabelled-driver precedence detectFromDriver always had.
+     * Everything else — bare numbers, decorated strings, garbage, empty —
+     * stays MySQL, because a PDO driver named 'mysql' talks MySQL SQL.
+     */
+    private static function refineMysqlFamily(string $version, string $versionComment): self
+    {
+        return match (true) {
+            str_contains($versionComment, 'MariaDB') || str_contains($version, 'MariaDB') => self::MariaDB,
+            str_contains($versionComment, 'Percona') || str_contains($version, 'Percona') => self::Percona,
+            str_starts_with($version, 'PostgreSQL') => self::Postgres,
+            str_contains($version, 'SQLite') || str_contains($versionComment, 'SQLite') => self::Sqlite,
+            default => self::MySQL,
         };
     }
 }
