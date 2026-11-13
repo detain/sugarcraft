@@ -10,6 +10,7 @@ use SugarCraft\ScriptUi\Model\ChooseModel;
 use SugarCraft\ScriptUi\Runtime\OptionList;
 use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
+use SugarCraft\ScriptUi\Runtime\ItemSource;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Attribute\Example;
@@ -31,7 +32,8 @@ final class ChooseCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addArgument('options', InputArgument::IS_ARRAY | InputArgument::REQUIRED, 'Options to pick from.')
+            ->addArgument('options', InputArgument::IS_ARRAY, 'Options to pick from.')
+            ->addOption('item', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Item to choose from; repeatable, comma-split (\\, stays a literal comma).', [])
             ->addOption('height',   null, InputOption::VALUE_REQUIRED, 'Visible item count.', 10)
             ->addOption('limit',    null, InputOption::VALUE_REQUIRED, 'Maximum selections (1 = single, >1 = multi).', 1)
             ->addOption('no-limit', null, InputOption::VALUE_NONE,    'Allow unlimited multi-select.')
@@ -60,8 +62,17 @@ final class ChooseCommand extends Command
             fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
             return Command::FAILURE;
         }
-        /** @var list<string> $options */
-        $options = $input->getArgument('options');
+        /** @var list<string> $positionalOptions */
+        $positionalOptions = (array) $input->getArgument('options');
+        /** @var list<string> $itemFlags */
+        $itemFlags = (array) $input->getOption('item');
+        // scriptui-46 (finding 064): positionals AND repeatable --item feed
+        // the same list (ItemSource precedence; choose has no stdin leg).
+        $options = ItemSource::collect($positionalOptions, $itemFlags, null);
+        if ($options === []) {
+            fwrite(STDERR, Lang::t('runtime.empty_items') . "\n");
+            return Command::FAILURE;
+        }
         try {
             $height = PositiveInt::parse('height', $input->getOption('height'));
             $limit  = PositiveInt::parse('limit', $input->getOption('limit'));

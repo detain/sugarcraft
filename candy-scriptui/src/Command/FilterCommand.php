@@ -8,6 +8,8 @@ use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\FilterModel;
 use SugarCraft\ScriptUi\Runtime\OptionList;
+use SugarCraft\ScriptUi\Runtime\ItemSource;
+use Symfony\Component\Console\Input\InputArgument;
 use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
@@ -34,6 +36,8 @@ final class FilterCommand extends Command
     protected function configure(): void
     {
         $this
+            ->addArgument('options', InputArgument::IS_ARRAY, 'Items to filter; when empty, lines are read from stdin.')
+            ->addOption('item', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Item to filter; repeatable, comma-split (\\, stays a literal comma).', [])
             ->addOption('height',           null, InputOption::VALUE_REQUIRED, 'Visible item count.', 10)
             ->addOption('limit',            null, InputOption::VALUE_REQUIRED, 'Maximum selections (>1 enables multi).', 1)
             ->addOption('no-limit',         null, InputOption::VALUE_NONE,    'Allow unlimited multi-select.')
@@ -67,7 +71,13 @@ final class FilterCommand extends Command
             return Command::FAILURE;
         }
 
-        $lines = self::stdinLines();
+        // scriptui-46 (finding 064): positionals AND repeatable --item feed
+        // the list directly; stdin remains the fallback source only.
+        /** @var list<string> $positionalOptions */
+        $positionalOptions = (array) $input->getArgument('options');
+        /** @var list<string> $itemFlags */
+        $itemFlags = (array) $input->getOption('item');
+        $lines = ItemSource::collect($positionalOptions, $itemFlags, self::stdinLines(...));
         if ($lines === []) {
             // Silence on empty stdin read as a crash to shell scripts;
             // the FAILURE polarity stays (gum parity), the reason is said.
