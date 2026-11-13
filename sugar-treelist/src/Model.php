@@ -608,6 +608,16 @@ final class Model
     /**
      * Add an item to the list.
      *
+     * INTAKE CONTRACT (sugar-treelist-022/036): a plain string is a
+     * first-class item value — `withItem('file.php')` just works and is
+     * normalized to a {@see StringItem} internally. Anything that is neither
+     * string nor \Stringable (null, bool, int, float, array, plain object)
+     * is refused with an InvalidArgumentException naming the door; the old
+     * array door CAST such values instead, so ['ok',null,1,true,2.5] became
+     * ['ok','','1','1','2.5'] and a blank `$row['name'] ?? null` row looked
+     * like library corruption. The @param docblock carries the accepted
+     * union for static analysis; the runtime door parses it.
+     *
      * The id is minted on the clone inside mutate(), never on the receiver —
      * otherwise a forked call would silently advance the base model's counter
      * (breaking the "instances are immutable" contract) and desync its id
@@ -618,9 +628,14 @@ final class Model
      * projected through the predicate: an item that does not match stays
      * invisible but is never lost — withoutFilter() (or a widened predicate)
      * reveals it.
+     *
+     * @param string|\Stringable $value
+     * @throws \InvalidArgumentException if the value is neither string nor \Stringable
      */
-    public function withItem(\Stringable $value): self
+    public function withItem(mixed $value): self
     {
+        $value = self::normalizeItem($value, 'Model::withItem()', 'the value');
+
         return $this->mutate(function ($m) use ($value) {
             $item = new Item($value, $m->idCounter++);
             if ($m->filterFn !== null) {
@@ -637,20 +652,33 @@ final class Model
      *             vocabulary; returns a new Model, receiver unchanged.
      *             REMOVED-IN: 2.0.0
      */
-    public function addItem(\Stringable $value): self { return $this->withItem($value); }
+    public function addItem(mixed $value): self { return $this->withItem($value); }
 
     /**
      * Add multiple items in one call (one clone, multiple pushes).
      *
+     * Intake follows the {@see withItem()} contract: every element must be
+     * string or \Stringable, refused by position otherwise.
+     *
      * Filtered models follow the {@see withItem()} rule: pushes go to the
      * pristine list, the projection is recomputed once.
      *
-     * @param \Stringable ...$values
+     * @param string|\Stringable ...$values
+     * @throws \InvalidArgumentException if an element is neither string nor \Stringable
      */
-    public function withItems(\Stringable ...$values): self
+    public function withItems(mixed ...$values): self
     {
-        return $this->mutate(function ($m) use ($values) {
-            foreach ($values as $value) {
+        $normalized = [];
+        foreach ($values as $k => $value) {
+            $normalized[] = self::normalizeItem(
+                $value,
+                'Model::withItems()',
+                \is_int($k) ? 'argument #' . ($k + 1) : "argument \$$k",
+            );
+        }
+
+        return $this->mutate(function ($m) use ($normalized) {
+            foreach ($normalized as $value) {
                 $item = new Item($value, $m->idCounter++);
                 if ($m->filterFn !== null) {
                     $m->originalItems[] = $item;
@@ -667,23 +695,37 @@ final class Model
      *             vocabulary; returns a new Model, receiver unchanged.
      *             REMOVED-IN: 2.0.0
      */
-    public function addItems(\Stringable ...$values): self { return $this->withItems(...$values); }
+    public function addItems(mixed ...$values): self { return $this->withItems(...$values); }
 
     /**
-     * Add multiple items from a plain array (strings auto-wrapped in StringItem).
+     * Add multiple items from a plain array.
+     *
+     * INTAKE CONTRACT (sugar-treelist-022/036): elements may be string or
+     * \Stringable; strings are normalized to StringItem exactly as at the
+     * scalar doors. Non-string/non-Stringable elements (null, bool, int,
+     * float — the shapes the old door silently CAST into '', '1', '2.5')
+     * are refused with an InvalidArgumentException naming the element's
+     * position and actual type.
      *
      * Filtered models follow the {@see withItem()} rule.
      *
-     * @param array<\Stringable|string> $values
+     * @param array<array-key, \Stringable|string> $values
+     * @throws \InvalidArgumentException if an element is neither string nor \Stringable
      */
     public function withItemsFromArray(array $values): self
     {
-        return $this->mutate(function ($m) use ($values) {
-            foreach ($values as $value) {
-                $item = new Item(
-                    $value instanceof \Stringable ? $value : new StringItem((string) $value),
-                    $m->idCounter++
-                );
+        $normalized = [];
+        foreach ($values as $k => $value) {
+            $normalized[] = self::normalizeItem(
+                $value,
+                'Model::withItemsFromArray()',
+                \is_int($k) ? "element $k" : "element '$k'",
+            );
+        }
+
+        return $this->mutate(function ($m) use ($normalized) {
+            foreach ($normalized as $value) {
+                $item = new Item($value, $m->idCounter++);
                 if ($m->filterFn !== null) {
                     $m->originalItems[] = $item;
                 } else {
@@ -700,6 +742,31 @@ final class Model
      *             REMOVED-IN: 2.0.0
      */
     public function addItemsFromArray(array $values): self { return $this->withItemsFromArray($values); }
+
+    /**
+     * The single intake ruling every item door parses through (accept the
+     * two honest shapes, refuse the rest by position), so the coercion
+     * contract lives in exactly one place and Item can keep demanding a
+     * \Stringable internally.
+     *
+     * @throws \InvalidArgumentException
+     */
+    private static function normalizeItem(mixed $value, string $door, string $position): \Stringable
+    {
+        if ($value instanceof \Stringable) {
+            return $value;
+        }
+        if (\is_string($value)) {
+            return new StringItem($value);
+        }
+        throw new \InvalidArgumentException(\sprintf(
+            '%s: %s must be a string or a %s object, %s given.',
+            $door,
+            $position,
+            '\\Stringable',
+            \get_debug_type($value),
+        ));
+    }
 
     /**
      * Remove an item by its VISIBLE index. Cursor is re-anchored by identity.
@@ -1038,11 +1105,18 @@ final class Model
      * Find the index of an item whose EqualsFunc matches the given value.
      * Returns -1 if not found.
      *
+     * Intake follows the {@see withItem()} contract: a plain string finds
+     * its own value; anything neither string nor \Stringable is refused.
+     *
+     * @param string|\Stringable $value
+     * @throws \InvalidArgumentException if the value is neither string nor \Stringable
      * @throws \LogicException if the installed equalsFunc returns null for a
      *         comparison (unset slot falls back to string equality).
      */
-    public function find(\Stringable $value): int
+    public function find(mixed $value): int
     {
+        $value = self::normalizeItem($value, 'Model::find()', 'the value');
+
         if ($this->equalsFunc === null) {
             foreach ($this->items as $i => $item) {
                 if ((string) $item->value === (string) $value) {

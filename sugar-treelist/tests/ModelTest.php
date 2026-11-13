@@ -2314,6 +2314,102 @@ final class ModelTest extends TestCase
         }
     }
 
+    // -- item intake contract (sugar-treelist-022/036) ---------------------
+
+    public function testPlainStringsAreFirstClassItemAtEveryDoor(): void
+    {
+        // The DX-03 cure: addItem('file.php') used to fatal; now every door
+        // takes strings directly, no StringItem boilerplate.
+        $m = Model::new()->withItem('file.php');
+        $this->assertSame(1, $m->length());
+        $this->assertSame('file.php', (string) $m->itemAt(0));
+        $this->assertSame(0, $m->find('file.php'));
+
+        $m = $m->withItems('second.php', new StringItem('third.php'));
+        $this->assertSame(
+            ['file.php', 'second.php', 'third.php'],
+            \array_map('strval', $this->valuesOf($m)),
+        );
+
+        $m = $m->withItemsFromArray(['fourth.php', new StringItem('fifth.php')]);
+        $this->assertSame(5, $m->length());
+        $this->assertSame('fourth.php', (string) $m->itemAt(3));
+        $this->assertSame(-1, $m->find('missing.php'));
+    }
+
+    public function testStringIntakeAndStringItemIntakeRenderByteIdentically(): void
+    {
+        // One normalization path, two spellings — the widened door must not
+        // introduce a second representation with its own rendering quirks.
+        $widened = Model::new()->withWidth(20)->withHeight(2)->withItem('same value');
+        $wrapped = Model::new()->withWidth(20)->withHeight(2)->withItem(new StringItem('same value'));
+
+        $this->assertSame($wrapped->lines(), $widened->lines());
+        $this->assertSame($wrapped->itemIds(), $widened->itemIds());
+    }
+
+    public function testScalarJunkIsRefusedByEveryIntakeDoor(): void
+    {
+        $doors = [
+            'Model::withItem()' => static fn (mixed $v): Model => Model::new()->withItem($v),
+            'Model::withItems()' => static fn (mixed $v): Model => Model::new()->withItems($v),
+            'Model::withItemsFromArray()' => static fn (mixed $v): Model => Model::new()->withItemsFromArray([$v]),
+            'Model::find()' => static fn (mixed $v): int => Model::new()->find($v),
+        ];
+        foreach ($doors as $door => $call) {
+            foreach ([null, true, 1, 2.5, [], new \stdClass()] as $junk) {
+                try {
+                    $call($junk);
+                    $this->fail("{$door} accepted " . \get_debug_type($junk));
+                } catch (\InvalidArgumentException $e) {
+                    $this->assertStringContainsString($door, $e->getMessage());
+                    $this->assertStringContainsString(\get_debug_type($junk), $e->getMessage());
+                }
+            }
+        }
+    }
+
+    public function testArrayDoorRefusesTheOffendingElementByPosition(): void
+    {
+        // The exact 036 regression shape: ['ok',null,1,true,2.5] used to land
+        // as ['ok','','1','1','2.5'] — blank rows that looked like library
+        // corruption. Now the first bad element aborts the whole call by name.
+        try {
+            Model::new()->withItemsFromArray(['ok', null, 1, true, 2.5]);
+            $this->fail('the lax cast door is supposed to be dead');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Model::withItemsFromArray()', $e->getMessage());
+            $this->assertStringContainsString('element 1', $e->getMessage());
+            $this->assertStringContainsString('null', $e->getMessage());
+        }
+        // String keys get quoted positions (an assoc `$rows` names the row).
+        try {
+            Model::new()->withItemsFromArray(['users' => ['name' => 1.0]]);
+            $this->fail('nested arrays must not slip through the door');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString("element 'users'", $e->getMessage());
+            $this->assertStringContainsString('array', $e->getMessage());
+        }
+    }
+
+    public function testJunkRefusalLeavesTheReceiverAndForksUnharmed(): void
+    {
+        // Fail-fast at the door: the rejected call must not mint ids or push
+        // half-normalized items onto the pristine list.
+        $base = Model::new()->withItemsFromArray(['a', 'b']);
+        try {
+            $base->withItemsFromArray(['c', false]);
+            $this->fail('bool element must be refused');
+        } catch (\InvalidArgumentException) {
+            // expected
+        }
+        $this->assertSame(['a', 'b'], \array_map('strval', $this->valuesOf($base)));
+
+        $fork = $base->withItem('later');
+        $this->assertSame(3, $fork->length());
+        $this->assertSame(['a', 'b', 'later'], \array_map('strval', $this->valuesOf($fork)));
+    }
+
     // -- malformed UTF-8 repair at the render choke (sugar-treelist-012) ----
 
     /** @return list<string> */
