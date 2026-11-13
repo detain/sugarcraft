@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'Items hernoemd: {count}',
     'undo.move' => 'Items verplaatst: {count}',
     'undo.copy' => 'Items gekopieerd: {count}',
-    'keyhelp.default' => 'Tab wisselen · ↑↓ jk bewegen · Home/End g/G springen · Enter openen · l bekijken · ← h omhoog · spatie selecteren · s sorteren · e extensie · . verborgen · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · r verversen · q afsluiten · / zoeken · Esc wissen · t tabblad dupliceren · ^w tabblad sluiten · ^tab cyclen · ^PgUp/^PgDn tabbladen · u/^z ongedaan · ^y herhalen · ? help · Ctrl+O openen · 1-9 tabs · Ctrl+a alles · v omkeren · * patroon · I info',
+    'keyhelp.default' => 'Tab wisselen · ↑↓ jk bewegen · Home/End g/G springen · Enter openen · l bekijken · ← h omhoog · spatie selecteren · s sorteren · e extensie · . verborgen · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · r verversen · q afsluiten · / zoeken · Esc wissen · t tabblad dupliceren · ^w tabblad sluiten · ^tab cyclen · ^PgUp/^PgDn tabbladen · u/^z ongedaan · ^y herhalen · ? help · Ctrl+O openen · 1-9 tabs · Ctrl+a alles · v omkeren · * patroon · I info · muis klik/wiel',
     'keyhelp.terse' => 'Tab wisselen · ↑↓ jk bewegen · Enter openen · l bekijken · ← h omhoog · spatie selecteren · s sorteren · e extensie · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · q afsluiten · / zoeken · u/^z ongedaan · ^y herhalen',
     'keyhelp.minimal' => 'Enter openen · l bekijken · q afsluiten · / zoeken',
     'help.title' => '{count} sneltoetsen',

@@ -11,6 +11,10 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ExecMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
@@ -56,6 +60,21 @@ final class Manager implements Model
      * live instance) round-trips unchanged and no ctor-side logic is skipped.
      */
     use Mutable;
+
+    /** CF-55: two left clicks on the same row within this many seconds are one double-click. */
+    private const DOUBLE_CLICK_SECONDS = 0.4;
+
+    /** CF-55: rows one wheel notch scrolls. */
+    private const WHEEL_ROWS = 3;
+
+    /** @var (\Closure(): float)|null CF-55 test seam: seconds clock for double-click timing. */
+    private static ?\Closure $clock = null;
+
+    /** CF-55: pin the double-click clock (tests); null restores microtime(). */
+    public static function useClock(?\Closure $clock): void
+    {
+        self::$clock = $clock;
+    }
 
     /** CF-31: FIFO cap on the per-directory selection stash. */
     private const MAX_DIR_MARKS = 128;
@@ -134,6 +153,8 @@ final class Manager implements Model
         public readonly ?\Closure $listerInvalidator = null,
         /** CF-52: the `I` stat overlay — pre-localized detail lines computed at open time (update, never view); null = closed. */
         public readonly ?array $infoLines = null,
+        /** CF-55: the previous left click (pane side, entry index, clock seconds) — the double-click memory. @var array{side:int,index:int,at:float}|null */
+        public readonly ?array $lastClick = null,
     ) {
         // The lister arrives exactly as the seam decided it (start() and
         // ManagerBuilder::build() are the memoized production paths);
@@ -255,6 +276,13 @@ final class Manager implements Model
                 ? Lang::t('status.opened', ['name' => $label])
                 : Lang::t('status.editor_failed', ['name' => $label, 'code' => $msg->exitCode]);
             return [$this->refreshAllPanes()->withStatus($status), null];
+        }
+
+        // CF-55: the pointer. Modal frames (confirm gate, help, info,
+        // search) own the screen, so a click there must neither answer a
+        // prompt nor move a cursor hidden behind an overlay.
+        if ($msg instanceof MouseMsg) {
+            return $this->handleMouse($msg);
         }
 
         if (($msg instanceof KeyMsg) === false) {
@@ -652,6 +680,98 @@ final class Manager implements Model
             default => $this,
         };
         return [$next, null];
+    }
+
+    /**
+     * CF-55: click / wheel routing against Renderer::hit's geometry.
+     *
+     * - wheel: scrolls the pane UNDER the pointer by three rows (cursor
+     *   moves; the window follows the cursor) without stealing focus.
+     * - left click on a row: activates that pane and parks the cursor on
+     *   the row; Ctrl-click toggles that row's mark (CF-31 grammar) instead
+     *   of just moving; a second click on the same row within 400 ms is
+     *   Enter semantics (openEntry('edit')).
+     * - left click on a pane's chrome: activates the pane. On the tab bar:
+     *   switches to that tab.
+     * Everything else (release, motion, other buttons) is inert.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function handleMouse(MouseMsg $msg): array
+    {
+        if ($this->confirm !== ConfirmState::None || $this->helpMode
+            || $this->infoLines !== null || $this->searchQuery !== null) {
+            return [$this, null];
+        }
+        $hit = Renderer::hit($this, $msg->x, $msg->y);
+        if ($hit === null) {
+            return [$this, null];
+        }
+        if ($msg instanceof MouseWheelMsg || $msg->button === MouseButton::WheelUp || $msg->button === MouseButton::WheelDown) {
+            if ($hit['kind'] === 'tab') {
+                return [$this, null];
+            }
+            $delta = $msg->button === MouseButton::WheelUp ? -self::WHEEL_ROWS : self::WHEEL_ROWS;
+            return [$this->withSidePane($hit['side'], static fn(Pane $p): Pane => $p->moveCursor($delta), false), null];
+        }
+        if (!($msg instanceof MouseClickMsg) || $msg->button !== MouseButton::Left) {
+            return [$this, null];
+        }
+        if ($hit['kind'] === 'tab') {
+            return [$this->switchTab($hit['tab']), null];
+        }
+        if ($hit['kind'] === 'pane') {
+            return [$this->withSidePane($hit['side'], static fn(Pane $p): Pane => $p, true), null];
+        }
+        $side = $hit['side'];
+        $index = $hit['index'];
+        $now = (self::$clock ?? static fn(): float => microtime(true))();
+        $double = $this->lastClick !== null
+            && $this->lastClick['side'] === $side
+            && $this->lastClick['index'] === $index
+            && $now - $this->lastClick['at'] <= self::DOUBLE_CLICK_SECONDS;
+        $moved = $this->withSidePane($side, static function (Pane $p) use ($index, $msg): Pane {
+            $p = $p->withCursor($index);
+            return $msg->ctrl ? $p->toggleSelection() : $p;
+        }, true);
+        if ($msg->ctrl) {
+            // A ctrl-click is a selection gesture; it never arms a double-click.
+            return [$moved->mutate(['lastClick' => null]), null];
+        }
+        if ($double) {
+            [$opened, $cmd] = $moved->mutate(['lastClick' => null])->openEntry('edit');
+            return [$opened, $cmd];
+        }
+        return [$moved->mutate(['lastClick' => ['side' => $side, 'index' => $index, 'at' => $now]]), null];
+    }
+
+    /**
+     * CF-55: apply $fn to one named pane of the current tab (0 = left,
+     * 1 = right), optionally making it the active one. Keeps the flat
+     * left/right/activeIdx mirror in step with the tab like withTabs does.
+     *
+     * @param \Closure(Pane): Pane $fn
+     */
+    private function withSidePane(int $side, \Closure $fn, bool $activate): self
+    {
+        $key = $side === 0 ? 'left' : 'right';
+        if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            $tab[$key] = $fn($tab[$key]);
+            if ($activate) {
+                $tab['activeIdx'] = $side;
+            }
+            $newTabs = $this->tabs;
+            $newTabs[$this->tabIndex] = $tab;
+            return $this->mutate([
+                'left' => $tab['left'], 'right' => $tab['right'],
+                'activeIdx' => $tab['activeIdx'], 'tabs' => $newTabs,
+            ]);
+        }
+        $changes = [$key => $fn($this->$key)];
+        if ($activate) {
+            $changes['activeIdx'] = $side;
+        }
+        return $this->mutate($changes);
     }
 
     private function withActive(int $idx): self

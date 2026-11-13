@@ -69,7 +69,7 @@ return [
     'undo.rename' => '重命名 {count} 个项目',
     'undo.move' => '移动 {count} 个项目',
     'undo.copy' => '复制 {count} 个项目',
-    'keyhelp.default' => 'Tab 切换 · ↑↓ jk 移动 · Home/End g/G 跳转 · Enter 打开 · l 查看 · ← h 上级 · Space 选择 · s 排序 · e 扩展名 · . 隐藏 · c 复制 · m 移动 · R 重命名 · d 删除 · r 刷新 · q 退出 · / 搜索 · Esc 清除 · t 复制标签页 · ^w 关闭标签页 · ^tab 循环切换 · ^PgUp/^PgDn 标签页 · u/^z 撤销 · ^y 重做 · ? 帮助 · Ctrl+O 打开 · 1-9 标签 · Ctrl+a 全选 · v 反选 · * 模式 · I 信息',
+    'keyhelp.default' => 'Tab 切换 · ↑↓ jk 移动 · Home/End g/G 跳转 · Enter 打开 · l 查看 · ← h 上级 · Space 选择 · s 排序 · e 扩展名 · . 隐藏 · c 复制 · m 移动 · R 重命名 · d 删除 · r 刷新 · q 退出 · / 搜索 · Esc 清除 · t 复制标签页 · ^w 关闭标签页 · ^tab 循环切换 · ^PgUp/^PgDn 标签页 · u/^z 撤销 · ^y 重做 · ? 帮助 · Ctrl+O 打开 · 1-9 标签 · Ctrl+a 全选 · v 反选 · * 模式 · I 信息 · 鼠标 点击/滚轮',
     'keyhelp.terse' => 'Tab 切换 · ↑↓ jk 移动 · Enter 打开 · l 查看 · ← h 上级 · Space 选择 · s 排序 · e 扩展名 · c 复制 · m 移动 · R 重命名 · d 删除 · q 退出 · / 搜索 · u/^z 撤销 · ^y 重做',
     'keyhelp.minimal' => 'Enter 打开 · l 查看 · q 退出 · / 搜索',
     'help.title' => '{count} 个按键绑定',

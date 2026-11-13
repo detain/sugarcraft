@@ -182,6 +182,19 @@ final class Pane
         return $this->mutate(['cursor' => $next]);
     }
 
+    /**
+     * Park the cursor on an absolute entry index, clamped into the list
+     * (CF-55: a mouse click names a row, not a delta).
+     */
+    public function withCursor(int $index): self
+    {
+        $count = count($this->entries);
+        if ($count === 0) {
+            return $this;
+        }
+        return $this->mutate(['cursor' => max(0, min($count - 1, $index))]);
+    }
+
     public function gotoTop(): self
     {
         return $this->mutate(['cursor' => 0]);

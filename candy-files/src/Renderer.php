@@ -46,13 +46,11 @@ final class Renderer
         // / search block already composed. Capacity 0 (no height captured
         // yet — unit shape, or pre-WindowSizeMsg) keeps every entry listed,
         // byte-preserving the legacy frame.
-        $capacity = 0;
-        if ($m->termRows > 0) {
-            $chromeRows = 5
-                + ($tabBar === '' ? 0 : substr_count($tabBar, "\n"))
-                + ($search === '' ? 0 : substr_count($search, "\n"));
-            $capacity = max(1, $m->termRows - $chromeRows);
-        }
+        $capacity = self::capacity(
+            $m,
+            ($tabBar === '' ? 0 : substr_count($tabBar, "\n"))
+            + ($search === '' ? 0 : substr_count($search, "\n")),
+        );
 
         $left  = self::renderPane(self::paneOf($m, 'left'),  $active === 0, $m->termCols, $capacity, $glyphs);
         $right = self::renderPane(self::paneOf($m, 'right'), $active === 1, $m->termCols, $capacity, $glyphs);
@@ -112,6 +110,73 @@ final class Renderer
         return $frame;
     }
 
+    /**
+     * Entry rows one pane may list: the live height minus the fixed chrome
+     * (5) and any tab-bar / search lines. 0 = no height captured yet. One
+     * definition for render() and the CF-55 hit-test, so a click can never
+     * land on a row the frame did not draw there.
+     */
+    private static function capacity(Manager $m, int $extraChrome): int
+    {
+        return $m->termRows > 0 ? max(1, $m->termRows - 5 - $extraChrome) : 0;
+    }
+
+    /**
+     * CF-55: map a 1-based terminal cell to the thing drawn there. Pure
+     * geometry over the same layout render() composes (tab bar line, pane
+     * box = top border + header + rule + rows, 2-cell gutter), with the
+     * entry window recomputed through rowWindow() exactly as the frame
+     * does. Callers must not ask while search / help / info / a confirm
+     * gate replaces the browse frame.
+     *
+     * @return array{kind:'tab',tab:int}|array{kind:'row',side:int,index:int}|array{kind:'pane',side:int}|null
+     */
+    public static function hit(Manager $m, int $x, int $y): ?array
+    {
+        if ($x < 1 || $y < 1) {
+            return null;
+        }
+        $hasTabBar = $m->tabs !== [] && count($m->tabs) > 1;
+        $top = 1;
+        if ($hasTabBar) {
+            if ($y === 1) {
+                $col = 1;
+                foreach (self::tabCells($m, GlyphSet::current()) as $i => $cell) {
+                    $w = Width::of($cell);
+                    if ($x >= $col && $x < $col + $w) {
+                        return ['kind' => 'tab', 'tab' => $i];
+                    }
+                    $col += $w + 1;
+                }
+                return null;
+            }
+            $top = 2;
+        }
+        $outer = $m->termCols > 0 ? intdiv($m->termCols - 2, 2) : 40;
+        if ($x <= $outer) {
+            $side = 0;
+        } elseif ($x >= $outer + 3 && $x <= 2 * $outer + 2) {
+            $side = 1;
+        } else {
+            return null;
+        }
+        $pane = self::paneOf($m, $side === 0 ? 'left' : 'right');
+        $rowsStart = $top + 3; // top border, header, rule
+        if ($y < $rowsStart) {
+            return $y >= $top ? ['kind' => 'pane', 'side' => $side] : null;
+        }
+        $count = count($pane->entries);
+        [$start, $end, $above] = self::rowWindow($count, $pane->cursor, self::capacity($m, $hasTabBar ? 1 : 0));
+        $r = $y - $rowsStart - ($above > 0 ? 1 : 0);
+        if ($above > 0 && $y === $rowsStart) {
+            return ['kind' => 'pane', 'side' => $side]; // fold hint row
+        }
+        if ($r < 0 || $start + $r >= $end) {
+            return ['kind' => 'pane', 'side' => $side];
+        }
+        return ['kind' => 'row', 'side' => $side, 'index' => $start + $r];
+    }
+
     /** The pane the tabs structure holds for the current tab, or the flat one. */
     private static function paneOf(Manager $m, string $side): Pane
     {
@@ -136,6 +201,24 @@ final class Renderer
             return '';
         }
         $parts = [];
+        foreach (self::tabCells($m, $glyphs) as $cell) {
+            // CF-47: each tab cell is one bidi island (CF-02's Latin paths
+            // inside bracket neutrals must not drift across neighbours in
+            // RTL paragraphs).
+            $parts[] = Bidi::isolate($cell, $rtl);
+        }
+        return implode(' ', $parts) . "\n";
+    }
+
+    /**
+     * The plain tab-bar cells (before the bidi island wrap). Split out of
+     * renderTabBar so the CF-55 hit-test measures the very text drawn.
+     *
+     * @return list<string>
+     */
+    private static function tabCells(Manager $m, GlyphSet $glyphs): array
+    {
+        $cells = [];
         foreach ($m->tabs as $i => $tab) {
             // cwd is filesystem data like any name — sanitize before render.
             $label = self::truncate(Entry::sanitizeName($tab['left']->cwd), 20, $glyphs);
@@ -143,12 +226,9 @@ final class Renderer
             // tab bar names its own direct-switch keys, 1..9.
             $prefix = ($i + 1) . ($i === $m->tabIndex ? '[' : ' ');
             $suffix = $i === $m->tabIndex ? ']' : ' ';
-            // CF-47: each tab cell is one bidi island (CF-02's Latin paths
-            // inside bracket neutrals must not drift across neighbours in
-            // RTL paragraphs).
-            $parts[] = Bidi::isolate("{$prefix}{$label}{$suffix}", $rtl);
+            $cells[] = "{$prefix}{$label}{$suffix}";
         }
-        return implode(' ', $parts) . "\n";
+        return $cells;
     }
 
     /**

@@ -154,6 +154,25 @@ At 100 columns and wider each pane row also carries a modification-time column
 (`YYYY-MM-DD HH:MM`); narrower terminals keep the name and size columns only
 (the same width-tier law as the key-help line).
 
+### Mouse (CF-55)
+
+The launcher asks the terminal for mouse reporting (SGR cell-motion mode), so:
+
+| Gesture | Action |
+|---------|--------|
+| Wheel | Scrolls the pane under the pointer three rows per notch — the cursor moves and the window follows; focus does not change |
+| Click a row | Activates that pane and parks the cursor on the row |
+| `Ctrl`+click a row | Toggles the row's selection mark (the CF-31 grammar, same as `Space` but without advancing) |
+| Double-click a row (second click on the same row within 400 ms) | Enter semantics: a directory opens, a file launches `$EDITOR` |
+| Click a pane's border/header | Activates that pane |
+| Click a tab label | Switches to that tab |
+
+Release, drag-motion, middle and right buttons are ignored, and while a modal
+frame owns the screen (confirm gate, help, info overlay, search) the pointer is
+inert, so a stray click can never answer a prompt. Mouse reporting steals the
+terminal's own text selection — hold `Shift` while dragging (most terminals) to
+select text.
+
 Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and
 `^tab` is Ctrl+Tab. That in-app line is a partial cheat sheet; the full binding table is
 the one above. Plain `PageUp`/`PageDown` (unmodified) are not bound to anything. The
@@ -344,7 +363,7 @@ reads through `FsLister`.
 
 ## Test plan
 
-- 455 tests / 7636 assertions — this pair is hand-typed: candy-files runs its
+- 472 tests / 7690 assertions — this pair is hand-typed: candy-files runs its
   suite lib-local and its totals are not part of the repository-wide pinned
   count, so re-derive them by running `vendor/bin/phpunit` in this directory
   whenever tests change.

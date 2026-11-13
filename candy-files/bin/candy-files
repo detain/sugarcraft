@@ -34,6 +34,7 @@ declare(strict_types=1);
 })();
 
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Files\Lang;
@@ -122,7 +123,7 @@ foreach (['left' => $leftCwd, 'right' => $rightCwd] as $side => $dir) {
 
 $program = new Program(
     Manager::start($leftCwd, $rightCwd),
-    new ProgramOptions(useAltScreen: true, bracketedPaste: true, openTty: $printCd)
+    new ProgramOptions(useAltScreen: true, bracketedPaste: true, mouseMode: MouseMode::CellMotion, openTty: $printCd)
 );
 $final = $program->run();
 
