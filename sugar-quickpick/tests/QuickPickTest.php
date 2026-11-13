@@ -761,44 +761,76 @@ final class QuickPickTest extends TestCase
         $this->assertSame($fresh->view($bg), $rendered->view($bg));
     }
 
-    public function testHighlightFuzzyWithNullResultFallsBackToPrintableText(): void
+    public function testHighlightFuzzyWithNoCarriedAnswerRendersTheRowUnchanged(): void
     {
-        // When ranker->match() returns null, highlightFuzzy should return the
-        // plain printable text without crashing.
-        $h = $this->makeQuickPick()->show();
-
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('highlightFuzzy');
-        $method->setAccessible(true);
-
-        $mockRanker = $this->createMock(FuzzyMatcher::class);
-        $mockRanker->method('match')->willReturn(null);
-
-        $result = $method->invoke($h, $mockRanker, '● banana', 'x');
-        $this->assertIsString($result);
-        // Falls back to printable text: the marker prefix is stripped, leaving 'banana'.
-        $this->assertStringContainsString('banana', $result);
-        // No ANSI reset codes since we're in the null-result fallback path.
-        $this->assertStringNotContainsString("\x1b[33m", $result);
+        // -069: the renderer never asks the ranker again. An item the last
+        // filter pass carried no indices for must be re-emitted byte-for-byte
+        // — host styling included — instead of crashing or re-scoring.
+        $h = $this->makeQuickPick()->show()->setMatchStyle("\x1b[33m");
+        $this->assertSame(
+            '● banana',
+            $this->invokeHighlightFuzzy($h, '● banana', new FilteredItem(1, 'banana')),
+        );
     }
 
-    public function testHighlightFuzzyWithEmptyResultFallsBackToPrintableText(): void
+    public function testHighlightFuzzyWithEmptyCarriedIndicesRendersTheRowUnchanged(): void
     {
-        // score=0 and empty indices means isMatched()=false and isEmpty()=true.
-        // highlightFuzzy should return the plain printable text.
-        $h = $this->makeQuickPick()->show();
+        // Contract noise — a stored empty index list paints nothing and must
+        // not corrupt the row.
+        $h = $this->makeQuickPick()->show()->setMatchStyle("\x1b[33m");
+        $this->assertSame(
+            '● banana',
+            $this->invokeHighlightFuzzy($h, '● banana', new FilteredItem(1, 'banana'), []),
+        );
+    }
 
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('highlightFuzzy');
+    /**
+     * Drive the private highlightFuzzy() seam with an optionally pre-seeded
+     * carried-hit map, mirroring how applyRankedFilter() fills it.
+     *
+     * @param list<int>|null $hits
+     */
+    private function invokeHighlightFuzzy(QuickPick $h, string $formatted, Item $item, ?array $hits = null): string
+    {
+        $map = new \WeakMap();
+        if ($hits !== null) {
+            $map[$item] = $hits;
+        }
+        $prop = new \ReflectionProperty(QuickPick::class, 'rankedHits');
+        $prop->setAccessible(true);
+        $prop->setValue($h, $map);
+
+        $method = new \ReflectionMethod($h, 'highlightFuzzy');
         $method->setAccessible(true);
 
-        $emptyResult = new MatchResult('x', 'banana', 0, []);
-        $mockRanker = $this->createMock(FuzzyMatcher::class);
-        $mockRanker->method('match')->willReturn($emptyResult);
+        return $method->invoke($h, $formatted, $item->value(), $item->value(), $item);
+    }
 
-        $result = $method->invoke($h, $mockRanker, '● banana', 'x');
-        $this->assertIsString($result);
-        $this->assertStringContainsString('banana', $result);
+    public function testOrdinalChromeIsNeverAHighlightTarget(): void
+    {
+        // -060: the old pass matched the filter against FORMATTER output, so
+        // the '1' of the ordinal '1. ' chrome was painted as a hit. Matching
+        // is now confined to the guarded value's own cells.
+        $h = QuickPick::new([new FilteredItem(1, '1apple')])
+            ->setWindowWidth(40)
+            ->setMatchStyle("\x1b[33m")
+            ->show()
+            ->type('1');
+
+        $rows = \explode("\n", $h->view(\str_repeat(\str_repeat(' ', 40) . "\n", 5)));
+        $itemRow = '';
+        foreach ($rows as $row) {
+            if (\str_contains($row, 'apple')) {
+                $itemRow = $row;
+                break;
+            }
+        }
+        $this->assertNotSame('', $itemRow, 'the survivor row must render');
+
+        // Decoration unstyled (old code wrapped the ordinal's '1'), while the
+        // value's leading '1' IS styled.
+        $this->assertStringContainsString('● 1. ', $itemRow, 'ordinal chrome must stay untouched');
+        $this->assertStringContainsString("\x1b[33m1\x1b[0mapple", $itemRow, 'the value match must still be painted');
     }
 
     /**
@@ -862,44 +894,28 @@ final class QuickPickTest extends TestCase
         );
     }
 
-    public function testHighlightFuzzyAppliesStyleToMatchedCharacters(): void
+    public function testHighlightFuzzyAppliesStyleToCarriedIndices(): void
     {
-        // When the ranker returns a valid (non-empty) match, the Highlighter
-        // should wrap the matched runes with the configured style ANSI codes.
+        // Indices carried from the filter pass wrap the matched runes with the
+        // configured style — the consumer half of -069.
         $h = $this->makeQuickPick()->show()->setMatchStyle("\x1b[33m"); // yellow
 
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('highlightFuzzy');
-        $method->setAccessible(true);
+        // 'an' matches 'banana' at value indices 1,2; frame the row with the
+        // default chrome to also pin that the shift lands INSIDE the value.
+        $result = $this->invokeHighlightFuzzy($h, '● 1. banana', new FilteredItem(1, 'banana'), [1, 2]);
 
-        // 'an' matches 'banana' at indices 1,2 → highlight should wrap 'an'.
-        $matchResult = new MatchResult('an', 'banana', 2, [1, 2]);
-        $mockRanker = $this->createMock(FuzzyMatcher::class);
-        $mockRanker->method('match')->willReturn($matchResult);
-
-        $result = $method->invoke($h, $mockRanker, 'banana', 'an');
-
-        // The matched substring 'an' should be wrapped in the yellow style.
         $this->assertStringContainsString("\x1b[33man\x1b[0m", $result);
+        $this->assertStringContainsString('● 1. b', $result, 'chrome and pre-match cells stay untouched');
     }
 
     public function testHighlightFuzzyStyleWrapsMatchedRunesWithAnsiReset(): void
     {
-        // Verify the style code appears BEFORE the matched text and ANSI reset
-        // appears AFTER, forming a proper SGR sequence.
+        // The style code opens before the matched character and the reset
+        // closes after it, forming a proper SGR sequence.
         $h = $this->makeQuickPick()->show()->setMatchStyle("\x1b[32m"); // green
 
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('highlightFuzzy');
-        $method->setAccessible(true);
+        $result = $this->invokeHighlightFuzzy($h, 'hex', new FilteredItem(1, 'hex'), [1]);
 
-        $matchResult = new MatchResult('x', 'hex', 1, [1]);
-        $mockRanker = $this->createMock(FuzzyMatcher::class);
-        $mockRanker->method('match')->willReturn($matchResult);
-
-        $result = $method->invoke($h, $mockRanker, 'hex', 'x');
-
-        // Verify the green code opens, the matched character appears, then reset closes.
         $this->assertStringContainsString("\x1b[32m", $result);
         $this->assertStringContainsString("\x1b[0m", $result);
         $this->assertStringContainsString('x', $result);

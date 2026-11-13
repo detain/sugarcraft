@@ -130,6 +130,16 @@ final class QuickPick
     private int $windowWidth = 0;
 
     /**
+     * Authoritative match indices from the last ranked filter pass, keyed by
+     * the item object itself (a WeakMap so discarded items are collected).
+     * The renderer consumes these instead of re-asking the ranker (-069) and
+     * instead of ever looking at formatter output for match targets (-060).
+     *
+     * @var \WeakMap<Item, list<int>>
+     */
+    private \WeakMap $rankedHits;
+
+    /**
      * Auto-width cache, shared by handle across every clone of this family
      * (see {@see WidthMemo}). Kept as an object, not a property, so that a
      * resize observed by ANY instance invalidates the view of ALL of them.
@@ -176,6 +186,7 @@ final class QuickPick
         ?\Closure $filterFn = null,
     ) {
         $this->widthMemo     = new WidthMemo();
+        $this->rankedHits    = new \WeakMap();
         $this->itemFactory   = new ItemFactory();
         $this->allItems      = $this->coerceItems($items);
         $this->installCorpusMemos();
@@ -570,10 +581,10 @@ final class QuickPick
      * Drop the last codepoint from the filter text.
      *
      * The unit is a CODEPOINT, deliberately matching how the rest of the class
-     * reads the filter: `highlightMatches()` splits it with
-     * `mb_str_split(..., 1, 'UTF-8')` and `applyFilter()` matches it against
-     * item values, so both sides of the comparison advance one codepoint at a
-     * time. A byte cut here instead (`substr($s, 0, -1)`) left a dangling UTF-8
+     * reads the filter: `highlightMatches()` compares folded text position by
+     * `mb_strpos`/`mb_strlen` in UTF-8 units and `applyFilter()` matches it
+     * against item values, so both sides of the comparison advance one
+     * codepoint at a time. A byte cut here instead (`substr($s, 0, -1)`) left a dangling UTF-8
      * lead byte behind — typing 'é' then backspacing produced the invalid
      * string `"\xc3"`, which corrupted the filter, the downstream match, and
      * the highlighting, and desynchronised the list from what was displayed.
@@ -874,17 +885,19 @@ final class QuickPick
 
         for ($i = 0; $i < $maxShow; $i++) {
             $actualIndex = $top + $i;
-            $isSelected = ($actualIndex === $this->cursor);
+            $isSelected  = ($actualIndex === $this->cursor);
+            $rawValue    = $items[$actualIndex]->value();
             // Guard the raw value BEFORE handing it to the formatter: the
             // value may come from disk (FileHistory) or any other corpus
             // the caller does not vet, while the formatter's own SGR is
             // host styling applied after — it must survive.
-            $itemStr    = ($this->itemFormatter)(UntrustedText::guard($items[$actualIndex]->value()), $isSelected, $items[$actualIndex]->number());
+            $guarded     = UntrustedText::guard($rawValue);
+            $itemStr     = ($this->itemFormatter)($guarded, $isSelected, $items[$actualIndex]->number());
 
             if ($filter !== '' && $this->matchStyle !== '') {
                 $itemStr = $this->ranker !== null
-                    ? $this->highlightFuzzy($this->ranker, $itemStr, $filter)
-                    : $this->highlightMatches($itemStr, $filter);
+                    ? $this->highlightFuzzy($itemStr, $guarded, $rawValue, $items[$actualIndex])
+                    : $this->highlightMatches($itemStr, $guarded, $filter);
             }
 
             $itemStr = \str_replace(["\r\n", "\r", "\n"], ' ', $itemStr);
@@ -1089,6 +1102,10 @@ final class QuickPick
 
         /** @var list<array{item: Item, score: int, order: int}> $scored */
         $scored = [];
+        // A fresh hit table per filter run: a ranker that answers for fewer
+        // candidates than offered must not leave LAST run's indices readable
+        // for a survivor it no longer scores.
+        $hits = new \WeakMap();
         foreach ($results as $result) {
             if ($result === null || $result->isMatched() === false) {
                 continue;
@@ -1099,14 +1116,17 @@ final class QuickPick
                 // noise — same drop the old `?? []` applied to it.
                 continue;
             }
+            $indices = $result->indices();
             foreach ($survivors[$slot] as $order) {
-                $scored[] = [
+                $scored[]                = [
                     'item'  => $this->allItems[$order],
                     'score' => $result->score,
                     'order' => $order,
                 ];
+                $hits[$this->allItems[$order]] = $indices;
             }
         }
+        $this->rankedHits = $hits;
 
         // Re-sort by score desc, then original order asc for stable tie-breaking
         // (matchAll may use alphabetical tie-break which differs from original order)
@@ -1130,6 +1150,7 @@ final class QuickPick
     {
         /** @var list<array{item: Item, score: int, order: int}> $scored */
         $scored = [];
+        $hits   = new \WeakMap();
         foreach ($this->allItems as $order => $item) {
             if ($fn($item) === false) {
                 continue;
@@ -1139,7 +1160,9 @@ final class QuickPick
                 continue;
             }
             $scored[] = ['item' => $item, 'score' => $result->score, 'order' => $order];
+            $hits[$item] = $result->indices();
         }
+        $this->rankedHits = $hits;
 
         \usort(
             $scored,
@@ -1239,56 +1262,79 @@ final class QuickPick
      * Highlight every contiguous occurrence of the filter text within a
      * formatted item string (the default substring strategy).
      *
-     * Match indices address DISPLAY codepoints only (escape sequences are
-     * invisible to the filter), and re-emission keeps the formatter's own
-     * escape sequences verbatim — see {@see AnsiWalk::paint()}.
+     * Match targets are computed on the GUARDED VALUE only — the formatter's
+     * chrome (marker, ordinal) is never a match, whatever it spells (-060).
+     * Offsets are mapped into the formatted string through its occurrence(s)
+     * of the value, counted in DISPLAY codepoints (escape sequences are
+     * invisible), and re-emission keeps the formatter's own escape sequences
+     * verbatim — see {@see AnsiWalk::paint()}.
      */
-    private function highlightMatches(string $text, string $filter): string
+    private function highlightMatches(string $formatted, string $value, string $filter): string
     {
-        $chars = AnsiWalk::chars($text);
-        $lowerChars = \array_map(
-            static fn(string $c): string => \mb_strtolower($c, 'UTF-8'),
-            $chars
-        );
-        $filterLower = \mb_strtolower($filter, 'UTF-8');
-        $fArr = \mb_str_split($filterLower, 1, 'UTF-8');
-        $flen = \count($fArr);
-        $charLen = \count($chars);
-        $matched = [];
+        // -068: fold the value and the filter ONCE (two C-level mb_* calls)
+        // and walk occurrences with mb_strpos, instead of materialising the
+        // row into per-codepoint arrays and slicing a window per offset.
+        $foldedValue  = \mb_strtolower($value, 'UTF-8');
+        $foldedFilter = \mb_strtolower($filter, 'UTF-8');
+        $needleLen    = \mb_strlen($foldedFilter, 'UTF-8');
+        $valueLen     = \mb_strlen($value, 'UTF-8');
+        $matched      = [];
 
-        for ($i = 0; $i + $flen <= $charLen; $i++) {
-            if (\array_slice($lowerChars, $i, $flen) === $fArr) {
-                for ($j = 0; $j < $flen; $j++) {
-                    $matched[$i + $j] = true;
+        $search = 0;
+        while (($occurrence = \mb_strpos($formatted, $value, $search, 'UTF-8')) !== false) {
+            $shift = \mb_strlen(
+                AnsiWalk::plain(\mb_substr($formatted, 0, $occurrence, 'UTF-8')),
+                'UTF-8'
+            );
+            for ($pos = \mb_strpos($foldedValue, $foldedFilter, 0, 'UTF-8');
+                 $pos !== false;
+                 $pos = \mb_strpos($foldedValue, $foldedFilter, $pos + $needleLen, 'UTF-8')) {
+                // Non-overlapping forward scan, exactly the previous semantics
+                // — but confined to the value's own cells.
+                for ($j = 0; $j < $needleLen; $j++) {
+                    $matched[$shift + $pos + $j] = true;
                 }
-                // Non-overlapping, exactly like the previous forward scan
-                // that resumed after each emitted run.
-                $i += $flen - 1;
             }
+            $search = $occurrence + $valueLen;
         }
 
-        return AnsiWalk::paint($text, $matched, $this->matchStyle);
+        return $matched === [] ? $formatted : AnsiWalk::paint($formatted, $matched, $this->matchStyle);
     }
 
     /**
-     * Highlight the sugar-fuzzy-matched runes in a formatted item string,
-     * following the ranker's scored indices (a subsequence match) rather than a
-     * contiguous substring. When the ranker reports no match for the displayed
-     * string the row is re-emitted unchanged — host styling included.
+     * Highlight the runes the ranker already answered for this item, using
+     * the indices carried out of the LAST filter pass (-069: the renderer
+     * must never re-run match()/matchAll() per visible row — applyRankedFilter
+     * produced the authoritative MatchResults and threw them away).
+     *
+     * The indices address the RAW value (candidates are raw text); a row whose
+     * guarded spelling differs never carries a carried answer, so it renders
+     * unstyled rather than painting offsets computed against a different
+     * string. When no carried answer exists — a ranker that stayed silent for
+     * this candidate — the row is re-emitted unchanged, host styling included.
      */
-    private function highlightFuzzy(FuzzyMatcher $ranker, string $text, string $filter): string
+    private function highlightFuzzy(string $formatted, string $guarded, string $raw, Item $item): string
     {
-        $result = $ranker->match($filter, AnsiWalk::plain($text));
-        if ($result === null || $result->isEmpty()) {
-            return $text;
+        if ($guarded !== $raw || !isset($this->rankedHits[$item])) {
+            return $formatted;
         }
+
+        $occurrence = \mb_strpos($formatted, $raw, 0, 'UTF-8');
+        if ($occurrence === false) {
+            return $formatted;
+        }
+
+        $shift = \mb_strlen(
+            AnsiWalk::plain(\mb_substr($formatted, 0, $occurrence, 'UTF-8')),
+            'UTF-8'
+        );
 
         $matched = [];
-        foreach ($result->indices() as $index) {
-            $matched[$index] = true;
+        foreach ($this->rankedHits[$item] as $index) {
+            $matched[$shift + $index] = true;
         }
 
-        return AnsiWalk::paint($text, $matched, $this->matchStyle);
+        return AnsiWalk::paint($formatted, $matched, $this->matchStyle);
     }
 
     private function compositeOver(array $overlayLines, int $winWidth, array $bgLines): string

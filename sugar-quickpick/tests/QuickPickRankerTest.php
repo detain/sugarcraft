@@ -298,4 +298,53 @@ final class QuickPickRankerTest extends TestCase
         self::assertStringContainsString('no matches', $out, 'the batch answer is final: nothing to list');
         self::assertStringNotContainsString('apple', $out);
     }
+
+    public function testViewNeverAsksTheRankerForHighlightIndices(): void
+    {
+        // -069: applyRankedFilter() owns the only ranker contact in the class.
+        // The old highlightFuzzy() re-ran match() for every visible row on
+        // every frame — indices it already had, then threw away.
+        $ranker = new class implements FuzzyMatcher {
+            public int $matchCalls = 0;
+
+            public function match(string $query, string $candidate): ?MatchResult
+            {
+                ++$this->matchCalls;
+                $pos = \mb_strpos(\mb_strtolower($candidate, 'UTF-8'), \mb_strtolower($query, 'UTF-8'), 0, 'UTF-8');
+
+                return $pos === false ? null : new MatchResult($query, $candidate, 10, [$pos]);
+            }
+
+            public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
+            {
+                $out = [];
+                foreach ($candidates as $candidate) {
+                    $result = $this->match($query, $candidate);
+                    if ($result !== null && $result->score >= $minScore) {
+                        $out[] = $result;
+                    }
+                }
+                return $out;
+            }
+
+            public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
+            {
+                yield from $this->matchAll($query, $candidates, $limit, $minScore);
+            }
+        };
+
+        $bg = \implode("\n", \array_fill(0, 8, \str_repeat(' ', 40)));
+        $h = QuickPick::new([new FilteredItem(1, 'apple'), new FilteredItem(2, 'grape')])
+            ->setWindowWidth(40)
+            ->setRanker($ranker)
+            ->setMatchStyle("\x1b[33m")
+            ->show()
+            ->type('ap');
+
+        $ranker->matchCalls = 0; // discount the filter pass itself
+        $out = $h->view($bg) . $h->view($bg) . $h->view($bg);
+
+        self::assertSame(0, $ranker->matchCalls, 'three rendered frames must cost zero ranker calls');
+        self::assertStringContainsString("\x1b[33m", $out, 'the carried indices must still paint (non-vacuity)');
+    }
 }

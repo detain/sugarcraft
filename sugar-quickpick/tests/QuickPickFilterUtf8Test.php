@@ -5,7 +5,8 @@
  * MAX_FILTER_LENGTH is measured in.
  *
  * Both used to work in BYTES while the rest of the class reads the filter in
- * CODEPOINTS (`highlightMatches()` splits on `mb_str_split(..., 'UTF-8')`), so
+ * CODEPOINTS (`highlightMatches()` compares with `mb_strpos(..., 'UTF-8')`
+ * and counts with `mb_strlen(..., 'UTF-8')`), so
  * a single backspace over an accented character left a dangling lead byte
  * behind and the byte cap charged multibyte input up to four times.
  */
