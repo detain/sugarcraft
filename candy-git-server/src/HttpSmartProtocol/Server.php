@@ -26,12 +26,14 @@ use SugarCraft\GitServer\LFS\LFSHandler;
  * CHILD-PROCESS LIFETIME: the live smart-HTTP children are spawned
  * inside Git\StatelessRpc (advertise + negotiate), whose bounded read +
  * TERM/KILL escalation ladder releases pipes and handle in a `finally` per
- * spawn site. This class keeps exactly one further `proc_open` — the DORMANT
- * generatePackData() shortcut, no callers, carrying the same reap shape — so
- * nothing outlives the synchronous handleRequest() call that reached it. The
- * short metadata commands (Repo reads, ssh-keygen, mirror fetch) all run
- * through Support\BoundedCommand, which enforces the same deadline-and-reap
- * contract synchronously.
+ * spawn site. This class itself spawns NOTHING: the DORMANT
+ * generatePackData() shortcut — a no-caller pack-objects replica of the
+ * route StatelessRpc::negotiate() already owns, along with its two private
+ * helpers (the finding-071 "honest contract" cure, S14: remove, do not
+ * re-wire dead code) — was deleted rather than maintained against a
+ * docblock no request ever exercises. The short metadata commands (Repo
+ * reads, ssh-keygen, mirror fetch) all run through Support\BoundedCommand,
+ * which enforces the same deadline-and-reap contract synchronously.
  * There is no daemon object here to stop: the host application owns the
  * socket, and a request never returns while it has a live child.
  *
@@ -767,114 +769,7 @@ final class Server
             . StatelessRpc::advertise($service, $repo->path());
     }
 
-    /**
-     * Generate pack data for upload-pack.
-     *
-     * DORMANT (E721 census): this private helper has no callers — the live
-     * upload-pack route delegates the whole negotiation to
-     * StatelessRpc::negotiate() (a real `git upload-pack --stateless-rpc`
-     * child), which subsumes this pack-objects shortcut. It is kept, carries
-     * the same request-scoped reap as its live siblings, and if it is ever
-     * re-wired it inherits that contract; removal was not taken under the
-     * dormant-code stop rule. Its spawn moved to an argv array with the
-     * others (house law: no shell strings around git).
-     */
-    private function generatePackData(Repo $repo, string $requestBody): string
-    {
-        // Parse the request to get wanted refs
-        $wants = $this->parseUploadPackRequest($requestBody);
-
-        if ($wants === []) {
-            return '';
-        }
-
-        $cmd = ['git', '-C', $repo->path(), 'pack-objects', '--stdout', '--revs'];
-
-        $desc = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        /** @var resource|false $proc */
-        $proc = \proc_open($cmd, $desc, $pipes);
-        if ($proc === false) {
-            return '';
-        }
-
-        // E721: request-scoped reap — see handleUploadPack() for the shape.
-        $packData = null;
-        try {
-            // Write want revs to stdin (one per line, no ^ prefix)
-            foreach ($wants as $hash) {
-                \fwrite($pipes[0], $hash . "\n");
-            }
-            \fclose($pipes[0]);
-
-            // TODO: stream via chunked callback for true streaming; cap buffered size for now
-            $maxBytes = $this->maxRequestBodyBytes();
-            $packData = $this->readCapped($pipes[1], $maxBytes);
-        } finally {
-            if ($packData === null) {
-                @\proc_terminate($proc);
-            }
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    \fclose($pipe);
-                }
-            }
-            \proc_close($proc);
-        }
-        if ($packData === null) {
-            throw new \RuntimeException('Packfile exceeds maximum size limit');
-        }
-        return $packData;
-    }
-
-    /**
-     * Drain a pipe into memory, enforcing a byte cap.
-     *
-     * stream_get_contents() copies in C rather than PHP-level 64 KiB
-     * concatenations; reading maxlength+1 lets a single call both fetch the
-     * data and detect the overflow.
-     *
-     * @param resource $pipe
-     * @return string|null  null when the stream exceeds $maxBytes
-     */
-    private function readCapped($pipe, int $maxBytes): ?string
-    {
-        $data = \stream_get_contents($pipe, $maxBytes + 1);
-        if ($data === false) {
-            return '';
-        }
-        return \strlen($data) > $maxBytes ? null : $data;
-    }
-
-    /**
-     * Parse upload-pack request body to extract wanted hashes.
-     *
-     * @return list<string>
-     */
-    private function parseUploadPackRequest(string $body): array
-    {
-        $wants = [];
-        $lines = \explode("\n", \rtrim($body, "\r\n"));
-
-        foreach ($lines as $line) {
-            $line = \rtrim($line, "\r\n");
-            if (\str_starts_with($line, 'want ')) {
-                $hash = \substr($line, 5);
-                if (\strlen($hash) === 40 && \ctype_xdigit($hash)) {
-                    $wants[] = $hash;
-                }
-            } elseif ($line === '') {
-                break;  // End of wants section
-            }
-        }
-
-        return $wants;
-    }
-
-    /**
+        /**
      * Parse a query string into key-value pairs.
      *
      * @return array<string, string>
