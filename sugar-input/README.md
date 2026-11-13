@@ -12,7 +12,7 @@ New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-repl
 
 - **Plain ASCII keys** — letters, digits, punctuation, control codes (the 0x7F byte names `Backspace` — one raw code, no escape sequence)
 - **Legacy escape sequences** — F1–F24, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Tab, Enter, Escape, Backtab (`CSI Z`) — including the MODIFIED numbered-key family `CSI number ; modifier ~` that terminals really emit: modified forms like `3;2~` (Shift+Delete) and `21;5~` (Ctrl+F10) ship in common terminfo entries, so `3;5~` decodes as Ctrl+Delete rather than vanishing
-- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press with `isRepeat` set). Codepoints follow the spec's private-use layout: `57344`–`57454` carry the functional keys (arrows at `57350`–`57353`, the keypad block from `57399`), and codes below `57344` in `u` frames are TEXT codepoints — legacy tilde numbers like `11u` are counted drops, not F1. On release the key name gains the `Release` prefix and its first letter is upper-cased: a released `a` arrives as `ReleaseA`
+- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press with `isRepeat` set). Codepoints follow the spec's private-use layout: `57344`–`57454` carry the functional keys (arrows at `57350`–`57353`, the keypad block from `57399`), and codes below `57344` in `u` frames are TEXT codepoints — legacy tilde numbers like `11u` are counted drops, not F1. On release the key name gains the `Release` prefix (see [Key names](#key-names-the-complete-vocabulary))
 - **xterm modifyOtherKeys** — wrapped keys `CSI 27 ; mods ; keysym ~`, so a modified key with no dedicated sequence is told apart from a plain press
 - **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (enter)
 - **SGR mouse 1006 / 1016** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 (pixels) frames carry colon sub-parameters and arrive byte-compatible with 1006 — the decoder keeps the first integer of each field, which for 1016 is a PIXEL coordinate. A stateless decoder cannot convert, so `x`/`y` are whatever the reporting mode measures; a host that enabled 1016 knows its own units. Non-numeric mouse parameters are refused, never cast to phantom origin clicks
@@ -164,9 +164,9 @@ construct the mix you want (named arguments make that a one-liner).
 
 | Driver | Reads | Notes |
 |---|---|---|
-| `StreamInputDriver` | any readable stream resource (e.g. `STDIN`) | Non-blocking by contract: takes over the stream's blocking flag on construction, restores it in `__destruct`; anything that is not a resource is refused at the constructor. Each `read()` pulls at most two 8192-byte chunks (a partial frame is retried once) through the internal `EscapeDecoder` and returns events one at a time in order. `isEof()` distinguishes "input ended" from `read()`'s shared idle-`null`; `hasPending()` reports buffered events or a partial sequence. `escapeDecoder()` exposes the owned decoder for `reset()`, `flushDeferredEscape()` and the counters. |
+| `StreamInputDriver` | any readable stream resource (e.g. `STDIN`) | Non-blocking by contract: takes over the stream's blocking flag on construction, restores it in `__destruct`; anything that is not a resource is refused at the constructor.<br>Each `read()` pulls at most two 8192-byte chunks (a partial frame is retried once) through the internal `EscapeDecoder` and returns events one at a time in order.<br>`isEof()` distinguishes "input ended" from `read()`'s shared idle-`null`.<br>`hasPending()` reports buffered events or a partial sequence.<br>`escapeDecoder()` exposes the owned decoder for `reset()`, `flushDeferredEscape()` and the counters. |
 | `ReactInputDriver` | a `React\Stream\ReadableStreamInterface` | PUSHES events by `emit('data', Event)` — it is not an `InputDriver`. `isReadable()` follows React's contract (`true` until the stream closes, not "bytes pending"); `pause()` defers emission — already-buffered events flush on `resume()`. Incoming chunks are sliced at 8192 bytes (`MAX_CHUNK_SIZE`) with a lone-trailing-`ESC` carry law so a boundary can never split a sequence's escape byte from its params. `pipe()` forwards the RAW byte stream, not events — the React "data" event name means one event per emit here, not per chunk. `escapeDecoder()` exposes the owned decoder. |
-| `SignalResizeDriver` | `SIGWINCH` | The production producer of `ResizeEvent`. Construction is side-effect free; `arm(): bool` is opt-in: it joins a weak-map fan-out, installs the process-wide handler, enables `pcntl_async_signals()`, probes current dimensions through `tput cols`/`tput lines` (capability names are refused before any shell-out unless they are a well-formed terminfo name, and stay quoted even after validation), and returns `false` where pcntl is absent. The handler itself only sets a per-instance flag — dimension probes run lazily in `read()`, so a resize-drag storm costs one probe pair, not 2×N forks from signal context. `disarm(): bool` reverses the last `arm()`: when the final armed driver leaves, the SIGWINCH disposition is handed back (see the one-disposition law below). |
+| `SignalResizeDriver` | `SIGWINCH` | The production producer of `ResizeEvent`. Construction is side-effect free; `arm(): bool` is opt-in: it joins a weak-map fan-out, installs the process-wide handler, enables `pcntl_async_signals()`, probes current dimensions through `tput cols`/`tput lines` (capability names are refused before any shell-out unless they are a well-formed terminfo name, and stay quoted even after validation), and returns `false` where pcntl is absent.<br>The handler itself only sets a per-instance flag — dimension probes run lazily in `read()`, so a resize-drag storm costs one probe pair, not 2×N forks from signal context.<br>`disarm(): bool` reverses the last `arm()`: when the final armed driver leaves, the SIGWINCH disposition is handed back (see the one-disposition law below). |
 
 One-disposition law: a process holds exactly one `SIGWINCH` handler and
 `arm()` takes it. Installing your own `pcntl_signal(SIGWINCH, …)` after an
@@ -218,7 +218,7 @@ never re-surfaced as its own event.
 | Event | Key fields |
 |---|---|
 | `KeyEvent` | `key`, `modifiers`, `raw`, `isRelease()`, `isRepeat` |
-| `MouseEvent` | `x`, `y`, `button`, `action`, `modifiers` — `action` is `press`/`release`/`drag`/`scroll` (refused at the constructor otherwise); `button` is 0/1/2 for left/middle/right press-drag-release, and X10 releases report button 3 (`MouseEvent::BUTTON_RELEASE`) — match releases on `action`, not the button index; scroll steps report 96 (up), 97 (down), 98 (left/wire 66), 99 (right/wire 67); `x`/`y` are the units the reporting mode measures (cells under 1000/1006, pixels under 1016) |
+| `MouseEvent` | Fields: `x`, `y`, `button`, `action`, `modifiers`.<br>`action` is `press`/`release`/`drag`/`scroll` (refused at the constructor otherwise).<br>`button` is 0/1/2 for left/middle/right press-drag-release.<br>X10 releases report button 3 (`MouseEvent::BUTTON_RELEASE`) — match releases on `action`, not the button index.<br>Scroll steps report 96 = scroll-up (wire code 64), 97 = scroll-down (wire code 65), 98 = scroll-left (wire code 66), 99 = scroll-right (wire code 67).<br>`x`/`y` are the units the reporting mode measures: cells under 1000/1006, pixels under 1016. |
 | `FocusEvent` | `gained`, `raw` (`?string` — the `CSI I`/`CSI O` frame; null on host-synthesized events) |
 | `PasteEvent` | `content`, `truncated`, `truncationNotice(): ?string` |
 | `ResizeEvent` | `cols`, `rows` — produced by `SignalResizeDriver` (see [Input drivers](#input-drivers)) |
@@ -253,13 +253,13 @@ prefix.
 
 | Family | Names |
 |---|---|
-| Text | every printable character (`a`… `Z`, digits, punctuation, Unicode runes as the character itself), `Space` (Kitty `32u` only — legacy 0x20 and modifyOtherKeys keysym 32 surface as the literal ` `) |
+| Text | every printable character (`a`… `Z`, digits, punctuation, Unicode runes as the character itself), `Space` (Kitty `32u` only — legacy 0x20 and modifyOtherKeys keysym 32 surface as the literal space character (U+0020)) |
 | Editing/whitespace | `Tab`, `Enter`, `Backspace`, `Escape`, `Backtab`, `Insert`, `Delete`, `Home`, `End`, `PageUp`, `PageDown` |
 | Arrows | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` |
 | Function | `F1`–`F24` (legacy families), up to `F35` via Kitty |
 | Keypad | `KP0`–`KP9`, `KPDecimal`, `KPDivide`, `KPMultiply`, `KPSubtract`, `KPAdd`, `KPEnter`, `KPEqual`, `KPSeparator`, `KPBegin`, `KPLeft`, `KPRight`, `KPUp`, `KPDown`, `KPPageUp`, `KPPageDown`, `KPHome`, `KPEnd`, `KPInsert`, `KPDelete` |
 | Locks/navigation state | `CapsLock`, `ScrollLock`, `NumLock`, `PrintScreen`, `Pause`, `Menu` |
-| Media (Kitty) | `MediaPlay`…`MediaRecord`, `LowerVolume`, `RaiseVolume`, `MuteVolume` |
+| Media (Kitty) | `MediaPlay`, `MediaPause`, `MediaPlayPause`, `MediaReverse`, `MediaStop`, `MediaFastForward`, `MediaRewind`, `MediaNext`, `MediaPrev`, `MediaRecord`, `LowerVolume`, `RaiseVolume`, `MuteVolume` |
 | Modifier-as-key (Kitty) | `LeftShift`, `RightShift`, `LeftCtrl`, `RightCtrl`, `LeftAlt`, `RightAlt`, `LeftSuper`, `RightSuper`, `LeftHyper`, `RightHyper`, `LeftMeta`, `RightMeta`, `IsoLevel3Shift`, `IsoLevel5Shift` |
 | Ctrl-paired | lowercase letter with the Ctrl modifier (`0x01` → `a`+Ctrl) |
 | Ctrl-paired symbols | 0x00 → `Space` with Ctrl; 0x1C–0x1F → `\`, `]`, `^`, `_` with Ctrl (no bare control byte ever reaches `$key` — the raw wire byte stays in `raw`) |
@@ -344,20 +344,22 @@ for a `string` reply clipped at the cap, `raw` covers only the drained head and
 
 `string` payloads are bounded: a reply longer than 1 KiB — whether it arrives
 in one read or across many — is surfaced exactly once with `truncated` set and
-`body` clipped to 1 KiB, and the decoder then keeps swallowing the rest of that
+`body` clipped to 1 KiB. The decoder then keeps swallowing the rest of that
 open OSC/DCS until its terminator (even a terminator split across the chunk
 boundary) rather than resuming key decoding mid-string, which would leak the
-tail as keystrokes. A stream that never terminates the string is abandoned
-after 64 KiB of swallowed payload so keystrokes resume; the abandon folds the
+tail as keystrokes. That swallowing is bounded by the ABANDON BUDGET — 64 KiB
+of swallowed payload: a stream that never terminates the string is abandoned
+when the budget is spent, so keystrokes resume. The abandon folds the
 still-in-hand body past the boundary into ONE counted drop rather than
 replaying it as a flood of printable keys. Which noise bytes that drop covers
 depends on where the reads fell; what cannot shift with chunk size is the
 control behaviour: one drain, one counted abandon, keystrokes resuming
-afterwards. Between the announce and the real terminator up to 64
-KiB of further traffic — including genuine keystrokes — is silently absorbed;
-that is the deliberate safety direction (a stuck prober swallows keys rather
-than a forged string forging them). A pathological reply that terminates only
-*after* exceeding the abandon budget is the one documented divergence: bytes
+afterwards. Between the announce and the real terminator, up to one abandon
+budget of further traffic — including genuine keystrokes — is silently
+absorbed; that is the deliberate safety direction (a stuck prober swallows
+keys rather than a forged string forging them). A pathological reply that
+terminates only *after* exceeding the abandon budget is the one documented
+divergence: bytes
 past the budget may already have resumed decoding as keys by the time the real
 terminator arrives — which ones, exactly, depends on where the reads fell —
 so the guarantee there is "keystrokes always come back", not "oversized

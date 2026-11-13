@@ -2090,10 +2090,11 @@ final class EscapeDecoder
      * functional codepoint, so it must not be fed to kittyKeyCodeToName() blindly:
      * keysyms below 0xE000 are character codes, and passing them through the text
      * leg would name control-adjacent keysyms wrong. Printable ASCII (32..126) is
-     * reported as the literal character so typing '!', '"' or ' ' under
-     * modifyOtherKeys=2 still reaches the app; the shared control keysyms keep
-     * their symbolic names; only the modern Kitty functional range (>= 0xE000,
-     * arrows etc.) falls back to the shared table. Anything else is unnamed -> null.
+     * reported as the literal character so typing '!', '"' or the space
+     * character (U+0020) under modifyOtherKeys=2 still reaches the app; the
+     * shared control keysyms keep their symbolic names; only the modern Kitty
+     * functional range (>= 0xE000, arrows etc.) falls back to the shared
+     * table. Anything else is unnamed -> null.
      *
      * @see xterm ctlseqs — "modifyOtherKeys".
      * @see X11 keysym definitions (<X11/keysymdef.h>: XK_exclam = 0x21 = 33).
