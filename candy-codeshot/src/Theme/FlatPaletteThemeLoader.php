@@ -19,6 +19,8 @@ use SugarCraft\CodeShot\Theme;
  * fields this shape has no place for, so a real chroma export binds
  * nothing through the lowercase map below. The name and the former
  * "chroma JSON theme file" claim were inherited fiction (candy-codeshot-026).
+ * Modeled on charmbracelet/freeze's theme JSON (a flat properties + colors
+ * object), reduced to the slots this library paints.
  */
 final class FlatPaletteThemeLoader
 {

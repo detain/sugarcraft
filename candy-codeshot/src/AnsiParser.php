@@ -24,6 +24,11 @@ use SugarCraft\AnsiParser\Parser\Parser;
  * silently — they have no visible effect in a static image.
  *
  * Internally delegates to sugar-ansi-parser's {@see Parser} state machine.
+ *
+ * No single upstream class is mirrored (candy-codeshot-059): freeze pipes
+ * pre-styled bytes through glamour, the state machine below is sugar-ansi-
+ * parser's port of charmbracelet/x/ansi, and this Segment model — one styled
+ * run per element — is this library's own paint-side shape.
  */
 final class AnsiParser
 {

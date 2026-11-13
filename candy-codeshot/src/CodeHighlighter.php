@@ -19,6 +19,10 @@ use SugarCraft\Core\Util\Palettes;
  * {@see AnsiParser} → SVG/PNG path unchanged, so the two renderers need no
  * per-token awareness of their own.
  *
+ * No single class is mirrored (candy-codeshot-059): upstream, this job is
+ * alecthomas/chroma's, reached through freeze via glamour; here the lexer is
+ * sugar-core's shared primitive and the colour map is this library's.
+ *
  * The feature is strictly OPT-IN: {@see self::highlight()} leaves
  * {@see TokenKind::Plain} spans (gap/tail text, and the whole input for an
  * unknown/empty language) completely un-annotated, so highlighting an

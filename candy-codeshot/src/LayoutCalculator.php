@@ -34,8 +34,10 @@ final class LayoutCalculator
      *                     framed look but paints no title bar, and must not
      *                     reserve empty space for one that never arrives.
      *
-     * @return array{0:int, 1:int, 2:float, 3:int, 4:int, 5:int, 6:int, 7:int}
+     * @return array{0:int, 1:int, 2:float, 3:float, 4:int, 5:int, 6:float, 7:float}
      *   [maxCols, gutter, contentWidth, contentHeight, headerHeight, shadowMargin, totalW, totalH]
+     *   — 2/3/6/7 are float-measured (cell sizes are float; every derived
+     *   extent keeps the type), pinned in LayoutCalculatorTest.
      */
     public static function calculate(
         array $lines,

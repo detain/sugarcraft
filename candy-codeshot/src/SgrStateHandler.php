@@ -1,7 +1,12 @@
 <?php
 
-// codacy ignore UndefinedVariable
 declare(strict_types=1);
+
+// candy-codeshot-058: this directive used to sit ABOVE declare() — the lib's
+// only first-line-rule breaker. A leading comment before declare is legal
+// PHP but reads as a file-level annotation; the ignore belongs to the code
+// below, so it lives below.
+// codacy ignore UndefinedVariable
 
 namespace SugarCraft\CodeShot;
 
@@ -11,7 +16,11 @@ use SugarCraft\Core\Util\Width;
 /**
  * Handler implementation for SGR (Select Graphic Rendition) state parsing.
  *
- * Mirrors charmbracelet/vterm's state machine logic. This is a plain token
+ * The state machine itself is sugar-ansi-parser's (the port of
+ * charmbracelet/x/ansi); this handler owns only the rendition semantics:
+ * SGR meaning follows ECMA-48 §14.1.1 and xterm's ctlseqs for the extended
+ * colour spellings. There is no charmbracelet/vterm in this dependency set
+ * (candy-codeshot-083 retired that phantom cite). This is a plain token
  * handler: it accumulates SGR state and forwards styled segments through the
  * callback given to its constructor — it is not a renderer and not a TEA
  * Program of its own.

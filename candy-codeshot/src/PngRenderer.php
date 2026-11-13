@@ -10,7 +10,10 @@ use SugarCraft\Core\Util\Width;
  * Renders text (with optional ANSI styling) to a PNG image via GD.
  * Requires ext-gd.
  *
- * Mirrors charmbracelet/freeze's PNG output mode. Supports:
+ * Covers charmbracelet/freeze's PNG output mode with a separate backend:
+ * upstream freeze rasterises its own SVG document, while this class draws
+ * the frame directly with GD — same advertised output shape, deliberately
+ * not the same pipeline (no SVG, no external rasteriser). Supports:
  *
  *  - macOS-style window-control "traffic lights" (`withWindow(true)`)
  *  - Padding around the code area
@@ -135,7 +138,7 @@ final class PngRenderer
         $lines = explode("\n", rtrim($text, "\n"));
         [$cellW, $cellH] = self::FONT_SIZE[self::DEFAULT_FONT];
 
-        [$maxCols, $gutter, $contentWidth, $contentHeight, $headerHeight, $shadowMargin, $totalW, $totalH] =
+        [, $gutter, $contentWidth, $contentHeight, $headerHeight, $shadowMargin, $totalW, $totalH] =
             LayoutCalculator::calculate(
                 lines: $lines,
                 lineNumbers: $this->lineNumbers,

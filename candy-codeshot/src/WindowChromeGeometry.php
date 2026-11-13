@@ -8,6 +8,10 @@ namespace SugarCraft\CodeShot;
  * Geometry description for one window-chrome style.
  * Centralizes the position and size calculations so each
  * renderer only implements the primitive-drawing loop.
+ *
+ * Mirrors charmbracelet/freeze's window-chrome dimensions — the
+ * traffic-light placement (centre line, first-button offset, radius, gap)
+ * and the square title-bar band are measured from freeze's rendered output.
  */
 final class WindowChromeGeometry
 {

@@ -219,7 +219,7 @@ final class SvgRenderer
         $cellW = $this->theme->fontSize * 0.6;
         $cellH = $this->theme->fontSize * $this->theme->lineHeight;
 
-        [$maxCols, $gutter, $contentWidth, , $headerHeight, $shadowMargin, $totalW, $totalH] =
+        [, $gutter, $contentWidth, , $headerHeight, $shadowMargin, $totalW, $totalH] =
             LayoutCalculator::calculate(
                 lines: $lines,
                 lineNumbers: $this->lineNumbers,

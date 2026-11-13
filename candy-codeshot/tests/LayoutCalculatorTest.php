@@ -314,4 +314,24 @@ final class LayoutCalculatorTest extends TestCase
         // measures the per-segment widths it needs for x advancement.
         $this->assertSame(40, LayoutCalculator::paintedColumnScanCount() - $before);
     }
+
+    /**
+     * cs-30 (-057b/c): the @return shape label must match the MEASURED types.
+     * Cell sizes are float, so contentWidth/contentHeight/totalW/totalH are
+     * doubles; maxCols, gutter, headerHeight and shadowMargin are ints.
+     */
+    public function testReturnElementTypesMatchTheShapeLabel(): void
+    {
+        $result = LayoutCalculator::calculate(
+            lines: ['ab', 'c'], lineNumbers: true, padding: 4, window: true,
+            shadow: true, cellW: 8.0, cellH: 17.0,
+        );
+
+        $this->assertSame(
+            ['integer', 'integer', 'double', 'double', 'integer', 'integer', 'double', 'double'],
+            array_map('gettype', $result),
+        );
+        // The headline honesty case: contentHeight = 2 lines * 17.0 — a float.
+        $this->assertSame(34.0, $result[3]);
+    }
 }
