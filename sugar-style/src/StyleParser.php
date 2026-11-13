@@ -75,15 +75,19 @@ final class StyleParser
             $pendingStyle = null;
         };
 
+        $afterRegion = false; // true only for the character immediately after a closed ]
         $len = strlen($input);
         for ($i = 0; $i < $len; $i++) {
             $ch = $input[$i];
+            $adjacentToRegion = $afterRegion;
+            $afterRegion = false;
 
             if ($inBracket) {
                 // Inside [...] - capture text content
                 if ($ch === ']') {
                     $inBracket = false;
                     $openBracketPos = -1;
+                    $afterRegion = true;
                 } else {
                     $pendingText .= $ch;
                 }
@@ -98,18 +102,18 @@ final class StyleParser
                 continue;
             }
 
-            if ($ch === '(') {
-                // Start of style definition - parse the style
+            if ($ch === '(' && $adjacentToRegion) {
+                // Style definition, and only here: a ( opens one ONLY when it
+                // immediately follows a parsed [...] region. Treating any
+                // unpaired paren as a definition silently ate literal prose —
+                // 'cost (USD)' reassembled to 'cost ' (finding 021).
                 $pendingStyle = self::parseInlineStyle($input, $i + 1, $currentStyle, $i);
+                $i++; // skip the closing ) the definition consumed through
                 continue;
             }
 
-            // Handle ) - marks end of style definition, skip it
-            if ($ch === ')') {
-                continue;
-            }
-
-            // Plain text outside brackets - flush any pending styled text first
+            // Plain text outside brackets (parens included when they open no
+            // definition) - flush any pending styled text first
             if ($pendingText !== '' && $pendingStyle !== null) {
                 $flushPendingText();
             }

@@ -452,6 +452,32 @@ final class StyleParserTest extends TestCase
     // Nested brackets
     // ═══════════════════════════════════════════════════════════════
 
+    public function testLiteralParensAfterPlainTextArePreserved(): void
+    {
+        // Finding 021: a ( opens a style definition ONLY when it immediately
+        // follows a parsed [...] region. Plain prose with parens must
+        // reassemble byte-for-byte — the old parser ate ' (USD)'.
+        $reassemble = static fn (array $cells): string => implode('', array_map(
+            static fn ($cell) => $cell->rune,
+            $cells,
+        ));
+
+        $this->assertSame('cost (USD)', $reassemble(StyleParser::parse('cost (USD)', $this->defaultStyle)));
+        $this->assertSame('(see x)', $reassemble(StyleParser::parse('(see x)', $this->defaultStyle)));
+        // Every cell keeps the default style — nothing was consumed as an attribute.
+        foreach (StyleParser::parse('cost (USD)', $this->defaultStyle) as $cell) {
+            $this->assertSame($this->defaultStyle, $cell->style);
+        }
+    }
+
+    public function testAdjacentDefinitionStillStyles(): void
+    {
+        // The adjacency rule must not break the real format.
+        $cells = StyleParser::parse('[red](bold)', $this->defaultStyle);
+        $this->assertSame('red', implode('', array_map(static fn ($c) => $c->rune, $cells)));
+        $this->assertTrue($cells[0]->style->isBold());
+    }
+
     public function testNestedBrackets(): void
     {
         // Nested brackets - outer style applies to all, inner style applies to inner text
