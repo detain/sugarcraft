@@ -75,4 +75,5 @@ return [
     'smtp.invalid_timeout' => 'Тайм-аут SMTP {timeout} — не число секунд от 1 до 3600',
     'resend.cid_unsupported' => 'Полезная нагрузка API Resend не содержит поля Content-ID: вложение {filename} является inline; встроенные изображения отправляются только через SMTP.',
     'smtp.incomplete_credentials' => 'Учётные данные SMTP неполны: укажите и имя пользователя, и пароль — или оба пустыми для анонимной отправки',
+    'email.non_ascii_address' => 'Адрес электронной почты {addr} содержит не-ASCII символы: SMTPUTF8 не поддерживается — используйте ASCII-адрес',
 ];

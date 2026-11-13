@@ -75,4 +75,5 @@ return [
     'smtp.invalid_timeout' => 'SMTP 超时 {timeout} 不是 1 到 3600 之间的秒数',
     'resend.cid_unsupported' => 'Resend API 载荷没有 Content-ID 字段：附件 {filename} 是内联的——内联图像只能经由 SMTP 发送。',
     'smtp.incomplete_credentials' => 'SMTP 凭据不完整: 请同时提供用户名和密码，或者两者皆空以匿名发送',
+    'email.non_ascii_address' => '邮件地址 {addr} 包含非 ASCII 字符：不支持 SMTPUTF8 — 请使用 ASCII 信封地址',
 ];

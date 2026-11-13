@@ -75,4 +75,5 @@ return [
     'smtp.invalid_timeout' => 'SMTP 타임아웃 {timeout}이 1~3600 사이의 초 값이 아닙니다',
     'resend.cid_unsupported' => 'Resend API 페이로드에 Content-ID 필드가 없습니다: 첨부 {filename}은(는) 인라인입니다. 인라인 이미지는 SMTP로만 전송됩니다.',
     'smtp.incomplete_credentials' => 'SMTP 자격 증명이 불완전합니다: 사용자 이름과 암호를 모두 지정하거나 익명 전송을 위해 둘 다 비워 두십시오',
+    'email.non_ascii_address' => '전자 메일 주소 {addr}에 비 ASCII 문자가 있습니다: SMTPUTF8는 지원되지 않습니다 — ASCII 봉투 주소를 사용하십시오',
 ];

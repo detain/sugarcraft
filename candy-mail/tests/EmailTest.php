@@ -77,6 +77,42 @@ final class EmailTest extends TestCase
         }
     }
 
+    /**
+     * CM-29: a non-ASCII addr-spec is its own nameable user error — SMTPUTF8
+     * (RFC 6531) is not implemented by this port — so it is refused with a
+     * named remedy instead of being swept under the generic dot-atom message.
+     */
+    public function testRefusesNonAsciiAddrSpecsWithTheSmtputf8Remedy(): void
+    {
+        $bad = [
+            'josé@example.com',              // non-ASCII local part
+            'user@bücher.example',           // non-ASCII domain
+            '用户@example.com',               // fully non-ASCII
+            'Üntrusted <josé@example.com>',  // display-name legal, addr-spec not
+        ];
+        foreach ($bad as $addr) {
+            try {
+                new Email(from: ['me@example.com'], to: [$addr]);
+                $this->fail("expected refusal of non-ASCII addr-spec '{$addr}'");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('SMTPUTF8', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * CM-29 kept-display-arm: non-ASCII in the display-name is legal (it is
+     * RFC 2047-encoded on the header path); only the bare addr-spec must be
+     * ASCII, so these tokens must NOT hit the SMTPUTF8 refusal.
+     */
+    public function testNonAsciiDisplayNamesStayLegalWithAsciiAddrSpecs(): void
+    {
+        foreach (['Üntrusted Name <a@b.co>', '张伟 <zhang@example.com>', 'ÆÖ <ae@example.com>'] as $addr) {
+            $email = new Email(from: ['me@example.com'], to: [$addr]);
+            $this->assertSame($addr, $email->to[0]);
+        }
+    }
+
     public function testWithFrom(): void
     {
         $email = (new Email(['old@example.com'], ['you@example.com']))

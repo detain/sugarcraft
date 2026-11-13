@@ -75,4 +75,5 @@ return [
     'smtp.invalid_timeout' => 'Il timeout SMTP {timeout} non è un numero di secondi tra 1 e 3600',
     'resend.cid_unsupported' => 'Il payload dell’API Resend non ha un campo Content-ID: l’allegato {filename} è inline; le immagini incorporate viaggiano solo via SMTP.',
     'smtp.incomplete_credentials' => 'Credenziali SMTP incomplete: specificare utente e password insieme, oppure nessuno dei due per invio anonimo',
+    'email.non_ascii_address' => 'L\'indirizzo email {addr} contiene caratteri non ASCII: SMTPUTF8 non è supportato — usare un indirizzo ASCII',
 ];

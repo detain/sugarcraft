@@ -82,4 +82,5 @@ return [
     'smtp.invalid_timeout' => 'Le délai SMTP {timeout} n’est pas un nombre de secondes entre 1 et 3600',
     'resend.cid_unsupported' => 'La charge utile de l’API Resend n’a pas de champ Content-ID : la pièce {filename} est inline ; les images intégrées ne voyagent que par SMTP.',
     'smtp.incomplete_credentials' => 'Paramètres SMTP incomplets : utilisateur et mot de passe doivent être définis ensemble, ou laissés vides pour un envoi anonyme',
+    'email.non_ascii_address' => 'L\'adresse {addr} contient des caractères non ASCII : SMTPUTF8 n\'est pas pris en charge — utilisez une adresse ASCII',
 ];

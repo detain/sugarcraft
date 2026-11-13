@@ -229,14 +229,24 @@ final class Email
             $bareAddr = $matches[1];
         }
 
+        // CM-29: the bare addr-spec must be ASCII. The dot-atom grammar below
+        // would also reject these bytes, but with the generic message — a
+        // non-ASCII address is a distinct user error with a distinct remedy
+        // (SMTPUTF8, RFC 6531, is not implemented by this port), so it is
+        // refused by name first. Display names keep their non-ASCII freedom:
+        // the check runs on the extracted addr-spec, not the whole token.
+        if (\preg_match('/[\x80-\xFF]/', $bareAddr) === 1) {
+            throw new \InvalidArgumentException(Lang::t('email.non_ascii_address', ['addr' => $bareAddr]));
+        }
+
         // Structural validation is a real grammar, not an @-count:
         // the bare addr-spec must be a dot-atom on both sides. 'a b@example.com'
         // once passed the three-clause @ check and rode to the wire, failing
         // later as a silent bounce. The grammar subsumes exactly-one-@ and
         // non-empty parts (anchored classes exclude @ on both sides).
         // Local-part comments and quoted strings stay out of scope — refusing
-        // them is the deliberate posture (the same anchor CM-29's non-ASCII
-        // refusal will sit on).
+        // them is the deliberate posture (the non-ASCII refusal above shares
+        // the same "no exotic addr-spec forms" anchor).
         if (\preg_match('/^[!#$%&\'*+\/=?^_`{|}~0-9A-Za-z.-]+@[0-9A-Za-z.-]+$/', $bareAddr) !== 1) {
             throw new \InvalidArgumentException(Lang::t('email.invalid_address', ['addr' => $bareAddr]));
         }

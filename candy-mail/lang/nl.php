@@ -75,4 +75,5 @@ return [
     'smtp.invalid_timeout' => 'SMTP-timeout {timeout} is geen aantal seconden tussen 1 en 3600',
     'resend.cid_unsupported' => 'De Resend-API-payload heeft geen Content-ID-veld: bijlage {filename} is inline; inline-afbeeldingen reizen alleen via SMTP.',
     'smtp.incomplete_credentials' => 'SMTP-gegevens onvolledig: geef zowel gebruikersnaam als wachtwoord op, of beide leeg voor anonieme verzending',
+    'email.non_ascii_address' => 'E-mailadres {addr} bevat niet-ASCII tekens: SMTPUTF8 wordt niet ondersteund — gebruik een ASCII-adres',
 ];
