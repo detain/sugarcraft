@@ -276,25 +276,6 @@ Cache the *rendered* bytes, not the source image — a render is expensive, a de
 less so, and the cache key must change when the terminal's protocol does:
 `DiskCache::key($url, $width, $height, $mosaic->protocol())`.
 
-Run the whole thing yourself (GD only, no network):
-
-```sh
-composer install          # the mosaic example needs the dev-only sugar-image dep…
-php examples/poster-grid-mosaic.php   # …and a PHP built with ext-gd
-```
-
-composer pulls neither automatically — `suggest` entries are advisory. The library
-itself needs **PHP >= 8.3 and zero extensions** (its runtime deps are sugar-core, sugar-style
-and sugar-mouse); ext-gd is required only by sugar-image, which the mosaic
-example and the integration tests use. The terminal baseline: all chrome is Unicode (`░ ▓ ▸ ● ○ …`) and there is **no
-ASCII fallback** — the widgets need a UTF-8 terminal with block-element
-coverage, or the skeleton, the focus cue and the progress bar arrive mojibaked.
-Both examples are non-interactive
-one-shot dumps — no key loop (map your own keys per the *Keyboard nav* legend in
-the first PosterGrid example above) — and assume a truecolour terminal.
-
-`examples/poster-grid.php` by contrast is pure PHP — no image stack, no extensions.
-
 ### Title trust boundary
 
 The plain `title` is treated as **untrusted** (it is typically DB-sourced):
@@ -392,6 +373,27 @@ runs of `█` and `░` are ordinary visible characters, so no sweep will tidy t
 A text-extraction path over cards must therefore read the MODEL (`title`,
 `positionText()`), never the painted frame: the art carries no accessible name,
 and the frame is display bytes, not content.
+
+## Examples
+
+Run the whole thing yourself (GD only, no network):
+
+```sh
+composer install          # the mosaic example needs the dev-only sugar-image dep…
+php examples/poster-grid-mosaic.php   # …and a PHP built with ext-gd
+```
+
+composer pulls neither automatically — `suggest` entries are advisory. The library
+itself needs **PHP >= 8.3 and zero extensions** (its runtime deps are sugar-core, sugar-style
+and sugar-mouse); ext-gd is required only by sugar-image, which the mosaic
+example and the integration tests use. The terminal baseline: all chrome is Unicode (`░ ▓ ▸ ● ○ …`) and there is **no
+ASCII fallback** — the widgets need a UTF-8 terminal with block-element
+coverage, or the skeleton, the focus cue and the progress bar arrive mojibaked.
+Both examples are non-interactive
+one-shot dumps — no key loop (map your own keys per the *Keyboard nav* legend in
+the first PosterGrid example above) — and assume a truecolour terminal.
+
+`examples/poster-grid.php` by contrast is pure PHP — no image stack, no extensions.
 
 ## Internationalisation
 
