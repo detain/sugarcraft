@@ -186,4 +186,39 @@ final class ToastFailFastTest extends TestCase
         $this->assertInstanceOf(\Countable::class, $log);
         $this->assertSame(0, \count($log));
     }
+
+    // TST-WIDTH: the box-width knobs join the fail-fast family. A typo'd
+    // width used to floor silently to a 1-cell box — permanently unreadable,
+    // no error, the exact "silently suppresses every alert" shape
+    // withMaxConcurrent() already refuses. withMinWidth is the asymmetric
+    // sibling: 0 there is the FIXED-WIDTH sentinel, not garbage.
+
+    public function testWithMaxWidthRefusesNonPositiveNamingSemantics(): void
+    {
+        foreach ([0, -1, -640] as $bad) {
+            try {
+                Toast::new()->withMaxWidth($bad);
+                $this->fail("withMaxWidth({$bad}) must throw");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('positive cells', $e->getMessage());
+                $this->assertStringContainsString('1-cell box', $e->getMessage());
+            }
+        }
+    }
+
+    public function testPositiveMaxWidthAndFixedZeroMinWidthStillWork(): void
+    {
+        $t = Toast::new(40)->withMaxWidth(20)->withMinWidth(0);
+        $this->assertStringContainsString('ok', $t->info('ok')->view('', 60, 8));
+    }
+
+    public function testWithMinWidthRefusesOnlyNegativeAndSaysWhy(): void
+    {
+        try {
+            Toast::new()->withMinWidth(-1);
+            $this->fail('withMinWidth(-1) must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('FIXED-WIDTH sentinel', $e->getMessage());
+        }
+    }
 }

@@ -131,11 +131,24 @@ final class Toast
 
     public function withMaxWidth(int $w): self
     {
+        if ($w <= 0) {
+            throw new \InvalidArgumentException(
+                'withMaxWidth(): positive cells = the box cap; there is no non-positive width — '
+                . 'a zero/negative value would floor silently to a permanently unreadable 1-cell box, '
+                . 'refused like withMaxConcurrent() refuses its below-1 cap'
+            );
+        }
         return $this->mutate(['maxWidth' => $w]);
     }
 
     public function withMinWidth(int $w): self
     {
+        if ($w < 0) {
+            throw new \InvalidArgumentException(
+                'withMinWidth(): 0 is the FIXED-WIDTH sentinel (box sizes to its content, no floor), '
+                . 'positive cells are the minimum width floor — only NEGATIVE is meaningless here'
+            );
+        }
         return $this->mutate(['minWidth' => $w]);
     }
 

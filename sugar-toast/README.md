@@ -471,8 +471,8 @@ already over the new cap survive until the next push evicts them.
 | `Toast::new(int $maxWidth = 50)` | Factory |
 | `->withPosition(Position)` | Screen position (9 positions) |
 | `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables. `null` = never expires, positive seconds = TTL: NAN/INF and `<= 0` throw — a zero/negative timer would birth every queued alert already expired (never rendered, `secondsUntilNextExpiry()` pinned at `0.0`) in silence, so the door refuses it like `withMaxConcurrent` does its below-1 cap |
-| `->withMaxWidth(int)` | Maximum alert width in cells. Non-positive values are not rejected — the renderer floors the effective cap to 1 cell (same for a `Toast::new(0)` width) |
-| `->withMinWidth(int)` | Minimum alert width in cells |
+| `->withMaxWidth(int)` | Maximum alert width in cells. `<= 0` throws `InvalidArgumentException` — positive cells are the cap, a non-positive width would floor silently to an unreadable 1-cell box (the renderer's old 1-cell floor now only guards the `Toast::new(0)` ctor path and raw internal state) |
+| `->withMinWidth(int)` | Minimum alert width in cells; `0` is the FIXED-WIDTH sentinel (box sizes to content, no floor), negative throws (only `0` has a meaning below the positive range) |
 | `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or Ascii symbols |
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
 | `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + numeric percentage on progress rows; default off keeps every frame byte-identical |
