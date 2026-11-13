@@ -489,6 +489,30 @@ final class ConversationRouterTest extends TestCase
         self::assertSame(40, $this->map->cursorForSession('sess_fixture_1'));
     }
 
+    /**
+     * msteams-14: a prompt the serve refuses (here: bridge stopped, so
+     * send rejects not_connected) must answer the chat, not swallow it.
+     * Before this pin the rejection only logged — the user typed and got
+     * silence out of a live-seeming channel.
+     */
+    public function testARefusedPromptAnswersInTheChatNotOnlyTheLog(): void
+    {
+        $this->boot();
+        $this->bridge->stop();
+        self::runFor($this->loop, 50);
+
+        $sendPrompt = new \ReflectionMethod(ConversationRouter::class, 'sendPrompt');
+        $sendPrompt->setAccessible(true);
+        $before = count($this->face->delivered);
+        $sendPrompt->invoke($this->router, $this->face, self::REF, 'sess_ghost', 'hello fenced', 'immediate');
+        self::runFor($this->loop, 250);
+
+        $chunks = \array_slice($this->face->delivered, $before);
+        self::assertGreaterThanOrEqual(1, count($chunks), 'a refused prompt must deliver a visible line');
+        self::assertStringContainsString('never reached the agent', $chunks[0] ?? '');
+        self::assertStringNotContainsString('not_connected', $chunks[0] ?? '', 'wire text stays log-only');
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = [], ?PlatformFace $face = null): void
     {

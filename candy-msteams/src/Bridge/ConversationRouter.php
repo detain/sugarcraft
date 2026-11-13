@@ -964,8 +964,10 @@ final class ConversationRouter
             $channel->beginReply($ref);
         }
 
-        // A prompt the serve never admitted gets no reply: say so in the log,
-        // and close any progressive placeholder so its refresh tick stops.
+        // A prompt the serve never admitted must NOT end as silence: the
+        // placeholder closes (refresh tick stops) and the chat gets one
+        // visible line. The wire error text stays log-only (SPEC copy law:
+        // chat gets a generic per-family sentence, never the raw kind).
         // Callers do not chain on this promise, so the rejection ends here.
         return $this->sendPromptOnWire($channel, $ref, $sessionId, $fenced, $delivery, $images, $documents)->then(
             null,
@@ -973,7 +975,8 @@ final class ConversationRouter
                 if ($channel instanceof StreamingFace) {
                     $channel->abandonReply($ref);
                 }
-                $this->log->warn('prompt_not_admitted', ['session' => $sessionId, 'error' => $error->getMessage()]);
+                $this->log->warn('prompt_refused', ['session' => $sessionId, 'error' => $error->getMessage()]);
+                $this->deliver($channel, $ref, '⛔ Your message never reached the agent — it was refused. Try again; if this keeps happening the served session may need /new.');
             },
         );
     }
