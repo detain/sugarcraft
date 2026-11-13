@@ -15,17 +15,16 @@ use PHPUnit\Framework\TestCase;
  * for the NARROWER, production shape of the same disease: a catch clause in
  * candy-code/src whose body contains NOTHING — no statement, not even a comment.
  *
- * A bare-empty catch is not automatically a bug. Every one of the twelve sites
+ * A bare-empty catch is not automatically a bug. Every one of the sites
  * below is defensible on inspection (teardown close, best-effort listener,
  * rethrow-after-rollback, fail-open probe ladder — each carries its one-line
  * justification on its roster row). What is NOT acceptable is for the tree to
- * hold twelve such sites with no census, because the shape's whole danger is
- * that it is silent by construction: the twelfth one, planted by the next
+ * hold such sites with no census, because the shape's whole danger is
+ * that it is silent by construction: the next one, planted by the next
  * lane in a hot path, will be invisible until the exception it ate matters.
  *
  * POLITY (mirrors the house site-keyed roster shape; keys are
- * `<relative-file>::<enclosing-method>` with a per-key count, because three of
- * the twelve share CapabilityDiscoverer::probe):
+ * `<relative-file>::<enclosing-method>` with a per-key count, because several sites can share one method):
  *
  *   - a bare-empty catch NOT on the roster → RED, named (fail closed: growth
  *     is exactly what this guard is for);
@@ -57,7 +56,7 @@ use PHPUnit\Framework\TestCase;
 final class SwallowingCatchSrcCensusTest extends TestCase
 {
     /**
-     * The twelve live sites, each re-verified against the tree at mint time
+     * The live sites, each re-verified against the tree at mint time
      * (line numbers drift; file plus method identity is the durable key). The
      * §ROSTER of the source inventory carried file:line only; method names here
      * are the scanner's own attribution, checked against the file layouts.
@@ -80,10 +79,6 @@ final class SwallowingCatchSrcCensusTest extends TestCase
         'src/MCP/SseMcpServer.php::assertSuccess' => [
             1,
             'close() on a response body that was consumed or read-errored already; the status verdict is taken from the response object, not the stream',
-        ],
-        'src/Media/Capability/CapabilityDiscoverer.php::probe' => [
-            3,
-            'fail-open dial ladder: a refused or unreachable endpoint family is absence of capability, not an error (three rungs: comfyui, sglang, openai-images)',
         ],
         'src/Memory/EmbeddingCache.php::store' => [
             1,

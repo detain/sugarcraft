@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config;
 
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Core\Util\AtomicJsonFile;
 
 /**
@@ -200,8 +201,9 @@ final class PolicySnapshot
      * the guard keeps its teeth. No record (or an unreadable one) is left
      * alone: the launch check owns baselines and corruption.
      *
-     * Best-effort and silent: a failure here costs one false notice, never the
-     * write that already succeeded.
+     * Best-effort, but not silent: a failure here costs one false notice, never
+     * the write that already succeeded — and it is logged, so that notice has
+     * a named cause.
      *
      * @param callable():string $configDir
      */
@@ -214,7 +216,8 @@ final class PolicySnapshot
             }
             $record['userConfig'] = $hashAfterWrite;
             self::write($configDir, $record);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::channel(Log::APP, 'policy snapshot userConfig refresh failed (' . $e->getMessage() . '); the next launch may raise one false "changed since last launch" notice');
         }
     }
 }

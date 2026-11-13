@@ -5496,10 +5496,7 @@ public static function useMaxCost(?string $maxCost): void
             // A zero-length config.json is the torn-write signature, not "no
             // settings": merging onto [] would overwrite whatever it held.
             // Refuse and say so; the operator deletes or restores the file.
-            try {
-                Log::raw('refusing to persist a setting: ' . $target . ' is empty (a torn write?); restore or delete it');
-            } catch (\Throwable) {
-            }
+            Log::raw('refusing to persist a setting: ' . $target . ' is empty (a torn write?); restore or delete it');
 
             return null;
         }
@@ -9209,18 +9206,12 @@ public static function useMaxCost(?string $maxCost): void
         $trustRoot = (string) $decision['canonicalRoot'];
         $pins = McpTrustPins::load(self::trustedConfigDirPath() . '/' . McpTrustPins::FILENAME);
         if (($failure = $pins->readFailure()) !== null) {
-            try {
-                Log::channel(Log::APP, 'MCP trust pins ' . $pins->path() . ' unusable (' . $failure . '); treated as no record');
-            } catch (\Throwable) {
-            }
+            Log::channel(Log::APP, 'MCP trust pins ' . $pins->path() . ' unusable (' . $failure . '); treated as no record');
         }
         if ($pins->damaged()) {
             // An empty pin file is a torn write, and defaulting it to "first
             // launch" would re-trust every server unseen (TOFU reset).
-            try {
-                Log::raw('refusing to start MCP servers: ' . $pins->path() . ' is empty or unreadable; run `candy-code mcp trust` to re-approve');
-            } catch (\Throwable) {
-            }
+            Log::raw('refusing to start MCP servers: ' . $pins->path() . ' is empty or unreadable; run `candy-code mcp trust` to re-approve');
 
             return null;
         }

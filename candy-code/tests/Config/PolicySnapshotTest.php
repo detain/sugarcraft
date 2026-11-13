@@ -217,4 +217,26 @@ final class PolicySnapshotTest extends TestCase
         file_put_contents($file, "hooks:\n  changed: yes\n");
         $this->assertNotSame($first, PolicySnapshot::fingerprint($file), 'the whole point: an edit between launches moves the hash');
     }
+
+    /** A refresh that cannot complete is named on the operator log, not swallowed. */
+    public function testAFailedUserConfigRefreshIsNamedOnTheOperatorLog(): void
+    {
+        $log = $this->dir . '/refresh.log';
+        $previous = \ini_set('error_log', $log);
+        try {
+            PolicySnapshot::refreshUserConfig(
+                static function (): string {
+                    throw new \RuntimeException('config dir gone');
+                },
+                'a',
+                'b',
+            );
+        } finally {
+            \ini_set('error_log', (string) $previous);
+        }
+
+        $captured = (string) @\file_get_contents($log);
+        @\unlink($log);
+        self::assertStringContainsString('userConfig refresh failed (config dir gone)', $captured);
+    }
 }

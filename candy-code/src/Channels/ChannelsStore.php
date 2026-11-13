@@ -161,7 +161,10 @@ final class ChannelsStore
         }
         try {
             Log::channel(Log::APP, 'channels record ' . $this->configDir->__invoke() . '/' . self::FILE_NAME . ' unusable (' . $this->readFailure . '); channel policy fails closed and quarantine will not persist until it is repaired');
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            // The announcer must not be the thing that goes quiet: a directory
+            // callable that throws still owes the operator the read failure.
+            Log::channel(Log::APP, 'channels record unusable (' . $this->readFailure . '); its directory could not be resolved (' . $e->getMessage() . ')');
         }
     }
 
