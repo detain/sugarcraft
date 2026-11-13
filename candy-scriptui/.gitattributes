@@ -1,0 +1,14 @@
+# Development-only material, excluded from dist archives (composer/GitHub
+# zips, scriptui-82). The runtime surface of this lib is src/, bin/, lang/,
+# composer.json and README.md; everything below is checkout scaffolding:
+# tests (dev), .vhs tapes + rendered demo GIFs (CI/site, served from raw
+# git URLs, never from a dist archive), examples (documented from the repo,
+# not shipped in the package) and tools/build-phar.php (run by the release
+# workflow from a git checkout — phar-dev.yml never builds from a dist).
+#
+# Fleet rollout of this pattern stays coordinated on the fleet
+# .gitattributes wave (route (b)); this file is lib-local by design.
+/tests/ export-ignore
+/.vhs/ export-ignore
+/examples/ export-ignore
+/tools/ export-ignore
