@@ -77,7 +77,8 @@ git branch | candy-scriptui filter
 
 ## Subcommands
 
-All 13 presentation subcommands ship, plus `completion` — 14 in the table
+Fifteen subcommands ship — thirteen presentation commands plus
+`completion` and `version` — all in the table
 below. Run `candy-scriptui <cmd> --help` for the full
 flag list per command. Bare `candy-scriptui --help` prints Symfony's stock
 `list`-command help rather than this roster — a built-in of the default
@@ -99,7 +100,50 @@ run `candy-scriptui list` to have the tool print it.
 | `spin`     | Run an external command behind a spinner. |
 | `style`    | Apply ANSI styling to argv (or stdin). |
 | `table`    | Render a CSV / TSV table. |
+| `version`  | Print the tool version (same answer as `--version`). |
 | `write`    | Multi-line text editor. |
+
+### Per-command examples
+
+The intro block demos `choose`, `confirm`, `input`, `filter`, `spin`,
+and `style`. Here is one canonical invocation for each of the rest:
+
+```sh
+# Render markdown — a file path or piped text.
+candy-scriptui format README.md
+candy-scriptui format --type code --language php src/Command/LogCommand.php
+
+# Pick a file under a directory (files only by default; --directory
+# also allows directories, --all shows dotfiles).
+candy-scriptui file --header "Attach which config?" src/
+
+# Multi-line editor — submit with Ctrl+D, abort with Esc.
+notes=$(candy-scriptui write --height 12 --placeholder "Release notes...")
+
+# CSV from a file or a pipe (--separator switches dialects, --header
+# promotes the first row, --border picks the frame style).
+candy-scriptui table --file sales.csv --header
+printf 'name,score\nada,99\ngrace,100\n' \
+  | candy-scriptui table --header --border double
+
+# Levelled log lines (--formatter json emits one JSON object per
+# message; -o/--file appends to a log file instead of printing).
+candy-scriptui log --level warn "disk at 90%"
+candy-scriptui log --formatter json --file build.log "deploy finished"
+
+# Join argument strings — one line with a separator…
+candy-scriptui join --separator ", " apple pear plum   # apple, pear, plum
+
+# …or the default vertical join (and stdin lines work the same way).
+candy-scriptui join apple pear plum                    # three lines
+
+# Page long output (arrows and PgUp/PgDn scroll, --match highlights a
+# substring given at launch, q quits).
+candy-scriptui pager --file README.md --match FIXME
+```
+
+`completion` and `version` are documented under their own headings
+below.
 
 ## Auto-discovery
 
@@ -323,8 +367,23 @@ candy-scriptui completion fish
 
 Emit a shell completion script for bash, zsh, or fish. The positional shell
 wins over `--shell`, and a bare `candy-scriptui completion` defaults to bash.
-Source the output directly or drop it into the appropriate completion
-directory.
+Concrete per-shell installs:
+
+```sh
+# bash — drop it where bash-completion looks:
+candy-scriptui completion bash \
+  | sudo tee /usr/share/bash-completion/completions/candy-scriptui
+
+# zsh — an fpath directory, named with the leading underscore:
+candy-scriptui completion zsh > "${fpath[1]}/_candy-scriptui"
+
+# fish — the completions directory:
+candy-scriptui completion fish > ~/.config/fish/completions/candy-scriptui.fish
+```
+
+New shells pick the function up automatically (zsh may want a rehash or a
+fresh terminal); as a fallback any of the three can simply be sourced from
+the shell's init file.
 
 ### Version
 
@@ -497,6 +556,14 @@ inside the message loop: on network mounts or huge directories a keystroke
 may stall behind a listing repaint, and `--timeout` keeps counting
 wall-clock across those stalls.
 
+Piped input is read whole before the first frame paints: the
+stdin-reading commands (`filter`, `join`, `table`, `pager`, `style`,
+`format`) buffer the entire payload with no cap, so memory scales with
+the stream — `find / | candy-scriptui filter` on a huge filesystem
+grows RSS until the producer finishes. `gum` full-buffers the same way;
+this is parity, not a regression, but bound unbounded generators behind
+`head` (or `sort -u` if you need dedup) when payload size is in play.
+
 ## Compatibility with `gum` invocations
 
 Most `gum X` invocations work as `candy-scriptui X` verbatim. Known
@@ -539,8 +606,12 @@ cd candy-scriptui && composer install && vendor/bin/phpunit
 
 Runnable examples live in [`examples/`](examples/):
 
-- [`examples/cli.php`](examples/cli.php) — drive the `Application`
-  in-process (register commands, run, read exit codes).
+- [`examples/cli.php`](examples/cli.php) — build an `Application`
+  in-process and forward its exit code: it registers one custom
+  `status` command with `add()` and runs the shell argv through it, so
+  `php examples/cli.php stat` demonstrates the built-in typo suggestion
+  (`Did you mean "status"?`). The attribute-scanned auto-discovery flow
+  the tool itself uses is documented under Auto-discovery above.
 - [`examples/setup-script.sh`](examples/setup-script.sh) — a shell script
   gating on `candy-scriptui confirm`'s exit code.
 
