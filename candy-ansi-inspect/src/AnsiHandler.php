@@ -241,7 +241,7 @@ final class AnsiHandler implements Handler
      *
      * @param State $stateBeforeFlush parser state captured before flush()
      */
-    public function finishPending(State $stateBeforeFlush): void
+    private function finishPending(State $stateBeforeFlush): void
     {
         $pendingText = $this->textBuf;
         $this->flushText();
