@@ -1594,6 +1594,8 @@ final class RuntimeTest extends TestCase
             // map is all this tripwire needed when the ctor grew the fields.
             'documentBytes' => 'RAW-PDF-BYTES',
             'documentName' => 'paper.pdf',
+            // The shell's exit status, carried through withContent()'s rebuild like the pairs above.
+            'exitCode' => 7,
         ];
 
         $constructor = (new \ReflectionClass(ToolResult::class))->getConstructor();
