@@ -29,9 +29,13 @@ $form = Form::new(
         -&gt;withOptions('PHP', 'Go', 'Rust', 'Python')
         -&gt;withFuzzySuggestions(['PHP', 'Go', 'Rust', 'Python', 'JavaScript', 'TypeScript']),
 );
-// $form is a SugarCraft Model — drive it with a Program:
-(new Program($form))->run();
-echo $form->values()['name'], "\n";
+// $form is a SugarCraft Model — drive it with a Program. The Model is
+// immutable: Program drives a COPY and run() returns the final model, so
+// capture it before reading values back.
+$form = (new Program($form))->run();
+if ($form->isSubmitted()) {
+    echo $form->values()['name'], "\n";
+}
 
 // Async suggestions:
 $form = Form::new(

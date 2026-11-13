@@ -47,16 +47,23 @@ $form = Form::new(
         ->withValidator(new Required())
 );
 
-(new Program($form))->run();
+$form = (new Program($form))->run(); // Program drives a COPY; run() returns the final model
 
-echo $form->values()['name'], "\n";
+/** @var Form $form */
+if ($form->isSubmitted()) {
+    echo $form->values()['name'], "\n";
+}
 ```
 
 `echo $form->view()` on its own renders one static frame; the form is a
-SugarCraft Model, so `Program::run()` is what drives it interactively. For a
-complete reference — multi-group paging and conditional visibility — see
-`examples/multi-page-form.php:53` (`php examples/multi-page-form.php`); the
-`examples/` directory holds eleven runnable demos.
+SugarCraft Model, so `Program::run()` is what drives it interactively. The
+Model is immutable, so `Program` rebinds its own copy on every update — the
+`$form` you pass in never observes the typing, validation, or submission that
+happened during the run. Capture `run()`'s return value and use that as the
+final model. For a complete reference — multi-group paging and conditional
+visibility — see `examples/multi-page-form.php` (`php
+examples/multi-page-form.php`); the `examples/` directory holds eleven
+runnable demos.
 
 ### Pre-filling fields
 
@@ -200,6 +207,22 @@ Form::groups(
 | `validateAll(): array<string,string>` | Run all field validators and return `[fieldKey => errorMessage]` for fields that failed. Use at the Program-run boundary (once the `Program` ends) to collect cross-field validation failures that cannot be expressed per-field. |
 
 ### Reading values after submit
+
+A run can end in submission or in abort, so gate the read on
+`isSubmitted()` before touching `values()` — after an abort the fields were
+never validated and `values()['name']` would be an unguarded lookup of a key
+whose value was never accepted. The captured final model makes the check
+honest:
+
+```php
+$form = (new Program($form))->run();
+
+if ($form->isSubmitted()) {
+    echo $form->values()['name'], "\n";
+} else {
+    echo "Form aborted.\n";
+}
+```
 
 `values()` returns every visible field keyed by `key()`. For typed access
 call `string()`, `int()`, `bool()`, `array()`, or the keyed lookup

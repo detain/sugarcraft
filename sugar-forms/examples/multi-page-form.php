@@ -50,9 +50,9 @@ $form = Form::groups(
         ->withTitle('Step 3 — Done'),
 )->withTheme(Theme::charm());
 
-(new Program($form))->run();
+$form = (new Program($form))->run(); // Program drives a COPY; run() returns the final model
 
-if ($form->isSubmitted() === TRUE) {
+if ($form->isSubmitted()) {
     echo "\nValues:\n";
     foreach ($form->values() as $key => $val) {
         echo "  $key = " . var_export($val, true) . "\n";
