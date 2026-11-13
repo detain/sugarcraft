@@ -326,6 +326,87 @@ final class ThemeTest extends TestCase
             $this->assertStringContainsString('simulated degraded read', $e->getMessage());
         }
     }
+
+    public function testConstructorElementSlotsDefaultToNoOpStyle(): void
+    {
+        $theme = new Theme();
+        $fields = ['heading1', 'heading2', 'heading3', 'heading4', 'heading5', 'heading6',
+            'paragraph', 'bold', 'italic', 'code', 'codeBlock', 'link', 'blockquote', 'listMarker', 'rule'];
+        foreach ($fields as $field) {
+            $this->assertSame('text', $theme->{$field}->render('text'), "{$field} must default to a no-op Style");
+        }
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function stockThemePins(): array
+    {
+        return [
+            'ansi'        => ['ansi', '0f419b27be52b124a81f28c56b29cd6923736d1f'],
+            'plain'       => ['plain', 'feeaa7d00c7fba48019928af25608b83fab7e553'],
+            'notty'       => ['notty', 'feeaa7d00c7fba48019928af25608b83fab7e553'],
+            'ascii'       => ['ascii', 'bf3c99f884901b2e867fada2725f2224cb529304'],
+            'dark'        => ['dark', 'ef74587f7471249edcc1d0745448e5e33ea6e1e8'],
+            'light'       => ['light', '0dd8ebb37b051aae40125ca0cad9fa51a20dd3fd'],
+            'dracula'     => ['dracula', '8b8acdc32532b10d99934826d2c0092ed414ec83'],
+            'tokyoNight'  => ['tokyoNight', 'd5ba6891a3f0efeddfa2119cbc793737da199f9f'],
+            'pink'        => ['pink', '54f4be28cd8b6b3d6c6d954b06ad8a95240fcd6b'],
+        ];
+    }
+
+    /**
+     * Adding constructor defaults must not move a single byte of any
+     * stock theme's output — the pins below were computed on the
+     * pre-change revision and re-asserted after it.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('stockThemePins')]
+    public function testStockThemeOutputIsPinStable(string $factory, string $sha1): void
+    {
+        $doc = "# H1\n\n## H2\n\n### H3\n\nPara **bold** *it* `code` [link](http://x.y) ~~strike~~ ![img](i.png).\n\n> quote\n\n- a\n- [x] b\n\n1. one\n2. two\n\n```php\necho 1;\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n---\n\nTerm\n: def\n";
+        $theme = Theme::{$factory}();
+        $out = (new Renderer($theme, wrapWidth: 60))->render($doc);
+        $this->assertSame($sha1, sha1($out), "stock theme {$factory}() output drifted");
+    }
+
+    public function testWithSwapsExactlyOneSlotAndCopiesEverythingElse(): void
+    {
+        $base = Theme::dark();
+        $gold = Style::new()->foreground(Color::hex('#ffd700'));
+        $custom = $base->with('code', $gold);
+
+        $this->assertNotSame($base, $custom);
+        $this->assertStringContainsString("\x1b[38;2;255;215;0m", $custom->code->render('x')); // swapped
+        $this->assertSame($base->heading1, $custom->heading1);                                  // copied
+        $this->assertSame($base->documentIndent, $custom->documentIndent);                     // scalar kept
+        $this->assertSame($base->headingCase, $custom->headingCase);                           // scalar kept
+    }
+
+    public function testWithKeepsScalarFieldsAcrossTheSwap(): void
+    {
+        $theme = (new Theme(documentIndent: 2, listLevelIndent: 4, headingCase: 'upper'))
+            ->with('code', Style::new()->bold());
+        $this->assertSame(2, $theme->documentIndent);
+        $this->assertSame(4, $theme->listLevelIndent);
+        $this->assertSame('upper', $theme->headingCase);
+        $this->assertSame('text', $theme->heading1->render('text')); // still no-op default
+    }
+
+    public function testWithRejectsUnknownSlotWithTheValidRoster(): void
+    {
+        try {
+            Theme::dark()->with('nope', Style::new());
+            $this->fail('an unknown slot must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('is not a Style slot', $e->getMessage());
+            $this->assertStringContainsString('heading1', $e->getMessage());
+            $this->assertStringContainsString('autolink', $e->getMessage());
+        }
+    }
+
+    public function testWithRejectsScalarSlots(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Theme::dark()->with('documentIndent', Style::new());
+    }
 }
 
 /**

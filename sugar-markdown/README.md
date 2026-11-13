@@ -279,7 +279,9 @@ $writer->close();
 ## Authoring a custom theme
 
 A `Theme` is a value object — every slot is a `Style` (or scalar).
-Build one with the constructor and feed it to `new Renderer($theme)`:
+Every element slot defaults to a no-op `Style`, so a custom theme from
+scratch lists only the slots it actually styles; feed it to
+`new Renderer($theme)`:
 
 ```php
 use SugarCraft\Core\Util\Color;
@@ -341,8 +343,12 @@ glyphs from `tableColumnSeparator` / `tableCenterSeparator` /
 
 Stock themes (`Theme::ansi()`, `Theme::dark()`, `Theme::dracula()`,
 `Theme::tokyoNight()`, `Theme::pink()`, `Theme::light()`, `Theme::ascii()`,
-`Theme::notty()`, `Theme::plain()`) are good starting points — copy
-the constructor call and adjust the slots you care about.
+`Theme::notty()`, `Theme::plain()`) are good starting points — swap one
+Style slot at a time with `Theme::with(string $slot, Style $style)`
+(it returns a copy, throwing `InvalidArgumentException` on a name that
+is not a Style slot; the table above is the roster), or pass a full
+constructor call as in the example. Scalar decorations such as
+`headingPrefix` / `headingCase` stay constructor parameters.
 
 `Theme::fromEnvironment(?$default)` (also `Renderer::fromEnvironment()`)
 resolves the theme from the environment without code changes: a

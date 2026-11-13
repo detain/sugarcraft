@@ -15,22 +15,43 @@ use SugarCraft\Style\Style;
  */
 final class Theme
 {
+    // ---- element slots (read the constructor for the canonical roster) ----
+    // PHP forbids `new` in promoted-property defaults, so the fifteen
+    // element styles are de-promoted and normalised to a no-op Style in
+    // the constructor body — callers may now omit any slot they do not
+    // style, and {@see with()} swaps exactly one slot off a stock theme.
+    public readonly Style $heading1;
+    public readonly Style $heading2;
+    public readonly Style $heading3;
+    public readonly Style $heading4;
+    public readonly Style $heading5;
+    public readonly Style $heading6;
+    public readonly Style $paragraph;
+    public readonly Style $bold;
+    public readonly Style $italic;
+    public readonly Style $code;
+    public readonly Style $codeBlock;
+    public readonly Style $link;
+    public readonly Style $blockquote;
+    public readonly Style $listMarker;
+    public readonly Style $rule;
+
     public function __construct(
-        public readonly Style $heading1,
-        public readonly Style $heading2,
-        public readonly Style $heading3,
-        public readonly Style $heading4,
-        public readonly Style $heading5,
-        public readonly Style $heading6,
-        public readonly Style $paragraph,
-        public readonly Style $bold,
-        public readonly Style $italic,
-        public readonly Style $code,
-        public readonly Style $codeBlock,
-        public readonly Style $link,
-        public readonly Style $blockquote,
-        public readonly Style $listMarker,
-        public readonly Style $rule,
+        ?Style $heading1 = null,
+        ?Style $heading2 = null,
+        ?Style $heading3 = null,
+        ?Style $heading4 = null,
+        ?Style $heading5 = null,
+        ?Style $heading6 = null,
+        ?Style $paragraph = null,
+        ?Style $bold = null,
+        ?Style $italic = null,
+        ?Style $code = null,
+        ?Style $codeBlock = null,
+        ?Style $link = null,
+        ?Style $blockquote = null,
+        ?Style $listMarker = null,
+        ?Style $rule = null,
         // ---- syntax-highlighting tokens (used inside fenced code blocks) ----
         public readonly ?Style $keyword = null,
         public readonly ?Style $string  = null,
@@ -178,7 +199,24 @@ final class Theme
          * Block-level suffix appended once after the document body.
          */
         public readonly string $documentBlockSuffix = '',
-    ) {}
+    ) {
+        $noop = Style::new();
+        $this->heading1   = $heading1   ?? $noop;
+        $this->heading2   = $heading2   ?? $noop;
+        $this->heading3   = $heading3   ?? $noop;
+        $this->heading4   = $heading4   ?? $noop;
+        $this->heading5   = $heading5   ?? $noop;
+        $this->heading6   = $heading6   ?? $noop;
+        $this->paragraph  = $paragraph  ?? $noop;
+        $this->bold       = $bold       ?? $noop;
+        $this->italic     = $italic     ?? $noop;
+        $this->code       = $code       ?? $noop;
+        $this->codeBlock  = $codeBlock  ?? $noop;
+        $this->link       = $link       ?? $noop;
+        $this->blockquote = $blockquote ?? $noop;
+        $this->listMarker = $listMarker ?? $noop;
+        $this->rule       = $rule       ?? $noop;
+    }
 
     /** Default ANSI theme: bright accents on each heading, coloured code, etc. */
     public static function ansi(): self
@@ -577,14 +615,23 @@ final class Theme
      *
      * @param callable(Style): Style $map
      */
+    /** @return array<string, \ReflectionProperty> properties keyed by name */
+    private static function propertiesByName(): array
+    {
+        $properties = [];
+        foreach ((new \ReflectionClass(self::class))->getProperties() as $property) {
+            $properties[$property->getName()] = $property;
+        }
+
+        return $properties;
+    }
+
     public function mapStyles(callable $map): self
     {
         $args = [];
-        foreach ((new \ReflectionClass(self::class))->getProperties() as $property) {
-            if (!$property->isPromoted()) {
-                continue;
-            }
-            $value = $property->getValue($this);
+        $properties = self::propertiesByName();
+        foreach ((new \ReflectionMethod(self::class, '__construct'))->getParameters() as $parameter) {
+            $value = $properties[$parameter->getName()]->getValue($this);
             if ($value instanceof Style) {
                 $mapped = $map($value);
                 if (!$mapped instanceof Style) {
@@ -592,8 +639,43 @@ final class Theme
                 }
                 $value = $mapped;
             }
-            $args[$property->getName()] = $value;
+            $args[$parameter->getName()] = $value;
         }
+
+        return new self(...$args);
+    }
+
+    /**
+     * One-slot modification idiom: return a copy of this theme with a
+     * single Style slot swapped, leaving every other slot (styles and
+     * scalars alike) untouched. This is the cheap path for "dark, but
+     * gold code" — the constructor's 15 required styles never need
+     * re-listing. `$slot` must name a Style-typed constructor slot;
+     * anything else throws with the valid roster.
+     *
+     * @throws \InvalidArgumentException on an unknown or non-Style slot name
+     */
+    public function with(string $slot, Style $style): self
+    {
+        $args = [];
+        $styleSlots = [];
+        $properties = self::propertiesByName();
+        foreach ((new \ReflectionMethod(self::class, '__construct'))->getParameters() as $parameter) {
+            $name = $parameter->getName();
+            $type = $parameter->getType();
+            if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
+                $styleSlots[] = $name;
+            }
+            $args[$name] = $properties[$name]->getValue($this);
+        }
+
+        if (!\in_array($slot, $styleSlots, true)) {
+            throw new \InvalidArgumentException(
+                'Theme::with(): "' . $slot . '" is not a Style slot; valid slots: ' . implode(', ', $styleSlots)
+            );
+        }
+
+        $args[$slot] = $style;
 
         return new self(...$args);
     }
