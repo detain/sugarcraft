@@ -34,6 +34,14 @@ use SugarCraft\Testing\Snapshot\GoldenFile;
  * per platform before the spring trajectory joins the Windows/macOS legs.
  *
  * Mirrors the spring physics of charmbracelet/harmonica.
+ *
+ * @group parallel-unsafe
+ *
+ * This class mutates global process state — putenv() of the reduced-motion
+ * variables in setUp/tearDown and ini_set('serialize_precision') — which
+ * affects the entire process, not just the current test context, so it
+ * cannot run in parallel (e.g., with Paratest) alongside anything that
+ * reads either. Same rationale as ReducedMotionTest's class-level tag.
  */
 final class GoldenRenderTest extends TestCase
 {

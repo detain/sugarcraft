@@ -271,6 +271,12 @@ final class SpringChainTest extends TestCase
     // the 2-stage case ReducedMotionTest tightens. putenv is restored in the
     // same method — this file has no env setUp/tearDown of its own.
 
+    /**
+     * @group parallel-unsafe
+     *
+     * Mutates the process environment (REDUCE_MOTION) and the probe memo —
+     * cannot run in parallel; same rationale as ReducedMotionTest (SPR-16).
+     */
     public function testReducedMotionChainCompletesOnTickTwoNWithPositionsAtTwoNMinusOne(): void
     {
         putenv('REDUCE_MOTION=1');
