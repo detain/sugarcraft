@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Spring;
 
 /**
- * Newtonian-physics projectile. Mirrors charmbracelet/harmonica `NewProjectile`.
+ * Newtonian-physics projectile. Mirrors charmbracelet/harmonica.NewProjectile.
  *
  * Each call to {@see update()} advances position by velocity and
  * velocity by acceleration; acceleration usually carries the gravity
@@ -41,10 +41,10 @@ namespace SugarCraft\Spring;
  */
 final class Projectile
 {
-    /** Standard gravity magnitude. Mirrors `harmonica.Gravity` value. */
+    /** Standard gravity magnitude. Mirrors charmbracelet/harmonica.Gravity. */
     public const GRAVITY = 9.81;
 
-    /** Approximate skydiver terminal-velocity magnitude. Mirrors `harmonica.TerminalGravity`. */
+    /** Approximate skydiver terminal velocity. Mirrors charmbracelet/harmonica.TerminalGravity. */
     public const TERMINAL_GRAVITY = 53.0;
 
     /**

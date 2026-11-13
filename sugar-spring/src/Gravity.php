@@ -42,8 +42,8 @@ final class Gravity
     private function __construct() {}
 
     /**
-     * Standard gravity vector (Y-up): `(0, -9.81, 0)`. Equivalent to
-     * harmonica's package-level `Gravity`.
+     * Standard gravity vector (Y-up): `(0, -9.81, 0)`. Mirrors
+     * charmbracelet/harmonica.Gravity (the package-level vector).
      *
      * @deprecated Use {@see Projectile::gravity()}. REMOVED-IN: 2.0.0.
      */
@@ -58,8 +58,8 @@ final class Gravity
     }
 
     /**
-     * Terminal-velocity gravity (Y-up): `(0, -53, 0)`. Equivalent to
-     * harmonica's package-level `TerminalGravity`.
+     * Terminal-velocity gravity (Y-up): `(0, -53, 0)`. Mirrors
+     * charmbracelet/harmonica.TerminalGravity (the package-level vector).
      *
      * @deprecated Use {@see Projectile::terminalGravity()}. REMOVED-IN: 2.0.0.
      */

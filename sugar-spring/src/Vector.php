@@ -7,7 +7,8 @@ namespace SugarCraft\Spring;
 /**
  * 3D vector for {@see Projectile}. Immutable.
  *
- * Mirrors the harmonica `Vector` value type — used both for positions
+ * Mirrors charmbracelet/harmonica.Vector — the same Go value type is used
+ * here both for positions
  * (X / Y / Z in arbitrary units) and for velocities / accelerations
  * (units per simulation step).
  *

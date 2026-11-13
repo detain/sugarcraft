@@ -11,6 +11,13 @@ use SugarCraft\ColorProfile\Probe;
  * under-/critically-/over-damped branches chosen by the damping ratio —
  * readable back off any live spring via {@see self::dampingRatio()}.
  *
+ * Mirrors charmbracelet/harmonica.Spring (constructed via
+ * charmbracelet/harmonica.NewSpring) — the Juckett attribution above is not
+ * decoration: harmonica's implementation itself consumes Juckett's "Damped
+ * Springs" closed form, so the port names the Go type and the math's author
+ * both, in one breath (upstream-of-record spot-check against
+ * docs/research/libraries/sugar-spring-research.md).
+ *
  * Construct once per (deltaTime, angularFrequency, dampingRatio) tuple — the
  * coefficients are precomputed. {@see update()} integrates one frame at the
  * deltaTime baked into the spring.
