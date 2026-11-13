@@ -114,6 +114,15 @@ final class DiscordChannel implements ChannelInterface
             ($context->log)($line);
         });
 
+        if (!\extension_loaded('pdo_sqlite')) {
+            // SessionMap and the pairing store open sqlite PDOs; name the
+            // missing extension instead of letting a raw PDOException
+            // surface mid-boot (candy-discord-047).
+            $this->log->warn('channels.discord.missing_extension', ['why' => 'ext-pdo_sqlite is not loaded; the session and pairing store cannot be opened']);
+
+            return;
+        }
+
         $store = new CredentialStore(CredentialStore::defaultPath());
         $accounts = $this->accountNames($cfg, $store);
         if ($accounts === []) {

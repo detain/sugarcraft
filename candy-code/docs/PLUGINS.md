@@ -153,6 +153,10 @@ entrypoint. Installing it exercises every rule above:
     https/wss regardless. The bot token never lives in settings: it
    lives in `~/.candy-code/channels.json` under `platforms.discord.accounts`,
    mode 0600, with `DISCORD_BOT_TOKEN` honored for the default account only.
+    Guild traffic is gated by `guilds.groupPolicy` — default `allowlist`:
+    nothing is served in a guild until a row names that guild. Endpoint env
+    overrides (`DISCORD_API_URL`, `DISCORD_GATEWAY_URL`, `CANDY_CODE_SERVER_DIR`)
+    are documented in the bundle README.
 3. It dials the local serve process over the ordinary WebSocket protocol —
    no new server surface, and `gen-protocol-schema --check` stays clean by
    construction. Chunking, redaction, and prompt-fencing happen in the
@@ -170,7 +174,7 @@ entrypoint. Installing it exercises every rule above:
     the bundle logs one content-free `approvals_open_roster` warning at
     startup — set the list to gate who may answer. With `approvals.enabled` false (or where a
    button cannot render) the ask falls back to a same-chat `/approve <id>
-   once|always|deny` line — never a silent bypass.
+   once|always|deny` line — never a silent bypass. The full chat command table lives in the bundle README.
 
 ### Worked example: the `sugarcraft/candy-msteams` bundle
 

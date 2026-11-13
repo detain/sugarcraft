@@ -20,7 +20,8 @@ Package: `sugarcraft/candy-discord` (bundle namespace `CandyCode\Bundles\Discord
 8. [Commands](#commands)
 9. [Replies and streaming](#replies-and-streaming)
 10. [Settings reference](#settings-reference)
-11. [Troubleshooting](#troubleshooting)
+11. [Log events](#log-events)
+12. [Troubleshooting](#troubleshooting)
 
 ## Requirements
 
@@ -32,6 +33,10 @@ Package: `sugarcraft/candy-discord` (bundle namespace `CandyCode\Bundles\Discord
   dials the serve over the local WebSocket; it does not accept inbound
   connections from Discord.
 - Outbound HTTPS and WebSocket access to Discord's API and gateway.
+- `ext-pdo_sqlite`: the session and pairing stores are sqlite. Without the
+  extension the channel refuses to start with `channels.discord.missing_extension`.
+  ReactPHP and Ratchet classes come from the host install; the bundle needs
+  no other extensions of its own.
 
 ## Create the Discord application and bot
 
@@ -46,7 +51,9 @@ needs, not a screen-by-screen walkthrough. Verify the labels in your portal.
    requests it when `intents.messageContent` is true (the default). Without it
    Discord withholds message text, and the bundle falls back to mention-only
    handling; the gateway's disallowed-intents close (4013/4014) triggers the
-   same degrade. Verify the privileged-intent toggle in your portal.
+   same degrade. Verify the privileged-intent toggle in your portal. Whenever
+   the ladder lands on mention-only, the bundle logs `discord_intents_degraded`
+   — that row names the posture you are actually running.
 4. The bundle identifies to the gateway with these intents: guilds, guild
    messages, direct messages, and (when enabled) message content. No other
    intents are requested.
@@ -70,6 +77,26 @@ The bot token lives in the 0600 channels store at `~/.candy-code/channels.json`
 reads it from settings, and it never writes it to logs: the token and the
 pairing codes are registered as redaction secrets.
 
+Canonical store shape (v1, byte-for-byte the layout `CredentialStore` fixes —
+the Teams bundle rides the same file):
+
+```json
+{
+  "version": 1,
+  "platforms": {
+    "discord": { "accounts": { "default": { "token": "<bot token>" } } }
+  }
+}
+```
+
+How credential mistakes surface — two families, one loud:
+
+| Mistake | Behaviour |
+| --- | --- |
+| No token anywhere (no store, no `DISCORD_BOT_TOKEN`) | start warns `channels.discord.account_without_credentials` for the default account, then `channels.discord.no_usable_accounts`; nothing starts |
+| A named account without its token | `channels.discord.account_without_credentials` skips it; `channels.discord.no_usable_accounts` when nothing remains |
+| Store file group/world-readable, not a regular file, or owned by another user | start **refuses** with a `RuntimeException` naming the path — a half-trusted credential file is worse than none |
+
 For the **default** account only, `DISCORD_BOT_TOKEN` is honored when the
 store has no token for it. The store wins when both are set. Named accounts
 (`accounts.<name>`) read only from the store.
@@ -80,6 +107,16 @@ override must be https/wss. Plain http/ws is accepted only for a loopback host,
 and only when `transport.insecureLoopbackProxy` is true. A refused override
 fails at startup, naming the setting that would authorize it, because the bot
 token rides every request.
+
+`CANDY_CODE_SERVER_DIR` points the bundle at the serve process's discovery
+directory (default `~/.candy-code/server`). The precedence law is fixed in
+`DiscordChannel::start()`: the environment wins over the settings tree. To
+front Discord through a local mirror or test proxy, run it on **loopback** and
+set `transport.insecureLoopbackProxy` — in `Endpoint`'s own words, "a
+plain-HTTP override must never silently point at a remote host", because a bot
+token rides every request. These env names live in the bundle, not in
+`candy-code/src`, so the host's generated env roster does not list them: this
+section is their documentation.
 
 ## Enable the channel
 
@@ -195,6 +232,17 @@ accepts the same words as text in a served conversation:
 Unknown slash commands are refused. Slash replies are ephemeral by default
 (`slash.ephemeral`).
 
+Worked pairing-and-approval exchange (a DM, text spellings):
+
+```text
+stranger  DM> hello                -> bot: "pairing code k7m2q9x4 …"
+approver  DM> /pair approve k7m2q9x4
+                                   -> admitted; the sender id is written to
+                                      the allowlist in the 0600 store
+bot       DM> [ask] run composer install?
+approver      /approve ask_17 once -> the pending permission is answered
+```
+
 ## Replies and streaming
 
 Replies are posted as normal Discord messages, split by the outbound chunker
@@ -237,6 +285,49 @@ when a key is absent.
 | `slash.ephemeral` | `true` | Make slash replies ephemeral. |
 | `accounts` | `{}` | Per-account overrides, keyed by account name. |
 
+The full default tree (the shape the bundle sees when settings say nothing —
+see the table above for every key's meaning):
+
+```json
+{
+  "enabled": false,
+  "intents": { "messageContent": true },
+  "transport": {},
+  "access": { "dmPolicy": "pairing", "dmScope": "per-peer", "allowFrom": [],
+              "allowBots": "mentions", "ignoreOtherMentions": true,
+              "respondWithoutMention": false },
+  "guilds": { "groupPolicy": "allowlist", "rows": {} },
+  "threads": { "enabled": false, "idleHours": 24 },
+  "queue": { "mode": "steer", "debounceMs": 500, "maxPending": 20 },
+  "outbound": { "typing": true, "suppressEmbeds": true },
+  "media": { "maxMb": 100 },
+  "approvals": { "enabled": true, "approvers": [], "ttlMinutes": 30 },
+  "slash": { "deploy": true, "ephemeral": true },
+  "accounts": {}
+}
+```
+
+## Log events
+
+Every row is one structured line in the channel log.
+
+| Event | Meaning | First remedy |
+| --- | --- | --- |
+| `channels.discord.missing_extension` | `ext-pdo_sqlite` is not loaded, so the session/pairing store cannot open. | Enable the extension and restart — nothing else starts. |
+| `channels.discord.account_without_credentials` | One named account booted without a token and was skipped (the `account` field names it). | Fill that account's `token` row in `channels.json`. |
+| `channels.discord.no_usable_accounts` | No token survived the account scan — including the plain no-credential boot (each skipped account first logs `account_without_credentials`). | Add the token(s); or leave `enabled: false` to stay dark on purpose. |
+| `channels.discord.state_dir_refused` | The serve discovery dir exists but refused validation. | Check `CANDY_CODE_SERVER_DIR` and permissions; the poll retries on a 30 s back-off. |
+| `channels.discord.discovery_url_untranslatable` | The discovery record's url cannot become a ws endpoint. | Restart `candy-code serve`; the bundle keeps polling. |
+| `channels.discord.serve_dial_failed` | The WebSocket connect to the serve leg threw. | Is `candy-code serve` running? The poll retries. |
+| `channels.discord.serve_down` | The serve leg dropped mid-run (`why` says which shape). | None needed: re-follow resumes each session from its cursor. |
+| `channels.discord.serve_giveup` | The dial ladder for a serve leg exhausted. | Back-off ends on a 30 s cadence; fix the serve side if it persists. |
+| `channels.discord.serve_connected` | The serve leg is up and bindings were adopted. | — (success row) |
+| `discord_intents_degraded` | The gateway closed 4013/4014 or text was withheld; this process is mention-only now — one-way. | Enable the portal intent and restart. |
+
+Other gateway/rest rows are named for their step (`discord_reconnect`,
+`discord_slash_deploy_failed`, `discord_rest_error`, …); pairing codes never
+appear in any of them — they are redaction secrets.
+
 ## Troubleshooting
 
 - **The bot is online but never answers in a guild**: the guild has no row
@@ -244,7 +335,8 @@ when a key is absent.
   message did not mention the bot. Add the guild row, or mention the bot.
 - **The bot sees messages without text**: the Message Content intent is off in
   the portal, or the gateway closed with 4013/4014 and the bundle degraded to
-  mention-only. Enable the intent and restart.
+  mention-only (`discord_intents_degraded` names the landing in the channel
+  log; it is one-way for the process). Enable the intent and restart.
 - **DMs get a pairing code but nothing happens after approval**: check the
   approver roster. `/pair approve` by a user not on `approvals.approvers` is
   refused, and an empty roster admits no one.

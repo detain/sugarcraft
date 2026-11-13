@@ -106,6 +106,47 @@ final class DiscordChannelTest extends TestCase
      * captures what start() wires WITHOUT ever running the loop — no dials,
      * no real time — and the fired callback is judged against live DB rows.
      */
+    public function testEnabledBootWithPdoSqliteLoadedNeverFiresTheMissingExtensionEvent(): void
+    {
+        file_put_contents(
+            $this->homeRoot . '/.candy-code/config.json',
+            (string) json_encode(['channels.discord' => ['enabled' => true]]),
+        );
+
+        $lines = [];
+        $channel = new DiscordChannel();
+        $channel->start(ChannelContext::for('candy-discord', 'discord', $this->homeRoot, $this->loop, static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+
+        self::assertSame([], \array_values(\array_filter($lines, static fn (string $l): bool => \str_contains($l, 'missing_extension'))), 'the extension guard must never misfire while pdo_sqlite is loaded');
+        self::assertNotEmpty(\array_filter($lines, static fn (string $l): bool => \str_contains($l, 'channels.discord.no_usable_accounts')), 'boot proceeds past the guard to the credential step');
+        $channel->dispose();
+    }
+
+    public function testMissingPdoSqliteRefusesToStartByNamedEvent(): void
+    {
+        if (\extension_loaded('pdo_sqlite')) {
+            $this->markTestSkipped('discord-05: the refusal arm runs only on a host without pdo_sqlite (disclosed, not faked)');
+        }
+
+        file_put_contents(
+            $this->homeRoot . '/.candy-code/config.json',
+            (string) json_encode(['channels.discord' => ['enabled' => true]]),
+        );
+
+        $lines = [];
+        $channel = new DiscordChannel();
+        $channel->start(ChannelContext::for('candy-discord', 'discord', $this->homeRoot, $this->loop, static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+
+        self::assertNotEmpty(\array_filter($lines, static fn (string $l): bool => \str_contains($l, 'channels.discord.missing_extension')), 'a missing pdo_sqlite is a NAMED refusal, not a raw PDOException');
+        self::assertSame([], $channel->faceNames());
+        self::assertSame([], \array_filter($lines, static fn (string $l): bool => \str_contains($l, 'channels.discord.no_accounts')), 'the refusal lands before any credential step');
+        $channel->dispose();
+    }
+
     public function testTheBottedTreeArmsTheSeenLedgerSweepAndItPrunesOnlyStaleRows(): void
     {
         putenv('DISCORD_BOT_TOKEN=' . 'xoxb-' . 'pinned-for-test');
