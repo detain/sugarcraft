@@ -214,6 +214,12 @@ final class SessionStore
             ON sessions(parent_id)
         ');
 
+        // OWNERSHIP (candy-code-server-017): a TUI conversation does NOT write
+        // here. The live transcript is owned by EnhancedSessionStore's
+        // `session_transcripts` row (flushed by DebouncedTranscriptWriter at
+        // message boundaries, session switch and shutdown); this table only
+        // fills on fork copies (forkSession). Zero rows after /exit is
+        // correct - pinned by SessionFlushOnExitTest.
         $this->pdo->exec('
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
