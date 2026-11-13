@@ -85,7 +85,7 @@ no arguments:
 |-------------------------|-------------------------------------------------|
 | `--version`             | print the stamped version line, exit 0          |
 | `-h` / `--help`         | print usage, exit 0                             |
-| unknown argument        | refuse with sanitized usage on stderr, exit 2   |
+| unknown argument        | echo sanitized args + usage on stderr, exit 2   |
 | killed by a signal      | exit `128 + signo` (the conventional shell code) |
 
 `php examples/play.php` is the bare-`Program` path: it boots the same game but
