@@ -307,6 +307,38 @@ final class GameTest extends TestCase
         $inherited($merged, ['highScores']);
     }
 
+    /**
+     * flappy-47 (finding -047): a resize mid-flight must carry the LIVE
+     * board, not re-seed it. The -06 round-trip pins hand-built boards;
+     * this one exercises the real path — flap, several dozen ticks (pipes
+     * on the board, score moving), then WindowSizeMsg — and asserts every
+     * other readonly field rides through, PRNG identity included. A
+     * withFrameSize() that dropped pipes or re-ran start() mid-flight
+     * reddens here (previously nothing pinned it: resizes were exercised
+     * from fresh boards only).
+     */
+    public function testResizeMidFlightPreservesTheLiveBoardState(): void
+    {
+        $rand = static fn(int $max): int => intdiv($max, 2);
+        $g = Game::start($rand, $this->hermeticConfigDir());
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space, ''));
+        $g = $g->tickN(2 * Game::PIPE_EVERY + 2);
+        $this->assertNotEmpty($g->pipes, 'probe board should carry pipes by now');
+        $this->assertTrue($g->started);
+
+        [$resized, $cmd] = $g->update(new WindowSizeMsg(100, 40));
+        $this->assertNull($cmd);
+        $this->assertSame([100, 40], [$resized->frameCols, $resized->frameRows]);
+        $this->assertSame($g->bird, $resized->bird, 'resize moved the bird');
+        $this->assertSame($g->pipes, $resized->pipes, 'resize dropped the pipes');
+        $this->assertSame($g->score, $resized->score, 'resize reset the score');
+        $this->assertSame($g->crashed, $resized->crashed);
+        $this->assertSame($g->tickIndex, $resized->tickIndex, 'resize rewound the clock');
+        $this->assertSame($g->highScores, $resized->highScores);
+        $this->assertTrue($resized->started);
+        $this->assertSame($g->rand(), $resized->rand(), 'resize re-rolled the PRNG');
+    }
+
     public function testScoresAreSeededViaStart(): void
     {
         $tmp = sys_get_temp_dir() . '/candy-flappy-test-' . uniqid();
