@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Panels\Tests;
 
 use SugarCraft\Panels\{Node, SugarPanels};
-use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\{Ansi, Color};
 use SugarCraft\Style\Align;
 use SugarCraft\Style\Style;
 use SugarCraft\Style\VAlign;
@@ -948,5 +948,39 @@ final class SugarPanelsTest extends TestCase
         $this->assertFalse($wrapper->isLeaf());
         $this->assertFalse($wrapper->isHorizontal());
         $this->assertFalse($wrapper->isVertical());
+    }
+
+    public function testPaddingIsInertOnAContainerButLiveOnALeaf(): void
+    {
+        $container = Node::horizontal(Node::leaf('a')->withBorder(false), Node::leaf('b')->withBorder(false))->withBorder(false);
+        $plain = self::body(SugarPanels::new()->render($container, 10, 2));
+        $padded = self::body(SugarPanels::new()->render($container->withPadding(2), 10, 2));
+        $this->assertStringContainsString('a', $plain, 'the unpadded frame must paint, or this pin is vacuous');
+        $this->assertSame($plain, $padded, 'container padding must change nothing on screen');
+        $this->assertSame($container->totalWidth(), $container->withPadding(2)->totalWidth(), 'container padding must not inflate the size claim either');
+
+        // Contrast leg: padding is a real facet for leaves, so the assertSame
+        // above measures an inert facet, not a dead one.
+        $leaf = Node::leaf('a')->withBorder(false);
+        $this->assertNotSame(
+            self::body(SugarPanels::new()->render($leaf, 6, 1)),
+            self::body(SugarPanels::new()->render($leaf->withPadding(1), 6, 1)),
+        );
+    }
+
+    public function testContentStoredOnAContainerNeverReachesTheScreen(): void
+    {
+        $container = Node::horizontal(Node::leaf('ab')->withBorder(false), Node::leaf('cd')->withBorder(false))->withBorder(false);
+        $leaky = $container->withContent('LEAK');
+        $frame = self::body(SugarPanels::new()->render($leaky, 10, 1));
+
+        $this->assertStringContainsString('ab', $frame, 'the children must paint, or this pin is vacuous');
+
+        $this->assertSame(self::body(SugarPanels::new()->render($container, 10, 1)), $frame, 'a container paints its children, not its stored content');
+        $this->assertStringNotContainsString('LEAK', $frame);
+
+        // Contrast leg: the same string set on a leaf does paint — the
+        // container path is what swallows it.
+        $this->assertStringContainsString('LEAK', Ansi::strip(self::body(SugarPanels::new()->render(Node::leaf('LEAK')->withBorder(false), 10, 1))));
     }
 }

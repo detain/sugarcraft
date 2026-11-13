@@ -195,6 +195,10 @@ final class Node
         return $this->withFlex(1);
     }
 
+    /**
+     * Inner inset around painted content. Applies to leaf nodes only; a
+     * container ignores it — its children fill the box.
+     */
     public function withPadding(int $cells): self
     {
         // Clamp negatives to 0 — padding can never be < 0. Mirrors withFlex().
@@ -285,6 +289,10 @@ final class Node
         return $this->mutate(alignV: $v, alignVSet: true);
     }
 
+    /**
+     * Painted string for a leaf. Containers paint their children, never a
+     * content string, so content set on a container is stored but inert.
+     */
     public function withContent(string $content): self
     {
         return $this->mutate(content: $content);

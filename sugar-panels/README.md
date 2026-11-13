@@ -20,7 +20,7 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 - **H/V composition** — build arbitrary layouts by nesting `horizontal()` and `vertical()` panels
 - **Box-drawing borders** — Unicode box-drawing glyphs (╭ ╮ ╰ ╯ │ ─), any sugar-style `Border` style
 - **No-border mode** — `noBorder()` flattens a subtree: neither its frames nor its dividers are painted, so adjacent panels touch
-- **Per-panel padding** — inner whitespace around content
+- **Leaf padding** — inner whitespace around painted content; containers ignore it, their children fill the box
 - **ANSI-aware content** — styled/coloured leaf text places by *visible* columns: escape sequences ride with the grapheme they style (zero width), wide graphemes keep their two columns, and a clipped or unbalanced span is auto-reset so colour never bleeds past the box
 - **Word-wrap at paint time** — a leaf line wider than its region is re-wrapped to fit at cell boundaries; over-long words split at grapheme boundaries, and only height overflow is dropped (see *Small viewports*)
 - **Flex / grow children** — `withFlex(int)` / `withGrow()`: a fixed child claims its **natural size** (widest visible line, floored by `minWidth`), a flex child fills the leftover by weight — so "sidebar = fixed, content = FILL" works without hand-counting columns
@@ -248,10 +248,10 @@ There is no focus or active-panel facet — see
 | `$node->totalWidth()` / `totalHeight()` | Footprint the node claims: natural content, floored by `min*`, capped by `max*`, plus padding, frame and margin |
 | `->withMinWidth(int)` / `->withMinHeight(int)` | Floor for the natural size. In the flex path it floors; in the legacy equal-split fallback a `min*` acts as a proportional **weight**, not a floor |
 | `->withMaxWidth(int)` / `->withMaxHeight(int)` | Cap on the node's painted footprint (frame + padding + content). `0` means no cap. Margin rides **outside** the cap: the claimed footprint is cap + margin, and `totalWidth()` / `totalHeight()` say so |
-| `->withPadding(int)` | Inner padding (cells) |
+| `->withPadding(int)` | Inner padding (cells) — leaf nodes only; ignored on containers |
 | `->withBorder(bool)` | Show/hide the node's own frame — **on by default** for leaves and containers |
 | `->withSpacing(int)` | Gap between children (cells). At `0` the divider shares the previous child's boundary, and it declines to overwrite a glyph that is already painted |
-| `->withContent(string)` | Replace leaf content (new node) |
+| `->withContent(string)` | Replace leaf content (new node) — a container paints its children, so content stored there is inert |
 | `->withFlex(int)` | Fill leftover space by weight (0 = fixed, natural size) |
 | `->withGrow()` | Shorthand for `withFlex(1)` |
 | `->withBorderStyle(?Border)` | Border char set from sugar-style |
