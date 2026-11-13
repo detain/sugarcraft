@@ -35,4 +35,12 @@ enum MouseAction: string
     public const BUTTON_LEFT = 0;
     public const BUTTON_MIDDLE = 1;
     public const BUTTON_RIGHT = 2;
+
+    /**
+     * xterm reports wheel ticks as pseudo-buttons in the same `b` field:
+     * every `1006`-style protocol decoder needs this pair, so it lives here
+     * spelled, not as a magic number at each use site.
+     */
+    public const BUTTON_WHEEL_UP = 64;
+    public const BUTTON_WHEEL_DOWN = 65;
 }

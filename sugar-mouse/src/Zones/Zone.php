@@ -119,7 +119,8 @@ final class Zone
      * sugar-core's InputReader hardcodes it there — the `MouseWheelMsg`
      * type is the discriminator, so it is matched FIRST. Buttons map to
      * the X10 numbers the primitive keys on (`MouseAction::BUTTON_*`,
-     * wheel pair 64/65); unmapped Core buttons become LEFT, mirroring
+     * including the wheel pair `BUTTON_WHEEL_UP` / `BUTTON_WHEEL_DOWN`);
+     * unmapped Core buttons become LEFT, mirroring
      * the placeholder the private path always used.
      *
      * `inBounds()` / `pos()` still read only x/y from the result, so the
@@ -137,8 +138,8 @@ final class Zone
         $button = match ($msg->button) {
             MouseButton::Middle => MouseGeometryAction::BUTTON_MIDDLE,
             MouseButton::Right => MouseGeometryAction::BUTTON_RIGHT,
-            MouseButton::WheelUp => 64,
-            MouseButton::WheelDown => 65,
+            MouseButton::WheelUp => MouseGeometryAction::BUTTON_WHEEL_UP,
+            MouseButton::WheelDown => MouseGeometryAction::BUTTON_WHEEL_DOWN,
             default => MouseGeometryAction::BUTTON_LEFT,
         };
         return new MouseEvent($msg->x, $msg->y, $button, $action);

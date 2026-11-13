@@ -149,11 +149,17 @@ final class ZoneTest extends TestCase
         // TYPE must win the translation, not the action field.
         $wheel = Zone::toMouseEvent(new MouseWheelMsg(2, 3, MouseButton::WheelDown, MouseAction::Press));
         $this->assertSame(GeometryAction::Scroll, $wheel->action);
-        $this->assertSame(65, $wheel->button);
+        $this->assertSame(GeometryAction::BUTTON_WHEEL_DOWN, $wheel->button);
 
         $up = Zone::toMouseEvent(new MouseWheelMsg(2, 3, MouseButton::WheelUp, MouseAction::Press));
         $this->assertSame(GeometryAction::Scroll, $up->action);
-        $this->assertSame(64, $up->button);
+        $this->assertSame(GeometryAction::BUTTON_WHEEL_UP, $up->button);
+
+        // Wire values pinned separately: the consts ARE the X10 vocabulary,
+        // so a bridge that reads them proves nothing unless their bytes are
+        // nailed too (sugar-mouse-049).
+        $this->assertSame(64, GeometryAction::BUTTON_WHEEL_UP);
+        $this->assertSame(65, GeometryAction::BUTTON_WHEEL_DOWN);
     }
 
     public function testInBoundsUnchangedByRicherBridge(): void

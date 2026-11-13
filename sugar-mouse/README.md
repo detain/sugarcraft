@@ -74,7 +74,7 @@ if ($click !== null) {
 | `Zone` | Readonly bounding box (start/end col/row) with `width()` / `height()` and `inBounds(MouseEvent)` |
 | `ZoneClickTracker` | Press+Release dedup per button |
 | `MouseEvent` | Immutable event (x, y, button, action enum) |
-| `MouseAction` | `Press` / `Release` / `Drag` / `Scroll` enum (the X10 button consts `BUTTON_LEFT/MIDDLE/RIGHT` hang off it — a legacy of the primitive's numeric-button vocabulary) |
+| `MouseAction` | `Press` / `Release` / `Drag` / `Scroll` enum (the X10 button consts `BUTTON_LEFT/MIDDLE/RIGHT` plus the wheel pair `BUTTON_WHEEL_UP/BUTTON_WHEEL_DOWN` hang off it — a legacy of the primitive's numeric-button vocabulary) |
 | `Selection` | Press → drag → release text-selection state machine over a selectable region |
 | `SelectionRange` | Normalized, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
 | `Sentinel` | The two framing codepoints (`U+E000` open / `U+E001` close), anchored to sugar-core |
@@ -320,7 +320,8 @@ app's enable sequence; its input layer (e.g. sugar-input) turns the reports
 into `MouseMsg` / `MouseEvent` values, which means the `b` field is decoded
 before this lib ever sees a message: strip the modifier bits (4 shift, 8
 alt, 16 ctrl; 32 marks a held-drag motion) before comparing button numbers,
-and fold xterm's wheel pair (64 = up, 65 = down) into one wheel event.
+and fold xterm's wheel pair (`MouseAction::BUTTON_WHEEL_UP` /
+`BUTTON_WHEEL_DOWN`) into one wheel event.
 Consequence: the hover tracker reacts to press and motion reports —
 enter/exit fire on a plain `1000` press — but wheel reports are inert for
 all three `Zones` trackers — hover, drag and `ClickCounter` alike (a scroll
