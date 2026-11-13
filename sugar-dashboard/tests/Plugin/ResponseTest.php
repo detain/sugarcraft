@@ -157,11 +157,24 @@ final class ResponseTest extends TestCase
     public function testToJsonThrowsOnUnencodablePayload(): void
     {
         // JSON_THROW_ON_ERROR: silent false (→ downstream TypeError on a
-        // string return type) is the failure mode being cured.
-        $response = new Response('view', ['content' => "\xB1\x31"]); // invalid UTF-8
+        // string return type) is the failure mode being cured. D-103 DISCLOSED
+        // FLIP: invalid UTF-8 used to be the trigger — that throw was the 209
+        // poison (Response::error on a raw-byte message died INSIDE run()'s
+        // catch, killing the reply channel). It is substituted now, so the
+        // fail-closed leg moves to inf, which stays genuinely unencodable.
+        $response = new Response('view', ['content' => \INF]);
 
         $this->expectException(\JsonException::class);
         $response->toJson();
+    }
+
+    public function testInvalidUtf8IsSubstitutedNotFatal(): void
+    {
+        $json = (new Response('view', ['content' => "\xB1\x31"]))->toJson();
+        $decoded = \json_decode($json, true);
+
+        $this->assertSame('view', $decoded['type']);
+        $this->assertStringContainsString("\u{FFFD}", $decoded['data']['content']);
     }
 
     public function testToJson(): void

@@ -161,7 +161,13 @@ final class SrcExitCensusTest extends TestCase
 
         $decoded = \json_decode((string) $responseLine, true);
         $this->assertIsArray($decoded, 'the init request must be served before the EOF terminus');
-        $this->assertSame('init', $decoded['type'] ?? null);
+        // D-103 DISCLOSED FLIP: the child's run() closure (every request →
+        // Response::view('q9')) now genuinely serves the wire, so the served
+        // row is the handler's view — before the fix the dead-parameter body
+        // answered through $sdk->handle() and the type was 'init'. Serving
+        // before exit is the contract here; both shapes prove it.
+        $this->assertSame('view', $decoded['type'] ?? null);
+        $this->assertSame('q9', $decoded['data']['content'] ?? null);
         $this->assertSame('', (string) $stdoutRest, 'stdout must drain to EOF exactly at the exit');
         $this->assertStringNotContainsString('Uncaught', (string) $stderr, 'a throw instead of exit() would fatal here');
         $this->assertSame(0, $status, 'the EOF terminus must keep the child on observable status 0');

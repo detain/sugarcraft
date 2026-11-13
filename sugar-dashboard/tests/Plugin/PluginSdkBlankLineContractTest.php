@@ -87,8 +87,17 @@ final class PluginSdkBlankLineContractTest extends TestCase
             $types[] = $decoded['type'] ?? null;
         }
 
+        // D-103 DISCLOSED FLIP: since run() finally honors its handler, this
+        // child's closure (Response::view for every request, q9-fixture) owns
+        // the answers — the old ['init','view'] expectation froze the broken
+        // dispatch where $sdk->handle() bypassed the supplied handler. The
+        // contract this test actually guards — blank lines produce NO events
+        // and no desync — is now tested against BOTH service paths: the
+        // class-template types rode every D-98 run, the handler path is what
+        // a real plugin author writes (an error row or missing row here would
+        // still desync readResponse's strict pairing).
         $this->assertSame(
-            ['init', 'view'],
+            ['view', 'view'],
             $types,
             'exactly the two real requests are answered, in order — the five blank lines '
             . 'produced no events, no error rows, and did not desync the pairing',

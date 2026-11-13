@@ -108,14 +108,20 @@ final class Response
     /**
      * Convert to JSON string.
      *
-     * @throws \JsonException If the payload cannot be encoded (invalid UTF-8, inf/nan).
+     * Invalid UTF-8 is substituted, not fatal: the error path at
+     * PluginSdk::run()'s catch builds this JSON from an exception message
+     * that may carry raw bytes (finding sugar-dashboard-209), and a throw
+     * there would kill the child's reply channel — the one moment it most
+     * owes the host an answer.
+     *
+     * @throws \JsonException If the payload cannot be encoded (inf/nan).
      */
     public function toJson(): string
     {
         return json_encode([
             'type' => $this->type,
             'data' => $this->data,
-        ], JSON_THROW_ON_ERROR);
+        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     /**

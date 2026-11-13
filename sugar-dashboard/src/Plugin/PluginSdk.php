@@ -60,9 +60,13 @@ abstract class PluginSdk
      * exactly one justified T_EXIT in src/, inside THIS body, and a real
      * child proving EOF ⇒ status 0 with clean stderr.
      *
-     * @param callable(Request): Response $handler Request handler
+     * @param (callable(Request): Response)|null $handler Request handler; when
+     *     given it OWNS every decoded request (finding sugar-dashboard-089
+     *     caught the old body dispatching $sdk->handle() unconditionally, so a
+     *     supplied closure could never fire), when omitted the class template's
+     *     own init/update/view answer the wire.
      */
-    final public static function run(callable $handler): never
+    final public static function run(?callable $handler = null): never
     {
         $sdk = new static();
 
@@ -87,7 +91,10 @@ abstract class PluginSdk
 
             try {
                 $request = Request::fromJson($line);
-                $response = $sdk->handle($request);
+                // A supplied handler owns the response (the @param promise the
+                // old body broke — the closure dispatched into nowhere while
+                // $sdk->handle() answered); without one the class template serves.
+                $response = $handler !== null ? $handler($request) : $sdk->handle($request);
                 echo $response->toJson() . "\n";
                 fflush(STDOUT);
             } catch (\Throwable $e) {
