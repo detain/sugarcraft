@@ -139,6 +139,12 @@ final class Sanitize
         $repaired = \mb_convert_encoding($text, 'UTF-8', 'UTF-8');
         \mb_substitute_character($previous);
 
-        return $repaired;
+        // mb_convert_encoding is signed string|false. PHP 8.x throws ValueError
+        // (rather than returning false) for bad encoding arguments, so on this
+        // UTF-8→UTF-8 path a false never happens at runtime — but the declared
+        // `: string` is a contract the signature cannot prove. Fail SOFT: an
+        // unrecoverable conversion hands back the empty string (the grid paints
+        // an empty cell) rather than leaking a false through the type.
+        return \is_string($repaired) ? $repaired : '';
     }
 }

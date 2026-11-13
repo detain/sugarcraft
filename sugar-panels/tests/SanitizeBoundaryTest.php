@@ -86,6 +86,25 @@ final class SanitizeBoundaryTest extends TestCase
         $this->assertStringNotContainsString("\xEE\x80", $repaired);
     }
 
+    public function testRepairUtf8AlwaysReturnsAStringAndRestoresTheSubstitute(): void
+    {
+        // -014 type-hole pin. mb_convert_encoding is signed string|false; the
+        // repair must fail SOFT (return a string, never a false through the
+        // `: string` signature) and must leave the global mb_substitute_character
+        // exactly as it found it. Both invariants are pinned over the inputs that
+        // actually take the conversion branch (ill-formed UTF-8).
+        $repair = new \ReflectionMethod(Sanitize::class, 'repairUtf8');
+        $repair->setAccessible(true);
+
+        $default = \mb_substitute_character();
+        $cases = ["\xF0\x9F\x98", "\xED\xA0\x80", "a\xFFb", "\xC0\x80", "keep\xEE\x80"];
+        foreach ($cases as $i => $illFormed) {
+            $out = $repair->invoke(null, $illFormed);
+            $this->assertIsString($out, 'repairUtf8 must never leak a false through its string return');
+            $this->assertSame($default, \mb_substitute_character(), "substitute character must be restored (case {$i})");
+        }
+    }
+
     // -------------------------------------------------------------------------
     // CR / CRLF smuggling
     // -------------------------------------------------------------------------
