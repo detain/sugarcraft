@@ -10,12 +10,12 @@ use SugarCraft\Spring\Lang;
  * Cubic bezier easing functions — matches the CSS `cubic-bezier()` spec.
  *
  * Use the static factory methods to construct named presets. The algorithm
- * follows the canonical CSS spec: find t such that x(t) = input, then return y(t).
- * The solver only INVERTS x(t) — it does not make anything monotonic. The
- * x(t) time mapping is guaranteed monotone by the constructor's x1/x2 ∈ [0, 1]
- * range check (the very condition the CSS spec imposes for that reason); the
- * y output may overshoot [0, 1] when the y control points do, which is the
- * whole point of back/elastic-style curves.
+ * follows the canonical CSS spec: find t such that x(t) = input, then return
+ * y(t). The solver only INVERTS x(t) — it does not make anything monotonic.
+ * The monotonicity the inversion relies on comes from the constructor's
+ * x1/x2 ∈ [0, 1] range check, which is exactly why the CSS spec imposes that
+ * same condition; the y output may overshoot [0, 1] when the y control
+ * points do, which is the whole point of back/elastic-style curves.
  *
  * The named family beyond the four CSS keywords ships the ORIGINAL (pre-2022)
  * easings.net cubic-bezier approximation table, rendered in this file's 2-dp
@@ -33,7 +33,10 @@ use SugarCraft\Spring\Lang;
  * with).
  *
  * @see https://www.w3.org/TR/css-easing-3/#cubic-bezier-algo
- * @see https://github.com/ai/easings.net (2022 table in src/easings.yml; pre-2022 table mirrored at https://30secondsofcode.org/css/s/easing-variables/)
+ * @see https://github.com/ai/easings.net (2022 redesign table)
+ * @see https://30secondsofcode.org/css/s/easing-variables/ (pre-2022 table
+ *      mirror — the generation this family ships; this docblock once cited
+ *      a src/easings.yml that exists in no relevant repo)
  */
 // Per-property readonly rather than a `readonly class`: the named-preset
 // memo below is a private *static* array, and PHP marks every property of a
@@ -52,8 +55,15 @@ final class CubicBezier implements EasingFunction
      * SUBDIVISION_PRECISION (1e-7). Answers from the two paths may therefore
      * disagree in the sixth decimal; both are inside a frame's worth of
      * visible motion.
+     *
+     * MAX_SUBDIVISION_ITERATIONS is not a tripwire: float bisection
+     * collapses its own bracket in under 53 passes, and the loop bound is a
+     * silent termination guarantee — were it ever reached, the fallback
+     * returns the best bracket so far without complaint (honest wording,
+     * 040: the old "loud safety net" claim contradicted the silent cap-exit
+     * the solver comments describe).
      */
-    private const MAX_SUBDIVISION_ITERATIONS = 64; // float bisection converges < 53; 64 is a loud safety net
+    private const MAX_SUBDIVISION_ITERATIONS = 64; // silent termination bound, never a hang
 
     /** Control point 1 x */
     private readonly float $x1;
@@ -242,11 +252,13 @@ final class CubicBezier implements EasingFunction
      * solve walks the polynomial outside [0, 1], though past roughly 1e2 the
      * solve loses to the bounded subdivision fallback, which returns an
      * endpoint: on cssEase(), ease(1e3) is exactly 1.0 and ease(-1e3)
-     * lands near 0. The RETURN value is likewise unclamped: control points with y
-     * outside [0, 1] (the back/elastic style of control point) legitimately overshoot
-     * beyond 0..1 progress — note that the `Easing` enum's Back and Elastic cases are
-     * analytic overshoots, not beziers, and CubicBezier ships no Back preset itself —
-     * and clamping would flatten exactly the motion those curves exist to express.
+     * lands near 0. The RETURN value is likewise unclamped: control points
+     * with y outside [0, 1] legitimately overshoot beyond 0..1 progress —
+     * that is what the back/elastic style of control point is for, and
+     * clamping would flatten exactly the motion those curves exist to
+     * express. (Distinct from the `Easing` enum's Back and Elastic cases,
+     * which are analytic overshoots rather than beziers; CubicBezier itself
+     * ships no Back preset.)
      */
     public function ease(float $t): float
     {
