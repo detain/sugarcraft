@@ -7,7 +7,6 @@ namespace SugarCraft\Input\Tests\Driver;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Input\Driver\SignalResizeDriver;
 use SugarCraft\Input\Event\ResizeEvent;
-use SugarCraft\Input\Event;
 
 /**
  * Tests for SignalResizeDriver — SIGWINCH signal-based resize detection.
@@ -29,18 +28,25 @@ final class SignalResizeDriverTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function testReadReturnsEventOrNull(): void
+    public function testReadReturnsResizeEventAfterRealSignal(): void
     {
-        $driver = new SignalResizeDriver();
-        $result = $driver->read();
+        if (!function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('SIGWINCH round-trip needs pcntl and posix');
+        }
 
-        // Must be null, ResizeEvent, or Event based on signal state
-        $this->assertTrue(
-            $result === null
-            || $result instanceof ResizeEvent
-            || $result instanceof Event,
-            'read() must return null, ResizeEvent, or Event'
-        );
+        $driver = new SignalResizeDriver();
+        $this->assertTrue($driver->arm());
+
+        $this->assertTrue(posix_kill(posix_getpid(), SIGWINCH));
+        pcntl_signal_dispatch();
+
+        $event = $driver->read();
+
+        $this->assertInstanceOf(ResizeEvent::class, $event);
+        $this->assertGreaterThan(0, $event->cols);
+        $this->assertGreaterThan(0, $event->rows);
+
+        $driver->disarm();
     }
 
     public function testConstructorDoesNotThrow(): void

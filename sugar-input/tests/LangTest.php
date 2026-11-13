@@ -12,9 +12,24 @@ use SugarCraft\Input\Lang;
  */
 final class LangTest extends TestCase
 {
-    public function testLangClassExists(): void
+    /**
+     * Fail-closed roster: every key shipped in lang/en.php must resolve to
+     * a real translation through Lang::t() — a key falling through to the
+     * raw 'input.<key>' sentinel fails the suite, no smoke tier.
+     */
+    public function testEveryShippedKeyResolvesNonRaw(): void
     {
-        $this->assertTrue(class_exists(Lang::class));
+        $messages = require __DIR__ . '/../lang/en.php';
+        $this->assertIsArray($messages);
+        $this->assertNotEmpty($messages, 'lang/en.php must ship at least one key');
+
+        foreach ($messages as $key => $template) {
+            $resolved = Lang::t($key);
+
+            $this->assertIsString($resolved, $key . ' must resolve to a string');
+            $this->assertNotSame('input.' . $key, $resolved, $key . ' fell through to the raw sentinel');
+            $this->assertNotSame($key, $resolved, $key . ' came back as its own raw key');
+        }
     }
 
     public function testPasteTruncatedKeyInterpolation(): void
@@ -46,12 +61,5 @@ final class LangTest extends TestCase
         $result = Lang::t('input.missing');
 
         $this->assertSame('input.input.missing', $result);
-    }
-
-    public function testLangTReturnsString(): void
-    {
-        $result = Lang::t('paste.truncated', ['bytes' => 1]);
-
-        $this->assertIsString($result);
     }
 }

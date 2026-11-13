@@ -15,6 +15,24 @@ use SugarCraft\Input\Event\KeyEvent;
  */
 final class StreamInputDriverTest extends TestCase
 {
+    /**
+     * Stream ends handed out by createPipe(); tearDown closes whatever a
+     * test body forgot, so the suite leaks no fds.
+     *
+     * @var list<resource>
+     */
+    private array $openStreams = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->openStreams as $stream) {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+        $this->openStreams = [];
+    }
+
     public function testReadSingleKey(): void
     {
         [$r, $w] = $this->createPipe();
@@ -95,25 +113,25 @@ final class StreamInputDriverTest extends TestCase
         $this->assertNull($driver->read());
     }
 
+    /**
+     * The real law for a parked partial: an incomplete CSI stays in the
+     * decoder's remainder — read() returns null without an EOF panic, and
+     * nothing phantom surfaces at the caller.
+     */
     public function testReadWithPartialSequenceThenEmpty(): void
     {
         [$r, $w] = $this->createPipe();
 
         // Write just CSI '[' prefix (incomplete sequence)
-        // This will be stored as remainder when decode can't complete it
         fwrite($w, "\x1b[");
         fclose($w);
 
         $driver = new StreamInputDriver($r);
 
-        // First read processes the partial \x1b[ - EscapeDecoder may or may not
-        // have a partial remainder depending on implementation
-        $event = $driver->read();
-
-        // If decode returned [] on the partial, we get null here.
-        // If decode processed \x1b as Escape key, we get a KeyEvent.
-        // Either outcome is valid - the important thing is the method completes.
-        $this->assertNull($event);
+        $this->assertNull($driver->read(), 'the parked partial must never surface as a phantom event');
+        $this->assertTrue($driver->hasPending(), 'the incomplete CSI stays pending — a continuation byte could still complete it');
+        $this->assertSame("\x1b[", $driver->escapeDecoder()->remainder());
+        $this->assertNull($driver->read(), 'EOF with a parked partial returns null, never an EOF panic');
     }
 
     public function testReadWithBareEscapeCharacter(): void
@@ -311,6 +329,9 @@ final class StreamInputDriverTest extends TestCase
         // Set non-blocking mode so reads don't hang
         stream_set_blocking($pair[0], false);
         stream_set_blocking($pair[1], false);
+
+        $this->openStreams[] = $pair[0];
+        $this->openStreams[] = $pair[1];
 
         return $pair;
     }
