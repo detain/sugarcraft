@@ -86,7 +86,9 @@ use SugarCraft\Sql\Core\Msg\TableRowsLoadedMsg;
  *
  * Query editor:
  *   - The Query pane is backed by a sugar-forms {@see TextArea} — it owns
- *     the cursor, UTF-8 editing, and Up/Down line movement.
+ *     the cursor and UTF-8 editing. Up/Down move the cursor inside a draft;
+ *     in an empty editor they instead recall executed statements from
+ *     {@see QueryState::$history} (SQL-O01a walk, status-line readout).
  *   - Ctrl+R / Ctrl+E run the query; Ctrl+F favorites it; Ctrl+Shift+F
  *     unfavorites. Executed queries are recorded in {@see QueryState::$history}.
  *
@@ -517,11 +519,63 @@ final class App implements Model
         if ($msg->ctrl && $msg->shift && $msg->rune === 'f') {
             return $this->unfavoriteQuery();
         }
+        // SQL-O01a: bare Up/Down recall executed history instead of moving
+        // the cursor — in an EMPTY editor (the sync-run path clears it, so
+        // ↑ after a run restages the statement that just executed) or while
+        // a recall walk still matches the editor text verbatim. A drafted
+        // query is never clobbered: once the text diverges, Up/Down revert
+        // to plain cursor movement in the widget.
+        if (($msg->type === KeyType::Up || $msg->type === KeyType::Down)
+            && !$msg->ctrl && !$msg->shift
+            && $this->recallApplies()) {
+            return $this->recallHistory($msg->type === KeyType::Up);
+        }
         // Everything else drives the editor: chars, backspace, space,
-        // Enter→newline, and Up/Down move the cursor between lines.
+        // Enter→newline, and Up/Down move the cursor between lines. Direct
+        // input ends any recall walk (SQL-O01a).
         [$editor, ] = $this->editor()->update($msg);
         assert($editor instanceof TextArea);
-        return $this->mutate(['query' => $this->query->withEditor($editor)]);
+        return $this->mutate(['query' => $this->query->withEditor($editor)->withRecallIndex(null)]);
+    }
+
+    /**
+     * SQL-O01a guard: recall applies when the editor is empty or still holds
+     * the walked history entry verbatim — the check that keeps the walk from
+     * overwriting a modified draft.
+     */
+    private function recallApplies(): bool
+    {
+        if ($this->query->history === []) {
+            return false;
+        }
+        if ($this->editor()->value() === '') {
+            return true;
+        }
+        $index = $this->query->recallIndex;
+        return $index !== null
+            && $this->editor()->value() === ($this->query->history[$index] ?? null);
+    }
+
+    /**
+     * SQL-O01a: stage the next-older (Up) or next-newer (Down) entry of the
+     * capped history into the editor and move the walk cursor, with a
+     * position readout on the status line. The cap lives in
+     * {@see QueryState::HISTORY_MAX} alone — this surface never renumbers it.
+     */
+    private function recallHistory(bool $older): self
+    {
+        $count = count($this->query->history);
+        $current = $this->query->recallIndex;
+        $next = $older
+            ? min(($current ?? -1) + 1, $count - 1)
+            : max(($current ?? 1) - 1, 0);
+        $sql = $this->query->history[$next];
+        return $this->mutate([
+            'query' => $this->query
+                ->withEditor($this->editor()->setValue($sql))
+                ->withRecallIndex($next),
+            'ui' => $this->ui->withStatus('history ' . ($next + 1) . '/' . $count)->withError(null),
+        ]);
     }
 
     private function runQuery(): self

@@ -36,6 +36,7 @@ final class QueryState
         public readonly array $history = [],
         public readonly array $favorites = [],
         public readonly int $queryGen = 0,
+        public readonly ?int $recallIndex = null,
     ) {}
 
     public static function new(): self
@@ -75,6 +76,17 @@ final class QueryState
     public function withFavorites(array $favorites): self
     {
         return $this->mutate(['favorites' => $favorites]);
+    }
+
+    /**
+     * Track the SQL-O01a recall walk: index into {@see self::$history} of the
+     * entry currently staged in the editor, or null when no walk is active.
+     * Any direct edit ends the walk; Up/Down then continue walking only while
+     * the editor still holds the recalled text verbatim.
+     */
+    public function withRecallIndex(?int $recallIndex): self
+    {
+        return $this->mutate(['recallIndex' => $recallIndex]);
     }
 
     /**

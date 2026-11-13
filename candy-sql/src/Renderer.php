@@ -166,7 +166,7 @@ final class Renderer
         // Help text differs per pane
         if ($a->ui->pane === Pane::Query) {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('tab  switch pane  ·  ctrl+r / ctrl+e  run  ·  enter  newline  ·  ctrl+c  quit');
+                ->render('tab  switch pane  ·  ctrl+r / ctrl+e  run  ·  enter  newline  ·  ↑/↓  recall history  ·  ctrl+c  quit');
         } else {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render('tab  switch pane  ·  enter  load table  ·  q / esc  quit');
