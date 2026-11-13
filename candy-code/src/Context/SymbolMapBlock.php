@@ -174,14 +174,15 @@ final readonly class SymbolMapBlock implements PromptSection
                 return self::empty('not enough memory headroom');
             }
 
-            $key = self::cacheKey($builder->stamps($listing['php'], $listing['other']));
+            $stamps = $builder->stamps($listing['php'], $listing['other']);
+            $key = self::cacheKey($stamps);
             $cached = $builder->cache()->rendered($key);
             if ($cached !== null) {
                 return new self($cached, $count, '');
             }
 
             $deadline = hrtime(true) + (int) (max(0.0, $budgetSeconds) * 1e9);
-            $summaries = $builder->summaries($listing['php'], $listing['other'], null, $deadline);
+            $summaries = $builder->summaries($listing['php'], $listing['other'], null, $deadline, $stamps);
             if (!$summaries['complete']) {
                 return self::empty('symbols still being indexed');
             }

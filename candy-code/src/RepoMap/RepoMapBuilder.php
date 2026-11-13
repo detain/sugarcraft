@@ -174,13 +174,16 @@ final class RepoMapBuilder
      * @param array<string, string> $php
      * @param array<string, string> $other
      * @param (\Closure(): void)|null $beat struck as the work proceeds
+     * @param array<string, array{0: int, 1: int, 2: string}>|null $stamps the
+     *        vector from {@see stamps()} when the caller already took it (the
+     *        capture's cache-key probe) — skips a second stat pass over every file
      * @return array{definitions: array<string, list<Tag>>, references: array<string, array<string, int>>, complete: bool}
      */
-    public function summaries(array $php, array $other, ?\Closure $beat = null, ?int $deadline = null): array
+    public function summaries(array $php, array $other, ?\Closure $beat = null, ?int $deadline = null, ?array $stamps = null): array
     {
         $beat ??= static function (): void {
         };
-        $stamps = $this->stamps($php, $other);
+        $stamps ??= $this->stamps($php, $other);
         $definitions = [];
         $references = [];
         $complete = true;
