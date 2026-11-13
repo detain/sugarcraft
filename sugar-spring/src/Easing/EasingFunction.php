@@ -11,8 +11,10 @@ namespace SugarCraft\Spring\Easing;
  * used wherever an easing function is expected (e.g., animation libraries,
  * physics simulations, or UI transitions).
  *
- * PHP 8.1+ backed enums that implement this interface (such as {@see Easing})
- * are already suitable for this role. The library's curve class
+ * PHP 8.1+ enums implementing this interface (such as {@see Easing}) are
+ * already suitable for this role — Easing is a UNIT enum, and unit-ness is
+ * what matters here: what makes a case an easing function is the
+ * interface, not a backing value. The library's curve class
  * {@see CubicBezier} implements it through its solver-backed sampler
  * {@see CubicBezier::ease()}; an enum case and a same-named preset are
  * value families, not drop-in twins (analytic vs bezier fit, and the enum

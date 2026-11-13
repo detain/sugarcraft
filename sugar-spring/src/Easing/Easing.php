@@ -53,18 +53,23 @@ enum Easing implements EasingFunction
     /**
      * Apply the easing function to a normalized time value.
      *
-     * Designed for $t ∈ [0, 1]; an out-of-range $t is NOT rejected and NOT
-     * clamped — the curves EXTRAPOLATE, so ease(2.0) answers whatever the
-     * formula gives. Callers feeding a progress ratio from host state should
-     * clamp upstream. The RETURN value is likewise unclamped by design:
-     * Elastic/Back curves overshoot past 1.0 (and below 0.0 on their
-     * anticipation legs) — that swing IS the effect. Mapping an eased value
-     * onto discrete cells (indices, widths) requires your own clamp or
-     * rounding gate; `round(ease($t) * 40)` can be a negative cell.
-     * Non-finite $t flows through unguarded here: NAN answers NAN from every
-     * case, ±INF survives the polynomial curves and flips to NAN inside the
-     * Elastic/Back trig — clamp upstream. Contrast CubicBezier::evaluate(),
-     * which refuses a non-finite t outright.
+     * Designed for $t ∈ [0, 1] — and that is the ONLY promise: neither the
+     * input nor the output is rejected or clamped.
+     *
+     * Why the numbers can leave the unit box: an out-of-range $t simply
+     * extrapolates — ease(2.0) answers whatever the formula gives, so
+     * callers feeding a progress ratio from host state should clamp
+     * upstream. In the other direction, Elastic/Back curves overshoot past
+     * 1.0 (and below 0.0 on their anticipation legs) by design — that
+     * swing IS the effect.
+     *
+     * Two edges to respect. (1) Mapping an eased value onto discrete cells
+     * (indices, widths) requires your own clamp or rounding gate:
+     * `round(ease($t) * 40)` can be a negative cell. (2) Non-finite $t
+     * flows through unguarded here: NAN answers NAN from every case, ±INF
+     * survives the polynomial curves and flips to NAN inside the
+     * Elastic/Back trig — clamp upstream. Contrast
+     * {@see CubicBezier::ease()}, which refuses a non-finite t outright.
      *
      * @param float $t Normalized time, designed for [0.0, 1.0]
      * @return float Eased value (may exceed [0,1] for Elastic/Back curves due to intentional overshoot)
