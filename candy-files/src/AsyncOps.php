@@ -19,7 +19,10 @@ use React\Promise\PromiseInterface;
  * batches, never parallel disk I/O. A worker/fork pipeline would be needed
  * for truly non-blocking bulk copies; deliberately not built here.
  *
- * Mirrors yorukot/superfile.asyncOps.
+ * No upstream — house pattern. Finding 106 relabel: an earlier line
+ * claimed "Mirrors yorukot/superfile.asyncOps", but asyncOps is not a
+ * symbol superfile ships (its copies run through goroutines under
+ * different names); this tick-sliced engine is the library's own.
  *
  * CF-07 disclosure flip: copies are NO LONGER content-only. File legs land
  * through a same-directory temp file renamed into place (an interrupted

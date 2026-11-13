@@ -9,6 +9,9 @@ namespace SugarCraft\Files;
  * the top regardless of order; the comparator below applies the
  * order as the secondary key.
  *
+ * No upstream — house pattern (finding 051). superfile tracks sort state
+ * as loose strings; this enum-plus-comparator is the library's own.
+ *
  * The "..  parent" sentinel is excluded from sorting and always
  * sits at the top of any pane that has one.
  */

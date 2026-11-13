@@ -7,6 +7,8 @@ namespace SugarCraft\Files\Support;
 /**
  * The version string this tool reports on `--version`.
  *
+ * No upstream — house pattern (finding 051).
+ *
  * Lighter namespace copy of candy-top/src/Support/Version.php (the DST-1
  * program): {@see self::CURRENT} is the checkout fallback and the ONE
  * override is the build stamp of the phar this process was launched from.

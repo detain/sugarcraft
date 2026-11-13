@@ -13,7 +13,11 @@ use SugarCraft\Files\UndoAction;
 /**
  * Fluent builder for Manager.
  *
- * Mirrors yorukot/superfile.Manager.builder
+ * No upstream — house pattern. Finding 106 relabel: an earlier line
+ * claimed "Mirrors yorukot/superfile.Manager.builder"; superfile ships
+ * no builder symbol — this fluent pre-ctor exists because Manager's
+ * constructor takes eighteen fields and CALIBER_LEARNINGS names
+ * positional construction of it the anti-pattern.
  *
  * Every `with*()` below is a real declared method returning a clone; there is
  * no magic __call, so no @method annotations are needed (a previous stale
@@ -194,24 +198,24 @@ final class ManagerBuilder
         }
 
         return new \SugarCraft\Files\Manager(
-            $this->left,
-            $this->right,
-            $this->activeIdx,
-            $this->status,
-            $this->confirm,
-            $this->lister,
-            $this->searchQuery,
-            $this->searchResults,
-            $this->searchCursor,
-            $this->tabs,
-            $this->tabIndex,
-            $this->undoStack,
-            $this->redoStack,
-            $this->pendingOpDest,
-            $this->pendingOpType,
-            $this->inputBuffer,
-            $this->termCols,
-            $this->termRows,
+            left: $this->left,
+            right: $this->right,
+            activeIdx: $this->activeIdx,
+            status: $this->status,
+            confirm: $this->confirm,
+            lister: $this->lister,
+            searchQuery: $this->searchQuery,
+            searchResults: $this->searchResults,
+            searchCursor: $this->searchCursor,
+            tabs: $this->tabs,
+            tabIndex: $this->tabIndex,
+            undoStack: $this->undoStack,
+            redoStack: $this->redoStack,
+            pendingOpDest: $this->pendingOpDest,
+            pendingOpType: $this->pendingOpType,
+            inputBuffer: $this->inputBuffer,
+            termCols: $this->termCols,
+            termRows: $this->termRows,
         );
     }
 }

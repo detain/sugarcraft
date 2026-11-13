@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Files;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * One half of the dual-pane file manager.
+ *
+ * No upstream — house pattern. yorukot/superfile has no Pane symbol;
+ * the twin-column layout evokes Midnight Commander, but this class
+ * (and its transitions) are the TEA model layer, not a port.
  *
  * Holds the current working directory, the listed entries, the
  * cursor position (which entry is highlighted), the multi-select
@@ -13,7 +19,7 @@ namespace SugarCraft\Files;
  * doesn't break selection), and the active sort order.
  *
  * Immutable: every transition (`navigate`, `moveCursor`,
- * `toggleSelection`, `setSort`) returns a fresh Pane so the
+ * `toggleSelection`, `withSort`) returns a fresh Pane so the
  * surrounding {@see Manager} can return `[nextManager, ?cmd]`
  * cleanly.
  *
@@ -30,6 +36,8 @@ namespace SugarCraft\Files;
  */
 final class Pane
 {
+    use Mutable;
+
     /** @var list<Entry> */
     public readonly array $entries;
     /** @var array<string,true> name → true; presence == selected */
@@ -113,7 +121,7 @@ final class Pane
      */
     public function unreadable(): self
     {
-        return new self($this->cwd, $this->entries, $this->cursor, $this->selected, $this->sort, $this->showHidden, false);
+        return $this->mutate(['readable' => false]);
     }
 
     /**
@@ -171,18 +179,17 @@ final class Pane
             return $this;
         }
         $next = max(0, min($count - 1, $this->cursor + $delta));
-        return new self($this->cwd, $this->entries, $next, $this->selected, $this->sort, $this->showHidden, $this->readable);
+        return $this->mutate(['cursor' => $next]);
     }
 
     public function gotoTop(): self
     {
-        return new self($this->cwd, $this->entries, 0, $this->selected, $this->sort, $this->showHidden, $this->readable);
+        return $this->mutate(['cursor' => 0]);
     }
 
     public function gotoBottom(): self
     {
-        $last = max(0, count($this->entries) - 1);
-        return new self($this->cwd, $this->entries, $last, $this->selected, $this->sort, $this->showHidden, $this->readable);
+        return $this->mutate(['cursor' => max(0, count($this->entries) - 1)]);
     }
 
     /**
@@ -194,7 +201,7 @@ final class Pane
     {
         foreach ($this->entries as $i => $entry) {
             if ($entry->name === $name) {
-                return new self($this->cwd, $this->entries, $i, $this->selected, $this->sort, $this->showHidden, $this->readable);
+                return $this->mutate(['cursor' => $i]);
             }
         }
         return $this;
@@ -213,21 +220,25 @@ final class Pane
         } else {
             $sel[$entry->name] = true;
         }
-        return new self($this->cwd, $this->entries, $this->cursor, $sel, $this->sort, $this->showHidden, $this->readable);
+        return $this->mutate(['selected' => $sel]);
     }
 
     public function clearSelection(): self
     {
-        return new self($this->cwd, $this->entries, $this->cursor, [], $this->sort, $this->showHidden, $this->readable);
+        return $this->mutate(['selected' => []]);
     }
 
     /**
-     * @param \Closure(string): list<Entry>|null $lister
+     * Re-order the CURRENT in-memory listing under a new sort — no
+     * disk rescan by design. The old signature's required `\Closure
+     * $lister` param was never read (finding 065): it invited a future
+     * "fix" into silently rescanning, so it is dropped. Refresh-first
+     * callers use relist().
      */
-    public function setSort(Sort $sort, \Closure $lister): self
+    public function withSort(Sort $sort): self
     {
-        // Re-order in-memory entries without calling the lister:
-        // strip the parent sentinel, sort the rest, re-prepend it.
+        // Re-order in-memory entries: strip the parent sentinel,
+        // sort the rest, re-prepend it.
         $parent = null;
         $rest = [];
         foreach ($this->entries as $e) {
@@ -239,7 +250,7 @@ final class Pane
         }
         $sorted = $sort->apply($rest);
         $entries = $parent !== null ? array_merge([$parent], $sorted) : $sorted;
-        return new self($this->cwd, $entries, 0, $this->selected, $sort, $this->showHidden, $this->readable);
+        return $this->mutate(['sort' => $sort, 'entries' => $entries, 'cursor' => 0]);
     }
 
     /**

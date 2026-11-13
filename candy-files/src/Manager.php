@@ -24,6 +24,10 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 /**
  * The dual-pane file manager `Model`.
  *
+ * No upstream — house pattern (finding 051). yorukot/superfile splits its
+ * state across several bubbletea model files and ships no single Manager
+ * symbol; this TEA model (update/view/subscriptions) is the library's own.
+ *
  * Holds two {@see Pane}s plus an active-pane index (Tab swaps),
  * a status line, and a confirmation-state enum so destructive
  * operations route through an explicit gate: "press `y` — or the
@@ -721,7 +725,7 @@ final class Manager implements Model
     private function cycleSort(): self
     {
         $active = $this->activePane();
-        return $this->withActivePane(fn(Pane $p) => $p->setSort($active->sort->cycle(), $this->lister));
+        return $this->withActivePane(fn(Pane $p) => $p->withSort($active->sort->cycle()));
     }
 
     private function refresh(): self

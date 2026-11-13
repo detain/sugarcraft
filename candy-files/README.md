@@ -13,7 +13,9 @@
 
 ![demo](.vhs/navigate.gif)
 
-Dual-pane terminal file manager built on the SugarCraft stack for PHP 8.3+, with the Midnight Commander look.
+Dual-pane terminal file manager built on the SugarCraft stack for PHP 8.3+, in
+the Midnight Commander lineage — the twin-column layout is MC's idiom, though
+MC's signature F-key bar is deliberately absent here.
 
 Prompts are localized: the executable activates a detected language from
 `$LC_ALL`/`$LANG` (16 catalogues under `lang/`, English by default), and a

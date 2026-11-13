@@ -15,7 +15,9 @@ use SugarCraft\Core\Msg;
  * resolution into an "Unhandled promise rejection" TypeError, so the Model
  * never learns the copy finished.
  *
- * Mirrors yorukot/superfile.asyncOps.CopyCompleted.
+ * No upstream — house pattern. Finding 106 relabel: an earlier line
+ * claimed "Mirrors yorukot/superfile.asyncOps.CopyCompleted"; no such
+ * symbol exists upstream — this resolution message is the library's own.
  */
 final readonly class CopyCompletedMsg implements Msg
 {

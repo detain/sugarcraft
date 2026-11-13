@@ -8,6 +8,10 @@ namespace SugarCraft\Files;
  * One row in a {@see Pane}'s listing — a file, directory, or
  * symlink found in the current directory. Immutable value object.
  *
+ * No upstream — house pattern (finding 051). superfile's fileModal
+ * carries view decoration (icons, colors, cursor flags) that has no
+ * business living in a data row; this row type is the library's own.
+ *
  * The "..  parent" sentinel (a `..` Entry inserted at the top of
  * any non-root pane) is constructed via {@see parent()} so the
  * navigator can always present it consistently regardless of the

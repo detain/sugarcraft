@@ -186,11 +186,11 @@ final class PaneTest extends TestCase
         $this->assertSame(2, $toggled->cursor);
     }
 
-    public function testSetSortRefreshesAndUpdatesOrder(): void
+    public function testWithSortReordersInMemory(): void
     {
         $fs = $this->fakeFs($this->tree());
         $home = Pane::open('/home', $fs);
-        $bySize = $home->setSort(Sort::SizeDesc, $fs);
+        $bySize = $home->withSort(Sort::SizeDesc);
         $this->assertSame(Sort::SizeDesc, $bySize->sort);
     }
 

@@ -12,7 +12,10 @@ use SugarCraft\Core\Undo\UndoActionType;
  * Each action stores enough information to reverse itself.
  * The undo system maintains stacks of these actions.
  *
- * @see Mirrors yorukot/superfile/undo.Action
+ * No upstream — house pattern. Finding 106 relabel: an earlier line
+ * claimed "Mirrors yorukot/superfile/undo.Action"; superfile has no
+ * undo.Action symbol — this reversible-operation record is the library's
+ * own (its own undo stack lives in {@see Manager}).
  */
 final class UndoAction
 {

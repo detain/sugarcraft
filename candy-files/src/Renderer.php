@@ -16,6 +16,9 @@ use SugarCraft\Files\Support\GlyphSet;
 /**
  * Pure view function for {@see Manager}. Lays out the two panes
  * side-by-side with a status line beneath.
+ *
+ * No upstream — house pattern (finding 051). superfile composes its view
+ * from bubbles/list models; there is no Renderer symbol to mirror.
  */
 final class Renderer
 {

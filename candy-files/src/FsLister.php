@@ -10,6 +10,10 @@ namespace SugarCraft\Files;
  * accepts a `Closure(string $path): list<Entry>|null` so tests can
  * substitute a deterministic in-memory fake.
  *
+ * No upstream — house pattern (finding 051). superfile walks directories
+ * inline in its bubbletea update path; the injectable-lister contract here
+ * is the library's own.
+ *
  * CF-22 (closes audit 031): null means "cannot read" (missing path,
  * not a directory, or `scandir` refused) and is NEVER collapsed to
  * `[]` — an empty list is a fact ("this directory is empty"), while

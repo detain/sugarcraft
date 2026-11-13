@@ -7,6 +7,9 @@ namespace SugarCraft\Files;
 /**
  * Pending-confirmation state for the {@see Manager}'s gate.
  *
+ * No upstream — house pattern (finding 051). superfile confirms through
+ * bubbletea dialog panes; this explicit enum gate is the library's own.
+ *
  * `None` → the manager dispatches keys normally. Any other value →
  * the next keystroke is consumed by the confirmation handler, which
  * takes one of two shapes: DeleteSelected/CopySelected/MoveSelected
