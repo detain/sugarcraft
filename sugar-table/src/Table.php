@@ -1051,8 +1051,10 @@ final class Table
     // -------------------------------------------------------------------------
 
     /**
-     * Key constants for scrollYForKey() and handleKey().
+     * Key constants for scrollYForKey() and handleKey() — a sugar-table
+     * extension: upstream ships no key vocabulary (no input routing).
      *
+
      * Use these constants when calling the keyboard navigation helpers to ensure
      * correct key names.  These map to typical terminal arrow-key and navigation
      * key sequences that input libraries (e.g. sugar-pty, brick/console) emit.
@@ -1066,6 +1068,8 @@ final class Table
 
     /**
      * Return the new scrollY value for a given keyboard key.
+     *
+     * sugar-table extension — upstream routes no terminal input.
      *
      * Useful for integrating with an input library — call this on each keypress
      * and then apply the result via withScrollY():
@@ -1094,6 +1098,10 @@ final class Table
 
     /**
      * Return a new Table with scrollY adjusted for the given keyboard key.
+     *
+     * sugar-table extension — upstream routes no terminal input; this and
+     * scrollYForKey() are the port's host-integration helpers (see the
+     * class docblock).
      *
      * Convenience wrapper around scrollYForKey() + withScrollY() for easy
      * keyboard navigation integration:
