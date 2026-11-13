@@ -148,6 +148,19 @@ final class PaneTest extends TestCase
         $this->assertSame(1, $again->cursor, 'cursor must stay on the same entry');
     }
 
+    /** CF-31: bulk selection primitives — all, invert, filtered adopt. */
+    public function testBulkSelectionPrimitives(): void
+    {
+        $fs = $this->fakeFs($this->tree());
+        $home = Pane::open('/home', $fs);            // ['..','alice','bob']
+        $all = $home->selectAll();
+        $this->assertSame(['alice', 'bob'], $all->selectedNames(), 'the sentinel is never marked');
+        $this->assertSame([], $all->invertSelection()->selectedNames(), 'invert complements');
+        $this->assertSame(['alice', 'bob'], $all->invertSelection()->invertSelection()->selectedNames(), 'round-trip');
+        $adopted = $home->withSelected(['alice' => true, 'gone' => true, '..' => true]);
+        $this->assertSame(['alice'], $adopted->selectedNames(), 'adopt filters to listed names');
+    }
+
     public function testRelistPrunesGoneNamesAndClampsCursor(): void
     {
         $tree = $this->tree();

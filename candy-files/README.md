@@ -32,7 +32,7 @@ works, and a German `(j/n)` answers to `j`.
 ┃    notes.md                    12.0KB    ┃  │    Xorg.0.log                   4.0KB    │
 ┃    todo.txt                      512B    ┃  └──────────────────────────────────────────┘
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
- focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs
+ focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern
 ```
 
 ## Run it
@@ -97,6 +97,9 @@ on a bare php-cli machine the step that refuses is `composer install`, naming `s
 | `x`             | Run the entry under cursor when it carries the exec bit (argv spawn — never a shell string) |
 | `←` / `h`       | Go up one directory                                 |
 | `Space`         | Toggle selection on the entry under cursor + advance|
+| `Ctrl+a`        | Select every listed entry (CF-31); the `..` sentinel is never marked |
+| `v`             | Invert the selection (CF-31) — complement over the listing, so pressing it twice restores the set |
+| `*`             | Pattern-select prompt (CF-31): type a glob-lite pattern (`*.txt`), `Enter` marks every match and clears the rest — `fnmatch` semantics, never regex |
 | `s`             | Cycle sort order (name → mtime → size, asc / desc)  |
 | `.`             | Toggle hidden-file visibility                       |
 | `c`             | Copy (selection or cursor) to inactive pane; confirm the armed gate (see Status)  |
@@ -154,7 +157,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 | `Entry`             | Value object: name, isDir, size, mtime, isLink, isHidden                |
 | `Sort`              | Enum (NameAsc/NameDesc/MtimeAsc/MtimeDesc/SizeAsc/SizeDesc) + comparator |
 | `Pane`              | One pane: cwd, entries, cursor, selection set, sort, showHidden          |
-| `ConfirmState`      | Pending-confirmation enum (None / DeleteSelected / CopySelected / MoveSelected / RenameSelected / MkdirPrompt / PathPrompt)     |
+| `ConfirmState`      | Pending-confirmation enum (None / DeleteSelected / CopySelected / MoveSelected / RenameSelected / MkdirPrompt / PathPrompt / SelectPattern)     |
 | `Manager`           | SugarCraft Model — orchestrates two panes, handles all keys + confirm gate |
 | `FsLister`          | Default lister: `scandir` + `lstat` against the live filesystem          |
 | `Renderer`          | Pure view function — tab bar, two pane boxes side-by-side, optional search overlay, status line |
@@ -240,7 +243,7 @@ The direct constructor is kept for backward compatibility only — new code shou
 
 ## Status
 
-Copy / move / rename / mkdir / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives. The trash root is `$TMPDIR/candyfiles-trash-<pid>-<random>` (mode `0700`, private to the owning process) and a normal exit wipes it; after a `SIGKILL` or crash the bytes **stay there** — that directory is the last-resort archive you can recover from by hand until the OS clears the temp dir. A new session starts with an empty undo stack (`nothing to undo`) and does not re-adopt a previous session's trash. There is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). After every delete that reached the trash, the status line names the window: recoverable with `u` until you quit. The `d`/`c`/`m` operations use a two-phase confirm gate keyed by three keys: one press **arms** it, the next answers — `y` **or the affirmative the prompt teaches** (a localized letter: `j` under German `(j/n)`, `д` under Russian, `e` under Turkish) confirms; anything else, including `Escape`, cancels, and modified chords never answer on your behalf. `R` rename and `N` mkdir are instead the text-entry submode: type the name, `Enter` commits it (an empty buffer cancels), `Backspace` edits, `Esc` cancels. The undo stack is capped at 50 operations (`UNDO_LIMIT`); the oldest entries fall off. Undo restores delete/move/rename and never renames onto an occupied path — a file created after the delete stays, the original is left in the trash, and the status names the refusal; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
+Copy / move / rename / mkdir / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives. The trash root is `$TMPDIR/candyfiles-trash-<pid>-<random>` (mode `0700`, private to the owning process) and a normal exit wipes it; after a `SIGKILL` or crash the bytes **stay there** — that directory is the last-resort archive you can recover from by hand until the OS clears the temp dir. A new session starts with an empty undo stack (`nothing to undo`) and does not re-adopt a previous session's trash. There is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). After every delete that reached the trash, the status line names the window: recoverable with `u` until you quit. The `d`/`c`/`m` operations use a two-phase confirm gate keyed by three keys: one press **arms** it, the next answers — `y` **or the affirmative the prompt teaches** (a localized letter: `j` under German `(j/n)`, `д` under Russian, `e` under Turkish) confirms; anything else, including `Escape`, cancels, and modified chords never answer on your behalf. `R` rename, `N` mkdir, `Ctrl+O` path and `*` pattern-select are instead the text-entry submode: type, `Enter` commits (an empty buffer cancels), `Backspace` edits, `Esc` cancels. CF-31: selections survive navigation — leaving a directory stashes its marks and re-entering re-adopts them for names that still exist (`Ctrl+a` and `v` need no confirmation), so "go up and back" never costs a re-mark. The undo stack is capped at 50 operations (`UNDO_LIMIT`); the oldest entries fall off. Undo restores delete/move/rename and never renames onto an occupied path — a file created after the delete stays, the original is left in the trash, and the status names the refusal; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
 
 Status-line semantics (all counts are **actions applied**, never arm-time intentions):
 

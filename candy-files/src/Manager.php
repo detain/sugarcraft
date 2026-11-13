@@ -55,6 +55,9 @@ final class Manager implements Model
      */
     use Mutable;
 
+    /** CF-31: FIFO cap on the per-directory selection stash. */
+    private const MAX_DIR_MARKS = 128;
+
     /** @var \Closure(string): list<Entry>|null */
     private readonly \Closure $lister;
 
@@ -109,6 +112,14 @@ final class Manager implements Model
         public readonly bool $quitArmed = false,
         /** CF-28: `?` opens the help overlay — a frame, not a side-effecting mode. */
         public readonly bool $helpMode = false,
+        /**
+         * CF-31: selection stash keyed by directory path. Navigation
+         * replaces panes with fresh Pane::open objects (which legitimately
+         * start unselected); marks recorded here re-attach on re-entry,
+         * filtered to names that survived. Stale paths age out FIFO — a
+         * long session must not accumulate a directory's marks forever.
+         */
+        public readonly array $dirMarks = [],
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -496,6 +507,19 @@ final class Manager implements Model
             $plain && $msg->rune === ' '
                 => $this->withActivePane(fn(Pane $p) => $p->toggleSelection())
                        ->withActivePane(fn(Pane $p) => $p->moveCursor(1)),
+            // CF-31 (closes 044): bulk selection grammar. Ctrl+a marks
+            // every listed entry; `v` flips the mark of every entry
+            // (the complement, so a round-trip restores the set); `*`
+            // arms the glob-lite pattern prompt — fnmatch semantics,
+            // never regex, per the findings safety clause. Ctrl+a is
+            // readline's beginning-of-line reflex; like mc/lf/ranger,
+            // the bulk-select meaning wins inside a file manager.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
+                => $this->bulkSelect(static fn(Pane $p): Pane => $p->selectAll()),
+            $plain && $msg->rune === 'v'
+                => $this->bulkSelect(static fn(Pane $p): Pane => $p->invertSelection()),
+            $plain && $msg->rune === '*'
+                => $this->armPatternPrompt(),
             $plain && $msg->rune === 's'
                 => $this->cycleSort(),
             $plain && $msg->rune === '.'
@@ -620,7 +644,41 @@ final class Manager implements Model
             return $this->withActivePane(fn(Pane $p) => $pane)
                 ->withStatus(Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($refused)]));
         }
-        return $this->withActivePane(fn(Pane $p) => $pane);
+        // CF-31: a real move stashes the leaving marks and re-adopts the
+        // targets own leftovers — goUp and back keeps the marks.
+        return $this->transition($active, $pane);
+    }
+
+    /**
+     * CF-31 (closes 044): the leave/adopt rule for every pane-replacing
+     * transition. The pane we leave contributes its marks to the stash
+     * (an empty selection clears the slot, so ops that consumed marks do
+     * not resurrect them on the next visit); the incoming pane adopts
+     * whatever this directory had left, filtered to names that survived
+     * (Pane::withSelected). Typing the SAME path at the CF-29 prompt
+     * lands on this same door: the stash round-trips, the selection
+     * survives — the specs "target cwd equals current" clause.
+     */
+    private function transition(Pane $from, Pane $target): self
+    {
+        $marks = $this->dirMarks;
+        if ($from->selected === []) {
+            unset($marks[$from->cwd]);
+        } else {
+            $marks[$from->cwd] = $from->selected;
+            // FIFO age-out: a browsing session must not accumulate
+            // directory marks forever.
+            while (count($marks) > self::MAX_DIR_MARKS) {
+                unset($marks[array_key_first($marks)]);
+            }
+        }
+        $adopted = $marks[$target->cwd] ?? [];
+        if ($adopted !== []) {
+            $target = $target->withSelected($adopted);
+        }
+        return $this
+            ->mutate(['dirMarks' => $marks])
+            ->withActivePane(static fn(Pane $p): Pane => $target);
     }
 
     /**
@@ -777,7 +835,7 @@ final class Manager implements Model
             return $this->withActivePane(fn(Pane $p) => $p->unreadable())
                 ->withStatus(Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($parentPath)]));
         }
-        return $this->withActivePane(fn(Pane $p) => $parent->cursorOnName(basename($active->cwd)));
+        return $this->transition($active, $parent->cursorOnName(basename($active->cwd)));
     }
 
     private function cycleSort(): self
@@ -872,19 +930,22 @@ final class Manager implements Model
         // leg differ. (The branch was rename-only; parameterising it keeps
         // the grammar surfaces from drifting. CF-29 adds PathPrompt — a
         // typed directory, committed through performPathOpen instead of
-        // a name write.)
+        // a name write; CF-31 adds SelectPattern — a glob-lite commit.)
         $isPath = $this->confirm === ConfirmState::PathPrompt;
         $isMkdir = $this->confirm === ConfirmState::MkdirPrompt;
-        if ($this->confirm === ConfirmState::RenameSelected || $isMkdir || $isPath) {
+        $isPattern = $this->confirm === ConfirmState::SelectPattern;
+        if ($this->confirm === ConfirmState::RenameSelected || $isMkdir || $isPath || $isPattern) {
             // Two literal key spellings below — the coverage guard greps
             // for literal key arguments and a dynamic key name is invisible.
             $promptText = static fn(self $m): string => match (true) {
                 $isMkdir => Lang::t('prompt.mkdir'),
                 $isPath => Lang::t('prompt.path'),
+                $isPattern => Lang::t('prompt.pattern'),
                 default => Lang::t('confirm.rename', ['name' => Entry::sanitizeName($m->pendingOpDest ?? '')]),
             };
             $restate = static fn(self $m, string $status, ?string $buf): self =>
-                $m->withConfirm($m->confirm, $status, $m->pendingOpDest, $isPath ? 'path' : ($isMkdir ? 'mkdir' : 'rename'), $buf);
+                $m->withConfirm($m->confirm, $status, $m->pendingOpDest,
+                    $isPattern ? 'pattern' : ($isPath ? 'path' : ($isMkdir ? 'mkdir' : 'rename')), $buf);
             // Backspace: drop last character from buffer
             if ($msg->type === KeyType::Backspace) {
                 $buf = $this->inputBuffer ?? '';
@@ -901,6 +962,7 @@ final class Manager implements Model
                 $committed = match (true) {
                     $isMkdir => $restate($this, $promptText($this), $newName)->performMkdir(),
                     $isPath => $restate($this, $promptText($this), $newName)->performPathOpen($newName),
+                    $isPattern => $restate($this, $promptText($this), $newName)->performPatternSelect($newName),
                     default => $restate($this, $promptText($this), $newName)->performRenameWithBuffer(),
                 };
                 return [$committed, null];
@@ -1153,6 +1215,51 @@ final class Manager implements Model
     }
 
     /**
+     * CF-31: run a bulk-selection op on the active pane and report the
+     * POST-op count — the status must describe the new truth, so the
+     * count is read from the mutated copy, never from $this.
+     */
+    private function bulkSelect(\Closure $op): self
+    {
+        $next = $this->withActivePane(static fn(Pane $p): Pane => $op($p));
+        return $next->withStatus(Lang::t('status.selection_count', ['count' => count($next->activePane()->selected)]));
+    }
+
+    /** CF-31: arm the glob-lite pattern prompt (`*`). */
+    private function armPatternPrompt(): self
+    {
+        return $this->withConfirm(ConfirmState::SelectPattern, Lang::t('prompt.pattern'));
+    }
+
+    /**
+     * CF-31: commit a pattern selection. fnmatch semantics only — the
+     * finding rules regex OUT at a prompt that interpolates user input
+     * near shell-facing operations. The commit REPLACES the selection:
+     * "select exactly what matches" is the predictable grammar, and an
+     * accidental partial pattern is one `v` or Space away from fixed.
+     */
+    private function performPatternSelect(string $pattern): self
+    {
+        $glob = trim($pattern);
+        if ($glob === '') {
+            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                ->withInputBuffer(null);
+        }
+        $next = $this->withActivePane(static function (Pane $p) use ($glob): Pane {
+            $wanted = [];
+            foreach ($p->entries as $entry) {
+                if (!$entry->isParentSentinel() && fnmatch($glob, $entry->name, FNM_NOESCAPE)) {
+                    $wanted[$entry->name] = true;
+                }
+            }
+            return $p->withSelected($wanted);
+        });
+        return $next
+            ->withConfirm(ConfirmState::None, Lang::t('status.selection_count', ['count' => count($next->activePane()->selected)]))
+            ->withInputBuffer(null);
+    }
+
+    /**
      * CF-29 (closes 042): arm the typed-path prompt. Same text-entry
      * machinery the rename and mkdir chords already drive — only the
      * commit leg differs (a navigation, not a name write). The API was
@@ -1195,7 +1302,7 @@ final class Manager implements Model
                 ->withConfirm(ConfirmState::None, Lang::t('status.path_unreadable', ['path' => Entry::sanitizeName($full)]))
                 ->withInputBuffer(null);
         }
-        return $this->withActivePane(static fn(Pane $p): Pane => $opened)
+        return $this->transition($pane, $opened)
             ->withConfirm(ConfirmState::None, Lang::t('status.path_opened', ['path' => Entry::sanitizeName($full)]))
             ->withInputBuffer(null);
     }

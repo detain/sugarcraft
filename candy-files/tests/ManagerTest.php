@@ -192,6 +192,58 @@ final class ManagerTest extends TestCase
         $this->assertCount(3, $edge->tabs);
     }
 
+    public function testMarksSurviveGoUpAndBack(): void
+    {
+        $m = $this->start();                                  // '/' sorts: etc, home, readme
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));    // cursor onto 'home'
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));   // mark 'home'
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'k'));    // back onto it
+        [$m] = $m->update(new KeyMsg(KeyType::Enter, ''));    // enter /home
+        $this->assertSame('/home', $m->left->cwd);
+        $this->assertSame([], $m->left->selectedNames(), 'a fresh dir is unmarked');
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));    // cursor to 'alice'
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));   // mark alice
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'h'));    // goUp to /
+        $this->assertSame('/', $m->left->cwd);
+        $this->assertSame(['home'], $m->left->selectedNames(), 'CF-31: the stash re-adopts on re-entry');
+        [$m] = $m->update(new KeyMsg(KeyType::Enter, ''));    // back into /home (cursor parked there)
+        $this->assertSame('/home', $m->left->cwd);
+        $this->assertSame(['alice'], $m->left->selectedNames(), 'the other direction round-trips too');
+    }
+
+    public function testSelectAllAndInvertRespectTheSentinel(): void
+    {
+        $all = $this->start();
+        [$all] = $all->update(new KeyMsg(KeyType::Char, 'a', ctrl: true));
+        $this->assertSame(['etc', 'home', 'readme'], $all->left->selectedNames());
+        $this->assertStringContainsString('3 selected', $all->status);
+        [$inv] = $all->update(new KeyMsg(KeyType::Char, 'v'));
+        $this->assertSame([], $inv->left->selectedNames());
+        [$back] = $inv->update(new KeyMsg(KeyType::Char, 'v'));
+        $this->assertSame(['etc', 'home', 'readme'], $back->left->selectedNames(), 'invert is the complement, not a clear');
+        // inside /home the '..' sentinel must never be marked
+        $fresh = $this->start();
+        [$down] = $fresh->update(new KeyMsg(KeyType::Char, 'j')); // cursor onto 'home'
+        [$down] = $down->update(new KeyMsg(KeyType::Enter, ''));
+        [$down] = $down->update(new KeyMsg(KeyType::Char, 'a', ctrl: true));
+        $this->assertSame('/home', $down->left->cwd);
+        $this->assertSame(['alice', 'bob'], $down->left->selectedNames());
+    }
+
+    public function testPatternPromptSelectsMatchesAndReplacesTheRest(): void
+    {
+        $m = $this->start();
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'a', ctrl: true)); // mark everything first
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, '*'));
+        $this->assertSame(ConfirmState::SelectPattern, $armed->confirm);
+        [$armed] = $armed->update(new KeyMsg(KeyType::Char, 'r'));
+        [$armed] = $armed->update(new KeyMsg(KeyType::Char, '*'));
+        [$done] = $armed->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame(ConfirmState::None, $done->confirm);
+        $this->assertSame(['readme'], $done->left->selectedNames(), 'the commit replaces: select exactly what matches');
+        $this->assertStringContainsString('1 selected', $done->status);
+    }
+
     public function testTabSwapsActivePane(): void
     {
         $m = $this->start();

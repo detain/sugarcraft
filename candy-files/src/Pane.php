@@ -229,6 +229,58 @@ final class Pane
     }
 
     /**
+     * Replace the selection with the given name→true map, keeping only
+     * names that are actually listed here right now (CF-31). The parent
+     * sentinel can never be marked — it is navigation furniture, not a
+     * file, and every operation walks real entries.
+     */
+    public function withSelected(array $wanted): self
+    {
+        $selectable = [];
+        foreach ($this->entries as $entry) {
+            if (!$entry->isParentSentinel()) {
+                $selectable[$entry->name] = true;
+            }
+        }
+        $kept = array_intersect_key($wanted, $selectable);
+        return $this->mutate(['selected' => $kept]);
+    }
+
+    /**
+     * CF-31 `Ctrl+a`: mark every listed entry. The acceptance wording is
+     * "operating on 30-of-40 stops meaning Space 30 times".
+     */
+    public function selectAll(): self
+    {
+        $selected = [];
+        foreach ($this->entries as $entry) {
+            if (!$entry->isParentSentinel()) {
+                $selected[$entry->name] = true;
+            }
+        }
+        return $this->mutate(['selected' => $selected]);
+    }
+
+    /**
+     * CF-31 `v`: flip every mark against every listed entry — the
+     * complement operation, not a clear. Round-tripping it returns the
+     * original set (pinned).
+     */
+    public function invertSelection(): self
+    {
+        $selected = [];
+        foreach ($this->entries as $entry) {
+            if ($entry->isParentSentinel()) {
+                continue;
+            }
+            if (!isset($this->selected[$entry->name])) {
+                $selected[$entry->name] = true;
+            }
+        }
+        return $this->mutate(['selected' => $selected]);
+    }
+
+    /**
      * Re-order the CURRENT in-memory listing under a new sort — no
      * disk rescan by design. The old signature's required `\Closure
      * $lister` param was never read (finding 065): it invited a future
