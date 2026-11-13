@@ -485,8 +485,13 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
   trade-off is that the landed frame can be a touch less frame-exact than output
   seeking, and `videoTime`/`frameIndex` are set to the requested target, so the
   on-screen clock can lead the first displayed frame by up to one GOP on
-  sparsely-keyed sources. Index-based backward seeks (`withSeek()` to an earlier
-  frame) instead reopen from t0 and decode forward, which is frame-exact.
+  sparsely-keyed sources. Index-based seeks (`withSeek()` — the arrows and the
+  digit keys) ride the SAME seconds route on factory-owned sources (SV-H11):
+  the decoder re-spawns at the target's seconds and lands with one pull
+  instead of re-decoding every intervening frame, so the keyframe-snap
+  trade-off applies to them too. Injected decoders that reopen from their own
+  head (no seconds notion) keep the frame-exact forward walk, bounded by the
+  per-tick budget.
 
 - **Audio pause/seek on Windows.** `AudioPlayer` no longer relies on
   `SIGSTOP`/`SIGCONT` (which are absent on Windows and unreliable under a PTY):

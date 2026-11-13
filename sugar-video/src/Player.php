@@ -1608,27 +1608,75 @@ final class Player implements Model
     }
 
     /**
-     * Seek to a specific frame index by re-creating the decoder
-     * and advancing it to the target frame.
+     * Seek to a specific frame index. SV-H11/011: a factory-owned decoder
+     * is re-spawned at the target's SECONDS (fast `-ss` / cursor jump — one
+     * pull lands there); an in-place decoder closes-and-reopens at its head
+     * and decodes forward, bounded by the frame budget. The landed index is
+     * always the truth the new state records (SV-H4/013).
      */
     public function withSeek(int $targetIndex): self
     {
-        // Clamp to valid range.
+        // Clamp to valid range. A known-length stream cannot seek past its
+        // last frame (SV-H11/011: the seconds route would read nothing there
+        // and land at 0 — worse than the old walk, which simply stopped at
+        // the end); an unknown-length one is left uncapped, exactly how the
+        // old live-walk behaved against a decoder's real EOF.
         $targetIndex = max(0, $targetIndex);
 
         // SV-H4/090: a same-index seek is a TRUE no-op — the check runs
-        // BEFORE the audio rebuild so the committed state is never touched
-        // and the companion is never respawned for a seek that seeks nothing.
+        // BEFORE the clamp and the audio rebuild: a fully consumed stream
+        // sits at frameIndex == totalFrames (one past the last 0-based
+        // content index), and the arrow law says → there must return
+        // identity, not clamp backward off the terminal playhead.
         if ($targetIndex === $this->frameIndex) {
             return $this;
+        }
+
+        if ($this->totalFrames > 0) {
+            $targetIndex = min($targetIndex, $this->totalFrames - 1);
+            // A clamp that lands back on the current frame is the same truth:
+            // no respawned audio, no half-dead "playing" claim past EOF.
+            if ($targetIndex === $this->frameIndex) {
+                return $this;
+            }
         }
 
         // F6: realign audio to the seek target position.
         $newAudio = $this->rebuildAudio((int)round(($targetIndex / $this->fps) * 1000));
 
-        // Backward seek: decoders are forward-only, so close-and-rebuild the
-        // decoder and skip forward to the target. rebuildDecoderAt() closes the
-        // old decoder first (F21: no leaked ffmpeg process) on the real path.
+        // SV-H11/011: a factory-owned decoder (the ffmpeg/GIF/WebP classes
+        // DecoderFactory builds) honours a start-second seek natively — `-ss`
+        // before `-i` for ffmpeg, a cursor jump for the byte formats. Routing
+        // an index seek through the seconds rebuild lands on the target with
+        // ONE pull, where the old index walk re-decoded every intervening
+        // frame inside the keypress (one ← at frame 7,000 paid ~6,990 reads).
+        // Decoders answering reopensInPlace() true have no seconds notion
+        // behind reopen() — an injected double or a socket stream replays
+        // from its own head — so they keep the budget-bounded index walks
+        // below. The split is the honest meaning of the capability and says
+        // so in Decoder::reopensInPlace()'s contract.
+        if (!$this->decoder->reopensInPlace()) {
+            [$decoder, $frame, $landed] = $this->rebuildDecoderAtSeconds(
+                $this->cellsW,
+                $this->cellsH,
+                $this->mode,
+                $targetIndex / $this->fps,
+            );
+
+            return $this->mutate([
+                'decoder' => $decoder,
+                'videoTime' => $landed / $this->fps,
+                'frameIndex' => $landed,
+                'currentFrame' => $frame ?? $this->currentFrame,
+                'lastTickTime' => microtime(true),
+                'audioPlayer' => $newAudio,
+                'failure' => null, // SV-H4/004: a rebuild from the SOURCE PATH clears the row
+                'ended' => $frame !== null ? false : $this->ended,
+            ]);
+        }
+
+        // Backward seek (in-place decoders): they are forward-only streams,
+        // so close-and-reopen and skip forward to the target.
         if ($targetIndex < $this->frameIndex) {
             [$decoder, $frame, $landed] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, $targetIndex);
             // videoTime = content time (not scaled); the landed index, not the

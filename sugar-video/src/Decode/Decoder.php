@@ -104,6 +104,14 @@ interface Decoder
      * and `videoPath === '/fake'` special cases: the decision belongs to the
      * decoder, not to a string comparison in the playback loop.
      *
+     * SV-H11/011 SHARPENS WHAT FALSE BUYS: the Player routes an index seek
+     * ({@see Player::withSeek()}) through the native start-second rebuild
+     * when you answer false — `-ss` before `-i` for ffmpeg, a cursor jump
+     * for the byte formats — so a deep jump lands with a single pull instead
+     * of walking every intervening frame in one keypress. Answering true
+     * says you have no seconds notion behind reopen() (you replay from your
+     * own head), so withSeek() keeps the budget-bounded index walk for you.
+     *
      * @return bool True when reopen() fully re-establishes the stream at the
      *         new geometry/mode, so the caller must not re-create the decoder.
      */

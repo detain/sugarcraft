@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Video\AudioPlayer;
 use SugarCraft\Video\Decode\FfmpegDecodeFailure;
 use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Synthetic;
 use SugarCraft\Video\Msg\ResizeRebuildMsg;
 use SugarCraft\Video\Msg\TickMsg;
 use SugarCraft\Video\Player;
@@ -2890,6 +2891,91 @@ final class PlayerTest extends TestCase
             'explicit 0.0 remains the unbounded opt-out'
         );
         $optOut->stop();
+    }
+
+    /**
+     * @testdox SV-H11/011: a factory-owned index seek lands by seconds, not by walking
+     *
+     * The GifDecoder route re-spawns at the target's seconds (cursor jump —
+     * one pull), and the deep-landed frame must equal what the independent
+     * throwaway-decoder oracle frameAt() sees at that time (dual oracle).
+     * A seek past the end of a KNOWN-length stream clamps to the last frame
+     * instead of collapsing to 0 (the route would read nothing past EOF).
+     * Mutation-proof: restoring the old rebuildDecoderAt walk for the
+     * factory branch reddens the structural pin below; removing the clamp
+     * reddens the overshoot arm on probed hosts.
+     */
+    public function testAFactoryOwnedIndexSeekLandsByTheSecondsRoute(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $gif = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-h11-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.gif',
+            16,
+            8,
+            60,
+            4,
+        );
+
+        try {
+            $player = Player::open($gif, 40, 20, 25.0);
+            try {
+                $deep = $player->withSeek(45);
+                $this->assertSame(45, $this->getPlayerProperty($deep, 'frameIndex'), 'the seconds route lands exactly on the target index');
+                $this->assertEqualsWithDelta(45 / 25.0, $deep->position(), 1e-9, 'videoTime records the landed seconds');
+                $oracle = $player->frameAt(45 / 25.0);
+                $painted = $this->getPlayerProperty($deep, 'currentFrame');
+                $this->assertNotNull($oracle);
+                $this->assertNotNull($painted);
+                $this->assertSame($oracle->bytes, $painted->bytes, 'the walked route and the seconds route agree on the frame content');
+
+                if ($deep->duration() > 0.0) {
+                    $over = $deep->withSeek(10000);
+                    $this->assertGreaterThan(
+                        0,
+                        $this->getPlayerProperty($over, 'frameIndex'),
+                        'a seek past the end of a known-length stream clamps instead of collapsing to frame 0'
+                    );
+                    $over->stop();
+                }
+                $deep->stop();
+            } finally {
+                $player->stop();
+            }
+        } finally {
+            @unlink($gif);
+        }
+    }
+
+    /**
+     * @testdox SV-H11/011: the seek split is structural - factory routes by seconds, in-place keeps the walk
+     */
+    public function testTheSeekSplitIsCarriedByTheReopensInPlaceCapability(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../src/Player.php');
+        $start = strpos($source, 'public function withSeek(int $targetIndex): self');
+        $this->assertNotFalse($start);
+        $end = strpos($source, 'public function position(): float', $start);
+        $this->assertNotFalse($end);
+        $body = substr($source, $start, $end - $start);
+
+        $this->assertStringContainsString(
+            'if (!$this->decoder->reopensInPlace()) {',
+            $body,
+            'the factory branch must be gated on the capability, not on a path string or class'
+        );
+        $this->assertSame(
+            1,
+            substr_count($body, '$this->rebuildDecoderAtSeconds('),
+            'the factory route calls the seconds rebuild exactly once'
+        );
+        $this->assertStringContainsString(
+            '$this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, $targetIndex)',
+            $body,
+            'the in-place backward arm keeps the index walk (deep-walk-on-everything is not allowed back)'
+        );
     }
 }
 
