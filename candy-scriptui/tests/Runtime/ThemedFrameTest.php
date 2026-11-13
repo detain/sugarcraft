@@ -47,7 +47,7 @@ final class ThemedFrameTest extends TestCase
         $view  = $frame->view();
 
         self::assertStringStartsWith('┌', $view);
-        self::assertMatchesRegularExpression('/│ ?>?\s*(\x1b\[7m)?alpha/', $view, 'body rows ride inside the border, cursor styling intact');
+        self::assertMatchesRegularExpression('/│ ?(?:>|→)?\s*(\x1b\[7m)?alpha/', $view, 'body rows ride inside the border, cursor styling intact');
         self::assertStringContainsString('└', $view);
     }
 

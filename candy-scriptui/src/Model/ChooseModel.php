@@ -79,9 +79,9 @@ final class ChooseModel implements Model
         $terminalRows = Geometry::rowsOrNull() ?? 0;
         $items = array_map(static fn(string $o) => new StringItem($o), $options);
         $list  = ItemList::new($items, $width, max(1, $height))->withShowDescription(false);
-        if ($cursorPrefix !== null) {
-            $list = $list->withCursorPrefix($cursorPrefix);
-        }
+        // scriptui-83: gum's choose cursor is the arrow glyph; the bare model
+        // default follows it so a programmatic caller and the CLI agree.
+        $list = $list->withCursorPrefix($cursorPrefix ?? "\u{2192} ");
         // Paint strings — sanitised like the placeholder leg (scriptui-18),
         // never part of the emitted DATA channel. The historical single
         // glyph keeps riding ItemList's own prefix; a longer cycle is

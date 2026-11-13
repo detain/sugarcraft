@@ -90,7 +90,7 @@ final class SelectionKeyingTest extends TestCase
         self::assertSame(2, substr_count($m->view(), "\u{2713}"));
         $lines = explode("\n", $m->view());
         self::assertStringStartsWith("\u{2713}", $lines[0]);
-        self::assertStringStartsWith("> \u{2713}", $lines[1], 'the cursor row carries glyph, tick, then reverse video');
+        self::assertStringStartsWith("→ \u{2713}", $lines[1], 'the cursor row carries glyph, tick, then reverse video');
         self::assertStringStartsWith('  ', $lines[2], 'unticked row 2 keeps the plain prefix');
     }
 
@@ -116,7 +116,7 @@ final class SelectionKeyingTest extends TestCase
         [$m, ] = $m->update(new KeyMsg(KeyType::Space, '')); // tick row 1
         [$m, ] = $m->update(new KeyMsg(KeyType::Up, ''));    // cursor back to row 0
         $lines = explode("\n", $m->view());
-        // lines: [0]='> ' REVERSE a, [1]='✓ a' (row 1), [2]='  z'
+        // lines: [0]='→ ' REVERSE a, [1]='✓ a' (row 1), [2]='  z'
         self::assertStringStartsWith("\u{2713}", $lines[1]);
         self::assertStringStartsWith('  ', $lines[2]);
         // Row 0 (the cursor row) never shows a mark glyph.

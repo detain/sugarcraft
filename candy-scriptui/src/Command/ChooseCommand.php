@@ -45,7 +45,7 @@ final class ChooseCommand extends Command
             ->addOption('selected', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option(s) (multi mode); repeatable, comma-separated lists are split.', [])
             ->addOption('select-if-one', null, InputOption::VALUE_NONE, 'Auto-pick when exactly one option is supplied.')
             ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n")
-            ->addOption('cursor', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Glyph(s) rendered before the highlighted item; repeatable (gum cycles a per-item list) and comma-split.', ['> '])
+            ->addOption('cursor', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Glyph(s) rendered before the highlighted item; repeatable (gum cycles a per-item list) and comma-split (default the gum arrow).', ['→ '])
             ->addOption('cursor-prefix', null, InputOption::VALUE_REQUIRED, 'Alias for --cursor (single glyph).', null)
             ->addOption('selected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before checked items (multi mode; default check mark).', null)
             ->addOption('unselected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before non-cursor items.', null)
