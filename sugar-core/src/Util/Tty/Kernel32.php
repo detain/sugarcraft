@@ -41,6 +41,36 @@ final class Kernel32 implements Kernel32Interface
     private static ?\FFI $ffi = null;
 
     /**
+     * Standalone cdef for the console screen buffer geometry structs.
+     *
+     * Split into its own constant so `tests/Util/Tty/Kernel32SizeTest.php`
+     * can compile it WITHOUT kernel32.dll (struct typedefs parse anywhere
+     * ext-ffi exists) and pin the byte layout against the documented
+     * CONSOLE_SCREEN_BUFFER_INFO ABI (dwSize@0/2, dwCursorPosition@4/6,
+     * wAttributes@8, srWindow@10/12/14/16, dwMaximumWindowSize@18/20,
+     * sizeof 22).  The old code read corners at byte offsets 4/8/6/10 of a
+     * raw blob — that is cursorX/wAttributes/cursorY/srWindow.Left — a
+     * garbage rectangle handed to every Windows layout pass; and the
+     * stride walk itself called `\FFI::ptr()`, a method that does not
+     * exist on any PHP release, so the whole path fataled.  Fields are
+     * read BY NAME from the declared struct from here on.
+     *
+     * `short` is the grammar-level 16-bit type (no typedef needed);
+     * Windows SHORT is exactly 16 bits.
+     */
+    public const SIZE_CDEF = <<<'CDEF'
+typedef struct { short X; short Y; } COORD;
+typedef struct { short Left; short Top; short Right; short Bottom; } SMALL_RECT;
+typedef struct {
+    COORD          dwSize;
+    COORD          dwCursorPosition;
+    unsigned short wAttributes;
+    SMALL_RECT     srWindow;
+    COORD          dwMaximumWindowSize;
+} CONSOLE_SCREEN_BUFFER_INFO;
+CDEF;
+
+    /**
      * Live ctrl-handler trampolines and the closures behind them.
      *
      * WHY A STATIC AT ALL: SetConsoleCtrlHandler is handed a raw function
@@ -81,7 +111,7 @@ final class Kernel32 implements Kernel32Interface
         }
 
         self::$ffi = \FFI::cdef(
-            <<<'CPROTO'
+            self::SIZE_CDEF . <<<'CPROTO'
 typedef void* HANDLE;
 typedef unsigned long DWORD;
 typedef unsigned int  UINT;
@@ -100,7 +130,7 @@ HANDLE GetStdHandle(DWORD nStdHandle);
 BOOL GetConsoleMode(long long h, DWORD *lpMode);
 BOOL SetConsoleMode(long long h, DWORD dwMode);
 
-BOOL GetConsoleScreenBufferInfo(long long h, void *lpInfo);
+BOOL GetConsoleScreenBufferInfo(long long h, CONSOLE_SCREEN_BUFFER_INFO *lpInfo);
 
 BOOL SetConsoleCP(UINT wCodePageID);
 BOOL SetConsoleOutputCP(UINT wCodePageID);
@@ -343,7 +373,7 @@ CPROTO
      */
     public function getConsoleScreenBufferInfo(int $h): ?array
     {
-        $info = $this->ffi()->new('unsigned char[24]');
+        $info = $this->ffi()->new('CONSOLE_SCREEN_BUFFER_INFO');
         $ok   = $this->ffi()->GetConsoleScreenBufferInfo(
             $h,
             \FFI::addr($info),
@@ -353,17 +383,40 @@ CPROTO
             return null;
         }
 
-        // Extract window bounds (all values are signed shorts; cast to int).
-        $left   = (int) \FFI::cast('short*', \FFI::ptr($info, 4))->cdata;
-        $right  = (int) \FFI::cast('short*', \FFI::ptr($info, 8))->cdata;
-        $top    = (int) \FFI::cast('short*', \FFI::ptr($info, 6))->cdata;
-        $bottom = (int) \FFI::cast('short*', \FFI::ptr($info, 10))->cdata;
+        /* Read the visible-window rectangle BY NAME from the declared
+         * struct (srWindow, offsets 10/12/14/16).  The previous walk
+         * indexed offsets 4/8/6/10 — dwCursorPosition.X, wAttributes,
+         * dwCursorPosition.Y, srWindow.Left — on a 24-byte blob via the
+         * nonexistent `FFI::ptr` stride helper: every value was a
+         * different field's bytes and the call fataled anyway. */
+        return self::deriveSize(
+            (int) $info->srWindow->Left,
+            (int) $info->srWindow->Right,
+            (int) $info->srWindow->Top,
+            (int) $info->srWindow->Bottom,
+        );
+    }
 
-        // Handle -1 (unset by ConHost) with sensible floor defaults.
-        $left   = $left   < 0 ? 0 : $left;
-        $right  = $right  < 0 ? 79 : $right;
-        $top    = $top    < 0 ? 0 : $top;
-        $bottom = $bottom < 0 ? 23 : $bottom;
+    /**
+     * Pure srWindow-rectangle → terminal-size mapping.
+     *
+     * Bounds validation replaces the old negative-corner fabrications
+     * (`right < 0 ? 79`, `bottom < 0 ? 23`): an unset ConHost rectangle
+     * (-1 corners, or an inverted one) is not geometry, and answering
+     * 80x24 for it would be exactly the silent wrong-size class this
+     * whole path is being cured of (sc-40 extends the no-fabricated-
+     * geometry rule to the remaining fallback rungs).  A negative
+     * coordinate or an inverted rectangle therefore returns null —
+     * truthful failure — and the caller's documented fallback chain
+     * decides what to say.
+     *
+     * @return array{cols:int, rows:int}|null
+     */
+    public static function deriveSize(int $left, int $right, int $top, int $bottom): ?array
+    {
+        if ($left < 0 || $top < 0 || $right < $left || $bottom < $top) {
+            return null;
+        }
 
         return [
             'cols' => $right - $left + 1,

@@ -224,8 +224,13 @@ final class WindowsBackend implements Backend
             if ($info !== null) {
                 return $info;
             }
-        } catch (\Throwable) {
-            // Fall through to fallback.
+        } catch (\FFI\Exception) {
+            /* Named FFI failure only.  The bare `\Throwable` catch here was
+             * half of the CRITICAL mis-layout story: `\FFI::ptr()` never
+             * existed, so EVERY Windows run swallowed a fatal and answered
+             * LAST_RESORT_SIZE 200x60 — silently wrong geometry on every
+             * sugar TUI.  Programming errors must propagate, not masquerade
+             * as a size query that failed. */
         }
 
         // Last resort — the shared answer every backend gives (see Backend::LAST_RESORT_SIZE).
