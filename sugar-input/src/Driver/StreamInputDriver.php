@@ -45,6 +45,12 @@ final class StreamInputDriver implements InputDriver
     /** Set once readNonBlocking() observes end-of-file on the stream. */
     private bool $eof = false;
 
+    /** Windows only: stdin when it is a console (read as INPUT_RECORDs). */
+    private ?\SugarCraft\Core\Util\Tty\WindowsConsoleInput $console = null;
+
+    /** Windows only: a pipe never reports EOF to feof() without blocking. */
+    private bool $pipeLike = false;
+
     /**
      * @param resource              $stream  A readable stream resource (STDIN, fopen('php://stdin', 'r'), etc.)
      * @param EscapeDecoderOptions|null $options Decoder protocol options; null uses all-defaults
@@ -71,29 +77,26 @@ final class StreamInputDriver implements InputDriver
         if (is_array($meta) && ($meta['blocked'] ?? false) === true) {
             $this->restoresBlocking = true;
         }
-        stream_set_blocking($this->stream, false);
-
-        // Windows has no reliable stream_select() for the fd types PHP
-        // exposes there, so that leg reads the already-non-blocking stream
-        // directly — which is only safe if the non-blocking switch actually
-        // took. A stream that cannot be made non-blocking would silently
-        // freeze the poll loop inside fread(): the one unacceptable shape is
-        // silence, so this fails loudly instead (POSIX keeps stream_select's
-        // own guard and is not forced to answer this question).
         if (PHP_OS_FAMILY === 'Windows') {
-            $meta = @stream_get_meta_data($this->stream);
-            if (($meta['blocked'] ?? true) === true) {
-                throw new \RuntimeException(
-                    'StreamInputDriver could not put its stream into non-blocking mode;'
-                    . ' the Windows direct-read fallback would block the poll loop.',
-                );
+            // stream_set_blocking() fails on Windows stdio pipes and the console,
+            // and select() calls an empty pipe ready. So: a console stdin is read
+            // as INPUT_RECORDs (sugar-core's WindowsConsoleInput), and a pipe or
+            // file with fstat-sized reads that never park. Neither needs the
+            // non-blocking switch, so none is attempted and none is restored.
+            $this->restoresBlocking = false;
+            $uri = is_array($meta) ? (string) ($meta['uri'] ?? '') : '';
+            if ($uri === 'php://stdin') {
+                $this->console = \SugarCraft\Core\Util\Tty\WindowsConsoleInput::forStdin();
             }
+            $stat = @fstat($this->stream);
+            $this->pipeLike = is_array($stat) && (((int) ($stat['mode'] ?? 0)) & 0170000) === 0010000;
+
+            return;
         }
+
+        stream_set_blocking($this->stream, false);
     }
 
-    /**
-     * Hand the caller's stream back the way we found it.
-     */
     public function __destruct()
     {
         if ($this->restoresBlocking && is_resource($this->stream)) {
@@ -146,7 +149,7 @@ final class StreamInputDriver implements InputDriver
             // decoder is still holding (e.g. the "\r" that followed a
             // bracketed-paste terminator) instead of returning null forever.
             // A live stream keeps the remainder buffered awaiting more bytes.
-            if (feof($this->stream)) {
+            if ($this->console === null && !$this->pipeLike && feof($this->stream)) {
                 $this->eof = true;
                 $this->primeBuffer($this->decoder->decode(''));
             }
@@ -219,7 +222,11 @@ final class StreamInputDriver implements InputDriver
         // immediately with bytes or ''. (Blocking that could not be lifted
         // was refused loudly at construction, never silently here.)
         if (PHP_OS_FAMILY === 'Windows') {
-            return fread($this->stream, 8192);
+            if ($this->console !== null) {
+                return $this->console->read();
+            }
+
+            return \SugarCraft\Core\Util\Proc\WindowsPipes::readAvailable($this->stream, 8192);
         }
 
         $read = [$this->stream];

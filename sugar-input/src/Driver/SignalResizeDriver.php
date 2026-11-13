@@ -367,6 +367,6 @@ final class SignalResizeDriver implements InputDriver
         // as "keep last known dimensions". POSIX-sh idiom — on cmd.exe the
         // redirect is inert and the error text lands on stdout, where the
         // numeric cast yields 0: the same safe answer by a different road.
-        return 'tput ' . \escapeshellarg($capability) . ' 2>/dev/null';
+        return 'tput ' . \escapeshellarg($capability) . (\PHP_OS_FAMILY === 'Windows' ? ' 2>NUL' : ' 2>/dev/null');
     }
 }
