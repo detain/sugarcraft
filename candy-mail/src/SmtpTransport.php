@@ -991,6 +991,14 @@ final class SmtpTransport implements Transport
             if (\microtime(true) >= $deadline) {
                 throw new \RuntimeException(Lang::t('smtp.response_timeout'));
             }
+            // Every read gets the REMAINING budget re-armed, not the full
+            // timeout armed once at connect(): a server that dribbles one
+            // line just under each stale deadline could hold a reply open
+            // for RESPONSE_MAX_LINES x timeout — far past the budget the
+            // operator named. Second granularity (stream_set_timeout takes
+            // whole seconds); the loop-top deadline check stays the hard
+            // bound, so a re-armed read never waits past deadline + 1s.
+            \stream_set_timeout($this->socket, max(1, (int) \ceil($deadline - \microtime(true))));
             if (\count($lines) >= self::RESPONSE_MAX_LINES) {
                 throw new \RuntimeException(Lang::t('smtp.response_too_long'));
             }
@@ -998,9 +1006,26 @@ final class SmtpTransport implements Transport
             // proves the line is longer than RESPONSE_LINE_MAX.
             $line = \stream_get_line($this->socket, self::RESPONSE_LINE_MAX + 1, "\n");
             if ($line === false) {
+                // Two personalities wear the false mask: a real EOF (peer
+                // closed without answering) and a timeout that delivered not
+                // even one byte — on this platform the stall reads back as
+                // false with timed_out set. The socket's confession tells
+                // them apart; the old code called both 'no response'.
+                $meta = @\stream_get_meta_data($this->socket);
+                if (\is_array($meta) && ($meta['timed_out'] ?? false) === true) {
+                    throw new \RuntimeException(Lang::t('smtp.response_timeout'));
+                }
                 throw new \RuntimeException(Lang::t('smtp.no_response'));
             }
             if ($line === '') {
+                // Same confession on the empty-string arm (some PHP builds
+                // report a stall as '' rather than false). A bare newline
+                // that actually arrived (no timed_out) is protocol
+                // noise and still classifies as empty_response.
+                $meta = @\stream_get_meta_data($this->socket);
+                if (\is_array($meta) && ($meta['timed_out'] ?? false) === true) {
+                    throw new \RuntimeException(Lang::t('smtp.response_timeout'));
+                }
                 throw new \RuntimeException(Lang::t('smtp.empty_response'));
             }
             if (\strlen($line) > self::RESPONSE_LINE_MAX) {

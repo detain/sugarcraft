@@ -243,4 +243,97 @@ final class SmtpTransportErrorTest extends TestCase
 
         $transport->send(new Email(from: ['a@x.com'], to: []));
     }
+
+    /**
+     * CM-44: a stalled read returns false (on this platform) or '' (on other
+     * builds) with timed_out set — a hung firewall, not an empty reply line.
+     * The classification (and therefore the operator's diagnosis) must follow
+     * the socket's confession. Against the old bytes this pins RED: the stall
+     * threw no_response, indistinguishable from a closed peer.
+     */
+    public function testStalledReadIsClassifiedAsTimeoutNotEmptyResponse(): void
+    {
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        [$client, $server] = $pair;
+
+        try {
+            $transport = new SmtpTransport('smtp.example.com', 587, timeout: 1);
+            $socketProp = new \ReflectionProperty($transport, 'socket');
+            $socketProp->setAccessible(true);
+            $socketProp->setValue($transport, $client);
+
+            $start = \microtime(true);
+            try {
+                $this->invokePrivate($transport, 'readResponseAny', [[250]]);
+                $this->fail('a silent peer must abort the read');
+            } catch (\RuntimeException $e) {
+                $this->assertSame(Lang::t('smtp.response_timeout'), $e->getMessage(), 'stall must be reported as a timeout, never as an empty response');
+            }
+            $this->assertLessThan(3.5, \microtime(true) - $start, 'the 1s budget must be honoured, not stretched');
+        } finally {
+            @\fclose($client);
+            @\fclose($server);
+        }
+    }
+
+    /** CM-44 guard arm: a bare newline that really arrived stays empty_response. */
+    public function testEmptyLineReplyStillClassifiesAsEmptyResponse(): void
+    {
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        [$client, $server] = $pair;
+
+        try {
+            \fwrite($server, "\n");
+            $transport = new SmtpTransport('smtp.example.com', 587, timeout: 5);
+            $socketProp = new \ReflectionProperty($transport, 'socket');
+            $socketProp->setAccessible(true);
+            $socketProp->setValue($transport, $client);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage(Lang::t('smtp.empty_response'));
+            $this->invokePrivate($transport, 'readResponseAny', [[250]]);
+        } finally {
+            @\fclose($client);
+            @\fclose($server);
+        }
+    }
+
+    /**
+     * CM-44: every read re-arms the remaining budget. The socket arrives
+     * pre-armed with a gross 30s timeout (as a stale connect() arm or an
+     * inherited default would be); the transport's 1s budget must still win:
+     * the read aborts within a couple of seconds, named as a timeout. The old
+     * code armed once and trusted forever — against those bytes this read
+     * blocks the full 30s and the elapsed bound fails (and the stale no-
+     * timed_out classification reddens the message assertion).
+     */
+    public function testStalledReadRespectsRemainingBudgetNotStaleArm(): void
+    {
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        [$client, $server] = $pair;
+
+        try {
+            \stream_set_timeout($client, 30);
+
+            $transport = new SmtpTransport('smtp.example.com', 587, timeout: 1);
+            $socketProp = new \ReflectionProperty($transport, 'socket');
+            $socketProp->setAccessible(true);
+            $socketProp->setValue($transport, $client);
+
+            $start = \microtime(true);
+            try {
+                $this->invokePrivate($transport, 'readResponseAny', [[250]]);
+                $this->fail('a silent peer must abort the read');
+            } catch (\RuntimeException $e) {
+                $this->assertSame(Lang::t('smtp.response_timeout'), $e->getMessage());
+            }
+            $this->assertLessThan(4.0, \microtime(true) - $start, 'the re-armed per-read budget must cut the stale 30s arm down to size');
+        } finally {
+            @\fclose($client);
+            @\fclose($server);
+        }
+    }
 }
