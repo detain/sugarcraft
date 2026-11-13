@@ -7,8 +7,12 @@ namespace SugarCraft\Input;
 /**
  * Modifier key flags for keyboard and mouse events.
  *
- * These are bitmask flags compatible with the Kitty keyboard protocol
- * modifier encoding and the SGR 1006 mouse modifier field.
+ * These are internal STORAGE bits in bubbletea's order (META=8, SUPER=16,
+ * HYPER=32) — not wire values. The Kitty keyboard protocol and the SGR 1006
+ * mouse modifier field use a different wire map (Super=8, Hyper=16, Meta=32;
+ * in the legacy Kitty form bit 32 doubles as the release flag), and the
+ * translation happens exclusively in `fromKittyInt()`, `fromXtermParam()`
+ * and `fromSgrMouse()` — never cast a raw wire field onto these constants.
  *
  * Mirrors charmbracelet/bubbletea's input handling.
  */

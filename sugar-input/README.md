@@ -95,10 +95,12 @@ default branch regardless. Use the plain form once a stable tag exists.
   terminfo cannot be resolved the probe fails soft and dimensions keep their
   last known value (80×24 until a real answer arrives).
 - `evenement`, `react/stream` and `react/event-loop` are hard requires
-  (declared): `ReactInputDriver` emits through `evenement` and takes a
-  `LoopInterface` to read on, and `react/stream` underpins its writable
-  event stream. The sibling `sugarcraft/sugar-core` is hard-required too —
-  the `Lang` facade extends `Core\I18n\Lang`.
+  (declared): `ReactInputDriver` emits through `evenement` and reads on a
+  `React\Stream\ReadableStreamInterface` — create your own stream over the
+  loop (`new ReadableResourceStream(STDIN, Loop::get())`) and pass it in;
+  the constructor takes no loop argument. `react/event-loop` is the loop
+  that stream runs on. The sibling `sugarcraft/sugar-core` is
+  hard-required too — the `Lang` facade extends `Core\I18n\Lang`.
 
 ### Platforms
 
@@ -274,12 +276,17 @@ $event->modifiers->value(); // the underlying bitmask, for caching/comparison
 $event->modifiers->equals($other); // exact equality between two KeyModifier values
 ```
 
-The constants `SHIFT`, `ALT`, `CTRL`, `META`, `SUPER`, `HYPER` (plus
-`CAPS_LOCK`, `NUM_LOCK`) document the wire bit layout the decoders map from:
-`KeyModifier::fromKittyInt()` reads Kitty bits 0–5 plus the lock-state bits
-64/128 (which ride only the explicit `:event-type` sub-param form — the
-legacy form's `& 0x1f` mask drops them along with the spec `meta` bit (32)), `fromXtermParam()` converts the legacy
-`1 + bitmask` field, `fromSgrMouse()` extracts mouse-report bits. `all()`
+The constants `SHIFT`(1), `ALT`(2), `CTRL`(4), `META`(8), `SUPER`(16),
+`HYPER`(32) (plus `CAPS_LOCK`(64), `NUM_LOCK`(128)) are internal **storage
+bits** in bubbletea's order — never wire values. The Kitty WIRE layout is a
+different map (`Super`=8, `Hyper`=16, `Meta`=32), and the translation lives
+exclusively in `KeyModifier::fromKittyInt()`, `fromXtermParam()` and
+`fromSgrMouse()`. `fromKittyInt()` reads wire bits 0–5 plus the lock-state
+bits 64/128 — which ride only the explicit `:event-type` sub-param form: in
+the legacy form wire bit 32 doubles as the release flag (spec `meta` and the
+legacy release flag collide at `0x20`), so it is masked off there and never
+arrives as `META`. `fromXtermParam()` converts the legacy `1 + bitmask`
+field, `fromSgrMouse()` extracts mouse-report bits. `all()`
 covers Shift+Alt+Ctrl only — the bits the legacy CSI forms can express — and
 the named factories (`none()`, `alt()`, `ctrl()`, `shift()`, `altShift()`,
 `ctrlShift()`, `altCtrl()`) exist for producers and tests, not as a public
