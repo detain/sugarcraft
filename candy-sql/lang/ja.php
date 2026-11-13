@@ -463,4 +463,147 @@ return [
     'cli.usage_line' => '使い方: candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # 詳細な使い方を表示',
     'cli.tip_saved_connections' => '       ヒント: 名前付き接続を {path} に保存し、--connect=<name> で起動できます。',
+    'help.summary' => 'candy-sql - SQLite、MySQL、PostgreSQL 向けのターミナル SQL クライアント',
+    'help.usage' => '使い方
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => '引数
+  path-or-dsn
+    SQLite データベースファイルのパス。例: app.sqlite
+    または DSN 文字列。例:  mysql://user:pass@localhost:3306/dbname
+
+  すべて省略した場合: 保存済み接続がある対話端末ではピッカーが
+  それらを提示します。それ以外は短い使用法の行を出力し、ステータス 2
+  (不正な呼び出し)で終了します。この完全な画面は --help で表示できます。',
+    'help.options' => 'オプション
+  --help, -h
+    このヘルプ画面を表示します。
+
+  --version, -V
+    バージョン番号を表示します。
+
+  --connect=<name>
+    保存済み接続ファイルから指定した名前のエントリへ接続します
+    ($XDG_CONFIG_HOME/candy-sql/connections.json。既定は
+    $HOME/.config/candy-sql/connections.json)。明示的な接続引数とは
+    併用できません。パスワードはディスクに保存されません。エントリは
+    "pass-env" で秘密の変数名を指定し、その変数は接続時に読み取られます。
+    下の「保存済み接続」(SAVED CONNECTIONS)を参照してください。',
+    'help.option_dsn' => '  --dsn=<dsn>
+    完全な DSN 接続文字列。
+    形式: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    例:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    個別の接続パラメーター(--driver と --db 以外はすべて任意)。
+    --driver は sqlite、mysql、pgsql のいずれか
+    --ssl-mode は MySQL では既定で "prefer"。"require" と "verify_*" は
+    サーバー証明書の検証付き TLS を強制します。CA の信頼はサーバー側または
+    my.cnf で設定する必要があります(README 参照)。これらの検証モードでは
+    平文を許す ReactPHP トランスポートは拒否され、クエリは TLS 接続上で
+    同期的に実行され、管理画面のライブ更新は無効になります(起動時の通知と
+    アプリのステータス行がそれを知らせます)。
+    パスワードがプロセスのコマンドライン(ps で見える)に残らないよう、
+    --pass= より CANDY_SQL_PASS を使ってください。',
+    'help.examples' => '使用例
+  # SQLite(既定 — パスのみ、または DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # DSN で MySQL
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # 個別のフラグで MySQL
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => '保存済み接続
+  名前付きサーバーを一度登録すれば、以後はすぐに接続できます:
+
+    $HOME/.config/candy-sql/connections.json  (ディレクトリ 0700、ファイル 0600)',
+    'help.saved_fields' => '  フィールド: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env。それ以外のフィールドは拒否され、平文の "pass" フィールドは
+  常に拒否されます。代わりに pass-env で変数を指定してください。対話端末で
+  引数なしに起動すると、これらのエントリがピッカーとして表示されます。
+  --connect=<name> で直接接続できます。',
+    'help.editing' => '編集
+  TABLE プレビューの Rows ペインは編集可能なグリッドです。h/l(または ←/→)で
+  セルカーソルを動かし、3 つのキーでデータを変更します。いずれも正確な
+  ステートメントをステータス行に表示し、Enter で確定するまで何も書き込みません:
+
+    e   カーソル位置のセルを編集(Ctrl+N で NULL)
+    o   行を挿入(Enter で列を順に進む。空入力はその列を DEFAULT のままに、
+        Ctrl+N は NULL を格納)
+    D   カーソル位置の行を削除
+
+  行は完全な PRIMARY KEY だけで特定されます。主キーのないテーブル、
+  NULL/バイナリのキー、バイナリのセル、およびクエリ結果は、名前付きの
+  ステータス行で拒否されます。値はバインドパラメーターで、各書き込みは
+  ちょうど 1 行が対象でない限りロールバックされるトランザクション内で
+  実行されます(既に同じ値を書く UPDATE は変更なしと報告されます)。
+  Esc で開いている編集行を取り消します。',
+    'help.editing_readonly' => '  --read-only
+    このセッションの編集キーを無効にします。うっかり操作を防ぐものであり、
+    Query ペインのステートメントはフィルターしません。確実に防ぐには
+    読み取り専用のデータベースユーザーで接続してください。',
+    'help.history' => '履歴
+  既定では、管理画面のポーリングのスナップショットがすべて、オフラインの
+  監査証跡として $HOME/.candy-sql/history.db(ディレクトリ 0700 / ファイル
+  0600)に記録されます。アプリ内の Dashboard と Reports ページはこの
+  ファイルを読まず、稼働中のサーバーに問い合わせます。',
+    'help.history_flags' => '  --no-history
+    記録を完全に無効にします(ディスクには何も書き込まれません)。
+
+  --history=<path>
+    スナップショットを既定の場所ではなく <path> に保存します。',
+    'help.keyboard' => 'キーボードショートカット (TUI)
+  Tab          ペイン間でフォーカスを循環(Tables → Rows → Query → Admin)
+  ↑ / ↓        リスト行を移動(または j/k)。Tables ペインでの移動はローカルのみで、
+               プレビューは取得しません
+  /            (Tables ペイン)テーブル名のライブフィルター行を開く。文字で追加、
+               ↑/↓ でカーソル移動、Enter で確定して読み込み、Backspace で編集、
+               Esc で破棄してクリア
+  Enter        選択したテーブルの行を読み込む
+  Space        選択したテーブルの行を読み込む(Enter の別名)
+  PgDn / PgUp  (Tables/Rows ペイン、テーブルプレビュー時)プレビューを 100 行単位で
+               ページ送り。閲覧上限はページサイズになりました
+  Ctrl+Enter   現在のクエリを実行
+  Ctrl+R       現在のクエリを実行
+  Ctrl+E       現在のクエリを実行
+  EXPLAIN …    (Query エディター、先頭のキーワード)入力した EXPLAIN は ExplainView を
+               通ります。Rows ペインはフラットなプロバイダーのグリッドではなく、
+               色分けされたプランツリーを表示し、ANALYZE 修飾子は除去されます。
+               インスペクターは調査対象を実行しません
+  e / o / D    (Rows ペイン、テーブルプレビュー)セルの編集 / 行の挿入 /
+               行の削除 — 「編集」(EDITING)を参照。h/l でセルカーソル移動
+  Ctrl+Space   キャレット位置で補完(Query エディター): SQL キーワード、
+               FROM/JOIN/INTO/UPDATE の後のテーブル名、文脈に応じた列
+               (WHERE/SELECT/ORDER BY、`alias.` / `table.` 修飾、INSERT INTO t (...)
+               の列リスト)を読み込み済みスキーマから補完します。候補が 1 つなら
+               補完、共通接頭辞があれば前進、それ以外はステータス行に候補を表示
+  Ctrl+F       現在のクエリをお気に入りリストに追加(セッション内のみ。
+               どのペインにも表示されず、保存もされません)
+  Ctrl+Shift+F 現在のクエリをお気に入りリストから削除
+  1-8          管理ペインへ移動(Admin ペインにフォーカスがあるときのみ)
+  q            Tables/Rows ペインから終了。Admin からは Tables に戻る
+  x            (Tables/Rows、ライブ結果)現在の行を CSV パスへエクスポート。
+               Enter で確定するまで上書き拒否が有効
+  i            (Tables/Rows)CSV ファイルを指定したテーブルへインポート
+  Ctrl+S       どのペインからでもライブ結果/プレビューを CSV にエクスポート
+  Esc          Tables/Rows ペインから終了。開いている Admin ダイアログを取り消す
+  Backspace    カーソルの前の文字を削除(Query エディター)',
+    'help.see_also' => '関連項目
+  https://github.com/sugarcraft/candy-sql',
 ];

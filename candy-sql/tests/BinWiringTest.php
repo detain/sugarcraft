@@ -183,7 +183,32 @@ final class BinWiringTest extends TestCase
         $this->assertStringContainsString("'--connect='", $src);
         $this->assertStringContainsString('ConnectionPicker', $src);
         $this->assertStringContainsString('stream_isatty(STDOUT)', $src);
-        $this->assertStringContainsString('SAVED CONNECTIONS', $src);
+        // SQL-O05: the help prose now lives in lang/*.php, so the heading is
+        // pinned on the rendered English screen, not on the launcher source.
+        $this->assertStringContainsString('SAVED CONNECTIONS', $this->englishHelp());
+    }
+
+    /** The `--help` screen under a pinned English locale (the ambient LC_ALL must not leak in). */
+    private function englishHelp(): string
+    {
+        [$exit, $stdout] = $this->runBin(['--help'], ['LC_ALL' => 'en_US.UTF-8', 'PATH' => (string) \getenv('PATH'), 'HOME' => \sys_get_temp_dir()]);
+        $this->assertSame(0, $exit);
+
+        return $stdout;
+    }
+
+    /** SQL-O05: every translated help section renders (no raw `help.*` key) in every shipped locale. */
+    public function testHelpRendersEveryLocaleWithoutRawKeysAndKeepsFlagsLiteral(): void
+    {
+        foreach (\glob(__DIR__ . '/../lang/*.php') ?: [] as $file) {
+            $code = \basename($file, '.php');
+            [$exit, $stdout] = $this->runBin(['--help'], ['LC_ALL' => $code, 'PATH' => (string) \getenv('PATH'), 'HOME' => \sys_get_temp_dir()]);
+            $this->assertSame(0, $exit, $code);
+            $this->assertSame(0, \preg_match('~\bhelp\.(?:summary|usage|arguments|options|option_dsn|option_params|examples|saved_intro|saved_fields|editing|editing_readonly|history|history_flags|keyboard|see_also)\b~', $stdout), "{$code}: a raw help.* key leaked");
+            foreach (['--connect=<name>', '--read-only', '--no-history', '--history=<path>', '"connections"', 'CANDY_SQL_PASS'] as $literal) {
+                $this->assertStringContainsString($literal, $stdout, "{$code}: {$literal} must stay literal");
+            }
+        }
     }
 
     public function testConnectRefusesAnUnknownNameAndListsSavedOnes(): void
@@ -353,11 +378,12 @@ final class BinWiringTest extends TestCase
     public function testReadOnlyFlagIsWiredAndDocumented(): void
     {
         $src = self::binSource();
+        $help = $this->englishHelp();
 
         $this->assertStringContainsString("in_array('--read-only', \$argv, true)", $src);
         $this->assertStringContainsString('->withReadOnly($readOnly)', $src);
-        $this->assertStringContainsString('does not filter Query-pane statements', $src);
-        $this->assertStringContainsString('e   edit the cell under the cursor', $src);
-        $this->assertStringContainsString('Rows are addressed by their full PRIMARY KEY only', $src);
+        $this->assertStringContainsString('does not filter Query-pane statements', $help);
+        $this->assertStringContainsString('e   edit the cell under the cursor', $help);
+        $this->assertStringContainsString('Rows are addressed by their full PRIMARY KEY only', $help);
     }
 }

@@ -463,4 +463,136 @@ return [
     'cli.usage_line' => '用法：candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # 查看完整用法信息',
     'cli.tip_saved_connections' => '       提示：将命名连接保存在 {path} 中，并使用 --connect=<name> 启动。',
+    'help.summary' => 'candy-sql - 适用于 SQLite、MySQL 和 PostgreSQL 的终端 SQL 客户端',
+    'help.usage' => '用法
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => '参数
+  path-or-dsn
+    SQLite 数据库文件路径，例如：app.sqlite
+    或 DSN 字符串，例如：  mysql://user:pass@localhost:3306/dbname
+
+  完全省略时：在有已保存连接的交互式终端中，选择器会列出它们；
+  否则打印一行简短用法并以状态 2（调用错误）退出——运行 --help
+  可查看此完整屏幕。',
+    'help.options' => '选项
+  --help, -h
+    显示此帮助屏幕。
+
+  --version, -V
+    显示版本号。
+
+  --connect=<name>
+    拨入已保存连接文件中指定名称的条目
+    ($XDG_CONFIG_HOME/candy-sql/connections.json，默认为
+    $HOME/.config/candy-sql/connections.json)。不能与显式连接参数
+    同时使用。密码从不存储在磁盘上：条目通过 "pass-env" 指明其密钥
+    变量，连接时才读取该变量。参见下方的已保存连接（SAVED CONNECTIONS）。',
+    'help.option_dsn' => '  --dsn=<dsn>
+    完整的 DSN 连接字符串。
+    格式： <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    示例：
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    各个连接参数（除 --driver 和 --db 外均为可选）。
+    --driver 必须是以下之一：sqlite、mysql、pgsql
+    MySQL 的 --ssl-mode 默认为 "prefer"。"require" 和 "verify_*" 会强制
+    使用带服务器证书校验的 TLS；CA 信任必须在服务器端或通过 my.cnf
+    配置（见 README）。在这些校验模式下，允许明文的 ReactPHP 传输会被
+    拒绝——查询通过 TLS 连接同步运行，管理页面的实时刷新被禁用
+    （启动提示和应用状态栏都会说明）。
+    建议使用 CANDY_SQL_PASS 而非 --pass=，以免密码出现在进程命令行
+    （ps 可见）中。',
+    'help.examples' => '示例
+  # SQLite（默认——纯路径或 DSN）
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # 通过 DSN 连接 MySQL
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # 通过单独标志连接 MySQL
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => '已保存连接
+  只需列出一次命名服务器，之后即可随时拨入：
+
+    $HOME/.config/candy-sql/connections.json  （目录 0700，文件 0600）',
+    'help.saved_fields' => '  字段：driver (sqlite|mysql|pgsql)、host、port、user、db、ssl-mode、
+  pass-env。其他任何字段都会被拒绝，明文 "pass" 字段始终被拒绝——
+  请改用 pass-env 指向一个变量。在交互式终端中无参数启动时，这些条目
+  会以选择器形式呈现；--connect=<name> 可直接拨入其中一个。',
+    'help.editing' => '编辑
+  TABLE 预览的 Rows 窗格是可编辑网格：h/l（或 ←/→）移动单元格光标，
+  三个组合键可修改数据——每个都会在状态栏显示确切的语句，在按 Enter
+  确认之前不会写入任何内容：
+
+    e   编辑光标所在的单元格（Ctrl+N 设为 NULL）
+    o   插入一行（Enter 逐列前进；空输入让该列取其 DEFAULT，
+        Ctrl+N 存为 NULL）
+    D   删除光标所在的行
+
+  行只能通过完整的 PRIMARY KEY 定位：没有主键的表、NULL/二进制键、
+  二进制单元格以及任何查询结果都会被拒绝，并给出具名状态行。值是绑定
+  参数；每次写入都在事务中运行，除非恰好只影响一行，否则回滚（写入
+  已有相同值的 UPDATE 会报告为无变化）。Esc 取消已打开的编辑行。',
+    'help.editing_readonly' => '  --read-only
+    在本次会话中关闭编辑组合键。这可防止误操作；它不会过滤 Query 窗格中
+    的语句——如需硬性保证，请以只读数据库用户身份连接。',
+    'help.history' => '历史记录
+  默认情况下，每个管理轮询快照都会记录到 $HOME/.candy-sql/history.db
+  （目录 0700 / 文件 0600），作为离线审计轨迹。应用内的 Dashboard 和
+  Reports 页面不读取此文件——它们轮询实时服务器。',
+    'help.history_flags' => '  --no-history
+    完全禁用记录（不向磁盘写入任何内容）。
+
+  --history=<path>
+    将快照存储到 <path>，而不是默认位置。',
+    'help.keyboard' => '键盘快捷键 (TUI)
+  Tab          在窗格之间循环切换焦点（Tables → Rows → Query → Admin）
+  ↑ / ↓        浏览列表行（或 j/k）——在 Tables 窗格中移动仅限本地；
+               从不获取预览
+  /            （Tables 窗格）打开表名的实时过滤行；字母会延长它，↑/↓ 移动光标，
+               Enter 确认并加载，Backspace 编辑，Esc 放弃并清除
+  Enter        加载所选表的行
+  Space        加载所选表的行（Enter 的别名）
+  PgDn / PgUp  （Tables/Rows 窗格，在表预览上）以 100 行为窗口分页预览——
+               浏览上限已变为页大小
+  Ctrl+Enter   执行当前查询
+  Ctrl+R       执行当前查询
+  Ctrl+E       执行当前查询
+  EXPLAIN …    （Query 编辑器，开头关键字）键入的 EXPLAIN 经由 ExplainView 运行：
+               Rows 窗格显示彩色编码的计划树，而不是扁平的提供者网格——并且任何
+               ANALYZE 修饰符都会被去除，检查器绝不执行它所检查的内容
+  e / o / D    （Rows 窗格，表预览）编辑单元格 / 插入行 /
+               删除行——参见编辑（EDITING）；h/l 移动单元格光标
+  Ctrl+Space   在光标处补全（Query 编辑器）：SQL 关键字、FROM/JOIN/INTO/UPDATE
+               之后的表名，以及依上下文的列（WHERE/SELECT/ORDER BY、`alias.` /
+               `table.` 限定、INSERT INTO t (...) 列表），均来自已加载的架构。
+               只有一个候选时直接补全，共同前缀则前移，否则状态栏列出候选
+  Ctrl+F       将当前查询加入收藏列表（仅会话状态——没有窗格浏览它，也不会持久化）
+  Ctrl+Shift+F 将当前查询从收藏列表中移除
+  1-8          跳转到某个管理窗格（仅当 Admin 窗格获得焦点时）
+  q            从 Tables/Rows 窗格退出；在 Admin 中则返回 Tables
+  x            （Tables/Rows，实时结果）将当前行导出到 CSV 路径——
+               在按 Enter 确认之前，拒绝覆盖保持生效
+  i            （Tables/Rows）将 CSV 文件导入到指定名称的表
+  Ctrl+S       从任意窗格将实时结果/预览导出为 CSV
+  Esc          从 Tables/Rows 窗格退出；取消已打开的 Admin 对话框
+  Backspace    删除光标前的字符（Query 编辑器）',
+    'help.see_also' => '另请参阅
+  https://github.com/sugarcraft/candy-sql',
 ];

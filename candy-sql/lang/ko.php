@@ -463,4 +463,146 @@ return [
     'cli.usage_line' => '사용법: candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # 전체 사용법 정보',
     'cli.tip_saved_connections' => '       팁: 이름 있는 연결을 {path}에 저장하고 --connect=<name>으로 실행하세요.',
+    'help.summary' => 'candy-sql - SQLite, MySQL, PostgreSQL용 터미널 SQL 클라이언트',
+    'help.usage' => '사용법
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => '인수
+  path-or-dsn
+    SQLite 데이터베이스 파일 경로. 예: app.sqlite
+    또는 DSN 문자열. 예:  mysql://user:pass@localhost:3306/dbname
+
+  모두 생략하면: 저장된 연결이 있는 대화형 터미널에서는 선택기가
+  이를 보여 주고, 그렇지 않으면 짧은 사용법 줄을 출력한 뒤 상태 2
+  (잘못된 호출)로 종료합니다. 이 전체 화면은 --help 로 확인하세요.',
+    'help.options' => '옵션
+  --help, -h
+    이 도움말 화면을 표시합니다.
+
+  --version, -V
+    버전 번호를 표시합니다.
+
+  --connect=<name>
+    저장된 연결 파일에서 지정한 이름의 항목에 연결합니다
+    ($XDG_CONFIG_HOME/candy-sql/connections.json, 기본값은
+    $HOME/.config/candy-sql/connections.json). 명시적인 연결 인수와는
+    함께 쓸 수 없습니다. 비밀번호는 디스크에 저장되지 않습니다. 항목은
+    "pass-env" 로 비밀 변수 이름을 지정하고, 그 변수는 연결 시점에
+    읽습니다. 아래 저장된 연결(SAVED CONNECTIONS)을 참조하세요.',
+    'help.option_dsn' => '  --dsn=<dsn>
+    전체 DSN 연결 문자열.
+    형식: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    예:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    개별 연결 매개변수 (--driver 와 --db 를 제외하면 모두 선택 사항).
+    --driver 는 sqlite, mysql, pgsql 중 하나여야 합니다
+    --ssl-mode 의 MySQL 기본값은 "prefer" 입니다. "require" 와 "verify_*" 는
+    서버 인증서 검증이 포함된 TLS 를 강제합니다. CA 신뢰는 서버 측이나
+    my.cnf 로 설정해야 합니다(README 참조). 이러한 검증 모드에서는 평문을
+    허용하는 ReactPHP 전송이 거부되고, 쿼리는 TLS 연결 위에서 동기식으로
+    실행되며 관리 라이브 새로 고침은 꺼집니다(시작 알림과 앱 상태 줄이
+    이를 알려 줍니다).
+    비밀번호가 프로세스 명령줄(ps 에 보임)에 남지 않도록 --pass= 보다
+    CANDY_SQL_PASS 를 사용하세요.',
+    'help.examples' => '예제
+  # SQLite (기본 — 경로만 또는 DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # DSN 으로 MySQL
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # 개별 플래그로 MySQL
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => '저장된 연결
+  이름 있는 서버를 한 번 나열해 두면 이후 바로 연결할 수 있습니다:
+
+    $HOME/.config/candy-sql/connections.json  (디렉터리 0700, 파일 0600)',
+    'help.saved_fields' => '  필드: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env. 그 밖의 필드는 거부되며 평문 "pass" 필드는 항상 거부됩니다.
+  대신 pass-env 가 변수를 가리키게 하세요. 대화형 터미널에서 인수 없이
+  실행하면 이 항목들을 선택기로 보여 주며, --connect=<name> 은 하나에
+  직접 연결합니다.',
+    'help.editing' => '편집
+  TABLE 미리 보기의 Rows 창은 편집 가능한 그리드입니다. h/l(또는 ←/→)로
+  셀 커서를 옮기고, 세 가지 키 조합으로 데이터를 바꿉니다. 각각 정확한
+  문장을 상태 줄에 보여 주며 Enter 로 확정하기 전에는 아무것도 쓰지 않습니다:
+
+    e   커서 아래의 셀 편집 (Ctrl+N 은 NULL 설정)
+    o   행 삽입 (Enter 로 열을 차례로 이동. 빈 입력은 해당 열을 DEFAULT 로
+        두고, Ctrl+N 은 NULL 을 저장)
+    D   커서 아래의 행 삭제
+
+  행은 전체 PRIMARY KEY 로만 지정됩니다. 기본 키가 없는 테이블,
+  NULL/바이너리 키, 바이너리 셀, 모든 쿼리 결과는 이름 있는 상태 줄과 함께
+  거부됩니다. 값은 바인딩된 매개변수이며, 각 쓰기는 정확히 한 행만
+  건드리지 않으면 롤백되는 트랜잭션에서 실행됩니다(이미 있는 값을 쓰는
+  UPDATE 는 변경 없음으로 보고됩니다). Esc 는 열린 편집 줄을 취소합니다.',
+    'help.editing_readonly' => '  --read-only
+    세션 동안 편집 키를 끕니다. 실수를 막아 주지만 Query 창의 문장은
+    거르지 않습니다. 확실히 막으려면 읽기 전용 데이터베이스 사용자로
+    연결하세요.',
+    'help.history' => '기록
+  기본적으로 모든 관리 폴링 스냅샷은 오프라인 감사 기록으로
+  $HOME/.candy-sql/history.db (디렉터리 0700 / 파일 0600)에 저장됩니다.
+  앱의 Dashboard 와 Reports 페이지는 이 파일을 읽지 않고 실행 중인
+  서버에 질의합니다.',
+    'help.history_flags' => '  --no-history
+    기록을 완전히 끕니다 (디스크에 아무것도 쓰지 않음).
+
+  --history=<path>
+    스냅샷을 기본 위치 대신 <path> 에 저장합니다.',
+    'help.keyboard' => '키보드 단축키 (TUI)
+  Tab          창 사이로 포커스 순환 (Tables → Rows → Query → Admin)
+  ↑ / ↓        목록 행 이동 (또는 j/k) — Tables 창에서는 이동이 로컬에서만
+               이루어지며 미리 보기를 가져오지 않음
+  /            (Tables 창) 테이블 이름에 대한 실시간 필터 줄을 엽니다. 글자는
+               덧붙이고, ↑/↓ 는 커서를 옮기고, Enter 는 확정 후 로드, Backspace 는
+               수정, Esc 는 취소 후 지움
+  Enter        선택한 테이블의 행 로드
+  Space        선택한 테이블의 행 로드 (Enter 의 별칭)
+  PgDn / PgUp  (Tables/Rows 창, 테이블 미리 보기에서) 미리 보기를 100행 창 단위로
+               넘김 — 탐색 상한이 페이지 크기가 되었음
+  Ctrl+Enter   현재 쿼리 실행
+  Ctrl+R       현재 쿼리 실행
+  Ctrl+E       현재 쿼리 실행
+  EXPLAIN …    (Query 편집기, 선두 키워드) 입력한 EXPLAIN 은 ExplainView 를 거칩니다.
+               Rows 창은 평평한 공급자 그리드가 아니라 색으로 구분된 계획 트리를
+               보여 주며, ANALYZE 수정자는 제거됩니다. 검사기는 검사 대상을
+               실행하지 않습니다
+  e / o / D    (Rows 창, 테이블 미리 보기) 셀 편집 / 행 삽입 /
+               행 삭제 — 편집(EDITING) 참조. h/l 은 셀 커서 이동
+  Ctrl+Space   캐럿 위치에서 완성 (Query 편집기): SQL 키워드, FROM/JOIN/INTO/UPDATE
+               뒤의 테이블 이름, 문맥에 맞는 열(WHERE/SELECT/ORDER BY, `alias.` /
+               `table.` 한정, INSERT INTO t (...) 목록)을 로드된 스키마에서 가져옵니다.
+               후보가 하나면 완성, 공통 접두사는 앞으로 진행, 그 외에는 상태 줄에
+               후보를 나열
+  Ctrl+F       현재 쿼리를 즐겨찾기 목록에 추가 (세션 상태만 — 어느 창에도
+               표시되지 않으며 저장되지 않음)
+  Ctrl+Shift+F 현재 쿼리를 즐겨찾기 목록에서 제거
+  1-8          관리 창으로 이동 (Admin 창에 포커스가 있을 때만)
+  q            Tables/Rows 창에서 종료. Admin 에서는 Tables 로 복귀
+  x            (Tables/Rows, 실시간 결과) 현재 행을 CSV 경로로 내보내기 —
+               Enter 로 확정할 때까지 덮어쓰기 거부가 유지됨
+  i            (Tables/Rows) CSV 파일을 이름 있는 테이블로 가져오기
+  Ctrl+S       어느 창에서든 실시간 결과/미리 보기를 CSV 로 내보내기
+  Esc          Tables/Rows 창에서 종료. 열린 Admin 대화 상자를 취소
+  Backspace    커서 앞의 문자 삭제 (Query 편집기)',
+    'help.see_also' => '참고
+  https://github.com/sugarcraft/candy-sql',
 ];

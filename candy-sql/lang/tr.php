@@ -463,4 +463,150 @@ return [
     'cli.usage_line' => 'KULLANIM: candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # tam kullanım bilgisi için',
     'cli.tip_saved_connections' => '       İpucu: adlandırılmış bağlantıları {path} içine kaydedin ve --connect=<name> ile başlatın.',
+    'help.summary' => 'candy-sql - SQLite, MySQL ve PostgreSQL için terminal SQL istemcisi',
+    'help.usage' => 'KULLANIM
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => 'ARGÜMANLAR
+  path-or-dsn
+    SQLite veritabanı dosya yolu, örn.: app.sqlite
+    Veya bir DSN dizgesi, örn.:  mysql://user:pass@localhost:3306/dbname
+
+  Tamamen atlandığında: kayıtlı bağlantıları olan etkileşimli bir
+  terminalde bir seçici bunları sunar; aksi halde kısa bir kullanım satırı
+  yazdırılır ve süreç 2 durumuyla (hatalı çağrı) çıkar — bu tam ekran için
+  --help çalıştırın.',
+    'help.options' => 'SEÇENEKLER
+  --help, -h
+    Bu yardım ekranını gösterir.
+
+  --version, -V
+    Sürüm numarasını gösterir.
+
+  --connect=<name>
+    Kayıtlı bağlantılar dosyasındaki adı verilen girdiye bağlanır
+    ($XDG_CONFIG_HOME/candy-sql/connections.json, varsayılan olarak
+    $HOME/.config/candy-sql/connections.json). Açık bağlantı argümanlarıyla
+    birleştirilemez. Parolalar asla diske yazılmaz: bir girdi sırrını
+    "pass-env" ile adlandırır ve değişken bağlanma anında okunur. Aşağıdaki
+    KAYITLI BAĞLANTILAR bölümüne bakın.',
+    'help.option_dsn' => '  --dsn=<dsn>
+    Tam DSN bağlantı dizgesi.
+    Biçim: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    Örnekler:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    Tek tek bağlantı parametreleri (--driver ve --db dışındakilerin hepsi isteğe bağlıdır).
+    --driver şunlardan biri olmalıdır: sqlite, mysql, pgsql
+    --ssl-mode, MySQL için varsayılan olarak "prefer"dir. "require" ve
+    "verify_*", sunucu sertifikası doğrulamalı TLS\'yi zorunlu kılar; CA
+    güveni sunucu tarafında veya my.cnf ile yapılandırılmalıdır (README\'ye
+    bakın). Bu doğrulanmış kiplerde düz metne izin verebilen ReactPHP
+    aktarımı reddedilir — sorgular TLS bağlantısı üzerinden eşzamanlı
+    çalışır ve yönetim canlı yenilemesi kapatılır (bir başlangıç bildirimi
+    ve uygulamanın durum satırı bunu belirtir).
+    Parolanın süreç komut satırında (ps ile görünür) kalmaması için --pass=
+    yerine CANDY_SQL_PASS tercih edin.',
+    'help.examples' => 'ÖRNEKLER
+  # SQLite (varsayılan — yalın yol veya DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # DSN ile MySQL
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # Tek tek seçeneklerle MySQL
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => 'KAYITLI BAĞLANTILAR
+  Adlandırılmış sunucuları bir kez listeleyin, sonra hep onlara bağlanın:
+
+    $HOME/.config/candy-sql/connections.json  (dizin 0700, dosya 0600)',
+    'help.saved_fields' => '  Alanlar: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env. Başka her alan reddedilir ve düz metin "pass" alanı her zaman
+  reddedilir — bunun yerine pass-env\'i bir değişkene yönlendirin. Etkileşimli
+  bir terminalde argümansız başlatma bu girdileri seçici olarak sunar;
+  --connect=<name> doğrudan birine bağlanır.',
+    'help.editing' => 'DÜZENLEME
+  Bir TABLE önizlemesinin Rows bölmesi düzenlenebilir bir ızgaradır: h/l
+  (veya ←/→) hücre imlecini taşır ve üç tuş dizisi veriyi değiştirir —
+  her biri tam deyimi durum satırında gösterir ve Enter onaylayana kadar
+  hiçbir şey yazmaz:
+
+    e   imlecin altındaki hücreyi düzenle (Ctrl+N NULL yapar)
+    o   satır ekle (Enter sütunlar arasında ilerler; boş girdi sütunu
+        DEFAULT değerine bırakır, Ctrl+N NULL saklar)
+    D   imlecin altındaki satırı sil
+
+  Satırlara yalnızca tam PRIMARY KEY ile erişilir: anahtarı olmayan bir
+  tablo, NULL/ikili bir anahtar, ikili bir hücre ve her sorgu sonucu adlı
+  bir durum satırıyla reddedilir. Değerler bağlı parametrelerdir; her
+  yazma, tam olarak bir satıra dokunulmadıkça geri alınan bir işlemde
+  çalışır (zaten var olan değeri yazan bir UPDATE değişiklik yok olarak
+  bildirilir). Esc açık bir düzenleme satırını iptal eder.',
+    'help.editing_readonly' => '  --read-only
+    Oturum için düzenleme tuşlarını kapatır. Bu bir sürçmeye karşı korur;
+    Query bölmesindeki deyimleri süzmez — kesin güvence için salt okunur
+    bir veritabanı kullanıcısıyla bağlanın.',
+    'help.history' => 'GEÇMİŞ
+  Varsayılan olarak her yönetim yoklama anlık görüntüsü, çevrimdışı bir
+  denetim izi olarak $HOME/.candy-sql/history.db dosyasına (dizin 0700 /
+  dosya 0600) kaydedilir. Uygulamadaki Dashboard ve Reports sayfaları bu
+  dosyayı okumaz — canlı sunucuyu yoklar.',
+    'help.history_flags' => '  --no-history
+    Kaydı tamamen kapatır (diske hiçbir şey yazılmaz).
+
+  --history=<path>
+    Anlık görüntüleri varsayılan konum yerine <path> yoluna kaydeder.',
+    'help.keyboard' => 'KLAVYE KISAYOLLARI (TUI)
+  Tab          Odağı bölmeler arasında döndürür (Tables → Rows → Query → Admin)
+  ↑ / ↓        Liste satırlarında gezinir (veya j/k) — Tables bölmesinde hareket
+               yalnızca yereldir; asla önizleme getirmez
+  /            (Tables bölmesi) tablo adları üzerinde canlı bir süzgeç satırı açar;
+               harfler uzatır, ↑/↓ imleci taşır, Enter onaylar ve yükler, Backspace
+               düzenler, Esc vazgeçer ve temizler
+  Enter        Seçili tablonun satırlarını yükler
+  Space        Seçili tablonun satırlarını yükler (Enter\'ın takma adı)
+  PgDn / PgUp  (Tables/Rows bölmesi, tablo önizlemesinde) önizlemeyi 100 satırlık
+               pencerelerle sayfalar — gezinme sınırı sayfa boyutu oldu
+  Ctrl+Enter   Geçerli sorguyu çalıştırır
+  Ctrl+R       Geçerli sorguyu çalıştırır
+  Ctrl+E       Geçerli sorguyu çalıştırır
+  EXPLAIN …    (Query düzenleyici, baştaki anahtar sözcük) yazılan bir EXPLAIN
+               ExplainView üzerinden çalışır: Rows bölmesi düz sağlayıcı ızgarası yerine
+               renk kodlu plan ağacını gösterir — ve her ANALYZE değiştiricisi
+               ÇIKARILIR, denetleyici incelediğini asla çalıştırmaz
+  e / o / D    (Rows bölmesi, tablo önizlemesi) hücreyi düzenle / satır ekle /
+               satırı sil — bkz. DÜZENLEME; h/l hücre imlecini taşır
+  Ctrl+Space   İmleç konumunda tamamlar (Query düzenleyici): SQL anahtar sözcükleri,
+               FROM/JOIN/INTO/UPDATE sonrası tablo adları ve bağlamdaki sütunlar
+               (WHERE/SELECT/ORDER BY, `alias.` / `table.` nitelikli, INSERT INTO t (...)
+               listesi) yüklü şemadan. Tek aday tamamlanır, ortak önek ilerler, aksi
+               halde durum satırı adayları listeler
+  Ctrl+F       Geçerli sorguyu sık kullanılanlar listesine ekler (yalnızca oturum
+               durumu — hiçbir bölme onu göstermez ve kalıcı değildir)
+  Ctrl+Shift+F Geçerli sorguyu sık kullanılanlar listesinden çıkarır
+  1-8          Bir yönetim bölmesine atlar (yalnızca Admin bölmesi odaktayken)
+  q            Tables/Rows bölmelerinden çıkar; Admin\'den Tables\'a döner
+  x            (Tables/Rows, canlı sonuç) geçerli satırları bir CSV yoluna dışa
+               aktarır — Enter onaylayana kadar üzerine yazma reddi kurulu kalır
+  i            (Tables/Rows) bir CSV dosyasını adlandırılmış bir tabloya aktarır
+  Ctrl+S       Canlı sonucu/önizlemeyi her bölmeden CSV olarak dışa aktarır
+  Esc          Tables/Rows bölmelerinden çıkar; açık bir Admin iletişim kutusunu iptal eder
+  Backspace    İmlecin önündeki karakteri siler (Query düzenleyici)',
+    'help.see_also' => 'AYRICA BAKIN
+  https://github.com/sugarcraft/candy-sql',
 ];

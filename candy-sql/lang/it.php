@@ -463,4 +463,152 @@ return [
     'cli.usage_line' => 'USO: candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # per le informazioni d’uso complete',
     'cli.tip_saved_connections' => '       Suggerimento: salva connessioni con nome in {path} e avvia con --connect=<name>.',
+    'help.summary' => 'candy-sql - Client SQL da terminale per SQLite, MySQL e PostgreSQL',
+    'help.usage' => 'UTILIZZO
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => 'ARGOMENTI
+  path-or-dsn
+    Percorso del file di database SQLite, ad es.: app.sqlite
+    Oppure una stringa DSN, ad es.:  mysql://user:pass@localhost:3306/dbname
+
+  Se omesso del tutto: in un terminale interattivo con connessioni
+  salvate, un selettore le propone; altrimenti viene stampata una breve
+  riga d\'uso e il processo termina con stato 2 (invocazione errata) —
+  eseguire --help per questa schermata completa.',
+    'help.options' => 'OPZIONI
+  --help, -h
+    Mostra questa schermata di aiuto.
+
+  --version, -V
+    Mostra il numero di versione.
+
+  --connect=<name>
+    Si collega alla voce indicata del file delle connessioni salvate
+    ($XDG_CONFIG_HOME/candy-sql/connections.json, in alternativa
+    $HOME/.config/candy-sql/connections.json). Non può essere combinata
+    con argomenti di connessione espliciti. Le password non vengono mai
+    salvate su disco: una voce indica il proprio segreto tramite "pass-env"
+    e la variabile viene letta al momento della connessione.
+    Vedere CONNESSIONI SALVATE più sotto.',
+    'help.option_dsn' => '  --dsn=<dsn>
+    Stringa di connessione DSN completa.
+    Formato: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    Esempi:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    Parametri di connessione singoli (tutti tranne --driver e --db sono facoltativi).
+    --driver deve essere uno tra: sqlite, mysql, pgsql
+    --ssl-mode vale "prefer" per impostazione predefinita su MySQL. "require" e
+    "verify_*" impongono TLS con verifica del certificato del server; la fiducia
+    nella CA va configurata lato server o tramite my.cnf (vedere il README). In
+    questi modi verificati il trasporto ReactPHP, capace di testo in chiaro, viene
+    rifiutato — le query girano in modo sincrono sulla connessione TLS e
+    l\'aggiornamento live dell\'amministrazione è disattivato (un avviso all\'avvio
+    e la riga di stato dell\'app lo segnalano).
+    Preferire CANDY_SQL_PASS a --pass= per tenere la password fuori dalla
+    riga di comando del processo (visibile con ps).',
+    'help.examples' => 'ESEMPI
+  # SQLite (predefinito — percorso semplice o DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # MySQL tramite DSN
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # MySQL tramite opzioni singole
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => 'CONNESSIONI SALVATE
+  Elenca una volta i server con nome, collegati sempre:
+
+    $HOME/.config/candy-sql/connections.json  (cartella 0700, file 0600)',
+    'help.saved_fields' => '  Campi: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env. Ogni altro campo viene rifiutato, e un campo "pass" in chiaro
+  viene sempre rifiutato — far puntare pass-env a una variabile. Un avvio
+  senza argomenti in un terminale interattivo presenta queste voci come
+  selettore; --connect=<name> ne apre una direttamente.',
+    'help.editing' => 'MODIFICA
+  Il pannello Rows di un\'anteprima TABLE è una griglia modificabile: h/l
+  (o ←/→) spostano il cursore di cella, e tre combinazioni modificano i
+  dati — ciascuna mostra l\'istruzione esatta nella riga di stato e non
+  scrive nulla finché Invio non conferma:
+
+    e   modifica la cella sotto il cursore (Ctrl+N imposta NULL)
+    o   inserisce una riga (Invio scorre le colonne; un valore vuoto
+        lascia la colonna al suo DEFAULT, Ctrl+N memorizza NULL)
+    D   elimina la riga sotto il cursore
+
+  Le righe sono indirizzate solo tramite la loro PRIMARY KEY completa: una
+  tabella senza, una chiave NULL/binaria, una cella binaria e qualsiasi
+  risultato di query vengono rifiutati con una riga di stato esplicita. I
+  valori sono parametri associati; ogni scrittura gira in una transazione
+  annullata a meno che sia stata toccata esattamente una riga (un UPDATE che
+  scrive il valore già presente viene segnalato come nessuna modifica).
+  Esc annulla una riga di modifica aperta.',
+    'help.editing_readonly' => '  --read-only
+    Disattiva le combinazioni di modifica per la sessione. Protegge da una
+    svista; non filtra le istruzioni del pannello Query — per una garanzia
+    rigida, collegarsi come utente di database in sola lettura.',
+    'help.history' => 'CRONOLOGIA
+  Per impostazione predefinita ogni istantanea di polling amministrativo
+  viene registrata in $HOME/.candy-sql/history.db (cartella 0700 / file 0600)
+  come traccia di audit offline. Le pagine Dashboard e Reports dell\'app non
+  leggono questo file — interrogano il server in tempo reale.',
+    'help.history_flags' => '  --no-history
+    Disattiva del tutto la registrazione (nulla viene scritto su disco).
+
+  --history=<path>
+    Salva le istantanee in <path> invece che nella posizione predefinita.',
+    'help.keyboard' => 'SCORCIATOIE DA TASTIERA (TUI)
+  Tab          Fa ruotare il focus tra i pannelli (Tables → Rows → Query → Admin)
+  ↑ / ↓        Naviga tra le righe dell\'elenco (o j/k) — nel pannello Tables lo
+               spostamento è solo locale; non carica mai un\'anteprima
+  /            (Pannello Tables) apre una riga di filtro live sui nomi delle tabelle;
+               le lettere la estendono, ↑/↓ muovono il cursore, Invio conferma e
+               carica, Backspace modifica, Esc abbandona e cancella
+  Enter        Carica le righe della tabella selezionata
+  Space        Carica le righe della tabella selezionata (alias di Enter)
+  PgDn / PgUp  (Pannello Tables/Rows, su un\'anteprima di tabella) sfoglia l\'anteprima
+               in finestre di 100 righe — il limite di navigazione è diventato la dimensione della pagina
+  Ctrl+Enter   Esegue la query corrente
+  Ctrl+R       Esegue la query corrente
+  Ctrl+E       Esegue la query corrente
+  EXPLAIN …    (Editor Query, parola chiave iniziale) un EXPLAIN digitato passa da
+               ExplainView: il pannello Rows mostra l\'albero del piano colorato, non
+               la griglia piatta del provider — e qualsiasi modificatore ANALYZE viene
+               RIMOSSO, l\'ispettore non esegue mai ciò che ispeziona
+  e / o / D    (Pannello Rows, anteprima di tabella) modifica la cella / inserisce una
+               riga / elimina la riga — vedere MODIFICA; h/l spostano il cursore di cella
+  Ctrl+Space   Completa al cursore (editor Query): parole chiave SQL, nomi di tabella
+               dopo FROM/JOIN/INTO/UPDATE e colonne nel contesto (WHERE/SELECT/ORDER BY,
+               qualificate `alias.` / `table.`, l\'elenco INSERT INTO t (...)) dallo
+               schema caricato. Un candidato viene completato, un prefisso comune
+               avanza, altrimenti la riga di stato elenca i candidati
+  Ctrl+F       Aggiunge la query corrente all\'elenco dei preferiti (solo stato di
+               sessione — nessun pannello lo mostra e non viene salvato)
+  Ctrl+Shift+F Rimuove la query corrente dall\'elenco dei preferiti
+  1-8          Salta a un pannello di amministrazione (solo con il pannello Admin attivo)
+  q            Esce dai pannelli Tables/Rows; da Admin torna a Tables
+  x            (Tables/Rows, risultato live) esporta le righe correnti in un percorso
+               CSV — il rifiuto di sovrascrittura resta armato finché Invio non conferma
+  i            (Tables/Rows) importa un file CSV in una tabella indicata
+  Ctrl+S       Esporta il risultato/anteprima live in CSV da qualsiasi pannello
+  Esc          Esce dai pannelli Tables/Rows; annulla una finestra di dialogo Admin aperta
+  Backspace    Elimina il carattere prima del cursore (editor Query)',
+    'help.see_also' => 'VEDERE ANCHE
+  https://github.com/sugarcraft/candy-sql',
 ];

@@ -463,4 +463,151 @@ return [
     'cli.usage_line' => 'GEBRUIK: candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # voor volledige gebruiksinformatie',
     'cli.tip_saved_connections' => '       Tip: sla benoemde verbindingen op in {path} en start met --connect=<name>.',
+    'help.summary' => 'candy-sql - Terminal-SQL-client voor SQLite, MySQL en PostgreSQL',
+    'help.usage' => 'GEBRUIK
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => 'ARGUMENTEN
+  path-or-dsn
+    Pad van het SQLite-databasebestand, bijv.: app.sqlite
+    Of een DSN-tekenreeks, bijv.:  mysql://user:pass@localhost:3306/dbname
+
+  Helemaal weggelaten: in een interactieve terminal met opgeslagen
+  verbindingen biedt een kiezer deze aan; anders wordt een korte
+  gebruiksregel afgedrukt en eindigt het proces met status 2 (onjuiste
+  aanroep) — voer --help uit voor dit volledige scherm.',
+    'help.options' => 'OPTIES
+  --help, -h
+    Dit helpscherm tonen.
+
+  --version, -V
+    Het versienummer tonen.
+
+  --connect=<name>
+    Verbinden met de genoemde invoer uit het bestand met opgeslagen verbindingen
+    ($XDG_CONFIG_HOME/candy-sql/connections.json, standaard
+    $HOME/.config/candy-sql/connections.json). Kan niet worden gecombineerd
+    met expliciete verbindingsargumenten. Wachtwoorden worden nooit op
+    schijf opgeslagen: een invoer noemt zijn geheim via "pass-env" en de
+    variabele wordt bij het verbinden gelezen. Zie OPGESLAGEN VERBINDINGEN hieronder.',
+    'help.option_dsn' => '  --dsn=<dsn>
+    Volledige DSN-verbindingstekenreeks.
+    Indeling: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    Voorbeelden:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    Afzonderlijke verbindingsparameters (alle behalve --driver en --db zijn optioneel).
+    --driver moet een van deze zijn: sqlite, mysql, pgsql
+    --ssl-mode is standaard "prefer" voor MySQL. "require" en "verify_*" dwingen
+    TLS af met controle van het servercertificaat; het vertrouwen in de CA moet
+    aan de serverkant of via my.cnf worden ingesteld (zie README). In die
+    gecontroleerde modi wordt het tot platte tekst in staat zijnde ReactPHP-
+    transport geweigerd — query\'s lopen synchroon over de TLS-verbinding en
+    het live verversen van de beheerpagina\'s is uitgeschakeld (een
+    opstartmelding en de statusregel van de app geven dit aan).
+    Gebruik liever CANDY_SQL_PASS dan --pass= zodat het wachtwoord niet in de
+    opdrachtregel van het proces staat (zichtbaar in ps).',
+    'help.examples' => 'VOORBEELDEN
+  # SQLite (standaard — kaal pad of DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # MySQL via DSN
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # MySQL via afzonderlijke opties
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => 'OPGESLAGEN VERBINDINGEN
+  Som benoemde servers één keer op en verbind er voortaan direct mee:
+
+    $HOME/.config/candy-sql/connections.json  (map 0700, bestand 0600)',
+    'help.saved_fields' => '  Velden: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env. Elk ander veld wordt geweigerd, en een "pass"-veld in platte
+  tekst wordt altijd geweigerd — laat pass-env naar een variabele wijzen.
+  Een start zonder argumenten in een interactieve terminal toont deze
+  invoeren als kiezer; --connect=<name> verbindt direct met één ervan.',
+    'help.editing' => 'BEWERKEN
+  Het Rows-paneel van een TABLE-voorbeeld is een bewerkbaar raster: h/l
+  (of ←/→) verplaatsen de celcursor, en drie toetscombinaties wijzigen
+  gegevens — elk toont de exacte instructie op de statusregel en schrijft
+  niets totdat Enter bevestigt:
+
+    e   de cel onder de cursor bewerken (Ctrl+N zet NULL)
+    o   een rij invoegen (Enter loopt door de kolommen; een lege invoer
+        laat de kolom op zijn DEFAULT, Ctrl+N slaat NULL op)
+    D   de rij onder de cursor verwijderen
+
+  Rijen worden alleen aangesproken via hun volledige PRIMARY KEY: een
+  tabel zonder sleutel, een NULL-/binaire sleutel, een binaire cel en elk
+  queryresultaat worden geweigerd met een benoemde statusregel. Waarden
+  zijn gebonden parameters; elke schrijfactie draait in een transactie die
+  wordt teruggedraaid tenzij precies één rij is geraakt (een UPDATE die de
+  al aanwezige waarde schrijft, wordt als ongewijzigd gemeld). Esc breekt
+  een geopende bewerkregel af.',
+    'help.editing_readonly' => '  --read-only
+    Schakelt de bewerktoetsen voor de sessie uit. Dit beschermt tegen een
+    misstap; het filtert geen opdrachten in het Query-paneel — kies voor
+    een harde garantie een verbinding als alleen-lezen databasegebruiker.',
+    'help.history' => 'GESCHIEDENIS
+  Standaard wordt elke beheer-pollmomentopname vastgelegd in
+  $HOME/.candy-sql/history.db (map 0700 / bestand 0600) als offline
+  auditspoor. De pagina\'s Dashboard en Reports in de app lezen dit
+  bestand niet — ze bevragen de live server.',
+    'help.history_flags' => '  --no-history
+    De registratie volledig uitschakelen (er wordt niets naar schijf geschreven).
+
+  --history=<path>
+    Momentopnamen opslaan in <path> in plaats van op de standaardlocatie.',
+    'help.keyboard' => 'SNELTOETSEN (TUI)
+  Tab          De focus door de panelen laten rouleren (Tables → Rows → Query → Admin)
+  ↑ / ↓        Door lijstrijen navigeren (of j/k) — in het Tables-paneel is een
+               verplaatsing alleen lokaal; er wordt nooit een voorbeeld opgehaald
+  /            (Tables-paneel) een live filterregel over tabelnamen openen; letters
+               verlengen hem, ↑/↓ verplaatsen de cursor, Enter bevestigt en laadt,
+               Backspace corrigeert, Esc verwerpt en wist
+  Enter        De rijen van de geselecteerde tabel laden
+  Space        De rijen van de geselecteerde tabel laden (alias voor Enter)
+  PgDn / PgUp  (Tables-/Rows-paneel, op een tabelvoorbeeld) het voorbeeld in vensters
+               van 100 rijen pagineren — de bladerlimiet werd een paginagrootte
+  Ctrl+Enter   De huidige query uitvoeren
+  Ctrl+R       De huidige query uitvoeren
+  Ctrl+E       De huidige query uitvoeren
+  EXPLAIN …    (Query-editor, voorafgaand sleutelwoord) een getypte EXPLAIN loopt via
+               ExplainView: het Rows-paneel toont de kleurgecodeerde plan-boom, niet
+               het platte providerraster — en elke ANALYZE-modifier wordt VERWIJDERD,
+               de inspecteur voert nooit uit wat hij inspecteert
+  e / o / D    (Rows-paneel, tabelvoorbeeld) de cel bewerken / een rij invoegen /
+               de rij verwijderen — zie BEWERKEN; h/l verplaatsen de celcursor
+  Ctrl+Space   Aanvullen bij de cursor (Query-editor): SQL-sleutelwoorden, tabelnamen
+               na FROM/JOIN/INTO/UPDATE en kolommen in context (WHERE/SELECT/ORDER BY,
+               gekwalificeerd als `alias.` / `table.`, de INSERT INTO t (...)-lijst)
+               uit het geladen schema. Eén kandidaat wordt aangevuld, een gedeeld
+               voorvoegsel schuift op, anders toont de statusregel de kandidaten
+  Ctrl+F       De huidige query aan de favorietenlijst toevoegen (alleen sessiestatus
+               — geen paneel toont hem en hij wordt niet bewaard)
+  Ctrl+Shift+F De huidige query uit de favorietenlijst verwijderen
+  1-8          Naar een beheerpaneel springen (alleen als het Admin-paneel focus heeft)
+  q            Afsluiten vanuit de panelen Tables/Rows; vanuit Admin terug naar Tables
+  x            (Tables/Rows, live resultaat) de huidige rijen naar een CSV-pad
+               exporteren — overschrijfweigering blijft actief tot Enter bevestigt
+  i            (Tables/Rows) een CSV-bestand importeren in een benoemde tabel
+  Ctrl+S       Het live resultaat/voorbeeld vanuit elk paneel naar CSV exporteren
+  Esc          Afsluiten vanuit de panelen Tables/Rows; sluit een open Admin-dialoog
+  Backspace    Het teken vóór de cursor verwijderen (Query-editor)',
+    'help.see_also' => 'ZIE OOK
+  https://github.com/sugarcraft/candy-sql',
 ];

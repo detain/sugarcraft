@@ -463,4 +463,147 @@ return [
     'cli.usage_line' => 'POUŽITÍ: candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # úplné informace o použití',
     'cli.tip_saved_connections' => '       Tip: uložte pojmenovaná připojení do {path} a spusťte s --connect=<name>.',
+    'help.summary' => 'candy-sql - Terminálový SQL klient pro SQLite, MySQL a PostgreSQL',
+    'help.usage' => 'POUŽITÍ
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => 'ARGUMENTY
+  path-or-dsn
+    Cesta k souboru databáze SQLite, např.: app.sqlite
+    Nebo řetězec DSN, např.:  mysql://user:pass@localhost:3306/dbname
+
+  Při úplném vynechání: v interaktivním terminálu s uloženými připojeními
+  je nabídne výběr; jinak se vypíše krátký řádek použití a proces skončí
+  se stavem 2 (chybné volání) — pro tuto úplnou obrazovku spusťte --help.',
+    'help.options' => 'PŘEPÍNAČE
+  --help, -h
+    Zobrazí tuto obrazovku nápovědy.
+
+  --version, -V
+    Zobrazí číslo verze.
+
+  --connect=<name>
+    Připojí se k pojmenované položce ze souboru uložených připojení
+    ($XDG_CONFIG_HOME/candy-sql/connections.json, ve výchozím stavu
+    $HOME/.config/candy-sql/connections.json). Nelze kombinovat s explicitními
+    argumenty připojení. Hesla se nikdy neukládají na disk: položka uvádí své
+    tajemství přes "pass-env" a proměnná se čte při připojení. Viz ULOŽENÁ
+    PŘIPOJENÍ níže.',
+    'help.option_dsn' => '  --dsn=<dsn>
+    Úplný připojovací řetězec DSN.
+    Formát: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    Příklady:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    Jednotlivé parametry připojení (všechny kromě --driver a --db jsou volitelné).
+    --driver musí být jedno z: sqlite, mysql, pgsql
+    --ssl-mode je pro MySQL výchozí "prefer". "require" a "verify_*" vynutí
+    TLS s ověřením certifikátu serveru; důvěra v CA se musí nastavit na straně
+    serveru nebo přes my.cnf (viz README). V těchto ověřených režimech se
+    odmítne transport ReactPHP, který připouští prostý text — dotazy běží
+    synchronně přes spojení TLS a živá aktualizace administrace je vypnutá
+    (upozorní na to oznámení při startu i stavový řádek aplikace).
+    Dejte přednost CANDY_SQL_PASS před --pass=, aby heslo nebylo v příkazovém
+    řádku procesu (viditelném v ps).',
+    'help.examples' => 'PŘÍKLADY
+  # SQLite (výchozí — holá cesta nebo DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # MySQL přes DSN
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # MySQL přes jednotlivé přepínače
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => 'ULOŽENÁ PŘIPOJENÍ
+  Pojmenované servery vypište jednou a připojujte se k nim navždy:
+
+    $HOME/.config/candy-sql/connections.json  (adresář 0700, soubor 0600)',
+    'help.saved_fields' => '  Pole: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env. Jakékoli jiné pole se odmítne a pole "pass" s prostým textem se
+  odmítne vždy — místo toho nasměrujte pass-env na proměnnou. Spuštění bez
+  argumentů v interaktivním terminálu tyto položky nabídne jako výběr;
+  --connect=<name> se připojí přímo k jedné z nich.',
+    'help.editing' => 'ÚPRAVY
+  Panel Rows náhledu TABLE je upravitelná mřížka: h/l (nebo ←/→) posouvají
+  kurzor buňky a tři akordy mění data — každý zobrazí přesný příkaz na
+  stavovém řádku a nic nezapíše, dokud to Enter nepotvrdí:
+
+    e   upravit buňku pod kurzorem (Ctrl+N nastaví NULL)
+    o   vložit řádek (Enter prochází sloupce; prázdný vstup nechá sloupci
+        jeho DEFAULT, Ctrl+N uloží NULL)
+    D   smazat řádek pod kurzorem
+
+  Řádky se adresují pouze celým PRIMARY KEY: tabulka bez něj, klíč NULL/
+  binární, binární buňka a jakýkoli výsledek dotazu se odmítnou pojmenovaným
+  stavovým řádkem. Hodnoty jsou vázané parametry; každý zápis běží v
+  transakci, která se vrátí zpět, pokud nebyl zasažen právě jeden řádek
+  (UPDATE zapisující již přítomnou hodnotu se hlásí jako beze změny).
+  Esc zruší otevřený editační řádek.',
+    'help.editing_readonly' => '  --read-only
+    Vypne pro relaci editační akordy. Chrání před překlepem; nefiltruje
+    příkazy v panelu Query — pro pevnou záruku se připojte jako databázový
+    uživatel jen pro čtení.',
+    'help.history' => 'HISTORIE
+  Ve výchozím stavu se každý snímek administračního dotazování zaznamenává do
+  $HOME/.candy-sql/history.db (adresář 0700 / soubor 0600) jako offline
+  auditní stopa. Stránky Dashboard a Reports v aplikaci tento soubor
+  nečtou — dotazují se živého serveru.',
+    'help.history_flags' => '  --no-history
+    Zcela vypne záznam (na disk se nezapisuje nic).
+
+  --history=<path>
+    Ukládá snímky do <path> místo výchozího umístění.',
+    'help.keyboard' => 'KLÁVESOVÉ ZKRATKY (TUI)
+  Tab          Cyklicky přepíná fokus mezi panely (Tables → Rows → Query → Admin)
+  ↑ / ↓        Pohyb po řádcích seznamu (nebo j/k) — v panelu Tables je pohyb pouze
+               lokální; nikdy nenačítá náhled
+  /            (Panel Tables) otevře řádek živého filtru nad názvy tabulek; písmena
+               jej prodlužují, ↑/↓ posouvají kurzor, Enter potvrdí a načte, Backspace
+               upravuje, Esc zahodí a vymaže
+  Enter        Načte řádky vybrané tabulky
+  Space        Načte řádky vybrané tabulky (alias pro Enter)
+  PgDn / PgUp  (Panel Tables/Rows, v náhledu tabulky) stránkuje náhled po oknech o
+               100 řádcích — limit procházení se stal velikostí stránky
+  Ctrl+Enter   Provede aktuální dotaz
+  Ctrl+R       Provede aktuální dotaz
+  Ctrl+E       Provede aktuální dotaz
+  EXPLAIN …    (Editor Query, úvodní klíčové slovo) napsaný EXPLAIN prochází přes
+               ExplainView: panel Rows ukáže barevný strom plánu, nikoli plochou mřížku
+               poskytovatele — a jakýkoli modifikátor ANALYZE se ODSTRANÍ, inspektor
+               nikdy neprovede to, co zkoumá
+  e / o / D    (Panel Rows, náhled tabulky) upravit buňku / vložit řádek / smazat
+               řádek — viz ÚPRAVY; h/l posouvají kurzor buňky
+  Ctrl+Space   Doplní u kurzoru (editor Query): klíčová slova SQL, názvy tabulek po
+               FROM/JOIN/INTO/UPDATE a sloupce v kontextu (WHERE/SELECT/ORDER BY,
+               kvalifikované `alias.` / `table.`, seznam INSERT INTO t (...)) z načteného
+               schématu. Jeden kandidát se doplní, společný prefix postoupí, jinak
+               stavový řádek vypíše kandidáty
+  Ctrl+F       Přidá aktuální dotaz do seznamu oblíbených (pouze stav relace — žádný
+               panel jej neprochází a neukládá se)
+  Ctrl+Shift+F Odebere aktuální dotaz ze seznamu oblíbených
+  1-8          Přeskočí na administrační panel (pouze s fokusem na panelu Admin)
+  q            Ukončí z panelů Tables/Rows; z Admin se vrátí do Tables
+  x            (Tables/Rows, živý výsledek) exportuje aktuální řádky do cesty CSV —
+               ochrana proti přepsání platí, dokud Enter nepotvrdí
+  i            (Tables/Rows) importuje soubor CSV do pojmenované tabulky
+  Ctrl+S       Exportuje živý výsledek/náhled do CSV z libovolného panelu
+  Esc          Ukončí z panelů Tables/Rows; zruší otevřený dialog Admin
+  Backspace    Smaže znak před kurzorem (editor Query)',
+    'help.see_also' => 'VIZ TAKÉ
+  https://github.com/sugarcraft/candy-sql',
 ];

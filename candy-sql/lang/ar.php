@@ -463,4 +463,143 @@ return [
     'cli.usage_line' => 'الاستخدام: candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # للحصول على معلومات الاستخدام الكاملة',
     'cli.tip_saved_connections' => '       نصيحة: احفظ الاتصالات المسماة في {path} وشغّل باستخدام --connect=<name>.',
+    'help.summary' => 'candy-sql - عميل SQL للطرفية لقواعد SQLite وMySQL وPostgreSQL',
+    'help.usage' => 'الاستخدام
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => 'المعاملات
+  path-or-dsn
+    مسار ملف قاعدة بيانات SQLite، مثال: app.sqlite
+    أو سلسلة DSN، مثال:  mysql://user:pass@localhost:3306/dbname
+
+  عند الحذف كليًا: في طرفية تفاعلية فيها اتصالات محفوظة يعرضها
+  المنتقي؛ وإلا يُطبع سطر استخدام قصير وتنتهي العملية بالحالة 2
+  (استدعاء خاطئ) — شغّل --help لعرض هذه الشاشة الكاملة.',
+    'help.options' => 'الخيارات
+  --help, -h
+    عرض شاشة المساعدة هذه.
+
+  --version, -V
+    عرض رقم الإصدار.
+
+  --connect=<name>
+    الاتصال بالإدخال المسمى من ملف الاتصالات المحفوظة
+    ($XDG_CONFIG_HOME/candy-sql/connections.json، وافتراضيًا
+    $HOME/.config/candy-sql/connections.json). لا يمكن الجمع بينه وبين
+    معاملات اتصال صريحة. لا تُخزَّن كلمات المرور على القرص أبدًا: يسمّي
+    الإدخال سرّه عبر "pass-env" ويُقرأ المتغير وقت الاتصال.
+    راجع الاتصالات المحفوظة (SAVED CONNECTIONS) أدناه.',
+    'help.option_dsn' => '  --dsn=<dsn>
+    سلسلة اتصال DSN كاملة.
+    الصيغة: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    أمثلة:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    معاملات اتصال فردية (كلها اختيارية عدا --driver و--db).
+    يجب أن يكون --driver أحد: sqlite, mysql, pgsql
+    القيمة الافتراضية لـ --ssl-mode في MySQL هي "prefer". يفرض "require"
+    و"verify_*" استخدام TLS مع التحقق من شهادة الخادم؛ ويجب ضبط الثقة
+    بجهة الاعتماد على الخادم أو عبر my.cnf (انظر README). في هذه الأوضاع
+    المتحقَّق منها يُرفض نقل ReactPHP القادر على النص الصريح — تعمل
+    الاستعلامات بشكل متزامن عبر اتصال TLS ويُعطَّل التحديث المباشر
+    للإدارة (يوضح ذلك إشعار البدء وسطر حالة التطبيق).
+    فضّل CANDY_SQL_PASS على --pass= كي تبقى كلمة المرور خارج سطر أوامر
+    العملية (المرئي في ps).',
+    'help.examples' => 'أمثلة
+  # SQLite (الافتراضي — مسار مجرد أو DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # MySQL عبر DSN
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # MySQL عبر أعلام فردية
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => 'الاتصالات المحفوظة
+  اسرد الخوادم المسماة مرة واحدة ثم اتصل بها دائمًا:
+
+    $HOME/.config/candy-sql/connections.json  (المجلد 0700، الملف 0600)',
+    'help.saved_fields' => '  الحقول: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env. يُرفض أي حقل آخر، ويُرفض حقل "pass" النصي الصريح دائمًا —
+  وجّه pass-env إلى متغير بدلًا منه. يعرض التشغيل بلا معاملات في طرفية
+  تفاعلية هذه الإدخالات كمنتقٍ؛ ويتصل --connect=<name> بأحدها مباشرة.',
+    'help.editing' => 'التحرير
+  جزء Rows في معاينة TABLE شبكة قابلة للتحرير: يحرّك h/l (أو ←/→) مؤشر
+  الخلية، وتغيّر ثلاثة اختصارات البيانات — يعرض كلٌّ منها العبارة الدقيقة
+  في سطر الحالة ولا يكتب شيئًا حتى يؤكد Enter:
+
+    e   تحرير الخلية تحت المؤشر (Ctrl+N يضبط NULL)
+    o   إدراج صف (يتنقل Enter بين الأعمدة؛ الإدخال الفارغ يترك العمود
+        على DEFAULT، وCtrl+N يخزّن NULL)
+    D   حذف الصف تحت المؤشر
+
+  تُحدَّد الصفوف بمفتاحها PRIMARY KEY الكامل فقط: يُرفض الجدول بلا مفتاح،
+  والمفتاح NULL/الثنائي، والخلية الثنائية، وأي نتيجة استعلام، مع سطر حالة
+  مسمّى. القيم معاملات مربوطة؛ وتعمل كل كتابة في معاملة تُلغى ما لم يُمَسّ
+  صف واحد بالضبط (يُبلَّغ عن UPDATE الذي يكتب القيمة الموجودة أصلًا بأنه
+  بلا تغيير). يلغي Esc سطر تحرير مفتوحًا.',
+    'help.editing_readonly' => '  --read-only
+    يعطّل اختصارات التحرير للجلسة. يحمي من الزلّات؛ ولا يرشّح عبارات جزء
+    Query — لضمان صارم اتصل كمستخدم قاعدة بيانات للقراءة فقط.',
+    'help.history' => 'السجل
+  افتراضيًا تُسجَّل كل لقطة استطلاع إداري في
+  $HOME/.candy-sql/history.db (المجلد 0700 / الملف 0600) كمسار تدقيق
+  دون اتصال. لا تقرأ صفحتا Dashboard وReports في التطبيق هذا الملف —
+  بل تستطلعان الخادم المباشر.',
+    'help.history_flags' => '  --no-history
+    تعطيل التسجيل كليًا (لا يُكتب شيء على القرص).
+
+  --history=<path>
+    تخزين اللقطات في <path> بدلًا من الموقع الافتراضي.',
+    'help.keyboard' => 'اختصارات لوحة المفاتيح (TUI)
+  Tab          تدوير التركيز بين الأجزاء (Tables → Rows → Query → Admin)
+  ↑ / ↓        التنقل بين صفوف القائمة (أو j/k) — في جزء Tables الحركة محلية فقط؛
+               ولا تجلب معاينة أبدًا
+  /            (جزء Tables) فتح سطر ترشيح مباشر على أسماء الجداول؛ تمدّه الحروف،
+               ويحرّك ↑/↓ المؤشر، ويثبّت Enter ويحمّل، ويعدّل Backspace، ويتخلى Esc
+               ويمسح
+  Enter        تحميل صفوف الجدول المحدد
+  Space        تحميل صفوف الجدول المحدد (اسم بديل لـ Enter)
+  PgDn / PgUp  (جزء Tables/Rows، على معاينة جدول) تصفّح المعاينة بنوافذ من 100 صف —
+               أصبح حدّ التصفح حجم الصفحة
+  Ctrl+Enter   تنفيذ الاستعلام الحالي
+  Ctrl+R       تنفيذ الاستعلام الحالي
+  Ctrl+E       تنفيذ الاستعلام الحالي
+  EXPLAIN …    (محرر Query، الكلمة المفتاحية الأولى) يمر EXPLAIN المكتوب عبر
+               ExplainView: يعرض جزء Rows شجرة الخطة الملونة لا شبكة المزوّد المسطحة —
+               ويُزال أي معدِّل ANALYZE، فالمفتش لا ينفذ أبدًا ما يفحصه
+  e / o / D    (جزء Rows، معاينة جدول) تحرير الخلية / إدراج صف /
+               حذف الصف — انظر التحرير (EDITING)؛ يحرّك h/l مؤشر الخلية
+  Ctrl+Space   إكمال عند المؤشر (محرر Query): كلمات SQL المفتاحية، وأسماء الجداول بعد
+               FROM/JOIN/INTO/UPDATE، والأعمدة بحسب السياق (WHERE/SELECT/ORDER BY،
+               المؤهلة بـ `alias.` / `table.`، وقائمة INSERT INTO t (...)) من المخطط
+               المحمّل. مرشح واحد يُكمَل، وبادئة مشتركة تتقدم، وإلا يسرد سطر الحالة
+               المرشحين
+  Ctrl+F       إضافة الاستعلام الحالي إلى قائمة المفضلة (حالة الجلسة فقط — لا يعرضها
+               أي جزء ولا تُحفظ)
+  Ctrl+Shift+F إزالة الاستعلام الحالي من قائمة المفضلة
+  1-8          الانتقال إلى جزء إداري (فقط عند تركيز جزء Admin)
+  q            الخروج من جزأي Tables/Rows؛ والعودة إلى Tables من Admin
+  x            (Tables/Rows، نتيجة مباشرة) تصدير الصفوف الحالية إلى مسار CSV —
+               يبقى رفض الكتابة فوق الملف مفعّلًا حتى يؤكد Enter
+  i            (Tables/Rows) استيراد ملف CSV إلى جدول مسمى
+  Ctrl+S       تصدير النتيجة/المعاينة المباشرة إلى CSV من أي جزء
+  Esc          الخروج من جزأي Tables/Rows؛ إلغاء حوار Admin المفتوح
+  Backspace    حذف الحرف قبل المؤشر (محرر Query)',
+    'help.see_also' => 'انظر أيضًا
+  https://github.com/sugarcraft/candy-sql',
 ];

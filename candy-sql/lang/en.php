@@ -463,4 +463,149 @@ return [
     'cli.usage_line' => 'USAGE: candy-sql [OPTIONS] [path-or-dsn]',
     'cli.usage_help_line' => '       candy-sql --help   # for full usage information',
     'cli.tip_saved_connections' => '       Tip: save named connections in {path} and launch with --connect=<name>.',
+    'help.summary' => 'candy-sql - Terminal SQL client for SQLite, MySQL and PostgreSQL',
+    'help.usage' => 'USAGE
+  candy-sql [OPTIONS] [path-or-dsn]',
+    'help.arguments' => 'ARGUMENTS
+  path-or-dsn
+    SQLite database file path, e.g.: app.sqlite
+    Or a DSN string, e.g.:  mysql://user:pass@localhost:3306/dbname
+
+  When omitted entirely: on an interactive terminal with saved
+  connections, a picker offers them; otherwise a short usage line is
+  printed and the process exits with status 2 (bad invocation) — run
+  --help for this full screen.',
+    'help.options' => 'OPTIONS
+  --help, -h
+    Show this help screen.
+
+  --version, -V
+    Show the version number.
+
+  --connect=<name>
+    Dial the named entry from the saved-connections file
+    ($XDG_CONFIG_HOME/candy-sql/connections.json, defaulting to
+    $HOME/.config/candy-sql/connections.json). Cannot be combined
+    with explicit connection arguments. Passwords are never stored
+    on disk: an entry names its secret via "pass-env" and the
+    variable is read at dial time. See SAVED CONNECTIONS below.',
+    'help.option_dsn' => '  --dsn=<dsn>
+    Full DSN connection string.
+    Format: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    Examples:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:',
+    'help.option_params' => '  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    Individual connection parameters (all except --driver and --db are optional).
+    --driver must be one of: sqlite, mysql, pgsql
+    --ssl-mode defaults to "prefer" for MySQL. "require" and "verify_*" enforce
+    TLS with server-certificate verification; CA trust must be configured
+    server-side or via my.cnf (see README). In those verified modes the
+    plaintext-capable ReactPHP transport is refused — queries run
+    synchronously over the TLS connection and admin live-refresh is disabled
+    (a startup notice and the in-app status line say so).
+    Prefer CANDY_SQL_PASS over --pass= to keep the password out of the
+    process command line (visible in ps).',
+    'help.examples' => 'EXAMPLES
+  # SQLite (default — bare path or DSN)
+  candy-sql app.sqlite
+  candy-sql sqlite:///var/data/app.sqlite
+  candy-sql sqlite://:memory:
+
+  # MySQL via DSN
+  candy-sql mysql://root:secret@localhost:3306/mydb
+  candy-sql --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # MySQL via individual flags
+  CANDY_SQL_PASS=secret candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
+
+  # PostgreSQL
+  candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb',
+    'help.saved_intro' => 'SAVED CONNECTIONS
+  List named servers once, dial them forever:
+
+    $HOME/.config/candy-sql/connections.json  (dir 0700, file 0600)',
+    'help.saved_fields' => '  Fields: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env. Any other field is refused, and a plaintext "pass" field
+  is always refused — point pass-env at a variable instead. A launch
+  with no arguments on an interactive terminal presents these entries
+  as a picker; --connect=<name> dials one directly.',
+    'help.editing' => 'EDITING
+  The Rows pane of a TABLE preview is an editable grid: h/l (or ←/→) move
+  a cell cursor, and three chords change data — each shows the exact
+  statement on the status line and writes nothing until Enter confirms:
+
+    e   edit the cell under the cursor (Ctrl+N sets NULL)
+    o   insert a row (Enter steps through the columns; an empty entry
+        leaves the column to its DEFAULT, Ctrl+N stores NULL)
+    D   delete the row under the cursor
+
+  Rows are addressed by their full PRIMARY KEY only: a table without one,
+  a NULL/binary key, a binary cell and any query result refuse with a
+  named status line. Values are bound parameters; each write runs in a
+  transaction that rolls back unless exactly one row was touched (an
+  UPDATE that writes the value already there is reported as no change).
+  Esc cancels an open edit line.',
+    'help.editing_readonly' => '  --read-only
+    Turn the edit chords off for the session. This guards against a slip;
+    it does not filter Query-pane statements — for a hard guarantee
+    connect as a read-only database user.',
+    'help.history' => 'HISTORY
+  By default every admin poll snapshot is recorded to
+  $HOME/.candy-sql/history.db (0700 dir / 0600 file) as an offline
+  audit trail. The in-app Dashboard and Reports pages do not read
+  from this file — they poll the live server.',
+    'help.history_flags' => '  --no-history
+    Disable recording entirely (nothing is written to disk).
+
+  --history=<path>
+    Store snapshots at <path> instead of the default location.',
+    'help.keyboard' => 'KEYBOARD SHORTCUTS (TUI)
+  Tab          Cycle focus through panes (Tables → Rows → Query → Admin)
+  ↑ / ↓        Navigate list rows (or j/k) — in the Tables pane a move is
+               local only; it never fetches a preview
+  /            (Tables pane) open a live filter line over table names;
+               letters extend it, ↑/↓ move the cursor, Enter commits and
+               loads, Backspace edits, Esc abandons and clears
+  Enter        Load selected table\'s rows
+  Space        Load selected table\'s rows (alias for Enter)
+  PgDn / PgUp  (Tables/Rows pane, on a table preview) page the preview in
+               100-row windows — the browse cap became a page size
+  Ctrl+Enter   Execute the current query
+  Ctrl+R       Execute the current query
+  Ctrl+E       Execute the current query
+  EXPLAIN …    (Query editor, leading keyword) a typed EXPLAIN runs through
+               ExplainView: the Rows pane shows the colour-coded plan tree,
+               not the flat provider grid — and any ANALYZE modifier is
+               STRIPPED, the inspector never executes what it inspects
+  e / o / D    (Rows pane, table preview) edit the cell / insert a row /
+               delete the row — see EDITING; h/l move the cell cursor
+  Ctrl+Space   Complete at the caret (Query editor): SQL keywords, table
+               names after FROM/JOIN/INTO/UPDATE, and columns in context
+               (WHERE/SELECT/ORDER BY, `alias.` / `table.` qualified, the
+               INSERT INTO t (...) list) from the loaded schema. One
+               candidate completes, a shared prefix advances, otherwise the
+               status line lists candidates
+  Ctrl+F       Add the current query to the favorites list (session
+               state only — no pane browses it, and it is not persisted)
+  Ctrl+Shift+F Remove the current query from the favorites list
+  1-8          Jump to an admin pane (only while the Admin pane is focused)
+  q            Quit from the Tables/Rows panes; returns to Tables from Admin
+  x            (Tables/Rows, live result) export the current rows to a CSV
+               path — refuse-overwrite arms until Enter confirms
+  i            (Tables/Rows) import a CSV file into a named table
+  Ctrl+S       Export the live result/preview to CSV from any pane
+  Esc          Quit from the Tables/Rows panes; cancels an open Admin dialog
+  Backspace    Delete the character before the cursor (Query editor)',
+    'help.see_also' => 'SEE ALSO
+  https://github.com/sugarcraft/candy-sql',
 ];
