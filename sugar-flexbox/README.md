@@ -51,8 +51,8 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
 - **Sticky regions** — `withStickyHeader($rows)` / `withStickyFooter($rows)` pin lines across scrolling; a row can never appear
   in both regions (the footer is clamped when the document is shorter than header + footer), and a document that FITS the box —
   nothing scrolled out — renders the plain streaming frame instead of reserving blank bands for pinned rows
-- **Sync partner** — `syncWith($other)` is a decorative association: it marks the viewport as synced and is readable via
-  `isSynced()`, but propagates nothing (scroll state never crosses to the partner)
+- **Sync partner** — `withLinkedViewport($other)` is a decorative association: it marks the viewport as synced and is readable via
+  `hasLinkedViewport()`, but propagates nothing (scroll state never crosses to the partner)
 - **Mouse wheel** support with configurable delta
 - **Horizontal scrolling** with step-based navigation
 - **Argument policy** — dimensions THROW on negatives (`Viewport::new(-5, 10)`
@@ -309,6 +309,8 @@ sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 | `Flexbox` | `Viewport` | `setWidth()` | `withSize()` |
 | `Flexbox` | `Viewport` | `setHeight()` | `withSize()` |
 | `Flexbox` | `Viewport` | `withContent()` | `fromContent()` |
+| `Flexbox` | `Viewport` | `syncWith()` | `withLinkedViewport()` |
+| `Flexbox` | `Viewport` | `isSynced()` | `hasLinkedViewport()` |
 | `Flexbox\Table` | `Table` | `addColumn()` | `withColumn()` |
 | `Flexbox\Table` | `Table` | `addRow()` | `withRow()` |
 | `Flexbox\Table` | `Table` | `sortBy()` | `withSort()` |

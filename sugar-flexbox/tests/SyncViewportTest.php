@@ -9,14 +9,14 @@ use SugarCraft\Flexbox\Viewport;
 
 final class SyncViewportTest extends TestCase
 {
-    // ---- syncWith --------------------------------------------------------
+    // ---- withLinkedViewport --------------------------------------------------------
 
     public function testSyncWithReturnsNewInstance(): void
     {
         $a = Viewport::fromContent("left content\nline2\nline3", 40, 24);
         $b = Viewport::fromContent("right content\nline2\nline3", 40, 24);
 
-        $synced = $a->syncWith($b);
+        $synced = $a->withLinkedViewport($b);
 
         $this->assertNotSame($a, $synced);
     }
@@ -26,15 +26,15 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent("left\nright\ncontent", 40, 24);
         $b = Viewport::fromContent("right\nleft\ncontent", 40, 24);
 
-        $syncedA = $a->syncWith($b);
+        $syncedA = $a->withLinkedViewport($b);
 
-        $this->assertTrue($syncedA->isSynced());
+        $this->assertTrue($syncedA->hasLinkedViewport());
     }
 
     public function testIsSyncedIsFalseByDefault(): void
     {
         $vp = Viewport::fromContent("some\ncontent\nhere", 40, 24);
-        $this->assertFalse($vp->isSynced());
+        $this->assertFalse($vp->hasLinkedViewport());
     }
 
     public function testIsSyncedIsTrueAfterSyncWith(): void
@@ -42,9 +42,9 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent("left\ncontent", 40, 24);
         $b = Viewport::fromContent("right\ncontent", 40, 24);
 
-        $synced = $a->syncWith($b);
+        $synced = $a->withLinkedViewport($b);
 
-        $this->assertTrue($synced->isSynced());
+        $this->assertTrue($synced->hasLinkedViewport());
     }
 
     public function testSyncWithBothViewportsAreIndependent(): void
@@ -52,7 +52,7 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent("A content here", 40, 24);
         $b = Viewport::fromContent("B different content", 40, 24);
 
-        $syncedA = $a->syncWith($b);
+        $syncedA = $a->withLinkedViewport($b);
 
         // Each viewport maintains its own content.
         $this->assertStringContainsString('A content', $syncedA->view());
@@ -66,12 +66,12 @@ final class SyncViewportTest extends TestCase
         $b = Viewport::fromContent("1\n2\n3", 40, 10);
         $c = Viewport::fromContent("alpha\nbeta\ngamma", 40, 10);
 
-        // A synced with B, then B synced with C (B's syncWith overwrites).
-        $ab = $a->syncWith($b);
-        $bc = $b->syncWith($c);
+        // A synced with B, then B synced with C (B's withLinkedViewport overwrites).
+        $ab = $a->withLinkedViewport($b);
+        $bc = $b->withLinkedViewport($c);
 
-        $this->assertTrue($ab->isSynced());
-        $this->assertTrue($bc->isSynced());
+        $this->assertTrue($ab->hasLinkedViewport());
+        $this->assertTrue($bc->hasLinkedViewport());
     }
 
     // ---- Navigation + sync (caller coordinates offsets) ---------------
@@ -88,9 +88,9 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent($content, 40, 10);
         $b = Viewport::fromContent($content, 40, 10);
 
-        $synced = $a->syncWith($b)->setYOffset(1);
+        $synced = $a->withLinkedViewport($b)->setYOffset(1);
 
-        $this->assertTrue($synced->isSynced());
+        $this->assertTrue($synced->hasLinkedViewport());
         $this->assertSame(1, $synced->yOffset());
     }
 
@@ -99,9 +99,9 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent("original\ncontent", 40, 24);
         $b = Viewport::fromContent("other\npanel", 40, 24);
 
-        $synced = $a->syncWith($b)->setContent("new\ncontent\nhere");
+        $synced = $a->withLinkedViewport($b)->setContent("new\ncontent\nhere");
 
-        $this->assertTrue($synced->isSynced());
+        $this->assertTrue($synced->hasLinkedViewport());
     }
 
     public function testSetYOffsetPreservesSyncRelationship(): void
@@ -116,9 +116,9 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent($content, 40, 24);
         $b = Viewport::fromContent($content, 40, 24);
 
-        $synced = $a->syncWith($b)->setYOffset(5);
+        $synced = $a->withLinkedViewport($b)->setYOffset(5);
 
-        $this->assertTrue($synced->isSynced());
+        $this->assertTrue($synced->hasLinkedViewport());
         $this->assertSame(5, $synced->yOffset());
     }
 
@@ -137,7 +137,7 @@ final class SyncViewportTest extends TestCase
         $right = Viewport::fromContent($rightContent, 40, 24);
 
         // Caller establishes sync relationship.
-        $leftSynced = $left->syncWith($right);
+        $leftSynced = $left->withLinkedViewport($right);
 
         // Caller coordinates scroll: apply same offset to both viewports.
         $scrollOffset = 20;
@@ -146,7 +146,7 @@ final class SyncViewportTest extends TestCase
 
         $this->assertSame($scrollOffset, $leftScrolled->yOffset());
         $this->assertSame($scrollOffset, $rightScrolled->yOffset());
-        $this->assertTrue($leftScrolled->isSynced());
+        $this->assertTrue($leftScrolled->hasLinkedViewport());
 
         // Left panel shows content from scroll offset.
         $this->assertStringContainsString('function20', $leftScrolled->view());

@@ -24,7 +24,7 @@ final class ReadmeTruthPinsTest extends TestCase
         'Buffer diffing (TableRenderer)',
         'withStickyHeader',
         'withStickyFooter',
-        'syncWith',
+        'withLinkedViewport',
         'halfPageUp',
         'halfPageDown',
         'legacy alias of',

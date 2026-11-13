@@ -16,7 +16,7 @@ use SugarCraft\Widgets\Viewport\Viewport as WidgetsViewport;
  * `SugarCraft\Widgets\Viewport\Viewport` symbol this file imports is a
  * deprecated class_alias façade onto `SugarCraft\Forms\Viewport\Viewport`.
  * Adds sticky header/footer positioning and a decorative sync-partner
- * reference ({@see self::syncWith()} stores it; it propagates nothing).
+ * reference ({@see self::withLinkedViewport()} stores it; it propagates nothing).
  *
  * @see \SugarCraft\Forms\Viewport\Viewport
  */
@@ -174,16 +174,17 @@ final readonly class Viewport
     }
 
     /**
-     * Record `$other` as this viewport's sync partner.
+     * Record `$other` as this viewport's LINKED viewport.
      *
-     * ONE-WAY and DECORATIVE: the reference is stored so
-     * {@see self::isSynced()} can report it — no offset ever flows in
-     * either direction on its own (and `$other` is unchanged). Callers
-     * that want synced panels must apply the same yOffset to both
-     * viewports themselves (e.g. a side-by-side diff viewer sharing one
-     * offset value).
+     * ONE-WAY and DECORATIVE (FBX-48 named the state for what it is):
+     * the reference is stored so {@see self::hasLinkedViewport()} can
+     * report it — no offset ever flows in either direction on its own
+     * (and `$other` is unchanged). Callers that want synced panels must
+     * apply the same yOffset to both viewports themselves (e.g. a
+     * side-by-side diff viewer sharing one offset value). The old
+     * syncWith() name promised exactly the coupling it does not do.
      */
-    public function syncWith(Viewport $other): self
+    public function withLinkedViewport(Viewport $other): self
     {
         return new self(
             $this->inner,
@@ -193,11 +194,24 @@ final readonly class Viewport
         );
     }
 
-    /** True when this viewport has a sync partner via {@see syncWith}. */
-    public function isSynced(): bool
+    /** True when a {@see self::withLinkedViewport()} partner is attached. */
+    public function hasLinkedViewport(): bool
     {
         return $this->syncedViewport !== null;
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withLinkedViewport()} — the old
+     *     name promised offset coupling it never had (finding-067).
+     *     REMOVED-IN: 2.0.0.
+     */
+    public function syncWith(Viewport $other): self { return $this->withLinkedViewport($other); }
+
+    /**
+     * @deprecated Renamed to {@see self::hasLinkedViewport()}; same one-way
+     *     decorative state, honest verb. REMOVED-IN: 2.0.0.
+     */
+    public function isSynced(): bool { return $this->hasLinkedViewport(); }
 
     // ---- init/update/view forwarding (NOT the Core\Model contract) -----
 

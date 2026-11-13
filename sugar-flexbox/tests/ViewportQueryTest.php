@@ -20,7 +20,7 @@ final class ViewportQueryTest extends TestCase
         $vp = Viewport::new();
         $this->assertSame(80, $vp->getWidth());
         $this->assertSame(24, $vp->getHeight());
-        $this->assertFalse($vp->isSynced());
+        $this->assertFalse($vp->hasLinkedViewport());
     }
 
     public function testNewWithCustomDimensions(): void

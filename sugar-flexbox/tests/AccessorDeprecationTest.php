@@ -74,6 +74,11 @@ final class AccessorDeprecationTest extends TestCase
             // instance misuse instead of silently resetting geometry —
             // the reshape flag relaxes exactly the body-shape check here.
             'Viewport::withContent' => [Viewport::class, 'withContent', 'fromContent', ['abc', 20, 10], 'equal-static'],
+            // The link rename (FBX-48): the old syncWith() name promised
+            // offset coupling it never had; BC legs compare the SAME
+            // partner object passed to both spellings.
+            'Viewport::syncWith' => [Viewport::class, 'syncWith', 'withLinkedViewport', [Viewport::new(20, 5)], 'equal'],
+            'Viewport::isSynced' => [Viewport::class, 'isSynced', 'hasLinkedViewport', [], 'same'],
         ];
     }
 
@@ -225,7 +230,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(14, $found);
+        $this->assertCount(16, $found);
     }
 
     /**
@@ -248,7 +253,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(14, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(16, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];
