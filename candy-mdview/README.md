@@ -165,7 +165,11 @@ when you resize the terminal, and a document taller than the screen grows a
 `█` scrollbar along the right edge — a short document renders without it. When
 opened on a file, the header row
 shows `file · scroll%` (plus `↻N` after N auto-reloads); a stdin pager has no
-header row.
+header row. Read aloud, the segments are *file name, scroll percent, reload
+count* — the `·` only separates, and `↻!` means the last change was refused
+and the frame is stale. On locales that do not declare UTF-8 (C/POSIX or an
+explicit ISO-8859-style charset) the same row is written in pure ASCII:
+`file 42% (r3)`, `(r!)` when refused.
 
 ![pager](.vhs/pager.gif)
 

@@ -6,6 +6,7 @@ namespace SugarCraft\MdView;
 
 use SugarCraft\Forms\Viewport\Viewport;
 use SugarCraft\Core\Cmd;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -384,25 +385,54 @@ final class MdViewModel implements Model
     }
 
     /**
-     * Locale-neutral status header: `name · 42%` plus a `↻N` reload marker
-     * only after the first auto-reload. Symbols, not words, so the row
-     * needs no translation and cannot overflow narrow boxes; it is clipped
-     * and padded to exactly the viewport width.
+     * Status header: `name · 42%` plus a `↻N` reload marker only after the
+     * first auto-reload. Symbols, not words, so the row needs no translation
+     * and cannot overflow narrow boxes; it is clipped and padded to exactly
+     * the viewport width. The glyphs themselves are Unicode — on a locale
+     * that does not promise UTF-8 (C/POSIX, or an explicit non-UTF-8
+     * charset) they would arrive as mojibake, so the row falls back to the
+     * pure-ASCII shape `name 42% (r3)` instead. Unknown charset (no locale
+     * variable at all) stays Unicode: the modern default.
      */
     private function statusLine(): string
     {
         $percent = (int) round($this->viewport->scrollPercent() * 100);
-        $line    = $this->documentName . ' · ' . $percent . '%';
+        $ascii   = self::headerIsAsciiOnly();
+        $sep     = $ascii ? ' ' : ' · ';
+        $line    = $this->documentName . $sep . $percent . '%';
         if ($this->reloadBlocked === true) {
             // A refused replacement reads louder than the success counter:
             // ↻N says "auto-reload is alive", ↻! says "the last change was
             // refused at the document door — the frame you see is stale".
-            $line .= ' · ↻!';
+            $line .= $ascii ? ' (r!)' : ' · ↻!';
         } elseif ($this->reloadCount > 0) {
-            $line .= ' · ↻' . $this->reloadCount;
+            $line .= $ascii ? ' (r' . $this->reloadCount . ')' : ' · ↻' . $this->reloadCount;
         }
         $width = $this->viewport->width;
         return Width::padRight(Width::truncate($line, max(0, $width)), $width);
+    }
+
+    /**
+     * Does the current locale environment forbid non-ASCII in the header?
+     * `T::charset()` names any declared charset; its null answer is
+     * ambiguous — unset locale (today's UTF-8-by-default world) versus the
+     * C/POSIX locales, which it deliberately skips — so the tie is broken
+     * with the same first-value-takes-position chain.
+     */
+    private static function headerIsAsciiOnly(): bool
+    {
+        $charset = T::charset();
+        if ($charset !== null) {
+            return preg_match('/^UTF-?8$/i', $charset) !== 1;
+        }
+        foreach (['LC_ALL', 'LC_MESSAGES', 'LANG'] as $var) {
+            $raw = (string) ($_SERVER[$var] ?? getenv($var));
+            if ($raw === '') {
+                continue; // takes no position, exactly like T::charset()
+            }
+            return $raw === 'C' || $raw === 'POSIX';
+        }
+        return false;
     }
 
     /** Rows the status header reserves from the terminal height. */

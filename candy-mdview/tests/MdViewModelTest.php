@@ -184,6 +184,122 @@ final class MdViewModelTest extends TestCase
         $this->assertSame('name ·', explode("\n", $narrow)[0]);
     }
 
+    /**
+     * Run the observation with the locale chain pinned to $vars (null value
+     * unsets). Both layers the readers consult — $_SERVER and putenv — are
+     * driven, and the previous values are restored afterwards.
+     *
+     * @param array<string,string|null> $vars
+     */
+    private function withLocaleEnv(array $vars, \Closure $observe): void
+    {
+        // The whole chain is pinned every time: a developer box with an
+        // unrelated LC_MESSAGES must not leak into the observation.
+        $vars = array_merge(['LC_ALL' => null, 'LC_MESSAGES' => null, 'LANG' => null], $vars);
+        $restore = [];
+        foreach ($vars as $key => $value) {
+            $restore[$key] = [getenv($key), $_SERVER[$key] ?? null];
+            if ($value === null) {
+                putenv($key);
+                unset($_SERVER[$key]);
+            } else {
+                putenv($key . '=' . $value);
+                $_SERVER[$key] = $value;
+            }
+        }
+        try {
+            $observe();
+        } finally {
+            foreach ($restore as $key => [$envValue, $serverValue]) {
+                if ($envValue === false || $envValue === null) {
+                    putenv($key);
+                } else {
+                    putenv($key . '=' . $envValue);
+                }
+                if ($serverValue === null) {
+                    unset($_SERVER[$key]);
+                } else {
+                    $_SERVER[$key] = $serverValue;
+                }
+            }
+        }
+    }
+
+    public function testStatusHeaderAsciiFallbackLegsOnCAndLegacyCharsets(): void
+    {
+        // Finding 034: the header glyphs are Unicode; a C/POSIX or explicit
+        // non-UTF-8 locale turned `name · 42% · ↻N` into mojibake. The row
+        // now answers in pure ASCII there, and stays Unicode everywhere the
+        // environment declares UTF-8 — including a declared C.UTF-8.
+        $model = MdViewModel::fromContent($this->content(5), 80, 4)->withDocument('name');
+        $asciiHeader = 'name 0%' . str_repeat(' ', 73);
+        $unicodeHeader = 'name · 0%' . str_repeat(' ', 71);
+
+        $this->withLocaleEnv(['LC_ALL' => 'C'], function () use ($model, $asciiHeader): void {
+            $this->assertSame($asciiHeader, explode("\n", $model->view())[0]);
+        });
+        $this->withLocaleEnv(['LC_ALL' => 'de_DE.ISO-8859-1'], function () use ($model, $asciiHeader): void {
+            $this->assertSame($asciiHeader, explode("\n", $model->view())[0]);
+        });
+        // The chain: LC_ALL takes no position, LANG does.
+        $this->withLocaleEnv(['LC_ALL' => null, 'LANG' => 'POSIX'], function () use ($model, $asciiHeader): void {
+            $this->assertSame($asciiHeader, explode("\n", $model->view())[0]);
+        });
+        // Precedence is first-value-takes-position: an overriding UTF-8
+        // LC_ALL outranks LANG=C.
+        $this->withLocaleEnv(['LC_ALL' => 'en_US.UTF-8', 'LANG' => 'C'], function () use ($model, $unicodeHeader): void {
+            $this->assertSame($unicodeHeader, explode("\n", $model->view())[0]);
+        });
+        $this->withLocaleEnv(['LC_ALL' => 'C.UTF-8'], function () use ($model, $unicodeHeader): void {
+            $this->assertSame($unicodeHeader, explode("\n", $model->view())[0]);
+        });
+        // An empty environment (no locale variable at all) stays Unicode —
+        // the byte-exact control for the un-pinned S03 literal.
+        $this->withLocaleEnv(['LC_ALL' => null, 'LC_MESSAGES' => null, 'LANG' => null], function () use ($model, $unicodeHeader): void {
+            $this->assertSame($unicodeHeader, explode("\n", $model->view())[0]);
+        });
+    }
+
+    public function testReloadMarkersHaveAsciiShapesUnderCLocale(): void
+    {
+        // The ↻N / ↻! markers share the header's charset gate: (rN)/(r!) in
+        // ASCII mode, nothing non-ASCII ever reaches the row.
+        $path = sys_get_temp_dir() . '/mdview-ascii-header-' . uniqid() . '.md';
+        file_put_contents($path, "# live\n");
+        $model = MdViewModel::fromContent('RENDERED-LIVE', 40, 6)
+            ->withDocument('doc.md')
+            ->withWatch($path, static fn (string $raw): string => 'RENDERED:' . $raw);
+
+        unlink($path);
+        $handle = fopen($path, 'wb');
+        $this->assertNotFalse($handle);
+        $this->assertTrue(ftruncate($handle, 67_108_865));
+        fclose($handle);
+        [$detect] = $model->update(new ReloadTickMsg());
+        [$blocked] = $detect->update(new ReloadTickMsg());
+        $this->assertTrue($blocked->reloadBlocked);
+
+        $this->withLocaleEnv(['LC_ALL' => 'C'], function () use ($blocked): void {
+            $line = explode("\n", $blocked->view())[0];
+            $this->assertMatchesRegularExpression('/^doc\.md \d+% \(r!\) *$/', $line, 'ASCII shapes only, padded to the viewport width');
+            $this->assertSame(0, preg_match('/[\x80-\xFF]/', $line), 'no non-ASCII byte may survive into the C-locale header');
+        });
+        // UTF-8 control: the same state renders the ↻! form.
+        $this->withLocaleEnv(['LC_ALL' => 'C.UTF-8'], function () use ($blocked): void {
+            $this->assertMatchesRegularExpression('/^doc\.md · \d+% · ↻! *$/', explode("\n", $blocked->view())[0]);
+        });
+
+        file_put_contents($path, "# newer\n");
+        clearstatcache(true, $path);
+        [$redetect] = $blocked->update(new ReloadTickMsg());
+        [$fixed] = $redetect->update(new ReloadTickMsg());
+        $this->assertSame(1, $fixed->reloadCount);
+        $this->withLocaleEnv(['LC_ALL' => 'C'], function () use ($fixed): void {
+            $this->assertMatchesRegularExpression('/^doc\.md \d+% \(r1\) *$/', explode("\n", $fixed->view())[0]);
+        });
+        unlink($path);
+    }
+
     public function testReloadSweepRefusesOversizeReplacementKeepsFrameAndMarks(): void
     {
         // Finding 003's gate leg: the reload sweep re-read the watched file
