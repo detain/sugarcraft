@@ -715,7 +715,9 @@ Uses multi-pass computation:
 2. **Pass 2**: Distribute the remaining space across the flex slots
 3. **Flex**: weighted share (weight = `withFlexibleWidth`); with `withWidth()` set the last Flex
    column absorbs the rounding slack so the sum is exact
-4. **Dynamic**: `max(contentWidth, one-share baseline)`
+4. **Dynamic**: the larger of the measured content width and one flex share — the
+   share width is the remaining space divided across every flexible slot
+   (Flex contributes its weight, Dynamic and Content count as one share each)
 5. **Content**: exact content width (min 1)
 
 ## Keeping a Table across frames
@@ -779,8 +781,9 @@ data cannot emit escape sequences:
   collapse to `↵` in single-line cells; `withMultilineMode()` paths keep them
   as row structure.
 - The sugar-mouse zone sentinels (U+E000/U+E001) are stripped, so a forged
-  click target cannot ride cell data, titles or the missing-value indicator
-  into a host that zones around — or consumes the output of — the table.
+  click target cannot ride cell data, titles or the missing-value indicator into
+  the table. That covers both shapes of host: one that zones around the table,
+  and one that consumes the table's rendered output.
 - **Marked-frame opt-in**: other Private-Use codepoints (image markers from
   U+E002 up, patched-font glyphs) pass by design — they are legitimate content
   for ordinary surfaces. A host whose frame allocates meaning from that arena
@@ -821,11 +824,11 @@ Known limits — there is no colour-blind or a11y mode:
 
 - No `NO_COLOR`, non-TTY or plain-text degrade path exists: SGR sequences are
   always emitted (only the Security section's sanitisation ever removes bytes).
-- Box-drawing border glyphs and the default `1;37` header style (slot 7 paints
-  as the fixed TrueColor `#E5E5E5`, which can vanish on light themes — see
-  Border Styling) add screen-reader noise and contrast risk. The quiet form is
-  `withBorder(Border::ascii())` (or `Border::hidden()`) plus
-  `withHeaderStyle('')`.
+- The border is drawn with box-drawing glyphs, and the default `1;37` header
+  style paints slot 7 as the fixed TrueColor `#E5E5E5`, which can vanish on
+  light themes (see Border Styling). Together they add screen-reader noise and
+  contrast risk. The quiet remedy: `withBorder(Border::ascii())` (or
+  `Border::hidden()`) plus `withHeaderStyle('')`.
 - The output is a text grid: there is no semantic association between a header
   cell and its column beyond visual alignment, so assistive technology reads
   positions, not relationships.
@@ -857,11 +860,12 @@ through a fixed TrueColor table — slot 7 renders as `#E5E5E5`, which can vanis
 light terminal themes. Palette-adaptive hosts should pass `withHeaderStyle('1')`
 (bold only, terminal default foreground) or `withHeaderStyle('')`.
 
-Only corner/vertical/horizontal glyphs are ever drawn — sugar-table consumes
-`Border`'s eight position glyphs (top/bottom/left/right + four corners) and
-never its junction glyphs (├/┤/┬/┴/┼): the header separator rule is built from
-the horizontal glyph with the vertical glyph in the inter-column gaps, and the
-inter-column separators are the vertical glyph throughout. Rendered `block()`
+sugar-table consumes only `Border`'s eight position glyphs — the four edges
+plus four corners — and never its junction glyphs (├/┤/┬/┴/┼). Corner, vertical
+and horizontal glyphs are therefore all that is ever drawn. The header
+separator rule is built from the horizontal glyph, with the vertical glyph
+placed in each inter-column gap; the inter-column separators use the vertical
+glyph throughout. Rendered `block()`
 frame:
 
 ```
