@@ -24,14 +24,22 @@ final class Styles
     public readonly Style $header;
     public readonly Style $cell;
     public readonly Style $selected;
+    /**
+     * Muted decoration for the cursor row while the table is BLURRED
+     * (dim by default, never the loud reverse — the inverted highlight
+     * stays the focused signal, W-15/017).
+     */
+    public readonly Style $unfocusedSelection;
 
     public function __construct(
         ?Style $header   = null,
         ?Style $cell     = null,
         ?Style $selected = null,
+        ?Style $unfocusedSelection = null,
     ) {
         $this->header   = $header   ?? Style::new()->underline();
         $this->cell     = $cell     ?? Style::new();
         $this->selected = $selected ?? Style::new()->reverse();
+        $this->unfocusedSelection = $unfocusedSelection ?? Style::new()->dim();
     }
 }

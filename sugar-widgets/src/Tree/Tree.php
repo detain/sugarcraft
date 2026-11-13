@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Style;
 
 /**
  * Interactive tree component — single-cursor navigation through a
@@ -72,6 +73,13 @@ final class Tree implements Model
     public readonly string $leafGlyph;
 
     /**
+     * Muted style drawn on the cursor row while the tree is blurred
+     * (W-15/017) — default dim. The loud affordances (the `> ` prefix)
+     * stay focused-only; blur must not erase WHERE the cursor is.
+     */
+    public readonly Style $unfocusedSelection;
+
+    /**
      * Memoized visibleRows() for this immutable instance — E736/3.2.
      * visibleRows() runs once per update/render cycle in five places
      * (view, selectedNode, visibleCount, setExpandedAtCursor, clamp);
@@ -98,10 +106,12 @@ final class Tree implements Model
         string $expandedGlyph = '▼ ',
         string $collapsedGlyph = '▶ ',
         string $leafGlyph = '  ',
+        ?Style $unfocusedSelection = null,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('tree.dim_nonneg'));
         }
+        $this->unfocusedSelection = $unfocusedSelection ?? Style::new()->dim();
         $this->roots = array_values($roots);
         $this->cursor = $cursor;
         $this->offset = $offset;
@@ -149,6 +159,29 @@ final class Tree implements Model
             $expandedGlyph ?? $this->expandedGlyph,
             $collapsedGlyph ?? $this->collapsedGlyph,
             $leafGlyph ?? $this->leafGlyph,
+            $this->unfocusedSelection,
+        );
+    }
+
+    /**
+     * Set the muted style drawn on the cursor row while blurred
+     * (W-15/017). Null restores the default dim.
+     */
+    public function withUnfocusedSelection(?Style $style): self
+    {
+        return new self(
+            $this->roots,
+            $this->cursor,
+            $this->offset,
+            $this->width,
+            $this->height,
+            $this->focused,
+            $this->cursorPrefix,
+            $this->unselectedPrefix,
+            $this->expandedGlyph,
+            $this->collapsedGlyph,
+            $this->leafGlyph,
+            $style ?? Style::new()->dim(),
         );
     }
 
@@ -219,6 +252,12 @@ final class Tree implements Model
             $line = $cursor . $indent . $glyph . $label;
             if ($this->width > 0) {
                 $line = Width::truncate($line, $this->width);
+            }
+            // W-15/017: blurred cursor rows read muted (dim, never the
+            // focused affordance). Applied AFTER the truncate so the cell
+            // budget math stays exact — style bytes are zero-width.
+            if ($absoluteIndex === $this->cursor && !$this->focused) {
+                $line = $this->unfocusedSelection->render($line);
             }
             $lines[] = $line;
         }
@@ -430,6 +469,7 @@ final class Tree implements Model
             $this->expandedGlyph,
             $this->collapsedGlyph,
             $this->leafGlyph,
+            $this->unfocusedSelection,
         );
     }
 

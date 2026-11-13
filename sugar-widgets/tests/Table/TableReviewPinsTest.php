@@ -141,7 +141,10 @@ final class TableReviewPinsTest extends TestCase
 
         $view = $table->view();
         $this->assertStringContainsString("\x1b[4mName", $view);
-        $this->assertStringContainsString("\x1b[3mAlice", $view);
+        // Alice is row 0 = the blurred cursor cell: the muted static style
+        // replaces the cell italic there (single merged dim pair, not a
+        // stack — the loud invert stays reserved for the focused state).
+        $this->assertStringContainsString("\x1b[2mAlice", $view);
     }
 
     /** m11: the page-size refusal names the page size, not the table dimensions. */

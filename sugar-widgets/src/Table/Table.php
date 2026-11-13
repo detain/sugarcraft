@@ -218,12 +218,19 @@ final class Table implements Model
         }
         $window = array_slice($filteredRows, $top, $windowSize);
         foreach ($window as $i => $row) {
-            $idx = $top + $i;
-            $isSelected = $idx === $this->cursor && $this->focused;
+            $idx       = $top + $i;
+            $isCursor  = $idx === $this->cursor;
+            $isSelected = $isCursor && $this->focused;
+            // W-15/017: a blurred selection must not vanish — the cursor
+            // row carries a muted static style (dim, never invert; the
+            // loud inverted state stays the focused signal).
+            $isMuted   = $isCursor && !$this->focused;
             if ($composed) {
                 $rowStyle = $isSelected
                     ? ($this->styles !== null ? $this->styles->selected : Style::new()->reverse())
-                    : ($this->styles !== null ? $this->styles->cell : null);
+                    : ($isMuted
+                        ? ($this->styles !== null ? $this->styles->unfocusedSelection : Style::new()->dim())
+                        : ($this->styles !== null ? $this->styles->cell : null));
                 $lines[]  = $this->renderRow($row, $cols, $idx, $rowStyle);
                 continue;
             }
@@ -231,9 +238,13 @@ final class Table implements Model
             if ($this->styles !== null) {
                 $line = $isSelected
                     ? $this->styles->selected->render($line)
-                    : $this->styles->cell->render($line);
+                    : ($isMuted
+                        ? $this->styles->unfocusedSelection->render($line)
+                        : $this->styles->cell->render($line));
             } elseif ($isSelected) {
                 $line = Ansi::sgr(Ansi::REVERSE) . $line . Ansi::reset();
+            } elseif ($isMuted) {
+                $line = Style::new()->dim()->render($line);
             }
             $lines[] = $line;
         }
@@ -323,6 +334,21 @@ final class Table implements Model
     public function withStyles(?Styles $styles): self
     {
         return $this->mutate(styles: $styles, stylesSet: true);
+    }
+
+    /**
+     * Set the muted style drawn on the cursor row while the table is
+     * blurred (W-15/017). Passing null restores the default dim. The
+     * loud `selected` invert remains the focused-only signal; partial
+     * {@see Styles} keep working — the slot rides the composed object.
+     */
+    public function withUnfocusedSelection(?Style $style): self
+    {
+        $base = $this->styles ?? new Styles();
+        return $this->mutate(
+            styles: new Styles($base->header, $base->cell, $base->selected, $style ?? Style::new()->dim()),
+            stylesSet: true,
+        );
     }
 
     public function styles(): ?Styles { return $this->styles; }

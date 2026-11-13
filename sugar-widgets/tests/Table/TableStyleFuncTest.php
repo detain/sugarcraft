@@ -38,9 +38,13 @@ final class TableStyleFuncTest extends TestCase
         // composition the header cells merge the default header underline
         // into one SGR run (`1;4`), while plain body cells keep bare `1` —
         // the old 8×`\x1b[1m` byte-count premise counted header cells that
-        // no longer render as a standalone-bold prefix.
-        $this->assertSame(6, substr_count($view, "\x1b[1m"));
+        // no longer render as a standalone-bold prefix. Since W-15 the
+        // blurred cursor row (row 0) merges the dim unfocusedSelection with
+        // the per-cell bold as `1;2`, so bare `1` drops to the 4 untouched
+        // body cells — styleFunc still reaches every cell.
+        $this->assertSame(4, substr_count($view, "\x1b[1m"));
         $this->assertSame(2, substr_count($view, "\x1b[1;4m"));
+        $this->assertSame(2, substr_count($view, "\x1b[1;2m"), 'blurred cursor row: bold+dim composed cells (W-15)');
     }
 
     public function testStyleFuncSeesHeaderRowSentinel(): void

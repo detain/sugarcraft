@@ -34,7 +34,16 @@ final class VisibleRowsCacheTest extends TestCase
         $t = $this->table()->withSort('Name');
         $before = $t->view();
         $moved  = $t->setCursor(2);
-        $this->assertSame($before, $moved->view(), 'cursor is not part of the sorted+filtered projection');
+        // The plain-text projection must be cursor-independent; since
+        // W-15 the blurred cursor MARKER is visible in the bytes, so the
+        // raw view equality is no longer the right proxy — compare the
+        // stripped text and pin that the marker itself moves.
+        $this->assertSame(
+            \SugarCraft\Core\Util\Ansi::strip($before),
+            \SugarCraft\Core\Util\Ansi::strip($moved->view()),
+            'cursor is not part of the sorted+filtered projection',
+        );
+        $this->assertNotSame($before, $moved->view(), 'the blurred cursor marker visibly moves (W-15)');
         $this->assertSame(['Carol', 'dev'], $moved->selectedRow());
     }
 

@@ -312,4 +312,23 @@ final class TableTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         Table::new(['x'], [['a']])->setColumns(['not a Column']);
     }
+
+    public function testBlurredCursorRowIsDimAndFocusedIsUntouched(): void
+    {
+        $table = Table::new(['N'], [['one'], ['two']]);
+        $lines = explode("\n", $table->view());
+        // Row 0 is the cursor while blurred: muted dim marker, not reverse.
+        $this->assertStringContainsString("\x1b[2m", $lines[1], 'blurred cursor row carries the dim marker');
+        $this->assertStringNotContainsString("\x1b[2m", $lines[2], 'non-cursor rows stay undimmed');
+        $this->assertStringNotContainsString("\x1b[7m", $lines[1], 'blur never forges the loud focused invert');
+        $moved = $table->withCursor(1);
+        $mlines = explode("\n", $moved->view());
+        $this->assertStringNotContainsString("\x1b[2m", $mlines[1]);
+        $this->assertStringContainsString("\x1b[2m", $mlines[2], 'the marker follows the cursor');
+        // Focused render keeps the exact loud invert bytes (regression pin).
+        $focused = $table->focus();
+        $flines = explode("\n", $focused->view());
+        $this->assertStringContainsString("\x1b[7m", $flines[1]);
+        $this->assertStringNotContainsString("\x1b[2m", $flines[1]);
+    }
 }

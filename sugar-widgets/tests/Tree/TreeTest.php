@@ -271,4 +271,18 @@ final class TreeTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         Tree::new(Node::leaf('a'))->withSize(-1, 10);
     }
+
+    public function testBlurredCursorRowIsDimAndFocusedIsUntouched(): void
+    {
+        $tree = Tree::new(Node::leaf('one'), Node::leaf('two'));
+        $lines = explode("\n", $tree->view());
+        $this->assertStringContainsString("\x1b[2m", $lines[0], 'blurred cursor row carries the dim marker (W-15)');
+        $this->assertStringNotContainsString("\x1b[2m", $lines[1]);
+        $moved = $tree->cursorDown();
+        $mlines = explode("\n", $moved->view());
+        $this->assertStringNotContainsString("\x1b[2m", $mlines[0]);
+        $this->assertStringContainsString("\x1b[2m", $mlines[1], 'the marker follows the cursor');
+        $focused = $tree->focus();
+        $this->assertStringNotContainsString("\x1b[2m", $focused->view(), 'focused bytes carry the prefix, never the dim');
+    }
 }
