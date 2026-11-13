@@ -215,6 +215,36 @@ final class Legend
     ];
 
     /**
+     * The swatch color contract as a Style: named colors from the
+     * {@see self::COLOR_MAP} table emit their exact ANSI slot, 3/6-digit
+     * hex (with or without `#`) goes truecolor, and anything else —
+     * unknown names like 'orange', typos — resolves to null so the
+     * consumer renders unstyled, EXACTLY like the swatch itself stays
+     * default-foreground (sugar-charts-023: a stroke honoring legend
+     * colors must be byte-identical to the promise the swatch makes,
+     * in both directions). coloredIndicator keeps its own raw wrapping
+     * (`3Xm…39m`) for pinned-byte reasons; the COLOR SGR prefixes of the
+     * two surfaces match by construction (LegendSwatchContractTest).
+     */
+    public static function styleForSwatchColor(string $css): ?Style
+    {
+        $code = self::COLOR_MAP[$css] ?? null;
+        if ($code !== null) {
+            if ($code === Ansi::CSI . '39m') {
+                return null;
+            }
+            if (preg_match('/(\d+)m$/', $code, $m) === 1) {
+                return Style::new()->foreground(Color::ansi((int) $m[1] - 30));
+            }
+        }
+        if (preg_match('/^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/', $css) === 1) {
+            return Style::new()->foreground(Color::hex(ltrim($css, '#')));
+        }
+
+        return null;
+    }
+
+    /**
      * Whether this render pass must emit no color at all.
      *
      * The legend's raw-CSI and hex paths bypass {@see Style}, so they need

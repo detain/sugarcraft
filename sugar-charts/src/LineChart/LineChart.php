@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\LineChart;
 use SugarCraft\Charts\Chart\Chart;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\LineStyle;
 use SugarCraft\Charts\Support\CellGrid;
 use SugarCraft\Charts\MarkLine;
@@ -408,8 +409,9 @@ final class LineChart extends Chart
      * A non-null Color overrides the series color for that sample's dot,
      * its fill run, and the connector segment leaving it; null falls
      * through to the series default — the theme palette slot when a theme
-     * is active, otherwise the legend color (braille mode) or unstyled
-     * (cell mode). `$dataset` is the series name
+     * is active, otherwise the legend color (braille always; cell mode
+     * when a legend is visible, sugar-charts-023) or unstyled.
+     * `$dataset` is the series name
      * ({@see PRIMARY_SERIES} for the unnamed `$data` series) and `$x` the
      * sample's index in that series. WHY: btop colors every graph point
      * by its value through the theme gradient, so one color per series is
@@ -586,8 +588,9 @@ final class LineChart extends Chart
      * Apply a named color theme. The palette colors every series (ASCII
      * and braille modes) and the legend indicators; the unnamed primary
      * series takes slot 0, then {@see withDataset()} series in insertion
-     * order. Unthemed rendering is byte-identical to the historical
-     * default (legend CSS colors in braille mode, unstyled in cell mode).
+     * order. Unthemed braille keeps the historical default (legend CSS
+     * colors); unthemed cell mode renders unstyled until a legend is
+     * visible, where strokes honor the legend palette (sugar-charts-023).
      */
     public function withTheme(?Theme $theme = null): self
     {
@@ -822,13 +825,31 @@ final class LineChart extends Chart
             /** @var array<string,Style> $pointStyleMemo */
             $pointStyleMemo = [];
             // Theme palette drives series color when set; without a theme
-            // cell mode stays unstyled (byte-identical default path).
+            // cell mode honors the LEGEND palette (sugar-charts-023) while
+            // a legend is visible — the same name→color mapping the
+            // braille path already uses — so swatch colors and strokes
+            // agree byte-for-byte. Legend-less unthemed cell mode stays
+            // the byte-identical unstyled default.
             $themePalette = $this->theme === null ? [] : self::themePalette($this->theme);
             $paletteSize  = count($themePalette);
+            /** @var array<string,Style> $legendStyles */
+            $legendStyles = [];
+            if ($paletteSize === 0 && $this->showLegend) {
+                foreach ($this->legendItems as $legendItem) {
+                    // Single matcher with the swatch surface: names hit
+                    // COLOR_MAP slots, hex goes truecolor, everything the
+                    // swatch renders colorless stays unstyled on the
+                    // stroke too (byte-equal promise, both directions).
+                    $swatch = Legend::styleForSwatchColor($legendItem['color']);
+                    if ($swatch !== null) {
+                        $legendStyles[$legendItem['label']] = $swatch;
+                    }
+                }
+            }
             $seriesIndex  = 0;
             foreach ($allSeries as $name => $values) {
                 $seriesStyle = $paletteSize === 0
-                    ? null
+                    ? ($legendStyles[$name] ?? null)
                     : Style::new()->fg($themePalette[$seriesIndex % $paletteSize]);
                 $seriesIndex++;
                 if ($values === []) {
@@ -836,11 +857,11 @@ final class LineChart extends Chart
                 }
                 $points  = count($values) > $plotW ? array_slice($values, -$plotW) : $values;
                 $count   = count($points);
-                // Unthemed cell mode carries no color bytes, so extra
-                // series separate by glyph (themed runs already carry a
-                // distinct color, so they keep the shared point rune): explicit
-                // per-series runes win,
-                // otherwise rotate the default table by dataset position
+                // Unthemed cell mode separates extra series by glyph (the
+                // themed runs already carry a distinct color, so they keep
+                // the shared point rune); even a legend-colored unthemed
+                // run keeps the rotating rune as its separation channel:
+                // explicit runes win, otherwise rotate the default table
                 // (the primary keeps its configured `point` rune).
                 $rune    = $name === self::PRIMARY_SERIES
                     ? $this->point
