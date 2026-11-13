@@ -1269,6 +1269,12 @@ final class ImageSource
      * a specific internal host pass it in $allowedHosts to bypass the
      * deny-list for that host only.
      *
+     * Loop residents (finding 105): this is a SYNCHRONOUS fetch — the stream
+     * read blocks the process, so a caller already running on a ReactPHP (or
+     * any) event loop must not call it there; use the non-blocking sibling
+     * {@see self::fromUrlAsync()}, which fetches the same contract on the
+     * loop instead of freezing it.
+     *
      * @param string $url     Absolute URL (http/https/file/data).
      * @param array<string,string>|list<string> $headers  Optional request
      *               headers, either associative ('Authorization' => 'Bearer x')
@@ -1609,6 +1615,7 @@ final class ImageSource
         // recursive fetch re-validates the scheme AND host-guards every hop.
         self::validateUrlScheme($url, $allowedSchemes);
 
+        $boundedDefault = $browser === null;
         if ($browser === null) {
             if (!class_exists(Browser::class)) {
                 return reject(new \RuntimeException(Lang::t('image_source.url_http_missing')));
@@ -1617,7 +1624,23 @@ final class ImageSource
             // default Browser is armed with FETCH_TIMEOUT_SECONDS. An injected
             // Browser is used exactly as the caller configured it — their
             // connector/timeout choice is theirs, only redirects are overridden.
-            $browser = (new Browser())->withTimeout(self::FETCH_TIMEOUT_SECONDS);
+            //
+            // Transport ceiling (finding 043): the default client is also
+            // armed with a response buffer of MAX_BYTES + 1 — the biggest
+            // payload this class's contract can ever accept, plus the same
+            // surplus discriminator byte the sync read uses. Before this, the
+            // default Browser carried react's 16 MiB buffer for small replies
+            // but no ceiling tied to OUR documented limit: the byte ceiling
+            // only ran AFTER react had buffered the whole body, so a hostile
+            // host streaming hundreds of megabytes was fully materialised in
+            // memory before the refusal that could have spared it. A class
+            // that refuses > MAX_BYTES must not build itself a client that
+            // buffers unboundedly to reach the refusal. Injected Browsers
+            // stay untouched: capping a caller-supplied client remains the
+            // caller's job ("their choice is theirs" is still true — only
+            // what WE construct is bounded).
+            $browser = (new Browser())->withTimeout(self::FETCH_TIMEOUT_SECONDS)
+                ->withResponseBuffer(self::MAX_BYTES + 1);
         }
 
         // Disable the Browser's built-in redirect follower: it would chase a
@@ -1634,6 +1657,7 @@ final class ImageSource
             $allowedHosts,
             $maxPixels,
             0,
+            $boundedDefault,
         );
     }
 
@@ -1651,6 +1675,11 @@ final class ImageSource
      * @param array<string>|null $allowedSchemes  Re-validated on every hop.
      * @param array<string>|null $allowedHosts    Bypass the deny-list for these
      *                                    hosts; re-checked on every hop.
+     * @param bool $boundedDefault  True when the caller passed no Browser and
+     *                                    fromUrlAsync() constructed the bounded
+     *                                    default (transport ceiling + its typed
+     *                                    translation); an injected Browser keeps
+     *                                    the caller's own buffering contract.
      * @return PromiseInterface<self>
      */
     private static function fetchUrlAsyncGuarded(
@@ -1661,6 +1690,7 @@ final class ImageSource
         ?array $allowedHosts,
         int $maxPixels,
         int $hop,
+        bool $boundedDefault = false,
     ): PromiseInterface {
         // SSRF / cloud-metadata guard BEFORE the request goes out — on the
         // initial URL AND every redirect target — so an http://169.254.169.254/
@@ -1673,7 +1703,7 @@ final class ImageSource
         }
 
         return $browser->get($url, $headers ?? [])->then(
-            static function ($response) use ($browser, $url, $headers, $allowedSchemes, $allowedHosts, $maxPixels, $hop): mixed {
+            static function ($response) use ($browser, $url, $headers, $allowedSchemes, $allowedHosts, $maxPixels, $hop, $boundedDefault): mixed {
                 $status = $response->getStatusCode();
 
                 if ($status >= 300 && $status < 400) {
@@ -1700,6 +1730,7 @@ final class ImageSource
                         $allowedHosts,
                         $maxPixels,
                         $hop + 1,
+                        $boundedDefault,
                     );
                 }
 
@@ -1713,17 +1744,46 @@ final class ImageSource
                     );
                 }
 
-                // Same byte ceiling as the sync route. Note the honest limit of
-                // this guard: react/stream buffers the response body before we
-                // see it, so the ceiling bounds what the lib ACCEPTS (and what
-                // ever reaches GD), not what the socket delivered. A transport
-                // cap would mean configuring the injected Browser's sender —
-                // left to the caller, since this class must not rebuild a
-                // caller-supplied client.
+                // Same byte ceiling as the sync route. For the DEFAULT client
+                // this is now the second net, not the only one: the transport
+                // ceiling armed at construction stops an over-size body from
+                // being buffered at all (rejected below, translated to the same
+                // typed refusal). For a caller-INJECTED Browser the honest limit
+                // still stands — react buffers whatever that client delivers
+                // before we see it, so this guard bounds what the lib ACCEPTS
+                // (and what ever reaches GD), not what the socket delivered;
+                // capping a caller-supplied client remains the caller's job,
+                // since this class must not rebuild one.
                 return self::fromString(
                     self::guardFetchedBytes((string) $response->getBody(), $url),
                     $maxPixels,
                 );
+            },
+            // Transport-ceiling trip for the default client (finding 043):
+            // react's Transaction rejects with an OverflowException when the
+            // advertised Content-Length (before any body bytes move) or the
+            // growing buffer (at maximumSize + 1 bytes, mid-stream) passes the
+            // ceiling we armed — keep the documented failure story identical to
+            // every other over-size route: a typed url_too_large
+            // InvalidArgumentException naming OUR limit, not a vendor
+            // exception class leaking. Guarded on $boundedDefault so a caller
+            // who configured their own buffer size keeps THEIR error, whatever
+            // it is. The mid-stream leg also proves the ceiling pre-empts
+            // materialisation: the buffer is cleared and the stream closed at
+            // the cap, so a gigabyte of hostile bytes never lands in memory.
+            static function (\Throwable $e) use ($url, $boundedDefault): never {
+                if (
+                    $boundedDefault
+                    && $e instanceof \OverflowException
+                    && preg_match('#body size(?: of \d+ bytes)? exceeds maximum#', $e->getMessage()) === 1
+                ) {
+                    throw new \InvalidArgumentException(Lang::t('image_source.url_too_large', [
+                        'url' => $url,
+                        'max' => self::MAX_BYTES,
+                    ]));
+                }
+
+                throw $e;
             },
         );
     }
