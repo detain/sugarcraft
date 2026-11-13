@@ -220,9 +220,59 @@ final class Sparkline
 
     public function view(): string
     {
+        $prepared = $this->prepared();
+        if ($prepared === null) {
+            return '';
+        }
+        [$w, $points, $min, $range] = $prepared;
+        if ($points === []) {
+            return $this->styled(str_repeat(self::GLYPHS[0], $w));
+        }
+
+        return $this->renderBuffer($w, $points, $min, $range);
+    }
+
+    /**
+     * The per-cell runes of the rendered row — one entry per display
+     * column (empty string for a blank or a wide-glyph continuation),
+     * which makes `implode('', $sparkline->cells())` equal to
+     * `Ansi::strip($sparkline->view())` on every host. The structured
+     * sibling of view() for consumers that need cells, not bytes:
+     * re-parsing the ANSI output with preg_split becomes unnecessary
+     * (sugar-charts-027).
+     *
+     * @return list<string>
+     */
+    public function cells(): array
+    {
+        $prepared = $this->prepared();
+        if ($prepared === null) {
+            return [];
+        }
+        [$w, $points, $min, $range] = $prepared;
+        if ($points === []) {
+            return array_fill(0, $w, self::GLYPHS[0]);
+        }
+
+        return array_map(
+            static fn(Cell $c): string => $c->rune(),
+            $this->assembleCells($w, $points, $min, $range)
+        );
+    }
+
+    /**
+     * Shared view()/cells() prep: window slide plus the sugar-charts-056
+     * range resolution, byte-identical to the sequence view() used
+     * inline before the cells() accessor landed. Null = the width-0
+     * off-switch.
+     *
+     * @return null|array{0:int,1:list<mixed>,2:float,3:float}
+     */
+    private function prepared(): ?array
+    {
         $w = $this->width;
         if ($w === 0) {
-            return '';
+            return null;
         }
         $points = $this->data;
         // Slide window: keep the last $w points.
@@ -230,7 +280,7 @@ final class Sparkline
             $points = array_slice($points, -$w);
         }
         if ($points === []) {
-            return $this->styled(str_repeat(self::GLYPHS[0], $w));
+            return [$w, [], 0.0, 0.0];
         }
 
         // sugar-charts-056: the effective pair is resolved against the
@@ -243,20 +293,27 @@ final class Sparkline
         // guard computes max(points) against itself — so it is kept
         // purely for ntcharts WithNoAutoMaxValue API parity (its
         // docblock says so). Behaviour is byte-identical.
-        $range = $max - $min;
-
-        return $this->renderBuffer($w, $points, (float) $min, $range);
+        return [$w, $points, (float) $min, $max - $min];
     }
 
     private function renderBuffer(int $w, array $points, float $min, float $range): string
     {
-        // sugar-charts-011: looping withCellAt() on the IMMUTABLE Buffer
-        // cloned the whole grid per cell — O(width²) (~0.2s at w=6400,
-        // never finishing at w=100000). Assemble the row-major cell list
-        // in the loop and hand it to cellbuffer's documented bulk escape
-        // hatch: one fromGrid(), O(width). The array mirrors the old
-        // last-write-wins semantics exactly: a wide lead's continuation at
-        // $col+1 is overwritten by the next point, as withCellAt did.
+        return Buffer::fromGrid($w, 1, $this->assembleCells($w, $points, $min, $range))->toAnsi();
+    }
+
+    /**
+     * sugar-charts-011: looping withCellAt() on the IMMUTABLE Buffer
+     * cloned the whole grid per cell — O(width²) (~0.2s at w=6400,
+     * never finishing at w=100000). Assemble the row-major cell list
+     * in the loop and hand it to cellbuffer's documented bulk escape
+     * hatch: one fromGrid(), O(width). The array mirrors the old
+     * last-write-wins semantics exactly: a wide lead's continuation at
+     * $col+1 is overwritten by the next point, as withCellAt did.
+     *
+     * @return list<Cell>
+     */
+    private function assembleCells(int $w, array $points, float $min, float $range): array
+    {
         $bufferStyle = $this->style !== null ? BufferHelper::toBufferStyle($this->style) : null;
         $missing     = $w - count($points);
         $blank       = new Cell(self::GLYPHS[0], $bufferStyle, null, 1);
@@ -290,7 +347,7 @@ final class Sparkline
             $col++;
         }
 
-        return Buffer::fromGrid($w, 1, $cells)->toAnsi();
+        return $cells;
     }
 
     private function styled(string $rendered): string

@@ -14,6 +14,8 @@ use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Support\Range;
+use SugarCraft\Charts\Buffer\BufferHelper;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -711,6 +713,30 @@ final class LineChart extends Chart
     /**
      * Render the raw line chart without legend, title, or labels.
      */
+    /**
+     * Per-cell rune dump of the finished frame: one row per output
+     * line, one entry per display column (a combining sequence stays
+     * one entry). `implode('', $row) === Ansi::strip(view() line)`
+     * holds by construction — this is the supported replacement for
+     * consumers that re-split the stripped ANSI of view() themselves
+     * (sugar-charts-027). Styling is projected out; the grid is the
+     * visible surface, chrome included. An empty chart yields [].
+     *
+     * @return list<list<string>>
+     */
+    public function cells(): array
+    {
+        $view = $this->view();
+        if ($view === '') {
+            return [];
+        }
+        $rows = [];
+        foreach (explode("\n", $view) as $row) {
+            $rows[] = BufferHelper::clusters(Ansi::strip($row));
+        }
+        return $rows;
+    }
+
     protected function renderChart(): string
     {
         // CH-08 (sugar-charts-087): zero dims are no longer a renderable
