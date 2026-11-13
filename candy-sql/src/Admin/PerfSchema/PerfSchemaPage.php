@@ -50,9 +50,10 @@ use SugarCraft\Sql\CellValue;
  * **State badge colours**: FULLY (green), DEFAULT (yellow), CUSTOM (blue),
  * DISABLED (red), UNKNOWN (neutral).
  *
- * **Read-only mode**: Detected by `hasUpdatePrivilege()` — tests with a no-op
- * `UPDATE ... SET ENABLED=ENABLED WHERE 1=0`. When true, all write actions
- * (Easy Setup `[`/`]`/`.` and inline toggles) are disabled. Requires `PROCESS`
+ * **Read-only mode**: Detected by `hasUpdatePrivilege()` — probed ONCE per
+ * page session with a no-op `UPDATE ... SET ENABLED=ENABLED WHERE 1=0`
+ * (memoized; SQL-P01). When true, all write actions (Easy Setup
+ * `[`/`]`/`.` and inline toggles) are disabled. Requires `PROCESS`
  * privilege on MySQL.
  *
  * Keyboard shortcuts:
@@ -127,6 +128,17 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     private ?ChangeTracker $changeTracker = null;
 
     private string $setupState = 'custom';
+
+    /**
+     * SQL-P01: session-memoized result of the UPDATE-privilege probe.
+     * The probe rides the SYNC handle (exec() bypasses the async cache),
+     * so running it per rendered frame was a full write round trip every
+     * second plus one per navigation keystroke — for a boolean that is
+     * constant per server session. Null until first probed; a page is
+     * built per pane entry, and {@see forgetPrivilegeProbe()} is the
+     * invalidation hook for context identity changes.
+     */
+    private ?bool $updatePrivilegeMemo = null;
 
     /**
      * D-M27: statements staged by [c] and awaiting an explicit [y]
@@ -946,15 +958,29 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
 
     private function hasUpdatePrivilege(): bool
     {
+        // SQL-P01: probe once per session, not once per frame.
+        if ($this->updatePrivilegeMemo !== null) {
+            return $this->updatePrivilegeMemo;
+        }
         try {
             // Try a test UPDATE to see if we have UPDATE privilege
             $this->context->connection()->exec(
                 'UPDATE `performance_schema`.`setup_consumers` SET `ENABLED` = `ENABLED` WHERE 1=0'
             );
-            return true;
+            return $this->updatePrivilegeMemo = true;
         } catch (\PDOException) {
-            return false;
+            return $this->updatePrivilegeMemo = false;
         }
+    }
+
+    /**
+     * SQL-P01 invalidation hook: drop the memoized privilege probe so the
+     * next frame re-checks. Call on any context/session identity change
+     * (a fresh page already re-probes because the memo is page-local).
+     */
+    public function forgetPrivilegeProbe(): void
+    {
+        $this->updatePrivilegeMemo = null;
     }
 
     private function getErrorMessage(\PDOException $e): string
