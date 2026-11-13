@@ -41,9 +41,10 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 # ↓ / j      Move down
 # Home / g   Top
 # End / G    Bottom
-# Enter / →  Open: directory navigates, file launches $EDITOR
-# l          Page a file through $PAGER; on a dir it opens (vim-diamond right)
-# x          Run the entry under cursor when it carries the exec bit
+# Enter / →  Open: directory navigates, archive (.zip/.tar/.tgz/.tbz2) browses read-only, file launches $EDITOR
+# l          Page a file through $PAGER, or the built-in viewer when none is installed; on a dir it opens (vim-diamond right)
+# o          Open with the platform default (xdg-open / open / cmd start) — argv list, never a shell string
+# x          Run the entry under cursor when it carries the exec bit; inside an archive view, extract to the other pane
 # ← / h      Up one directory
 # Space      Toggle selection + advance
 # Ctrl+a     Select every listed entry (the .. sentinel is never marked)
@@ -57,6 +58,11 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 # R          Rename cursor entry — type new name, Enter commits, Backspace edits, Esc cancels
 # N          Create directory in the active pane — same text-entry; u removes it while empty
 # d          Delete (selection or cursor) — confirm gate arms first
+# y / Y      Yank (copy / move) the selection or cursor entry into the yank register
+# p          Paste the register into the active pane's directory (existing confirm gate)
+# w / W      Copy the full path / bare name to the clipboard over OSC 52
+# a          Pin the active directory as a bookmark · B opens the bookmarks overlay (Enter jumps, d unpins)
+# I          Info overlay: path, type, size, permissions, owner, times, link target, free space
 # r          Refresh active pane
 # q          Quit (two presses while copy batches are in flight)
 # ?          Help overlay — every binding one per row, Esc or ? closes
@@ -70,7 +76,8 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 # Ctrl+Shift+Tab  Previous tab
 # Ctrl+PgUp  Next tab · Ctrl+PgDn  Previous tab — tmux/browser terminals may intercept modified Page keys
 # u / Ctrl+z Undo last operation
-# Ctrl+y     Redo last undo</code></pre>
+# Ctrl+y     Redo last undo
+# Mouse      Wheel scrolls the pane under the pointer · click activates + parks the cursor · Ctrl+click toggles the mark · double-click opens · tab-bar click switches tab</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -83,6 +90,12 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
       <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
       <div class="feature"><strong>Requirements</strong><span>PHP <code>^8.3</code> with <code>ext-intl</code> and <code>ext-mbstring</code> — both hard-required transitively by <code>sugar-core</code>, whose cell-width math segments through ICU, so <code>composer install</code> is the step that refuses on a bare php-cli machine.</span></div>
       <div class="feature"><strong>Live search</strong><span><code>/</code> fuzzy-filters the active pane's listing <strong>by name</strong> (dotfiles obey the <code>.</code> visibility law). Matching compares NFC-normalized names, so a composed query finds macOS's decomposed bytes and vice versa (CF-48). <code>↑</code>/<code>↓</code> move the result cursor, so <code>k</code>, <code>j</code> and every other printable type into the query (<code>/</code> itself cannot). <code>Enter</code> opens a directory result; on a file result it exits search with the pane cursor landed on the hit. A <code>Backspace</code> that empties the query exits. <code>Ctrl+R</code> inside search arms a bounded recursive walk of the whole tree (CF-17) — depth, name-count, and hit budgets, with the status announcing "search partial" when any cap fires.</span></div>
+      <div class="feature"><strong>Mouse</strong><span>The launcher requests SGR cell-motion reporting: the wheel scrolls the hovered pane, a click activates it and parks the cursor, <code>Ctrl</code>+click toggles the mark, a double-click opens, and a tab label click switches tabs. Modal frames (confirm gate, help, info, bookmarks, search) swallow the pointer so a click can never answer a prompt (CF-55).</span></div>
+      <div class="feature"><strong>Metadata</strong><span>Terminals of 100 columns or more add a modification-time column to every pane row; <code>I</code> opens a stat overlay read fresh with <code>lstat</code> (type, bytes, <code>drwxr-xr-x</code> + octal, owner:group, times, link target, free space) (CF-52).</span></div>
+      <div class="feature"><strong>Yank / paste &amp; clipboard</strong><span><code>y</code>/<code>Y</code> stage a copy or move, <code>p</code> arms the ordinary confirm gate at the active pane's directory; <code>w</code>/<code>W</code> put the path or name on the clipboard over OSC 52, refusing a <code>dumb</code>/<code>linux</code> TERM and admitting the terminal may ignore the sequence (CF-32, CF-50).</span></div>
+      <div class="feature"><strong>Bookmarks</strong><span><code>a</code> pins the directory, <code>B</code> lists the pins, Enter jumps through the typed-path door, <code>d</code> unpins; stored as atomic <code>0600</code> JSON under <code>$XDG_DATA_HOME/candy-files/</code> (CF-30).</span></div>
+      <div class="feature"><strong>Archives</strong><span>Enter on a <code>.zip</code>, <code>.tar</code>, <code>.tar.gz</code> or <code>.tar.bz2</code> browses it as a read-only directory; <code>x</code> extracts to the other pane through the copy gate on the event loop. Zip-slip names, links and devices are dropped, and 256&nbsp;MiB scan / 512&nbsp;MiB extract ceilings stop decompression bombs (CF-33).</span></div>
+      <div class="feature"><strong>Built-in viewer &amp; open-with-default</strong><span><code>l</code> falls back to a read-only in-app viewer (head 256&nbsp;KiB, sanitized lines) when no pager exists; <code>o</code> opens the entry with <code>xdg-open</code>/<code>open</code> as an argv list (CF-03).</span></div>
       <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates the current tab, <code>Ctrl+Tab</code>/<code>Ctrl+Shift+Tab</code> cycle (needs a terminal that reports modified Tab; <code>Ctrl+PgUp</code>/<code>Ctrl+PgDn</code> are the alternative — tmux and browser terminals may intercept modified Page keys), <code>Ctrl+w</code> closes (refuses the last tab).</span></div>
       <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores the last delete / move / rename; <code>Ctrl+y</code> redoes.</span></div>
       <div class="feature"><strong>Localized prompts</strong><span>The executable activates a language detected from <code>$LC_ALL</code>/<code>$LANG</code> (16 catalogs, English default). Confirmation gates honor the affirmative each locale's prompt teaches — a German <code>(j/n)</code> answers <code>j</code>, a Russian <code>(д/н)</code> answers <code>д</code> — and <code>y</code> works everywhere.</span></div>
