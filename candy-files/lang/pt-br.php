@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'renomear {count} item(ns)',
     'undo.move' => 'mover {count} item(ns)',
     'undo.copy' => 'copiar {count} item(ns)',
-    'keyhelp.default' => 'Tab alternar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · e extensão · . ocultos · c copiar · m mover · R renomear · d excluir · r atualizar · q sair · / pesquisar · Esc limpar · t duplicar aba · ^w fechar aba · ^tab circular · ^PgUp/^PgDn abas · u/^z desfazer · ^y refazer · ? ajuda · Ctrl+O abrir · 1-9 separadores · Ctrl+a todos · v inverter · * padrão · I info · mouse clique/roda',
+    'keyhelp.default' => 'Tab alternar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · e extensão · . ocultos · c copiar · m mover · R renomear · d excluir · r atualizar · q sair · / pesquisar · Esc limpar · t duplicar aba · ^w fechar aba · ^tab circular · ^PgUp/^PgDn abas · u/^z desfazer · ^y refazer · ? ajuda · Ctrl+O abrir · 1-9 separadores · Ctrl+a todos · v inverter · * padrão · I info · mouse clique/roda · y/Y marcar · p colar',
     'keyhelp.terse' => 'Tab alternar · ↑↓ jk mover · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · e extensão · c copiar · m mover · R renomear · d excluir · q sair · / pesquisar · u/^z desfazer · ^y refazer',
     'keyhelp.minimal' => 'Enter abrir · l ver · q sair · / pesquisar',
     'help.title' => '{count} atalhos de teclado',
@@ -128,4 +128,8 @@ Uso:
     'info.free' => 'Espaço livre',
     'info.dismiss' => 'I ou Esc fecha',
     'status.info_failed' => 'não foi possível ler as informações de {name}',
+    'status.yanked' => '{count} entradas marcadas para cópia — p cola',
+    'status.cut' => '{count} entradas recortadas para mover — p cola',
+    'status.nothing_to_yank' => 'nada para marcar',
+    'status.nothing_to_paste' => 'nada para colar — y ou Y marca entradas primeiro',
 ];

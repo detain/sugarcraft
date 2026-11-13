@@ -69,7 +69,7 @@ return [
     'undo.rename' => '{count} ögeyi yeniden adlandır',
     'undo.move' => '{count} ögeyi taşı',
     'undo.copy' => '{count} ögeyi kopyala',
-    'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Home/End g/G atla · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · e uzantı · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · Esc temizle · t sekmeyi çoğalt · ^w sekmeyi kapat · ^tab dön · ^PgUp/^PgDn sekmeler · u/^z geri al · ^y yinele · ? yardım · Ctrl+O aç · 1-9 sekme · Ctrl+a tümü · v tersine · * desen · I bilgi · fare tık/tekerlek',
+    'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Home/End g/G atla · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · e uzantı · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · Esc temizle · t sekmeyi çoğalt · ^w sekmeyi kapat · ^tab dön · ^PgUp/^PgDn sekmeler · u/^z geri al · ^y yinele · ? yardım · Ctrl+O aç · 1-9 sekme · Ctrl+a tümü · v tersine · * desen · I bilgi · fare tık/tekerlek · y/Y işaretle · p yapıştır',
     'keyhelp.terse' => 'Tab değiştir · ↑↓ jk hareket · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · e uzantı · c kopyala · m taşı · R adlandır · d sil · q çık · / ara · u/^z geri al · ^y yinele',
     'keyhelp.minimal' => 'Enter aç · l görüntüle · q çık · / ara',
     'help.title' => '{count} tuş bağı',
@@ -128,4 +128,8 @@ Kullanım:
     'info.free' => 'Boş alan',
     'info.dismiss' => 'I veya Esc kapatır',
     'status.info_failed' => '{name} bilgisi okunamıyor',
+    'status.yanked' => '{count} öğe kopyalama için işaretlendi — p yapıştırır',
+    'status.cut' => '{count} öğe taşıma için kesildi — p yapıştırır',
+    'status.nothing_to_yank' => 'işaretlenecek bir şey yok',
+    'status.nothing_to_paste' => 'yapıştırılacak bir şey yok — önce y veya Y öğeleri işaretler',
 ];

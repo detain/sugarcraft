@@ -552,11 +552,15 @@ final class RendererTest extends TestCase
         $this->assertStringNotContainsString('Home/End', $status, 'full roster must not fit at 200');
     }
 
-    /** CF-12: very wide terminals keep the complete roster. */
-    public function testKeyhelpFullRosterAt400Cols(): void
+    /**
+     * CF-12: very wide terminals keep the complete roster. The width is
+     * deliberately generous (the roster grows with every feature chord:
+     * 400 -> 600 at CF-32); the pin is about the TIER, not the figure.
+     */
+    public function testKeyhelpFullRosterAt600Cols(): void
     {
         [$m] = Manager::start('/', '/', $this->fakeFs())
-            ->update(new \SugarCraft\Core\Msg\WindowSizeMsg(400, 24));
+            ->update(new \SugarCraft\Core\Msg\WindowSizeMsg(600, 24));
         $lines = explode("\n", Renderer::render($m));
         $status = Ansi::strip(end($lines));
         $this->assertStringContainsString('Home/End', $status);

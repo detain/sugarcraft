@@ -134,6 +134,8 @@ naming `sugar-core`.
 | `R`             | Rename the entry under cursor through the text-entry mode (see Modes) |
 | `N`             | Create a directory in the active pane through the text-entry mode (see Modes); `u` removes it again while it is empty |
 | `d`             | Delete (selection or cursor); arms the confirm gate (see Modes) |
+| `y` / `Y`       | Yank (CF-32): stage the selection (or the cursor entry) in the yank register as a copy (`y`) or a move (`Y`). Nothing touches the filesystem — the register remembers the source directory and names, so it survives navigation and tab switches |
+| `p`             | Paste the register into the **active pane's directory**: arms the same y/n confirm gate `c`/`m` use (overwrite, undo and in-flight rules unchanged). A copy-yank stays staged for further pastes; a move-yank is consumed once its bytes moved. Pasting into the source directory skips the legs (the CF-43 self-copy guard) |
 | `r`             | Refresh active pane                                       |
 | `I`             | Info overlay (CF-52) for the entry under the cursor (the pane's own directory on `..`): path, type, size in bytes, permissions (`drwxr-xr-x` + octal), owner:group, modified / accessed times, link target and the filesystem's free space — read fresh with `lstat` when the key is pressed. `I` or `Esc` closes it |
 | `q`             | Quit; while copy batches are in flight the first press only arms the question ("press q again") and any other key drops it |
@@ -363,7 +365,7 @@ reads through `FsLister`.
 
 ## Test plan
 
-- 472 tests / 7690 assertions — this pair is hand-typed: candy-files runs its
+- 482 tests / 7937 assertions — this pair is hand-typed: candy-files runs its
   suite lib-local and its totals are not part of the repository-wide pinned
   count, so re-derive them by running `vendor/bin/phpunit` in this directory
   whenever tests change.

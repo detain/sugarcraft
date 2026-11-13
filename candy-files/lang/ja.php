@@ -69,7 +69,7 @@ return [
     'undo.rename' => '{count} 項目の名前変更',
     'undo.move' => '{count} 項目の移動',
     'undo.copy' => '{count} 項目のコピー',
-    'keyhelp.default' => 'Tab 切替 · ↑↓ jk 移動 · Home/End g/G 先頭末尾 · Enter 開く · l 表示 · ← h 上へ · Space 選択 · s 並べ替え · e 拡張子 · . 隠し表示 · c コピー · m 移動 · R 名前変更 · d 削除 · r 再読込 · q 終了 · / 検索 · Esc 解除 · t タブを複製 · ^w タブを閉じる · ^tab タブ巡回 · ^PgUp/^PgDn タブ · u/^z 元に戻す · ^y やり直し · ? ヘルプ · Ctrl+O 開く · 1-9 タブ · Ctrl+a すべて · v 反転 · * パターン · I 情報 · マウス クリック/ホイール',
+    'keyhelp.default' => 'Tab 切替 · ↑↓ jk 移動 · Home/End g/G 先頭末尾 · Enter 開く · l 表示 · ← h 上へ · Space 選択 · s 並べ替え · e 拡張子 · . 隠し表示 · c コピー · m 移動 · R 名前変更 · d 削除 · r 再読込 · q 終了 · / 検索 · Esc 解除 · t タブを複製 · ^w タブを閉じる · ^tab タブ巡回 · ^PgUp/^PgDn タブ · u/^z 元に戻す · ^y やり直し · ? ヘルプ · Ctrl+O 開く · 1-9 タブ · Ctrl+a すべて · v 反転 · * パターン · I 情報 · マウス クリック/ホイール · y/Y ヤンク · p 貼り付け',
     'keyhelp.terse' => 'Tab 切替 · ↑↓ jk 移動 · Enter 開く · l 表示 · ← h 上へ · Space 選択 · s 並べ替え · e 拡張子 · c コピー · m 移動 · R 名前変更 · d 削除 · q 終了 · / 検索 · u/^z 元に戻す · ^y やり直し',
     'keyhelp.minimal' => 'Enter 開く · l 表示 · q 終了 · / 検索',
     'help.title' => '{count} 個のキーバインド',
@@ -128,4 +128,8 @@ return [
     'info.free' => '空き容量',
     'info.dismiss' => 'I か Esc で閉じる',
     'status.info_failed' => '{name} の情報を読み取れません',
+    'status.yanked' => '{count} 件をコピー用にヤンクしました — p で貼り付け',
+    'status.cut' => '{count} 件を移動用に切り取りました — p で貼り付け',
+    'status.nothing_to_yank' => 'ヤンクするものがありません',
+    'status.nothing_to_paste' => '貼り付けるものがありません — 先に y か Y で選びます',
 ];

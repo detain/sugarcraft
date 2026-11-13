@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'Items hernoemd: {count}',
     'undo.move' => 'Items verplaatst: {count}',
     'undo.copy' => 'Items gekopieerd: {count}',
-    'keyhelp.default' => 'Tab wisselen · ↑↓ jk bewegen · Home/End g/G springen · Enter openen · l bekijken · ← h omhoog · spatie selecteren · s sorteren · e extensie · . verborgen · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · r verversen · q afsluiten · / zoeken · Esc wissen · t tabblad dupliceren · ^w tabblad sluiten · ^tab cyclen · ^PgUp/^PgDn tabbladen · u/^z ongedaan · ^y herhalen · ? help · Ctrl+O openen · 1-9 tabs · Ctrl+a alles · v omkeren · * patroon · I info · muis klik/wiel',
+    'keyhelp.default' => 'Tab wisselen · ↑↓ jk bewegen · Home/End g/G springen · Enter openen · l bekijken · ← h omhoog · spatie selecteren · s sorteren · e extensie · . verborgen · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · r verversen · q afsluiten · / zoeken · Esc wissen · t tabblad dupliceren · ^w tabblad sluiten · ^tab cyclen · ^PgUp/^PgDn tabbladen · u/^z ongedaan · ^y herhalen · ? help · Ctrl+O openen · 1-9 tabs · Ctrl+a alles · v omkeren · * patroon · I info · muis klik/wiel · y/Y vastleggen · p plakken',
     'keyhelp.terse' => 'Tab wisselen · ↑↓ jk bewegen · Enter openen · l bekijken · ← h omhoog · spatie selecteren · s sorteren · e extensie · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · q afsluiten · / zoeken · u/^z ongedaan · ^y herhalen',
     'keyhelp.minimal' => 'Enter openen · l bekijken · q afsluiten · / zoeken',
     'help.title' => '{count} sneltoetsen',
@@ -128,4 +128,8 @@ Gebruik:
     'info.free' => 'Vrije ruimte',
     'info.dismiss' => 'I of Esc sluit',
     'status.info_failed' => 'kan informatie over {name} niet lezen',
+    'status.yanked' => '{count} items onthouden voor kopiëren — p plakt',
+    'status.cut' => '{count} items geknipt voor verplaatsen — p plakt',
+    'status.nothing_to_yank' => 'niets om te onthouden',
+    'status.nothing_to_paste' => 'niets om te plakken — y of Y legt eerst items vast',
 ];

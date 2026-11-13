@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'Éléments renommés : {count}',
     'undo.move' => 'Éléments déplacés : {count}',
     'undo.copy' => 'Éléments copiés : {count}',
-    'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Home/End g/G sauter · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · Esc effacer · t dupliquer l’onglet · ^w fermer l’onglet · ^tab cycler · ^PgUp/^PgDn onglets · u/^z annuler · ^y rétablir · ? aide · Ctrl+O ouvrir · 1-9 onglets · Ctrl+a tous · v inverser · * motif · I infos · souris clic/molette',
+    'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Home/End g/G sauter · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · Esc effacer · t dupliquer l’onglet · ^w fermer l’onglet · ^tab cycler · ^PgUp/^PgDn onglets · u/^z annuler · ^y rétablir · ? aide · Ctrl+O ouvrir · 1-9 onglets · Ctrl+a tous · v inverser · * motif · I infos · souris clic/molette · y/Y retenir · p coller',
     'keyhelp.terse' => 'Tab permuter · ↑↓ jk déplacer · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · c copier · m déplacer · R renommer · d supprimer · q quitter · / rechercher · u/^z annuler · ^y rétablir',
     'keyhelp.minimal' => 'Entrée ouvrir · l voir · q quitter · / rechercher',
     'help.title' => '{count} raccourcis clavier',
@@ -128,4 +128,8 @@ Utilisation :
     'info.free' => 'Espace libre',
     'info.dismiss' => 'I ou Échap ferme',
     'status.info_failed' => 'impossible de lire les informations de {name}',
+    'status.yanked' => '{count} entrées retenues pour copie — p colle',
+    'status.cut' => '{count} entrées coupées pour déplacement — p colle',
+    'status.nothing_to_yank' => 'rien à retenir',
+    'status.nothing_to_paste' => 'rien à coller — y ou Y retient d’abord des entrées',
 ];

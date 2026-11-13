@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'přejmenovat {count} položek',
     'undo.move' => 'přesunout {count} položek',
     'undo.copy' => 'kopírovat {count} položek',
-    'keyhelp.default' => 'Tab prohodit · ↑↓ jk pohyb · Home/End g/G skok · Enter otevřít · l prohlížet · ← h nahoru · mezerník vybrat · s řadit · e přípona · . skryté · c kopírovat · m přesunout · R přejmenovat · d smazat · r obnovit · q quitter · / hledat · Esc vyčistit · t duplikovat kartu · ^w zavřít kartu · ^tab přepínat · ^PgUp/^PgDn karty · u/^z vrátit · ^y znovu · ? nápověda · Ctrl+O otevřít · 1-9 karty · Ctrl+a vše · v prohodit · * vzor · I info · myš klik/kolečko',
+    'keyhelp.default' => 'Tab prohodit · ↑↓ jk pohyb · Home/End g/G skok · Enter otevřít · l prohlížet · ← h nahoru · mezerník vybrat · s řadit · e přípona · . skryté · c kopírovat · m přesunout · R přejmenovat · d smazat · r obnovit · q quitter · / hledat · Esc vyčistit · t duplikovat kartu · ^w zavřít kartu · ^tab přepínat · ^PgUp/^PgDn karty · u/^z vrátit · ^y znovu · ? nápověda · Ctrl+O otevřít · 1-9 karty · Ctrl+a vše · v prohodit · * vzor · I info · myš klik/kolečko · y/Y označit · p vložit',
     'keyhelp.terse' => 'Tab prohodit · ↑↓ jk pohyb · Enter otevřít · l prohlížet · ← h nahoru · mezerník vybrat · s řadit · e přípona · c kopírovat · m přesunout · R přejmenovat · d smazat · q quitter · / hledat · u/^z vrátit · ^y znovu',
     'keyhelp.minimal' => 'Enter otevřít · l prohlížet · q quitter · / hledat',
     'help.title' => '{count} klávesových zkratek',
@@ -128,4 +128,8 @@ Použití:
     'info.free' => 'Volné místo',
     'info.dismiss' => 'I nebo Esc zavře',
     'status.info_failed' => 'nelze číst informace o {name}',
+    'status.yanked' => 'označeno {count} položek ke kopírování — p vloží',
+    'status.cut' => 'vyjmuto {count} položek k přesunu — p vloží',
+    'status.nothing_to_yank' => 'není co označit',
+    'status.nothing_to_paste' => 'není co vložit — nejdřív y nebo Y připraví položky',
 ];

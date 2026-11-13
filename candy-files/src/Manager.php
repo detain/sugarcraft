@@ -155,6 +155,10 @@ final class Manager implements Model
         public readonly ?array $infoLines = null,
         /** CF-55: the previous left click (pane side, entry index, clock seconds) — the double-click memory. @var array{side:int,index:int,at:float}|null */
         public readonly ?array $lastClick = null,
+        /** CF-32: the yank register — source directory, entry names, and the staged op. @var array{dir:string,names:list<string>,op:'copy'|'move'}|null */
+        public readonly ?array $yank = null,
+        /** CF-32: set only while a paste's confirm gate is armed — the sources the perform legs read instead of the active pane. @var array{dir:string,names:list<string>}|null */
+        public readonly ?array $pasteSrc = null,
     ) {
         // The lister arrives exactly as the seam decided it (start() and
         // ManagerBuilder::build() are the memoized production paths);
@@ -630,6 +634,14 @@ final class Manager implements Model
                 => $this->armCopy(),
             $plain && $msg->rune === 'm'
                 => $this->armMove(),
+            // CF-32: yank/paste. y stages a copy, Y a move; p arms the
+            // existing confirm against the active pane's cwd.
+            $plain && $msg->rune === 'y'
+                => $this->yank('copy'),
+            $plain && $msg->rune === 'Y'
+                => $this->yank('move'),
+            $plain && $msg->rune === 'p'
+                => $this->armPaste(),
             $plain && $msg->rune === 'R'
                 => $this->armRename(),
             // CF-10: mc-F7/superfile-N baseline — create a directory in the
@@ -1697,10 +1709,7 @@ final class Manager implements Model
      */
     private function performCopyAsync(): array
     {
-        $pane = $this->activePane();
-        $names = $pane->selected !== []
-            ? array_keys($pane->selected)
-            : [$pane->currentEntry()?->name];
+        [$srcDir, $names] = $this->operationSources();
         $dst = $this->pendingOpDest;
         if ($dst === null) {
             return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled')), null];
@@ -1712,7 +1721,7 @@ final class Manager implements Model
             if ($name === null || $name === '..' || $name === '') {
                 continue;
             }
-            $src = Pane::join($pane->cwd, $name);
+            $src = Pane::join($srcDir, $name);
             $target = Pane::join($dst, $name);
             // CF-43: self-copy guard. With both panes on one cwd (the
             // documented startup default) target === src: copyPath would
@@ -1774,10 +1783,8 @@ final class Manager implements Model
 
     private function performMove(): self
     {
-        $pane = $this->activePane();
-        $names = $pane->selected !== []
-            ? array_keys($pane->selected)
-            : [$pane->currentEntry()?->name];
+        [$srcDir, $names] = $this->operationSources();
+        $viaPaste = $this->pasteSrc !== null;
         $dst = $this->pendingOpDest;
         if ($dst === null) {
             return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'));
@@ -1789,7 +1796,7 @@ final class Manager implements Model
             if ($name === null || $name === '..' || $name === '') {
                 continue;
             }
-            $src = Pane::join($pane->cwd, $name);
+            $src = Pane::join($srcDir, $name);
             $target = Pane::join($dst, $name);
             // CF-43: self-move guard — same rationale as the copy schedule.
             // @rename($s,$s) succeeds as a silent no-op on POSIX, so the old
@@ -1830,9 +1837,86 @@ final class Manager implements Model
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         // CF-20: a move lands bytes in the (possibly inactive) destination
         // pane — both panes re-read, no Tab+`r` dance to chase a phantom.
-        return $this->refreshAllPanes()
+        $done = $this->refreshAllPanes()
             ->withConfirm(ConfirmState::None, $msg)
             ->withUndoRedoStacks($newUndoStack, []);
+        // CF-32: a cut is consumed by its paste (the bytes left the source);
+        // a yank-for-copy stays staged so one yank can paste many places.
+        return $viaPaste && $movedItems !== [] ? $done->mutate(['yank' => null]) : $done;
+    }
+
+    /**
+     * CF-32: where the perform legs read their sources — the staged paste
+     * set while a paste gate is armed, otherwise the active pane's
+     * selection (or cursor entry), exactly as before.
+     *
+     * @return array{0:string,1:list<?string>}
+     */
+    private function operationSources(): array
+    {
+        if ($this->pasteSrc !== null) {
+            return [$this->pasteSrc['dir'], $this->pasteSrc['names']];
+        }
+        $pane = $this->activePane();
+        return [$pane->cwd, $pane->selected !== []
+            ? array_keys($pane->selected)
+            : [$pane->currentEntry()?->name]];
+    }
+
+    /**
+     * CF-32 `y` / `Y`: stage the selection (or the cursor entry) in the
+     * yank register as a copy or a move. Nothing touches the filesystem —
+     * the destructive part waits for `p`, behind the existing confirm gate.
+     *
+     * @param 'copy'|'move' $op
+     */
+    private function yank(string $op): self
+    {
+        $pane = $this->activePane();
+        $current = $pane->currentEntry();
+        $names = $pane->selected !== []
+            ? array_keys($pane->selected)
+            : ($current === null || $current->isParentSentinel() ? [] : [$current->name]);
+        if ($names === []) {
+            return $this->withStatus(Lang::t('status.nothing_to_yank'));
+        }
+        $names = array_values(array_map('strval', $names));
+        $staged = $this->mutate(['yank' => ['dir' => $pane->cwd, 'names' => $names, 'op' => $op]]);
+        return $op === 'copy'
+            ? $staged->withStatus(Lang::t('status.yanked', ['count' => count($names)]))
+            : $staged->withStatus(Lang::t('status.cut', ['count' => count($names)]));
+    }
+
+    /**
+     * CF-32 `p`: arm the EXISTING copy/move confirm with the yank register
+     * as the source and the active pane's cwd as the destination. The gate
+     * fires at paste time — a yank never writes — so every overwrite /
+     * undo / in-flight rule of `c` and `m` applies unchanged.
+     */
+    private function armPaste(): self
+    {
+        if ($this->yank === null) {
+            return $this->withStatus(Lang::t('status.nothing_to_paste'));
+        }
+        $y = $this->yank;
+        $dest = $this->activePane()->cwd;
+        $names = count($y['names']) > 1
+            ? Lang::t('confirm.selected_entries', ['count' => count($y['names'])])
+            : "'" . Entry::sanitizeName($y['names'][0]) . "'";
+        $armed = $y['op'] === 'copy'
+            ? $this->withConfirm(
+                ConfirmState::CopySelected,
+                Lang::t('confirm.copy', ['names' => $names, 'dest' => Entry::sanitizeName($dest)]),
+                $dest,
+                'copy'
+            )
+            : $this->withConfirm(
+                ConfirmState::MoveSelected,
+                Lang::t('confirm.move', ['names' => $names, 'dest' => Entry::sanitizeName($dest)]),
+                $dest,
+                'move'
+            );
+        return $armed->mutate(['pasteSrc' => ['dir' => $y['dir'], 'names' => $y['names']]]);
     }
 
     private function performRename(): self
@@ -1987,6 +2071,10 @@ final class Manager implements Model
             'pendingOpDest' => $pendingOpDest,
             'pendingOpType' => $pendingOpType,
             'inputBuffer' => $inputBuffer,
+            // CF-32: every gate transition drops the paste source — only
+            // armPaste re-attaches it AFTER arming, so a stale stash can
+            // never ride into an unrelated copy/move confirmation.
+            'pasteSrc' => null,
         ]);
     }
 

@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'Elementi rinominati: {count}',
     'undo.move' => 'Elementi spostati: {count}',
     'undo.copy' => 'Elementi copiati: {count}',
-    'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Home/End g/G salta · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · Esc cancella · t duplica scheda · ^w chiudi scheda · ^tab cicla · ^PgUp/^PgDn schede · u/^z annulla · ^y ripeti · ? aiuto · Ctrl+O apri · 1-9 schede · Ctrl+a tutti · v inverti · * motivo · I info · mouse clic/rotella',
+    'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Home/End g/G salta · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · Esc cancella · t duplica scheda · ^w chiudi scheda · ^tab cicla · ^PgUp/^PgDn schede · u/^z annulla · ^y ripeti · ? aiuto · Ctrl+O apri · 1-9 schede · Ctrl+a tutti · v inverti · * motivo · I info · mouse clic/rotella · y/Y segna · p incolla',
     'keyhelp.terse' => 'Tab scambia · ↑↓ jk muovi · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · c copia · m sposta · R rinomina · d elimina · q esci · / cerca · u/^z annulla · ^y ripeti',
     'keyhelp.minimal' => 'Invio apri · l vista · q esci · / cerca',
     'help.title' => '{count} scorciatoie da tastiera',
@@ -128,4 +128,8 @@ Uso:
     'info.free' => 'Spazio libero',
     'info.dismiss' => 'I o Esc chiude',
     'status.info_failed' => 'impossibile leggere le informazioni di {name}',
+    'status.yanked' => '{count} voci segnate per la copia — p incolla',
+    'status.cut' => '{count} voci tagliate per lo spostamento — p incolla',
+    'status.nothing_to_yank' => 'niente da segnare',
+    'status.nothing_to_paste' => 'niente da incollare — y o Y segna prima le voci',
 ];

@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'zmiana nazwy {count} elementów',
     'undo.move' => 'przeniesienie {count} elementów',
     'undo.copy' => 'skopiowanie {count} elementów',
-    'keyhelp.default' => 'Tab zamień · ↑↓ jk ruch · Home/End g/G skacz · Enter otwórz · l podgląd · ← h w górę · spacja zaznacz · s sortuj · e rozszerzenie · . ukryte · c kopiuj · m przenieś · R zmień nazwę · d usuń · r odśwież · q wyjdź · / szukaj · Esc wyczyść · t duplikuj kartę · ^w zamknij kartę · ^tab przełączaj · ^PgUp/^PgDn karty · u/^z cofnij · ^y ponów · ? pomoc · Ctrl+O otwórz · 1-9 zakładki · Ctrl+a wszystkie · v odwróć · * wzorzec · I info · mysz klik/kółko',
+    'keyhelp.default' => 'Tab zamień · ↑↓ jk ruch · Home/End g/G skacz · Enter otwórz · l podgląd · ← h w górę · spacja zaznacz · s sortuj · e rozszerzenie · . ukryte · c kopiuj · m przenieś · R zmień nazwę · d usuń · r odśwież · q wyjdź · / szukaj · Esc wyczyść · t duplikuj kartę · ^w zamknij kartę · ^tab przełączaj · ^PgUp/^PgDn karty · u/^z cofnij · ^y ponów · ? pomoc · Ctrl+O otwórz · 1-9 zakładki · Ctrl+a wszystkie · v odwróć · * wzorzec · I info · mysz klik/kółko · y/Y zapamiętaj · p wklej',
     'keyhelp.terse' => 'Tab zamień · ↑↓ jk ruch · Enter otwórz · l podgląd · ← h w górę · spacja zaznacz · s sortuj · e rozszerzenie · c kopiuj · m przenieś · R zmień nazwę · d usuń · q wyjdź · / szukaj · u/^z cofnij · ^y ponów',
     'keyhelp.minimal' => 'Enter otwórz · l podgląd · q wyjdź · / szukaj',
     'help.title' => '{count} skrótów klawiszowych',
@@ -128,4 +128,8 @@ Użycie:
     'info.free' => 'Wolne miejsce',
     'info.dismiss' => 'I lub Esc zamyka',
     'status.info_failed' => 'nie można odczytać informacji o {name}',
+    'status.yanked' => 'zapamiętano {count} pozycji do kopiowania — p wkleja',
+    'status.cut' => 'wycięto {count} pozycji do przeniesienia — p wkleja',
+    'status.nothing_to_yank' => 'nic do zapamiętania',
+    'status.nothing_to_paste' => 'nic do wklejenia — najpierw y lub Y zapamiętuje pozycje',
 ];
