@@ -127,6 +127,15 @@ final class ResponseTest extends TestCase
         Response::generation(SdTransportResult::new(200, '<html>nginx</html>', 'text/html'));
     }
 
+    public function testCorruptInfoIsAProtocolBreakNotSilentlyEmpty(): void
+    {
+        $body = json_encode(['images' => [self::PNG_B64], 'parameters' => new \stdClass(), 'info' => '{"truncated":']);
+        self::assertIsString($body);
+        $this->expectException(SdException::class);
+        $this->expectExceptionMessage('info is not a JSON object');
+        Response::generation(SdTransportResult::new(200, $body, 'application/json'));
+    }
+
     public function testABrokenImageEntryIsNamedByIndex(): void
     {
         $this->expectException(SdException::class);

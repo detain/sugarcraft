@@ -64,9 +64,17 @@ final class Response
         }
 
         $infoRaw = $decoded['info'] ?? null;
-        $info = is_string($infoRaw) ? (json_decode($infoRaw, true) ?? []) : [];
-        if (!is_array($info)) {
-            $info = [];
+        // A PRESENT info string that is not a JSON object is a protocol break
+        // (same stance as the envelope legs): silently collapsing it to []
+        // would drop the grid index, seeds and infotexts with no signal and
+        // mislabel a grid-prepended batch. Absent / empty info stays [].
+        $info = [];
+        if (is_string($infoRaw) && $infoRaw !== '') {
+            $decodedInfo = json_decode($infoRaw, true);
+            if (!is_array($decodedInfo)) {
+                throw SdException::protocol($context, 'generation response info is not a JSON object');
+            }
+            $info = $decodedInfo;
         }
 
         $parameters = $decoded['parameters'] ?? [];
