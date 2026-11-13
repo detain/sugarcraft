@@ -103,4 +103,70 @@ final class MountsTest extends TestCase
             $tree->destroy();
         }
     }
+
+    public function testSuccessfulProbesAreBoundToTheCadenceWindow(): void
+    {
+        // candy-top-031: on a slow-bus host the per-tick statvfs pair blew
+        // the frame budget forever; each mount is now touched at most once
+        // per RETRY_AFTER window — successes included, not just failures.
+        $tree = FixtureTree::copy();
+        try {
+            $tree->write('proc/mounts', "/dev/sdz /mnt/slow nfs rw 0 0\n/dev/sda1 /mnt/other ext4 rw 0 0\n");
+            [, $mounts] = Mounts::new($tree->paths(), $this->space(), physicalOnly: false, clock: $this->clock())->sample();
+            $this->assertSame(['/mnt/slow', '/mnt/other'], $this->probed);
+
+            $this->probed = [];
+            $snap = null;
+            for ($t = 0.1; $t < Mounts::RETRY_AFTER - 1; $t += 0.05) {
+                $this->now = $t;
+                [$snap, $mounts] = $mounts->sample();
+            }
+            $this->assertSame([], $this->probed, 'frame ticks never re-probe');
+            $this->assertSame(1000, $snap?->mounts[0]->total, 'cached values keep the disk listed');
+
+            $this->now = Mounts::RETRY_AFTER;
+            $this->probed = [];
+            $mounts->sample();
+            $this->assertSame(['/mnt/slow', '/mnt/other'], $this->probed, 'the window lapse admits exactly one fresh probe each');
+        } finally {
+            $tree->destroy();
+        }
+    }
+
+    public function testStackedMountsPairWithTheTopmostEntry(): void
+    {
+        // candy-top-056: statvfs measures the top of a stacked (overlay/
+        // bind) mount point; the shadowed first line must not lend its
+        // device/fstype to those numbers.
+        $tree = FixtureTree::copy();
+        try {
+            $tree->write('proc/mounts', "lower /mnt/x overlay rw 0 0\n/dev/sdb1 /mnt/x ext4 rw 0 0\n/dev/sdc1 /mnt/y ext4 rw 0 0\n");
+            [$snap] = Mounts::new($tree->paths(), $this->space(), physicalOnly: false, clock: $this->clock())->sample();
+
+            $byPoint = [];
+            foreach ($snap->mounts as $mount) {
+                $byPoint[$mount->mountpoint] = $mount;
+            }
+            $this->assertCount(2, $snap->mounts);
+            $this->assertSame('/dev/sdb1', $byPoint['/mnt/x']->device, 'the top of the stack');
+            $this->assertSame('ext4', $byPoint['/mnt/x']->fstype);
+            $this->assertSame('x', $byPoint['/mnt/x']->name, 'the shadowed entry left no duplicate row');
+        } finally {
+            $tree->destroy();
+        }
+    }
+
+    public function testMalformedOctalEscapeFailsSoftNotFatal(): void
+    {
+        // candy-top-048: chr(octdec('777')) threw a ValueError, killing the
+        // disk box on every later sample for one malformed line.
+        $tree = FixtureTree::copy();
+        try {
+            $tree->write('proc/mounts', "/dev/sdd1 /mnt/weird\\777 ext4 rw 0 0\n");
+            [$snap] = Mounts::new($tree->paths(), $this->space(), physicalOnly: false, clock: $this->clock())->sample();
+            $this->assertSame('/mnt/weird' . chr(255), $snap->mounts[0]->mountpoint);
+        } finally {
+            $tree->destroy();
+        }
+    }
 }
