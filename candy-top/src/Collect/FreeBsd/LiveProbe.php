@@ -19,8 +19,10 @@ namespace SugarCraft\Top\Collect\FreeBsd;
  * stdout a pipe); descriptors the PHP process itself holds open without
  * close-on-exec are still inherited by the child, as with every
  * proc_open — the child is short-lived (reaped inside run()), so that
- * window closes with it. Children run under LC_ALL=C so decimal points
- * are '.', and are bounded end to end:
+ * window closes with it. Children receive the {@see ENV_KEYS} allowlist
+ * rebuilt by {@see childEnvFor()} plus LC_ALL=C — never the parent's
+ * whole environment — so decimal points are '.', and are bounded end to
+ * end:
  *  - stdout is read until EOF or TIMEOUT; an overrun is SIGKILLed;
  *  - after EOF the exit is polled with proc_get_status for at most
  *    REAP_WAIT (a child can close stdout and keep running), and a child
@@ -37,6 +39,21 @@ final class LiveProbe implements Probe
 
     /** Base-system locations, tried before PATH (a sanitised PATH may lack /sbin). */
     private const array DIRS = ['/sbin', '/bin', '/usr/sbin', '/usr/bin'];
+
+    /**
+     * The child-environment allowlist — the same vocabulary as
+     * {@see \SugarCraft\Top\Collect\Process\AsyncCommand}'s (a FreeBSD base
+     * tool needs a PATH for ITS helpers, HOME/XDG for caches, TERM, LANG,
+     * the LC_ family and TZ to render like the user expects, and the loader
+     * path; nothing else).
+     * The parent of a TUI is the user's shell: proc_open without this seam
+     * handed every child the whole environment, secrets included.
+     */
+    private const array ENV_KEYS = [
+        'PATH', 'HOME', 'TERM', 'LANG', 'TZ',
+        'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME',
+        'LD_LIBRARY_PATH',
+    ];
 
     private function __construct()
     {
@@ -67,8 +84,7 @@ final class LiveProbe implements Probe
             return null;
         }
         $argv[0] = $binary;
-        $env = getenv();
-        $env['LC_ALL'] = 'C';
+        $env = self::childEnvFor(getenv());
 
         $pipes = [];
         try {
@@ -118,6 +134,33 @@ final class LiveProbe implements Probe
         proc_close($process);
 
         return $exit === 0 ? $output : null;
+    }
+
+    /**
+     * The child environment as a rebuilt allowlist, never the raw parent
+     * environment: {@see ENV_KEYS} plus the LC_ family carried over, the
+     * base PATH ensured, and LC_ALL pinned to C after the copy so a
+     * parent locale cannot outlive it. Pure on purpose — the seam that
+     * lets tests pin the rule without touching the process.
+     *
+     * @param array<string, string> $parentEnv the getenv() map
+     *
+     * @return array<string, string>
+     */
+    public static function childEnvFor(array $parentEnv): array
+    {
+        $env = [];
+        foreach ($parentEnv as $key => $value) {
+            if (\in_array((string) $key, self::ENV_KEYS, true) || \str_starts_with((string) $key, 'LC_')) {
+                $env[(string) $key] = (string) $value;
+            }
+        }
+        // sysctl(8) and friends resolve their own helpers; even a hardened
+        // parent without PATH must leave the child able to find the base.
+        $env['PATH'] ??= '/usr/bin:/bin';
+        $env['LC_ALL'] = 'C';
+
+        return $env;
     }
 
     public function file(string $path): ?string

@@ -100,4 +100,21 @@ final class ProbeTest extends TestCase
         $this->assertSame(['hw.ncpu' => '4'], $probe->sysctl(['hw.ncpu', 'no.such.oid']));
         $this->assertCount(15, $probe->sysctl(['hw.acpi.thermal']));
     }
+
+    public function testChildEnvKeepsOnlyTheAllowlistAndPinsC(): void
+    {
+        $env = LiveProbe::childEnvFor([
+            'PATH' => '/sbin:/usr/bin', 'HOME' => '/root', 'TERM' => 'xterm-256color',
+            'LC_CTYPE' => 'en_US.UTF-8', 'LC_ALL' => 'de_DE.UTF-8',
+            'SSH_AUTH_SOCK' => '/tmp/s', 'AWS_SECRET_ACCESS_KEY' => 'nope', 'FOO' => 'bar',
+        ]);
+
+        $this->assertSame(['PATH', 'HOME', 'TERM', 'LC_CTYPE', 'LC_ALL'], array_keys($env), 'allowlist (+LC_ family) only, in parent order');
+        $this->assertSame('C', $env['LC_ALL'], 'a parent LC_ALL cannot outlive the pin');
+        $this->assertArrayNotHasKey('SSH_AUTH_SOCK', $env);
+        $this->assertArrayNotHasKey('AWS_SECRET_ACCESS_KEY', $env);
+        $this->assertArrayNotHasKey('FOO', $env);
+        $this->assertSame('/usr/bin:/bin', LiveProbe::childEnvFor([])['PATH'], 'no-PATH parent still leaves the child a base');
+        $this->assertSame('fr_FR.UTF-8', LiveProbe::childEnvFor(['LANG' => 'fr_FR.UTF-8'])['LANG'], 'LANG rides the allowlist');
+    }
 }
