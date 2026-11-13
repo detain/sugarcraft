@@ -633,8 +633,9 @@ behavioural differences:
   `table` it is not defined and fails with Symfony's unknown-option error
   (exit `1`) — as does `--cursor-mode` on all five non-interactive
   commands. The `--cursor-mode` flag itself is honoured by `input` and
-  `write` (`hidden` hides the cursor; `blink` and `static` leave the
-  terminal default) and refuses any other value.
+  `write` (`hidden` hides the cursor; `blink` and `static` program the
+  DECSCUSR cursor style — blinking vs steady block — and the style is
+  restored to the terminal's default on exit) and refuses any other value.
 - The rule behind all of this: every flag a command's `--help` lists is
   live — with one named exception, `--timeout` on `join`, `log`, `style`,
   and `table`, which is listed for gum flag-parity and documented above

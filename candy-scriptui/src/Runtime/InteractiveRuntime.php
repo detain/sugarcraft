@@ -137,6 +137,42 @@ final class InteractiveRuntime
     }
 
     /**
+     * scriptui-73 (finding 099): paint the DECSCUSR style the chosen
+     * `--cursor-mode` word actually promises (blink `ESC[1 q`, static
+     * `ESC[2 q`) onto the same stream the Program will render to. Dumb
+     * TERM suppresses it — DECSCUSR is a CSI sequence a dumb terminal
+     * echoes instead of obeying, so it rides the same posture as the
+     * DEC-private modes above. `hidden` answers null here: the cursor
+     * hiding is ProgramOptions::$hideCursor's own DEC-private arm.
+     *
+     * @return bool true when style bytes were written; the caller then
+     *               owes the paired {@see emitCursorReset()} on exit.
+     */
+    public static function emitCursorStyle(string $cursorMode, ProgramOptions $options): bool
+    {
+        $sequence = CursorMode::styleSequence($cursorMode);
+        if ($sequence === null || ColourGate::termIsDumb()) {
+            return false;
+        }
+
+        $stream = $options->output ?? STDOUT;
+        fwrite($stream, $sequence);
+
+        return true;
+    }
+
+    /**
+     * Restore the terminal's own cursor style on exit (scriptui-73).
+     * Called unconditionally when {@see emitCursorStyle()} painted —
+     * a scripted blinking/steady cursor must not outlive the program.
+     */
+    public static function emitCursorReset(ProgramOptions $options): void
+    {
+        $stream = $options->output ?? STDOUT;
+        fwrite($stream, CursorMode::resetSequence());
+    }
+
+    /**
      * scriptui-07 (candy-scriptui-036): the options above request
      * signal-mapped cancellation (`catchInterrupts: true`), but sugar-core
      * can only install the handler when ext-pcntl is loaded — without it

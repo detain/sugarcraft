@@ -101,10 +101,19 @@ final class InputCommand extends Command
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'input']) . "\n");
             return Command::FAILURE;
         }
+        $paintedCursorStyle = InteractiveRuntime::emitCursorStyle($cursorMode, $options);
         $program = new Program($frame !== null ? new StyledFrame($model, $frame) : $model, $options);
         $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var InputModel $final */
-        $final = $program->run();
+        try {
+            $final = $program->run();
+        } finally {
+            // scriptui-73 (finding 099): the DECSCUSR style promised by
+            // --cursor-mode is ours to restore, on every way out.
+            if ($paintedCursorStyle) {
+                InteractiveRuntime::emitCursorReset($options);
+            }
+        }
         $final = $final instanceof StyledFrame ? $final->inner : $final;
         $guard->disarm();
 
