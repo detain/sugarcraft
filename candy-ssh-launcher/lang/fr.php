@@ -25,6 +25,7 @@ return [
     'config.too_large'          => 'le fichier de configuration dépasse la limite de {limit} octets : {path}',
     'config.list_too_long'      => 'entrée de la liste : le champ [{field}] contient plus des {limit} éléments autorisés par le chargeur',
     'config.field_not_list'       => 'entrée de la liste : le champ [{field}] doit être une liste de valeurs, pas une table clé-valeur',
+    'config.encoding_utf16'       => '{path} est encodé en UTF-16 — ré-enregistrez la configuration en UTF-8',
     'config.unreadable'       => 'impossible de lire la configuration wishlist : {path}',
     'config.home_unset'       => 'impossible de développer ~ sans $HOME : {path}',
     'config.yaml_inline_flow' => 'wishlist yaml : collection de flux en ligne non prise en charge : {value} (utilisez une liste imbriquée)',

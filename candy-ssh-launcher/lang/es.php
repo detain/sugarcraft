@@ -25,6 +25,7 @@ return [
     'config.too_large'          => 'la configuración de la lista supera el límite de {limit} bytes: {path}',
     'config.list_too_long'      => 'entrada de la lista: el campo [{field}] contiene más de los {limit} elementos que permite el cargador',
     'config.field_not_list'       => 'entrada de la lista: el campo [{field}] debe ser una lista de valores, no un mapa clave-valor',
+    'config.encoding_utf16'       => '{path} está codificado en UTF-16 — vuelve a guardar la configuración como UTF-8',
     'config.unreadable'       => 'no se pudo leer la configuración de wishlist: {path}',
     'config.home_unset'       => 'no se puede expandir ~ sin $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: colección de flujo en línea no admitida: {value} (use una lista anidada)',

@@ -25,6 +25,7 @@ return [
     'config.too_large'          => 'plik konfiguracji wishlistu przekracza limit {limit} bajt\u00f3w: {path}',
     'config.list_too_long'      => 'wpis wishlistu: pole [{field}] zawiera wi\u0119cej ni\u017e {limit} element\u00f3w dozwolonych przez loader',
     'config.field_not_list'       => 'wpis wishlistu: pole [{field}] musi być listą wartości, nie mapą klucz-wartość',
+    'config.encoding_utf16'       => 'plik {path} ma kodowanie UTF-16 — zapisz konfigurację ponownie jako UTF-8',
     'config.unreadable'       => 'nie można odczytać konfiguracji wishlist: {path}',
     'config.home_unset'       => 'nie można rozwinąć ~ bez $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: kolekcja flow w linii nie jest obsługiwana: {value} (użyj listy zagnieżdżonej)',

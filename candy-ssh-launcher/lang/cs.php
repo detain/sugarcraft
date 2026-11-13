@@ -25,6 +25,7 @@ return [
     'config.too_large'          => 'konfigurace wishlistu je větší než limit {limit} bajtů: {path}',
     'config.list_too_long'      => 'položka wishlistu: pole [{field}] obsahuje více než {limit} položek, které zástupce umožňuje',
     'config.field_not_list'       => 'položka wishlistu: pole [{field}] musí být seznam hodnot, ne mapa klíč a hodnot',
+    'config.encoding_utf16'       => '{path} je kódován UTF-16 — uložte konfiguraci znovu jako UTF-8',
     'config.unreadable'       => 'konfiguraci wishlist nelze načíst: {path}',
     'config.home_unset'       => 'nelze rozbalit ~ bez $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: řádková flow kolekce není podporována: {value} (použijte vnořený seznam)',

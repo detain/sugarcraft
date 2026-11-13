@@ -25,6 +25,7 @@ return [
     'config.too_large'          => '\u0645\u0644\u0641 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0623\u0645\u0627\u0646\u064a \u0623\u0643\u0628\u0631 \u0645\u0646 \u062d\u062f {limit} \u0628\u0627\u064a\u062a: {path}',
     'config.list_too_long'      => '\u0625\u062f\u062e\u0627\u0644 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0623\u0645\u0627\u0646\u064a: \u0627\u0644\u062d\u0642\u0644 [{field}] \u064a\u062d\u0645\u0644 \u0623\u0643\u062b\u0631 \u0645\u0646 {limit} \u0639\u0646\u0635\u0631\u064b\u0627 \u064a\u0633\u0645\u062d \u0628\u0647\u0627 \u0627\u0644\u0645\u062d\u0645\u0644',
     'config.field_not_list'       => '‏إدخال قائمة الأمنيات: الحقل [{field}] يجب أن يكون قائمة قيم لا خريطة مفاتيح',
+    'config.encoding_utf16'       => '{path} ترميزه UTF-16 — أعد حفظ الملف بترميز UTF-8',
     'config.unreadable'       => 'تعذر قراءة تكوين wishlist: {path}',
     'config.home_unset'       => 'لا يمكن توسيع ~ بدون HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: مجموعة التدفق المضمّنة غير مدعومة: {value} (استخدم قائمة متداخلة)',

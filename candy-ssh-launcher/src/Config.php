@@ -184,6 +184,19 @@ final class Config
         if ($raw === false) {
             throw new \RuntimeException(Lang::t('config.unreadable', ['path' => $path]));
         }
+        // -017: encoding gate at the single read choke (load() and
+        // importFromSshConfig() both arrive here). A leading UTF-8 BOM
+        // poisoned the first key — `\xEF\xBB\xBF- name:` no longer
+        // matches `^-`, surfacing as an unparseable line 1 with bytes
+        // no terminal can show. Strip it. A UTF-16 file can never parse
+        // into a first key either, but its real failure is unreadable
+        // gibberish, so refuse it BY NAME with the fix spelled out —
+        // silently transcoding would paper over what the reader is.
+        if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+            $raw = substr($raw, 3);
+        } elseif (str_starts_with($raw, "\xFF\xFE") || str_starts_with($raw, "\xFE\xFF")) {
+            throw new \RuntimeException(Lang::t('config.encoding_utf16', ['path' => $path]));
+        }
         return $raw;
     }
 

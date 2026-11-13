@@ -25,6 +25,7 @@ return [
     'config.too_large'          => 'wishlist y\u0131ap\u0131land\u0131rmas\u0131 {limit} bayt s\u0131n\u0131r\u0131n\u0131 a\u015f\u0131yor: {path}',
     'config.list_too_long'      => 'wishlist giri\u015fi: [{field}] alan\u0131, y\u00fckleyicinin izin verdi\u011fi {limit} \u00f6\u011feden fazlas\u0131n\u0131 i\u00e7eriyor',
     'config.field_not_list'       => 'wishlist girişi: [{field}] alanı bir anahtar-değer eşlemesi değil, bir değer listesi olmalı',
+    'config.encoding_utf16'       => '{path} UTF-16 kodlamalı — yapılandırmayı UTF-8 olarak yeniden kaydedin',
     'config.unreadable'       => 'wishlist yapılandırması okunamadı: {path}',
     'config.home_unset'       => '~ $HOME olmadan genişletilemiyor: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: satır içi akış koleksiyonu desteklenmiyor: {value} (iç içe liste kullanın)',

@@ -25,6 +25,7 @@ return [
     'config.too_large'          => 'Wishlist-Konfiguration ist größer als das Limit von {limit} Bytes: {path}',
     'config.list_too_long'      => 'Wishlist-Eintrag: Feld [{field}] enthält mehr als die {limit} Einträge, die der Lader erlaubt',
     'config.field_not_list'       => 'Wishlist-Eintrag: Feld [{field}] muss eine Werteliste sein, keine Schlüssel-Wert-Zuordnung',
+    'config.encoding_utf16'       => '{path} ist UTF-16-kodiert — die Konfiguration bitte als UTF-8 neu speichern',
     'config.unreadable'       => 'Wishlist-Konfiguration konnte nicht gelesen werden: {path}',
     'config.home_unset'       => '~ kann ohne $HOME nicht expandiert werden: {path}',
     'config.yaml_inline_flow' => 'Wishlist-YAML: Inline-Flow-Sammlung nicht unterstützt: {value} (verschachtelte Liste verwenden)',

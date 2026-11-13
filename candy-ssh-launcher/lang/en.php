@@ -25,6 +25,7 @@ return [
     'config.too_large'          => 'wishlist config file is larger than the {limit}-byte limit: {path}',
     'config.list_too_long'      => 'wishlist entry: field [{field}] carries more than the {limit} list items the loader allows',
     'config.field_not_list'       => 'wishlist entry: field [{field}] must be a list of values, not a key-value map',
+    'config.encoding_utf16'       => '{path} is UTF-16 encoded — re-save the config as UTF-8',
     'config.unreadable'       => 'wishlist config could not be read: {path}',
     'config.home_unset'       => 'cannot expand ~ without $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: inline flow collection not supported: {value} (use a nested list)',
