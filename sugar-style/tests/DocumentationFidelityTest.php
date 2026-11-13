@@ -310,19 +310,17 @@ final class DocumentationFidelityTest extends TestCase
         self::assertStringContainsString('arabic, alphabet, roman, romanUpper, decimal, tree, none', $readme);
     }
 
-    public function testUnderlineStyleIsInertWithoutUnderlineAndTheReadmeSaysSo(): void
+    public function testUnderlineStyleImpliesUnderlineAndTheReadmeSaysSo(): void
     {
         $alone = Style::new()->underlineStyle(UnderlineStyle::Curly)->of('x')->render();
-        self::assertStringNotContainsString("\x1b[4:", $alone, 'the sub-style alone emits nothing');
-
-        $together = Style::new()->underline()->underlineStyle(UnderlineStyle::Curly)->of('x')->render();
-        self::assertStringContainsString("\x1b[4:3m", $together);
+        self::assertStringContainsString("\x1b[4:3m", $alone, 'the sub-style alone now enables underline');
+        self::assertStringNotContainsString("\x1b[4m", $alone, 'wire form stays 4:N only');
 
         $readme = self::flattened(dirname(__DIR__) . '/README.md');
-        self::assertStringContainsString('Inert on its own', $readme);
+        self::assertStringContainsString('also switches `underline()` on', $readme);
 
         $style = self::flattened(dirname(__DIR__) . '/src/Style.php');
-        self::assertStringContainsString('in combination with `underline()`', $style, 'the setter docblock must state the gate');
+        self::assertStringContainsString('also switches `underline()` on', $style);
     }
 
     public function testLightDarkIsAClosureAndNoDocSellsAPickMethod(): void

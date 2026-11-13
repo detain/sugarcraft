@@ -391,8 +391,10 @@ echo Tree::new()
   when you pass `null` (meaning “unknown — don't switch schemes”); it does
   not probe the terminal by itself.
 - **`UnderlineStyle`** — enum (None / Single / Double / Curly /
-  Dotted / Dashed) for SGR `4:N` sub-style emit. Inert on its own: the
-  `4:N` form is emitted only when `underline()` is also set.
+  Dotted / Dashed) for SGR `4:N` sub-style emit. `Style::underlineStyle()`
+  with a non-None shape also switches `underline()` on (a later
+  `underline(false)` still wins, `None` leaves it alone); the wire form stays
+  the ruled `4:N` only, with no plain SGR 4 companion.
 - **`Hsl`** — CSS-style HSL factory: `Hsl::color($h, $s, $l)` (hue 0-360,
   saturation/lightness 0-100) and `Hsl::parse('hsl(200,80%,50%)')` for
   string input. Note the scale split with `Color::hsl()`, whose `s`/`l`

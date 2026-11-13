@@ -17,11 +17,13 @@ namespace SugarCraft\Style;
  * - {@see Dotted} (4:4) — dotted line.
  * - {@see Dashed} (4:5) — dashed line.
  *
- * Terminals that understand SGR `4:N` render the styled underline;
- * terminals that don't typically ignore the extended form and render no
- * underline at all, since no plain SGR 4 companion is emitted. For a
- * guaranteed plain underline do not set a style: bare underline() alone
- * emits SGR 4.
+ * Setting a non-None style via Style::underlineStyle() also enables
+ * underline(); an explicit later underline(false) still wins. The wire form
+ * is the ruled 4:N only. Terminals that understand SGR `4:N` render the
+ * styled underline; terminals that don't typically ignore the extended form
+ * and render no underline at all, since no plain SGR 4 companion is emitted.
+ * For a guaranteed plain underline do not set a style: bare underline()
+ * alone emits SGR 4.
  */
 enum UnderlineStyle: int
 {

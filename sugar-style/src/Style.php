@@ -242,16 +242,22 @@ final class Style
 
     /**
      * Underline-line shape (single / double / curly / dotted / dashed),
-     * emitted as the SGR `4:N` sub-parameter — only in combination with
-     * `underline()`: set on its own this attribute emits nothing. Terminals
-     * that understand
+     * emitted as the SGR `4:N` sub-parameter. A non-None shape also switches
+     * `underline()` on (an explicit later `underline(false)` still wins; None
+     * leaves the flag alone), so the shape never silently renders nothing.
+     * The wire form is unchanged (ruled): only `4:N`, no plain SGR 4
+     * companion. Terminals that understand
      * SGR `4:N` render the styled underline; terminals that don't typically
      * ignore the extended form and render no underline at all, since no
      * plain SGR 4 companion is emitted. Mirrors lipgloss `UnderlineStyle`.
      */
     public function underlineStyle(UnderlineStyle $style): self
     {
-        return $this->with(underlineStyle: $style, propsAdded: ['underlineStyle']);
+        if ($style === UnderlineStyle::None) {
+            return $this->with(underlineStyle: $style, propsAdded: ['underlineStyle']);
+        }
+
+        return $this->with(underline: true, underlineStyle: $style, propsAdded: ['underline', 'underlineStyle']);
     }
 
     /**

@@ -56,13 +56,29 @@ final class UnderlineStyleTest extends TestCase
         $this->assertStringNotContainsString("\x1b[4:", $rendered);
     }
 
-    public function testWithoutUnderlineFlagNoSubStyleEmitted(): void
+    public function testSubStyleAloneImpliesUnderlineWith4NWireForm(): void
     {
-        // Sub-style without the underline flag should emit nothing
-        // related to underlining.
-        $s = Style::new()->underlineStyle(UnderlineStyle::Curly);
-        $rendered = $s->render('hello');
-        $this->assertStringNotContainsString("\x1b[4:", $rendered);
+        $rendered = Style::new()->underlineStyle(UnderlineStyle::Curly)->render('hello');
+        $this->assertStringContainsString("\x1b[4:3m", $rendered);
         $this->assertStringNotContainsString("\x1b[4m", $rendered);
+    }
+
+    public function testExplicitLaterUnderlineFalseWins(): void
+    {
+        $rendered = Style::new()->underlineStyle(UnderlineStyle::Curly)->underline(false)->render('hello');
+        $this->assertStringNotContainsString("\x1b[4", $rendered);
+    }
+
+    public function testNoneStyleLeavesUnderlineAlone(): void
+    {
+        $rendered = Style::new()->underlineStyle(UnderlineStyle::None)->render('hello');
+        $this->assertStringNotContainsString("\x1b[4", $rendered);
+    }
+
+    public function testImplicitUnderlineSurvivesInheritAndPatch(): void
+    {
+        $parent = Style::new()->underlineStyle(UnderlineStyle::Dashed);
+        $this->assertStringContainsString("\x1b[4:5m", Style::new()->inherit($parent)->render('x'));
+        $this->assertStringContainsString("\x1b[4:5m", Style::new()->patch($parent)->render('x'));
     }
 }
