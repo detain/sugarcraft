@@ -42,8 +42,10 @@ final class PharBuildScriptTest extends TestCase
 
         // mail's packaged data surface is exactly lang/ — no fonts/, themes/ or
         // data/ directory exists in this package, and the manifest says so.
+        // CM-26: whitespace-tolerant — the claim is the exact ordered
+        // content, not the array's formatting.
         self::assertMatchesRegularExpression(
-            '/const INCLUDE_ROOTS = \[\'bin\', \'src\', \'lang\', \'vendor\'\];/',
+            '/const\s+INCLUDE_ROOTS\s*=\s*\[\s*\'bin\'\s*,\s*\'src\'\s*,\s*\'lang\'\s*,\s*\'vendor\'\s*\]\s*;/',
             $script,
             'mail ships bin, src, lang, vendor in that order — nothing more, nothing less.',
         );
@@ -75,11 +77,15 @@ final class PharBuildScriptTest extends TestCase
         // the ladder below is pinned behaviourally in BinDispatchTest — the
         // candidate literals are pinned here so neither arm can silently
         // shrink back.
-        self::assertStringContainsString('hostArchiveFrom(\Phar::running(false), __FILE__)', $bin);
-        self::assertStringContainsString("'phar://' . \$archive . '/vendor/autoload.php'", $bin);
+        // CM-26: the code-shape pins below carry whitespace-tolerant regexes
+        // — a behaviour-preserving re-wrap or alignment must not redden the
+        // guard; the tokens, order and quoting do. Message literals stay
+        // exact on purpose (they are the human-visible contract).
+        self::assertMatchesRegularExpression('/hostArchiveFrom\(\s*\\\\Phar::running\(\s*false\s*\)\s*,\s*__FILE__\s*\)/', $bin);
+        self::assertMatchesRegularExpression('/[\'"]phar:\/\/[\'"]\s*\.\s*\$archive\s*\.\s*[\'"]\/vendor\/autoload\.php[\'"]/', $bin);
         self::assertStringContainsString('the archive has no vendor/autoload.php', $bin);
-        self::assertStringContainsString("__DIR__ . '/../vendor/autoload.php'", $bin);
-        self::assertStringContainsString("__DIR__ . '/../../../autoload.php'", $bin);
+        self::assertMatchesRegularExpression('/__DIR__\s*\.\s*[\'"]\/\.\.\/vendor\/autoload\.php[\'"]/', $bin);
+        self::assertMatchesRegularExpression('/__DIR__\s*\.\s*[\'"]\/\.\.\/\.\.\/\.\.\/autoload\.php[\'"]/', $bin);
         self::assertStringContainsString('cannot find composer autoload.php', $bin);
     }
 

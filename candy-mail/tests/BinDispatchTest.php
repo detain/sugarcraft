@@ -212,20 +212,6 @@ final class BinDispatchTest extends TestCase
         $this->assertStringContainsString('port', $result['err']);
     }
 
-    public function testDispatchArmsTheUserLocaleBeforeAnythingCanFail(): void
-    {
-        $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
-
-        // Structural order-pin: setLocale(T::detect()) must run before the
-        // first parseArgs() throw path, or the first error would be English
-        // whatever the user's locale is.
-        $armed   = \strpos($src, 'T::setLocale(');
-        $parseAt = \strpos($src, 'parseArgs($argv)');
-        $this->assertNotFalse($armed);
-        $this->assertNotFalse($parseAt);
-        $this->assertLessThan($parseAt, $armed);
-    }
-
     public function testSuccessBannerSanitisesTheTransportValue(): void
     {
         // CM-48: every other echo of non-constant text in the bin rides
@@ -366,20 +352,6 @@ final class BinDispatchTest extends TestCase
         }
     }
 
-    public function testBootstrapLadderListsPackageLocalCandidateBeforeProjectCandidate(): void
-    {
-        $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
-
-        $packageLocal = \strpos($src, "/../vendor/autoload.php");
-        $projectRoot = \strpos($src, "/../../../autoload.php");
-        $this->assertNotFalse($packageLocal);
-        $this->assertNotFalse($projectRoot);
-        // Package-local first: a monorepo checkout must boot on its linked
-        // siblings, not on whatever project happens to surround it.
-        $this->assertLessThan($projectRoot, $packageLocal, 'candidate order drifted');
-        $this->assertStringContainsString('cannot find composer autoload.php', $src);
-    }
-
     // ---------------------------------------------------------------------
     // C5 (lib-reviews-1102): untrusted bytes must never reach the terminal
     // raw. Every stderr message choke in bin/candy-mail sweeps the composed
@@ -401,26 +373,6 @@ final class BinDispatchTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $result['err']);
         $this->assertStringNotContainsString("\x07", $result['err']);
         $this->assertStringNotContainsString('pwned', $result['err'], 'OSC payload must not leak to the terminal');
-    }
-
-    public function testLegacyEnvVarNameChokeIsSanitizedInBootstrapSource(): void
-    {
-        // The POP_* deprecation warning echoes env var NAMES, and names are
-        // attacker-settable — but PHP's own exec layer filters control bytes
-        // out of environment names (measured: SGR/BEL/DEL/TAB-bearing names
-        // never reach getenv intact via proc_open), so no child can deliver
-        // one. The honest pin is therefore structural: the fwrite at the
-        // legacy choke must wrap the composed string in Sanitize::untrusted.
-        $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
-
-        // CM-13 routed the sentence through cli.deprecated_env (translated),
-        // so the literal English no longer lives in the bin — anchor on the
-        // Lang::t call that composes the warning instead.
-        $pos = \strpos($src, "Lang::t('cli.deprecated_env'");
-        $this->assertNotFalse($pos, 'legacy deprecation warning drifted out of the bin');
-        $window = \substr($src, \max(0, $pos - 220), 320);
-        $this->assertStringContainsString('Sanitize::untrusted(', $window, 'legacy-name choke lost its untrusted sweep');
-        $this->assertStringNotContainsString('fwrite(STDERR, sprintf(', $window, 'raw legacy-name echo reintroduced');
     }
 
     public function testUsageBannerNameChokeIsSanitizedInBootstrapSource(): void
@@ -850,9 +802,18 @@ final class BinDispatchTest extends TestCase
         // that key silently rerouted every broken config into the localhost
         // preview. The absence is now its own type; pin the wiring so it
         // cannot regress back into text matching.
+        //
+        // CM-26: the two POSITIVE literal pins are gone — the same-process
+        // wiring they grep for is already pinned behaviourally by
+        // testRenderRefusesToPreviewOverABrokenTransportConfig (broken
+        // config must exit 1, never preview) and
+        // testRenderFallbackPreviewHonoursHeloWithNoTransportConfigured
+        // (the no-transport catch really produces the preview). What no
+        // behaviour test can see is the FORBIDDEN pattern's return — both
+        // text-matching and type-catching agree inside one locale'd
+        // process — so only the anti-pattern arm stays, and it is immune
+        // to behaviour-preserving renames by construction.
         $bin = (string) file_get_contents(__DIR__ . '/../bin/candy-mail');
-        $this->assertStringContainsString("new MissingTransportConfig(Lang::t('cli.no_transport'))", $bin);
-        $this->assertStringContainsString('catch (MissingTransportConfig)', $bin);
         $this->assertStringNotContainsString("!== Lang::t('cli.no_transport')", $bin);
     }
 

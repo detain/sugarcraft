@@ -297,6 +297,12 @@ final class SmtpMimeStructureTest extends TestCase
         $this->assertFalse($has->invoke($transport, '8BITMIME'));
 
         // Structural half: connect() snapshots AFTER the EHLO 250 read.
+        // CM-26 keep-with-note: this ordering pin stays ONLY because no seam
+        // exists yet — connect() cannot be driven (nor its 8BITMIME snapshot
+        // observed) through a fake server from here, so the forked dialogue
+        // harness cannot carry the claim. Delete this half when connect()
+        // gains that arm; until then the residue is acknowledged, not
+        // accreted.
         $src  = \file_get_contents(\dirname(__DIR__) . '/src/SmtpTransport.php');
         $from = \strpos($src, 'private function connect(');
         $this->assertNotFalse($from);
