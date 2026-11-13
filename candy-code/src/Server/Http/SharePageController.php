@@ -174,17 +174,17 @@ final class SharePageController
         }
         $method = $request->getMethod();
         if ($method !== 'GET' && $method !== 'HEAD') {
-            return Responses::error(405, 'method_not_allowed', 'share pages are served by GET only', ['Allow' => 'GET, HEAD']);
+            return Responses::error(405, 'method_not_allowed', RequestLocale::t($request, 'serve.share.method_not_allowed'), ['Allow' => 'GET, HEAD']);
         }
 
         $token = substr($path, strlen('/' . ShareStore::URL_PREFIX . '/'));
         if ($token === '' || str_contains($token, '/')) {
-            return $this->notFound();
+            return $this->notFound($request);
         }
 
         $record = $this->shares->lookup($token);
         if ($record === null) {
-            return $this->notFound();
+            return $this->notFound($request);
         }
 
         $html = $record->html;
@@ -211,7 +211,7 @@ final class SharePageController
                     // token itself would answer, indistinguishable from it. A
                     // malformed renderer reply dies the same way — the controller
                     // never serves what it cannot name a revision for.
-                    return $this->notFound();
+                    return $this->notFound($request);
                 }
                 // Budget-then-cache (D-19): the bytes that enter the memo are
                 // post-budget even if the renderer forgot its cap, so no
@@ -241,10 +241,10 @@ final class SharePageController
         }
     }
 
-    private function notFound(): ResponseInterface
+    private function notFound(ServerRequestInterface $request): ResponseInterface
     {
         // One sentence for all three deaths — unknown, expired, revoked. The
         // grouping is policy, never per-token knowledge.
-        return Responses::error(404, 'not_found', 'this share page does not exist, or it has expired or been revoked');
+        return Responses::error(404, 'not_found', RequestLocale::t($request, 'serve.share.not_found'));
     }
 }

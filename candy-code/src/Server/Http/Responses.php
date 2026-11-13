@@ -15,6 +15,15 @@ use React\Http\Message\Response;
  * `error.kind` (Appendix O §6.2); the message is for a human and says what was
  * refused, not which check fired or what the server holds — an auth failure
  * reads the same whether the token was missing, wrong or expired.
+ *
+ * MESSAGE LANGUAGE LAW (S-V08, G-13). `message` on a JSON/API refusal is a
+ * developer-facing English diagnostic: clients branch on `kind`, and the web
+ * UI renders its own `web.*` chrome from `server.strings`. The exception is
+ * the pages a browser navigation lands on (static-file refusals, the no-UI
+ * notice, the share page): their prose is user-visible framing and is keyed
+ * through `Lang::t` under the visitor's `Accept-Language` via
+ * {@see RequestLocale}. `ErrorMessageLanguageLawTest` fails on any new bare
+ * sentence literal in argument 3 outside its census.
  */
 final class Responses
 {

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Server\Http;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use React\Http\Message\Response;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 
 /**
@@ -99,19 +100,19 @@ final class StaticFiles
     {
         $method = $request->getMethod();
         if ($method !== 'GET' && $method !== 'HEAD') {
-            return Responses::error(405, 'method_not_allowed', 'method not allowed', ['Allow' => 'GET, HEAD']);
+            return Responses::error(405, 'method_not_allowed', RequestLocale::t($request, 'serve.static.method_not_allowed'), ['Allow' => 'GET, HEAD']);
         }
 
         $path = \rawurldecode($request->getUri()->getPath());
         if ($this->root === null) {
             return $path === '/' || $path === '/index.html'
-                ? new Response(200, ['Content-Type' => self::TYPES['html'], 'Cache-Control' => 'no-store'], self::noticePage())
-                : Responses::error(404, 'not_found', 'not found');
+                ? new Response(200, ['Content-Type' => self::TYPES['html'], 'Cache-Control' => 'no-store'], self::noticePage($request))
+                : Responses::error(404, 'not_found', RequestLocale::t($request, 'serve.static.not_found'));
         }
 
         $relative = self::safeRelative($path);
         if ($relative === null) {
-            return Responses::error(404, 'not_found', 'not found');
+            return Responses::error(404, 'not_found', RequestLocale::t($request, 'serve.static.not_found'));
         }
 
         $file = $this->root . ($relative === '' ? '' : '/' . $relative);
@@ -122,12 +123,12 @@ final class StaticFiles
         }
 
         if (!\is_file($file) || !ContainedPath::within($file, $this->root)) {
-            return Responses::error(404, 'not_found', 'not found');
+            return Responses::error(404, 'not_found', RequestLocale::t($request, 'serve.static.not_found'));
         }
 
         $size = @\filesize($file);
         if ($size === false || $size > self::MAX_FILE_BYTES) {
-            return Responses::error(404, 'not_found', 'not found');
+            return Responses::error(404, 'not_found', RequestLocale::t($request, 'serve.static.not_found'));
         }
 
         $extension = \strtolower(\pathinfo($file, \PATHINFO_EXTENSION));
@@ -155,7 +156,7 @@ final class StaticFiles
 
         $body = @\file_get_contents($file);
         if ($body === false) {
-            return Responses::error(404, 'not_found', 'not found');
+            return Responses::error(404, 'not_found', RequestLocale::t($request, 'serve.static.not_found'));
         }
 
         // A HEAD answer keeps its Content-Length and loses the body in
@@ -237,39 +238,49 @@ final class StaticFiles
      * `--web-root` instruction instead (CWPM-10). Factored through the bool
      * seam because {@see \Phar::running()} cannot be mocked from a test.
      */
-    private static function noticePage(): string
+    private static function noticePage(ServerRequestInterface $request): string
     {
-        return self::noticePageFor(\Phar::running(false) !== '');
+        return self::noticePageFor(\Phar::running(false) !== '', $request);
     }
 
-    /** @internal pin-tested by reflection; the runtime branch has no other seam. */
-    private static function noticePageFor(bool $inPhar): string
+    /**
+     * The page prose is framing (G-13) and answers in the visitor's
+     * `Accept-Language`; the vocabulary inside it — the flag, the endpoints,
+     * the package names, the install command — stays literal.
+     *
+     * @internal pin-tested by reflection; the runtime branch has no other seam.
+     */
+    private static function noticePageFor(bool $inPhar, ?ServerRequestInterface $request = null): string
     {
-        return $inPhar ? self::NOTICE_PAGE_PHAR : self::NOTICE_PAGE;
-    }
+        $tr = static fn (string $key, array $params = []): string => $request === null
+            ? Lang::t($key, $params)
+            : RequestLocale::t($request, $key, $params);
+        $tag = $request === null ? 'en' : RequestLocale::tag($request);
+        $code = static fn (string $text): string => '<code>' . \htmlspecialchars($text, \ENT_QUOTES) . '</code>';
+        $e = static fn (string $text): string => \htmlspecialchars($text, \ENT_QUOTES);
+        $api = $e($tr('serve.notice.api', ['ws' => '@@ws@@', 'api' => '@@api@@']));
+        $api = \strtr($api, ['@@ws@@' => $code('/ws'), '@@api@@' => $code('/api/')]);
 
-    private const NOTICE_PAGE = <<<'HTML'
+        if ($inPhar) {
+            $body = '<p>' . \strtr($e($tr('serve.notice.phar_lead', ['flag' => '@@flag@@', 'package' => '@@package@@', 'composer' => '@@composer@@'])), [
+                '@@flag@@' => $code('--web-root'),
+                '@@package@@' => $code('candy-code-web'),
+                '@@composer@@' => $code('sugarcraft/candy-code-web'),
+            ]) . "</p>\n<p>" . $api . '</p>';
+        } else {
+            $tail = \strtr($e($tr('serve.notice.composer_tail', ['flag' => '@@flag@@'])), ['@@flag@@' => $code('--web-root')]);
+            $body = '<p>' . $e($tr('serve.notice.composer_lead')) . "</p>\n<pre>composer require sugarcraft/candy-code-web</pre>\n<p>" . $tail . ' ' . $api . '</p>';
+        }
+
+        return <<<HTML
 <!doctype html>
-<html lang="en">
+<html lang="{$tag}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>candy-code serve</title></head>
 <body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5">
 <h1>candy-code serve</h1>
-<p>The server is running, but no web UI is installed. Install it next to candy-code with</p>
-<pre>composer require sugarcraft/candy-code-web</pre>
-<p>or point <code>--web-root</code> at a build. The WebSocket endpoint <code>/ws</code> and the HTTP API under <code>/api/</code> work without it.</p>
+{$body}
 </body>
 </html>
 HTML;
-
-    private const NOTICE_PAGE_PHAR = <<<'HTML'
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>candy-code serve</title></head>
-<body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5">
-<h1>candy-code serve</h1>
-<p>The server is running, but no web UI is installed. This executable is a bundled phar, so Composer cannot add packages to it: point <code>--web-root</code> at a build — for example an unpacked <code>candy-code-web</code> release bundle — or run the Composer-installed candy-code with the <code>sugarcraft/candy-code-web</code> package beside it.</p>
-<p>The WebSocket endpoint <code>/ws</code> and the HTTP API under <code>/api/</code> work without it.</p>
-</body>
-</html>
-HTML;
+    }
 }
