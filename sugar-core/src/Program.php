@@ -293,7 +293,10 @@ final class Program
 
     /**
      * Override the exception handler that receives any uncaught throwable
-     * during the program loop. The default re-throws.
+     * arising from user code during the loop: model init()/update()/view(),
+     * the filter, every subscription/TickRequest produce closure, every
+     * Cmd/Sequence callback, signal arms, and rejected AsyncCmd promises.
+     * The default re-throws.
      *
      * @param \Closure(\Throwable): void $handler
      */
@@ -496,7 +499,12 @@ final class Program
             $this->dispatch(new EnvMsg($this->options->environment ?? $this->collectEnv()));
             $this->dispatch(new ColorProfileMsg($this->options->colorProfile ?? ColorProfile::detect()));
 
-            $initCmd = $this->activeModel()->init();
+            try {
+                $initCmd = $this->activeModel()->init();
+            } catch (\Throwable $t) {
+                $this->routeThrowable($t);
+                $initCmd = null; // handler absorbed: boot without the init cmd
+            }
             if ($initCmd !== null) {
                 $this->scheduleCmd($initCmd);
             }
@@ -820,8 +828,73 @@ final class Program
         return self::$screenStackRoutes[$class] = 'none';
     }
 
+    /**
+     * Route a throwable escaping a user-code seat to the configured
+     * exception handler (sugar-core-003). Returns normally when the handler
+     * absorbs the failure — every caller then continues from its documented
+     * recovery point. The default handler re-throws, so by-default behaviour
+     * is unchanged: the program dies loudly with its terminal state torn
+     * down by run()'s finally.
+     */
+    private function routeThrowable(\Throwable $t): void
+    {
+        ($this->exceptionHandler)($t);
+    }
+
+    /**
+     * User-code seat: model update (sugar-core-003). Returns null when the
+     * handler absorbed a throw — callers keep the previous model untouched.
+     *
+     * @return array{0: Model, 1: ?Cmd}|null
+     */
+    private function userUpdate(Model $model, Msg $msg): ?array
+    {
+        try {
+            return $model->update($msg);
+        } catch (\Throwable $t) {
+            $this->routeThrowable($t);
+            return null;
+        }
+    }
+
+    /**
+     * User-code seat: model view (sugar-core-003). Returns null when the
+     * handler absorbed a throw — the frame is skipped, previous paint stays.
+     *
+     * @return string|View|null
+     */
+    private function userView(Model $model): string|View|null
+    {
+        try {
+            return $model->view();
+        } catch (\Throwable $t) {
+            $this->routeThrowable($t);
+            return null;
+        }
+    }
+
+    /**
+     * User-code seat: a subscription/TickRequest produce closure
+     * (sugar-core-003). Returns null when the handler absorbed a throw —
+     * that tick/signal is skipped, the subscription stays armed.
+     */
+    private function userProduce(\Closure $produce): ?Msg
+    {
+        try {
+            return $produce();
+        } catch (\Throwable $t) {
+            $this->routeThrowable($t);
+            return null;
+        }
+    }
+
     private function dispatch(Msg $msg): void
     {
+        // sugar-core-003: every seat in this class that invokes USER code
+        // (model init/update/view, filter, produce closures, signal arms)
+        // routes a throw through routeThrowable() so withExceptionHandler()
+        // keeps the promise its docblock makes. The default handler
+        // re-throws — unhandled user code still crashes loudly.
         if ($msg instanceof BatchMsg) {
             foreach ($msg->cmds as $cmd) {
                 $this->scheduleCmd($cmd);
@@ -834,7 +907,12 @@ final class Program
         }
         if ($msg instanceof TickRequest) {
             $this->addOneShotTimer($msg->seconds, function () use ($msg): void {
-                $produced = ($msg->produce)();
+                try {
+                    $produced = ($msg->produce)();
+                } catch (\Throwable $t) {
+                    $this->routeThrowable($t);
+                    return; // handler absorbed it: skip this produced message
+                }
                 if ($produced !== null) {
                     $this->dispatch($produced);
                 }
@@ -962,7 +1040,12 @@ final class Program
 
         // WithFilter pre-processor.
         if ($this->options->filter !== null) {
-            $filtered = ($this->options->filter)($this->model, $msg);
+            try {
+                $filtered = ($this->options->filter)($this->model, $msg);
+            } catch (\Throwable $t) {
+                $this->routeThrowable($t);
+                $filtered = $msg; // handler absorbed it: route the original message
+            }
             if ($filtered === null) {
                 return;
             }
@@ -973,7 +1056,11 @@ final class Program
         // root model (which owns the ScreenStack), not to the active screen.
         if ($msg instanceof ScreenStackPushedMsg || $msg instanceof ScreenStackPoppedMsg) {
             if ($this->model instanceof ScreenStackCapable) {
-                [$nextModel, $cmd] = $this->model->update($msg);
+                $updated = $this->userUpdate($this->model, $msg);
+                if ($updated === null) {
+                    return; // handler absorbed the update() throw: stack unchanged
+                }
+                [$nextModel, $cmd] = $updated;
                 $this->model = $nextModel;
                 $this->dirty = true;
                 if ($cmd !== null) {
@@ -984,7 +1071,13 @@ final class Program
         }
 
         $active = $this->activeModel();
-        [$nextModel, $cmd] = $active->update($msg);
+        $updated = $this->userUpdate($active, $msg);
+        if ($updated === null) {
+            // handler absorbed the update() throw: previous model stays,
+            // no dirty flag, no cmd — the next message drives the next cycle.
+            return;
+        }
+        [$nextModel, $cmd] = $updated;
         if ($active === $this->model) {
             // Active model is the root model (not a nested screen), so
             // its update() returned the updated root model.
@@ -1030,7 +1123,13 @@ final class Program
                 return;
             }
             $cmd = array_shift($remaining);
-            $msg = $cmd();
+            try {
+                $msg = $cmd();
+            } catch (\Throwable $t) {
+                $this->routeThrowable($t);
+                $this->deferTick($runNext); // handler absorbed: continue the sequence
+                return;
+            }
             if ($msg !== null) {
                 $this->dispatch($msg);
             }
@@ -1414,10 +1513,13 @@ final class Program
     {
         // Notify the model first so it can stash any state it cares about.
         if ($this->options->filter === null) {
-            [$nextModel, $cmd] = $this->model->update(new SuspendMsg());
-            $this->model = $nextModel;
-            if ($cmd !== null) {
-                $this->scheduleCmd($cmd);
+            $updated = $this->userUpdate($this->model, new SuspendMsg());
+            if ($updated !== null) { // handler-absorbed throw: suspend without the stash
+                [$nextModel, $cmd] = $updated;
+                $this->model = $nextModel;
+                if ($cmd !== null) {
+                    $this->scheduleCmd($cmd);
+                }
             }
         }
 
@@ -1672,7 +1774,12 @@ final class Program
     private function scheduleCmd(\Closure $cmd): void
     {
         $this->deferTick(function () use ($cmd): void {
-            $msg = $cmd();
+            try {
+                $msg = $cmd();
+            } catch (\Throwable $t) {
+                $this->routeThrowable($t);
+                return; // handler absorbed: this cmd produced no message
+            }
             if ($msg !== null) {
                 $this->dispatch($msg);
             }
@@ -1948,11 +2055,18 @@ final class Program
             // Headless mode: still call view() so the model's
             // computation runs (and any errors surface) but skip
             // emitting any output.
-            $this->activeModel()->view();
+            $this->userView($this->activeModel());
             $this->lastFrameDuration = microtime(true) - $frameStart;
             return;
         }
-        $rendered = $this->activeModel()->view();
+        $rendered = $this->userView($this->activeModel());
+        if ($rendered === null) {
+            // handler absorbed the view() throw: skip this frame. The
+            // caller clears dirty for this pass, so the screen keeps the
+            // previous paint until the next update() marks it dirty again.
+            $this->lastFrameDuration = microtime(true) - $frameStart;
+            return;
+        }
         $images = [];
         $cursorView = null;
         if ($rendered instanceof View) {
@@ -2410,7 +2524,7 @@ final class Program
             Kind::Tick => $this->loop->addPeriodicTimer(
                 $sub->params['seconds'],
                 function () use ($sub): void {
-                    $msg = ($sub->produce)();
+                    $msg = $this->userProduce($sub->produce);
                     if ($msg !== null) {
                         $this->dispatch($msg);
                     }
@@ -2419,7 +2533,7 @@ final class Program
             Kind::Key => $this->loop->addPeriodicTimer(
                 0.1,
                 function () use ($sub): void {
-                    $msg = ($sub->produce)();
+                    $msg = $this->userProduce($sub->produce);
                     if ($msg !== null) {
                         $this->dispatch($msg);
                     }
@@ -2429,7 +2543,7 @@ final class Program
             Kind::Custom => $this->loop->addPeriodicTimer(
                 $sub->params['interval'] ?? 1.0,
                 function () use ($sub): void {
-                    $msg = ($sub->produce)();
+                    $msg = $this->userProduce($sub->produce);
                     if ($msg !== null) {
                         $this->dispatch($msg);
                     }
@@ -2459,7 +2573,7 @@ final class Program
                 $this->prevSignalHandlers[$signo] = pcntl_signal_get_handler($signo);
             }
             $handler = function (int $signo) use ($sub): void {
-                $msg = ($sub->produce)();
+                $msg = $this->userProduce($sub->produce);
                 if ($msg !== null) {
                     $this->dispatch($msg);
                 }
