@@ -591,12 +591,16 @@
             click into any library page for its full set.
         </p>
         <p class="motion-note">
-            Accessibility note: the previews are looping GIF recordings. A
-            reduced-motion preference stops this site's own transitions and
-            animations, but browsers cannot pause an animated
-            <code>&lt;img&gt;</code> — the TUIs themselves honour
+            Accessibility note: the previews are looping GIF recordings,
+            content rather than decoration — deliberately excluded from the
+            site's blanket reduced-motion rule, since no browser can pause an
+            animated <code>&lt;img&gt;</code>. A reduced-motion preference
+            still stops this site's own transitions and animations, and the
+            full-size lightbox view is opt-in and closes on demand.
+            The TUIs themselves honour
             <code>REDUCE_MOTION</code> / <code>PREFERS_REDUCED_MOTION</code>
-            where supported (sugar-spring, sugar-colorprofile).
+            where supported (sugar-spring, sugar-colorprofile, sugar-toast,
+            sugar-video).
         </p>
         <div class="demo-grid">
             <a class="demo-card" href="lib/sugar-core.html">
