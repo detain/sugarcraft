@@ -199,4 +199,49 @@ final class PaginatorTest extends TestCase
         $this->assertSame(0, preg_match('/\x1b|[\x00-\x08]/', $view), 'page-27 render carries zero control bytes');
         $this->assertSame('Page 27 of 27', $legal->withArabicFormat('Page %d of %d')->view());
     }
+
+    // ─── W-42 focus concept ─────────────────────────────────────────
+
+    public function testBlurredPaginatorLeavesEveryNavKeyInert(): void
+    {
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(250)->blur();
+        foreach (
+            [KeyType::Right, KeyType::Left, KeyType::PageUp, KeyType::PageDown,
+             KeyType::Home, KeyType::End] as $type
+        ) {
+            [$next, $cmd] = $p->update(new KeyMsg($type));
+            $this->assertSame($p, $next, $type->name . ' inert while blurred');
+            $this->assertNull($cmd);
+        }
+        foreach (['l', 'h'] as $rune) {
+            [$next, $cmd] = $p->update(new KeyMsg(KeyType::Char, $rune));
+            $this->assertSame($p, $next);
+            $this->assertNull($cmd);
+        }
+    }
+
+    public function testFocusRestoresNavigationAndDefaultIsFocused(): void
+    {
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(250);
+        // BC pin: today's hosts see always-consume behaviour by default.
+        [$moved, ] = $p->update(new KeyMsg(KeyType::Right));
+        $this->assertSame(1, $moved->page);
+        $blurred = $p->blur();
+        [$same, ] = $blurred->update(new KeyMsg(KeyType::Right));
+        $this->assertSame($blurred, $same);
+        [$moved, ] = $blurred->focus()->update(new KeyMsg(KeyType::Right));
+        $this->assertSame(1, $moved->page, 'focus() restores routing');
+    }
+
+    public function testFocusBlurArePureIdempotentValueVerbs(): void
+    {
+        $p = Paginator::new();
+        $this->assertTrue($p->focused);
+        $b = $p->blur();
+        $this->assertNotSame($p, $b);
+        $this->assertFalse($b->focused);
+        $this->assertSame($b, $b->blur(), 'already blurred: identity');
+        $this->assertSame($p, $p->focus(), 'already focused: identity');
+        $this->assertTrue($b->focus()->focused);
+    }
 }

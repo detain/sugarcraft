@@ -44,6 +44,7 @@ final class Paginator implements Model
         public readonly string $activeDot,
         public readonly string $inactiveDot,
         public readonly string $arabicFormat = '%d/%d',
+        public readonly bool $focused = true,
     ) {}
 
     public static function new(): self
@@ -71,6 +72,15 @@ final class Paginator implements Model
         if (!($msg instanceof KeyMsg)) {
             return [$this, null];
         }
+        // W-42: navigation belongs to the focused widget — while blurred
+        // every key flows back untouched so a multi-model host router
+        // stops double-consuming. The flag DEFAULTS true: today's
+        // always-consume behaviour is the BC default and the flip to
+        // family-parity default-blurred is a recorded owner ruling
+        // (single-pane hosts would regress), not a silent change.
+        if (!$this->focused) {
+            return [$this, null];
+        }
         return match (true) {
             $msg->type === KeyType::Right
                 || ($msg->type === KeyType::Char && $msg->rune === 'l')
@@ -84,6 +94,25 @@ final class Paginator implements Model
             $msg->type === KeyType::End  => [$this->lastPage(), null],
             default => [$this, null],
         };
+    }
+
+    /**
+     * Mark the paginator focused so {@see update()} routes its nav keys
+     * again. Pure value verb (W-10 law): returns a new instance, identity
+     * when already focused.
+     */
+    public function focus(): self
+    {
+        return $this->focused ? $this : $this->mutate(focused: true);
+    }
+
+    /**
+     * Mark the paginator blurred: nav keys flow through untouched, like
+     * Table/Tabs/Tree when unfocused. Identity when already blurred.
+     */
+    public function blur(): self
+    {
+        return $this->focused ? $this->mutate(focused: false) : $this;
     }
 
     public function view(): string
@@ -316,6 +345,7 @@ final class Paginator implements Model
         ?string $activeDot = null,
         ?string $inactiveDot = null,
         ?string $arabicFormat = null,
+        ?bool $focused = null,
     ): self {
         return new self(
             page:         $page         ?? $this->page,
@@ -325,6 +355,7 @@ final class Paginator implements Model
             activeDot:    $activeDot    ?? $this->activeDot,
             inactiveDot:  $inactiveDot  ?? $this->inactiveDot,
             arabicFormat: $arabicFormat ?? $this->arabicFormat,
+            focused:      $focused      ?? $this->focused,
         );
     }
 

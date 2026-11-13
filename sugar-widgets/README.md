@@ -69,7 +69,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` _(deprecated alias — re-exported from `SugarCraft\Forms\TextInput`)_ | — |
 | `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) _(deprecated alias — re-exported from `SugarCraft\Forms\TextArea`)_ | `TextArea\TextAreaEditedMsg` |
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | `ViewportTickMsg` |
-| `Paginator\Paginator` | Dot / arabic page indicator | — |
+| `Paginator\Paginator` | Dot / arabic page indicator; nav gated on focus — `focus()` / `blur()` like the family, `DEFAULT` focused (BC; family-parity flip pending owner ruling) | — |
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values — `list<Item>` is a phpdoc contract, there is no runtime element guard _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values: `Node::branch($label, ...$children)` / `Node::leaf($label)`. Mind the raw constructor — its second parameter is `$value`, not children, so a 2-arg `new Node(...)` parks the child list in the value slot and renders flat; prefer the factories. Chrome glyphs and prefixes are immutable via `withStyle(...)`, checked at ingress; node labels are sanitised at RENDER (control characters stripped, `Sanitize::untrustedForMarkedFrames()` applied). | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
@@ -206,7 +206,7 @@ already carries the tick-arming capability, so nothing else needs to.
 | `Timer` | `stop` / `reset` / `withInterval` | `start()` / `toggle()`, `update()` |
 | `Stopwatch` | `stop` / `reset` / `withInterval` | `start()` / `toggle()`, `update()` |
 | `Tabs` / `Table` / `Tree` | `focus` / `blur` / `with*` / cursor moves | `update()` |
-| `Paginator` | `with*` | `update()` |
+| `Paginator` | `with*` / `focus` / `blur` | `update()` (nav keys inert while blurred) |
 | `Help` | `with*` — not a `Model`; `update()`/`updateWithBinding()` are bespoke `self` verbs (rationale in its docblock) | — |
 
 `AnimatedProgress` previously contradicted *itself* (`setPercent` array
