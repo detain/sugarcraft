@@ -6,6 +6,7 @@ namespace SugarCraft\Overlay\Tests\Animation;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Spring\Easing\CubicBezier;
+use SugarCraft\Overlay\AnimationFrame;
 use SugarCraft\Overlay\Animation\Slide;
 use SugarCraft\Overlay\Position;
 
@@ -19,6 +20,37 @@ final class SlideTest extends TestCase
         $this->assertArrayHasKey('foreground', $result);
         $this->assertArrayHasKey('verticalOffset', $result);
         $this->assertArrayHasKey('horizontalOffset', $result);
+    }
+
+    /**
+     * SO-13 (sugar-overlay-013): the typed applyFrame() is the contract and
+     * the 1.x array form is its wrapper — cross-form identity across the
+     * travel extremes, plus typed accessors on a known frame.
+     */
+    public function testApplyFrameIsTypedAndTheArrayFormIsTheSameFrame(): void
+    {
+        $slide = new Slide();
+        for ($p = 0.0; $p <= 1.01; $p += 0.4) {
+            foreach ([Position::TOP, Position::BOTTOM] as $v) {
+                foreach ([Position::LEFT, Position::RIGHT] as $h) {
+                    $frame = $slide->applyFrame("A\nB", $p, $v, $h);
+                    $array = $slide->apply("A\nB", $p, $v, $h);
+
+                    $this->assertInstanceOf(AnimationFrame::class, $frame);
+                    $this->assertSame([
+                        'foreground'       => $frame->foreground,
+                        'verticalOffset'   => $frame->verticalOffset,
+                        'horizontalOffset' => $frame->horizontalOffset,
+                    ], $array, "frame/array drift at p=$p {$v->name}/{$h->name}");
+                }
+            }
+        }
+
+        $start = $slide->applyFrame("A\nB", 0.0, Position::TOP, Position::LEFT);
+        $this->assertSame(-2, $start->verticalOffset);
+        // A LEFT anchor travels on its own axis too: one fg-column off.
+        $this->assertSame(-1, $start->horizontalOffset);
+        $this->assertSame("A\nB", $start->foreground);
     }
 
     public function testSlideFromTopAtProgressZero(): void

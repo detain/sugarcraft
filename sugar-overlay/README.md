@@ -277,12 +277,16 @@ echo Veil::new()
     ->animate($fg, $bg, Position::TOP, Position::LEFT, 0.8) . "\n";
 ```
 
-For manual driving the pieces stay public: `Slide::apply()` returns
-`array{foreground, verticalOffset, horizontalOffset}`; `Fade` and `Scale`
-return the transformed foreground string directly (their `apply()` takes
-`($foreground, $progress)`). The example steps to `0.8` deliberately: at
-low progress the offsets still place the whole block off-canvas, so a
-`composite()` of an early step paints nothing but the backdrop.
+For manual driving the pieces stay public: `Slide::applyFrame($fg,
+$progress, $vertical, $horizontal)` returns the typed `AnimationFrame`
+— fields `foreground`, `verticalOffset`, `horizontalOffset`. The array
+form `apply()` still answers for 1.x source compatibility — it is the
+legacy shape of the same frame, not a second computation; `Fade` and
+`Scale` return the transformed foreground string directly (their
+`apply()` takes `($foreground, $progress)`). The example steps to `0.8`
+deliberately: at low progress the offsets still place the whole block
+off-canvas, so a `composite()` of an early step paints nothing but the
+backdrop.
 
 ## Z-Index and Stacking Order
 

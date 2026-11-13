@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Overlay\Animation;
 
 use SugarCraft\Spring\Easing\CubicBezier;
+use SugarCraft\Overlay\AnimationFrame;
 use SugarCraft\Overlay\Lines;
 use SugarCraft\Overlay\MarkedFrame;
 use SugarCraft\Overlay\Position;
@@ -72,20 +73,21 @@ final class Slide
     }
 
     /**
-     * Apply slide animation to the foreground at the given progress.
+     * The typed per-frame result: the foreground plus the anchor-relative
+     * travel offsets to add to the composite() call (sugar-overlay-013 —
+     * the shape the untyped array form used to hide).
      *
      * @param string   $foreground  The overlay content
      * @param float    $progress    Animation progress 0.0–1.0
      * @param Position $vertical    Vertical anchor
      * @param Position $horizontal  Horizontal anchor
-     * @return array{foreground: string, verticalOffset: int, horizontalOffset: int}
      */
-    public function apply(
+    public function applyFrame(
         string $foreground,
         float $progress,
         Position $vertical,
         Position $horizontal,
-    ): array {
+    ): AnimationFrame {
         $eased = $this->easing()->evaluate($progress);
 
         // Measure exactly as Veil::composite() does, so a trailing "\n"
@@ -114,10 +116,33 @@ final class Slide
             $vOffset = (int) \round($factor * $fgHeight);
         }
 
+        return new AnimationFrame(
+            foreground: $foreground,
+            verticalOffset: $vOffset,
+            horizontalOffset: $hOffset,
+        );
+    }
+
+    /**
+     * The legacy array shape (public since 1.x), delegating to
+     * {@see applyFrame()} — source-compatible until the 2.0 flip. New
+     * consumers take the typed frame; the magic-key array is the compat
+     * reading, not the contract.
+     *
+     * @return array{foreground: string, verticalOffset: int, horizontalOffset: int}
+     */
+    public function apply(
+        string $foreground,
+        float $progress,
+        Position $vertical,
+        Position $horizontal,
+    ): array {
+        $frame = $this->applyFrame($foreground, $progress, $vertical, $horizontal);
+
         return [
-            'foreground' => $foreground,
-            'verticalOffset' => $vOffset,
-            'horizontalOffset' => $hOffset,
+            'foreground'       => $frame->foreground,
+            'verticalOffset'   => $frame->verticalOffset,
+            'horizontalOffset' => $frame->horizontalOffset,
         ];
     }
 

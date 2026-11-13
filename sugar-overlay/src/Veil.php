@@ -681,7 +681,7 @@ final class Veil
     ): AnimationFrame {
         $driver = $this->animationDriver();
         if ($driver instanceof Slide) {
-            return AnimationFrame::fromArray($driver->apply($foreground, $progress, $vertical, $horizontal));
+            return $driver->applyFrame($foreground, $progress, $vertical, $horizontal);
         }
 
         if ($driver === null) {
