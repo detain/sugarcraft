@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Minesweeper\Board;
 use SugarCraft\Minesweeper\Difficulty;
 use SugarCraft\Minesweeper\Game;
+use SugarCraft\Minesweeper\Lang;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
 
 /**
@@ -299,6 +300,25 @@ final class SaveTamperTest extends TestCase
             'elapsed' => null,
         ]);
         $this->assertSame(0, self::loadArm($g)->cursorX, 'sanity: a well-typed envelope loads');
+    }
+
+    public function testOversizedBoardStringRefusesTheLoadWithoutDecoding(): void
+    {
+        // msw-34 (finding -067) end-to-end: a well-typed envelope carrying a
+        // crawl-sized board string must be refused by Board's byte door —
+        // 'L' toasts the refusal, and the live game continues untouched.
+        $g = Game::start(3, 3, 2, static fn(int $max): int => 0);
+        [$g, ] = $g->update(new KeyMsg(KeyType::Char, 'l')); // cursorX → 1
+        $this->writeSlot([
+            'v'       => 1,
+            'board'   => (string) json_encode(['v' => 1, 'pad' => str_repeat('a', 70 * 1024)], JSON_THROW_ON_ERROR),
+            'cursorX' => 0,
+            'cursorY' => 0,
+            'elapsed' => null,
+        ]);
+        $next = self::loadArm($g);
+        $this->assertSame(Lang::t('ui.load_refused'), $next->notice);
+        $this->assertSame(1, $next->cursorX, 'a refused load never moves the live game');
     }
 
     public function testNonFiniteAndOverlongElapsedAreRefused(): void

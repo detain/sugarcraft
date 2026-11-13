@@ -19,6 +19,16 @@ namespace SugarCraft\Minesweeper;
  */
 final class Board
 {
+    /**
+     * Byte budget a serialized payload may occupy BEFORE the parse (msw-34,
+     * finding -067). The largest HONEST save is a 50×50 board: 2,500 cells
+     * at their most verbose wire form ('[true,true,true,8],') plus the
+     * envelope ≈ 50.4 KB, so 64 KiB carries every board the game itself can
+     * produce with comfortable margin — while a crafted multi-megabyte
+     * crawl is refused at the door instead of being json_decode'd first.
+     */
+    public const MAX_SERIALIZED_BYTES = 65536;
+
     /** @var list<list<Cell>> $rows[y][x] */
     private array $rows;
 
@@ -184,7 +194,11 @@ final class Board
      *        called once per Knuth step with the current index as the INCLUSIVE
      *        upper bound (n-1 down to 1) and expected to answer an int in
      *        [0, $max]. A deterministic closure therefore yields a
-     *        deterministic layout — tests rely on exactly that contract.
+     *        deterministic layout — tests rely on exactly that contract, and
+     *        the swap below now ENFORCES it (msw-34, finding -066): an
+     *        out-of-range or non-int answer throws here, naming the contract,
+     *        instead of detonating opaquely at the destructure with a
+     *        TypeError far from its cause.
      */
     private function placeMines(int $sx, int $sy, \Closure $rand): self
     {
@@ -220,6 +234,12 @@ final class Board
         $n = count($candidates);
         for ($i = $n - 1; $i > 0; $i--) {
             $j = $rand($i);
+            if (!\is_int($j) || $j < 0 || $j > $i) {
+                throw new \InvalidArgumentException(
+                    'Mine placement random() must answer an int in [0, ' . $i . ']; got '
+                        . (\is_int($j) ? (string) $j : \get_debug_type($j))
+                );
+            }
             [$candidates[$i], $candidates[$j]] = [$candidates[$j], $candidates[$i]];
         }
         $mines = array_slice($candidates, 0, $this->mineCount);
@@ -346,6 +366,8 @@ final class Board
      * loader treats it as hostile input and enforces that the payload
      * describes a state this game could actually have produced:
      *
+     *  - a payload small enough to parse at all — the byte budget is checked
+     *    BEFORE {@see \json_decode()} ever touches it (finding -067);
      *  - strict wire types (no silent (int)/"yes"-to-bool coercion of junk);
      *  - dimensions within the game's 2..50 ladder (CustomDifficulty law);
      *  - planted mine bits exactly equal the claimed mineCount;
@@ -371,6 +393,14 @@ final class Board
      */
     public static function unserialize(string $data): self
     {
+        // The cheap door runs FIRST (finding -067): the 2..50 ladder below
+        // only fires after json_decode has already eaten the whole payload,
+        // so the size defense needs to precede the parse it protects.
+        if (\strlen($data) > self::MAX_SERIALIZED_BYTES) {
+            throw new \InvalidArgumentException(
+                'Invalid board serialization: payload exceeds the byte budget'
+            );
+        }
         try {
             $p = json_decode($data, true, 16, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
@@ -400,8 +430,9 @@ final class Board
         ) {
             throw new \InvalidArgumentException('Invalid board serialization');
         }
-        // Same ladder the interactive custom-difficulty form enforces; a
-        // crafted 5000x5000 payload must not turn a load into a crawl.
+        // Same ladder the interactive custom-difficulty form enforces; the
+        // byte budget above already bounded the parse cost, so a crafted
+        // 5000x5000 payload cannot reach this line as a crawl.
         if ($w < 2 || $w > 50 || $h < 2 || $h > 50) {
             throw new \InvalidArgumentException('Invalid board serialization');
         }

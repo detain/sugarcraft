@@ -601,4 +601,53 @@ final class BoardTest extends TestCase
         $this->assertSame(5, $r->width);
         $this->assertSame(5, $r->height);
     }
+
+    // ---- msw-34 (findings -066/-067): injected contracts enforced --------
+
+    public function testRandomAnsweringAboveTheIndexIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Mine placement random() must answer an int in [0, 15]; got 16');
+        Board::blank(5, 5, 5)->reveal(2, 2, static fn(int $max): int => $max + 1);
+    }
+
+    public function testRandomAnsweringNegativeIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must answer an int in [0, 15]; got -1');
+        Board::blank(5, 5, 5)->reveal(2, 2, static fn(int $max): int => -1);
+    }
+
+    public function testRandomAnsweringNonIntIsRefused(): void
+    {
+        // '0' would sail through a bare range check as a numeric string —
+        // the contract names the TYPE, and the door enforces both halves.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must answer an int in [0, 15]; got string');
+        Board::blank(5, 5, 5)->reveal(2, 2, static fn(int $max): string => '0');
+    }
+
+    public function testOversizedPayloadIsRefusedBeforeTheDecode(): void
+    {
+        // A well-formed JSON envelope padded past the budget: without the
+        // pre-parse door this would be json_decode'd whole and only die at
+        // the shape census after it. The exact message proves the ORDER.
+        $huge = (string) json_encode(['v' => 1, 'pad' => str_repeat('a', 70 * 1024)], JSON_THROW_ON_ERROR);
+        $this->assertGreaterThan(Board::MAX_SERIALIZED_BYTES, strlen($huge), 'sanity: the fixture is over budget');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('exceeds the byte budget');
+        Board::unserialize($huge);
+    }
+
+    public function testDensestHonestSaveRoundTripsInsideTheBudget(): void
+    {
+        // The budget comment claims ~50.4 KB for the most verbose honest
+        // 50×50 wire form; verify the claim on a REAL board (every mine the
+        // ladder allows planted) and pin that the door never clips a save
+        // the game itself produced.
+        $board = Board::blank(50, 50, 2499)->reveal(0, 0, static fn(int $max): int => 0);
+        $wire = $board->serialize();
+        $this->assertLessThanOrEqual(Board::MAX_SERIALIZED_BYTES, strlen($wire), 'the honest worst case must fit the budget');
+        $this->assertSame($wire, Board::unserialize($wire)->serialize());
+    }
 }
