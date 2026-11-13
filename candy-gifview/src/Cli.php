@@ -33,6 +33,10 @@ use SugarCraft\Core\Util\Tty;
  * single-play default). --watch binds chicle's run_watch rebind
  * (chafa.c:908-955) to Player::withWatch behind a host-probe seam, so CI
  * drives change tokens without a real 10 ms busy-poll.
+ *
+ * chicle = https://github.com/haraldschmidt/chicle (CLI viewer over chafa):
+ * the flag-parser model this front end mirrors, so every chicle-options.c/
+ * chafa.c line cite below refers to that project.
  */
 final class Cli
 {
@@ -126,7 +130,7 @@ final class Cli
         $watch = false;
         $paused = false;
 
-        foreach (array_slice($argv, 1) as $token) {
+        foreach (\array_slice($argv, 1) as $token) {
             if ($token === '--help' || $token === '-h') {
                 \fwrite($stdout, Lang::t('cli.usage') . "\n");
 
@@ -140,14 +144,14 @@ final class Cli
             }
 
             if (\str_starts_with($token, '--')) {
-                $flag = substr($token, 2);
+                $flag = \substr($token, 2);
                 $raw = null;
-                if (($eq = strpos($flag, '=')) !== false) {
-                    $raw = substr($flag, $eq + 1);
-                    $flag = substr($flag, 0, $eq);
+                if (($eq = \strpos($flag, '=')) !== false) {
+                    $raw = \substr($flag, $eq + 1);
+                    $flag = \substr($flag, 0, $eq);
                 }
 
-                if (!in_array($flag, ['fps', 'speed', 'duration', 'watch', 'paused'], true)) {
+                if (!\in_array($flag, ['fps', 'speed', 'duration', 'watch', 'paused'], true)) {
                     \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => self::printable($flag)]) . "\n");
                     \fwrite($stderr, Lang::t('cli.usage') . "\n");
 
@@ -178,7 +182,7 @@ final class Cli
 
                 switch ($flag) {
                     case 'fps':
-                        $fps = self::parseSecondsLike('fps', $raw);
+                        $fps = self::parseSecondsLike($raw);
                         if ($fps === null) {
                             \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--fps', 'value' => self::printable($raw)]) . "\n");
 
@@ -190,9 +194,9 @@ final class Cli
                             $speedMax = true;
                             break;
                         }
-                        if (substr($raw, -3) === 'fps') {
+                        if (\substr($raw, -3) === 'fps') {
                             // chicle's Nfps spelling (chicle-options.c:1456-1458): an absolute rate.
-                            $fps = self::parseSecondsLike('speed', substr($raw, 0, -3));
+                            $fps = self::parseSecondsLike(\substr($raw, 0, -3));
                             if ($fps === null) {
                                 \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--speed', 'value' => self::printable($raw)]) . "\n");
 
@@ -200,7 +204,7 @@ final class Cli
                             }
                             break;
                         }
-                        $speed = self::parseSecondsLike('speed', $raw);
+                        $speed = self::parseSecondsLike($raw);
                         if ($speed === null) {
                             \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--speed', 'value' => self::printable($raw)]) . "\n");
 
@@ -208,7 +212,7 @@ final class Cli
                         }
                         break;
                     case 'duration':
-                        $duration = self::parseSecondsLike('duration', $raw);
+                        $duration = self::parseSecondsLike($raw);
                         if ($duration === null) {
                             \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--duration', 'value' => self::printable($raw)]) . "\n");
 
@@ -226,8 +230,8 @@ final class Cli
             // hardcodes the double dash, so `-fps=10` echoes as
             // `unknown option --fps` (pinned by CliTest's single-dash refusal).
             if (\str_starts_with($token, '-') && $token !== '-') {
-                $body = substr($token, 1);
-                $name = rtrim(($eq = strpos($body, '=')) === false ? $body : substr($body, 0, $eq), '-');
+                $body = \substr($token, 1);
+                $name = \rtrim(($eq = \strpos($body, '=')) === false ? $body : \substr($body, 0, $eq), '-');
                 \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => self::printable($name)]) . "\n");
                 \fwrite($stderr, Lang::t('cli.usage') . "\n");
 
@@ -241,7 +245,7 @@ final class Cli
             if ($presetToken === null) {
                 // The preset slot accepts exactly the two documented presets;
                 // anything else is a refusal, not a silent fall back to solid.
-                if (!in_array($token, [Renderer::PRESET_SOLID, Renderer::PRESET_DENSITY], true)) {
+                if (!\in_array($token, [Renderer::PRESET_SOLID, Renderer::PRESET_DENSITY], true)) {
                     \fwrite($stderr, Lang::t('cli.bad_preset', ['preset' => self::printable($token)]) . "\n");
                     \fwrite($stderr, Lang::t('cli.usage') . "\n");
 
@@ -296,7 +300,7 @@ final class Cli
             // messages (decoder.no_file), so the relayed reason passes the
             // same printable() choke as every other echo — wording survives,
             // control bytes do not.
-            $reason = preg_replace('/^sugar-animation: /', '', $e->getMessage()) ?? $e->getMessage();
+            $reason = \preg_replace('/^sugar-animation: /', '', $e->getMessage()) ?? $e->getMessage();
             \fwrite($stderr, Lang::t('cli.cannot_play', [
                 'path' => self::printable($path),
                 'reason' => self::printable($reason),
@@ -311,7 +315,7 @@ final class Cli
             return 1;
         }
 
-        if (count($frames) >= Decoder::MAX_FRAMES) {
+        if (\count($frames) >= Decoder::MAX_FRAMES) {
             // Honest disclosure of the engine window: what plays is the
             // first Decoder::MAX_FRAMES frames, whatever the file holds.
             // The notice fires when the decoded list FILLS the window: a
@@ -322,11 +326,11 @@ final class Cli
             \fwrite($stderr, Lang::t('cli.truncated', ['max' => (string) Decoder::MAX_FRAMES]) . "\n");
         }
 
-        if ($duration !== null && count($frames) < 2) {
+        if ($duration !== null && \count($frames) < 2) {
             // The Player re-anchors its deadline on every early-fire tick,
             // so --duration can never elapse on a single-frame animation —
             // refuse loudly instead of hanging (sugar-animation engine seam).
-            \fwrite($stderr, Lang::t('cli.duration_static', ['count' => (string) count($frames)]) . "\n");
+            \fwrite($stderr, Lang::t('cli.duration_static', ['count' => (string) \count($frames)]) . "\n");
 
             return 1;
         }
@@ -336,7 +340,7 @@ final class Cli
 
         // Honour the file: null (unauthored or raw 0) keeps the Player's
         // infinite default; N >= 2 stops the schedule after N complete
-        // playthroughs, exactly chicle-style intent. The audit rode the
+        // playthroughs, matching chicle's intent exactly. The audit rode the
         // intake, so no raw bytes survive this point (gifview-007).
         $player = $player->withLoops($loops);
 
@@ -348,7 +352,7 @@ final class Cli
         if ($fps !== null || $speed !== 1.0 || $speedMax) {
             $target = $speedMax
                 ? Player::MAX_FPS
-                : min(($fps ?? self::nominalFps($frames)) * $speed, Player::MAX_FPS);
+                : \min(($fps ?? self::nominalFps($frames)) * $speed, Player::MAX_FPS);
             $player = $player->withFixedFps($target);
         }
         if ($duration !== null) {
@@ -382,13 +386,13 @@ final class Cli
      * Parse a positive finite number for --fps/--speed/--duration; anything
      * else (non-numeric, zero, negative, INF, NAN) refuses with null.
      */
-    private static function parseSecondsLike(string $flag, string $raw): ?float
+    private static function parseSecondsLike(string $raw): ?float
     {
-        if (!is_numeric($raw)) {
+        if (!\is_numeric($raw)) {
             return null;
         }
         $value = (float) $raw;
-        if (!is_finite($value) || $value <= 0.0) {
+        if (!\is_finite($value) || $value <= 0.0) {
             return null;
         }
 
@@ -407,10 +411,10 @@ final class Cli
      */
     private static function decodeFrames(string $path, int $cellsW, int $cellsH): array
     {
-        $size = @filesize($path);
-        if (is_int($size) && $size > self::MAX_INPUT_BYTES) {
+        $size = @\filesize($path);
+        if (\is_int($size) && $size > self::MAX_INPUT_BYTES) {
             throw new \RuntimeException(Lang::t('cli.reason_bytes_over', [
-                'max' => (string) intdiv(self::MAX_INPUT_BYTES, 1_048_576),
+                'max' => (string) \intdiv(self::MAX_INPUT_BYTES, 1_048_576),
             ]));
         }
 
@@ -445,7 +449,7 @@ final class Cli
         $out = [];
         foreach ($frames as $frame) {
             $out[] = $frame;
-            $count = count($out);
+            $count = \count($out);
             if ($count > $max) {
                 throw new \RuntimeException(Lang::t('cli.reason_frames_over', ['max' => (string) $max]));
             }
@@ -471,7 +475,7 @@ final class Cli
      */
     private static function printable(string $text): string
     {
-        return preg_replace('/[\x00-\x1F\x7F]/', '?', $text) ?? $text;
+        return \preg_replace('/[\x00-\x1F\x7F]/', '?', $text) ?? $text;
     }
 
     /**
@@ -494,9 +498,9 @@ final class Cli
             $s = $stat($path);
         } else {
             \clearstatcache(false, $path);
-            $s = @stat($path);
+            $s = @\stat($path);
         }
-        if (!is_array($s)) {
+        if (!\is_array($s)) {
             return ['missing'];
         }
 
@@ -570,12 +574,12 @@ final class Cli
      */
     private static function nominalFps(array $frames): float
     {
-        $n = count($frames);
+        $n = \count($frames);
         if ($n === 0) {
             return 100.0;
         }
-        $total = array_sum(array_map(
-            static fn ($f): int => max(1, $f->delay),
+        $total = \array_sum(\array_map(
+            static fn ($f): int => \max(1, $f->delay),
             $frames,
         )) / 100.0;
 
