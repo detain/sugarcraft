@@ -10,6 +10,34 @@ use PHPUnit\Framework\TestCase;
 
 final class ProfileTest extends TestCase
 {
+    public function testTheDeprecatedAliasResolvesThroughTheAutoloader(): void
+    {
+        // CP-46 smoke pin: src/Profile.php is a bare class_alias — with only
+        // the psr-4 map, a classmap-dumped (--classmap-authoritative) context
+        // knows NOTHING for the name this test file's symbols resolve from.
+        // The composer.json autoload.files entry registers the side-effect
+        // file so the DOCUMENTED deprecated alias survives optimization
+        // dumps; the string-form existence probe below is what such a
+        // consumer effectively asks, and the identity leg pins the alias to
+        // its target, not to a parallel class. (Local proof runs `composer
+        // dump-autoload -o` + this probe — forbidden to this lane by the
+        // no-composer law; the entry is structural, verified by CI's dump.)
+        $this->assertTrue(
+            class_exists('SugarCraft\\ColorProfile\\Profile', true),
+            'the deprecated Profile alias must answer through the autoloader',
+        );
+        $this->assertInstanceOf(
+            Profile::class,
+            ColorProfile::TrueColor,
+            'Profile must BE ColorProfile, not a second type',
+        );
+        $this->assertInstanceOf(
+            ColorProfile::class,
+            Profile::TrueColor,
+            'the alias must resolve to the same single class entry',
+        );
+    }
+
     public function testTrueColorLabel(): void
     {
         $this->assertSame('TrueColor', Profile::TrueColor->label());
