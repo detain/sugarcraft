@@ -345,6 +345,26 @@ final class VeilTest extends TestCase
         );
     }
 
+    /**
+     * SO-11 (sugar-overlay-008/028): the bounds contract, pinned as today's
+     * honest behavior — offsets are verbatim, and once the block is fully
+     * off-canvas it collapses to just the (dimmed) backdrop; pushing
+     * further is a byte no-op on either axis.
+     */
+    public function testFullyOffCanvasOffsetsCollapseToTheBackdropAlone(): void
+    {
+        $bg = "alpha\nbeta\ngamma";
+        $frame = static fn (int $x, int $y): string => Veil::new()
+            ->withBackdrop(50)
+            ->withoutSession()
+            ->composite('XX', $bg, Position::CENTER, Position::CENTER, $x, $y);
+
+        $this->assertStringNotContainsString('XX', $frame(0, -9999));
+        $this->assertSame($frame(0, -5), $frame(0, -9999));
+        $this->assertSame($frame(50, 0), $frame(9999, 0));
+        $this->assertSame($frame(0, -5), $frame(9999, 0));
+    }
+
     public function testBrightOverlayIsNotDimmedWhileBackgroundIs(): void
     {
         // A FULL-WIDTH styled foreground bar over a dotted background + backdrop.

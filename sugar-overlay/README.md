@@ -88,6 +88,14 @@ composite(string $foreground, string $background,
 - `$xOffset` / `$yOffset` shift from the anchor in columns/rows
   (`+` right/down, `-` left/up).
 
+Offsets are applied verbatim — they are never clamped, and can push part
+of the block (or all of it) off the canvas. Fully off-canvas yields just
+the dimmed backdrop; pushing further changes nothing. The axes are also
+asymmetric at the anchor stage: an overlay taller than the backdrop paints
+from the top row, while a too-wide overlay can drop whole columns on the
+x-axis — a deliberate divergence (slide-in animations paint partial-width
+rows), not upstream behavior.
+
 Any of the nine `Position` cases is accepted on either axis; the case's
 other-half is ignored on that axis. So `TOP` as the horizontal anchor
 means "horizontally centered", and `LEFT` as the vertical anchor means

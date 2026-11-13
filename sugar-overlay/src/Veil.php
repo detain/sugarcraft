@@ -744,8 +744,12 @@ final class Veil
         //
         // baseX is deliberately the ASYMMETRIC axis: it is not clamped, so
         // a RIGHT/LEFT anchor with a too-wide overlay (or a slide offset)
-        // can push the block off the columns and whole rows drop. This
-        // matches upstream's horizontal slide semantics; a fit-to-canvas
+        // can push the block off the columns and whole rows drop. This is
+        // sugar-overlay's OWN divergence, dated 2026-11 (sugar-overlay-028
+        // — an earlier revision of this comment wrongly called it "upstream
+        // slide semantics": upstream has no slide/animation at all, and
+        // clamps both axes). We keep x unclamped because the Animation/Slide
+        // arms rely on partial-width paints at negative x; a fit-to-canvas
         // mode that shrinks the backdrop's canvas instead is a product
         // design seam, not silently added here.
         $baseX = $horizontal->xOffset($fgWidth, $bgWidth);
