@@ -220,9 +220,82 @@ final class ImageSourceUrlTest extends TestCase
         ));
     }
 
-    public function testFromUrlAsyncRejectsOnNonImagePayload(): void
+    public function testSyncAndAsyncTwinsShareThePixelCeiling(): void
     {
+        // finding sugar-image-092 parity law: fromUrlAsync() once lacked the
+        // $maxPixels parameter its synchronous twin honours — an async caller
+        // could not cap the decompression bomb budget at all. The twins must
+        // refuse the SAME over-budget image with the SAME typed message and
+        // accept it with the SAME generous ceiling.
         $this->startServer();
+
+        $asyncRefused = null;
+        try {
+            $this->await(ImageSource::fromUrlAsync(
+                "http://127.0.0.1:{$this->port}/poster.png",
+                allowedHosts: ['127.0.0.1'],
+                maxPixels: 4,
+            ));
+        } catch (\Throwable $e) {
+            $asyncRefused = $e;
+        }
+
+        $this->assertInstanceOf(\InvalidArgumentException::class, $asyncRefused);
+        $this->assertStringContainsString('exceed the maximum of 4 pixels', $asyncRefused->getMessage());
+
+        $syncRefused = null;
+        try {
+            ImageSource::fromUrl('file://' . $this->fixture, null, ['file'], 4);
+        } catch (\Throwable $e) {
+            $syncRefused = $e;
+        }
+
+        $this->assertInstanceOf(\InvalidArgumentException::class, $syncRefused);
+        $this->assertSame(
+            $asyncRefused->getMessage(),
+            $syncRefused->getMessage(),
+            'the twins must refuse with byte-identical messages, not dialects',
+        );
+
+        $asyncOk = $this->await(ImageSource::fromUrlAsync(
+            "http://127.0.0.1:{$this->port}/poster.png",
+            allowedHosts: ['127.0.0.1'],
+            maxPixels: 8,
+        ));
+        $this->assertSame(8, $asyncOk->maxPixels, 'the granted ceiling must ride the constructed source');
+
+        $syncOk = ImageSource::fromUrl('file://' . $this->fixture, null, ['file'], 8);
+        $this->assertSame(8, $syncOk->maxPixels);
+    }
+
+    public function testTheAsyncTwinCarriesThePixelCeilingParameterShape(): void
+    {
+        // Shape pin for the same finding: the parameter must exist with the
+        // contract default, and it must sit where the signature advertises it
+        // (after allowedSchemes, before the allowedHosts seam) — so a caller
+        // migrating from the sync route passes it the same way.
+        $params = array_map(
+            static fn (\ReflectionParameter $p): string => $p->getName(),
+            (new \ReflectionMethod(ImageSource::class, 'fromUrlAsync'))->getParameters(),
+        );
+
+        $this->assertContains('maxPixels', $params);
+        $this->assertSame(
+            ['url', 'headers', 'browser', 'allowedSchemes', 'maxPixels', 'allowedHosts'],
+            $params,
+        );
+
+        $rm = new \ReflectionMethod(ImageSource::class, 'fromUrlAsync');
+        $idx = (int) array_search('maxPixels', $params, true);
+        $this->assertSame(
+            ImageSource::MAX_PIXELS,
+            $rm->getParameters()[$idx]->getDefaultValue(),
+            'the async default must draw the same MAX_PIXELS constant as the contract',
+        );
+    }
+
+    public function testFromUrlAsyncRejectsOnNonImagePayload(): void
+    {        $this->startServer();
 
         $this->expectException(\InvalidArgumentException::class);
 
