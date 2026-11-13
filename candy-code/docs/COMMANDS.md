@@ -416,6 +416,7 @@ edit it by hand.
 | `/pr` | ✓ | | `[<focus>]` | Push the current branch and open a pull request for it with gh |
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
 | `/shells` | ✓ | | `[list\|output <id> [cursor]\|send <id> <keys…>\|stop <id>]` | List, read output from, and stop background shells |
+| `/tasks` | ✓ | | `[list\|tail <id>\|stop <id>]` | List background shells, background sessions and sub-agent runs; tail or stop a background shell |
 | `/schedules` | ✓ | | `[list\|add <name> <interval> <prompt>\|enable\|disable\|delete <name>]` | List, add, enable, disable, and delete scheduled prompt rows |
 | `/loop` | ✓ | | `<interval> <prompt>` | Re-run a prompt in this session every interval (this process only) |
 | `/fork` | ✓ | | `<prompt>` | Clone this conversation into a background session |

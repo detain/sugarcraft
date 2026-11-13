@@ -110,6 +110,7 @@ enum PaletteAction: string
     case RunSecurityReview = 'run_security_review';
     case CreatePullRequest = 'create_pull_request';
     case ShowShells = 'show_shells';
+    case ShowTasks = 'show_tasks';
     case ShowSchedules = 'show_schedules';
     case RecapSession = 'recap_session';
 
