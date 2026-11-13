@@ -459,13 +459,13 @@ final class Toast
      * A dismissed instance refuses new writes outright rather than queueing
      * into a renderer that will not paint them — clear() revives first.
      *
-     * DropNewest discards the INCOMING alert (it was never displayed, so it
-     * is not filed under history — a discard signal is recorded as a seam
-     * row, it would change the self-returning API shape); DropOldest evicts
+     * DropNewest discards the INCOMING alert AND files it in history — it
+     * was never displayed, so the history row is its only trace and the
+     * message never vanishes silently; DropOldest evicts
      * the oldest queued alert AND records the evictee in history, since it
      * lived in the queue and may have been on screen. At a zero cap there is
-     * nothing to evict, so the incoming alert is discarded unrecorded rather
-     * than letting the queue exceed the cap (withMaxConcurrent() now refuses
+     * nothing to evict, so a DropOldest arrival is discarded unrecorded
+     * rather than letting the queue exceed the cap (withMaxConcurrent() now refuses
      * caps below 1 — the leg is defensive depth for the shared engine).
      * An alert carrying an id that matches a live alert bypasses all policy:
      * it is an update, not an append (see the replace-by-id leg).
@@ -505,6 +505,12 @@ final class Toast
 
         if ($this->maxConcurrent !== null && \count($queue) >= $this->maxConcurrent) {
             if ($this->overflow === Overflow::DropNewest) {
+                // The refused arrival was never displayed — history is its ONLY
+                // trace. Filing it keeps the guarantee "no message vanishes
+                // silently" symmetric with the DropOldest eviction below; a
+                // host can announce over-cap arrivals without re-implementing
+                // the cap check.
+                $this->historyLog = $this->historyLog->push($alert, $this->historyLimit);
                 return $queue;
             }
             if ($this->overflow === Overflow::DropOldest) {

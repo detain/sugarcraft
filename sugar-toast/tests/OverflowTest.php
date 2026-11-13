@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast\Tests;
 
-use SugarCraft\Toast\Overflow;
+use SugarCraft\Toast\{Alert, Overflow, Toast};
 use PHPUnit\Framework\TestCase;
 
 final class OverflowTest extends TestCase
@@ -31,5 +31,46 @@ final class OverflowTest extends TestCase
     public function testEnqueue(): void
     {
         $this->assertSame(Overflow::Enqueue, Overflow::Enqueue);
+    }
+
+    public function testDropNewestFilesEveryOverCapArrivalInOrder(): void
+    {
+        $toast = Toast::new(50)
+            ->withMaxConcurrent(2)
+            ->withOverflow(Overflow::DropNewest)
+            ->info('one')
+            ->info('two')
+            ->error('three')
+            ->warning('four');
+
+        $this->assertSame(['one', 'two'], \array_map(
+            static fn(Alert $a): string => (string) $a->message,
+            $toast->activeAlerts()
+        ));
+        $this->assertSame(['three', 'four'], \array_map(
+            static fn(Alert $a): string => (string) $a->message,
+            $toast->history()
+        ));
+    }
+
+    public function testDropOldestEvictionLegIsUnmoved(): void
+    {
+        // Positive control across the policy split (TST-DROPINFO): DropOldest
+        // still evicts the OLDEST into history and admits the newcomer.
+        $toast = Toast::new(50)
+            ->withMaxConcurrent(2)
+            ->withOverflow(Overflow::DropOldest)
+            ->info('one')
+            ->info('two')
+            ->error('three');
+
+        $this->assertSame(['two', 'three'], \array_map(
+            static fn(Alert $a): string => (string) $a->message,
+            $toast->activeAlerts()
+        ));
+        $this->assertSame(['one'], \array_map(
+            static fn(Alert $a): string => (string) $a->message,
+            $toast->history()
+        ));
     }
 }

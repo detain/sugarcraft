@@ -107,12 +107,12 @@ final class ToastStackingRecoveryTest extends TestCase
         ));
     }
 
-    public function testDropNewestRefusalStaysUnrecordedAndDocumented(): void
+    public function testDropNewestRefusalFilesTheArrivalInHistory(): void
     {
-        // The refused incoming was never displayed — filing it in the history
-        // would LIE about it having been seen. Honest shape today: silent
-        // refusal, disclosed in README + appendBounded docblock; a discard
-        // signal is a recorded seam row (needs a cross-API return-shape).
+        // TST-DROPINFO: the refused incoming was never displayed, and the
+        // history row is its ONLY trace — a silent disappearance gave the
+        // host no way to announce an over-cap arrival. Filing is symmetric
+        // with the DropOldest eviction leg.
         $toast = Toast::new(50)
             ->withMaxConcurrent(1)
             ->withOverflow(Overflow::DropNewest)
@@ -123,7 +123,10 @@ final class ToastStackingRecoveryTest extends TestCase
             static fn(Alert $a): string => (string) $a->message,
             $toast->activeAlerts()
         ));
-        $this->assertSame([], $toast->history());
+        $this->assertSame(['refused'], \array_map(
+            static fn(Alert $a): string => (string) $a->message,
+            $toast->history()
+        ));
     }
 
     public function testClearIsBulkResetNotDismissal(): void

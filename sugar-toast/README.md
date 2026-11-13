@@ -24,7 +24,7 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **Accessible text mode**: `withAccessibleText()` names the severity in words and prints progress percentages — a text channel beside the frame's colour/glyph language (WCAG 1.4.1)
 - **Action buttons**: `[Label]` buttons attached to an alert with closure callbacks
 - **Styled alerts**: per-alert background/foreground/border colour overrides
-- **History log**: immutable, bounded record of dismissed and overflow-evicted alerts (default cap 100)
+- **History log**: immutable, bounded record of dismissed, overflow-evicted and refused (DropNewest) alerts (default cap 100)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
 - **Accessibility environment variables**: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink; `NO_COLOR`/`CLICOLOR=0` drop all colour bytes (renderer palette, custom alert colours, inline message SGR); `CLICOLOR_FORCE` overrides. The gates are deliberately not spec-literal: a literal `NO_COLOR=0` counts as unset (suppression off) and `CLICOLOR` must read exactly `0` to drop colour — `CLICOLOR=00` keeps it; the divergence law lives in the colour-decision docblock. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself
 
@@ -101,7 +101,7 @@ Position::MiddleRight
 
 ```php
 Overflow::DropOldest  // remove oldest alert to make room (default)
-Overflow::DropNewest  // discard the new alert instead of enqueueing
+Overflow::DropNewest  // discard the new alert, filing it into history (never silently lost)
 Overflow::Enqueue     // allow queue to exceed maxConcurrent
 ```
 
@@ -455,8 +455,9 @@ foreach ($history as $alert) {
 
 Recording rules: `dismiss()` files EVERY queued survivor — including alerts
 that had expired but not yet been pruned; a `DropOldest` eviction files the
-evictee; `DropNewest` refusals (never displayed) and `clear()` (a bulk reset,
-not a dismissal) file nothing.
+evictee; a `DropNewest` refusal files the refused arrival (it was never
+displayed, so history is its only trace); `clear()` (a bulk reset,
+not a dismissal) files nothing.
 
 `HistoryLog` is immutable and implements `\Countable`; `HistoryLog::new()` and the constructor accept only a `list<Alert>` (garbage payloads and string-keyed arrays throw) — `dismiss()` returns a new `Toast` with an
 updated log; prior instances are unchanged. The log is capped at 100 entries
@@ -496,7 +497,7 @@ already over the new cap survive until the next push evicts them.
 | `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds, wall clock — an NTP step shifts it) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
 | `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files EVERY queued alert (expired included) into history and stops rendering until `clear()`, which also resets the flag but files nothing; `pruneExpired()` drops expired alerts silently |
-| `->history(): list<Alert>` | Return all recorded alerts — dismissed AND overflow-evicted (`DropOldest`); cumulative, `clear()` never resets it |
+| `->history(): list<Alert>` | Return all recorded alerts — dismissed, `DropOldest` evictees AND `DropNewest` refusals; cumulative, `clear()` never resets it |
 | `->activeAlerts(): list<Alert>` | The live queue exactly as `view()` sees it — expired filtered, queue order; the index space `cancelAlert()`/`extendAlert()` and `actionRects()`'s `alertIndex` share |
 | `->actionRects(string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button (the `"[+N more]"` fold row is not clickable) |
 | `->actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action` | The dispatch door: which Action (if any) covers a frame position — where two boxes share rows, the top-most (newest) one wins |
