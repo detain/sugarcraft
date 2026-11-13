@@ -7,6 +7,7 @@ namespace SugarCraft\ScriptUi\Tests\Model;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\ScriptUi\Model\FilterModel;
 use SugarCraft\ScriptUi\Model\InputModel;
 use SugarCraft\ScriptUi\Model\WriteModel;
 use SugarCraft\ScriptUi\Runtime\ColourGate;
@@ -106,5 +107,56 @@ final class PlaceholderGhostTest extends TestCase
 
         self::assertStringNotContainsString("\x1b", $frame);
         self::assertStringContainsString('Start typing...', $frame);
+    }
+
+    // ---- scriptui-18: filter --placeholder threaded through ------------
+
+    public function testEmptyFilterLinePaintsTheGhost(): void
+    {
+        $model = FilterModel::fromOptions(['banana', 'cherry'], placeholder: 'Type to narrow');
+
+        $frame = $model->view();
+        self::assertStringContainsString("\x1b[2mType to narrow", $frame);
+        self::assertStringContainsString('/' . "\x1b[2mType to narrow", $frame);
+    }
+
+    public function testFirstTypedCharacterErasesTheFilterGhost(): void
+    {
+        $model = FilterModel::fromOptions(['banana', 'cherry'], placeholder: 'Type to narrow');
+        [$model] = $model->update(new KeyMsg(KeyType::Char, 'b'));
+
+        self::assertStringNotContainsString('Type to narrow', $model->view());
+        self::assertStringContainsString('/b', $model->view());
+    }
+
+    public function testFuzzyAndMarkedModesKeepTheGhost(): void
+    {
+        $fuzzy = FilterModel::fromOptions(['banana', 'cherry'], fuzzy: true, placeholder: 'go');
+        self::assertStringContainsString("/\x1b[2mgo\x1b[0m", $fuzzy->view());
+
+        $marked = FilterModel::fromOptions(['banana', 'cherry'], noLimit: true, placeholder: 'go');
+        self::assertStringContainsString("/\x1b[2mgo\x1b[0m", $marked->view());
+    }
+
+    public function testFilterGhostBoundedToFirstSlashLine(): void
+    {
+        // An item that renders as a bare '/' row must never receive the
+        // ghost instead of the real probe line (first-exact-match binding).
+        $model = FilterModel::fromOptions(
+            ['/', 'x'],
+            cursorPrefix: '',
+            unselectedPrefix: '',
+            placeholder: 'hint',
+        );
+        $frame = $model->view();
+        self::assertSame(1, substr_count($frame, 'hint'), $frame);
+        self::assertMatchesRegularExpression("/^\\/\\x1b\\[2mhint/", $frame);
+    }
+
+    public function testNoPlaceholderFilterFrameUnchanged(): void
+    {
+        $model = FilterModel::fromOptions(['banana']);
+
+        self::assertStringNotContainsString("\x1b[2m", $model->view());
     }
 }

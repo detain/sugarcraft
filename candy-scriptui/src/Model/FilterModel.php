@@ -51,6 +51,7 @@ final class FilterModel implements Model
         bool $fuzzy = false,
         ?FuzzyMatcher $matcher = null,
         int $width = 0,
+        string $placeholder = '',
     ): self {
         // scriptui-15: the option payload stays RAW — it is the DATA
         // channel (`printf 'a\tb\n' | filter` must hand back the real
@@ -63,6 +64,7 @@ final class FilterModel implements Model
         // line ('/' . filterText) and never emitted as a selection.
         $options     = array_values($options);
         $value       = \SugarCraft\Core\Util\Sanitize::cellValue($value);
+        $placeholder = \SugarCraft\Core\Util\Sanitize::cellValue($placeholder);
 
         // 0 = auto width: terminal columns when knowable, else the
         // historical 60-cell list (see ChooseModel for the same rule).
@@ -118,6 +120,7 @@ final class FilterModel implements Model
             allItems: $items,
             fuzzyResults: [],
             matcher: $matcher,
+            placeholder: $placeholder,
         );
         if ($fuzzy && $value !== '') {
             $filterText = $list->filterValue();
@@ -151,6 +154,9 @@ final class FilterModel implements Model
         // not the set painted in fuzzy mode — these carry the real one.
         public readonly int $fuzzyCursor = 0,
         public readonly int $fuzzyOffset = 0,
+        // scriptui-18: the hint painted over the bare '/' probe line while
+        // the filter text is empty ('' = no ghost, the historical frame).
+        public readonly string $placeholder = '',
         ?FuzzyMatcher $matcher = null,
     ) {
         $this->matcher = $matcher ?? new SmithWatermanMatcher();
@@ -325,7 +331,33 @@ final class FilterModel implements Model
         if (!$this->submitted && !$this->aborted) {
             $body .= "\n" . Lang::t('hints.filter');
         }
-        return $body;
+        return $this->ghostFilterLine($body);
+    }
+
+    /**
+     * scriptui-18: --placeholder reached nowhere — the flag was registered
+     * and dropped. The ghost now rides -17's shared span doctrine: while the
+     * filter text is empty, the bare '/' probe line (ItemList:197 and the
+     * fuzzyView mirror of it) carries the dim hint after the slash; the
+     * first typed character extends that same line and the hint is gone.
+     * Bounded to the FIRST exact '/' line so item text can never be touched.
+     */
+    private function ghostFilterLine(string $body): string
+    {
+        if ($this->placeholder === '' || $this->list->filterText !== '') {
+            return $body;
+        }
+
+        $ghost = '/' . Emphasis::sgr(Ansi::FAINT) . $this->placeholder . Emphasis::reset();
+        $lines = explode("\n", $body);
+        foreach ($lines as $i => $line) {
+            if ($line === '/') {
+                $lines[$i] = $ghost;
+                break;
+            }
+        }
+
+        return implode("\n", $lines);
     }
 
     /**
@@ -594,6 +626,7 @@ final class FilterModel implements Model
             fuzzyCursor:    $fuzzyCursor    ?? $this->fuzzyCursor,
             fuzzyOffset:    $fuzzyOffset    ?? $this->fuzzyOffset,
             matcher:        $this->matcher,
+            placeholder:    $this->placeholder,
         );
     }
 

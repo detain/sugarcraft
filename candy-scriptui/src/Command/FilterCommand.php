@@ -113,6 +113,7 @@ final class FilterCommand extends Command
             unselectedPrefix: is_string($unselected) ? $unselected : null,
             fuzzy:            (bool) $input->getOption('fuzzy'),
             width:            $width,
+            placeholder:      (string) $input->getOption('placeholder'),
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(
