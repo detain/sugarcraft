@@ -148,13 +148,21 @@ if ($pathArg === 'synthetic') {
 fwrite(STDERR, "SugarVideo — Space=play  q=quit  m=mode  [/] speed  0-9 seek\n");
 
 // The synthetic source is an animated GIF that should loop by default.
-$reel = Reel::open($path)
-    ->withSize($cols, $rows)
-    ->withLoop($pathArg === 'synthetic');
+// A probe refusal (RuntimeException from VideoSource::probe(): corrupt file,
+// or no video stream) is a user-facing outcome, not a bug: print the sentence
+// and exit 1, the same class as the not-found path — never a raw fatal+trace.
+try {
+    $reel = Reel::open($path)
+        ->withSize($cols, $rows)
+        ->withLoop($pathArg === 'synthetic');
 
-// Apply mode override if explicitly requested via CLI.
-if ($mode !== null) {
-    $reel = $reel->withMode($mode);
+    // Apply mode override if explicitly requested via CLI.
+    if ($mode !== null) {
+        $reel = $reel->withMode($mode);
+    }
+
+    $reel->play();
+} catch (\RuntimeException $e) {
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
 }
-
-$reel->play();
