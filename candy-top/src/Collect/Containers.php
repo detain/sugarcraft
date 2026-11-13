@@ -140,7 +140,7 @@ final class Containers implements ContainerCollector
 
                 continue;
             }
-            $usage = self::cpuUsage(self::read($dir . '/cpu.stat'));
+            $usage = self::cpuUsage(Read::file($dir . '/cpu.stat'));
             if ($usage !== null) {
                 $cpu = $c->cpu;
                 if ($c->cpuTime > 0 && $usage >= $c->cpuTime && $now > $this->oldTime) {
@@ -148,14 +148,14 @@ final class Containers implements ContainerCollector
                 }
                 $c = $c->withCpu($cpu, $usage);
             }
-            $current = self::integer(self::read($dir . '/memory.current'));
+            $current = self::integer(Read::file($dir . '/memory.current'));
             if ($current !== null) {
-                $inactive = self::statValue(self::read($dir . '/memory.stat'), 'inactive_file');
+                $inactive = self::statValue(Read::file($dir . '/memory.stat'), 'inactive_file');
                 $c = $c->withMem($current - min($current, $inactive ?? 0));
             }
             // Set on every read, "max" included (0): a limit lifted since the
             // last sample must not stick and block a VM's -m fallback.
-            $max = self::read($dir . '/memory.max');
+            $max = Read::file($dir . '/memory.max');
             if ($max !== null) {
                 $c = $c->withMemLimit(self::integer($max) ?? 0);
             }
@@ -316,12 +316,5 @@ final class Containers implements ContainerCollector
     {
         return str_starts_with($path, '/') && !str_contains($path, "\0")
             && !\in_array('..', explode('/', $path), true);
-    }
-
-    private static function read(string $file): ?string
-    {
-        $raw = @file_get_contents($file);
-
-        return $raw === false ? null : $raw;
     }
 }
