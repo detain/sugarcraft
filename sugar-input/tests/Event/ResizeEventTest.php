@@ -53,11 +53,30 @@ final class ResizeEventTest extends TestCase
         $this->assertSame(2160, $event->rows);
     }
 
-    public function testZeroDimensions(): void
+    public function testZeroDimensionsAreRefused(): void
     {
-        $event = new ResizeEvent(0, 0);
+        $this->expectException(\InvalidArgumentException::class);
 
-        $this->assertSame(0, $event->cols);
-        $this->assertSame(0, $event->rows);
+        new ResizeEvent(0, 0);
+    }
+
+    public function testEitherDimensionAloneRefusesTheFrame(): void
+    {
+        foreach ([[0, 24], [80, 0], [-1, 24], [80, -1]] as [$cols, $rows]) {
+            try {
+                new ResizeEvent($cols, $rows);
+                $this->fail("expected refusal of {$cols}x{$rows}");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString("{$cols}x$rows", $e->getMessage());
+            }
+        }
+    }
+
+    public function testOneCellFrameIsTheSmallestLegalTerminal(): void
+    {
+        $event = new ResizeEvent(1, 1);
+
+        $this->assertSame(1, $event->cols);
+        $this->assertSame(1, $event->rows);
     }
 }

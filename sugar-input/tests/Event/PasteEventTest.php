@@ -104,4 +104,24 @@ final class PasteEventTest extends TestCase
         $this->assertFalse($boundary->truncated);
         $this->assertNull($boundary->truncationNotice());
     }
+
+    public function testConstructorClampsEvenWhenTheFactoryIsBypassed(): void
+    {
+        // The cap is an invariant of construction, not of one factory path:
+        // a host that synthesises an oversized paste directly gets the same
+        // clip and the same loud flag the decoder's truncate() would give.
+        $event = new PasteEvent(str_repeat('b', PasteEvent::MAX_SIZE + 1));
+
+        $this->assertSame(PasteEvent::MAX_SIZE, strlen($event->content));
+        $this->assertTrue($event->truncated);
+        $this->assertNotNull($event->truncationNotice());
+    }
+
+    public function testConstructorAtExactCapStaysIntact(): void
+    {
+        $event = new PasteEvent(str_repeat('b', PasteEvent::MAX_SIZE));
+
+        $this->assertSame(PasteEvent::MAX_SIZE, strlen($event->content));
+        $this->assertFalse($event->truncated);
+    }
 }
