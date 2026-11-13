@@ -139,6 +139,35 @@ final class ProviderKeyStoreTest extends TestCase
         self::assertSame('{ not json', (string) file_get_contents($this->configPath));
     }
 
+    public function testRefusesAnUnreadableConfigInLocaleWithoutAWarning(): void
+    {
+        if (\function_exists('posix_geteuid') && \posix_geteuid() === 0) {
+            self::markTestSkipped('root reads a mode-0000 file; the unreadable branch cannot be reached.');
+        }
+        file_put_contents($this->configPath, '{"theme":"dark"}');
+        chmod($this->configPath, 0000);
+
+        $warnings = [];
+        set_error_handler(static function (int $no, string $str) use (&$warnings): bool {
+            // `@` does not stop the handler running; it clears the bit.
+            if ((error_reporting() & $no) !== 0) {
+                $warnings[] = $str;
+            }
+
+            return true;
+        });
+        try {
+            $result = ProviderKeyStore::store('openai', 'sk-x');
+        } finally {
+            restore_error_handler();
+            chmod($this->configPath, 0600);
+        }
+
+        self::assertSame(Lang::t('cli.sub.login.unreadable', ['path' => $this->configPath]), $result);
+        self::assertSame([], $warnings, 'the read must be suppressed, not warn');
+        self::assertSame('{"theme":"dark"}', (string) file_get_contents($this->configPath));
+    }
+
     public function testADoorThatBailedUnwrittenIsReportedAsNotStored(): void
     {
         // writeUserConfig() can bail silently (lock contention, an

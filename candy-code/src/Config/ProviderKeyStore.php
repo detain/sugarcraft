@@ -26,6 +26,7 @@ use SugarCraft\Code\Lang;
  *    a pasted key rides the config file verbatim, and a control byte in it
  *    is a forgery vector for the human reader of the file later;
  *  - a non-array JSON body is refused (`cli.sub.login.corrupt_config`),
+ *  - an existing file that cannot be read is refused (`cli.sub.login.unreadable`),
  *    never repaired;
  *  - the write goes through {@see Bootstrap::writeUserConfig()}, the one
  *    sanctioned `config.json` door (it can bail unwritten under lock
@@ -67,8 +68,14 @@ final class ProviderKeyStore
         // Advisory pre-read, only so a corrupt file keeps its own refusal
         // message; the merge base is re-read INSIDE the lock below.
         if (\is_file($path)) {
-            $raw = \file_get_contents($path);
-            if ($raw !== false && $raw !== '' && !\is_array(\json_decode($raw, true))) {
+            // Suppressed on purpose (the LayeredSettings read doctrine): an
+            // existing-but-unreadable file must announce in the user's locale,
+            // not leak a raw E_WARNING onto the terminal.
+            $raw = @\file_get_contents($path);
+            if ($raw === false) {
+                return Lang::t('cli.sub.login.unreadable', ['path' => $path]);
+            }
+            if ($raw !== '' && !\is_array(\json_decode($raw, true))) {
                 return Lang::t('cli.sub.login.corrupt_config', ['path' => $path]);
             }
         }
