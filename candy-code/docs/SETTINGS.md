@@ -1907,6 +1907,22 @@ take quietly. `readUserConfig()` itself stays tolerant throughout; it is the
 launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
 
+**A key the cascade drops is named, not just dropped.** Past the strict read,
+the launch audits the top-level keys of each file it can see
+(`LayeredSettings::keyAuditRows()`, also run by `candy-code doctor`) and writes
+one stderr line per offender: a misspelled key (with a "did you mean"), a key
+the schema knows but that file's tier may not carry — the "Project may set"
+column above is exactly the project-tier allowlist, so a `no` row in a project
+file is reported as the wrong tier — and a value the resolver refuses and
+replaces with the default. Reading an untrusted project file for this audit
+applies nothing from it.
+
+Above the files, the effective value is resolved in one fixed order, lowest
+first: default, the four files, the session overlay (settings view choices),
+the managed file, the environment, command-line flags. The managed file
+outranks the session but never the environment or a flag
+(`SettingSource`, pinned by `SettingSourceOrderTest`).
+
 ## See also
 
 - [`PERMISSIONS.md`](PERMISSIONS.md) — permission modes, rule patterns, and
