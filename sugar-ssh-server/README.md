@@ -338,6 +338,19 @@ ssh wishuser@your-host
 
 ## Middleware
 
+The table names middleware bare. Four of the Auth-suite members —
+`PasswordAuth`, `CertificateAuth`, `AuthMethods`, `KeyboardInteractive` —
+live under `SugarCraft\SshServer\Middleware\Auth\`, while the `Auth` class
+itself is `SugarCraft\SshServer\Middleware\Auth`: the class and the
+sub-namespace share one name, so the quickstart's
+`use SugarCraft\SshServer\Middleware\Auth;` imports the class, and the four
+named above import one level deeper
+(`use SugarCraft\SshServer\Middleware\Auth\PasswordAuth;`).
+That holds wherever this README names them bare. The `Subsystem` section
+below already spells its sub-namespace explicitly
+(`Middleware\Subsystem\SftpStub`); this note closes the gap for the Auth
+suite once, rather than parenthetically at every appearance.
+
 | Middleware           | Transport       | Purpose                                                                                              |
 |----------------------|-----------------|------------------------------------------------------------------------------------------------------|
 | `Logger`             | both            | One-line JSON event at session start + end, with elapsed time and connection meta. Sink matters: `Logger::auto()` (and `new Logger()`) append to `$SSH_SERVER_LOG` when set, else `php://stderr` — which under `ForceCommand` **is the connecting client's extended-data channel**, not journald. Pass a file path (we create it `0600`; an existing file keeps its mode) or `Logger::toStream($handle)` you control. `target()` reports the choice. |
@@ -403,7 +416,9 @@ final class HelloBanner implements Middleware
 Every shipped gate takes its knobs at construction, and several defaults are
 security-relevant, so the signatures are tabulated once here rather than
 inferred from examples. Names in **bold** are the ones that change behaviour
-when left alone.
+when left alone, and the Auth-suite four live under
+`SugarCraft\SshServer\Middleware\Auth\` (namespace note under
+[Middleware](#middleware)).
 
 | Middleware | Constructor | Defaults worth knowing |
 |---|---|---|
@@ -461,7 +476,8 @@ Consequences worth knowing before you deploy:
   boot line can say it out loud. Files this class creates are
   `0600` — the records carry usernames and client addresses.
 - `Auth`, `RateLimit`, `KeyboardInteractive` and `CertificateAuth`
-  take a `$stderr` stream. Left alone, their notices (including
+  (the last two under `Middleware\Auth\`) take a `$stderr` stream. Left
+  alone, their notices (including
   "fail-open, allowing") reach the prober. Inject a real operator
   sink there; the messages themselves carry no paths and no
   posture detail by design.
@@ -549,8 +565,8 @@ new Auth(userKeys: ['alice' => [Auth::ANY_KEY], 'bob' => ['SHA256:bbb']]);
 ```
 
 With `userKeys` non-empty it is authoritative: a name absent from the
-map is refused even if its key appears nowhere, and a key listed under
-someone else never admits you. `users` and `keyFingerprints`, when also
+map is refused regardless of the key it presents, and a key listed under a
+different name never admits you. `users` and `keyFingerprints`, when also
 supplied, apply as *additional* gates — combining surfaces can only
 narrow, never widen.
 
@@ -668,7 +684,8 @@ $s->toLogContext();
 ```
 
 `$s->toLogContext()` is what the bundled `Logger` writes, and it carries nine
-fields: the six above plus `session`, `auth_method`
+fields: the user, client address (host:port), term, tty, pty size
+(cols x rows) and command, plus `session`, `auth_method`
 and `key_fingerprint` (a dash stands for "not carried", so a line never loses
 the authentication column silently).
 
@@ -952,9 +969,8 @@ There is no shell in this path. `decodeCommandString()` is a quoting tokenizer
 as commands or expansions — the property the allowlist rests on. Empty or
 whitespace-only requests decode to `[]` and are not announced at all.
 
-Shell requests are deliberately *not* gated, because they name no program: the
-interpreter is the configured `$shell`, then the server-side `SHELL`, then
-`FALLBACK_SHELL`, and a client-supplied `SHELL` is stripped as a dangerous var.
+Shell requests are deliberately *not* gated, because they name no program;
+the interpreter they get resolves per the note below.
 
 The deny-list that makes that sentence true is `DANGEROUS_VARS`, and it is
 applied even to names an operator put in `$acceptEnv`: the loader hooks
@@ -1002,6 +1018,12 @@ use SugarCraft\SshServer\Channel\Msg\BreakMsg;
 use SugarCraft\SshServer\Session;
 use SugarCraft\SshServer\Transport\InProcessTransport;
 
+// WARNING (read back to the client): under ForceCommand STDERR *is* the
+// client's extended-data channel, so every fwrite below — including the
+// peer-controlled `exec:` command and raw `env:` values, written here
+// unscrubbed — lands on the terminal of whoever just connected. This is
+// a debug specimen: scrub through Logger sinks instead of raw writes,
+// and never ship this handler to production.
 final class DebugChannelHandler implements ChannelHandler
 {
     private int $cols = 80;
@@ -1086,6 +1108,8 @@ $subsystem->register('sftp', new SftpStub());
 
 exit(Server::new()
     ->use(Logger::toFile('/var/log/wish.jsonl'))
+    // Flat users list = name-only; sshd remains the credential gate —
+    // see 'Defaults that are open until you close them' before shipping.
     ->use(new Auth(['alice', 'bob']))
     ->use($subsystem)  // handles subsystem sftp; others pass through to Spawn
     ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
@@ -1108,6 +1132,14 @@ your own code dispatches them (see
 would feed them belongs to a transport that speaks the SSH protocol itself, and
 this library deliberately does not — see
 [Runtime requirements](#runtime-requirements).
+
+Two upstream siblings go unmentioned because they were considered and
+dropped, not missed: `wish/agent` (agent-channel forwarding) is a wire
+protocol owned by the host sshd — this library speaks no SSH — and
+`wish/transfer` (scp/sftp transfer helpers) has nothing to forward: scp
+arrives as a plain `exec` request and sftp as a `subsystem` request, both
+already covered by `Spawn`, `Subsystem` and the channel handler wherever
+policy allows them.
 
 Runnable examples:
 - [`examples/hello-server.php`](examples/hello-server.php) — banner-only stack you can ForceCommand against.
