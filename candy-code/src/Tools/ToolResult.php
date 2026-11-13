@@ -66,6 +66,7 @@ final readonly class ToolResult
         private ?DenialKind $denial = null,
         private ?string $documentBytes = null,
         private ?string $documentName = null,
+        private ?int $exitCode = null,
     ) {}
 
     /**
@@ -101,6 +102,17 @@ final readonly class ToolResult
     public function durationMs(): ?int
     {
         return $this->durationMs;
+    }
+
+    /**
+     * The process exit status a shell-shaped tool ran to, or null when the
+     * tool ran no process (or never got one to report). Display-only: the
+     * model reads the text, which already carries whatever the tool printed,
+     * so this rides the structure for the transcript's `exit N` label.
+     */
+    public function exitCode(): ?int
+    {
+        return $this->exitCode;
     }
 
     public function imageBytes(): ?string

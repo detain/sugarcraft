@@ -124,6 +124,9 @@ final class ToolResult
      *                                and a tool can print anything — `Permission denied:`
      *                                included. Mirrors {@see EngineToolResult::denial()} and
      *                                crosses both adapters.
+     * @param int|null $exitCode The process exit status a shell tool ran to (see
+     *                           {@see EngineToolResult::exitCode()}); null when no process ran.
+     *                           Drives the `exit N` label on a Bash row and crosses both adapters.
      */
     public function __construct(
         public readonly string $name,
@@ -138,6 +141,7 @@ final class ToolResult
         public readonly ?string $description = null,
         public readonly array $arguments = [],
         public readonly ?DenialKind $denial = null,
+        public readonly ?int $exitCode = null,
     ) {}
 
     /**
@@ -209,6 +213,7 @@ final class ToolResult
             description: $this->description,
             arguments: $this->arguments,
             denial: $this->denial,
+            exitCode: $this->exitCode,
         );
     }
 
@@ -239,6 +244,7 @@ final class ToolResult
             $trimmed === '' ? null : $trimmed,
             $this->arguments,
             $this->denial,
+            $this->exitCode,
         );
     }
 
@@ -263,6 +269,7 @@ final class ToolResult
             $this->description,
             $arguments,
             $this->denial,
+            $this->exitCode,
         );
     }
 
@@ -410,6 +417,7 @@ final class ToolResult
             imageProtocol: $this->imageProtocol,
             diff: $this->diff,
             denial: $this->denial,
+            exitCode: $this->exitCode,
         );
     }
 
@@ -436,6 +444,7 @@ final class ToolResult
             $result->diff(),
             $result->durationMs(),
             denial: $result->denial(),
+            exitCode: $result->exitCode(),
         );
     }
 

@@ -767,6 +767,9 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 $this->maxOutputBytes,
             ),
             isError: $run['exitCode'] !== 0,
+            // Structure for the transcript row only: the text above is what
+            // the model reads and is deliberately unchanged by this field.
+            exitCode: is_int($run['exitCode'] ?? null) ? $run['exitCode'] : null,
         );
     }
 
