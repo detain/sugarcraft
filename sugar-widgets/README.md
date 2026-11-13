@@ -14,7 +14,7 @@
 <!-- BADGES:END -->
 
 
-![demo](.vhs/spinners.gif)
+![spinners](.vhs/spinners.gif)
 
 sugar-widgets — TUI components for PHP 8.3+: 9 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch), 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), and two btop-derived render helpers (`Input\TextEdit`, `Menu\OptionRow`) — including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
 
@@ -22,7 +22,7 @@ sugar-widgets — TUI components for PHP 8.3+: 9 first-party components (Table, 
 composer require sugarcraft/sugar-widgets
 ```
 
-Requires PHP ≥ 8.3. No non-bundled extensions are needed (mbstring is
+Requires PHP ≥ 8.3. Nothing beyond PHP itself is required (mbstring is
 bundled with PHP). When you depend on this package standalone, its `sugarcraft/*`
 siblings resolve from Packagist.
 
@@ -52,16 +52,16 @@ The table below lists the first-party components — Help, Key, Progress
 (includes the AnimatedProgress spring-variant), Timer, Stopwatch,
 Paginator, Tree, Table, Tabs — plus the two btop-derived render helpers,
 `Input\TextEdit` and `Menu\OptionRow`, followed by the deprecated alias
-re-exports from `sugarcraft/sugar-forms` (each row flags which it is).
+re-exports from `sugarcraft/sugar-forms` (the alias rows name their origin explicitly).
 The counted inventory lives once, in the intro at the top of this file.
 
-| Component | What it does | Notable msgs |
+| Component | What it does | Notable messages |
 |---|---|---|
 | `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
 | `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the public constructor is deprecated BC — removal at 2.0); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()`; `withShowDisabled()` pins greyed-out bindings into the footer so a host can document commands that exist but are inactive (off by default; a disabled toggle never flips show-all) | — |
-| `Key\Binding` | One key list + label + help row: readonly `keys`/`help`/`disabled`, `matches()` / static `any()` for dispatch, `withHelp()`, `disable()`/`setEnabled()` (plus legacy `setKeys()`/`setHelp()`), `unbind()`; factories `Binding::new(...)`, `Binding::withDisabled(...)` | — |
+| `Key\Binding` | One key list + label + help row: readonly `keys`/`help`/`disabled`, `matches()` / static `any()` for dispatch, `withHelp()`, `disable()`/`withEnabled()` (the `setKeys()`/`setHelp()`/`setEnabled()` spellings are dated BC aliases), `unbind()`; factories `Binding::new(...)`, `Binding::withDisabled(...)` | — |
 | `Key\KeyMap` | Interface — implement it so `Help` can render your bindings: `shortHelp(): list<Binding>` for the inline row, `fullHelp(): list<list<Binding>>` for the expanded pane (one inner list per column); `Tabs\TabsKeyMap` is the shipped example. Naming, spelled out: three things answer to *KeyMap* in this ecosystem — **this** help-collection contract (`SugarCraft\Widgets\Key\KeyMap`), the sugar-forms submit/abort chords class (`SugarCraft\Forms\...KeyMap`, a different shape entirely), and `Tabs\TabsKeyMap`, which merely *implements* this interface. Likewise two types are called *Help*: the `Key\Help` `{key, desc}` label value object bindings render through, and the `Help\Help` footer component. In a file that needs both, alias one at import: `use SugarCraft\Widgets\Help\Help as HelpFooter;` (or `…Key\Help as HelpLabel`) | — |
-| `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |
+| `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner`)_ | `Spinner\TickMsg` |
 | `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`; render modes via `withRenderMode(ProgressRenderMode)` — `Block` / `Line` / `Slim`, see *Render-mode feature matrix* below — and custom percent copy via `withPercentFormat(string)`) | — |
 | `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); reduced motion is honoured BY THE ENGINE — every `Spring` consults `Probe::reducedMotion()` (`sugar-colorprofile`; any value outside `''`/`0`/`false`/`no`/`off`) and snaps to target, a per-spring override always winning — not by widget code | `SpringTickMsg` |
 | `Timer\Timer` | Countdown timer — `Timer::new($duration, $interval = 1.0)` (duration is required); `remaining` / `interval` are promoted readonly properties, the methods are `interval(): float`, `timeout(): float` (remaining seconds — `0` once `TimeoutMsg` has fired) and `withInterval(float)`; there is no `remaining()` method. When not running, `view()` appends a dim state tag (`paused`, or `timeout` once `TimeoutMsg` has fired) so the state is visible in the frame — running bytes are byte-identical; hosts style it themselves from the plain-text `stateLabel()`. In-flight ticks from stopped generations are refused via the tick `epoch` | `Timer\TimerTick` (deprecated alias `TickMsg`), `TimeoutMsg` |
@@ -73,7 +73,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values — `list<Item>` is a phpdoc contract, there is no runtime element guard _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values: `Node::branch($label, ...$children)` / `Node::leaf($label)`. Mind the raw constructor — its second parameter is `$value`, not children, so a 2-arg `new Node(...)` parks the child list in the value slot and renders flat; prefer the factories. Chrome glyphs and prefixes are immutable via `withStyle(...)`, checked at ingress; node labels are sanitised at RENDER (control characters stripped, `Sanitize::untrustedForMarkedFrames()` applied). | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
-| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Setter enforcement matches the vocabulary: `withActive()` throws `tabs.bad_index` out of range (an empty bar is a no-op) and `withWidth()` rejects negatives with `tabs.neg_width`; render-time clamping stays as a defensive belt, not a silent rewriter. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then clicks find nothing. While focused, the active tab renders underlined; blurred it renders plain — the focus state is visible in the frame bytes, and forward selection scrolls the window by the minimum that reveals the new tab (no paging) | — |
+| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Setter enforcement matches the vocabulary: `withActive()` throws `tabs.bad_index` out of range (an empty bar is a no-op) and `withWidth()` rejects negatives with `tabs.neg_width`; render-time clamping stays as a defensive belt, not a silent rewriter. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then, clicks find nothing. While focused, the active tab renders underlined; blurred it renders plain — the focus state is visible in the frame bytes, and forward selection scrolls the window by the minimum that reveals the new tab (no paging) | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
 | `Scrollbar\Scrollbar` | Scrollbar indicator for scrollable viewports _(deprecated alias — re-exported from `SugarCraft\Forms\Scrollbar`)_ | — |
 | `Input\TextEdit` | Inline single-line editor value object with an underline caret (no hardware cursor), grapheme-cluster caret, cell-budget windowing, digits-only mode — btop `Draw::TextEdit` | — |
@@ -111,9 +111,8 @@ powered by `sugar-forms`'s shared `VimKeyHandler` — the same handler
 backing `sugar-forms`' own fields and `sugar-readline`; this package's
 `TextInput` is a façade re-export riding that handler, not an
 independent third home. Adding a new binding to the `VimAction` enum
-benefits the forms and readline consumers at once. The per-lib opt-in
-flag `withVimMode(true)` is preserved; consumers control whether vim
-mode is enabled.
+benefits the forms and readline consumers at once. The per-library switch
+`withVimMode(true)` is preserved: each consumer decides whether vim mode is on.
 
 ### Msg routing cheat-sheet
 
@@ -331,7 +330,7 @@ echo $ti->view();
 
 ## TextInput — ValidateOn and restrict
 
-`TextInput` supports deferred and filtered validation via two new builders:
+`TextInput` supports deferred and filtered validation via the builders below:
 
 ### ValidateOn timing control
 
@@ -401,7 +400,7 @@ foreach ($state->criteria as [$colIndex, $dir]) {
 
 When a sort is active the header cell gains that marker (`Name ↑`), so
 the visible state matches `sortState()` — and when the selection cursor
-is on a row, `focused` state rides `focus()`/`blur()`.
+is on a row, `focused` state follows `focus()`/`blur()`.
 
 ### SortState DTO
 
@@ -410,16 +409,16 @@ Immutable list of sort criteria — each entry is a `(column index, direction)` 
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `SortState::empty()` | `SortState` | Factory for no criteria |
-| `SortState->withCriterion(int $col, SortDirection $dir)` | `SortState` | Append a criterion |
-| `SortState->isEmpty()` | `bool` | True when no criteria are set |
-| `SortState->criteria` | `list<array{0:int,1:SortDirection}>` | Raw criteria list |
+| `SortState::withCriterion(int $col, SortDirection $dir)` | `SortState` | Append a criterion |
+| `SortState::isEmpty()` | `bool` | True when no criteria are set |
+| `SortState::$criteria` | `list<array{0:int,1:SortDirection}>` | Raw criteria list |
 
 ### Table sort builders
 
 | Method | Description |
 |--------|-------------|
-| `withSort(string $column, SortDirection $dir = Asc)` | Set primary sort — clears any prior sort chain |
-| `thenSortBy(string $column, SortDirection $dir = Asc)` | Add a secondary (or further) tiebreaker criterion |
+| `withSort(string $column, SortDirection $dir = SortDirection::Asc)` | Set primary sort — clears any prior sort chain |
+| `thenSortBy(string $column, SortDirection $dir = SortDirection::Asc)` | Add a secondary (or further) tiebreaker criterion |
 | `clearSort()` | Remove all sort criteria, restoring insertion order |
 | `sortState(): SortState` | Return the current sort criteria (readonly accessor) |
 
@@ -462,7 +461,7 @@ When `withFilterPredicate()` is set, it overrides the default substring-match be
 | `filter(): string` | Return the current filter query string |
 | `filterPredicate(): ?Closure` | Return the current custom predicate |
 
-The default filter applies case-insensitive substring matching across every cell of every row (hidden columns are a future feature — there is no visibility filtering today).
+The default filter applies case-insensitive substring matching across every cell of every row (there is no column-visibility filtering — every cell participates).
 
 ## Table — pagination
 
@@ -549,7 +548,7 @@ no-styles path renders (header underline, selected reverse).
 
 ## btop helpers — TextEdit, OptionRow, position-coloured Progress
 
-Three pieces added for [candy-top](https://github.com/detain/sugarcraft/tree/master/candy-top) (the btop-inspired system monitor) that are
+The three helpers added for [candy-top](https://github.com/detain/sugarcraft/tree/master/candy-top) (the btop-inspired system monitor) that are
 useful to any TUI drawing overlays, option screens or gradient meters.
 
 ### `Input\TextEdit` — underline-caret inline editor
@@ -635,7 +634,7 @@ echo OptionRow::renderRow(
 ```
 `render()` remains supported as the legacy two-line shim above.
 
-Centering follows btop `cjust` (the odd spare column goes on the left,
+Centring follows btop `cjust` (the odd spare column goes on the left,
 the opposite of `Width::padCenter()`); over-wide text truncates to the
 column in display cells. The selected style deliberately bleeds into the
 value line, so the selected option reads as one two-row block. Optional
@@ -658,14 +657,14 @@ echo Progress::new()
     ->withWidth(20)
     ->withShowPercent(false)
     ->withPercent(0.6)
-    ->withColorFunc(static fn (int $i, int $filled, float $pct, int $barWidth): Color
-        => $ramp[(int) round(($i + 1) * 100 / $barWidth)])
+    ->withColorFunc(static fn (int $cell, int $filledCells, float $percent, int $barWidth): Color
+        => $ramp[(int) round(($cell + 1) * 100 / $barWidth)])
     ->view();
 ```
 
 This gives btop's *colouring*, not its fill count (Progress fills
-`round(percent * barWidth)` cells, where `barWidth` is the total width less the
-measured percent-suffix when the `%` label fits — see the `computeBarLayout()`
+`round(percent * barWidth)` cells, where `barWidth` is the total width minus the width
+of the measured percent-suffix when the `%` label fits — see the `computeBarLayout()`
 reserved-suffix maths). For an exact btop meter use sugar-dashboard
 `Meter::withGradient($stops, positionWise: true)`.
 
@@ -694,7 +693,7 @@ Exception messages and label copy resolve through
 `SugarCraft\Widgets\Lang` (the `sugar-core` i18n lookup: exact locale →
 base language → `en` → raw key). `lang/en.php` is the source of truth,
 mirrored into 15 further locales (ar, cs, de, es, fr, it, ja, ko, nl,
-pl, pt-br, pt, ru, tr, zh-cn); placeholder tokens such as `{column}`
+pl, pt, pt-br, ru, tr, zh-cn); placeholder tokens such as `{column}`
 survive in every locale, and `tests/LangTest.php` fails closed when the
 per-locale key sets diverge, when a locale drops a placeholder, or when
 `src/` requests a key the catalogue does not ship.
@@ -714,7 +713,7 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit --filter <owningTest>
 git diff tests/fixtures/   # the rewrite must be the disclosed delta
 ```
 
-## Test
+## Tests
 
 ```sh
 cd sugar-widgets && composer install && vendor/bin/phpunit
