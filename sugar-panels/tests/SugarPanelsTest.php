@@ -932,4 +932,21 @@ final class SugarPanelsTest extends TestCase
         $this->assertNotSame('', $delta, 'Styled-content change must produce a delta');
         $this->assertStringContainsString('b', $delta);
     }
+
+    public function testShapePredicatesMatchTheConstructors(): void
+    {
+        $this->assertTrue(Node::leaf('x')->isLeaf());
+        $this->assertTrue(Node::horizontal(Node::leaf('a'))->isHorizontal());
+        $this->assertTrue(Node::vertical(Node::leaf('a'))->isVertical());
+
+        $this->assertFalse(Node::leaf('x')->isHorizontal());
+        $this->assertFalse(Node::leaf('x')->isVertical());
+        $this->assertFalse(Node::horizontal(Node::leaf('a'))->isVertical());
+
+        // The no-border wrapper is its own kind: it is neither leaf nor split.
+        $wrapper = Node::noBorder(Node::leaf('x'));
+        $this->assertFalse($wrapper->isLeaf());
+        $this->assertFalse($wrapper->isHorizontal());
+        $this->assertFalse($wrapper->isVertical());
+    }
 }

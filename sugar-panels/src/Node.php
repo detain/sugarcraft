@@ -124,6 +124,30 @@ final class Node
     }
 
     // -------------------------------------------------------------------------
+    // Shape queries
+    // -------------------------------------------------------------------------
+
+    /**
+     * Shape predicates. The `kind` string constants remain the wire form, but
+     * comparisons are spelled through these so intent reads and the constants
+     * cannot be hand-typo'd at call sites.
+     */
+    public function isLeaf(): bool
+    {
+        return $this->kind === self::LEAF;
+    }
+
+    public function isHorizontal(): bool
+    {
+        return $this->kind === self::HORIZONTAL;
+    }
+
+    public function isVertical(): bool
+    {
+        return $this->kind === self::VERTICAL;
+    }
+
+    // -------------------------------------------------------------------------
     // With* builders
     // -------------------------------------------------------------------------
 
@@ -321,7 +345,7 @@ final class Node
         $marginW = $this->marginWidth();
         $frame   = $this->border === true && $noFrames === false;
 
-        if ($this->kind === self::LEAF) {
+        if ($this->isLeaf()) {
             // A leaf's natural size IS its content: the widest visible line, with
             // the SGR runs that ride the text stripped first because they cost no
             // columns. min* is a FLOOR on that measure, never a substitute for it
@@ -342,7 +366,7 @@ final class Node
         // child sum is computed only on this branch — VERTICAL never uses it,
         // so summing there was a wasted full subtree traversal (it already
         // re-walks the children for the max).
-        if ($this->kind === self::HORIZONTAL) {
+        if ($this->isHorizontal()) {
             $childWidths = \array_sum(\array_map(fn(Node $c) => $c->measureWidth($childNoFrames), $this->children));
             $gaps = \max(0, \count($this->children) - 1) * $this->spacing;
 
@@ -374,7 +398,7 @@ final class Node
         $marginH = $this->marginHeight();
         $frame   = $this->border === true && $noFrames === false;
 
-        if ($this->kind === self::LEAF) {
+        if ($this->isLeaf()) {
             // See totalWidth(): a leaf's natural height is the number of lines its
             // content carries (unwrapped — the renderer word-wraps only what the
             // region it was given cannot hold), with min* as a floor.
@@ -387,7 +411,7 @@ final class Node
 
         $childNoFrames = $noFrames || $this->kind === self::NOBORDER;
 
-        if ($this->kind === self::VERTICAL) {
+        if ($this->isVertical()) {
             $childHeights = \array_sum(\array_map(fn(Node $c) => $c->measureHeight($childNoFrames), $this->children));
             $gaps = \max(0, \count($this->children) - 1) * $this->spacing;
 
