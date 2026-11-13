@@ -26,9 +26,25 @@ final class PlatformTest extends TestCase
         ];
     }
 
-    /** @dataProvider oses */
-    public function testSelectsTheCollectorFamilyByOs(string $os, bool $freeBsd): void
+    /**
+     * candy-top-003/-004: Linux and FreeBSD are the whole tested boundary;
+     * the Darwin and OpenBSD families btop ships (1.1.0 / 1.3.0) do not
+     * exist here, so isSupported() must say false for them, not pretend
+     * the /proc fallback is a platform.
+     */
+    public function testNamesTheTestedPlatformBoundary(): void
     {
+        $this->assertTrue(Platform::for('Linux')->isSupported());
+        $this->assertTrue(Platform::for('linux')->isSupported());
+        $this->assertTrue(Platform::for('FreeBSD')->isSupported());
+
+        foreach (['Darwin', 'OpenBSD', 'NetBSD', 'WINNT', 'CYGWIN'] as $os) {
+            $this->assertFalse(Platform::for($os)->isSupported(), $os);
+        }
+    }
+
+    /** @dataProvider oses */
+    public function testSelectsTheCollectorFamilyByOs(string $os, bool $freeBsd): void    {
         $platform = Platform::for($os, new FixtureProbe());
         $this->assertSame($freeBsd, $platform->isFreeBsd());
         $this->assertSame($os, $platform->os);

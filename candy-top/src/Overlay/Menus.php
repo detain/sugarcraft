@@ -59,6 +59,29 @@ final class Menus
     }
 
     /**
+     * The honest OS-boundary notice {@see \SugarCraft\Top\Collect\Platform::isSupported()}
+     * arms the app with on an untested host (Darwin, OpenBSD, NT): btop has
+     * native macOS collectors since 1.1.0 and OpenBSD since 1.3.0, while
+     * candy-top routes every non-Linux/non-FreeBSD OS onto the Linux /proc
+     * collectors, which read nothing there. Saying so beats lying in 100 %
+     * `n/a`. Always-shown like the size notice: it is the app's truth until
+     * dismissed.
+     */
+    public static function unsupported(string $os): Overlay
+    {
+        return MsgBox::ok(
+            60,
+            Lang::t('overlay.title.warning'),
+            static fn (Ink $ink): array => [
+                MenuDraw::cut(Lang::t('app.unsupported.os', ['os' => $os]), 54),
+                MenuDraw::cut(Lang::t('app.unsupported.degrade'), 54),
+                MenuDraw::cut(Lang::t('app.unsupported.tested'), 54),
+            ],
+            alwaysShown: true,
+        );
+    }
+
+    /**
      * btop Menu::sizeError: a 45-wide `error` box — "Terminal size too
      * small to display menu or box!". Shown when a box toggle (or a
      * shown_boxes write) would not fit, and in place of any menu the

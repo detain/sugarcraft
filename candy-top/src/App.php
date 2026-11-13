@@ -258,6 +258,7 @@ final class App implements Model
         ?ConfigFile $file = null,
         bool $writeNew = false,
         ?ThemeRegistry $catalog = null,
+        ?string $unsupportedOs = null,
     ): self {
         $profile ??= self::profileFor($config);
 
@@ -272,6 +273,12 @@ final class App implements Model
             writeNew: $writeNew,
             catalog: $catalog,
             logoArt: Logo::pick($profile),
+            // The OS-boundary notice rides the stack from the first frame;
+            // the push size rule cannot know the terminal yet (the first
+            // WindowSizeMsg revalidates it, S-X01), so seed it unconstrained.
+            overlays: $unsupportedOs === null
+                ? null
+                : OverlayStack::new()->push(Menus::unsupported($unsupportedOs), PHP_INT_MAX, PHP_INT_MAX),
         );
     }
 

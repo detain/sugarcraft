@@ -451,6 +451,9 @@ return [
     'help.vim_help_kill' => 'With vim_keys: help and kill (h and k move).',
     // ---- options + presets (phase P-F2) ----
     'overlay.title.warning' => 'warning',
+    'app.unsupported.os' => 'candy-top has no collectors for {os}.',
+    'app.unsupported.degrade' => 'Every reading below stays n/a; the UI still runs.',
+    'app.unsupported.tested' => 'Tested hosts: Linux and FreeBSD only.',
     'overlay.options.page' => 'page {page}/{pages}',
     'options.note.restart' => 'A restart is required to apply changes.',
     'options.note.unused' => 'Kept for btop.conf; candy-top ignores it.',

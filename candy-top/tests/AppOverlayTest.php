@@ -256,6 +256,48 @@ final class AppOverlayTest extends TestCase
         $this->assertFalse($app->config->bool('vim_keys'), 'the keys hit the error box, not the options');
     }
 
+    public function testAnUnsupportedHostBootsWithTheHonestNotice(): void
+    {
+        // candy-top-003: a macOS host got a silent all-n/a monitor. The
+        // boundary now surfaces: Platform::isSupported() names Linux and
+        // FreeBSD, and anything else boots under a warning msgBox.
+        $start = static fn (?string $os): App => App::start(
+            self::config(),
+            ThemeConfig::new(),
+            self::host(),
+            Panels::placeholders(self::host(), self::config(), true),
+            static fn (): ClockTickMsg => new ClockTickMsg(1_700_000_000.0, 60.0),
+            ColorProfile::TrueColor,
+            unsupportedOs: $os,
+        );
+
+        $app = $start('Darwin');
+        [$app] = $app->update(new WindowSizeMsg(120, 40));
+        $box = $app->overlay();
+        $this->assertInstanceOf(MsgBox::class, $box);
+        $this->assertSame('warning', $box->title);
+        $text = implode("\n", $app->surface()?->plainLines() ?? []);
+        $this->assertStringContainsString('candy-top has no collectors for Darwin.', $text);
+        $this->assertStringContainsString('Tested hosts: Linux and FreeBSD only.', $text);
+
+        // Dismissed like any Ok box, and it never comes back.
+        [$app] = $app->update(self::keyMsg('enter'));
+        $this->assertNull($app->overlay());
+
+        // The notice is always-shown: a breach swaps sized menus for the
+        // error box but keeps the OS truth (S-X01 revalidate exemption).
+        $app = $start('OpenBSD');
+        [$app] = $app->update(new WindowSizeMsg(120, 40));
+        [$app] = $app->update(new WindowSizeMsg(40, 10));
+        $this->assertSame('warning', $app->overlay()?->title);
+
+        // A supported host boots clean — bin passes unsupportedOs: null for
+        // Linux and FreeBSD (Platform::isSupported() gates it), so no notice.
+        $clean = $start(null);
+        [$clean] = $clean->update(new WindowSizeMsg(120, 40));
+        $this->assertNull($clean->overlay());
+    }
+
     public function testRefusedToggleOpensTheSizeErrorBox(): void
     {
         $app = self::app(70, 24, self::config(['shown_boxes' => 'cpu proc']));

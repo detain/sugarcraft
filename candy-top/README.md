@@ -37,6 +37,7 @@ candy-top reads btop's config format and btop's `.theme` files, and its keys, me
 ## Requirements
 
 - PHP 8.3 or newer, CLI.
+- Linux or FreeBSD — the only hosts candy-top ships collectors for (`/proc` + `/sys` on Linux, sysctl and the base tools on FreeBSD). Upstream btop also supports macOS natively (since 1.1.0) and OpenBSD (since 1.3.0); candy-top has no Darwin or OpenBSD collector family, so on any other OS the UI starts but every reading stays `n/a` and a start-up notice says so honestly.
 - A terminal with an interactive tty on both stdin and stdout. Like btop, candy-top refuses to start without one ("No tty detected!").
 - Truecolor is recommended. With `truecolor = false` colours are mapped to the 256-colour cube, and in [TTY mode](#tty-mode) the 16 terminal colours are used.
 - Colour depth comes from the config: `tty_mode` and `truecolor` decide the palette the renderer paints. The environment can refuse colour but not choose its depth: with `NO_COLOR` set — or on a `TERM=dumb` or unrecognised terminal — candy-top steps down to decoration-only (no colour) rendering even when the config asks for more, and a dumb terminal emits no colour escapes at all; `FORCE_COLOR` / `CLICOLOR_FORCE` lifts that refusal and the config depth stands (sugar-core's detection ladder, consumed through the startup colour-profile message, makes the call). Stepping colours down deliberately remains `truecolor = false` or `tty_mode = true` in the config, or the matching options-menu toggle.
@@ -614,7 +615,7 @@ Known limitations on FreeBSD:
 
 ### Other systems
 
-Any other OS uses the Linux collectors, which read "not measured" wherever `/proc` and `/sys` are missing. The UI runs, but most readings stay blank.
+Any other OS — macOS (Darwin), OpenBSD, Windows — falls back to the Linux collectors, which read "not measured" wherever `/proc` and `/sys` are missing. The UI runs, but every reading stays blank, and candy-top surfaces a `warning` notice saying exactly that at start-up. This is a documented gap, not platform support: btop ships native macOS collectors since 1.1.0 and OpenBSD collectors since 1.3.0; candy-top has neither.
 
 ## Containers and VMs
 
@@ -683,6 +684,7 @@ These are deliberate deviations and gaps; the accumulated notes live in `CALIBER
 **Not implemented (yet)**
 
 - No PCIe TX/RX line in the gpu boxes (nothing measures PCIe throughput), and no Apple GPUs.
+- No macOS or OpenBSD collectors: btop ships native support for both (macOS since 1.1.0, OpenBSD since 1.3.0); candy-top routes those hosts onto the Linux `/proc` fallback, so every reading stays `n/a` and a start-up `warning` notice says so instead of pretending.
 - AMD NPUs are detected but not measured; Intel GPUs report no VRAM.
 - No `ctrl+z` suspend.
 - No CPU package watts (`show_cpu_watts` has no RAPL reader).

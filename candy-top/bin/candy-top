@@ -199,7 +199,18 @@ if ($statePath !== null && ($panels['proc'] ?? null) instanceof ProcPanel) {
 $config = $config->with('lowcolor', !$config->bool('truecolor'));
 
 $program = new Program(
-    App::start($config, $palette, $host, $panels, file: $file, writeNew: $loaded->needsRewrite, catalog: $catalog),
+    App::start(
+        $config,
+        $palette,
+        $host,
+        $panels,
+        file: $file,
+        writeNew: $loaded->needsRewrite,
+        catalog: $catalog,
+        // btop compiles a macOS/OpenBSD collector; candy-top ships none —
+        // say so up front instead of painting a silent all-n/a monitor.
+        unsupportedOs: $platform->isSupported() ? null : $platform->os,
+    ),
     App::programOptions($config),
 );
 // btop's SIGTERM / SIGHUP handlers run clean_quit (config save included);

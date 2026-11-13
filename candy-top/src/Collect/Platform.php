@@ -14,10 +14,15 @@ use SugarCraft\Top\Source\Source;
  *
  * btop picks its collector at compile time (src/linux/, src/freebsd/,
  * src/osx/ ... — one btop_collect.cpp per OS). PHP decides at run time
- * from PHP_OS: "FreeBSD" gets {@see FreeBsd} (sysctl + base tools); every
- * other OS keeps the Linux /proc + /sys collectors, which already degrade
- * to sentinels where those trees are missing. Both families produce the
- * SAME snapshot types, so panels are platform-blind.
+ * from PHP_OS: "FreeBSD" gets {@see FreeBsd} (sysctl + base tools), every
+ * other OS falls back to the Linux /proc + /sys collectors, which read
+ * sentinels where those trees are missing. That fallback is a degrades-to-
+ * blank path, NOT platform support: btop ships native macOS collectors
+ * since 1.1.0 and OpenBSD since 1.3.0, and candy-top has no Darwin or
+ * OpenBSD family — {@see isSupported()} names the only tested hosts and
+ * the app surfaces an honest start-up notice on anything else. Both
+ * supported families produce the SAME snapshot types, so panels are
+ * platform-blind.
  *
  * Every factory returns a {@see CollectorSource} around the concrete
  * collector. The collectors a panel retunes at collect time implement a
@@ -57,6 +62,19 @@ final class Platform
     public function isFreeBsd(): bool
     {
         return strcasecmp($this->os, 'FreeBSD') === 0;
+    }
+
+    /**
+     * The tested-platform boundary: Linux (the /proc + /sys family) and
+     * FreeBSD (the sysctl family). Anything else — Darwin, OpenBSD, NT —
+     * falls back to Linux collectors that only degrade to sentinels;
+     * btop itself supports macOS since 1.1.0 and OpenBSD since 1.3.0,
+     * candy-top ships no collectors for either, so an unsupported host
+     * gets an honest start-up notice instead of a silent all-`n/a` monitor.
+     */
+    public function isSupported(): bool
+    {
+        return strcasecmp($this->os, 'Linux') === 0 || $this->isFreeBsd();
     }
 
     public function hostInfo(): HostInfo
