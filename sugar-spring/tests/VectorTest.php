@@ -303,4 +303,15 @@ final class VectorTest extends TestCase
         $this->expectExceptionMessage('Cannot normalize a zero-length vector');
         (new Vector(0.0, 0.0, 0.0))->normalize();
     }
+
+    public function testNormalizeRefusesTheWholeGuardBandNotJustTrueZero(): void
+    {
+        // SPR-23 (finding 048): the door is `length < EPSILON (1e-9)`, and the
+        // docblock now says so. A (1e-10, 0, 0) vector answers the zero-length
+        // message — a sub-band "direction" is float noise amplified to unit
+        // scale, so refusing it is the honest answer, not a misreport.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cannot normalize a zero-length vector');
+        (new Vector(1e-10, 0.0, 0.0))->normalize();
+    }
 }

@@ -15,6 +15,14 @@ namespace SugarCraft\Spring;
  * The `$z` axis defaults to `0.0` so existing 2D call sites keep working
  * unchanged. Use the third component for true 3D simulations or to
  * express depth in pseudo-3D scenes.
+ *
+ * Two refusal families, two classes, by taxonomy: the CONSTRUCTOR guards
+ * the data plane — a non-finite component is bad input, answered with
+ * `InvalidArgumentException`; `normalize()` guards the operation — a
+ * degenerate length (zero-band or overflowed) is a computation with no
+ * honest answer, answered with `RuntimeException`. Pattern-match what you
+ * mean: catching only `InvalidArgumentException` around `normalize()` lets
+ * a zero vector crash a direction-from-input path.
  */
 final class Vector implements \JsonSerializable
 {
@@ -22,8 +30,10 @@ final class Vector implements \JsonSerializable
 
     /**
      * @throws \InvalidArgumentException on a non-finite component — NaN/INF
-     *         would propagate through every add/scale/length downstream and
-     *         jsonSerialize() false on INF, far from the cause.
+     *         would propagate through every add/scale/length downstream, and
+     *         the wire format has no vocabulary for them: json_encode of a
+     *         non-finite vector collapses to a bare `false` with no cause
+     *         attached — nothing a caller downstream can act on.
      */
     public function __construct(
         public readonly float $x,
@@ -106,10 +116,19 @@ final class Vector implements \JsonSerializable
     /**
      * Normalized (unit) vector.
      *
-     * @throws \RuntimeException if called on a zero-length vector, or on one
-     *         whose length OVERFLOWED to INF (finite components around 1e154
-     *         and up sum their squares past float_MAX) — dividing by INF would
-     *         silently answer the zero vector, the opposite of a unit vector.
+     * Guard band, stated honestly: the refusal is `length < EPSILON`
+     * (1e-9), not `length == 0` — a vector as small as (1e-10, 0, 0) is
+     * answered with the zero-length message, and that is the documented
+     * behaviour, not a misreport. The rejected alternative (divide by the
+     * true length whatever it is) was dropped on purpose: below the band a
+     * "direction" is float noise amplified to unit scale, and the NaN case
+     * slips through ANY length comparison — the band is the door that holds.
+     *
+     * @throws \RuntimeException if called on a zero-OR-SUB-BAND length
+     *         (see above), or on one whose length OVERFLOWED to INF (finite
+     *         components around 1e154 and up sum their squares past
+     *         float_MAX) — dividing by INF would silently answer the zero
+     *         vector, the opposite of a unit vector.
      */
     public function normalize(): self
     {

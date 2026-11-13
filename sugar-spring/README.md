@@ -341,8 +341,12 @@ Both `Vector` and `Point` are **3D** (`x`, `y`, `z`) — the constructor's
 `$z` defaults to `0.0` so existing 2D call sites still compile
 unchanged. Use the third dimension when a scene needs a Z
 axis (parallax / depth-shaded particle systems). Both types refuse
-non-finite components, and `Vector::normalize()` refuses zero and
-overflowed (`INF`) lengths rather than quietly returning garbage. `length()`,
+non-finite components with `InvalidArgumentException`, and
+`Vector::normalize()` refuses zero-band and overflowed (`INF`) lengths with
+a `RuntimeException` — a different class on purpose (constructor: bad input;
+normalize: no honest answer — catch what you mean, a
+`catch (InvalidArgumentException)` around `normalize()` is an uncaught fatal
+on a zero vector). `length()`,
 `lengthSquared()` and `distance()` can overflow to `INF` (components ~1e154
 and up), so compare magnitudes through `normalize()`d operands on extreme
 inputs — it refuses the overflow loudly, where a raw `length()` comparison
@@ -642,7 +646,9 @@ back-flavoured control points — same honesty rule as `Easing`.
   `standardYDown()`, `terminalYDown()`.
 - **`Vector`** — immutable 3D vector (finite components enforced) with `add` /
   `sub` / `scale` / `length` / `lengthSquared` / `dot` / `cross` / `lerp` /
-  `normalize` / `jsonSerialize` / `__toString` / `Vector::zero()`.
+  `normalize` (throws `RuntimeException` — zero-band and overflowed lengths;
+  NOT the constructors' `InvalidArgumentException`) / `jsonSerialize` /
+  `__toString` / `Vector::zero()`.
 - **`Point`** — immutable 3D point (finite components enforced) with
   `add(Vector)` / `delta(Point)` (the `$to − $from` motion primitive, returns a
   `Vector`) / `distance` / `__toString` / `jsonSerialize` /
