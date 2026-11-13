@@ -12,6 +12,7 @@ use SugarCraft\Code\Support\Directories\DirectoryBrowser;
 use SugarCraft\Code\Support\Directories\DirectoryBrowserException;
 use SugarCraft\Code\Support\Directories\DirectoryListing;
 use SugarCraft\Code\Theme;
+use SugarCraft\Code\Tui\Components\PaneLabel;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 
@@ -229,7 +230,7 @@ final class DirectoryPicker
             return $this;
         }
         if (!$entry->readable) {
-            return $this->with(notice: Lang::t('tui.dirpicker.unreadable', ['path' => $entry->path]));
+            return $this->with(notice: Lang::t('tui.dirpicker.unreadable', ['path' => PaneLabel::safe($entry->path)]));
         }
 
         return $this->go($entry->path, $this->showHidden);
@@ -251,7 +252,7 @@ final class DirectoryPicker
             return $this->with(notice: $e->getMessage());
         }
         if (!$listing->readable) {
-            return $this->with(notice: Lang::t('tui.dirpicker.unreadable', ['path' => $listing->path]));
+            return $this->with(notice: Lang::t('tui.dirpicker.unreadable', ['path' => PaneLabel::safe($listing->path)]));
         }
         $selected = 0;
         if ($focus !== null) {
@@ -341,7 +342,7 @@ final class DirectoryPicker
     {
         $rows = ['▶ ' . Lang::t('tui.dirpicker.start_here')];
         foreach ($this->listing->entries as $entry) {
-            $rows[] = '  ' . $entry->name . '/'
+            $rows[] = '  ' . PaneLabel::safe($entry->name) . '/'
                 . ($entry->project ? '  [' . Lang::t('tui.dirpicker.project') . ']' : '')
                 . ($entry->readable ? '' : '  (' . Lang::t('tui.dirpicker.no_access') . ')');
         }
@@ -369,21 +370,21 @@ final class DirectoryPicker
         // The restart question takes both footer lines: it names the
         // directory itself, and cut to one line its "(y/n)" would be lost.
         if ($this->confirm !== null) {
-            [$first, $second] = self::twoLines(Lang::t('tui.dirpicker.confirm', ['path' => $this->confirm]), $width + 3);
+            [$first, $second] = self::twoLines(Lang::t('tui.dirpicker.confirm', ['path' => PaneLabel::safe($this->confirm)]), $width + 3);
             $warn = Style::new()->foreground($theme->shellWarning)->bold();
 
             return $warn->render(' ' . $first) . "\n" . $warn->render(' ' . $second);
         }
-        $path = ' ' . self::fitLeft($this->listing->path . ($this->listing->project ? '  [' . Lang::t('tui.dirpicker.project') . ']' : ''), $width + 3);
+        $path = ' ' . self::fitLeft(PaneLabel::safe($this->listing->path) . ($this->listing->project ? '  [' . Lang::t('tui.dirpicker.project') . ']' : ''), $width + 3);
         $status = match (true) {
             $this->confirm !== null => Style::new()->foreground($theme->shellWarning)->bold()->render(self::fit(
-                ' ' . Lang::t('tui.dirpicker.confirm', ['path' => $this->confirm]),
+                ' ' . Lang::t('tui.dirpicker.confirm', ['path' => PaneLabel::safe($this->confirm)]),
                 $width + 4,
             )),
             $this->typed !== null => Style::new()->foreground($theme->shellPrimary)->render(
-                ' ' . Lang::t('tui.dirpicker.path_prompt') . ' ' . self::fitLeft($this->typed . '▏', \max(1, $width + 3 - Width::string(Lang::t('tui.dirpicker.path_prompt')) - 1)),
+                ' ' . Lang::t('tui.dirpicker.path_prompt') . ' ' . self::fitLeft(PaneLabel::safe($this->typed) . '▏', \max(1, $width + 3 - Width::string(Lang::t('tui.dirpicker.path_prompt')) - 1)),
             ),
-            $this->notice !== null => Style::new()->foreground($theme->shellWarning)->render(self::fit(' ' . $this->notice, $width + 4)),
+            $this->notice !== null => Style::new()->foreground($theme->shellWarning)->render(self::fit(' ' . PaneLabel::safe($this->notice), $width + 4)),
             default => '',
         };
 
@@ -398,7 +399,6 @@ final class DirectoryPicker
      */
     private static function twoLines(string $text, int $width): array
     {
-        $text = (string) \preg_replace('/[\x00-\x1f\x7f]+/u', '', $text);
         if (Width::string($text) <= $width) {
             return [$text, ''];
         }
@@ -430,10 +430,9 @@ final class DirectoryPicker
         return [$from, $from + $height];
     }
 
-    /** $text cut (with "…") or space-padded to exactly $width cells; control bytes dropped. */
+    /** $text cut (with "…") or space-padded to exactly $width cells; callers pass PaneLabel::safe() text. */
     private static function fit(string $text, int $width): string
     {
-        $text = (string) \preg_replace('/[\x00-\x1f\x7f]+/u', '', $text);
         if ($width <= 0) {
             return '';
         }
@@ -450,7 +449,6 @@ final class DirectoryPicker
     /** $text cut from the LEFT ("…/tail") to at most $width cells: a path's end is what tells it apart. */
     private static function fitLeft(string $text, int $width): string
     {
-        $text = (string) \preg_replace('/[\x00-\x1f\x7f]+/u', '', $text);
         if ($width <= 0) {
             return '';
         }

@@ -222,4 +222,19 @@ final class DirectoryPickerTest extends TestCase
         self::assertSame("…b\u{2764}c", $tail, 'the heart+VS16 cluster is dropped whole: no orphan selector right after the ellipsis');
         self::assertLessThanOrEqual(4, Width::string($tail));
     }
+
+    /** S-U03: a hostile directory name is flattened by the house sanitizer, not just C0-stripped. */
+    public function testHostileDirectoryNamesAreSanitizedInRows(): void
+    {
+        \mkdir($this->root . "/ev\u{85}il\u{9b}31m\u{e000}x", 0o700, true);
+        \mkdir($this->root . "/tab\there", 0o700, true);
+        $picker = DirectoryPicker::open($this->root);
+
+        $rows = \implode("\n", $picker->rowLabels());
+        self::assertStringContainsString('  evil31mx/', $rows);
+        self::assertStringContainsString('  tab here/', $rows);
+        self::assertDoesNotMatchRegularExpression('/[\x00-\x08\x0b-\x1f\x7f]|\xc2[\x80-\x9f]|\xee\x80\x80/', $rows);
+        $frame = (string) \preg_replace('/\x1b\[[0-9;]*m/', '', $picker->render(80, 20, Theme::byName('dark')));
+        self::assertDoesNotMatchRegularExpression('/[\x00-\x09\x0b-\x1f\x7f]|\xc2[\x80-\x9f]|\xee\x80\x80/', $frame);
+    }
 }
