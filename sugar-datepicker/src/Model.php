@@ -26,11 +26,25 @@ final class Model implements \SugarCraft\Core\Model
     /**
      * Factory: build a new date-picker model.
      *
+     * Pass either a seed `$time` or a fully configured `$picker` (bounds,
+     * range mode, render state — all honoured as-is). Supplying both is a
+     * programming error and throws: the picker would silently discard the
+     * time, and silent precedence is how integration bugs ship.
+     *
      * Mirrors the EthanEFung/bubble-datepicker construction pattern.
      */
-    public static function new(?\DateTimeImmutable $time = null, ?EventStoreInterface $store = null): self
-    {
-        return new self(DatePicker::new($time), $store);
+    public static function new(
+        ?\DateTimeImmutable $time = null,
+        ?EventStoreInterface $store = null,
+        ?DatePicker $picker = null,
+    ): self {
+        if ($time !== null && $picker !== null) {
+            throw new \InvalidArgumentException(
+                'Model::new() takes either a seed time or a configured picker, never both',
+            );
+        }
+
+        return new self($picker ?? DatePicker::new($time), $store);
     }
 
     /**
@@ -187,6 +201,25 @@ final class Model implements \SugarCraft\Core\Model
     public function picker(): DatePicker
     {
         return $this->picker;
+    }
+
+    /**
+     * Swap the wrapped picker, keeping the SAME EventStore instance wired in.
+     *
+     * Accepts a ready DatePicker, or a callable that receives the current
+     * picker and returns its replacement — the TEA-idiomatic way for a host
+     * to reconfigure a running model (flip range mode, tighten bounds)
+     * mid-flight without hand-threading the store through a constructor.
+     * The readonly DatePicker-typed constructor is the validation seam: a
+     * callable returning anything else is a TypeError, not a silent skew.
+     */
+    public function withPicker(callable|DatePicker $picker): self
+    {
+        $next = $picker instanceof DatePicker
+            ? $picker
+            : $picker($this->picker);
+
+        return new self($next, $this->store);
     }
 
 }

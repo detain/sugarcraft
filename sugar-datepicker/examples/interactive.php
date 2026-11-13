@@ -37,9 +37,11 @@ use SugarCraft\DatePicker\Model as DatePickerModel;
 /**
  * Host-side command: flip the wrapped picker into range mode between the
  * single-mode and range-mode legs of the script. Not a KeyMsg, so the
- * picker itself ignores it; the demo model acts on it.
+ * picker's reducer ignores it; the demo model intercepts it and rebinds
+ * through Model::withPicker() — the store instance travels with the model,
+ * the demo never hand-threads a new DatePickerModel.
  */
-final class SwitchToRangeMsg implements Msg
+final class RangeModeMsg implements Msg
 {
 }
 
@@ -97,7 +99,7 @@ final class InteractiveDemo implements CoreModel
             ['label' => 'Right',      'msg' => new KeyMsg(KeyType::Right)],
             ['label' => 'Enter',      'msg' => new KeyMsg(KeyType::Enter)],
             ['label' => 'Escape',     'msg' => new KeyMsg(KeyType::Escape)],
-            ['label' => 'range-mode', 'msg' => new SwitchToRangeMsg()],
+            ['label' => 'range-mode', 'msg' => new RangeModeMsg()],
             ['label' => 'Enter',      'msg' => new KeyMsg(KeyType::Enter)],
             ['label' => 'Right',      'msg' => new KeyMsg(KeyType::Right)],
             ['label' => 'Enter',      'msg' => new KeyMsg(KeyType::Enter)],
@@ -120,7 +122,7 @@ final class InteractiveDemo implements CoreModel
     {
         // Startup messages the Program injects (window size, env, colour
         // profile) are not script steps: pass through without advancing.
-        if (!$msg instanceof KeyMsg && !$msg instanceof SwitchToRangeMsg) {
+        if (!$msg instanceof KeyMsg && !$msg instanceof RangeModeMsg) {
             return [$this, null];
         }
 
@@ -133,8 +135,10 @@ final class InteractiveDemo implements CoreModel
             return [$this, null];
         }
 
-        if ($msg instanceof SwitchToRangeMsg) {
-            $switched = new DatePickerModel($this->dp->picker()->withRangeMode(true), $this->store);
+        if ($msg instanceof RangeModeMsg) {
+            $switched = $this->dp->withPicker(
+                static fn (DatePicker $p): DatePicker => $p->withRangeMode(true),
+            );
 
             return [$this->withState($switched, [sprintf('%-12s -> %-14s {}', 'range-mode', 'mode')]), $this->nextCmd()];
         }

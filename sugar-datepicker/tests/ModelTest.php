@@ -463,4 +463,72 @@ final class ModelTest extends TestCase
         // Explicit arguments through Model::view() still win per call.
         $this->assertSame($picker->view(21, false), $model->view(21, false));
     }
+
+    public function testNewAcceptsConfiguredPicker(): void
+    {
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true)
+            ->withWidth(30);
+
+        $model = Model::new(picker: $picker);
+
+        $this->assertSame($picker, $model->picker());
+        $this->assertTrue($model->picker()->isRangeMode());
+        // The configured render state survives construction: argless view
+        // renders the 30-wide grid, not a re-defaulted 21.
+        $this->assertSame($picker->view(30), $model->view());
+    }
+
+    public function testNewRejectsTimeAndPickerTogether(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        Model::new(
+            new \DateTimeImmutable('2026-05-01'),
+            picker: DatePicker::new(new \DateTimeImmutable('2026-06-01')),
+        );
+    }
+
+    public function testWithPickerCallableFormSeesCurrentPickerAndKeepsStore(): void
+    {
+        $store  = new EventStore(clock: static fn (): int => 1_777_636_800);
+        $model  = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+
+        $seen = null;
+        $next = $model->withPicker(static function (DatePicker $p) use (&$seen): DatePicker {
+            $seen = $p;
+
+            return $p->withRangeMode(true);
+        });
+
+        $this->assertSame($model->picker(), $seen, 'the callable receives the current picker');
+        $this->assertTrue($next->picker()->isRangeMode());
+
+        // Store identity proven behaviourally: the event raised through the
+        // rebound model lands in the ORIGINAL store instance.
+        $next->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotSame([], $store->release(), 'withPicker must keep the same EventStore');
+    }
+
+    public function testWithPickerInstanceForm(): void
+    {
+        $store   = new EventStore(clock: static fn (): int => 1_777_636_800);
+        $model   = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $replacement = DatePicker::new(new \DateTimeImmutable('2026-07-01'));
+
+        $next = $model->withPicker($replacement);
+
+        $this->assertSame($replacement, $next->picker());
+        $this->assertSame(7, $next->picker()->viewMonth());
+    }
+
+    public function testWithPickerRejectsNonPickerReturn(): void
+    {
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'));
+
+        $this->expectException(\TypeError::class);
+
+        /** @phpstan-ignore-next-line callable must return DatePicker */
+        $model->withPicker(static fn (DatePicker $p) => 'nope');
+    }
 }

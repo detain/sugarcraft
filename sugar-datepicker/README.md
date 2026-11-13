@@ -61,12 +61,23 @@ Or drive it as a TEA model:
 ```php
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
+use SugarCraft\DatePicker\DatePicker;
 use SugarCraft\DatePicker\Model;
 
 $model = Model::new(new \DateTimeImmutable('2026-05-15'));
 [$model, $cmd] = $model->update(new KeyMsg(KeyType::Right));
 [$model, $cmd] = $model->update(new KeyMsg(KeyType::Enter));  // selects the date
 echo $model->view();
+
+// A fully configured picker enters the model directly (seed time and picker
+// are mutually exclusive — passing both throws):
+$picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
+    ->withRangeMode(true)
+    ->withWidth(30);
+$model = Model::new(picker: $picker);
+
+// Mid-flight reconfiguration keeps the attached EventStore instance:
+$model = $model->withPicker(fn (DatePicker $p) => $p->withRangeMode(false));
 ```
 
 ## Navigation
