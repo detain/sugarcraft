@@ -26,7 +26,7 @@ sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Re
 - **Plain-string intake** — every item door (`withItem()`, `withItems()`, `withItemsFromArray()`, `find()`) accepts `string|\Stringable` and normalizes internally; `null`/bool/int/float elements are refused with an `InvalidArgumentException` naming the position (never silently cast to `''`/`'1'`/`'2.5'`). `StringItem` remains for typed slots and explicit adapters.
 - **`LessFunc` / `EqualsFunc`** — plug-in sorting and equality comparison
 - **Fuzzy matching** — `FuzzyMatch` scores candidates by delegating to sugar-fuzzy's `SmithWatermanMatcher` (SSOT — see [Deprecation & delegation](#deprecation--delegation))
-- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering; `filterState()` returns `null` until one of them is called for the first time); a filter is a live view, mutations project through it
+- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering; `filterState()` returns `null` until one of them is called for the first time); a filter is a live view, mutations project through it. `withFuzzyFilter()` / `withoutFuzzyFilter()` are the fuzzy search door over the same machinery
 - **Delta rendering** — `view()` emits a full frame first, then repaints only the rows that changed; `resetPreviousFrame()` forces a repaint (see [Delta rendering](#delta-rendering))
 
 ## Install
@@ -270,6 +270,25 @@ item re-derives the whole projection every time (quadratic for a streaming
 result set) — batch with `withItemsFromArray()`/`withItems()`, which re-apply
 once per call.
 
+Fuzzy search as the user types is one door — no hand-wired matcher, no
+capture closure to re-wrap per keystroke:
+
+```php
+$searching = $model->withFuzzyFilter('ap');       // apple, apricot (coverage rule)
+$narrower  = $searching->withFuzzyFilter('apic'); // apricot only
+$widened   = $narrower->withFuzzyFilter('ap');    // apple + apricot again —
+                                                  // re-projected from the pristine list
+$restored  = $widened->withoutFuzzyFilter();      // all five items
+```
+
+`withFuzzyFilter()` keeps an item only when every query character appears in
+it **in order** (full-query coverage — a stray shared letter is not a match),
+and an empty query clears the filter. Like `withFilterFn()` it is a live view:
+each call re-derives the projection from the whole original list, which is
+what makes typing and backspacing behave correctly. Matching is not ranking —
+survivors keep list order; use `FuzzyMatch::match()` directly when
+score-descending order is the product requirement.
+
 ## Fuzzy Matching
 
 `FuzzyMatch` ranks candidates by Smith-Waterman local-alignment score. It is a
@@ -277,7 +296,10 @@ thin delegating shim: the DP core lives in sugar-fuzzy's `SmithWatermanMatcher`
 (SSOT), and this class keeps sugar-treelist's own public contract —
 `\Stringable` items and input-order tiebreak on equal scores (intentionally
 *not* `SmithWatermanMatcher::matchAll()`, whose haystack-ascending tiebreak
-would reorder equal-score items):
+would reorder equal-score items). The tiebreak is carried structurally: each
+hit keeps its input position through the sort (PHP's `usort` is unstable), and
+duplicate strings collapse to one scoring pass, so equal scores always mean
+"input order", with or without repeats:
 
 ```php
 use SugarCraft\TreeList\FuzzyMatch;
@@ -299,14 +321,72 @@ $items = [
 
 $results = $matcher->match('sep', $items);
 // Returns [ [StringItem('September'), 19], ... ] sorted by score descending
+
+// Threshold and limit (pass-throughs to the SSOT's batch door):
+$real = $matcher->match('sep', $items, minScore: 8, limit: 5);
+// Only September survives — April/June/November aligned at 3 on a stray letter.
 ```
 
-**Candidate cap (DoS guard):** sugar-fuzzy caps input lengths
+**Score guidance.** Local alignment rewards *any* in-order letters, so an
+incidental hit is not zero: on the canonical profile a single stray character
+scores `matchScore` (3), a two-letter adjacent hit scores 11, and a real
+substring lands at 19-27. A `qqzzrr` typo still paints every item containing
+one `q` or `z` at score 3 under the default threshold. For typo-tolerant
+search on the canonical weights, `minScore: 8` is the measured junk line:
+it clears every single-letter alignment while keeping genuine multi-letter
+hits. Raise it further when short queries look noisy, or use strict mode
+below, which refuses the alignment shape outright rather than reweighting it.
+
+**Tie order.** Equal scores keep input order — nothing ranks above a real hit
+because it came first, but a page of same-scored items renders in list order,
+so put items in the order you want ties to surface in (favourites first).
+
+**Strict mode (full-query coverage).** `withStrictMode()` keeps a candidate
+only when *every* query character appears in it in order: `bxz` no longer
+"matches" `abcdef` on its lone `b`, while `gst` still matches `git status`.
+
+**Candidate cap (DoS guard).** sugar-fuzzy caps input lengths
 (`SmithWatermanMatcher::DEFAULT_MAX_QUERY_LENGTH` /
 `DEFAULT_MAX_CANDIDATE_LENGTH`). Over-cap input is aligned on its **prefix**
 on the same score scale as every other item, so a very long candidate ranks
 consistently with short ones. The trade-off: **text that exists only past the
-candidate cap is not searched.**
+candidate cap is not searched.** The candidate side of the cap is tunable
+(`withCandidateCap(int $characters)`, also settable through the constructor);
+both knobs survive `withProfile()`.
+
+**Knobs and pruning.** The constructor takes `($profile, $maxCandidateLength,
+$strictMode)`; `withCandidateCap()`, `withStrictMode()` and `withProfile()`
+return tuned copies; `candidateCap()` / `isStrictMode()` report them; and
+`matchGenerator(...)` yields the same ranked pairs as `match(...)`. Passing
+`minScore` through the SSOT batch door means its ceiling prune fires: a
+candidate whose best attainable score provably cannot reach the threshold is
+skipped without paying for the quadratic alignment (measured: 20 001 mostly
+duplicate short items, `match('ab')` default = 311 ms with 20 001 hits vs
+`minScore: 17` = 68 ms with none — the prune plus the unmaterialised hit list).
+
+**Narrow-first recipe (measured).** Full scoring is ~63 µs/item: an 8 000-item
+palette costs ~430 ms per keystroke through `match()` alone, and a `withFuzzyFilter`
+over the same corpus re-projects in ~85 ms (coverage refusals exit before the
+DP). For very large lists, pre-screen with a cheap `str_contains` pass and
+fuzzy-rank only the survivors:
+
+```php
+$needle = 'stat';
+$survivors = [];
+foreach ($items as $item) {
+    if (stripos((string) $item, $needle) !== false) {
+        $survivors[] = $item; // the contiguous core at least appears
+    }
+}
+$ranked = $matcher->match($needle, $survivors); // 8 000 items: 430 ms -> 80 ms measured
+```
+
+The trade-off is recall: scattered in-order alignments (`gst` → `git status`)
+never survive a `str_contains($needle)` pre-screen — pre-screen on a core that
+real hits contain contiguously, or drop the pre-screen and pay the scan.
+
+**Filtering a Model as the user types** is `withFuzzyFilter()` (the coverage
+rule, re-projected from the pristine list per call); see [Filtering](#filtering).
 
 ## Deprecation & delegation
 

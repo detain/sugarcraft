@@ -570,6 +570,57 @@ final class Model
     }
 
     /**
+     * Filter items by fuzzy relevance to a query, and return a new Model.
+     *
+     * Sugar for {@see self::withFilterFn()} over the FuzzyMatch shim in strict
+     * mode (full-query coverage): an item survives while every query
+     * character appears in it IN ORDER (case-folded), so a two-letter query
+     * no longer keeps half the list on one incidental character — a local
+     * alignment can score a stray single letter above zero. The list keeps
+     * everything else exactly as the filter door does — the pristine list
+     * stays authoritative, so calling this once per keystroke re-projects
+     * from the WHOLE original list (widening a query as the user backspaces
+     * reveals everything again without hand-wiring a capture).
+     * An empty query clears the filter; {@see self::withoutFuzzyFilter()}
+     * is the explicit counterpart. Matching is not ranking: the surviving
+     * items keep their list order (the filter door cannot reorder) — use
+     * {@see FuzzyMatch::match()} directly when score-descending order is the
+     * product requirement.
+     *
+     * Costs scale with list size (~63 us/item on the canonical profile):
+     * over a few thousand items, pre-screen with a cheap str_contains filter
+     * and fuzzy-rank the survivors — see the README narrow-first recipe.
+     *
+     * @param string              $query   The search query (empty clears the filter)
+     * @param ScoringProfile|null $profile Scoring weights to filter with (null = canonical)
+     */
+    public function withFuzzyFilter(string $query, ?ScoringProfile $profile = null): self
+    {
+        if ($query === '') {
+            return $this->withoutFuzzyFilter();
+        }
+
+        $matcher = (new FuzzyMatch($profile))->withStrictMode();
+
+        return $this->withFilterFn(
+            static fn(\Stringable $item): bool => $matcher->score($query, (string) $item) > 0
+        );
+    }
+
+    /**
+     * Clear a filter installed by {@see self::withFuzzyFilter()}.
+     *
+     * The filter is a single slot, so this clears ANY active filter — fuzzy
+     * or hand-wired — exactly like {@see self::withoutFilter()}, which it
+     * delegates to (restore of the pristine list, cursor re-anchor by
+     * identity, full-frame reset included).
+     */
+    public function withoutFuzzyFilter(): self
+    {
+        return $this->withoutFilter();
+    }
+
+    /**
      * Recompute the visible list from the pristine list while filtering.
      *
      * While a filter is active, `items` is a PROJECTION of `originalItems`,

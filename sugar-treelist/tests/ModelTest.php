@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\TreeList\Tests;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Lang, Model, Prefixer, StringItem, Suffixer};
+use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Lang, Model, Prefixer, ScoringProfile, StringItem, Suffixer};
 use SugarCraft\TreeList\Tests\Support\RowDeltaAssertions;
 use PHPUnit\Framework\TestCase;
 
@@ -2553,6 +2553,95 @@ final class ModelTest extends TestCase
             $streamed[] = $line;
         }
         $this->assertSame($model->lines(), $streamed);
+    }
+
+    /**
+     * Fuzzy filter door (sugar-treelist-033): withFuzzyFilter wires the
+     * capture, keeps full-query coverage, and re-projects from the pristine
+     * list on every call — the filter-as-you-type contract.
+     */
+    public function testWithFuzzyFilterReprojectsFromThePristineListPerCall(): void
+    {
+        $model = Model::tree()->withWidth(40)->withHeight(6)->withItemsFromArray([
+            'apple', 'apricot', 'banana', 'blueberry',
+        ]);
+
+        $ap = $model->withFuzzyFilter('ap');
+        $this->assertSame(['apple', 'apricot'], \array_map(strval(...), $this->valuesOf($ap)));
+        $this->assertSame(FilterState::filtering, $ap->filterState());
+
+        // Type further: only apricot keeps a-p-i-c in order.
+        $apic = $ap->withFuzzyFilter('apic');
+        $this->assertSame(['apricot'], \array_map(strval(...), $this->valuesOf($apic)));
+
+        // Backspace must NOT be trapped inside the previous projection:
+        // 'ap' again reveals both original 'ap' items, not apricot only.
+        $back = $apic->withFuzzyFilter('ap');
+        $this->assertSame(['apple', 'apricot'], \array_map(strval(...), $this->valuesOf($back)));
+    }
+
+    public function testWithFuzzyFilterKeepsOnlyFullQueryCoverage(): void
+    {
+        $model = Model::tree()->withWidth(40)->withHeight(6)->withItemsFromArray([
+            'git status --short',
+            'git commit -m x',
+            'docker status',
+            'node-server route',
+        ]);
+
+        // g,s,t in order lands only on 'git status --short' — plain local
+        // alignment would keep every item that shares one stray letter.
+        $hits = $model->withFuzzyFilter('gst');
+        $this->assertSame(['git status --short'], \array_map(strval(...), $this->valuesOf($hits)));
+    }
+
+    public function testWithFuzzyFilterEmptyQueryClearsTheFilter(): void
+    {
+        $model = Model::tree()->withWidth(40)->withHeight(6)
+            ->withItemsFromArray(['apple', 'banana'])
+            ->withFuzzyFilter('app');
+        $this->assertSame(1, $model->length());
+
+        $cleared = $model->withFuzzyFilter('');
+        $this->assertSame(2, $cleared->length());
+        $this->assertSame(FilterState::unfiltered, $cleared->filterState());
+        $this->assertNull($cleared->filterFn());
+    }
+
+    public function testWithoutFuzzyFilterRestoresTheListAndReAnchorsTheCursor(): void
+    {
+        $model = Model::tree()->withWidth(40)->withHeight(6)
+            ->withItemsFromArray(['apple', 'apricot', 'banana', 'blueberry'])
+            ->withCursor(1);
+        $this->assertSame('apricot', (string) $model->cursorItem());
+
+        $hits = $model->withFuzzyFilter('ap');
+        $this->assertSame(2, $hits->length());
+
+        // 'apricot' survived the projection, so the restore keeps the
+        // selection on it by identity — not on whatever index 1 now holds.
+        $restored = $hits->withoutFuzzyFilter();
+        $this->assertSame(4, $restored->length());
+        $this->assertSame('apricot', (string) $restored->cursorItem());
+        $this->assertSame(1, $restored->cursorIndex());
+    }
+
+    public function testWithFuzzyFilterMembershipIsTheCoverageRuleUnderAnyProfile(): void
+    {
+        // Weights shape the reported scores of FuzzyMatch::match(); the door's
+        // membership is full-query coverage either way — a covered alignment
+        // is floored at 1, so even an extreme profile cannot veto a real hit,
+        // and no profile can smuggle an uncovered candidate past the rule.
+        $model = Model::tree()->withWidth(40)->withHeight(6)->withItemsFromArray([
+            'git status --short',
+            'node-server route',
+        ]);
+        $extreme = new ScoringProfile(matchScore: 1, mismatchPenalty: -1, gapOpen: -1, gapExtend: -100, adjacentBonus: 0);
+
+        $canonical = $model->withFuzzyFilter('gst');
+        $retuned   = $model->withFuzzyFilter('gst', $extreme);
+        $this->assertSame(['git status --short'], \array_map(strval(...), $this->valuesOf($canonical)));
+        $this->assertSame(['git status --short'], \array_map(strval(...), $this->valuesOf($retuned)));
     }
 
     /**
