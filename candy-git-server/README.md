@@ -35,8 +35,7 @@ do `--daemon`/`--pid-file`:
 
 ```console
 $ candy-git-server serve
-candy-git-server: 'serve' refuses to start — server assembly is not
-implemented; see docs (status: scaffold).
+candy-git-server: 'serve' refuses to start: the ssh and git listeners are not wired yet, only 'serve --http' runs (see the README, Known gaps)
 $ echo $?
 1
 ```
@@ -89,12 +88,13 @@ bounded, reaped `git` children.
 - `Support\PromisePool`, `Support\Version` — bounded-concurrency helper,
   phar build-stamp resolver
 - `bin/candy-git-server` — CLI: `serve` (refuses), `serve --http
-  --repo-root DIR` (starts the smart-HTTP listener), `init` (writes a
-  config skeleton), `repo create|list|info` (`--public` marks a repo
-  public via an on-disk visibility marker — anonymous serving additionally
-  requires the `git.allow_anonymous_read` lever, default off), `user
-  add|key|list|token` (persisted accounts, hashed passwords, expiring
-  proxy-token minting), `help`, `version`
+  --repo-root DIR` (starts the smart-HTTP listener), `init [data-path]`
+  (writes a config skeleton; `--admin NAME` also mints the first admin),
+  `repo create|list|info|collaborator|mirror|push-access` (`--public` marks a
+  repo public via an on-disk visibility marker — anonymous serving
+  additionally requires the `git.allow_anonymous_read` lever, default off),
+  `user add|key|list|token|remove|deactivate` (persisted accounts, hashed
+  passwords, expiring proxy-token minting), `help`, `version`
 
 **What does not exist:** any TUI (there is no terminal UI of any kind); a
 listener on `:23231`/`:23232`/`:9418` by default (`serve --http` binds only
@@ -181,6 +181,53 @@ not a refusal the class can answer with — there is no load-time guard that
 would let it live in `suggest`. (The opt-in async daemon mode and the
 smart-HTTP listener bind through core `stream_socket_server` and never
 touch ext-sockets; it is the blocking daemon seat that pins the require.)
+
+## Quickstart (init to clone)
+
+A verified end-to-end run on one machine. The data path is the one
+argument every local command takes (default `CANDY_GIT_SERVER_DATA_PATH`,
+else `sys_get_temp_dir()/candy-git-server` with a warning).
+
+```bash
+D=/var/lib/candy-git-server
+
+# 1. initialize the data directory and mint the first admin; the password
+#    is read from STDIN, never argv (or pass --key-file ~/.ssh/id_ed25519.pub)
+printf '%s\n' 'correct horse battery staple' |
+    candy-git-server init "$D" --admin alice --admin-password-stdin
+
+# 2. add a least-privilege account (non-admin unless --admin is passed)
+printf '%s\n' 'hunter2hunter2' | candy-git-server user add bob "$D" --password
+
+# 3. create a repository (private by default; --public marks it public)
+candy-git-server repo create myrepo "$D"
+
+# 4. serve it; --config makes the data path dirname(F) so users.json is read
+candy-git-server serve --http --repo-root "$D/repositories" --config "$D/config.yaml"
+
+# 5. from another shell: clone and push over smart HTTP (Basic auth)
+git clone http://alice@localhost:23232/myrepo.git
+```
+
+`init --admin` refuses when an admin already exists (add `--force` to
+replace the named account), and `CANDY_GIT_SERVER_BOOTSTRAP_ADMIN=<name>`
+does the same as `--admin <name>` for `init` only. `serve --http` prints a
+one-line hint when the store holds no active admin. A `--password` with no
+value reads STDIN; a password-less, key-less account is warned about on
+stderr because it authenticates nothing.
+
+| `serve --http` flag | Meaning | Default |
+|---|---|---|
+| `--repo-root DIR` | directory whose subdirectories are served (required) | none |
+| `--http-port N` | listen port (`--port` is a deprecated alias) | `23232` |
+| `--http-host H` | listen host | `127.0.0.1` |
+| `--config F` | YAML config; its directory is the data path | defaults applied |
+| `--daemon`, `--pid-file`, `--verbose` | refused (foreground only) | n/a |
+
+| Exit code | Meaning |
+|---|---|
+| `0` | success; for `serve --http`, graceful SIGINT/SIGTERM shutdown (needs ext-pcntl) |
+| `1` | any refusal: bad flag, bind failure, unknown user or repo, existing admin, corrupt store, bare `serve` |
 
 ## Configuration
 
@@ -273,7 +320,7 @@ off. The CLI pieces that work without any listener operate on the local
 data directory:
 
 ```bash
-candy-git-server init /var/lib/candy-git-server   # writes config skeleton + dirs
+candy-git-server init /var/lib/candy-git-server   # writes config skeleton + dirs (add --admin NAME for the first admin)
 candy-git-server repo create myrepo /var/lib/candy-git-server   # creates myrepo/.git bare
 candy-git-server repo list /var/lib/candy-git-server
 candy-git-server repo info myrepo /var/lib/candy-git-server
@@ -580,8 +627,8 @@ $repo->isPublic;           // false (BC readonly property)
 $repo->isVisiblePublic();  // false
 ```
 
-Collaborator lists live on the `Repo` object in memory. Accounts do not:
-`user add`/`user key` persist through `UserStore` into
+Collaborator lists persist in the repo's metadata plane (`repo collaborator
+<name> add|remove <user>`), and so do accounts: `user add`/`user key` persist through `UserStore` into
 `<data_path>/users.json`, and `serve --http` loads every stored account
 at launch.
 
@@ -630,14 +677,16 @@ everywhere, and the extension manifest. What remains open:
    terminate HTTPS in a reverse proxy.
 6. **`SIGHUP` shuts down instead of reloading** — all three signals share
    one handler.
-7. **Locale coverage of CLI help copy** — the en strings are the reference
-   and every key exists in all 16 locales, but a few translated help
-   lines lag en wording changes.
-8. **Admin elevation is CLI-explicit; collaborator grants are not.**
-   `user add` creates least-privilege accounts by default — a global admin
-   only comes from `user add --admin`. The per-repo collaborator lists
-   behind non-admin access are still not CLI-manageable, so that scoping
-   remains library-caller work persisting repo metadata directly.
+7. **Locale coverage.** English is the reference; all 17 catalogues
+   (including `zh-tw`) carry the same keys and placeholders, enforced by
+   `tests/LangLocaleSelectionTest.php`. The translations are
+   machine-assisted and have not had native-speaker review.
+8. **Collaborator grants are CLI-managed, but ACL scoping is per repo.**
+   `user add` creates least-privilege accounts and a global admin only
+   comes from `--admin` or `init --admin`; `repo collaborator <name>
+   add|remove <user>` edits the persisted collaborator list, `repo
+   push-access` and `repo mirror` persist the other metadata. There is no
+   team or group model — grants are per user per repo.
 
 ## Shared foundations
 
