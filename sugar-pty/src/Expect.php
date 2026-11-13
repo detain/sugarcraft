@@ -266,11 +266,16 @@ final class Expect
      * (original behaviour). Zero and negative windows are refused at
      * construction.
      *
-     * Straddle rule: with a window set, a needle whose FIRST byte lands
-     * before the tail window's start never matches — only occurrences
-     * beginning inside the last `$searchWindow` bytes are found. Size the
-     * window at or above your longest needle plus expected noise, or keep
-     * it null.
+     * Straddle rule: with a window set, a match — literal needle or
+     * regex — whose FIRST byte lands before the tail window's start is
+     * never found: `expectAny` bounds the strpos START, and
+     * `expectPattern` only feeds the window slice to the engine, so the
+     * straddling head bytes are not even visible. Only occurrences
+     * beginning inside the last `$searchWindow` bytes match. What the
+     * pattern leg adds is an offset REMAP (slice offset → full-buffer
+     * offset) so `before`/`buffer` split at the true position. Size the
+     * window at or above your longest needle plus expected noise, or
+     * keep it null.
      */
     public function withSearchWindow(?int $searchWindow): self
     {

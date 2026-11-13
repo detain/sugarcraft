@@ -298,6 +298,72 @@ final class ExpectTest extends TestCase
 
         $this->assertSame(40 * 65536, \strlen((string) $final->before), 'the opt-out must capture everything');
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // PTY-33 — searchWindow behaviour legs (bounding + straddle + remap)
+    // ─────────────────────────────────────────────────────────────
+
+    public function testLiteralNeedleFullyBeforeTheWindowNeverMatches(): void
+    {
+        $master = new FixtureMaster('NEEDLE' . \str_repeat('.', 200));
+        $expect = Expect::on($master)->withSearchWindow(64);
+
+        $this->expectException(ExpectTimeoutException::class);
+        $expect->expectAny(['NEEDLE'], 0.2);
+    }
+
+    public function testLiteralNeedleStraddlingTheWindowStartDoesNotMatch(): void
+    {
+        // buffer 'PREFIXNEEDLESUFFIX' (18); the only NEEDLE occurrence
+        // spans bytes 6..11. Window 11 starts the scan at byte 7 — one
+        // past the occurrence's first byte. strpos() bounds the START,
+        // so a straddling literal must time out.
+        $master = new FixtureMaster('PREFIXNEEDLESUFFIX');
+        $expect = Expect::on($master)->withSearchWindow(11);
+
+        $this->expectException(ExpectTimeoutException::class);
+        $expect->expectAny(['NEEDLE'], 0.2);
+    }
+
+    public function testLiteralNeedleBeginningInsideTheWindowMatches(): void
+    {
+        $master = new FixtureMaster('PREFIXNEEDLESUFFIX');
+        $expect = Expect::on($master)->withSearchWindow(12);
+
+        $final = $expect->expectAny(['NEEDLE'], 0.5);
+
+        $this->assertSame('NEEDLE', $final->lastMatch);
+        $this->assertSame('PREFIX', $final->before);
+    }
+
+    public function testPatternStraddlingTheWindowStartIsNotFoundLikeLiterals(): void
+    {
+        // Same straddle that defeats the literal leg above defeats the
+        // pattern leg too, and for the same reason with a different
+        // mechanism: the slice starts at byte 7, so the regex never sees
+        // the 'N' — occurrences must BEGIN inside the window.
+        $master = new FixtureMaster('PREFIXNEEDLESUFFIX');
+        $expect = Expect::on($master)->withSearchWindow(11);
+
+        $this->expectException(ExpectTimeoutException::class);
+        $expect->expectPattern('/NEEDLE/', 0.2);
+    }
+
+    public function testPatternOffsetsRemapToTheFullBufferNotTheSlice(): void
+    {
+        // 'EEDLE' begins at byte 7, inside the 12-byte window (start 6),
+        // at SLICE offset 1. Without the strlen-minus-window remap the
+        // split would land at buffer offset 1 (before='P'); the true
+        // full-buffer split is before='PREFIXN', remainder 'SUFFIX'.
+        $master = new FixtureMaster('PREFIXNEEDLESUFFIX');
+        $expect = Expect::on($master)->withSearchWindow(12);
+
+        $final = $expect->expectPattern('/EEDLE/', 0.5);
+
+        $this->assertSame('EEDLE', $final->lastMatch);
+        $this->assertSame('PREFIXN', $final->before);
+        $this->assertSame('SUFFIX', $final->buffer);
+    }
 }
 
 /**
