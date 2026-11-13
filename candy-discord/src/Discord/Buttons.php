@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Discord;
 
+use SugarCraft\Code\Lang;
+
 /**
  * Approval UI (§7.5). A `permission.requested` becomes a message whose
  * components-v2 buttons answer the ask: **Approve once**, **Always** (the
@@ -84,12 +86,12 @@ final class Buttons
         $tool = (string) ($ask['tool'] ?? 'tool');
 
         $buttons = [];
-        foreach (['once' => ['Approve once', self::BUTTON_STYLE_SUCCESS], 'always' => ['Always allow', self::BUTTON_STYLE_PRIMARY], 'deny' => ['Deny', self::BUTTON_STYLE_DANGER]] as $verdict => $spec) {
-            [$label, $style] = $spec;
+        foreach (['once' => ['channels.discord.button.approve_once', self::BUTTON_STYLE_SUCCESS], 'always' => ['channels.discord.button.always_allow', self::BUTTON_STYLE_PRIMARY], 'deny' => ['channels.discord.button.deny', self::BUTTON_STYLE_DANGER]] as $verdict => $spec) {
+            [$labelKey, $style] = $spec;
             $button = [
                 'type' => self::COMPONENT_BUTTON,
                 'style' => $style,
-                'label' => $label,
+                'label' => Lang::t($labelKey),
                 'custom_id' => self::PREFIX . ':' . $askId . ':' . $verdict . ($nonce === '' ? '' : ':' . $nonce),
             ];
             if ($allowedUsers !== []) {

@@ -52,12 +52,6 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
 {
     private const BOT_ID_PREFIXES = ['28:', 'app:'];
 
-    /** Placeholder text of a progressive reply; the elapsed seconds ride after it on refresh. */
-    private const WORKING_TEXT = 'working…';
-
-    /** Shown in place of a placeholder whose turn ended without a reply. */
-    private const ABANDONED_TEXT = 'No reply was produced.';
-
     /** The refresh tick: cheap, because the throttle below decides what actually reaches Teams. */
     private const PROGRESS_TICK_SECONDS = 1.0;
 
@@ -491,7 +485,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
                     'type' => 'message',
                     'from' => ['id' => $this->appId],
                     'textFormat' => 'markdown',
-                    'text' => '⛔ You are not permitted to answer approvals here.',
+                    'text' => Lang::t('channels.msteams.invoke.not_permitted'),
                 ])->then(null, fn (\Throwable $e) => $this->log->debug('msteams_invoke_refuse_failed', ['error' => $e->getMessage()]));
             }
 
@@ -574,9 +568,10 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         }
         $outcome = $this->pairing->request($this->account, $authorId);
         $notice = match ($outcome['kind']) {
-            'new', 'pending' => "Pairing required.\nYour code: `" . ($outcome['code'] ?? '') . "` (expires in 1 hour)\n"
-                . 'An approver answers with: /pair approve ' . ($outcome['code'] ?? ''),
-            'full' => 'Pairing requests are at their limit right now; try again later.',
+            'new', 'pending' => Lang::t('channels.msteams.pairing.heading') . "\n"
+                . Lang::t('channels.msteams.pairing.code_line', ['code' => (string) ($outcome['code'] ?? '')]) . "\n"
+                . Lang::t('channels.msteams.pairing.approve_hint', ['code' => (string) ($outcome['code'] ?? '')]),
+            'full' => Lang::t('channels.msteams.pairing.full'),
             default => '', // 'silent' / 'paired': inside the reminder window, or raced onto the roster
         };
         if ($notice !== '') {
@@ -1037,7 +1032,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         }
         $token = ++$this->replySeq;
         $now = $this->now();
-        $open = $this->rest->sendActivity($serviceUrl, $conversationId, $this->textActivity(self::WORKING_TEXT))->then(
+        $open = $this->rest->sendActivity($serviceUrl, $conversationId, $this->textActivity(Lang::t('channels.msteams.progress.working')))->then(
             static fn (array $sent): string => (string) ($sent['id'] ?? ''),
             function (\Throwable $e): string {
                 $this->log->warn('reply_stream_open_failed', ['error' => $e->getMessage()]);
@@ -1053,7 +1048,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             'activityId' => null,
             'startedAt' => $now,
             'lastAt' => $now,
-            'shown' => self::WORKING_TEXT,
+            'shown' => Lang::t('channels.msteams.progress.working'),
             'timer' => $timer,
         ];
         $open->then(function (string $activityId) use ($conversationId, $token): void {
@@ -1086,7 +1081,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         if ($now - $state['lastAt'] < self::PROGRESS_GAP_SECONDS) {
             return;
         }
-        $text = self::WORKING_TEXT . ' ' . (int) \floor($now - $state['startedAt']) . 's';
+        $text = Lang::t('channels.msteams.progress.working_elapsed', ['seconds' => (string) (int) \floor($now - $state['startedAt'])]);
         if ($text === $state['shown']) {
             return;
         }
@@ -1115,7 +1110,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         }
         $this->loop->cancelTimer($state['timer']);
         if ($chunks === []) {
-            $this->settlePlaceholder($ref, $state['open'], self::ABANDONED_TEXT);
+            $this->settlePlaceholder($ref, $state['open'], Lang::t('channels.msteams.progress.no_reply'));
 
             return \React\Promise\resolve(null);
         }
@@ -1145,7 +1140,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         }
         unset($this->replies[$conversationId]);
         $this->loop->cancelTimer($state['timer']);
-        $this->settlePlaceholder($ref, $state['open'], self::ABANDONED_TEXT);
+        $this->settlePlaceholder($ref, $state['open'], Lang::t('channels.msteams.progress.no_reply'));
     }
 
     /** @param PromiseInterface<string> $open */

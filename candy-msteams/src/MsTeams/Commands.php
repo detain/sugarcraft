@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\MsTeams;
 
+use SugarCraft\Code\Lang;
+
 /**
  * The command vocabulary in Teams spelling.
  *
@@ -28,15 +30,15 @@ final class Commands
 
     /** One line per command the bundle answers, in the order /help lists them. */
     public const HELP = [
-        'help' => 'this list',
-        'new' => 'start a fresh session for this conversation',
-        'stop' => 'cancel the running turn',
-        'status' => 'session id, state, queue mode and approvals awaiting an answer',
-        'cost' => 'the spend the host reports for this session',
-        'queue' => '`/queue <text>` queues a prompt behind the running turn',
-        'model' => '`/model [name]` runs the session\'s /model command',
-        'approve' => '`/approve <askId> [once|always|deny]` answers a tool approval in chat',
-        'pair' => 'pairing for approvers: `/pair`, `/pair approve <code>`',
+        'help' => 'channels.msteams.help.cmd.help',
+        'new' => 'channels.msteams.help.cmd.new',
+        'stop' => 'channels.msteams.help.cmd.stop',
+        'status' => 'channels.msteams.help.cmd.status',
+        'cost' => 'channels.msteams.help.cmd.cost',
+        'queue' => 'channels.msteams.help.cmd.queue',
+        'model' => 'channels.msteams.help.cmd.model',
+        'approve' => 'channels.msteams.help.cmd.approve',
+        'pair' => 'channels.msteams.help.cmd.pair',
     ];
 
     /**
@@ -69,11 +71,12 @@ final class Commands
     /** The /help body (Teams markdown). Lists exactly what HELP names. */
     public static function helpText(): string
     {
-        $lines = ['**candy-code commands**'];
-        foreach (self::HELP as $name => $description) {
+        $lines = [Lang::t('channels.msteams.help.heading')];
+        foreach (self::HELP as $name => $key) {
+            $description = Lang::t($key);
             $lines[] = \str_contains($description, '`') ? "- {$description}" : "- `/{$name}`: {$description}";
         }
-        $lines[] = 'Anything else you write is a prompt for the session.';
+        $lines[] = Lang::t('channels.msteams.help.footer');
 
         return \implode("\n", $lines);
     }

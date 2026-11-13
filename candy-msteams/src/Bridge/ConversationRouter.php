@@ -170,7 +170,7 @@ final class ConversationRouter
         $this->sessionFor($key, $ref)->then(function (string $sessionId) use ($key, $ref, $text, $isMention, $channel, $images, $documents): void {
             $this->map->rememberConversation($sessionId, $key, $ref);
             $this->dispatch($channel, $ref, $sessionId, $key, $text, $isMention, $images, $documents);
-        }, fn (\Throwable $e) => $this->failWith($channel, $ref, 'Could not open a session: ' . $e->getMessage()));
+        }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.msteams.session.could_not_open', ['error' => $e->getMessage()])));
     }
 
     /**
@@ -194,7 +194,7 @@ final class ConversationRouter
             $this->serve->cancel($sessionId)
                 ->then(
                     fn () => $this->sendPrompt($channel, $ref, $sessionId, $fenced, 'queue', $images, $documents),
-                    fn (\Throwable $e) => $this->failWith($channel, $ref, 'Cancel failed: ' . $e->getMessage()),
+                    fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.msteams.turn.cancel_failed', ['error' => $e->getMessage()])),
                 );
             $channel->typing($ref);
 
@@ -212,7 +212,7 @@ final class ConversationRouter
             });
 
             if ($dropped > 0) {
-                $this->deliver($channel, $ref, 'Dropped ' . $dropped . ' queued prompt(s) over the cap.');
+                $this->deliver($channel, $ref, Lang::t('channels.msteams.router.dropped_queued', ['count' => (string) $dropped]));
             }
 
             return;
@@ -242,27 +242,27 @@ final class ConversationRouter
                     ->then(function (array $created) use ($key, $ref, $channel): void {
                         $sessionId = (string) ($created['id'] ?? '');
                         if ($sessionId === '') {
-                            $this->failWith($channel, $ref, 'session.create came back without an id.');
+                            $this->failWith($channel, $ref, Lang::t('channels.msteams.session.no_id'));
 
                             return;
                         }
                         $this->map->bind($key, $sessionId);
                         $this->map->rememberConversation($sessionId, $key, $ref);
                         $this->followNow($sessionId, $key);
-                        $this->deliver($channel, $ref, "New session `{$sessionId}`. Anything you say here goes to it.");
-                    }, fn (\Throwable $e) => $this->failWith($channel, $ref, 'Could not create a session: ' . $e->getMessage()));
+                        $this->deliver($channel, $ref, Lang::t('channels.msteams.session.new', ['sessionId' => $sessionId]));
+                    }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.msteams.session.could_not_create', ['error' => $e->getMessage()])));
                 break;
             case 'stop':
                 $sessionId = $this->map->sessionIdFor($key);
                 if ($sessionId === null) {
-                    $this->deliver($channel, $ref, 'Nothing is running here.');
+                    $this->deliver($channel, $ref, Lang::t('channels.msteams.turn.nothing_running'));
 
                     return;
                 }
                 $this->serve->cancel($sessionId)
                     ->then(
-                        fn () => $this->deliver($channel, $ref, 'Turn cancelled.'),
-                        fn (\Throwable $e) => $this->failWith($channel, $ref, 'Cancel failed: ' . $e->getMessage()),
+                        fn () => $this->deliver($channel, $ref, Lang::t('channels.msteams.turn.cancelled')),
+                        fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.msteams.turn.cancel_failed', ['error' => $e->getMessage()])),
                     );
                 break;
             case 'approve':
@@ -270,7 +270,7 @@ final class ConversationRouter
                 $verdict = Cards::VERDICTS[\strtolower((string) ($args[1] ?? 'once'))] ?? null;
                 $sessionId = $this->askSession[$askId] ?? $this->map->sessionIdFor($key);
                 if ($askId === '' || $verdict === null || $sessionId === null) {
-                    $this->deliver($channel, $ref, 'Usage: `/approve <askId> [once|always|deny]` (the ask id is in the approval message).');
+                    $this->deliver($channel, $ref, Lang::t('channels.msteams.approve.usage'));
 
                     return;
                 }
@@ -279,7 +279,7 @@ final class ConversationRouter
             case 'model':
                 $sessionId = $this->map->sessionIdFor($key);
                 if ($sessionId === null) {
-                    $this->deliver($channel, $ref, 'Nothing is attached here yet — send a message first.');
+                    $this->deliver($channel, $ref, Lang::t('channels.msteams.attach.none'));
 
                     return;
                 }
@@ -289,13 +289,13 @@ final class ConversationRouter
                     'args' => \implode(' ', $args),
                 ])->then(
                     fn (array $result) => $this->deliver($channel, $ref, $this->commandResultText($result)),
-                    fn (\Throwable $e) => $this->failWith($channel, $ref, 'The /model command failed: ' . $e->getMessage()),
+                    fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.msteams.model.failed', ['error' => $e->getMessage()])),
                 );
                 break;
             case 'pair':
                 $handler = $this->pairHandler;
                 if ($handler === null) {
-                    $this->deliver($channel, $ref, 'Pairing is not wired on this account.');
+                    $this->deliver($channel, $ref, Lang::t('channels.msteams.pair.not_wired'));
 
                     return;
                 }
@@ -311,7 +311,7 @@ final class ConversationRouter
             case 'queue':
                 $text = \implode(' ', $args);
                 if ($text === '') {
-                    $this->deliver($channel, $ref, 'Usage: `/queue <text>`');
+                    $this->deliver($channel, $ref, Lang::t('channels.msteams.queue.usage'));
 
                     return;
                 }
@@ -384,7 +384,7 @@ final class ConversationRouter
             case 'turn.completed':
                 $stop = (string) ($data['stopReason'] ?? '');
                 if ($stop === 'error') {
-                    $this->deliver($channel, $conversation['ref'], '⚠ The turn ended in an error: ' . (string) ($data['error'] ?? 'unknown'));
+                    $this->deliver($channel, $conversation['ref'], Lang::t('channels.msteams.turn.error', ['error' => (string) ($data['error'] ?? Lang::t('channels.msteams.turn.error_unknown'))]));
                 }
                 // A progressive placeholder whose reply never came must not
                 // keep ticking; a reply that already settled it makes this a no-op.
@@ -393,7 +393,7 @@ final class ConversationRouter
                 }
                 break;
             case 'spend_cap.breached':
-                $this->deliver($channel, $conversation['ref'], '⚠ The spend cap stopped this turn.');
+                $this->deliver($channel, $conversation['ref'], Lang::t('channels.msteams.turn.spend_cap'));
                 break;
             default:
                 break;
@@ -405,10 +405,10 @@ final class ConversationRouter
         $who = isset($data['note']) && \is_string($data['note']) && $data['note'] !== '' ? " ({$data['note']})" : '';
 
         return match ($verdict) {
-            'once' => '✅ Approved once' . $who,
-            'always' => '✅ Always allowed' . $who,
-            'reject' => '⛔ Denied' . $who,
-            default => 'Question resolved',
+            'once' => Lang::t('channels.msteams.approve.resolved_once', ['who' => $who]),
+            'always' => Lang::t('channels.msteams.approve.resolved_always', ['who' => $who]),
+            'reject' => Lang::t('channels.msteams.approve.resolved_denied', ['who' => $who]),
+            default => Lang::t('channels.msteams.approve.resolved_default'),
         };
     }
 
@@ -469,7 +469,7 @@ final class ConversationRouter
 
             return;
         }
-        $this->deliver($channel, $conversation['ref'], '/approve ' . $askId . ' once|always|deny');
+        $this->deliver($channel, $conversation['ref'], Lang::t('channels.msteams.approve.hint', ['askId' => (string) $askId]));
     }
 
     /**
@@ -771,12 +771,7 @@ final class ConversationRouter
         $channel = $conversation === null ? null : $this->channelFor($conversation['key']);
 
         if ($conversation !== null && $channel !== null) {
-            $this->deliver($channel, $conversation['ref'], \sprintf(
-                '⚠ The serve log could not replay seq %d–%d while this bridge was away — %d snapshot row(s) were discarded; some replies may be missing here.',
-                $seen + 1,
-                $through,
-                $dropped
-            ));
+            $this->deliver($channel, $conversation['ref'], Lang::t('channels.msteams.replay.gap', ['from' => (string) ($seen + 1), 'to' => (string) $through, 'count' => (string) $dropped]));
         }
 
         $this->map->noteSeqForSession($sessionId, $through);
@@ -829,7 +824,7 @@ final class ConversationRouter
     {
         $sessionId = $this->map->sessionIdFor($key);
         if ($sessionId === null) {
-            $this->deliver($channel, $ref, 'No session is attached to this conversation yet. Send a message first.');
+            $this->deliver($channel, $ref, Lang::t('channels.msteams.session.none_attached'));
 
             return;
         }
@@ -839,7 +834,7 @@ final class ConversationRouter
                     ? self::costText($snapshot)
                     : $this->statusText($sessionId, $snapshot));
             },
-            fn (\Throwable $e) => $this->failWith($channel, $ref, 'Could not read the session: ' . $e->getMessage()),
+            fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.msteams.session.could_not_read', ['error' => $e->getMessage()])),
         );
     }
 
@@ -856,17 +851,17 @@ final class ConversationRouter
             }
         }
         $lines = [
-            '**Session status**',
-            "- Session: `{$sessionId}`",
-            "- State: {$state}",
+            Lang::t('channels.msteams.status.heading'),
+            Lang::t('channels.msteams.status.session', ['sessionId' => $sessionId]),
+            Lang::t('channels.msteams.status.state', ['state' => $state]),
         ];
         if (\is_string($snapshot['model'] ?? null) && $snapshot['model'] !== '') {
-            $lines[] = '- Model: ' . $snapshot['model'];
+            $lines[] = Lang::t('channels.msteams.status.model', ['model' => (string) $snapshot['model']]);
         }
-        $lines[] = "- Queue mode: {$mode}";
-        $lines[] = "- Queued prompts: {$queued}";
-        $lines[] = "- Approvals awaiting an answer: {$pending}"
-            . ($pending > 0 ? ' (answer with the card, or `/approve <askId> once|always|deny`)' : '');
+        $lines[] = Lang::t('channels.msteams.status.queue_mode', ['mode' => $mode]);
+        $lines[] = Lang::t('channels.msteams.status.queued', ['queued' => (string) $queued]);
+        $lines[] = Lang::t('channels.msteams.status.approvals', ['pending' => (string) $pending])
+            . ($pending > 0 ? Lang::t('channels.msteams.status.approvals_hint') : '');
 
         return \implode("\n", $lines);
     }
@@ -876,12 +871,12 @@ final class ConversationRouter
     {
         $spent = $snapshot['spentUsd'] ?? null;
         if (!\is_int($spent) && !\is_float($spent)) {
-            return 'Cost: not reported.';
+            return Lang::t('channels.msteams.cost.not_reported');
         }
         $unpriced = (bool) ($snapshot['spendUnpriced'] ?? false);
 
-        return \sprintf('Spend this session: $%.4f', (float) $spent)
-            . ($unpriced ? ' (a lower bound: a call used a model with no price on file)' : '');
+        return Lang::t('channels.msteams.cost.spend', ['amount' => \sprintf('%.4f', (float) $spent)])
+            . ($unpriced ? Lang::t('channels.msteams.cost.lower_bound') : '');
     }
 
     /**
@@ -999,7 +994,7 @@ final class ConversationRouter
                     throw $error;
                 }
                 $this->log->warn('media_refused', ['session' => $sessionId, 'kind' => $error instanceof ServeError ? $error->kind : 'unknown']);
-                $this->deliver($channel, $ref, 'Attachments refused by the server — sent without them.');
+                $this->deliver($channel, $ref, Lang::t('channels.msteams.media.refused'));
 
                 return $this->serve->send($sessionId, $fenced, $delivery);
             },

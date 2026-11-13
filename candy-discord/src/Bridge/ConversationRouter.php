@@ -163,7 +163,7 @@ final class ConversationRouter
         $this->sessionFor($key, $ref)->then(function (string $sessionId) use ($key, $ref, $text, $isMention, $channel, $images, $documents): void {
             $this->map->rememberConversation($sessionId, $key, $ref);
             $this->dispatch($channel, $ref, $sessionId, $key, $text, $isMention, $images, $documents);
-        }, fn (\Throwable $e) => $this->failWith($channel, $ref, 'Could not open a session: ' . $e->getMessage()));
+        }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.session.could_not_open', ['error' => $e->getMessage()])));
     }
 
     /**
@@ -187,7 +187,7 @@ final class ConversationRouter
             $this->serve->cancel($sessionId)
                 ->then(
                     fn () => $this->sendPrompt($channel, $ref, $sessionId, $fenced, 'queue', $images, $documents),
-                    fn (\Throwable $e) => $this->failWith($channel, $ref, 'Cancel failed: ' . $e->getMessage()),
+                    fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.turn.cancel_failed', ['error' => $e->getMessage()])),
                 );
             $channel->typing($ref);
 
@@ -205,7 +205,7 @@ final class ConversationRouter
             });
 
             if ($dropped > 0) {
-                $this->deliver($channel, $ref, 'Dropped ' . $dropped . ' queued prompt(s) over the cap.');
+                $this->deliver($channel, $ref, Lang::t('channels.discord.router.dropped_queued', ['count' => (string) $dropped]));
             }
 
             return;
@@ -236,27 +236,27 @@ final class ConversationRouter
                     ->then(function (array $created) use ($key, $ref, $channel): void {
                         $sessionId = (string) ($created['id'] ?? '');
                         if ($sessionId === '') {
-                            $this->failWith($channel, $ref, 'session.create came back without an id.');
+                            $this->failWith($channel, $ref, Lang::t('channels.discord.session.no_id'));
 
                             return;
                         }
                         $this->map->bind($key, $sessionId);
                         $this->map->rememberConversation($sessionId, $key, $ref);
                         $this->followNow($sessionId, $key);
-                        $this->deliver($channel, $ref, "New session `{$sessionId}`. Anything you say here goes to it.");
-                    }, fn (\Throwable $e) => $this->failWith($channel, $ref, 'Could not create a session: ' . $e->getMessage()));
+                        $this->deliver($channel, $ref, Lang::t('channels.discord.session.new', ['sessionId' => $sessionId]));
+                    }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.session.could_not_create', ['error' => $e->getMessage()])));
                 break;
             case 'stop':
                 $sessionId = $this->map->sessionIdFor($key);
                 if ($sessionId === null) {
-                    $this->deliver($channel, $ref, 'Nothing is running here.');
+                    $this->deliver($channel, $ref, Lang::t('channels.discord.turn.nothing_running'));
 
                     return;
                 }
                 $this->serve->cancel($sessionId)
                     ->then(
-                        fn () => $this->deliver($channel, $ref, 'Turn cancelled.'),
-                        fn (\Throwable $e) => $this->failWith($channel, $ref, 'Cancel failed: ' . $e->getMessage()),
+                        fn () => $this->deliver($channel, $ref, Lang::t('channels.discord.turn.cancelled')),
+                        fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.turn.cancel_failed', ['error' => $e->getMessage()])),
                     );
                 break;
             case 'approve':
@@ -264,7 +264,7 @@ final class ConversationRouter
                 $verdict = Buttons::VERDICTS[\strtolower((string) ($args[1] ?? 'once'))] ?? null;
                 $sessionId = $this->askSession[$askId] ?? $this->map->sessionIdFor($key);
                 if ($askId === '' || $verdict === null || $sessionId === null) {
-                    $this->deliver($channel, $ref, 'Usage: `/approve <askId> [once|always|deny]` (the ask id is in the approval message).');
+                    $this->deliver($channel, $ref, Lang::t('channels.discord.approve.usage'));
 
                     return;
                 }
@@ -273,7 +273,7 @@ final class ConversationRouter
             case 'model':
                 $sessionId = $this->map->sessionIdFor($key);
                 if ($sessionId === null) {
-                    $this->deliver($channel, $ref, 'Nothing is attached here yet — send a message first.');
+                    $this->deliver($channel, $ref, Lang::t('channels.discord.attach.none'));
 
                     return;
                 }
@@ -283,13 +283,13 @@ final class ConversationRouter
                     'args' => \implode(' ', $args),
                 ])->then(
                     fn (array $result) => $this->deliver($channel, $ref, $this->commandResultText($result)),
-                    fn (\Throwable $e) => $this->failWith($channel, $ref, 'The /model command failed: ' . $e->getMessage()),
+                    fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.model.failed', ['error' => $e->getMessage()])),
                 );
                 break;
             case 'pair':
                 $handler = $this->pairHandler;
                 if ($handler === null) {
-                    $this->deliver($channel, $ref, 'Pairing is not wired on this account.');
+                    $this->deliver($channel, $ref, Lang::t('channels.discord.pair.not_wired'));
 
                     return;
                 }
@@ -298,7 +298,7 @@ final class ConversationRouter
             case 'queue':
                 $text = \implode(' ', $args);
                 if ($text === '') {
-                    $this->deliver($channel, $ref, 'Usage: `/queue <text>`');
+                    $this->deliver($channel, $ref, Lang::t('channels.discord.queue.usage'));
 
                     return;
                 }
@@ -371,11 +371,11 @@ final class ConversationRouter
             case 'turn.completed':
                 $stop = (string) ($data['stopReason'] ?? '');
                 if ($stop === 'error') {
-                    $this->deliver($channel, $conversation['ref'], '⚠ The turn ended in an error: ' . (string) ($data['error'] ?? 'unknown'));
+                    $this->deliver($channel, $conversation['ref'], Lang::t('channels.discord.turn.error', ['error' => (string) ($data['error'] ?? Lang::t('channels.discord.turn.error_unknown'))]));
                 }
                 break;
             case 'spend_cap.breached':
-                $this->deliver($channel, $conversation['ref'], '⚠ The spend cap stopped this turn.');
+                $this->deliver($channel, $conversation['ref'], Lang::t('channels.discord.turn.spend_cap'));
                 break;
             default:
                 break;
@@ -387,10 +387,10 @@ final class ConversationRouter
         $who = isset($data['note']) && \is_string($data['note']) && $data['note'] !== '' ? " ({$data['note']})" : '';
 
         return match ($verdict) {
-            'once' => '✅ Approved once' . $who,
-            'always' => '✅ Always allowed' . $who,
-            'reject' => '⛔ Denied' . $who,
-            default => 'Question resolved',
+            'once' => Lang::t('channels.discord.approve.resolved_once', ['who' => $who]),
+            'always' => Lang::t('channels.discord.approve.resolved_always', ['who' => $who]),
+            'reject' => Lang::t('channels.discord.approve.resolved_denied', ['who' => $who]),
+            default => Lang::t('channels.discord.approve.resolved_default'),
         };
     }
 
@@ -451,7 +451,7 @@ final class ConversationRouter
 
             return;
         }
-        $this->deliver($channel, $conversation['ref'], '/approve ' . $askId . ' once|always|deny');
+        $this->deliver($channel, $conversation['ref'], Lang::t('channels.discord.approve.hint', ['askId' => (string) $askId]));
     }
 
     /**
@@ -742,12 +742,7 @@ final class ConversationRouter
         $channel = $conversation === null ? null : $this->channelFor($conversation['key']);
 
         if ($conversation !== null && $channel !== null) {
-            $this->deliver($channel, $conversation['ref'], \sprintf(
-                '⚠ The serve log could not replay seq %d–%d while this bridge was away — %d snapshot row(s) were discarded; some replies may be missing here.',
-                $seen + 1,
-                $through,
-                $dropped
-            ));
+            $this->deliver($channel, $conversation['ref'], Lang::t('channels.discord.replay.gap', ['from' => (string) ($seen + 1), 'to' => (string) $through, 'count' => (string) $dropped]));
         }
 
         $this->map->noteSeqForSession($sessionId, $through);
@@ -837,7 +832,7 @@ final class ConversationRouter
                     throw $error;
                 }
                 $this->log->warn('media_refused', ['session' => $sessionId, 'kind' => $error instanceof ServeError ? $error->kind : 'unknown']);
-                $this->deliver($channel, $ref, 'Attachments refused by the server — sent without them.');
+                $this->deliver($channel, $ref, Lang::t('channels.discord.media.refused'));
 
                 return $this->serve->send($sessionId, $fenced, $delivery);
             },

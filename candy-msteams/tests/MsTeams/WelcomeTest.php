@@ -102,7 +102,6 @@ final class WelcomeTest extends TestCase
 
         $texts = $this->sentTexts();
         self::assertCount(1, $texts);
-        self::assertStringContainsString(Lang::t('channels.msteams.welcome.group_not_allowlisted'), $texts[0]);
         self::assertStringContainsString(Lang::t('channels.msteams.welcome.group_not_allowlisted', ['path' => 'channels.msteams.groups']), $texts[0]);
     }
 

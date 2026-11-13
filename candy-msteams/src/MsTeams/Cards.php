@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\MsTeams\MsTeams;
 
+use SugarCraft\Code\Lang;
+
 /**
  * Approval cards — the Teams dialect of §8.4. An adaptive card carries the
  * ask (tool, command summary, session) and one Action.Submit per verdict;
@@ -51,22 +53,22 @@ final class Cards
     {
         $askId = (string) ($ask['askId'] ?? $ask['id'] ?? '');
         $body = [
-            ['type' => 'TextBlock', 'weight' => 'Bolder', 'size' => 'Medium', 'text' => 'candy-code approval'],
+            ['type' => 'TextBlock', 'weight' => 'Bolder', 'size' => 'Medium', 'text' => Lang::t('channels.msteams.card.title')],
             ['type' => 'TextBlock', 'wrap' => true, 'text' => $summary],
         ];
         if ($roster !== []) {
-            $body[] = ['type' => 'TextBlock', 'isSubtle' => true, 'wrap' => true, 'text' => 'Approvers: ' . implode(', ', $roster)];
+            $body[] = ['type' => 'TextBlock', 'isSubtle' => true, 'wrap' => true, 'text' => Lang::t('channels.msteams.card.approvers', ['roster' => implode(', ', $roster)])];
         }
 
         $actions = [];
-        foreach (['once' => 'Allow once', 'always' => 'Allow always', 'deny' => 'Deny'] as $word => $title) {
+        foreach (['once' => 'channels.msteams.card.allow_once', 'always' => 'channels.msteams.card.allow_always', 'deny' => 'channels.msteams.card.deny'] as $word => $titleKey) {
             $data = [self::DATA_KEY => $askId, 'verdict' => $word];
             if ($nonce !== '') {
                 $data['nonce'] = $nonce;
             }
             $actions[] = [
                 'type' => 'Action.Submit',
-                'title' => $title,
+                'title' => Lang::t($titleKey),
                 'data' => $data,
             ];
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Discord;
 
+use SugarCraft\Code\Lang;
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
 use CandyCode\Bundles\Discord\Bridge\PlatformFace;
 use CandyCode\Bundles\Discord\Support\Keys;
@@ -425,9 +426,10 @@ final class DiscordAccount implements PlatformFace
         }
         $outcome = $this->pairing->request($this->account, $authorId);
         $notice = match ($outcome['kind']) {
-            'new', 'pending' => "Pairing required.\nYour code: `" . ($outcome['code'] ?? '') . "` (expires in 1 hour)\n"
-                . 'An approver answers with: /pair approve ' . ($outcome['code'] ?? ''),
-            'full' => 'Pairing requests are at their limit right now; try again later.',
+            'new', 'pending' => Lang::t('channels.discord.pairing.heading') . "\n"
+                . Lang::t('channels.discord.pairing.code_line', ['code' => (string) ($outcome['code'] ?? '')]) . "\n"
+                . Lang::t('channels.discord.pairing.approve_hint', ['code' => (string) ($outcome['code'] ?? '')]),
+            'full' => Lang::t('channels.discord.pairing.full'),
             default => '', // 'silent' / 'paired': inside the reminder window, or raced onto the roster
         };
         if ($notice !== '') {
@@ -599,7 +601,7 @@ final class DiscordAccount implements PlatformFace
         if ($channelId === '') {
             return;
         }
-        $notice = 'Skipped ' . \count($notes) . ' attachment(s): ' . \implode('; ', $notes);
+        $notice = Lang::t('channels.discord.attachments.skipped', ['count' => (string) \count($notes), 'notes' => \implode('; ', $notes)]);
         $this->rest->send($channelId, $notice, ['allowed_mentions' => ['parse' => []]])
             ->then(null, fn (\Throwable $e) => $this->log->debug('drop_notice_failed', ['error' => $e->getMessage()]));
     }
@@ -634,7 +636,7 @@ final class DiscordAccount implements PlatformFace
             if (!$this->interactionActorAllowed($isDm, $userId, $guildId, $channelId)) {
                 $this->log->warn('approval_button_refused', ['ask' => $parsed['askId'], 'user' => $userId]);
                 $this->rest->respondInteraction($id, $token, Buttons::RESPONSE_TYPE_MESSAGE, [
-                    'content' => '⛔ You are not permitted to answer approvals here.',
+                    'content' => Lang::t('channels.discord.approval.not_permitted'),
                     'flags' => Buttons::FLAG_EPHEMERAL,
                 ])->then(null, fn (\Throwable $e) => $this->log->debug('button_refuse_ack_failed', ['error' => $e->getMessage()]));
 
@@ -671,8 +673,8 @@ final class DiscordAccount implements PlatformFace
         if (!$this->interactionActorAllowed($isDm, $userId, $guildId, $channelId)) {
             $this->log->warn('slash_refused', ['command' => $command['name'], 'user' => $userId]);
             $answer($command['name'] === 'approve'
-                ? '⛔ You are not permitted to answer approvals here.'
-                : '⛔ You are not permitted to use commands here.',
+                ? Lang::t('channels.discord.approval.not_permitted')
+                : Lang::t('channels.discord.command.not_permitted'),
             )->then(null, fn (\Throwable $e) => $this->log->debug('slash_refuse_ack_failed', ['error' => $e->getMessage()]));
 
             return;
@@ -770,7 +772,7 @@ final class DiscordAccount implements PlatformFace
         };
 
         if (!$this->isApprover($actorId)) {
-            $say('⛔ Only an approver can manage pairings.');
+            $say(Lang::t('channels.discord.pair.only_approver'));
 
             return;
         }
@@ -779,21 +781,21 @@ final class DiscordAccount implements PlatformFace
         if ($action === 'approve') {
             $code = \strtoupper(\trim((string) ($args[1] ?? '')));
             $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
-            $say($paired === null ? 'No pending pairing matches that code.' : "Paired {$paired}.");
+            $say($paired === null ? Lang::t('channels.discord.pair.no_match') : Lang::t('channels.discord.pair.paired', ['paired' => (string) $paired]));
 
             return;
         }
 
         if (!$isDm) {
-            $say('Use a direct message to list pairing codes.');
+            $say(Lang::t('channels.discord.pair.use_dm'));
 
             return;
         }
         $rows = $this->pairing->pending($this->account);
         $say($rows === []
-            ? 'No pending pairings.'
+            ? Lang::t('channels.discord.pair.none_pending')
             : \implode("\n", \array_map(
-                static fn (array $row): string => (string) $row['code'] . ' — user ' . (string) $row['userId'],
+                static fn (array $row): string => Lang::t('channels.discord.pair.row', ['code' => (string) $row['code'], 'userId' => (string) $row['userId']]),
                 $rows,
             )));
     }
@@ -809,12 +811,12 @@ final class DiscordAccount implements PlatformFace
     private static function ackFor(string $name): string
     {
         return match ($name) {
-            'new' => 'Opening a new session…',
-            'stop' => 'Interrupting the running turn…',
-            'approve' => 'Answering the permission ask…',
-            'queue' => 'Queued behind the running turn.',
-            'model' => 'Running /model…',
-            default => 'Working…',
+            'new' => Lang::t('channels.discord.ack.new'),
+            'stop' => Lang::t('channels.discord.ack.stop'),
+            'approve' => Lang::t('channels.discord.ack.approve'),
+            'queue' => Lang::t('channels.discord.ack.queue'),
+            'model' => Lang::t('channels.discord.ack.model'),
+            default => Lang::t('channels.discord.ack.default'),
         };
     }
 
