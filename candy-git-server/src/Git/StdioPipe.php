@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\Git;
 
+use SugarCraft\Async\ChildStdio;
+use SugarCraft\Core\Util\Proc\WindowsPipes;
+
 /**
  * Bounded bidirectional stdio pump between a client connection and a
  * short-lived git child process.
@@ -112,11 +115,15 @@ final class StdioPipe
             return 1;
         }
 
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
+        // On Windows a proc_open PIPE can't be made non-blocking, select()
+        // calls it ready while empty and the read then parks, so this relay
+        // deadlocked there (the upload-pack census test hung > 5 min).
+        // ChildStdio hands out sockets for git's stdin/stdout on Windows, so
+        // the loop's select stays honest. stderr stays a pipe (git's hooks
+        // run under MSYS sh, which inherits it and cannot use a socket); on
+        // Windows it is polled rather than selected ($pollStderr below).
+        $descriptors = ChildStdio::descriptors();
+        $pollStderr = WindowsPipes::runtimeNeedsIt();
         /** @var array<int, resource|null> $pipes */
         $pipes = [];
         /** @var resource|\Process|false $proc */
@@ -175,8 +182,21 @@ final class StdioPipe
                 if (!$childOutDone) {
                     $read[] = $pipes[1];
                 }
-                if (!$childErrDone) {
+                if (!$childErrDone && !$pollStderr) {
                     $read[] = $pipes[2];
+                }
+                if ($pollStderr && !$childErrDone) {
+                    $polled = WindowsPipes::readAvailable($pipes[2], self::CHUNK_BYTES);
+                    if ($polled !== '') {
+                        $errTail .= $polled;
+                        if (\strlen($errTail) > self::STDERR_TAIL_BYTES) {
+                            $errTail = \substr($errTail, -self::STDERR_TAIL_BYTES);
+                        }
+                        $lastActivityNs = \hrtime(true);
+                    }
+                    if ($childOutDone) {
+                        $childErrDone = true;
+                    }
                 }
                 $write = [];
                 if ($childInOpen && $toChild !== '') {
@@ -367,7 +387,14 @@ final class StdioPipe
             // Honest failure reporting: a fast-dying child can still have
             // stderr bytes in the pipe when the loop breaks (the exit
             // condition above does not wait for STDERR EOF).
-            if (isset($pipes[2]) && \is_resource($pipes[2])) {
+            if ($pollStderr && isset($pipes[2]) && \is_resource($pipes[2])) {
+                // Windows: one fstat-sized read; a blocking fread on a pipe a
+                // surviving hook still holds would park here.
+                $errTail .= WindowsPipes::readAvailable($pipes[2], self::CHUNK_BYTES);
+                if (\strlen($errTail) > self::STDERR_TAIL_BYTES) {
+                    $errTail = \substr($errTail, -self::STDERR_TAIL_BYTES);
+                }
+            } elseif (isset($pipes[2]) && \is_resource($pipes[2])) {
                 // Read until the pipe reports EOF: a drained-but-open
                 // non-blocking stream returns '' repeatedly, so the loop
                 // must terminate on feof() (or on a read error).

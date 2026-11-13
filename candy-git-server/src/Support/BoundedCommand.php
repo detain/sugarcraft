@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\Support;
 
+use SugarCraft\Async\ChildStdio;
+use SugarCraft\Core\Util\Proc\WindowsPipes;
+
 /**
  * Synchronous argv-only subprocess runner with a hard deadline.
  *
@@ -180,11 +183,9 @@ final class BoundedCommand
         // Child-relative descriptors: index 0 ['pipe','r'] means the CHILD
         // reads stdin (the parent holds the write end); we never write a
         // prompt-answered stdin, so it is closed straight away.
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
+        // stdout is a socket on Windows (see ChildStdio: a pipe there defeats
+        // select); stderr stays a pipe there and is polled below instead.
+        $descriptors = ChildStdio::descriptors();
         $pipes = [];
         $env = \getenv() !== false ? \getenv() : [];
         foreach ($extraEnv as $name => $value) {
@@ -214,6 +215,12 @@ final class BoundedCommand
         $timedOut = false;
         $deadlineNs = \hrtime(true) + (int) \round($timeoutSeconds * 1_000_000_000);
 
+        // Windows: the stderr PIPE never enters select (select calls a pipe
+        // ready while empty and the fread then parks); it is polled for what
+        // fstat reports waiting, and counts as done once stdout's socket has
+        // reached EOF and a last poll has run.
+        $pollStderr = WindowsPipes::runtimeNeedsIt();
+
         while ($stdoutOpen || $stderrOpen) {
             if (\hrtime(true) >= $deadlineNs) {
                 $timedOut = true;
@@ -224,8 +231,24 @@ final class BoundedCommand
             if ($stdoutOpen) {
                 $read[] = $pipes[1];
             }
-            if ($stderrOpen) {
+            if ($stderrOpen && !$pollStderr) {
                 $read[] = $pipes[2];
+            }
+            if ($pollStderr && $stderrOpen) {
+                $polled = WindowsPipes::readAvailable($pipes[2], self::CHUNK_BYTES);
+                if ($polled !== '') {
+                    $stderr .= $polled;
+                    if (\strlen($stderr) > $maxOutputBytes) {
+                        $stderr = \substr($stderr, -$maxOutputBytes);
+                        $truncated = true;
+                    }
+                }
+                if (!$stdoutOpen) {
+                    $stderrOpen = false;
+                }
+            }
+            if ($read === []) {
+                continue;
             }
             $write = null;
             $except = null;

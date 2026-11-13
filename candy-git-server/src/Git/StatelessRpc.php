@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\Git;
 
+use SugarCraft\Async\ChildStdio;
+use SugarCraft\Core\Util\Proc\WindowsPipes;
+
 /**
  * The single stateless-rpc delegate: this package never re-implements git's
  * protocol brain, it pumps bytes to and from the real binary.
@@ -195,7 +198,8 @@ final class StatelessRpc
 
         $proc = \proc_open(
             ['git', '-C', $repoPath, $binary, '--stateless-rpc', '--advertise-refs', '.'],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            // Sockets on Windows (pipes there defeat the bounded select loops).
+            ChildStdio::descriptors(),
             $pipes
         );
         if (!\is_resource($proc)) {
@@ -305,7 +309,8 @@ final class StatelessRpc
 
         $proc = \proc_open(
             ['git', '-C', $repoPath, $binary, '--stateless-rpc', '.'],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            // Sockets on Windows (pipes there defeat the bounded select loops).
+            ChildStdio::descriptors(),
             $pipes
         );
         if (!\is_resource($proc)) {
@@ -454,17 +459,38 @@ final class StatelessRpc
         \stream_set_blocking($stdoutPipe, false);
         \stream_set_blocking($stderrPipe, false);
 
+        // Windows: stdout is a socket (ChildStdio) but stderr is a PIPE, which
+        // select() calls ready while empty and whose fread then parks. It is
+        // polled for what fstat reports waiting instead, and closes with
+        // stdout's EOF after one last poll.
+        $pollStderr = WindowsPipes::runtimeNeedsIt();
+
         while (!($outEof && $errEof)) {
             $remainingNs = $deadlineNs - \hrtime(true);
             if ($remainingNs <= 0) {
                 return ['bytes' => $data, 'reason' => self::REASON_TIMEOUT]; // wedged child — caller reaps
             }
 
+            if ($pollStderr && !$errEof) {
+                $polled = WindowsPipes::readAvailable($stderrPipe, 65536);
+                if ($polled !== '') {
+                    $stderrTail .= $polled;
+                    if (\strlen($stderrTail) > self::STDERR_TAIL_BYTES) {
+                        $stderrTail = \substr($stderrTail, -self::STDERR_TAIL_BYTES);
+                    }
+                }
+                if ($outEof) {
+                    $errEof = true;
+
+                    continue;
+                }
+            }
+
             $read = [];
             if (!$outEof) {
                 $read[] = $stdoutPipe;
             }
-            if (!$errEof) {
+            if (!$errEof && !$pollStderr) {
                 $read[] = $stderrPipe;
             }
 
@@ -474,7 +500,9 @@ final class StatelessRpc
             // raw remainder made the final tick sleep up to ~1000x past
             // the deadline (a ~1 s overshoot per poll once under a
             // millisecond remained). Convert, then clamp to one second.
-            $ready = @\stream_select($read, $null, $null, 0, (int) \min(1_000_000, \intdiv((int) $remainingNs, 1000)));
+            // (Windows polls stderr each pass, so its slice stays short.)
+            $slice = $pollStderr ? 50_000 : 1_000_000;
+            $ready = @\stream_select($read, $null, $null, 0, (int) \min($slice, \intdiv((int) $remainingNs, 1000)));
             if ($ready === false) {
                 \usleep(1000); // interrupted (signal): re-check the deadline next turn
                 continue;
