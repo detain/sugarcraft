@@ -563,10 +563,33 @@ final class CliTest extends TestCase
         $this->assertSame(50.0, $player->fixedFps);
     }
 
+    /**
+     * gifview-17: the min(Player::MAX_FPS) on the composed rate arm is a
+     * live contract, not decoration. Deleting the min() lets a hostile
+     * --fps through to the model — this pin reddens on that mutation.
+     */
+    public function testAStratosphericFpsClampsAtThePlayerCeiling(): void
+    {
+        $player = $this->wiredPlayer(['{gif}', '--fps=1000000']);
+        $this->assertSame(Player::MAX_FPS, $player->fixedFps,
+            'the rate-slot clamp is dead — --fps reached the model unbounded');
+    }
+
+    public function testTheCeilingClampsTheComposedFpsTimesSpeedPath(): void
+    {
+        // --fps seeds the rate slot, --speed multiplies it: 10 × 20000
+        // overshoots Player::MAX_FPS, and the SAME min() must catch the
+        // composed value, not just the direct --fps spelling.
+        $player = $this->wiredPlayer(['{gif}', '--fps=10', '--speed=20000']);
+        $this->assertSame(Player::MAX_FPS, $player->fixedFps,
+            'the composed path escaped the ceiling');
+    }
+
     public function testE09SpeedMaxSaturatesAtThePlayerCeiling(): void
     {
         $player = $this->wiredPlayer(['{gif}', '--speed=max']);
-        $this->assertSame(Player::MAX_FPS, $player->fixedFps);
+        $this->assertSame(Player::MAX_FPS, $player->fixedFps,
+            'the max latch shares the ceiling constant with the clamp arms');
     }
 
     public function testE09SpeedFpsSuffixIsAnAbsoluteRate(): void

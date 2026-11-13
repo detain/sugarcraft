@@ -66,7 +66,7 @@ works — inline-protocol rendering is a different route, offered by
 
 | Option                | Meaning                                                          |
 |-----------------------|------------------------------------------------------------------|
-| `--fps=N`             | Play at a uniform N frames/second instead of the GIF's delays. N is a positive number; fractions work (`--fps=12.5`). Values above `Player::MAX_FPS` clamp silently, and the scheduler's one-centisecond tick floor caps the real rate near 100 fps anyway. |
+| `--fps=N`             | Play at a uniform N frames/second instead of the GIF's delays. N is a positive number; fractions work (`--fps=12.5`). Values above `Player::MAX_FPS` clamp silently, and there is no lower clamp — any positive N is wired as entered (the scheduler's one-centisecond tick floor caps the real rate near 100 fps anyway). |
 | `--speed=N`           | Plays at the GIF's average rate multiplied by N — like `--fps` but relative. N positive, fractions accepted. |
 | `--speed=Nfps`        | An absolute rate of N frames/second (shares the rate slot with `--fps`). |
 | `--speed=max`         | Burn frames as fast as the scheduler's floors allow.              |
