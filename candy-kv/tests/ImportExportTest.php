@@ -1148,14 +1148,22 @@ final class ImportExportTest extends TestCase
 
     public function testNeitherImporterKeepsAPrivateWriteLoop(): void
     {
-        // Structural drift pin (candy-kv-051): both importers must hand
-        // their rows to the shared ImportCommit kernel. The old shape was
-        // two byte-identical private closures — one gaining a policy while
-        // the other stayed silent is exactly the bug this pins out.
+        // Structural drift pin (candy-kv-051, re-anchored for candy-kv-063):
+        // neither format class may own the commit step. The old shape was
+        // two byte-identical private closures; the S31 refactor moved the
+        // whole roster into FlatDocumentNormaliser, so the law now reads:
+        // each importer calls the shared commit exactly once, names the
+        // kernel directly nowhere, and keeps no private row-writing loop.
+        // One gaining a policy while the other stayed silent is exactly
+        // the bug this pins out — and the kv-041 roster bug proved the
+        // twin-copy shape re-opens it.
         foreach (['JsonImporter', 'YamlImporter'] as $class) {
             $source = (string) \file_get_contents(__DIR__ . '/../src/Import/' . $class . '.php');
-            $this->assertSame(1, \substr_count($source, 'ImportCommit::run'), "{$class} must commit through ImportCommit exactly once");
+            $this->assertSame(0, \substr_count($source, 'ImportCommit::run'), "{$class} must not name the commit kernel directly — rows go through FlatDocumentNormaliser");
+            $this->assertSame(1, \substr_count($source, 'FlatDocumentNormaliser::commit'), "{$class} must commit through the shared normaliser exactly once");
             $this->assertSame(0, \preg_match('/foreach\s*\(\s*\$rows[^;]*store->set/s', $source), "{$class} must not keep a private row-writing loop");
         }
+        $shared = (string) \file_get_contents(__DIR__ . '/../src/Import/FlatDocumentNormaliser.php');
+        $this->assertSame(1, \substr_count($shared, 'ImportCommit::run'), 'the commit kernel is named exactly once, in the shared normaliser');
     }
 }

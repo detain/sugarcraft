@@ -6,7 +6,6 @@ namespace SugarCraft\Kv\Import;
 
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\InputPath;
-use SugarCraft\Kv\Support\Ttl;
 use SugarCraft\Kv\YamlDialect;
 
 /**
@@ -41,6 +40,11 @@ use SugarCraft\Kv\YamlDialect;
  * integer lands as its exact digit string, and a float that storing would
  * rewrite (3.10, 1e2, 1e999) refuses the import like any other unfaithful
  * value.
+ *
+ * The normalization law itself is shared with YamlImporter through
+ * {@see FlatDocumentNormaliser} (candy-kv-063); only the JSON number
+ * fidelity half and the top-level envelope harvest stay here, because
+ * those genuinely differ per format.
  */
 final class JsonImporter
 {
@@ -57,52 +61,7 @@ final class JsonImporter
         private readonly Store $store,
         array $options = [],
     ) {
-        $this->options = self::validatedOptions($options);
-    }
-
-    /**
-     * Fail fast on the constructor `ttl` map (candy-kv-031): the options and
-     * a document share one write path, so they must share one law. A raw
-     * `'soon'` used to leak a TypeError out of resolveTtl's return type
-     * where every document-level shape answers with a domain exception.
-     *
-     * @param array<string, mixed> $options
-     * @return array<string, mixed>
-     */
-    private static function validatedOptions(array $options): array
-    {
-        if (!\array_key_exists('ttl', $options) || $options['ttl'] === null) {
-            return $options;
-        }
-        if (!\is_array($options['ttl'])) {
-            throw new \RuntimeException(
-                \sprintf('Import option "ttl" must be a map of key → seconds, got %s.', \get_debug_type($options['ttl']))
-            );
-        }
-
-        $validated = [];
-        foreach ($options['ttl'] as $key => $seconds) {
-            if (!\is_int($seconds) && !\is_numeric($seconds)) {
-                throw new \RuntimeException(
-                    \sprintf('TTL option for entry "%s" must be an integer number of seconds, got %s.', (string) $key, \get_debug_type($seconds))
-                );
-            }
-            if ((float) $seconds !== (float) (int) $seconds) {
-                throw new \RuntimeException(
-                    \sprintf('TTL option for entry "%s" must be an integer number of seconds, got %s.', (string) $key, (string) $seconds)
-                );
-            }
-            $ttl = (int) $seconds;
-            if ($ttl < 1 || $ttl > Ttl::MAX_SECONDS) {
-                throw new \RuntimeException(
-                    \sprintf('TTL option for entry "%s" must be between 1 and %d seconds.', (string) $key, Ttl::MAX_SECONDS)
-                );
-            }
-            $validated[(string) $key] = $ttl;
-        }
-        $options['ttl'] = $validated;
-
-        return $options;
+        $this->options = FlatDocumentNormaliser::validatedOptions($options);
     }
 
     /**
@@ -158,54 +117,14 @@ final class JsonImporter
             throw new \RuntimeException('Expected a JSON object mapping keys to values, got a list.');
         }
 
-        // Extract TTL map if present (values must be whole seconds).
-        $ttlMap = [];
-        if (isset($data['_ttl'])) {
-            if (!\is_array($data['_ttl'])) {
-                throw new \RuntimeException(
-                    \sprintf('_ttl must be a map of key → seconds, got %s.', \get_debug_type($data['_ttl']))
-                );
-            }
-            foreach ($data['_ttl'] as $ttlKey => $seconds) {
-                if (!\is_int($seconds) && !\is_numeric($seconds)) {
-                    throw new \RuntimeException(
-                        \sprintf('_ttl entry "%s" must be an integer number of seconds, got %s.', (string) $ttlKey, \get_debug_type($seconds))
-                    );
-                }
-                // is_numeric admits floats and float-shaped strings; the
-                // store counts whole seconds, and (int) would silently
-                // truncate 1.5 to 1 while the text promises "integer".
-                if ((float) $seconds !== (float) (int) $seconds) {
-                    throw new \RuntimeException(
-                        \sprintf('_ttl entry "%s" must be an integer number of seconds, got %s.', (string) $ttlKey, (string) $seconds)
-                    );
-                }
-                $ttlMap[(string) $ttlKey] = (int) $seconds;
-            }
-            unset($data['_ttl']);
-        }
+        // Extract the TTL envelope if present (whole seconds, or refuse).
+        $ttlMap = isset($data['_ttl']) ? FlatDocumentNormaliser::ttlMap($data['_ttl']) : [];
+        unset($data['_ttl']);
 
         // Binary entries ride base64 values plus the "_binary" flag list;
         // without it a reimport would store the base64 text as the value.
-        $binaryKeys = [];
-        if (isset($data['_binary'])) {
-            if (!\is_array($data['_binary'])) {
-                throw new \RuntimeException(
-                    \sprintf('_binary must be a list of key names, got %s.', \get_debug_type($data['_binary']))
-                );
-            }
-            foreach ($data['_binary'] as $bKey) {
-                if (!\is_string($bKey)) {
-                    // A skipped non-string member would silently demote one
-                    // intended binary entry to literal base64 text.
-                    throw new \RuntimeException(
-                        \sprintf('_binary must list key names as strings, got %s.', \get_debug_type($bKey))
-                    );
-                }
-                $binaryKeys[$bKey] = true;
-            }
-            unset($data['_binary']);
-        }
+        $binaryKeys = isset($data['_binary']) ? FlatDocumentNormaliser::binaryKeyList($data['_binary']) : [];
+        unset($data['_binary']);
 
         // Merge constructor options with file-level TTL. Document keys match
         // on their full spelling (the '@db' suffix included when present),
@@ -214,24 +133,15 @@ final class JsonImporter
 
         // Normalise every row BEFORE any write (fail-fast: a document with
         // one bad entry imports nothing rather than importing a prefix of
-        // itself and reporting a partial count).
+        // itself and reporting a partial count). The key law, the TTL
+        // horizon and the non-scalar sentence are the shared normaliser's;
+        // the number fidelity below is JSON's own.
         $rows = [];
         foreach ($data as $key => $value) {
             $key = (string) $key; // JSON object keys are strings; PHP may hand us int subscripts.
             $binary = ($binaryKeys[$key] ?? false) === true;
-            $ttl = self::resolveTtl($ttlMap, $key);
-            // The key law pre-writes too (candy-kv-030): Store::splitKey is
-            // the same authority Store::set routes by, and the walk happens
-            // HERE, so a malformed key refuses the document before any row
-            // is committed — under atomic=false the old shape left prefix
-            // rows mutated and made the docblock's refuse-before-any-write
-            // law false for exactly this error class.
-            if (Store::splitKey($key, $this->store->defaultDatabase())[1] === '') {
-                // Same law and wording Store::set applies after parsing; an
-                // empty entry key ({"":"v"}) would otherwise still poison
-                // the pre-pass's completeness.
-                throw new \InvalidArgumentException('Entry key must not be empty.');
-            }
+            $ttl = FlatDocumentNormaliser::resolveTtl($ttlMap, $key);
+            FlatDocumentNormaliser::validatedEntryKey($key, $this->store);
 
             if (\is_int($value)) {
                 $value = (string) $value;
@@ -240,15 +150,7 @@ final class JsonImporter
                 // document used round-trips as stored text; see floatTextOrFail.
                 $value = self::floatTextOrFail($value, $key, $json);
             } elseif (!\is_string($value)) {
-                // null lands here too: get_debug_type(null) = 'null'. A
-                // null once coerced silently to an empty string — explicit
-                // "nothing" is not the same as "".
-                // candy-kv-103: "of type %s", not "a %s value" — the old
-                // pattern read "has a array value"; the type name is not
-                // reliably consonant-led.
-                throw new \RuntimeException(
-                    \sprintf('Entry "%s" has a value of type %s; only strings and numbers round-trip.', $key, \get_debug_type($value))
-                );
+                FlatDocumentNormaliser::refuseNonScalar($key, $value);
             }
 
             if ($binary) {
@@ -259,47 +161,9 @@ final class JsonImporter
 
         // candy-kv-051: the live-store meeting point — existence check,
         // clobber policy and the count triple all live in ImportCommit,
-        // shared verbatim with YamlImporter (a structural pin forbids a
-        // private copy of that loop in either class).
-        $import = fn(): ImportReport => ImportCommit::run($this->store, $rows, $ifExists);
-
-        if ($atomic && $rows !== []) {
-            // Zero-entry documents skip the transaction entirely: opening a
-            // database to BEGIN/COMMIT nothing would create the SQLite file,
-            // breaking the documented law that no file exists "until the
-            // first write" (README, Data directory).
-            // Collect the databases the validated keys route to so the whole
-            // import runs inside that database's transaction. The roster MUST
-            // see every row (and use the same escape-aware '@' law Store::set
-            // routes by): the old value-type-filtered strrpos() walk missed
-            // rows whose values were numbers, letting their writes land on a
-            // second database OUTSIDE any transaction without ever tripping
-            // the multi-database refusal below.
-            $dbNames = [];
-            foreach ($rows as [$key]) {
-                $dbNames[] = Store::splitKey($key, $this->store->defaultDatabase())[0];
-            }
-
-            $uniqueDbs = \array_unique($dbNames);
-
-            // Multi-database atomic import is not supported — cross-db
-            // SQLite transactions cannot be atomic across separate .db files.
-            if (\count($uniqueDbs) > 1) {
-                throw new \RuntimeException(
-                    'Atomic import is not supported across multiple databases. ' .
-                    'Use --no-atomic (atomic=false in the library) for ' .
-                    'multi-database imports, or import each database separately.'
-                );
-            }
-
-            // Single-database: run all sets inside a transaction on that db,
-            // via the public Store API (it routes to the same cached Database
-            // the sets below use, so they all join the transaction).
-            $targetDb = $uniqueDbs[0] ?? $this->store->defaultDatabase();
-            return $this->store->transaction($targetDb, $import);
-        }
-
-        return $import();
+        // reached through the shared commit roster (candy-kv-063) that
+        // forbids a private copy in either format class.
+        return FlatDocumentNormaliser::commit($this->store, $rows, $atomic, $ifExists);
     }
 
     /**
@@ -323,7 +187,7 @@ final class JsonImporter
         // candy-kv-102: empty-document symmetry with the YAML route. The
         // dialect answers trim === '' as an empty mapping and the importer
         // commits 'Imported 0 entries.' at rc 0; json_decode('') threw
-        // Syntax error, so one document shape carried two verdicts. A
+        // Syntax error, so the same empty shape carried two verdicts. A
         // document that IS whitespace imports nothing — loudly silently,
         // exactly like its YAML twin.
         if (\trim($json) === '') {
@@ -370,32 +234,5 @@ final class JsonImporter
         }
 
         return $text;
-    }
-
-    /**
-     * @param array<string, int> $ttlMap
-     */
-    private static function resolveTtl(array $ttlMap, string $key): ?int
-    {
-        if (!\array_key_exists($key, $ttlMap)) {
-            return null;
-        }
-        $ttl = $ttlMap[$key];
-        if ($ttl <= 0) {
-            throw new \RuntimeException(
-                \sprintf('TTL for entry "%s" must be at least 1 second; omit it for a forever entry.', $key)
-            );
-        }
-        // The shared horizon (candy-kv-001): an integer-shaped value that
-        // passed the number law (PHP_INT_MAX rides the float round-trip)
-        // used to reach the writer unbounded — overflow poisons the row and
-        // a near-max value mints the forever zombie the TTL spells the
-        // opposite of.
-        if ($ttl > Ttl::MAX_SECONDS) {
-            throw new \RuntimeException(
-                \sprintf('TTL for entry "%s" exceeds the maximum of %d seconds.', $key, Ttl::MAX_SECONDS)
-            );
-        }
-        return $ttl;
     }
 }
