@@ -131,12 +131,9 @@ final class Pty implements MasterPty
 
     public function setBlocking(bool $blocking): void
     {
-        if (!@\stream_set_blocking($this->impl->stream(), $blocking)) {
-            throw new PtyException(Lang::t('stream.set_blocking_failed', [
-                'fd'       => $this->master->fd,
-                'blocking' => $blocking ? 'true' : 'false',
-            ]));
-        }
+        // The lever moved onto MasterPty itself (PTY-13); the facade is a
+        // pure delegation now — one implementation, one failure message.
+        $this->impl->setBlocking($blocking);
     }
 
     /**

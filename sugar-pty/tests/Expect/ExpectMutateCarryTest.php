@@ -114,6 +114,7 @@ final class ExpectMutateCarryTest extends TestCase
             public function resize(int $cols, int $rows): void {}
             public function size(): array { return ['rows' => 24, 'cols' => 80, 'xpix' => 0, 'ypix' => 0]; }
             public function stream(): mixed { throw new \LogicException('no stream on this stub'); }
+            public function setBlocking(bool $blocking): void {}
             public function close(): void {}
             public function isClosed(): bool { return false; }
             public function fd(): int { return -1; }

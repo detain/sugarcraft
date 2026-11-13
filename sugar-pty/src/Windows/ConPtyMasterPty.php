@@ -199,6 +199,13 @@ final class ConPtyMasterPty implements MasterPty
         );
     }
 
+    public function setBlocking(bool $blocking): void
+    {
+        throw new PtyException(
+            'a ConPTY master has no POSIX blocking mode; bound your pumps with read($len, $timeout) polling',
+        );
+    }
+
     /**
      * Same reason as {@see stream()}: a Win32 handle is not a file
      * descriptor, and handing back a number that cannot cross the boundary

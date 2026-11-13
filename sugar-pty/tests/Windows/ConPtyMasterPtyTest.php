@@ -165,4 +165,18 @@ final class ConPtyMasterPtyTest extends TestCase
             }
         }
     }
+
+    /**
+     * PTY-13: setBlocking on the contract has a ConPTY arm, and its arm
+     * is the refusal — Win32 console pipes are poll-driven, there is no
+     * blocking mode to flip. Same posture as stream()/fd(); reachable
+     * from Linux through the fake because the throw needs no FFI.
+     */
+    public function testSetBlockingRefusesBecauseConptyHasNoBlockingMode(): void
+    {
+        $this->expectException(PtyException::class);
+        $this->expectExceptionMessage('no POSIX blocking mode');
+
+        $this->master->setBlocking(false);
+    }
 }

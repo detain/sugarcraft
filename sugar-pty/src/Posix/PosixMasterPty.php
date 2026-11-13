@@ -205,6 +205,16 @@ final class PosixMasterPty implements MasterPty
         return \SugarCraft\Pty\SizeIoctl::unpack($ws);
     }
 
+    public function setBlocking(bool $blocking): void
+    {
+        if (!@\stream_set_blocking($this->stream(), $blocking)) {
+            throw new PtyException(\SugarCraft\Pty\Lang::t('stream.set_blocking_failed', [
+                'fd'       => $this->fd,
+                'blocking' => $blocking ? 'true' : 'false',
+            ]));
+        }
+    }
+
     /**
      * @return mixed
      * @see creack/pty.Pty.Fd()

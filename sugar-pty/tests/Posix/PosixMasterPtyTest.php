@@ -368,4 +368,57 @@ final class PosixMasterPtyTest extends TestCase
         }
         $this->assertTrue($master->isClosed());
     }
+
+    /**
+     * PTY-13 acceptance: the lever is a contract member — taken through
+     * the MasterPty type (not the concretype), it must actually move the
+     * mode: non-blocking makes the mode-governed null-timeout read
+     * report idleness immediately instead of parking. A stub satisfying
+     * the roster assert cannot satisfy this one.
+     */
+    public function testSetBlockingThroughTheContractFlipsRealMasterMode(): void
+    {
+        $this->requirePtySyscalls();
+
+        $master = (new PosixPtySystem())->open()->master();
+        $this->assertInstanceOf(\SugarCraft\Pty\Contract\MasterPty::class, $master);
+
+        try {
+            /** @var \SugarCraft\Pty\Contract\MasterPty $contract */
+            $contract = $master;
+            $contract->setBlocking(false);
+            $start = \microtime(true);
+            $this->assertNull(
+                $contract->read(16, null),
+                'an idle non-blocking master must answer null — never park, never launder idle as the EOF token',
+            );
+            $this->assertLessThan(
+                0.1,
+                \microtime(true) - $start,
+                'setBlocking(false) through the contract must make the mode-governed read return at once',
+            );
+            // The lever is repeatable both ways without throwing.
+            $contract->setBlocking(true);
+            $contract->setBlocking(false);
+        } finally {
+            $master->close();
+        }
+    }
+
+    /**
+     * PTY-13: a closed master refuses the lever loudly through the same
+     * door read() and write() use (assertOpen inside stream()) — the
+     * facade-level twin in IoTest now proves the delegation, not a
+     * second implementation.
+     */
+    public function testSetBlockingOnClosedMasterThrows(): void
+    {
+        $this->requirePtySyscalls();
+
+        $master = (new PosixPtySystem())->open()->master();
+        $master->close();
+
+        $this->expectException(PtyException::class);
+        $master->setBlocking(false);
+    }
 }

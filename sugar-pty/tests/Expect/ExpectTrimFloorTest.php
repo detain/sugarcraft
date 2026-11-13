@@ -139,6 +139,7 @@ final class TrimFixtureMaster implements MasterPty
     public function resize(int $cols, int $rows): void {}
     public function size(): array { return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0]; }
     public function stream(): mixed { throw new \LogicException('TrimFixtureMaster has no real stream'); }
+    public function setBlocking(bool $blocking): void {}
     public function close(): void {}
     public function isClosed(): bool { return false; }
     public function fd(): int { return -1; }

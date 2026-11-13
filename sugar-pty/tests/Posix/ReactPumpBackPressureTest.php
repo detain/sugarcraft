@@ -187,6 +187,14 @@ final class SlowWriteMasterPty implements MasterPty
     {
         return $this->stream;
     }
+    /**
+     * MasterPty contract member (PTY-13). Scripted fakes hold no real
+     * blocking mode — nothing they return depends on it.
+     */
+    public function setBlocking(bool $blocking): void
+    {
+    }
+
 
     public function fd(): int
     {

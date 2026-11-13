@@ -71,6 +71,22 @@ interface MasterPty
     public function stream(): mixed;
 
     /**
+     * Toggle blocking mode on the master without exposing the stream.
+     *
+     * The lever a {@see \SugarCraft\Pty\Pty} facade user already knows;
+     * it was only ever reachable on the contract through
+     * `stream_set_blocking($master->stream(), ...)`, which made the
+     * sanctioned path bypass the type. POSIX arms flip the fd; ConPTY
+     * has no blocking mode at all, so its arm throws with the same
+     * posture as {@see stream()} and {@see fd()} — poll
+     * `read($len, $timeout)` there.
+     *
+     * @throws PtyException when the flip cannot be applied (POSIX) or the
+     *         backend has no such mode (ConPTY)
+     */
+    public function setBlocking(bool $blocking): void;
+
+    /**
      * Close the master fd. Idempotent.
      *
      * @see creack/pty.Close()
@@ -94,8 +110,9 @@ interface MasterPty
      * to {@see PosixMasterPty} to access the underlying fd — a common
      * need when wiring FFI-level integrations.
      *
-     * Note: Windows does not have POSIX fd semantics; any Windows Pty
-     * implementation (not yet built) should throw if this is called.
+     * ConPtyMasterPty throws: Win32 pipe handles are not file
+     * descriptors, and it has thrown since the backend shipped — the
+     * throw is the contract's answer for that backend, not a gap.
      */
     public function fd(): int;
 }

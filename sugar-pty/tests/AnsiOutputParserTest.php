@@ -269,6 +269,14 @@ final class FakeMasterPty2 implements MasterPty
     {
         return null;
     }
+    /**
+     * MasterPty contract member (PTY-13). Scripted fakes hold no real
+     * blocking mode — nothing they return depends on it.
+     */
+    public function setBlocking(bool $blocking): void
+    {
+    }
+
 
     public function close(): void {}
 
@@ -319,6 +327,14 @@ final class FakeMasterPtyQueue implements MasterPty
     {
         return null;
     }
+    /**
+     * MasterPty contract member (PTY-13). Scripted fakes hold no real
+     * blocking mode — nothing they return depends on it.
+     */
+    public function setBlocking(bool $blocking): void
+    {
+    }
+
 
     public function close(): void {}
 

@@ -51,6 +51,8 @@ final class PosixPumpFlushEmptyTest extends TestCase
                 return null;
             }
 
+            public function setBlocking(bool $blocking): void {}
+
             public function close(): void {}
 
             public function isClosed(): bool

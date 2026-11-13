@@ -132,6 +132,7 @@ final class InterfacesTest extends TestCase
         $this->assertContains('resize', $methods);
         $this->assertContains('size', $methods);
         $this->assertContains('stream', $methods);
+        $this->assertContains('setBlocking', $methods);
         $this->assertContains('close', $methods);
     }
 

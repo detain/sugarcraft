@@ -68,6 +68,8 @@ final class ExpectValidationTest extends TestCase
                 throw new \LogicException('This stub carries no real stream');
             }
 
+            public function setBlocking(bool $blocking): void {}
+
             public function close(): void {}
 
             public function isClosed(): bool
