@@ -69,4 +69,6 @@ return [
     'cli.ca_file_unreadable' => 'CA file {file} is not a readable regular file',
     'cli.invalid_timeout' => 'Timeout {timeout} is not a number of seconds between 1 and 3600',
     'cli.render_resend_divergence' => 'Note: --render previews the SMTP MIME envelope; your configured transport is Resend, which posts a JSON payload instead. The bytes below are not what ships.',
+    'cli.empty_message' => 'Nothing to send: the message carries no body, no HTML part, and no attachment. Pass --body, pipe input, or use --html.',
+    'cli.stdin_too_large' => 'STDIN input exceeded the {limit}-byte cap; trim the input or attach it as a file.',
 ];

@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'Soubor CA {file} není čitelný běžný soubor',
     'cli.invalid_timeout' => 'Timeout {timeout} není počet sekund mezi 1 a 3600',
     'cli.render_resend_divergence' => 'Poznámka: --render zobrazuje náhled SMTP MIME obálky; nakonfigurovaný transport je Resend, který posílá JSON payload. Následující bajty se neodešlou.',
+    'cli.empty_message' => 'Není co odeslat: zpráva neobsahuje tělo, HTML část ani přílohu. Použijte --body, převeďte vstup troubou, nebo použijte --html.',
+    'cli.stdin_too_large' => 'Vstup ze STDIN překročil limit {limit} bajtů; zkraťte vstup, nebo jej přiložte jako soubor.',
 ];

@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'Plik CA {file} nie jest zwykłym plikiem do odczytu',
     'cli.invalid_timeout' => 'Limit czasu {timeout} nie jest liczbą sekund od 1 do 3600',
     'cli.render_resend_divergence' => 'Uwaga: --render podgląda kopertę SMTP MIME; skonfigurowany transport to Resend, który wysyła ładunek JSON. Poniższe bajty nie są tym, co zostanie wysłane.',
+    'cli.empty_message' => 'Brak treści do wysłania: wiadomość nie zawiera ciała, części HTML ani załącznika. Użyj --body, przekaż dane standardowym wejściem albo użyj --html.',
+    'cli.stdin_too_large' => 'Dane ze STDIN przekroczyły limit {limit} bajtów; skróć wejście lub dołącz je jako plik.',
 ];

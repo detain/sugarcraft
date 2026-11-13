@@ -69,4 +69,6 @@ return [
     'cli.ca_file_unreadable' => "Le fichier CA {file} n'est pas un fichier régulier lisible",
     'cli.invalid_timeout' => "Le délai {timeout} n'est pas un nombre de secondes entre 1 et 3600",
     'cli.render_resend_divergence' => "Remarque : --render prévisualise l'enveloppe SMTP MIME ; le transport configuré est Resend, qui publie une charge JSON. Les octets ci-dessous ne sont pas ce qui sera envoyé.",
+    'cli.empty_message' => 'Rien à envoyer : le message ne contient ni corps, ni partie HTML, ni pièce jointe. Utilisez --body, transmettez l’entrée par tube ou employez --html.',
+    'cli.stdin_too_large' => 'L’entrée STDIN a dépassé la limite de {limit} octets ; réduisez l’entrée ou joignez-la comme fichier.',
 ];

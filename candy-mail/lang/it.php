@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'Il file CA {file} non è un file regolare leggibile',
     'cli.invalid_timeout' => 'Il timeout {timeout} non è un numero di secondi tra 1 e 3600',
     'cli.render_resend_divergence' => "Nota: --render mostra l'anteprima della busta SMTP MIME; il trasporto configurato è Resend, che invia un payload JSON. I byte seguenti non sono ciò che verrà spedito.",
+    'cli.empty_message' => 'Niente da inviare: il messaggio non contiene corpo, né parte HTML, né allegati. Usare --body, inviare l’input tramite pipe oppure usare --html.',
+    'cli.stdin_too_large' => 'L’input STDIN ha superato il limite di {limit} byte; ridurre l’input o allegarlo come file.',
 ];

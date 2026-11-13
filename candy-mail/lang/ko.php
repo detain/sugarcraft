@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'CA 파일 {file}이 읽을 수 있는 일반 파일이 아닙니다',
     'cli.invalid_timeout' => '타임아웃 {timeout}이 1~3600 사이의 초 값이 아닙니다',
     'cli.render_resend_divergence' => '참고: --render는 SMTP MIME 봉투 미리보기를 표시합니다. 구성된 전송 수단은 Resend이며 JSON 페이로드를 보냅니다. 아래 바이트는 실제 전송 내용이 아닙니다.',
+    'cli.empty_message' => '보낼 내용이 없습니다: 메시지에 본문, HTML 부분, 첨부 파일이 없습니다. --body를 사용하거나 입력을 파이프하거나 --html을 사용하세요.',
+    'cli.stdin_too_large' => 'STDIN 입력이 {limit}바이트 상한을 초과했습니다. 입력을 줄이거나 파일로 첨부하세요.',
 ];

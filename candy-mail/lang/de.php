@@ -69,4 +69,6 @@ return [
     'cli.ca_file_unreadable' => 'CA-Datei {file} ist keine lesbare reguläre Datei',
     'cli.invalid_timeout' => 'Timeout {timeout} ist keine Anzahl Sekunden zwischen 1 und 3600',
     'cli.render_resend_divergence' => 'Hinweis: --render zeigt den SMTP-MIME-Umschlag als Vorschau; der konfigurierte Versandweg ist Resend und sendet eine JSON-Nutzlast. Die folgenden Bytes werden nicht versendet.',
+    'cli.empty_message' => 'Nichts zu senden: Die Nachricht enthält keinen Textkörper, keinen HTML-Teil und keine Anlage. Geben Sie --body an, leiten Sie die Eingabe weiter, oder verwenden Sie --html.',
+    'cli.stdin_too_large' => 'Die STDIN-Eingabe hat die Grenze von {limit} Byte überschritten; Eingabe kürzen oder als Datei anhängen.',
 ];

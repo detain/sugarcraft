@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'ملف CA {file} ليس ملفًا عاديًا قابلًا للقراءة',
     'cli.invalid_timeout' => 'المهلة {timeout} ليست عدد ثوانٍ بين 1 و3600',
     'cli.render_resend_divergence' => 'ملاحظة: يعرض --render معاينة مظروف SMTP MIME؛ الناقل المُهيّأ هو Resend الذي ينشر حمولة JSON. البايتات أدناه ليست ما سيتم إرساله.',
+    'cli.empty_message' => 'لا يوجد ما يُرسل: الرسالة لا تحتوي على متن أو جزء HTML أو مرفق. استخدم --body أو مرّر الإدخال أو استخدم --html.',
+    'cli.stdin_too_large' => 'تجاوز إدخال STDIN الحد البالغ {limit} بايتًا; قلّل الإدخال أو أرفقه كملف.',
 ];

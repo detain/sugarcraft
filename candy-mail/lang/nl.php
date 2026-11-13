@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'CA-bestand {file} is geen leesbaar regulier bestand',
     'cli.invalid_timeout' => 'Timeout {timeout} is geen aantal seconden tussen 1 en 3600',
     'cli.render_resend_divergence' => 'Let op: --render toont een voorbeeld van de SMTP MIME-envelop; de geconfigureerde transport is Resend, die een JSON-payload plaatst. De onderstaande bytes zijn niet wat verzonden wordt.',
+    'cli.empty_message' => 'Er is niets te verzenden: het bericht bevat geen tekstbody, geen HTML-onderdeel en geen bijlage. Gebruik --body, voer de invoer via een pipe in, of gebruik --html.',
+    'cli.stdin_too_large' => 'De STDIN-invoer overschreed de limiet van {limit} bytes; verkort de invoer of voeg deze toe als bestand.',
 ];

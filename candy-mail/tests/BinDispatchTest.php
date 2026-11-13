@@ -116,6 +116,39 @@ final class BinDispatchTest extends TestCase
         $this->assertStringContainsString('Usage:', $result['out']);
     }
 
+    public function testZeroPartMessageIsRefusedBeforeRender(): void
+    {
+        // `--render </dev/null` (empty closed non-tty stdin, no --body, no
+        // --html, no attachment) used to exit 0 with a header-only document
+        // no receiver accepts as mail. The composition check refuses it now,
+        // before the render branch and before any transport is consulted.
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'you@example.com', '--subject', 'Hollow', '--render'],
+            env: ['CANDY_MAIL_SMTP_HOST' => 'smtp.invalid.test']
+        );
+
+        $this->assertSame(1, $result['status'], $result['err']);
+        $this->assertSame('', $result['out']);
+        $this->assertStringContainsString('no body', $result['err']);
+    }
+
+    public function testStdinAccumulationIsCappedAndRefusedLoudly(): void
+    {
+        // The cap guard: a pathological producer (the `yes | candy-mail`
+        // shape) is refused past 4 MiB instead of draining sender memory,
+        // and the refusal names the limit rather than silently truncating.
+        $flood = str_repeat('x', 4 * 1024 * 1024 + 8192);
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'you@example.com', '--render'],
+            $flood,
+            env: ['CANDY_MAIL_SMTP_HOST' => 'smtp.invalid.test']
+        );
+
+        $this->assertSame(1, $result['status'], $result['err']);
+        $this->assertStringContainsString('4194304', $result['err']);
+        $this->assertStringNotContainsString('MIME-Version', $result['out']);
+    }
+
     public function testEnvironmentSenderPipelineRendersInsteadOfShowingHelp(): void
     {
         // The M-5 reproduction, verbatim: an env-provided sender plus --to

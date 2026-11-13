@@ -258,6 +258,50 @@ export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to the plain-text 
 ```
 <!-- @rename-keep -->
 
+### Running unattended
+
+Cron jobs, systemd units, and containers have no terminal, and STDIN there is
+an environment detail, not an intent: a closed non-tty stream (redirected from
+`/dev/null`, or the default of a hardened unit) reads as an empty body. Since
+a message with no body, no HTML part, and no attachment composes to zero MIME
+parts, the CLI now **refuses** that shape loudly (exit 1) instead of mailing
+or previewing a hollow envelope. Unattended senders therefore always pass
+`--body` (or `--html`) explicitly, or pipe real content:
+
+```bash
+# crontab — body on the command line, credentials from an EnvironmentFile-
+# style export block, never from an interactive terminal assumption:
+*/15 * * * * candy-mail --from reports@example.com --to oncall@example.com \
+    --subject "Nightly summary" --body "$(tail -n 20 /var/log/nightly.log)"
+
+# systemd unit — feed the body through a pipe so the service reads content,
+# not a tty; source the credential env from a root-owned 600 file.
+ExecStart=/bin/sh -c '. /etc/candy-mail.env; printf "%%s" "$BODY_TEXT" | \
+    /usr/local/bin/candy-mail --from bot@example.com --to team@example.com'
+
+# container — -i keeps STDIN open so the pipe actually delivers:
+docker run --rm -i candy-mail --from me@example.com --to you@example.com < body.txt
+```
+
+STDIN accumulation is capped at 4 MiB per run: a runaway producer
+(`yes | candy-mail`) is refused at the cap before any connection is paid, the
+same loud-over-truncating posture as `Attachment::MAX_BYTES`. Credentials come
+from the environment in every unattended shape — the `CANDY_MAIL_SMTP_*`
+variables above are read identically under cron, systemd, and containers;
+the flags `--helo/--ca-file/--timeout` override their env rows when passed.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success — includes `--help`, `--version`, and `--render` |
+| 1 | Every refusal: bad input, missing/invalid config, TLS or relay failure |
+
+(The build script `tools/build-phar.php` runs on a different scale — it exits
+2 on a failed preflight; it is a build tool, not the shipped CLI.)
+Differentiated refusal codes per failure class remain a separate open
+CONV/CLI decision; until then, script authors branch on 0 vs 1 only.
+
 Error **messages** follow the standard `LC_ALL`/`LC_MESSAGES`/`LANG` environment (16
 locales ship); the usage/help text is English by design. Examples under `examples/`
 are offline-safe: without real credentials they print the composed message instead of

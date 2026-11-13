@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'CA dosyası {file} okunabilir normal bir dosya değil',
     'cli.invalid_timeout' => 'Zaman aşımı {timeout}, 1 ile 3600 arasında bir saniye sayısı değil',
     'cli.render_resend_divergence' => 'Not: --render SMTP MIME zarfının önizlemesini gösterir; yapılandırılan taşıyıcı Resend olup JSON yük gönderir. Aşağıdaki baytlar gönderilecek içerik değildir.',
+    'cli.empty_message' => 'Gönderilecek bir şey yok: ileti gövde, HTML bölümü ya da ek taşımıyor. --body kullanın, girdiyi borulayın ya da --html kullanın.',
+    'cli.stdin_too_large' => 'STDIN girdisi {limit} bayt sınırını aştı; girdiyi kısaltın ya da dosya olarak ekleyin.',
 ];

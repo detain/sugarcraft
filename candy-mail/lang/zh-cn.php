@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'CA 文件 {file} 不是可读的常规文件',
     'cli.invalid_timeout' => '超时 {timeout} 不是 1 到 3600 之间的秒数',
     'cli.render_resend_divergence' => '注意：--render 预览 SMTP MIME 信封；已配置的传输方式是 Resend，它提交 JSON 载荷。下面的字节不是实际发送的内容。',
+    'cli.empty_message' => '没有可发送的内容：邮件不包含正文、HTML 部分或附件。请使用 --body、通过管道输入，或使用 --html。',
+    'cli.stdin_too_large' => 'STDIN 输入超过了 {limit} 字节上限；请缩减输入或将其作为文件附件。',
 ];

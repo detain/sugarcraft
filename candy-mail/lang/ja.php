@@ -62,4 +62,6 @@ return [
     'cli.ca_file_unreadable' => 'CA ファイル {file} は読み取り可能な通常のファイルではありません',
     'cli.invalid_timeout' => 'タイムアウト {timeout} は 1 から 3600 の秒数ではありません',
     'cli.render_resend_divergence' => '注意: --render は SMTP MIME エンベロープのプレビューを表示します。設定済みのトランスポートは Resend で、JSON ペイロードが送信されます。以下のバイトは実際の送信内容ではありません。',
+    'cli.empty_message' => '送信する内容がありません: メッセージに本文、HTML パート、添付ファイルが含まれていません。--body を指定するか、入力パイプするか、--html を使用してください。',
+    'cli.stdin_too_large' => 'STDIN 入力が上限 {limit} バイトを超過しました。入力を削減するか、ファイルとして添付してください。',
 ];

@@ -162,8 +162,28 @@ function main(array $argv): int
     // Read body from STDIN if available and no --body given
     $body = $args['opts']['body'] ?? '';
     if ($body === '' && !\feof(STDIN) && !\stream_isatty(STDIN)) {
+        // Hard local ceiling on the STDIN accumulation (4 MiB): the old
+        // unbounded fgets loop turned a pathological producer —
+        // `yes | candy-mail` — into sender-side memory exhaustion before a
+        // single transport byte was spent. The rationale mirrors
+        // Attachment::MAX_BYTES: refuse loud past the cap, never truncate
+        // (a silent clip would mail a body the caller never composed).
+        $capBytes = 4 * 1024 * 1024;
+        $overCap  = false;
         while (!\feof(STDIN)) {
-            $body .= \fgets(STDIN);
+            $chunk = \fread(STDIN, 65536);
+            if ($chunk === false) {
+                break; // read error or EOF — the feof() loop condition ends it
+            }
+            $body .= $chunk;
+            if (\strlen($body) > $capBytes) {
+                $overCap = true;
+                break;
+            }
+        }
+        if ($overCap) {
+            fwrite(STDERR, Lang::t('cli.stdin_too_large', ['limit' => (string) $capBytes]) . "\n");
+            return 1;
         }
         $body = \trim($body);
     }
@@ -177,6 +197,16 @@ function main(array $argv): int
         // pre-STARTTLS server lines; sugar-core's untrusted choke strips
         // SGR/OSC/BEL before they reach the terminal.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.error', ['message' => $e->getMessage()])) . "\n");
+        return 1;
+    }
+
+    // A message that would compose to ZERO MIME parts is a refusal, not a
+    // send: relays reject bare-header documents, and --render used to exit 0
+    // certifying a structure no receiver accepts as mail. This covers every
+    // shape — an empty closed non-tty STDIN, a bare --subject, a signature
+    // with no body (bodyWithSignature() drops it without one).
+    if ($email->bodyWithSignature() === null && $email->htmlBody === null && $email->attachments === []) {
+        fwrite(STDERR, Lang::t('cli.empty_message') . "\n");
         return 1;
     }
 
@@ -675,7 +705,8 @@ Options:
   --cc <addr>          CC recipient (may be repeated)
   --bcc <addr>         BCC recipient (may be repeated)
   --subject <s>        Email subject
-  --body <text>        Email body (else reads STDIN)
+  --body <text>        Email body (else reads STDIN, up to 4 MiB; a message
+                       with no body, HTML part, or attachment is refused)
   --html <html>        HTML body alternative
   --attach <file>      Attach a file (may be repeated)
   --reply-to <addr>    Reply-to address
