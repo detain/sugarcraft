@@ -287,8 +287,17 @@ final class SyntheticTest extends TestCase
     public function testPlayPhpNoArgsEmitsNoWarnings(): void
     {
         $playPhp = \dirname(__DIR__) . '/examples/play.php';
-        $cmd = 'bash -c ' . escapeshellarg('echo q | php ' . escapeshellarg($playPhp) . ' 2>&1');
-        $stderr = shell_exec($cmd);
+        // No shell: PHP_BINARY with "q\n" as a staged-file stdin, stdout+stderr
+        // both captured (the child exits on its own, so blocking reads end).
+        $in = (string) tempnam(sys_get_temp_dir(), 'sv-play-');
+        file_put_contents($in, "q\n");
+        $proc = proc_open([PHP_BINARY, $playPhp], [0 => ['file', $in, 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc);
+        $stderr = (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($proc);
+        @unlink($in);
 
         $this->assertStringNotContainsString('Warning:', (string) $stderr);
         $this->assertStringNotContainsString('Undefined array key', (string) $stderr);
