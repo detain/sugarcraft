@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Subscriptions;
+use SugarCraft\Core\TickRequest;
 use SugarCraft\Core\View;
 use SugarCraft\Testing\ProgramSimulator;
 use SugarCraft\Testing\TestResult;
@@ -350,5 +351,27 @@ final class ProgramSimulatorTest extends TestCase
         $finalModel = $result->model;
         $this->assertSame(1, $finalModel->count());
         $this->assertCount(1, $result->cmds);
+    }
+
+    public function testSelfReferencingTickRequestHitsThePumpIterationCeiling(): void
+    {
+        // The Batch/Sequence/TickRequest legs continue before the update-leg
+        // cycle counter, so a producer that re-enqueues forever never trips
+        // MAX_CYCLES — the queue-iteration ceiling is the bound that catches
+        // it. A TickRequest whose producer returns itself is the minimal
+        // never-reaching-an-update loop.
+        $self = null;
+        $self = new TickRequest(
+            seconds: 0.001,
+            produce: static function () use (&$self): ?Msg {
+                return $self;
+            },
+        );
+
+        $sim = ProgramSimulator::for(new CounterModel());
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('pump() exceeded');
+        $sim->addMsgs($self)->run();
     }
 }

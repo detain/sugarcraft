@@ -98,6 +98,14 @@ final class ProgramSimulator
     /** Safety bound on update-legs per drained message chain (see pump()). */
     private const MAX_CYCLES = 10_000;
 
+    /**
+     * Hard ceiling on pump() queue iterations (any message processed, not
+     * just update legs) — see pump(): the Batch/Sequence/TickRequest legs
+     * continue before the update-leg cycle counter, so a producer that
+     * re-enqueues forever never touches MAX_CYCLES.
+     */
+    private const MAX_PUMP_ITERATIONS = 100_000;
+
     private ?\Closure $fakeCmdRunner = null;
 
     /** Set once a QuitMsg/InterruptMsg has been intercepted mid-drain. */
@@ -434,19 +442,29 @@ final class ProgramSimulator
      * through this same pump. The mirror is partial: see the class docblock
      * and the README "Simulation subset" section for what is NOT intercepted.
      *
-     * The $maxCycles bound (self::MAX_CYCLES = 10,000) guards against
-     * infinite cmd loops in models that produce a cmd on every update. It
-     * is fixed — a model that trips it is looping, not stretching a limit,
-     * and the throw names it.
+     * Two bounds guard the drain, both fixed throws naming themselves: the
+     * update-leg cycle counter (self::MAX_CYCLES = 10,000) catches models
+     * that produce a cmd on every update; a queue-iteration ceiling
+     * (self::MAX_PUMP_ITERATIONS = 100,000) catches legs that never reach
+     * an update at all — a Batch/Sequence member or TickRequest producer
+     * whose result re-enqueues forever would otherwise spin the loop with
+     * the cycle counter untouched.
      *
      * @param list<string> $frames view() outputs collected across the run
      */
     private function pump(Model $model, Msg $msg, array &$frames): Model
     {
-        $pending   = [$msg];
-        $cycles    = 0;
+        $pending    = [$msg];
+        $cycles     = 0;
+        $iterations = 0;
 
         while ($pending !== []) {
+            if (++$iterations > self::MAX_PUMP_ITERATIONS) {
+                throw new RuntimeException(
+                    Lang::t('simulator.pump_overflow', ['max' => self::MAX_PUMP_ITERATIONS])
+                );
+            }
+
             if ($this->stopped) {
                 $this->dropped += count($pending);
                 break;
