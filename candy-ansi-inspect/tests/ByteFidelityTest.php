@@ -831,6 +831,39 @@ final class ByteFidelityTest extends TestCase
         }
     }
 
+    public function testTrailingBareEscReportsCancelledAndSwallowedWindowBytes(): void
+    {
+        // AIP-11 / finding 010: finishPending() emitted the dangling ESC and
+        // dropped the rest of the window — the sequence the ESC had cancelled
+        // ahead of it, and any byte the parser swallowed after it (0x7F stays
+        // Action::None in Escape). Every window byte now keeps its own segment
+        // in stream order, so a tail conserves 100 % of its bytes.
+        $cases = [
+            'cancelled CSI ahead of the ESC' => ["\x1b[1;2\x1b", ["\x1b[1;2", "\x1b"]],
+            'abandoned SS3, ESC, ignored DEL' => ["\x1bO\x1b\x7f", ["\x1bO", "\x1b", "\x7f"]],
+            'pending text, cancelled CSI, ESC' => ["ok\x1b[31\x1b", ["ok", "\x1b[31", "\x1b"]],
+        ];
+
+        foreach ($cases as $name => [$input, $expected]) {
+            $segments = Inspector::parse($input);
+
+            $this->assertSame(
+                $expected,
+                array_map(static fn($segment): string => $segment->raw(), $segments),
+                $name,
+            );
+            $this->assertSame($input, self::reemit($segments), $name . ' byte-for-byte');
+        }
+
+        $segments = Inspector::parse("\x1b[1;2\x1b");
+        $this->assertStringEndsWith(
+            ' — cancelled',
+            $segments[0]->describe(),
+            'the prelude the ESC cancelled is labelled cancelled',
+        );
+        $this->assertStringStartsWith('ESC ', $segments[1]->describe());
+    }
+
     public function testMidSequenceC0AndC1ExecuteKeepTheirPrelude(): void
     {
         // AIP-10 / finding 009: an executed C0/C1 byte mid-sequence used to

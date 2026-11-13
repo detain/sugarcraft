@@ -223,8 +223,9 @@ final class AnsiHandler implements Handler
      * Finalise the end-of-stream tail after the parser has been flushed.
      *
      * Flushes any buffered text, then emits a trailing bare ESC (when the
-     * stream ended mid-escape), a dangling SS3 intermediate (ESC O with no
-     * final byte) and — for any other escape state the stream never left —
+     * stream ended mid-escape) together with the bytes it cancelled and any
+     * the parser swallowed after it, a dangling SS3 intermediate (ESC O with
+     * no final byte) and — for any other escape state the stream never left —
      * the exact bytes of the unterminated sequence. Shared by the one-shot
      * {@see parse()} and the streaming {@see StreamingInspector::finish()} so
      * both handle the dangling tail identically — and so the streaming path
@@ -256,7 +257,38 @@ final class AnsiHandler implements Handler
         $this->flushPendingSs3();
 
         if ($stateBeforeFlush === State::Escape) {
-            $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
+            // The dangling introducer is the LAST ESC in the window: whatever
+            // sits ahead of it belongs to a sequence this ESC cancelled, and
+            // anything behind it is a byte the parser swallowed without
+            // executing (0x7F stays Action::None in Escape). Report all three
+            // pieces in stream order so no byte vanishes (finding 010).
+            $escPos = strrpos($tailBytes, "\x1b");
+            if ($escPos !== false) {
+                $cancelled = $escPos > 0 ? substr($tailBytes, 0, $escPos) : '';
+                $swallowed = substr($tailBytes, $escPos + 1);
+                if ($cancelled !== '') {
+                    $this->segments[] = new SequenceSegment(
+                        $cancelled,
+                        Inspector::describeTruncated($cancelled) . ' — cancelled',
+                    );
+                }
+                $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
+                if ($swallowed !== '') {
+                    $this->segments[] = new SequenceSegment(
+                        $swallowed,
+                        Inspector::describeTruncated($swallowed),
+                    );
+                }
+            } else {
+                // feed() appends every byte before the parser advances, so an
+                // Escape state without an ESC in the window cannot normally
+                // happen — emit the introducer anyway rather than forget it,
+                // and keep the window bytes as the unterminated tail.
+                $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
+                if ($tailBytes !== '') {
+                    $this->segments[] = new SequenceSegment($tailBytes, Inspector::describeTruncated($tailBytes));
+                }
+            }
             $tailBytes = '';
         }
 
