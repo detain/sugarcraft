@@ -59,9 +59,13 @@ final class Fade
         return \max(0.0, \min(1.0, $this->easing()->evaluate($progress)));
     }
 
+    /** Memoized default curve (sugar-overlay-077): animation ticks news a
+     *  driver per frame and each driver used to news this cubic afresh. */
+    private static ?CubicBezier $defaultEasing = null;
+
     private function easing(): CubicBezier
     {
-        return $this->easing ?? CubicBezier::easeInOut();
+        return $this->easing ?? (self::$defaultEasing ??= CubicBezier::easeInOut());
     }
 
     /**

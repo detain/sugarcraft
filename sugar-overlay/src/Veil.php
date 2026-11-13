@@ -74,6 +74,44 @@ final class Veil
      */
     private ?\Closure $bufferFactory = null;
 
+    /**
+     * Shared default drivers for the enum spellings (sugar-overlay-077):
+     * animate() resolved the kind every frame and each resolution news a
+     * driver that itself news a fresh cubic bezier. The enum path carries
+     * no per-instance state, so one shared instance per kind is
+     * byte-equivalent; configured Fade/Scale/Slide objects still ride
+     * their own instances untouched.
+     *
+     * @var array<string, Fade|Scale|Slide>
+     */
+    private static array $defaultDrivers = [];
+
+    /**
+     * Single-slot memo for {@see dimPen()} (sugar-overlay-032): during a
+     * composite the pen is a pure function of this instance's
+     * backdropOpacity, but dimLine() used to rebuild the same array once
+     * per background row.
+     */
+    private ?array $dimPenMemo = null;
+
+    /** @var int|null the backdropOpacity the dimPenMemo was built for */
+    private ?int $dimPenMemoOpacity = null;
+
+    /**
+     * Single-slot memo for {@see applyBorderChrome()} (sugar-overlay-075):
+     * an animation tick re-composites the SAME framed bytes against the
+     * SAME border, and re-rendering the chrome through sugar-style each
+     * tick is pure waste. The slot holds the Border reference itself, so
+     * a replaced border can never alias a stale render.
+     */
+    private ?Border $borderMemoBorder = null;
+
+    /** @var string|null the content the borderMemoValue was rendered for */
+    private ?string $borderMemoContent = null;
+
+    /** @var string|null rendered chrome for the held (border, content) pair */
+    private ?string $borderMemoValue = null;
+
     /** @var Position|null Vertical position anchor for per-veil positioning */
     private readonly ?Position $vPosition;
 
@@ -497,9 +535,20 @@ final class Veil
         if ($this->border === null) {
             return $content;
         }
-        return Style::new()
+
+        if ($this->borderMemoBorder === $this->border && $this->borderMemoContent === $content) {
+            return (string) $this->borderMemoValue;
+        }
+
+        $rendered = Style::new()
             ->border($this->border)
             ->render($content);
+
+        $this->borderMemoBorder = $this->border;
+        $this->borderMemoContent = $content;
+        $this->borderMemoValue = $rendered;
+
+        return $rendered;
     }
 
     /**
@@ -744,11 +793,14 @@ final class Veil
             return $animation;
         }
 
-        return match ($animation) {
+        if ($animation === null) {
+            return null;
+        }
+
+        return self::$defaultDrivers[$animation->name] ??= match ($animation) {
             AnimationKind::SLIDE => Slide::new(),
             AnimationKind::FADE => Fade::new(),
             AnimationKind::SCALE => Scale::new(),
-            null => null,
         };
     }
 
@@ -1228,17 +1280,26 @@ final class Veil
             return null;
         }
 
+        if ($this->dimPenMemo !== null && $this->dimPenMemoOpacity === $opacity) {
+            return $this->dimPenMemo;
+        }
+
         $factor = 1.0 - ($opacity / 100.0);
         $r = (int) \round(255 * $factor);
         $g = (int) \round(255 * $factor);
         $b = (int) \round(255 * $factor);
 
-        return [
+        $pen = [
             'open'  => "\e[38;2;{$r};{$g};{$b}m",
             'close' => "\e[39m",
             'openSeg'  => ['kind' => 'sgr', 'bytes' => "\e[38;2;{$r};{$g};{$b}m", 'width' => 0, 'id' => "38;2;{$r};{$g};{$b}"],
             'closeSeg' => ['kind' => 'sgr', 'bytes' => "\e[39m", 'width' => 0, 'id' => '39'],
         ];
+
+        $this->dimPenMemo = $pen;
+        $this->dimPenMemoOpacity = $opacity;
+
+        return $pen;
     }
 
     /**
@@ -1396,14 +1457,13 @@ final class Veil
      */
     private function paintRow(string $line, int $width): array
     {
-        // Blank row first; visible placement overwrites from the left. This
-        // keeps fromGrid()'s exact width*height contract regardless of where
-        // the walk stops (row overrun, unplaceable wide glyph).
-        /** @var list<Cell> $cells */
+        // Sparse placement first; untouched columns materialize as blanks
+        // only at the return leg. This keeps fromGrid()'s exact width*height
+        // contract regardless of where the walk stops (row overrun,
+        // unplaceable wide glyph) without allocating — and then overwriting —
+        // a blank for every painted column (sugar-overlay-078).
+        /** @var array<int, Cell> $cells */
         $cells = [];
-        for ($i = 0; $i < $width; $i++) {
-            $cells[] = Cell::new(' ', null, null, 1);
-        }
 
         $pen  = null;   // running SGR style
         $link = null;   // running OSC 8 link (survives SGR reset, per xterm)
@@ -1504,6 +1564,14 @@ final class Veil
             $pos += \strlen($cluster);
         }
 
+        // Untouched trailing columns materialize as blanks here. The walk
+        // advances strictly leftward, so the keys below are contiguous and
+        // this stays a list (sugar-overlay-078 lazy-allocation leg).
+        for ($i = 0; $i < $width; $i++) {
+            $cells[$i] ??= Cell::new(' ', null, null, 1);
+        }
+
+        /** @var list<Cell> $cells */
         return $cells;
     }
 

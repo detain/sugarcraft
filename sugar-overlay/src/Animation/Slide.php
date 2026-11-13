@@ -69,9 +69,13 @@ final class Slide
     /**
      * Get the easing function, falling back to easeOut if not set.
      */
+    /** Memoized default curve (sugar-overlay-077): animation ticks news a
+     *  driver per frame and each driver used to news this cubic afresh. */
+    private static ?CubicBezier $defaultEasing = null;
+
     private function easing(): CubicBezier
     {
-        return $this->easing ?? CubicBezier::easeOut();
+        return $this->easing ?? (self::$defaultEasing ??= CubicBezier::easeOut());
     }
 
     /**

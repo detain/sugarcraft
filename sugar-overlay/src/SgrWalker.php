@@ -222,13 +222,23 @@ final class SgrWalker
      *  the exact 0x7f7f7f the diff model records, or a style-only change
      *  diffs as a false no-op (xterm bright black is a fixed gray, not a
      *  40% lift of black — which would stay 0x000000). */
+    /** @var list<int> Base-16 palette hexes (normal half), xterm defaults;
+     *  built once as a class constant, not per 16-color SGR parse
+     *  (sugar-overlay-078). */
+    private const PALETTE = [
+        0x000000, 0xff0000, 0x00ff00, 0xffff00,
+        0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
+    ];
+
+    /** Bright-half channel lift: +40% saturating at 255. */
+    private static function liftChannel(int $c): int
+    {
+        return \min(255, (int) ($c + ($c * 0.4)));
+    }
+
     public static function ansiColorToHex(int $idx, bool $bright = false): int
     {
-        $palette = [
-            0x000000, 0xff0000, 0x00ff00, 0xffff00,
-            0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
-        ];
-        $base = $palette[$idx] ?? 0xffffff;
+        $base = self::PALETTE[$idx] ?? 0xffffff;
         if ($bright === false) {
             return $base;
         }
@@ -238,8 +248,9 @@ final class SgrWalker
             // Style::ansiColorToHex's identical case (sugar-cellbuffer).
             return 0x7f7f7f;
         }
-        $lift = static fn(int $c): int => min(255, (int) ($c + ($c * 0.4)));
-        return ($lift(($base >> 16) & 0xFF) << 16) | ($lift(($base >> 8) & 0xFF) << 8) | $lift($base & 0xFF);
+        return (self::liftChannel(($base >> 16) & 0xFF) << 16)
+            | (self::liftChannel(($base >> 8) & 0xFF) << 8)
+            | self::liftChannel($base & 0xFF);
     }
 
     /**
