@@ -163,9 +163,15 @@ final class TerminalPostureTest extends TestCase
             newRecord: true,
             configDir: $this->hermeticConfigDir(),
         );
+        // flappy-31 (finding -034): every width arm runs over BOTH
+        // postures — the plain renderer's returns now pass through fit()
+        // like the colour path's, and the sweeps must be able to tell.
         foreach ([$wide, $crashed] as $g) {
-            foreach (explode("\n", $g->view()) as $line) {
-                $this->assertLessThanOrEqual($g->frameCols, Width::of($line));
+            foreach ([null, ColorProfile::Ascii] as $profile) {
+                $board = $profile === null ? $g : $g->update(new ColorProfileMsg($profile))[0];
+                foreach (explode("\n", $board->view()) as $line) {
+                    $this->assertLessThanOrEqual($board->frameCols, Width::of($line));
+                }
             }
         }
         // The long hint survives on a comfortably wide frame:
@@ -219,14 +225,50 @@ final class TerminalPostureTest extends TestCase
         );
         $view = $g->view();
         $this->assertStringContainsString($artifact, $view, 'the forensic copy must be named by basename');
-        foreach (range(62, 82) as $cols) {
-            [$sized,] = $g->update(new WindowSizeMsg($cols, 24));
-            foreach (explode("\n", rtrim($sized->view(), "\n")) as $line) {
-                $this->assertLessThanOrEqual($cols, Width::of($line), "ready-board line too wide at $cols: '$line'");
+        // flappy-31: the width sweep runs over both postures.
+        [$plainG,] = $g->update(new ColorProfileMsg(ColorProfile::Ascii));
+        foreach ([[0, $g], [1, $plainG]] as [$arm, $board]) {
+            foreach (range(62, 82) as $cols) {
+                [$sized,] = $board->update(new WindowSizeMsg($cols, 24));
+                foreach (explode("\n", rtrim($sized->view(), "\n")) as $line) {
+                    $this->assertLessThanOrEqual($cols, Width::of($line), "arm $arm ready-board line too wide at $cols: '$line'");
+                }
             }
         }
         [$flapped,] = $g->update(new KeyMsg(KeyType::Space, ''));
         $this->assertStringNotContainsString('corrupt-', $flapped->view(), 'the announcement must not ride the live board');
+        [$flappedPlain,] = $plainG->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertStringNotContainsString('corrupt-', $flappedPlain->view(), 'nor in the plain posture');
+    }
+
+    public function testOversizeStatusTextIsClampedNotSpilledInBothPostures(): void
+    {
+        // flappy-31 (finding -034): fit() routing IS the guard this row
+        // installs on the plain renderer. A 120-cell single-word forensic
+        // name cannot be folded below the frame by any budget math, so the
+        // line exceeds the viewport unless fit() clamps it — plain without
+        // the route fails exactly here while colour passes through its
+        // long-standing clamp.
+        $artifact = str_repeat('x', 120);
+        $g = new Game(
+            bird: $this->sized(62, 24)->bird,
+            pipes: [],
+            configDir: $this->hermeticConfigDir(),
+            quarantinedSave: $artifact,
+        );
+        [$plain,] = $g->update(new ColorProfileMsg(ColorProfile::Ascii));
+        foreach (['colour' => $g, 'plain' => $plain] as $posture => $board) {
+            foreach ([62, 70, 81] as $cols) {
+                [$sized,] = $board->update(new WindowSizeMsg($cols, 24));
+                foreach (explode("\n", rtrim($sized->view(), "\n")) as $line) {
+                    $this->assertLessThanOrEqual(
+                        $cols,
+                        Width::of($line),
+                        "$posture posture spills past $cols cols: '$line'",
+                    );
+                }
+            }
+        }
     }
 
     public function testCrashRecordHintStaysWholeDownToTheFloor(): void
@@ -238,7 +280,6 @@ final class TerminalPostureTest extends TestCase
         // noun dropped) must keep ONE complete crash hint whole across the
         // 62..82 band (82 = where fit() starts skipping the row walk).
         $en = require __DIR__ . '/../lang/en.php';
-        $tiers = [$en['ui.crash_full'], $en['ui.crash_short'], $en['ui.crash_floor']];
         $g = new Game(
             bird: $this->sized(62, 24)->bird,
             pipes: [],
@@ -248,19 +289,28 @@ final class TerminalPostureTest extends TestCase
             newRecord: true,
             configDir: $this->hermeticConfigDir(),
         );
-        foreach (range(62, 82) as $cols) {
-            [$sized,] = $g->update(new WindowSizeMsg($cols, 24));
-            $rows = explode("\n", rtrim($sized->view(), "\n"));
-            $status = (string) end($rows);
-            $this->assertLessThanOrEqual($cols, Width::of($status), "status row exceeds $cols cols");
-            $whole = false;
-            foreach ($tiers as $tier) {
-                if (str_contains($status, $tier) === true) {
-                    $whole = true;
-                    break;
+        // flappy-31: both postures sweep — the plain crash card draws the
+        // plain_* tier family and (post -034 cure) shares fit()'s clamp.
+        [$plain,] = $g->update(new ColorProfileMsg(ColorProfile::Ascii));
+        $arms = [
+            'colour' => [$g, [$en['ui.crash_full'], $en['ui.crash_short'], $en['ui.crash_floor']]],
+            'plain' => [$plain, [$en['ui.plain_crash_full'], $en['ui.plain_crash_short'], $en['ui.plain_crash_floor']]],
+        ];
+        foreach ($arms as $posture => [$board, $tiers]) {
+            foreach (range(62, 82) as $cols) {
+                [$sized,] = $board->update(new WindowSizeMsg($cols, 24));
+                $rows = explode("\n", rtrim($sized->view(), "\n"));
+                $status = (string) end($rows);
+                $this->assertLessThanOrEqual($cols, Width::of($status), "$posture status row exceeds $cols cols");
+                $whole = false;
+                foreach ($tiers as $tier) {
+                    if (str_contains($status, $tier) === true) {
+                        $whole = true;
+                        break;
+                    }
                 }
+                $this->assertTrue($whole, "no complete $posture crash hint survived at $cols cols: '$status'");
             }
-            $this->assertTrue($whole, "no complete crash hint survived at $cols cols: '$status'");
         }
     }
 
@@ -285,15 +335,44 @@ final class TerminalPostureTest extends TestCase
             newRecord: true,
             configDir: $this->hermeticConfigDir(),
         );
-        [$sized,] = $g->update(new WindowSizeMsg(62, 24));
-        $rows = explode("\n", rtrim($sized->view(), "\n"));
-        $status = (string) end($rows);
-        $this->assertLessThanOrEqual(62, Width::of($status));
+        // flappy-31 dual arms, with an honest split: this fixture's budget
+        // is posture-asymmetric — pickHint measures the ASSEMBLED prefix,
+        // and the plain card's plain-worded prefix leaves room for the
+        // 18-cell plain floor where the colour card's 16-cell floor falls
+        // one cell short (the wider 'NEW BEST' word spacing). So colour
+        // pins the OMIT branch, plain pins whole-survival — both share the
+        // spill law and the no-clipped-rejoin law.
+        [$plain,] = $g->update(new ColorProfileMsg(ColorProfile::Ascii));
         $en = require __DIR__ . '/../lang/en.php';
+        [$coloredSized,] = $g->update(new WindowSizeMsg(62, 24));
+        $colourRows = explode("\n", rtrim($coloredSized->view(), "\n"));
+        $colourStatus = (string) end($colourRows);
+        $this->assertLessThanOrEqual(62, Width::of($colourStatus));
         foreach (['ui.crash_full', 'ui.crash_short', 'ui.crash_floor'] as $key) {
-            $this->assertStringNotContainsString($en[$key], $status, "tier $key cannot fit at this budget");
+            $this->assertStringNotContainsString($en[$key], $colourStatus, "colour tier $key cannot fit at this budget");
         }
-        // No hint glyph bytes at all: a clipped re-join would leave 💥 in the row.
-        $this->assertStringNotContainsString('💥', $status, 'a too-wide hint must be omitted, never clipped');
+        $this->assertStringNotContainsString('💥', $colourStatus, 'a too-wide hint must be omitted, never clipped');
+        [$plainSized,] = $plain->update(new WindowSizeMsg(62, 24));
+        $plainRows = explode("\n", rtrim($plainSized->view(), "\n"));
+        $plainStatus = (string) end($plainRows);
+        $this->assertLessThanOrEqual(62, Width::of($plainStatus), 'plain status spills past 62 cols');
+        $plainWhole = false;
+        foreach (['ui.plain_crash_full', 'ui.plain_crash_short', 'ui.plain_crash_floor'] as $key) {
+            if (str_contains($plainStatus, $en[$key]) === true) {
+                $plainWhole = true;
+            }
+        }
+        $this->assertTrue($plainWhole, "plain posture must keep one complete crash hint whole: '$plainStatus'");
+        // Either a COMPLETE tier rides the row or nothing of it does — the
+        // old leak was a clipped remnant ('… q qui'), never a clean tier.
+        // (An omitted row is safe too: short/full tiers END with the whole
+        // floor text, so a partial floor prefix can only mean clipping.)
+        if ($plainWhole === false) {
+            $this->assertStringNotContainsString(
+                substr($en['ui.plain_crash_floor'], 0, -2),
+                $plainStatus,
+                'a clipped hint remnant must not ride the plain row',
+            );
+        }
     }
 }

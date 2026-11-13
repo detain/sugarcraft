@@ -252,7 +252,7 @@ final class Renderer
                 Lang::t('ui.plain_crash_short'),
                 Lang::t('ui.plain_crash_floor'),
             );
-            return implode("\n", $rows) . "\n " . $scoreText . $recordPlain . '    ' . $hint . "\n";
+            return self::fit($g, implode("\n", $rows) . "\n " . $scoreText . $recordPlain . '    ' . $hint . "\n");
         }
         $bestPlain = '';
         if ($g->highScore() > 0) {
@@ -281,7 +281,12 @@ final class Renderer
                 'file' => $g->quarantinedSave,
             ]))) . "\n ";
         }
-        return implode("\n", $rows) . "\n " . $warn . $scoreText . $bestPlain . '    ' . $hint . "\n";
+        // flappy-31 (finding -034): the plain posture now shares the colour
+        // path's last line of defence — fit() clamps every row to the live
+        // viewport. pickHint's budgeting is the reason nothing clips in
+        // practice; fit() is the reason nothing SPILLS if the budgeting
+        // ever drifts, and it must guard both renderers equally.
+        return self::fit($g, implode("\n", $rows) . "\n " . $warn . $scoreText . $bestPlain . '    ' . $hint . "\n");
     }
 
     private static function refusal(): string
