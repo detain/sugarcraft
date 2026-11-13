@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox\Flex;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Flexbox\Support\Sgr;
 
@@ -21,6 +22,8 @@ use SugarCraft\Flexbox\Support\Sgr;
  */
 final class FlexItem
 {
+    use Mutable;
+
     public readonly string $content;
 
     /** Relative size ratio — items with higher ratios take more space. */
@@ -51,6 +54,25 @@ final class FlexItem
 
     /** Memo of measuredHeight() for this instance. */
     private ?int $heightMemo = null;
+
+    /**
+     * The lib's copy path (FBX-23): every with* answers a new instance
+     * built from the four constructor fields plus the overrides. The
+     * measured memos are deliberately NOT carried — a new content,
+     * ratio or basis invalidates every memo anyway, and 'fresh by
+     * construction' is the law the old hand-repeated tails kept.
+     *
+     * @param array<string, mixed> $changes
+     */
+    protected function mutate(array $changes): static
+    {
+        return new self(...array_merge([
+            'content' => $this->content,
+            'ratio'   => $this->ratio,
+            'basis'   => $this->basis,
+            'style'   => $this->style,
+        ], $changes));
+    }
 
     private function __construct(
         string $content,
@@ -106,7 +128,7 @@ final class FlexItem
 
     public function withContent(string $content): self
     {
-        return new self($content, $this->ratio, $this->basis, $this->style);
+        return $this->mutate(['content' => $content]);
     }
 
     /**
@@ -122,7 +144,7 @@ final class FlexItem
                 'Ratio must be >= 0; got ' . $ratio . '.',
             );
         }
-        return new self($this->content, $ratio, $this->basis, $this->style);
+        return $this->mutate(['ratio' => $ratio]);
     }
 
     /**
@@ -139,13 +161,13 @@ final class FlexItem
                 'Basis must be >= 0 cells; got ' . $basis . '.',
             );
         }
-        return new self($this->content, $this->ratio, $basis, $this->style);
+        return $this->mutate(['basis' => $basis]);
     }
 
     public function withStyle(string $ansiStyle): self
     {
         $style = Sgr::normalize($ansiStyle, 'FlexItem style');
-        return new self($this->content, $this->ratio, $this->basis, $style);
+        return $this->mutate(['style' => $style]);
     }
 
     /**

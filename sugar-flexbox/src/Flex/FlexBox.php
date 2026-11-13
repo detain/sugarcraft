@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox\Flex;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Flexbox\Support\CellPad;
 
@@ -18,6 +19,8 @@ use SugarCraft\Flexbox\Support\CellPad;
  */
 final class FlexBox
 {
+    use Mutable;
+
     /**
      * @param list<FlexItem> $items
      */
@@ -48,12 +51,12 @@ final class FlexBox
 
     public function withDirection(Direction $d): self
     {
-        return new self($d, $this->align, $this->gap, $this->items);
+        return $this->mutate(['direction' => $d]);
     }
 
     public function withAlign(Align $a): self
     {
-        return new self($this->direction, $a, $this->gap, $this->items);
+        return $this->mutate(['align' => $a]);
     }
 
     public function withGap(int $cells): self
@@ -63,7 +66,7 @@ final class FlexBox
                 'Gap must be >= 0 cells; got ' . $cells . '.',
             );
         }
-        return new self($this->direction, $this->align, $cells, $this->items);
+        return $this->mutate(['gap' => $cells]);
     }
 
     /**
@@ -80,7 +83,7 @@ final class FlexBox
     {
         $newItems = $this->items;
         $newItems[] = $item;
-        return new self($this->direction, $this->align, $this->gap, $newItems);
+        return $this->mutate(['items' => $newItems]);
     }
 
     /**
@@ -92,7 +95,7 @@ final class FlexBox
      */
     public function withItems(FlexItem ...$items): self
     {
-        return new self($this->direction, $this->align, $this->gap, array_values($items));
+        return $this->mutate(['items' => array_values($items)]);
     }
 
     // -------------------------------------------------------------------------

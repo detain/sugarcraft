@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Forms\Scrollbar\Scrollbar as FormsScrollbar;
 use SugarCraft\Forms\Scrollbar\ScrollbarState;
 
@@ -19,6 +20,8 @@ use SugarCraft\Forms\Scrollbar\ScrollbarState;
  */
 final readonly class Scrollbar
 {
+    use Mutable;
+
     private FormsScrollbar $inner;
 
     private function __construct(FormsScrollbar $inner)
@@ -40,17 +43,17 @@ final readonly class Scrollbar
 
     public function withTrackChar(string $char): self
     {
-        return new self($this->inner->withTrackChar($char));
+        return $this->mutate(['inner' => $this->inner->withTrackChar($char)]);
     }
 
     public function withThumbChar(string $char): self
     {
-        return new self($this->inner->withThumbChar($char));
+        return $this->mutate(['inner' => $this->inner->withThumbChar($char)]);
     }
 
     public function withArrows(bool $show): self
     {
-        return new self($this->inner->withArrows($show));
+        return $this->mutate(['inner' => $this->inner->withArrows($show)]);
     }
 
     /**
