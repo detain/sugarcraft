@@ -142,12 +142,25 @@ final class LinkSafetyTest extends TestCase
     public static function invisibleSchemeSplitProvider(): iterable
     {
         $forms = [
-            'soft-hyphen'       => "\xC2\xAD",
-            'mongolian-vowel'   => "\xE1\xA0\x8E",
-            'zero-width-space'  => "\xE2\x80\x8B",
-            'word-joiner'       => "\xE2\x81\xA0",
-            'byte-order-mark'   => "\xEF\xBB\xBF",
-            'right-to-left'     => "\xE2\x80\xAE",
+            'soft-hyphen'         => "\xC2\xAD",
+            'mongolian-vowel'     => "\xE1\xA0\x8E",
+            'zero-width-space'    => "\xE2\x80\x8B",
+            'word-joiner'         => "\xE2\x81\xA0",
+            'byte-order-mark'     => "\xEF\xBB\xBF",
+            'right-to-left'       => "\xE2\x80\xAE",
+            // S09: the roster the gate used to miss — directionality
+            // initiates, marks, isolates, the invisible operators, the
+            // interlinear anchors, and the C1 controls' pair spelling.
+            'left-to-right-override'  => "\xE2\x80\xAA",
+            'left-to-right-mark'      => "\xE2\x80\x8E",
+            'right-to-left-mark'      => "\xE2\x80\x8F",
+            'first-strong-isolate'    => "\xE2\x81\xA6",
+            'right-to-left-isolate'   => "\xE2\x81\xA7",
+            'pop-directional-isolate' => "\xE2\x81\xA9",
+            'invisible-times'         => "\xE2\x81\xA1",
+            'arabic-letter-mark'      => "\xD9\x9C",
+            'interlinear-anchor'      => "\xEF\xBF\xB9",
+            'c1-control-pair'         => "\xC2\x9B",
         ];
         foreach ($forms as $label => $bytes) {
             yield $label => [
@@ -180,6 +193,31 @@ final class LinkSafetyTest extends TestCase
 
         $plain = (new Renderer(Theme::plain()))->render("[x](\xE2\x80\x8Bjavascript:alert(1))");
         $this->assertSame('x (%E2%80%8Bjavascript:alert(1))', $plain);
+    }
+
+    /**
+     * S09: the annotation's named forgeries. The isolate/override between
+     * the scheme's letters must not smuggle a live target, in raw,
+     * percent-encoded, or C1-pair spellings, on the schemes the old
+     * six-byte roster missed entirely.
+     */
+    public function testIsolatesAndOverridesSplitTheDataAndVbscriptSchemesToo(): void
+    {
+        $ansi = new Renderer();
+
+        foreach ([
+            '[x](da' . "\xE2\x81\xA6" . 'ta:text/html,x)',
+            '[x](da%E2%81%A6ta:text/html,x)',
+            '[x](vb' . "\xE2\x80\xAA" . 'script:msgbox(1))',
+            '[x](java' . "\xC2\x9B" . 'script:alert(1))',
+            '[x](java%C2%9Bscript:alert(1))',
+        ] as $md) {
+            $this->assertStringNotContainsString(self::OSC8_OPEN, $ansi->render($md), $md . ' must not be clickable');
+        }
+
+        // And nothing invisible survives the visible suffix.
+        $plain = (new Renderer(Theme::plain()))->render('[x](da' . "\xE2\x81\xA6" . 'ta:text/html,x)');
+        $this->assertSame('x (da%E2%81%A6ta:text/html,x)', $plain);
     }
 
     /**

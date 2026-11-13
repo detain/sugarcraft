@@ -1088,8 +1088,9 @@ final class Renderer
             $rendered = $textStyle->render($alt);
         }
         // An empty destination carries no ' ()' noise (n4); the visible
-        // suffix loses the bytes no terminal can render (m3).
-        $visible = $url === '' ? '' : ' (' . str_replace(self::INVISIBLE_URL_BYTES, '', $url) . ')';
+        // suffix loses the bytes no terminal can render (m3) — the full Cf
+        // roster and the C1 pair spelling alike (S09).
+        $visible = $url === '' ? '' : ' (' . self::stripInvisibleUrlChars($url) . ')';
         return $rendered . $visible;
     }
 
@@ -1120,9 +1121,15 @@ final class Renderer
      * sweep runs over the visible `(url)` suffix (m3) so unrenderable
      * bytes cannot forge text next to a URL.
      *
+     * The full Unicode Cf roster (soft hyphen, Arabic letter mark,
+     * Mongolian vowel separator, the zero-width marks, all directional
+     * overrides and isolates, word joiner and the invisible operators,
+     * BOM, interlinear annotation anchors), mirroring sugar-core's
+     * `Sanitize::invisibleFormattingMaps()` tiers plus FFF9-FFFB.
+     *
      * @var list<string>
      */
-    private const INVISIBLE_URL_BYTES = ["\xC2\xAD", "\xE1\xA0\x8E", "\xE2\x80\x8B", "\xE2\x81\xA0", "\xEF\xBB\xBF", "\xE2\x80\xAE"];
+    private const INVISIBLE_URL_BYTES = ["\xC2\xAD", "\xD9\x9C", "\xE1\xA0\x8E", "\xE2\x80\x8B", "\xE2\x80\x8C", "\xE2\x80\x8D", "\xE2\x80\x8E", "\xE2\x80\x8F", "\xE2\x80\xAA", "\xE2\x80\xAB", "\xE2\x80\xAC", "\xE2\x80\xAD", "\xE2\x80\xAE", "\xE2\x81\xA0", "\xE2\x81\xA1", "\xE2\x81\xA2", "\xE2\x81\xA3", "\xE2\x81\xA4", "\xE2\x81\xA6", "\xE2\x81\xA7", "\xE2\x81\xA8", "\xE2\x81\xA9", "\xEF\xBB\xBF", "\xEF\xBF\xB9", "\xEF\xBF\xBA", "\xEF\xBF\xBB"];
 
     /** True when $url targets a refused executable scheme. */
     private static function refusesUrl(string $url): bool
@@ -1153,24 +1160,33 @@ final class Renderer
      */
     private static function schemeProbes(string $url): array
     {
-        $raw = strtolower(str_replace(
-            self::INVISIBLE_URL_BYTES,
-            '',
-            ltrim($url, " \t\n\r\0\x0b\x0c"),
-        ));
+        $raw = strtolower(self::stripInvisibleUrlChars(ltrim($url, " \t\n\r\0\x0b\x0c")));
 
         $decoded = rawurldecode($url);
         $decoded = preg_replace('/[\x00-\x1f\x7f]/', '', $decoded) ?? '';
-        $decoded = str_replace(self::INVISIBLE_URL_BYTES, '', $decoded);
-        $decoded = strtolower(str_replace("\xEF\xBF\xBD", '', $decoded));
+        $decoded = strtolower(str_replace("\xEF\xBF\xBD", '', self::stripInvisibleUrlChars($decoded)));
 
         // A client that decodes entities before opening sees this spelling;
         // probing it over-refuses exotic entity-games, the accepted side of
         // the trade (fail-closed).
         $entity = html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5);
-        $entity = strtolower(str_replace(self::INVISIBLE_URL_BYTES, '', $entity));
+        $entity = strtolower(self::stripInvisibleUrlChars($entity));
 
         return array_values(array_unique([$raw, $decoded, $entity]));
+    }
+
+    /**
+     * Remove every character that renders nothing: the {@see
+     * INVISIBLE_URL_BYTES} Cf roster, and the C1 controls as their exact
+     * UTF-8 pair spelling (`\xC2[\x80-\x9F]`). The C1 pass is pair-only on
+     * purpose — a byte-mode strip of \x80-\x9F would corrupt the
+     * continuation bytes of legitimate multi-byte text (CJK, emoji).
+     * Percent-encoded forms reach the sweep already decoded through
+     * {@see schemeProbes()}'s rawurldecode leg.
+     */
+    private static function stripInvisibleUrlChars(string $url): string
+    {
+        return preg_replace('/\xC2[\x80-\x9F]/', '', str_replace(self::INVISIBLE_URL_BYTES, '', $url)) ?? $url;
     }
 
     /**
