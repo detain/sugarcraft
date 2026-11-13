@@ -57,6 +57,10 @@ $loads = array_fill(0, $K, 0.0);
 $buckets = array_fill(0, $K, []);
 
 $fh = fopen($in, 'r');
+if ($fh === false) {
+    fwrite(STDERR, "make-shards: cannot open durations input: {$in}\n");
+    exit(2);
+}
 while (($line = fgets($fh)) !== false) {
     $line = rtrim($line, "\n");
     if ($line === '') {
@@ -104,16 +108,38 @@ fwrite(STDERR, sprintf("K=%d buckets=%s\n", $K, implode(' ', array_map(static fn
 function parseJunit(string $xmlPath, string $tsvPath, array $psr4): array
 {
     $dom = new DOMDocument();
-    $dom->load($xmlPath, LIBXML_NOCDATA);
+    // RT-16: a truncated junit used to load to nothing — zero testcases, an
+    // empty durations TSV, an empty shard plan, and exit 0 (the CI leg would
+    // then conservation-fail elsewhere or, worse, "succeed" against a fiction).
+    // Hard parse failure AND empty-plan are both exit 2 naming the path; the
+    // merge-clover.php load wrap is the in-repo exemplar copied verbatim.
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $dom->load($xmlPath, LIBXML_NOCDATA);
+    $errors = libxml_get_errors();
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if (!$loaded || $errors !== []) {
+        $first = $errors[0]->message ?? 'load failed';
+        fwrite(STDERR, "make-shards: unparseable junit: {$xmlPath}: " . trim($first) . "\n");
+        exit(2);
+    }
     $xp = new DOMXPath($dom);
     $rootDir = dirname(__DIR__) . '/';
 
+    if ($xp->query('//testcase')->length === 0) {
+        fwrite(STDERR, "make-shards: junit parsed but carries zero testcases — refusing to plan from an empty source: {$xmlPath}\n");
+        exit(2);
+    }
+
     $perFile = [];
+    // RT-16: order the PSR-4 prefixes once per parse, not once per testcase
+    // (the usort in classToFile ran ~31k times per lib on the candy-code corpus).
+    $orderedPrefixes = orderedPsr4Prefixes($psr4);
     foreach ($xp->query('//testcase') as $tc) {
         /** @var DOMElement $tc */
         $time = (float) ($tc->getAttribute('time') ?: '0');
         $class = $tc->getAttribute('class');
-        $mapped = classToFile($class, $psr4);
+        $mapped = classToFile($class, $psr4, $orderedPrefixes);
         if ($mapped !== null) {
             $file = $mapped;
         } else {
@@ -139,6 +165,10 @@ function parseJunit(string $xmlPath, string $tsvPath, array $psr4): array
     usort($entries, static fn($a, $b) => $b[1] <=> $a[1] ?: strcmp($a[0], $b[0]));
 
     $fh = fopen($tsvPath, 'w');
+    if ($fh === false) {
+        fwrite(STDERR, "make-shards: cannot write durations TSV: {$tsvPath}\n");
+        exit(2);
+    }
     foreach ($entries as [$file, $t, $n]) {
         fwrite($fh, sprintf("%s\t%.3f\t%d\n", $file, $t, $n));
     }
@@ -165,13 +195,26 @@ function parseJunit(string $xmlPath, string $tsvPath, array $psr4): array
     return [$tsvPath, $totals];
 }
 
-function classToFile(string $class, array $psr4): ?string
+/**
+ * Longest prefix first so a nested rule wins over its parent (e.g. a
+ * `...\Tests\Fixtures\` sub-root beats the plain `...\Tests\` entry).
+ *
+ * @return list<string>
+ */
+function orderedPsr4Prefixes(array $psr4): array
 {
-    // Longest prefix first so a nested rule wins over its parent (e.g. a
-    // `...\Tests\Fixtures\` sub-root beats the plain `...\Tests\` entry).
     $prefixes = array_keys($psr4);
     usort($prefixes, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
-    foreach ($prefixes as $prefix) {
+
+    return $prefixes;
+}
+
+/**
+ * @param list<string> $orderedPrefixes longest-first order from orderedPsr4Prefixes
+ */
+function classToFile(string $class, array $psr4, array $orderedPrefixes): ?string
+{
+    foreach ($orderedPrefixes as $prefix) {
         if (str_starts_with($class, $prefix)) {
             return $psr4[$prefix] . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
         }
