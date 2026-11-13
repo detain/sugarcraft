@@ -8,11 +8,28 @@ use App\Counter;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use PHPUnit\Framework\TestCase;
 
 final class CounterTest extends TestCase
 {
+    /**
+     * Byte-exact golden frame for new Counter(0)->view() — captured once
+     * from the shipped Style::new()->border(Border::rounded())->padding(1, 2)
+     * render (456 bytes, no trailing newline), then pinned. Any change to
+     * border glyphs, padding, hint text, or spacing must redden
+     * testTheFrameIsThePinnedGoldenBytes (candy-starter-034: this is the
+     * refutable snapshot the twice-call "stability" check could not be).
+     */
+    private const GOLDEN_FRAME =
+        '╭─────────────────────────────────────────╮' . "\n" .
+        '│                                         │' . "\n" .
+        '│  count: 0                               │' . "\n" .
+        '│  ↑ ↓ to change · q / Esc / Ctrl+C quit  │' . "\n" .
+        '│                                         │' . "\n" .
+        '╰─────────────────────────────────────────╯';
+
     // -------------------------------------------------------------------------
     // Core state tests
     // -------------------------------------------------------------------------
@@ -52,7 +69,11 @@ final class CounterTest extends TestCase
         [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Char, 'q'));
         $this->assertInstanceOf(Counter::class, $next);
         $this->assertSame(7, $next->n, 'quit must not mutate count');
-        $this->assertNotNull($cmd, 'quit returns Cmd::quit()');
+        // Cmd::quit() is a pure closure whose dispatch produces QuitMsg —
+        // assertNotNull would also pass on a Tick closure or any stray
+        // callable; pin the shape the harness actually feeds (034).
+        $this->assertInstanceOf(\Closure::class, $cmd, 'quit returns Cmd::quit()');
+        $this->assertInstanceOf(QuitMsg::class, $cmd(), 'the quit Cmd must dispatch a QuitMsg');
     }
 
     public function testCtrlCDispatchesQuitCmd(): void
@@ -60,7 +81,8 @@ final class CounterTest extends TestCase
         [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
         $this->assertInstanceOf(Counter::class, $next);
         $this->assertSame(7, $next->n, 'ctrl+c must not mutate count');
-        $this->assertNotNull($cmd, 'ctrl+c returns Cmd::quit()');
+        $this->assertInstanceOf(\Closure::class, $cmd, 'ctrl+c returns Cmd::quit()');
+        $this->assertInstanceOf(QuitMsg::class, $cmd(), 'the ctrl+c Cmd must dispatch a QuitMsg');
     }
 
     public function testEscDispatchesQuitCmd(): void
@@ -68,7 +90,48 @@ final class CounterTest extends TestCase
         [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertInstanceOf(Counter::class, $next);
         $this->assertSame(7, $next->n, 'Esc must not mutate count');
-        $this->assertNotNull($cmd, 'Esc returns Cmd::quit()');
+        $this->assertInstanceOf(\Closure::class, $cmd, 'Esc returns Cmd::quit()');
+        $this->assertInstanceOf(QuitMsg::class, $cmd(), 'the Esc Cmd must dispatch a QuitMsg');
+    }
+
+    public function testCtrlEscStillQuitsBecauseTheEscapeArmIgnoresModifiers(): void
+    {
+        // candy-starter-035 matrix cell the docblock advertised but the
+        // suite never pinned: `Esc under any modifier` — ctrl+Esc quits.
+        [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Escape, '', ctrl: true));
+        $this->assertSame(7, $next->n);
+        $this->assertInstanceOf(QuitMsg::class, $cmd());
+    }
+
+    public function testCtrlAltQDoesNotQuitBecauseCtrlDisqualifiesTheQArm(): void
+    {
+        // The third advertised modifier cell, pinned to the CODE truth:
+        // the q-arm requires ctrl === false, so ctrl strips q of its quit
+        // power even with alt riding along. (The review finding sketched
+        // this cell as quitting; the shipped guard and its docblock both
+        // say otherwise, and disk governs.)
+        [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Char, 'q', alt: true, ctrl: true));
+        $this->assertSame(7, $next->n);
+        $this->assertNull($cmd, 'ctrl must disqualify the q arm under any modifier mix');
+    }
+
+    public function testAltShiftQQuitsUnderTheAnyModifierExceptCtrlRule(): void
+    {
+        [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Char, 'q', alt: true, shift: true));
+        $this->assertSame(7, $next->n);
+        $this->assertInstanceOf(QuitMsg::class, $cmd(), 'q with alt+shift and no ctrl must quit');
+    }
+
+    public function testNonCharCtrlCDoesNotQuitAfterSymmetricGuard(): void
+    {
+        // candy-starter-022: the ctrl+c arm once omitted the Char-type
+        // conjunct, so a decoder that populates runes on named keys could
+        // hand it KeyMsg(Enter, 'c', ctrl: true) and the demo would quit
+        // on Enter. With the symmetric guard the misfire is dead — and
+        // THIS is the pin that keeps it dead.
+        [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Enter, 'c', ctrl: true));
+        $this->assertSame(7, $next->n);
+        $this->assertNull($cmd, 'the quit path must require the Char type on both rune arms');
     }
 
     // -------------------------------------------------------------------------
@@ -229,12 +292,6 @@ final class CounterTest extends TestCase
     // View rendering
     // -------------------------------------------------------------------------
 
-    public function testViewReturnsString(): void
-    {
-        $view = (new Counter())->view();
-        $this->assertIsString($view);
-    }
-
     public function testViewContainsCount(): void
     {
         $view = (new Counter(42))->view();
@@ -251,13 +308,15 @@ final class CounterTest extends TestCase
         $this->assertStringContainsString('42', $view);
     }
 
-    public function testViewOutputStable(): void
+    public function testTheFrameIsThePinnedGoldenBytes(): void
     {
-        // Calling view() multiple times returns consistent output
-        $counter = new Counter(10);
-        $view1 = $counter->view();
-        $view2 = $counter->view();
-        $this->assertSame($view1, $view2, 'view() output must be deterministic');
+        // candy-starter-034: the byte-exact replacement for the twice-call
+        // "stability" check, which could not disagree with anything — two
+        // calls of a deterministic function agree even when both are
+        // wrong. This one disagrees with every drift in border glyphs,
+        // padding, hint text, spacing, or a newly-introduced colour:
+        // flip any corner byte and the suite reddens.
+        $this->assertSame(self::GOLDEN_FRAME, (new Counter(0))->view());
     }
 
     public function testTheFrameDecorationIsMemoizedNotRebuiltPerFrame(): void
@@ -492,11 +551,13 @@ final class CounterTest extends TestCase
         // PHP_INT_MAX - 1 to stay one step inside the boundary: overflow
         // would yield a float, and storing it in the promoted int property
         // under strict_types is an uncaught TypeError, not a silent decay
-        // (CALIBER [gotcha:candy-starter-overflow-teaching]).
+        // (CALIBER [gotcha:candy-starter-overflow-teaching]). The assertSame
+        // already pins the int — a trailing assertIsInt could only echo it
+        // (candy-starter-034), so the boundary's real teaching lives in the
+        // one-step-over child-process pin below.
         $counter = new Counter(PHP_INT_MAX - 1);
         [$next, ] = $counter->update(new KeyMsg(KeyType::Up, ''));
         $this->assertSame(PHP_INT_MAX, $next->n);
-        $this->assertIsInt($next->n);
     }
 
     public function testIntegerBoundaryNegative(): void
@@ -507,7 +568,31 @@ final class CounterTest extends TestCase
         $counter = new Counter(PHP_INT_MIN + 1);
         [$next, ] = $counter->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(PHP_INT_MIN, $next->n);
-        $this->assertIsInt($next->n);
+    }
+
+    public function testSteppingOverTheBoundaryFatalsInTheChildProcess(): void
+    {
+        // candy-starter-034's refutable half: one step past PHP_INT_MAX
+        // must be a loud TypeError against the promoted int property — a
+        // clamp or a silent float decay would make this child exit 0 and
+        // the suite reddens. It runs as a child because an uncaught fatal
+        // in-process would take the test runner down with the evidence.
+        $script = sys_get_temp_dir() . '/st-overflow-' . bin2hex(random_bytes(6)) . '.php';
+        file_put_contents($script, "<?php\ndeclare(strict_types=1);\nrequire "
+            . var_export(realpath(__DIR__ . '/../vendor/autoload.php'), true) . ";\n"
+            . '$counter = new App\Counter(PHP_INT_MAX);'
+            . '$counter->update(new SugarCraft\Core\Msg\KeyMsg(SugarCraft\Core\KeyType::Up, ""));'
+            . "echo 'unreachable\n';\n");
+
+        $out = [];
+        $status = 0;
+        exec(escapeshellarg(PHP_BINARY) . ' -d display_errors=stderr ' . escapeshellarg($script) . ' 2>&1', $out, $status);
+        @unlink($script);
+
+        $message = implode("\n", $out);
+        $this->assertSame(255, $status, 'stepping over the boundary must fatal, not return: ' . $message);
+        $this->assertStringContainsString('TypeError', $message);
+        $this->assertStringNotContainsString('unreachable', $message, 'the fatal must land before the next statement');
     }
 
     public function testViewRenderingDoesNotAffectState(): void

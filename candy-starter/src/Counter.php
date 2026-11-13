@@ -152,7 +152,7 @@ final class Counter implements Model
         if ($msg->type === KeyType::Escape) {
             return true;
         }
-        if ($msg->ctrl && $msg->rune === 'c') {
+        if ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'c') {
             return true;
         }
         return false;
