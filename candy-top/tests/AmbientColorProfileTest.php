@@ -152,4 +152,19 @@ final class AmbientColorProfileTest extends TestCase
         $this->assertSame($once->ink, $twice->ink, 'the equality branch must reuse the Ink instance');
         $this->assertSame(ColorProfile::Ascii, $twice->ink->profile());
     }
+
+    public function testTheDumbTerminalClaimStaysScopedToColour(): void
+    {
+        // S-X14 (candy-top-140): a live-PTY probe with TERM=dumb shows the
+        // colourless frame still rides 1049/1002/1006/2027/2026 and cursor
+        // addressing — the veto steps colour down, never the control bytes.
+        // The README therefore says exactly that (the gate G7 default:
+        // correct claims + declare the true dumb device out of scope);
+        // this guard is the docs-pinned-by-tests leg keeping the prose
+        // honest to the observed bytes.
+        $readme = (string) file_get_contents(__DIR__ . '/../README.md');
+        $this->assertStringContainsString('the refusal covers colour only', $readme);
+        $this->assertStringContainsString('is declared out of scope', $readme);
+        $this->assertStringNotContainsString('gets text only', $readme, 'the old over-claim must not return');
+    }
 }
