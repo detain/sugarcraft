@@ -10,6 +10,12 @@ use SugarCraft\Video\Source\Probe;
 /**
  * F-17: the binary-presence probe is a memoized lookup with a 60s TTL, not a
  * per-call `command -v` fork — probes now ride every decoder reopen.
+ *
+ * SV-L55/055 closes the gap this file used to document as permanent: the
+ * clock seam (SV-M17/017, setClockForTesting) makes the expiry crossing
+ * scriptable, so both the 60s window and the 1s failure-retry arm are now
+ * pinned behaviourally — the TTL is no longer an honest-comment-only
+ * contract, it is tested.
  */
 final class ProbeTtlTest extends TestCase
 {
@@ -87,6 +93,33 @@ final class ProbeTtlTest extends TestCase
         $t += 30.5;
         self::assertNull(ProbeShellTape::ffmpeg());
         self::assertSame(2, ProbeShellTape::$execs, 'an answered-miss re-probes once the TTL expires');
+    }
+
+    /**
+     * SV-L55/055: the POSITIVE path's own window — a found binary is served
+     * from the memo up to the TTL and re-forked exactly once past it. The
+     * answered-none arm above proves the same crossing for absences; this
+     * completes the pair so neither half of the cache is comment-pinned.
+     */
+    public function testAPositiveLookupIsServedAcrossTheTtlAndReprobedAfterwards(): void
+    {
+        $t = 1000.0;
+        Probe::setClockForTesting(static function () use (&$t): float {
+            return $t;
+        });
+        ProbeShellTape::$tape = ['/usr/bin/ffmpeg', '/usr/bin/ffmpeg'];
+        ProbeShellTape::$execs = 0;
+        Probe::clearBinaryCacheForTesting();
+
+        self::assertSame('/usr/bin/ffmpeg', ProbeShellTape::ffmpeg());
+
+        $t += 59.9;
+        self::assertSame('/usr/bin/ffmpeg', ProbeShellTape::ffmpeg(), 'inside the window the cached path answers');
+        self::assertSame(1, ProbeShellTape::$execs, 'and the window itself never re-forks');
+
+        $t += 0.2; // now older than the 60.0 TTL
+        self::assertSame('/usr/bin/ffmpeg', ProbeShellTape::ffmpeg());
+        self::assertSame(2, ProbeShellTape::$execs, 'crossing the TTL re-looks the binary up — staleness is bounded, not permanent');
     }
 
     public function testAnExecFailureIsRetriedNotPinnedForSixtySeconds(): void
