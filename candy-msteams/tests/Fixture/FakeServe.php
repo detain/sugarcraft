@@ -106,6 +106,11 @@ final class FakeServe
 
     public ?string $lastNote = null;
 
+    /** @var array<string,mixed> the session.get answer; empty = a plain idle snapshot */
+    public array $sessionSnapshot = [];
+
+    public int $getSeen = 0;
+
     private ?SocketServer $server = null;
 
     public function __construct(
@@ -393,6 +398,18 @@ final class FakeServe
                     'jsonrpc' => '2.0', 'id' => $rpcId,
                     'result' => (object) ['answered' => true, 'askId' => $params['askId'] ?? null, 'reply' => $params['reply'] ?? null],
                 ]);
+                break;
+            case 'session.get':
+                $this->getSeen++;
+                $snapshot = $this->sessionSnapshot + [
+                    'sessionId' => (string) ($params['sessionId'] ?? ''),
+                    'status' => 'idle',
+                    'messages' => [],
+                    'queued' => [],
+                    'spentUsd' => 0.0,
+                    'lastSeq' => 0,
+                ];
+                $this->emit($id, ['jsonrpc' => '2.0', 'id' => $rpcId, 'result' => (object) $snapshot]);
                 break;
             case 'session.unsubscribe':
                 $this->emit($id, ['jsonrpc' => '2.0', 'id' => $rpcId, 'result' => (object) ['unsubscribed' => true]]);

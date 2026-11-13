@@ -7,6 +7,7 @@ namespace CandyCode\Bundles\MsTeams\Bridge;
 use CandyCode\Bundles\MsTeams\Candy\ServeBridge;
 use CandyCode\Bundles\MsTeams\Candy\ServeError;
 use CandyCode\Bundles\MsTeams\MsTeams\Cards;
+use CandyCode\Bundles\MsTeams\MsTeams\Commands;
 use CandyCode\Bundles\MsTeams\Support\Keys;
 use CandyCode\Bundles\MsTeams\Support\Log;
 use CandyCode\Bundles\MsTeams\Support\OutboundChunker;
@@ -299,6 +300,13 @@ final class ConversationRouter
                 }
                 $handler($key, $ref, $args);
                 break;
+            case 'help':
+                $this->deliver($channel, $ref, Commands::helpText());
+                break;
+            case 'status':
+            case 'cost':
+                $this->sessionReport($channel, $key, $ref, $name);
+                break;
             case 'queue':
                 $text = \implode(' ', $args);
                 if ($text === '') {
@@ -353,7 +361,7 @@ final class ConversationRouter
             case 'assistant.completed':
                 $content = (string) ($data['content'] ?? '');
                 if ($content !== '') {
-                    $this->deliver($channel, $conversation['ref'], $content);
+                    $this->deliverReply($channel, $conversation['ref'], $content);
                 }
                 break;
             case 'permission.requested':
@@ -376,6 +384,11 @@ final class ConversationRouter
                 $stop = (string) ($data['stopReason'] ?? '');
                 if ($stop === 'error') {
                     $this->deliver($channel, $conversation['ref'], '⚠ The turn ended in an error: ' . (string) ($data['error'] ?? 'unknown'));
+                }
+                // A progressive placeholder whose reply never came must not
+                // keep ticking; a reply that already settled it makes this a no-op.
+                if ($channel instanceof StreamingFace) {
+                    $channel->abandonReply($conversation['ref']);
                 }
                 break;
             case 'spend_cap.breached':
@@ -786,6 +799,107 @@ final class ConversationRouter
         $this->deliveryTails[$chain] = $tail;
     }
 
+    /**
+     * The final reply of a turn. A face with an open progressive placeholder
+     * takes the chunks through finishReply() (first chunk replaces the
+     * placeholder); everything else rides the plain chunk chain, exactly as
+     * {@see deliver()} always has.
+     */
+    private function deliverReply(PlatformFace $channel, array $ref, string $text): void
+    {
+        if (!$channel instanceof StreamingFace || !$channel->hasOpenReply($ref)) {
+            $this->deliver($channel, $ref, $text);
+
+            return;
+        }
+        $chain = $channel->name() . '|' . (string) ($ref['conversationId'] ?? '');
+        $tail = $this->deliveryTails[$chain] ?? \React\Promise\resolve(null);
+        $chunks = OutboundChunker::split($this->safety->outbound($text), $channel->textChunkLimit(), $channel->maxLinesPerMessage());
+        $this->deliveryTails[$chain] = $tail
+            ->then(static fn () => $channel->finishReply($ref, $chunks))
+            ->then(null, fn (\Throwable $e) => $this->log->warn('deliver_failed', ['error' => $e->getMessage()]));
+    }
+
+    /**
+     * `/status` and `/cost`: one read of the session's own snapshot. The
+     * host reports status, queue and spend there; nothing here is estimated.
+     */
+    private function sessionReport(PlatformFace $channel, string $key, array $ref, string $name): void
+    {
+        $sessionId = $this->map->sessionIdFor($key);
+        if ($sessionId === null) {
+            $this->deliver($channel, $ref, 'No session is attached to this conversation yet. Send a message first.');
+
+            return;
+        }
+        $this->serve->call('session.get', ['sessionId' => $sessionId, 'limit' => 1])->then(
+            function (array $snapshot) use ($channel, $ref, $sessionId, $name): void {
+                $this->deliver($channel, $ref, $name === 'cost'
+                    ? self::costText($snapshot)
+                    : $this->statusText($sessionId, $snapshot));
+            },
+            fn (\Throwable $e) => $this->failWith($channel, $ref, 'Could not read the session: ' . $e->getMessage()),
+        );
+    }
+
+    /** @param array<string,mixed> $snapshot */
+    private function statusText(string $sessionId, array $snapshot): string
+    {
+        $state = (string) ($snapshot['status'] ?? ($this->busy[$sessionId] ?? 'idle'));
+        $queued = \is_array($snapshot['queued'] ?? null) ? \count($snapshot['queued']) : 0;
+        $mode = (string) ($this->policy['queue']['mode'] ?? 'steer');
+        $pending = 0;
+        foreach ($this->askSession as $askId => $owner) {
+            if ($owner === $sessionId && isset($this->presentedAsks[$askId])) {
+                $pending++;
+            }
+        }
+        $lines = [
+            '**Session status**',
+            "- Session: `{$sessionId}`",
+            "- State: {$state}",
+        ];
+        if (\is_string($snapshot['model'] ?? null) && $snapshot['model'] !== '') {
+            $lines[] = '- Model: ' . $snapshot['model'];
+        }
+        $lines[] = "- Queue mode: {$mode}";
+        $lines[] = "- Queued prompts: {$queued}";
+        $lines[] = "- Approvals awaiting an answer: {$pending}"
+            . ($pending > 0 ? ' (answer with the card, or `/approve <askId> once|always|deny`)' : '');
+
+        return \implode("\n", $lines);
+    }
+
+    /** @param array<string,mixed> $snapshot */
+    private static function costText(array $snapshot): string
+    {
+        $spent = $snapshot['spentUsd'] ?? null;
+        if (!\is_int($spent) && !\is_float($spent)) {
+            return 'Cost: not reported.';
+        }
+        $unpriced = (bool) ($snapshot['spendUnpriced'] ?? false);
+
+        return \sprintf('Spend this session: $%.4f', (float) $spent)
+            . ($unpriced ? ' (a lower bound: a call used a model with no price on file)' : '');
+    }
+
+    /**
+     * The conversation reply-address store the proactive-notify door reads.
+     * Keyed by account + Teams conversation id, never by session.
+     *
+     * @param array<string,mixed> $ref
+     */
+    public function rememberTeamsConversation(string $account, string $conversationId, array $ref): void
+    {
+        $this->map->rememberTeamsConversation($account, $conversationId, $ref);
+    }
+
+    /** @return array<string,mixed>|null */
+    public function teamsConversation(string $account, string $conversationId): ?array
+    {
+        return $this->map->teamsConversation($account, $conversationId);
+    }
+
     private function failWith(PlatformFace $channel, array $ref, string $message): void
     {
         $this->log->error('bridge_failure', ['channel' => $channel->name(), 'error' => $message]);
@@ -849,6 +963,27 @@ final class ConversationRouter
      * @return PromiseInterface<mixed>
      */
     private function sendPrompt(PlatformFace $channel, array $ref, string $sessionId, string $fenced, string $delivery, array $images = [], array $documents = []): PromiseInterface
+    {
+        if ($channel instanceof StreamingFace) {
+            $channel->beginReply($ref);
+        }
+
+        // A prompt the serve never admitted gets no reply: say so in the log,
+        // and close any progressive placeholder so its refresh tick stops.
+        // Callers do not chain on this promise, so the rejection ends here.
+        return $this->sendPromptOnWire($channel, $ref, $sessionId, $fenced, $delivery, $images, $documents)->then(
+            null,
+            function (\Throwable $error) use ($channel, $ref, $sessionId): void {
+                if ($channel instanceof StreamingFace) {
+                    $channel->abandonReply($ref);
+                }
+                $this->log->warn('prompt_not_admitted', ['session' => $sessionId, 'error' => $error->getMessage()]);
+            },
+        );
+    }
+
+    /** @return PromiseInterface<mixed> */
+    private function sendPromptOnWire(PlatformFace $channel, array $ref, string $sessionId, string $fenced, string $delivery, array $images, array $documents): PromiseInterface
     {
         if ($images === [] && $documents === []) {
             return $this->serve->send($sessionId, $fenced, $delivery)->then(

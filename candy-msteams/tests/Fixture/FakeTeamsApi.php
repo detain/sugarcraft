@@ -35,6 +35,9 @@ final class FakeTeamsApi
 
     private int $failStatus = 0;
 
+    /** One-shot failure for the next PUT (activity edit): the status it answers. */
+    public ?int $failNextPutWith = null;
+
     private ?string $failRetryAfter = null;
 
     private string $failBody = '{"error":"throttled"}';
@@ -152,6 +155,13 @@ final class FakeTeamsApi
             return;
         }
         if ($method === 'PUT' && \str_contains($path, '/v3/conversations/')) {
+            if ($this->failNextPutWith !== null) {
+                $status = $this->failNextPutWith;
+                $this->failNextPutWith = null;
+                $conn->end($this->frame($status, '{"error":"refused"}'));
+
+                return;
+            }
             $id = \substr($path, (int) \strrpos($path, '/') + 1);
             $conn->end($this->frame(200, (string) \json_encode(['id' => $id])));
 

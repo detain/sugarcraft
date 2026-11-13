@@ -6,9 +6,11 @@ namespace CandyCode\Bundles\MsTeams\MsTeams;
 
 use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
 use CandyCode\Bundles\MsTeams\Bridge\PlatformFace;
+use CandyCode\Bundles\MsTeams\Bridge\StreamingFace;
 use CandyCode\Bundles\MsTeams\Support\Keys;
 use CandyCode\Bundles\MsTeams\Support\Log;
 use CandyCode\Bundles\MsTeams\Support\MediaSniff;
+use CandyCode\Bundles\MsTeams\Support\OutboundChunker;
 use CandyCode\Bundles\MsTeams\Support\PairingCodes;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
@@ -45,9 +47,31 @@ use SugarCraft\Code\Backend\PendingAsk;
  * closest analogue to Discord's components-v2 edit, and the same second-
  * click impossibility law: a retired card carries no actions at all.
  */
-final class MsTeamsAccount implements PlatformFace
+final class MsTeamsAccount implements PlatformFace, StreamingFace
 {
     private const BOT_ID_PREFIXES = ['28:', 'app:'];
+
+    /** Placeholder text of a progressive reply; the elapsed seconds ride after it on refresh. */
+    private const WORKING_TEXT = 'working…';
+
+    /** Shown in place of a placeholder whose turn ended without a reply. */
+    private const ABANDONED_TEXT = 'No reply was produced.';
+
+    /** The refresh tick: cheap, because the throttle below decides what actually reaches Teams. */
+    private const PROGRESS_TICK_SECONDS = 1.0;
+
+    /** At most one placeholder edit per this many seconds (the throttle law). */
+    private const PROGRESS_GAP_SECONDS = 2.0;
+
+    /**
+     * conversationId → open progressive reply. At most one per conversation:
+     * a second prompt while a turn runs rides the same placeholder.
+     *
+     * @var array<string, array{token: int, ref: array<string,mixed>, open: PromiseInterface, activityId: ?string, startedAt: float, lastAt: float, shown: string, timer: TimerInterface}>
+     */
+    private array $replies = [];
+
+    private int $replySeq = 0;
 
     /** @var array<string, array{serviceUrl: string, conversationId: string, activityId: string}> askId → the card to retire */
     private array $approvalMessages = [];
@@ -66,6 +90,8 @@ final class MsTeamsAccount implements PlatformFace
         private readonly TextSafety $safety,
         private readonly LoopInterface $loop,
         private readonly string $tenantId = '',
+        /** Test seam for the throttle: returns seconds (float). Null = the wall clock. */
+        private readonly ?\Closure $clock = null,
     ) {
     }
 
@@ -280,6 +306,10 @@ final class MsTeamsAccount implements PlatformFace
             $this->loop->cancelTimer($timer);
         }
         $this->approvalTimers = [];
+        foreach ($this->replies as $state) {
+            $this->loop->cancelTimer($state['timer']);
+        }
+        $this->replies = [];
     }
 
     /** The declared RSC posture (§8.3): degraded = the app package lacks ChannelMessage.Read.Group. */
@@ -299,8 +329,8 @@ final class MsTeamsAccount implements PlatformFace
     public function handleActivity(array $activity): void
     {
         $type = (string) ($activity['type'] ?? '');
-        if ($type !== 'message' && $type !== 'invoke') {
-            return; // conversationUpdate, typing from humans, messageReaction… — not input
+        if ($type !== 'message' && $type !== 'invoke' && $type !== 'conversationUpdate') {
+            return; // typing from humans, messageReaction… — not input
         }
         if (!$this->tenantAccepted($activity)) {
             return;
@@ -315,6 +345,11 @@ final class MsTeamsAccount implements PlatformFace
         }
         if ($type === 'invoke') {
             $this->handleInvoke($activity);
+
+            return;
+        }
+        if ($type === 'conversationUpdate') {
+            $this->handleConversationUpdate($activity);
 
             return;
         }
@@ -360,9 +395,12 @@ final class MsTeamsAccount implements PlatformFace
             if (!$this->handleDmPolicy($authorId, $serviceUrl, $conversationId, $content)) {
                 return;
             }
-        } elseif (!$this->allowedGroup($conversationId, $isMention, $degraded)) {
+        } elseif (!$this->allowedGroup($conversationId, $authorId, $isMention, $degraded)) {
             return;
         }
+        // The access floor passed: this conversation is one the bot serves,
+        // so its reply address becomes eligible for proactive notify.
+        $this->rememberConversation($activity, $conversationType);
 
         // The own-mention markup is stripped; other <at> tokens are dropped
         // so the transcript carries no addressing noise (§7.4 analogue).
@@ -458,6 +496,7 @@ final class MsTeamsAccount implements PlatformFace
 
             return;
         }
+        $this->rememberConversation($activity, $conversationType);
         $this->router->answerByAskId($answer['askId'], $answer['verdict'], [
             'userId' => $authorId,
             'name' => (string) ($from['name'] ?? ''),
@@ -493,9 +532,11 @@ final class MsTeamsAccount implements PlatformFace
 
             return $this->pairing->isPaired($this->account, $authorId);
         }
-        $groups = $this->mapCfg('groups');
-        $row = \is_array($groups[$conversationId] ?? null) ? $groups[$conversationId] : null;
+        $row = $this->groupRow($conversationId);
         if ($row === null && $this->strCfg('groupPolicy', 'allowlist') !== 'open') {
+            return false;
+        }
+        if ($row !== null && !self::groupRowAllows($row, $authorId)) {
             return false;
         }
 
@@ -612,10 +653,9 @@ final class MsTeamsAccount implements PlatformFace
      * explicitly. `requireMention` defaults true per row and globally; the
      * degraded floor (§8.3 without the RSC consent) forces mention-only.
      */
-    private function allowedGroup(string $conversationId, bool $isMention, bool $degraded): bool
+    private function allowedGroup(string $conversationId, string $authorId, bool $isMention, bool $degraded): bool
     {
-        $groups = $this->mapCfg('groups');
-        $row = \is_array($groups[$conversationId] ?? null) ? $groups[$conversationId] : null;
+        $row = $this->groupRow($conversationId);
         $groupPolicy = $this->strCfg('groupPolicy', 'allowlist');
         if ($row === null && $groupPolicy !== 'open') {
             $this->log->debug('msteams_group_blocked_default', ['conversation' => \substr($conversationId, 0, 24)]);
@@ -623,6 +663,11 @@ final class MsTeamsAccount implements PlatformFace
             return false;
         }
         if ($row !== null && (string) ($row['policy'] ?? 'allowlist') === 'disabled') {
+            return false;
+        }
+        if ($row !== null && !self::groupRowAllows($row, $authorId)) {
+            $this->log->debug('msteams_group_user_not_listed', ['conversation' => \substr($conversationId, 0, 24)]);
+
             return false;
         }
         if ($degraded) {
@@ -786,6 +831,357 @@ final class MsTeamsAccount implements PlatformFace
             return;
         }
         $this->router->inbound('msteams', $key, $ref, $text, $isMention, null, $images, $documents);
+    }
+
+    // ── membership: welcome ──
+
+    /**
+     * conversationUpdate: the welcome fires when the bot itself is ADDED. A
+     * removal (membersRemoved naming the bot) never welcomes, even in the
+     * same activity. Duplicate delivery is absorbed by the inbound claim
+     * that runs before this door.
+     *
+     * @param array<string,mixed> $activity
+     */
+    private function handleConversationUpdate(array $activity): void
+    {
+        if ($this->botListed($activity['membersRemoved'] ?? null)) {
+            return;
+        }
+        if (!$this->botListed($activity['membersAdded'] ?? null)) {
+            return;
+        }
+        $from = \is_array($activity['from'] ?? null) ? $activity['from'] : [];
+        $authorId = (string) ($from['aadObjectId'] ?? $from['id'] ?? '');
+        $conversation = \is_array($activity['conversation'] ?? null) ? $activity['conversation'] : [];
+        $conversationId = (string) ($conversation['id'] ?? '');
+        $serviceUrl = \trim((string) ($activity['serviceUrl'] ?? ''));
+        if ($conversationId === '' || $serviceUrl === '') {
+            return;
+        }
+        $conversationType = (string) ($conversation['conversationType'] ?? (string) ($activity['conversationType'] ?? 'personal'));
+        // The bot was given this conversation by its own members: remember the
+        // reply address now, so a later proactive notify can reach it.
+        $this->rememberConversation($activity, $conversationType);
+
+        $isDm = $conversationType === 'personal';
+        if ($isDm && $this->strCfg('dmPolicy', 'pairing') === 'disabled') {
+            return; // a disabled DM door has nothing to welcome anyone into
+        }
+        $lines = ['candy-code is connected to this conversation. Send a message to start a session, or type /help for the commands.'];
+        if ($isDm) {
+            if ($this->strCfg('dmPolicy', 'pairing') === 'pairing' && !$this->pairing->isPaired($this->account, $authorId)) {
+                $lines[] = 'Pairing is required before the bot answers. Send any message and an approver will get your code.';
+            }
+        } else {
+            $lines[] = $this->groupServed($conversationId)
+                ? 'Mention me to ask something.'
+                : 'This conversation is not on the group allowlist yet, so the bot stays quiet here until an admin adds it under channels.msteams.groups.';
+        }
+
+        $this->rest->sendActivity($serviceUrl, $conversationId, [
+            'type' => 'message',
+            'from' => ['id' => $this->appId],
+            'textFormat' => 'markdown',
+            'text' => $this->safety->outbound(\implode("\n", $lines)),
+        ])->then(null, fn (\Throwable $e) => $this->log->warn('welcome_failed', ['error' => $e->getMessage()]));
+    }
+
+    /** @param mixed $members the membersAdded / membersRemoved list */
+    private function botListed(mixed $members): bool
+    {
+        if (!\is_array($members)) {
+            return false;
+        }
+        foreach ($members as $member) {
+            if (\is_array($member) && $this->isOurAuthor((string) ($member['id'] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // ── reply-address store (proactive notify) ──
+
+    /**
+     * Remember the reply address of a conversation this account has just
+     * served. The stored ref is the only address notifyConversation() will
+     * ever post to, so the serviceUrl a caller passes is never trusted.
+     *
+     * @param array<string,mixed> $activity
+     */
+    private function rememberConversation(array $activity, string $conversationType): void
+    {
+        $conversation = \is_array($activity['conversation'] ?? null) ? $activity['conversation'] : [];
+        $conversationId = (string) ($conversation['id'] ?? '');
+        $serviceUrl = \trim((string) ($activity['serviceUrl'] ?? ''));
+        if ($conversationId === '' || $serviceUrl === '') {
+            return;
+        }
+        $this->router->rememberTeamsConversation($this->account, $conversationId, [
+            'serviceUrl' => $serviceUrl,
+            'conversationId' => $conversationId,
+            'conversationType' => $conversationType,
+            'tenantId' => (string) ($conversation['tenantId'] ?? ''),
+        ]);
+    }
+
+    /**
+     * Proactive post into a conversation this account has served (the
+     * background-job completion path). Refused, not guessed: a conversation
+     * never seen by this account returns null, a seen one whose door has
+     * since closed returns a rejected promise. The text takes the same
+     * redaction and chunking as a reply.
+     *
+     * @param array<string,mixed> $conversationRef at least `conversationId`; any caller serviceUrl is ignored
+     *
+     * @return PromiseInterface<void>|null null when this account has never seen the conversation
+     */
+    public function notifyConversation(array $conversationRef, string $text): ?PromiseInterface
+    {
+        $conversationId = (string) ($conversationRef['conversationId'] ?? '');
+        $stored = $conversationId === '' ? null : $this->router->teamsConversation($this->account, $conversationId);
+        if ($stored === null) {
+            return null;
+        }
+        $isDm = (string) ($stored['conversationType'] ?? 'personal') === 'personal';
+        $stillServed = $isDm
+            ? $this->strCfg('dmPolicy', 'pairing') !== 'disabled'
+            : $this->groupServed($conversationId);
+        if (!$stillServed) {
+            return \React\Promise\reject(new \RuntimeException('msteams notify refused: the conversation is no longer served'));
+        }
+        $ref = [
+            'serviceUrl' => (string) ($stored['serviceUrl'] ?? ''),
+            'conversationId' => $conversationId,
+            'activityId' => '',
+        ];
+        $chunks = OutboundChunker::split($this->safety->outbound($text), $this->textChunkLimit(), $this->maxLinesPerMessage());
+
+        return $this->postChunks($ref, $chunks);
+    }
+
+    // ── group allowlist helpers ──
+
+    /** @return array<string,mixed>|null the groups row for a conversation, if any */
+    private function groupRow(string $conversationId): ?array
+    {
+        $groups = $this->mapCfg('groups');
+
+        return \is_array($groups[$conversationId] ?? null) ? $groups[$conversationId] : null;
+    }
+
+    /** Whether the conversation is served at all (the §8.3 door, without the mention arms). */
+    private function groupServed(string $conversationId): bool
+    {
+        $row = $this->groupRow($conversationId);
+        if ($row === null) {
+            return $this->strCfg('groupPolicy', 'allowlist') === 'open';
+        }
+
+        return (string) ($row['policy'] ?? 'allowlist') !== 'disabled';
+    }
+
+    /**
+     * Per-user allowlist for one group row (`groups.rows.<conversationId>.allowFrom`,
+     * the same ID spellings as `access.allowFrom`). An unset or empty list
+     * admits everyone, which is the behaviour before the list existed.
+     *
+     * @param array<string,mixed> $row
+     */
+    private static function groupRowAllows(array $row, string $authorId): bool
+    {
+        $raw = \is_array($row['allowFrom'] ?? null) ? $row['allowFrom'] : [];
+        $allow = [];
+        foreach ($raw as $value) {
+            if (\is_string($value) || \is_int($value)) {
+                $allow[] = (string) $value;
+            }
+        }
+        if ($allow === []) {
+            return true;
+        }
+
+        return $authorId !== '' && \in_array($authorId, $allow, true);
+    }
+
+    // ── StreamingFace: progressive replies (streamReplies, default off) ──
+
+    /**
+     * Post the placeholder for an admitted prompt and arm the refresh tick.
+     * The post is asynchronous, so a reply that lands first still finds the
+     * placeholder through the pending `open` promise.
+     */
+    public function beginReply(array $ref): void
+    {
+        if (!$this->boolCfg('streamReplies', false)) {
+            return;
+        }
+        $conversationId = (string) ($ref['conversationId'] ?? '');
+        $serviceUrl = (string) ($ref['serviceUrl'] ?? '');
+        if ($conversationId === '' || $serviceUrl === '' || isset($this->replies[$conversationId])) {
+            return;
+        }
+        $token = ++$this->replySeq;
+        $now = $this->now();
+        $open = $this->rest->sendActivity($serviceUrl, $conversationId, $this->textActivity(self::WORKING_TEXT))->then(
+            static fn (array $sent): string => (string) ($sent['id'] ?? ''),
+            function (\Throwable $e): string {
+                $this->log->warn('reply_stream_open_failed', ['error' => $e->getMessage()]);
+
+                return '';
+            },
+        );
+        $timer = $this->loop->addPeriodicTimer(self::PROGRESS_TICK_SECONDS, fn () => $this->refreshReply($ref));
+        $this->replies[$conversationId] = [
+            'token' => $token,
+            'ref' => $ref,
+            'open' => $open,
+            'activityId' => null,
+            'startedAt' => $now,
+            'lastAt' => $now,
+            'shown' => self::WORKING_TEXT,
+            'timer' => $timer,
+        ];
+        $open->then(function (string $activityId) use ($conversationId, $token): void {
+            if (($this->replies[$conversationId]['token'] ?? null) === $token) {
+                $this->replies[$conversationId]['activityId'] = $activityId !== '' ? $activityId : null;
+            }
+        });
+    }
+
+    public function hasOpenReply(array $ref): bool
+    {
+        return isset($this->replies[(string) ($ref['conversationId'] ?? '')]);
+    }
+
+    /**
+     * One refresh tick: edit the placeholder with the elapsed seconds, but
+     * never twice inside PROGRESS_GAP_SECONDS. Public so the throttle can be
+     * driven directly under an injected clock.
+     *
+     * @param array<string,mixed> $ref
+     */
+    public function refreshReply(array $ref): void
+    {
+        $conversationId = (string) ($ref['conversationId'] ?? '');
+        $state = $this->replies[$conversationId] ?? null;
+        if ($state === null || $state['activityId'] === null) {
+            return;
+        }
+        $now = $this->now();
+        if ($now - $state['lastAt'] < self::PROGRESS_GAP_SECONDS) {
+            return;
+        }
+        $text = self::WORKING_TEXT . ' ' . (int) \floor($now - $state['startedAt']) . 's';
+        if ($text === $state['shown']) {
+            return;
+        }
+        $this->replies[$conversationId]['lastAt'] = $now;
+        $this->replies[$conversationId]['shown'] = $text;
+        $this->rest->updateActivity((string) ($state['ref']['serviceUrl'] ?? ''), $conversationId, $state['activityId'], $this->textActivity($text))
+            ->then(null, fn (\Throwable $e) => $this->log->debug('reply_stream_update_failed', ['error' => $e->getMessage()]));
+    }
+
+    /**
+     * The final reply. The first chunk replaces the placeholder in place; if
+     * that edit is refused for any reason, the chunk posts as a new message
+     * instead, so the answer is never lost to a failed edit.
+     *
+     * @param list<string> $chunks
+     *
+     * @return PromiseInterface<void>
+     */
+    public function finishReply(array $ref, array $chunks): PromiseInterface
+    {
+        $conversationId = (string) ($ref['conversationId'] ?? '');
+        $state = $this->replies[$conversationId] ?? null;
+        unset($this->replies[$conversationId]);
+        if ($state === null) {
+            return $this->postChunks($ref, $chunks);
+        }
+        $this->loop->cancelTimer($state['timer']);
+        if ($chunks === []) {
+            $this->settlePlaceholder($ref, $state['open'], self::ABANDONED_TEXT);
+
+            return \React\Promise\resolve(null);
+        }
+        $first = (string) \array_shift($chunks);
+
+        return $state['open']->then(function (string $activityId) use ($ref, $first, $chunks, $conversationId): PromiseInterface {
+            if ($activityId === '') {
+                return $this->postChunks($ref, [$first, ...$chunks]);
+            }
+            return $this->rest->updateActivity((string) ($ref['serviceUrl'] ?? ''), $conversationId, $activityId, $this->textActivity($first))
+                ->then(null, function (\Throwable $e) use ($ref, $first): PromiseInterface {
+                    $this->log->warn('reply_stream_replace_failed', ['error' => $e->getMessage()]);
+
+                    return $this->postChunks($ref, [$first]);
+                })
+                ->then(fn () => $this->postChunks($ref, $chunks));
+        });
+    }
+
+    /** A turn that ended without a reply: stop the tick and say so in the placeholder. */
+    public function abandonReply(array $ref): void
+    {
+        $conversationId = (string) ($ref['conversationId'] ?? '');
+        $state = $this->replies[$conversationId] ?? null;
+        if ($state === null) {
+            return;
+        }
+        unset($this->replies[$conversationId]);
+        $this->loop->cancelTimer($state['timer']);
+        $this->settlePlaceholder($ref, $state['open'], self::ABANDONED_TEXT);
+    }
+
+    /** @param PromiseInterface<string> $open */
+    private function settlePlaceholder(array $ref, PromiseInterface $open, string $text): void
+    {
+        $open->then(function (string $activityId) use ($ref, $text): void {
+            if ($activityId === '') {
+                return;
+            }
+            $this->rest->updateActivity((string) ($ref['serviceUrl'] ?? ''), (string) ($ref['conversationId'] ?? ''), $activityId, $this->textActivity($text))
+                ->then(null, fn (\Throwable $e) => $this->log->debug('reply_stream_settle_failed', ['error' => $e->getMessage()]));
+        });
+    }
+
+    /**
+     * Sequential posts: each chunk waits for the one before it, and a failed
+     * chunk is logged without stopping the rest.
+     *
+     * @param list<string> $chunks
+     *
+     * @return PromiseInterface<void>
+     */
+    private function postChunks(array $ref, array $chunks): PromiseInterface
+    {
+        $tail = \React\Promise\resolve(null);
+        foreach ($chunks as $chunk) {
+            $tail = $tail
+                ->then(fn () => $this->deliver($ref, $chunk))
+                ->then(null, fn (\Throwable $e) => $this->log->warn('deliver_failed', ['error' => $e->getMessage()]));
+        }
+
+        return $tail;
+    }
+
+    /** @return array<string,mixed> */
+    private function textActivity(string $text): array
+    {
+        return [
+            'type' => 'message',
+            'from' => ['id' => $this->appId],
+            'textFormat' => 'markdown',
+            'text' => $text,
+        ];
+    }
+
+    private function now(): float
+    {
+        return $this->clock !== null ? ($this->clock)() : \microtime(true);
     }
 
     /** Public door for the router's /pair text fallback (§7.3). */

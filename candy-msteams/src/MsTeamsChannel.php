@@ -373,6 +373,31 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         $this->validators = [];
     }
 
+    /**
+     * Proactive post into a conversation the bot has served before (the
+     * host's background-job completion path). The conversation is looked up
+     * in the reply-address store the bot filled on its last inbound there;
+     * an unknown conversation is refused, never guessed at.
+     *
+     * @param array<string,mixed> $conversationRef the reference the bot stored for a conversation: `conversationId` is what matters
+     *
+     * @return \React\Promise\PromiseInterface<void>
+     */
+    public function notifyConversation(array $conversationRef, string $text): \React\Promise\PromiseInterface
+    {
+        if ($this->disposed) {
+            return \React\Promise\reject(new \RuntimeException('msteams notify refused: channel is not running'));
+        }
+        foreach ($this->faces as $face) {
+            $pending = $face->notifyConversation($conversationRef, $text);
+            if ($pending !== null) {
+                return $pending;
+            }
+        }
+
+        return \React\Promise\reject(new \RuntimeException('msteams notify refused: conversation has not been seen by this bot'));
+    }
+
     /** Faces built for the dark-posture e2e seam (tests only). */
     public function faceNames(): array
     {
@@ -534,6 +559,9 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             'media' => $media,
             'approvals' => $approvals,
             'approvalRoster' => (array) ($approvals['approvers'] ?? []),
+            // Progressive replies: an edited placeholder instead of silence.
+            // Off by default, so an upgraded install behaves exactly as before.
+            'streamReplies' => (bool) ($cfg['streamReplies'] ?? false),
         ];
 
         // accounts.<id> rows override EVERYTHING above, per account (§7.11

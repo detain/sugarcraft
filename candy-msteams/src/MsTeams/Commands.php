@@ -21,6 +21,25 @@ final class Commands
     public const ROSTER = ['new', 'stop', 'approve', 'queue', 'model', 'pair'];
 
     /**
+     * Teams-only words on top of the shared roster: discord answers these
+     * natively (or not at all), so they stay out of the §7.6 list.
+     */
+    public const TEAMS_EXTRA = ['help', 'status', 'cost'];
+
+    /** One line per command the bundle answers, in the order /help lists them. */
+    public const HELP = [
+        'help' => 'this list',
+        'new' => 'start a fresh session for this conversation',
+        'stop' => 'cancel the running turn',
+        'status' => 'session id, state, queue mode and approvals awaiting an answer',
+        'cost' => 'the spend the host reports for this session',
+        'queue' => '`/queue <text>` queues a prompt behind the running turn',
+        'model' => '`/model [name]` runs the session\'s /model command',
+        'approve' => '`/approve <askId> [once|always|deny]` answers a tool approval in chat',
+        'pair' => 'pairing for approvers: `/pair`, `/pair approve <code>`',
+    ];
+
+    /**
      * Parse the TEXT command line: a bare `/word …`, possibly preceded by
      * `<at>Name</at>` mention markup (Teams delivers the bot mention as
      * inline markup in the activity text for some clients).
@@ -40,10 +59,22 @@ final class Commands
             return null;
         }
         $name = \strtolower(\array_shift($words));
-        if (!\in_array($name, self::ROSTER, true)) {
+        if (!\in_array($name, \array_merge(self::ROSTER, self::TEAMS_EXTRA), true)) {
             return null;
         }
 
         return ['name' => $name, 'args' => $words];
+    }
+
+    /** The /help body (Teams markdown). Lists exactly what HELP names. */
+    public static function helpText(): string
+    {
+        $lines = ['**candy-code commands**'];
+        foreach (self::HELP as $name => $description) {
+            $lines[] = \str_contains($description, '`') ? "- {$description}" : "- `/{$name}`: {$description}";
+        }
+        $lines[] = 'Anything else you write is a prompt for the session.';
+
+        return \implode("\n", $lines);
     }
 }

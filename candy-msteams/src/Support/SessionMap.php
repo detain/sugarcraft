@@ -73,6 +73,15 @@ final class SessionMap
                 )
                 SQL);
             $db->exec(<<<'SQL'
+                CREATE TABLE IF NOT EXISTS teams_conversations (
+                    account         TEXT NOT NULL,
+                    conversation_id TEXT NOT NULL,
+                    ref_json        TEXT NOT NULL,
+                    updated_at      INTEGER NOT NULL,
+                    PRIMARY KEY (account, conversation_id)
+                )
+                SQL);
+            $db->exec(<<<'SQL'
                 CREATE TABLE IF NOT EXISTS seen_inbound (
                     platform  TEXT NOT NULL,
                     inbound_id TEXT NOT NULL,
@@ -218,6 +227,42 @@ final class SessionMap
         $ref = \json_decode((string) $row['ref_json'], true);
 
         return ['key' => (string) $row['key'], 'ref' => \is_array($ref) ? $ref : []];
+    }
+
+    /**
+     * Remember the reply address of a conversation the bot has served (the
+     * proactive-notify door only speaks to conversations it has seen). The
+     * stored ref carries the serviceUrl Microsoft last sent for it.
+     *
+     * @param array<string,mixed> $ref
+     */
+    public function rememberTeamsConversation(string $account, string $conversationId, array $ref): void
+    {
+        $stmt = $this->db->prepare(
+            'INSERT INTO teams_conversations (account, conversation_id, ref_json, updated_at)
+             VALUES (:account, :conversation, :ref, :now)
+             ON CONFLICT(account, conversation_id) DO UPDATE SET ref_json = excluded.ref_json, updated_at = excluded.updated_at',
+        );
+        $stmt->execute([
+            'account' => $account,
+            'conversation' => $conversationId,
+            'ref' => (string) \json_encode($ref, \JSON_THROW_ON_ERROR),
+            'now' => \time(),
+        ]);
+    }
+
+    /** @return array<string,mixed>|null */
+    public function teamsConversation(string $account, string $conversationId): ?array
+    {
+        $stmt = $this->db->prepare('SELECT ref_json FROM teams_conversations WHERE account = :account AND conversation_id = :conversation');
+        $stmt->execute(['account' => $account, 'conversation' => $conversationId]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if ($row === false) {
+            return null;
+        }
+        $ref = \json_decode((string) $row['ref_json'], true);
+
+        return \is_array($ref) ? $ref : null;
     }
 
     /**
