@@ -100,7 +100,10 @@ final class CancellationToken
      * Public contract (mirrors {@see Cancellable::onCancel()} — the contract
      * itself makes it public, no visibility games).
      * Fires immediately if the token is already cancelled, otherwise runs at
-     * most once, when cancel() happens.
+     * most once, when cancel() happens. Either way a callback that throws is
+     * logged, never propagated: the immediate-fire path shares cancel()'s
+     * hook-failure seam, so registration cannot surface what cancellation
+     * promises to contain.
      *
      * The returned handle removes the registration while it is still pending:
      * unsubscribe() before the cancellation drops the callback without
@@ -120,7 +123,10 @@ final class CancellationToken
         }
         if ($this->cancelled) {
             // Already cancelled — fire immediately; the handle is born spent.
-            $callback();
+            // Same logged-never-propagated seam as cancel(): a PUBLIC
+            // registration on a pre-cancelled token must not surface a hook
+            // throw where cancel() semantics promise it never will.
+            $this->invokeLogged($callback);
             return CallbackSubscription::settled();
         }
         $id = $this->nextCallbackId++;
@@ -163,12 +169,24 @@ final class CancellationToken
         // shutdown) run to completion, and every remaining callback still
         // executes.
         foreach ($this->callbacks as $callback) {
-            try {
-                $callback();
-            } catch (\Throwable $e) {
-                AsyncOps::logFailure('sugar-async: cancellation callback failed: ' . $e->getMessage());
-            }
+            $this->invokeLogged($callback);
         }
         $this->callbacks = [];
+    }
+
+    /**
+     * The single hook-failure seam for cancellation callbacks: run one, and
+     * if it throws, log through the sink and swallow (never rethrow). Both
+     * the cancel()-time fan-out and the immediate fire on an already
+     * cancelled token go through here, so one contract — logged, never
+     * propagated — holds for every reachable call site.
+     */
+    private function invokeLogged(callable $callback): void
+    {
+        try {
+            $callback();
+        } catch (\Throwable $e) {
+            AsyncOps::logFailure('sugar-async: cancellation callback failed: ' . $e->getMessage());
+        }
     }
 }

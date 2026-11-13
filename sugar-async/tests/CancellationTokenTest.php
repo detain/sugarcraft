@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Async\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\CancellationToken;
 
@@ -533,5 +534,33 @@ final class CancellationTokenTest extends TestCase
 
         $this->assertTrue($token->isCancelled());
         $this->assertTrue($source->isCancelled(), 'source delegates to the token — no desync');
+    }
+
+    public function testThrowingCallbackOnAlreadyCancelledTokenIsLoggedNotThrown(): void
+    {
+        // The asymmetry this pins, and cures: cancel() swallows a throwing
+        // hook (logged, never propagated) — registering the SAME hook on an
+        // already-cancelled token used to run it bare, surfacing a throw the
+        // contract promises containment for. Both paths share one seam now.
+        $notices = [];
+        AsyncOps::setLogSink(static function (string $line) use (&$notices): void {
+            $notices[] = $line;
+        });
+        try {
+            $source = CancellationSource::new();
+            $source->cancel();
+            $handle = $source->token()->onCancel(static function (): never {
+                throw new \RuntimeException('late hook exploded');
+            });
+
+            // Reaching here is the no-propagation half of the assertion;
+            // the handle is born spent, as on any cancelled token.
+            $this->assertFalse($handle->isActive());
+        } finally {
+            AsyncOps::setLogSink(null);
+        }
+
+        $this->assertCount(1, $notices);
+        $this->assertStringStartsWith('sugar-async: cancellation callback failed: late hook exploded', $notices[0]);
     }
 }

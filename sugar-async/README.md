@@ -85,7 +85,9 @@ further guarantees:
 - Late registration never misses: calling `onCancel()` on an already-cancelled
   token fires the callback immediately — synchronously, before the call
   returns — and hands back an already-spent handle, so nothing is retained for
-  a cancellation that has already happened.
+  a cancellation that has already happened. A callback that throws on this
+  immediate path is logged through the same seam as `cancel()` — registration
+  cannot surface what cancellation contains.
 
 ### Cancellation cookbook
 
