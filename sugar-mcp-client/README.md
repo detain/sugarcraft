@@ -43,7 +43,7 @@ composer require sugarcraft/sugar-mcp-client
 | `McpTool` | Tool definition value object with a well-typedness gate (`tryFromArray`) |
 | `ArgumentShape` | Restores `{}` vs `[]` in decoded tool-call arguments against the tool's `inputSchema` |
 | `McpServer` | Transport contract: `start` / `stop` / `listTools` / `callTool` |
-| `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture (also drainable between exchanges via `pumpStderr()`), skipped-definition reporting (`malformedToolDefinitions()` / `malformedToolDefinitionsReport()`), `BoundedShutdown` teardown, `__destruct` back-stop (the SIGKILLed-owner residual is named in *Fork safety*) |
+| `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture (also drainable between exchanges via `pumpStderr()`), skipped-definition reporting (`malformedToolDefinitions()` / `malformedToolDefinitionsReport()`), `BoundedShutdown` teardown, `__destruct` back-stop (the SIGKILLed-owner residual is named in *Fork safety*), and the resources/prompts convenience quartet (`listResources` / `readResource` / `listPrompts` / `getPrompt`, sharing callTool's array-or-error shape) |
 | `McpRouter` | Deny-before-allow SERVER narrowing over raw config keys (tool rosters follow servers); empty allow-list means allow-all |
 | `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere; the transport stringifies what it sends, so an outbound request carries `"5"` on the wire, never a bare `5` |
 | `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
@@ -500,9 +500,12 @@ stderr is not locked — it is diagnostics only.
   policy at the embedder.
 - **Deferred (not planned in this package):** HTTP/SSE transport, server-side
   implementation, and OAuth (PKCE, loopback, dynamic client registration).
-  `resources/*` and `prompts/*` traffic is already one
-  `StdioMcpServer::request()` away (the product's provider pages ride exactly
-  that), and the server's own request/notification traffic is answered inline
+  `resources/*` and `prompts/*` traffic rides the shipped convenience quartet
+  (`listResources()` / `readResource()` / `listPrompts()` / `getPrompt()`)
+  over `StdioMcpServer::request()` — the same array-or-error shape as
+  `callTool()` (the product's provider pages rode exactly that before the
+  quartet gave the walk a name), and the server's own request/notification
+  traffic is answered inline
   — see *Server requests* above. What is deliberately NOT answered for you is
   `sampling/createMessage`: model policy stays downstream.
 - Deprecated surfaces (`ExchangeLock::create()`) keep working and announce

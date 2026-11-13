@@ -1306,6 +1306,98 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
+     * `resources/list` — the server's advertised resources. Same
+     * array-or-error shape as {@see self::callTool()}: the result payload on
+     * success, `['error' => ...]` on any failure; never a throw, never null.
+     * The unbounded-wait law applies (this is protocol chatter without a
+     * defensible blanket budget — bound it via {@see self::request()} if you
+     * need a deadline).
+     *
+     * @return array<string,mixed>
+     */
+    public function listResources(): array
+    {
+        return $this->protocolResult('resources/list');
+    }
+
+    /**
+     * `resources/read` — fetch one resource by URI.
+     *
+     * @return array<string,mixed>
+     */
+    public function readResource(string $uri): array
+    {
+        return $this->protocolResult('resources/read', ['uri' => $uri]);
+    }
+
+    /**
+     * `prompts/list` — the server's advertised prompt templates.
+     *
+     * @return array<string,mixed>
+     */
+    public function listPrompts(): array
+    {
+        return $this->protocolResult('prompts/list');
+    }
+
+    /**
+     * `prompts/get` — render one prompt template. $arguments follows the
+     * tool-arguments law: an object map, a non-empty positional list is
+     * refused at the client door, and `[]` is repaired to an empty JSON
+     * object before the wire sees it.
+     *
+     * @param array<string,mixed> $arguments
+     * @return array<string,mixed>
+     */
+    public function getPrompt(string $name, array $arguments = []): array
+    {
+        if (array_is_list($arguments) && $arguments !== []) {
+            return ['error' => 'MCP prompts/get failed: arguments must be a JSON object, got a list.'];
+        }
+
+        return $this->protocolResult('prompts/get', [
+            'name' => $name,
+            'arguments' => $arguments === [] ? new \stdClass() : $arguments,
+        ]);
+    }
+
+    /**
+     * The shared request→check-error→extract-result walk the embedders
+     * previously re-implemented per transport. The failure cause (dead
+     * child, refused frame, JSON-RPC error) is named exactly the way
+     * callTool names it, so one vocabulary covers every convenience door.
+     *
+     * @param array<string,mixed>|null $params
+     * @return array<string,mixed>
+     */
+    private function protocolResult(string $method, ?array $params = null): array
+    {
+        $this->lastFailureCause = null;
+
+        try {
+            $response = $this->request($method, $params);
+        } catch (\InvalidArgumentException $unencodable) {
+            return ['error' => "MCP {$method} failed: " . $unencodable->getMessage()];
+        }
+
+        if ($response === null) {
+            $cause = $this->lastFailureCause ?? 'no reply arrived before the wait ended';
+
+            return ['error' => "MCP {$method} failed: {$cause}" . $this->stderrTailForDiagnostics()];
+        }
+
+        if ($response->error !== null) {
+            return ['error' => "MCP {$method} failed" . $this->describeError($method, $response) . $this->stderrTailForDiagnostics()];
+        }
+
+        if (!$response->resultSet) {
+            return ['error' => "MCP {$method} failed: the server answered neither result nor error"];
+        }
+
+        return is_array($response->result) ? $response->result : ['result' => $response->result];
+    }
+
+    /**
      * Tell the server to stop a call this side gave up on (MCP
      * `notifications/cancelled`). Best effort and bounded: a server that has
      * died or wedged its stdin costs CANCEL_NOTICE_SECONDS, never a hang, and

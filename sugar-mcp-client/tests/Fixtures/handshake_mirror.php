@@ -34,6 +34,7 @@ while (($line = fgets(STDIN)) !== false) {
     }
 
     $id = (string) $msg['id'];
+    $params = is_array($msg['params'] ?? null) ? $msg['params'] : [];
 
     switch ($msg['method']) {
         case 'initialize':
@@ -75,6 +76,78 @@ while (($line = fgets(STDIN)) !== false) {
                             'probeEnv' => getenv('MCP_PROBE_ENV'),
                             'secretPresent' => getenv('MCP_TEST_SECRET') !== false,
                         ]),
+                    ]],
+                ],
+            ]);
+            break;
+
+        case 'resources/list':
+            $write([
+                'jsonrpc' => '2.0',
+                'id' => $id,
+                'result' => [
+                    'resources' => [[
+                        'uri' => 'file:///notes/today.md',
+                        'name' => 'Today',
+                        'mimeType' => 'text/plain',
+                    ]],
+                ],
+            ]);
+            break;
+
+        case 'resources/read':
+            $write([
+                'jsonrpc' => '2.0',
+                'id' => $id,
+                'result' => [
+                    'contents' => [[
+                        'uri' => $params['uri'] ?? '',
+                        'mimeType' => 'text/plain',
+                        'text' => 'body of the resource',
+                    ]],
+                ],
+            ]);
+            break;
+
+        case 'prompts/list':
+            $write([
+                'jsonrpc' => '2.0',
+                'id' => $id,
+                'result' => [
+                    'prompts' => [[
+                        'name' => 'recap',
+                        'description' => 'Recap the session',
+                        'arguments' => [['name' => 'lang', 'required' => true]],
+                    ]],
+                ],
+            ]);
+            break;
+
+        case 'prompts/get':
+            // Strict like a real SDK server: `arguments` must arrive as a
+            // JSON object, never a (despite the repair law) bare list.
+            $wire = json_decode($line);
+            $wireArgs = $wire->params->arguments ?? null;
+            if ($wireArgs !== null && !is_object($wireArgs)) {
+                $write([
+                    'jsonrpc' => '2.0',
+                    'id' => $id,
+                    'error' => ['code' => -32602, 'message' => 'expected object, received array'],
+                ]);
+                break;
+            }
+            $arguments = is_array($params['arguments'] ?? null) ? $params['arguments'] : [];
+            $write([
+                'jsonrpc' => '2.0',
+                'id' => $id,
+                'result' => [
+                    'description' => 'Recap the session',
+                    'messages' => [[
+                        'role' => 'user',
+                        'content' => [
+                            'type' => 'text',
+                            'text' => 'recap language: ' . (is_array($arguments) ? (string) ($arguments['lang'] ?? '?') : '?'),
+                        ],
                     ]],
                 ],
             ]);
