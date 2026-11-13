@@ -49,7 +49,6 @@ final class CassowarySolverTest extends TestCase
 
     public function testFactoryMethods(): void
     {
-        $this->assertInstanceOf(GreedySolver::class, CassowarySolver::greedy());
         $this->assertInstanceOf(CassowarySolver::class, CassowarySolver::cassowary());
         $this->assertInstanceOf(CassowarySolver::class, CassowarySolver::new());
     }

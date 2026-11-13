@@ -46,21 +46,34 @@ final class SolverEdgeCaseTest extends TestCase
         $this->assertInstanceOf(LayoutSolver::class, $solver);
         // The interface contract is solve() alone (Interface Segregation): an
         // implementer must not be forced to know or build the other concrete
-        // solvers. The factories stay on the concrete classes, so existing
-        // GreedySolver::greedy()/::cassowary() call-sites keep working.
+        // solvers. The factories stay on the concrete classes and each class
+        // keeps its own construction story — SC-03 retired the inverted
+        // plumbing pair: the cassowary() factory that lived on GreedySolver
+        // (handing out deprecated instances from the supported class) and the
+        // greedy() factory that lived on CassowarySolver (the mirror image).
         $contract = new \ReflectionClass(LayoutSolver::class);
         $this->assertSame(
             ['solve'],
             array_map(static fn(\ReflectionMethod $m): string => $m->getName(), $contract->getMethods()),
             'LayoutSolver must declare only solve()'
         );
-        foreach ([GreedySolver::class, CassowarySolver::class] as $implementor) {
-            foreach (['solve', 'greedy', 'cassowary'] as $method) {
+        $roster = [
+            GreedySolver::class => ['solve', 'new', 'greedy', 'compat'],
+            CassowarySolver::class => ['solve', 'new', 'cassowary'],
+        ];
+        foreach ($roster as $implementor => $methods) {
+            foreach ($methods as $method) {
                 $this->assertTrue(
                     (new \ReflectionClass($implementor))->hasMethod($method),
                     "{$implementor} must keep providing {$method}()"
                 );
             }
+        }
+        foreach ([[GreedySolver::class, 'cassowary'], [CassowarySolver::class, 'greedy']] as [$implementor, $method]) {
+            $this->assertFalse(
+                (new \ReflectionClass($implementor))->hasMethod($method),
+                "{$implementor}::{$method}() was retired by SC-03 (finding 013) and must stay retired"
+            );
         }
     }
 

@@ -549,16 +549,6 @@ final class GreedySolverTest extends TestCase
         $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
-    /**
-     * Step 6: GreedySolver::cassowary() now correctly returns CassowarySolver
-     * (interface and implementation typed with concrete return types).
-     */
-    public function testFactoryCassowaryFromGreedy(): void
-    {
-        $solver = GreedySolver::cassowary();
-        $this->assertInstanceOf(CassowarySolver::class, $solver);
-    }
-
     // ── LayoutSolver interface ──────────────────────────────────────────
 
     public function testSolverImplementsLayoutSolver(): void

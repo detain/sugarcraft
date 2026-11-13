@@ -132,17 +132,6 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * Legacy convenience returning the deprecated {@see CassowarySolver} shim
-     * (which delegates here anyway). Prefer {@see CassowarySolver::new()} if a
-     * call-site must keep naming it, and {@see GreedySolver::new()} for
-     * anything new.
-     */
-    public static function cassowary(): CassowarySolver
-    {
-        return new CassowarySolver();
-    }
-
-    /**
      * sugar-panels parity mode: round-split + remainder-to-last + non-truncating
      * overflow. Opt-in seam for retiring sugar-panels's duplicated distribute()
      * /distributeFlex() without regressing its goldens.

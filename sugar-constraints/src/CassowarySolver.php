@@ -21,8 +21,13 @@ use SugarCraft\Constraints\Constraint\Constraint;
  *
  * The live caller is sugar-style: its `Layout\Solver` consults
  * `SolverFactory::fromEnvironment()`, and with `SUGARCRAFT_LAYOUT_SOLVER=cassowary`
- * set, every split that lib performs routes through this class's `solve()` —
- * so the deprecation fires there on each solve, not merely at construction.
+ * set, every split that lib performs routes through this class's `solve()`.
+ * Two notices guard that route at deliberately different rates: the factory's
+ * selection announcement latches ONCE PER PROCESS (sugar-style's own
+ * `SolverFactory` owns that one), while this class's `E_USER_DEPRECATED`
+ * fires on EVERY `solve()`, not merely at construction — the per-solve
+ * loudness is the documented contract (pinned by sugar-style's
+ * DocumentationFidelityTest), complementary to the factory latch, not a bug.
  * The notice is NOT `@`-suppressed:
  * whether it is shown or logged is the host's `error_reporting` /
  * error-handler decision, never this library's.
@@ -38,12 +43,6 @@ final class CassowarySolver implements LayoutSolver
     public static function new(): self
     {
         return new self();
-    }
-
-    /** @return GreedySolver */
-    public static function greedy(): GreedySolver
-    {
-        return new GreedySolver();
     }
 
     /**
