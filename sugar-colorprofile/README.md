@@ -132,13 +132,14 @@ surface answers may still diverge, because `Probe` layers an opt-in terminfo
 phase (Phase 2) on top and `TerminalProbe` the terminfo and `TERM_PROGRAM`
 upgrade phases (Phases 2-3) — the chain's answer is the floor those phases can
 raise, never the ceiling. Measured: `{TERM_PROGRAM: WezTerm, TERM: xterm}`
-answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade).
+answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade) —
+quoted on an interactive stream: on a piped `Palette` the step-0 stream gate
+floors the answer before any rung gets to speak.
 `README`, the `DetectionChain` docblock and the tests follow this one numbering
 (the chain levels `truecolor`/`ansi256`/`ansi`/`ascii`/`none` map to the enum
-cases `TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` respectively). The numbered
-list below is duplicated in `DetectionChain`'s class docblock — that docblock
-carries the enumeration beside this prose; a ladder change must edit both (no
-drift pin guards this genre yet):
+cases `TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` respectively; the numbered
+list below and the docblock are twins pinned by `LadderDriftTest` — see
+Maintenance):
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — and since CP-07 outranks the step-0 stream gate too)
 2. `FORCE_COLOR` (non-empty) → level: numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/…) → `Ascii` floor (colorless — color codes dropped, decoration kept)
@@ -492,6 +493,19 @@ Reconciling the forks (a single enum, or a documented bridge between the two)
 is an owner-level ruling, tracked as follow-up #26 — status: OPEN (the audit
 record lives outside this repository; the divergence table above is its public
 data and must stay current while the ruling is pending).
+
+## Maintenance
+
+**The ladder twins.** The numbered ladder above and the `DetectionChain`
+class docblock are maintained as a hand-copied pair — the README is prose,
+the docblock is the source the code comments quote. `tests/LadderDriftTest`
+re-derives both lists (step count, ascending numbering, per-step env-key and
+answer-rung vocabulary outside parentheses) and fails naming the side that
+moved, so an edit to one twin cannot land silently. The guard pins
+vocabulary, not commas: parenthetical commentary may be phrased freely on
+either side. `sugar-core`'s forked ladder is deliberately NOT pinned to
+equality — the divergence is public data, documented (with its drift-pinned
+rows) under Fleet integration rather than guarded into sameness.
 
 ## Architecture
 
