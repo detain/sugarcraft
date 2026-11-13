@@ -22,7 +22,7 @@ $nav-&gt;depth();              // 2</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>NavStack</strong><span>Push / pop navigation stack (mutable, chainable push) with depth, parent and truncation helpers.</span></div>
-            <div class="feature"><strong>Directory stacks (Shell)</strong><span>Explicit cwd-tracked trails — your host detects a directory change and calls pushDirectory(); nothing auto-pushes, and `.`/`..` follow the documented no-downward-walk rule.</span></div>
+            <div class="feature"><strong>Directory stacks (Shell)</strong><span>Explicit cwd-tracked trails — your host detects a directory change and calls withDirectory() (pushDirectory() remains as a deprecated forwarder); nothing auto-pushes, and `.`/`..` follow the documented no-downward-walk rule.</span></div>
             <div class="feature"><strong>Filter</strong><span>Unicode case-folded substring filtering over titles and payload data (arrays matched by value up to 64 nesting levels — deeper payloads throw).</span></div>
             <div class="feature"><strong>Accessible HTML</strong><span>viewHtml() emits the recommended nav[aria-label] &gt; ol shape with aria-current="page" on the live crumb — screen-reader-ready without host markup work.</span></div>
             <div class="feature"><strong>Breadcrumb renderer</strong><span>Theme-aware plain-text rendering with width-capped left-elision, custom separators/ellipses, per-item renderer closures, and stack-indexed mouse zones that survive truncation.</span></div>
@@ -44,20 +44,26 @@ $nav-&gt;depth();              // 2</code></pre>
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>NavStack</td><td>new()</td><td>Create navigation stack</td></tr>
 <tr><td>NavStack</td><td>push(string $title, mixed $data = null): self</td><td>Push a navigation item (mutates; returns the stack). Refuses titles empty after trimming and sanitizing, and growth past MAX_STACK_DEPTH.</td></tr>
-<tr><td>NavStack</td><td>pop(): ?NavigationItem / popTo(int) / current() / parent() / depth()</td><td>Pop and inspect the stack</td></tr>
-<tr><td>NavStack</td><td>view(string $separator = ' › '): string</td><td>Plain-text crumb trail; titles sanitized for terminal safety</td></tr>
-<tr><td>NavStack</td><td>viewHtml(?callable $href = null, string $label = 'Breadcrumb'): string</td><td>Accessible HTML: nav[aria-label=&quot;…&quot;] around an ol, last item aria-current=&quot;page&quot;. $href maps item =&gt; URL (links for every crumb but the live one); omit it and the trail renders as plain li text. $label names the landmark for screen readers.</td></tr>
+<tr><td>NavStack</td><td>pop(): ?NavigationItem / popTo(int) / popToRoot() / current() / parent() / depth()</td><td>Pop and inspect the stack; generation(): int stamps the mutation counter so cross-generation breadcrumb dispatch is refused</td></tr>
+<tr><td>NavStack</td><td>safeTitle(string): string</td><td>Public static facade over the display sweep — sanitize untrusted titles before pushing them</td></tr>
+<tr><td>NavStack</td><td>view(string $separator = ' › '): string</td><td>Plain-text crumb trail; titles sanitized and the separator control-gated (CR/LF and terminal escapes throw; zone sentinels stripped; empty is legal here)</td></tr>
+<tr><td>NavStack</td><td>viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?array $allowSchemes = null): string</td><td>Accessible HTML: nav[aria-label=&quot;…&quot;] around an ol, last item aria-current=&quot;page&quot;. $href receives (item, stack index); a string answer links that crumb, null leaves it plain text (an unlinked ancestor). $allowSchemes gates returned URLs by scheme (case-insensitive; '/' admits scheme-less paths) — rejected URLs render as plain text. $label names the landmark via aria-label.</td></tr>
 <tr><td>NavStack</td><td>filtered(string $term): self</td><td>New stack with items whose title or scalar/Stringable payload (array values up to 64 levels) contains $term — Unicode (mb_stripos) case fold; result indices renumber. filter() is a deprecated forwarder.</td></tr>
+<tr><td>Shell</td><td>withDirectory(string $cwd): self / withBreadcrumb(Breadcrumb)</td><td>New Shell per navigation mutation (derived Shells get their own breadcrumb); withBreadcrumb opts into deliberate sharing</td></tr>
+<tr><td>Url</td><td>derive(NavStack): string / deriveTo(NavStack, int $index): string</td><td>Percent-encoded path from the trail (sanitize-then-encode); deriveTo() yields the ancestor prefix up to and including $index — every prefix is a byte-identical segment slice of the full path</td></tr>
 <tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry; the constructor refuses titles empty after trim+sanitize and over 64 KiB raw</td></tr>
 <tr><td>Breadcrumb</td><td>withScanner(?Scanner)</td><td>Attach mouse-click zones per crumb (sugar-mouse Scanner; copied in, never aliased — read it back via scanner()). Zone ids carry the STACK index, so click routing survives truncation.</td></tr>
 <tr><td>Breadcrumb</td><td>scan(string $rendered, int $viewportWidth, int $row = 1) / hit(col, row) / hitItem(stack, col, row)</td><td>Feed the rendered string to the owned scanner, clamped to the REQUIRED viewport width (for a row other than 1), then resolve which crumb a terminal cell falls in — hitItem() is the one-call dispatcher returning the clicked NavigationItem; failure shapes follow the scan()/hit() rule table</td></tr>
 <tr><td>Breadcrumb</td><td>setSeparator(string)</td><td>Set separator between crumbs</td></tr>
 <tr><td>Breadcrumb</td><td>setMaxWidth(int)</td><td>Cap trail width; oldest crumbs elide first. 0 (default) disables the cap; negative throws.</td></tr>
 <tr><td>Breadcrumb</td><td>setTruncator(string $ellipsis)</td><td>Glyph marking elided crumbs (default …); forged zone-sentinel bytes are stripped, multi-line throws</td></tr>
-<tr><td>Breadcrumb</td><td>setItemRenderer(\Closure $fn)</td><td>Per-item custom rendering fn(item, index): ?string — null falls back to the default; returned strings emit RAW. Contract errors throw at render(), not at assignment.</td></tr>
+<tr><td>Breadcrumb</td><td>setItemRenderer(\Closure $fn)</td><td>Per-item custom rendering fn(item, index, focused): ?string — null falls back to the default; returned strings emit RAW. A smoke call at assignment refuses non-string answers; contract errors otherwise throw at render(). 2-arg closures keep working.</td></tr>
+<tr><td>Breadcrumb</td><td>setEmptyLabel(string)</td><td>Depth-0 opt-in: paints a label through the same width pipeline; never a clickable zone</td></tr>
+<tr><td>Breadcrumb</td><td>setFocusedIndex(?int) / focusedIndex(): ?int</td><td>Hands the item renderer a third bool $focused; focus is intent — off-visible indices clamp to null and the accessor reports what the render reflected</td></tr>
+<tr><td>Breadcrumb</td><td>elisionSpan(): ?array</td><td>[start, end, row] of the painted … marker after scan(), or null; treat hits there as an expansion gesture, not navigation</td></tr>
 <tr><td>Breadcrumb</td><td>setZonePrefix(string)</td><td>Rename crumb- zone ids (alphabet [A-Za-z0-9._:-]); keeps merged dispatch tables of independent widgets unambiguous</td></tr>
 <tr><td>Breadcrumb</td><td>visibleIndices(): array</td><td>Stack indices that survived the last render's truncation — the map from display position to zone id</td></tr>
-<tr><td>Breadcrumb</td><td>renderTitles(array $titles): string</td><td>Render a pre-trimmed title list (host-owned filtering) instead of a NavStack</td></tr>
+<tr><td>Breadcrumb</td><td>renderTitles(array $titles): string</td><td>Render a pre-trimmed title list (host-owned filtering) instead of a NavStack; each title is byte-capped like a constructed item</td></tr>
 <tr><td>Breadcrumb</td><td>scanner(): ?Scanner</td><td>Read back the owned (copied-in) sugar-mouse scanner, or null when click zones are off</td></tr>
 <tr><td>Breadcrumb</td><td>render(NavStack)</td><td>Render NavStack as breadcrumb string</td></tr>
 </table>

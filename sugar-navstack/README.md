@@ -33,6 +33,15 @@ string renderer for it.
 - **Pure renderer** — breadcrumb output is just strings; works with any TUI framework
 - **Small dependency surface** — built on the SugarCraft foundations only: [sugar-core](../sugar-core/) (untrusted-input sanitization, grapheme width, i18n base — facade ready, glyphs host-fed) and [sugar-mouse](../sugar-mouse/) (zone markers for click routing). No third-party packages.
 
+## Where it fits
+
+`sugar-navstack` has **zero in-repo consumers today**: it is the
+navigation-state *model* — stack depth, crumb identity, generation
+stamping — built and tested standalone. The fleet's trail UIs are its
+hosts: `sugar-dashboard`'s Nav components, for instance, are one UI
+consuming exactly this kind of state; this library renders nothing, the
+dashboard decides *how* — neither side owns both halves.
+
 ## Install
 
 ```bash
@@ -282,11 +291,14 @@ zones carry — so a jump target can be checked against elision before use.
 
 ### Keyboard & accessible navigation
 
-`viewHtml()`'s anchors exist for a reason: given an `$href` callback, every
-non-current crumb becomes a real `<a href>` — tab-navigable and discoverable
-in a screen reader's link list — while the current crumb stays text bearing
-`aria-current="page"`, and the `$label` argument localizes the landmark's
-visually-hidden heading. The natural `$href` is `Url::deriveTo()`: the
+`viewHtml()`'s anchors exist for a reason: whenever the `$href` callback
+answers a **string** for a non-current crumb, that crumb becomes a real
+`<a href>` — tab-navigable and discoverable in a screen reader's link list;
+a `null` answer (or no callback at all) leaves the crumb as plain text — an
+*unlinked ancestor*, not a broken link. The current crumb stays text bearing
+`aria-current="page"`. The `$label` argument names the landmark via
+`nav[aria-label=…]` — that attribute IS the mechanism (there is no
+visually-hidden heading). The natural `$href` is `Url::deriveTo()`: the
 callback's second argument is the crumb's stack index, so
 `fn($item, $i) => Url::deriveTo($stack, $i)` links every ancestor to its
 sanitized, percent-encoded prefix path (NS-22's rule, one shared encoder —
@@ -308,6 +320,41 @@ negative, or elided off the left edge is treated as no selection, and
 `focusedIndex()` reports what the most recent render actually reflected.
 Pair it with `visibleIndices()`: a key handler that sets focus is guaranteed
 to see, from one accessor, whether the selection survived the width math.
+
+## Accessibility & terminals
+
+**Screen readers and elision.** The `…` marker is not decoration — on the
+terminal path it is the only announcement that older crumbs were dropped.
+Assistive tech speaks U+2026 as an ellipsis, and `setTruncator('[more] ')`
+says more; `setTruncator('')` stays available as the deliberate silent-drop
+escape, but a silent drop is exactly what a keyboard user cannot recover
+from by luck.
+
+**Basic terminals.** The shipped glyphs (`›` U+203A separator, `…` U+2026
+truncator — NS-13's consts) assume a UTF-8-capable terminal. Under `LANG=C`
+or `TERM=dumb`, swap both to ASCII fallbacks:
+
+```php
+$bc->setSeparator(' > ')->setTruncator('... ');
+```
+
+**Color & motion.** The library itself emits no ANSI and no motion: the
+default output is monochrome static text. Any styling rides in through
+*your* `setItemRenderer()` / separator payload — honor `NO_COLOR` and
+reduced-motion preferences there, not here. Width accounting strips and
+re-balances SGR around the geometry (NS-01), so a styled crumb costs
+nothing extra to the cell math.
+
+**Direction and language.** The one assistive-tech-spoken string in the
+HTML path is `$label` — its default `'Breadcrumb'` is English, and the
+localization route is passing your own: `viewHtml($href,
+$yourTranslatedLabel)`. The dormant registry (see Localization) stays
+dormant here on purpose: a caller-supplied parameter never needs a
+built-in catalog. On direction: the default chevron `›` faces the reading
+direction, so RTL hosts pass mirrored glyphs to `setSeparator()` /
+`setTruncator()`. The library paints left-to-right exactly what the stack
+holds — it does not reorder crumbs or mirror glyphs itself, and says so
+honestly.
 
 ## Shell
 
