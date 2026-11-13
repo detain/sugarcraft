@@ -138,7 +138,7 @@ final class SessionSearchIndexTest extends TestCase
     public function testOpeningTheIndexLandsTheTablesAndAsksForTheFirstSweep(): void
     {
         $store = $this->baseStore();
-        $index = SessionSearchIndex::create($store->getPdo());
+        $index = SessionSearchIndex::new($store->getPdo());
 
         self::assertTrue($index->available());
         self::assertTrue($index->needsRebuild(), 'no marker on disk — a process cannot trust a table it has never seen built');
@@ -156,7 +156,7 @@ final class SessionSearchIndexTest extends TestCase
         $store = $this->baseStore();
         $store->createSession('light', 'p', 'm');
         $store->createSession('heavy', 'p', 'm');
-        $index = SessionSearchIndex::create($store->getPdo());
+        $index = SessionSearchIndex::new($store->getPdo());
 
         $index->syncMessages('light', ['m1' => 'the kubernetes cluster rolled once']);
         $index->syncMessages('heavy', [
@@ -175,7 +175,7 @@ final class SessionSearchIndexTest extends TestCase
     public function testAQueryWithoutIndexableWordsCannotBeAnswered(): void
     {
         $store = $this->baseStore();
-        $index = SessionSearchIndex::create($store->getPdo());
+        $index = SessionSearchIndex::new($store->getPdo());
 
         self::assertNull($index->search('!!! ??? ...'), 'punctuation carries no prefix term — the caller must hear "cannot answer", not "nothing matched"');
         self::assertSame([], $index->search('zzzqqqxyz') ?? [], 'a real word that matches nothing is a real, empty, answer');
@@ -185,7 +185,7 @@ final class SessionSearchIndexTest extends TestCase
     {
         $store = $this->baseStore();
         $store->createSession('s1', 'p', 'm');
-        $index = SessionSearchIndex::create($store->getPdo());
+        $index = SessionSearchIndex::new($store->getPdo());
         $stable = 'the kubernetes cluster rolled overnight';
 
         $index->syncMessages('s1', ['m1' => $stable, 'm2' => 'a note about redis failover']);
@@ -206,7 +206,7 @@ final class SessionSearchIndexTest extends TestCase
     {
         $store = $this->baseStore();
         $store->createSession('s1', 'p', 'm');
-        $index = SessionSearchIndex::create($store->getPdo());
+        $index = SessionSearchIndex::new($store->getPdo());
         $bodies = ['m1' => 'the kubernetes cluster rolled overnight', 'm2' => 'a note about redis failover'];
         $index->syncMessages('s1', $bodies);
 
@@ -236,7 +236,7 @@ final class SessionSearchIndexTest extends TestCase
         $store = $this->baseStore();
         $store->createSession('gone', 'p', 'm');
         $store->createSession('kept', 'p', 'm');
-        $index = SessionSearchIndex::create($store->getPdo());
+        $index = SessionSearchIndex::new($store->getPdo());
         $index->syncMessages('gone', ['m1' => 'ephemeral contraband prose']);
         $index->syncMessages('kept', ['m1' => 'ephemeral contraband prose too']);
 
@@ -254,7 +254,7 @@ final class SessionSearchIndexTest extends TestCase
     {
         $store = $this->baseStore();
         $store->createSession('s1', 'p', 'm');
-        $index = SessionSearchIndex::create($store->getPdo());
+        $index = SessionSearchIndex::new($store->getPdo());
         $index->syncMessages('s1', ['m1' => 'cascade bound prose about walrus teeth']);
 
         $store->deleteSession('s1');
@@ -273,7 +273,7 @@ final class SessionSearchIndexTest extends TestCase
     {
         $store = $this->baseStore();
         $store->createSession('s1', 'p', 'm');
-        $index = SessionSearchIndex::create($store->getPdo());
+        $index = SessionSearchIndex::new($store->getPdo());
 
         $head = 'leadword here';
         $tail = 'tailword past the window';
@@ -356,7 +356,7 @@ final class SessionSearchIndexTest extends TestCase
         // this test look hung.
         $busyPath = $this->tempDir . '/busy.db';
         $pdo = $this->barePdo($busyPath);
-        $index = SessionSearchIndex::create($pdo);
+        $index = SessionSearchIndex::new($pdo);
         $index->syncMessages('s1', ['m1' => 'the kubernetes cluster rolled once']);
         $index->markBuilt();
         self::assertFalse($index->needsRebuild());
@@ -384,7 +384,7 @@ final class SessionSearchIndexTest extends TestCase
     {
         $busyPath = $this->tempDir . '/busy.db';
         $pdo = $this->barePdo($busyPath);
-        $index = SessionSearchIndex::create($pdo);
+        $index = SessionSearchIndex::new($pdo);
         $index->syncMessages('s1', ['m1' => 'the kubernetes cluster rolled once']);
         $index->markBuilt();
         self::assertSame(0, $this->readMarkerRow($busyPath)['dirty'] ?? -1);
@@ -397,7 +397,7 @@ final class SessionSearchIndexTest extends TestCase
         self::assertTrue($index->needsRebuild());
         self::assertSame(1, $this->readMarkerRow($busyPath)['dirty'] ?? -1, 'the flag is durable, not just in-process');
 
-        $reopened = SessionSearchIndex::create($this->barePdo($busyPath));
+        $reopened = SessionSearchIndex::new($this->barePdo($busyPath));
         self::assertTrue($reopened->needsRebuild(), 'the next process reads the recorded failure and asks for the sweep');
     }
 
@@ -448,7 +448,7 @@ final class SessionSearchIndexTest extends TestCase
         $store = $this->baseStore();
         $store->createSession('s1', 'p', 'm');
 
-        $index = SessionSearchIndex::create($store->getPdo(), 'no_such_fts_module_probe');
+        $index = SessionSearchIndex::new($store->getPdo(), 'no_such_fts_module_probe');
 
         self::assertFalse($index->available());
         self::assertNull($index->search('anything'));

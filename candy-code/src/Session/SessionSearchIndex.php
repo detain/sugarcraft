@@ -129,7 +129,7 @@ final class SessionSearchIndex
      *
      * @param string $module test seam — the FTS5 module name to attempt
      */
-    public static function create(PDO $pdo, string $module = 'fts5'): self
+    public static function new(PDO $pdo, string $module = 'fts5'): self
     {
         return new self($pdo, $module);
     }
@@ -295,7 +295,7 @@ final class SessionSearchIndex
             return null;
         }
 
-        return self::create($pdo);
+        return self::new($pdo);
     }
 
     /**

@@ -210,7 +210,7 @@ final class BoardTest extends TestCase
 
     public function testTheBoardGoesWithItsLastViewInTheCreatingProcess(): void
     {
-        $board = Board::create([BoardMember::new('a', ''), BoardMember::new('b', '')]);
+        $board = Board::forMembers([BoardMember::new('a', ''), BoardMember::new('b', '')]);
         $this->assertNotNull($board);
         $path = $board->path();
         $member = $board->forMember('a-1');
@@ -468,7 +468,7 @@ final class BoardTest extends TestCase
      */
     private function board(array $agents): Board
     {
-        $board = Board::create(array_map(static fn (string $a): BoardMember => BoardMember::new($a, 'task ' . $a), $agents));
+        $board = Board::forMembers(array_map(static fn (string $a): BoardMember => BoardMember::new($a, 'task ' . $a), $agents));
         $this->assertNotNull($board);
         $this->boards[] = $board;
 

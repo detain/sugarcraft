@@ -274,7 +274,7 @@ final class GcPurgeSubcommandTest extends TestCase
     public function testStripFtsBlindsTheSearchIndex(): void
     {
         [$store, $pdo] = self::gcPurgeSeedStore($this->dbPath);
-        SessionSearchIndex::create($pdo)->syncMessages('old', ['searchable body about purging']);
+        SessionSearchIndex::new($pdo)->syncMessages('old', ['searchable body about purging']);
         $hits = (int) $pdo->query("SELECT COUNT(*) FROM session_messages_fts WHERE session_messages_fts MATCH 'purging'")->fetchColumn();
         self::assertGreaterThan(0, $hits, 'the seeded body must be findable before the strip');
         unset($store);

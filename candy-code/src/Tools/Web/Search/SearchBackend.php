@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tools\Web\Search;
 
 /**
  * One place WebSearch queries. Chosen by the `webSearchBackend` setting
- * (user tier, default `searxng`) and built by {@see SearchBackends::make()}.
+ * (user tier, default `searxng`) and built by {@see SearchBackends::new()}.
  *
  * Every implementation answers the same three questions in the same order
  * {@see \SugarCraft\Code\Tools\BuiltIn\WebSearch} uses them: is the backend

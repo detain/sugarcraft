@@ -110,7 +110,7 @@ final class ParallelBoardNoticeTest extends TestCase
 
     public function testATaskMembersRunIsOfferedTheBoardAndHearsOfItsPeersPostOnItsNextResult(): void
     {
-        $board = Board::create([BoardMember::new('coder', 'A'), BoardMember::new('coder', 'B')]);
+        $board = Board::forMembers([BoardMember::new('coder', 'A'), BoardMember::new('coder', 'B')]);
         $this->assertNotNull($board);
         $board->forMember('coder-2')->post(Board::ALL, BoardKind::Info, 'I am editing src/Auth.php');
 
@@ -140,7 +140,7 @@ final class ParallelBoardNoticeTest extends TestCase
 
     public function testAToolsListDoesNotKeepAMemberOffTheBoardButADenylistDoes(): void
     {
-        $board = Board::create([BoardMember::new('reader', 'A'), BoardMember::new('coder', 'B')]);
+        $board = Board::forMembers([BoardMember::new('reader', 'A'), BoardMember::new('coder', 'B')]);
         $this->assertNotNull($board);
         $board->forMember('coder-2')->post(Board::ALL, BoardKind::Info, 'news');
         $read = self::probe('Read');

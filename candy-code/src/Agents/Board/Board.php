@@ -92,7 +92,7 @@ final readonly class Board
      *
      * @param list<BoardMember> $members in batch order
      */
-    public static function create(array $members): ?self
+    public static function forMembers(array $members): ?self
     {
         $roster = [];
         foreach (array_values($members) as $n => $member) {

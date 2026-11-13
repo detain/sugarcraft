@@ -195,7 +195,7 @@ final readonly class ScheduleTool implements Tool, BuildsFromCatalog, DelegatesT
     private function createRow(array $args): ToolResult
     {
         try {
-            $row = ScheduleFactory::create(
+            $row = ScheduleFactory::new(
                 $args,
                 $this->root,
                 $this->sessionMode ?? PermissionMode::Default,

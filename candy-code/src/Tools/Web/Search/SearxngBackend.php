@@ -30,7 +30,7 @@ namespace SugarCraft\Code\Tools\Web\Search;
  * answered byte-for-byte by pins in the web-search tests, so an open class
  * would let a subclass rewrite what those pins promise. A deployment that
  * wants to answer from a cache does not need inheritance for it — a
- * transport closure is injected through {@see SearchBackends::make()}, and
+ * transport closure is injected through {@see SearchBackends::new()}, and
  * that is the override seam. Zero subclasses exist tree-wide (verified at
  * the reviews-1103 base; PHP-n1); reopening this class would be a
  * deliberate ruling, not a default.

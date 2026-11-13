@@ -25,7 +25,7 @@ final class BoardToolsTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->board = Board::create([
+        $this->board = Board::forMembers([
             BoardMember::new('coder', 'Rename the auth helper'),
             BoardMember::new('tester', 'Cover the login flow'),
             BoardMember::new('reviewer', ''),

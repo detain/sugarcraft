@@ -52,7 +52,7 @@ final class ScheduleFactoryTest extends TestCase
      */
     private function create(array $args, PermissionMode $session = PermissionMode::Default, int $now = 1_700_000_000): Schedule
     {
-        return ScheduleFactory::create(
+        return ScheduleFactory::new(
             $args + ['name' => 'nightly-sweep', 'every' => 86_400, 'prompt' => 'Run the suite and summarise.'],
             $this->root,
             $session,
@@ -180,7 +180,7 @@ final class ScheduleFactoryTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/already carries/');
-        ScheduleFactory::create(
+        ScheduleFactory::new(
             ['name' => 'late-one', 'every' => 600, 'prompt' => 'x'],
             $this->root,
             PermissionMode::Default,
@@ -205,7 +205,7 @@ final class ScheduleFactoryTest extends TestCase
         // factory refuses rather than persisting a false success.
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/no project directory/');
-        ScheduleFactory::create(
+        ScheduleFactory::new(
             ['name' => 'homeless', 'every' => 600, 'prompt' => 'x'],
             null,
             PermissionMode::Default,

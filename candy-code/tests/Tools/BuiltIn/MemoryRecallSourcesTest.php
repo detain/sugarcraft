@@ -116,7 +116,7 @@ final class MemoryRecallSourcesTest extends TestCase
         $pdo = new \PDO('sqlite:' . $dbPath);
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 1);
-        SessionSearchIndex::create($pdo)->markBuilt();
+        SessionSearchIndex::new($pdo)->markBuilt();
     }
 
     /**
@@ -135,7 +135,7 @@ final class MemoryRecallSourcesTest extends TestCase
         $pdo = new \PDO('sqlite:' . $dbPath);
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 1);
-        SessionSearchIndex::create($pdo)->markBuilt();
+        SessionSearchIndex::new($pdo)->markBuilt();
     }
 
     /**
@@ -327,7 +327,7 @@ final class MemoryRecallSourcesTest extends TestCase
         $pdo = new \PDO('sqlite:' . $home . '/session.db');
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 1);
-        SessionSearchIndex::create($pdo)->markBuilt();
+        SessionSearchIndex::new($pdo)->markBuilt();
 
         $rows = $this->hitRows($this->runTool(new MemoryTool(null, $this->rootA), [
             'action' => 'recall', 'query' => 'zebrafish', 'source' => 'sessions',

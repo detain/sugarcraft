@@ -22,7 +22,7 @@ use SugarCraft\Code\Tools\Web\Search\SearchResponse;
  * harnesses subclass this tool to drive it. The network seam, though, is no
  * longer the subclass hook it used to be — the old `fetch()` override — it is
  * the transport closure the constructor accepts and hands to
- * {@see SearchBackends::make()}, so a test stubs one HTTP call without
+ * {@see SearchBackends::new()}, so a test stubs one HTTP call without
  * reaching through the class hierarchy, and every other step (query
  * validation, the SSRF host checks, status mapping, JSON decode, formatting)
  * stays on the real code path.
@@ -120,7 +120,7 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
         }
         $this->endpoint = is_string($configured) && trim($configured) !== '' ? $configured : null;
         $chosen = $backend ?? $limits?->string(ToolLimits::WEB_SEARCH_BACKEND_KEY);
-        $this->backend = SearchBackends::make(
+        $this->backend = SearchBackends::new(
             \is_string($chosen) && $chosen !== '' ? $chosen : null,
             $this->endpoint,
             $this->timeout,

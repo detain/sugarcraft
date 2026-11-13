@@ -76,7 +76,7 @@ final class SearchBackends
      * @param (callable(string): list<string>)|null                                                                                                                            $resolveAddresses
      * @param (callable(string): bool)|null                                                                                                                                    $isBlockedAddress
      */
-    public static function make(
+    public static function new(
         ?string $name,
         ?string $endpoint,
         int $timeout,

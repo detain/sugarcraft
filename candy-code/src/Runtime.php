@@ -2836,7 +2836,7 @@ final class Runtime
             if ($job['settled'] || !$job['tool'] instanceof SharesSiblingSpend) {
                 continue;
             }
-            $ledger ??= SiblingSpendLedger::create();
+            $ledger ??= SiblingSpendLedger::new();
             if ($ledger === null) {
                 break;
             }
@@ -2860,7 +2860,7 @@ final class Runtime
                 $boardSeats[$index] = $member;
             }
         }
-        $board = \count($boardSeats) >= 2 ? \SugarCraft\Code\Agents\Board\Board::create(array_values($boardSeats)) : null;
+        $board = \count($boardSeats) >= 2 ? \SugarCraft\Code\Agents\Board\Board::forMembers(array_values($boardSeats)) : null;
         if ($board !== null) {
             foreach (array_keys($boardSeats) as $n => $index) {
                 $jobs[$index]['tool'] = $jobs[$index]['tool']->withBoard($board->forMember($board->roster()[$n]->id));

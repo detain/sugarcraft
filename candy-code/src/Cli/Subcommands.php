@@ -2459,7 +2459,7 @@ final class Subcommands
                 // nothing); then ride the house route, outside any
                 // transaction — the index latches itself on failure.
                 $stripped['search_rows'] += self::gcPurgeCountSessions($rw, 'session_message_rows', $stripIds);
-                SessionSearchIndex::create($rw)->forgetSessions($stripIds);
+                SessionSearchIndex::new($rw)->forgetSessions($stripIds);
             }
         }
 

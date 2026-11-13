@@ -168,7 +168,7 @@ final class ScheduleFactory
      *         unwritable home) — the row is withdrawn from the roster before
      *         this escapes, so no ghost outlives the caller's refusal
      */
-    public static function create(array $args, ?string $hostRoot, PermissionMode $sessionMode, ScheduleRegistry $registry, int $now): Schedule
+    public static function new(array $args, ?string $hostRoot, PermissionMode $sessionMode, ScheduleRegistry $registry, int $now): Schedule
     {
         $registry->reloadIfChanged();
 

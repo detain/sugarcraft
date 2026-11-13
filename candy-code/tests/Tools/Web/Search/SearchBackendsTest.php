@@ -64,9 +64,9 @@ final class SearchBackendsTest extends TestCase
 
     public function testDefaultAndExplicitSearxngBothBuildTheSelfHostedBackend(): void
     {
-        $default = SearchBackends::make(null, 'https://searx.example/search', 30);
-        $named = SearchBackends::make('searxng', 'https://searx.example/search', 30);
-        $empty = SearchBackends::make('', 'https://searx.example/search', 30);
+        $default = SearchBackends::new(null, 'https://searx.example/search', 30);
+        $named = SearchBackends::new('searxng', 'https://searx.example/search', 30);
+        $empty = SearchBackends::new('', 'https://searx.example/search', 30);
 
         self::assertInstanceOf(SearxngBackend::class, $default);
         self::assertInstanceOf(SearxngBackend::class, $named);
@@ -108,7 +108,7 @@ final class SearchBackendsTest extends TestCase
             . '(or the webSearchEndpoint setting) to the search URL of a SearXNG instance you trust '
             . '(for example https://searx.example.org/search) and restart; there is no built-in default.';
 
-        $backend = SearchBackends::make(null, null, 30);
+        $backend = SearchBackends::new(null, null, 30);
 
         self::assertFalse($backend->isConfigured());
         self::assertSame($expected, $backend->configurationRefusal());
@@ -142,7 +142,7 @@ final class SearchBackendsTest extends TestCase
     public function testAnUnknownNameFromAHandBuiltCallerIsRefusedByName(): void
     {
         try {
-            SearchBackends::make('bogus', 'https://searx.example/search', 30);
+            SearchBackends::new('bogus', 'https://searx.example/search', 30);
             self::fail('the factory accepted an unknown backend name');
         } catch (\InvalidArgumentException $e) {
             self::assertStringContainsString('bogus', $e->getMessage());
@@ -167,9 +167,9 @@ final class SearchBackendsTest extends TestCase
 
     public function testTheHostedChoicesBuildTheirOwnClasses(): void
     {
-        self::assertInstanceOf(BraveBackend::class, SearchBackends::make('brave', null, 30));
-        self::assertInstanceOf(TavilyBackend::class, SearchBackends::make('tavily', null, 30));
-        self::assertInstanceOf(ExaBackend::class, SearchBackends::make('exa', null, 30));
+        self::assertInstanceOf(BraveBackend::class, SearchBackends::new('brave', null, 30));
+        self::assertInstanceOf(TavilyBackend::class, SearchBackends::new('tavily', null, 30));
+        self::assertInstanceOf(ExaBackend::class, SearchBackends::new('exa', null, 30));
     }
 
     /**

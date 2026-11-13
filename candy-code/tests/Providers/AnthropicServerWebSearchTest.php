@@ -253,7 +253,7 @@ final class AnthropicServerWebSearchTest extends TestCase
     {
         Bootstrap::writeUserConfig([ToolLimits::WEB_SEARCH_BACKEND_KEY => SearchBackends::BACKEND_ANTHROPIC]);
 
-        $backend = SearchBackends::make(SearchBackends::BACKEND_ANTHROPIC, null, 30);
+        $backend = SearchBackends::new(SearchBackends::BACKEND_ANTHROPIC, null, 30);
         self::assertSame(SearchBackends::BACKEND_ANTHROPIC, $backend->name());
         self::assertFalse($backend->isConfigured());
 

@@ -95,7 +95,7 @@ final class SiblingSpendLedgerTest extends TestCase
 
     private function ledger(): SiblingSpendLedger
     {
-        $ledger = SiblingSpendLedger::create();
+        $ledger = SiblingSpendLedger::new();
         $this->assertNotNull($ledger);
         $this->ledgers[] = $ledger;
 

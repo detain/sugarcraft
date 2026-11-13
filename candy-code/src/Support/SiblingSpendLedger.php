@@ -59,7 +59,7 @@ final readonly class SiblingSpendLedger
      * class existed (each member sees only its own spend), which is a weaker
      * cap, not a broken turn.
      */
-    public static function create(): ?self
+    public static function new(): ?self
     {
         $path = ToolIpcFiles::reserve(ToolIpcFiles::RUNTIME_PREFIX, 'spend');
 

@@ -2969,7 +2969,7 @@ final class DocFigureProseDriftTest extends TestCase
             'a batch board is no longer an sc_runtime_tool_<id>.board file — table cell drifted',
         );
         self::assertStringContainsString('ToolIpcFiles::reserve(ToolIpcFiles::RUNTIME_PREFIX, self::EXTENSION)', self::sourceOf('Agents/Board/Board.php'), 'a board is no longer reserved in the system temp dir under the runtime prefix the sweep reaps — table row drifted');
-        self::assertStringContainsString('Board::create(', self::bodyExcerpt(self::sourceOf('Runtime.php'), 'executeConcurrently', 40000), 'executeConcurrently() no longer creates the batch board — the row\'s "created before the batch forks" lost its referent');
+        self::assertStringContainsString('Board::forMembers(', self::bodyExcerpt(self::sourceOf('Runtime.php'), 'executeConcurrently', 40000), 'executeConcurrently() no longer creates the batch board — the row\'s "created before the batch forks" lost its referent');
         self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Code\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
         self::assertSame(
             'candy_code_bg_<uid>_index',

@@ -64,7 +64,7 @@ final class EnhancedSessionStore
             $this->pdo = $this->sessionStore->pdo();
 
             $this->initEnhancedSchema();
-            $this->searchIndex = SessionSearchIndex::create($this->pdo, $ftsModule);
+            $this->searchIndex = SessionSearchIndex::new($this->pdo, $ftsModule);
         } finally {
             umask($previousUmask);
         }

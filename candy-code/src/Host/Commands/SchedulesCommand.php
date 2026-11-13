@@ -155,7 +155,7 @@ final class SchedulesCommand implements HostCommand
         }
 
         try {
-            $schedule = ScheduleFactory::create(
+            $schedule = ScheduleFactory::new(
                 [
                     'name' => $name,
                     'every' => $seconds,
