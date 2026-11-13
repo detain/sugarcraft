@@ -23,12 +23,12 @@ store, or manage an inbox.
 ## Features
 
 - **Dual transport** — send via the Resend HTTP API (Resend is a hosted email API:
-  sign up at [resend.com](https://resend.com), create an API key) or raw SMTP
-- **Send-path scope** — the upstream TUI parity leg is deliberately descoped
-  2026-11-12 (owner ruling 6a) because the pop-parity surface this app commits to is
+  sign up at [resend.com](https://resend.com) and create an API key) or raw SMTP
+- **Send-path scope** — the upstream TUI parity leg was deliberately descoped
+  on 2026-11-12 (owner ruling 6a) because the pop-parity surface this app commits to is
   composing and dispatching mail (CLI + library), not an interactive client; a TUI
   would duplicate the sugar-widgets surface instead of deepening the send path.
-  Likewise the Mailgun leg is deliberately descoped 2026-11-12 (same ruling): the
+  Likewise the Mailgun leg was deliberately descoped on 2026-11-12 (same ruling): the
   transport roster stays SMTP + Resend, and Mailgun accounts relay through their
   documented SMTP endpoints rather than a second API transport.
 - **Email value object** — from, to, cc, bcc, subject, body, HTML body, reply-to, attachments,
@@ -40,7 +40,8 @@ store, or manage an inbox.
   same CRLF/control-byte gate as the subject
 - **HTML accessibility** — the authored HTML is embedded verbatim (nothing post-processes it),
   so set `<html lang="…">`, give images alt text, and keep a meaningful plain-text body: it is
-  the reader-equivalent leg of the `multipart/alternative` for anyone your HTML does not reach.
+  the reader-facing text alternative inside the `multipart/alternative`, what reaches
+  anyone your HTML does not.
   No `Content-Language` header is emitted — the language lives in the document, not the envelope.
 - **File attachments** — attach from disk paths (`withAttachment()`), or pass raw in-memory
   bytes with `Attachment::fromContent()` via the constructor's `attachments:` parameter
@@ -56,11 +57,11 @@ store, or manage an inbox.
 - **CLI** — one-shot sending with STDIN compose, `--render` for offline MIME preview, and
   translated error messages (the CLI translates at startup; library errors route through
   the same facade — see [Internationalisation](#internationalisation))
-- **PHP 8.3+** — pure PHP. `suggest`ed extensions, honestly scoped: `ext-curl` is
-  needed only for the Resend transport, `ext-fileinfo` improves automatic MIME
-  detection for path attachments, and `ext-openssl` is required for TLS — without
-  it the SMTP transport refuses every encrypted connection (STARTTLS and port-465
-  alike); only plain, unencrypted SMTP works without it.
+- **PHP 8.3+** — pure PHP. The composer `suggest` entries are honestly scoped:
+  `ext-curl` is needed only for the Resend transport, `ext-fileinfo` improves
+  automatic MIME detection for path attachments, and `ext-openssl` is required for
+  TLS — without it the SMTP transport refuses every encrypted connection (STARTTLS
+  and port-465 alike); only plain, unencrypted SMTP works without it.
 
 ## Install
 
@@ -250,8 +251,12 @@ candy-mail --from "me@example.com" --to you@example.com --render < message.txt
 # RFC 2046-valid structure) and sends nothing — no transport env required.
 ```
 
-`--version` prints the package version, `--help` (or `-h`) the usage, repeat `--to/--cc/--bcc/--attach`
-to accumulate, and a bare `--` ends option parsing (later addresses are positional recipients).
+Four parsing rules, one each:
+
+- `--version` prints the package version.
+- `--help` (or `-h`) prints the usage.
+- `--to`, `--cc`, `--bcc` and `--attach` are repeatable; each occurrence accumulates.
+- A bare `--` ends option parsing; later addresses are positional recipients.
 Short aliases `-f` (`--from`), `-t` (`--to`), `-s` (`--subject`) and `-a` (`--attach`) are accepted
 as `-f value`; the inline `=` form is long-option only (so `-f=x` is refused, use `--from=x` or `-f x`).
 Positional recipients fill `--to` only when `--to` is absent — if you also pass `--to`, the
@@ -269,8 +274,9 @@ stderr note naming it), and the API transport keeps its own fixed 10 s connect /
 configured the ladder can silently spend the WRONG domain's identity (SPF/DKIM
 alignment rides whichever transport answers), so `--transport=smtp|resend` forces the
 choice: `smtp` ignores a present key outright, `resend` refuses without one. The
-zero-flag recipe for a one-off is `env -u RESEND_API_KEY candy-mail …`. A value that begins with a dash needs the inline form
-(`--subject=-50% off`) — a switch is never stolen as another switch's value. The CLI
+zero-flag recipe for a one-off is `env -u RESEND_API_KEY candy-mail …`. A value that begins with a
+dash needs the inline form, shell-quoted so the rest of the value stays one argv token
+(`--subject="-50% off"`) — a switch is never stolen as another switch's value. The CLI
 requires a `--to` recipient: cc/bcc alone ends in a loud refusal (the library itself
 permits cc/bcc-only sends over SMTP; the Resend API needs at least one `to`).
 
@@ -288,7 +294,7 @@ export CANDY_MAIL_SMTP_PORT=587               # SMTP port (default: 587)
 export CANDY_MAIL_SMTP_USERNAME=user          # SMTP username
 export CANDY_MAIL_SMTP_PASSWORD=pass          # SMTP password (app password for Gmail etc.)
 export CANDY_MAIL_SMTP_REQUIRE_TLS=1          # default ON; ON words 1/true/yes/on, OFF words 0/false/no/off —
-                                              # anything else is REFUSED, never guessed (a typo'd security
+                                              # anything else is REFUSED, never guessed (a mistyped security
                                               # switch must not silently downgrade)
 export CANDY_MAIL_SMTP_IMPLICIT_TLS=0         # leave unset for port-465 auto-detect; set 1 to force on, 0 to force off (same word vocabulary)
 export CANDY_MAIL_SMTP_HELO=mail.example.com  # EHLO/HELO identity (letters, digits, dots, hyphens only)
@@ -313,7 +319,7 @@ Cron jobs, systemd units, and containers have no terminal, and STDIN there is
 an environment detail, not an intent: a closed non-tty stream (redirected from
 `/dev/null`, or the default of a hardened unit) reads as an empty body. Since
 a message with no body, no HTML part, and no attachment composes to zero MIME
-parts, the CLI now **refuses** that shape loudly (exit 1) instead of mailing
+parts, the CLI now refuses that shape loudly (exit 1) instead of mailing
 or previewing a hollow envelope. Unattended senders therefore always pass
 `--body` (or `--html`) explicitly, or pipe real content:
 
@@ -335,9 +341,9 @@ docker run --rm -i candy-mail --from me@example.com --to you@example.com < body.
 STDIN accumulation is capped at 4 MiB per run: a runaway producer
 (`yes | candy-mail`) is refused at the cap before any connection is paid, the
 same loud-over-truncating posture as `Attachment::MAX_BYTES`. Credentials come
-from the environment in every unattended shape — the `CANDY_MAIL_SMTP_*`
-variables above are read identically under cron, systemd, and containers;
-the flags `--helo/--ca-file/--timeout` override their env rows when passed.
+from the environment in every unattended shape — automation passes no flags, so
+the `CANDY_MAIL_SMTP_*` variables above are read identically under cron, systemd,
+and containers and carry every decision.
 
 ### Exit codes
 
@@ -424,13 +430,29 @@ loopback fake-server tests for the SMTP conversation; no external network is eve
 
 ## Deprecated accessors
 
-Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*)*), `Attachment::getContent()` was renamed to its bare twin `content()` — the method slot was unclaimed (no `withContent` setter exists; the public readonly `$content` property names the raw backing field, not a callable, and PHP keeps property and method namespaces distinct). The legacy spelling stays a byte-identical one-line BC forwarder marked `@deprecated` with `REMOVED-IN: 2.0.0`; it will be removed in candy-mail v2.0.0.
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*)*),
+`Attachment::getContent()` was renamed to its bare twin `content()`. The rename is safe
+because the method slot was unclaimed: no `withContent` setter exists, the public readonly
+`$content` property names the raw backing field and not a callable, and PHP keeps property
+and method namespaces distinct. The legacy spelling stays as a byte-identical one-line BC
+forwarder marked `@deprecated` with `REMOVED-IN: 2.0.0`; it will be removed in
+candy-mail v2.0.0.
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
 | `Mail` | `Attachment` | `getContent()` | `content()` |
 
-Note the distinction the rename preserves: the readonly property `$content` is the raw nullable backing field, while `content()` resolves the bytes (including the defense-in-depth path re-read). `tests/AccessorDeprecationTest.php` pins BC identity on live objects from both factories, the property/method distinction, the forwarder shape, a discovery-first `src/` census with an inverse leg that reddens any unmarked public `get*()`, and the README table agreement. Internal call sites in `src/` (`SmtpTransport`, `ResendTransport`) were switched to the bare form in the same commit.
+Note the distinction the rename preserves: the readonly property `$content` is the raw
+nullable backing field, while `content()` resolves the bytes (including the
+defense-in-depth path re-read). `tests/AccessorDeprecationTest.php` pins five legs:
+
+- BC identity on live objects from both factories
+- the property/method distinction
+- the forwarder shape
+- a discovery-first `src/` census, with an inverse leg that reddens any unmarked public `get*()`
+- README table agreement
+
+Internal call sites in `src/` (`SmtpTransport`, `ResendTransport`) were switched to the bare form in the same commit.
 
 ## License
 
