@@ -32,7 +32,10 @@ use SugarCraft\Markdown\Renderer;
  *    the next: only when the parser makes that line a top-level heading are
  *    all blocks before it closed, so the next section starts from the same
  *    state the whole document would be in. A refused proposal is merged
- *    into the following section.
+ *    into the following section — and once the refused prefix itself
+ *    exceeds {@see MAX_UNCONFIRMED_BYTES}, the stream stops probing and
+ *    every later byte joins the closing tail that finish() parses once
+ *    (SM-S52, mirroring the defersStreaming() regime).
  *  - **Link reference definitions**. A definition applies to
  *    the whole document. Every section is parsed with the definitions of
  *    the sections before it, so a reference to an earlier definition
@@ -64,6 +67,17 @@ final class SectionStream
     /** Beyond this many distinct candidate labels an entry is treated as wild. */
     private const MAX_WATCH_LABELS = 256;
 
+    /**
+     * Beyond this many refused bytes the stream stops probing boundaries and
+     * folds every later byte into the closing tail, which {@see finish()}
+     * parses once — the streaming counterpart of the {@see Renderer}
+     * `defersStreaming()` regime (SM-S52). Refused prefixes stay bounded
+     * work, not O(refusals²) parse bytes; no in-repo trigger reaches this
+     * cap today (PERF-SM-07 probed linear), so it is the unbounded-in-code
+     * stamp, kept deliberately generous.
+     */
+    private const MAX_UNCONFIRMED_BYTES = 1048576;
+
     /** CommonMark label normalization, the same steps the reference map keys by. */
     private static TextNormalizer $normalizer;
 
@@ -82,6 +96,12 @@ final class SectionStream
 
     /** Source of sections whose proposed end the parser refused, waiting to lead the next one. */
     private string $unconfirmed = '';
+
+    /** Complete lines in {@see $unconfirmed} — the probe's line base, carried so confirm() never recounts it (SM-S52). */
+    private int $unconfirmedLines = 0;
+
+    /** The refused prefix blew {@see MAX_UNCONFIRMED_BYTES}: every later byte joins the closing tail, parsed once at finish(). */
+    private bool $deferredTail = false;
 
     /**
      * Confirmed sections not answered yet: a held one and every section
@@ -123,10 +143,23 @@ final class SectionStream
         }
 
         $definitions = \count($this->known);
+        if ($this->deferredTail) {
+            // SM-S52: past the cap there is nothing to arbitrate per frame —
+            // the bytes join the closing tail and finish() parses it once.
+            $blob = implode('', $closed);
+            $this->unconfirmed .= $blob;
+            $this->unconfirmedLines += self::countLines($blob);
+
+            return $this->release();
+        }
         foreach ($closed as $i => $section) {
             $next = $closed[$i + 1] ?? $this->scanner->openSection();
             $nl = strpos($next, "\n");
-            $this->confirm($this->unconfirmed . $section, $nl === false ? $next : substr($next, 0, $nl + 1));
+            $this->confirm(
+                $this->unconfirmed . $section,
+                $nl === false ? $next : substr($next, 0, $nl + 1),
+                $this->unconfirmedLines + self::countLines($section),
+            );
         }
         if (\count($this->known) > $definitions) {
             $this->retryHeld();
@@ -192,10 +225,11 @@ final class SectionStream
 
     /**
      * Confirm the proposed boundary after $source (the next section starts
-     * with $headingLine) and queue $source as a section, or keep it to lead
-     * the next one.
+     * with $headingLine, and $sourceLines is how many complete lines
+     * $source already holds) and queue $source as a section, or keep it to
+     * lead the next one.
      */
-    private function confirm(string $source, string $headingLine): void
+    private function confirm(string $source, string $headingLine, int $sourceLines): void
     {
         // SM-S03 refusals the parser could only echo, proven from bytes:
         //  - a mid-line provisional cut: $source has no line ending, so
@@ -207,24 +241,27 @@ final class SectionStream
         // test is inconclusive the full probe below arbitrates as always.
         if ($headingLine !== '' && (!str_ends_with($source, "\n")
             || preg_match('/^ {0,3}#{1,6}([ \t]|$)/', $headingLine) !== 1)) {
-            $this->unconfirmed = $source;
+            $this->refuse($source, $sourceLines);
 
             return;
         }
         $probe = $source . $headingLine;
+        // The parser numbers lines from 1 and ends one at \r\n, \r or \n;
+        // the prefix's share arrives carried, not recounted (SM-S52).
+        $lines = $sourceLines + self::countLines($headingLine);
         if (!str_ends_with($probe, "\n")) {
             $probe .= "\n";
+            $lines++;
         }
         $document = $this->renderer->parseSection($probe, $this->known);
         $heading = $document->lastChild();
-        // The parser numbers lines from 1 and ends one at \r\n, \r or \n.
-        $lines = preg_match_all('/\r\n|\r|\n/', $probe);
         if (!$heading instanceof Heading || $heading->getStartLine() !== $lines) {
-            $this->unconfirmed = $source;
+            $this->refuse($source, $sourceLines);
 
             return;
         }
         $this->unconfirmed = '';
+        $this->unconfirmedLines = 0;
         $heading->detach();
         $this->learn($document);
         $labels = self::unresolvedLabels($document);
@@ -235,6 +272,26 @@ final class SectionStream
             'defs' => \count($this->learned),
             'watch' => $labels,
         ];
+    }
+
+    /** Keep a refused proposal to lead the next section, arming the deferred tail past the byte cap. */
+    private function refuse(string $source, int $sourceLines): void
+    {
+        $this->unconfirmed = $source;
+        $this->unconfirmedLines = $sourceLines;
+        if (!$this->deferredTail && strlen($source) > self::MAX_UNCONFIRMED_BYTES) {
+            // SM-S52: k refused re-probes cost O(k²) parse bytes; past the
+            // cap the arbitration stops and the bytes just accumulate onto
+            // the tail finish() parses once — the defersStreaming() regime,
+            // linear by construction and unfired in practice.
+            $this->deferredTail = true;
+        }
+    }
+
+    /** Complete lines in $text, the parser's counting rule: a line ends at \r\n, \r or \n. */
+    private static function countLines(string $text): int
+    {
+        return preg_match_all('/\r\n|\r|\n/', $text) ?: 0;
     }
 
     /**

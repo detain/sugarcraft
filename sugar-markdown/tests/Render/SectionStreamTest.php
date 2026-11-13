@@ -336,6 +336,58 @@ final class SectionStreamTest extends TestCase
         return (hrtime(true) - $start) / 1e6;
     }
 
+    public function testTheCarriedLineCountDecidesTheProbeAfterARefusal(): void
+    {
+        // SM-S52: confirm() must judge the heading's start line against the
+        // prefix's lines CARRIED through the refusal, never recounted nor
+        // dropped. A refused prefix ("x\ny\n", 3 complete lines) is seeded
+        // as the scanner's first proposal then meets a real boundary: the
+        // probe's heading starts at line 6, so a dropped carry-off would
+        // refuse forever and nothing would be answered before finish().
+        $renderer = $this->renderer();
+        $stream = new SectionStream($renderer);
+
+        $inject = static function (string $property, mixed $value) use ($stream): void {
+            $p = new \ReflectionProperty(SectionStream::class, $property);
+            $p->setAccessible(true);
+            $p->setValue($stream, $value);
+        };
+        $inject('unconfirmed', "x\ny\n\n");
+        $inject('unconfirmedLines', 3);
+
+        $released = $stream->push("# Z\n\n# W\n\nw\n");
+        $this->assertNotSame([], $released, 'the boundary after a carried prefix must confirm, not stall');
+        array_push($released, ...$stream->finish());
+
+        $this->assertRendersLike("x\ny\n\n# Z\n\n# W\n\nw\n", $released);
+    }
+
+    public function testARefusedBlobTripsTheCapAndTheTailStillRendersExactly(): void
+    {
+        // SM-S52: with no blank line inside the blob it stays one open
+        // section, so the scanner's provisional flushes are the only
+        // boundary proposals — each refused, each re-joining a longer
+        // prefix, until the cap flips the stream into its one-parse closing
+        // tail. Output must stay byte-identical to render(); the flip is
+        // pinned from the inside so the test cannot go vacuous.
+        $renderer = $this->renderer();
+        $doc = "# H\n\nintro\n\n" . str_repeat("filler line text\n", 80_000) . "\n\n# Done\n\ntail text\n";
+
+        $stream = new SectionStream($renderer);
+        $bodies = [];
+        $deferred = new \ReflectionProperty(SectionStream::class, 'deferredTail');
+        $deferred->setAccessible(true);
+        $tripped = false;
+        foreach (str_split($doc, 65536) as $chunk) {
+            array_push($bodies, ...$stream->push($chunk));
+            $tripped = $tripped || $deferred->getValue($stream);
+        }
+        array_push($bodies, ...$stream->finish());
+
+        $this->assertTrue($tripped, 'the fence-desync blob must trip MAX_UNCONFIRMED_BYTES');
+        $this->assertSame($renderer->render($doc), rtrim(implode('', $bodies), "\n"), 'the deferred tail renders byte-identical');
+    }
+
     public function testMultiLineLabelResolvesAcrossStreamedSections(): void
     {
         // End-to-end SM-S07: a label defined across lines in one section
