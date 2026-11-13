@@ -661,4 +661,44 @@ final class PosterGridTest extends TestCase
         self::assertStringContainsString('(unavailable)', $english);
         self::assertStringContainsString('(nicht verfügbar)', $german, 'the fallback key keeps the notice locale-live');
     }
+
+    public function testTheBoxMemoEvictsTheOldestHalfPastTheCap(): void
+    {
+        // sugar-gallery-008 twin of the fit-memo pin: drive 2,100 distinct
+        // cell contents through the grid's box memo (one key per overlay id,
+        // focus false keeps the content key stable) and prove the cap bites,
+        // the survivor is still found by key, and the victim recomputes the
+        // same bytes — at a fixed 1×1-cell viewport, so crossing the cap does
+        // not cost the suite 2,100 full-width renders.
+        PosterGrid::clearBoxCache();
+        $cacheRef = new \ReflectionClass(PosterGrid::class);
+
+        $early = [];
+        $draw = static fn (int $id): string => PosterGrid::new(10, 1, 0, 0)->withViewport(10, 3)->withReset(1)->withItems([0 => (new PosterCard('1', 'Item 1'))->withImage('x', $id)])->render(false);
+        for ($id = 1; $id <= 2100; $id++) {
+            $frame = $draw($id);
+            if ($id === 20 || $id === 2100) {
+                $early[$id] = $frame;
+            }
+        }
+
+        $keys = array_keys($cacheRef->getStaticPropertyValue('boxCache'));
+        $hasId = static function (int $id) use ($keys): bool {
+            foreach ($keys as $key) {
+                if (str_starts_with($key, 'i|' . $id . '|')) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        $cacheSize = count($keys);
+        self::assertLessThanOrEqual(2048, $cacheSize, 'the box memo never outruns its cap');
+        self::assertGreaterThanOrEqual(1024, $cacheSize, 'the eviction keeps the young half, not everything');
+        self::assertTrue($hasId(2100), 'a survivor stays addressable by its own key');
+        self::assertFalse($hasId(20), 'the oldest half really left the building');
+
+        self::assertSame($early[2100], $draw(2100), 'a surviving geometry re-renders byte-identical from the memo');
+        self::assertSame($early[20], $draw(20), 'an evicted geometry recomputes byte-identical');
+    }
 }

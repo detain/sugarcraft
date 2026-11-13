@@ -787,6 +787,37 @@ final class PosterCardTest extends TestCase
         }
     }
 
+    public function testTheFitMemoEvictsTheOldestHalfPastTheCap(): void
+    {
+        // sugar-gallery-008: the memo BOUND was pinned in shape (privacy, the
+        // 2048 value) but never exercised — no test proved the oldest-half
+        // slice fires, that survivors are still found by KEY (array_slice
+        // with use_keys), or that a victim recomputes byte-identically.
+        PosterCard::clearFitCache();
+        $ref = new \ReflectionMethod(PosterCard::class, 'fitCacheRef');
+
+        // Distinct overlay ids at a fixed small geometry give one memo key
+        // per card with O(cell) per-frame cost — crossing the 2,048 cap
+        // without the suite paying for 2,100 full-width renders.
+        $early = [];
+        for ($id = 1; $id <= 2100; $id++) {
+            $frame = (new PosterCard('ev', 'Eviction driver'))->withImage('x', $id)->render(false, 4, 1);
+            if ($id === 20 || $id === 2100) {
+                $early[$id] = $frame;
+            }
+        }
+
+        $cache = $ref->invoke(null);
+        self::assertLessThanOrEqual(2048, count($cache), 'the memo never outruns its cap');
+        self::assertGreaterThanOrEqual(1024, count($cache), 'the eviction keeps the young half, not everything');
+        self::assertArrayHasKey('i|2100|4|1', $cache, 'a survivor stays addressable by its own key');
+        self::assertArrayNotHasKey('i|20|4|1', $cache, 'the oldest half really left the building');
+
+        $again = static fn (int $id): string => (new PosterCard('ev', 'Eviction driver'))->withImage('x', $id)->render(false, 4, 1);
+        self::assertSame($early[2100], $again(2100), 'a surviving geometry re-renders byte-identical from the memo');
+        self::assertSame($early[20], $again(20), 'an evicted geometry recomputes byte-identical');
+    }
+
     public function testRenderMemoKeyNamesTheRenderBytesAndRefusesALocaleFrozenCell(): void
     {
         // SG-S15 (sugar-gallery-047): the seam the grid's box memo keys on.
