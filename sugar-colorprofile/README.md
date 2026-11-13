@@ -124,7 +124,7 @@ drift pin guards this genre yet):
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — step 0 can still outrank it)
 2. `FORCE_COLOR` (non-empty) → level: numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/…) → `Ascii` floor (colorless — color codes dropped, decoration kept)
-3. `NO_COLOR` (set and **non**-empty; `""` = unset — the supports-color convention, NO_COLOR's own text is presence-based) → the colorless `Ascii` rung — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept; this is what `Palette::withProfile(ColorProfile::Ascii)` pins, so the pin is now the same answer the env already gives
+3. `NO_COLOR` (set and **non**-empty; `""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept; this is what `Palette::withProfile(ColorProfile::Ascii)` pins, so the pin is now the same answer the env already gives
 4. `CLICOLOR=0` → `Ascii` (the colorless rung)
 5. `TERM=dumb` (case-insensitive) → `Ascii` (the colorless rung)
 6. `COLORTERM=24bit|truecolor|yes` → TrueColor (`yes` is the legacy "this is a
@@ -207,7 +207,7 @@ The ladder's env legs, one table row per variable, in ladder order:
 |---------|-------------|--------|
 | `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; the step-0 stream TTY gate still outranks it on stream-taking surfaces). Silently re-enables color over `NO_COLOR` — see the a11y caveat under this table |
 | `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/`no`/…) lands on the `Ascii` floor — decoration kept, color codes dropped. Outranks `NO_COLOR` by design — see the a11y caveat under this table |
-| `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset — the supports-color convention, NO_COLOR's own text is presence-based) → the colorless `Ascii` rung / `NoColor` capability — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept, the reading no-color.org itself states (color attributes only). Contrast: `NoTTY`'s full strip answers only hardware absence (the step-0 stream gate). Report surfaces still observe the `NoColor` capability for every suppression leg (`Probe::isNoColor()` names the `NO_COLOR` one) |
+| `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung / `NoColor` capability — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept, the reading no-color.org itself states (color attributes only). Contrast: `NoTTY`'s full strip answers only hardware absence (the step-0 stream gate). Report surfaces still observe the `NoColor` capability for every suppression leg (`Probe::isNoColor()` names the `NO_COLOR` one) |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
 | `COLORTERM=24bit\|truecolor\|yes` | 6 | TrueColor (exact value match, case-insensitive); `yes` is the legacy color-terminal marker, promoted here beyond its historical "some color" meaning |
