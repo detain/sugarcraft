@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast\Tests;
 
-use SugarCraft\Toast\{Action, Alert, ToastType};
+use SugarCraft\Toast\{Action, Alert, Toast, ToastType};
 use PHPUnit\Framework\TestCase;
 
 final class AlertTest extends TestCase
@@ -280,5 +280,24 @@ final class AlertTest extends TestCase
         foreach (['type', 'message', 'expiresAt', 'progress', 'actions', 'backgroundColor', 'foregroundColor', 'borderColor', 'persistent', 'id'] as $field) {
             $this->assertSame($viaCtor->{$field}, $viaFactory->{$field}, "Alert::new() lost the {$field} override");
         }
+    }
+
+    public function testProgressSentinelAbsenceIsObservablyVoidAtTheRenderSeam(): void
+    {
+        // TST-XSET probe (finding 032): Alert carries nullable progress with
+        // no $XSet companion, so 'never set' and 'explicitly null' must not
+        // be confusable by callers. At the render seam they are the SAME
+        // bytes — no bar either way — and both differ from a set bar. The
+        // confusion surface is empty, which is why the full sentinel
+        // retrofit stays gated (public API-shape change, 2.x).
+        $unset = Alert::new(ToastType::Info, 'progress probe');
+        $explicitNull = new Alert(ToastType::Info, 'progress probe');
+        $set = $unset->withProgress(0.5);
+
+        $render = static fn (Alert $a): string => Toast::new()->push($a)->view('', 80, 24);
+
+        $this->assertSame($render($unset), $render($explicitNull), 'unset and explicit-null progress must be one render state');
+        $this->assertStringNotContainsString('░', $render($unset));
+        $this->assertStringContainsString('░', $render($set), 'a set progress renders the bar row');
     }
 }
