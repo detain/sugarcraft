@@ -185,12 +185,13 @@ final class ReactInputDriver implements ReadableStreamInterface
      * EscapeDecoder buffers an incomplete trailing sequence — a CSI, SS3, Kitty
      * or bracketed-paste sequence, or a partial UTF-8 codepoint — in its
      * internal $remainder and completes it on the next decode() call, so
-     * feeding these pieces to one decoder instance in order reproduces a whole
-     * -chunk decode byte-for-byte, with a single exception: a lone trailing ESC
-     * is emitted eagerly as an Escape key rather than buffered. To keep an
-     * escape sequence that straddles a MAX_CHUNK_SIZE boundary intact, a piece
-     * is never allowed to end on a lone ESC that begins (rather than ends) the
-     * buffer; that ESC is carried into the next piece instead.
+     * feeding these pieces to one decoder instance in order reproduces a
+     * whole-chunk decode byte-for-byte, with a single exception: a lone
+     * trailing ESC is emitted eagerly as an Escape key rather than buffered.
+     * The carry law protects the straddling case: a chunk boundary may never
+     * fall right after a lone ESC that begins (rather than ends) the buffer —
+     * such an ESC is carried into the next piece, keeping the escape sequence
+     * that straddles a MAX_CHUNK_SIZE boundary intact for the decoder.
      *
      * @return list<string> Non-empty pieces whose concatenation equals $chunk.
      * @internal Public only so the DoS chunk bound is directly testable.

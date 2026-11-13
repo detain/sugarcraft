@@ -14,7 +14,8 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
  * Terminal escape sequence decoder.
  *
  * Consumes raw bytes via decode() and emits typed Event objects.
- * Handles partial sequences across calls — state is reentrant per instance.
+ * Handles partial sequences across calls — state is per-instance: two
+ * decoders never share buffers.
  *
  * Supported sequences:
  *  - Plain ASCII + control codes (Backspace, Tab, Enter, Esc, Ctrl+letter)
@@ -168,7 +169,7 @@ final class EscapeDecoder
     /** Whether we are mid OSC/DCS/APC/PM string (payload accumulates in $stringBuffer) */
     private bool $inString = false;
 
-    /** The 2-byte introducer ("ESC" + "]" "P" "_" "^") of the in-progress string */
+    /** The 2-byte introducer ("ESC" + one of "]", "P", "_", "^") of the in-progress string */
     private string $stringIntroducer = '';
 
     /** Accumulated payload bytes of the in-progress string, excluding introducer (capped) */
@@ -458,13 +459,14 @@ final class EscapeDecoder
     /**
      * UTF-8 expected-sequence-length classifier shared by both multibyte
      * walkers (decodeClean and the ESC+lead leg). Returns 2/3/4 for a valid
-     * lead byte, 0 for anything that cannot start a well-formed codepoint:
-     * 0x80-0xBF lone continuations, 0xC0-0xC1/0xF5-0xFF overlong/out-of-range
-     * leads — and the second-byte audits: ED A0-BF (surrogate halves, m12),
-     * E0 80-9F and F0 80-8F (overlong re-spellings of shorter codepoints),
-     * F4 90-BF (past U+10FFFF). None of these can exist in well-formed UTF-8
-     * (mbstring/json/MySQL reject them), so a stream carrying one must resync
-     * byte-by-byte instead of surfacing a multi-byte key that every
+     * lead byte; returns 0 for anything that cannot start a well-formed
+     * codepoint. The refused families: 0x80-0xBF lone continuations,
+     * 0xC0-0xC1/0xF5-0xFF overlong or out-of-range leads, and the
+     * second-byte audits — ED A0-BF (surrogate halves, m12), E0 80-9F and
+     * F0 80-8F (overlong re-spellings of shorter codepoints), F4 90-BF
+     * (past U+10FFFF). Well-formed UTF-8 cannot carry any of them
+     * (mbstring/json/MySQL all reject them). A stream carrying one must
+     * resync byte-by-byte, not surface a multi-byte key that every
      * downstream codec chokes on.
      */
     private function utf8SeqLength(string $stream, int $leadPos): int
@@ -513,10 +515,11 @@ final class EscapeDecoder
      * The view is grammar-bounded, deliberately generous, and conservative:
      * a CSI/SS3 runs to its final byte (0x40-0x7e), stopping one lookahead
      * byte past any embedded ESC so the handlers' own ambiguity arms still
-     * see what they need; a string introducer (] P _ ^) runs to its BEL or
-     * ST terminator, or to the drain+abandon budget (the payload legs
-     * measure against exactly that much); anything else (Alt+x, UTF-8) runs
-     * a flat few bytes. If the scan runs off the END of the in-hand stream,
+     * see what they need; a string introducer ("]", "P", "_", or "^") runs
+     * to its BEL or ST terminator, or to the drain+abandon budget (the
+     * payload legs measure against exactly that much); anything else (Alt+x,
+     * UTF-8) runs a flat few bytes. If the scan runs off the END of the
+     * in-hand stream,
      * the returned length reaches the stream end — the view then IS the old
      * tail, so the handlers' incomplete-sequence decisions (defer the lone
      * trailing ESC, cap the buffered remainder) are made with the same
@@ -978,7 +981,9 @@ final class EscapeDecoder
      *  - bits 0-1: button number (3 = release in X10)
      *  - bit 2/3/4 (values 4/8/16): Shift / Alt / Ctrl
      *  - bit 5 (value 32): motion (drag)
-     *  - bit 6 (value 64): wheel — bit 1 selects left/right, bit 0 up/down
+     *  - bit 6 (value 64): wheel — 64+0 = wheel-up, +1 = wheel-down,
+     *    +2 = wheel-left, +3 = wheel-right (the low bits carry the axis and
+     *    direction; the wire forms are 64/65/66/67, stored +32 as 96-99)
      *  - bit 7 (value 128): the horizontal-wheel pair — 128 = scroll-left,
      *    129 = scroll-right (xterm's bit-7 fold of the 66/67 forms)
      *
@@ -1647,7 +1652,8 @@ final class EscapeDecoder
     }
 
     /**
-     * Begin an OSC/DCS/APC/PM string sequence (ESC followed by ] P _ ^).
+     * Begin an OSC/DCS/APC/PM string sequence (ESC followed by "]", "P",
+     * "_", or "^").
      *
      * Consume payload bytes up to the terminator — ST ("ESC \") or BEL. The
      * whole payload is a reply body (color report, capability answer, termcap
@@ -1915,19 +1921,23 @@ final class EscapeDecoder
     }
 
     /**
-     * Kitty keyboard protocol functional key codes (U+E000 and above), verbatim
-     * from the spec's functional-key table — the same partition sugar-core's
+     * Kitty keyboard protocol functional key codes (U+E000 and above): the
+     * contract is code -> key name, verbatim from the spec's functional-key
+     * table. Codes below the table's floor never mint a functional key: in
+     * CSI-u frames the TEXT rule resolves printable codepoints to the
+     * character itself and control-adjacent codes count as drops. An
+     * unlisted code at or above the floor is a counted drop, never an
+     * invented key. Names use
+     * this lib's house vocabulary (ArrowUp, KP0, KPDecimal — not the spec's
+     * KpUp spellings) so Kitty frames and their SS3/CSI equivalents decode
+     * to one name. The partition is the same one sugar-core's
      * KeyType::kittyFunctionalKeys() carries, cross-checked by
      * tests/KeySpecTableParityTest.
      *
-     * Historical defect this table cures: the decoder used to INVENT arrows at
-     * 57399-57402 (the spec's Kp0..Kp3) and to borrow xterm's *tilde* numbering
-     * (1..6 / 11..34) into CSI-u space. In the CSI-u space, codes below 0xE000
-     * are TEXT codepoints only — a functional key never travels as 11 or 1;
-     * those forms now count as drops instead of mis-naming printable ASCII
-     * (11 is literally the control-K byte). Names use this lib's house
-     * vocabulary (ArrowUp, KP0, KPDecimal — not the spec's KpUp spellings) so
-     * Kitty frames and their SS3/CSI equivalents decode to one name.
+     * History this table cures: the decoder once INVENTED arrows at
+     * 57399-57402 (the spec's Kp0..Kp3) and borrowed xterm's *tilde*
+     * numbering (1..6 / 11..34) into CSI-u space, where 11 is literally the
+     * control-K byte; those forms now count as drops.
      *
      * @see https://sw.kovidgoyal.net/kitty/keyboard-protocol/ — functional key codes.
      */
