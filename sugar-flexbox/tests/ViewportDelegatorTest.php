@@ -40,11 +40,24 @@ final class ViewportDelegatorTest extends TestCase
         $this->assertTrue($vp->atLeftmost());
     }
 
-    public function testAtRightmostReturnsTrueWhenScrolledToEnd(): void
+    public function testAtRightmostNeedsContentWiderThanTheViewport(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 5)), 20, 10);
-        // Content fits within viewport width, so at rightmost
-        $this->assertTrue($vp->atRightmost());
+        // FBX-13: the old case used content NARROWER than the box, where
+        // 'rightmost' is trivially true and proves nothing. Real law:
+        // wide content starts false, and only scrolling to the far edge
+        // flips it — pixels and query state must agree (FBX-02 lineage).
+        $content = implode("\n", array_map(
+            static fn (int $n): string => str_repeat('x', 40) . $n,
+            range(1, 5),
+        ));
+        $vp = Viewport::withContent($content, 20, 5);
+        $this->assertFalse($vp->atRightmost(), 'wide content starts away from the right edge');
+        $this->assertTrue($vp->atLeftmost());
+
+        $scrolled = $vp->scrollRight(60);
+        $this->assertTrue($scrolled->atRightmost());
+        $this->assertFalse($scrolled->atLeftmost());
+        $this->assertSame(1.0, $scrolled->horizontalScrollPercent());
     }
 
     public function testHorizontalScrollPercent(): void
@@ -269,5 +282,141 @@ final class ViewportDelegatorTest extends TestCase
             Viewport::withContent($content, 20, 6)->showScrollbar(false)->view(),
             'bar off is literally the old path',
         );
+    }
+
+    // ---- FBX-13: drive the delegator for real through update() ---------
+
+    /** @return \SugarCraft\Core\Msg\MouseWheelMsg */
+    private static function wheel(\SugarCraft\Core\MouseButton $button): \SugarCraft\Core\Msg\MouseWheelMsg
+    {
+        return new \SugarCraft\Core\Msg\MouseWheelMsg(
+            0, 0, $button, \SugarCraft\Core\MouseAction::Press,
+        );
+    }
+
+    public function testWheelDownThroughUpdateMovesByTheDefaultDelta(): void
+    {
+        [$after, $cmd] = $this->fifty()->update(self::wheel(\SugarCraft\Core\MouseButton::WheelDown));
+
+        $this->assertSame(3, $after->yOffset(), 'default wheel delta is 3 lines');
+        $this->assertNull($cmd, 'the wheel leg never arms an animation');
+        // Immutability law: the receiver answers zero.
+        $this->assertSame(0, $this->fifty()->yOffset());
+    }
+
+    public function testWheelUpThroughUpdateMovesBackExactly(): void
+    {
+        $vp = $this->fifty()->setYOffset(10);
+        [$after, $cmd] = $vp->update(self::wheel(\SugarCraft\Core\MouseButton::WheelUp));
+
+        $this->assertSame(7, $after->yOffset());
+        $this->assertNull($cmd);
+    }
+
+    public function testWheelMovesByTheConfiguredDelta(): void
+    {
+        [$after,] = $this->fifty()
+            ->withMouseWheelDelta(5)
+            ->update(self::wheel(\SugarCraft\Core\MouseButton::WheelDown));
+        $this->assertSame(5, $after->yOffset(), 'withMouseWheelDelta feeds the wheel leg');
+    }
+
+    public function testWheelIsIgnoredWhileDisabled(): void
+    {
+        [$after, $cmd] = $this->fifty()
+            ->withMouseWheelEnabled(false)
+            ->update(self::wheel(\SugarCraft\Core\MouseButton::WheelDown));
+
+        $this->assertSame(0, $after->yOffset(), 'the disabled door must move nothing');
+        $this->assertNull($cmd);
+    }
+
+    public function testWheelWithANonWheelButtonCarriesNoVerticalMeaning(): void
+    {
+        $msg = new \SugarCraft\Core\Msg\MouseWheelMsg(
+            0, 0, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press,
+        );
+        [$after, $cmd] = $this->fifty()->update($msg);
+
+        $this->assertSame(0, $after->yOffset());
+        $this->assertNull($cmd);
+    }
+
+    public function testHorizontalStepKeysDriveXOffsetAndReachTheFrame(): void
+    {
+        // Content must actually be WIDER than the box or the delegate
+        // clamps every horizontal move to 0 (the old identity-only
+        // forward could never notice).
+        $content = implode("\n", array_map(
+            static fn (int $n): string => \str_pad("L{$n}", 8, '_', \STR_PAD_RIGHT) . str_repeat('x', 33),
+            range(1, 5),
+        )); // each line 41 cells in a 20-wide box
+
+        $vp = Viewport::withContent($content, 20, 5)->withHorizontalStep(7);
+        $right = new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Right);
+
+        [$once,] = $vp->update($right);
+        $this->assertSame(7, $once->xOffset(), 'one Right key = one configured step');
+        [$twice,] = $once->update($right);
+        $this->assertSame(14, $twice->xOffset());
+
+        $left = new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Left);
+        [$back,] = $twice->update($left);
+        $this->assertSame(7, $back->xOffset(), 'Left steps back the same budget');
+
+        // Pixels agree with the query state (the FBX-02 law), exactly:
+        // on the boxed (scrollbar) path the first frame row is the raw
+        // slice the offset promises, clamped to the body budget (width
+        // minus the one-cell bar column) with the thumb rune appended.
+        // (The bare plain path returns unclamped variable-width rows —
+        // that path-shape contract is the FBX-43 decision, not this pin.)
+        $line0 = 'L1______' . str_repeat('x', 33);
+        $boxed = $twice->showScrollbar(true);
+        $rows = explode("\n", $boxed->view());
+        $this->assertSame(\substr($line0, 14, 19) . '█', $rows[0], 'step-scrolled pixels start at the column the state names');
+        $zeroRows = explode("\n", $vp->showScrollbar(true)->view());
+        $this->assertSame(\substr($line0, 0, 19) . '█', $zeroRows[0], 'offset 0 still paints from column 0');
+    }
+
+    public function testSmoothScrollInterpolationIsPinnedAcrossTickFrames(): void
+    {
+        // Deterministic lerp: factor 0.15 per ViewportTickMsg, ten frames,
+        // snap on the last. No wall clock is involved, so the exact
+        // vector is safe to pin — a changed easing must be a deliberate
+        // (disclosed) move, not a silent law change.
+        $vp = $this->fifty()->withSmoothScroll(true);
+
+        [$anim, $cmd] = $vp->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::End));
+        $this->assertNotNull($cmd, 'a smooth-scrolled move arms a tick command');
+        $this->assertSame(0, $anim->yOffset(), 'the first frame stays put and lets ticks run');
+
+        $seen = [];
+        for ($frame = 0; $frame < 10; $frame++) {
+            [$anim, $cmd] = $anim->update(new \SugarCraft\Forms\Viewport\ViewportTickMsg());
+            $seen[] = $anim->yOffset();
+        }
+        $this->assertSame([6, 11, 15, 19, 22, 25, 27, 29, 31, 40], $seen);
+        $this->assertNull($cmd, 'the animation releases its command at the snap');
+        // A post-completion tick answers unchanged with no command.
+        [$settled, $cmd2] = $anim->update(new \SugarCraft\Forms\Viewport\ViewportTickMsg());
+        $this->assertSame(40, $settled->yOffset());
+        $this->assertNull($cmd2);
+    }
+
+    public function testWheelBypassesSmoothScrollEvenWhenArmed(): void
+    {
+        // The delegate documents the wheel as an instant jump; the
+        // wrapper must not smuggle it into the animation either.
+        [$anim, $cmd] = $this->fifty()
+            ->withSmoothScroll(true)
+            ->update(self::wheel(\SugarCraft\Core\MouseButton::WheelDown));
+
+        $this->assertSame(3, $anim->yOffset(), 'no easing frame: the jump lands immediately');
+        $this->assertNull($cmd);
+    }
+
+    private function fifty(): Viewport
+    {
+        return Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
     }
 }

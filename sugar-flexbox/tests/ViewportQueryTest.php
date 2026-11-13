@@ -283,23 +283,36 @@ final class ViewportQueryTest extends TestCase
 
     // ---- paintScrollbar with various states -------------------------------
 
-    public function testPaintScrollbarVisibleWithStickyHeaderAndFooter(): void
+    public function testPaintScrollbarWithStickyFrameIsBoxyWithABarColumn(): void
     {
         $content = "H1\nH2\nM1\nM2\nM3\nM4\nM5\nF1";
         $vp = Viewport::withContent($content, 20, 8)
             ->withStickyHeader(2)
             ->withStickyFooter(1)
-            ->withScrollbar(true)
+            ->showScrollbar(true)
             ->setYOffset(0);
 
-        $view = $vp->view();
-        $lines = explode("\n", $view);
+        $lines = explode("\n", $vp->view());
 
-        // With scrollbar, each line has an extra char at the end
-        $this->assertGreaterThan(8, \strlen($lines[0]));
+        // The old proxy was strlen > 8 — true for ANY nonempty row. The
+        // real law: every row is exactly the box width (19 body cells +
+        // one bar cell), the bar column only ever holds configured runes,
+        // and the thumb appears on the row the offset maps to.
+        $this->assertCount(8, $lines, 'sticky header 2 + middle 5 + footer 1');
+        foreach ($lines as $i => $line) {
+            $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "sticky row $i");
+        }
+        // Proportional law: this document fits entirely (maxOffset 0), so
+        // the thumb spans the WHOLE column and no track cell appears —
+        // travel is pinned by testThumbRowIsMonotonicInYOffset below.
+        $bar = array_map(
+            static fn (string $l): string => mb_substr($l, -1, 1, 'UTF-8'),
+            $lines,
+        );
+        $this->assertSame(array_fill(0, 8, '█'), $bar);
     }
 
-    public function testPaintScrollbarRendersAtBottomWhenScrolled(): void
+    public function testThumbRowIsMonotonicInYOffset(): void
     {
         $lines = [];
         for ($i = 0; $i < 30; $i++) {
@@ -307,14 +320,26 @@ final class ViewportQueryTest extends TestCase
         }
         $content = implode("\n", $lines);
 
-        $vp = Viewport::withContent($content, 20, 6)
-            ->withScrollbar(true)
-            ->setYOffset(20);
+        $starts = [];
+        foreach ([0, 4, 8, 12, 16, 20, 24] as $y) {
+            $vp = Viewport::withContent($content, 20, 6)
+                ->showScrollbar(true)
+                ->setYOffset($y);
+            $rows = explode("\n", $vp->view());
+            foreach ($rows as $i => $line) {
+                $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "row $i at y=$y");
+            }
+            $thumb = array_keys(array_map(
+                static fn (string $l): string => mb_substr($l, -1, 1, 'UTF-8'),
+                $rows,
+            ), '█', true);
+            $this->assertNotEmpty($thumb, "a thumb cell must exist at y=$y");
+            $starts[] = $thumb[0];
+        }
 
-        $view = $vp->view();
-        $viewLines = explode("\n", $view);
-
-        // Thumb should be near bottom when scrolled far
-        $this->assertGreaterThan(6, \strlen($viewLines[0]));
+        // Monotonic: deeper offsets never drag the thumb upward, and the
+        // exact rows are deterministic (thumb height 1 of 6 travel 5 over
+        // maxOffset 24: round(5 * y / 24)).
+        $this->assertSame([0, 1, 2, 3, 3, 4, 5], $starts);
     }
 }
