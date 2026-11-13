@@ -20,6 +20,7 @@ namespace SugarCraft\Kv;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Kv\Support\InputPath;
+use SugarCraft\Kv\Support\SizeCap;
 use SugarCraft\Kv\Support\Ttl;
 
 /**
@@ -465,6 +466,15 @@ final class Store
         // kv-019: public library door — a wrapper URL here would deserialize
         // archive metadata before the read is even attempted.
         InputPath::refuseStreamWrapper($filePath);
+
+        // candy-kv-073: the same ceiling every other byte door enforces —
+        // a stored value is bounded by the gate `set` STDIN already obeys,
+        // so stat-gate here before any read can grow the process.
+        SizeCap::refuseOversized(
+            \is_file($filePath) ? \filesize($filePath) : null,
+            SizeCap::DEFAULT_MAX_BYTES,
+            "Store file \"{$filePath}\"",
+        );
 
         // @-suppressed: the false return is handled with a proper exception;
         // the C-level warning would otherwise trip failOnWarning suites.

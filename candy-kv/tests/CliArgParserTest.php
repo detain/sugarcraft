@@ -181,6 +181,47 @@ final class CliArgParserTest extends TestCase
         }
     }
 
+    public function testImportOptsMaxBytesDefaultsToTheShippedCeiling(): void
+    {
+        // candy-kv-073 gate G10: 256 MiB, spelled once (SizeCap) and read
+        // here through the parser's default answer.
+        $result = ArgParser::import(['candy-kv', 'import', 'json', 'd.json'], 2);
+        $this->assertSame(268_435_456, $result['maxBytes']);
+    }
+
+    public function testImportOptsMaxBytesAcceptsBothSpellingsAndZero(): void
+    {
+        $attached = ArgParser::import(['candy-kv', 'import', 'json', 'd.json', '--max-bytes=4096'], 2);
+        $this->assertSame(4096, $attached['maxBytes']);
+
+        $separated = ArgParser::import(['candy-kv', 'import', 'json', 'd.json', '--max-bytes', '8192'], 2);
+        $this->assertSame(8192, $separated['maxBytes']);
+
+        $uncapped = ArgParser::import(['candy-kv', 'import', 'json', 'd.json', '--max-bytes=0'], 2);
+        $this->assertSame(0, $uncapped['maxBytes'], 'zero is the documented uncapped door');
+    }
+
+    public function testImportOptsMalformedMaxBytesRefuses(): void
+    {
+        foreach (['x', '-5', '1.5', '1_000', ' 7'] as $bad) {
+            try {
+                ArgParser::import(['candy-kv', 'import', 'json', 'd.json', '--max-bytes=' . $bad], 2);
+                $this->fail("--max-bytes={$bad} must refuse");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('whole number of bytes', $e->getMessage());
+            }
+        }
+    }
+
+    public function testImportOptsTrailingMaxBytesRefusesNotSilentlyCaps(): void
+    {
+        // The --ttl law (kv-036 era): an option that lost its value is a
+        // usage error, never a silent default.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Option --max-bytes requires a value.');
+        ArgParser::import(['candy-kv', 'import', 'json', 'd.json', '--max-bytes'], 2);
+    }
+
     public function testImportOptsYamlFormat(): void
     {
         $result = ArgParser::import(['candy-kv', 'import', 'yaml', 'data.yaml'], 2);

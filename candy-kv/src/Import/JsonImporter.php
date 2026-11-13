@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Import;
 
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\InputPath;
+use SugarCraft\Kv\Support\SizeCap;
 use SugarCraft\Kv\YamlDialect;
 
 /**
@@ -70,9 +71,10 @@ final class JsonImporter
      * @param string $path      Path to the JSON file.
      * @param bool   $atomic    Whether to wrap all sets in a single transaction.
      * @param string $ifExists  Clobber policy: replace, skip or fail.
+     * @param int    $maxBytes  Admission ceiling (candy-kv-073); 0 = uncapped.
      * @return ImportReport Imported/overwritten/skipped triple.
      */
-    public function importFromFile(string $path, bool $atomic = true, string $ifExists = 'replace'): ImportReport
+    public function importFromFile(string $path, bool $atomic = true, string $ifExists = 'replace', int $maxBytes = SizeCap::DEFAULT_MAX_BYTES): ImportReport
     {
         // kv-019: this is a PUBLIC library door — the path may come from
         // config or uploads in wrapping automation, never a terminal argv.
@@ -87,11 +89,21 @@ final class JsonImporter
             throw new \RuntimeException("Cannot read JSON file: {$path}");
         }
 
-        $json = \file_get_contents($path);
-        if ($json === false) {
+        // kv-073: the gate runs on the STAT before the bytes exist in
+        // memory, and the read itself stops growing at the cap — a 4 GB
+        // file refuses on one stat() instead of OOM-killing the process,
+        // and a file lying about its size (procfs shapes) still dies
+        // mid-stream, never in the decoder.
+        SizeCap::refuseOversized(\filesize($path), $maxBytes, "Import file \"{$path}\"");
+        $handle = \fopen($path, 'rb');
+        $json = $handle === false ? null : SizeCap::readStream($handle, $maxBytes, "Import file \"{$path}\"");
+        if ($handle !== false) {
+            \fclose($handle);
+        }
+        if ($json === null) {
             throw new \RuntimeException("Cannot read JSON file: {$path}");
         }
-        return $this->importFromString($json, $atomic, $ifExists);
+        return $this->importFromString($json, $atomic, $ifExists, $maxBytes);
     }
 
     /**
@@ -100,11 +112,17 @@ final class JsonImporter
      * @param string $json      Raw JSON string.
      * @param bool   $atomic    Whether to wrap all sets in a single transaction.
      * @param string $ifExists  Clobber policy: replace, skip or fail.
+     * @param int    $maxBytes  Admission ceiling (candy-kv-073); 0 = uncapped.
      * @return ImportReport Imported/overwritten/skipped triple.
      * @throws \RuntimeException when the document shape cannot round-trip.
      */
-    public function importFromString(string $json, bool $atomic = true, string $ifExists = 'replace'): ImportReport
+    public function importFromString(string $json, bool $atomic = true, string $ifExists = 'replace', int $maxBytes = SizeCap::DEFAULT_MAX_BYTES): ImportReport
     {
+        // kv-073 string door: these bytes already exist in the caller's
+        // memory, so the guard counts them instead of the stat — and an
+        // un-capped explicit caller (0) walks free, by design.
+        SizeCap::refuseOversized(\strlen($json), $maxBytes, 'The import document');
+
         // Guarded decode: a non-array top level (bare scalar/null) is rejected
         // with a clear \RuntimeException instead of silently iterating as an
         // empty foreach downstream. Malformed JSON still surfaces \JsonException.

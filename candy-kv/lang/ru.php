@@ -14,7 +14,7 @@ return [
     'cli.usage_set'             => 'Использование: {bin} set <ключ> [значение] [--ttl SECONDS] [--binary|--text]',
     'cli.usage_get'             => 'Использование: {bin} get <ключ> [--sanitize]',
     'cli.usage_delete'          => 'Использование: {bin} delete <ключ>',
-    'cli.usage_import'           => 'Использование: {bin} import <json|yaml|yml> <путь> [--no-atomic] [--if-exists=MODE]',
+    'cli.usage_import'           => 'Использование: {bin} import <json|yaml|yml> <путь> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]',
     'cli.usage_export'            => 'Использование: {bin} export <json|yaml|yml> [база] [шаблон]',
     'cli.deleted_n'             => 'Удалено {count} записей.',
     'cli.unknown_command'       => 'Неизвестная команда: {cmd}',

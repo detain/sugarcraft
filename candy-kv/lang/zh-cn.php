@@ -14,7 +14,7 @@ return [
     'cli.usage_set'             => '用法：{bin} set <键> [值] [--ttl SECONDS] [--binary|--text]',
     'cli.usage_get'             => '用法：{bin} get <键> [--sanitize]',
     'cli.usage_delete'          => '用法：{bin} delete <键>',
-    'cli.usage_import'           => '用法：{bin} import <json|yaml|yml> <路径> [--no-atomic] [--if-exists=MODE]',
+    'cli.usage_import'           => '用法：{bin} import <json|yaml|yml> <路径> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]',
     'cli.usage_export'            => '用法：{bin} export <json|yaml|yml> [数据库] [模式]',
     'cli.deleted_n'             => '已删除 {count} 个条目。',
     'cli.unknown_command'       => '未知命令：{cmd}',

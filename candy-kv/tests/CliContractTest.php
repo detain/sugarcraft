@@ -58,7 +58,7 @@ final class CliContractTest extends TestCase
         $this->assertSame(0, $run['exit']);
         $this->assertStringContainsString('candy-kv', $run['stdout']);
         // The rewritten help lists every flag the parser actually accepts.
-        foreach (['--binary', '--text', '--sanitize', '--dry-run', '--no-atomic', '--if-exists', 'prune'] as $needle) {
+        foreach (['--binary', '--text', '--sanitize', '--dry-run', '--no-atomic', '--if-exists', '--max-bytes', 'prune'] as $needle) {
             $this->assertStringContainsString($needle, $run['stdout'], "help must document {$needle}");
         }
         $this->assertFalse(\is_dir($this->configHome . '/.config'));
@@ -705,6 +705,75 @@ final class CliContractTest extends TestCase
         $bogus = $this->runKvFeeding(['import', 'json', '-', '--if-exists=clobber'], '{}');
         $this->assertSame(2, $bogus['exit'], 'unknown mode is a usage-class refusal');
         $this->assertStringContainsString('Unknown --if-exists mode', $bogus['stderr']);
+    }
+
+    public function testImportRefusesDocumentsOverTheDefaultCeilingWithoutReadingThem(): void
+    {
+        // candy-kv-073 acceptance, stat-gate leg: a 300 MiB dump (sparse —
+        // the bytes are never written, which is exactly the point) under
+        // the 256 MiB default refuses on one stat(), naming both numbers,
+        // and mints no database.
+        $path = $this->configHome . '/fat-dump.json';
+        $handle = \fopen($path, 'wb');
+        $this->assertIsResource($handle);
+        $this->assertTrue(\ftruncate($handle, 314_572_800)); // 300 MiB
+        \fclose($handle);
+
+        $start = \hrtime(true);
+        $run = $this->runKv(['import', 'json', $path]);
+        $elapsed = (\hrtime(true) - $start) / 1e9;
+
+        $this->assertSame(1, $run['exit'], $run['stdout'] . $run['stderr']);
+        $this->assertStringContainsString('314572800 bytes', $run['stderr']);
+        $this->assertStringContainsString('268435456-byte size ceiling', $run['stderr']);
+        $this->assertLessThan(5.0, $elapsed, 'the stat gate refuses without buffering — a read-first shape takes seconds');
+        $this->assertFileDoesNotExist($this->configHome . '/skate/default.db', 'a refused import must not mint the store');
+        @\unlink($path);
+    }
+
+    public function testMaxBytesFlagRefusesAndAdmitsThroughTheBinary(): void
+    {
+        $path = $this->configHome . '/two-mib.json';
+        $payload = '{"blob":"' . \str_repeat('A', 2 * 1024 * 1024) . '"}';
+        \file_put_contents($path, $payload);
+
+        $capped = $this->runKv(['import', 'json', $path, '--max-bytes=1048576']);
+        $this->assertSame(1, $capped['exit'], $capped['stderr']);
+        $this->assertStringContainsString('--max-bytes', $capped['stderr']);
+
+        $raised = $this->runKv(['import', 'json', $path, '--max-bytes=4194304']);
+        $this->assertSame(0, $raised['exit'], $raised['stderr']);
+        $this->assertStringContainsString('Imported 1 entry.', $raised['stdout']);
+
+        $separated = $this->runKv(['import', 'json', $path, '--max-bytes', '1048576']);
+        $this->assertSame(1, $separated['exit'], 'the separated spelling obeys the same gate');
+    }
+
+    public function testExportMemoryStaysFlatInRowCount(): void
+    {
+        // candy-kv-073 acceptance, streaming leg: a 12k-row export through
+        // the real run() door must not grow peak memory with the payload.
+        // Batch shape reference (measured on the pre-fix tree): roughly
+        // two payload copies for JSON alone — this 15 MiB document would
+        // have peaked far above the ceiling asserted here.
+        $child = __DIR__ . '/Support/export-peak.php';
+        $this->assertFileExists($child);
+        $sizes = [];
+        foreach ([3000, 12000] as $rows) {
+            $dir = $this->configHome . "/peak-{$rows}";
+            $out = $this->configHome . "/peak-{$rows}.json";
+            \mkdir($dir, 0o700, true);
+            $run = self::spawnBounded([PHP_BINARY, $child, (string) $rows, $dir, $out]);
+            $this->assertFalse($run['timedOut'], "peak child {$rows} timed out");
+            $this->assertSame(0, $run['exit'], $run['stdout'] . $run['stderr']);
+            $this->assertSame(1, \preg_match('/PEAK (\d+) SIZE (\d+)/', $run['stdout'], $m), $run['stdout']);
+            $sizes[$rows] = ['peak' => (int) $m[1], 'size' => (int) $m[2]];
+        }
+
+        $this->assertGreaterThan(6_000_000, $sizes[12000]['size'], 'the payload must actually be large');
+        $this->assertLessThan(16_777_216, $sizes[12000]['peak'], '12k-row export peaked above 16 MiB — the batch accumulation is back');
+        $growth = $sizes[12000]['peak'] - $sizes[3000]['peak'];
+        $this->assertLessThan(8_388_608, $growth, 'peak grew 4x payload-scale with row count — streaming regressed');
     }
 
     public function testCliRefusesStreamWrapperImportPathNamingScheme(): void

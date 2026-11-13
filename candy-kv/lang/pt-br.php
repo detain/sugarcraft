@@ -14,7 +14,7 @@ return [
     'cli.usage_set'             => 'Uso: {bin} set <chave> [valor] [--ttl SECONDS] [--binary|--text]',
     'cli.usage_get'             => 'Uso: {bin} get <chave> [--sanitize]',
     'cli.usage_delete'          => 'Uso: {bin} delete <chave>',
-    'cli.usage_import'           => 'Uso: {bin} import <json|yaml|yml> <caminho> [--no-atomic] [--if-exists=MODE]',
+    'cli.usage_import'           => 'Uso: {bin} import <json|yaml|yml> <caminho> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]',
     'cli.usage_export'            => 'Uso: {bin} export <json|yaml|yml> [bd] [padrão]',
     'cli.deleted_n'             => '{count} entradas removidas.',
     'cli.unknown_command'       => 'Comando desconhecido: {cmd}',

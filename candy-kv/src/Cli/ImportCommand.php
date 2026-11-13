@@ -10,6 +10,7 @@ use SugarCraft\Kv\Import\YamlImporter;
 use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\InputPath;
+use SugarCraft\Kv\Support\SizeCap;
 
 /**
  * CLI command handler for `candy-kv import`.
@@ -55,9 +56,10 @@ final class ImportCommand
      * @param string $path     File path to import from (use '-' for STDIN)
      * @param bool   $atomic   Whether to use an atomic transaction.
      * @param string $ifExists Clobber policy: replace, skip or fail (kv-051).
+     * @param int    $maxBytes Admission ceiling (candy-kv-073); 0 = uncapped.
      * @return int Exit code (0 = success, 1 = failure, 2 = bad usage).
      */
-    public function run(string $format, string $path, bool $atomic = true, string $ifExists = 'replace'): int
+    public function run(string $format, string $path, bool $atomic = true, string $ifExists = 'replace', int $maxBytes = SizeCap::DEFAULT_MAX_BYTES): int
     {
         $importer = match ($format) {
             'json' => new JsonImporter($this->store),
@@ -80,12 +82,20 @@ final class ImportCommand
             // importers expose importFromString/importFromFile; PHP's
             // duck-typing dispatches on the object we already built.
             if ($path === '-' || $path === '/dev/stdin') {
-                $document = \file_get_contents('php://stdin');
-                if ($document === false) {
+                // kv-073: STDIN had no ceiling at all — a hostile pipe fed
+                // the process until the OOM killer answered instead of the
+                // CLI. The bounded read stops growing at the cap and never
+                // hands a truncated document to the parser.
+                $stdin = \fopen('php://stdin', 'rb');
+                $document = $stdin === false ? null : SizeCap::readStream($stdin, $maxBytes, 'STDIN');
+                if ($stdin !== false) {
+                    \fclose($stdin);
+                }
+                if ($document === null) {
                     \fwrite($this->stderr, "Failed to read from STDIN.\n");
                     return 1;
                 }
-                $report = $importer->importFromString($document, $atomic, $ifExists);
+                $report = $importer->importFromString($document, $atomic, $ifExists, $maxBytes);
             } else {
                 // kv-019: refuse wrapper URLs BEFORE file_exists — the stat
                 // itself deserializes phar archive metadata inside us.
@@ -105,7 +115,7 @@ final class ImportCommand
                     \fwrite($this->stderr, "Not a regular file: " . Store::sanitizeForTty($path) . "\n");
                     return 1;
                 }
-                $report = $importer->importFromFile($path, $atomic, $ifExists);
+                $report = $importer->importFromFile($path, $atomic, $ifExists, $maxBytes);
             }
 
             \fwrite($this->stdout, self::successLine($report) . "\n");

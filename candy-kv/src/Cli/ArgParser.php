@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Cli;
 
 use SugarCraft\Kv\Import\ImportCommit;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\Support\SizeCap;
 use SugarCraft\Kv\Support\Ttl;
 
 /**
@@ -315,9 +316,12 @@ final class ArgParser
         [$tokens, $tail] = self::splitPositional($argv, $offset);
         $atomic = true;
         $ifExists = 'replace';
+        $maxBytes = SizeCap::DEFAULT_MAX_BYTES;
         $out = [];
 
-        foreach ($tokens as $arg) {
+        $count = count($tokens);
+        for ($p = 0; $p < $count; $p++) {
+            $arg = $tokens[$p];
             if ($arg === '--no-atomic') {
                 $atomic = false;
             } elseif (\str_starts_with($arg, '--if-exists=')) {
@@ -335,6 +339,19 @@ final class ArgParser
                     );
                 }
                 $ifExists = $mode;
+            } elseif (\str_starts_with($arg, '--max-bytes=')) {
+                // candy-kv-073: admission ceiling override, both spellings
+                // like --ttl. 0 lifts the cap entirely (the documented
+                // uncapped door); anything negative or fractional is the
+                // same usage-class refusal --ttl answers.
+                $maxBytes = self::maxBytes(substr($arg, strlen('--max-bytes=')));
+            } elseif ($arg === '--max-bytes') {
+                $next = $tokens[$p + 1] ?? null;
+                if ($next === null) {
+                    throw new \InvalidArgumentException('Option --max-bytes requires a value.');
+                }
+                $p++;
+                $maxBytes = self::maxBytes($next);
             } elseif (self::isOptionLike($arg)) {
                 throw self::unknownOption($arg, 'import', $argv);
             } else {
@@ -345,7 +362,32 @@ final class ArgParser
 
         self::refuseSurplus($out, 2, 'import');
 
-        return ['format' => $out[0] ?? null, 'path' => $out[1] ?? null, 'atomic' => $atomic, 'ifExists' => $ifExists];
+        return [
+            'format' => $out[0] ?? null,
+            'path' => $out[1] ?? null,
+            'atomic' => $atomic,
+            'ifExists' => $ifExists,
+            'maxBytes' => $maxBytes,
+        ];
+    }
+
+    /**
+     * Validate a --max-bytes payload: a whole number of bytes, 0 allowed
+     * (uncapped). Mirrors the --ttl guard law — reject the shape, echo the
+     * offending argv bytes sanitized (kv-004).
+     */
+    private static function maxBytes(string $raw): int
+    {
+        if (preg_match('/^\d+$/', $raw) !== 1) {
+            throw new \InvalidArgumentException(
+                \sprintf(
+                    'Option --max-bytes expects a whole number of bytes (0 removes the ceiling), got "%s".',
+                    Store::sanitizeForTty($raw),
+                )
+            );
+        }
+
+        return (int) $raw;
     }
 
     /**

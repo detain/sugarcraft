@@ -14,7 +14,7 @@ return [
     'cli.usage_set'             => 'Kullanım: {bin} set <anahtar> [değer] [--ttl SECONDS] [--binary|--text]',
     'cli.usage_get'             => 'Kullanım: {bin} get <anahtar> [--sanitize]',
     'cli.usage_delete'          => 'Kullanım: {bin} delete <anahtar>',
-    'cli.usage_import'           => 'Kullanım: {bin} import <json|yaml|yml> <yol> [--no-atomic] [--if-exists=MODE]',
+    'cli.usage_import'           => 'Kullanım: {bin} import <json|yaml|yml> <yol> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]',
     'cli.usage_export'            => 'Kullanım: {bin} export <json|yaml|yml> [veritabanı] [desen]',
     'cli.deleted_n'             => '{count} giriş silindi.',
     'cli.unknown_command'       => 'Bilinmeyen komut: {cmd}',

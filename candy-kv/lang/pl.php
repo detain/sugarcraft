@@ -14,7 +14,7 @@ return [
     'cli.usage_set'             => 'Użycie: {bin} set <klucz> [wartość] [--ttl SECONDS] [--binary|--text]',
     'cli.usage_get'             => 'Użycie: {bin} get <klucz> [--sanitize]',
     'cli.usage_delete'          => 'Użycie: {bin} delete <klucz>',
-    'cli.usage_import'           => 'Użycie: {bin} import <json|yaml|yml> <ścieżka> [--no-atomic] [--if-exists=MODE]',
+    'cli.usage_import'           => 'Użycie: {bin} import <json|yaml|yml> <ścieżka> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]',
     'cli.usage_export'            => 'Użycie: {bin} export <json|yaml|yml> [baza] [wzorzec]',
     'cli.deleted_n'             => 'Usunięto {count} wpisów.',
     'cli.unknown_command'       => 'Nieznane polecenie: {cmd}',

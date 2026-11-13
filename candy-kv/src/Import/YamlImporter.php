@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Import;
 
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\InputPath;
+use SugarCraft\Kv\Support\SizeCap;
 use SugarCraft\Kv\YamlDialect;
 
 /**
@@ -69,9 +70,10 @@ final class YamlImporter
      * @param string $path      Path to the YAML file.
      * @param bool   $atomic    Whether to wrap all sets in a single transaction.
      * @param string $ifExists  Clobber policy: replace, skip or fail.
+     * @param int    $maxBytes  Admission ceiling (candy-kv-073); 0 = uncapped.
      * @return ImportReport Imported/overwritten/skipped triple.
      */
-    public function importFromFile(string $path, bool $atomic = true, string $ifExists = 'replace'): ImportReport
+    public function importFromFile(string $path, bool $atomic = true, string $ifExists = 'replace', int $maxBytes = SizeCap::DEFAULT_MAX_BYTES): ImportReport
     {
         // kv-019: this is a PUBLIC library door — the path may come from
         // config or uploads in wrapping automation, never a terminal argv.
@@ -83,11 +85,18 @@ final class YamlImporter
             throw new \RuntimeException("Cannot read YAML file: {$path}");
         }
 
-        $yaml = \file_get_contents($path);
-        if ($yaml === false) {
+        // kv-073: stat gate before the bytes, bounded read after it — the
+        // twin of the JSON door, same refusal wording.
+        SizeCap::refuseOversized(\filesize($path), $maxBytes, "Import file \"{$path}\"");
+        $handle = \fopen($path, 'rb');
+        $yaml = $handle === false ? null : SizeCap::readStream($handle, $maxBytes, "Import file \"{$path}\"");
+        if ($handle !== false) {
+            \fclose($handle);
+        }
+        if ($yaml === null) {
             throw new \RuntimeException("Cannot read YAML file: {$path}");
         }
-        return $this->importFromString($yaml, $atomic, $ifExists);
+        return $this->importFromString($yaml, $atomic, $ifExists, $maxBytes);
     }
 
     /**
@@ -96,11 +105,18 @@ final class YamlImporter
      * @param string $yaml      Raw YAML string.
      * @param bool   $atomic    Whether to wrap all sets in a single transaction.
      * @param string $ifExists  Clobber policy: replace, skip or fail.
+     * @param int    $maxBytes  Admission ceiling (candy-kv-073); 0 = uncapped.
      * @return ImportReport Imported/overwritten/skipped triple.
      * @throws \RuntimeException when the document shape cannot round-trip.
      */
-    public function importFromString(string $yaml, bool $atomic = true, string $ifExists = 'replace'): ImportReport
+    public function importFromString(string $yaml, bool $atomic = true, string $ifExists = 'replace', int $maxBytes = SizeCap::DEFAULT_MAX_BYTES): ImportReport
     {
+        // kv-073 string door: the bytes already exist, so the guard counts
+        // them; SizeCap reads it before the parser does (the document is
+        // refused whole — a truncated parse of a truncated read is the
+        // silent-corruption shape this law exists to kill).
+        SizeCap::refuseOversized(\strlen($yaml), $maxBytes, 'The import document');
+
         $data = $this->parseYaml($yaml);
 
         // A YAML sequence is not a key/value document — refuse rather than

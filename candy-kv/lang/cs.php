@@ -14,7 +14,7 @@ return [
     'cli.usage_set'             => 'Použití: {bin} set <klíč> [hodnota] [--ttl SECONDS] [--binary|--text]',
     'cli.usage_get'             => 'Použití: {bin} get <klíč> [--sanitize]',
     'cli.usage_delete'          => 'Použití: {bin} delete <klíč>',
-    'cli.usage_import'           => 'Použití: {bin} import <json|yaml|yml> <cesta> [--no-atomic] [--if-exists=MODE]',
+    'cli.usage_import'           => 'Použití: {bin} import <json|yaml|yml> <cesta> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]',
     'cli.usage_export'            => 'Použití: {bin} export <json|yaml|yml> [databáze] [vzor]',
     'cli.deleted_n'             => 'Smazáno {count} položek.',
     'cli.unknown_command'       => 'Neznámý příkaz: {cmd}',

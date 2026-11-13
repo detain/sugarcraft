@@ -14,7 +14,7 @@ declare(strict_types=1);
  *   candy-kv list-dbs
  *   candy-kv delete-db <name>
  *   candy-kv prune [--db NAME] [--all]
- *   candy-kv import <format> <path> [--no-atomic] [--if-exists=MODE]
+ *   candy-kv import <format> <path> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]
  *   candy-kv export <format> [db] [pattern]
  *   candy-kv --help | --version
  *
@@ -81,6 +81,7 @@ use SugarCraft\Kv\Cli\ImportCommand;
 use SugarCraft\Kv\Cli\ExportCommand;
 use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\Support\SizeCap;
 use SugarCraft\Kv\Support\Version;
 
 // Locale wiring: honour LC_ALL/LC_MESSAGES/LANG like every translated lib.
@@ -183,7 +184,10 @@ function stdinOrFail(): string
     });
 
     try {
-        $value = \stream_get_contents(STDIN);
+        // candy-kv-073: the STDIN doors are capped too — stream_get_contents
+        // grew without bound and the OOM killer answered instead of candy-kv.
+        // The refusal name-the-ceiling shape is thrown by SizeCap itself.
+        $value = SizeCap::readStream(STDIN, SizeCap::DEFAULT_MAX_BYTES, 'The STDIN payload') ?? false;
     } catch (\ErrorException) {
         $value = false; // a stream-layer diagnostic IS a failed read
     } finally {
@@ -429,6 +433,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
             $opts['path'],
             $opts['atomic'],
             $opts['ifExists'],
+            $opts['maxBytes'],
         );
         exit($exitCode);
 
@@ -527,7 +532,7 @@ function help(string $bin): void
       {$bin} prune [--db NAME|--all]
                                       Remove expired entries: the default db,
                                       one named db, or every db (--all).
-      {$bin} import <format> <path> [--no-atomic] [--if-exists=MODE]
+      {$bin} import <format> <path> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]
                                       Import entries (json|yaml|yml, path=- for stdin)
       {$bin} export <format> [db] [pattern]
                                       Export entries (json|yaml|yml)
@@ -554,6 +559,10 @@ function help(string $bin): void
       --if-exists=MODE                `import`: what a key that is already
                                       stored does — replace it (default),
                                       skip it, or refuse the import.
+      --max-bytes=N                   `import`: size ceiling in bytes
+                                      (default 268435456 — 256 MiB); 0
+                                      removes it. Oversized documents
+                                      refuse before they are read.
       --db NAME | --db=NAME           `prune`: limit the sweep to one
                                       database instead of the default.
       --all                           `prune`: sweep every database in the
