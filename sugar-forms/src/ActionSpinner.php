@@ -38,9 +38,11 @@ use SugarCraft\Core\Util\TtyDetect;
  *   parent after `run()` returns; communicate results out-of-band
  *   (tempfile, pipe, database, etc.).
  * - If the action throws, the exception is converted to a non-zero
- *   exit code; `run()` throws a `\RuntimeException` with the exit
- *   code. The original exception type and message cannot cross the
- *   fork boundary.
+ *   exit code; `run()` reports that code on the returned
+ *   {@see SpinnerResult} (SF-46) — the original exception type and
+ *   message cannot cross the fork boundary. Callers that want the
+ *   old throw contract opt in with
+ *   {@see SpinnerResult::throwIfFailed()}.
  * - The fork path is lifetime-bounded: an action that outlives
  *   {@see self::MAX_RUNTIME_SECONDS} (tune with
  *   {@see self::withMaxRuntimeSeconds()}) is torn down through a
@@ -138,6 +140,10 @@ final class ActionSpinner
      * Bound the FORKED action's lifetime (E711). See
      * {@see self::MAX_RUNTIME_SECONDS} for what the bound is and the
      * class docblock for why the inline fallback stays unbounded.
+     * On hosts without `pcntl_fork` the ceiling is INERT: the action
+     * runs inline with no timer and no ladder, and nothing can set
+     * {@see SpinnerResult::$timedOut} — only `wallSeconds` measures
+     * such a run.
      *
      * @throws \InvalidArgumentException on a non-positive or non-finite bound —
      *         a zero ceiling would kill every action at the first frame, and
@@ -158,27 +164,40 @@ final class ActionSpinner
      * Run the action, animating the spinner on STDERR until it returns.
      * STDERR is used so stdout stays clean for piped output.
      *
-     * If no action was set, this is a no-op (returns immediately).
+     * If no action was set, this is a no-op and the returned result is a
+     * clean zero-second success.
      *
-     * @throws \RuntimeException if the forked action exits with non-zero status
+     * SF-46 (sugar-forms-067): the verdict is DATA. A forked action that
+     * exits non-zero (or dies by signal) returns the {@see SpinnerResult}
+     * carrying the code/signal — it no longer throws; the exit-code throw
+     * lives on as {@see SpinnerResult::throwIfFailed()} for callers that
+     * want it. Ceiling expiry keeps throwing (see below): whether the
+     * overrun child was reaped or ABANDONED alive is process hygiene, not
+     * a verdict to swallow.
+     *
+     * @throws \RuntimeException if the ceiling expires and the child cannot
+     *         be terminated (the abandoned pid is named in the message), or
+     *         after expiry when the bounded ladder reaped it (the terminated
+     *         verdict) — the two SF-35 catalogue rows, unchanged.
      */
-    public function run(): void
+    public function run(): SpinnerResult
     {
+        $startAt = microtime(true);
         if ($this->action === null) {
-            return;
+            return SpinnerResult::new(0, null, false, 0.0);
         }
         $action = $this->action;
         // Fork-and-spin where pcntl is available; fall back to running
         // the action inline (no animation) elsewhere.
         if (function_exists('pcntl_fork') === FALSE) {
             $action();
-            return;
+            return SpinnerResult::new(0, null, false, round(microtime(true) - $startAt, 4));
         }
         $pid = null;
         $pid = @pcntl_fork();
         if ($pid === -1) {
             $action();
-            return;
+            return SpinnerResult::new(0, null, false, round(microtime(true) - $startAt, 4));
         }
         if ($pid === 0) {
             // Child: run the action and exit.
@@ -258,6 +277,7 @@ final class ActionSpinner
             // $waitStatus is always set by waitpid before any signal handler fires.
             $waitStatus = 0;
             $check = @pcntl_waitpid($pid, $waitStatus, WNOHANG);
+            $reapedByUs = $check === $pid;
             if ($check === $pid || $check === -1) {
                 // -1: the child is no longer ours — a signal handler already
                 // reaped it via the ladder (it runs between ticks, off this
@@ -300,14 +320,20 @@ final class ActionSpinner
                 'seconds' => $this->maxRuntimeSeconds,
             ]));
         }
-        // Reap and check exit status — throw if the child action failed.
-        // Note: the original exception type/message cannot cross the fork
-        // boundary; only the exit code is available to the parent.
-        // $waitStatus was captured in the loop when the child was reaped.
-        if (pcntl_wifexited($waitStatus) === TRUE && pcntl_wexitstatus($waitStatus) !== 0) {
-            throw new \RuntimeException(Lang::t('spinner.action_failed', [
-                'code' => pcntl_wexitstatus($waitStatus),
-            ]));
-        }
+        // Decode the reaped status into the result (SF-46). Note: the
+        // original exception type/message cannot cross the fork boundary;
+        // only the exit code is available to the parent. A status of -1
+        // means a signal handler's ladder already reaped the child off our
+        // variable — the exit status is then UNOBSERVABLE, reported as
+        // null rather than the zero-init of $waitStatus masquerading as
+        // success.
+        $exitCode = $reapedByUs && pcntl_wifexited($waitStatus) === TRUE
+            ? pcntl_wexitstatus($waitStatus)
+            : null;
+        $signal   = $reapedByUs && pcntl_wifsignaled($waitStatus) === TRUE
+            ? pcntl_wtermsig($waitStatus)
+            : null;
+
+        return SpinnerResult::new($exitCode, $signal, false, round(microtime(true) - $startAt, 4));
     }
 }

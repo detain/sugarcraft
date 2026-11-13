@@ -495,13 +495,16 @@ ActionSpinner::new()
         // child on pcntl hosts; in-memory mutations are not visible to
         // the parent after run() returns.
     })
-    ->run();
+    ->run(); // returns SpinnerResult: exitCode / signal / timedOut / wallSeconds
 ```
 
 **Fork semantics on pcntl hosts:** the action executes in a forked child.
 Return values and in-memory mutations are **not** visible to the parent; a
-throwing action surfaces as a `\RuntimeException` from `run()` (the original
-exception type/message cannot cross the fork boundary). The child is bounded
+throwing action surfaces as a non-zero `exitCode` on the `SpinnerResult`
+`run()` returns (the original exception type/message cannot cross the fork
+boundary), and a signal-killed child reports its `signal` instead of looking
+like success. Callers that prefer the old exception style opt in with
+`->run()->throwIfFailed()`, which throws the same localized failure row. The child is bounded
 by a wall-clock ceiling (default 600 s; tune with
 `withMaxRuntimeSeconds()`). On expiry the reaper escalates TERM→KILL and
 `run()` throws — "was terminated" (child reaped) or "could not be

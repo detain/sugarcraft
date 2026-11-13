@@ -24,7 +24,9 @@ $spinner = ActionSpinner::new()
     });
 
 try {
-    $spinner->run();
+    // SF-46: the exit-code throw moved onto the result object; the probe
+    // opts back in so the SF-35 label-once contract keeps its old bytes.
+    $spinner->run()->throwIfFailed();
     fwrite(STDOUT, "PARENT: returned without throwing\n");
     exit(0);
 } catch (\RuntimeException $e) {

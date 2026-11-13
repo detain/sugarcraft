@@ -117,7 +117,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Validator\Required</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is empty</td></tr>
 <tr><td>Validator\Email</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is not a valid email</td></tr>
 <tr><td>Spinner\Spinner</td><td>new(?Style)</td><td>Create a spinner with style</td></tr>
-<tr><td>ActionSpinner</td><td>new() / run()</td><td>Fork-isolated spinner action with a bounded runtime ceiling</td></tr>
+<tr><td>ActionSpinner</td><td>new() / run()</td><td>Fork-isolated spinner action with a bounded runtime ceiling; the verdict arrives as a <code>SpinnerResult</code></td></tr>
 <tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int) — delegates to sugar-fuzzy</td></tr>
 <tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>match(query, candidates): list&lt;[string, int]&gt;</td><td>Legacy ranking shape — for <code>?MatchResult</code> / <code>matchAll()</code> use sugar-fuzzy's <code>SmithWatermanMatcher</code> directly</td></tr>
 <tr><td>Theme</td><td>errorSummary</td><td>Renderable slot for custom error summary display</td></tr>

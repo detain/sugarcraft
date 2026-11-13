@@ -69,7 +69,7 @@ final class ActionSpinnerTest extends TestCase
         unlink($tmp);
     }
 
-    public function testRunReraisesActionFailure(): void
+    public function testRunReportsActionFailureAsResult(): void
     {
         if (function_exists('pcntl_fork') === FALSE) {
             $this->markTestSkipped('pcntl required');
@@ -80,8 +80,17 @@ final class ActionSpinnerTest extends TestCase
             ->withAction(static function () {
                 throw new \RuntimeException('boom');
             });
+        // SF-46 (sugar-forms-067): the verdict is data. A throwing action
+        // crosses the fork boundary as exit code 1 on the result; the old
+        // throw survives only as the explicit throwIfFailed() opt-in.
+        $result = $s->run();
+        $this->assertSame(1, $result->exitCode);
+        $this->assertNull($result->signal);
+        $this->assertFalse($result->timedOut);
+        $this->assertFalse($result->ok());
         $this->expectException(\RuntimeException::class);
-        $s->run();
+        $this->expectExceptionMessage(Lang::t('spinner.action_failed', ['code' => 1]));
+        $result->throwIfFailed();
     }
 
     public function testWithStyleSetsStyle(): void
