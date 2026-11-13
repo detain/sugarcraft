@@ -213,7 +213,12 @@ The bird's vertical motion is a SugarSpring `Projectile` in the Y-down conventio
 | `Bird::TICKS_PER_SEC`| `30`         | Simulation rate baked into the projectile's `deltaTime`.    |
 | World scroll         | 1 cell/tick  | Pipes slide left one column per tick — 30 cells/s at 30 ticks/s. |
 
-Fall speed is clamped to `Projectile::TERMINAL_GRAVITY` (53 cells/sec) on every tick, so an uninterrupted drop can never accumulate enough velocity to teleport the bird several rows in a single frame and skip a pipe without a collision.
+Fall speed is clamped to `Projectile::TERMINAL_GRAVITY` (53 cells/sec) on
+every tick — insurance that caps any pathological velocity state at under
+two rows per frame. It never engages in ordinary play: the fastest
+reachable fall across the 18-row world (a flap at the ceiling, then free
+fall) peaks at √(10² + 2·18·18) ≈ 27.4 cells/sec, under one row per tick,
+so the bird can never teleport through a pipe's gap un collision-checked.
 
 The pacing choice is the core game-feel parameter. Upstream flapioca ticks at 5 Hz and slides one cell per tick — 5 cells/s of scroll, a game of patience; candy-flappy runs the same one-column-per-tick rule at 30 ticks/s — 30 cells/s, six times the pace, a game of flappy timing. A pipe joins the world every `Game::PIPE_EVERY` (18) ticks — new pipe at the right edge every 0.6 s, the first one reaching the bird's column about 2.3 s after the first flap (0.6 s to appear, then 52 columns at 30 cells/s). The difficulty curve is tuned against that faster clock: gaps shrink while pipes run, so the pressure comes from both at once.
 

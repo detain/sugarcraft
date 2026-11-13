@@ -50,11 +50,14 @@ final class Bird
     public function tick(): self
     {
         $advanced = $this->body->update();
-        // Clamp the fall speed to terminal velocity. Bird uses the Y-down
-        // convention (positive vy = falling), so an unbounded free fall would
-        // otherwise accumulate enough velocity to teleport the bird several
-        // rows in a single tick — skipping straight through a pipe's gap
-        // without a collision check ever landing on its column.
+        // Clamp the fall speed to terminal velocity — defensive, never
+        // ordinary play (M27 comment-truth precedent, flappy-44): the
+        // Y-down world tops out at sqrt(10^2 + 2*18*18) ~ 27.4 cells/sec
+        // (flap-kick speed at the ceiling, then a free fall across all 18
+        // rows) — under one row per tick — so an honest game can never
+        // reach 53, let alone teleport through a pipe's gap un-checked.
+        // The guard is insurance against a pathological velocity state,
+        // mirroring upstream harmonica's terminal clamp.
         if ($advanced->velocity->y > Projectile::TERMINAL_GRAVITY) {
             $advanced = new Projectile(
                 deltaTime:    $advanced->deltaTime,
