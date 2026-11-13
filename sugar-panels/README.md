@@ -391,8 +391,9 @@ Ask the TEA model (the application-state object returned by `update()`) first:
 claims **before word-wrap** — the unwrapped rectangle. The renderer reflows long
 lines at paint time and rows past the interior height are simply not painted, so
 a host that sized the viewport to the claim can still render into silence: a
-single-line leaf that claims three rows at 201 columns wide overflowed to 28
-painted rows inside a ten-cell pane (measured). Size the region to
+leaf whose natural size the solver measured as 3 rows × 201 columns (content
+plus its own border and padding) was given a 10-column-wide pane and overflowed
+to 28 painted rows (measured). Size the region to
 `totalWidth()` first and the wrap stays cosmetic; when it must be narrower,
 budget `ceil(claimedWidth / interiorWidth)` rows for the wrapped continuations.
 A visible degradation cue is deliberately not invented here — it would change the
