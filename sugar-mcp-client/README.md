@@ -193,12 +193,12 @@ checkout the launch stood in.
 ## Timeout discipline
 
 - The handshake runs under **one** monotonic (`hrtime`) deadline
-  (`DEFAULT_START_TIMEOUT_SECONDS`, 60s, sized for cold `npx` fetches) shared
+  (`DEFAULT_START_TIMEOUT_SECONDS`, 60 s, sized for cold `npx` fetches) shared
   across `initialize`, `notifications/initialized` and `tools/list`. A slow
   start is not a silence: `start(onWait: $beat)` gets the same liveness beat
   every poll slice while the handshake runs. The `startTimeoutSeconds:`
   override is a silent-fallback knob: null, zero or a negative value lands on
-  the 60s default — a 0 that means 60 — so a bad setting can never disable the
+  the 60 s default — a 0 that means 60 — so a bad setting can never disable the
   handshake bound entirely.
 - Every handshake leg must succeed, or `start()` stops the child and throws a
   `RuntimeException` (with any captured stderr) rather than reporting "up, 0
@@ -241,7 +241,7 @@ checkout the launch stood in.
   silence can keep a long unbounded call visibly alive. Throttle it yourself;
   it may fire far more often.
 - Every socket wait is bounded by `stream_select` polls; stderr is absorbed on
-  both wait sets so a full 64KiB kernel pipe can never deadlock the child.
+  both wait sets so a full 64 KiB kernel pipe can never deadlock the child.
   A `select` that keeps failing (an EINTR storm) is counted on both the read
   and the write side and ends the wait with a named cause.
 - `request()` and `notify()` take a `$deadline` as an **absolute monotonic

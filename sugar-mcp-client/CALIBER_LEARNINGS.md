@@ -15,7 +15,7 @@
   server is a grandchild; stop() signals /bin/sh and the server survives
   orphaned (measured in the product).
 - **Close pipes BEFORE signalling in stop().** On stdin EOF a well-behaved
-  server exits on its own: measured 1.05s → 0.010s and exit status 9 → 0.
+  server exits on its own: measured 1.05 s → 0.010 s and exit status 9 → 0.
 - **Teardown via sugar-core `Util\Proc\BoundedShutdown`** — TERM → poll → KILL →
   poll → proc_close with exit-code harvest from the status poll (proc_close
   reports -1 after a reaped exit). `groupId()` must be computed while the child
@@ -23,8 +23,8 @@
 - **One wall-clock deadline across the whole handshake.** Per-read timeouts are
   starvable by a server that streams notifications forever (measured rc=124);
   one deadline checked at each leg bounds the exchange as a unit.
-- **stderr is absorbed on both wait sets, tail-kept at 64KiB.** The kernel pipe
-  holds ~64KiB; a server whose stderr nobody reads blocks on its own write
+- **stderr is absorbed on both wait sets, tail-kept at 64 KiB.** The kernel pipe
+  holds ~64 KiB; a server whose stderr nobody reads blocks on its own write
   before answering on stdout — a deadlock that looks like an unresponsive
   server. At EOF, mark the pipe closed for this instance: an EOF pipe reads as
   permanently ready and would spin every later wait.
@@ -69,7 +69,7 @@
   own product identity through it.
 - Router takes a plain `list<string>` allow-list; candy-code's AgentPreset
   extraction (`$preset->mcpServers`) stays downstream.
-- MAX_FRAME_BYTES restates the product family's 64MiB cap as a library-local
+- MAX_FRAME_BYTES restates the product family's 64 MiB cap as a library-local
   constant (pinned != MAX_STDERR_BYTES to catch a collapse edit).
 - pumpStderr() is a caller-pumped seam, never loop-mounted (pipe reads
   are destructive — two readers on one pipe steal each other's bytes).

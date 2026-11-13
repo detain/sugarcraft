@@ -43,7 +43,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * actually reach it.
  *
  * WHY stderr is absorbed during every read and write wait: kernel pipes carry
- * ~64KiB. A chatty server that fills stderr BLOCKS on its own write before it
+ * ~64 KiB. A chatty server that fills stderr BLOCKS on its own write before it
  * ever answers on stdout — a deadlock that looks exactly like an unresponsive
  * server. Both poll sets therefore include fd 2, and anything ready there is
  * drained (tail-kept, capped at MAX_STDERR_BYTES) before stdout is consulted.
@@ -156,7 +156,7 @@ final class StdioMcpServer implements McpServer
     /**
      * Monotonic ceiling for the whole handshake (initialize → notifications/initialized →
      * tools/list). Sized for cold package fetches: an `npx`-style launcher
-     * downloading its server takes 30–60s on first run, and failing that boot
+     * downloading its server takes 30–60 s on first run, and failing that boot
      * faster is not failing better. Bounds the handshake ONLY — never a tool
      * call. Embedders with local servers pass a tighter startTimeoutSeconds.
      */
@@ -186,7 +186,7 @@ final class StdioMcpServer implements McpServer
     /**
      * Ceiling on the read buffer: it bounds every byte held between newline
      * discovery and frame consumption (the whole pending buffer, not just one
-     * unread line). A stream with no newline for 64MiB is
+     * unread line). A stream with no newline for 64 MiB is
      * not speaking NDJSON no matter what it eventually says, and letting the
      * buffer grow toward it trades a protocol error for memory pressure.
      * The product family pins this same value via EngineBackend::MAX_FRAME_BYTES;
@@ -202,7 +202,7 @@ final class StdioMcpServer implements McpServer
      * Escape hatch for a stream_select() that keeps failing while the child
      * lives. Signal storms make select return false at thousands of calls per
      * second (product-measured ~2800/s under a 300µs SIGUSR1 storm); without a
-     * ceiling the 1ms sleep per pass becomes a livelock. 10000 keeps genuine
+     * ceiling the 1 ms sleep per pass becomes a livelock. 10000 keeps genuine
      * EINTR tolerance (the loop retries) while bounding worst-case spinning.
      */
     private const MAX_CONSECUTIVE_SELECT_FAILURES = 10000;
@@ -984,7 +984,7 @@ final class StdioMcpServer implements McpServer
         if ($this->process !== null && is_resource($this->process)) {
             // Close pipes BEFORE signalling: on stdin EOF a well-behaved server
             // exits on its own, and the ladder below never has to pay for a
-            // signal round-trip (measured in the product: 1.05s → 0.010s, and
+            // signal round-trip (measured in the product: 1.05 s → 0.010 s, and
             // exit status 9 → 0 — graceful, not killed).
             $this->closePipes();
 
