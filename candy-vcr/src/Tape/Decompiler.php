@@ -105,7 +105,7 @@ final class Decompiler
         }
 
         foreach ($header->env as $key => $value) {
-            $lines[] = 'Env ' . $key . ' "' . $this->escapeQuoted($value) . '"';
+            $lines[] = 'Env ' . $key . ' ' . $this->quoteFor($value, ['"', "'"]);
         }
 
         return $lines;
@@ -130,7 +130,7 @@ final class Decompiler
                 return;
             }
             $payload = implode('', $typeGroup);
-            $lines[] = 'Type "' . $this->escapeQuoted($payload) . '"';
+            $lines[] = 'Type ' . $this->quoteFor($payload, ['"', "'", '`']);
             $typeGroup = [];
         };
 
@@ -257,9 +257,50 @@ final class Decompiler
         return true;
     }
 
+    /**
+     * Emit a quoted value in a dialect the Lexer can actually read back
+     * (finding 007 round-trip honesty): prefer the first delimiter the
+     * payload does NOT contain, in the sketch order `"` → `'` → backtick,
+     * so the emitted tape needs no escaped delimiter at all — only
+     * backslashes double, and {@see Lexer} since S06 consumes exactly that
+     * pair. When every delimiter viable for this position is present in the
+     * payload the decompiler refuses LOUDLY instead of emitting bytes the
+     * reader would truncate (the old behavior: `a"b\c` decompiled to
+     * `Type "a\"b\\c"` which the pre-S06 lexer cut at `a\`).
+     *
+     * @param list<string> $viable delimiters in preference order, a subset of
+     *        the delimiters the matching Lexer arm accepts (Type/Copy take all
+     *        three; the Env arm's grammar is `"`/`'` only — handing it a
+     *        backtick-wrapped value would be a dialect the reader cannot speak).
+     */
+    private function quoteFor(string $payload, array $viable): string
+    {
+        foreach ($viable as $quote) {
+            if (!str_contains($payload, $quote)) {
+                return $quote . $this->escapeQuoted($payload) . $quote;
+            }
+        }
+
+        throw new \RuntimeException(
+            'Decompiler: value contains every quote delimiter viable for it ('
+            . implode(', ', $viable) . '); refusing to emit a tape the Lexer cannot read back: '
+            . $this->describeBytes($payload),
+        );
+    }
+
+    /**
+     * Render a refusal message byte-safely for non-printable payloads.
+     */
+    private function describeBytes(string $payload): string
+    {
+        $printable = preg_replace('/[^\x20-\x7e]/', '.', $payload);
+
+        return "'" . $printable . "'";
+    }
+
     private function escapeQuoted(string $s): string
     {
-        return str_replace(['\\', '"'], ['\\\\', '\\"'], $s);
+        return str_replace('\\', '\\\\', $s);
     }
 
     /**

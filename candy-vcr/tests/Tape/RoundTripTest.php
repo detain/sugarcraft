@@ -147,11 +147,11 @@ TAPE;
     }
 
     /**
-     * The Lexer doesn't currently parse backslash-escaped quotes inside
-     * `Type "..."` — the non-greedy regex stops at the first inner quote.
-     * Decompiler still escapes quotes/backslashes defensively so future
-     * Lexer support is forwards-compatible. This test pins the escaping
-     * choice rather than the (unsupported) lexer round-trip.
+     * S06/S07 dialect: the Decompiler picks the first quote the payload does
+     * not contain (here `'`, since the payload carries `"`), doubles only
+     * backslashes, and the Lexer reads every emitted spelling back. This
+     * pins the adaptive choice; the byte-identity law lives in
+     * {@see DecompilerRoundTripTest}.
      */
     public function testDecompilerEscapesQuotesAndBackslashes(): void
     {
@@ -167,7 +167,20 @@ TAPE;
         $cassette = new Cassette($header, [$event]);
         $output = (new Decompiler())->decompile($cassette);
 
-        $this->assertStringContainsString('Type "a\\"b\\\\c"', $output);
+        $this->assertStringContainsString("Type 'a\"b\\\\c'", $output);
+
+        // And the emitted line re-parses to the bytes it came from.
+        $recompiled = (new \SugarCraft\Vcr\Tape\Compiler())->compile(
+            \SugarCraft\Vcr\Tape\Compiler::parseSource($output)['ast'],
+            '/test.tape',
+        );
+        $typed = '';
+        foreach ($recompiled->events as $event2) {
+            if ($event2->kind === \SugarCraft\Vcr\EventKind::Input) {
+                $typed .= (string) $event2->payload['b'];
+            }
+        }
+        $this->assertSame($bytes, $typed);
     }
 
     /**
