@@ -962,4 +962,153 @@ final class ReelTest extends TestCase
         self::assertSame(1, substr_count($src, '$player->stop();'), 'the finally stop() must be the only reap');
         self::assertStringContainsString('} finally {', $src);
     }
+
+    /**
+     * SV-L79: the size stat is advisory — a filesystem that lies (or a swap
+     * between stat and read) must still meet the ceiling, because the ceiling
+     * binds the READ itself.  A userland wrapper reports a tiny stat while
+     * serving megabytes; the reader must deliver cap+1 bytes at most and
+     * refuse, announcing the too-large key.
+     */
+    public function testAGrownAfterStatSubtitleRefusesAtTheReadCeiling(): void
+    {
+        if (!in_array('svl79', stream_get_wrappers(), true)) {
+            self::assertTrue(stream_wrapper_register('svl79', LyingStatSubtitleWrapper::class));
+        }
+        LyingStatSubtitleWrapper::$reportedSize = 64;
+        LyingStatSubtitleWrapper::$delivered = 0;
+        // A runaway that dwarfs the cap: an unbounded slurp would deliver
+        // every byte, while the bounded read stops within one block of cap+1.
+        LyingStatSubtitleWrapper::$payload = "WEBVTT\n\n" . str_repeat('x', 2 * Reel::MAX_SUBTITLE_BYTES);
+
+        $reader = new \ReflectionMethod(Reel::class, 'readSubtitleFile');
+
+        $result = null;
+        $log = $this->captureErrorLog(static function () use ($reader, &$result): void {
+            $result = $reader->invoke(null, 'svl79://host/subs.vtt');
+        });
+
+        $this->assertNull($result, 'a stat-undersized runaway must refuse, not be capped silently');
+        $this->assertLessThanOrEqual(
+            Reel::MAX_SUBTITLE_BYTES + 1 + 8192,
+            LyingStatSubtitleWrapper::$delivered,
+            'the read itself was not bounded — cap plus one stream block at most'
+        );
+        $this->assertStringContainsString('exceeds the ' . Reel::MAX_SUBTITLE_BYTES . '-byte ceiling', $log);
+        $this->assertStringContainsString('subs.vtt', $log);
+
+        LyingStatSubtitleWrapper::$payload = '';
+    }
+
+    /** An honestly small track still arrives whole and unannounced. */
+    public function testABoundedSubtitleStillReadsWhole(): void
+    {
+        if (!in_array('svl79', stream_get_wrappers(), true)) {
+            self::assertTrue(stream_wrapper_register('svl79', LyingStatSubtitleWrapper::class));
+        }
+        $text = "WEBVTT\n\n00:00.000 --> 00:01.000\nbounded ok\n";
+        LyingStatSubtitleWrapper::$reportedSize = 8;
+        LyingStatSubtitleWrapper::$delivered = 0;
+        LyingStatSubtitleWrapper::$payload = $text;
+
+        $reader = new \ReflectionMethod(Reel::class, 'readSubtitleFile');
+
+        $result = null;
+        $log = $this->captureErrorLog(static function () use ($reader, &$result): void {
+            $result = $reader->invoke(null, 'svl79://host/small.vtt');
+        });
+
+        $this->assertSame($text, $result);
+        $this->assertSame('', $log);
+        $this->assertSame(strlen($text), LyingStatSubtitleWrapper::$delivered);
+
+        LyingStatSubtitleWrapper::$payload = '';
+    }
+
+    /** SV-L79 structural: the ceiling rides the read length, not a guess. */
+    public function testTheSubtitleCeilingBindsTheReadItself(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Reel.php');
+
+        $this->assertSame(1, substr_count($src, 'self::MAX_SUBTITLE_BYTES + 1'), 'the cap+1 read length must appear exactly once');
+        $this->assertSame(0, substr_count($src, 'ile_get_contents($path)'), 'the unbounded single-argument form must be gone');
+    }
+}
+
+/**
+ * Test-only stream wrapper (SV-L79): url_stat lies about the size while the
+ * byte source serves arbitrarily more — the FUSE/proc race made deterministic.
+ */
+final class LyingStatSubtitleWrapper
+{
+    public mixed $context = null;
+
+    public static int $reportedSize = 64;
+
+    /** @var int */
+    public static int $delivered = 0;
+
+    public static string $payload = '';
+
+    private int $pos = 0;
+
+    /** @return array<string,int> */
+    private function fakeStat(): array
+    {
+        return [
+            'dev' => 0, 'ino' => 0, 'mode' => 0100644, 'nlink' => 1,
+            'uid' => 0, 'gid' => 0, 'rdev' => 0,
+            'size' => self::$reportedSize,
+            'atime' => 0, 'mtime' => 0, 'ctime' => 0,
+            'blksize' => 4096, 'blocks' => 0,
+        ];
+    }
+
+    /** @return array<string,int> */
+    public function url_stat(string $url, int $flags): array
+    {
+        return $this->fakeStat();
+    }
+
+    public function stream_open(string $path, string $mode, int $options, ?string &$opened_path): bool
+    {
+        $this->pos = 0;
+
+        return true;
+    }
+
+    public function stream_read(int $count): string
+    {
+        $chunk = substr(self::$payload, $this->pos, $count);
+        $this->pos += strlen($chunk);
+        self::$delivered += strlen($chunk);
+
+        return $chunk;
+    }
+
+    public function stream_eof(): bool
+    {
+        return $this->pos >= strlen(self::$payload);
+    }
+
+    public function stream_tell(): int
+    {
+        return $this->pos;
+    }
+
+    public function stream_seek(int $offset, int $whence = SEEK_SET): bool
+    {
+        if ($whence !== SEEK_SET || $offset < 0 || $offset > strlen(self::$payload)) {
+            return false;
+        }
+        $this->pos = $offset;
+
+        return true;
+    }
+
+    /** @return array<string,int> */
+    public function stream_stat(): array
+    {
+        return $this->fakeStat();
+    }
 }

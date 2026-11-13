@@ -495,11 +495,13 @@ final class Reel
     public const MAX_SUBTITLE_BYTES = 4 * 1024 * 1024;
 
     /**
-     * Read a configured subtitle file, BOUNDED and LOUD (M25/m6).
+     * Read a configured subtitle file, BOUNDED and LOUD (M25/m6, SV-L79).
      *
      * Returns the raw text, or null when the path is missing, oversized, or
      * unreadable — every refusal names the path (control-swept, length-capped)
      * on the error log instead of the old silent `@file_get_contents` shrug.
+     * The size stat is advisory; the ceiling binds the READ (cap+1, overrun
+     * refused), so a file that grows between stat and read still refuses.
      */
     private static function readSubtitleFile(string $path): ?string
     {
@@ -520,9 +522,21 @@ final class Reel
             return null;
         }
 
-        $raw = @file_get_contents($path);
+        // The stat is ADVISORY: on FUSE/proc-style filesystems it can lag the
+        // bytes actually served (SV-L79).  The ceiling therefore binds the read
+        // itself — we ask for one byte past the cap and refuse what arrives —
+        // the same cap+1 law the image decoders already follow.
+        $raw = @file_get_contents($path, false, null, 0, self::MAX_SUBTITLE_BYTES + 1);
         if (!is_string($raw) || $raw === '') {
             error_log(Lang::t('subtitle.unreadable', ['path' => $describe()]));
+            return null;
+        }
+
+        if (strlen($raw) > self::MAX_SUBTITLE_BYTES) {
+            error_log(Lang::t('subtitle.too_large', [
+                'path' => $describe(),
+                'max' => (string) self::MAX_SUBTITLE_BYTES,
+            ]));
             return null;
         }
 
