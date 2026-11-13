@@ -7,6 +7,7 @@ namespace SugarCraft\CellBuffer\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Diff\SetCellOp;
 use SugarCraft\CellBuffer\Position;
 use SugarCraft\CellBuffer\Region;
 
@@ -63,15 +64,77 @@ final class WideCellPairingTest extends TestCase
         self::assertSame('Y', $split->cellAt(1, 0)->rune());
     }
 
-    public function testStraddleAtLastColumnKeepsOnlyTheLead(): void
+    public function testStraddleAtLastColumnDegradesToABlank(): void
     {
-        // applyDiff() silently skips an out-of-bounds continuation; the
-        // mutator must not wrap the pair onto the next row.
+        // CB-04 (disclosed golden move): the old shape kept a partnerless
+        // width-2 lead in the final column — and the emission contract
+        // writes the full 2-column rune into the single remaining slot, so
+        // the row painted W+1 cells past the frame (raw-mode auto-wrap then
+        // shifts every following row, breaking the bare-LF join). The
+        // impossible straddle now degrades at placement; the pair still
+        // never wraps onto the next row.
         $buf = Buffer::new(2, 2)->withCellAt(1, 0, Cell::new(self::WIDE, null, null, 2));
 
-        self::assertSame(2, $buf->cellAt(1, 0)->width());
+        self::assertSame(1, $buf->cellAt(1, 0)->width());
+        self::assertSame(' ', $buf->cellAt(1, 0)->rune());
         self::assertSame(1, $buf->cellAt(0, 1)->width());
         self::assertSame(' ', $buf->cellAt(0, 1)->rune());
+        // Emission stays inside the frame: the wide glyph is gone entirely,
+        // not painted one column past the right edge.
+        self::assertStringNotContainsString(self::WIDE, $buf->toAnsi());
+    }
+
+    public function testFillOfAFinalColumnDegradesWideLeadsAndKeepsRowsInFrame(): void
+    {
+        // fill() routes through placeWithPair(), so a uniform width-2 fill
+        // that reaches the last column composes to in-bounds cells: every
+        // straddling lead degrades and its stranded partner sweep blanks
+        // the lead to its left.
+        $buf = Buffer::new(3, 1)->fill(
+            new Region(new Position(0, 0), 3, 1),
+            Cell::new(self::WIDE, null, null, 2),
+        );
+
+        foreach ([0, 1, 2] as $col) {
+            self::assertLessThanOrEqual(1, $buf->cellAt($col, 0)->width());
+        }
+        self::assertStringNotContainsString(self::WIDE, $buf->toAnsi());
+        // text() still yields exactly one row of 3 columns' worth of runes.
+        self::assertSame('   ', $buf->text());
+    }
+
+    public function testBlitLandingAWideLeadOnTheFinalColumnDegrades(): void
+    {
+        // withRegion() shares placeWithPair(): a source pair blitted so the
+        // lead lands on the last column degrades; the row stays in frame.
+        $dest = Buffer::new(2, 1);
+        $src = Buffer::new(2, 1)->withCellAt(0, 0, Cell::new(self::WIDE, null, null, 2));
+
+        $blit = $dest->withRegion(new Region(new Position(1, 0), 1, 1), $src);
+
+        self::assertSame(1, $blit->cellAt(1, 0)->width());
+        self::assertSame(' ', $blit->cellAt(1, 0)->rune());
+        self::assertStringNotContainsString(self::WIDE, $blit->toAnsi());
+    }
+
+    public function testApplyDiffOfAStraddlingWideLeadDegradesToBlank(): void
+    {
+        // applyDiff mirrors the placement degrade (hand-built streams can
+        // still carry the shape; real diffs from in-bounds grids cannot).
+        // The cursor advances by the DECLARED width, as the wire does:
+        // the following un-anchored 'y' write lands past the row and is
+        // skipped by the bounds guard, exactly as a width-2 write would.
+        $buf = Buffer::new(2, 1);
+
+        $out = $buf->applyDiff([
+            new SetCellOp([Cell::new('x'), Cell::new(self::WIDE, null, null, 2), Cell::new('y')]),
+        ]);
+
+        self::assertSame('x', $out->cellAt(0, 0)->rune());
+        self::assertSame(' ', $out->cellAt(1, 0)->rune());
+        self::assertSame(1, $out->cellAt(1, 0)->width());
+        self::assertStringNotContainsString(self::WIDE, $out->toAnsi());
+        self::assertSame('x ', $out->text());
     }
 
     public function testClearViaWithCellAtMakesTheRowRepaintCleanly(): void

@@ -329,8 +329,9 @@ final class Buffer implements \JsonSerializable
      * Return a new Buffer with $cell placed at ($col, $row).
      *
      * Wide-cell pairing is enforced here: placing a width-2 cell writes the
-     * width-0 continuation into the next column (clipped at the right edge,
-     * mirroring applyDiff's discipline); replacing a wide lead, or writing
+     * width-0 continuation into the next column (a lead straddling the last
+     * column DEGRADES to a blank — the same placement-time degrade
+     * applyDiff() performs); replacing a wide lead, or writing
      * onto a continuation, sweeps the partner so no orphaned half-pair can
      * survive the mutation. {@see fromGrid()} stays the unvalidated bulk
      * escape hatch for callers that build grids themselves.
@@ -718,6 +719,15 @@ final class Buffer implements \JsonSerializable
                         continue;
                     }
                     $width = $cell->width() > 0 ? $cell->width() : 1;
+                    if ($width === 2 && $cursorCol + 1 >= $this->width) {
+                        // Straddle at the last column: degrade to a blank,
+                        // mirroring placeWithPair() — a lone 2-column lead
+                        // overruns the row past the frame. The cursor still
+                        // advances by the declared width, as the wire does.
+                        $grid[$cursorRow * $this->width + $cursorCol] = Cell::new();
+                        $cursorCol += $width;
+                        continue;
+                    }
                     // Build cell with pending style merged. The cell's own
                     // hyperlink is carried through intact (url AND id) — the
                     // old reconstruction dropped the id and the comment
@@ -859,9 +869,13 @@ final class Buffer implements \JsonSerializable
      * Write one cell into a working grid, keeping the wide-cell pair
      * invariant of the Cell docblock structurally true afterwards:
      *
-     *  - a width-2 lead gets its width-0 continuation in the right neighbour
-     *    (a straddle at the last column keeps only the lead — the same
-     *    silent in-range clamp applyDiff() performs);
+     *  - a width-2 lead gets its width-0 continuation in the right
+     *    neighbour; a straddle at the last column DEGRADES to a blank —
+     *    the lead would otherwise paint two columns of rune into one
+     *    slot and overrun the row past the frame (auto-wrap then shifts
+     *    every following row in raw mode); applyDiff() mirrors the
+     *    degrade so grid, diff, encoder and text() stay within the width
+     *    by construction;
      *  - replacing a lead with a real cell blanks a left-behind continuation
      *    so the cleared column repaints instead of ghosting;
      *  - writing a real cell onto a continuation blanks the stranded lead
@@ -880,15 +894,17 @@ final class Buffer implements \JsonSerializable
         $idx = $row * $this->width + $col;
         $previous = $grid[$idx];
 
+        if ($cell->width() === 2 && $col + 1 >= $this->width) {
+            $cell = Cell::new(); // straddle degrade — see docblock
+        }
+
         $grid[$idx] = $cell;
 
         if ($cell->width() === 2) {
-            if ($col + 1 < $this->width) {
-                $displaced = $grid[$idx + 1];
-                $grid[$idx + 1] = Cell::continuation();
-                if ($displaced->width() === 2 && $col + 2 < $this->width) {
-                    $grid[$idx + 2] = Cell::new();
-                }
+            $displaced = $grid[$idx + 1];
+            $grid[$idx + 1] = Cell::continuation();
+            if ($displaced->width() === 2 && $col + 2 < $this->width) {
+                $grid[$idx + 2] = Cell::new();
             }
         } elseif ($cell->width() !== 0
             && $previous->width() === 2

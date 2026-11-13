@@ -74,7 +74,7 @@ No `.vhs` demo — this is a pure data model; `examples/basic.php` + `examples/d
 
 ## Wide characters
 
-Wide cells (CJK, many emoji) declare `width: 2` — the pair law is exactly a width-2 contract; larger widths are single run-length spans that carry no continuation cells. The writing API enforces the pair for you: `withCellAt()`, `fill()` and `withRegion()` automatically write the width-0 continuation partner to the right (a width-2 lead placed in the last column writes no partner — the pair is clipped to the grid edge), blank a left-behind continuation when a lead is replaced, and blank the displaced partner when a new lead lands on an existing pair's slot — no orphaned half-pair can survive a public mutation. Encoded streams skip continuations while the cursor advance trusts each lead's declared width, keeping wire and grid in contract.
+Wide cells (CJK, many emoji) declare `width: 2` — the pair law is exactly a width-2 contract; larger widths are single run-length spans that carry no continuation cells. The writing API enforces the pair for you: `withCellAt()`, `fill()` and `withRegion()` automatically write the width-0 continuation partner to the right (a width-2 lead straddling the last column DEGRADES to a blank there — a two-column rune never paints past the frame edge, and `applyDiff()` mirrors the degrade), blank a left-behind continuation when a lead is replaced, and blank the displaced partner when a new lead lands on an existing pair's slot — no orphaned half-pair can survive a public mutation. Encoded streams skip continuations while the cursor advance trusts each lead's declared width, keeping wire and grid in contract.
 
 ```php
 // Width is declared, never measured: pass width 2 explicitly.
