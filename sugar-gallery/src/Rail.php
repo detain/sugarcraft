@@ -204,14 +204,32 @@ final readonly class Rail
         return max(0, $scroll);
     }
 
-    /** How many cards of $cardWidth fit in $railWidth at $spacing gap. */
+    /**
+     * How many cards of $cardWidth fit in $railWidth at $spacing gap. The
+     * clamps here are the ONE row-fit law: they mirror the grid's constructor
+     * floors (`cardWidth ≥ 4`) and the rail's render-head clamps, so direct
+     * callers and `render()` can never disagree about the window (each card
+     * paints at 4 cells minimum no matter what it is asked for — a perRow
+     * computed from an unfloored cardWidth promises more slots than fit).
+     */
     public static function perRow(int $railWidth, int $cardWidth, int $spacing = 2): int
     {
-        return max(1, intdiv($railWidth + $spacing, max(1, $cardWidth) + $spacing));
+        return max(1, intdiv(max(1, $railWidth) + max(0, $spacing), max(4, $cardWidth) + max(0, $spacing)));
     }
 
     public function render(int $railWidth, bool $focused, int $cardWidth, int $posterHeight, int $spacing = 2): string
     {
+        // Clamp the degenerate edges ONCE, at the method head, and let every
+        // use below ride the clamped values (sugar-gallery-005/-021: the
+        // header floored the rail while perRow() ran raw, so railWidth=60 at
+        // cardWidth=2 painted 88-cell rows — fifteen 4-wide cards the
+        // unfloored division happily promised). These are the same floors
+        // PosterGrid::new() enforces at construction; perRow() re-applies
+        // them for direct callers.
+        $railWidth = max(1, $railWidth);
+        $cardWidth = max(4, $cardWidth);
+        $spacing = max(0, $spacing);
+
         $count = count($this->cards);
         // The rail title rides the SAME trust boundary the plain card title
         // documents: titles are DB/server-sourced, so the exact scanner
@@ -229,8 +247,8 @@ final readonly class Rail
         // BEFORE the title is trimmed, so a narrow rail truncates the title
         // and the counter survives whole. Before this the whole line went
         // through one clamp and the counter died first.
-        if (Width::string($prefix . $title . $counter) > max(1, $railWidth)) {
-            $room = max(1, $railWidth) - Width::string($prefix . $counter) - 1;
+        if (Width::string($prefix . $title . $counter) > $railWidth) {
+            $room = $railWidth - Width::string($prefix . $counter) - 1;
             $title = $room > 0 ? Width::truncate($title, $room) . '…' : '';
         }
 

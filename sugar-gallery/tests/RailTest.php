@@ -227,6 +227,45 @@ final class RailTest extends TestCase
         self::assertSame(3, Rail::perRow(34, 10, 2), '(34+2)/(10+2) = 3');
     }
 
+    public function testCardWidthFloorKeepsEveryRowInsideTheRail(): void
+    {
+        // sugar-gallery-005: cardWidth below 4 inflated perRow with the raw
+        // value while each card re-clamped to 4 at paint — QA measured 88-cell
+        // rows at railWidth=60, cardWidth=2 (fifteen 4-wide cards). One floor
+        // now rules window and paint alike.
+        $wide = (new Rail('R', $this->cards(20)))->render(60, false, 2, 1);
+        foreach (array_slice(explode("\n", $wide), 1) as $line) {
+            self::assertLessThanOrEqual(60, \SugarCraft\Style\Layout::width($line), 'floored window fits the rail');
+        }
+
+        // The row's cited edge: railWidth=27, cardWidth=3 — the unfloored
+        // division promised five slots (28 painted cells); the floored one
+        // fits four (22).
+        $narrow = (new Rail('R', $this->cards(9)))->render(27, false, 3, 1);
+        foreach (array_slice(explode("\n", $narrow), 1) as $line) {
+            self::assertLessThanOrEqual(27, \SugarCraft\Style\Layout::width($line), 'every painted row ≤ railWidth');
+        }
+    }
+
+    public function testDegenerateRailWidthAndSpacingClampOnceAtTheHead(): void
+    {
+        // sugar-gallery-021: the header clamped max(1, railWidth) while
+        // perRow() ran the raw value — two disagreeing idioms inside one
+        // method. The law is single-sourced now (render head + perRow mirror).
+        self::assertSame(1, Rail::perRow(-5, 10, 2), 'a non-positive railWidth still yields one card');
+        self::assertSame(15, Rail::perRow(60, 2, -3), 'cardWidth floors at 4 (intdiv(60, 4)); negative spacing floors at 0');
+        self::assertSame(5, Rail::perRow(30, 6, -5), 'raw negative spacing used to tighten the divisor to 1 and promise 25 slots; floored to 0 it yields 5');
+
+        $out = (new Rail('R', $this->cards(4)))->render(30, false, 6, 1, -5);
+        // Spacing -5 clamps to 0: four 6-wide cards join to 24 cells, inside
+        // the 30-cell rail, with no exceptions and no phantom fifth slot.
+        $lines = explode("\n", $out);
+        self::assertStringContainsString('○ R  (1/4)', $lines[0]);
+        foreach (array_slice($lines, 1) as $line) {
+            self::assertLessThanOrEqual(30, \SugarCraft\Style\Layout::width($line));
+        }
+    }
+
     public function testFocusedCardOnEmptyRail(): void
     {
         $rail = new Rail('R');
