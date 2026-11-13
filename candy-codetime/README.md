@@ -281,6 +281,30 @@ width, while the ranking panes keep their budgeted 62-cell band, and days
 that cannot be drawn are counted
 ("+N earlier") rather than silently dropped.
 
+## Accessibility
+
+The dashboard is a deliberately visual artifact; the supported assistive
+path is the plain-text commands: `export csv|json` and `gaps` write their
+whole answer to stdout as ordinary lines, so a screen reader gets the same
+data as the terminal does. The TUI adds nothing that those commands lack.
+
+Font requirement: the frame draws rounded box glyphs, the timeline draws
+block-character bars, and the help row uses arrow glyphs. There is no ASCII
+fallback, so on a terminal whose font lacks those characters they degrade to
+replacement symbols — labels and numbers stay legible, borders get ugly.
+
+Colour is decorative only. The palette ships dark-terminal hexes, applied
+solely when the terminal declares 256-colour or TrueColor capability (and
+never under `NO_COLOR`); the information survives without it — bars are
+height-encoded (minutes, not hue), every coloured value carries its word
+label (`total:`, spelled-out project and language names), and the milestone
+mark is `*` text rather than a colour change.
+
+The interface is static by design: the dashboard subscribes to nothing — no
+timers, no animation, no moving cells. Each screen is a snapshot that
+redraws only when a key changes it, which is also the reduced-motion answer:
+nothing ever moves on its own.
+
 ## Architecture
 
 | File | Role |
