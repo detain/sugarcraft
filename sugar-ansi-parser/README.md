@@ -151,8 +151,14 @@ load-bearing because the transition table is indexed by value):
   the *first* private prefix byte wins (`CSI ? < 25 h` keeps `?`, the `<`
   vanishes, and DCS prelude behaves the same), while a repeated intermediate
   keeps the *last* byte. Once in CsiIntermediate, a digit or another prefix
-  byte (`0x30-0x3F`) drops the **whole sequence** to Ground with no dispatch —
-  reference-table parity, not an accident.
+  byte (`0x30-0x3F`) drops the **whole sequence** to Ground with no dispatch,
+  and the bytes after it then **echo** as ordinary printable text (`ESC [ SP
+  5 m` prints `m` — the byte that triggered the drop is itself consumed by
+  the transition) — a quirk inherited byte-identically from the
+  charmbracelet table that diverges BEHAVIOURALLY from the Paul-Williams
+  figure (`csi_ignore` swallows until the final) and from DEC. The
+  reference-table parity is the claim, not behavioural silence: the quirk is
+  disclosed here, not accidental.
 - **DcsEntry → DcsParam → DcsIntermediate → DcsString** — the DCS prelude,
   then the passthrough payload until ST; `dcsDispatch()` carries the prelude
   fields plus the data.
@@ -178,7 +184,13 @@ so `ESC \` is a terminator rather than a lost byte; the *different-type* C1
 bleed guard (cross-type introducer discards the stale payload, same-type one
 deliberately keeps it) applies **inside SOS/PM/APC strings only**, and there
 only to the four string-family introducers 0x98-0x9F — every other byte
-≥ 0x80 accumulates into the payload. OSC and DCS payloads carry no such
+≥ 0x80 accumulates into the payload. The DEC figure aborts or executes C1
+controls in those strings — and charmbracelet's anywhere edges hand
+0x9B/0x90/0x99/0x9A to them too — but here those bytes are payload as well:
+the three states absorb every byte ≥ 0x80 except their own terminators
+(0x1B/0x18/0x1A/0x9C, which dispatch per the fidelity contract above) and the
+four re-introducers. That is a deliberate, disclosed parity deviation with
+the OSC/DCS 0x20-0xFF payload handling, not a silent one. OSC and DCS payloads carry no such
 guard: the table maps OscString/DcsString 0x20-0xFF to `Put`, so introducers,
 C1 controls and high bytes all stay in the payload, and only ESC, BEL (OSC),
 ST and the CAN/SUB cancels above end those strings. Bytes with no mapped
@@ -222,6 +234,16 @@ product:
   sanitize — validate or reject before display or re-emission; the
   escape-and-clip discipline described under [Decoders](#decoders-codec) is
   confined to `describe()` and does not extend to the raw accessors.
+- **A UTF-8 lead mid-sequence abandons that sequence:** a byte 0xC2-0xF4
+  arriving while an escape/CSI (or its ESC-feed twin) is in flight is taken
+  by the anywhere-table's Utf8 edge — the completed rune PRINTS (or is
+  replaced under `$replaceMalformed`) and the machine lands back in Ground,
+  while the in-flight sequence never dispatches; the next introducer's
+  `Clear` edge resets the slots, so later sequences are unaffected.
+  DEC/xterm would ignore the lead and continue collecting the sequence;
+  charmbracelet's table abandons it and the parity here is with the table
+  (finding sugar-ansi-parser-015, disclosed deliberately). Pinned behaviorally
+  by `ParserTest::testUtf8LeadMidSequenceAbandonsIt`.
 - **UTF-8 is not validated by default:** with `$replaceMalformed = false`
   (the default, and what sugar-vterm passes), structurally-completed rune
   byte-sequences are forwarded **verbatim** to `printChar()` — overlong,

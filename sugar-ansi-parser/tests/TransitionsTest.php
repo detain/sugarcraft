@@ -107,8 +107,15 @@ final class TransitionsTest extends TestCase
         $this->assertSame(State::Ground->value, Transitions::nextState($entry));
     }
 
-    public function testCsiIntermediateIgnoreOtherParams(): void
+    public function testCsiIntermediateDigitBandDropsSequenceToGround(): void
     {
+        // G1 documented arm (finding 003): the row is charmbracelet-identical
+        // BY DESIGN — a digit or private byte after intermediates drops the
+        // whole CSI to Ground with no dispatch, and the tail bytes then echo
+        // as printable text (pinned behaviorally in ParserTest). The
+        // Paul-Williams figure's csi_ignore swallows until the final instead;
+        // the README's machine section discloses that divergence rather than
+        // pretending parity with the figure.
         $entry = Transitions::get(State::CsiIntermediate->value, ord('3'));
 
         $this->assertSame(Action::None->value, Transitions::action($entry));

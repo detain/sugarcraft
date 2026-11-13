@@ -673,6 +673,40 @@ final class ParserTest extends TestCase
         $this->assertSame([1], $legalDcs[0]['detail']['params']);
     }
 
+    public function testUtf8LeadMidSequenceAbandonsIt(): void
+    {
+        // sap-05 (finding 015) behavioral pin of the DOCUMENTED outcome: an
+        // in-flight UTF-8 lead is taken by the anywhere Utf8 edge — the rune
+        // completes and prints, the CSI never dispatches, Ground resumes.
+        // (DEC/xterm would continue collecting; parity here is with the
+        // charmbracelet table, disclosed in the README machine section.)
+        $handler = new DebugHandler();
+        (new Parser($handler))->parseComplete("\x1b[1\xC3\xA9m");
+
+        $this->assertSame([], $handler->filter('csi'), 'the abandoned sequence must not dispatch');
+        $this->assertSame(
+            ['é', 'm'],
+            array_map(static fn(array $e): string => $e['detail'], $handler->filter('print')),
+            'the whole rune first, then the post-abandonment byte prints normally',
+        );
+    }
+
+    public function testCsiIntermediateDigitBandEchoesTailToGround(): void
+    {
+        // sap-05 (finding 003) behavioral pin of the inherited echo: after
+        // the CI band drops the sequence, the remaining bytes are ordinary
+        // Ground input — nothing dispatches, the tail prints.
+        $handler = new DebugHandler();
+        (new Parser($handler))->parseComplete("\x1b[ 5m");
+
+        $this->assertSame([], $handler->filter('csi'), 'the dropped sequence must not dispatch');
+        $this->assertSame(
+            ['m'],
+            array_map(static fn(array $e): string => $e['detail'], $handler->filter('print')),
+            'the drop byte itself is consumed by the transition; only the tail echoes',
+        );
+    }
+
     public function testEmptyFirstParamDefaultsToOne(): void
     {
         $handler = new DebugHandler();

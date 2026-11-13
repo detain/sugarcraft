@@ -325,6 +325,12 @@ final class Transitions
         $setRange($CI, 0x20, 0x2F, Action::Collect->value, $CI);
         $set($CI, 0x7F, Action::None->value, $CI);
         $setRange($CI, 0x40, 0x7E, Action::Dispatch->value, $G);
+        // charmbracelet-IDENTICAL row (finding 003, G1 documented as
+        // divergence, not silently fixed): the drop echoes the sequence tail
+        // to Ground as printable text — csi_ignore in the Paul-Williams
+        // figure (and DEC) swallows until the final instead. The README's
+        // machine section states the quirk; the byte-parity headline claim
+        // stays true.
         $setRange($CI, 0x30, 0x3F, Action::None->value, $G);
 
         // CsiEntry
