@@ -12,7 +12,7 @@ use SugarCraft\Core\Msg;
  * path that Ctrl-C triggers, distinguishing "user-requested abort"
  * from a graceful {@see QuitMsg} for downstream tooling.
  *
- * Mirrors Bubble Tea's `tea.InterruptMsg`.
+ * Mirrors charmbracelet/bubbletea.InterruptMsg.
  */
 final class InterruptMsg implements Msg
 {

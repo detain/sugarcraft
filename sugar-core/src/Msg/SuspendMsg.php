@@ -13,7 +13,7 @@ use SugarCraft\Core\Msg;
  * SIGCONT re-arms its handlers, restores the alt screen / raw mode,
  * and dispatches a {@see ResumeMsg} to the model.
  *
- * Mirrors Bubble Tea's `tea.SuspendMsg`. Models typically don't
+ * Mirrors charmbracelet/bubbletea.SuspendMsg. Models typically don't
  * inspect this directly — they emit `Cmd::suspend()` to request a
  * suspend, and react to `ResumeMsg` to refresh state on return.
  */

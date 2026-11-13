@@ -12,7 +12,7 @@ use SugarCraft\Core\Msg;
  * use this to re-emit any output that was clobbered by an external
  * editor / pager run mid-program.
  *
- * Mirrors Bubble Tea's `tea.ResumeMsg`.
+ * Mirrors charmbracelet/bubbletea.ResumeMsg.
  */
 final class ResumeMsg implements Msg
 {

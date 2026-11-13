@@ -10,7 +10,7 @@ use SugarCraft\Core\Util\Color;
  * Rich render result. Models that want per-frame control over
  * cursor shape, window title, taskbar progress, etc. can return a
  * {@see View} from {@see Model::view()} instead of a plain string.
- * Mirrors Bubble Tea v2's `tea.View` struct.
+ * Mirrors charmbracelet/bubbletea.View.
  *
  * Only the {@see $body} field is required — every other field is
  * optional and only emitted when it changes between frames so the

@@ -109,8 +109,7 @@ final class ProgramOptions
          */
         public readonly bool $cellDiffRenderer = false,
         /**
-         * Register no signal handlers at all. Mirrors Bubble Tea's
-         * `WithoutSignalHandler`. When true, the runtime skips
+         * Register no signal handlers at all. Mirrors charmbracelet/bubbletea.WithoutSignalHandler. When true, the runtime skips
          * installing handlers for SIGINT / SIGWINCH / SIGTSTP /
          * SIGCONT regardless of {@see $catchInterrupts}.
          *

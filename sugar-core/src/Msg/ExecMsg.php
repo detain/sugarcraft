@@ -17,8 +17,8 @@ use SugarCraft\Core\Msg;
  *  - `$stderr`     — captured stderr.
  *
  * Models inspect this in `update()` to know whether the editor /
- * pager / external command succeeded. Mirrors Bubble Tea's
- * `tea.ExecMsg`.
+ * pager / external command succeeded. Mirrors
+ * charmbracelet/bubbletea.ExecMsg.
  */
 final class ExecMsg implements Msg
 {

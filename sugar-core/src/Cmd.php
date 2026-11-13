@@ -27,7 +27,7 @@ final class Cmd
      * Suspend the program (Ctrl-Z / SIGTSTP semantics). Tears down
      * the terminal, re-raises SIGTSTP on the process group, and on
      * SIGCONT restores the terminal and dispatches a `ResumeMsg`.
-     * Mirrors Bubble Tea's `tea.Suspend`.
+     * Mirrors charmbracelet/bubbletea.Suspend.
      */
     public static function suspend(): \Closure
     {
@@ -55,18 +55,22 @@ final class Cmd
         $filtered = array_values(array_filter($cmds, static fn ($c) => $c !== null));
         return static function () use ($filtered): Msg {
             // The Program inspects this sentinel and explodes it into
-            // separate dispatches. See Program::runCmd().
+            // separate dispatches — see the BatchMsg arm of
+            // {@see \SugarCraft\Core\Program::dispatch()} and
+            // {@see \SugarCraft\Core\Program::scheduleCmd()}.
             return new BatchMsg($filtered);
         };
     }
 
     /**
-     * Run Cmds strictly in order: each returned Msg is dispatched (and
-     * processed by the model's `update()`) before the next Cmd starts.
+     * Run Cmds strictly in order, one per loop tick: each returned Msg
+     * is dispatched (and processed by the model's `update()`) before the
+     * next Cmd starts, but the sequence does NOT complete inside this
+     * call — later steps land on later ticks.
      * Use this when ordering matters — a `setForegroundColor()` should
      * land before the colour-dependent render that follows it.
      *
-     * Mirrors Bubble Tea's `tea.Sequence`.
+     * Mirrors charmbracelet/bubbletea.Sequence.
      */
     public static function sequence(?\Closure ...$cmds): \Closure
     {
@@ -85,7 +89,7 @@ final class Cmd
      * tears itself down when the last consumer leaves. This synchronised
      * cadence is the shipped contract (audit sugar-core-004).
      *
-     * Mirrors Bubble Tea's `tea.Every`.
+     * Mirrors charmbracelet/bubbletea.Every.
      *
      * @param \Closure(\DateTimeImmutable): ?Msg $produce
      */
@@ -137,7 +141,7 @@ final class Cmd
      * inline images, etc.) and call `Renderer::reset()` themselves if
      * they intentionally clobber the painted region.
      *
-     * Mirrors Bubble Tea v2's `tea.Raw`.
+     * Mirrors charmbracelet/bubbletea.Raw.
      */
     public static function raw(string $bytes): \Closure
     {

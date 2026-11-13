@@ -6,7 +6,7 @@ namespace SugarCraft\Core;
 
 /**
  * Immutable bitfield wrapping the `shift`, `alt`, `ctrl` modifier set
- * for a key event. Mirrors Bubble Tea v2's `key.Mod` so existing
+ * for a key event. Mirrors charmbracelet/bubbletea.Key.Mod so existing
  * code that reads `KeyMsg::$alt` / `$ctrl` keeps working while new
  * code can pattern-match on a single value.
  *

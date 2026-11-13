@@ -10,7 +10,7 @@ namespace SugarCraft\Core;
  * useful for non-alt-screen "inline" programs that need to log
  * messages without disturbing the rendered view.
  *
- * Mirrors Bubble Tea v2's `tea.Println` Cmd.
+ * Mirrors charmbracelet/bubbletea.Println.
  *
  * @internal
  */

@@ -20,7 +20,6 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Tty;
-use SugarCraft\Core\Util\NullLogger;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
@@ -659,8 +658,7 @@ final class Program
     }
 
     /**
-     * Block until the loop has stopped. Mirrors bubbletea's
-     * `Program.Wait()`. In PHP {@see run()} is itself a blocking call
+     * Block until the loop has stopped. Mirrors charmbracelet/bubbletea.Program.Wait. In PHP {@see run()} is itself a blocking call
      * so this is mainly useful as a status query — it returns true if
      * the program is no longer running.
      */
@@ -1067,9 +1065,10 @@ final class Program
                 try {
                     ($this->exceptionHandler)($e);
                 } catch (\Throwable) {
-                    // Swallowed: the error is already surfaced via ExceptionMsg
-                    // at line 502, so this rethrow is noise. The rationale above
-                    // (lines 500-507) explains the safety-net contract.
+                    // Swallowed: the error is already surfaced via the
+                    // ExceptionMsg dispatch above, so this rethrow is noise —
+                    // the promise-callback rationale there explains the
+                    // safety-net contract.
                 }
             });
             return;
