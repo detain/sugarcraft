@@ -46,22 +46,6 @@ final class RenderCommand extends Command
      */
     private const MAX_THEME_CONFIG_BYTES = GlamourTheme::MAX_CONFIG_BYTES;
 
-    /**
-     * Hard cap on document bytes read from a file argument. The renderer
-     * holds the source and the rendered form at once; a runaway "markdown"
-     * file must fail loudly instead of exhausting memory.
-     */
-    private const MAX_INPUT_BYTES = 67_108_864; // 64 MiB
-
-    /** Bytes sampled by {@see self::refuseBinary()} when judging "is text". */
-    private const BINARY_PROBE_BYTES = 8192;
-
-    /**
-     * Fraction of non-printing control bytes (outside tab/newline/CR) that
-     * marks a probe window as binary rather than text with a few oddities.
-     */
-    private const BINARY_CONTROL_RATIO = 0.05;
-
     /** @var callable|null */
     private static $colorProbeCallback = null;
 
@@ -149,6 +133,13 @@ final class RenderCommand extends Command
 
         $renderer = (new Renderer($theme))
             ->withWordWrap($width > 0 ? $width : null)
+            // The sanitizer is pinned ON at the construction site (the
+            // explicit opposite of the opt-out switch) instead of riding the
+            // constructor default: stripControls is the render-safety NET
+            // under the DocumentGate's contract, and that dependency must
+            // not hinge on a default a future release could flip. The gate
+            // already refused the bytes that matter.
+            ->withRawControlChars(false)
             // OSC 8 envelopes ride the decoration decision: skipped on an
             // undecorated stream and over an explicit --no-hyperlinks, but
             // forced decoration (--ansi / CLICOLOR_FORCE / FORCE_COLOR) emits
@@ -264,61 +255,13 @@ final class RenderCommand extends Command
         }
 
         $stream = $pipedStream ?? STDIN;
-        $raw    = @stream_get_contents($stream);
-        if (!is_string($raw) || $raw === '') {
-            throw new \InvalidArgumentException(Lang::t('render.no_input_empty'));
-        }
-        self::refuseBinary($raw, 'standard input');
-        return $raw;
+
+        return DocumentGate::readStream($stream, 'standard input');
     }
 
     private static function readDocumentFile(string $path): string
     {
-        if (is_dir($path) === true) {
-            throw new \InvalidArgumentException(Lang::t('render.file_is_directory', ['path' => $path]));
-        }
-        if (is_file($path) === false) {
-            throw new \InvalidArgumentException($path === '' || file_exists($path)
-                ? Lang::t('render.file_unreadable', ['path' => $path])
-                : Lang::t('render.file_missing', ['path' => $path]));
-        }
-        $size = @filesize($path);
-        if ($size !== false && $size > self::MAX_INPUT_BYTES) {
-            throw new \InvalidArgumentException(Lang::t('render.input_too_large', [
-                'path'  => $path,
-                'limit' => self::MAX_INPUT_BYTES,
-            ]));
-        }
-        $raw = @file_get_contents($path);
-        if (!is_string($raw)) {
-            throw new \InvalidArgumentException(Lang::t('render.file_unreadable', ['path' => $path]));
-        }
-        self::refuseBinary($raw, $path);
-        return $raw;
-    }
-
-    /**
-     * Refuse to render binary payloads. Mistyping onto a PNG/PDF/ELF must
-     * not spray escape sequences (possible cursor/color-state changes) at
-     * the terminal with a success code. Probe: NUL bytes are conclusive; a
-     * control-character ratio above 5% of the first 8 KiB is refusal-grade
-     * for anything a human would call a text file (UTF-8 text and its
-     * multi-byte sequences contain no C0 bytes).
-     */
-    private static function refuseBinary(string $raw, string $label): void
-    {
-        $probe = substr($raw, 0, self::BINARY_PROBE_BYTES);
-        if ($probe === '' || $probe === false) {
-            return;
-        }
-        $looksBinary = str_contains($probe, "\x00") === true;
-        if ($looksBinary === false) {
-            $controlCount = preg_match_all('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $probe);
-            $looksBinary  = $controlCount !== false && $controlCount / strlen($probe) > self::BINARY_CONTROL_RATIO;
-        }
-        if ($looksBinary === true) {
-            throw new \InvalidArgumentException(Lang::t('render.binary_input', ['path' => $label]));
-        }
+        return DocumentGate::readFile($path);
     }
 
     /** Whether STDIN is an interactive terminal (no document was piped). */
@@ -476,9 +419,16 @@ final class RenderCommand extends Command
 
     /**
      * Legacy input reader kept for integrators: null on every failure mode,
-     * without naming which one. The command itself now uses
-     * {@see self::readDocument()}, whose refusals carry distinct messages
-     * and exit codes.
+     * without naming which one.
+     *
+     * @deprecated kept for the package's own tests and integrators, not
+     *             advertised API. It carries NONE of the {@see DocumentGate}
+     *             guards that every real input door enforces (is_file, the
+     *             size cap, the binary refusal) — bytes read through this
+     *             helper go unjudged, and it has no refusal channel to name
+     *             what it rejected. Successors: the file lane
+     *             {@see self::readDocumentFile()} and the stdin lane of
+     *             {@see self::readDocument()}, which share the one gate.
      *
      * @param resource|null $stream Defaults to STDIN; allows unit-testing stdin paths.
      *
@@ -486,6 +436,7 @@ final class RenderCommand extends Command
      *   - file path provided but file does not exist or is unreadable
      *   - no file path and STDIN is a TTY (interactive terminal)
      *   - no file path and STDIN is empty
+     *   - no file path and the stream exceeds the document cap
      * Note: It is not possible to distinguish these failure modes from the return value.
      */
     public static function loadInput(string $file, $stream = null): ?string
@@ -506,8 +457,14 @@ final class RenderCommand extends Command
         if (is_resource($stream) === false || TtyDetect::isAtty($stream) === true) {
             return null;
         }
-        // Color decision lives entirely in execute(); loadInput just reads.
-        $raw = stream_get_contents($stream);
+        // Color decision lives entirely in execute(); loadInput just reads —
+        // bounded at the document cap (an unbounded read here would make the
+        // deprecated door the one that ignores the invariant).
+        $raw = stream_get_contents($stream, DocumentGate::MAX_INPUT_BYTES + 1);
+        if (is_string($raw) && strlen($raw) > DocumentGate::MAX_INPUT_BYTES) {
+            return null;
+        }
+
         return is_string($raw) && $raw !== '' ? $raw : null;
     }
 

@@ -37,7 +37,10 @@ use SugarCraft\Core\Util\Width;
  * the file, runs it through the injected re-render closure, and swaps the
  * Viewport content in place. The tick interval is an idle bound (never a
  * request deadline), and a deleted-then-recreated file reloads when it
- * reappears because the sweep keeps polling the baseline.
+ * reappears because the sweep keeps polling the baseline. Refused
+ * replacements (oversize, device swap, binary) never blank the pager: the
+ * last good frame stays, the tuple is consumed, and the header marks `↻!`
+ * until the next accepted reload.
  */
 final class MdViewModel implements Model
 {
@@ -65,13 +68,15 @@ final class MdViewModel implements Model
         public readonly int $reloadCount = 0,
         /** Status-header label (file basename); null keeps the frame chrome-free. */
         public readonly ?string $documentName = null,
+        /** True when the latest sweep's replacement was refused at the gate. */
+        public readonly bool $reloadBlocked = false,
     ) {}
 
     /**
      * Structural clone with named overrides — the ONE derivation site, so
      * no state field can be silently zeroed by a hand-rolled copy.
      *
-     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string} $overrides
+     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool} $overrides
      */
     private function copy(array $overrides = []): self
     {
@@ -89,6 +94,7 @@ final class MdViewModel implements Model
             $pick('watchSize', $this->watchSize),
             $pick('reloadCount', $this->reloadCount),
             $pick('documentName', $this->documentName),
+            $pick('reloadBlocked', $this->reloadBlocked),
         );
     }
 
@@ -179,8 +185,12 @@ final class MdViewModel implements Model
     /**
      * One non-blocking (mtime, size) sweep; returns a content-refreshed
      * copy when the file moved, `$this` (identical instance) when it did
-     * not. Read/render failures keep the last good frame: the pager never
-     * blanks on a transient half-written save.
+     * not. A replacement refused at the document gate (grown over cap,
+     * swapped to a device, binary payload) keeps the last good frame,
+     * consumes the tuple, and marks the header `↻!` — re-reading refused
+     * bytes every tick would re-pay the slurp forever, and the next real
+     * edit presents a fresh tuple. Render failures likewise keep the last
+     * good frame: the pager never blanks on a transient half-written save.
      */
     private function sweepForReload(): self
     {
@@ -193,18 +203,29 @@ final class MdViewModel implements Model
             return $this;
         }
 
-        $raw = @file_get_contents($this->watchPath);
-        if ($raw === false) {
-            // Stat said "there", the read said "gone" — keep the baseline
-            // so the next sweep retries (covers delete-then-recreate).
-            return $this;
+        try {
+            // The same door every launch lane uses — no cap-free back
+            // entrance for the sweep that runs for the whole session.
+            $raw = DocumentGate::readFile($this->watchPath);
+        } catch (\InvalidArgumentException) {
+            // Refused replacement: keep the frame, consume the tuple, flag
+            // the header. "Stat said there, the read said gone" collapses
+            // here too — FileWatcher::pollTuple answers null once the path
+            // is truly absent, so delete-then-recreate recovery keeps its
+            // baseline through the sweep that finds nothing.
+            return $this->copy([
+                'watchMtime'    => $changed[0],
+                'watchSize'     => $changed[1],
+                'reloadBlocked' => true,
+            ]);
         }
 
         return $this->copy([
-            'viewport'   => $this->viewport->setContent(($this->reRender)($raw)),
-            'watchMtime' => $changed[0],
-            'watchSize'  => $changed[1],
-            'reloadCount' => $this->reloadCount + 1,
+            'viewport'      => $this->viewport->setContent(($this->reRender)($raw)),
+            'watchMtime'    => $changed[0],
+            'watchSize'     => $changed[1],
+            'reloadCount'   => $this->reloadCount + 1,
+            'reloadBlocked' => false,
         ]);
     }
 
@@ -236,7 +257,12 @@ final class MdViewModel implements Model
     {
         $percent = (int) round($this->viewport->scrollPercent() * 100);
         $line    = $this->documentName . ' · ' . $percent . '%';
-        if ($this->reloadCount > 0) {
+        if ($this->reloadBlocked === true) {
+            // A refused replacement reads louder than the success counter:
+            // ↻N says "auto-reload is alive", ↻! says "the last change was
+            // refused at the document door — the frame you see is stale".
+            $line .= ' · ↻!';
+        } elseif ($this->reloadCount > 0) {
             $line .= ' · ↻' . $this->reloadCount;
         }
         $width = $this->viewport->width;

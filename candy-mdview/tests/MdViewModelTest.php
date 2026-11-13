@@ -7,6 +7,7 @@ namespace SugarCraft\MdView\Tests;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\MdView\MdViewModel;
+use SugarCraft\MdView\ReloadTickMsg;
 use PHPUnit\Framework\TestCase;
 
 final class MdViewModelTest extends TestCase
@@ -180,6 +181,71 @@ final class MdViewModelTest extends TestCase
             ->withDocument('name')
             ->view();
         $this->assertSame('name ·', explode("\n", $narrow)[0]);
+    }
+
+    public function testReloadSweepRefusesOversizeReplacementKeepsFrameAndMarks(): void
+    {
+        // Finding 003's gate leg: the reload sweep re-read the watched file
+        // through a guard-free @file_get_contents, so a grow-past-cap swap
+        // OOM'd the LIVE pager while the launch-time "64 MiB contract" sat
+        // unused. The sweep now goes through the same DocumentGate: the
+        // refused replacement keeps the frame, consumes the tuple, and the
+        // header marks ↻! until a later edit is accepted.
+        $path = sys_get_temp_dir() . '/mdview-sweep-cap-' . uniqid() . '.md';
+        file_put_contents($path, "# live\n");
+        $model = MdViewModel::fromContent('RENDERED-LIVE', 40, 5)
+            ->withDocument('doc.md')
+            ->withWatch($path, static fn (string $raw): string => 'RENDERED:' . $raw);
+
+        // Replace with a file past the cap — metadata-only sparse write,
+        // and the gate refuses on fstat before any slurp can happen.
+        unlink($path);
+        $handle = fopen($path, 'wb');
+        $this->assertNotFalse($handle);
+        $this->assertTrue(ftruncate($handle, 67_108_865));
+        fclose($handle);
+
+        [$blocked] = $model->update(new ReloadTickMsg());
+        $this->assertTrue($blocked->reloadBlocked);
+        $this->assertSame(0, $blocked->reloadCount, 'a refusal is not a reload');
+        $frame = $blocked->view();
+        $this->assertStringContainsString('↻!', $frame);
+        $this->assertStringContainsString('RENDERED-LIVE', $frame, 'the refused frame must never blank the pager');
+
+        // Tuple consumed: an identical next tick re-judges nothing, marker holds.
+        [$held] = $blocked->update(new ReloadTickMsg());
+        $this->assertTrue($held->reloadBlocked);
+
+        // A later real edit recovers: accepted, counter moves, ↻! clears.
+        file_put_contents($path, "# newer\n");
+        clearstatcache(true, $path);
+        [$fixed] = $held->update(new ReloadTickMsg());
+        $this->assertFalse($fixed->reloadBlocked);
+        $this->assertSame(1, $fixed->reloadCount);
+        $this->assertStringContainsString('↻1', $fixed->view());
+        unlink($path);
+    }
+
+    public function testReloadSweepRefusesBinarySwapAndKeepsLastFrame(): void
+    {
+        // Finding 003's second probe leg: an ELF payload swapped onto the
+        // watched path rendered WITH A SUCCESS FRAME. The shared gate now
+        // refuses it; the header tells the user the frame is stale.
+        $path = sys_get_temp_dir() . '/mdview-sweep-bin-' . uniqid() . '.md';
+        file_put_contents($path, "# live\n");
+        $model = MdViewModel::fromContent('RENDERED-LIVE', 40, 5)
+            ->withDocument('doc.md')
+            ->withWatch($path, static fn (string $raw): string => 'RENDERED:' . $raw);
+
+        file_put_contents($path, "# ELF-ish\x00hostile");
+        clearstatcache(true, $path);
+
+        [$blocked] = $model->update(new ReloadTickMsg());
+        $this->assertTrue($blocked->reloadBlocked);
+        $this->assertSame(0, $blocked->reloadCount);
+        $this->assertStringContainsString('↻!', $blocked->view());
+        $this->assertStringContainsString('RENDERED-LIVE', $blocked->view());
+        unlink($path);
     }
 
     public function testFromContentClampsHeightToAtLeastOne(): void

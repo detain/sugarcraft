@@ -352,6 +352,63 @@ final class RenderCommandTest extends TestCase
         }
     }
 
+    public function testStdinLaneCapsTheReadInsteadOfSlurping(): void
+    {
+        // Finding 004's gate leg: 65 MiB on stdin used to be an unbounded
+        // slurp (rc 255 fatal under memory_limit, kernel OOM without one)
+        // while the file lane refused the same bytes cleanly. The shared
+        // DocumentGate bounds the stream read at MAX+1 and refuses.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, str_repeat('x', 67_108_865));
+        fseek($stream, 0);
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/exceeds.*67108864/');
+            $this->invokeStatic('readDocument', ['', $stream]);
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function testNulByteAfterTheProbeWindowStillRefuses(): void
+    {
+        // Finding 016's gate leg: the head-only 8 KiB probe let 9000
+        // printable bytes hide a NUL tail and render rc 0 (the renderer's
+        // stripControls defanged it downstream, but the CONTRACT promised
+        // refusal). The NUL scan now covers the whole capped string; the
+        // control-ratio probe stays head-windowed by design.
+        $payload = str_repeat('a', 9000) . "\x00" . str_repeat('a', 16);
+        [$rc, $msg] = $this->runUsageRun($payload, $this->optionMap());
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('not a text file', $msg);
+    }
+
+    public function testLoadInputIsDeprecatedAndBounded(): void
+    {
+        // Finding 042: the legacy integrator door lacked its @deprecated
+        // tag and read streams unbounded. Both legs pinned here: the tag
+        // names the gated successors, and a past-cap stream collapses to
+        // null instead of ballooning the caller's memory.
+        $doc = (new \ReflectionMethod(RenderCommand::class, 'loadInput'))->getDocComment();
+        $this->assertIsString($doc);
+        $this->assertStringContainsString('@deprecated', $doc);
+
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, str_repeat('y', 67_108_865));
+        fseek($stream, 0);
+        $this->assertNull(RenderCommand::loadInput('', $stream), 'past-cap stream collapses to null, never an unbounded slurp');
+        fclose($stream);
+
+        $small = fopen('php://temp', 'r+');
+        $this->assertNotFalse($small);
+        fwrite($small, "# ok\n");
+        fseek($small, 0);
+        $this->assertSame("# ok\n", RenderCommand::loadInput('', $small), 'bounded, not broken: small reads still work');
+        fclose($small);
+    }
+
     public function testExecuteWithWidthOptionEnablesWordWrap(): void
     {
         RenderCommand::setTerminalCheckCallback(fn () => false);
