@@ -106,6 +106,35 @@ final class IntelSysfsTest extends TestCase
         $this->assertEqualsWithDelta(40.0, $snap->devices[1]->utilization, 1e-9, 'xe vcs');
     }
 
+    public function testPowerInputFallbackFeedsTheTenWattObservedPeakLaw(): void
+    {
+        // Parity with the AMD twin's pin (candy-top-066): with power1_max
+        // gone and no energy counter to derive watts from, card6 runs the
+        // watts-only path — and its power limit is btop's Intel law: a
+        // 10 W seed that only grows.
+        unlink($this->tree->root . '/sys/class/drm/card6/device/hwmon/hwmon7/power1_max');
+        unlink($this->tree->root . '/sys/class/drm/card6/device/hwmon/hwmon7/energy1_input');
+        $this->tree->write('sys/class/drm/card6/device/hwmon/hwmon7/power1_input', "5000000\n");
+        [$snap, $intel] = $this->intel()->poll(DrmScan::none());
+        $d = $snap->devices[1];
+        $this->assertSame(5.0, $d->watts, 'power1_input only when energy1_input is absent');
+        $this->assertSame(10.0, $d->powerLimit, 'a 5 W reading never pulls the 10 W seed down');
+
+        $this->tree->write('sys/class/drm/card6/device/hwmon/hwmon7/power1_input', "17500000\n");
+        [$snap, $intel] = $intel->poll(DrmScan::none());
+        $this->assertSame(17.5, $snap->devices[1]->powerLimit, 'peak grows');
+
+        $this->tree->write('sys/class/drm/card6/device/hwmon/hwmon7/power1_input', "8000000\n");
+        [$snap] = $intel->poll(DrmScan::none());
+        $this->assertSame(8.0, $snap->devices[1]->watts);
+        $this->assertSame(17.5, $snap->devices[1]->powerLimit, 'peak holds');
+
+        // An explicit cap outranks the observed peak the moment it appears.
+        $this->tree->write('sys/class/drm/card6/device/hwmon/hwmon7/power1_cap', "165000000\n");
+        [$snap] = $intel->poll(DrmScan::none());
+        $this->assertSame(165.0, $snap->devices[1]->powerLimit, 'power1_cap when power1_max is gone');
+    }
+
     public function testNoIntelHardwareInstallsNothing(): void
     {
         $amd = GpuTree::of('amd');
