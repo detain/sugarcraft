@@ -7,12 +7,24 @@ namespace SugarCraft\Sql\Admin;
 /**
  * Placeholder context for unsupported database flavors (e.g., SQLite).
  * Returns empty data for all queries to avoid render errors.
+ *
+ * SQL-C01: {@see connection()} no longer throws — pages construct eagerly
+ * through it (ReportsPage via adminPage()), and a throw there killed the
+ * whole TUI three keys into a default SQLite session. The null-sentinel
+ * seam answers empty data exactly like the other accessors here, keeping
+ * the class docblock's "avoid render errors" promise true. An injected
+ * handle is honoured for tests that need the sentinel to observe calls.
  */
 final class EmptyServerContext implements ServerContextInterface
 {
+    public function __construct(
+        private readonly ?\SugarCraft\Sql\Db\DatabaseInterface $db = null,
+    ) {
+    }
+
     public function connection(): \SugarCraft\Sql\Db\DatabaseInterface
     {
-        throw new \RuntimeException('Not supported');
+        return $this->db ?? new \SugarCraft\Sql\Db\NullDatabase();
     }
 
     /** @return array<string, string> */

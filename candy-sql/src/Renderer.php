@@ -378,7 +378,13 @@ final class Renderer
         $sidebarText = implode("\n", $sidebarLines);
 
         // Get admin page content — no frame wrapping from here
-        $pageContent = $a->adminPage()->view();
+        try {
+            $pageContent = $a->adminPage()->view();
+        } catch (\Throwable $e) {
+            // SQL-C01 fold seam (view leg): a page that cannot paint answers
+            // an honest error line instead of exiting the TUI.
+            $pageContent = 'admin page unavailable: ' . $e->getMessage();
+        }
 
         // This pane spans the full width. The outer BorderFrame content area is
         // (cols - 2); a bordered+padded Style adds 4, so the inner content width

@@ -187,8 +187,13 @@ final class App implements Model
             // minted a throwaway page per render — rolling-window widgets
             // (Server Status graphs, Sampler rates) could never accumulate.
             $page = $newApp->admin->page ?? $newApp->adminPage();
-            [$newPage,] = $page->update(new ReloadReportMsg());
-            $newApp = $newApp->withAdminPage($newPage);
+            try {
+                [$newPage,] = $page->update(new ReloadReportMsg());
+                $newApp = $newApp->withAdminPage($newPage);
+            } catch (\Throwable) {
+                // SQL-C01 fold seam: a page-level reload failure must never
+                // kill the TUI — drop the reload, keep the arrived data.
+            }
             return [$newApp, null];
         }
         if ($msg instanceof TableRowsLoadedMsg) {
@@ -207,8 +212,13 @@ final class App implements Model
             // Only the page is told to re-read (memo invalidation) — never
             // AdminDataLoadedMsg, whose empty arrays would wipe the cached vars.
             if ($this->admin->page !== null) {
-                [$newPage,] = $this->admin->page->update(new ReloadReportMsg());
-                return [$this->withAdminPage($newPage), null];
+                try {
+                    [$newPage,] = $this->admin->page->update(new ReloadReportMsg());
+                    return [$this->withAdminPage($newPage), null];
+                } catch (\Throwable) {
+                    // SQL-C01 fold seam: see AdminDataLoadedMsg above.
+                    return [$this, null];
+                }
             }
             return [$this, null];
         }
@@ -434,7 +444,12 @@ final class App implements Model
         if ($msg->type === KeyType::Char && $msg->rune === 'r') {
             AdminQueryCache::instance()->forget();
             $page = $this->adminPage();
-            [$newPage, ] = $page->update($msg);
+            try {
+                [$newPage, ] = $page->update($msg);
+            } catch (\Throwable) {
+                // SQL-C01 fold seam: a page reacting to reset must not kill the TUI.
+                return [$this, null];
+            }
             if ($newPage !== $page) {
                 return [$this->withAdminPage($newPage), null];
             }
@@ -449,7 +464,13 @@ final class App implements Model
         // respond to their own keys while preserving the returned page state
         // across poll-tick refreshes.
         $page = $this->adminPage();
-        [$newPage, $cmd] = $page->update($msg);
+        try {
+            [$newPage, $cmd] = $page->update($msg);
+        } catch (\Throwable) {
+            // SQL-C01 fold seam: page-level key handling failures degrade to
+            // "key ignored", never to a dead TUI.
+            return [$this, null];
+        }
         return [$this->withAdminPage($newPage), $cmd];
     }
 
@@ -957,15 +978,24 @@ final class App implements Model
             statusVarsArrivedAt: $this->admin->cacheTs > 0.0 ? $this->admin->cacheTs : null,
         );
 
-        return match ($this->admin->pane) {
-            AdminPane::ProcessList => ConnectionsPage::new($context),
-            AdminPane::Dashboard => new DashboardPage($context),
-            AdminPane::Variables => self::buildVariablesPage($context),
-            AdminPane::Status => self::buildServerStatusPage($context),
-            AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context, $context->connection()),
-            AdminPane::PerfSchema => PerfSchemaPage::new($context, EasySetupDetector::fromContext($context)),
-            AdminPane::Debug => DebugPage::new($context),
-        };
+        // SQL-C01 fold seam (build leg): a page constructor or its data
+        // seed throwing must not escape into the render path and kill the
+        // TUI. The Dashboard page over the same (sentinel-safe) context is
+        // the floor that provably cannot throw; its empty-state legs paint
+        // "no data" honestly.
+        try {
+            return match ($this->admin->pane) {
+                AdminPane::ProcessList => ConnectionsPage::new($context),
+                AdminPane::Dashboard => new DashboardPage($context),
+                AdminPane::Variables => self::buildVariablesPage($context),
+                AdminPane::Status => self::buildServerStatusPage($context),
+                AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context, $context->connection()),
+                AdminPane::PerfSchema => PerfSchemaPage::new($context, EasySetupDetector::fromContext($context)),
+                AdminPane::Debug => DebugPage::new($context),
+            };
+        } catch (\Throwable) {
+            return new DashboardPage($context);
+        }
     }
 
     /**

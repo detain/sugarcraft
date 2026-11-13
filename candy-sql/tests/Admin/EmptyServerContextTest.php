@@ -82,10 +82,23 @@ final class EmptyServerContextTest extends TestCase
         $this->assertFalse($this->ctx->wasReset());
     }
 
-    public function testConnectionThrowsRuntimeException(): void
+    public function testConnectionAnswersEmptySentinel(): void
     {
-        $this->expectException(\RuntimeException::class);
-        $this->ctx->connection();
+        // SQL-C01: connection() used to throw RuntimeException('Not supported')
+        // — which killed the TUI wherever a page dereferenced it during build
+        // (ReportsPage via adminPage()). The sentinel answers empty data.
+        $db = $this->ctx->connection();
+        $this->assertSame([], $db->tables());
+        $this->assertSame([], $db->query('anything'));
+        $this->assertSame([], $db->rows('t'));
+        $this->assertSame(0, $db->exec('UPDATE t SET x = 1'));
+        $this->assertFalse($db->ping());
+    }
+
+    public function testInjectedHandleIsHonoured(): void
+    {
+        $fake = new FakeDatabase();
+        $this->assertSame($fake, (new EmptyServerContext($fake))->connection());
     }
 
     public function testRefreshIsNoOp(): void
