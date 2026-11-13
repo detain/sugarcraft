@@ -129,11 +129,53 @@ final class MigrateCommand implements DocumentedCommand
             $outputPath = $inputPath;
             $backupPath = $inputPath . self::BACKUP_SUFFIX;
 
-            // Backup original
-            if (!@copy($inputPath, $backupPath)) {
-                fwrite($stderr, "candy-vcr migrate: could not create backup at {$backupPath}\n");
+            // Backup door (findings 017/059). The pre-fix `@copy()` was
+            // three findings deep: it clobbered any existing .bak (the
+            // second migrate silently destroyed the only copy of the
+            // pre-migration bytes), it followed a planted symlink at the
+            // backup name (CWE-59), and it re-stamped the copy at the
+            // ambient umask — a 0600 source produced a 0664 .bak holding
+            // every keystroke of the session. An explicit is_link refusal
+            // plus `fopen('xb')` exclusive creation close both halves
+            // (see note below on why 'x' alone is not enough); chmod
+            // lands the 0600 policy BEFORE any content, matching the
+            // RestrictsCassettePermissions contract every format writer
+            // already keeps; the bytes then stream-copy from the source.
+            // is_link first, not just 'xb': PHP's fopen('x') probes with
+            // stat(), which FOLLOWS symlinks — a dangling link stats as
+            // "does not exist", so 'x' happily creates its target and
+            // writes straight through the planted name. The link check
+            // closes the hole 'x' leaves.
+            if (is_link($backupPath)) {
+                fwrite($stderr, "candy-vcr migrate: backup path {$backupPath} is a symlink - refusing to write through it\n");
                 return 1;
             }
+            $backupHandle = @fopen($backupPath, 'xb');
+            if ($backupHandle === false) {
+                $reason = file_exists($backupPath)
+                    ? "backup {$backupPath} already exists - refusing to overwrite it"
+                    : "could not create backup at {$backupPath}";
+                fwrite($stderr, "candy-vcr migrate: {$reason}\n");
+                return 1;
+            }
+            if (!@chmod($backupPath, 0600)) {
+                fclose($backupHandle);
+                @unlink($backupPath);
+                fwrite($stderr, "candy-vcr migrate: cannot restrict permissions on {$backupPath}\n");
+                return 1;
+            }
+            $sourceHandle = @fopen($inputPath, 'rb');
+            if ($sourceHandle === false || @stream_copy_to_stream($sourceHandle, $backupHandle) === false) {
+                if (is_resource($sourceHandle)) {
+                    fclose($sourceHandle);
+                }
+                fclose($backupHandle);
+                @unlink($backupPath);
+                fwrite($stderr, "candy-vcr migrate: could not copy {$inputPath} to {$backupPath}\n");
+                return 1;
+            }
+            fclose($sourceHandle);
+            fclose($backupHandle);
             fwrite($stdout, "backed up original to {$backupPath}\n");
         }
 
