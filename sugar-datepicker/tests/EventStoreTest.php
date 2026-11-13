@@ -142,4 +142,48 @@ final class EventStoreTest extends TestCase
             $types,
         );
     }
+
+    public function testRingReleaseRebuildsTheWholeListOldestFirstBeyondCap(): void
+    {
+        // dp-28 differential: cap+50 records, then release() must return
+        // EXACTLY the list the old array_shift implementation would have —
+        // every retained seq in order, not just head/tail (the
+        // SemanticsPins eviction test pins only the ends).
+        $store = new EventStore(static fn (): int => 7);
+        $total = EventStore::MAX_EVENTS + 50;
+        for ($i = 0; $i < $total; $i++) {
+            $store->record(PickerEvent::CURSOR_MOVED, ['seq' => $i]);
+        }
+
+        $released = $store->release();
+
+        $this->assertCount(EventStore::MAX_EVENTS, $released);
+        $seqs = array_column(array_column($released, 'payload'), 'seq');
+        $this->assertSame(range(50, $total - 1), $seqs);
+        $this->assertSame(array_keys($seqs), range(0, EventStore::MAX_EVENTS - 1),
+            'release() must hand back a plain re-indexed list');
+        $this->assertFalse($store->hasEvents());
+        $this->assertSame(0, $store->count());
+    }
+
+    public function testRingWrapsAcrossMultipleDrainsWithoutReordering(): void
+    {
+        // Drain, refill past the wrap point, drain again: the head keeps
+        // walking mod cap, so the second release exercises ring wraparound.
+        $store = new EventStore(static fn (): int => 9);
+        $first = EventStore::MAX_EVENTS - 3;
+        for ($i = 0; $i < $first; $i++) {
+            $store->record(PickerEvent::DATE_CLEARED, ['seq' => $i]);
+        }
+        $store->release();
+
+        for ($i = 0; $i < $first + 10; $i++) {
+            $store->record(PickerEvent::DATE_CLEARED, ['seq' => $i]);
+        }
+        $released = $store->release();
+
+        $this->assertCount(EventStore::MAX_EVENTS, $released);
+        $seqs = array_column(array_column($released, 'payload'), 'seq');
+        $this->assertSame(range(7, $first + 9), $seqs, 'wrapped ring must read oldest→newest');
+    }
 }
