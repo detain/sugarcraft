@@ -35,7 +35,12 @@ use SugarCraft\Spring\Lang;
  * @see https://www.w3.org/TR/css-easing-3/#cubic-bezier-algo
  * @see https://github.com/ai/easings.net (2022 table in src/easings.yml; pre-2022 table mirrored at https://30secondsofcode.org/css/s/easing-variables/)
  */
-final readonly class CubicBezier implements EasingFunction
+// Per-property readonly rather than a `readonly class`: the named-preset
+// memo below is a private *static* array, and PHP marks every property of a
+// readonly class — statics included — immutable, which forbids it a default.
+// The ten instance fields are each individually readonly; the curve's
+// immutability (what makes sharing a preset safe) is unchanged.
+final class CubicBezier implements EasingFunction
 {
     private const NEWTON_ITERATIONS    = 8;
     private const NEWTON_MIN_STEP      = 0.000_001;
@@ -51,15 +56,42 @@ final readonly class CubicBezier implements EasingFunction
     private const MAX_SUBDIVISION_ITERATIONS = 64; // float bisection converges < 53; 64 is a loud safety net
 
     /** Control point 1 x */
-    private float $x1;
+    private readonly float $x1;
     /** Control point 1 y */
-    private float $y1;
+    private readonly float $y1;
     /** Control point 2 x */
-    private float $x2;
+    private readonly float $x2;
     /** Control point 2 y */
-    private float $y2;
+    private readonly float $y2;
 
-    private float $epsilon;
+    /**
+     * Bézier polynomial coefficients (endpoints P0=0, P3=1 baked in), one
+     * constructor-hoisted set per axis: x(t) = ax·t³ + bx·t² + cx·t and the
+     * y mirror. The sampler AND the Newton derivative consume the SAME six
+     * floats — before the hoist each method recomputed them inline per call,
+     * the derivative from a differently-associated spelling that differs from
+     * the polynomial's by one ulp on most non-dyadic control points (the
+     * very value/slope drift the old comment claimed was impossible).
+     */
+    private readonly float $cx;
+    private readonly float $bx;
+    private readonly float $ax;
+    private readonly float $cy;
+    private readonly float $by;
+    private readonly float $ay;
+
+    private readonly float $epsilon;
+
+    /**
+     * The 26 named presets, one shared immutable instance per factory name.
+     * Every instance field is readonly and all derived values are computed
+     * in the constructor, so handing the same object to every caller is
+     * safe; the per-frame consumer path (sugar-overlay's
+     * `$this->easing ?? CubicBezier::easeX()`) stops allocating a curve each
+     * frame. Ad-hoc `new CubicBezier(...)` curves bypass this memo — it holds
+     * at most the 26 named entries, keyed by final factory name.
+     */
+    private static array $presets = [];
 
     /**
      * @param float $x1 Control point 1 x (CSS requires 0 ≤ x1 ≤ 1)
@@ -93,10 +125,34 @@ final readonly class CubicBezier implements EasingFunction
         $this->y1 = $y1;
         $this->x2 = $x2;
         $this->y2 = $y2;
+        // WebKit UnitBezier coefficient form — hoisted once per instance so
+        // every sample is pure evaluation, never re-derivation. The local
+        // spelling below is load-bearing for byte-fidelity: 1-cx-bx and the
+        // old derivative spelling 1-3x2+3x1 are algebraically equal but
+        // differ by one ulp in float, and existing sample pins are asserted
+        // on this form (pinned in CubicBezierTest).
+        $this->cx = $cx = 3.0 * $x1;
+        $this->bx = $bx = 3.0 * ($x2 - $x1) - $cx;
+        $this->ax = 1.0 - $cx - $bx;
+        $this->cy = $cy = 3.0 * $y1;
+        $this->by = $by = 3.0 * ($y2 - $y1) - $cy;
+        $this->ay = 1.0 - $cy - $by;
         $this->epsilon = self::SUBDIVISION_PRECISION;
     }
 
     // ─── CSS named easings ────────────────────────────────────────────────
+
+    /**
+     * Memo door for the 26 named presets: the key is the factory name and
+     * the value is a shared immutable instance (see {@see self::$presets}
+     * for the consumer payoff). Private and reached only from the named
+     * factories below — never from the constructor, so custom curves stay
+     * unshared.
+     */
+    private static function memo(string $name, float $x1, float $y1, float $x2, float $y2): self
+    {
+        return self::$presets[$name] ??= new self($x1, $y1, $x2, $y2);
+    }
 
     /**
      * The CSS `ease` transition-timing-function keyword. Named `cssEase()`
@@ -106,11 +162,11 @@ final readonly class CubicBezier implements EasingFunction
      * `__callStatic()` (the engine resolves it to the instance method and
      * raises an Error) and fails loudly instead; migrate to `cssEase()`.
      */
-    public static function cssEase(): self       { return new self(0.25, 0.10, 0.25, 1.00); }
-    public static function easeIn(): self         { return new self(0.42, 0.00, 1.00, 1.00); }
-    public static function easeOut(): self        { return new self(0.00, 0.00, 0.58, 1.00); }
-    public static function easeInOut(): self      { return new self(0.42, 0.00, 0.58, 1.00); }
-    public static function linear(): self         { return new self(0.00, 0.00, 1.00, 1.00); }
+    public static function cssEase(): self       { return self::memo('cssEase', 0.25, 0.10, 0.25, 1.00); }
+    public static function easeIn(): self         { return self::memo('easeIn', 0.42, 0.00, 1.00, 1.00); }
+    public static function easeOut(): self        { return self::memo('easeOut', 0.00, 0.00, 0.58, 1.00); }
+    public static function easeInOut(): self      { return self::memo('easeInOut', 0.42, 0.00, 0.58, 1.00); }
+    public static function linear(): self         { return self::memo('linear', 0.00, 0.00, 1.00, 1.00); }
 
     /**
      * BC door for the CSS-keyword preset, honestly stated: PHP resolves a
@@ -126,24 +182,24 @@ final readonly class CubicBezier implements EasingFunction
         throw new \BadMethodCallException(Lang::t('bezier.unknown_static', ['name' => $name]));
     }
 
-    public static function easeInSine(): self     { return new self(0.47, 0.00, 0.75, 0.72); }
-    public static function easeOutSine(): self    { return new self(0.39, 0.58, 0.57, 1.00); }
-    public static function easeInOutSine(): self  { return new self(0.45, 0.05, 0.55, 0.95); }
+    public static function easeInSine(): self     { return self::memo('easeInSine', 0.47, 0.00, 0.75, 0.72); }
+    public static function easeOutSine(): self    { return self::memo('easeOutSine', 0.39, 0.58, 0.57, 1.00); }
+    public static function easeInOutSine(): self  { return self::memo('easeInOutSine', 0.45, 0.05, 0.55, 0.95); }
 
-    public static function easeInQuad(): self     { return new self(0.55, 0.09, 0.68, 0.53); }
-    public static function easeOutQuad(): self    { return new self(0.25, 0.46, 0.45, 0.94); }
-    public static function easeInOutQuad(): self  { return new self(0.46, 0.03, 0.52, 0.96); }
+    public static function easeInQuad(): self     { return self::memo('easeInQuad', 0.55, 0.09, 0.68, 0.53); }
+    public static function easeOutQuad(): self    { return self::memo('easeOutQuad', 0.25, 0.46, 0.45, 0.94); }
+    public static function easeInOutQuad(): self  { return self::memo('easeInOutQuad', 0.46, 0.03, 0.52, 0.96); }
 
-    public static function easeInCubic(): self    { return new self(0.55, 0.06, 0.68, 0.19); }
-    public static function easeOutCubic(): self   { return new self(0.22, 0.61, 0.36, 1.00); }
-    public static function easeInOutCubic(): self { return new self(0.65, 0.05, 0.35, 1.00); }
+    public static function easeInCubic(): self    { return self::memo('easeInCubic', 0.55, 0.06, 0.68, 0.19); }
+    public static function easeOutCubic(): self   { return self::memo('easeOutCubic', 0.22, 0.61, 0.36, 1.00); }
+    public static function easeInOutCubic(): self { return self::memo('easeInOutCubic', 0.65, 0.05, 0.35, 1.00); }
 
-    public static function easeInQuart(): self    { return new self(0.90, 0.03, 0.69, 0.22); }
-    public static function easeOutQuart(): self   { return new self(0.17, 0.84, 0.44, 1.00); }
-    public static function easeInOutQuart(): self { return new self(0.77, 0.00, 0.18, 1.00); }
+    public static function easeInQuart(): self    { return self::memo('easeInQuart', 0.90, 0.03, 0.69, 0.22); }
+    public static function easeOutQuart(): self   { return self::memo('easeOutQuart', 0.17, 0.84, 0.44, 1.00); }
+    public static function easeInOutQuart(): self { return self::memo('easeInOutQuart', 0.77, 0.00, 0.18, 1.00); }
 
-    public static function easeInQuint(): self    { return new self(0.76, 0.05, 0.86, 0.06); }
-    public static function easeOutQuint(): self   { return new self(0.23, 1.00, 0.32, 1.00); }
+    public static function easeInQuint(): self    { return self::memo('easeInQuint', 0.76, 0.05, 0.86, 0.06); }
+    public static function easeOutQuint(): self   { return self::memo('easeOutQuint', 0.23, 1.00, 0.32, 1.00); }
 
     /**
      * Pre-2022 easings.net approximation: cubic-bezier(0.86, 0, 0.07, 1).
@@ -151,14 +207,14 @@ final readonly class CubicBezier implements EasingFunction
      * preset family consistently ships the original table, see the class
      * docblock.)
      */
-    public static function easeInOutQuint(): self { return new self(0.86, 0.00, 0.07, 1.00); }
+    public static function easeInOutQuint(): self { return self::memo('easeInOutQuint', 0.86, 0.00, 0.07, 1.00); }
 
-    public static function easeInExpo(): self     { return new self(0.95, 0.05, 0.80, 0.00); }
-    public static function easeOutExpo(): self    { return new self(0.19, 1.00, 0.22, 1.00); }
-    public static function easeInOutExpo(): self  { return new self(1.00, 0.00, 0.00, 1.00); }
+    public static function easeInExpo(): self     { return self::memo('easeInExpo', 0.95, 0.05, 0.80, 0.00); }
+    public static function easeOutExpo(): self    { return self::memo('easeOutExpo', 0.19, 1.00, 0.22, 1.00); }
+    public static function easeInOutExpo(): self  { return self::memo('easeInOutExpo', 1.00, 0.00, 0.00, 1.00); }
 
-    public static function easeInCirc(): self     { return new self(0.60, 0.04, 0.98, 0.34); }
-    public static function easeOutCirc(): self    { return new self(0.08, 0.82, 0.17, 1.00); }
+    public static function easeInCirc(): self     { return self::memo('easeInCirc', 0.60, 0.04, 0.98, 0.34); }
+    public static function easeOutCirc(): self    { return self::memo('easeOutCirc', 0.08, 0.82, 0.17, 1.00); }
 
     /**
      * Pre-2022 easings.net approximation: cubic-bezier(0.785, 0.135, 0.15, 0.86).
@@ -171,7 +227,7 @@ final readonly class CubicBezier implements EasingFunction
      * https://github.com/NG-ZORRO/ng-zorro-antd default.less), rounded to the
      * 2-dp convention stated in the class docblock.
      */
-    public static function easeInOutCirc(): self  { return new self(0.785, 0.135, 0.150, 0.860); }
+    public static function easeInOutCirc(): self  { return self::memo('easeInOutCirc', 0.785, 0.135, 0.150, 0.860); }
 
     // ─── Evaluation ───────────────────────────────────────────────────────
 
@@ -279,29 +335,24 @@ final readonly class CubicBezier implements EasingFunction
     }
 
     // Bézier polynomial with endpoints P0=0, P3=1 and B=x1, C=x2:
-    // x(t) = (1+3B-3C)t³ + (3C-6B)t² + 3Bt  (the ax/bx/cx below are its terms)
+    // x(t) = (1+3B-3C)t³ + (3C-6B)t² + 3Bt  (the ax/bx/cx fields hoisted in
+    // the constructor are its terms; the samplers below only evaluate)
 
     private function sampleCurveX(float $t): float
     {
-        // WebKit UnitBezier coefficient form — the SAME representation the
-        // Newton derivative uses below, so slope and value cannot drift out of
-        // agreement (the Bernstein spelling `3(1-t)²t·x1 + 3(1-t)t²·x2 + t³`
-        // is algebraically identical but rounds differently).
+        // WebKit UnitBezier coefficient form — computed once in the
+        // constructor (see the coefficient fields) and consumed here and by
+        // the Newton derivative from the SAME six floats, so slope and value
+        // cannot drift out of agreement (the Bernstein spelling
+        // `3(1-t)²t·x1 + 3(1-t)t²·x2 + t³` is algebraically identical but
+        // rounds differently).
         // x(t) = ax·t³ + bx·t² + cx·t, endpoints x(0)=0, x(1)=1 baked in.
-        $cx = 3.0 * $this->x1;
-        $bx = 3.0 * ($this->x2 - $this->x1) - $cx;
-        $ax = 1.0 - $cx - $bx;
-
-        return ($ax * $t + $bx) * $t * $t + $cx * $t;
+        return ($this->ax * $t + $this->bx) * $t * $t + $this->cx * $t;
     }
 
     private function sampleCurveY(float $t): float
     {
-        $cy = 3.0 * $this->y1;
-        $by = 3.0 * ($this->y2 - $this->y1) - $cy;
-        $ay = 1.0 - $cy - $by;
-
-        return ($ay * $t + $by) * $t * $t + $cy * $t;
+        return ($this->ay * $t + $this->by) * $t * $t + $this->cy * $t;
     }
 
     private function sampleCurveDerivativeX(float $t): float
@@ -309,13 +360,11 @@ final readonly class CubicBezier implements EasingFunction
         // Repair note: the previous spelling 3(t-1)((2-t)x1+(t-2)x2) is NOT
         // d/dt of sampleCurveX() — e.g. at t=0 it returns -6·x1 where the true
         // derivative is 3·x1, and it collapses to 0 for every x1===x2 curve.
-        // Closed form of x(t) = at³ + bt² + ct with the WebKit UnitBezier
-        // coefficients (the Newton step's slope must match the polynomial or
-        // the solver relies on the subdivision fallback to mask the damage).
-        $ax = 1.0 - 3.0 * $this->x2 + 3.0 * $this->x1;
-        $bx = 3.0 * $this->x2 - 6.0 * $this->x1;
-        $cx = 3.0 * $this->x1;
-
-        return (3.0 * $ax * $t + 2.0 * $bx) * $t + $cx;
+        // Closed form of x(t) = ax·t³ + bx·t² + cx·t with the SAME
+        // constructor-hoisted coefficients the polynomial sampler reads —
+        // the Newton step's slope cannot contradict the value it walks
+        // (pre-hoist, this method re-derived ax/bx from a different float
+        // association, up to one ulp apart).
+        return (3.0 * $this->ax * $t + 2.0 * $this->bx) * $t + $this->cx;
     }
 }

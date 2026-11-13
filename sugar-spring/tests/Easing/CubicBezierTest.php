@@ -437,6 +437,127 @@ final class CubicBezierTest extends TestCase
     }
 
     /**
+     * SPR-04 hoist honesty: the six constructor-computed polynomial
+     * coefficients must equal the old per-call inline arithmetic BIT-EXACTLY
+     * (===) — the hoist is pure performance, no sample may move. The
+     * arithmetic is spelled independently here (the legacy WebKit UnitBezier
+     * association) so the pin is an oracle, not a tautology; adversarial
+     * tuples included because the old code had TWO inline spellings (the
+     * derivative recomputed ax as 1-3x2+3x1, up to one ulp off 1-cx-bx —
+     * measured divergent on 38% of random control points), and the pin
+     * records WHICH association the hoisted fields carry: the polynomial's,
+     * keeping every existing sample pin byte-identical (26-preset + custom
+     * 1000-point grid diffed pre/post hoist: only the known 1-ulp Newton
+     * derivative-path shifts on easeIn's non-dyadic tuple moved, ulp-deep,
+     * with zero exact pins at those coordinates).
+     *
+     * @dataProvider coefficientHoistProvider
+     */
+    public function testHoistedCoefficientsEqualLegacyInlineArithmetic(
+        float $x1, float $y1, float $x2, float $y2
+    ): void {
+        $cb = new CubicBezier($x1, $y1, $x2, $y2);
+        $read = static function (string $prop) use ($cb): float {
+            return (float) (new \ReflectionProperty(CubicBezier::class, $prop))->getValue($cb);
+        };
+
+        // Legacy inline arithmetic of sampleCurveX/sampleCurveY, verbatim.
+        $cx = 3.0 * $x1;
+        $bx = 3.0 * ($x2 - $x1) - $cx;
+        $ax = 1.0 - $cx - $bx;
+        $cy = 3.0 * $y1;
+        $by = 3.0 * ($y2 - $y1) - $cy;
+        $ay = 1.0 - $cy - $by;
+
+        $this->assertSame($cx, $read('cx'), "cx at ($x1,$y1,$x2,$y2)");
+        $this->assertSame($bx, $read('bx'), "bx at ($x1,$y1,$x2,$y2)");
+        $this->assertSame($ax, $read('ax'), "ax at ($x1,$y1,$x2,$y2)");
+        $this->assertSame($cy, $read('cy'), "cy at ($x1,$y1,$x2,$y2)");
+        $this->assertSame($by, $read('by'), "by at ($x1,$y1,$x2,$y2)");
+        $this->assertSame($ay, $read('ay'), "ay at ($x1,$y1,$x2,$y2)");
+    }
+
+    /**
+     * The Newton slope must read the SAME stored coefficients the polynomial
+     * evaluates — (3·ax·t + 2·bx)·t + cx with the reflected hoisted floats,
+     * bit-exact. This is the value/slope drift cure: pre-hoist the derivative
+     * re-derived ax/bx from the alternate association and could disagree with
+     * its own polynomial by one ulp on adversarial control points.
+     *
+     * @dataProvider coefficientHoistProvider
+     */
+    public function testDerivativeConsumesTheSameHoistedCoefficients(
+        float $x1, float $y1, float $x2, float $y2
+    ): void {
+        $cb = new CubicBezier($x1, $y1, $x2, $y2);
+        $read = static function (string $prop) use ($cb): float {
+            return (float) (new \ReflectionProperty(CubicBezier::class, $prop))->getValue($cb);
+        };
+        $derivative = new \ReflectionMethod(CubicBezier::class, 'sampleCurveDerivativeX');
+
+        foreach ([0.0, 0.125, 1 / 3, 0.5, 0.9375, 1.0] as $t) {
+            $expected = (3.0 * $read('ax') * $t + 2.0 * $read('bx')) * $t + $read('cx');
+            $this->assertSame($expected, $derivative->invoke($cb, $t), "slope at t=$t");
+        }
+    }
+
+    /** @return array<string, array{float, float, float, float}> */
+    public static function coefficientHoistProvider(): array
+    {
+        $cases = [];
+        foreach (self::frozenFactoryTupleRosterProvider() as $name => [$factory, $tuple]) {
+            $cases["table $name"] = $tuple;
+        }
+        // Adversarial non-dyadic tuples, including the ones measured
+        // divergent between the old two spellings (1 ulp apart):
+        $cases['easeIn non-dyadic']  = [0.42, 0.00, 1.00, 1.00];
+        $cases['back overshoot']     = [0.68, -0.60, 0.32, 1.60];
+        $cases['thirds']             = [1 / 3, 2 / 3, 2 / 7, 5 / 7];
+        $cases['near-dyadic drift']  = [0.94999999999999996, 0.050000000000000003, 0.80000000000000004, 0.0];
+        $cases['quarter grid']       = [0.25, 0.10, 0.25, 1.00];
+
+        return $cases;
+    }
+
+    /**
+     * SPR-04 memo: every named factory hands back one shared immutable
+     * instance (identity, not just equality), the cache holds at most the 26
+     * named entries keyed by factory name, and ad-hoc constructor curves
+     * stay unshared. Mutation-proven: dropping `??=` (returning `new self`
+     * every call) reddens the identity leg.
+     *
+     * @dataProvider frozenFactoryTupleRosterProvider
+     */
+    public function testNamedFactoriesReturnSharedInstances(string $factory, array $tuple): void
+    {
+        $first  = CubicBezier::$factory();
+        $second = CubicBezier::$factory();
+
+        $this->assertSame($first, $second, "$factory must return the same shared instance");
+    }
+
+    public function testPresetMemoIsBoundedToTheNamedFamily(): void
+    {
+        foreach (self::frozenFactoryTupleRosterProvider() as [$factory]) {
+            CubicBezier::$factory();
+        }
+        // Constructor-built customs bypass the memo entirely.
+        $customA = new CubicBezier(0.13, 0.29, 0.41, 0.57);
+        $customB = new CubicBezier(0.13, 0.29, 0.41, 0.57);
+        $this->assertNotSame($customA, $customB, 'custom curves must not be memoized');
+
+        $cache = (new \ReflectionProperty(CubicBezier::class, 'presets'))->getValue();
+        $this->assertCount(26, $cache);
+        // Insertion order is suite-order dependent (one shared static), so
+        // the census compares sorted key sets, not order.
+        $keys = array_keys($cache);
+        sort($keys);
+        $roster = array_column(self::frozenFactoryTupleRosterProvider(), 0);
+        sort($roster);
+        $this->assertSame($roster, $keys, 'memo keys are exactly the 26 factory names');
+    }
+
+    /**
      * @return array{float, float, float, float}
      */
     private function tupleOf(CubicBezier $cb): array
