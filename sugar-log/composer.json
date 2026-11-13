@@ -22,7 +22,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-log/issues",
-        "source": "https://github.com/sugarcraft/sugar-log"
+        "source": "https://github.com/sugarcraft/sugar-log",
+        "docs": "https://sugarcraft.github.io/lib/sugar-log.html"
     },
     "require": {
         "php": "^8.3",
