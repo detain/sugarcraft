@@ -1110,10 +1110,14 @@ hooks x passes x 60. The sum is used rather than a new constant because it is
 the only figure derived from what you already wrote: on a single pass every
 entry gets exactly the budget it asked for, and what is taken away is the
 multiplication nobody asked for. A chain that runs out is a **DENY**, naming
-the budget. Hand-written PHP hooks (`HookInterface` implementations that are
-not `ScriptHook`) are a synchronous call in this process with no deadline to
-honour: they neither contribute to that budget nor are charged against it, and
-a chain made only of those is bounded by nothing here, as it always was.
+the budget. Command (script) hooks and `type: http` hooks both carry a bounded
+`timeout`, so both contribute to that sum and are charged against it. Two kinds
+do not: hand-written PHP hooks (`HookInterface` implementations that are not
+`ScriptHook`) are a synchronous call in this process with no deadline to
+honour, and `type: prompt` hooks apply no `timeout` to the model call at all
+(see "Prompt hooks" below). Neither contributes to that budget nor is charged
+against it, and a chain made only of those has no ceiling here — the sum is
+absent, not zero, so nothing is denied for lack of clock — as it always was.
 
 **A deny reason is clipped at 16 KiB**, with the clip announcing itself, and so
 is an `EXIT_ASK` question. Both are quoted verbatim into the model's tool
