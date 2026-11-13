@@ -35,6 +35,20 @@ final class RendererTest extends TestCase
         fclose($out);
     }
 
+    public function testSynchronizedOutputCanBeDisabledForCapabilitylessTerminals(): void
+    {
+        $out = fopen('php://memory', 'w+');
+        $this->assertNotFalse($out);
+        $r = new Renderer($out, synchronized: false);
+        $r->render("a\nb");
+        $r->render("a\nc");
+
+        $written = $this->read($out);
+        $this->assertStringNotContainsString('?2026', $written, 'no DEC 2026 markers on first or diff frames');
+        $this->assertStringContainsString("a\r\nb", $written);
+        fclose($out);
+    }
+
     public function testIdenticalFrameSkipped(): void
     {
         [$out, $r] = $this->make();

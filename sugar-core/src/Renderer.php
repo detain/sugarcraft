@@ -92,6 +92,7 @@ final class Renderer
         private $out,
         private readonly bool $inline = false,
         private readonly bool $cellDiff = false,
+        private readonly bool $synchronized = true,
     ) {
         $this->parser = new Parser();
     }
@@ -114,7 +115,7 @@ final class Renderer
             $body = $this->inline
                 ? Ansi::cursorSave() . implode("\r\n", $lines)
                 : Ansi::cursorTo(1, 1) . Ansi::eraseToEnd() . implode("\r\n", $lines);
-            $this->emit(Ansi::syncBegin() . $body . Ansi::syncEnd());
+            $this->emit($this->sync($body));
             $this->lastLines = $lines;
             return;
         }
@@ -125,7 +126,7 @@ final class Renderer
 
         if ($this->inline) {
             $body = Ansi::cursorRestore() . Ansi::eraseToEnd() . implode("\r\n", $lines);
-            $this->emit(Ansi::syncBegin() . $body . Ansi::syncEnd());
+            $this->emit($this->sync($body));
             $this->lastLines = $lines;
             return;
         }
@@ -135,9 +136,15 @@ final class Renderer
             : $this->diffLines($this->lastLines, $lines);
 
         if ($payload !== '') {
-            $this->emit(Ansi::syncBegin() . $payload . Ansi::syncEnd());
+            $this->emit($this->sync($payload));
         }
         $this->lastLines = $lines;
+    }
+
+    /** DEC 2026 wrap, unless the terminal never advertised the mode ({@see ProgramOptions::$synchronizedOutput}). */
+    private function sync(string $body): string
+    {
+        return $this->synchronized ? Ansi::syncBegin() . $body . Ansi::syncEnd() : $body;
     }
 
     public function reset(): void

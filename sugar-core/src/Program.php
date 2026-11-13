@@ -233,6 +233,7 @@ final class Program
             $this->output,
             inline:   $options->inlineMode,
             cellDiff: $options->cellDiffRenderer,
+            synchronized: $options->synchronizedOutput,
         );
         $this->tty = new Tty($this->input, $options->termios);
     }

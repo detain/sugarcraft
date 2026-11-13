@@ -78,6 +78,13 @@ final class ProgramOptionsBuilderTest extends TestCase
         $this->assertTrue($options->withoutSignalHandler);
     }
 
+    public function testSynchronizedOutputDefaultsOnAndBuilderTurnsItOff(): void
+    {
+        $this->assertTrue((new ProgramOptions())->synchronizedOutput);
+        $this->assertTrue(ProgramOptions::builder()->build()->synchronizedOutput);
+        $this->assertFalse(ProgramOptions::builder()->withSynchronizedOutput(false)->build()->synchronizedOutput);
+    }
+
     public function testBuilderWithInvalidFramerate(): void
     {
         $this->expectException(\InvalidArgumentException::class);

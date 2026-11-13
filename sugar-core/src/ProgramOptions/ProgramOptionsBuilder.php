@@ -48,6 +48,7 @@ final class ProgramOptionsBuilder
     private ?\Closure $subscriptions = null;
     private bool $sanitizePaste = true;
     private bool $exitOnStdinEof = true;
+    private bool $synchronizedOutput = true;
 
     public function withUseAltScreen(bool $useAltScreen): self
     {
@@ -210,6 +211,12 @@ final class ProgramOptionsBuilder
         return $this;
     }
 
+    public function withSynchronizedOutput(bool $synchronizedOutput): self
+    {
+        $this->synchronizedOutput = $synchronizedOutput;
+        return $this;
+    }
+
     /**
      * Build the {@see ProgramOptions} instance.
      */
@@ -241,6 +248,7 @@ final class ProgramOptionsBuilder
             subscriptions: $this->subscriptions,
             sanitizePaste: $this->sanitizePaste,
             exitOnStdinEof: $this->exitOnStdinEof,
+            synchronizedOutput: $this->synchronizedOutput,
         );
     }
 }

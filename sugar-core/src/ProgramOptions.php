@@ -168,6 +168,13 @@ final class ProgramOptions
          * still dropped so the loop does not spin on the dead stream.
          */
         public readonly bool $exitOnStdinEof = true,
+        /**
+         * Wrap every renderer frame in DEC 2026 synchronized-update markers.
+         * Defaults ON (Bubble Tea v2). Pass false for a terminal that never
+         * advertised the mode: a dumb or capability-less terminal would
+         * print the raw `?2026h`/`?2026l` sequences as garbage.
+         */
+        public readonly bool $synchronizedOutput = true,
     ) {
     }
 
