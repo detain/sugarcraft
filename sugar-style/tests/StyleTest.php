@@ -465,6 +465,95 @@ final class StyleTest extends TestCase
         $this->assertSame("\x1b[41mhi\x1b[0m", $s->render('hi'));
     }
 
+    // ---- value-object slot setters (finding 019) ------------------------
+
+    public function testWithAdaptiveForegroundIsByteEqualToPositionalTwin(): void
+    {
+        // The VO feeds the same slot with the same set-flags: every
+        // downstream ritual, refusal and render byte is shared.
+        $vo   = Style::new()
+            ->withAdaptiveForeground(new AdaptiveColor(Color::hex('#000000'), Color::hex('#ffffff')))
+            ->withAdaptiveBackground(new AdaptiveColor(Color::hex('#eeeeee'), Color::hex('#111111')));
+        $flat = Style::new()
+            ->foregroundAdaptive(Color::hex('#000000'), Color::hex('#ffffff'))
+            ->backgroundAdaptive(Color::hex('#eeeeee'), Color::hex('#111111'));
+        $this->assertSame(
+            $flat->resolveAdaptive(isDark: true)->render('hi'),
+            $vo->resolveAdaptive(isDark: true)->render('hi'),
+        );
+        $this->assertSame("\x1b[38;2;255;255;255m\x1b[48;2;17;17;17mhi\x1b[0m", $vo->resolveAdaptive(isDark: true)->render('hi'));
+    }
+
+    public function testWithAdaptiveForegroundStillRefusesUncollapsed(): void
+    {
+        $s = Style::new()->withAdaptiveForeground(new AdaptiveColor(Color::hex('#000'), Color::hex('#fff')));
+        $this->expectException(\LogicException::class);
+        $s->render('hi');
+    }
+
+    public function testWithCompleteForegroundCollapsesAtRenderLikeItsTwin(): void
+    {
+        $vo = Style::new()
+            ->colorProfile(ColorProfile::Ansi256)
+            ->withCompleteForeground(new CompleteColor(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1)));
+        $flat = Style::new()
+            ->colorProfile(ColorProfile::Ansi256)
+            ->foregroundComplete(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1));
+        $this->assertSame($flat->render('hi'), $vo->render('hi'));
+        $this->assertSame("\x1b[38;5;202mhi\x1b[0m", $vo->render('hi'));
+    }
+
+    public function testWithCompleteBackgroundFeedsTheBackgroundSlot(): void
+    {
+        $vo = Style::new()
+            ->colorProfile(ColorProfile::TrueColor)
+            ->withCompleteBackground(new CompleteColor(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1)));
+        $this->assertSame("\x1b[48;2;255;0;0mhi\x1b[0m", $vo->render('hi'));
+    }
+
+    public function testNamedArgumentConstructionMakesMisorderInvisible(): void
+    {
+        // Writing the slots in scrambled textual order while naming each
+        // tier keeps the semantics — the VO cure for the positional trap.
+        $shuffled = Style::new()
+            ->colorProfile(ColorProfile::TrueColor)
+            ->withCompleteForeground(new CompleteColor(
+                ansi: Color::ansi(1),
+                trueColor: Color::hex('#ff0000'),
+                ansi256: Color::ansi256(202),
+            ));
+        $this->assertSame("\x1b[38;2;255;0;0mhi\x1b[0m", $shuffled->render('hi'));
+    }
+
+    public function testAdaptiveAndCompleteSettersAcceptHexStrings(): void
+    {
+        // String sugar on the positional setters, same door as fg().
+        $s = Style::new()
+            ->colorProfile(ColorProfile::TrueColor)
+            ->foregroundAdaptive('#000000', '#ffffff')
+            ->resolveAdaptive(isDark: true);
+        $this->assertSame("\x1b[38;2;255;255;255mhi\x1b[0m", $s->render('hi'));
+        $c = Style::new()
+            ->colorProfile(ColorProfile::TrueColor)
+            ->foregroundComplete('#ff0000', '#cc0000', '#990000');
+        $this->assertSame("\x1b[38;2;255;0;0mhi\x1b[0m", $c->render('hi'));
+    }
+
+    public function testIntLegsAreRefusedByTheTypes(): void
+    {
+        // The misorder-by-int leg never reaches the body: widening to
+        // Color|string did not admit ints.
+        $this->expectException(\TypeError::class);
+        Style::new()->foregroundComplete(0, 1, 2);
+    }
+
+    public function testColourNamesAreStillNotAcceptedAsStrings(): void
+    {
+        // Consistent with the ruled fg()/on() hex-only contract.
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->foregroundAdaptive('navy', '#ffffff');
+    }
+
     public function testExplicitForegroundStillWinsOverUnresolvedComplete(): void
     {
         // Concrete slot precedence (lipgloss) survives the auto-collapse.

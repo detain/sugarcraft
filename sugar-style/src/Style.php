@@ -357,21 +357,24 @@ final class Style
      * `LogicException`. Until the ritual runs, an explicit
      * `foreground` slot wins.
      *
-     * Mirrors lipgloss v2's `AdaptiveColor` field.
+     * Accepts a {@see Color} or a hex string per operand, coerced through
+     * the same {@see fg()} door. Mirrors lipgloss v2's `AdaptiveColor`
+     * field; assign a pre-built pair through
+     * {@see withAdaptiveForeground()} instead.
      */
-    public function foregroundAdaptive(Color $light, Color $dark): self
+    public function foregroundAdaptive(Color|string $light, Color|string $dark): self
     {
         return $this->with(
-            fgAdaptive: new AdaptiveColor($light, $dark),
+            fgAdaptive: new AdaptiveColor(self::asColor($light), self::asColor($dark)),
             fgAdaptiveSet: true,
             propsAdded: ['fgAdaptive'],
         );
     }
 
-    public function backgroundAdaptive(Color $light, Color $dark): self
+    public function backgroundAdaptive(Color|string $light, Color|string $dark): self
     {
         return $this->with(
-            bgAdaptive: new AdaptiveColor($light, $dark),
+            bgAdaptive: new AdaptiveColor(self::asColor($light), self::asColor($dark)),
             bgAdaptiveSet: true,
             propsAdded: ['bgAdaptive'],
         );
@@ -384,24 +387,68 @@ final class Style
      * needed); {@see resolveProfile()} materialises the same pick into
      * the concrete slot. Use this when you want to override the
      * automatic downsampling with designer-chosen values for each
-     * terminal capability tier. Mirrors lipgloss v2's `CompleteColor`.
+     * terminal capability tier. Mirrors lipgloss v2's `CompleteColor`;
+     * assign a pre-built triple through {@see withCompleteForeground()}
+     * instead (named arguments there keep the tier semantics attached to
+     * each value, which is what makes positional misorder invisible).
+     *
+     * Accepts a {@see Color} or a hex string per tier through the same
+     * {@see fg()} door — a mis-ordered int leg is refused by the type.
      */
-    public function foregroundComplete(Color $trueColor, Color $ansi256, Color $ansi): self
+    public function foregroundComplete(Color|string $trueColor, Color|string $ansi256, Color|string $ansi): self
     {
         return $this->with(
-            fgComplete: new CompleteColor($trueColor, $ansi256, $ansi),
+            fgComplete: new CompleteColor(self::asColor($trueColor), self::asColor($ansi256), self::asColor($ansi)),
             fgCompleteSet: true,
             propsAdded: ['fgComplete'],
         );
     }
 
-    public function backgroundComplete(Color $trueColor, Color $ansi256, Color $ansi): self
+    public function backgroundComplete(Color|string $trueColor, Color|string $ansi256, Color|string $ansi): self
     {
         return $this->with(
-            bgComplete: new CompleteColor($trueColor, $ansi256, $ansi),
+            bgComplete: new CompleteColor(self::asColor($trueColor), self::asColor($ansi256), self::asColor($ansi)),
             bgCompleteSet: true,
             propsAdded: ['bgComplete'],
         );
+    }
+
+    /**
+     * Feed a pre-built {@see AdaptiveColor} pair into the adaptive
+     * foreground slot — the value-object twin of
+     * {@see foregroundAdaptive()}, byte-identical downstream (same slot,
+     * same set-flags). Upstream lipgloss assigns the pair (its
+     * `lightdark.Color` struct) directly to the style field; this
+     * restores that shape after the flattened positional port. The same
+     * fail-fast contract applies: render() refuses while the pair is
+     * uncollapsed.
+     */
+    public function withAdaptiveForeground(AdaptiveColor $pair): self
+    {
+        return $this->with(fgAdaptive: $pair, fgAdaptiveSet: true, propsAdded: ['fgAdaptive']);
+    }
+
+    /** Value-object twin of {@see backgroundAdaptive()}. */
+    public function withAdaptiveBackground(AdaptiveColor $pair): self
+    {
+        return $this->with(bgAdaptive: $pair, bgAdaptiveSet: true, propsAdded: ['bgAdaptive']);
+    }
+
+    /**
+     * Feed a pre-built {@see CompleteColor} triple into the complete
+     * foreground slot — the value-object twin of
+     * {@see foregroundComplete()}, byte-identical downstream. Construct
+     * with named arguments to keep each tier bound to its value.
+     */
+    public function withCompleteForeground(CompleteColor $triple): self
+    {
+        return $this->with(fgComplete: $triple, fgCompleteSet: true);
+    }
+
+    /** Value-object twin of {@see backgroundComplete()}. */
+    public function withCompleteBackground(CompleteColor $triple): self
+    {
+        return $this->with(bgComplete: $triple, bgCompleteSet: true, propsAdded: ['bgComplete']);
     }
 
     /**

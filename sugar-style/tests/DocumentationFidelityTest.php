@@ -143,8 +143,11 @@ final class DocumentationFidelityTest extends TestCase
             'README with() parameter count drifted from reflection (' . $params . ')',
         );
 
-        // Independent of the prose shape: the code really has no with*() builder.
-        self::assertSame(0, $withers, 'Style gained with*() methods — the README census paragraph must be re-decided');
+        // Independent of the prose shape: the only with*() builders are the
+        // four colour-slot value-object setters (2026-11 re-decision of the
+        // original zero-wither census — finding 019). A fifth wither without
+        // a README re-decision goes red here.
+        self::assertSame(4, $withers, 'Style gained with*() methods — the README census paragraph must be re-decided');
     }
 
     /**

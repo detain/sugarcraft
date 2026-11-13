@@ -14,7 +14,9 @@ use SugarCraft\Core\Util\ColorProfile;
  * lipgloss v2's `CompleteColor`.
  *
  * Use with {@see Style::foregroundComplete()} /
- * {@see Style::backgroundComplete()}: the style's own {@see ColorProfile}
+ * {@see Style::backgroundComplete()}, or build once and assign through
+ * {@see Style::withCompleteForeground()} /
+ * {@see Style::withCompleteBackground()}: the style's own {@see ColorProfile}
  * picks one of the three colours — automatically at render, or up front
  * through {@see Style::resolveProfile()}.
  *
