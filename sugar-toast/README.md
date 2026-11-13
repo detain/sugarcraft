@@ -250,6 +250,13 @@ A later `withExpiry()`/`withExtendedExpiry()` on a persistent alert clears the
 sentinel (asking for a timer is asking for a timer). `Toast::cancelAlert()`
 routes through the same sentinel.
 
+**Why `Alert` has no `$XSet` companions.** Nullable fields (`expiresAt`,
+`progress`, the three colours) deliberately carry no "was it set?" flags: where
+null and unset would be observably different the lib already pairs a real state
+flag (`persistent` beside `expiresAt`), and for `progress` and the colours the
+two states render identical bytes. This is a pinned, deliberate divergence from
+the house sentinel rule, not an oversight — see `AlertTest`.
+
 Persistent alerts never expire, so `pruneExpired()` cannot remove them — take
 them down with `dismiss()` (files EVERY queued alert into the history log —
 including ones already expired but not yet pruned — and stops

@@ -280,3 +280,28 @@ reset sitting at the box-edge column; `Width::dropAnsi()` then harvested it
 into the row tail, leaking `\x1b[…m` fragments past the right border. Fix:
 Top positions add `$totalAlertLines` (stack downward), matching the existing
 Bottom/Middle stacking contract.
+
+---
+
+## [decision:toast-no-xset-sentinels] Nullable fields stay sentinel-free on purpose
+
+`Alert::$expiresAt` (null = inherit the toast duration), `$progress`, and the
+three colours carry no `$XSet` companions. Where null and "unset" would be
+observably different the lib already pairs a real state flag
+(`bool $persistent` beside `$expiresAt`); for progress and colours the two
+states render identical bytes, so a retrofit would change public shape for no
+observable gain. The audit (TST-XSET) ruled NOT to retrofit; the root
+AGENTS.md rule wording ("nullable where null and unset are observably
+different need an `$XSet` sentinel", sugar-toast the cited exemplar) is owned
+elsewhere. Pins: `AlertTest::testNullExpiryAndThePersistentSentinelAreDistinct...`,
+`testProgressSentinelAbsenceIsObservablyVoidAtTheRenderSeam`,
+`testNullColourFieldsMeanInheritAndExplicitNullIsTheSameState`.
+
+## [pattern:toast-fold-to-fit] The painted stack never outgrows the canvas
+
+`Toast::layout()` caps the stack to `max(bg rows, viewport)`; a stack that
+`stackFits()` (judged through `Position::yOffset()` so middle-anchor pile-up
+counts as not fitting) folds into one `+N hidden` row (`hidden` lang key).
+Survivors follow the overflow policy; `index` on each layout box keeps
+`actionRects()` `alertIndex` in `activeAlerts()` space across a fold. Any new
+layout box entry must carry `index`/`fold`; the fold row has `alert === null`.

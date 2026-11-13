@@ -277,7 +277,7 @@ final class AlertTest extends TestCase
         $viaCtor = new Alert(...$args);
         $viaFactory = Alert::new(...$args);
 
-        foreach (['type', 'message', 'expiresAt', 'progress', 'actions', 'backgroundColor', 'foregroundColor', 'borderColor', 'persistent', 'id'] as $field) {
+        foreach (['type', 'message', 'expiresAt', 'progress', 'actions', 'backgroundColor', 'foregroundColor', 'borderColor', 'persistent', 'id', 'definition'] as $field) {
             $this->assertSame($viaCtor->{$field}, $viaFactory->{$field}, "Alert::new() lost the {$field} override");
         }
     }
@@ -299,5 +299,35 @@ final class AlertTest extends TestCase
         $this->assertSame($render($unset), $render($explicitNull), 'unset and explicit-null progress must be one render state');
         $this->assertStringNotContainsString('░', $render($unset));
         $this->assertStringContainsString('░', $render($set), 'a set progress renders the bar row');
+    }
+
+    public function testNullExpiryAndThePersistentSentinelAreDistinctStatesWithoutAnExpirySetCompanion(): void
+    {
+        // TST-XSET arm (deliberate non-retrofit): expiresAt has no $XSet
+        // companion because the lib already carries the observable
+        // distinction in `bool $persistent`. Null expiry = INHERIT the
+        // toast's duration; persistent = never expire. The two states are
+        // pinned apart at the queue seam so "null means never" cannot creep
+        // back in.
+        $toast = Toast::new()->withDuration(60.0);
+
+        $inherits = $toast->push(Alert::new(ToastType::Info, 'inherit'))->activeAlerts()[0];
+        $this->assertNotNull($inherits->expiresAt, 'null expiry inherits the configured duration');
+        $this->assertFalse($inherits->persistent);
+
+        $persistent = $toast->push(Alert::new(ToastType::Info, 'forever')->withCancelledExpiry())->activeAlerts()[0];
+        $this->assertNull($persistent->expiresAt, 'the sentinel suppresses inheritance');
+        $this->assertTrue($persistent->persistent);
+        $this->assertFalse($persistent->isExpired());
+    }
+
+    public function testNullColourFieldsMeanInheritAndExplicitNullIsTheSameState(): void
+    {
+        // Colours: unset and explicit-null are one state by design (inherit the
+        // terminal/type default), so no $XSet is needed — same bytes.
+        $unset = Alert::new(ToastType::Info, 'c');
+        $explicit = $unset->withBorderColor(null)->withForegroundColor(null)->withBackgroundColor(null);
+        $render = static fn (Alert $a): string => Toast::new()->push($a)->view('', 40, 6);
+        $this->assertSame($render($unset), $render($explicit));
     }
 }
