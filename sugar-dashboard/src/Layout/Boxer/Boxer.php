@@ -22,6 +22,9 @@ use SugarCraft\Core\Util\Width;
  */
 final class Boxer implements Item, Sizer
 {
+    /** @var array<string, Item> */
+    private readonly array $modelMap;
+
     /**
      * @param Node $root Root node of the layout tree
      * @param array<string, Item> $modelMap Map of address string to rendered content
@@ -30,10 +33,38 @@ final class Boxer implements Item, Sizer
      */
     public function __construct(
         private readonly Node $root,
-        private readonly array $modelMap = [],
+        array $modelMap = [],
         private readonly int $width = 0,
         private readonly int $height = 0,
-    ) {}
+    ) {
+        // Every leaf address the tree declares must be editable from
+        // birth: seed blanks for the ones the host has not supplied yet
+        // (finding sugar-dashboard-033 — the factory path used to throw
+        // NotFoundError on addresses the factory itself announced).
+        $this->modelMap = self::seedDeclaredLeaves($root, $modelMap);
+    }
+
+    /**
+     * Fill every declared leaf address missing from the map with a blank.
+     *
+     * @param array<string, Item> $modelMap
+     * @return array<string, Item>
+     */
+    private static function seedDeclaredLeaves(Node $node, array $modelMap): array
+    {
+        if ($node->isLeaf()) {
+            if (!isset($modelMap[$node->address()])) {
+                $modelMap[$node->address()] = new PlaceholderItem();
+            }
+            return $modelMap;
+        }
+
+        foreach ($node->children() as $child) {
+            $modelMap = self::seedDeclaredLeaves($child, $modelMap);
+        }
+
+        return $modelMap;
+    }
 
     // ─── Factory Methods ───────────────────────────────────────────
 
@@ -66,6 +97,9 @@ final class Boxer implements Item, Sizer
     /**
      * Create a horizontal layout with children arranged side by side.
      *
+     * Declared leaf children are blank-seeded: editLeaf() works on their
+     * addresses immediately (see {@see self::editLeaf()}).
+     *
      * @param Node ...$children
      */
     public static function horizontal(Node ...$children): self
@@ -75,6 +109,9 @@ final class Boxer implements Item, Sizer
 
     /**
      * Create a vertical layout with children stacked top to bottom.
+     *
+     * Declared leaf children are blank-seeded: editLeaf() works on their
+     * addresses immediately (see {@see self::editLeaf()}).
      *
      * @param Node ...$children
      */
@@ -87,6 +124,11 @@ final class Boxer implements Item, Sizer
 
     /**
      * Edit a leaf node's content, returning a new Boxer with the changes.
+     *
+     * Addresses declared by the tree (factory children included) are
+     * seeded with a blank placeholder at construction, so the factory
+     * path `Boxer::vertical(Node::leaf('0'), ...)` can jump straight to
+     * editLeaf; addresses the tree does not declare still throw.
      *
      * If the edit function returns an error, the exception is thrown.
      *

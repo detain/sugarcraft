@@ -393,11 +393,23 @@ final class BoxerTest extends TestCase
     // Edge cases
     // ═══════════════════════════════════════════════════════════════
 
-    public function testTreeWithEmptyModelMap(): void
+    /**
+     * D-39 (finding sugar-dashboard-033): an under-supplied modelMap no
+     * longer stays empty — declared leaves are blank-seeded so editLeaf
+     * works from birth. This pin used to freeze the old broken empty map.
+     */
+    public function testTreeWithEmptyModelMapSeedsPlaceholders(): void
     {
         $boxer = Boxer::tree(Node::horizontal(Node::leaf('0'), Node::leaf('1')));
 
-        $this->assertSame([], $boxer->getModelMap());
+        $map = $boxer->getModelMap();
+        // PHP coerces numeric-string addresses to int array keys; the
+        // lib casts them back on every read (setSize does (string) $addr).
+        $this->assertSame(['0', '1'], array_map('strval', array_keys($map)));
+        foreach ($map as $address => $model) {
+            $this->assertInstanceOf(Item::class, $model, "seeded slot {$address}");
+            $this->assertSame('', $model->render());
+        }
     }
 
     public function testSetSizeIdempotent(): void

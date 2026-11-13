@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Layout\Boxer\Address;
 use SugarCraft\Dashboard\Layout\Boxer\Boxer;
 use SugarCraft\Dashboard\Layout\Boxer\Node;
 use SugarCraft\Dashboard\Layout\Boxer\NotFoundError;
+use SugarCraft\Dashboard\Layout\Boxer\PlaceholderItem;
 use SugarCraft\Dashboard\Layout\Boxer\SizeError;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
@@ -318,6 +319,62 @@ final class BoxerTest extends TestCase
 
         $this->assertSame(50, $boxer->getHeight());
     }
+    /**
+     * D-39 (finding sugar-dashboard-033): the README-documented primary
+     * path — build with a factory, edit by declared address — must work
+     * without hand-feeding a modelMap first.
+     */
+    public function testFactoryBuiltTreeSupportsEditLeafOnDeclaredAddresses(): void
+    {
+        $boxer = Boxer::vertical(Node::leaf('/0'), Node::leaf('/1'));
+
+        $item = new class implements Item {
+            public function render(): string { return 'EDITED-PANEL'; }
+        };
+
+        $edited = $boxer->editLeaf('/0', static fn (Item $model): Item => $item);
+        $sized = $edited->setSize(20, 3);
+        $rendered = $sized->render();
+
+        $this->assertStringContainsString('EDITED-PANEL', $rendered);
+        $this->assertStringNotContainsString('size error', $rendered);
+        $this->assertStringNotContainsString('not found', $rendered);
+    }
+
+    public function testUntouchedFactorySlotRendersBlankNotError(): void
+    {
+        $boxer = Boxer::horizontal(Node::leaf('/0'), Node::leaf('/1'))->setSize(20, 2);
+
+        // Both slots are still placeholders: blank content, but the
+        // layout renders — no SizeError 'model not found' leak.
+        $this->assertStringNotContainsString('size error', $boxer->render());
+        $map = $boxer->modelMap();
+        $this->assertArrayHasKey('/0', $map);
+        $this->assertArrayHasKey('/1', $map);
+        $this->assertInstanceOf(PlaceholderItem::class, $map['/0']);
+        $this->assertSame('', $map['/0']->render());
+    }
+
+    public function testEditLeafStillThrowsForUndeclaredAddress(): void
+    {
+        $boxer = Boxer::vertical(Node::leaf('/0'), Node::leaf('/1'));
+
+        $this->expectException(NotFoundError::class);
+        $boxer->editLeaf('/9', static fn (Item $model): Item => $model);
+    }
+
+    public function testTreeFactoryKeepsSuppliedModelsOverPlaceholders(): void
+    {
+        $item = new class implements Item {
+            public function render(): string { return 'GIVEN'; }
+        };
+        $boxer = Boxer::tree(Node::vertical(Node::leaf('0'), Node::leaf('1')), ['0' => $item]);
+
+        $map = $boxer->modelMap();
+        $this->assertSame($item, $map['0']);
+        $this->assertInstanceOf(PlaceholderItem::class, $map['1']);
+    }
+
     private static function stateSandbox(): string
     {
         $dir = sys_get_temp_dir() . '/dash-state-' . bin2hex(random_bytes(4));
