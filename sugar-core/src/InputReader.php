@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core;
 
+use SugarCraft\Core\Exception\TerminalException;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\ClipboardMsg;
 use SugarCraft\Core\Msg\CursorColorMsg;
 use SugarCraft\Core\Msg\CursorPositionMsg;
+use SugarCraft\Core\Msg\ExceptionMsg;
 use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
@@ -71,9 +73,32 @@ final class InputReader
      */
     public const PASTE_IDLE_TIMEOUT = 1.0;
 
+    /**
+     * Ceiling on bytes a single INCOMPLETE escape sequence may park in the
+     * read buffer (sugar-core-001).
+     *
+     * Without it a hostile (or truncating) stream — e.g. a `CSI …` or
+     * `OSC …` whose terminator never arrives — parks every later byte for
+     * the life of the process: unbounded memory, and the parked prefix
+     * re-walks on every feed. Sized to the paste envelope: both bound one
+     * burst of terminal data, and a legitimate OSC-52 clipboard reply that
+     * outgrows a megabyte is indistinguishable from a never-terminated
+     * stream. The parked bytes are then refused with a named
+     * {@see ExceptionMsg} warning (never silent) and the stream restarts.
+     */
+    public const MAX_INCOMPLETE_BYTES = self::MAX_PASTE_BYTES;
+
     private string $buf = '';
     private bool $pasting = false;
     private string $pasteBuf = '';
+
+    /**
+     * Bytes of the parked head sequence already scanned for a terminator
+     * (sugar-core-001 linearization). Only the CSI/OSC/DCS park sites set
+     * it; it is cleared whenever a sequence completes, a bare ESC resets
+     * the machine mid-sequence, or the parked head is gone.
+     */
+    private int $scanResume = 0;
 
     /**
      * @param bool $sanitizePaste When true (default), bracketed-paste payloads
@@ -99,6 +124,14 @@ final class InputReader
     public function parse(string $bytes): array
     {
         $this->buf .= $bytes;
+        // A stale resume offset can only belong to the sequence that was
+        // parked at the buffer head; if the head is gone (consumed,
+        // flushed, or never an ESC) the scan restarts honestly from 0.
+        if ($this->scanResume > 0
+            && ($this->buf === '' || $this->buf[0] !== "\x1b" || $this->scanResume > strlen($this->buf))
+        ) {
+            $this->scanResume = 0;
+        }
         $msgs = [];
         $i = 0;
         $len = strlen($this->buf);
@@ -144,10 +177,25 @@ final class InputReader
                     if ($remain < 3) {
                         break;
                     }
-                    $j = $i + 2;
+                    // Resume at the saved scan offset when re-walking a
+                    // parked incomplete CSI; fresh starts begin at the
+                    // first parameter byte (sugar-core-001 linearization).
+                    $j = $this->scanResume > 0 ? $i + $this->scanResume : $i + 2;
+                    if ($j < $i + 2) {
+                        $j = $i + 2;
+                    }
                     while ($j < $len) {
                         $c = ord($this->buf[$j]);
                         $j++;
+                        // sugar-core-029: a bare ESC mid-sequence resets the
+                        // machine and the ESC re-reads as a NEW start — the
+                        // abandoned parameters are dropped, the bytes after
+                        // the ESC are never silently absorbed as params.
+                        if ($c === 0x1b) {
+                            $this->scanResume = 0;
+                            $i = $j - 1;
+                            continue 2;
+                        }
                         if ($c >= 0x40 && $c <= 0x7e) {
                             $params = substr($this->buf, $i + 2, $j - $i - 3);
                             $final  = chr($c);
@@ -156,7 +204,8 @@ final class InputReader
                             // (including the eventual 201~) are handled
                             // by the pasting branch above.
                             if ($final === '~' && $params === '200') {
-                                $this->pasting  = true;
+                                $this->pasting    = true;
+                                $this->scanResume = 0;
                                 $this->pasteBuf = '';
                                 $msgs[]         = new PasteStartMsg();
                                 $i = $j;
@@ -166,10 +215,16 @@ final class InputReader
                             if ($msg !== null) {
                                 $msgs[] = $msg;
                             }
+                            $this->scanResume = 0;
                             $i = $j;
                             continue 2;
                         }
                     }
+                    // Parked: no terminator in this buffer yet. Record how
+                    // far the scan reached (offset from the sequence start
+                    // = buffer head after the tail trim) so the next feed
+                    // resumes here instead of re-walking the parked bytes.
+                    $this->scanResume = $len - $i;
                     break;
                 }
                 if ($next === 'O') {
@@ -189,18 +244,28 @@ final class InputReader
                     // OSC: ESC ] payload (ST | BEL). Used for terminal
                     // queries (OSC 10/11/12 colour replies, OSC 52
                     // clipboard, OSC 0/2 title, etc.).
-                    $end = $this->findOscEnd($i + 2, $len);
-                    if ($end === null) {
-                        // End marker not in the buffer yet — wait for
-                        // more bytes.
+                    $scan = $this->scanStringTerminator(
+                        $i + 2,
+                        $this->scanResume > 0 ? max($i + 2, $i + $this->scanResume) : $i + 2,
+                        $len,
+                    );
+                    if ($scan[0] === 'abort') {
+                        // sugar-core-029: bare ESC mid-string resets the
+                        // machine; the ESC re-reads as a new start.
+                        $this->scanResume = 0;
+                        $i = $scan[2];
+                        continue;
+                    }
+                    if ($scan[0] === 'park') {
+                        $this->scanResume = $scan[2] - $i;
                         break;
                     }
-                    [$payload, $next_i] = $end;
-                    $msg = $this->decodeOsc($payload);
+                    $this->scanResume = 0;
+                    $msg = $this->decodeOsc($scan[1]);
                     if ($msg !== null) {
                         $msgs[] = $msg;
                     }
-                    $i = $next_i;
+                    $i = $scan[2];
                     continue;
                 }
                 // DCS: ESC P payload ESC \ . Narrowly triggered when
@@ -208,16 +273,26 @@ final class InputReader
                 // so we don't shadow Alt-P keypresses (`ESC P` from
                 // the user) for the general case.
                 if ($next === 'P' && $remain >= 3 && $this->buf[$i + 2] === '>') {
-                    $end = $this->findStTerminator($i + 2, $len);
-                    if ($end === null) {
+                    $scan = $this->scanStringTerminator(
+                        $i + 2,
+                        $this->scanResume > 0 ? max($i + 2, $i + $this->scanResume) : $i + 2,
+                        $len,
+                    );
+                    if ($scan[0] === 'abort') {
+                        $this->scanResume = 0;
+                        $i = $scan[2];
+                        continue;
+                    }
+                    if ($scan[0] === 'park') {
+                        $this->scanResume = $scan[2] - $i;
                         break;
                     }
-                    [$payload, $next_i] = $end;
-                    $msg = $this->decodeDcs($payload);
+                    $this->scanResume = 0;
+                    $msg = $this->decodeDcs($scan[1]);
                     if ($msg !== null) {
                         $msgs[] = $msg;
                     }
-                    $i = $next_i;
+                    $i = $scan[2];
                     continue;
                 }
                 // Alt-prefixed key. The printable range (0x20-0x7e) covers
@@ -363,11 +438,35 @@ final class InputReader
                 continue;
             }
 
+            // sugar-core-029 documented policy: NUL never surfaces as
+            // decoded text. A typed 0x00 (Ctrl+Space on old keyboards) is
+            // meaningless as a Char rune and the default arm used to hand
+            // callers a "\x00" text message; structured channels (paste,
+            // raw) keep their bytes as documented instead.
+            if ($code === 0x00) {
+                $i += 1;
+                continue;
+            }
+
             $msgs[] = $this->decodeChar($code);
             $i += 1;
         }
 
         $this->buf = substr($this->buf, $i);
+
+        // sugar-core-001 bounded refusal: an incomplete sequence that grew
+        // past the envelope is dropped with a NAMED warning — never silent,
+        // never unbounded. RawMsg is deliberately NOT the channel: Program
+        // writes an input RawMsg's bytes back to the terminal verbatim, so
+        // flushing attacker-chosen bytes there would be self-injection.
+        if (!$this->pasting && strlen($this->buf) > self::MAX_INCOMPLETE_BYTES) {
+            $msgs[] = new ExceptionMsg(new TerminalException(Lang::t('input.incomplete_overflow', [
+                'limit' => self::MAX_INCOMPLETE_BYTES,
+            ])));
+            $this->buf        = '';
+            $this->scanResume = 0;
+        }
+
         return $msgs;
     }
 
@@ -437,7 +536,19 @@ final class InputReader
      */
     private function pastePayload(string $raw): string
     {
-        return $this->sanitizePaste ? Sanitize::untrustedForMarkedFrames($raw) : $raw;
+        if (!$this->sanitizePaste) {
+            // Documented raw channel (constructor docblock): pasted
+            // NUL/0x1C-0x1F bytes pass through verbatim. This is the
+            // sugar-core-029 policy choice — structured channels keep raw
+            // when explicitly opted, decoded TEXT never carries NUL (the
+            // text path drops it, see parse()).
+            return $raw;
+        }
+        // Sanitize::untrustedForMarkedFrames already drops NUL and the
+        // file/group/record/unit separators along with the ANSI sweep —
+        // the paste-strip policy is pinned in tests/InputReaderTest.php
+        // against exactly this call.
+        return Sanitize::untrustedForMarkedFrames($raw);
     }
 
     /**
@@ -673,18 +784,39 @@ final class InputReader
      *
      * @return array{0:string,1:int}|null
      */
-    private function findOscEnd(int $start, int $len): ?array
+    /**
+     * Scan a string-sequence payload (OSC / DCS share the grammar:
+     * terminated by BEL or ST = ESC-backslash) from a resume offset.
+     *
+     * Returns one of:
+     *  - ['done',  payload, index-after-terminator]
+     *  - ['park',  '',      offset-to-resume-from]   (incomplete; a lone
+     *    trailing ESC is held back so its ESC/ST lookahead re-evaluates
+     *    when the next feed arrives)
+     *  - ['abort', '',      index-of-bare-ESC]       (sugar-core-029: an
+     *    ESC that is not the head of an ST resets the machine; the caller
+     *    re-reads from that ESC instead of absorbing the tail as payload)
+     *
+     * @return array{0:'done'|'park'|'abort', 1:string, 2:int}
+     */
+    private function scanStringTerminator(int $payloadStart, int $scanFrom, int $len): array
     {
-        for ($k = $start; $k < $len; $k++) {
+        for ($k = max($payloadStart, $scanFrom); $k < $len; $k++) {
             $c = $this->buf[$k];
             if ($c === self::BEL) {
-                return [substr($this->buf, $start, $k - $start), $k + 1];
+                return ['done', substr($this->buf, $payloadStart, $k - $payloadStart), $k + 1];
             }
-            if ($c === "\x1b" && ($this->buf[$k + 1] ?? '') === '\\') {
-                return [substr($this->buf, $start, $k - $start), $k + 2];
+            if ($c === "\x1b") {
+                if ($k + 1 >= $len) {
+                    return ['park', '', $k];
+                }
+                if ($this->buf[$k + 1] === '\\') {
+                    return ['done', substr($this->buf, $payloadStart, $k - $payloadStart), $k + 2];
+                }
+                return ['abort', '', $k];
             }
         }
-        return null;
+        return ['park', '', $len];
     }
 
     /**
@@ -768,20 +900,6 @@ final class InputReader
      *
      * @return array{0:string,1:int}|null
      */
-    private function findStTerminator(int $start, int $len): ?array
-    {
-        for ($k = $start; $k < $len; $k++) {
-            $c = $this->buf[$k];
-            if ($c === self::BEL) {
-                return [substr($this->buf, $start, $k - $start), $k + 1];
-            }
-            if ($c === "\x1b" && ($this->buf[$k + 1] ?? '') === '\\') {
-                return [substr($this->buf, $start, $k - $start), $k + 2];
-            }
-        }
-        return null;
-    }
-
     private function decodeDcs(string $payload): ?Msg
     {
         // XTVERSION reply: `> | <terminal name and version>`. The

@@ -38,4 +38,7 @@ return [
     'errors.negative_not_allowed' => 'no se permiten valores negativos para {name}',
     'errors.value_must_be_positive' => '{name} debe ser positivo, obtenido {value}',
     'errors.value_out_of_range' => '{name} debe estar entre {min} y {max}, obtenido {value}',
+
+    // InputReader.php
+    'input.incomplete_overflow' => 'incomplete terminal escape sequence exceeded the {limit}-byte ceiling and was discarded',
 ];

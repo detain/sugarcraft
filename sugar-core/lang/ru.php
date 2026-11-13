@@ -33,4 +33,7 @@ return [
     'errors.negative_not_allowed' => 'отрицательное значение недопустимо для {name}',
     'errors.value_must_be_positive' => '{name} должно быть положительным, получено {value}',
     'errors.value_out_of_range' => '{name} должно быть от {min} до {max}, получено {value}',
+
+    // InputReader.php
+    'input.incomplete_overflow' => 'incomplete terminal escape sequence exceeded the {limit}-byte ceiling and was discarded',
 ];

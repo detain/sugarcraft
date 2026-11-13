@@ -33,4 +33,7 @@ return [
     'errors.negative_not_allowed' => '{name}에 음수 값은 허용되지 않습니다',
     'errors.value_must_be_positive' => '{name}은(는) 양수여야 합니다. 입력값: {value}',
     'errors.value_out_of_range' => '{name}은(는) {min}과(와) {max} 사이여야 합니다. 입력값: {value}',
+
+    // InputReader.php
+    'input.incomplete_overflow' => 'incomplete terminal escape sequence exceeded the {limit}-byte ceiling and was discarded',
 ];

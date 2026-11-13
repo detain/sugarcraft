@@ -33,4 +33,7 @@ return [
     'errors.negative_not_allowed' => '{name} 不允许为负值',
     'errors.value_must_be_positive' => '{name} 必须为正数，实际为 {value}',
     'errors.value_out_of_range' => '{name} 必须在 {min} 和 {max} 之间，实际为 {value}',
+
+    // InputReader.php
+    'input.incomplete_overflow' => 'incomplete terminal escape sequence exceeded the {limit}-byte ceiling and was discarded',
 ];

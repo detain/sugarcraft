@@ -33,4 +33,7 @@ return [
     'errors.negative_not_allowed' => '{name} に負の値は使用できません',
     'errors.value_must_be_positive' => '{name} は正の値である必要があります。取得値: {value}',
     'errors.value_out_of_range' => '{name} は {min} と {max} の間である必要があります。取得値: {value}',
+
+    // InputReader.php
+    'input.incomplete_overflow' => 'incomplete terminal escape sequence exceeded the {limit}-byte ceiling and was discarded',
 ];

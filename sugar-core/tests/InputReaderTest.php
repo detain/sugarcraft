@@ -6,6 +6,8 @@ namespace SugarCraft\Core\Tests;
 
 use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Lang;
+use SugarCraft\Core\Msg\ExceptionMsg;
 use SugarCraft\Core\ModeState;
 use SugarCraft\Core\Modifiers;
 use SugarCraft\Core\MouseAction;
@@ -1481,5 +1483,160 @@ final class InputReaderTest extends TestCase
         $msgs = (new InputReader())->parse("a\xe4\xbd\xa0b");
         $this->assertCount(3, $msgs);
         $this->assertSame(['a', '你', 'b'], array_map(fn (KeyMsg $m): string => $m->rune, $msgs));
+    }
+
+    // ---- sc-04 / sugar-core-001 + sugar-core-029: bounded parks, linear
+    // ---- scan resume, ESC-mid-sequence reset, NUL/separator policy ------
+
+    private function parkedBytes(InputReader $r): int
+    {
+        return strlen((new \ReflectionProperty(InputReader::class, 'buf'))->getValue($r));
+    }
+
+    public function testScanResumeTracksParkedScanOffset(): void
+    {
+        $r = new InputReader();
+        $r->parse("\x1b]" . str_repeat('a', 5000));
+        $resume = new \ReflectionProperty(InputReader::class, 'scanResume');
+        $this->assertSame(5002, $resume->getValue($r), 'parked scan offset = bytes consumed by the aborted walk');
+        $msgs = $r->parse("\x07");
+        $this->assertSame([], $msgs, 'a junk OSC payload decodes to nothing (unchanged contract)');
+        $this->assertSame(0, $resume->getValue($r), 'completion clears the resume cursor');
+    }
+
+    public function testNeverCompletingOscIsRefusedWithNamedWarningAndBoundedBuffer(): void    {
+        $r = new InputReader();
+        $msgs = $r->parse("\x1b]");
+        $this->assertSame([], $msgs, 'an OSC that never ends must park silently first');
+
+        $feed     = str_repeat('a', 128 * 1024);
+        $peak     = 0;
+        $refusals = 0;
+        $warning  = null;
+        for ($k = 0; $k < 24; $k++) { // ~3 MiB — well past the envelope
+            $out  = $r->parse($feed);
+            $peak = max($peak, $this->parkedBytes($r));
+            foreach ($out as $m) {
+                if ($m instanceof ExceptionMsg) {
+                    $refusals++;
+                    $warning = $m->exception->getMessage();
+                }
+            }
+        }
+
+        $this->assertGreaterThanOrEqual(1, $refusals, 'overflow must surface a named refusal, never silent');
+        $this->assertSame(
+            Lang::t('input.incomplete_overflow', ['limit' => InputReader::MAX_INCOMPLETE_BYTES]),
+            $warning,
+        );
+        $this->assertLessThanOrEqual(
+            InputReader::MAX_INCOMPLETE_BYTES + 128 * 1024 + 64,
+            $peak,
+            'parked bytes stay inside the documented envelope (cap + one feed)',
+        );
+
+        // The stream restarts: a complete sequence after the purge decodes.
+        $msgs = $r->parse("\x1b[A");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+        $this->assertSame(0, $this->parkedBytes($r));
+    }
+
+    public function testEscMidCsiResetsMachineAndReReadsAsFreshStart(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1b[1;2"));
+        $msgs = $r->parse("\x1b[A");
+        $this->assertCount(1, $msgs, 'the ESC must start a new sequence, not extend the parked params');
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+        $this->assertSame(0, $this->parkedBytes($r));
+    }
+
+    public function testEscMidCsiInOneFeedStillDecodesTheNewSequence(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[1;2\x1b[A");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+    }
+
+    public function testEscMidOscResetsMachineAndReReadsAsFreshStart(): void
+    {
+        $r    = new InputReader();
+        $msgs = $r->parse("\x1b]10;rgb:11\x1b[A");
+        $this->assertCount(1, $msgs, 'the abandoned OSC payload never surfaces');
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+        $this->assertSame(0, $this->parkedBytes($r));
+    }
+
+    public function testOscTerminatorSplitAcrossFeedsCompletes(): void
+    {
+        $r = new InputReader();
+        // Payload split mid-parameters (resume must not re-decode, and the
+        // payload must still be built from the sequence start).
+        $this->assertSame([], $r->parse("\x1b]12;rgb:ffff/"));
+        $msgs = $r->parse("0000/0000\x07");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(CursorColorMsg::class, $msgs[0]);
+        $this->assertSame([255, 0, 0], [$msgs[0]->r, $msgs[0]->g, $msgs[0]->b]);
+    }
+
+    public function testOscLoneTrailingEscIsHeldBackNotAbsorbed(): void
+    {
+        $r = new InputReader();
+        // ESC as the last byte could be the head of ST — hold it back.
+        $this->assertSame([], $r->parse("\x1b]12;rgb:ffff/0000/0000\x1b"));
+        $msgs = $r->parse("\\");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(CursorColorMsg::class, $msgs[0]);
+    }
+
+    public function testNulNeverSurfacesAsDecodedText(): void
+    {
+        $msgs = (new InputReader())->parse("a\x00b");
+        $this->assertSame(['a', 'b'], array_map(fn (KeyMsg $m): string => $m->rune, $msgs));
+        $this->assertSame([], (new InputReader())->parse("\x00"));
+        // ESC + NUL: the ESC decodes as Escape, the NUL drops — exactly
+        // like the other non-alt-list byte after ESC, no NUL Char ever.
+        $msgs = (new InputReader())->parse("\x1b\x00");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Escape, $msgs[0]->type);
+    }
+
+    public function testPasteStripsNulAndFileSeparatorsWhenSanitized(): void
+    {
+        $paste = "\x1b[200~abc\x00d\x1ce\x1f\x1e\x1d\x1b[201~";
+        $msgs  = (new InputReader())->parse($paste);
+        $this->assertInstanceOf(PasteStartMsg::class, $msgs[0]);
+        $payload = null;
+        foreach ($msgs as $m) {
+            if ($m instanceof PasteMsg) {
+                $payload = $m->content;
+            }
+        }
+        $this->assertNotNull($payload, 'paste payload surfaced');
+        $this->assertSame('abcde', $payload);
+    }
+
+    public function testPasteRawChannelKeepsControlBytesWhenSanitizeOff(): void
+    {
+        $paste = "\x1b[200~abc\x00d\x1c\x1b[201~";
+        $msgs  = (new InputReader(sanitizePaste: false))->parse($paste);
+        $payload = null;
+        foreach ($msgs as $m) {
+            if ($m instanceof PasteMsg) {
+                $payload = $m->content;
+            }
+        }
+        $this->assertSame("abc\x00d\x1c", $payload, 'the documented raw opt-out keeps bytes verbatim');
+    }
+
+    public function testTypedSeparatorsRemainNamedControls(): void
+    {
+        // Documented policy (sugar-core-029): FS/GS/RS/US stay available as
+        // Char messages carrying the exact byte — typing them is not paste
+        // flooding, and consumers who bind C-\ etc. keep working.
+        $msgs = (new InputReader())->parse("\x1c");
+        $this->assertCount(1, $msgs);
+        $this->assertSame("\x1c", $msgs[0]->rune);
     }
 }

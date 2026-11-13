@@ -33,4 +33,7 @@ return [
     'errors.negative_not_allowed' => 'القيمة السالبة غير مسموح بها لـ {name}',
     'errors.value_must_be_positive' => 'يجب أن تكون {name} موجبة، تم تلقي {value}',
     'errors.value_out_of_range' => 'يجب أن تكون {name} بين {min} و {max}، تم تلقي {value}',
+
+    // InputReader.php
+    'input.incomplete_overflow' => 'incomplete terminal escape sequence exceeded the {limit}-byte ceiling and was discarded',
 ];

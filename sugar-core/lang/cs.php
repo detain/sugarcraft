@@ -33,4 +33,7 @@ return [
     'errors.negative_not_allowed' => 'záporná hodnota není pro {name} povolena',
     'errors.value_must_be_positive' => '{name} musí být kladné, získáno {value}',
     'errors.value_out_of_range' => '{name} musí být mezi {min} a {max}, získáno {value}',
+
+    // InputReader.php
+    'input.incomplete_overflow' => 'incomplete terminal escape sequence exceeded the {limit}-byte ceiling and was discarded',
 ];
