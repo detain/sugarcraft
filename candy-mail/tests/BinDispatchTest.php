@@ -23,6 +23,7 @@ final class BinDispatchTest extends TestCase
         'CANDY_MAIL_SMTP_PASSWORD',
         'CANDY_MAIL_SMTP_REQUIRE_TLS',
         'CANDY_MAIL_SMTP_IMPLICIT_TLS',
+        'CANDY_MAIL_SMTP_HELO',
         'CANDY_MAIL_SIGNATURE',
     ];
 
@@ -871,6 +872,29 @@ final class BinDispatchTest extends TestCase
         );
         $this->assertSame(0, $result['status']);
         $this->assertStringContainsString('@mail.example.org>', $result['out']);
+    }
+
+    public function testRenderFallbackPreviewHonoursHeloWithNoTransportConfigured(): void
+    {
+        // CM-30: with no transport the preview fell back to a bare
+        // SmtpTransport('localhost'), dropping --helo and
+        // CANDY_MAIL_SMTP_HELO entirely — the rendered Message-ID carried the
+        // machine identity a configured send would never use. Both seams now
+        // thread into the fallback renderer.
+        $flag = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--render', '--helo', 'mail.example.com'],
+            stdin: 'hi',
+        );
+        $this->assertSame(0, $flag['status']);
+        $this->assertStringContainsString('@mail.example.com>', $flag['out']);
+
+        $env = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--render'],
+            stdin: 'hi',
+            env: ['CANDY_MAIL_SMTP_HELO' => 'env.example.org'],
+        );
+        $this->assertSame(0, $env['status']);
+        $this->assertStringContainsString('@env.example.org>', $env['out']);
     }
 
     public function testTimeoutFlagIsBoundedLoudly(): void

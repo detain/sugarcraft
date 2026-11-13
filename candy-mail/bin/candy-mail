@@ -232,9 +232,16 @@ function main(array $argv): int
         if ($configured instanceof ResendTransport) {
             fwrite(STDERR, Lang::t('cli.render_resend_divergence') . "\n");
         }
+        // CM-30: the fallback renderer must carry the same identity the
+        // configured transport would. Threading --helo/CANDY_MAIL_SMTP_HELO
+        // through here keeps the docblock promise ("Message-ID identity is
+        // --helo when given") true even for an unconfigured preview; without
+        // it the preview certified a @machine.local Message-ID that the real
+        // send would never emit.
+        $heloPreview = (string) ($args['opts']['helo'] ?? envString('CANDY_MAIL_SMTP_HELO'));
         $renderer = $configured instanceof SmtpTransport
             ? $configured
-            : new SmtpTransport(host: 'localhost');
+            : new SmtpTransport(host: 'localhost', heloHost: $heloPreview);
         fwrite(STDOUT, $renderer->buildMimeMessage($email));
         return 0;
     }
