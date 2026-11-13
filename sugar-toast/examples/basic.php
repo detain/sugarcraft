@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * SugarToast — floating alert notifications demo.
+ * sugar-toast — floating alert notifications demo.
  *
  * Run: php examples/basic.php
  */
