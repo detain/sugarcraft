@@ -56,6 +56,11 @@ final class RenamesJsonTest extends TestCase
         self::assertIsArray($decoded, 'tools/renames.json must decode to an object');
         self::assertArrayHasKey('entries', $decoded, 'tools/renames.json must carry an "entries" array');
         self::assertIsList($decoded['entries'], 'tools/renames.json "entries" must be a list');
+        // RT-18: every per-entry arm below loops over this roster — shape
+        // claims are vacuously green on an empty list, so the floor keeps the
+        // ledger's existence load-bearing (53 entries today; the bound leaves
+        // room for entries to retire, but an emptied file reddens the class).
+        self::assertGreaterThan(10, count($decoded['entries']), 'tools/renames.json is the rename SSOT — an emptied ledger certifies nothing through the per-entry arms');
 
         return $decoded['entries'];
     }
