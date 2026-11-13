@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Commands;
 use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Agents\Live\AgentLiveState;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Host\Commands\CommandResult;
@@ -67,8 +68,43 @@ final class TasksCommand implements HostCommand
 
     private function listing(CommandContext $context, ?BackgroundShellRegistry $registry, ?string $owner): string
     {
-        $sections = [];
+        $groups = self::groups($registry, $context->backgroundSupervisor, $this->agents, $owner, \microtime(true));
 
+        $sections = [];
+        foreach (['shells', 'sessions', 'agents'] as $kind) {
+            if ($groups[$kind] === []) {
+                continue;
+            }
+            $sections[] = self::heading($kind);
+            $sections = [...$sections, ...$groups[$kind]];
+        }
+
+        return $sections === [] ? Lang::t('host.tasks.none') : implode("\n", $sections);
+    }
+
+    /**
+     * The three kinds of background work, as formatted rows, grouped by kind.
+     *
+     * This is the one assembly both surfaces read: `/tasks` prints the groups
+     * under their headings, and the `/tasks` sidebar pane
+     * ({@see \SugarCraft\Code\Tui\Components\TasksPane}) paints the same rows,
+     * so the two cannot disagree about what is running. Pure read: nothing is
+     * started, stopped or written.
+     *
+     * @param ?BackgroundShellRegistry $registry the shell registry, if the session has one
+     * @param ?BackgroundSupervisor $supervisor the background supervisor, if wired
+     * @param ?AgentLiveRegistry $agents the session's live sub-agent registry, if wired
+     * @param ?string $owner the session whose shells and agent runs are listed
+     * @param float $now the clock agent ages are measured against (microtime)
+     * @return array{shells: list<string>, sessions: list<string>, agents: list<string>}
+     */
+    public static function groups(
+        ?BackgroundShellRegistry $registry,
+        ?BackgroundSupervisor $supervisor,
+        ?AgentLiveRegistry $agents,
+        ?string $owner,
+        float $now,
+    ): array {
         $shells = [];
         if ($registry !== null) {
             foreach ($registry->ownedBy($owner) as $id) {
@@ -83,13 +119,8 @@ final class TasksCommand implements HostCommand
                 ]);
             }
         }
-        if ($shells !== []) {
-            $sections[] = Lang::t('host.tasks.shells_heading');
-            $sections = [...$sections, ...$shells];
-        }
 
         $sessions = [];
-        $supervisor = $context->backgroundSupervisor;
         if ($supervisor !== null) {
             foreach ($supervisor->activeSessions() as $id => $session) {
                 $sessions[] = Lang::t('host.tasks.session_row', [
@@ -100,19 +131,14 @@ final class TasksCommand implements HostCommand
                 ]);
             }
         }
-        if ($sessions !== []) {
-            $sections[] = Lang::t('host.tasks.sessions_heading');
-            $sections = [...$sections, ...$sessions];
-        }
 
-        $agents = [];
-        $now = \microtime(true);
-        if ($this->agents !== null) {
-            foreach ($this->agents->forSession($owner) as $state) {
+        $runs = [];
+        if ($agents !== null) {
+            foreach ($agents->forSession($owner) as $state) {
                 if ($state->status !== AgentLiveState::STATUS_RUNNING && $state->status !== AgentLiveState::STATUS_QUEUED) {
                     continue;
                 }
-                $agents[] = Lang::t('host.tasks.agent_row', [
+                $runs[] = Lang::t('host.tasks.agent_row', [
                     'id' => $state->id,
                     'name' => Chat::reportField($state->name),
                     'state' => $state->status,
@@ -120,12 +146,8 @@ final class TasksCommand implements HostCommand
                 ]);
             }
         }
-        if ($agents !== []) {
-            $sections[] = Lang::t('host.tasks.agents_heading');
-            $sections = [...$sections, ...$agents];
-        }
 
-        return $sections === [] ? Lang::t('host.tasks.none') : implode("\n", $sections);
+        return ['shells' => $shells, 'sessions' => $sessions, 'agents' => $runs];
     }
 
     /** @param list<string> $words */
@@ -168,6 +190,19 @@ final class TasksCommand implements HostCommand
         }
 
         return CommandResult::reply($text, Lang::t('host.shells.stopped', ['id' => $id, 'exit' => $exit]));
+    }
+
+    /**
+     * Literal keys rather than a built key: the lang parity scan only sees
+     * literal `Lang::t()` arguments, so a concatenated prefix looks missing.
+     */
+    public static function heading(string $kind): string
+    {
+        return match ($kind) {
+            'shells' => Lang::t('host.tasks.shells_heading'),
+            'sessions' => Lang::t('host.tasks.sessions_heading'),
+            default => Lang::t('host.tasks.agents_heading'),
+        };
     }
 
     private static function age(int $seconds): string

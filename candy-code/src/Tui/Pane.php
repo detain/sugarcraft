@@ -27,13 +27,14 @@ enum Pane: string
     case Todo = 'todo';
     case Context = 'context';
     case Sessions = 'sessions';
+    case Tasks = 'tasks';
     case Help = 'help';
     case Menu = 'menu';
 
     /**
      * The panes Tab walks, in display order — the ring, and only the ring.
      *
-     * This is NINE of the twelve cases, and the three that are missing are
+     * This is TEN of the thirteen cases, and the three that are missing are
      * missing for a reason the history below records. Kept public so the
      * traversal order can be asserted against the tab strip that advertises
      * it; the two lists are declared separately (this one, and
@@ -54,6 +55,7 @@ enum Pane: string
             self::Todo,
             self::Context,
             self::Sessions,
+            self::Tasks,
         ];
     }
 
@@ -64,7 +66,7 @@ enum Pane: string
      * traversal — including the wrap at both ends, which is the part a
      * hand-rolled `match` chain gets subtly wrong — is the library's problem
      * rather than this enum's. Built per call because a PHP enum may not hold
-     * state of any kind, static properties included; nine ids is not worth a
+     * state of any kind, static properties included; ten ids is not worth a
      * cache.
      *
      * `ofStrict()` rather than `of()`: a duplicate id would silently shorten
@@ -81,7 +83,7 @@ enum Pane: string
     /**
      * Returns the next pane in the cycling order.
      *
-     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Todo → Context → Sessions → Chat.
+     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Todo → Context → Sessions → Tasks → Chat.
      *
      * @see step() for the fold-back rule and the history behind it.
      */
@@ -93,7 +95,7 @@ enum Pane: string
     /**
      * Returns the previous pane in the cycling order — Shift+Tab.
      *
-     * Cycle: Chat → Sessions → Context → Todo → Settings → Agents → Skills → Tools → Files → Chat.
+     * Cycle: Chat → Tasks → Sessions → Context → Todo → Settings → Agents → Skills → Tools → Files → Chat.
      *
      * Tab could only ever walk forward, so escaping a pane you overshot meant
      * five more presses. The reverse walk is {@see FocusRing::previous()}, so
@@ -178,7 +180,7 @@ enum Pane: string
     {
         return match ($this) {
             self::Files, self::Tools, self::Sessions => Side::Left,
-            self::Skills, self::Settings, self::Agents, self::Todo, self::Context => Side::Right,
+            self::Skills, self::Settings, self::Agents, self::Todo, self::Context, self::Tasks => Side::Right,
             default => null,
         };
     }
@@ -241,6 +243,10 @@ enum Pane: string
             // that carries East Asian Width N in UCD 16.0, adjudicated against
             // unicode.org/Public/16.0.0/ucd/EastAsianWidth.txt (2026-10-27).
             self::Context => "\u{25D4}",
+            // ⧗ black hourglass — background work still running. U+29D7 is not
+            // listed in UCD 16.0 EastAsianWidth.txt, so it is N by default;
+            // adjudicated against unicode.org/Public/16.0.0/ucd/EastAsianWidth.txt.
+            self::Tasks => "\u{29D7}",
             // ⧉ two overlapping squares — the session-window list (P-TABS.g).
             // U+29C9 is not listed in the UCD 16.0 East Asian Width file, and
             // unlisted code points default to Neutral; verified width 1 against
@@ -266,6 +272,7 @@ enum Pane: string
             self::Todo => Lang::t('tui.pane.label.todo'),
             self::Context => Lang::t('tui.pane.label.context'),
             self::Sessions => Lang::t('tui.pane.label.sessions'),
+            self::Tasks => Lang::t('tui.pane.label.tasks'),
             self::Help => Lang::t('tui.pane.label.help'),
             self::Menu => Lang::t('tui.pane.label.menu'),
         };

@@ -34,6 +34,7 @@ use SugarCraft\Code\Tui\Components\AgentsPane;
 use SugarCraft\Code\Tui\Components\FilesPane;
 use SugarCraft\Code\Tui\Components\SettingsPane;
 use SugarCraft\Code\Tui\Components\TodoPane;
+use SugarCraft\Code\Tui\Components\TasksPane;
 use SugarCraft\Code\Tui\Components\ToolsPane;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Components\SessionsPane;
@@ -2788,6 +2789,7 @@ final class Renderer
             Pane::Settings => SettingsPane::render($a, $width, $rows),
             Pane::Agents => self::keyed($pane, AgentsPane::layout($a, $width, $rows)),
             Pane::Todo => TodoPane::render($a, $width, $rows),
+            Pane::Tasks => TasksPane::render($a, $width, $rows),
             // P-CTX.e: keyed like Tools and Agents — the layout hands back a
             // click key per body row (category / toggle / dump) and no scroll
             // slot, which keyed() already reads as a zero maximum.
