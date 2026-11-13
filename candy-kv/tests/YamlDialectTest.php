@@ -158,11 +158,15 @@ final class YamlDialectTest extends TestCase
     public function testReservedKeyReasonIsFormatScoped(): void
     {
         // The JSON envelope reserves _ttl/_binary; the YAML dialect reserves
-        // the skate_* prefixes. Each format must refuse ONLY its own.
+        // the skate_* prefixes AND the legacy nested _ttl/_binary envelope
+        // forms (kv-021 — a yaml export writing one reimports it as
+        // metadata, so both formats reserve the exact names). Each format
+        // must still refuse ONLY its own prefix family.
         $this->assertNull(YamlDialect::reservedKeyReason('skate_ttl_backup', 'json'));
         $this->assertStringContainsString('collides', (string) YamlDialect::reservedKeyReason('skate_ttl_backup', 'yaml'));
         $this->assertStringContainsString('reserved', (string) YamlDialect::reservedKeyReason('_ttl', 'json'));
-        $this->assertNull(YamlDialect::reservedKeyReason('_ttl', 'yaml'));
+        $this->assertStringContainsString('reserved', (string) YamlDialect::reservedKeyReason('_ttl', 'yaml'));
+        $this->assertStringContainsString('reserved', (string) YamlDialect::reservedKeyReason('_binary', 'yaml'));
         // Legacy unscoped call still refuses both families.
         $this->assertNotNull(YamlDialect::reservedKeyReason('skate_ttl_backup'));
         $this->assertNotNull(YamlDialect::reservedKeyReason('_ttl'));
@@ -183,6 +187,36 @@ final class YamlDialectTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Syntax error');
         YamlDialect::parse('42');
+    }
+
+    public function testYamlExportRefusesLegacyEnvelopeKeyNames(): void
+    {
+        // kv-021 reproduction: store a key named `_binary`, export YAML —
+        // the restore used to fail because YamlImporter consumes a top-level
+        // `_binary:` line as its legacy metadata envelope. Refusing on the
+        // WRITE side is what keeps every emitted document importable.
+        foreach (['_ttl', '_binary'] as $reserved) {
+            $this->store->set($reserved, 'x');
+            $exportCmd = new ExportCommand($this->store);
+
+            try {
+                $exportCmd->exportToString('yaml');
+                $this->fail($reserved . ' must be refused at the YAML write side');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('reserved by the YAML legacy metadata envelope', $e->getMessage());
+                $this->assertStringContainsString($reserved, $e->getMessage(), 'refusal names the key');
+            }
+
+            // JSON refused the same names before this step; that law holds.
+            try {
+                $exportCmd->exportToString('json');
+                $this->fail($reserved . ' must stay refused for JSON too');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('reserved by the JSON export envelope', $e->getMessage());
+            }
+
+            $this->store->delete($reserved);
+        }
     }
 
     public function testTtlAndBinaryMetadataRideTheFlatDialectOnBothEngines(): void

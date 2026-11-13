@@ -128,9 +128,11 @@ final class ExportCommand
             // Fail loud on envelope collisions: exporting a key that looks
             // like a reserved metadata form for THIS format would silently
             // turn into TTL/binary state on reimport. The check is
-            // format-scoped — JSON reserves _ttl/_binary, YAML reserves the
-            // skate_* line prefixes — because refusing the other format's
-            // namespace blocked entries that round-trip perfectly well.
+            // format-scoped — JSON reserves _ttl/_binary for its envelope,
+            // YAML reserves the skate_* line prefixes plus the legacy
+            // nested _ttl/_binary envelope names (kv-021) — because refusing
+            // the other format's prefix family blocked entries that
+            // round-trip perfectly well.
             $reason = YamlDialect::reservedKeyReason($key, $format);
             if ($reason !== null) {
                 throw new \RuntimeException(\ucfirst($reason) . '.');

@@ -282,12 +282,17 @@ final class YamlDialect
      * Does this key need to be refused at export time because the envelope
      * would corrupt it on reimport (it collides with a reserved form)?
      *
-     * The two formats reserve DIFFERENT namespaces: the JSON envelope rides
-     * `_ttl`/`_binary` keys, the YAML dialect rides `skate_ttl_`/
-     * `skate_binary_` line prefixes. Checking one format's reserves against
-     * the other used to refuse legitimate entries (`skate_ttl_backup` could
-     * not be exported as JSON at all). Pass the export format to scope the
-     * check; null checks every reserved family (legacy callers).
+     * The two formats reserve overlapping-but-distinct namespaces: BOTH use
+     * `_ttl`/`_binary` for metadata — the JSON envelope rides them as top
+     * level keys, and the YAML importer consumes legacy nested `_ttl:` /
+     * `_binary:` forms on every read (YamlImporter) — while YAML
+     * additionally owns the `skate_ttl_`/`skate_binary_` line prefixes.
+     * Checking one format's reserves against the other used to refuse
+     * legitimate entries (`skate_ttl_backup` could not be exported as JSON
+     * at all), and a YAML export that writes a store key named `_binary`
+     * reimports as METADATA, losing the entry (kv-021). Pass the export
+     * format to scope the check; null checks every reserved family (legacy
+     * callers).
      *
      * @param string|null $format 'json', 'yaml', 'yml', or null for all.
      * @return string|null the refusal reason, or null when the key is safe.
@@ -299,6 +304,11 @@ final class YamlDialect
 
         if ($json && ($key === self::JSON_TTL_KEY || $key === self::JSON_BINARY_KEY)) {
             return \sprintf('the key "%s" is reserved by the JSON export envelope and cannot round-trip', $key);
+        }
+        if ($yaml && ($key === self::JSON_TTL_KEY || $key === self::JSON_BINARY_KEY)) {
+            // kv-021: the YAML reader treats these exact names as its legacy
+            // metadata envelope — writing one loses the entry at restore.
+            return \sprintf('the key "%s" is reserved by the YAML legacy metadata envelope and cannot round-trip', $key);
         }
         if ($yaml && (\str_starts_with($key, self::TTL_PREFIX) || \str_starts_with($key, self::BINARY_PREFIX))) {
             return \sprintf('the key "%s" collides with the YAML metadata prefixes and cannot round-trip', $key);
