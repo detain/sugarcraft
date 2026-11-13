@@ -24,7 +24,7 @@ sugar-toast — a floating alert notification component for terminal UIs on PHP 
 - **Auto-dismiss**: time-based expiry, pruned by the host tick
 - **Multiple alerts**: queue of toasts rendered in order
 - **Progress toasts**: inline progress bar (0–100%) beneath the message body
-- **Accessible text mode**: `withAccessibleText()` names the severity in words and prints progress percentages — a text channel beside the frame's colour/glyph language (WCAG 1.4.1)
+- **Accessible text mode**: `withAccessibleText()` names the severity in words and prints progress percentages — a text channel beside the frame's colour/glyph language (WCAG 1.4.1) — recommended for any host whose output may be read as plain text (screen readers, copy-paste, log extraction); see Accessibility
 - **Action buttons**: `[Label]` buttons attached to an alert with closure callbacks
 - **Styled alerts**: per-alert background/foreground/border colour overrides
 - **History log**: immutable, bounded record of dismissed, overflow-evicted and refused (DropNewest) alerts (default cap 100)
@@ -481,6 +481,42 @@ decodes them through sugar-core's canonical table), not as `31`/`33`-style
 slot numbers — so a user's 16-colour theme remaps will restyle the rest of the
 frame but will **not** restyle toasts.
 
+## Accessibility
+
+The frame speaks in glyphs and colour; sugar-toast hands hosts the knobs that
+carry the same meaning without either. The renderer itself handles no input
+and owns no screen-reader surface, so the pieces below form the recommended
+HOST CONTRACT:
+
+1. **Escape dismisses.** Read `allowEscToClose()` each frame; when the host
+   sees Escape and the flag is on, call `dismiss()`. The flag is a
+   preference the host consumes — the renderer never acts on it.
+2. **Keyboard access to buttons.** `actionRects()` enumerates every painted
+   `[Label]` button in absolute frame cells — bind Alt+<n> or a focus ring
+   to the enumeration and route activations through `actionAt($col, $row)`
+   (see Action Buttons).
+3. **A dismiss prompt in words.** `Lang::t('dismiss')` is a convenience
+   string for host-rendered UI; `view()` never emits it (see
+   Internationalization).
+4. **A text channel for severity.** `withAccessibleText()` writes the
+   severity word into each header and numeric percentages onto progress
+   rows — the only text beside the glyph/colour language, and the knob that
+   keeps meaning alive for screen readers, copy-paste and log extraction
+   (WCAG 1.4.1). Default off keeps every frame byte-identical.
+
+Environment policy: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink and
+`NO_COLOR`/`CLICOLOR=0` drop every colour byte (gates and their deliberate
+non-spec-literal edges are spelled out in the Features list above). When the
+coloured icon is dropped by suppression, severity retreats to the plain
+`[E]`/`[W]`/`[I]`/`[S]` ASCII prefix — the meaning survives the channel loss
+(see Styled Alerts); the `Ascii` symbol set keeps the icon ASCII end-to-end.
+Box-drawing chrome assumes UTF-8 output.
+
+Stacked frames can occlude: an older sibling's message or action row may sit
+visually covered with no signal in the frame, and expiry reflow moves boxes,
+so accessibility-critical hosts should cap `maxConcurrent` deliberately
+(see Stacking & The Frame and Overflow & Concurrency).
+
 ## History Log
 
 `Toast` maintains an immutable history of every DISMISSED and every
@@ -521,8 +557,8 @@ already over the new cap survive until the next push evicts them.
 | `->withMaxWidth(int)` | Width cap in cells; `<= 0` throws (the refusal message names the reason) — see Features |
 | `->withMinWidth(int)` | Fit-content floor — master switch: `0` (default) FIXED-WIDTH full cap, positive engages auto-fit; negative throws — see Features |
 | `->withSymbolSet(SymbolSet)` | Icon glyph set (NerdFont/Unicode/Ascii) — icons only; borders and bar stay box-drawing |
-| `->withAllowEscToClose(bool)` | Preference flag the host reads to decide Escape dismissal (the renderer handles no input) |
-| `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + percentage on progress rows; default off keeps frames byte-identical |
+| `->withAllowEscToClose(bool)` | Preference flag the host reads to decide Escape dismissal (the renderer handles no input) — see Accessibility |
+| `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + percentage on progress rows; default off keeps frames byte-identical — see Accessibility |
 | `->withHostZoneCarry(bool $on = true)` | Carry the host's U+E000..U+E001 zone markers through the composite; `off` blits opaque chrome — see Security & Trust Boundary |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts; `null` = unlimited, `< 1` throws — see Overflow & Concurrency |
 | `->withOverflow(Overflow)` | Strategy when the cap is reached — see Overflow & Concurrency |
