@@ -20,6 +20,8 @@ return [
     'style.slot_unresolved' => 'the adaptive colour slots {slots} were never collapsed; call resolveAdaptive(bool $isDark) before render()',
     'style.hyperlink_id_delimiter' => 'hyperlink id must not contain ";" or ":" (OSC 8 parameter delimiters)',
     'style.markup_depth' => 'markup nesting exceeds {levels} levels',
+    'style.write_invalid_stream' => 'cannot write: {destination} is not a valid stream resource',
+    'style.write_short' => 'stream write failed: wrote {written} of {total} bytes',
     'style.label_nonneg'    => '{label} values must be >= 0',
     'style.border_toggles_count' => 'border() side toggles take 0, 2, or 4 bools; got {count}',
     'style.expand_sides_count'   => '{label}() takes 1, 2, or 4 ints; got {count}',

@@ -20,6 +20,8 @@ return [
     'style.slot_unresolved' => 'os slots de cor adaptativos {slots} nunca foram dobrados; chame resolveAdaptive(bool $isDark) antes de renderizar',
     'style.hyperlink_id_delimiter' => 'o id da hiperligação não deve conter ";" nem ":" (separadores de parâmetros OSC 8)',
     'style.markup_depth' => 'o aninhamento de marcação excede {levels} níveis',
+    'style.write_invalid_stream' => 'não é possível escrever: {destination} não é um recurso de stream válido',
+    'style.write_short' => 'falha de escrita no stream: escritos {written} de {total} bytes',
     'style.label_nonneg'    => 'os valores de {label} têm de ser >= 0',
     'style.border_toggles_count' => 'os toggles de lado de border() aceitam 0, 2 ou 4 booleanos; obtido: {count}',
     'style.expand_sides_count'   => '{label}() aceita 1, 2 ou 4 inteiros; obtido: {count}',

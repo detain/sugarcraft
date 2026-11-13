@@ -1469,20 +1469,26 @@ final class Style
      * newline — for non-TUI scripts that just want styled console
      * output. The space-join (and its Go divergence) is inherited from
      * {@see sprint()}. The un-styled twin is {@see Output::println()}.
+     *
+     * Fail-fast accounting: returns the number of bytes written and
+     * throws `RuntimeException` when STDOUT is no longer a valid stream
+     * or the write comes back false/short — silent data loss on a
+     * console write is the defect, not a result.
      */
-    public function println(string ...$content): void
+    public function println(string ...$content): int
     {
-        fwrite(STDOUT, $this->sprint(...$content) . "\n");
+        return self::writeStream(STDOUT, $this->sprint(...$content) . "\n", 'STDOUT');
     }
 
     /**
      * Write the rendered {@see sprint()} output to STDOUT (no trailing
      * newline). Join semantics as in {@see sprint()}; the un-styled
-     * twin is {@see Output::print()}.
+     * twin is {@see Output::print()}. Same fail-fast write accounting
+     * and byte-count return as {@see println()}.
      */
-    public function print(string ...$content): void
+    public function print(string ...$content): int
     {
-        fwrite(STDOUT, $this->sprint(...$content));
+        return self::writeStream(STDOUT, $this->sprint(...$content), 'STDOUT');
     }
 
     /**
@@ -1490,11 +1496,40 @@ final class Style
      * stream resource (no trailing newline). The un-styled twin is
      * {@see Output::fprint()}.
      *
+     * Fail-fast accounting: returns the number of bytes written;
+     * throws `RuntimeException` on an invalid stream or a false/short
+     * write. An empty payload legitimately writes zero bytes.
+     *
      * @param resource $stream
      */
-    public function fprint($stream, string ...$content): void
+    public function fprint($stream, string ...$content): int
     {
-        fwrite($stream, $this->sprint(...$content));
+        return self::writeStream($stream, $this->sprint(...$content), 'stream');
+    }
+
+    /**
+     * Accounted fwrite for the writers family (shared contract with
+     * {@see Output}'s identical private door): the payload must land in
+     * full or the call refuses loudly. `@` folds fwrite's PHP warning
+     * into the false arm so the RuntimeException carries the diagnosis
+     * instead of a warning + silent zero.
+     *
+     * @param resource|mixed $stream
+     */
+    private static function writeStream($stream, string $payload, string $destination): int
+    {
+        if (!is_resource($stream)) {
+            throw new \RuntimeException(Lang::t('style.write_invalid_stream', ['destination' => $destination]));
+        }
+        $total   = strlen($payload);
+        $written = @fwrite($stream, $payload);
+        if ($written === false || $written < $total) {
+            throw new \RuntimeException(Lang::t('style.write_short', [
+                'written' => $written === false ? 0 : $written,
+                'total'   => $total,
+            ]));
+        }
+        return $written;
     }
 
     /**

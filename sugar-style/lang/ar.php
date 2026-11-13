@@ -20,6 +20,8 @@ return [
     'style.slot_unresolved' => 'لم تُطوَ فتحات الألوان التكيفية {slots} قط؛ استدعِ resolveAdaptive(bool $isDark) قبل العرض',
     'style.hyperlink_id_delimiter' => 'يجب ألا يحتوي معرف الرابط على ";" أو ":" (فواصل معاملات OSC 8)',
     'style.markup_depth' => 'تداخل الرمز يتجاوز {levels} مستوى',
+    'style.write_invalid_stream' => 'تعذر الكتابة: {destination} ليس مورد تدفق صالحًا',
+    'style.write_short' => 'فشل كتابة التدفق: كُتب {written} من {total} بايت',
     'style.label_nonneg'    => 'قيم {label} يجب أن تكون >= 0',
     'style.border_toggles_count' => 'border() يأخذ 0 أو 2 أو 4 قيم منطقية; تم الحصول على: {count}',
     'style.expand_sides_count'   => '{label}() يأخذ 1 أو 2 أو 4 أعداد صحيحة; تم الحصول على: {count}',

@@ -20,6 +20,8 @@ return [
     'style.slot_unresolved' => 'die adaptiven Farb-Slots {slots} wurden nie aufgelöst; vor dem Rendern resolveAdaptive(bool $isDark) aufrufen',
     'style.hyperlink_id_delimiter' => 'Hyperlink-ID darf kein ";" oder ":" enthalten (OSC-8-Parameter-Trenner)',
     'style.markup_depth' => 'Markup-Verschachtelung überschreitet {levels} Ebenen',
+    'style.write_invalid_stream' => 'schreiben nicht möglich: {destination} ist keine gültige Stream-Ressource',
+    'style.write_short' => 'Stream-Schreiben fehlgeschlagen: {written} von {total} Bytes geschrieben',
     'style.label_nonneg'    => '{label}-Werte müssen >= 0 sein',
     'style.border_toggles_count' => 'border()-Seiten-Toggles benötigen 0, 2 oder 4 Booleans; erhalten: {count}',
     'style.expand_sides_count'   => '{label}() benötigt 1, 2 oder 4 Ganzzahlen; erhalten: {count}',

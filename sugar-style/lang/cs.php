@@ -20,6 +20,8 @@ return [
     'style.slot_unresolved' => 'adaptivní sloty barev {slots} nikdy nebyly sbaleny; před vykreslením zavolejte resolveAdaptive(bool $isDark)',
     'style.hyperlink_id_delimiter' => 'ID odkazu nesmí obsahovat ";" ani ":" (oddělovače parametrů OSC 8)',
     'style.markup_depth' => 'úrovření zanoření markupu přesahuje {levels} úrovní',
+    'style.write_invalid_stream' => 'nelze zapsat: {destination} není platný zdroj proudu',
+    'style.write_short' => 'zápis do proudu selhal: zapsáno {written} z {total} bajtů',
     'style.label_nonneg'    => '{label} hodnoty musí být >= 0',
     'style.border_toggles_count' => 'border() bere 0, 2 nebo 4 booleany; obdrženo: {count}',
     'style.expand_sides_count'   => '{label}() bere 1, 2 nebo 4 integery; obdrženo: {count}',

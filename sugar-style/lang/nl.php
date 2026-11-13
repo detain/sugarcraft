@@ -20,6 +20,8 @@ return [
     'style.slot_unresolved' => 'de adaptieve kleursleuven {slots} zijn nooit samengevouwen; roep resolveAdaptive(bool $isDark) aan vóór het renderen',
     'style.hyperlink_id_delimiter' => 'hyperlink-id mag geen ";" of ":" bevatten (OSC 8-parameter scheidingstekens)',
     'style.markup_depth' => 'markup-nesting overschrijdt {levels} niveaus',
+    'style.write_invalid_stream' => 'schrijven niet mogelijk: {destination} is geen geldige streambron',
+    'style.write_short' => 'stream-write mislukt: {written} van de {total} bytes geschreven',
     'style.label_nonneg'    => '{label}-waarden moeten >= 0 zijn',
     'style.border_toggles_count' => 'border() neemt 0, 2 of 4 booleans; gekregen: {count}',
     'style.expand_sides_count'   => '{label}() neemt 1, 2 of 4 integers; gekregen: {count}',

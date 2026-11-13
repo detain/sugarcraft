@@ -20,6 +20,8 @@ return [
     'style.slot_unresolved' => 'адаптивные слоты цветов {slots} никогда не были свёрнуты; вызовите resolveAdaptive(bool $isDark) перед рендерингом',
     'style.hyperlink_id_delimiter' => 'ИD гиперссылки не должна содержать ";" или ":" (разделители параметров OSC 8)',
     'style.markup_depth' => 'вложенность разметки превышает {levels} уровней',
+    'style.write_invalid_stream' => 'запись невозможна: {destination} не является допустимым ресурсом потока',
+    'style.write_short' => 'ошибка записи в поток: записано {written} из {total} байт',
     'style.label_nonneg'    => 'значения {label} должны быть >= 0',
     'style.border_toggles_count' => ' side toggles принимают 0, 2 или 4 булевых значения; получено: {count}',
     'style.expand_sides_count'   => '{label}() принимает 1, 2 или 4 целых числа; получено: {count}',

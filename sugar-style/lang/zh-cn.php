@@ -20,6 +20,8 @@ return [
     'style.slot_unresolved' => 'adaptive 颜色槽 {slots} 尚未折叠；请在渲染前调用 resolveAdaptive(bool $isDark)',
     'style.hyperlink_id_delimiter' => 'hyperlink id 不得包含 ";" 或 ":" (OSC 8 参数分隔符)',
     'style.markup_depth' => 'markup 嵌套超过 {levels} 层',
+    'style.write_invalid_stream' => '无法写入：{destination} 不是有效的流资源',
+    'style.write_short' => '流写入失败：已写入 {written} 字节，应为 {total} 字节',
     'style.label_nonneg'    => '{label} 值必须 >= 0',
     'style.border_toggles_count' => 'border() 边切换需要 0、2 或 4 个布尔值；实际：{count}',
     'style.expand_sides_count'   => '{label}() 需要 1、2 或 4 个整数；实际：{count}',

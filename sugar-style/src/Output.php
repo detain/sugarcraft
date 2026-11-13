@@ -47,20 +47,23 @@ final class Output
 
     /**
      * Write `Output::sprint($parts)` to STDOUT (no newline). Un-styled
-     * twin of {@see Style::print()}.
+     * twin of {@see Style::print()}. Same fail-fast write accounting:
+     * returns the bytes written, throws `RuntimeException` on an
+     * invalid STDOUT or a false/short write.
      */
-    public static function print(string ...$parts): void
+    public static function print(string ...$parts): int
     {
-        fwrite(STDOUT, self::sprint(...$parts));
+        return self::writeStream(STDOUT, self::sprint(...$parts), 'STDOUT');
     }
 
     /**
      * Write `Output::sprint($parts) . "\n"` to STDOUT. Un-styled twin
-     * of {@see Style::println()}.
+     * of {@see Style::println()}. Same fail-fast write accounting as
+     * {@see print()}.
      */
-    public static function println(string ...$parts): void
+    public static function println(string ...$parts): int
     {
-        fwrite(STDOUT, self::sprint(...$parts) . "\n");
+        return self::writeStream(STDOUT, self::sprint(...$parts) . "\n", 'STDOUT');
     }
 
     /**
@@ -68,10 +71,39 @@ final class Output
      * resource (no trailing newline). Un-styled twin of
      * {@see Style::fprint()}.
      *
+     * Fail-fast accounting: returns the number of bytes written;
+     * throws `RuntimeException` on an invalid stream or a false/short
+     * write. An empty payload legitimately writes zero bytes.
+     *
      * @param resource $stream
      */
-    public static function fprint($stream, string ...$parts): void
+    public static function fprint($stream, string ...$parts): int
     {
-        fwrite($stream, self::sprint(...$parts));
+        return self::writeStream($stream, self::sprint(...$parts), 'stream');
+    }
+
+    /**
+     * Accounted fwrite for the writers family — the same contract as
+     * {@see Style::writeStream()} (kept as a private door per class so
+     * Output stays dependency-free). The payload must land in full or
+     * the call refuses loudly; `@` folds fwrite's PHP warning into the
+     * false arm.
+     *
+     * @param resource|mixed $stream
+     */
+    private static function writeStream($stream, string $payload, string $destination): int
+    {
+        if (!is_resource($stream)) {
+            throw new \RuntimeException(Lang::t('style.write_invalid_stream', ['destination' => $destination]));
+        }
+        $total   = strlen($payload);
+        $written = @fwrite($stream, $payload);
+        if ($written === false || $written < $total) {
+            throw new \RuntimeException(Lang::t('style.write_short', [
+                'written' => $written === false ? 0 : $written,
+                'total'   => $total,
+            ]));
+        }
+        return $written;
     }
 }

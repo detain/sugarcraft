@@ -656,7 +656,9 @@ final class StyleTest extends TestCase
     public function testFprintWritesToStream(): void
     {
         $stream = fopen('php://memory', 'w+');
-        Style::new()->bold()->fprint($stream, 'hi');
+        // Finding 038: the write is accounted — fprint returns the byte
+        // count (the styled payload is 10 bytes: 4 + 2 + 4).
+        $this->assertSame(10, Style::new()->bold()->fprint($stream, 'hi'));
         rewind($stream);
         $this->assertSame("\x1b[1mhi\x1b[0m", stream_get_contents($stream));
         fclose($stream);
