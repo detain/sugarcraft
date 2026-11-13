@@ -21,15 +21,37 @@ use React\Promise\PromiseInterface;
  */
 final class AsyncProbeTest extends TestCase
 {
+    /** @var array<string, string|null> */
+    private array $savedEnv = [];
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Clear environment variables that might affect detection
-        $keys = ['CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR', 'TERM', 'COLORTERM', 'WT_SESSION', 'GOOGLE_CLOUD_SHELL', 'TMUX', 'STY'];
+        // Clear environment variables that might affect detection — and
+        // save each key (CP-26): a developer/CI shell exporting
+        // FORCE_COLOR=1|3 outranks every TERM rung asserted below, and the
+        // old list omitted FORCE_COLOR entirely. tearDown restores.
+        $keys = ['CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR', 'TERM', 'COLORTERM', 'FORCE_COLOR', 'WT_SESSION', 'GOOGLE_CLOUD_SHELL', 'TMUX', 'STY'];
         foreach ($keys as $key) {
+            $this->savedEnv[$key] = $_ENV[$key] ?? null;
             unset($_ENV[$key]);
             putenv($key);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        foreach ($this->savedEnv as $key => $value) {
+            if ($value === null) {
+                unset($_ENV[$key]);
+                putenv($key);
+            } else {
+                $_ENV[$key] = $value;
+                putenv("{$key}={$value}");
+            }
         }
     }
 

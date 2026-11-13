@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\ColorProfile\Tests;
 
+use PHPUnit\Framework\TestCase;
 use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Probe;
-use PHPUnit\Framework\TestCase;
+use SugarCraft\ColorProfile\Probe\InfocmpBinary;
 
 /**
  * @covers \SugarCraft\ColorProfile\Probe
@@ -19,8 +20,10 @@ final class ProbeTest extends TestCase
     {
         parent::setUp();
 
-        // Preserve original env values so tearDown can restore them
-        $keys = ['CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR', 'TERM', 'COLORTERM', 'WT_SESSION', 'GOOGLE_CLOUD_SHELL', 'TMUX', 'STY', 'REDUCE_MOTION', 'PREFERS_REDUCED_MOTION'];
+        // Preserve original env values so tearDown can restore them.
+        // FORCE_COLOR joins the list (CP-26): a developer/CI shell
+        // exporting it outranks every TERM rung asserted below.
+        $keys = ['CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR', 'TERM', 'COLORTERM', 'FORCE_COLOR', 'WT_SESSION', 'GOOGLE_CLOUD_SHELL', 'TMUX', 'STY', 'REDUCE_MOTION', 'PREFERS_REDUCED_MOTION'];
         foreach ($keys as $key) {
             $this->savedEnv[$key] = $_ENV[$key] ?? null;
             unset($_ENV[$key]);
@@ -260,8 +263,17 @@ final class ProbeTest extends TestCase
      */
     public function testResetClearsStaticCache(): void
     {
-        // Calling _reset should not throw
+        // The old body was `_reset(); assertTrue(true)` — a tautology that
+        // stayed green no matter what the seam did. Stuff BOTH statics the
+        // seam owns, reset, and prove they actually drained.
+        $memo = new \ReflectionProperty(Probe::class, 'terminfoUpgradeMemo');
+        $memo->setValue(null, ['xterm' => true, 'vt100' => false]);
+        $path = new \ReflectionProperty(InfocmpBinary::class, 'path');
+        $path->setValue(null, '/usr/bin/infocmp');
+
         Probe::_reset();
-        $this->assertTrue(true);
+
+        $this->assertSame([], $memo->getValue(), 'the phase-2 memo must drain');
+        $this->assertNull($path->getValue(), 'the binary-path memo must drain');
     }
 }
