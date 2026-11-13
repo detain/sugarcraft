@@ -16,9 +16,10 @@ declare(strict_types=1);
  * parameter except `session` must have a same-named mutate() parameter
  * (and vice versa, modulo the paired `*Set` presence flags) — mutate()
  * deliberately never swaps the session, since no with*() may detach one
- * implicitly. withoutSession() must name every constructor parameter in
- * its reconstruction. Comment out any single carry line and the suite
- * goes red.
+ * implicitly. rebuild() (the single carry-everything enumeration since
+ * SO-22, sugar-overlay-033) must name every constructor parameter and
+ * must mint — never inherit — the session. Comment out any single carry
+ * line and the suite goes red.
  */
 
 namespace SugarCraft\Overlay\Tests;
@@ -49,9 +50,9 @@ final class ImmutabilityFieldParityTest extends TestCase
         );
     }
 
-    public function testWithoutSessionCarriesEveryField(): void
+    public function testRebuildCarriesEveryField(): void
     {
-        $method = new ReflectionMethod(Veil::class, 'withoutSession');
+        $method = new ReflectionMethod(Veil::class, 'rebuild');
         $file = (string) $method->getFileName();
         $lines = explode("\n", file_get_contents($file) ?: '');
         $body = implode("\n", array_slice($lines, (int) $method->getStartLine(), (int) $method->getEndLine() - (int) $method->getStartLine() + 1));
@@ -64,22 +65,31 @@ final class ImmutabilityFieldParityTest extends TestCase
         $this->assertSame(
             [],
             $missing,
-            'withoutSession() drops fields that the constructor knows — every field must be re-carried explicitly'
+            'rebuild() drops fields that the constructor knows — every field must be re-carried explicitly'
         );
     }
 
-    public function testSessionIsFreshNotSharedInWithoutSession(): void
+    public function testRebuildMintsAFreshSessionNeverCarriesTheOldOne(): void
     {
-        $method = new ReflectionMethod(Veil::class, 'withoutSession');
+        $method = new ReflectionMethod(Veil::class, 'rebuild');
         $file = (string) $method->getFileName();
         $lines = explode("\n", file_get_contents($file) ?: '');
         $body = implode("\n", array_slice($lines, (int) $method->getStartLine(), (int) $method->getEndLine() - (int) $method->getStartLine() + 1));
 
         $this->assertMatchesRegularExpression(
-            '/session:\s*new RenderSession\(\)/',
+            '/session:\s*\$session\s*\?\?\s*new RenderSession\(\)/',
             $body,
-            'withoutSession() must mint a fresh session, never carry the old one'
+            'rebuild() must default to a fresh session, never carry $this->session'
         );
+
+        // Behaviour twin: the detached veil really holds a different
+        // RenderSession object than its origin.
+        $origin  = Veil::new()->withBackdrop(37);
+        $detached = $origin->withoutSession();
+        $prop = (new \ReflectionClass(Veil::class))->getProperty('session');
+
+        $this->assertNotSame($prop->getValue($origin), $prop->getValue($detached));
+        $this->assertSame(37, (new \ReflectionClass(Veil::class))->getProperty('backdropOpacity')->getValue($detached));
     }
 
     /**

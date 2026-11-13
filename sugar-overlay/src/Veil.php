@@ -1230,8 +1230,9 @@ final class Veil
     /**
      * Split a multi-line string into an array of lines.
      *
-     * A trailing "\n" closes the last line rather than opening an empty one;
-     * the Slide and Scale animations measure with the same rule (Lines).
+     * Same rule as {@see Lines::split()}: a trailing "\n" closes the last
+     * line rather than opening an empty one; the Slide and Scale
+     * animations measure with this exact rule.
      *
      * @return list<string>
      */
@@ -1242,6 +1243,9 @@ final class Veil
 
     /**
      * Get the maximum line width (in characters) of an array of lines.
+     *
+     * Cells, not bytes: every line is weighed by {@see lineWidth()}
+     * (which is {@see MarkedFrame::measure()}).
      *
      * @param list<string> $lines
      */
@@ -1262,7 +1266,9 @@ final class Veil
      *
      * ANSI escapes and sugar-mouse zone markers (the U+E000 id U+E001
      * envelopes {@see mark()} adds) cost zero cells and are excluded —
-     * the same accounting the compositor and the Scanner use.
+     * the same accounting the compositor and the Scanner use. Delegates
+     * to {@see MarkedFrame::measure()}; this is the pointer, not a
+     * second implementation.
      */
     public function lineWidth(string $line): int
     {
@@ -1583,13 +1589,17 @@ final class Veil
     }
 
     /**
-     * Return a copy of this veil with a fresh RenderSession.
+     * Copy-construct this veil, swapping the diff session (SO-22,
+     * sugar-overlay-033): the ONE enumeration point for "carry every
+     * field unchanged". mutate() changes selected fields; rebuild()
+     * changes none but the session.
      *
-     * This ensures that when a veil is reused in a stacking context,
-     * inner compositing operations always emit FULL frames rather than
-     * deltas that would otherwise corrupt the chaining computation.
+     * ImmutabilityFieldParityTest pins that this body names every
+     * constructor parameter — the "do not forget a new field" warning is
+     * executable, not tribal: add a ctor field without carrying it here
+     * and that suite goes red.
      */
-    public function withoutSession(): self
+    private function rebuild(?RenderSession $session = null): self
     {
         return new self(
             backdropOpacity: $this->backdropOpacity,
@@ -1601,7 +1611,7 @@ final class Veil
             scanner: $this->scanner,
             lastRendered: $this->lastRendered,
             marker: $this->marker,
-            session: new RenderSession(),
+            session: $session ?? new RenderSession(),
             vPosition: $this->vPosition,
             hPosition: $this->hPosition,
             posX: $this->posX,
@@ -1609,5 +1619,17 @@ final class Veil
             content: $this->content,
             reducedMotion: $this->reducedMotion,
         );
+    }
+
+    /**
+     * Return a copy of this veil with a fresh RenderSession.
+     *
+     * This ensures that when a veil is reused in a stacking context,
+     * inner compositing operations always emit FULL frames rather than
+     * deltas that would otherwise corrupt the chaining computation.
+     */
+    public function withoutSession(): self
+    {
+        return $this->rebuild();
     }
 }
