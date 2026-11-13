@@ -70,6 +70,98 @@ final class MirrorPullerTest extends TestCase
         $this->assertSame(8 * 3600, $puller->schedule()->intervalSeconds);
     }
 
+    // -------------------------------------------------------------------------
+    // S05 (finding 005): tick budget + overlap guard
+    // -------------------------------------------------------------------------
+
+    public function testTickBudgetIsCappedAndStaysBelowTheScheduleInterval(): void
+    {
+        // 10 min cadence: the 60 s cap rules.
+        $this->assertSame(60.0, $this->puller('@every 10m')->tickBudgetSeconds());
+        // 90 s cadence: half the interval rules — a tick yields before
+        // the next one is due, whatever the cap would allow.
+        $this->assertSame(45.0, $this->puller('@every 90s')->tickBudgetSeconds());
+        // The floor keeps a pathological 1 s schedule at a usable budget.
+        $this->assertGreaterThanOrEqual(1.0, $this->puller('@every 2s')->tickBudgetSeconds());
+    }
+
+    public function testExhaustedBudgetDefersEveryMirrorWithoutStamping(): void
+    {
+        $puller = $this->puller();
+        $puller->registerRepos([
+            Repo::new('mirror-a', '/tmp/mirror-a')->withMirrorFrom('https://example.com/a.git'),
+            Repo::new('mirror-b', '/tmp/mirror-b')->withMirrorFrom('https://example.com/b.git'),
+        ]);
+
+        // Zero budget: the admission check at the head of each iteration
+        // refuses ALL fetches — and the deferred mirrors were never
+        // stamped, so they are due again next tick (deferral is not
+        // failure).
+        $this->assertSame(0, $puller->runOnce(null, 0.0));
+        $this->assertSame([], $this->commands, 'no fetch may start past the budget');
+        $this->assertNull($puller->lastPullAt('mirror-a'));
+        $this->assertNull($puller->lastPullAt('mirror-b'));
+    }
+
+    public function testEachFetchGetsTheBudgetRemainingAtItsAdmission(): void
+    {
+        $timeouts = [];
+        $puller = new MirrorPuller($this->config('@every 10m'), function (array $argv, float $timeout) use (&$timeouts): array {
+            $timeouts[] = $timeout;
+            \usleep(150_000); // burn real wall time so the budget visibly shrinks
+
+            return ['code' => 0, 'output' => []];
+        });
+        $puller->registerRepos([
+            Repo::new('mirror-a', '/tmp/mirror-a')->withMirrorFrom('https://example.com/a.git'),
+            Repo::new('mirror-b', '/tmp/mirror-b')->withMirrorFrom('https://example.com/b.git'),
+        ]);
+
+        $pulled = $puller->runOnce(null, 0.5);
+
+        $this->assertSame(2, $pulled, 'a 0.5 s budget over ~0.15 s fetches admits both, not none');
+        $this->assertCount(2, $timeouts);
+        $this->assertLessThanOrEqual(0.5, $timeouts[0]);
+        $this->assertGreaterThan($timeouts[1], $timeouts[0], 'the second fetch gets strictly less wall left');
+        // The 0.1 s floor: an admission at the last instants still gets a
+        // usable timeout rather than a meaningless 2 ms one.
+        $this->assertGreaterThanOrEqual(0.1, $timeouts[1]);
+    }
+
+    public function testAReenteredTickSkipsInsteadOfInterleaving(): void
+    {
+        $puller = null;
+        $calls = 0;
+        $puller = new MirrorPuller($this->config('@every 10m'), function (array $argv) use (&$calls, &$puller): array {
+            $calls++;
+            if ($calls === 1) {
+                // The pathological host: housekeeping re-enters the very
+                // tick the seam is still executing.
+                $inner = $puller->runOnce();
+                $this->assertSame(0, $inner, 'the overlapped tick must log-skip and return zero');
+            }
+
+            return ['code' => 0, 'output' => []];
+        });
+        $puller->registerRepo(Repo::new('mirror-a', '/tmp/mirror-a')->withMirrorFrom('https://example.com/a.git'));
+
+        $this->assertSame(1, $puller->runOnce(), 'the outer batch still completes normally');
+        $this->assertSame(1, $calls, 'the inner tick must not run a second batch');
+    }
+
+    public function testTheGuardFlagClearsAfterAFailingBatch(): void
+    {
+        $puller = $this->puller('@every 10m', exitCode: 128); // every fetch "fails"
+        $puller->registerRepo(Repo::new('mirror-a', '/tmp/mirror-a')->withMirrorFrom('https://example.com/a.git'));
+
+        $this->assertSame(0, $puller->runOnce(1000, 5.0), 'failures count as zero pulled');
+        // The finally-cleared flag: the NEXT tick (past the schedule gap —
+        // failed attempts stamp, so the repo is due again after 600 s)
+        // must run normally, not see a stale guard and skip forever.
+        $this->assertSame(0, $puller->runOnce(1700, 5.0));
+        $this->assertCount(2, $this->commands, 'both ticks really executed');
+    }
+
     public function testConstructorThrowsOnInvalidSchedule(): void
     {
         $this->expectException(\InvalidArgumentException::class);

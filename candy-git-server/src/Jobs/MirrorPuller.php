@@ -38,6 +38,19 @@ use SugarCraft\GitServer\Support\BoundedCommand;
  * {@see runOnce()} is the synchronous entry point a blocking host can
  * call from its own housekeeping (or a cron job).
  *
+ * TICK ENVELOPE (finding 005): a batch of due mirrors used to pull with
+ * no wall bound at all — N mirrors × FETCH_TIMEOUT_SECONDS of blocked
+ * host, and on the {@see attach()} path that block froze the SHARED
+ * event loop for its whole duration: the pre-fix worst case is a batch
+ * of hung upstreams freezing every other client of the async server for
+ * N×300 s. A tick now carries a wall budget — half the schedule interval,
+ * capped at {@see TICK_BUDGET_MAX_SECONDS}, strictly below one interval by
+ * construction — every fetch gets the REMAINING budget as its deadline,
+ * mirrors the budget ran out on stay unstamped (and therefore due) for
+ * the next tick, and the tick refuses to overlap: a second entry while
+ * one runs logs the skip and returns zero rather than interleaving
+ * pulls.
+ *
  * Mirrors charmbracelet/soft-serve's mirror job.
  */
 final class MirrorPuller
@@ -48,6 +61,18 @@ final class MirrorPuller
     /** Wall-clock ceiling for one upstream fetch (git can be slow, not forever). */
     public const FETCH_TIMEOUT_SECONDS = 300.0;
 
+    /**
+     * Ceiling on ONE tick's wall budget: the batch of due mirrors may
+     * block its host at most this long (finding 005 — pre-fix, N hung
+     * upstreams meant N×FETCH_TIMEOUT_SECONDS of frozen event loop). The
+     * effective budget is min(this, half the schedule interval) so a tick
+     * always finishes — and defers — before the next one is due.
+     */
+    public const TICK_BUDGET_MAX_SECONDS = 60.0;
+
+    /** True while a runOnce() batch is executing (overlap guard). */
+    private bool $inTick = false;
+
     private Schedule $schedule;
 
     /** @var array<string, Repo> repo name => Repo */
@@ -57,9 +82,12 @@ final class MirrorPuller
     private array $lastPull = [];
 
     /**
-     * Process-execution seam: fn(list<string> $argv): array{code:int, output:list<string>}.
+     * Process-execution seam: fn(list<string> $argv, float $timeoutSeconds):
+     * array{code:int, output:list<string>}. The timeout arrives PER FETCH —
+     * the tick's remaining budget — so the runner cannot outlive the tick
+     * that invoked it.
      *
-     * @var \Closure(list<string>): array{code: int, output: list<string>}
+     * @var \Closure(list<string>, float): array{code: int, output: list<string>}
      */
     private \Closure $exec;
 
@@ -69,14 +97,15 @@ final class MirrorPuller
     /**
      * @param \Closure|null $exec Process-execution seam for tests; the
      *                            default runs argv vectors through
-     *                            {@see BoundedCommand::run()}.
+     *                            {@see BoundedCommand::run()} with the
+     *                            per-fetch timeout the tick hands it.
      * @throws \InvalidArgumentException if the configured schedule is invalid
      */
     public function __construct(Config $config, ?\Closure $exec = null)
     {
         $this->schedule = Schedule::parse($config->mirrorPullSchedule);
-        $this->exec = $exec ?? static function (array $argv): array {
-            return BoundedCommand::run($argv, self::FETCH_TIMEOUT_SECONDS, ['GIT_TERMINAL_PROMPT' => '0']);
+        $this->exec = $exec ?? static function (array $argv, float $timeoutSeconds = self::FETCH_TIMEOUT_SECONDS): array {
+            return BoundedCommand::run($argv, $timeoutSeconds, ['GIT_TERMINAL_PROMPT' => '0']);
         };
     }
 
@@ -133,31 +162,78 @@ final class MirrorPuller
     // Pulling
     // -------------------------------------------------------------------------
 
+    /** Wall-clock budget one runOnce() batch may spend (S05, finding 005). */
+    public function tickBudgetSeconds(): float
+    {
+        // min(cap, half the interval): a tick defers and yields long
+        // before the next one is due, whatever the operator's cadence.
+        return \max(1.0, \min(self::TICK_BUDGET_MAX_SECONDS, $this->schedule->intervalSeconds / 2.0));
+    }
+
     /**
      * Pull every due mirror now. Synchronous — callable from a blocking
      * host's housekeeping or standalone (e.g. cron).
      *
+     * S05 (finding 005): the batch carries a wall budget
+     * ({@see tickBudgetSeconds()}, or $budgetSeconds when the host knows
+     * better); the moment it is spent, the remaining mirrors are DEFERRED
+     * — not failed: they were never stamped, so they are due again on the
+     * next tick. Each fetch receives its own share: the runner's timeout
+     * is the budget still left, capped at FETCH_TIMEOUT_SECONDS. Overlap
+     * is refused: a host that re-enters mid-batch (a synchronous seam
+     * calling runOnce, a housekeeping pass beside an attached timer) gets
+     * a logged skip and zero, never two interleaved pull batches.
+     *
      * @return int number of mirrors pulled successfully
      */
-    public function runOnce(?int $now = null): int
+    public function runOnce(?int $now = null, ?float $budgetSeconds = null): int
     {
-        $now ??= \time();
-        $pulled = 0;
-        foreach ($this->dueMirrors($now) as $repo) {
-            if ($this->pull($repo, $now)) {
-                $pulled++;
-            }
+        if ($this->inTick) {
+            \error_log('candy-git-server: mirror pull skipped — a tick is already running');
+
+            return 0;
         }
 
-        return $pulled;
+        $now ??= \time();
+        $budget = $budgetSeconds ?? $this->tickBudgetSeconds();
+        $deadlineNs = \hrtime(true) + (int) ($budget * 1e9);
+        $this->inTick = true;
+        try {
+            $pulled = 0;
+            foreach ($this->dueMirrors($now) as $repo) {
+                $leftNs = $deadlineNs - \hrtime(true);
+                if ($leftNs <= 0) {
+                    // Deferred mirrors stay unstamped (due next tick) —
+                    // the budget exhaustion is not their failure.
+                    \error_log('candy-git-server: mirror pull tick budget exhausted; remaining mirrors defer to the next tick');
+
+                    break;
+                }
+                $timeout = \min(
+                    self::FETCH_TIMEOUT_SECONDS,
+                    \max(0.1, $leftNs / 1e9)
+                );
+                if ($this->pull($repo, $now, $timeout)) {
+                    $pulled++;
+                }
+            }
+
+            return $pulled;
+        } finally {
+            $this->inTick = false;
+        }
     }
 
     /**
      * Fetch a single mirror from its upstream. The attempt is recorded
      * even on failure — and on refusal — so a broken or unfit config
      * cannot hot-loop the job.
+     *
+     * @param float|null $timeoutSeconds per-fetch wall ceiling; defaults
+     *                                   to the full FETCH_TIMEOUT_SECONDS
+     *                                   (a standalone pull, not a tick)
      */
-    public function pull(Repo $repo, ?int $now = null): bool
+    public function pull(Repo $repo, ?int $now = null, ?float $timeoutSeconds = null): bool
     {
         if (!$repo->isMirror()) {
             return false;
@@ -177,7 +253,7 @@ final class MirrorPuller
 
         $result = ($this->exec)([
             'git', '-C', $repo->path(), 'fetch', '--prune', $url, '+refs/*:refs/*',
-        ]);
+        ], $timeoutSeconds ?? self::FETCH_TIMEOUT_SECONDS);
 
         if ($result['code'] !== 0) {
             \error_log("candy-git-server: mirror pull failed for {$repo->name}: "
