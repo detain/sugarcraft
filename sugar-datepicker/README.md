@@ -52,7 +52,7 @@ one).
 composer require sugarcraft/sugar-datepicker:@dev
 ```
 
-No tagged release yet — the package currently ships only `dev-master` from Packagist, so consume it with the `@dev` constraint above until the first version tag lands.
+No tagged release yet — the package currently ships only `dev-master` from Packagist, so consume it with the `@dev` constraint above until the first version tag lands. The 2026-10 rename left the old `sugarcraft/sugar-calendar` provider registered and frozen at its last old-name release; depend on the new name only.
 
 ## Quick Start
 
@@ -271,6 +271,19 @@ $picker = $picker
     ->withRangeStyle('4;35');
 ```
 
+Shipped defaults (the values a fresh picker renders with — the example above
+deliberately overrides them):
+
+| Setter                 | Default SGR | Renders as      |
+|------------------------|-------------|-----------------|
+| `withHeaderStyle`      | `'1;37'`    | bold white      |
+| `withDayNameStyle`     | `'90'`      | bright black    |
+| `withTodayStyle`       | `'1;32'`    | bold green      |
+| `withSelectedStyle`    | `'1;36'`    | bold cyan       |
+| `withSelectedTodayStyle` | `'1;33'`  | bold yellow     |
+| `withCursorStyle`      | `'7'`       | reverse video   |
+| `withRangeStyle`       | `'1;35'`    | bold magenta    |
+
 There is no dedicated disabled-day style: every out-of-bounds day always
 receives the built-in faint composition, layered onto whichever style the
 chain above chose, and none of the seven setters influence it.
@@ -315,6 +328,9 @@ jumps between months and years go through the `goTo*()` methods.
 `Model::new()` takes an optional `EventStore` as its second argument. When one
 is attached, every state *transition* — a value change, never a flag edge — is
 recorded as a typed event the host drains with `release()` after each update.
+Each drained row has the fixed shape `array{type: string, payload: array, time: int}` —
+`time` is whole epoch-seconds from the store's clock seam (real wall clock by
+default; inject `EventStore::new(clock: …)` for deterministic tests).
 Event kinds are `PickerEvent` constants; compare against the constants, never
 hand-copied strings (a typo in a raw literal fails silently, a typo in a class
 constant does not):
@@ -386,6 +402,10 @@ Beyond `DatePicker` itself, the shipped public classes are:
 - **`Navigation::gridIndexToDate($index, $month, $year)`** — maps a raw grid
   index to a date; it throws when `month` is outside 1–12 or `year` is below 1,
   which the picker's view floor prevents from ever reaching it in normal use.
+- **`Lang`** — the lib-internal i18n façade (extends the sugar-core base): it
+  exists so `Lang::t()` resolves through this package's namespace and is not a
+  host-facing API — consume translations by editing `lang/<code>.php`, never by
+  calling into this class.
 - **`Model`** — the TEA wrapper (`init()`/`update($msg)`/`view()`/
   `subscriptions()`). Its `update()` command is **always null** — a host learns
   the outcome by polling `picker()->selectedDate()`/`rangeStart()`/`rangeEnd()`
@@ -426,6 +446,14 @@ fit the 3-column cell budget (an oversized name is clipped to its own slot at
 render time, never overwriting the next column), `month.*` fit the 16-column
 header budget (the natural 21-wide floor minus the year slot), and the
 `day.0`–`day.6` positional Sunday-first order is pinned.
+
+The keys are POSITIONAL, and there is no week-start knob: `day.0` labels the
+leftmost column, `day.6` the rightmost, Sunday-first — translating the file
+changes the labels, never the layout. A locale that really starts its week on
+Monday must translate positionally (day.0 = that locale's Sunday name, e.g.
+`So` in German), and a consumer who instead writes `day.0` = Monday ships
+silently mislabeled columns. The grid geometry itself — and therefore what a
+`hitTest()` coordinate means — is Sunday-first for every locale.
 
 ## Shared foundations
 
