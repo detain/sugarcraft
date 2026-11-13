@@ -182,6 +182,10 @@ final class Tabs implements Model
      * When a {@see Manager} is set, each tab label is wrapped in an APC
      * zone marker so the parent can {@see Manager::scan()} to record
      * bounding boxes for mouse routing.
+     *
+     * An empty label list renders the empty string — emptiness is never
+     * signalled (no placeholder hook ships; the parked emptyPlaceholder
+     * concept awaits an owner ruling, W-40/063).
      */
     public function view(): string
     {

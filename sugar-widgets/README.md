@@ -175,6 +175,21 @@ closure (the `Progress` precedent is spelled out under
 Components deliberately do not read the environment themselves so a
 single detection point keeps every widget consistent.
 
+### Empty collections render blank — per-surface truth
+
+| Surface | Empty input renders |
+| --- | --- |
+| `Table::view()` | no columns → the empty string; columns present → header lines only, zero body rows |
+| `Tree::view()` | no roots (or all collapsed out of the window) → the empty string |
+| `Tabs::view()` | no labels → the empty string |
+| `Paginator::view()` | no pages (`perPage <= 0` or `totalItems <= 0`) → the empty string — a lone dot claiming a page that does not exist was the old bug |
+
+No surface above signals emptiness with a placeholder — an invisible
+empty pane is the host's to detect and label (supply your own
+placeholder row in the data, or branch before calling `view()`). A
+shared `emptyPlaceholder()` / empty-state message concept is PARKED
+behind an owner ruling (W-40/063); it is deliberately not invented here.
+
 ### The `0` dimension sentinel — one table, per-surface meanings
 
 There is no repo-wide `DimensionPolicy` yet (unifying the behaviour is a
