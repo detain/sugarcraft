@@ -25,11 +25,18 @@ namespace SugarCraft\McpClient;
  */
 final class McpRouter
 {
-    /** @var array<string,string> pattern => action, normalised once in the constructor */
+    /**
+     * @var array<array-key,string> pattern => action, normalised once in the
+     *      constructor — a digit-SPELLED pattern lands on an INT key (PHP
+     *      array-key normalisation), so the domain is array-key, not string;
+     *      the readers below cast back to the config spelling before matching
+     */
     private readonly array $denyActions;
 
     /**
-     * @param array<string,McpServer> $servers keyed by server name
+     * @param array<array-key,McpServer> $servers keyed by server name — a
+     *        digit-named server sits on an int key for the same normalisation,
+     *        and the filter closures spell names back with (string) casts
      * @param array<array-key, string|array{action:string}> $denyPatterns two
      *        config notations are legal: a PLAIN
      *        LIST of glob patterns — `['scratch', 'untrusted_*']` — where every
@@ -66,7 +73,7 @@ final class McpRouter
      * the map reading byte-for-byte.
      *
      * @param array<array-key, mixed> $denyPatterns the raw config shape
-     * @return array<string,string> pattern => action
+     * @return array<array-key,string> pattern => action
      */
     private static function normalizeDenyActions(array $denyPatterns): array
     {
@@ -89,6 +96,10 @@ final class McpRouter
 
         $actions = [];
         foreach ($denyPatterns as $pattern => $spec) {
+            // (string) is the config SPELLING used in diagnostics; the array
+            // write re-normalises a digit-spelled pattern to its int key —
+            // the truth the widened annotations above carry, matched back as
+            // a string by denyMapMatches().
             if (is_string($spec)) {
                 $actions[(string) $pattern] = $spec;
                 continue;
@@ -154,8 +165,8 @@ final class McpRouter
     }
 
     /**
-     * @param array<string,McpServer> $servers
-     * @return array<string,McpServer>
+     * @param array<array-key,McpServer> $servers
+     * @return array<array-key,McpServer>
      */
     private function applyDenyPatterns(array $servers): array
     {
@@ -171,9 +182,9 @@ final class McpRouter
     }
 
     /**
-     * @param array<string,McpServer> $servers
+     * @param array<array-key,McpServer> $servers
      * @param list<string> $allowList
-     * @return array<string,McpServer>
+     * @return array<array-key,McpServer>
      */
     private function applyAllowList(array $servers, array $allowList): array
     {
@@ -205,7 +216,9 @@ final class McpRouter
      * key exactly as {@see serverAllowed()} is). Shared by both doors of the
      * deny law; takes the map the constructor produced, never raw config.
      *
-     * @param array<string,string> $denyActions
+     * @param array<array-key,string> $denyActions normalised map — a
+     *        digit-spelled pattern stands on an int key and is cast back to
+     *        its config spelling by the loop below before matching
      */
     private static function denyMapMatches(string $server, array $denyActions): bool
     {
