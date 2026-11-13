@@ -166,12 +166,12 @@ Codec matrix (sugar-image native paths only):
 |---|---|---|
 | PNG (still + APNG) | ✅ decode | APNG frames via `fromAnimatedFile()` → an `Animation` |
 | JPEG, static GIF | ✅ decode | GIF animates via `fromAnimatedFile()` → an `Animation` |
-| WebP — static (VP8/VP8L/VP8X) | ✅ decode via `fromString()` | ext-gd WebP build |
-| BMP | ✅ decode via `fromString()` | ext-gd decode; `fromFile()` refuses it — its declared-MIME allowlist is png/jpeg/gif only |
-| WebP — animated (VP8X ANIM bit / ANMF) | ❌ refused by name | `UnsupportedFormatException` — needs chafa CLI or sugar-video's pure-PHP `AnimatedWebpDecoder` (no released ffmpeg decodes animated WebP frames — its demuxer skips ANMF); the refusal is structural (pure-PHP RIFF walk), so the silent first-frame degrade class is closed on every host |
-| AVIF / HEIF / HEIC (`ftyp` brands) | ❌ refused by name | no PHP-side decoder; chafa CLI renders a still |
-| JPEG XL (`FF 0A` codestream, `jxl ` brand) | ❌ refused by name | same |
-| TIFF (`II*\0` / `MM\0*`) | ❌ refused as input | output-only: the GD-free iTerm2 payload encoder (`Codec\TiffUncompressed`) |
+| WebP — static (VP8/VP8L/VP8X) | ✅ decode | via `fromString()` only — `fromFile()`'s declared-MIME allowlist is png/jpeg/gif; needs an ext-gd WebP build |
+| BMP | ✅ decode | via `fromString()` only — `fromFile()` refuses it: its declared-MIME allowlist is png/jpeg/gif |
+| WebP — animated (VP8X ANIM bit / ANMF) | ❌ refuse | refused by name: `UnsupportedFormatException` before any decode — needs chafa CLI or sugar-video's pure-PHP `AnimatedWebpDecoder` (no released ffmpeg decodes animated WebP frames — its demuxer skips ANMF); the refusal is structural (pure-PHP RIFF walk), so the silent first-frame degrade class is closed on every host |
+| AVIF / HEIF / HEIC (`ftyp` brands) | ❌ refuse | refused by name: no PHP-side decoder; chafa CLI renders a still |
+| JPEG XL (`FF 0A` codestream, `jxl ` brand) | ❌ refuse | refused by name: same |
+| TIFF (`II*\0` / `MM\0*`) | ❌ refuse | refused as input; output-only — the GD-free iTerm2 payload encoder (`Codec\TiffUncompressed`) |
 
 The matrix states what decodes where. Three facts it cannot carry:
 
@@ -186,8 +186,10 @@ The matrix states what decodes where. Three facts it cannot carry:
   corrupt payload produces exactly one thrown refusal — never warning spam
   ahead of it. `tests/GdCallIdiomCensusTest.php` greps the source tree and
   keeps both idioms from drifting back.
-- Animated GIF and APNG via `ImageSource::fromAnimatedFile()`, which returns an
-  `Animation` (frames + per-frame delays) — the input to `AnimationDriver`.
+- Animation has exactly one entry: `ImageSource::fromAnimatedFile()` → an
+  `Animation` (frames + per-frame delays, the input to `AnimationDriver`).
+  The still paths above decode a single frame of an animated container —
+  `fromFile()`/`fromString()` on a GIF or APNG yield the first frame, silently.
 
 ## Limits
 
@@ -199,14 +201,23 @@ Decoding untrusted images is budgeted — the caps are constants on
 | `ImageSource::MAX_BYTES` | 64 MiB | the file, animated-file, URL and `fromString()` reads — oversized payloads are refused before GD ever sees them (the in-memory route measures its buffer up front, so every byte-intake path shares one ceiling; the format-signature and pixel budgets below still guard what fits) |
 | `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget — `fromFile()`, `fromAnimatedFile()` and `fromString()` check it against declared dimensions, every renderer re-checks it on the decoded frame, and `withMaxPixels()` tunes it per source |
 | `FLIP_FRAME_CAP` (private) | 256 frames | animated-GIF frame list: walks beyond the cap are sliced away rather than decoded (a silent truncation, not a refusal) |
-| `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: one frame wider than `width × height` allows is refused with a mosaic-owned message before sugar-animation's decoder sees it (the sibling's own `Decoder::MAX_CELLS` mirror) |
+| `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: a frame whose `width × height` cell footprint exceeds it is refused with a mosaic-owned message before sugar-animation's decoder sees it (mirrors the sibling's own `Decoder::MAX_CELLS`) |
 | `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
 | `MAX_RIFF_CHUNKS` (private) | 64 | the pure-PHP WebP RIFF walk bails out of a chunk flood instead of iterating forever |
 | `Animation::MAX_FRAMES` | 10,000 frames | the frame-list length itself: `new Animation(...)` and `withFrame()` refuse a longer sequence — a driver walking an unbounded list could pre-materialise unbounded memory, so the cap belongs to the value object, not the walk |
 
-Every refusal cap above is pinned by tests; `FLIP_FRAME_CAP` is the
-documented slice-out and is verified by the flip-walk parity pins around it,
-not by its own boundary test.
+What the budgets are and what proves them, honestly: `ImageSource::MAX_BYTES`,
+`MAX_PIXELS` and `Animation::MAX_FRAMES` refuse and are pinned by boundary
+tests; `FLIP_MAX_TOTAL_CELLS` refuses and is pinned by the recalibrated
+cell-budget bomb leg in `tests/ImageSourceGifRound4SecurityTest.php`;
+`MAX_RIFF_CHUNKS` is not a refusal at all — exhausting it gives up the
+pure-PHP walk fail-soft (GD's judgement takes over), pinned as that give-up.
+`FLIP_FRAME_CAP` truncates silently (walks beyond it are sliced away) and is
+verified by the flip-walk parity pins around it, not by its own boundary test;
+and the `FLIP_MAX_CELLS` per-frame refusal's boundary itself is not pinned by
+a dedicated test — it shares its guard helper and refusal grammar with the
+pinned pixel ceilings, and its gap is on the record here rather than
+papered over by "every cap above is pinned".
 
 ## Chafa binary discovery
 
@@ -300,7 +311,8 @@ ImageSource::fromUrlAsync('https://example.com/poster.png')
 `fromUrlAsync()` needs the suggested `react/http` package
 (`composer require react/http`); without it the returned promise rejects with
 an install hint rather than a fatal. The default Browser it builds carries the
-same 30-second per-request timeout as the sync path; pass your own
+same 30-second per-request timeout as the sync path
+(`ImageSource::FETCH_TIMEOUT_SECONDS`); pass your own
 pre-configured `React\Http\Browser` as the third argument to control the
 connector and timeout yourself.
 
@@ -375,10 +387,11 @@ $cache  = new DiskCache($_SERVER['HOME'] . '/.cache/posters', maxEntries: 512);
 // Key includes the protocol — the same image at the same size encodes
 // differently for sixel vs kitty vs half-block. The ASCII renderer's colour
 // arms share one protocol name, so append modeDetail() to protocol(). The
-// real key Mosaic uses for its own posters is wider still: protocol + mode
-// detail + the Scale NAME + the renderer's config fingerprint + the
-// optimisation mask, each part appended only when non-empty (private
-// Mosaic::posterCacheKey()) to keep them cache-distinct.
+// real key Mosaic uses for its own posters is wider still: protocol, mode
+// detail, the Scale enum name, the renderer's config fingerprint and the
+// optimisation mask — each part appended only when non-empty (private
+// `Mosaic::posterCacheKey()`), so posters that differ in any of them can
+// never share a cache entry.
 $key = DiskCache::key($url, width: 24, height: 36, protocol: $mosaic->protocol() . ($mosaic->modeDetail() ? ':' . $mosaic->modeDetail() : ''));
 
 $ansi = $cache->getOrCompute($key, fn (): string =>
@@ -438,8 +451,7 @@ control placement and one that controls the payload encoding:
   the older `withCellDimensions($w, $h)` carries the identical pixel contract
   under a misleading name (kept for wire compatibility — neither takes cell
   counts, and `c=`/`r=` stay renderer-computed either way).
-
-- **Zlib compression** (`o=z`): Pass `withCompression(1)` to compress
+- **Zlib compression** (`o=z`): pass `withCompression(1)` to compress
   the PNG payload with zlib before base64-encoding; the transmit is
   emitted as `f=100,o=z` (compression rides the spec's `o` key, `f`
   stays the data format). Useful for large images on slow links; adds
@@ -656,8 +668,8 @@ text, so they reach any Unicode-capable terminal for sighted readers:
 - **Symbol map** — chafa's coverage-class engine: each cell's bit coverage
   picks the closest Unicode braille/sextant/octant/block glyph by
   Hamming-distance candidate search over a symbol corpus.
-  `Mosaic::symbols(canvas:, workFactor:, symbols:)` picks the colour
-  canvas (`CanvasMode`), the candidate-budget work factor, and a chafa
+  `Mosaic::symbols(CanvasMode $canvas = CanvasMode::TrueColor, float $workFactor = SymbolMapRenderer::DEFAULT_WORK_FACTOR, ?string $symbols = null)` picks the colour
+  canvas, the candidate-budget work factor, and a chafa
   `--symbols=` selector expression over the wider corpus. That `symbols:`
   argument and `Mosaic::withSymbolSelectors()` are the same knob at two
   facades; both feed `Symbol\SymbolMap::withSelectors()`, where the tag
@@ -696,10 +708,11 @@ knob instead of letting someone tune a dead dial.
 
 ## Limited-colour and no-colour terminals
 
-The half-block, quarter-block and chafa-adjacent text paths emit 24-bit
-foreground/background SGR unconditionally — there is no automatic palette
-negotiation, so a terminal that does not honour truecolour discards or
-misinterprets those sequences. The explicit escape hatches:
+The coloured text tiers default to 24-bit foreground/background SGR and
+nothing negotiates with the terminal — a terminal that does not honour
+truecolour discards or misinterprets those sequences unless you steer them
+with the explicit escape hatches below. The half-block tier offers none: it is
+truecolour or nothing.
 
 - `Mosaic::ascii(AsciiColorMode::Ansi16)` maps every pixel onto the 16-colour
   ANSI palette; `Mosaic::ascii()` defaults to `AsciiColorMode::Mono`, the one
@@ -747,7 +760,7 @@ the default is `Fit`, except `poster()`, which defaults to `Fill`.
 | `Fill` | cover the box, cropping the overflow |
 | `Crop` | crop from the source to the box aspect, then fit |
 | `Stretch` | ignore aspect and pull to the exact box |
-| `ShrinkToFit` | like `Fit` but never upscales: native pixels are centred on a blank-padded box (the quarter-block tier cannot pad and falls back to filling) |
+| `ShrinkToFit` | like `Fit` but never upscales: native pixels are centred on a blank-padded box (the quarter-block tier cannot represent the blank — its grid reads RGB only, so a transparent pad would paint black cells — and keeps `Fit`-shaped output until nullable quads land, a disclosed follow-up) |
 
 Cell boxes are not square, so the cover modes crop against a cell-height
 multiple of the box (`CellGeometry`), and an auto height divides the source
@@ -776,7 +789,8 @@ $cell = $layer->place($ansiBytes, 20, 10);
 // Compose $cell into the frame like any other text; $frame is the result —
 // the text rows with $cell's marker in place.
 $frame = "top row\n" . $cell . "\nbottom row";
-return new View($frame, images: $layer->placements());
+$view = new View($frame, images: $layer->placements());
+// $view is the composed frame: hand it to the program's draw/output path.
 ```
 
 Identical bytes register once — dedup is by content hash (`xxh3`), so the same
