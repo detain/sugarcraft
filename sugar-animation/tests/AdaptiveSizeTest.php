@@ -90,7 +90,7 @@ final class AdaptiveSizeTest extends TestCase
         $this->assertStringContainsString("\033[48;2;0;0;0m", $out);
     }
 
-    public function testWithAdaptiveSizeSkipsWhenNoTty(): void
+    public function testWithAdaptiveSizeThrowsWhenNotATty(): void
     {
         if (\posix_isatty(STDOUT)) {
             $this->markTestSkipped('STDOUT is a TTY — would query real terminal size');
