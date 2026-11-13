@@ -117,6 +117,19 @@ final class FfmpegDecoder implements Decoder
     private string $pngBuffer = '';
 
     /**
+     * Byte offset to resume the PNG_IEND scan from (SV-M37).
+     *
+     * Without it, every 64KB top-up re-scans the WHOLE buffer from byte 0 —
+     * O(N²) in buffer size: a stalling-but-live child lets a slow trickle
+     * inflate toward the 100MB cap while memchr earns its keep hundreds of
+     * times per frame. The cursor parks (marker length − 1) bytes behind the
+     * buffer end — the marker may straddle a top-up — so each
+     * byte is examined at most once between consumptions. Reset on frame
+     * delivery, buffer drop, and open.
+     */
+    private int $pngScanCursor = 0;
+
+    /**
      * Carry-over bytes of a partially-read rawvideo frame between next() calls.
      *
      * A bounded read can return with a frame only half-received (the pipe stalled
@@ -208,6 +221,7 @@ final class FfmpegDecoder implements Decoder
         $this->source = $source;
         $this->graphics = $mode?->isGraphics() ?? false;
         $this->pngBuffer = '';
+        $this->pngScanCursor = 0;
         $this->rawBuffer = '';
         $this->headers = HttpHeaders::parse($headers);
 
@@ -570,14 +584,20 @@ final class FfmpegDecoder implements Decoder
         $deadline = self::monotonic() + $this->readTimeout;
 
         while (true) {
-            $end = strpos($this->pngBuffer, self::PNG_IEND);
+            $end = strpos($this->pngBuffer, self::PNG_IEND, $this->pngScanCursor);
             if ($end !== false) {
                 $cut = $end + strlen(self::PNG_IEND);
                 $png = substr($this->pngBuffer, 0, $cut);
                 $this->pngBuffer = substr($this->pngBuffer, $cut);
+                $this->pngScanCursor = 0;
 
                 return new RgbFrame('', $this->frameW, $this->frameH, $png);
             }
+
+            // SV-M37: nothing found — park the cursor where a marker could
+            // still START inside the current tail, so the next top-up scans
+            // only the bytes it has never seen.
+            $this->pngScanCursor = max(0, strlen($this->pngBuffer) - (strlen(self::PNG_IEND) - 1));
 
             $chunk = $this->readStdout(65536, $deadline);
             if ($chunk === null) {
@@ -597,6 +617,7 @@ final class FfmpegDecoder implements Decoder
                 // the reset the framing is unrecoverable anyway, but the
                 // close()/EOF paths proceed and the memory actually drops.
                 $this->pngBuffer = '';
+                $this->pngScanCursor = 0;
                 error_log("FfmpegDecoder: PNG buffer exceeded limit, aborting");
                 return null;
             }
@@ -764,7 +785,15 @@ final class FfmpegDecoder implements Decoder
 
         try {
             if ($size > self::STDERR_TAIL_BYTES) {
-                @fseek($handle, -$size + self::STDERR_TAIL_BYTES, SEEK_SET);
+                // SV-M14: the old `-$size + 400` offset was NEGATIVE for any
+                // sink over 400 bytes (the common case), the @-suppressed
+                // fseek failed silently, and the read returned the FIRST 400
+                // bytes — the head, not the tail — exactly when the detail
+                // mattered. Seek to the true tail and take failures loudly.
+                $offset = $size - self::STDERR_TAIL_BYTES;
+                if (@fseek($handle, $offset, SEEK_SET) !== 0) {
+                    return '';
+                }
             }
             $raw = (string) @fread($handle, self::STDERR_TAIL_BYTES);
         } finally {

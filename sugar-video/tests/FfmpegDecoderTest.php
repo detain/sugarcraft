@@ -321,6 +321,103 @@ final class FfmpegDecoderTest extends TestCase
         }
     }
 
+    // -------------------------------------------------------------------------
+    // SV-M37: PNG IEND scan cursor (quadratic re-scan cure)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox SV-M37: multi-top-up PNG scans incrementally and survives a marker straddling a chunk
+     *
+     * Load-bearing: drop the scan cursor (strpos back to offset 0) and the
+     * parked-cursor assertion reddens; overshoot the cursor slack past
+     * marker-length-1 and the straddled IEND is missed, losing the frame.
+     */
+    public function testPngTopUpsParkTheScanCursorAndLandTheStraddledFrame(): void
+    {
+        $marker = "\x00\x00\x00\x00IEND\xae\x42\x60\x82"; // the whole 12-byte search key
+        $partOne = str_repeat('A', 100_000) . substr($marker, 0, 2);
+
+        $stream = fopen('php://temp', 'r+b');
+        $this->assertNotFalse($stream);
+        fwrite($stream, $partOne);
+        rewind($stream);
+
+        $decoder = new FfmpegDecoder();
+        $r = new \ReflectionClass($decoder);
+        foreach (['stdout' => $stream, 'graphics' => true, 'frameW' => 8, 'frameH' => 6, 'cellsW' => 8, 'cellsH' => 3] as $prop => $value) {
+            $p = $r->getProperty($prop);
+            $p->setAccessible(true);
+            $p->setValue($decoder, $value);
+        }
+
+        $cursor = $r->getProperty('pngScanCursor');
+        $cursor->setAccessible(true);
+        $nextPng = $r->getMethod('nextPng');
+        $nextPng->setAccessible(true);
+
+        // Phase 1: three 64KB top-ups, no complete marker anywhere — the call
+        // ends null (stream exhausted, no child) with the cursor parked
+        // marker-length-1 behind the buffer end, NOT at 0.
+        $this->assertNull($nextPng->invoke($decoder));
+        $this->assertSame(strlen($partOne) - 11, $cursor->getValue($decoder), 'the cursor parks where a straddling marker could still start');
+
+        // Phase 2: the rest of the marker trickles in across the call boundary.
+        // php://temp shares one cursor for read+write: append, then park the
+        // read position back at the end of what the decoder already consumed.
+        fwrite($stream, substr($marker, 2));
+        fseek($stream, strlen($partOne));
+        $frame = $nextPng->invoke($decoder);
+        $this->assertNotNull($frame, 'the frame must land even with its IEND split over two top-ups');
+        $this->assertSame($partOne . substr($marker, 2), $frame->png);
+        $this->assertSame(0, $cursor->getValue($decoder), 'consumption resets the cursor');
+    }
+
+    // -------------------------------------------------------------------------
+    // SV-M14: stderr tail (not head) for sinks over the cap
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox SV-M14: a >400-byte stderr sink yields its LAST bytes, not its first
+     */
+    public function testStderrTailReturnsTheTailForOversizedSinks(): void
+    {
+        $path = sys_get_temp_dir() . '/ffdec-tail-' . uniqid('', true) . '.txt';
+        $head = 'HEAD-NOISE ' . str_repeat('x', 500);
+        $tail = 'the-real-error: Option not found';
+        file_put_contents($path, $head . $tail);
+
+        try {
+            $tailFn = new \ReflectionMethod(FfmpegDecoder::class, 'stderrTail');
+            $tailFn->setAccessible(true);
+            $read = (string) $tailFn->invoke(null, $path);
+
+            $this->assertStringContainsString($tail, $read, 'the failure detail lives at the tail — the old negative seek showed only noise');
+            $this->assertStringNotContainsString('HEAD-NOISE', $read);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * @testdox SV-M14: a short sink still reads whole (and the null path stays quiet)
+     */
+    public function testStderrTailKeepsShortSinksIntact(): void
+    {
+        $tailFn = new \ReflectionMethod(FfmpegDecoder::class, 'stderrTail');
+        $tailFn->setAccessible(true);
+
+        $path = sys_get_temp_dir() . '/ffdec-short-' . uniqid('', true) . '.txt';
+        file_put_contents($path, 'small but sincere');
+        try {
+            $this->assertSame('small but sincere', (string) $tailFn->invoke(null, $path));
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertSame('', (string) $tailFn->invoke(null, null));
+        $this->assertSame('', (string) $tailFn->invoke(null, $path . '.missing'));
+    }
+
     /**
      * Inject decoder framing state + a fake stdout stream via reflection so
      * next() can be exercised without launching ffmpeg.
