@@ -259,7 +259,11 @@ $log->setStyles($styles);
 
 ### High-contrast environments
 
-The shipped defaults put `Debug`, the caller tag and generic keys on
+This port's level palette deliberately diverges from charmbracelet/log:
+upstream paints the levels purple-63/green-86/yellow-192/red-204/magenta-134,
+while the shipped defaults here re-tune to bright-black-8/blue-4/yellow-3/
+bold-red-1/white-on-bold-red-7 for terminal legibility — expect a silent
+visual break when migrating charm setups. The shipped defaults put `Debug`, the caller tag and generic keys on
 bright-black — roughly 2.5-3:1 against the default background, marginal for
 long reading sessions. Labels always carry text (color is never the only
 channel), but where contrast matters, override the roles explicitly:

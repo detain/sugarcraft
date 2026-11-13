@@ -9,7 +9,14 @@ use SugarCraft\Style\Style;
 
 /**
  * Styles for log level rendering in text output.
- * Mirrors charmbracelet/log's Styles / DefaultStyles.
+ *
+ * Mirrors charmbracelet/log's Styles SHAPE (levels keyed by level, per-field
+ * keys/values envelope map, copy/snapshot ergonomics); the default palette is
+ * intentionally re-tuned high-contrast rather than copied 1:1 — upstream
+ * ships purple-63/green-86/yellow-192/red-204/magenta-134 levels, this port
+ * ships bright-black-8/blue-4/yellow-3/bold-red-1/white-on-bold-red-7
+ * (see the README "High-contrast environments" section). Charm migrants
+ * should expect that silent visual break.
  */
 final class Styles
 {
