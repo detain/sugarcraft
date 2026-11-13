@@ -24,13 +24,13 @@ use SugarCraft\ScriptUi\Runtime\Geometry;
 final class PagerModel implements Model
 {
     /**
-     * Rows the view() footer (hints.pager line) occupies. Every height
-     * derivation that is expressed in terminal rows must subtract the
-     * same number, or the frame grows one line past the screen
+     * Rows the view() footer (hints.pager + hints.pager.more) occupies.
+     * Every height derivation that is expressed in terminal rows must
+     * subtract the same number, or the frame grows past the screen
      * (scriptui-20: bottom-bleed in alt-screen / stray hint lines into
      * scrollback inline).
      */
-    private const HINT_ROWS = 1;
+    private const HINT_ROWS = 2;
 
     public static function fromContent(
         string $content,
@@ -44,7 +44,7 @@ final class PagerModel implements Model
         // fall back to the historical 80x20 when nothing is knowable.
         $rows   = Geometry::rowsOrNull();
         $width  = $width  > 0 ? $width  : (Geometry::columnsOrNull() ?? 80);
-        // Auto height reserves one row for the hint footer; the historical
+        // Auto height reserves the hint footer rows; the historical
         // 20-row fallback (no knowable size) keeps pinned output stable.
         $height = $height > 0 ? $height : ($rows !== null ? max(1, $rows - self::HINT_ROWS) : 20);
         // Multi-line untrusted paint: control/escape bytes out, CR mapped to
@@ -68,7 +68,7 @@ final class PagerModel implements Model
             $content = self::numberLines($content);
         }
         $vp = Viewport::new($width, max(1, $height))->setContent($content);
-        return new self($vp, false);
+        return new self($vp, false, terminalRows: $rows ?? 0);
     }
 
     /**
@@ -109,6 +109,7 @@ final class PagerModel implements Model
         public readonly Viewport $viewport,
         public readonly bool $exited,
         public readonly bool $interrupted = false,
+        public readonly int $terminalRows = 0,
     ) {}
 
     public function init(): ?\Closure
@@ -131,7 +132,7 @@ final class PagerModel implements Model
                 // 'q'/Esc are a normal finish (exit 0); Ctrl+C is a
                 // cancellation and the command must exit 130, not pretend
                 // the page was read to the end.
-                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c'), Cmd::quit()];
+                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c', $this->terminalRows), Cmd::quit()];
             }
         }
         if ($msg instanceof WindowSizeMsg) {
@@ -142,9 +143,10 @@ final class PagerModel implements Model
             // never the full terminal height, so the composed frame stays
             // within the screen.
             $width  = max(1, $msg->cols);
-            $height = max(1, $msg->rows - self::HINT_ROWS);
-            if ($width !== $this->viewport->width || $height !== $this->viewport->height) {
-                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted), null];
+            $rows   = max(1, $msg->rows);
+            $height = max(1, $rows - self::HINT_ROWS);
+            if ($width !== $this->viewport->width || $height !== $this->viewport->height || $rows !== $this->terminalRows) {
+                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted, $rows), null];
             }
             return [$this, null];
         }
@@ -155,8 +157,15 @@ final class PagerModel implements Model
     public function view(): string
     {
         $body = $this->viewport->view();
-        if (!$this->exited) {
-            $body .= "\n" . Lang::t('hints.pager');
+        if (!$this->exited && ($this->terminalRows === 0 || $this->terminalRows >= self::HINT_ROWS + 1)) {
+            // scriptui-57 (146): the footer is the only in-frame
+            // discoverability channel, and one line could not carry the
+            // bound key set — the roster now spans two lines, and
+            // HINT_ROWS makes every height derivation subtract both.
+            // On terminals too short to hold footer + one content row the
+            // footer yields (the scriptui-20 never-exceed contract wins
+            // over discoverability at 2 rows).
+            $body .= "\n" . Lang::t('hints.pager') . "\n" . Lang::t('hints.pager.more');
         }
         return $body;
     }

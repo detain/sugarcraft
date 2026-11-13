@@ -10,7 +10,7 @@ use SugarCraft\ScriptUi\Model\PagerModel;
 
 /**
  * scriptui-20 — a WindowSizeMsg re-fit must keep the hint-footer
- * reservation: the composed frame (viewport + hint line) never grows
+ * reservation: the composed frame (viewport + hint lines) never grows
  * past the terminal rows.
  */
 final class PagerResizeFooterTest extends TestCase
@@ -24,7 +24,7 @@ final class PagerResizeFooterTest extends TestCase
 
         $lines = explode("\n", $model->view());
         $this->assertLessThanOrEqual(5, count($lines), 'frame must stay within the 5 terminal rows');
-        $this->assertSame(4, $model->viewport->height, 'viewport keeps rows-1 after the reservation');
+        $this->assertSame(3, $model->viewport->height, 'viewport keeps rows-2 after the two-row footer reservation');
     }
 
     public function testSuccessiveResizesNeverExceedTheirRows(): void
@@ -40,11 +40,12 @@ final class PagerResizeFooterTest extends TestCase
         }
     }
 
-    public function testFooterLineIsTheSingleReservedRow(): void
+    public function testFooterLinesAreTheReservedRows(): void
     {
         $model = PagerModel::fromContent(str_repeat("line\n", 100), width: 12, height: 7);
 
         $this->assertSame(7, $model->viewport->height);
-        $this->assertSame(8, count(explode("\n", $model->view())), 'view = viewport + one hint line');
+        // scriptui-57 re-pin: the footer grew from one line to two.
+        $this->assertSame(9, count(explode("\n", $model->view())), 'view = viewport + two hint lines');
     }
 }

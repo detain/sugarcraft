@@ -192,7 +192,12 @@ final class ChooseModel implements Model
         }
         if (!$this->submitted && !$this->aborted && !$this->refusedEmpty) {
             // In-app keybinding discoverability (gum's list help line).
-            $body .= "\n" . Lang::t('hints.choose');
+            // scriptui-57 (109): the space clause only exists in multi
+            // mode — single-select choose used to advertise a tick key
+            // that does nothing there.
+            $body .= "\n" . ($this->multi
+                ? Lang::t('hints.choose.multi')
+                : Lang::t('hints.choose'));
         }
         return $body;
     }

@@ -105,12 +105,12 @@ final class GeometryAndTerminalStateTest extends TestCase
         Geometry::override(null);
     }
 
-    public function testPagerResolvesTerminalSizeAndReservesTheHintRow(): void
+    public function testPagerResolvesTerminalSizeAndReservesTheFooterRows(): void
     {
         Geometry::override(['cols' => 120, 'rows' => 40]);
         $pager = PagerModel::fromContent('body');
         self::assertSame(120, $pager->viewport->width);
-        self::assertSame(39, $pager->viewport->height, 'auto height reserves the footer row');
+        self::assertSame(38, $pager->viewport->height, 'auto height reserves the two-row footer');
 
         Geometry::override(['cols' => 120, 'rows' => 40]);
         $fixed = PagerModel::fromContent('body', width: 80, height: 20);
@@ -131,7 +131,7 @@ final class GeometryAndTerminalStateTest extends TestCase
         self::assertNull($cmd);
         self::assertInstanceOf(PagerModel::class, $next);
         self::assertSame(150, $next->viewport->width);
-        self::assertSame(49, $next->viewport->height, 'scriptui-20: the resize re-fit keeps the footer reservation');
+        self::assertSame(48, $next->viewport->height, 'scriptui-20: the resize re-fit keeps the two-row footer reservation');
         self::assertFalse($next->isExited());
 
         // Already-sized model keeps identity (no repaint churn per tick).
