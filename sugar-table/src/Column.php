@@ -43,6 +43,15 @@ final class Column
     /** Text wrapping mode. */
     public readonly WrapMode $wrapMode;
 
+    /** How the column's values compare when sorted (OG-5 / ST-36). */
+    public readonly SortType $sortType;
+
+    /** Custom comparator overriding $sortType; see {@see withSortFunc()}. */
+    public readonly ?\Closure $sortFunc;
+
+    /** sprintf template applied to the displayed value; '' = none (OG-5 / ST-69). */
+    public readonly string $formatString;
+
     private function __construct(
         string $key,
         string $title,
@@ -55,6 +64,9 @@ final class Column
         ?ColumnWidth $columnWidth = null,
         float $percentValue = 0.0,
         ?WrapMode $wrapMode = null,
+        SortType $sortType = SortType::Auto,
+        ?\Closure $sortFunc = null,
+        string $formatString = '',
     ) {
         // Column contract is width >= 0 (audit ST-09): a negative seed used to
         // sail through the immutable builder and detonate deep inside the
@@ -76,6 +88,9 @@ final class Column
         $this->columnWidth   = $columnWidth ?? ColumnWidth::Fixed;
         $this->percentValue  = $percentValue;
         $this->wrapMode      = $wrapMode ?? WrapMode::None;
+        $this->sortType      = $sortType;
+        $this->sortFunc      = $sortFunc;
+        $this->formatString  = $formatString;
     }
 
     public static function new(string $key, string $title, int $width): self
@@ -85,7 +100,7 @@ final class Column
 
     public function withFlexibleWidth(int $share): self
     {
-        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $share, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $share, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode, sortType: $this->sortType, sortFunc: $this->sortFunc, formatString: $this->formatString);
     }
 
     /**
@@ -104,22 +119,22 @@ final class Column
 
     public function withMaxWidth(int $max): self
     {
-        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $max, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $max, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode, sortType: $this->sortType, sortFunc: $this->sortFunc, formatString: $this->formatString);
     }
 
     public function withFilterable(bool $v = true): self
     {
-        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $v, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $v, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode, sortType: $this->sortType, sortFunc: $this->sortFunc, formatString: $this->formatString);
     }
 
     public function withAlignLeft(bool $v = true): self
     {
-        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $v, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $v, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode, sortType: $this->sortType, sortFunc: $this->sortFunc, formatString: $this->formatString);
     }
 
     public function withStyle(string $ansiStyle): self
     {
-        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $ansiStyle, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $ansiStyle, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode, sortType: $this->sortType, sortFunc: $this->sortFunc, formatString: $this->formatString);
     }
 
     public function withColumnWidth(ColumnWidth $columnWidth, float $percentValue = 0.0): self
@@ -132,7 +147,7 @@ final class Column
             throw new \InvalidArgumentException('Percent value must be between 0.0 and 100.0');
         }
 
-        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $columnWidth, percentValue: $columnWidth === ColumnWidth::Percent ? $percentValue : 0.0, wrapMode: $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $columnWidth, percentValue: $columnWidth === ColumnWidth::Percent ? $percentValue : 0.0, wrapMode: $this->wrapMode, sortType: $this->sortType, sortFunc: $this->sortFunc, formatString: $this->formatString);
     }
 
     /**
@@ -159,7 +174,64 @@ final class Column
 
     public function withWrapMode(WrapMode $wrapMode): self
     {
-        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $wrapMode, sortType: $this->sortType, sortFunc: $this->sortFunc, formatString: $this->formatString);
+    }
+
+    /**
+     * Choose how this column's values compare under Table::sortBy() (OG-5 /
+     * ST-36). Auto (default) is float-when-both-numeric else case-insensitive
+     * text; Natural orders digit runs numerically ("item2" < "item10").
+     * Mirrors Evertras/bubble-table.Column.WithSortType.
+     */
+    public function withSortType(SortType $type): self
+    {
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode, sortType: $type, sortFunc: $this->sortFunc, formatString: $this->formatString);
+    }
+
+    /**
+     * Per-column comparator hook; null restores $sortType. The callable gets
+     * the two cells' raw values (a StyledCell is unwrapped to its value) and
+     * returns <0, 0 or >0 in ascending sense — Table flips it for descending.
+     *
+     * @param (callable(mixed, mixed): int)|null $fn
+     */
+    public function withSortFunc(?callable $fn): self
+    {
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode, sortType: $this->sortType, sortFunc: $fn === null ? null : \Closure::fromCallable($fn), formatString: $this->formatString);
+    }
+
+    /**
+     * sprintf template for the displayed value ('%.2f', '$%s'); '' clears it.
+     * Display only — sort, filter and search keep reading the raw value.
+     * An invalid template throws here, not mid-render. Missing (null) values
+     * show the table's missing indicator unformatted.
+     * Mirrors Evertras/bubble-table.Column.WithFormatString.
+     */
+    public function withFormatString(string $format): self
+    {
+        if ($format !== '') {
+            try {
+                \sprintf($format, 0);
+            } catch (\ValueError | \ArgumentCountError $e) {
+                throw new \InvalidArgumentException("Column '{$this->key}' format string '{$format}' is not a valid sprintf template: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode, sortType: $this->sortType, sortFunc: $this->sortFunc, formatString: $format);
+    }
+
+    /**
+     * Apply the format template to one display string (identity when none is
+     * set).     *
+     * @internal Part of the Table render pipeline.
+     */
+    public function formatText(string $text): string
+    {
+        if ($this->formatString === '') {
+            return $text;
+        }
+
+        return \sprintf($this->formatString, $text);
     }
 
     /**

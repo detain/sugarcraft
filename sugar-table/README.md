@@ -241,6 +241,25 @@ $t = $t->sortBy('city')
 - An unknown column key throws `InvalidArgumentException`
 - `clearSort()` removes all sorting
 
+### Sort Types and Comparator Hook
+
+By default a column compares as a float when both sides are numeric and as
+case-insensitive text otherwise (`SortType::Auto`). Per column:
+
+```php
+use SugarCraft\Table\SortType;
+
+Column::new('file', 'File', 12)->withSortType(SortType::Natural);   // item2 < item10
+Column::new('zip',  'Zip',   6)->withSortType(SortType::Text);      // '10' < '9', never numeric
+Column::new('ver',  'Ver',   8)->withSortFunc(
+    static fn (mixed $a, mixed $b): int => version_compare((string) $a, (string) $b),
+);
+```
+
+`withSortFunc()` receives the two cells' raw values (a `StyledCell` is
+unwrapped), returns the ascending comparison, and wins over the sort type;
+the table flips it for descending. `null` clears it.
+
 ## Keyboard Navigation
 
 Scroll the table vertically using keyboard input via `scrollYForKey()` and `handleScrollKey()` (`handleKey()` is the older, deprecated alias — the name promised navigation while it only ever scrolls):
@@ -333,6 +352,12 @@ $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
 ```
 
 ## Global Search
+
+`withFilterFunc(fn (Row $row, string $text): bool)` swaps the substring scan
+for a host predicate (fuzzy matching, structured queries) — it runs once per
+row while `search()` text is non-empty and ANDs with the column filters,
+which keep their substring rule. `withFilterFunc(null)` restores the
+built-in match.
 
 Call `search()` to run one needle across the scanned columns at once: a row
 survives when ANY scanned column contains the text, case-insensitively, and
@@ -491,6 +516,18 @@ the footer with no opt-in (call `withShowFooter(false)` to silence it) — and
 only while pagination is active; with pagination off there is no footer at all.
 
 The row count footer uses the `showing_rows` i18n key and updates automatically based on the current page and any active filters/searches.
+
+### Wrapping, Static Footer and Format Strings
+
+- `withPaginationWrap(true)` cycles instead of clamping: `selectNext()` past
+  the last row lands on the first, `selectPrevious()` before the first on the
+  last, and `nextPage()`/`previousPage()` cycle the page ring (default off).
+- `withStaticFooter('42 items')` replaces the Page/Rows label with fixed text
+  and shows the footer even without pagination; `''` restores the default.
+- `Column::withFormatString('$%.2f')` runs the displayed text through
+  `sprintf` — display only, sort/filter/search read the raw value, missing
+  cells keep the unformatted indicator, and an invalid template throws when
+  set. Expanded-row detail lines stay unformatted.
 
 ### Numeric Setters: Coercion vs Throw
 
@@ -1147,6 +1184,9 @@ in this README is still documented — this table is the completeness floor.
 | `withShowHeader(bool $v): self` | — |
 | `withShowFooter(bool $v): self` | — |
 | `withFooterType(FooterType $type): self` | Set the footer display type. |
+| `withStaticFooter(string $text): self` | Fixed footer text replacing the Page/Rows label |
+| `withPaginationWrap(bool $v = true): self` | Cycle cursor/pages instead of clamping |
+| `withFilterFunc(?callable $fn): self` | Host predicate replacing the global-search substring match |
 | `withBorder(Border $border): self` | Set the border character family for the table. |
 | `withMultilineMode(bool $multiline = true): self` | Toggle multi-line row rendering. |
 | `withStyleFunc(?callable $fn): self` | Set a per-cell style callback. |
@@ -1214,6 +1254,9 @@ in this README is still documented — this table is the completeness floor.
 | `withColumnWidth(ColumnWidth $columnWidth, float $percentValue = 0.0): self` | — |
 | `withWidthMode(ColumnWidth $mode, ?float $percent = null): self` | The single spelling for (re)declaring a column's width mechanism |
 | `withWrapMode(WrapMode $wrapMode): self` | — |
+| `withSortType(SortType $type): self` | Auto / Text / Natural comparison |
+| `withSortFunc(?callable $fn): self` | Per-column comparator hook (raw values) |
+| `withFormatString(string $format): self` | sprintf display template (display only) |
 | `static clipToWidth(string $text, int $width): string` | Clamp one line of text to a display-width budget, announcing the cut |
 | `static splitClusters(string $text): array` | Split text into clusters for character-level wrapping and width fitting. |
 | `readonly string $key` | public state |

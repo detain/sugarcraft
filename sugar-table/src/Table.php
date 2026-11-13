@@ -95,6 +95,9 @@ final class Table
     /** Number of visible rows. 0 = no virtualization (render all). */
     private int $viewportHeight = 0;
     private int $maxLines = 0;
+    private ?\Closure $filterFunc = null;
+    private bool $paginationWrap = false;
+    private string $staticFooter = '';
 
     /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
     private int $scrollY = 0;
@@ -1071,12 +1074,13 @@ final class Table
         // Exactly on the last row is a no-op — return $this like the other
         // no-op withers. (An out-of-range index still takes the clamp path so
         // stale selections keep snapping back to the last row.)
-        if ($this->selectedIndex === \count($view) - 1) {
+        $wrapToTop = $this->paginationWrap && $this->selectedIndex === \count($view) - 1;
+        if ($this->selectedIndex === \count($view) - 1 && !$wrapToTop) {
             return $this;
         }
 
         $clone = clone $this;
-        $clone->selectedIndex = \min(\count($view) - 1, $clone->selectedIndex + 1);
+        $clone->selectedIndex = $wrapToTop ? 0 : \min(\count($view) - 1, $clone->selectedIndex + 1);
         $clone->page = $this->pageForIndex($clone->selectedIndex);
         $clone->followCursor();
         return $clone;
@@ -1086,12 +1090,19 @@ final class Table
     {
         // Already at the top: skip the clone AND the filtered/sorted view —
         // no state can change, so the expensive computation is pure waste.
-        if ($this->selectedIndex === 0) {
+        $wrapToEnd = $this->paginationWrap && $this->selectedIndex === 0;
+        if ($this->selectedIndex === 0 && !$wrapToEnd) {
             return $this;
+        }
+        if ($wrapToEnd) {
+            $view = $this->filteredSortedRows();
+            if (\count($view) < 2) {
+                return $this;
+            }
         }
 
         $clone = clone $this;
-        $clone->selectedIndex = \max(0, $clone->selectedIndex - 1);
+        $clone->selectedIndex = $wrapToEnd ? \count($view) - 1 : \max(0, $clone->selectedIndex - 1);
         $clone->page = $this->pageForIndex($clone->selectedIndex);
         $clone->followCursor();
         return $clone;
@@ -1167,12 +1178,50 @@ final class Table
     public function nextPage(): self
     {
         $total = $this->totalPages();
+        if ($this->paginationWrap && $this->page >= $total - 1) {
+            return $this->selectPage(0);
+        }
         return $this->selectPage(\min($total - 1, $this->page + 1));
     }
 
     public function previousPage(): self
     {
+        if ($this->paginationWrap && $this->page <= 0) {
+            return $this->selectPage($this->totalPages() - 1);
+        }
         return $this->selectPage(\max(0, $this->page - 1));
+    }
+
+    /**
+     * Cycle instead of clamp (OG-5 / ST-68): with wrapping on, selectNext()
+     * past the last row lands on the first, selectPrevious() before the
+     * first lands on the last, and nextPage()/previousPage() cycle the
+     * page ring. Default off — the port clamps. Mirrors
+     * Evertras/bubble-table.WithPaginationWrapping.
+     */
+    public function withPaginationWrap(bool $v = true): self
+    {
+        $clone = clone $this;
+        $clone->paginationWrap = $v;
+        return $clone;
+    }
+
+    /**
+     * Fixed footer text (OG-5 / ST-69) replacing the Page/Rows label. It is
+     * shown whenever the footer is shown, paginated or not; '' (default)
+     * restores the pagination footer. Mirrors
+     * Evertras/bubble-table.WithStaticFooter.
+     */
+    public function withStaticFooter(string $text): self
+    {
+        $clone = clone $this;
+        $clone->staticFooter = $text;
+        return $clone;
+    }
+
+    private function footerVisible(): bool
+    {
+        return $this->showFooter && ($this->pageSize > 0 || $this->staticFooter !== '');
     }
 
     // -------------------------------------------------------------------------
@@ -1443,6 +1492,26 @@ final class Table
     }
 
     /**
+     * Replace the global search's substring match with a host predicate
+     * (OG-5 / ST-37): `fn(Row $row, string $searchText): bool`, called once
+     * per row while search() text is non-empty; true keeps the row. Column
+     * filters (filter()) keep their substring rule and still AND with it.
+     * null restores the built-in match. Fuzzy matching is a predicate away
+     * (e.g. over sugar-fuzzy) rather than a built-in. Mirrors
+     * Evertras/bubble-table.WithFilterFunc.
+     *
+     * @param (callable(Row, string): bool)|null $fn
+     */
+    public function withFilterFunc(?callable $fn): self
+    {
+        $clone = clone $this;
+        $clone->filterFunc = $fn === null ? null : \Closure::fromCallable($fn);
+        $clone->resetCursor();
+        $clone->filteredSortedCache = null;
+        return $clone;
+    }
+
+    /**
      * Clear the global search.
      *
      * Removes the active global search filter, showing all rows (subject to
@@ -1604,8 +1673,13 @@ final class Table
             );
         }
 
-        // Global search — only scan filterable columns (OR logic)
-        if ($this->searchText !== '') {
+        // Global search — a host predicate (ST-37) replaces the substring scan.
+        if ($this->searchText !== '' && $this->filterFunc !== null) {
+            $fn = $this->filterFunc;
+            $text = $this->searchText;
+            $rows = \array_values(\array_filter($rows, static fn (Row $row): bool => (bool) $fn($row, $text)));
+        } elseif ($this->searchText !== '') {
+            // Global search — only scan filterable columns (OR logic)
             $searchLower = \strtolower($this->searchText);
             $filterable = $this->filterableKeys();
             $rows = \array_values(
@@ -1637,23 +1711,41 @@ final class Table
             $decorated = [];
             foreach ($rows as $row) {
                 $sortKeys = [];
+                $rawKeys = [];
                 foreach ($this->sortColumns as $sort) {
-                    $sortKeys[] = self::plainText($row->data->get($sort['key']));
+                    $raw = $row->data->get($sort['key']);
+                    $sortKeys[] = self::plainText($raw);
+                    $rawKeys[] = $raw instanceof StyledCell ? $raw->value : $raw;
                 }
-                $decorated[] = [$sortKeys, $row];
+                $decorated[] = [$sortKeys, $row, $rawKeys];
             }
 
             // PHP's usort is stable: comparing equal decorated pairs keeps
             // insertion order — the documented tie behavior (multi-key
             // comparators resolve on their own; a full tie is row order).
             $keys = $this->sortColumns;
-            \usort($decorated, static function (array $a, array $b) use ($keys): int {
+            $sortCols = [];
+            foreach ($keys as $i => $sort) {
+                foreach ($this->columns as $c) {
+                    if ($c->key === $sort['key']) {
+                        $sortCols[$i] = $c;
+                        break;
+                    }
+                }
+            }
+            \usort($decorated, static function (array $a, array $b) use ($keys, $sortCols): int {
                 foreach ($keys as $i => $sort) {
                     $sa = $a[0][$i];
                     $sb = $b[0][$i];
+                    $col = $sortCols[$i] ?? null;
 
-                    // Numeric sort
-                    if (\is_numeric($sa) && \is_numeric($sb)) {
+                    if ($col?->sortFunc !== null) {
+                        // ST-36 hook: raw values, ascending sense.
+                        $cmp = (int) ($col->sortFunc)($a[2][$i], $b[2][$i]);
+                    } elseif ($col?->sortType === SortType::Natural) {
+                        $cmp = \strnatcasecmp($sa, $sb);
+                    } elseif ($col?->sortType !== SortType::Text && \is_numeric($sa) && \is_numeric($sb)) {
+                        // Numeric sort
                         $cmp = (float) $sa <=> (float) $sb;
                     } else {
                         $cmp = \strcasecmp($sa, $sb);
@@ -2119,7 +2211,7 @@ final class Table
         // Borderless mode drops the top/bottom border rows entirely.
         $topBorderRows = $this->borderless ? 0 : 1;
         $headerRows = $this->showHeader ? 2 : 0; // header + separator
-        $footerRows = ($this->showFooter && $this->pageSize > 0) ? 1 : 0;
+        $footerRows = $this->footerVisible() ? 1 : 0;
         $bottomBorderRows = $this->borderless ? 0 : 1;
         $rowCount = \count($rows);
 
@@ -2225,7 +2317,7 @@ final class Table
         }
 
         // Footer
-        if ($this->showFooter && $this->pageSize > 0) {
+        if ($this->footerVisible()) {
             $canvas = $this->fillFooterRow($canvas, $bufferRow, $visibleWidth);
             $bufferRow++;
         }
@@ -2536,7 +2628,8 @@ final class Table
 
             $val = $rowData->data->get($column->key);
 
-            if (self::isMissingValue($val)) {
+            $isMissingCell = self::isMissingValue($val);
+            if ($isMissingCell) {
                 $val = $this->missingIndicator;
             }
 
@@ -2566,6 +2659,11 @@ final class Table
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
                 $cellStyle = $this->normalizeStyleResult($rawResult, $rowIndex, $ci);
+            }
+
+            // ST-69: display-only format template (styleFunc saw the raw text).
+            if (!$isMissingCell) {
+                $cellStr = Sanitize::value($column->formatText($cellStr), false, $this->markedFrameSanitization);
             }
 
             // Selection rides on top of the winning cell style (audit M3).
@@ -2658,6 +2756,9 @@ final class Table
             $effectiveWidth = \max(1, $effectiveWidth);
             $heightVal = $row->data->get($column->key);
             $cellStr = self::plainText(self::isMissingValue($heightVal) ? $this->missingIndicator : $heightVal);
+            if (!self::isMissingValue($heightVal)) {
+                $cellStr = $column->formatText($cellStr);
+            }
             // Sanitize before renderCell width measurement
             $cellStr = Sanitize::value($cellStr, true, $this->markedFrameSanitization);
 
@@ -2708,7 +2809,8 @@ final class Table
             $colWidths[$ci] = $colWidth;
 
             $val = $row->data->get($column->key);
-            if (self::isMissingValue($val)) {
+            $isMissingCell = self::isMissingValue($val);
+            if ($isMissingCell) {
                 $val = $this->missingIndicator;
             }
 
@@ -2733,6 +2835,11 @@ final class Table
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
                 $cellStyle = $this->normalizeStyleResult($rawResult, $rowIndex, $ci);
+            }
+
+            // ST-69: display-only format template (styleFunc saw the raw text).
+            if (!$isMissingCell) {
+                $cellStr = Sanitize::value($column->formatText($cellStr), true, $this->markedFrameSanitization);
             }
 
             // Selection rides on top of the winning cell style (audit M3).
@@ -2800,7 +2907,7 @@ final class Table
     {
         $style = $this->styleFor($this->footerStyle);
 
-        $label = match ($this->footerType) {
+        $label = $this->staticFooter !== '' ? Sanitize::value($this->staticFooter, false, $this->markedFrameSanitization) : match ($this->footerType) {
             FooterType::Page => $this->pageFooter(),
             FooterType::Rows => $this->rowsFooter(),
             FooterType::Both => $this->pageFooter() . '  |  ' . $this->rowsFooter(),
