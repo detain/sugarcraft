@@ -6,6 +6,8 @@ namespace SugarCraft\Markdown\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Render\SectionScanner;
+use SugarCraft\Markdown\Render\SectionStream;
+use SugarCraft\Markdown\Renderer;
 
 /**
  * M3: push() consumed its buffer by re-slicing the remainder on every line,
@@ -84,5 +86,56 @@ final class ScannerCursorTest extends TestCase
 
         self::assertNotEmpty($closed);
         self::assertLessThan(1.0, $elapsed, 'one large push must stay linear in size');
+    }
+
+    public function testAChunkedStreamCompactsTheReadHeadAndStillRendersExactly(): void
+    {
+        // SM-S19: the mid-stream compaction branch (consumed >= 8192) had no
+        // coverage — single pushes drained or cleared it outright. Deliver
+        // the same way hostile callers do: chunks so small every line lands
+        // twice, plus one push that outgrows the read head mid-stream.
+        $doc = str_repeat("## Head\n\nsome prose to keep the scanner chewing\n\n", 400);
+
+        $head = substr($doc, 0, 19000); // cut lands inside a prose line
+        $tail = substr($doc, 19000, 10); // deliberately unterminated — no newline
+        $mid = new SectionScanner();
+        $mid->push($head . $tail);
+        self::assertSame(0, self::cursor($mid), 'the outweighed read head is dropped, not held');
+        self::assertSame(substr($head, strrpos($head, "\n") + 1) . $tail, self::liveBuffer($mid), 'only the live tail survives compaction');
+
+        $bulk = new SectionScanner();
+        $expected = $bulk->push($doc);
+        $expected[] = $bulk->finish();
+
+        $trickle = new SectionScanner();
+        $got = [];
+        $maxChunk = 0;
+        foreach (str_split($doc, 257) as $chunk) {
+            $maxChunk = max($maxChunk, strlen($chunk));
+            foreach ($trickle->push($chunk) as $section) {
+                $got[] = $section;
+            }
+            self::assertLessThan(
+                2 * $maxChunk,
+                strlen(self::liveBuffer($trickle)) - self::cursor($trickle),
+                'the live buffer stays proportional to the delivered chunk'
+            );
+        }
+        $got[] = $trickle->finish();
+
+        self::assertSame($expected, $got, 'section invariance holds under trickle feeding');
+
+        $renderer = new Renderer();
+        $stream = new SectionStream($renderer);
+        $bodies = [];
+        foreach (str_split($doc, 991) as $chunk) {
+            array_push($bodies, ...$stream->push($chunk));
+        }
+        array_push($bodies, ...$stream->finish());
+        self::assertSame(
+            $renderer->render($doc),
+            rtrim(implode('', $bodies), "\n"),
+            'the chunked stream answers byte-exactly what a one-shot render says (G3)'
+        );
     }
 }
