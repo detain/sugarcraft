@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'タイマーの持続時間は >= 0 である必要があります',
     'timer.interval_positive'     => 'タイマーの間隔は > 0 である必要があります',
     'paginator.arabic_format_invalid' => 'アラビア数字形式は2つの整数の有効なsprintfでなければなりません',
+    'progress.bad_percent_format' => 'パーセント形式は整数1個の有効なsprintfでなければなりません',
+    'progress.bad_value_format' => '値形式は整数2個の有効なsprintfでなければなりません',
+    'progress.rune_cell_width' => 'バーの文字はちょうど1表示セル幅でなければなりません',
+    'progress.color_func_type' => 'colorFuncはColorを返す必要があります',
 ];

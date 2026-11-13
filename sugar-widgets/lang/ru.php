@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'длительность таймера должна быть >= 0',
     'timer.interval_positive'     => 'интервал таймера должен быть > 0',
     'paginator.arabic_format_invalid' => 'арабский формат должен быть допустимым sprintf с двумя целыми числами',
+    'progress.bad_percent_format' => 'формат процентов должен быть корректным sprintf с одним целым числом',
+    'progress.bad_value_format' => 'формат значения должен быть корректным sprintf с двумя целыми числами',
+    'progress.rune_cell_width' => 'символы полосы должны занимать ровно одну ячейку',
+    'progress.color_func_type' => 'colorFunc должен возвращать Color',
 ];

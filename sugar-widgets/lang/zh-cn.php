@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => '计时器持续时间必须 >= 0',
     'timer.interval_positive'     => '计时器间隔必须 > 0',
     'paginator.arabic_format_invalid' => '阿拉伯数字格式必须是包含两个整数的有效 sprintf',
+    'progress.bad_percent_format' => '百分比格式必须是接受一个整数的有效 sprintf',
+    'progress.bad_value_format' => '值格式必须是接受两个整数的有效 sprintf',
+    'progress.rune_cell_width' => '进度条字符必须恰好占一个显示单元',
+    'progress.color_func_type' => 'colorFunc 必须返回 Color',
 ];

@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'trvání timeru musí být >= 0',
     'timer.interval_positive'     => 'interval timeru musí být > 0',
     'paginator.arabic_format_invalid' => 'arabský formát musí být platný sprintf se dvěma celými čísly',
+    'progress.bad_percent_format' => 'formát procent musí být platný sprintf s jedním celým číslem',
+    'progress.bad_value_format' => 'formát hodnoty musí být platný sprintf se dvěma celými čísly',
+    'progress.rune_cell_width' => 'znaky panelu musí být přesně jeden zobrazovací řádek',
+    'progress.color_func_type' => 'colorFunc musí vrátit Color',
 ];

@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => '타이머 지속 시간은 >= 0이어야 합니다',
     'timer.interval_positive'     => '타이머 간격은 > 0이어야 합니다',
     'paginator.arabic_format_invalid' => '아랍어 형식은 두 정수의 유효한 sprintf이어야 합니다',
+    'progress.bad_percent_format' => '퍼센트 형식은 정수 1개의 유효한 sprintf여야 합니다',
+    'progress.bad_value_format' => '값 형식은 정수 2개의 유효한 sprintf여야 합니다',
+    'progress.rune_cell_width' => '바 문자는 정확히 표시 셀 1개 너비여야 합니다',
+    'progress.color_func_type' => 'colorFunc는 Color를 반환해야 합니다',
 ];

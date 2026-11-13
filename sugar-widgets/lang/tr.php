@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'zamanlayıcı süresi >= 0 olmalıdır',
     'timer.interval_positive'     => 'zamanlayıcı aralığı > 0 olmalıdır',
     'paginator.arabic_format_invalid' => 'Arapça biçim, iki tamsayı için geçerli bir sprintf olmalıdır',
+    'progress.bad_percent_format' => 'yüzde biçimi tek tamsayılı geçerli bir sprintf olmalıdır',
+    'progress.bad_value_format' => 'değer biçimi iki tamsayılı geçerli bir sprintf olmalıdır',
+    'progress.rune_cell_width' => 'çubuk karakterleri tam olarak bir görüntü hücresi genişliğinde olmalıdır',
+    'progress.color_func_type' => 'colorFunc bir Color döndürmeli',
 ];

@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'Timer-Dauer muss >= 0 sein',
     'timer.interval_positive'     => 'Timer-Intervall muss > 0 sein',
     'paginator.arabic_format_invalid' => 'Arabiles Format muss ein gültiges sprintf mit zwei Ganzzahlen sein',
+    'progress.bad_percent_format' => 'Prozentformat muss ein gültiges sprintf mit einer Ganzzahl sein',
+    'progress.bad_value_format' => 'Wertformat muss ein gültiges sprintf mit zwei Ganzzahlen sein',
+    'progress.rune_cell_width' => 'Balken-Zeichen müssen genau eine Anzeigenzelle breit sein',
+    'progress.color_func_type' => 'colorFunc muss ein Color zurückgeben',
 ];

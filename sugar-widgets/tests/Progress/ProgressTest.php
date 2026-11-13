@@ -384,16 +384,18 @@ final class ProgressTest extends TestCase
 
     /**
      * E743: Line mode never renders percent text, so computeBarLayout's
-     * withPercentSuffix=false gate must keep a caller-supplied malformed
-     * percentFormat from ever reaching sprintf() on this path.
+     * withPercentSuffix=false gate keeps any stored percentFormat from
+     * reaching sprintf() on this path. (A MALFORMED format is a separate
+     * story since the ingress fix: it is rejected where it is stored, so
+     * this pin uses a legal format and proves the suffix is skipped.)
      */
-    public function testLineModeIgnoresMalformedPercentFormat(): void
+    public function testLineModeNeverFormatsThePercentSuffix(): void
     {
         $p = Progress::new()
             ->withRenderMode(\SugarCraft\Widgets\Progress\ProgressRenderMode::Line)
             ->withWidth(7)
             ->withPercent(0.5)
-            ->withPercentFormat('%d %d');
+            ->withPercentFormat('[=%d=]');
         // Same bytes as the default-format Line render — the format is never applied.
         $this->assertSame("\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80", $p->view());
     }
@@ -461,5 +463,67 @@ final class ProgressTest extends TestCase
         // helper's percent×100 rounding: three round($this->percent) in all.
         $this->assertSame(3, substr_count($src, '(int) round($this->percent'));
         $this->assertSame(1, substr_count($src, 'Width::string($pctText) + 1'));
+    }
+
+    // ─── format / rune / colorFunc ingress (006/059/062) ─────────────
+
+    public function testPercentFormatRejectedAtTheSetterNotMidFrame(): void
+    {
+        $p = Progress::new();
+        $this->expectException(\InvalidArgumentException::class);
+        $p->withPercentFormat('%q');
+    }
+
+    public function testTwoSpecifierPercentFormatRejectedAtTheSetter(): void
+    {
+        // view() feeds ONE int; '%d/%d' would ArgumentCountError mid-frame.
+        $this->expectException(\InvalidArgumentException::class);
+        Progress::new()->withPercentFormat('%d/%d');
+    }
+
+    public function testPercentFormatCheckedAtCtorIngress(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Progress(percentFormat: '%q');
+    }
+
+    public function testValueFormatCheckedAtIngress(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Progress::new()->withShowValue(true, '%d/%d/%d');
+    }
+
+    public function testLegitFormatsStillStore(): void
+    {
+        $p = Progress::new()->withPercentFormat('%5.1f%%')->withShowValue(true, '%d%% of %d');
+        $this->assertSame('%5.1f%%', $p->percentFormat);
+        $this->assertStringContainsString('%', (string) $p);
+    }
+
+    public function testWideRunesRejectedAtIngress(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Progress::new()->withRunes('中', '░');
+    }
+
+    public function testEmptyRunesRejectedAtIngress(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Progress(fullChar: '', emptyChar: '-');
+    }
+
+    public function testColorFuncReturnIsTypeChecked(): void
+    {
+        $p = Progress::new()->withWidth(4)->withPercent(0.5)
+            ->withColorFunc(static fn (): string => 'red');
+        $this->expectException(\InvalidArgumentException::class);
+        $p->view();
+    }
+
+    public function testColorFuncReturningColorRenders(): void
+    {
+        $p = Progress::new()->withWidth(4)->withPercent(0.5)
+            ->withColorFunc(static fn (): Color => Color::rgb(1, 2, 3));
+        $this->assertNotEmpty($p->view());
     }
 }

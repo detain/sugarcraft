@@ -73,17 +73,17 @@ final class Progress
         }
         $this->percent = self::clampPercent($percent);
         $this->width = $width;
-        $this->fullChar = self::sanitizeRune($fullChar);
-        $this->emptyChar = self::sanitizeRune($emptyChar);
+        $this->fullChar = self::checkRune(self::sanitizeRune($fullChar));
+        $this->emptyChar = self::checkRune(self::sanitizeRune($emptyChar));
         $this->showPercent = $showPercent;
         $this->fillColor = $fillColor;
         $this->emptyColor = $emptyColor;
         $this->profile = $profile;
         $this->gradientStart = $gradientStart;
         $this->gradientEnd = $gradientEnd;
-        $this->percentFormat = $percentFormat;
+        $this->percentFormat = self::checkFormat($percentFormat, 1, Lang::t('progress.bad_percent_format'));
         $this->showValue = $showValue;
-        $this->showValueFormat = $showValueFormat;
+        $this->showValueFormat = self::checkFormat($showValueFormat, 2, Lang::t('progress.bad_value_format'));
         $this->renderMode = $renderMode;
         $this->gradientStops = array_values($gradientStops);
         $this->colorFunc = $colorFunc;
@@ -117,6 +117,37 @@ final class Progress
     private static function sanitizeRune(string $rune): string
     {
         return Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($rune));
+    }
+
+    /**
+     * The bar geometry counts one cell per rune (filledCells × rune), so a
+     * wide glyph silently doubles the frame past the configured width.
+     * Rejected at the ctor — the single ingress every `with*()` funnels
+     * through — so `view()` can trust the stored rune (M59).
+     */
+    private static function checkRune(string $rune): string
+    {
+        if (Width::string($rune) !== 1) {
+            throw new \InvalidArgumentException(Lang::t('progress.rune_cell_width'));
+        }
+        return $rune;
+    }
+
+    /**
+     * Stored formats are parsed at the boundary: a trial sprintf with the
+     * exact arity `view()` feeds (one int at :298, two ints at :365), so a
+     * bad specifier raises a typed error here — never a ValueError or
+     * ArgumentCountError mid-frame at render time (the lib's own M21
+     * Paginator::withArabicFormat pattern).
+     */
+    private static function checkFormat(string $fmt, int $argc, string $message): string
+    {
+        try {
+            vsprintf($fmt, array_fill(0, $argc, 0));
+        } catch (\ValueError | \ArgumentCountError) {
+            throw new \InvalidArgumentException($message);
+        }
+        return $fmt;
     }
 
     public function withPercent(float $p): self
@@ -247,6 +278,10 @@ final class Progress
      * Custom format string for the percent suffix. Receives the
      * 0-100 integer via printf, e.g. `'%3d%%'` (default), `'%5.1f%%'`,
      * or `'(%d%%)'`. Mirrors Bubbles' `PercentFormat`.
+     *
+     * @throws \InvalidArgumentException when the format is not a valid
+     *         sprintf consuming one integer — checked at store time so
+     *         `view()` never throws mid-frame.
      */
     public function withPercentFormat(string $fmt): self
     {
@@ -279,8 +314,9 @@ final class Progress
      * never drift between the render modes.
      *
      * `$withPercentSuffix` gates the suffix formatting itself — Line
-     * mode never renders percent text, so a caller-supplied malformed
-     * `percentFormat` must not throw there. `$reserveSuffix` decides
+     * mode never renders percent text, so it never formats the suffix
+     * (stored `percentFormat` is validated at ingress either way).
+     * `$reserveSuffix` decides
      * whether the bar yields cells to the suffix: Slim always does
      * when it fits; Block only when the suffix is the bare percent
      * (value suffixes deliberately overflow past the configured width).
@@ -468,6 +504,12 @@ final class Progress
         for ($i = 0; $i < $cells; $i++) {
             /** @var Color $c */
             $c = ($this->colorFunc)($i, $cells, $this->percent, $barWidth);
+            if (!$c instanceof Color) {
+                // A closure returning anything else dies here with a named,
+                // typed error — not as a cryptic `toFg() on string` fatal
+                // mid-frame (M62).
+                throw new \InvalidArgumentException(Lang::t('progress.color_func_type'));
+            }
             $out .= $c->toFg($this->profile) . $this->fullChar . Ansi::reset();
         }
         return $out;

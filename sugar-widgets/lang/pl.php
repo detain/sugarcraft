@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'czas trwania timera musi być >= 0',
     'timer.interval_positive'     => 'interwał timera musi być > 0',
     'paginator.arabic_format_invalid' => 'format arabski musi być prawidłowym sprintf dwóch liczb całkowitych',
+    'progress.bad_percent_format' => 'format procentów musi być prawidłowym sprintf z jedną liczbą całkowitą',
+    'progress.bad_value_format' => 'format wartości musi być prawidłowym sprintf z dwiema liczbami całkowitymi',
+    'progress.rune_cell_width' => 'znaki paska muszą mieć dokładnie jedną komórkę wyświetlania',
+    'progress.color_func_type' => 'colorFunc musi zwracać Color',
 ];

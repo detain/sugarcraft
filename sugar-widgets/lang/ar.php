@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'مدة المؤقت يجب أن تكون >= 0',
     'timer.interval_positive'     => 'فترة المؤقت يجب أن تكون > 0',
     'paginator.arabic_format_invalid' => 'يجب أن يكون التنسيق العربي sprintf صالحًا لعددين صحيحين',
+    'progress.bad_percent_format' => 'يجب أن يكون تنسيق النسبة sprintf صالحًا لعدد صحيح واحد',
+    'progress.bad_value_format' => 'يجب أن يكون تنسيق القيمة sprintf صالحًا لعددين صحيحين',
+    'progress.rune_cell_width' => 'يجب أن يكون عرض رموز الشريط خانة عرض واحدة بالضبط',
+    'progress.color_func_type' => 'يجب أن ترجع colorFunc قيمة من نوع Color',
 ];

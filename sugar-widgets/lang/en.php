@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'timer duration must be >= 0',
     'timer.interval_positive'     => 'timer interval must be > 0',
     'paginator.arabic_format_invalid' => 'arabic format must be a valid sprintf of two integers',
+    'progress.bad_percent_format' => 'percent format must be a valid sprintf of one integer',
+    'progress.bad_value_format' => 'value format must be a valid sprintf of two integers',
+    'progress.rune_cell_width' => 'bar runes must be exactly one display cell',
+    'progress.color_func_type' => 'colorFunc must return a Color',
 ];

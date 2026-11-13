@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'la durée du minuteur doit être >= 0',
     'timer.interval_positive'     => 'l\'intervalle du minuteur doit être > 0',
     'paginator.arabic_format_invalid' => 'le format arabe doit être un sprintf valide de deux entiers',
+    'progress.bad_percent_format' => 'le format de pourcentage doit être un sprintf valide d\'un entier',
+    'progress.bad_value_format' => 'le format de valeur doit être un sprintf valide de deux entiers',
+    'progress.rune_cell_width' => 'les caractères de la barre doivent mesurer exactement une cellule',
+    'progress.color_func_type' => 'colorFunc doit renvoyer un Color',
 ];

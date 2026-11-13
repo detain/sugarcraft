@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'la duración del temporizador debe ser >= 0',
     'timer.interval_positive'     => 'el intervalo del temporizador debe ser > 0',
     'paginator.arabic_format_invalid' => 'el formato arábigo debe ser un sprintf válido de dos enteros',
+    'progress.bad_percent_format' => 'el formato de porcentaje debe ser un sprintf válido de un entero',
+    'progress.bad_value_format' => 'el formato de valor debe ser un sprintf válido de dos enteros',
+    'progress.rune_cell_width' => 'los caracteres de la barra deben medir exactamente una celda',
+    'progress.color_func_type' => 'colorFunc debe devolver un Color',
 ];

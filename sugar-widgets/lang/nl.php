@@ -23,4 +23,8 @@ return [
     'timer.duration_nonneg'       => 'timer-duur moet >= 0 zijn',
     'timer.interval_positive'     => 'timer-interval moet > 0 zijn',
     'paginator.arabic_format_invalid' => 'Arabische notatie moet een geldige sprintf met twee gehele getallen zijn',
+    'progress.bad_percent_format' => 'percentage-notatie moet een geldige sprintf met één geheel getal zijn',
+    'progress.bad_value_format' => 'waarde-notatie moet een geldige sprintf met twee gehele getallen zijn',
+    'progress.rune_cell_width' => 'balktekens moeten exact één weergavecel breed zijn',
+    'progress.color_func_type' => 'colorFunc moet een Color teruggeven',
 ];
