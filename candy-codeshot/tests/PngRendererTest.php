@@ -10,6 +10,17 @@ use PHPUnit\Framework\TestCase;
 
 final class PngRendererTest extends TestCase
 {
+    public static function setUpBeforeClass(): void
+    {
+        // cs-21 (TEST-04): ext-gd is suggest-by-design in this lib's
+        // composer.json, but every render() here hard-requires it - on
+        // gd-less hosts the whole class used to land as ~11 RuntimeException
+        // ERRORS instead of skips. One class-level guard; the scattered
+        // per-test guards are gone.
+        if (!extension_loaded('gd')) {
+            self::markTestSkipped('ext-gd not loaded');
+        }
+    }
     public function testRendersPng(): void
     {
         $png = PngRenderer::dark()->render("hello world\n");
@@ -117,10 +128,6 @@ final class PngRendererTest extends TestCase
         // proven against the pre-cure implementation at commit time). This
         // pins the CONTRACT the blit provided: the offset L-band carries the
         // shadow pixels and nothing beyond it leaks onto the canvas.
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('ext-gd not loaded');
-        }
-
         // Geometry for this shape: frame 8x16 at (32,32), shadow rect
         // (38,38)-(45,53), canvas 72x80 (shadow margin 32, offset 6).
         $png = PngRenderer::dark()->withWindow(false)->withBorder(false)->withPadding(0)->render("x\n");
@@ -161,10 +168,6 @@ final class PngRendererTest extends TestCase
 
     public function testWindowStylesProduceDistinctOutput(): void
     {
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('ext-gd not loaded');
-        }
-
         $styles = ['macos', 'windows-terminal', 'iterm', 'hyper'];
         $outputs = [];
         foreach ($styles as $style) {
@@ -189,10 +192,6 @@ final class PngRendererTest extends TestCase
 
     public function testMalformedThemeColourIsRefusedNotPaintedBlack(): void
     {
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('ext-gd not loaded');
-        }
-
         $theme = new Theme(
             background:   'oops',
             foreground:   '#c9d1d9',
@@ -229,10 +228,6 @@ final class PngRendererTest extends TestCase
 
     public function testWindowStyleNoneCollapsesTheHeaderBandInPng(): void
     {
-        if (!extension_loaded('gd')) {
-            $this->markTestSkipped('ext-gd not loaded');
-        }
-
         $none  = PngRenderer::dark()->withWindowStyle('none')->withShadow(false)->render("x\n");
         $macos = PngRenderer::dark()->withWindowStyle('macos')->withShadow(false)->render("x\n");
 
