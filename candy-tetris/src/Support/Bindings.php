@@ -153,9 +153,29 @@ final class Bindings
     /** Rows per versus-strip line (chunks of three keep every line ≤48 cells). */
     private const STRIP_CHUNK = 3;
 
+    /**
+     * The one shipped default table (candy-tetris-048/-112): KeyBindings
+     * is immutable, so every frame — and every key gate inside it — can
+     * share a single instance instead of re-folding the MAP ~11 times per
+     * keystroke. Overrides are separate instances and never enter here.
+     */
+    private static ?KeyBindings $defaultTable = null;
+
+    /**
+     * Rendered teaching surfaces keyed by locale + table identity
+     * (candy-tetris-048): the card was rebuilt string-by-string on every
+     * frame. The value keeps its KeyBindings strong so an spl_object_id
+     * recycled onto a new table can never serve stale bytes, and the
+     * locale rides the key because a test (or a $LANG export) flipping
+     * languages mid-process must see the verb column it asked for.
+     *
+     * @var array<string, array{0: KeyBindings, 1: string}>
+     */
+    private static array $SURFACES = [];
+
     public static function table(): KeyBindings
     {
-        return KeyBindings::fromMap(self::MAP);
+        return self::$defaultTable ??= KeyBindings::fromMap(self::MAP);
     }
 
     /**
@@ -218,6 +238,11 @@ final class Bindings
      */
     public static function helpCard(KeyBindings $bindings): string
     {
+        return self::surface('card', $bindings, static fn(): string => self::buildHelpCard($bindings));
+    }
+
+    private static function buildHelpCard(KeyBindings $bindings): string
+    {
         $verbs = self::verbColumn();
         $lines = [];
         foreach (self::GAMEPLAY_ROWS as $index => $row) {
@@ -234,6 +259,11 @@ final class Bindings
      * match strip (candy-tetris-015: five of eleven was not teaching).
      */
     public static function vsStrip(KeyBindings $bindings): string
+    {
+        return self::surface('strip', $bindings, static fn(): string => self::buildVsStrip($bindings));
+    }
+
+    private static function buildVsStrip(KeyBindings $bindings): string
     {
         $verbs = self::verbColumn();
         $parts = [];
@@ -298,5 +328,25 @@ final class Bindings
         }
 
         return implode(' ', $labels);
+    }
+
+    /**
+     * The memo door (candy-tetris-048): keyed by locale and table
+     * identity, and the identity is RE-CHECKED against the strong
+     * reference the entry keeps — an spl_object_id recycled onto a new
+     * table can serve the entry the same way a cache never should.
+     */
+    private static function surface(string $kind, KeyBindings $bindings, \Closure $build): string
+    {
+        $key = $kind . '|' . \SugarCraft\Core\I18n\T::locale() . '|' . spl_object_id($bindings);
+        $cached = self::$SURFACES[$key] ?? null;
+        if ($cached !== null && $cached[0] === $bindings) {
+            return $cached[1];
+        }
+
+        $text = $build();
+        self::$SURFACES[$key] = [$bindings, $text];
+
+        return $text;
     }
 }

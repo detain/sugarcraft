@@ -34,33 +34,47 @@ final class Computer
         $bestScore = -INF;
         $bestDx = 0;
         $bestRot = 0;
+        // candy-tetris-051: O ships four identical rotation states and
+        // every kind repeats at least one shape — each duplicate
+        // re-scanned the whole board for a score that the strict '>'
+        // tie-break can never promote over the first arrival. Remember
+        // the shapes; skip the echoes.
+        $seenShapes = [];
 
-        // Try all rotations (0-3)
-        foreach (range(0, 3) as $rotations) {
+        foreach (range(0, 3) as $rotation) {
             $rotated = $piece;
-            for ($r = 0; $r < $rotations; $r++) {
+            for ($r = 0; $r < $rotation; $r++) {
                 $rotated = $rotated->rotated(1);
             }
 
-            // Get the piece cells to find width
             $cells = $rotated->cells();
+            $shapeKey = serialize($cells);
+            if (isset($seenShapes[$shapeKey]) === true) {
+                continue;
+            }
+            $seenShapes[$shapeKey] = true;
+
             $minX = PHP_INT_MAX;
             $maxX = PHP_INT_MIN;
             foreach ($cells as [$x,]) {
                 $minX = min($minX, $x);
                 $maxX = max($maxX, $x);
             }
-            $pieceWidth = $maxX - $minX + 1;
 
-            // Try all x positions (leftmost valid to rightmost valid)
-            $maxXPos = Board::COLS - $pieceWidth;
-            for ($dx = -$minX; $dx <= $maxXPos; $dx++) {
+            // candy-tetris-073: the right bound is where the RIGHTMOST
+            // cell still lands inside the wall — the old count-style
+            // COLS - pieceWidth over-shot by minX whenever the shape did
+            // not touch its box's left edge, feeding guaranteed-fail
+            // probes to fits(). Coverage was complete (the extras always
+            // refused); they were only wasteful, and the name said
+            // "position" while holding a count.
+            $maxDx = Board::COLS - 1 - $maxX;
+            for ($dx = -$minX; $dx <= $maxDx; $dx++) {
                 $moved = $rotated->moved($dx, 0);
                 if ($board->fits($moved) === false) {
                     continue;
                 }
 
-                // Find landing position
                 $dropped = $board->dropPiece($moved);
                 $placed = $board->place($dropped);
                 $score = $this->evaluate($placed);
@@ -68,7 +82,7 @@ final class Computer
                 if ($score > $bestScore) {
                     $bestScore = $score;
                     $bestDx = $dx;
-                    $bestRot = $rotations;
+                    $bestRot = $rotation;
                 }
             }
         }
@@ -77,119 +91,70 @@ final class Computer
     }
 
     /**
-     * Evaluate a board state and return a score.
-     * Higher is better.
+     * Evaluate a board state and return a score. Higher is better.
+     *
+     * candy-tetris-051: one row-major pass replaces the four scans this
+     * method used to dispatch (height, holes, gaps, lines each walked the
+     * board on its own). The per-column facts — first fill (height) and
+     * block-seen (holes) — ride a ten-slot state array down the rows; the
+     * per-row facts (nulls, block presence, null-after-block) are decided
+     * inside the same column sweep that already reads the row. This runs
+     * once per candidate placement, which made the quadruple walk the
+     * AI's hot back.
+     *
+     * The gap law preserved verbatim from the old countGaps: a row earns
+     * its gap penalty when it holds a block AND a null that follows a
+     * block — and then EVERY null of the row counts, leading nulls
+     * included. PerfContractTest cross-checks the pass against the
+     * original four-scan formulas on seeded boards.
      */
     public function evaluate(Board $board): float
     {
         $rows = $board->rows();
 
-        // Aggregate height: sum of all column heights
-        $height = $this->aggregateHeight($rows);
+        /** @var array<int, bool> $blockSeen */
+        $blockSeen = array_fill(0, Board::COLS, false);
+        $height = 0;
+        $holes = 0;
+        $gaps = 0;
+        $lines = 0;
 
-        // Count holes: empty cells with at least one block above
-        $holes = $this->countHoles($rows);
+        for ($row = Board::HIDDEN_ROWS; $row < Board::ROWS; $row++) {
+            $rowCells = $rows[$row];
+            $rowNulls = 0;
+            $blockInRow = false;
+            $gapAfterBlock = false;
 
-        // Count gaps: horizontal gaps in filled rows
-        $gaps = $this->countGaps($rows);
+            for ($col = 0; $col < Board::COLS; $col++) {
+                if ($rowCells[$col] !== null) {
+                    if ($blockSeen[$col] === false) {
+                        $blockSeen[$col] = true;
+                        $height += Board::ROWS - $row;
+                    }
+                    $blockInRow = true;
+                } else {
+                    $rowNulls++;
+                    // The shipped gap fact is a null that FOLLOWS a block
+                    // in the row — the old countGaps order preserved.
+                    if ($blockInRow === true) {
+                        $gapAfterBlock = true;
+                    }
+                    if ($blockSeen[$col] === true) {
+                        $holes++;
+                    }
+                }
+            }
 
-        // Count lines (would be cleared externally)
-        $lines = $this->countCompleteLines($rows);
+            if ($rowNulls === 0) {
+                $lines++;
+            } elseif ($blockInRow === true && $gapAfterBlock === true) {
+                $gaps += $rowNulls;
+            }
+        }
 
         return self::WEIGHT_HEIGHT * $height
             + self::WEIGHT_HOLES * $holes
             + self::WEIGHT_GAPS * $gaps
             + self::WEIGHT_LINES * $lines;
-    }
-
-    /**
-     * @param list<list<?Tetromino>> $rows
-     */
-    private function aggregateHeight(array $rows): int
-    {
-        $height = 0;
-        // Only count visible rows (from HIDDEN_ROWS to ROWS)
-        for ($col = 0; $col < Board::COLS; $col++) {
-            for ($row = Board::HIDDEN_ROWS; $row < Board::ROWS; $row++) {
-                if ($rows[$row][$col] !== null) {
-                    // Height from bottom (visible rows = 20)
-                    $height += Board::ROWS - $row;
-                    break;
-                }
-            }
-        }
-        return $height;
-    }
-
-    /**
-     * @param list<list<?Tetromino>> $rows
-     */
-    private function countHoles(array $rows): int
-    {
-        $holes = 0;
-        // Only look at visible rows
-        for ($col = 0; $col < Board::COLS; $col++) {
-            $blockSeen = false;
-            for ($row = Board::HIDDEN_ROWS; $row < Board::ROWS; $row++) {
-                if ($rows[$row][$col] !== null) {
-                    $blockSeen = true;
-                } elseif ($blockSeen === true) {
-                    $holes++;
-                }
-            }
-        }
-        return $holes;
-    }
-
-    /**
-     * @param list<list<?Tetromino>> $rows
-     */
-    private function countGaps(array $rows): int
-    {
-        $gaps = 0;
-        // Only look at visible rows
-        for ($row = Board::HIDDEN_ROWS; $row < Board::ROWS; $row++) {
-            $rowCells = $rows[$row];
-            // Only check rows that are partially filled
-            $hasBlock = false;
-            $hasGap = false;
-            for ($col = 0; $col < Board::COLS; $col++) {
-                if ($rowCells[$col] !== null) {
-                    $hasBlock = true;
-                } elseif ($hasBlock === true) {
-                    $hasGap = true;
-                }
-            }
-            if ($hasBlock === true && $hasGap === true) {
-                // Count individual gap cells
-                for ($col = 0; $col < Board::COLS; $col++) {
-                    if ($rowCells[$col] === null) {
-                        $gaps++;
-                    }
-                }
-            }
-        }
-        return $gaps;
-    }
-
-    /**
-     * @param list<list<?Tetromino>> $rows
-     */
-    private function countCompleteLines(array $rows): int
-    {
-        $lines = 0;
-        for ($row = Board::HIDDEN_ROWS; $row < Board::ROWS; $row++) {
-            $full = true;
-            for ($col = 0; $col < Board::COLS; $col++) {
-                if ($rows[$row][$col] === null) {
-                    $full = false;
-                    break;
-                }
-            }
-            if ($full === true) {
-                $lines++;
-            }
-        }
-        return $lines;
     }
 }

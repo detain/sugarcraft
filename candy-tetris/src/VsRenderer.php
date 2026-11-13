@@ -292,18 +292,39 @@ final class VsRenderer
      * falling piece) disappear wherever the background SGR did not land,
      * inverting the board so holes looked like blocks.
      */
+    /**
+     * candy-tetris-052 measured against the finding's preferred shape: the
+     * Buffer cell-grid path cannot serve these bytes — Buffer::toAnsi emits
+     * TRUECOLOUR run-joined cells while the VS boards paint 256-palette SGR
+     * around literal block glyphs (verified byte-for-byte before choosing),
+     * and migrating would repaint every versus golden, perf rows do not
+     * bargain with art. The allocation waste is taken anyway: every cell
+     * string is a deterministic function of (kind, posture, panel palette)
+     * — 56 in all — so each helper memoises its shape and the per-cell
+     * Ansi:: concatenations happen once per process, not twice per painted
+     * square per frame.
+     *
+     * @var array<string, string>
+     */
+    private static array $CELLS = [];
+
+    private static function cell(string $shape, Tetromino $kind, bool $plain, \Closure $build): string
+    {
+        return self::$CELLS[$shape . '|' . $kind->name . '|' . ($plain ? 'p' : 'c')] ??= $build();
+    }
+
     private static function block(Tetromino $kind, bool $plain = false): string
     {
-        return $plain === true
+        return self::cell('block', $kind, $plain, static fn(): string => $plain === true
             ? '██'
-            : Ansi::bg256($kind->color()) . '██' . Ansi::reset();
+            : Ansi::bg256($kind->color()) . '██' . Ansi::reset());
     }
 
     private static function ghost(Tetromino $kind, bool $plain = false): string
     {
-        return $plain === true
+        return self::cell('ghost', $kind, $plain, static fn(): string => $plain === true
             ? '▒▒'
-            : Ansi::sgr(38, 5, $kind->color(), 2) . '▒▒' . Ansi::reset();
+            : Ansi::sgr(38, 5, $kind->color(), 2) . '▒▒' . Ansi::reset());
     }
 
     /**
@@ -330,15 +351,15 @@ final class VsRenderer
 
     private static function blockComputer(Tetromino $kind, bool $plain = false): string
     {
-        return $plain === true
+        return self::cell('blockC', $kind, $plain, static fn(): string => $plain === true
             ? '██'
-            : Ansi::bg256(self::COMPUTER_COLORS[$kind->value]) . '██' . Ansi::reset();
+            : Ansi::bg256(self::COMPUTER_COLORS[$kind->value]) . '██' . Ansi::reset());
     }
 
     private static function ghostComputer(Tetromino $kind, bool $plain = false): string
     {
-        return $plain === true
+        return self::cell('ghostC', $kind, $plain, static fn(): string => $plain === true
             ? '▒▒'
-            : Ansi::sgr(38, 5, self::COMPUTER_COLORS[$kind->value], 2) . '▒▒' . Ansi::reset();
+            : Ansi::sgr(38, 5, self::COMPUTER_COLORS[$kind->value], 2) . '▒▒' . Ansi::reset());
     }
 }

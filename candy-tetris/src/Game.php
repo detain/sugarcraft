@@ -243,6 +243,14 @@ final class Game implements Model
      */
     private \Closure $garbageStream;
 
+    /**
+     * Resolved key table, memoised per game instance (candy-tetris-112):
+     * the frame dispatch consulted keys() ~11x per keystroke and each
+     * consult re-folded the shipped MAP. A mutate() mints a NEW Game, so
+     * the cache can never outlive a bindings change.
+     */
+    private ?KeyBindings $keysCache = null;
+
     /** Death by spawn-block: the freshly spawned piece does not fit. */
     public const OVER_SPAWN_BLOCKED = 'spawn-blocked';
     /** Death by top-out: incoming garbage would push locked content off the ceiling. */
@@ -472,7 +480,7 @@ final class Game implements Model
      */
     private function keys(): KeyBindings
     {
-        return $this->bindings ?? Support\Bindings::table();
+        return $this->keysCache ??= $this->bindings ?? Support\Bindings::table();
     }
 
     public function update(Msg $msg): array

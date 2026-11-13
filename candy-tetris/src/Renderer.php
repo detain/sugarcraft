@@ -299,7 +299,10 @@ final class Renderer
         $ghostCells = Support\Paint::cellMap($ghost->cells());
 
         // Build a Buffer-backed interior, then frame it with the sugar-style border.
-        $boardBuf = Buffer::new(Board::COLS, Board::VISIBLE_ROWS);
+        // candy-tetris-009: the row-major flat grid goes through fromGrid in one
+        // wrap — the old withCellAt chain copied the whole cell set per square,
+        // making one frame quadratic in the board it paints.
+        $grid = [];
 
         for ($dy = 0; $dy < Board::VISIBLE_ROWS; $dy++) {
             $y = Board::HIDDEN_ROWS + $dy;
@@ -322,12 +325,12 @@ final class Renderer
                     $style = $plain ? null : self::ghostStyle($piece->kind);
                 }
 
-                $boardBuf = $boardBuf->withCellAt($dx, $dy, Cell::new($rune, $style));
+                $grid[] = Cell::new($rune, $style);
             }
         }
 
         // Frame the Buffer interior with the sugar-style border.
-        $interior = $boardBuf->toAnsi();
+        $interior = Buffer::fromGrid(Board::COLS, Board::VISIBLE_ROWS, $grid)->toAnsi();
         return SugarStyle::new()
             ->border(Border::rounded())
             ->padding(0, 1)
@@ -480,6 +483,15 @@ final class Renderer
 
     private static function renderMini(Tetromino $kind, bool $plain = false): string
     {
+        // candy-tetris-009: the preview of a kind in a colour posture is a
+        // deterministic string — fourteen in all. Built once, reused every
+        // frame; the sidebar asks for three-plus-one of them per render.
+        $cacheKey = $kind->name . ($plain === true ? '/plain' : '/colour');
+        $cached = self::$MINIS[$cacheKey] ?? null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
         $cells = Support\Paint::cellMap($kind->cells(0));
 
         // 4×2 preview grid, two Buffer columns per tetromino cell so the
@@ -505,7 +517,7 @@ final class Renderer
             }
         }
 
-        return $buf->toAnsi();
+        return self::$MINIS[$cacheKey] = $buf->toAnsi();
     }
 
     /**
@@ -521,11 +533,27 @@ final class Renderer
     }
 
     /**
+     * Rendered one-kind previews and the two per-kind styles, cached
+     * (candy-tetris-009/-113): a frame painted up to two Style objects per
+     * occupied cell, and rebuilt every preview string from scratch. All
+     * cached values are deterministic pure functions of (kind, posture).
+     *
+     * @var array<string, string>
+     */
+    private static array $MINIS = [];
+
+    /** @var array<string, Style> */
+    private static array $BLOCK_STYLES = [];
+
+    /** @var array<string, Style> */
+    private static array $GHOST_STYLES = [];
+
+    /**
      * Style for a filled block cell using the tetromino's colour as background.
      */
     private static function blockStyle(Tetromino $kind): Style
     {
-        return Style::new(null, $kind->rgbColor());
+        return self::$BLOCK_STYLES[$kind->name] ??= Style::new(null, $kind->rgbColor());
     }
 
     /**
@@ -533,6 +561,6 @@ final class Renderer
      */
     private static function ghostStyle(Tetromino $kind): Style
     {
-        return Style::new($kind->rgbColor(), null, Style::ATTR_FAINT);
+        return self::$GHOST_STYLES[$kind->name] ??= Style::new($kind->rgbColor(), null, Style::ATTR_FAINT);
     }
 }

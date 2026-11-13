@@ -122,14 +122,23 @@ final class Board
      */
     public function dropPiece(Piece $piece): Piece
     {
-        $candidate = $piece;
-        while (true) {
-            $next = $candidate->moved(0, 1);
-            if ($this->fits($next) === false) {
-                return $candidate;
+        // candy-tetris-050: the descent is one scan of the four cells, not
+        // one Piece allocation per row. A cell's free prefix runs while the
+        // square below it is free; the piece lands when the FIRST cell hits
+        // something, so the descent is the MINIMUM prefix — exactly where
+        // the old move-until-!fits loop stopped (offsets below that bound
+        // keep every cell inside its own free run, so the whole-piece fits()
+        // check agreed with it step for step, overlaps at rest included).
+        $slack = PHP_INT_MAX;
+        foreach ($piece->cells() as [$x, $y]) {
+            $free = 0;
+            while ($this->isOccupied($x, $y + $free + 1) === false) {
+                $free++;
             }
-            $candidate = $next;
+            $slack = min($slack, $free);
         }
+
+        return $slack === 0 ? $piece : $piece->moved(0, $slack);
     }
 
     /**

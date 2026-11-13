@@ -113,6 +113,13 @@ final class VsGame implements Model
     private const COMPUTER_STREAM_MIX = 0x5BD1E995;
 
     /**
+     * Resolved key table, memoised per match (candy-tetris-112 — the same
+     * law as {@see Game::$keysCache}: a mutate mints a new VsGame, so the
+     * cache cannot outlive a bindings change).
+     */
+    private ?KeyBindings $keysCache = null;
+
+    /**
      * True when the live terminal cannot host the VS frame
      * ({@see VsRenderer::MIN_COLS} × {@see VsRenderer::MIN_ROWS}).
      */
@@ -130,7 +137,7 @@ final class VsGame implements Model
      */
     private function keys(): KeyBindings
     {
-        return $this->bindings ?? Support\Bindings::table();
+        return $this->keysCache ??= $this->bindings ?? Support\Bindings::table();
     }
 
     /**

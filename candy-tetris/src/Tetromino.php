@@ -34,7 +34,15 @@ enum Tetromino: string
      */
     private function rotations(): array
     {
-        return match ($this) {
+        // candy-tetris-049: the nested literals were re-materialised on
+        // every cells() call, which the renderer and the AI both hit
+        // dozens of times per frame. Enum cases are singletons, so the
+        // method-static is keyed by case name and shared process-wide;
+        // (enums carry no properties — this is the legal cache seat). The
+        // tables themselves are never mutated.
+        static $cache = [];
+
+        return $cache[$this->name] ??= match ($this) {
             self::I => [
                 [[0,1],[1,1],[2,1],[3,1]],
                 [[2,0],[2,1],[2,2],[2,3]],
