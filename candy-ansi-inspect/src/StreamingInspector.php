@@ -22,6 +22,9 @@ use SugarCraft\AnsiParser\Parser\Parser;
  *
  * Text segments are flushed when a sequence is encountered or at
  * end-of-stream via {@see finish()}.
+ *
+ * Mirrors charmbracelet/sequin reading a live stdin pipe: bytes are
+ * reported segment-by-segment as they complete, never withheld for EOF.
  */
 final class StreamingInspector
 {

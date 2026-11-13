@@ -128,7 +128,7 @@ final class UnderlineStylesTest extends TestCase
     }
 
     /**
-     * Step 10.16: a colon style must never be borrowed across the semicolon.
+     * A colon style must never be borrowed across the semicolon.
      * An earlier revision peeked at the NEXT parameter group for a `4:N` and
      * cast it with (int), so `4;4:3` re-read the group `4:3` as style 4 and
      * reported one effect "underline dotted" where ECMA-48 has two: a plain
@@ -143,7 +143,7 @@ final class UnderlineStylesTest extends TestCase
 
     /**
      * `4:0` is "underline off" — ECMA-48 names the zero sub-parameter, and
-     * the sugar-vterm UnderlineStyle enum (step 07.05) carries it as None, so
+     * the sugar-vterm UnderlineStyle enum carries it as None, so
      * the report must not fall through to the numbered-label fallback.
      */
     public function testZeroStyleTurnsUnderlineOff(): void

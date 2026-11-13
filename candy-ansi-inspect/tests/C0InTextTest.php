@@ -13,7 +13,7 @@ final class C0InTextTest extends TestCase
 {
     public function testC0TabIsolatesText(): void
     {
-        // Tab (0x09) in text causes a flush - per step 10.16 spec.
+        // Tab (0x09) in text causes a flush - per the 2026-10 C0/C1 split.
         $segs = Inspector::parse("hello\tworld");
         $this->assertCount(3, $segs);
         $this->assertInstanceOf(TextSegment::class, $segs[0]);
@@ -53,7 +53,7 @@ final class C0InTextTest extends TestCase
 
     public function testC0NewlineIsolatesText(): void
     {
-        // LF (0x0A) in text causes a flush - per step 10.16 spec.
+        // LF (0x0A) in text causes a flush - per the 2026-10 C0/C1 split.
         $segs = Inspector::parse("line1\nline2");
         $this->assertCount(3, $segs);
         $this->assertInstanceOf(TextSegment::class, $segs[0]);
@@ -66,7 +66,7 @@ final class C0InTextTest extends TestCase
 
     public function testC0CarriageReturnIsolatesText(): void
     {
-        // CR (0x0D) in text causes a flush - per step 10.16 spec.
+        // CR (0x0D) in text causes a flush - per the 2026-10 C0/C1 split.
         $segs = Inspector::parse("line1\rline2");
         $this->assertCount(3, $segs);
         $this->assertInstanceOf(TextSegment::class, $segs[0]);
@@ -81,7 +81,7 @@ final class C0InTextTest extends TestCase
     {
         // \x1b[31m = CSI foreground red
         // red = text
-        // \x07 = BEL (C0 code - becomes SequenceSegment per step 10.16)
+        // \x07 = BEL (C0 code - becomes SequenceSegment per the 2026-10 split)
         // normal = text
         $segs = Inspector::parse("\x1b[31mred\x07normal");
         $this->assertCount(4, $segs);
@@ -168,7 +168,7 @@ final class C0InTextTest extends TestCase
     public function testDelByteIsReportedNotSwallowed(): void
     {
         // DEL (0x7F) is part of the ISO 6429 C0 set although it sits outside
-        // the 0x00-0x1F range; before the step 10.16 fix it reached
+        // the 0x00-0x1F range; before the 2026-10 fix it reached
         // execute(), matched no branch, and the byte vanished — an
         // unlisted loss under the README fidelity contract.
         $segs = Inspector::parse("ab\x7fcd");

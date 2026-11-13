@@ -11,7 +11,7 @@ use SugarCraft\AnsiInspect\SequenceSegment;
 use SugarCraft\AnsiInspect\TextSegment;
 
 /**
- * SOS / PM / ST and the C1 controls in the inspector (step 10.16).
+ * SOS / PM / ST and the C1 controls in the inspector (the 2026-10 split).
  *
  * C1 controls arrive in the stream under two spellings, and this file pins
  * both:

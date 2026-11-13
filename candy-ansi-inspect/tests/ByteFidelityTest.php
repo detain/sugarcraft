@@ -17,14 +17,14 @@ use SugarCraft\AnsiInspect\TextSegment;
  * The inspector's whole value is that what it reports is what the terminal
  * actually sent, so every case here pins exact bytes rather than merely a
  * shape. Five defect families are covered, keyed to the ANSI conformance
- * audit (`docs/research/ansi-tmux-ansicode-audit.md`) and the step 10.16
+ * audit (`docs/research/ansi-tmux-ansicode-audit.md`) and the 2026-10
  * C1 rollout:
  *
- *  - SP-R5 parameter separators were rewritten (`ESC[4;3m` → `ESC[4:3m`).
- *  - SP-R2 a string terminator leaked out again as a ghost `ESC \` segment.
- *  - SP-R1 a CSI cut short by end-of-stream vanished without a segment.
- *  - SP-R8 an abandoned `ESC O` swallowed the printable that followed it.
- *  - SP-R9 the 8-bit C1 controls replay in 7-bit form, and DEL survives.
+ *  - parameter separators were rewritten (`ESC[4;3m` → `ESC[4:3m`).
+ *  - a string terminator leaked out again as a ghost `ESC \` segment.
+ *  - a CSI cut short by end-of-stream vanished without a segment.
+ *  - an abandoned `ESC O` swallowed the printable that followed it.
+ *  - the 8-bit C1 controls replay in 7-bit form, and DEL survives.
  *
  * @see https://www.ecma-international.org/publications-and-standards/standards/ecma-48/
  */
@@ -57,7 +57,7 @@ final class ByteFidelityTest extends TestCase
         );
     }
 
-    // --- SP-R5: parameter separator fidelity -----------------------------
+    // --- parameter separator fidelity -----------------------------
 
     public function testSemicolonParametersAreNotRewrittenAsColons(): void
     {
@@ -185,7 +185,7 @@ final class ByteFidelityTest extends TestCase
         $this->assertSame("\x1b[?1;2:3c", $segments[0]->raw());
     }
 
-    // --- SP-R2: string terminators are consumed exactly once --------------
+    // --- string terminators are consumed exactly once --------------
 
     public function testDcsTerminatorDoesNotReappearAsGhostSegment(): void
     {
@@ -274,7 +274,7 @@ final class ByteFidelityTest extends TestCase
         $this->assertSame('B', $afterC1[2]->raw());
     }
 
-    // --- SP-R1: an unterminated sequence is never silently dropped ---------
+    // --- an unterminated sequence is never silently dropped ---------
 
     public function testTruncatedCsiIsSurfacedAtEndOfStream(): void
     {
@@ -380,7 +380,7 @@ final class ByteFidelityTest extends TestCase
         $this->assertStringContainsString('set window title', $segments[0]->describe());
     }
 
-    // --- SP-R8: an abandoned SS3 must not steal following bytes ------------
+    // --- an abandoned SS3 must not steal following bytes ------------
 
     public function testValidSs3FinalIsStillAttached(): void
     {
@@ -702,7 +702,7 @@ final class ByteFidelityTest extends TestCase
         }
     }
 
-    // --- SP-R5 beyond CSI: the same replay rule applies to DCS parameters ----
+    // --- Beyond CSI: the same replay rule applies to DCS parameters ----
 
     public function testDcsParametersKeepTheirOwnSeparators(): void
     {
@@ -790,7 +790,7 @@ final class ByteFidelityTest extends TestCase
         // to reset the window); a cancel followed by CAN does not, because
         // `execute` flushes the window and an illegal byte leaves no callback
         // behind. The truncated tail itself is exactly what `master` dropped
-        // (SP-R1) — on `master` the two last inputs yielded only `m` and only
+        // — on `master` the two last inputs yielded only `m` and only
         // CAN. A deliberate guard on the `inFlightBytes` bookkeeping.
         $cases = [
             // Cancelled mid-CSI; the final byte falls through to Ground as text.
@@ -925,7 +925,7 @@ final class ByteFidelityTest extends TestCase
 
     public function testCancelByteInsideStringStateDispatchesTheTruncatedPayload(): void
     {
-        // 2026-10-23 (r1024/inspect, README deviation 11): sugar-ansi-parser
+        // 2026-10-23 (README deviation 11): sugar-ansi-parser
         // commit 35dda61c0 moved CAN/SUB inside the *string* states (OSC,
         // DCS-passthrough, SOS/PM/APC) from silently dropping the whole
         // sequence to dispatching the payload collected so far. The cancel
@@ -1095,7 +1095,7 @@ final class ByteFidelityTest extends TestCase
         }
     }
 
-    // --- SP-R9: the C1 controls (step 10.16) --------------------------------
+    // --- the C1 controls --------------------------------
 
     public function testDelByteSurvivesTheStreamByteForByte(): void
     {
@@ -1161,7 +1161,7 @@ final class ByteFidelityTest extends TestCase
     {
         // The rewrite of deviation #9 applies to DISPATCHED sequences only. A
         // tail reports the bytes in flight verbatim in `raw()` — and since
-        // step 10.16 it names the family from the 8-bit introducer instead of
+        // the 2026-10 split it names the family from the 8-bit introducer instead of
         // the generic "escape". Since AIP-02 the DISPLAY column tokenizes the
         // raw C1 byte (`CSI`, `DCS`) exactly like the label sanitizer: the
         // bytes are preserved in the segment, never replayed at the terminal.

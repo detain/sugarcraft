@@ -11,9 +11,14 @@ use SugarCraft\AnsiParser\Parser\State;
 /**
  * Collects ANSI parse events into a flat list of Segments.
  *
+ * Mirrors charmbracelet/sequin's report builder: sequin walks each parsed
+ * entry printing raw bytes plus annotation, which here is the Segment list
+ * this handler accumulates (the parse events themselves come from
+ * sugar-ansi-parser, not a sequin port).
+ *
  * Feeds the input string through {@see Parser}, intercepts every handler
  * call, and accumulates TextSegments for printChar output and
- * SequenceSegments for every recognized escape sequence.
+ * SequenceSegments for every recognised escape sequence.
  *
  * Every sequence is re-emitted with the bytes the input actually carried:
  * parameter separators keep their own `;`/`:` spelling, an unterminated
@@ -376,7 +381,7 @@ final class AnsiHandler implements Handler
             // DEL (0x7F) belongs to the C0 set of ISO 6429 even though it sits
             // outside the 0x00–0x1F range the branch above covers, and the VT500
             // anywhere table routes it through Action::Execute while in Ground.
-            // Before step 10.16 it matched neither branch and vanished — exactly
+            // Before the 2026-10 C0/C1 split it matched neither branch and vanished — exactly
             // the kind of unlisted byte loss the README fidelity contract forbids.
             // Mid-sequence the table gives it None (no callback), so the residue
             // this branch can ever see is empty unless a future table change
@@ -601,7 +606,7 @@ final class AnsiHandler implements Handler
         );
         $this->flushPendingSs3();
         $this->flushText();
-        // OSC terminator normalized to BEL; original ST (\x1b\\) is not
+        // OSC terminator normalised to BEL; original ST (\x1b\\) is not
         // preserved because sugar-ansi-parser's Parser strips it before dispatch.
         $this->segments[] = new SequenceSegment(
             "\x1b]{$data}\x07",
@@ -649,7 +654,7 @@ final class AnsiHandler implements Handler
         );
         $this->flushPendingSs3();
         $this->flushText();
-        // 2026-10-23 (r1024/inspect): classify from the parser's true dispatch
+        // 2026-10-23: classify from the parser's true dispatch
         // fields via the shared sugar-ansi-parser Codec\Dcs decoder instead of
         // re-peeling the payload string — a sixel body that begins with '$'
         // is sixel, not a DECRQSS request, and only the fields can say so.
@@ -851,7 +856,7 @@ final class AnsiHandler implements Handler
     /**
      * SOS and PM carry opaque strings with no internal structure to decode,
      * so the honest label is the family plus the payload length. The two
-     * shared one "SOS/PM" label until step 10.16 split them the way
+     * shared one "SOS/PM" label until the 2026-10 SOS/PM split split them the way
      * ECMA-48 §5.6 does — a report should not make the reader guess which
      * privacy flavor the stream used.
      */

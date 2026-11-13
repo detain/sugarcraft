@@ -90,7 +90,7 @@ $input = '';
 // usage; a source that happens to be empty is a legitimate report of nothing.
 $sawSource = false;
 // Flags are scanned before any source is opened: `--help`/`-h` is a request
-// for usage, not a path (m2-fresh ruling (a)); `--json` reports a JSON array
+// for usage, not a path; `--json` reports a JSON array
 // instead of one line per segment (finding 005); `--` enters exec mode
 // (finding 003). Operands: the first non-flag word names the file, and
 // PRESENCE — not truthiness — is the gate (finding 012: empty() treats the
@@ -166,7 +166,7 @@ if ($operandSeen && $operand !== '') {
     // Reject stream wrappers (php://, data://, http://, …) — a file-path argument
     // must not be coerced into fetching a URL or evaluating a wrapper. is_file()
     // is false for every wrapper scheme and for non-existent paths, and the
-    // readability half of the gate (M2) answers an existing-but-unreadable file
+    // readability half of the gate answers an existing-but-unreadable file
     // with the same refusal + exit 1 instead of letting the bare read below
     // emit a PHP warning and exit 0 over empty content.
     if (!is_file($operand) || !is_readable($operand)) {

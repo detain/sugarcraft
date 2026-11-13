@@ -286,7 +286,7 @@ final class CliTest extends TestCase
 
     public function testHelpFlagPrintsUsageOnStdoutAndExitsZero(): void
     {
-        // m2-fresh ruling (a): `--help`/`-h` is a request for usage, not a
+        // `--help`/`-h` is a request for usage, not a
         // path — before the arm it was swallowed by the file gate and refused
         // 'not a readable file: --help' with exit 1. Now the usage lands on
         // stdout, exit 0, stderr silent (a scripted caller may capture it).

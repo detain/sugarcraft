@@ -14,8 +14,11 @@ namespace SugarCraft\AnsiInspect;
  *   - {@see SequenceSegment} — a single ANSI escape sequence with a
  *     decoded label.
  *
- * @note Sequences are rendered in normalized form by {@see raw()}.  OSC/DCS
- *   terminators are normalized to BEL/ST and may differ byte-for-byte from
+ * Mirrors the entry shape charmbracelet/sequin prints per stream chunk:
+ * payload bytes and their annotation, kept addressable apart.
+ *
+ * @note Sequences are rendered in normalised form by {@see raw()}.  OSC/DCS
+ *   terminators are normalised to BEL/ST and may differ byte-for-byte from
  *   the original input (e.g. OSC ST \x1b\\ becomes BEL \x07).
  */
 abstract class Segment

@@ -9,6 +9,9 @@ namespace SugarCraft\AnsiInspect;
  * (e.g. `"SGR foreground red"`). The label is what makes CandyAnsiInspect
  * useful as a debugging tool: you can pipe styled output in and see
  * exactly which sequence produced what effect.
+ *
+ * Mirrors charmbracelet/sequin's annotated escape-sequence entries —
+ * the raw column is what the wire carried, the label is the annotation.
  */
 final class SequenceSegment extends Segment
 {
@@ -40,7 +43,7 @@ final class SequenceSegment extends Segment
      * captured bytes must not be able to forge segment lines or mutate the
      * viewing terminal — a raw CR/LF would rewrite the report's own line
      * framing, a raw 0x9B would re-arm a CSI parser on an 8-bit-capable
-     * terminal, and every BEL-normalized OSC raw would ring on render
+     * terminal, and every BEL-normalised OSC raw would ring on render
      * (finding 002). `raw()` stays untouched for library consumers who need
      * the verbatim bytes; the tokenization is a display-layer contract, and
      * README's fidelity list discloses the raw-column spelling it imposes.

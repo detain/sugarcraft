@@ -7,6 +7,9 @@ namespace SugarCraft\AnsiInspect;
 /**
  * Lookup tables for C0 (0x00–0x1F) and C1 (0x80–0x9F) control codes.
  * Descriptions follow ANSI/ISO standards and common terminal conventions.
+ *
+ * Mirrors the control-name vocabulary of charmbracelet/sequin's rendered
+ * labels; the code points themselves are ECMA-48.
  */
 final class C0C1
 {
@@ -46,7 +49,8 @@ final class C0C1
         0x1F => 'US (unit separator)',
     ];
 
-    /** C1 control codes 0x80–0x9F (8-bit, two-byte ESC sequence). */
+    /** C1 control codes 0x80–0x9F — one 8-bit byte each; only the 7-bit
+     *  channel's spelling is two bytes (ESC + final). */
     public const C1 = [
         0x80 => 'PAD (padding character)',
         0x81 => 'HOP (high octet preset)',

@@ -144,7 +144,7 @@ final class AnsiHandlerTest extends TestCase
 
         // The APC segment already carries its ST terminator, so the parser's
         // follow-up `ESC \` dispatch must not surface as a second, ghost
-        // segment. Regression (SP-R2): 2 segments — APC + bare ESC \.
+        // segment. Regression: 2 segments — APC + bare ESC \.
         $this->assertCount(1, $segments);
         $this->assertInstanceOf(SequenceSegment::class, $segments[0]);
         $this->assertSame($input, $segments[0]->raw());

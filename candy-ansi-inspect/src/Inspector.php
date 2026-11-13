@@ -20,9 +20,13 @@ use SugarCraft\AnsiParser\Codec\Dcs;
  *
  * Sequence *recognition* lives entirely in sugar-ansi-parser's {@see Parser} state
  * machine; this class only labels the sequences it dispatches, plus the
- * truncated tails {@see AnsiHandler} recovers at end of stream. There is no
- * scanning of the input stream of its own, so OSC/DCS/APC strings go through
+ * truncated tails {@see AnsiHandler} recovers at end of stream. It performs
+ * no scanning of its own, so OSC/DCS/APC strings go through
  * the same machine as CSI rather than a separate fast path.
+ *
+ * Mirrors charmbracelet/sequin: the labelling half of that tool — every
+ * parsed escape sequence gains a human-readable annotation beside its
+ * raw bytes.
  */
 final class Inspector
 {
@@ -48,11 +52,11 @@ final class Inspector
     }
 
     /**
-     * Render parsed segments as a machine-readable JSON array string.
+     * Render parsed segments as a machine-readable JSON array.
      *
      * Each entry: {"type": "text"|"sequence", "content": "...", "description": "..."}
      *
-     * @return string JSON array string; each entry is {type, content, description}.
+     * @return string
      */
     public static function reportAsJson(string $input): string
     {
@@ -187,7 +191,7 @@ final class Inspector
         if (preg_match('/^>0 ?$/D', $params) === 1 && $final === 'q') {
             return 'request terminal version (XTVERSION)';
         }
-        // OSC palette set/query and DSR.
+        // Device status reports (DSR); palette set/query lives in describeOsc().
         if ($params === '6' && $final === 'n') {
             return 'request cursor position (DSR-CPR)';
         }
@@ -256,7 +260,7 @@ final class Inspector
             // NEXT element for a `4:N`, but groups never split across a
             // semicolon that way — and `(int)` on the borrowed group re-read
             // `4;4:3` as style 4 (dotted) instead of two effects (underline,
-            // underline curly), so step 10.16 removed the heuristic outright.
+            // underline curly), so the 2026-10 sweep removed the heuristic outright.
             if (preg_match('/^4:(\d+)$/', $codeStr, $underlined) === 1) {
                 $parts[] = self::underlineStyleName((int) $underlined[1]);
                 continue;
@@ -657,7 +661,7 @@ final class Inspector
      * that was a DECRQSS intermediate from sixel data that merely begins
      * with '$', and cannot recover parameter slots at all.
      *
-     * 2026-10-23 (r1024/inspect): migrated onto the shared decoder. The
+     * 2026-10-23: migrated onto the shared decoder. The
      * hand-rolled branch list that lived here classified only four shapes,
      * checked the '$' sixel/DECRQSS pair in payload order (so `ESC P $ q …`
      * DECRQSS requests were labelled "sixel image"), and had no notion of
@@ -729,7 +733,12 @@ final class Inspector
             Dcs::KIND_SIXEL => 'sixel image (' . strlen($data) . ' bytes)',
             Dcs::KIND_DECRQSS => 'DECRQSS request ' . self::sanitizeLabelBytes($data),
             Dcs::KIND_DECRPSS => 'DECRPSS reply '
-                . self::sanitizeLabelBytes((string) ($params[0] ?? -1)) . '$r' . self::sanitizeLabelBytes($data),
+                . (isset($params[0])
+                    ? self::sanitizeLabelBytes((string) $params[0])
+                    // A reply with no operand must not invent one; the shared
+                    // codec's wording for that state (finding 040).
+                    : '(no parameter)')
+                . '$r' . self::sanitizeLabelBytes($data),
             Dcs::KIND_TMUX => 'tmux passthrough (' . strlen($data) . ' bytes)',
             Dcs::KIND_TRUNCATED => 'DCS truncated (no final byte; ' . strlen($echo) . ' bytes collected)',
             default => 'DCS ' . chr($final) . self::sanitizeLabelBytes($echo),
@@ -789,7 +798,7 @@ final class Inspector
             // The 7-bit spellings of the SOS / PM / ST C1 controls. A bare
             // `ESC X` (or `ESC ^`) never opens a string long enough to
             // dispatch — it flushes empty at end of stream — but naming the
-            // introducer here is what step 10.16 asks the Inspector to do.
+            // introducer here is what the 2026-10 naming pass asks the Inspector to do.
             'X' => 'start of string (SOS)',
             '^' => 'privacy message (PM)',
             '\\' => 'string terminator (ST)',
@@ -868,7 +877,7 @@ final class Inspector
 
     /**
      * Name an SGR underline style sub-parameter (`4:n`, ECMA-48). Mirrors the
-     * SugarCraft\Vterm\Sgr\UnderlineStyle enum shipped by sugar-vterm step 07.05 —
+     * SugarCraft\Vterm\Sgr\UnderlineStyle enum (sugar-vterm/src/Sgr/UnderlineStyle.php) —
      * candy-ansi-inspect carries no sugar-vterm dependency, so this table is the local
      * reflection of that enum and must be kept in step with it.
      */

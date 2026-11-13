@@ -7,6 +7,9 @@ namespace SugarCraft\AnsiInspect;
 /**
  * Visible text between escape sequences. {@see describe()} returns the
  * payload verbatim so it shows up unmodified in inspector reports.
+ *
+ * Mirrors the plain (unannotated) entries charmbracelet/sequin prints
+ * between escape sequences.
  */
 final class TextSegment extends Segment
 {

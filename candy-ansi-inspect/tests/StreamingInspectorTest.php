@@ -187,7 +187,7 @@ final class StreamingInspectorTest extends TestCase
         $inspector = new StreamingInspector();
         // The single trailing \x1b\\ in the input IS the DCS terminator: it is
         // consumed by the DCS segment and must not reappear as a second,
-        // bare-ESC segment. Regression (SP-R2): 2 segments — DCS + ghost ESC \.
+        // bare-ESC segment. Regression: 2 segments — DCS + ghost ESC \.
         // Also, '|' (0x7C) is NOT an intermediate byte (those are 0x20-0x2F),
         // so it becomes part of the data: ">xterm" not ">|xterm".
         $segs = $inspector->feed("\x1bP>|xterm\x1b\\");

@@ -187,7 +187,7 @@ final class InspectorTest extends TestCase
     public function testDcsPayloadSanitizesControlBytes(): void
     {
         // Unknown-DCS fallback branch — raw payload interpolation.
-        // 2026-10-23 (r1024/inspect): this probe used to call describeDcs()
+        // 2026-10-23: this probe used to call describeDcs()
         // with NO final byte, a shape the migrated decoder classifies as a
         // truncated DCS whose label never echoes the payload — the ESC/BEL
         // contains would have tested nothing. Repointed to the generic
@@ -538,7 +538,7 @@ final class InspectorTest extends TestCase
 
     public function testDcsDecrpssReply(): void
     {
-        // 2026-10-23 (r1024/inspect): describeDcs() migrated onto the shared
+        // 2026-10-23: describeDcs() migrated onto the shared
         // Codec\Dcs decoder, which sees the TRUE fields of these sequences
         // (intermediate '$', final 'r', params slot) instead of only the
         // rebuilt payload string. Both cases are now classified as DECRPSS
@@ -550,6 +550,22 @@ final class InspectorTest extends TestCase
 
         $seg = Inspector::parse("\x1bP0" . '$r1' . '$r' . "\x1b\\")[0];
         $this->assertStringContainsString('DECRPSS reply 0$r1$r', $seg->describe());
+    }
+
+    public function testDcrpssReplyWithoutParameterSaysSoInsteadOfInventingOne(): void
+    {
+        // Finding 040: the parts-shaped arm used to render `($params[0] ?? -1)`
+        // as a number the wire never carried. The shared codec's wording for
+        // that state is "(no parameter)" — mirror it, and keep the real
+        // operand path exact.
+        $this->assertSame(
+            'DECRPSS reply (no parameter)$r',
+            Inspector::describeDcsParts(ord('r'), [], 0, ord('$'), ''),
+        );
+        $this->assertSame(
+            'DECRPSS reply 5$rq',
+            Inspector::describeDcsParts(ord('r'), [5], 0, ord('$'), 'q'),
+        );
     }
 
     public function testDcsSixel(): void
@@ -773,7 +789,7 @@ final class InspectorTest extends TestCase
 
     public function testDcsDecrqssRequestIsNotMislabelledSixel(): void
     {
-        // 2026-10-23 (r1024/inspect): DECRQSS is 'DCS $ q <params> ST' -
+        // 2026-10-23: DECRQSS is 'DCS $ q <params> ST' -
         // '$' intermediate, 'q' final, request riding in the data. The old
         // hand-rolled classifier looked only at final=='q' and claimed the
         // whole thing as a sixel image. The migrated Codec\Dcs classifier
@@ -784,7 +800,7 @@ final class InspectorTest extends TestCase
 
     public function testDcsTmuxPassthrough(): void
     {
-        // 2026-10-23 (r1024/inspect): tmux passthrough DCS (final 't',
+        // 2026-10-23: tmux passthrough DCS (final 't',
         // data starting 'mux;') gets its own label from the shared decoder.
         $seg = Inspector::parse("\x1bPtmux;xterm\x1b\\")[0];
         $this->assertStringContainsString('tmux passthrough (9 bytes)', $seg->describe());
@@ -792,7 +808,7 @@ final class InspectorTest extends TestCase
 
     public function testDcsSixelDataStartingWithDollarStaysSixel(): void
     {
-        // 2026-10-23 (r1024/inspect): production DCS dispatch hands the
+        // 2026-10-23: production DCS dispatch hands the
         // decoder the true parsed fields, so a sixel whose DATA happens to
         // begin '$' is not mistaken for DECRQSS - the intermediate is the
         // discriminator, not the first payload byte.
@@ -804,7 +820,7 @@ final class InspectorTest extends TestCase
 
     public function testDcsShimPeelsPreludeForLegacyCallers(): void
     {
-        // 2026-10-23 (r1024/inspect): describeDcs($payload, $final) is a
+        // 2026-10-23: describeDcs($payload, $final) is a
         // compatibility shim - with only the rebuilt prelude+data string it
         // heuristically peels leading intermediate/prefix bytes. A direct
         // '$'-leading call therefore classifies as DECRQSS; documented
@@ -815,7 +831,7 @@ final class InspectorTest extends TestCase
 
     public function testDcsTruncatedDirectCallNamesTheFamily(): void
     {
-        // 2026-10-23 (r1024/inspect): final byte 0 on the shared decoder
+        // 2026-10-23: final byte 0 on the shared decoder
         // means 'no final byte seen' - a truncated DCS - so the label says
         // so instead of pretending the payload was a complete sequence.
         $desc = Inspector::describeDcs('collected');
