@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'les canaux de l\'accumulateur withError() doivent être int ou float ; reçu : {type}',
     'palette_index.metric' => 'PaletteIndex exige une métrique préservant les distances (Euclidean ou Cie76) ; {metric} n\'a pas de base PCA fixe - utilisez plutôt NearestColor::closest()',
     'stream.invalid_resource' => 'le flux {label} doit être une ressource valide',
+    'palette.describe' => 'Votre terminal prend en charge {label} ({description}).',
+    'probe.color_description_truecolor' => 'TrueColor 24 bits (16,7 millions de couleurs)',
+    'probe.color_description_ansi256' => 'ANSI 256 couleurs',
+    'probe.color_description_ansi16' => 'ANSI 16 couleurs',
+    'probe.color_description_no_color' => 'Aucune prise en charge des couleurs',
+    'probe.color_description_basic_ascii' => 'ASCII de base',
 ];

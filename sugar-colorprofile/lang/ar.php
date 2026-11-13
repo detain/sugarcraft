@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'يجب أن تكون قنوات مجموعة withError() من النوع int أو float; المستلم: {type}',
     'palette_index.metric' => 'يطلب PaletteIndex مقياسًا يحافظ على المسافة (Euclidean أو Cie76); لا يحتوي {metric} على أساس PCA ثابت - استخدم NearestColor::closest() بدلاً من ذلك',
     'stream.invalid_resource' => 'يجب أن تكون سلسلة {label} موردًا صالحًا',
+    'palette.describe' => 'تدعم طرفيتك {label} ({description}).',
+    'probe.color_description_truecolor' => 'TrueColor بجودة 24-bit (16.7 مليون لون)',
+    'probe.color_description_ansi256' => 'ANSI بـ 256 لون',
+    'probe.color_description_ansi16' => 'ANSI بـ 16 لونًا',
+    'probe.color_description_no_color' => 'لا دعم للألوان',
+    'probe.color_description_basic_ascii' => 'ASCII أساسي',
 ];

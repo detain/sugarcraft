@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'kanály akumulátoru withError() musí být int nebo float; obdržen typ {type}',
     'palette_index.metric' => 'PaletteIndex vyžaduje metriku zachovávající vzdálenost (Euclidean nebo Cie76); {metric} nemá pevnou PCA bázi - místo toho použijte NearestColor::closest()',
     'stream.invalid_resource' => 'Proud {label} musí být platný zdroj',
+    'palette.describe' => 'Váš terminál podporuje {label} ({description}).',
+    'probe.color_description_truecolor' => '24bitový TrueColor (16,7 milionu barev)',
+    'probe.color_description_ansi256' => 'ANSI 256 barev',
+    'probe.color_description_ansi16' => 'ANSI 16 barev',
+    'probe.color_description_no_color' => 'Žádná podpora barev',
+    'probe.color_description_basic_ascii' => 'Základní ASCII',
 ];

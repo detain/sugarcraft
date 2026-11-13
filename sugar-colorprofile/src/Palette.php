@@ -184,6 +184,13 @@ final class Palette
 
     /**
      * Comment on the detected profile in a human-readable way.
+     *
+     * CALIBER EXEMPTION (2026-11-13, CP-25): these whimsical one-liners stay
+     * untranslated — they are the upstream's own joke-voice ("1990s fancy",
+     * "paper & ink", "naughty!"), a personality artifact kept for mirror
+     * fidelity, not prose a translator can localize without deleting the
+     * joke. The real capability sentence is the translated
+     * {@see self::describe()}.
      */
     public function comment(): string
     {
@@ -201,10 +208,17 @@ final class Palette
 
     /**
      * Full descriptive sentence about the terminal's color capabilities.
+     *
+     * Translated (CP-25): the sentence frame is user-facing prose; the
+     * {label}/{description} payloads it interpolates are the display
+     * identifiers below, which stay English by design.
      */
     public function describe(): string
     {
-        return "Your terminal supports {$this->profile->label()} ({$this->profile->description()}).";
+        return Lang::t('palette.describe', [
+            'label'       => $this->profile->label(),
+            'description' => $this->profile->description(),
+        ]);
     }
 
     // -------------------------------------------------------------------------

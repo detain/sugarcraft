@@ -105,6 +105,10 @@ enum ColorProfile: string
 
     /**
      * Human-readable label for display.
+     *
+     * CALIBER EXEMPTION (2026-11-13, CP-25): English display identifiers, not
+     * prose — they name the rungs the same way palette slots do and are fed
+     * into the translated {@see Palette::describe()} sentence.
      */
     public function label(): string
     {
@@ -122,6 +126,10 @@ enum ColorProfile: string
 
     /**
      * Short description for display.
+     *
+     * CALIBER EXEMPTION (2026-11-13, CP-25): English display identifiers, not
+     * prose — same door as {@see self::label()}; the translated sentence
+     * frame lives in {@see Palette::describe()}.
      */
     public function description(): string
     {

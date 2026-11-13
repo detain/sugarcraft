@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'withError() 누적기 채널은 int 또는 float여야 합니다. 받은 유형: {type}',
     'palette_index.metric' => 'PaletteIndex는 거리를 보존하는 측정법(Euclidean 또는 Cie76)이 필요합니다. {metric}에는 고정된 PCA 기저가 없습니다 - 대신 NearestColor::closest()를 사용하세요',
     'stream.invalid_resource' => '{label} 스트림은 유효한 리소스여야 합니다',
+    'palette.describe' => '터미널이 {label}({description})을(를) 지원합니다.',
+    'probe.color_description_truecolor' => '24비트 TrueColor(1,670만 색)',
+    'probe.color_description_ansi256' => '256색 ANSI',
+    'probe.color_description_ansi16' => '16색 ANSI',
+    'probe.color_description_no_color' => '색상 지원 없음',
+    'probe.color_description_basic_ascii' => '기본 ASCII',
 ];

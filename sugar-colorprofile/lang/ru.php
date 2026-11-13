@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'каналы накопителя withError() должны быть int или float; получено {type}',
     'palette_index.metric' => 'PaletteIndex требует метрику, сохраняющую расстояния (Euclidean или Cie76); у {metric} нет фиксированного базиса PCA - используйте вместо этого NearestColor::closest()',
     'stream.invalid_resource' => 'поток {label} должен быть допустимым ресурсом',
+    'palette.describe' => 'Ваш терминал поддерживает {label} ({description}).',
+    'probe.color_description_truecolor' => '24-битный TrueColor (16,7 млн цветов)',
+    'probe.color_description_ansi256' => 'ANSI 256 цветов',
+    'probe.color_description_ansi16' => 'ANSI 16 цветов',
+    'probe.color_description_no_color' => 'Нет поддержки цвета',
+    'probe.color_description_basic_ascii' => 'Базовый ASCII',
 ];

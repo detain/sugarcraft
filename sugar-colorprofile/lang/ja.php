@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'withError() のアキュムレータチャネルは int または float である必要があります。受け取った型: {type}',
     'palette_index.metric' => 'PaletteIndex は距離を保つ計量 (Euclidean または Cie76) を必要とします。{metric} には固定の PCA 基底がありません - 代わりに NearestColor::closest() を使用してください',
     'stream.invalid_resource' => '{label} ストリームは有効なリソースでなければなりません',
+    'palette.describe' => 'お使いのターミナルは {label}（{description}）に対応しています。',
+    'probe.color_description_truecolor' => '24ビットTrueColor（1670万色）',
+    'probe.color_description_ansi256' => '256色ANSI',
+    'probe.color_description_ansi16' => '16色ANSI',
+    'probe.color_description_no_color' => '色非対応',
+    'probe.color_description_basic_ascii' => '基本ASCII',
 ];

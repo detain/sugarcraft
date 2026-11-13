@@ -189,21 +189,24 @@ final readonly class ProbeReport
 
     /**
      * Return a human-readable description of the highest color capability.
+     *
+     * Translated (CP-25) — one key per rung; the values keep the capability
+     * nouns (TrueColor/ANSI/ASCII) recognizable across locales.
      */
     public function colorDescription(): string
     {
         if ($this->has(Capability::TrueColor)) {
-            return '24-bit TrueColor (16.7 million colors)';
+            return Lang::t('probe.color_description_truecolor');
         }
         if ($this->has(Capability::Color256)) {
-            return '256-color ANSI';
+            return Lang::t('probe.color_description_ansi256');
         }
         if ($this->has(Capability::Color16)) {
-            return '16-color ANSI';
+            return Lang::t('probe.color_description_ansi16');
         }
         if ($this->has(Capability::NoColor)) {
-            return 'No color support';
+            return Lang::t('probe.color_description_no_color');
         }
-        return 'Basic ASCII';
+        return Lang::t('probe.color_description_basic_ascii');
     }
 }

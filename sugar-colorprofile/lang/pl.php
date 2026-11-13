@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'kanały akumulatora withError() muszą być typu int lub float; otrzymano {type}',
     'palette_index.metric' => 'PaletteIndex wymaga metryki zachowującej odległości (Euclidean lub Cie76); {metric} nie ma stałej bazy PCA - użyj zamiast tego NearestColor::closest()',
     'stream.invalid_resource' => 'strumień {label} musi być prawidłowym zasobem',
+    'palette.describe' => 'Twój terminal obsługuje {label} ({description}).',
+    'probe.color_description_truecolor' => 'TrueColor 24-bitowy (16,7 mln kolorów)',
+    'probe.color_description_ansi256' => 'ANSI 256-kolorowy',
+    'probe.color_description_ansi16' => 'ANSI 16-kolorowy',
+    'probe.color_description_no_color' => 'Brak obsługi kolorów',
+    'probe.color_description_basic_ascii' => 'Podstawowy ASCII',
 ];

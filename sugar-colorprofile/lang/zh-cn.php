@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'withError() 累加器通道必须是 int 或 float；收到 {type}',
     'palette_index.metric' => 'PaletteIndex 需要保持距离的度量 (Euclidean 或 Cie76)；{metric} 没有固定的 PCA 基 - 请改用 NearestColor::closest()',
     'stream.invalid_resource' => '{label} 流必须是有效资源',
+    'palette.describe' => '您的终端支持 {label}（{description}）。',
+    'probe.color_description_truecolor' => '24 位 TrueColor（1670 万色）',
+    'probe.color_description_ansi256' => '256 色 ANSI',
+    'probe.color_description_ansi16' => '16 色 ANSI',
+    'probe.color_description_no_color' => '不支持颜色',
+    'probe.color_description_basic_ascii' => '基本 ASCII',
 ];

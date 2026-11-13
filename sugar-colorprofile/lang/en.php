@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'withError() accumulator channels must be int or float; got {type}',
     'palette_index.metric' => 'PaletteIndex requires a distance-preserving metric (Euclidean or Cie76); {metric} has no fixed PCA basis - use NearestColor::closest() instead',
     'stream.invalid_resource' => 'the {label} stream must be a valid resource',
+    'palette.describe' => 'Your terminal supports {label} ({description}).',
+    'probe.color_description_truecolor' => '24-bit TrueColor (16.7 million colors)',
+    'probe.color_description_ansi256' => '256-color ANSI',
+    'probe.color_description_ansi16' => '16-color ANSI',
+    'probe.color_description_no_color' => 'No color support',
+    'probe.color_description_basic_ascii' => 'Basic ASCII',
 ];

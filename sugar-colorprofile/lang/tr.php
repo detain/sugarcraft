@@ -24,4 +24,10 @@ return [
     'nearest.error_channel' => 'withError() toplayıcı kanalları int veya float olmalıdır; alınan: {type}',
     'palette_index.metric' => 'PaletteIndex mesafe koruyan bir ölçüt gerektirir (Euclidean veya Cie76); {metric} sabit bir PCA tabanına sahip değil - bunun yerine NearestColor::closest() kullanın',
     'stream.invalid_resource' => '{label} akışı geçerli bir kaynak olmalıdır',
+    'palette.describe' => 'Terminaliniz {label} ({description}) destekliyor.',
+    'probe.color_description_truecolor' => '24-bit TrueColor (16,7 milyon renk)',
+    'probe.color_description_ansi256' => '256 renkli ANSI',
+    'probe.color_description_ansi16' => '16 renkli ANSI',
+    'probe.color_description_no_color' => 'Renk desteği yok',
+    'probe.color_description_basic_ascii' => 'Temel ASCII',
 ];
