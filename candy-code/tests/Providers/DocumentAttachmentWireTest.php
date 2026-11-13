@@ -89,11 +89,11 @@ final class DocumentAttachmentWireTest extends TestCase
     public function testBedrockClaimsDocumentsForTheVisionFamiliesOnly(): void
     {
         $this->assertTrue(
-            BedrockProvider::create('us-east-1', 'anthropic.claude-sonnet-4-5')->supportsDocuments(),
+            BedrockProvider::new('us-east-1', 'anthropic.claude-sonnet-4-5')->supportsDocuments(),
             'C-TOOL-2.e: the same Claude families that read images read document blocks',
         );
         $this->assertFalse(
-            BedrockProvider::create('us-east-1', 'meta.llama3-70b-instruct')->supportsDocuments(),
+            BedrockProvider::new('us-east-1', 'meta.llama3-70b-instruct')->supportsDocuments(),
             'a text-only family would answer the block with a ValidationException',
         );
     }

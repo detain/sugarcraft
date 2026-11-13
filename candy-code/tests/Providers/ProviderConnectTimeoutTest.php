@@ -165,7 +165,7 @@ final class ProviderConnectTimeoutTest extends TestCase
      */
     public function testBedrockPassesTheConnectTimeoutIntoTheAwsSdksHttpOptions(): void
     {
-        $awsClient = self::readProperty(BedrockProvider::create(), 'client');
+        $awsClient = self::readProperty(BedrockProvider::new(), 'client');
 
         $property = new \ReflectionProperty(\Aws\AwsClient::class, 'defaultRequestOptions');
         $property->setAccessible(true);

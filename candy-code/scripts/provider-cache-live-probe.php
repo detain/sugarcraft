@@ -481,7 +481,7 @@ function checkCacheMarks(ProviderInterface $provider, string $model): array
 
 function bedrockProvider(array $options, bool $promptCache): BedrockProvider
 {
-    return BedrockProvider::create(
+    return BedrockProvider::new(
         region: $options['region'] ?? 'us-east-1',
         model: $options['model'] ?? null,
         promptCache: $promptCache,
@@ -503,7 +503,7 @@ function checkBedrockCacheMarks(array $options): array
 
 function vertexProvider(array $options, string $model, bool $promptCache, ?int $thinkingBudget = null): VertexProvider
 {
-    return VertexProvider::create(
+    return VertexProvider::new(
         projectId: (string) gcpProject($options),
         location: $options['location'] ?? 'us-central1',
         model: $model,

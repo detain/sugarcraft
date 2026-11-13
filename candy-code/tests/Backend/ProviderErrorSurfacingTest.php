@@ -110,7 +110,7 @@ final class ProviderErrorSurfacingTest extends TestCase
      */
     public function testAVertexStreamedErrorEventSurfacesItsMessage(): void
     {
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: 'claude-3-sonnet@20240229',

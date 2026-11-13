@@ -162,6 +162,6 @@ final class DiscordBundleWeldTest extends TestCase
     {
         $configDir = $this->tempDir . '/cfg';
         mkdir($configDir, 0700, true);
-        return ChannelsStore::create(static fn (): string => $configDir);
+        return ChannelsStore::new(static fn (): string => $configDir);
     }
 }

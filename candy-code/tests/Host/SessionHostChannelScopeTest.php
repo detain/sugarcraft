@@ -190,7 +190,7 @@ final class SessionHostChannelScopeTest extends TestCase
 
     public function testATightenedPolicyBindsOnTheNextAdmissionThroughTheRealStore(): void
     {
-        // The production path itself: a real ChannelsStore::create() over the
+        // The production path itself: a real ChannelsStore::new() over the
         // configDir file, its record closure consulted at every admission. An
         // operator edit to channels.json must land on the next dispatch without
         // a restart — the exact security property the store's class docblock
@@ -225,7 +225,7 @@ final class SessionHostChannelScopeTest extends TestCase
     private function service(array $trusted): ChannelToolPolicyService
     {
         return ChannelToolPolicyService::forStore(
-            ChannelsStore::create(fn (): string => $this->chanDir),
+            ChannelsStore::new(fn (): string => $this->chanDir),
             $trusted,
         );
     }

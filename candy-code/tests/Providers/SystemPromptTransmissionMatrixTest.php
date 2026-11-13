@@ -1521,7 +1521,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     {
         $captured = ['called' => false];
 
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: 'claude-3-sonnet@20240229',
@@ -1575,7 +1575,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     {
         $captured = ['called' => false];
 
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: 'claude-3-sonnet@20240229',

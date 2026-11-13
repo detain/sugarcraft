@@ -58,7 +58,7 @@ final class ProviderDefaultPriceTableTest extends TestCase
     public function testTheFactoryAndProviderAgreeOnTheVertexDefault(): void
     {
         $configDefault = $this->factory->defaultConfig('vertex')['model'];
-        $providerDefault = VertexProvider::create(projectId: 'proj-price-table')->model();
+        $providerDefault = VertexProvider::new(projectId: 'proj-price-table')->model();
 
         $this->assertIsString($configDefault);
         $this->assertSame((string) $configDefault, $providerDefault);
@@ -72,14 +72,14 @@ final class ProviderDefaultPriceTableTest extends TestCase
 
     public function testTheVertexDefaultIsNotTheRetiredClaude3Sonnet(): void
     {
-        $model = VertexProvider::create(projectId: 'proj-price-table')->model();
+        $model = VertexProvider::new(projectId: 'proj-price-table')->model();
 
         $this->assertStringNotContainsString('claude-3-sonnet', $model);
     }
 
     public function testTheVertexDefaultResolvesInItsPriceTable(): void
     {
-        $provider = VertexProvider::create(projectId: 'proj-price-table');
+        $provider = VertexProvider::new(projectId: 'proj-price-table');
 
         $this->assertNotNull($provider->costPer1kTokens($provider->model(), 'input'));
         $this->assertNotNull($provider->costPer1kTokens($provider->model(), 'output'));

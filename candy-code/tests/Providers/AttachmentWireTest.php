@@ -226,12 +226,12 @@ final class AttachmentWireTest extends TestCase
             $factory->create(['type' => 'sglang', 'baseUrl' => 'https://x', 'model' => 'm', 'discoverServerInfo' => false, 'supportsVision' => true])->supportsDocuments(),
         );
 
-        $claude = VertexProvider::create(
+        $claude = VertexProvider::new(
             projectId: 'p',
             model: 'claude-3-sonnet@20240229',
             predictor: static fn (string $e, string $m, array $b): array => ['content' => [['type' => 'text', 'text' => 'ok']]],
         );
-        $gemini = VertexProvider::create(
+        $gemini = VertexProvider::new(
             projectId: 'p',
             model: 'gemini-1.5-pro-002',
             predictor: static fn (string $e, string $m, array $b): array => ['candidates' => [['content' => ['parts' => [['text' => 'ok']]]]]],
@@ -243,7 +243,7 @@ final class AttachmentWireTest extends TestCase
     public function testVertexClaudeCarriesTheDocumentBlockOnTheWire(): void
     {
         $captured = [];
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'p',
             model: 'claude-3-sonnet@20240229',
             predictor: function (string $endpoint, string $method, array $body) use (&$captured): array {
@@ -308,7 +308,7 @@ final class AttachmentWireTest extends TestCase
     public function testVertexClaudeSendsAnImageBlock(): void
     {
         $captured = [];
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'p',
             model: 'claude-3-sonnet@20240229',
             predictor: function (string $endpoint, string $method, array $body) use (&$captured): array {
@@ -330,7 +330,7 @@ final class AttachmentWireTest extends TestCase
     public function testVertexGeminiSendsInlineData(): void
     {
         $captured = [];
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'p',
             model: 'gemini-1.5-pro-002',
             predictor: function (string $endpoint, string $method, array $body) use (&$captured): array {

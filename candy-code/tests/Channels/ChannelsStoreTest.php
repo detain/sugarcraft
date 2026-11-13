@@ -203,7 +203,7 @@ final class ChannelsStoreTest extends TestCase
 
     private function ledger(): ChannelsStore
     {
-        return ChannelsStore::create(fn (): string => $this->configDir);
+        return ChannelsStore::new(fn (): string => $this->configDir);
     }
 
     private function seedRawLedger(string $bytes): void

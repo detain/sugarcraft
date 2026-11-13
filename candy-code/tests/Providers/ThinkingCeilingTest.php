@@ -426,7 +426,7 @@ final class ThinkingCeilingTest extends TestCase
     private function capturedVertexBody(string $model, ?int $budget, CompleteRequest $request): array
     {
         $seen = null;
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'p',
             model: $model,
             predictor: static function (string $endpoint, string $method, array $body) use (&$seen): array {

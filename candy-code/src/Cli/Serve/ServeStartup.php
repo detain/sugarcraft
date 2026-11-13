@@ -377,11 +377,11 @@ trait ServeStartup
                 self::reportChannelBuckets($channelRegistry->boot(
                     Bootstrap::bundles($config->root),
                     Bootstrap::trustedBundleChannelNames(),
-                    ChannelsStore::create(),
+                    ChannelsStore::new(),
                     $config->root,
                     $loop,
                     $log,
-                    ChannelInboundLog::create(),
+                    ChannelInboundLog::new(),
                 ));
             } catch (\Throwable $e) {
                 // A broken channel never takes the serve down with it.

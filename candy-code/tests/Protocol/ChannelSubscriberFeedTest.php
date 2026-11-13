@@ -120,7 +120,7 @@ final class ChannelSubscriberFeedTest extends TestCase
     {
         [$bundle, $bundleName, $entryPath] = $this->channelBundle($sink, $blows);
         $registry ??= ChannelRegistry::new();
-        $store = ChannelsStore::create(fn (): string => $this->configDir);
+        $store = ChannelsStore::new(fn (): string => $this->configDir);
         $store->recordEntrypoint($entryPath);
         $registry->boot([$bundle], [$bundleName], $store, $this->project, Loop::get(), static function (string $line): void {});
 

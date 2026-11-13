@@ -69,7 +69,7 @@ final class VertexProviderTest extends TestCase
     ): VertexProvider {
         $captured = ['called' => false];
 
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,
@@ -100,7 +100,7 @@ final class VertexProviderTest extends TestCase
     ): VertexProvider {
         $captured = ['called' => false];
 
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,
@@ -125,7 +125,7 @@ final class VertexProviderTest extends TestCase
     public function testCreateFactoryWithDefaults(): void
     {
         $captured = null;
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'proj-default',
             predictor: function (string $endpoint) use (&$captured): array {
                 $captured = $endpoint;
@@ -144,7 +144,7 @@ final class VertexProviderTest extends TestCase
 
     public function testCreateFactoryWithCustomLocation(): void
     {
-        $provider = VertexProvider::create(projectId: 'proj-1', location: 'europe-west4');
+        $provider = VertexProvider::new(projectId: 'proj-1', location: 'europe-west4');
 
         $this->assertStringContainsString('/locations/europe-west4/', $provider->endpointFor('claude-3-opus@20240229'));
     }
@@ -153,7 +153,7 @@ final class VertexProviderTest extends TestCase
     {
         // The default seams are lazy: building a provider with no injected
         // closures must not construct a credential-bound SDK client.
-        $provider = VertexProvider::create(projectId: 'proj-lazy');
+        $provider = VertexProvider::new(projectId: 'proj-lazy');
 
         $this->assertSame('vertex', $provider->name());
         // ISS-025: the default must be a current model, and it must resolve
@@ -256,7 +256,7 @@ final class VertexProviderTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Vertex model id is empty');
 
-        VertexProvider::create(projectId: 'p', model: '')->endpointFor('');
+        VertexProvider::new(projectId: 'p', model: '')->endpointFor('');
     }
 
     public function testCompleteSurfacesAnUnusableModelIdAsAnErrorResponse(): void
@@ -809,7 +809,7 @@ final class VertexProviderTest extends TestCase
 
     public function testCompleteReturnsErrorResponseOnException(): void
     {
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'my-project',
             predictor: function (): array {
                 throw new \RuntimeException('prediction boom');
@@ -1762,7 +1762,7 @@ final class VertexProviderTest extends TestCase
 
     public function testCompleteStreamReturnsAnErrorChunkWhenTheGeminiStreamerThrows(): void
     {
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'my-project',
             model: self::GEMINI_MODEL,
             predictor: fn (): array => [],
@@ -2077,7 +2077,7 @@ final class VertexProviderTest extends TestCase
 
     public function testCompleteStreamReturnsErrorChunkOnException(): void
     {
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'my-project',
             streamer: function (): \Generator {
                 yield from [];

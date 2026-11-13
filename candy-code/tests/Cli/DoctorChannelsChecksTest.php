@@ -286,7 +286,7 @@ final class DoctorChannelsChecksTest extends TestCase
 
     private function store(): ChannelsStore
     {
-        return ChannelsStore::create($this->dirSeam());
+        return ChannelsStore::new($this->dirSeam());
     }
 
     /** @param array<string,mixed> $record */

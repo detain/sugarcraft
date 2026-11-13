@@ -40,7 +40,7 @@ final class ChannelInboundLogTest extends TestCase
 
     private function inboxLedger(): ChannelInboundLog
     {
-        return ChannelInboundLog::create(
+        return ChannelInboundLog::new(
             fn (): string => $this->inboxConfig,
             function (): int {
                 return $this->now;
@@ -571,6 +571,6 @@ final class ChannelInboundLogTest extends TestCase
     public function testMissingConfigDirectoryRefusesToConstruct(): void
     {
         $this->expectException(\RuntimeException::class);
-        ChannelInboundLog::create(static fn (): string => '');
+        ChannelInboundLog::new(static fn (): string => '');
     }
 }

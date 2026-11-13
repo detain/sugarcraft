@@ -325,7 +325,7 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
      * @param bool $promptCache see {@see __construct()}
      * @param int|null $contextWindowOverride see {@see __construct()}
      */
-    public static function create(
+    public static function new(
         string $projectId,
         string $location = 'us-central1',
         string $model = 'claude-sonnet-4-6',

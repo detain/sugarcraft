@@ -78,7 +78,7 @@ final class ToolResultDocumentBlocksTest extends TestCase
     {
         $captured = ['body' => []];
 
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: self::VERTEX_MODEL,

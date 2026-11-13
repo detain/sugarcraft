@@ -61,7 +61,7 @@ final class StreamPrematureEndTest extends TestCase
     /** @param list<array<string, mixed>> $events */
     private static function vertex(string $model, array $events): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,

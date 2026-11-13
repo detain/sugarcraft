@@ -245,7 +245,7 @@ final class ChannelInboundReplayTest extends TestCase
     /** Every call builds a reader over the SAME shared config dir — a fresh instance is a reboot. */
     private function inboxLedger(): ChannelInboundLog
     {
-        return ChannelInboundLog::create(
+        return ChannelInboundLog::new(
             fn (): string => $this->inboxCfg,
             function (): int {
                 return 1700000000;
@@ -258,7 +258,7 @@ final class ChannelInboundReplayTest extends TestCase
     {
         $config = $this->inboxScratch . '/seen-' . (++$this->inboxSerial);
         \mkdir($config, 0700, true);
-        $store = ChannelsStore::create(fn (): string => $config);
+        $store = ChannelsStore::new(fn (): string => $config);
         foreach ($bundles as $bundle) {
             foreach ($bundle->entrypoints()['channel'] ?? [] as $entry) {
                 $store->recordEntrypoint($entry['path']);

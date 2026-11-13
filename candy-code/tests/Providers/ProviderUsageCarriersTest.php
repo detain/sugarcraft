@@ -408,7 +408,7 @@ final class ProviderUsageCarriersTest extends TestCase
     /** @param array<string, mixed> $response */
     private function vertexUnaryWith(array $response, string $model): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,
@@ -419,7 +419,7 @@ final class ProviderUsageCarriersTest extends TestCase
     /** @param array<int, array<string, mixed>> $events */
     private function vertexStreamWith(array $events, string $model): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,

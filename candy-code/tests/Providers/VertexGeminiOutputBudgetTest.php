@@ -71,7 +71,7 @@ final class VertexGeminiOutputBudgetTest extends TestCase
     public function testTheStreamingGeminiBodyCarriesTheBudgetAndNoDefaultCeiling(): void
     {
         $captured = null;
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'p',
             model: self::GEMINI_25_PRO,
             predictor: fn (): array => [],
@@ -141,7 +141,7 @@ final class VertexGeminiOutputBudgetTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('thinkingBudget');
 
-        VertexProvider::create(projectId: 'p', model: self::GEMINI_25_PRO, predictor: fn (): array => [], thinkingBudget: -2);
+        VertexProvider::new(projectId: 'p', model: self::GEMINI_25_PRO, predictor: fn (): array => [], thinkingBudget: -2);
     }
 
     /**
@@ -150,7 +150,7 @@ final class VertexGeminiOutputBudgetTest extends TestCase
     private function sentBody(string $model, ?int $thinkingBudget, CompleteRequest $request): array
     {
         $captured = null;
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'p',
             model: $model,
             predictor: function (string $endpoint, string $method, array $body) use (&$captured): array {

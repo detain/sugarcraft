@@ -214,7 +214,7 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
     /**
      * @param array<string, mixed> $config
      */
-    public static function create(array $config): self
+    public static function new(array $config): self
     {
         return new self(
             $config['apiKey'],

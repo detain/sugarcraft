@@ -144,7 +144,7 @@ final class ChannelInboundLog
         $this->load();
     }
 
-    public static function create(?callable $configDir = null, ?\Closure $clock = null): self
+    public static function new(?callable $configDir = null, ?\Closure $clock = null): self
     {
         return new self($configDir, $clock);
     }

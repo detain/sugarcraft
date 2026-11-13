@@ -31,7 +31,7 @@ final class VertexPricingTest extends TestCase
         array $predicted = [],
         array $events = [],
     ): VertexProvider {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,

@@ -23,7 +23,7 @@ final class VertexThoughtTokensTest extends TestCase
     /** @param list<array<string, mixed>> $events */
     private function provider(string $model = 'gemini-2.5-pro', array $predicted = [], array $events = []): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,

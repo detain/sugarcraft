@@ -606,7 +606,7 @@ final class ProviderFactoryTest extends TestCase
 
     public function testCreateVertexCreatesVertexProvider(): void
     {
-        // VertexProvider::create() no longer constructs the Google SDK client at
+        // VertexProvider::new() no longer constructs the Google SDK client at
         // build time (the network call lives behind a lazy predictor seam), so
         // this runs without the AIPlatform library or credentials.
         $provider = $this->factory->create([

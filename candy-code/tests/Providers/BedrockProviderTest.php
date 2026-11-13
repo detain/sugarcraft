@@ -29,7 +29,7 @@ final class BedrockProviderTest extends TestCase
 
     public function testCreateFactoryWithDefaults(): void
     {
-        $provider = BedrockProvider::create();
+        $provider = BedrockProvider::new();
 
         $this->assertInstanceOf(BedrockProvider::class, $provider);
         $this->assertSame('bedrock', $provider->name());
@@ -37,14 +37,14 @@ final class BedrockProviderTest extends TestCase
 
     public function testCreateFactoryWithCustomRegion(): void
     {
-        $provider = BedrockProvider::create('eu-west-1');
+        $provider = BedrockProvider::new('eu-west-1');
 
         $this->assertInstanceOf(BedrockProvider::class, $provider);
     }
 
     public function testCreateFactoryWithCustomModel(): void
     {
-        $provider = BedrockProvider::create('us-east-1', 'meta.llama3-70b-instruct');
+        $provider = BedrockProvider::new('us-east-1', 'meta.llama3-70b-instruct');
 
         $this->assertInstanceOf(BedrockProvider::class, $provider);
         $this->assertSame(8_192, $provider->contextWindow());
@@ -776,7 +776,7 @@ final class BedrockProviderTest extends TestCase
 
     public function testCreateUsesTheGivenRegionForBothTheClientAndTheProvider(): void
     {
-        $provider = BedrockProvider::create('eu-west-1');
+        $provider = BedrockProvider::new('eu-west-1');
 
         $this->assertSame('eu-west-1', $provider->region());
         $this->assertSame('eu-west-1', (string) self::readClient($provider)->getRegion());
@@ -788,7 +788,7 @@ final class BedrockProviderTest extends TestCase
         putenv('AWS_REGION=ap-southeast-2');
 
         try {
-            $provider = BedrockProvider::create('');
+            $provider = BedrockProvider::new('');
 
             $this->assertSame('ap-southeast-2', $provider->region());
             $this->assertSame('ap-southeast-2', (string) self::readClient($provider)->getRegion());
@@ -799,7 +799,7 @@ final class BedrockProviderTest extends TestCase
 
     public function testCreateBuildsARuntimeClientNotAControlPlaneClient(): void
     {
-        $this->assertInstanceOf(BedrockRuntimeClient::class, self::readClient(BedrockProvider::create()));
+        $this->assertInstanceOf(BedrockRuntimeClient::class, self::readClient(BedrockProvider::new()));
     }
 
     // -------------------------------------------------------------------------

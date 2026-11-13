@@ -1924,7 +1924,7 @@ final readonly class ProviderFactory
         // default is applied here once and passed down.
         $model = $config['model'] ?? BedrockProvider::DEFAULT_MODEL;
 
-        return BedrockProvider::create(
+        return BedrockProvider::new(
             region: $config['region'],
             model: $model,
             modelPrices: self::modelPricesFor($config),
@@ -1990,7 +1990,7 @@ final readonly class ProviderFactory
     {
         $model = $config['model'] ?? 'claude-sonnet-4-6';
 
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: $config['projectId'],
             location: $config['location'] ?? 'us-central1',
             model: $model,

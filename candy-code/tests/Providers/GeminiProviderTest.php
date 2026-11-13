@@ -59,7 +59,7 @@ final class GeminiProviderTest extends TestCase
 
     public function testCreateAcceptsTheMinimalConfigAndAppliesDefaults(): void
     {
-        $provider = GeminiProvider::create(['apiKey' => 'gsk-min']);
+        $provider = GeminiProvider::new(['apiKey' => 'gsk-min']);
 
         $this->assertSame('gemini', $provider->name());
         $this->assertStringStartsWith('https://generativelanguage.googleapis.com/v1beta/', $provider->generateEndpoint('gemini-2.5-pro'));
@@ -558,7 +558,7 @@ final class GeminiProviderTest extends TestCase
             'the native arm must show Google\'s sentence, not Guzzle\'s transport prose',
         );
 
-        $vertex = VertexProvider::create(
+        $vertex = VertexProvider::new(
             projectId: 'p',
             location: 'l',
             model: 'gemini-1.5-pro-002',

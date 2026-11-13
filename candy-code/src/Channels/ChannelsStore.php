@@ -92,9 +92,15 @@ final class ChannelsStore
         }
     }
 
-    public static function create(?callable $configDir = null): self
+    public static function new(?callable $configDir = null): self
     {
         return new self($configDir);
+    }
+
+    /** @deprecated use {@see new()}; kept so out-of-tree callers keep working. */
+    public static function create(?callable $configDir = null): self
+    {
+        return self::new($configDir);
     }
 
     /** Has an earlier launch already seen this entrypoint file? */

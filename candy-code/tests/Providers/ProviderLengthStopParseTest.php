@@ -233,7 +233,7 @@ final class ProviderLengthStopParseTest extends TestCase
 
     public function testTheVertexGeminiStreamParksAVerdictFromATextlessClosingCandidate(): void
     {
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: 'gemini-1.5-pro-002',
@@ -473,7 +473,7 @@ final class ProviderLengthStopParseTest extends TestCase
 
     private function vertexPredictor(array $return): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: 'claude-3-sonnet@20240229',
@@ -484,7 +484,7 @@ final class ProviderLengthStopParseTest extends TestCase
     /** @param list<array<string, mixed>> $events @return list<CompleteResponse> */
     private function vertexAnthropicStream(array $events): array
     {
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: 'claude-3-sonnet@20240229',

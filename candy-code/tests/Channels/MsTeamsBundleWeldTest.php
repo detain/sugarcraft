@@ -351,7 +351,7 @@ final class MsTeamsBundleWeldTest extends TestCase
     {
         $configDir = $this->tempDir . '/cfg';
         mkdir($configDir, 0700, true);
-        return ChannelsStore::create(static fn (): string => $configDir);
+        return ChannelsStore::new(static fn (): string => $configDir);
     }
 
     private static function runFor(LoopInterface $loop, int $ms): void

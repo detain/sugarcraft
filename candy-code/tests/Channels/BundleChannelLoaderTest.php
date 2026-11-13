@@ -275,7 +275,7 @@ final class BundleChannelLoaderTest extends TestCase
         [$bundle] = $this->singleEntryBundle('mode');
         $configDir = $this->tempDir . '/cfg-mode';
         mkdir($configDir, 0700, true);
-        $store = ChannelsStore::create(static fn (): string => $configDir);
+        $store = ChannelsStore::new(static fn (): string => $configDir);
         BundleChannelLoader::load([$bundle], [$this->trusted('mode')], $store);
         $file = $configDir . '/' . ChannelsStore::FILE_NAME;
         self::assertFileExists($file);
@@ -288,7 +288,7 @@ final class BundleChannelLoaderTest extends TestCase
         $configDir = $this->tempDir . '/cfg-garbage';
         mkdir($configDir, 0700, true);
         file_put_contents($configDir . '/' . ChannelsStore::FILE_NAME, '{not json at all');
-        $store = ChannelsStore::create(static fn (): string => $configDir);
+        $store = ChannelsStore::new(static fn (): string => $configDir);
         $buckets = BundleChannelLoader::load([$bundle], [$this->trusted('garbage')], $store);
         self::assertSame([], $buckets['loaded'], 'the corrupt record fails CLOSED — the quarantine treats every entrypoint as first-sighted and nothing loads');
         self::assertCount(1, $buckets['quarantined']);
@@ -382,6 +382,6 @@ final class BundleChannelLoaderTest extends TestCase
     {
         $configDir = $this->tempDir . '/cfg-' . (++$this->counter);
         mkdir($configDir, 0700, true);
-        return ChannelsStore::create(static fn (): string => $configDir);
+        return ChannelsStore::new(static fn (): string => $configDir);
     }
 }

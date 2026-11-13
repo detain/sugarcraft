@@ -510,7 +510,7 @@ final class ChannelRegistryTest extends TestCase
     {
         $configDir = $this->scratch . '/cfg-' . (++$this->serial);
         mkdir($configDir, 0700, true);
-        return ChannelsStore::create(static fn (): string => $configDir);
+        return ChannelsStore::new(static fn (): string => $configDir);
     }
 
     private function plainChannel(string $name): ChannelInterface

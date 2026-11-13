@@ -283,7 +283,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
      * @param bool $promptCache see {@see __construct()}
      * @param ?int $contextWindowOverride see {@see __construct()}
      */
-    public static function create(
+    public static function new(
         string $region = self::REGION_US,
         ?string $model = null,
         array $modelPrices = [],

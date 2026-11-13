@@ -1657,7 +1657,7 @@ JSON;
      */
     private function p4s2VertexWith(array $response, string $model): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,
@@ -1668,7 +1668,7 @@ JSON;
     /** @param array<int, array<string, mixed>> $events */
     private function p4s2VertexStreamerWith(array $events, string $model): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,

@@ -230,7 +230,7 @@ final class BedrockModelIdTest extends TestCase
 
     public function testCreateAcceptsModelPrices(): void
     {
-        $provider = BedrockProvider::create('us-east-1', 'amazon.nova-pro-v1:0', [
+        $provider = BedrockProvider::new('us-east-1', 'amazon.nova-pro-v1:0', [
             'amazon.nova-pro' => ['input' => 0.8, 'output' => 3.2],
         ]);
 
@@ -246,7 +246,7 @@ final class BedrockModelIdTest extends TestCase
         $this->assertNotNull($provider->costPer1kTokens($model, 'input'));
         $this->assertNotNull($provider->costPer1kTokens($model, 'output'));
         $this->assertGreaterThanOrEqual(200_000, $provider->contextWindow());
-        $this->assertSame($model, BedrockProvider::create()->model());
+        $this->assertSame($model, BedrockProvider::new()->model());
     }
 
     private function client(MockHandler $handler): BedrockRuntimeClient

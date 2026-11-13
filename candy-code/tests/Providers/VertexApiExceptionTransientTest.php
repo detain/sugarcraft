@@ -185,7 +185,7 @@ final class VertexApiExceptionTransientTest extends TestCase
 
     private function throwingProvider(string $model, \Throwable $error): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'my-project',
             location: 'us-central1',
             model: $model,

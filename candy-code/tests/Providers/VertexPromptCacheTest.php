@@ -344,7 +344,7 @@ final class VertexPromptCacheTest extends TestCase
     /** @param array<string, mixed> $modelPrices */
     private function provider(string $model = self::MODEL, array $modelPrices = [], bool $promptCache = true): VertexProvider
     {
-        return VertexProvider::create(
+        return VertexProvider::new(
             projectId: 'p',
             location: 'us-central1',
             model: $model,
@@ -408,7 +408,7 @@ final class VertexPromptCacheTest extends TestCase
      */
     private function stream(array $events): array
     {
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'p',
             location: 'us-central1',
             model: self::MODEL,

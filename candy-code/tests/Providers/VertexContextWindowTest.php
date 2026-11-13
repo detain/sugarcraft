@@ -60,14 +60,14 @@ final class VertexContextWindowTest extends TestCase
     #[DataProvider('modelIds')]
     public function testTheFamilyTableSizesTheWindow(string $model, int $expected): void
     {
-        $provider = VertexProvider::create(projectId: 'proj-ctx', model: $model);
+        $provider = VertexProvider::new(projectId: 'proj-ctx', model: $model);
 
         $this->assertSame($expected, $provider->contextWindow());
     }
 
     public function testTheOverrideOutranksTheTable(): void
     {
-        $provider = VertexProvider::create(
+        $provider = VertexProvider::new(
             projectId: 'proj-ctx',
             model: 'claude-sonnet-4-6',
             contextWindowOverride: 400_000,

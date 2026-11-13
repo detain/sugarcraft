@@ -109,7 +109,7 @@ final class DoctorChannelsChecks
             $paths = Bootstrap::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
             $bundles = (new BundleDiscovery($root ?? '', is_array($paths) ? $paths : []))->discover();
         }
-        $store ??= ChannelsStore::create();
+        $store ??= ChannelsStore::new();
 
         $byName = [];
         foreach ($bundles as $bundle) {
@@ -217,7 +217,7 @@ final class DoctorChannelsChecks
         ])];
     }
 
-    /** The trusted config dir, same seam shape as ChannelsStore::create(). */
+    /** The trusted config dir, same seam shape as ChannelsStore::new(). */
     private static function resolveDir(?callable $configDir): string
     {
         return trim((string) ($configDir === null ? Bootstrap::trustedConfigDirPath() : $configDir()));
