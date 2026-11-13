@@ -524,59 +524,59 @@ if ($opts['mode'] === 'published') {
     \fwrite(\STDOUT, "Updating from Packagist (siblings = published dev-master)...\n");
     $updateLibs($targets, $root, $failed);
 } else {
-$scratchSnapshot = $takeScratchSnapshot();
-try {
-    foreach ($targets as $lib) {
-        $purged = $purgeStaleSiblings($lib);
-        if ($purged !== []) {
-            \printf("  purged stale packagist copies in %-16s %s\n", $lib, \implode(',', $purged));
-        }
-    }
-
-    \fwrite(\STDOUT, "Injecting path-repo closure (scratch)...\n");
-    \exec('php ' . \escapeshellarg("{$root}/tools/check-path-repos.php") . ' --fix --strict-closure 2>&1', $o, $rc);
-    \fwrite(\STDOUT, '  ' . (\end($o) ?: '') . "\n");
-
-    // Supplement the require-dev gap --fix leaves behind.
-    $supplemented = [];
-    foreach ($targets as $lib) {
-        $m = $manifestOf($lib);
-        if ($m === null) {
-            continue;
-        }
-        $have = [];
-        foreach ($m['repositories'] ?? [] as $r) {
-            if (($r['type'] ?? '') === 'path' && isset($r['url'])) {
-                $have[\basename((string) $r['url'])] = true;
+    $scratchSnapshot = $takeScratchSnapshot();
+    try {
+        foreach ($targets as $lib) {
+            $purged = $purgeStaleSiblings($lib);
+            if ($purged !== []) {
+                \printf("  purged stale packagist copies in %-16s %s\n", $lib, \implode(',', $purged));
             }
         }
-        $missing = \array_values(\array_filter(
-            $closureOf($lib),
-            static fn (string $d): bool => !isset($have[$d]) && \is_dir("{$root}/{$d}")
-        ));
-        if ($missing === []) {
-            continue;
-        }
-        $m['repositories'] = $m['repositories'] ?? [];
-        foreach ($missing as $d) {
-            $m['repositories'][] = ['type' => 'path', 'url' => "../{$d}", 'options' => ['symlink' => true]];
-        }
-        \file_put_contents(
-            "{$root}/{$lib}/composer.json",
-            \json_encode($m, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . "\n"
-        );
-        $supplemented[$lib] = $missing;
-    }
-    foreach ($supplemented as $lib => $missing) {
-        \printf("  supplemented %-18s + %s  (require-dev gap)\n", $lib, \implode(',', $missing));
-    }
 
-    \fwrite(\STDOUT, "\nUpdating (third-party moves; siblings resolve to symlinks)...\n");
-    $updateLibs($targets, $root, $failed);
-} finally {
-    \fwrite(\STDOUT, "\nDiscarding scratch manifests...\n");
-    $restore();
-}
+        \fwrite(\STDOUT, "Injecting path-repo closure (scratch)...\n");
+        \exec('php ' . \escapeshellarg("{$root}/tools/check-path-repos.php") . ' --fix --strict-closure 2>&1', $o, $rc);
+        \fwrite(\STDOUT, '  ' . (\end($o) ?: '') . "\n");
+
+        // Supplement the require-dev gap --fix leaves behind.
+        $supplemented = [];
+        foreach ($targets as $lib) {
+            $m = $manifestOf($lib);
+            if ($m === null) {
+                continue;
+            }
+            $have = [];
+            foreach ($m['repositories'] ?? [] as $r) {
+                if (($r['type'] ?? '') === 'path' && isset($r['url'])) {
+                    $have[\basename((string) $r['url'])] = true;
+                }
+            }
+            $missing = \array_values(\array_filter(
+                $closureOf($lib),
+                static fn (string $d): bool => !isset($have[$d]) && \is_dir("{$root}/{$d}")
+            ));
+            if ($missing === []) {
+                continue;
+            }
+            $m['repositories'] = $m['repositories'] ?? [];
+            foreach ($missing as $d) {
+                $m['repositories'][] = ['type' => 'path', 'url' => "../{$d}", 'options' => ['symlink' => true]];
+            }
+            \file_put_contents(
+                "{$root}/{$lib}/composer.json",
+                \json_encode($m, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . "\n"
+            );
+            $supplemented[$lib] = $missing;
+        }
+        foreach ($supplemented as $lib => $missing) {
+            \printf("  supplemented %-18s + %s  (require-dev gap)\n", $lib, \implode(',', $missing));
+        }
+
+        \fwrite(\STDOUT, "\nUpdating (third-party moves; siblings resolve to symlinks)...\n");
+        $updateLibs($targets, $root, $failed);
+    } finally {
+        \fwrite(\STDOUT, "\nDiscarding scratch manifests...\n");
+        $restore();
+    }
 }
 
 if ($opts['root']) {
