@@ -91,7 +91,7 @@ deliberately ignores all flags (no `--version`/`--help`/refusal handling).
 | Key                  | Action                                                |
 |----------------------|-------------------------------------------------------|
 | `Space` / `Enter` / `↑` / `w` (either case) | Flap (the first flap also starts the run)  |
-| `r`                  | Restart — after a crash or mid-flight; lands on the ready card |
+| `r`                  | Restart — after a crash or mid-flight; a qualifying mid-flight score settles first, landing on the ready card |
 | `q` / `Esc` / `Ctrl+C` | Quit                                              |
 
 Other `Ctrl`-combinations do nothing; `Ctrl+C` is the only chord the game
@@ -104,8 +104,9 @@ chords and do nothing.
 
 The board opens on a **ready card**: the bird hovers and the world is frozen
 until your first flap, so launching never drops you into the floor. Quitting
-mid-flight with a qualifying score settles it onto the leaderboard before the
-process exits — you do not have to die to keep your best.
+or restarting (`q` or `r`) mid-flight with a qualifying score settles it onto
+the leaderboard before the board resets — you do not have to die to keep your
+best.
 
 ## Terminal requirements
 

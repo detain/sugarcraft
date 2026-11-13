@@ -433,6 +433,28 @@ final class Game implements Model
                 // m30: restart is a fresh board IN THE SAME viewport — the
                 // old trip through start() silently reset the frame to the
                 // default 62x21, so a resized terminal would snap back.
+                // flappy-04 (finding -004): a mid-flight restart with a
+                // qualifying score settles it like the settling quit does —
+                // "you do not have to die to keep your best" was only half
+                // true (crash and q persisted, r discarded a live record in
+                // silence). Same merge check as the q arm above; the fresh
+                // board carries the MERGED list and the persist rides a Cmd
+                // off the update path — but no quit, the game continues.
+                if ($this->crashed === false && $this->started === true && $this->score > 0) {
+                    $merged = $this->withHighScore($this->score);
+                    if ($merged->newRecord === true) {
+                        return [new self(
+                            bird: Bird::spawn(self::BIRD_COL, self::HEIGHT / 2.0),
+                            pipes: [],
+                            highScores: $merged->highScores,
+                            rand: $this->rand,
+                            configDir: $this->configDir,
+                            frameCols: $this->frameCols,
+                            frameRows: $this->frameRows,
+                            colorProfile: $this->colorProfile,
+                        ), $merged->persistCmd()];
+                    }
+                }
                 return [new self(
                     bird: Bird::spawn(self::BIRD_COL, self::HEIGHT / 2.0),
                     pipes: [],

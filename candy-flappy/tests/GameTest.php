@@ -925,6 +925,43 @@ final class GameTest extends TestCase
         @rmdir($tmp);
     }
 
+    /**
+     * flappy-04 (finding -004): symmetric with the quit-settle test above —
+     * a MID-FLIGHT r with a qualifying score must settle it (merge into the
+     * fresh board's leaderboard AND write it) before landing on the ready
+     * card. Pre-fix, r discarded a live record in silence.
+     */
+    public function testMidFlightRestartSettlesAQualifyingScore(): void
+    {
+        $tmp = sys_get_temp_dir() . '/candy-flappy-rsettle-' . getmypid() . '-' . spl_object_id($this);
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0),
+            pipes: [],
+            score: 12,
+            started: true,
+            highScores: [5],
+            configDir: $tmp,
+        );
+        [$fresh, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertNotNull($cmd, 'a settling restart must hand back the persist Cmd');
+        $this->assertNull($cmd(), 'the restart persist is a plain Cmd, not a batch');
+
+        $target = $tmp . '/.candy-flappy/scores.json';
+        $this->assertFileExists($target);
+        $this->assertSame([5, 12], json_decode((string) file_get_contents($target), true, 512, JSON_THROW_ON_ERROR));
+
+        $this->assertSame([5, 12], $fresh->highScores, 'the fresh board must carry the merged list');
+        $this->assertSame(12, $fresh->highScore());
+        $this->assertSame([], $fresh->pipes);
+        $this->assertFalse($fresh->started, 'restart lands on the ready card');
+        $this->assertFalse($fresh->newRecord, 'the shout belongs to the settled run, not the new board');
+        $this->assertSame(0, $fresh->score);
+
+        @unlink($target);
+        @rmdir($tmp . '/.candy-flappy');
+        @rmdir($tmp);
+    }
+
     public function testQuitDoesNotDoublePersistAfterACrash(): void
     {
         // The crash already persisted; q must be a bare quit, no second write.
