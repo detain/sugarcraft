@@ -125,4 +125,59 @@ final class UrlDerivationTest extends TestCase
         $this->assertSame('home', $stack->items()[0]->title);
         $this->assertSame('settings', $stack->items()[1]->title);
     }
+
+    // ─── NS-22: sanitize-then-encode (URL carries what the user SEES) ────────
+
+    public function testDeriveCarriesNoPercentEncodedTerminalJunk(): void
+    {
+        $stack = new NavStack();
+        $stack->push("Ge\x1b[31mne\u{E000}ral");
+
+        // Old shape encoded the RAW title: /Ge%1B%5B31mne%EE%80%80ral —
+        // percent-reanimatable bytes travelling in a path. Post-NS-22 the
+        // sweep runs first, so the path is the DISPLAYED word:
+        $this->assertSame('/General', Url::derive($stack));
+        $this->assertStringNotContainsString('%1B', Url::derive($stack));
+    }
+
+    public function testDeriveEncodesPercentLiteralsOfSanitizedTitles(): void
+    {
+        $stack = new NavStack();
+        $stack->push('100%zz');
+
+        // '%zz' is an INVALID percent sequence and must arrive as the
+        // literal text, via %25 — never a raw '%' segment that a decoder
+        // would trip over:
+        $this->assertSame('/100%25zz', Url::derive($stack));
+        $this->assertSame('100%zz', Url::parse(Url::derive($stack))->items()[0]->title);
+    }
+
+    public function testMultibyteTitlesTravelAsPercentExilesByteExactly(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Café');
+
+        // rawurlencode over UTF-8 bytes (RFC 3986 §2.4): the é ships as the
+        // two percent-exiled bytes and restores byte-identically.
+        $this->assertSame('/Caf%C3%A9', Url::derive($stack));
+        $this->assertSame('Café', Url::parse('/Caf%C3%A9')->items()[0]->title);
+    }
+
+    public function testParsedTitlesEqualTheDisplaySweepOfDerivedTitles(): void
+    {
+        // The round-trip contract, executably: what parse() re-stores is
+        // byte-identical to what every render surface would DISPLAY of the
+        // original — the URL is a faithful carrier of the visible title.
+        $stack = new NavStack();
+        foreach (["Ho\x1b[31mme", "Set\u{200E}tings-x", '100%é', 'Ünïcode ✓'] as $t) {
+            $stack->push($t);
+        }
+
+        $titles = array_map(
+            static fn (NavigationItem $i): string => NavStack::safeTitle($i->title),
+            $stack->items()
+        );
+        $back = Url::parse(Url::derive($stack));
+        $this->assertSame($titles, array_map(static fn (NavigationItem $i): string => $i->title, $back->items()));
+    }
 }

@@ -13,6 +13,15 @@ final class Url
      * Derive a URL path string from the navigation stack.
      * e.g. NavStack with items ["home", "settings", "display"] → "/home/settings/display"
      *
+     * Titles are sanitized BEFORE encoding (NS-09's sibling, NS-22): each
+     * one runs through the same {@see TitleSanitizer} sweep the display
+     * surfaces apply, then through rawurlencode. The URL therefore carries
+     * what the user SEES — never percent-reanimated terminal junk (%1B[31m
+     * style debris that survives a naive raw-title encode and re-enters the
+     * stack as hostile bytes on decode). rawurlencode is RFC 3986 §2
+     * percent-encoding over UTF-8 bytes, so multibyte titles travel as
+     * percent-exile ("Café" → "Caf%C3%A9") and restore byte-exactly.
+     *
      * An EMPTY stack derives to `/` — the base case of the join, and the
      * inverse shape {@see parse()} reads back as an empty stack (a depth-0
      * trail is representable even though a depth-1 root is the normal floor).
@@ -20,13 +29,13 @@ final class Url
     public static function derive(NavStack $stack): string
     {
         $segments = \array_map(
-            static fn(NavigationItem $item): string => $item->title,
+            static fn(NavigationItem $item): string => \rawurlencode(TitleSanitizer::sanitize($item->title)),
             $stack->items()
         );
         if ($segments === []) {
             return '/';
         }
-        return '/' . \implode('/', \array_map('rawurlencode', $segments));
+        return '/' . \implode('/', $segments);
     }
 
     /**

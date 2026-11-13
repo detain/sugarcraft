@@ -305,7 +305,9 @@ Url::derive($stack);            // "/Home/My%20Settings"
 Url::parse('/home/settings');   // fresh NavStack: home → settings
 ```
 
-`derive()` rawurlencodes each title; `parse()` url-decodes segments. The URL
+`derive()` sanitizes each title through the same display sweep the render
+surfaces use, THEN rawurlencodes it (RFC 3986 §2 percent-encoding over
+UTF-8); `parse()` url-decodes segments. The URL
 carries TITLES ONLY — item payloads do not travel, so a parsed stack is
 title-equivalent to its source, never deep-equal.
 
