@@ -152,6 +152,18 @@ final class RealProcess implements Process
             throw new PtyException(Lang::t('spinner.windows_unsupported'));
         }
 
+        // scriptui-33 (candy-scriptui-051): when argv[0] can never execute,
+        // fail at spawn with a plain localized sentence instead of a wrapper
+        // exit status. proc_open gets a bare argv (no shell), so argv[0] is
+        // always a PATH-prog or a literal path — same lookup rule as the
+        // wrapper location walk, never a shell -v probe.
+        $executable = \str_contains($command[0], '/')
+            ? (\is_executable($command[0]) && !\is_dir($command[0]) ? $command[0] : '')
+            : self::locateOnPath($command[0]);
+        if ($executable === '') {
+            throw new PtyException(Lang::t('process.spawn_failed') . ': ' . $command[0]);
+        }
+
         // scriptui-04 (candy-scriptui-006): plain proc_open leaves the
         // child in OUR process group, so a timeout/Esc cancel could only
         // ever signal the direct child — grandchildren (`sh -c 'sleep 27 &
@@ -159,6 +171,7 @@ final class RealProcess implements Process
         // detach wrapper we give the child its own group by construction;
         // kill() then reaches -pid, the whole tree.
         $prefix     = self::detachSpawnPrefix();
+        $attempted  = \implode(' ', \array_values($command));
         $command    = $prefix === [] ? $command : [...$prefix, ...\array_values($command)];
 
         $descriptors = [
@@ -170,14 +183,18 @@ final class RealProcess implements Process
 
         $process = @\proc_open($command, $descriptors, $pipes, null, null, null);
         if (!\is_resource($process)) {
-            throw new PtyException('child spawn failed: ' . \implode(' ', $command));
+            // scriptui-33 (candy-scriptui-051): a missing/forbidden child is
+            // a plain localized sentence + the command the user asked for
+            // (not the detach-wrapped token stream), so the line after this
+            // throw never carries framework chrome or wrapper noise.
+            throw new PtyException(Lang::t('process.spawn_failed') . ': ' . $attempted);
         }
 
         $status = \proc_get_status($process);
         $pid    = (int) ($status['pid'] ?? 0);
         if ($pid <= 0) {
             \proc_close($process);
-            throw new PtyException('child spawn returned no pid: ' . \implode(' ', $command));
+            throw new PtyException(Lang::t('process.spawn_failed') . ': ' . $attempted);
         }
 
         $stdoutPipe = $captureStdout && isset($pipes[1]) && \is_resource($pipes[1]) ? $pipes[1] : null;

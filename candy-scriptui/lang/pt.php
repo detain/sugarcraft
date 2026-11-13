@@ -41,6 +41,7 @@ return [
     'hints.pager' => 'space/PgDn para baixo · PgUp/b para cima · g início · G fim · q sair',
     'format.template_unresolved' => 'modelo: {count} espaço(s) reservado(s) expandidos para vazio: {names} — uma variável deve estar definida e permitida via --allow-env.',
     'runtime.empty_input' => 'A entrada não continha linhas; nada a fazer.',
+    'runtime.empty_input_filter' => 'nada para filtrar; a entrada não continha linhas.',
     'runtime.conflicting_flags' => 'As opções {first} e {second} não podem ser combinadas com valores diferentes.',
     'runtime.empty_selection' => 'Nenhum item selecionado — prima Espaço para marcar pelo menos um item antes de Enter.',
 ];

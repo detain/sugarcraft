@@ -56,6 +56,7 @@ return [
     'hints.pager' => 'space/PgDn down · PgUp/b up · g top · G end · q quit',
     'format.template_unresolved' => 'template: {count} placeholder(s) expanded to empty: {names} — a variable must be set and permitted via --allow-env.',
     'runtime.empty_input' => 'input produced no lines; nothing to do.',
+    'runtime.empty_input_filter' => 'nothing to filter: standard input produced no lines.',
     'runtime.conflicting_flags' => 'Flags {first} and {second} cannot be combined with different values.',
     'runtime.empty_selection' => 'no item selected — press Space to tick at least one item before Enter.',
 ];

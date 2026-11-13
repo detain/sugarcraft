@@ -71,7 +71,10 @@ final class FilterCommand extends Command
         if ($lines === []) {
             // Silence on empty stdin read as a crash to shell scripts;
             // the FAILURE polarity stays (gum parity), the reason is said.
-            fwrite(STDERR, Lang::t('runtime.empty_input') . "\n");
+            // scriptui-33 (candy-scriptui-052): filter's refusal names the
+            // filter's own silence — the shared copy read as an error about
+            // the sibling `input` subcommand.
+            fwrite(STDERR, Lang::t('runtime.empty_input_filter') . "\n");
 
             return Command::FAILURE;
         }

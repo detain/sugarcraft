@@ -65,7 +65,9 @@ final class EmptyInputAndLogForgeTest extends TestCase
         $filter = (string) file_get_contents(__DIR__ . '/../../src/Command/FilterCommand.php');
         $table  = (string) file_get_contents(__DIR__ . '/../../src/Command/TableCommand.php');
         $log    = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
-        self::assertStringContainsString("Lang::t('runtime.empty_input')", $filter);
+        // scriptui-33 re-pin (DISCLOSED): filter's refusal moved to the
+        // filter-specific copy; table keeps the shared sentence.
+        self::assertStringContainsString("Lang::t('runtime.empty_input_filter')", $filter);
         self::assertStringContainsString("Lang::t('runtime.empty_input')", $table);
         self::assertStringContainsString('str_replace(["\r\n", "\r", "\n"]', $log);
     }

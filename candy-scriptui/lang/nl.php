@@ -41,6 +41,7 @@ return [
     'hints.pager' => 'space/PgDn omlaag · PgUp/b omhoog · g begin · G einde · q afsluiten',
     'format.template_unresolved' => 'sjabloon: {count} tijdelijke aanduiding(en) uitgebreid naar leeg: {names} — een variabele moet zijn ingesteld en toegestaan via --allow-env.',
     'runtime.empty_input' => 'De invoer bevatte geen regels; niets te doen.',
+    'runtime.empty_input_filter' => 'niets te filteren; de invoer bevatte geen regels.',
     'runtime.conflicting_flags' => 'De opties {first} en {second} kunnen niet worden gecombineerd met verschillende waarden.',
     'runtime.empty_selection' => 'Geen item geselecteerd — druk op Spatie om minstens één item aan te vinken vóór Enter.',
 ];

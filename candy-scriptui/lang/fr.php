@@ -54,6 +54,7 @@ return [
     'hints.pager' => 'space/PgDn bas · PgUp/b haut · g début · G fin · q quitter',
     'format.template_unresolved' => 'modèle : {count} espace(s) réservé(s) expandé(s) en vide : {names} — une variable doit être définie et autorisée via --allow-env.',
     'runtime.empty_input' => 'L\'entrée ne contenait aucune ligne; rien à faire.',
+    'runtime.empty_input_filter' => 'rien à filtrer; l\'entrée ne contenait aucune ligne.',
     'runtime.conflicting_flags' => 'Les options {first} et {second} ne peuvent pas être combinées avec des valeurs différentes.',
     'runtime.empty_selection' => 'Aucun élément sélectionné — appuyez sur Espace pour cocher au moins un élément avant Entrée.',
 ];

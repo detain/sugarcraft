@@ -41,6 +41,7 @@ return [
     'hints.pager' => 'space/PgDn вниз · PgUp/b вверх · g начало · G конец · q выход',
     'format.template_unresolved' => 'шаблон: {count} подстановочных знаков раскрылись в пустоту: {names} — переменная должна быть задана и разрешена через --allow-env.',
     'runtime.empty_input' => 'Во входе не было строк; ничего не выполнено.',
+    'runtime.empty_input_filter' => 'фильтровать нечего; на вход не поступило ни одной строки.',
     'runtime.conflicting_flags' => 'Флаги {first} и {second} нельзя комбинировать с разными значениями.',
     'runtime.empty_selection' => 'Элемент не выбран — нажмите Пробел, чтобы отметить хотя бы один элемент перед Enter.',
 ];

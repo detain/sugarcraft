@@ -41,6 +41,7 @@ return [
     'hints.pager' => 'space/PgDn w dół · PgUp/b do góry · g początek · G koniec · q wyjdź',
     'format.template_unresolved' => 'szablon: {count} symboli zastępczych rozwinięto do pustych: {names} — zmienna musi być ustawiona i dozwolona przez --allow-env.',
     'runtime.empty_input' => 'Wejście nie zawierało linii; nic do zrobienia.',
+    'runtime.empty_input_filter' => 'brak czego filtrować; wejście nie zawierało linii.',
     'runtime.conflicting_flags' => 'Opcji {first} i {second} nie można łączyć z różnymi wartościami.',
     'runtime.empty_selection' => 'Nie wybrano żadnego elementu — naciśnij Spację, aby zaznaczyć co najmniej jeden element przed Enterem.',
 ];

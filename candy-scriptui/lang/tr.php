@@ -41,6 +41,7 @@ return [
     'hints.pager' => 'space/PgDn aşağı · PgUp/b yukarı · g baş · G son · q çık',
     'format.template_unresolved' => 'şablon: {count} yer tutucu boş olarak genişletildi: {names} — bir değişken ayarlanmalı ve --allow-env ile izin verilmelidir.',
     'runtime.empty_input' => 'Girdi satır üretmedi; yapılacak bir şey yok.',
+    'runtime.empty_input_filter' => 'filtrelenecek bir şey yok; standart girdi satır üretmedi.',
     'runtime.conflicting_flags' => '{first} ve {second} bayrakları farklı değerlerle birleştirilemez.',
     'runtime.empty_selection' => 'Öğe seçilmedi — Enter öncesi en az bir öğeyi işaretlemek için Space tuşuna basın.',
 ];

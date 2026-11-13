@@ -41,6 +41,7 @@ return [
     'hints.pager' => 'space/PgDn giù · PgUp/b su · g inizio · G fine · q esci',
     'format.template_unresolved' => 'template: {count} segnaposto espansi a vuoto: {names} — una variabile deve essere impostata e consentita tramite --allow-env.',
     'runtime.empty_input' => 'L\'input non conteneva righe; nulla da fare.',
+    'runtime.empty_input_filter' => 'niente da filtrare; l\'input non conteneva righe.',
     'runtime.conflicting_flags' => 'Le opzioni {first} e {second} non possono essere combinate con valori diversi.',
     'runtime.empty_selection' => 'Nessun elemento selezionato — premere Spazio per spuntare almeno un elemento prima di Invio.',
 ];
