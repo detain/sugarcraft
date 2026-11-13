@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host\Commands;
 
 use SugarCraft\Code\CommandParser;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Commands\PlayCommand;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Support\MediaStore;
@@ -74,13 +75,13 @@ final class PlayHostCommand implements HostCommand
     private function fromPath(string $text, string $target): CommandResult
     {
         if (!is_file($target) || !is_readable($target)) {
-            return CommandResult::failure($text, 'no readable file at ' . $target, 1);
+            return CommandResult::failure($text, Lang::t('cmd.play.err.no-file', ['path' => $target]), 1);
         }
 
         $real = realpath($target);
 
         return $real === false
-            ? CommandResult::failure($text, 'cannot resolve ' . $target, 1)
+            ? CommandResult::failure($text, Lang::t('cmd.play.err.unresolved', ['path' => $target]), 1)
             : $this->playing($text, $real);
     }
 
@@ -90,7 +91,7 @@ final class PlayHostCommand implements HostCommand
         $store = $this->storeFor($context);
 
         if ($store === null) {
-            return CommandResult::failure($text, 'no media store is reachable — /play <path> still plays a local file', 1);
+            return CommandResult::failure($text, Lang::t('cmd.play.err.no-store'), 1);
         }
 
         $wanted = strtolower($target);
@@ -109,14 +110,11 @@ final class PlayHostCommand implements HostCommand
 
                 return is_readable($path)
                     ? $this->playing($text, $path)
-                    : CommandResult::failure($text, 'artifact ' . $target . ' points at an unreadable file', 1);
+                    : CommandResult::failure($text, Lang::t('cmd.play.err.unreadable-artifact', ['name' => $target]), 1);
             }
         }
 
-        return CommandResult::failure($text, sprintf(
-            'no playable artifact named %s — /play also takes a local path',
-            $target,
-        ), 1);
+        return CommandResult::failure($text, Lang::t('cmd.play.err.no-artifact', ['name' => $target]), 1);
     }
 
     /** The session's store, or null when its home is unowned/unreadable. */
@@ -133,10 +131,7 @@ final class PlayHostCommand implements HostCommand
     {
         return CommandResult::new(
             Message::user($text),
-            Message::assistant(sprintf(
-                'playing %s — space play/pause, arrows seek, m mode, q/Esc close',
-                basename($absolute),
-            )),
+            Message::assistant(Lang::t('cmd.play.playing', ['name' => basename($absolute)])),
         )->withEffect(CommandEffect::openVideoPlayer($absolute));
     }
 }

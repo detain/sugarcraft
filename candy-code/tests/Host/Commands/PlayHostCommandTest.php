@@ -32,6 +32,21 @@ final class PlayHostCommandTest extends TestCase
         $this->phRemoveTree($this->phRoot);
     }
 
+    public function testRefusalsSpeakTheLaunchLocale(): void
+    {
+        $before = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('de');
+        try {
+            $parsed = PlayCommand::parse(['--zoom']);
+            self::assertStringContainsString('unbekanntes Flag', (string) $parsed['error']);
+
+            $result = (new PlayHostCommand($this->phRoot))->run(CommandContext::new(), '/play /nonexistent/x.mp4');
+            self::assertStringContainsString('keine lesbare Datei', $result->rows[1]->content);
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($before);
+        }
+    }
+
     public function testBareCommandAnswersUsageAndRaisesNothing(): void
     {
         $result = (new PlayHostCommand($this->phRoot))->run(CommandContext::new(), '/play');

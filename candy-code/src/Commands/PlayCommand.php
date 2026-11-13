@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Commands;
 
+use SugarCraft\Code\Lang;
+
 /**
  * argv-style parser behind the `/play` console command (crush-media W5.4).
  *
@@ -56,11 +58,11 @@ final class PlayCommand
             }
 
             if (str_starts_with($token, '--')) {
-                return self::refusal(sprintf('unknown flag "%s". %s', $token, self::USAGE));
+                return self::refusal(Lang::t('cmd.play.err.unknown-flag', ['flag' => $token, 'usage' => self::USAGE]));
             }
 
             if ($path !== null) {
-                return self::refusal('play takes exactly one target. ' . self::USAGE);
+                return self::refusal(Lang::t('cmd.play.err.one-target', ['usage' => self::USAGE]));
             }
 
             $checked = self::check($token);
@@ -81,7 +83,7 @@ final class PlayCommand
     /** The usage sentence for the bare command. */
     public static function usage(): string
     {
-        return self::USAGE . ' — plays a saved video artifact by name, or a local clip by path';
+        return Lang::t('cmd.play.usage-line', ['usage' => self::USAGE]);
     }
 
     /** The `--help` answer. */
@@ -90,9 +92,9 @@ final class PlayCommand
         return implode("\n", [
             self::USAGE,
             '',
-            '  <artifact-name>   a video saved this session (mp4, gif, webm, mov, mkv, avi)',
-            '  <path>            any readable local clip; absolute paths are honoured as typed',
-            '  space play/pause · left/right seek · [ ] speed · m render mode · q or Esc close',
+            Lang::t('cmd.play.help.artifact'),
+            Lang::t('cmd.play.help.path'),
+            Lang::t('cmd.play.help.keys'),
         ]);
     }
 
@@ -103,21 +105,21 @@ final class PlayCommand
     private static function check(string $token): ?string
     {
         if ($token === '') {
-            return 'empty target. ' . self::USAGE;
+            return Lang::t('cmd.play.err.empty', ['usage' => self::USAGE]);
         }
 
         if (preg_match('/[\x00-\x1F\x7F]/', $token) === 1) {
-            return 'the target contains control characters.';
+            return Lang::t('cmd.play.err.control');
         }
 
         foreach (self::REMOTE_PREFIXES as $prefix) {
             if (stripos($token, $prefix) === 0) {
-                return 'remote targets are not playable — /play reads local files only, got "' . $token . '".';
+                return Lang::t('cmd.play.err.remote', ['target' => $token]);
             }
         }
 
         if (!str_starts_with($token, '/') && self::hasDotSegment($token)) {
-            return 'relative ".." paths are refused — name the artifact or type the full path.';
+            return Lang::t('cmd.play.err.dotdot');
         }
 
         return null;

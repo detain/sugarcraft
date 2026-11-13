@@ -75,7 +75,7 @@ final class SendToCommandTest extends TestCase
         self::assertStringContainsString('path is required', (string) SendToCommand::parse([])['error']);
 
         $two = SendToCommand::parse(['/a.png', '/b.png']);
-        self::assertStringContainsString('Expected one PNG path', (string) $two['error']);
+        self::assertStringContainsString('expected one PNG path', (string) $two['error']);
         self::assertNull($two['path']);
     }
 
@@ -83,7 +83,7 @@ final class SendToCommandTest extends TestCase
     {
         self::assertStringContainsString('img2img or inpaint', (string) SendToCommand::parse(['/a.png', '--to', 'txt2img'])['error']);
         self::assertStringContainsString('needs a value', (string) SendToCommand::parse(['/a.png', '--to'])['error']);
-        self::assertStringContainsString('Unknown flag', (string) SendToCommand::parse(['/a.png', '--bogus'])['error']);
+        self::assertStringContainsString('unknown flag', (string) SendToCommand::parse(['/a.png', '--bogus'])['error']);
     }
 
     public function testRemoteSpellingsAreRefusedAtTheDoor(): void
@@ -100,6 +100,19 @@ final class SendToCommandTest extends TestCase
         self::assertStringContainsString('not a .png', (string) SendToCommand::parse(['/a.jpg'])['error']);
         self::assertStringContainsString('--to inpaint', (string) SendToCommand::parse(['/a.png', '--mask', '/m.png'])['error']);
         self::assertStringContainsString('--to inpaint', (string) SendToCommand::parse(['/a.png', '--to', 'img2img', '--mask', '/m.png'])['error']);
+    }
+
+    public function testRefusalsAndHelpSpeakTheLaunchLocale(): void
+    {
+        $before = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('de');
+        try {
+            self::assertStringContainsString('unbekanntes Flag', (string) SendToCommand::parse(['/a.png', '--bogus'])['error']);
+            self::assertStringContainsString('Optionen:', SendToCommand::help());
+            self::assertStringContainsString('--help zeigt', SendToCommand::usage());
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($before);
+        }
     }
 
     // ---- host command -----------------------------------------------------------

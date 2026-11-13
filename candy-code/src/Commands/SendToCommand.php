@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Commands;
 
+use SugarCraft\Code\Lang;
+
 /**
  * argv-style parser behind the `/sendto` console command (crush-media W4.4).
  *
@@ -63,18 +65,17 @@ final class SendToCommand
             if ($token === '--to' || $token === '--mask') {
                 $value = $tokens[$i + 1] ?? null;
                 if ($value === null || str_starts_with($value, '--')) {
-                    return self::refusal(sprintf('The flag %s needs a value.', $token));
+                    return self::refusal(Lang::t('cmd.sendto.err.flag-value', ['flag' => $token]));
                 }
                 $i++;
 
                 if ($token === '--to') {
                     if (!\in_array($value, self::MODES, true)) {
-                        return self::refusal(sprintf(
-                            '--to expects one of %s, got "%s". %s',
-                            implode(' or ', self::MODES),
-                            $value,
-                            self::USAGE,
-                        ));
+                        return self::refusal(Lang::t('cmd.sendto.err.to-mode', [
+                            'modes' => implode(' or ', self::MODES),
+                            'value' => $value,
+                            'usage' => self::USAGE,
+                        ]));
                     }
                     $to = $value;
                     continue;
@@ -85,11 +86,11 @@ final class SendToCommand
             }
 
             if (str_starts_with($token, '--')) {
-                return self::refusal(sprintf('Unknown flag "%s". %s', $token, self::USAGE));
+                return self::refusal(Lang::t('cmd.sendto.err.unknown-flag', ['flag' => $token, 'usage' => self::USAGE]));
             }
 
             if ($path !== null) {
-                return self::refusal(sprintf('Expected one PNG path, got "%s" and "%s". %s', $path, $token, self::USAGE));
+                return self::refusal(Lang::t('cmd.sendto.err.two-paths', ['first' => $path, 'second' => $token, 'usage' => self::USAGE]));
             }
             $path = $token;
         }
@@ -99,22 +100,22 @@ final class SendToCommand
         }
 
         if ($path === null) {
-            return self::refusal('A saved PNG path is required, for example: /sendto output.png --to img2img');
+            return self::refusal(Lang::t('cmd.sendto.err.path-required'));
         }
 
         // Scheme-shaped paths are remote by spelling; the import law is
         // local-only (mirrors ImageIngress's URL refusal), refused at parse.
         $lower = strtolower($path);
         if (str_contains($lower, '://') || str_starts_with($lower, 'data:')) {
-            return self::refusal('remote images are never fetched for import — save the PNG locally first. ' . self::USAGE);
+            return self::refusal(Lang::t('cmd.sendto.err.remote', ['usage' => self::USAGE]));
         }
 
         if (preg_match('/\.png$/i', $path) !== 1) {
-            return self::refusal(sprintf('"%s" is not a .png — the infotext import reads PNG files only.', $path));
+            return self::refusal(Lang::t('cmd.sendto.err.not-png', ['path' => $path]));
         }
 
         if ($mask !== null && $to !== 'inpaint') {
-            return self::refusal('the --mask flag needs --to inpaint — a mask only travels with an inpaint send.');
+            return self::refusal(Lang::t('cmd.sendto.err.mask-needs-inpaint'));
         }
 
         return ['path' => $path, 'to' => $to, 'mask' => $mask, 'help' => false, 'error' => null];
@@ -123,7 +124,7 @@ final class SendToCommand
     /** The bare-command answer: /sendto is meaningless without a subject. */
     public static function usage(): string
     {
-        return self::USAGE . "\nAdd --help for the full flag table.";
+        return Lang::t('cmd.sendto.usage-line', ['usage' => self::USAGE]);
     }
 
     /** Long, line-per-option help block rendered from the tables above. */
@@ -132,15 +133,12 @@ final class SendToCommand
         return implode("\n", [
             self::USAGE,
             '',
-            'Imports the PNG\'s own parameters chunk (server png-info only when',
-            'the chunk is absent and an SD base is configured) into a fresh',
-            'generate-form draft. Values already on the draft are never',
-            'overwritten (the onlyUnset law).',
+            Lang::t('cmd.sendto.help.intro'),
             '',
-            'Options:',
-            '  --to img2img   attach the file as the init image',
-            '  --to inpaint   attach it as init image; --mask then applies',
-            '  --mask FILE    inpaint mask PNG (requires --to inpaint)',
+            Lang::t('cmd.sendto.help.options'),
+            Lang::t('cmd.sendto.help.to-img2img'),
+            Lang::t('cmd.sendto.help.to-inpaint'),
+            Lang::t('cmd.sendto.help.mask'),
         ]);
     }
 

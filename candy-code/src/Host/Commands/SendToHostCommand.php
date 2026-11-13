@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Host\Commands;
 
 use SugarCraft\Code\CommandParser;
 use SugarCraft\Code\Commands\SendToCommand;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Media\ImageIngress;
 use SugarCraft\Code\Media\MediaRequest;
 use SugarCraft\Code\Message;
@@ -78,14 +79,14 @@ final class SendToHostCommand implements HostCommand
         try {
             $ingress = ImageIngress::fromPath($path);
         } catch (\Throwable $error) {
-            return CommandResult::failure($text, 'cannot read ' . $path . ': ' . $error->getMessage(), 1);
+            return CommandResult::failure($text, Lang::t('cmd.sendto.err.cannot-read', ['path' => $path, 'reason' => $error->getMessage()]), 1);
         }
 
         $hop = $this->serverInfo ?? static fn (string $base64): ?string => ImportPng::serverInfoFor($base64);
         $imported = ImportPng::import($ingress->bytes, MediaRequest::new(), $hop);
 
         if ($imported['error'] !== null) {
-            return CommandResult::failure($text, $path . ': ' . $imported['error'], 1);
+            return CommandResult::failure($text, Lang::t('cmd.sendto.err.import', ['path' => $path, 'reason' => $imported['error']]), 1);
         }
 
         $request = $imported['request'];
@@ -99,7 +100,7 @@ final class SendToHostCommand implements HostCommand
             try {
                 $mask = ImageIngress::fromPath($plan['mask']);
             } catch (\Throwable $error) {
-                return CommandResult::failure($text, 'cannot read mask ' . $plan['mask'] . ': ' . $error->getMessage(), 1);
+                return CommandResult::failure($text, Lang::t('cmd.sendto.err.cannot-read-mask', ['path' => $plan['mask'], 'reason' => $error->getMessage()]), 1);
             }
 
             $request = $request->withMask($mask->base64);
@@ -117,15 +118,14 @@ final class SendToHostCommand implements HostCommand
     private function row(ImageIngress $ingress, MediaRequest $request, array $plan, ?string $via): string
     {
         $mode = $plan['to'] === null
-            ? 'parameters only'
-            : $plan['to'] . ($plan['mask'] !== null ? ' + mask' : '');
+            ? Lang::t('cmd.sendto.mode.params')
+            : ($plan['mask'] !== null ? Lang::t('cmd.sendto.mode.mask', ['mode' => $plan['to']]) : $plan['to']);
 
-        return sprintf(
-            'sent %s to the generate form — %d fields imported (%s, %s)',
-            $ingress->name(),
-            count($request->toArray()),
-            $via === ImportPng::VIA_SERVER ? ImportPng::VIA_SERVER_LABEL : ImportPng::VIA_LOCAL_LABEL,
-            $mode,
-        );
+        return Lang::t('cmd.sendto.row', [
+            'name' => $ingress->name(),
+            'count' => count($request->toArray()),
+            'via' => $via === ImportPng::VIA_SERVER ? ImportPng::VIA_SERVER_LABEL : ImportPng::VIA_LOCAL_LABEL,
+            'mode' => $mode,
+        ]);
     }
 }
