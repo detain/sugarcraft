@@ -1322,6 +1322,36 @@ final class DockLayoutTest extends TestCase
         DockLayout::fromArray(['minimums' => [24, 20, 1]] + $this->validManifest());
     }
 
+    public function testConstructorInvariantRefusesNonSlotEntries(): void
+    {
+        // The list<DockSlot> param annotations are prose only — the runtime
+        // guard is the sole gate for hand-built constructions that bypass
+        // new()/withSlotAdded(), so it is pinned through the same private-ctor
+        // seam as the centre-collision guard. A relaxation here would let a
+        // raw entry fall past this foreach and surface as a property-read
+        // TypeError deeper in resolution — the wrong error family.
+        $build = \Closure::bind(
+            static fn(): DockLayout => new DockLayout(
+                centerPaneId: 'center',
+                leftSlots: ['not-a-slot'],
+                rightSlots: [],
+                leftShareNum: 1,
+                leftShareDenom: 3,
+                rightShareNum: 1,
+                rightShareDenom: 3,
+                centerMinCols: 24,
+                sideMinCols: 20,
+                dividerCols: 1,
+            ),
+            null,
+            DockLayout::class,
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('DockLayout slots must be DockSlot instances');
+        $build();
+    }
+
     /**
      * @return array<string,mixed>
      */

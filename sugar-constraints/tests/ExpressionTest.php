@@ -160,4 +160,21 @@ final class ExpressionTest extends TestCase
         $this->expectExceptionMessage('Cannot access private property SugarCraft\Constraints\Expression::$constant');
         $expr->constant = 3.0;
     }
+
+    public function testBothFieldsAreCompileShapeFrozen(): void
+    {
+        // Shape-pin (SC-16): the freeze promise on Expression is structural,
+        // not merely behavioural — README's Shared foundations section states
+        // the class is fully immutable. Reflection pins the storage shape so a
+        // future relaxation (a re-opened public field, or a non-readonly prop
+        // mutated in place from inside the class) fails here even while every
+        // runtime accessor test stays green.
+        $constant = new \ReflectionProperty(Expression::class, 'constant');
+        $terms = new \ReflectionProperty(Expression::class, 'terms');
+
+        $this->assertTrue($constant->isPrivate(), 'Expression::$constant must stay private');
+        $this->assertTrue($constant->isReadOnly(), 'Expression::$constant must stay readonly');
+        $this->assertTrue($terms->isPrivate(), 'Expression::$terms must stay private');
+        $this->assertTrue($terms->isReadOnly(), 'Expression::$terms must stay readonly');
+    }
 }
