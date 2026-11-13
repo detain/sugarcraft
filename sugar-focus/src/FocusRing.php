@@ -21,7 +21,9 @@ namespace SugarCraft\Focus;
  * and unregister() falls back to when every survivor is disabled; see
  * {@see isFocused()} before painting a focus accent, and treat that parked
  * state as inert in key routing the same way. Every mutator returns a
- * new instance and leaves the receiver untouched.
+ * new instance and leaves the receiver untouched, except the documented no-op
+ * paths, which return the receiver unchanged so callers can cheaply detect
+ * "nothing moved" with ===.
  *
  * Mirrors the focus-traversal role of charmbracelet/bubbles' focus handling and
  * sugar-dashboard's FocusManager, but as a standalone, dependency-free, ordered ring.
@@ -764,6 +766,9 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * The focused position into the REGISTERED ids (disabled regions count
      * too), or -1 when the ring is empty. For "region k of n" among the
      * focusable ones use {@see enabledIndex()} with {@see enabledCount()}.
+     * Answers -1 ONLY when empty: a parked focus still reports its raw slot —
+     * the two no-answer grammars differ, {@see enabledIndex()} nulls on empty
+     * AND parked.
      */
     public function index(): int
     {
@@ -774,7 +779,8 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * The focused region's 0-based ordinal into {@see enabledIds()} — the "k"
      * of "region k of n" for a status line. null when the ring is empty or
      * focus is parked on a disabled region, cases where index() counts every
-     * registered region and cannot answer.
+     * registered region and cannot answer; unlike index()'s -1 (empty only),
+     * this null also covers the parked state.
      */
     public function enabledIndex(): ?int
     {
@@ -783,10 +789,15 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         return $at === false ? null : $at;
     }
 
-    /** @return list<string> registered region ids in traversal order */
+    /**
+     * @return list<string> registered region ids in traversal order
+     */
     public function ids(): array
     {
-        return array_values($this->ids);
+        // $ids is a list by construction: every producer maintains it
+        // (of/ofStrict unique(), register/unregister splices, reorder's
+        // unique(), restore's unique()) — no defensive reindex per read.
+        return $this->ids;
     }
 
     /** Number of registered regions (enabled and disabled); backs count($ring). */
