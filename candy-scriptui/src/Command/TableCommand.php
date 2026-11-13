@@ -215,7 +215,7 @@ final class TableCommand extends Command
         }
 
         // scriptui-30 (finding 040): the RFC lane used to run through
-        // fgetcsv(escape:'\\') — a NON-RFC fold: PHP turns `"a\"b"` into
+        // fgetcsv with escape:'\\' — a NON-RFC fold: PHP turns `"a\"b"` into
         // `a"b` while Go's encoding/csv (gum's compatibility bar) treats
         // backslash as ordinary data, and PHP 8.4 deprecates the custom
         // escape (removal in 9.0) — with failOnWarning="true" that is a
