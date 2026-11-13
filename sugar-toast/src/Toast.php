@@ -1640,7 +1640,7 @@ final class Toast
             $cols = \min($bufWidth, Width::string($lines[$row]));
             for ($col = 0; $col < $cols; $col++) {
                 $cell = $grid[$row * $bufWidth + $col];
-                if ($cell->width === 0) {
+                if ($cell->width() === 0) {
                     continue;  // wide-char continuation — toAnsi() skips it
                 }
 
@@ -1661,7 +1661,7 @@ final class Toast
                 $newBg = $bg ?? $existing?->bg();
 
                 $grid[$row * $bufWidth + $col] =
-                    new Cell($cell->rune(), new Style($newFg, $newBg, $attrs), $cell->link(), $cell->width);
+                    new Cell($cell->rune(), new Style($newFg, $newBg, $attrs), $cell->link(), $cell->width());
             }
         }
 
