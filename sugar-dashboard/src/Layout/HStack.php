@@ -89,57 +89,78 @@ final class HStack implements \SugarCraft\Dashboard\Foundation\SizedItem
         $useWidth = $this->getWidth();
         $useHeight = $this->getHeight();
 
-        // Render each item and get its dimensions
-        $renderedItems = [];
-        $itemWidths = [];
-        $itemHeights = [];
+        // Render each child into its own column of lines (finding
+        // sugar-dashboard-020: string-concatenating multi-line blobs made a
+        // horizontal stack render its children vertically and the seam
+        // corrupted content; the row-wise stitch in Layout.php is the
+        // exemplar followed here). Children are allocated their natural
+        // width — the old setSize(0, h) collapsed allocation-reporting
+        // children to zero.
+        $columns = [];
+        $columnWidths = [];
         $maxHeight = 0;
 
         foreach ($this->items as $item) {
             $sizedItem = $item;
-            if ($sizedItem instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
-                // Give each item natural width, fixed height
-                $sizedItem = $sizedItem->setSize(0, $useHeight);
+            if ($sizedItem instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
+                [$naturalWidth, $naturalHeight] = $sizedItem->innerSize();
+                $sizedItem = $sizedItem->setSize($naturalWidth, $useHeight > 0 ? $useHeight : $naturalHeight);
             }
-            $rendered = $sizedItem->render();
-            $renderedItems[] = $rendered;
+            $lines = explode("\n", $sizedItem->render());
 
-            // Calculate dimensions
-            $lines = explode("\n", $rendered);
-            $maxLineWidth = 0;
+            $widest = 0;
             foreach ($lines as $line) {
-                $maxLineWidth = max($maxLineWidth, Width::string($line));
+                $widest = max($widest, Width::string($line));
             }
-            $itemWidths[] = $maxLineWidth;
-            $itemHeights[] = count($lines);
+
+            $columns[] = $lines;
+            $columnWidths[] = $widest;
             $maxHeight = max($maxHeight, count($lines));
         }
 
         // Calculate total width
-        $totalWidth = array_sum($itemWidths);
-        if ($this->spacing > 0 && count($this->items) > 1) {
-            $totalWidth += $this->spacing * (count($this->items) - 1);
+        $totalWidth = array_sum($columnWidths);
+        $gap = $this->spacing > 0 && count($this->items) > 1 ? $this->spacing : 0;
+        if ($gap > 0) {
+            $totalWidth += $gap * (count($this->items) - 1);
         }
 
-        // Build result
-        $result = '';
-
-        if ($this->alignment === HAlign::Center && $useWidth > $totalWidth) {
-            $pad = (int) floor(($useWidth - $totalWidth) / 2);
-            $result .= str_repeat(' ', $pad);
-        } elseif ($this->alignment === HAlign::Right && $useWidth > $totalWidth) {
-            $pad = $useWidth - $totalWidth;
-            $result .= str_repeat(' ', $pad);
+        // Horizontal alignment pads EVERY row of the composed block (the old
+        // code padded only in front of the first line of the concatenated blob).
+        $prePad = '';
+        if ($useWidth > $totalWidth) {
+            $pad = $this->alignment === HAlign::Right
+                ? $useWidth - $totalWidth
+                : ($this->alignment === HAlign::Center ? intdiv($useWidth - $totalWidth, 2) : 0);
+            $prePad = str_repeat(' ', $pad);
         }
 
-        foreach ($renderedItems as $i => $rendered) {
-            $result .= $rendered;
-            if ($i < count($renderedItems) - 1 && $this->spacing > 0) {
-                $result .= str_repeat(' ', $this->spacing);
+        $rowCount = count($columns);
+        $result = [];
+        for ($y = 0; $y < $maxHeight; $y++) {
+            $row = $prePad;
+            foreach ($columns as $i => $lines) {
+                $line = $lines[$y] ?? '';
+                if ($i > 0 && $gap > 0 && !($i === $rowCount - 1 && $line === '')) {
+                    // No phantom seam after the last column when that row
+                    // simply does not exist for the final child.
+                    $row .= str_repeat(' ', $gap);
+                }
+                // Non-final columns are padded to their slot so following
+                // columns stay in their lane; the final column keeps its
+                // exact bytes (no trailing-space drift).
+                if ($i < $rowCount - 1) {
+                    $deficit = $columnWidths[$i] - Width::string($line);
+                    if ($deficit > 0) {
+                        $line .= str_repeat(' ', $deficit);
+                    }
+                }
+                $row .= $line;
             }
+            $result[] = $row;
         }
 
-        return $result;
+        return implode("\n", $result);
     }
 
     /**

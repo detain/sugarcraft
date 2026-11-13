@@ -252,4 +252,57 @@ final class HStackTest extends TestCase
         $this->assertStringContainsString('New', $rendered);
         $this->assertStringContainsString('Label', $rendered);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Multi-line children stitch side-by-side (finding sugar-dashboard-020)
+    // ═══════════════════════════════════════════════════════════════
+
+    private function rawItem(string $bytes): Item
+    {
+        return new class($bytes) implements Item {
+            public function __construct(private readonly string $bytes)
+            {
+            }
+
+            public function render(): string
+            {
+                return $this->bytes;
+            }
+        };
+    }
+
+    public function testMultiLineChildrenComposeRowWiseSideBySide(): void
+    {
+        $stack = new HStack(items: [$this->rawItem("ab\ncd"), $this->rawItem('xyz')], spacing: 0, alignment: HAlign::Left);
+
+        // 'ab','cd' column is 2 wide; the tall right column keeps its rows
+        // lane-locked — the old blob-concat produced ['abxy\nz'... wrecked].
+        $this->assertSame("abxyz\ncd", $stack->render());
+    }
+
+    public function testSeamSpacingNeverCorruptsThePreviousLine(): void
+    {
+        $stack = new HStack(items: [$this->rawItem("a\nb"), $this->rawItem('c')], spacing: 1, alignment: HAlign::Left);
+
+        // Row 1 has no final-column content: no phantom trailing seam.
+        $this->assertSame("a c\nb", $stack->render());
+    }
+
+    public function testShorterBlockRowsArePaddedWithinTheirColumn(): void
+    {
+        $stack = new HStack(items: [$this->rawItem("wide!\nq"), $this->rawItem("r\ns\nt")], spacing: 0, alignment: HAlign::Left);
+
+        // Column 0 pads rows to width 5; missing rows of the shorter child
+        // render as its padded blanks so the following column stays in lane.
+        $this->assertSame("wide!r\nq    s\n     t", $stack->render());
+    }
+
+    public function testAlignmentPadsEveryRowNotJustTheFirst(): void
+    {
+        $stack = new HStack(items: [$this->rawItem("ab\ncd")], spacing: 0, alignment: HAlign::Right);
+        $stack = $stack->setSize(6, 0);
+
+        // two children columns total 2 wide inside 6 → 4 leading spaces on BOTH rows
+        $this->assertSame("    ab\n    cd", $stack->render());
+    }
 }
