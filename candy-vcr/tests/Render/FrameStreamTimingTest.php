@@ -195,6 +195,64 @@ final class FrameStreamTimingTest extends TestCase
     }
 
     /**
+     * Finding 038 (resize half): a mid-tape Resize must preserve the
+     * visible grid (clamped to the new geometry) instead of wiping it —
+     * the old `Terminal::new` swap turned every resize into a black flash.
+     */
+    public function testMidTapeResizePreservesVisibleGrid(): void
+    {
+        $typed = '';
+        for ($line = 1; $line <= 7; $line++) {
+            $typed .= "L{$line}\r\n";
+        }
+
+        $cassette = new Cassette(self::header(), [
+            new Event(t: 0.0, kind: EventKind::Input, payload: ['b' => $typed]),
+            new Event(t: 1.0, kind: EventKind::Resize, payload: ['cols' => 20, 'rows' => 4]),
+        ]);
+
+        $terminal = Terminal::new(40, 6);
+        $snapshots = self::collect((new Renderer())->render(new Player($cassette), $terminal, 30.0));
+
+        $this->assertGreaterThanOrEqual(2, count($snapshots));
+        $pre = $snapshots[0];
+        $final = $snapshots[count($snapshots) - 1];
+
+        $this->assertSame(20, $final->grid->cols, 'The frame carries the new width');
+        $this->assertSame(4, $final->grid->rows, 'The frame carries the new height');
+
+        // The resized grid must be EXACTLY what Buffer::resize computes from the
+        // pre-resize grid (copy of the intersecting region + wide-cell repair):
+        // content survives the boundary; the old path blanked it wholesale.
+        $expected = $pre->grid->resize(20, 4);
+        $diff = 0;
+        for ($row = 0; $row < 4; $row++) {
+            for ($col = 0; $col < 20; $col++) {
+                if ($final->grid->cell($row, $col)->char !== $expected->cell($row, $col)->char) {
+                    $diff++;
+                }
+            }
+        }
+        $this->assertSame(0, $diff, 'Resized frame equals the reflowed pre-resize grid');
+
+        $hasContent = false;
+        $rowText = static function (int $row) use ($final): string {
+            $out = '';
+            for ($col = 0; $col < 20; $col++) {
+                $out .= $final->grid->cell($row, $col)->char;
+            }
+
+            return $out;
+        };
+        for ($row = 0; $row < 4; $row++) {
+            if (trim($rowText($row)) !== '') {
+                $hasContent = true;
+            }
+        }
+        $this->assertTrue($hasContent, 'A resized frame must not be the blank wipe the old path produced');
+    }
+
+    /**
      * End-to-end proof of the trailing-Sleep fix: two otherwise identical
      * tapes, one closing with `Sleep 2s`, must encode different bytes — the
      * pre-fix pipeline dropped the final event's frame and flattened the

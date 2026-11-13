@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Render;
 
+use SugarCraft\AnsiParser\Parser\HandlerAdapter;
+use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
+use SugarCraft\Vterm\Parser\CsiHandlerImpl;
+use SugarCraft\Vterm\Parser\OscHandlerImpl;
+use SugarCraft\Vterm\Parser\RendererHandler;
 use SugarCraft\Vterm\Snapshot;
 use SugarCraft\Vterm\Terminal;
 
@@ -380,14 +385,11 @@ final class FrameStream implements \IteratorAggregate
     }
 
     /**
-     * Apply a resize by retiring the current grid and starting a fresh
-     * `Terminal` at the new size (same theme) — a deliberate fidelity
-     * choice, not a bug: the previous screen is NOT reflowed, so a frame
-     * captured across the boundary shows the new empty grid until the tape
-     * repaints it, and an escape sequence that was mid-flight at resize
-     * time is dropped. The exec-mode master PTY (when still open) is
-     * resized first, best-effort, so the live child re-negotiates its
-     * window before subsequent output is read.
+     * Apply a resize by growing/shrinking the CURRENT grid — the visible
+     * screen survives the boundary, clamped to the new geometry (finding 038
+     * resize half). The exec-mode master PTY (when still open) is resized
+     * first, best-effort, so the live child re-negotiates its window before
+     * subsequent output is read.
      */
     private function processResize(Event $event, Terminal $terminal): Terminal
     {
@@ -404,10 +406,37 @@ final class FrameStream implements \IteratorAggregate
                         // Best-effort — a failed TIOCSWINSZ must not abort the render.
                     }
                 }
-                return Terminal::new($colsInt, $rowsInt, $terminal->theme());
+                return self::resizePreserving($terminal, $colsInt, $rowsInt);
             }
         }
         return $terminal;
+    }
+
+    /**
+     * Resize the emulator's grid WITHOUT wiping it.
+     *
+     * `Buffer::resize` copies the intersecting region (crop on shrink, blank
+     * fill on growth, wide-cell boundary repair included); the cursor is
+     * clamped back into the new geometry, exactly like the emulator handlers
+     * do on SIGWINCH. Rewiring a fresh Parser/CSI/OSC trio over the new
+     * grid+cursor keeps the live instance byte-compatible for later feeds.
+     * What cannot survive is terminal-internal state the render model does
+     * not read back (SGR pen, DEC modes, alt-screen): the previous
+     * `Terminal::new` wiped ALL of it, which made every mid-tape resize a
+     * black flash — keeping the grid is the finding's bar (038 resize half).
+     */
+    private static function resizePreserving(Terminal $terminal, int $cols, int $rows): Terminal
+    {
+        $grid = $terminal->grid()->resize($cols, $rows);
+        $cursor = $terminal->cursor();
+        $cursor = $cursor->at(min($cursor->row, $rows - 1), min($cursor->col, $cols - 1));
+
+        $csi = new CsiHandlerImpl($grid, $cursor, $terminal->theme());
+        $osc = new OscHandlerImpl($csi);
+        $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
+        $parser = new Parser($handler, maxStringBuffer: Terminal::MAX_STRING_BUFFER);
+
+        return new Terminal($cols, $rows, $grid, $cursor, $parser, $csi, $osc, $terminal->theme());
     }
 
     /**
