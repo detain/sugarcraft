@@ -155,7 +155,13 @@ amber bird reads 13.72:1, the green pipes 11.21:1 and the crash pink
 5.89:1, while the `·` parallax dots sit at 1.37:1 — decorative scenery,
 never information. On white the primaries invert to 1.25:1, 1.52:1 and
 2.90:1: no light-background palette is provided, so use a dark terminal
-theme. The status hint that carries the keyboard instructions sits at
+theme. Cell widths are computed by sugar-core's `Width::of`, which counts
+the Ambiguous-East-Asian-Width glyphs the board chrome is made of — the
+`▓` pipes, the `·` dots, the box-drawing border — as one cell. A terminal
+emulator configured for ambiguous-width = 2 renders those same rows wider
+than the cells counted (a wall row alone crosses ~124 columns on a 62-cell
+frame) and the border desyncs: that is an unsupported posture, and the
+structural cure — one fleet-wide width policy — sits elsewhere. The status hint that carries the keyboard instructions sits at
 3.71:1, below the 4.5:1 WCAG small-text line — low-vision players may
 struggle to read it.
 
