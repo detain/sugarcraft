@@ -1404,7 +1404,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         if (!$workflow instanceof Workflow) {
             throw new WorkflowLoadException(
-                "Workflow class must return a Workflow instance, got " . get_debug_type($workflow)
+                "Workflow class must return a Workflow instance, got " . StageCondition::plainKind($workflow)
             );
         }
 
@@ -6061,7 +6061,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $this->refuseDeniedTools($step['task'], "{$label} task");
                 $this->refuseDeniedTools($step['verifier'], "{$label} verifier");
             } else {
-                return $fail("{$label} is a '" . (is_string($type) ? $type : get_debug_type($type)) . "' step; a map step is a task or a type: verification sub-stage");
+                return $fail("{$label} is a '" . (is_string($type) ? $type : StageCondition::plainKind($type)) . "' step; a map step is a task or a type: verification sub-stage");
             }
         }
 
@@ -6799,7 +6799,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             is_bool($value) => 'a bool',
             is_int($value), is_float($value) => 'a number',
             $value === null => 'null',
-            default => get_debug_type($value),
+            default => 'a value of another kind',
         };
     }
 
@@ -7002,7 +7002,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             if (!is_string($tool) || $tool === '') {
                 throw new \RuntimeException(sprintf(
                     'A workflow task declares a tool that is not a non-empty tool name (%s); it cannot be resolved against the tool registry.',
-                    get_debug_type($tool),
+                    StageCondition::plainKind($tool),
                 ));
             }
 
@@ -7016,7 +7016,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 throw new \RuntimeException(sprintf(
                     'The tool registry holds a non-%s entry (%s); a workflow tool grant cannot be built from it.',
                     Tool::class,
-                    get_debug_type($tool),
+                    StageCondition::plainKind($tool),
                 ));
             }
 
@@ -7138,7 +7138,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 throw new \RuntimeException(sprintf(
                     '%s declares a tool that is not a non-empty tool name (%s), so its permissions cannot be checked.',
                     $where,
-                    get_debug_type($tool),
+                    StageCondition::plainKind($tool),
                 ));
             }
 

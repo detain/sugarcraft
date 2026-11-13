@@ -524,7 +524,7 @@ final class StageCondition
      * Plain-language phrase for a value's kind, so an authoring error reads
      * "got text" rather than leaking PHP's type names ("string", "array").
      */
-    private static function plainKind(mixed $value): string
+    public static function plainKind(mixed $value): string
     {
         return match (true) {
             $value === null => 'nothing',

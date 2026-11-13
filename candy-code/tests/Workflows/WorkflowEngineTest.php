@@ -1539,7 +1539,7 @@ final class WorkflowEngineTest extends TestCase
         $result = $engine->run('bogus-tool-entry', []);
 
         $this->assertFalse($result->isSuccess());
-        $this->assertStringContainsString('int', (string) $result->stageResults[0]->error);
+        $this->assertStringContainsString('a whole number', (string) $result->stageResults[0]->error);
         $this->assertStringContainsString(
             'cannot be checked',
             (string) $result->stageResults[0]->error,
