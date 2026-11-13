@@ -22,16 +22,33 @@ namespace SugarCraft\Top\Collect;
  *  - without a cpu sensor the thermal zones are added (type as label,
  *    high/critical trip points, defaults 80/95), and the cpu sensor falls
  *    back to the first name containing "cpu"/"k10temp", then to any;
- *  - discovery happens once; later samples only re-read the inputs.
+ *  - discovery happens once; later samples re-read the inputs at most
+ *    once per {@see SENSOR_INTERVAL} window (candy-top-030: one sysfs read
+ *    measured ~100 ms on a slow-bus bnxt_en host, so the per-tick version
+ *    broke the frame budget forever), and hostile `name`/`label` bytes
+ *    never reach the display keys (candy-top-046).
  */
 final class Temp
 {
     private const array CPU_LABELS = ['Package id', 'Tdie', 'SoC Temperature'];
     private const array CORE_LABELS = ['Core', 'Tccd'];
 
+    /** Seconds between input re-reads (the proven Gpu interval idiom, low end). */
+    public const SENSOR_INTERVAL = 5.0;
+
+    /**
+     * Plausible hwmon window in millidegrees. A disconnected thermistor
+     * reads -99999000 here and btop's own driver quirks show whole-tree
+     * garbage; outside ±(-50..250) °C nothing on a board is real (046).
+     */
+    private const MILLI_MIN = -50_000;
+    private const MILLI_MAX = 250_000;
+
     /**
      * @param array<string, array{input: string, high: float, crit: float}>|null $found null until discovered
      * @param list<string> $coreSensors
+     * @param ?array<string, Sensor> $cached sensor values from the last read window
+     * @param \Closure(): float $clock monotonic seconds
      */
     private function __construct(
         private readonly Paths $paths,
@@ -39,15 +56,26 @@ final class Temp
         private readonly ?array $found,
         private readonly ?string $cpuSensor,
         private readonly array $coreSensors,
+        private readonly \Closure $clock,
+        private readonly ?array $cached = null,
+        private readonly ?float $nextSensorReadAt = null,
     ) {
     }
 
     /**
      * @param string|null $cpuSensor btop `cpu_sensor` override ("chip/label"), used when present
+     * @param (\Closure(): float)|null $clock monotonic seconds; null = the live hrtime clock
      */
-    public static function new(?Paths $paths = null, ?string $cpuSensor = null): self
+    public static function new(?Paths $paths = null, ?string $cpuSensor = null, ?\Closure $clock = null): self
     {
-        return new self($paths ?? Paths::system(), $cpuSensor === '' ? null : $cpuSensor, null, null, []);
+        return new self(
+            $paths ?? Paths::system(),
+            $cpuSensor === '' ? null : $cpuSensor,
+            null,
+            null,
+            [],
+            $clock ?? static fn (): float => hrtime(true) / 1e9,
+        );
     }
 
     /**
@@ -57,10 +85,19 @@ final class Temp
     {
         $self = $this->found === null ? $this->discover() : $this;
 
-        $sensors = [];
-        foreach ($self->found ?? [] as $name => $s) {
-            $milli = Read::int($s['input']);
-            $sensors[$name] = new Sensor($name, $milli === null ? Sentinel::UNMEASURED : $milli / 1000.0, $s['high'], $s['crit']);
+        $now = ($self->clock)();
+        if ($self->cached !== null && $now < (float) $self->nextSensorReadAt) {
+            // Inside the throttle window: hand back the last values, never
+            // touch the (possibly 100 ms-per-read) slow bus.
+            $sensors = $self->cached;
+        } else {
+            $sensors = [];
+            foreach ($self->found ?? [] as $name => $s) {
+                $milli = Read::int($s['input']);
+                $real = $milli !== null && $milli >= self::MILLI_MIN && $milli <= self::MILLI_MAX;
+                $sensors[$name] = new Sensor($name, $real ? $milli / 1000.0 : Sentinel::UNMEASURED, $s['high'], $s['crit']);
+            }
+            $self = new self($self->paths, $self->preferred, $self->found, $self->cpuSensor, $self->coreSensors, $self->clock, $sensors, $now + self::SENSOR_INTERVAL);
         }
 
         $cpu = $self->preferred !== null && isset($sensors[$self->preferred]) ? $self->preferred : $self->cpuSensor;
@@ -107,13 +144,13 @@ final class Temp
             if (str_contains($path, 'nvme')) {
                 continue;
             }
-            $chip = Read::line($path . '/name') ?? basename($path);
+            $chip = self::visible(Read::line($path . '/name') ?? '', basename($path));
             foreach (Read::entries($path) as $file) {
                 if (preg_match('/^temp(\d+)_input$/', $file, $m) !== 1) {
                     continue;
                 }
                 $base = $path . '/temp' . $m[1] . '_';
-                $label = Read::line($base . 'label') ?? 'temp' . $m[1];
+                $label = self::visible(Read::line($base . 'label') ?? '', 'temp' . $m[1]);
                 $name = $chip . '/' . $label;
                 $high = Read::int($base . 'max');
                 $crit = Read::int($base . 'crit');
@@ -156,7 +193,20 @@ final class Temp
             $cpuSensor ??= array_key_first($found);
         }
 
-        return new self($this->paths, $this->preferred, $found, $cpuSensor, $coreSensors);
+        return new self($this->paths, $this->preferred, $found, $cpuSensor, $coreSensors, $this->clock);
+    }
+
+    /**
+     * sysfs `name`/`label`/`type` strings arrive verbatim from kernel
+     * drivers — NUL and control bytes included on hostile or buggy chips
+     * (candy-top-046; the container-tag and BMC paths already whitelist
+     * the same way). Collapse to printable text; blank means the fallback.
+     */
+    private static function visible(string $raw, string $fallback): string
+    {
+        $clean = trim(preg_replace('/[^\x20-\x7E]+/', ' ', $raw) ?? '');
+
+        return $clean === '' ? $fallback : $clean;
     }
 
     /**
@@ -169,7 +219,7 @@ final class Temp
             if (!is_file($base . '/temp')) {
                 continue;
             }
-            $label = Read::line($base . '/type') ?? 'temp' . $i;
+            $label = self::visible(Read::line($base . '/type') ?? '', 'temp' . $i);
             $high = 0.0;
             $crit = 0.0;
             for ($t = 0; is_file($base . "/trip_point_{$t}_temp"); $t++) {
