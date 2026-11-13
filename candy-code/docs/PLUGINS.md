@@ -174,7 +174,10 @@ entrypoint. Installing it exercises every rule above:
     the bundle logs one content-free `approvals_open_roster` warning at
     startup — set the list to gate who may answer. With `approvals.enabled` false (or where a
    button cannot render) the ask falls back to a same-chat `/approve <id>
-   once|always|deny` line — never a silent bypass. The full chat command table lives in the bundle README.
+   [once|always|deny]` line — never a silent bypass. A channel bundle's
+   approval contract carries the three universal verdicts (allow-once /
+   allow-always / deny); rule-saving and deny-with-reason are TUI-only
+   today. The full chat command table lives in the bundle README.
 
 ### Worked example: the `sugarcraft/candy-msteams` bundle
 

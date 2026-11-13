@@ -224,10 +224,15 @@ accepts the same words as text in a served conversation:
 | --- | --- |
 | `/new [name]` | Start a fresh session for this conversation. |
 | `/stop` | Stop the running turn. |
-| `/approve <ask> [once\|always\|deny]` | Answer a pending permission prompt by id. |
+| `/approve <askId> [once\|always\|deny]` | Answer an open approval by id. |
 | `/queue <text>` | Queue a message behind the running turn (see `queue`). |
 | `/model [name]` | Show or change the model for this session. |
-| `/pair action:approve\|list [code]` | Approver pairing commands (`list` is DM-only). |
+| `/pair action:grant\|list [code]` | Approver pairing commands (`list` is DM-only). |
+
+A channel bundle's approval contract carries the three universal verdicts
+— allow-once, allow-always, deny. Rule-saving and deny-with-reason are
+TUI-only today: the wire from a bundle has no remember member, and its
+note field carries actor attribution, not a user-authored reason.
 
 Unknown slash commands are refused. Slash replies are ephemeral by default
 (`slash.ephemeral`).
