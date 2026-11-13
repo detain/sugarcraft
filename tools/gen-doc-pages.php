@@ -106,8 +106,12 @@ const DOC_STEMS = ['GETTING-STARTED', 'GLOSSARY', 'KEYMAPS', 'TRUST-BOUNDARY'];
 
 /**
  * Locate a composer autoloader that provides league/commonmark. The monorepo
- * vendors are gitignored, so candidates are ordered: this tree's own root vendor,
- * then the sibling main checkout's roots. Fail LOUD — never silently skip pages.
+ * vendors are gitignored, so candidates are ordered within THIS tree only:
+ * root vendor first, then the documented per-lib shape. RT-39: the former
+ * machine-path candidates (`/home/sites/sugarcraft/...`) let a stale main
+ * checkout's vendor win over the tree actually generating pages — a copied
+ * scratch tree rendered against the WRONG bytes, or worse, silently green.
+ * Fail LOUD — never silently skip pages.
  *
  * @return string the require()-able autoload file
  */
@@ -119,8 +123,6 @@ function findAutoloader(): string
         // that requires league/commonmark, so any checkout that ran its own
         // `composer install -d sugar-markdown` resolves here, worktree-relative.
         \dirname(__DIR__) . '/sugar-markdown/vendor/autoload.php',
-        '/home/sites/sugarcraft/vendor/autoload.php',
-        '/home/sites/sugarcraft/sugar-markdown/vendor/autoload.php',
     ];
 
     foreach ($candidates as $file) {
