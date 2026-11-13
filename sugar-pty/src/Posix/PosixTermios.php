@@ -140,10 +140,12 @@ final class PosixTermios implements Termios
      */
     public function isAtty(): bool
     {
-        if (!\function_exists('posix_isatty')) {
-            return false;
+        if (\function_exists('posix_isatty')) {
+            return \posix_isatty($this->fd);
         }
-        return \posix_isatty($this->fd);
+        // A missing ext-posix is not evidence of "not a tty" — the libc
+        // handle this class already holds can answer directly.
+        return $this->libc->isatty($this->fd) === 1;
     }
 
     /**

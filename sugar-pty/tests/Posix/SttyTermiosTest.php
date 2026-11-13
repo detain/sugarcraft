@@ -256,4 +256,27 @@ final class SttyTermiosTest extends TestCase
             $master->close();
         }
     }
+
+    public function testIsAttyProbeArmAnswersWithoutExtPosix(): void
+    {
+        // Honest skip-gate: with ext-posix loaded the stty-probe arm
+        // is unreachable in-process.
+        if (\function_exists('posix_isatty')) {
+            $this->markTestSkipped('ext-posix present; stty probe arm unreachable in-process');
+        }
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open();
+        $master = $pair->master();
+        $libc = Libc::lib();
+        $slaveFd = $libc->open($pair->slave()->path(), self::O_RDWR);
+        $this->assertGreaterThan(0, $slaveFd, 'slave fd must open for the probe arm');
+        try {
+            $this->assertTrue((new SttyTermios($slaveFd))->isAtty(), 'probe arm must report a PTY slave as tty');
+        } finally {
+            $libc->close($slaveFd);
+            $master->close();
+        }
+    }
 }

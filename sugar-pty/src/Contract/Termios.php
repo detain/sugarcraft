@@ -44,6 +44,12 @@ interface Termios
      * @param int $when one of TCSANOW, TCSADRAIN, TCSAFLUSH (0 = TCSANOW).
      *                  TCSASOFT is a macOS flag modifier, not an action —
      *                  it is deliberately absent from this trio.
+     *
+     * Scope: implementations with less fidelity than the FFI byte-replay
+     * (the stty(1) fallback) may no-op when apply() is handed a
+     * current()-captured snapshot whose exact set they cannot express —
+     * treat that as best-effort; restore() remains the round-trip door.
+     *
      * @see portable-pty.Termios.Apply()
      */
     public function apply(int $when = self::TCSANOW): void;

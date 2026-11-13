@@ -17,6 +17,12 @@ use SugarCraft\Pty\Posix\SttyTermios;
  * Every fallback is logged via error_log, numbered with a per-process
  * count and carrying the reason PosixTermios failed.
  *
+ * isAtty() honesty: neither backend returns a silent false floor when
+ * ext-posix is absent — PosixTermios answers through the libc isatty(3)
+ * handle it already holds, SttyTermios probes `stty size`. A false from
+ * a factory-returned Termios therefore means the fd is genuinely not a
+ * terminal (or the probe itself failed), never "we could not look".
+ *
  * @see portable-pty.Termios
  */
 final class TermiosFactory

@@ -308,4 +308,59 @@ final class PosixTermiosTest extends TestCase
             $master->close();
         }
     }
+
+    public function testLibcCdefDeclaresIsattyForTheFallbackArm(): void
+    {
+        // PTY-29: the ext-posix-less isAtty arm of PosixTermios calls
+        // isatty(3) through the cached libc handle — the symbol must be
+        // declared in the cdef or the arm fatals at first use.
+        $this->assertMatchesRegularExpression('/\bint\s+isatty\s*\(\s*int/', Libc::cdef());
+    }
+
+    public function testIsattyArmAnswersWithoutExtPosix(): void
+    {
+        // Honest skip-gate: with ext-posix loaded the FFI arm is
+        // unreachable in-process — on such hosts the public isAtty
+        // pins above already prove the primary path.
+        if (\function_exists('posix_isatty')) {
+            $this->markTestSkipped('ext-posix present; FFI isatty arm unreachable in-process');
+        }
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open();
+        $master = $pair->master();
+        $libc = Libc::lib();
+        $slaveFd = $libc->open($pair->slave()->path(), self::O_RDWR);
+        $this->assertGreaterThan(0, $slaveFd, 'slave fd must open for the FFI arm');
+        try {
+            $this->assertTrue((new PosixTermios($slaveFd))->isAtty(), 'FFI arm must report a PTY slave as tty');
+        } finally {
+            $libc->close($slaveFd);
+            $master->close();
+        }
+    }
+
+    public function testIsattyAnswersThroughFfiOnRealDescriptors(): void
+    {
+        // PTY-29 live proof of the arm's mechanism: isatty(3) over the
+        // cached libc handle resolves and discriminates a real pty
+        // slave (1) from /dev/null (0) without ext-posix involvement.
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open();
+        $master = $pair->master();
+        $libc = Libc::lib();
+        $slaveFd = $libc->open($pair->slave()->path(), self::O_RDWR);
+        $nullFd = $libc->open('/dev/null', 0);
+        try {
+            $this->assertSame(1, $libc->isatty($slaveFd), 'pty slave must answer isatty=1 through FFI');
+            $this->assertSame(0, $libc->isatty($nullFd), '/dev/null must answer isatty=0 through FFI');
+        } finally {
+            $libc->close($nullFd);
+            $libc->close($slaveFd);
+            $master->close();
+        }
+    }
 }

@@ -119,7 +119,14 @@ final class SttyTermios implements Termios
         if (\function_exists('posix_isatty')) {
             return \posix_isatty($this->fd);
         }
-        return false;
+        // No ext-posix: ask stty(1) — the very backend this class is.
+        // `stty size` succeeds only on a terminal; a probe failure
+        // answers false as evidence, never as a silent floor.
+        try {
+            return $this->runStty('size') !== '';
+        } catch (RuntimeException) {
+            return false;
+        }
     }
 
     public function fd(): int

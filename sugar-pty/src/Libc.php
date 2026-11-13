@@ -157,6 +157,9 @@ int   close(int fd);
 /* kill(2): the ext-posix-less path of Libc::kill(). pid_t is int on
    every target ABI. */
 int   kill(int pid, int sig);
+/* isatty(3): the ext-posix-less arm of Termios isAtty(). 1 = tty,
+   0 = not (ENOTTY et al. via errno). */
+int   isatty(int fd);
 int   open(const char *path, int flags);
 /* ioctl is variadic in <sys/ioctl.h>; this fixed-arg form is what every
    call site uses. On arm64 DARWIN a winsize pointer does NOT survive the
