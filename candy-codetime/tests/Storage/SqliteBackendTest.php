@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeTime\Tests\Storage;
 
+use SugarCraft\CodeTime\Tests\Support\DrainPipes;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Milestone;
@@ -12,6 +13,9 @@ use SugarCraft\CodeTime\Storage\SqliteBackend;
 
 final class SqliteBackendTest extends TestCase
 {
+
+    use DrainPipes;
+
     private string $dbPath;
     private SqliteBackend $backend;
 
@@ -58,9 +62,8 @@ final class SqliteBackendTest extends TestCase
             . '} catch (\\Throwable $e) {'
             . 'fwrite(STDOUT, $e->getMessage());'
             . '}' . "\n");
-        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-        $out = stream_get_contents($pipes[1]);
-        $err = stream_get_contents($pipes[2]);
+        $proc = proc_open([PHP_BINARY, $script], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        [$out, $err] = self::drainPair($pipes[1], $pipes[2]);
         proc_close($proc);
         unlink($script);
         $this->assertStringContainsString('is not a usable candy-codetime database', $out);
@@ -87,9 +90,8 @@ final class SqliteBackendTest extends TestCase
             . '$backup = new \\SugarCraft\\CodeTime\\Backup\\AutoBackup(' . var_export($backupDir, true) . ', [' . var_export($dataDir, true) . "]);\n"
             . 'try { $backup->rotate(30); fwrite(STDOUT, \'rotated\'); }'
             . ' catch (\\Throwable $e) { fwrite(STDOUT, $e->getMessage()); }' . "\n");
-        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-        $out = stream_get_contents($pipes[1]);
-        $err = stream_get_contents($pipes[2]);
+        $proc = proc_open([PHP_BINARY, $script], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        [$out, $err] = self::drainPair($pipes[1], $pipes[2]);
         proc_close($proc);
         chmod($backupDir, 0o700); // let tearDown sweep
         unlink($script);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeTime\Tests;
 
+use SugarCraft\CodeTime\Tests\Support\DrainPipes;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Storage\HeartbeatReader;
 use SugarCraft\CodeTime\Store;
@@ -11,6 +12,9 @@ use PHPUnit\Framework\TestCase;
 
 final class StoreTest extends TestCase
 {
+
+    use DrainPipes;
+
     private string $tmp;
 
     protected function setUp(): void
@@ -393,9 +397,8 @@ final class StoreTest extends TestCase
             . '$store = new \\SugarCraft\\CodeTime\\Store(' . var_export($this->tmp, true) . ");\n"
             . '$rows = $store->loadDay(new \\DateTimeImmutable(' . var_export('2026-05-05', true) . "));\n"
             . 'fwrite(STDOUT, (string) count($rows));' . "\n");
-        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-        $out = stream_get_contents($pipes[1]);
-        $err = stream_get_contents($pipes[2]);
+        $proc = proc_open([PHP_BINARY, $script], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        [$out, $err] = self::drainPair($pipes[1], $pipes[2]);
         proc_close($proc);
         $this->assertSame('2', $out);
         $this->assertSame(2, substr_count($err, "\n"), 'exactly two counted notices, not silence and not a pile-up: ' . $err);
@@ -425,9 +428,8 @@ final class StoreTest extends TestCase
             . 'chmod($chmod, 0o600);' . "\n"
             . '$notes = $store->drainDiagnostics();' . "\n"
             . 'fwrite(STDOUT, $notes[\'dropped\'] . \'|\' . $notes[\'unreadable\']);' . "\n");
-        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-        $out = stream_get_contents($pipes[1]);
-        $err = stream_get_contents($pipes[2]);
+        $proc = proc_open([PHP_BINARY, $script], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        [$out, $err] = self::drainPair($pipes[1], $pipes[2]);
         proc_close($proc);
         $this->assertSame('', $err, 'the silent lane keeps every byte off stderr: ' . $err);
         $this->assertSame('2|1', $out, 'two dropped lines and one unreadable day still counted');
@@ -641,11 +643,8 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
             . '$store = new \\SugarCraft\\CodeTime\\Store(' . var_export($this->tmp, true) . ");\n"
             . '$rows = $store->loadDay(new \\DateTimeImmutable(' . var_export($day, true) . "));\n"
             . 'fwrite(STDOUT, (string) count($rows));' . "\n");
-        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-        $out = stream_get_contents($pipes[1]);
-        $err = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        $proc = proc_open([PHP_BINARY, $script], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        [$out, $err] = self::drainPair($pipes[1], $pipes[2]);
         $exit = proc_close($proc);
         unlink($script);
         return [$out, $err, $exit];

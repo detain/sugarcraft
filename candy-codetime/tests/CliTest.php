@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeTime\Tests;
 
+use SugarCraft\CodeTime\Tests\Support\DrainPipes;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\CodeTime\Ignore\SugarTrackIgnore;
 use SugarCraft\CodeTime\Support\Version;
@@ -24,6 +25,9 @@ use SugarCraft\CodeTime\Support\Version;
  */
 final class CliTest extends TestCase
 {
+
+    use DrainPipes;
+
     private string $dataDir;
     private string $workDir;
 
@@ -67,16 +71,27 @@ final class CliTest extends TestCase
         $bin = dirname(__DIR__) . '/bin/candy-codetime';
         $cmd = array_merge([PHP_BINARY, $bin], $args);
 
+        // 042: pin the child to the C locale beneath per-call overrides so an
+        // ambient LANG cannot flow translated strings into English needles.
+        // T::detect reads LC_ALL first, and the deliberate German test passes
+        // its own LC_ALL through $env, which still wins.
         $parentEnv = getenv();
         $fullEnv = array_merge(is_array($parentEnv) ? $parentEnv : [], [
+            'LC_ALL' => 'C.UTF-8',
+            'LANG' => 'C',
             'CANDY_CODETIME_DIR' => $this->dataDir,
         ], $env);
 
+        // 086: an unmapped stdin is inherited from the runner; 087: the
+        // drains must be concurrent, not stdout-to-EOF-then-hope.
         $descriptors = [
+            0 => ['file', '/dev/null', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
         if ($stdin !== null) {
+            // The pipe direction marker follows PHP's own manual example for
+            // child stdin: the parent writes through $pipes[0] with this shape.
             $descriptors[0] = ['pipe', 'r'];
         }
         $proc = proc_open($cmd, $descriptors, $pipes, $cwd ?? $this->workDir, $fullEnv);
@@ -86,10 +101,7 @@ final class CliTest extends TestCase
             fclose($pipes[0]);
         }
 
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        [$stdout, $stderr] = self::drainPair($pipes[1], $pipes[2]);
         $exit = proc_close($proc);
 
         return [
@@ -812,15 +824,14 @@ final class CliTest extends TestCase
         $script = dirname(__DIR__) . '/examples/plugin-heartbeat.example.sh';
         $parentEnv = getenv();
         $fullEnv = array_merge(is_array($parentEnv) ? $parentEnv : [], [
+            'LC_ALL' => 'C.UTF-8',
+            'LANG' => 'C',
             'CANDY_CODETIME_DIR' => $this->dataDir,
             'CODETIME_HOOK_BIN'  => $hookBin,
         ]);
-        $proc = proc_open(['sh', $script, $file, $project, $language], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $this->workDir, $fullEnv);
+        $proc = proc_open(['sh', $script, $file, $project, $language], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $this->workDir, $fullEnv);
         $this->assertIsResource($proc);
-        $stdout = (string) stream_get_contents($pipes[1]);
-        $stderr = (string) stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        [$stdout, $stderr] = self::drainPair($pipes[1], $pipes[2]);
 
         return ['stdout' => $stdout, 'stderr' => $stderr, 'exit' => proc_close($proc)];
     }
