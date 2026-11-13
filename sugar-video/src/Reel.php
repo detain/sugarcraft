@@ -54,6 +54,9 @@ final class Reel
     /** Fallback cell pixel height — see {@see DEFAULT_CELL_PX_W} for why 20. */
     private const DEFAULT_CELL_PX_H = 20;
 
+    /** Default luminance ramp; {@see withoutRamp()} returns to it (SV-L50). */
+    private const DEFAULT_RAMP = 'standard';
+
     /**
      * @param string      $path  Video file path ('' for synthetic/unbound)
      * @param Mode|null   $mode  Rendering mode (null = auto-detect)
@@ -94,7 +97,7 @@ final class Reel
         private readonly int $rows,
         private readonly ?float $fps,
         private readonly bool $loop = false,
-        private readonly string $ramp = 'standard',
+        private readonly string $ramp = self::DEFAULT_RAMP,
         private readonly ?string $subtitlePath = null,
         private readonly ?array $allowedHosts = null,
         private readonly array $headers = [],
@@ -325,7 +328,7 @@ final class Reel
      */
     public function withMode(Mode $mode): self
     {
-        return $this->with(mode: $mode);
+        return $this->mutate(mode: $mode);
     }
 
     /**
@@ -334,7 +337,7 @@ final class Reel
      */
     public function withAutoMode(): self
     {
-        return $this->with(mode: AutoMode::new());
+        return $this->mutate(mode: AutoMode::new());
     }
 
     /**
@@ -343,7 +346,7 @@ final class Reel
      */
     public function withLoop(bool $loop = true): self
     {
-        return $this->with(loop: $loop);
+        return $this->mutate(loop: $loop);
     }
 
     /**
@@ -357,7 +360,19 @@ final class Reel
         if (!LumaRamp::isValidRamp($name)) {
             throw new \InvalidArgumentException(Lang::t('ramp.unknown', ['name' => $name]));
         }
-        return $this->with(ramp: $name);
+        return $this->mutate(ramp: $name);
+    }
+
+    /**
+     * Return to the default luminance ramp (SV-L50).
+     *
+     * The `?? keep` builder semantics cannot express removal through null, so
+     * clearing rides an explicit sentinel — this is that door. Returns a new
+     * Reel (immutable).
+     */
+    public function withoutRamp(): self
+    {
+        return $this->mutate(clearRamp: true);
     }
 
     /**
@@ -370,7 +385,7 @@ final class Reel
         // 9999x9999 request must never round-trip through either.
         [$cols, $rows] = Player::clampCells($cols, $rows);
 
-        return $this->with(cols: $cols, rows: $rows, sizeSet: true);
+        return $this->mutate(cols: $cols, rows: $rows, sizeSet: true);
     }
 
     /**
@@ -391,7 +406,7 @@ final class Reel
             throw new \InvalidArgumentException(Lang::t('player.fps_positive'));
         }
 
-        return $this->with(fps: $fps, fpsSet: true);
+        return $this->mutate(fps: $fps, fpsSet: true);
     }
 
     /**
@@ -417,7 +432,7 @@ final class Reel
             throw new \InvalidArgumentException(Lang::t('player.frame_budget_negative', ['ms' => (string) $ms]));
         }
 
-        return $this->with(frameBudgetMs: $ms, frameBudgetSet: true);
+        return $this->mutate(frameBudgetMs: $ms, frameBudgetSet: true);
     }
 
     /**
@@ -432,7 +447,19 @@ final class Reel
      */
     public function withSubtitles(string $path): self
     {
-        return $this->with(subtitlePath: $path);
+        return $this->mutate(subtitlePath: $path);
+    }
+
+    /**
+     * Detach the subtitle track (SV-L50).
+     *
+     * A path-bound Reel can add captions with {@see withSubtitles()} and — this
+     * is the removal door the `?? keep` semantics lacked — take them off again;
+     * toPlayer()/play() after it run uncaptioned. Returns a new Reel (immutable).
+     */
+    public function withoutSubtitles(): self
+    {
+        return $this->mutate(clearSubtitles: true);
     }
 
     /**
@@ -440,7 +467,7 @@ final class Reel
      */
     public function withAudio(bool $on): self
     {
-        return $this->with(audioEnabled: $on);
+        return $this->mutate(audioEnabled: $on);
     }
 
     /**
@@ -498,6 +525,13 @@ final class Reel
      * so the restriction can be tightened after the fact. Returns a new Reel
      * (immutable).
      *
+     * There is deliberately NO withoutAllowedHosts() (SV-L50): a security
+     * allowlist never loosens via absence. Broadening is a re-derivation act —
+     * build the Reel again from {@see open()}/{@see openUrl()} with the intended
+     * list, or pass a wider list through this same re-validated door. (Clearing
+     * to the empty list would only lock remote sources harder: it fails closed
+     * at every later check, which is by design.)
+     *
      * @param list<string> $hosts Case-insensitive host allowlist.
      * @throws \InvalidArgumentException When a remote URL is already bound and
      *               its host is not in $hosts.
@@ -508,7 +542,7 @@ final class Reel
             self::assertHostAllowed($this->path, $hosts);
         }
 
-        return $this->with(allowedHosts: $hosts);
+        return $this->mutate(allowedHosts: $hosts);
     }
 
     /**
@@ -528,7 +562,15 @@ final class Reel
         // the raw array is what the decoder re-parses downstream (idempotent once safe).
         HttpHeaders::parse($headers);
 
-        return $this->with(headers: $headers);
+        return $this->mutate(headers: $headers);
+    }
+
+    /**
+     * Clear every request header (SV-L50). Returns a new Reel (immutable).
+     */
+    public function withoutHeaders(): self
+    {
+        return $this->mutate(clearHeaders: true);
     }
 
     /**
@@ -559,7 +601,7 @@ final class Reel
             );
         }
 
-        return $this->with(cellPxW: $w, cellPxH: $h, cellPxSet: true);
+        return $this->mutate(cellPxW: $w, cellPxH: $h, cellPxSet: true);
     }
 
     /**
@@ -713,7 +755,9 @@ final class Reel
     }
 
     /**
-     * Generic immutable-update helper: create a new Reel with changed fields.
+     * Generic immutable-update helper: create a new Reel with changed fields
+     * (AGENTS canonical: private `mutate()` — SV-L50/052; the public with*()
+     * setters and without*() removers are its only doors).
      *
      * @param string             $path  Leave null to keep current
      * @param Mode|AutoMode|null $mode  Leave null to keep current; AutoMode sets null (auto-detect)
@@ -729,11 +773,16 @@ final class Reel
      * @param int|null   $cellPxH Caller-measured cell pixel height, leave null to keep current
      * @param bool|null  $cellPxSet Sentinel for the pair, leave null to keep current
      * @param bool|null  $sizeSet  Sentinel for the explicit size, leave null to keep current
+     * @param bool|null  $clearSubtitles  Removal sentinel (SV-L50): true detaches the subtitle track
+     * @param bool|null  $clearHeaders    Removal sentinel (SV-L50): true empties the request headers
+     * @param bool|null  $clearRamp       Removal sentinel (SV-L50): true restores the default ramp
      *
      * The cellPx trio is coupled: pass all three together (as withCellPx() does) —
      * dimensions without cellPxSet stay inert, matching cellPx()'s set ⇒ non-null invariant.
+     * Removal cannot ride null either (null means keep), so it rides its own
+     * sentinel — only the without*() removers pass it (SV-L50).
      */
-    private function with(
+    private function mutate(
         ?string $path = null,
         Mode|AutoMode|null $mode = null,
         ?int $cols = null,
@@ -756,6 +805,12 @@ final class Reel
         // SV-M19: same law as fpsSet — 0.0 is a legal budget (the unbounded
         // opt-out), so a null prop cannot mark "the caller handed it".
         ?bool $frameBudgetSet = null,
+        // SV-L50: explicit removal sentinels — `?? keep` semantics cannot
+        // express clearing, so the without*() removers pass these instead
+        // of relying on null (which would mean "keep current").
+        ?bool $clearSubtitles = null,
+        ?bool $clearHeaders = null,
+        ?bool $clearRamp = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -767,10 +822,10 @@ final class Reel
             $rows ?? $this->rows,
             $fpsSet ? $fps : $this->fps,
             $loop ?? $this->loop,
-            $ramp ?? $this->ramp,
-            $subtitlePath ?? $this->subtitlePath,
+            $clearRamp ? self::DEFAULT_RAMP : ($ramp ?? $this->ramp),
+            $clearSubtitles ? null : ($subtitlePath ?? $this->subtitlePath),
             $allowedHosts ?? $this->allowedHosts,
-            $headers ?? $this->headers,
+            $clearHeaders ? [] : ($headers ?? $this->headers),
             $cellPxW ?? $this->cellPxW,
             $cellPxH ?? $this->cellPxH,
             $cellPxSet ?? $this->cellPxSet,

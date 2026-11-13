@@ -817,4 +817,85 @@ final class ReelTest extends TestCase
             @unlink($vtt);
         }
     }
+
+    /**
+     * @testdox The removal doors detach what the setters attached (SV-L50)
+     */
+    public function testTheRemoversDetachWhatTheWithersAttached(): void
+    {
+        $base = Reel::open('/fake.mp4');
+
+        $subs = $base->withSubtitles('/tmp/sv-l50-a.vtt')->withoutSubtitles();
+        self::assertNull($this->reelField($subs, 'subtitlePath'));
+
+        $headers = $base->withHeaders(['X-Test' => 'yes'])->withoutHeaders();
+        self::assertSame([], $this->reelField($headers, 'headers'));
+
+        $ramp = $base->withRamp('dense')->withoutRamp();
+        self::assertSame('standard', $this->reelField($ramp, 'ramp'));
+
+        // A setter-less base is stable through a remover (no-op clear).
+        self::assertNull($this->reelField($base->withoutSubtitles(), 'subtitlePath'));
+        self::assertSame('standard', $this->reelField($base->withoutRamp(), 'ramp'));
+    }
+
+    /**
+     * @testdox A detached subtitle track leaves the BUILT player uncaptioned (SV-L50)
+     */
+    public function testDetachedSubtitlesLeaveTheBuiltPlayerUncaptioned(): void
+    {
+        $dir = sys_get_temp_dir();
+        $gif = Synthetic::generate(
+            $dir . '/sugar-video-l50-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.gif',
+            16,
+            8,
+            4,
+            4,
+        );
+        $vtt = $dir . '/sugar-video-l50-' . getmypid() . '.vtt';
+        file_put_contents($vtt, "WEBVTT\n\n00:00.000 --> 00:02.000\nDetached caption\n");
+
+        try {
+            $player = Reel::open($gif)
+                ->withMode(Mode::Ascii)
+                ->withSubtitles($vtt)
+                ->withoutSubtitles()
+                ->toPlayer();
+
+            $track = (new \ReflectionProperty(Player::class, 'subtitles'))->getValue($player);
+            self::assertNull($track, 'withoutSubtitles() left the built player captioned');
+        } finally {
+            @unlink($gif);
+            @unlink($vtt);
+        }
+    }
+
+    /**
+     * @testdox The private builder is mutate() — AGENTS naming, zero legacy ->with( (SV-L50/052)
+     */
+    public function testTheBuilderIsNamedMutate(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Reel.php');
+
+        self::assertSame(0, substr_count($src, '->with('), 'a legacy ->with( call survived the rename');
+        self::assertSame(1, substr_count($src, 'private function mutate('));
+        self::assertGreaterThan(6, substr_count($src, '$this->mutate('));
+    }
+
+    /**
+     * @testdox The security allowlist carries no remover; re-validation keeps it moot (SV-L50)
+     */
+    public function testTheAllowlistHasNoRemoverDoor(): void
+    {
+        self::assertFalse(method_exists(Reel::class, 'withoutAllowedHosts'));
+
+        $reel = Reel::openUrl('https://example.com/clip.mp4', [], ['example.com']);
+        $this->expectException(\InvalidArgumentException::class);
+        $reel->withAllowedHosts(['other.example']);
+    }
+
+    private function reelField(Reel $reel, string $field): mixed
+    {
+        return (new \ReflectionProperty(Reel::class, $field))->getValue($reel);
+    }
 }
