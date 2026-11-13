@@ -15,15 +15,13 @@ final class ScanTest extends TestCase
 {
     public function testParseReturnsEmptyArrayForPlainText(): void
     {
-        $scan = new Scan();
-        $zones = $scan->parse('plain text without markers');
+        $zones = Scan::parse('plain text without markers');
         self::assertEmpty($zones);
     }
 
     public function testParseReturnsEmptyArrayForEmptyString(): void
     {
-        $scan = new Scan();
-        $zones = $scan->parse('');
+        $zones = Scan::parse('');
         self::assertEmpty($zones);
     }
 
@@ -32,8 +30,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('z1', 'HELLO');
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertCount(1, $zones);
         self::assertArrayHasKey('z1', $zones);
@@ -45,8 +42,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('a', 'AAA') . "\n" . $mark->wrap('b', 'BBB');
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertCount(2, $zones);
         self::assertSame('a', $zones['a']->id);
@@ -58,8 +54,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = "\x1b[38;5;196m" . $mark->wrap('c', 'RED') . "\x1b[0m";
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertCount(1, $zones);
         self::assertSame('c', $zones['c']->id);
@@ -70,8 +65,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = "\x1b]10;rgb:00/00/00\x07" . $mark->wrap('o', 'OSC') . "\x1b\\";
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertCount(1, $zones);
         self::assertSame('o', $zones['o']->id);
@@ -89,7 +83,7 @@ final class ScanTest extends TestCase
         foreach (['P', 'X', '^', '_'] as $introducer) {
             $rendered = "\x1b" . $introducer . 'q>0;1;2;3' . "\x1b\\" . $mark->wrap('z', 'AB');
 
-            $zones = (new Scan())->parse($rendered);
+            $zones = Scan::parse($rendered);
 
             self::assertArrayHasKey('z', $zones, "sequence with introducer {$introducer}");
             self::assertSame(1, $zones['z']->startCol, "introducer {$introducer} inflated the column");
@@ -104,7 +98,7 @@ final class ScanTest extends TestCase
         // posture as an unterminated OSC), and only the earlier zone survives.
         $rendered = $mark->wrap('a', 'A') . "\x1b_Pq#5";
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertSame(['a'], array_keys($zones));
         self::assertSame(1, $zones['a']->endCol);
@@ -124,7 +118,7 @@ final class ScanTest extends TestCase
         $tag = $open . 'in' . $close;
         $rendered = "\x1b]2;" . $tag . 'XY' . $open . '/in' . $close . "\x07tail";
 
-        self::assertSame([], (new Scan())->parse($rendered));
+        self::assertSame([], Scan::parse($rendered));
         self::assertSame("\x1b]2;XY\x07tail", Scan::strip($rendered));
     }
 
@@ -133,8 +127,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('good', 'GOOD') . "\xEE\x80\x80unterm";
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         // The well-formed zone 'good' should still be found.
         self::assertArrayHasKey('good', $zones);
@@ -146,8 +139,7 @@ final class ScanTest extends TestCase
         // Japanese characters — 3 chars × 2 cells each = 6 columns.
         $rendered = $mark->wrap('jk', '日本語');
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertSame(6, $zones['jk']->width());
     }
@@ -157,8 +149,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('nl', "AAA\nBBB");
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertSame(1, $zones['nl']->startRow);
         self::assertGreaterThanOrEqual(2, $zones['nl']->endRow);
@@ -173,7 +164,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('nlonly', "\n") . 'B';
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertArrayNotHasKey('nlonly', $zones);
         self::assertSame([], $zones);
@@ -186,8 +177,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         // The zone itself should still be discovered.
         $rendered = $mark->wrap('ok', 'OK');
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
         self::assertCount(1, $zones);
         self::assertSame('ok', $zones['ok']->id);
     }
@@ -207,8 +197,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('x', 'HI') . $loneCloseSentinel . ' orphaned';
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         // The well-formed zone 'x' must still be discovered.
         self::assertArrayHasKey('x', $zones);
@@ -237,8 +226,7 @@ final class ScanTest extends TestCase
         // on the combining char alone would return empty.
         $rendered = $mark->wrap('comb', $eWithAcute);
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         // Zone must be discovered despite the combining char handling.
         self::assertArrayHasKey('comb', $zones);
@@ -264,8 +252,7 @@ final class ScanTest extends TestCase
 
         // Case 1: content with trailing row, close after content (col > 1).
         $rendered1 = $mark->wrap('multi', "AAA\nBBB");
-        $scan1 = new Scan();
-        $zones1 = $scan1->parse($rendered1);
+        $zones1 = Scan::parse($rendered1);
 
         self::assertArrayHasKey('multi', $zones1);
         $z1 = $zones1['multi'];
@@ -277,8 +264,7 @@ final class ScanTest extends TestCase
 
         // Case 2: content with newline-only trailing row, close at col 1.
         $rendered2 = $mark->wrap('nlonly2', "AAA\n");
-        $scan2 = new Scan();
-        $zones2 = $scan2->parse($rendered2);
+        $zones2 = Scan::parse($rendered2);
 
         self::assertArrayHasKey('nlonly2', $zones2);
         $z2 = $zones2['nlonly2'];
@@ -302,8 +288,7 @@ final class ScanTest extends TestCase
         // "HELLO" occupies 5 columns starting at col 1.
         $rendered = $mark->wrap('wide', 'HELLO');
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered, 3); // Clamp to 3 columns.
+        $zones = Scan::parse($rendered, 3); // Clamp to 3 columns.
 
         self::assertArrayHasKey('wide', $zones);
         $zone = $zones['wide'];
@@ -323,8 +308,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('normal', 'HELLO');
 
-        $scan = new Scan();
-        $zones = $scan->parse($rendered); // No width.
+        $zones = Scan::parse($rendered); // No width.
 
         self::assertArrayHasKey('normal', $zones);
         $zone = $zones['normal'];
@@ -333,57 +317,56 @@ final class ScanTest extends TestCase
     }
 
     /**
-     * A zone that opens entirely beyond the right edge used to keep its raw
-     * startCol while only the endCol was clamped — an inverted bbox
-     * (endCol < startCol, width() = -2) that sugar-mouse / relative-math
-     * consumers read as negative extents.  Both ends now clamp into
-     * [1, width], collapsing the zone to a degenerate single column pinned
-     * at the right edge — non-negative by construction.
+     * SM-S28: a zone that opens entirely beyond the right edge used to clamp
+     * into a degenerate single column pinned at the viewport edge — a 1-col
+     * sliver that could claim clicks UNDER whatever the terminal really
+     * painted there, breaking the paints-no-cell/claims-nothing rule the
+     * class docblock promises. Such a zone (pre-clamp startCol > width) is
+     * now DROPPED: no visible cell of the frame lies inside its rect.
      */
-    public function testParseWithWidthZoneBeyondRightEdgeCollapsesToEdgeColumn(): void
+    public function testParseWithWidthZoneBeyondRightEdgeIsDropped(): void
     {
         $mark = new Mark();
         // Five visible cells first: 'off' opens at col 6, content spans
         // cols 6–7 — wholly outside a 3-column viewport.
         $rendered = '     ' . $mark->wrap('off', 'AB');
 
-        $zones = (new Scan())->parse($rendered, 3);
+        $zones = Scan::parse($rendered, 3);
 
-        self::assertArrayHasKey('off', $zones);
-        $zone = $zones['off'];
-        self::assertSame(3, $zone->startCol);
-        self::assertSame(3, $zone->endCol);
-        self::assertGreaterThanOrEqual(1, $zone->width());
-        self::assertSame(1, $zone->height());
+        self::assertSame([], $zones, 'an open-past-edge zone is dropped, never collapsed to an edge sliver');
 
-        // hit() semantics survive the collapse: the degenerate zone is
-        // reachable exactly at the edge column, nowhere beyond it.
+        // The edge column belongs to the real content (leading spaces):
+        // nothing steals its clicks.
         $scanner = (new Scanner())->scan($rendered, 3);
-        self::assertSame('off', $scanner->hit(3, 1)?->id);
+        self::assertNull($scanner->hit(3, 1));
         self::assertNull($scanner->hit(4, 1));
     }
 
     /**
-     * Same collapse for a multi-row zone that opens beyond the right edge:
-     * the columns degenerate to the edge while the row span stays honest —
-     * extents never go negative on either axis.
+     * Same drop for a multi-row zone whose rect opens beyond the right
+     * edge: rows can not rescue columns — the rect owns no visible cell.
      */
-    public function testParseWithWidthOffscreenMultiRowZoneStaysNonNegative(): void
+    public function testParseWithWidthOffscreenMultiRowZoneIsDropped(): void
     {
         $mark = new Mark();
         // Opens at col 6 (outside a 3-col viewport), wraps to row 2.
         $rendered = '     ' . $mark->wrap('tall', "AB\nC");
 
-        $zones = (new Scan())->parse($rendered, 3);
+        self::assertSame([], Scan::parse($rendered, 3));
+    }
 
-        self::assertArrayHasKey('tall', $zones);
-        $zone = $zones['tall'];
-        self::assertSame(3, $zone->startCol);
-        self::assertSame(3, $zone->endCol);
-        self::assertSame(1, $zone->startRow);
-        self::assertSame(2, $zone->endRow);
-        self::assertGreaterThanOrEqual(1, $zone->width());
-        self::assertGreaterThanOrEqual(1, $zone->height());
+    /**
+     * A viewport narrower than one column has no cell to paint in, so the
+     * clamp drops everything instead of flooring a sliver at fake column 1.
+     */
+    public function testParseWithSubColumnWidthDropsAllZones(): void
+    {
+        $mark = new Mark();
+        $rendered = $mark->wrap('a', 'HELLO');
+
+        self::assertSame(['a'], array_keys(Scan::parse($rendered, 5)), 'sanity: same input at a real width records');
+        self::assertSame([], Scan::parse($rendered, 0));
+        self::assertSame([], Scan::parse($rendered, -4));
     }
 
     // ─── [BUG] duplicate zone id rejection ──────────────────────────────────
@@ -407,7 +390,7 @@ final class ScanTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('duplicate zone id');
-        (new Scan())->parse($rendered);
+        Scan::parse($rendered);
     }
 
     /**
@@ -423,7 +406,7 @@ final class ScanTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("'dup'");
-        (new Scan())->parse($rendered);
+        Scan::parse($rendered);
     }
 
     /**
@@ -436,7 +419,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('dup', 'A') . $mark->wrap('dup-2', 'B') . $mark->wrap('dupe', 'C');
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
         self::assertCount(3, $zones);
         self::assertArrayHasKey('dup', $zones);
         self::assertArrayHasKey('dup-2', $zones);
@@ -465,11 +448,11 @@ final class ScanTest extends TestCase
         $four = str_repeat(Sentinel::OPEN, 100000);
 
         $start  = microtime(true);
-        $zonesN = (new Scan())->parse($n);
+        $zonesN = Scan::parse($n);
         $timeN  = microtime(true) - $start;
 
         $start   = microtime(true);
-        $zones4N = (new Scan())->parse($four);
+        $zones4N = Scan::parse($four);
         $time4N  = microtime(true) - $start;
 
         self::assertSame([], $zonesN, 'unmatched open sentinels must yield no zones');
@@ -500,7 +483,7 @@ final class ScanTest extends TestCase
         // so the trailing well-formed zone parses exactly as normal.
         $rendered = str_repeat(Sentinel::CLOSE, 500) . $mark->wrap('real', 'HELLO');
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
         self::assertCount(1, $zones);
         self::assertArrayHasKey('real', $zones);
         self::assertSame(1, $zones['real']->startCol);
@@ -525,7 +508,7 @@ final class ScanTest extends TestCase
         $mark  = new Mark();
         $rendered = $mark->wrap('emoji', $emoji);
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertArrayHasKey('emoji', $zones);
         self::assertGreaterThanOrEqual(2, $zones['emoji']->width());
@@ -542,7 +525,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('cjk3', $cjk3);
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertArrayHasKey('cjk3', $zones);
         self::assertGreaterThanOrEqual(1, $zones['cjk3']->width());
@@ -559,7 +542,7 @@ final class ScanTest extends TestCase
         $mark   = new Mark();
         $rendered = $mark->wrap('latin2', $latin2);
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertArrayHasKey('latin2', $zones);
         self::assertGreaterThanOrEqual(1, $zones['latin2']->width());
@@ -575,7 +558,7 @@ final class ScanTest extends TestCase
         $mark = new Mark();
         $rendered = $mark->wrap('flag', $flag);
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertArrayHasKey('flag', $zones);
         self::assertGreaterThanOrEqual(1, $zones['flag']->width());
@@ -618,7 +601,7 @@ final class ScanTest extends TestCase
     public function testTrailingBlankLinesInsideTheTagsDoNotExtendTheBox(): void
     {
         $mark  = new Mark();
-        $zones = (new Scan())->parse($mark->wrap('btn', "abc\n\n"));
+        $zones = Scan::parse($mark->wrap('btn', "abc\n\n"));
         self::assertCount(1, $zones);
         self::assertSame(1, $zones['btn']->startRow);
         self::assertSame(1, $zones['btn']->endRow);
@@ -632,7 +615,7 @@ final class ScanTest extends TestCase
     public function testInteriorBlankRowsStillUnionPaintedRowsAboveAndBelow(): void
     {
         $mark = new Mark();
-        $zone = (new Scan())->parse($mark->wrap('btn', "a\n\nb"))['btn'];
+        $zone = Scan::parse($mark->wrap('btn', "a\n\nb"))['btn'];
         self::assertSame(1, $zone->startRow);
         self::assertSame(3, $zone->endRow);
         self::assertSame(1, $zone->endCol);

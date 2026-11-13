@@ -36,7 +36,7 @@ final class ScanMalformedMarkupTest extends TestCase
         // lone sentinel and the text after it is measured, not skipped.
         $rendered = "ab{$o}cd efgh ij{$c}" . str_repeat('x', 20) . Mark::zone('z', 'QQQQ');
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertSame([33, 1, 36, 1], self::box($zones['z']));
     }
@@ -47,7 +47,7 @@ final class ScanMalformedMarkupTest extends TestCase
         $c = Sentinel::CLOSE;
         $rendered = "ab{$o}cd\nef\ngh{$c}xx\n" . Mark::zone('z', 'QQQQ');
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertSame([1, 4, 4, 4], self::box($zones['z']));
     }
@@ -61,7 +61,7 @@ final class ScanMalformedMarkupTest extends TestCase
         // guard, losing every zone in the frame.
         $rendered = "{$o}{$c}{$o}{$c}{$o}/{$c}" . Mark::zone('z', 'QQQQ');
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertSame(['z'], array_keys($zones));
         self::assertSame([1, 1, 4, 1], self::box($zones['z']));
@@ -74,7 +74,7 @@ final class ScanMalformedMarkupTest extends TestCase
         $long = str_repeat('a', Mark::MAX_ID_BYTES + 1);
         $rendered = $o . $long . $c . Mark::zone('z', 'Q');
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertSame(['z'], array_keys($zones));
         self::assertSame(Mark::MAX_ID_BYTES + 2, $zones['z']->startCol);
@@ -88,7 +88,7 @@ final class ScanMalformedMarkupTest extends TestCase
         // of anything, and its text is measured as visible cells.
         $rendered = Mark::zone('z', 'AB') . "{$o}/z z{$c}" . Mark::zone('y', 'C');
 
-        $zones = (new Scan())->parse($rendered);
+        $zones = Scan::parse($rendered);
 
         self::assertSame([1, 1, 2, 1], self::box($zones['z']));
         // 'AB' (2) + '/z z' (4) → 'C' paints at col 7.
@@ -99,8 +99,8 @@ final class ScanMalformedMarkupTest extends TestCase
 
     public function testCrlfAdvancesRowLikeLf(): void
     {
-        $crlf = (new Scan())->parse("AAAA\r\n" . Mark::zone('z', 'QQQQ'));
-        $lf   = (new Scan())->parse("AAAA\n" . Mark::zone('z', 'QQQQ'));
+        $crlf = Scan::parse("AAAA\r\n" . Mark::zone('z', 'QQQQ'));
+        $lf   = Scan::parse("AAAA\n" . Mark::zone('z', 'QQQQ'));
 
         self::assertSame([1, 2, 4, 2], self::box($crlf['z']));
         self::assertSame(self::box($lf['z']), self::box($crlf['z']));
@@ -108,7 +108,7 @@ final class ScanMalformedMarkupTest extends TestCase
 
     public function testCrlfInsideMultiRowZoneSpansBothRows(): void
     {
-        $zones = (new Scan())->parse(Mark::zone('z', "ABC\r\nDE") . "\r\n" . Mark::zone('y', 'F'));
+        $zones = Scan::parse(Mark::zone('z', "ABC\r\nDE") . "\r\n" . Mark::zone('y', 'F'));
 
         self::assertSame([1, 1, 3, 2], self::box($zones['z']));
         self::assertSame([1, 3, 1, 3], self::box($zones['y']));
@@ -116,7 +116,7 @@ final class ScanMalformedMarkupTest extends TestCase
 
     public function testLoneCarriageReturnResetsColumnOnSameRow(): void
     {
-        $zones = (new Scan())->parse("AAAA\r" . Mark::zone('z', 'QQ'));
+        $zones = Scan::parse("AAAA\r" . Mark::zone('z', 'QQ'));
 
         self::assertSame([1, 1, 2, 1], self::box($zones['z']));
     }
@@ -124,14 +124,14 @@ final class ScanMalformedMarkupTest extends TestCase
     public function testZonePaintingAcrossLoneCarriageReturnCoversBothRuns(): void
     {
         // Opens at col 3, paints cols 3-6, CR, then paints col 1 again.
-        $zones = (new Scan())->parse('XX' . Mark::zone('z', "ABCD\rQ"));
+        $zones = Scan::parse('XX' . Mark::zone('z', "ABCD\rQ"));
 
         self::assertSame([1, 1, 6, 1], self::box($zones['z']));
     }
 
     public function testZoneEndingWithLoneCarriageReturnKeepsItsExtent(): void
     {
-        $zones = (new Scan())->parse('XX' . Mark::zone('z', "AB\r") . Mark::zone('y', 'Q'));
+        $zones = Scan::parse('XX' . Mark::zone('z', "AB\r") . Mark::zone('y', 'Q'));
 
         self::assertSame([3, 1, 4, 1], self::box($zones['z']));
         self::assertSame([1, 1, 1, 1], self::box($zones['y']));
@@ -141,7 +141,7 @@ final class ScanMalformedMarkupTest extends TestCase
     {
         // z opens at col 10 but paints nothing there: the CR sends it back
         // to col 1 and it paints cols 1-3 only.
-        $zones = (new Scan())->parse('123456789' . Mark::zone('z', "\rabc"));
+        $zones = Scan::parse('123456789' . Mark::zone('z', "\rabc"));
 
         self::assertSame([1, 1, 3, 1], self::box($zones['z']));
     }
@@ -161,21 +161,21 @@ final class ScanMalformedMarkupTest extends TestCase
     {
         // Opens at col 5, paints 5-6, CR, paints 1-2, CR, paints nothing:
         // the run after the FIRST CR still landed from col 1.
-        $zones = (new Scan())->parse('ABCD' . Mark::zone('z', "ef\rgh\r"));
+        $zones = Scan::parse('ABCD' . Mark::zone('z', "ef\rgh\r"));
 
         self::assertSame([1, 1, 6, 1], self::box($zones['z']));
     }
 
     public function testRepeatedLeadingCarriageReturnsKeepOnlyPaintedExtent(): void
     {
-        $zones = (new Scan())->parse('12345678' . Mark::zone('z', "\r\rab"));
+        $zones = Scan::parse('12345678' . Mark::zone('z', "\r\rab"));
 
         self::assertSame([1, 1, 2, 1], self::box($zones['z']));
     }
 
     public function testLeadingCarriageReturnThenNewlineSpansOnlyPaintedColumns(): void
     {
-        $zones = (new Scan())->parse('123456789' . Mark::zone('z', "\rab\ncd"));
+        $zones = Scan::parse('123456789' . Mark::zone('z', "\rab\ncd"));
 
         self::assertSame([1, 1, 2, 2], self::box($zones['z']));
     }
@@ -185,7 +185,7 @@ final class ScanMalformedMarkupTest extends TestCase
         // z opens at col 10 of row 1 but paints nothing there: its first cell
         // is col 1 of row 2.  It used to keep the open column, giving a
         // 1-col sliver at col 10 of rows 1-2 that missed 'abc' entirely.
-        $zones = (new Scan())->parse('123456789' . Mark::zone('z', "\nabc"));
+        $zones = Scan::parse('123456789' . Mark::zone('z', "\nabc"));
 
         self::assertSame([1, 2, 3, 2], self::box($zones['z']));
     }
@@ -208,11 +208,11 @@ final class ScanMalformedMarkupTest extends TestCase
         // The re-anchor is not limited to mid-row opens: opened at column 1,
         // z still paints nothing on row 1.  It used to span rows 1-2 (cols
         // 1-3 — bubblezone's Start(0,0) End(2,1)), claiming blank row-1 cells.
-        $zones = (new Scan())->parse(Mark::zone('z', "\nabc"));
+        $zones = Scan::parse(Mark::zone('z', "\nabc"));
         self::assertSame([1, 2, 3, 2], self::box($zones['z']));
 
         // Column 1 of a later row, behind SGR: same rule.
-        $zones = (new Scan())->parse("XY\n" . Mark::zone('z', "\x1b[1m\nabc"));
+        $zones = Scan::parse("XY\n" . Mark::zone('z', "\x1b[1m\nabc"));
         self::assertSame([1, 3, 3, 3], self::box($zones['z']));
     }
 
@@ -220,8 +220,8 @@ final class ScanMalformedMarkupTest extends TestCase
     {
         // Moving the zero-width open tag across the paint-free "\n" must not
         // change the bbox — the anchor is the first painted cell.
-        $leading = (new Scan())->parse('123456789' . Mark::zone('z', "\nabc"));
-        $moved   = (new Scan())->parse("123456789\n" . Mark::zone('z', 'abc'));
+        $leading = Scan::parse('123456789' . Mark::zone('z', "\nabc"));
+        $moved   = Scan::parse("123456789\n" . Mark::zone('z', 'abc'));
 
         self::assertSame(self::box($moved['z']), self::box($leading['z']));
     }
@@ -242,21 +242,21 @@ final class ScanMalformedMarkupTest extends TestCase
     public function testSeveralLeadingNewlinesAndZeroWidthBytesSkipToFirstPaintedRow(): void
     {
         // SGR and blank rows paint nothing; the zone starts on row 3.
-        $zones = (new Scan())->parse('12345' . Mark::zone('z', "\x1b[1m\n\nab\ncdef\x1b[0m"));
+        $zones = Scan::parse('12345' . Mark::zone('z', "\x1b[1m\n\nab\ncdef\x1b[0m"));
 
         self::assertSame([1, 3, 4, 4], self::box($zones['z']));
     }
 
     public function testLeadingNewlineZoneOpenedPastViewportEdgeStaysInside(): void
     {
-        $zones = (new Scan())->parse('123456789' . Mark::zone('z', "\nab"), 5);
+        $zones = Scan::parse('123456789' . Mark::zone('z', "\nab"), 5);
 
         self::assertSame([1, 2, 2, 2], self::box($zones['z']));
     }
 
     public function testLeadingNewlineOnlyZoneIsStillNotEmitted(): void
     {
-        $zones = (new Scan())->parse('12345' . Mark::zone('z', "\n\n") . 'B');
+        $zones = Scan::parse('12345' . Mark::zone('z', "\n\n") . 'B');
 
         self::assertSame([], $zones);
     }
@@ -265,7 +265,7 @@ final class ScanMalformedMarkupTest extends TestCase
 
     public function testEmptyContentZoneIsNotEmitted(): void
     {
-        $zones = (new Scan())->parse('AAAA' . Mark::zone('e', '') . 'B');
+        $zones = Scan::parse('AAAA' . Mark::zone('e', '') . 'B');
 
         self::assertSame([], $zones);
     }
@@ -281,7 +281,7 @@ final class ScanMalformedMarkupTest extends TestCase
     public function testZeroWidthOnlyContentZoneIsNotEmitted(): void
     {
         // An SGR-only payload paints no cell either.
-        $zones = (new Scan())->parse('AA' . Mark::zone('e', "\x1b[1m\x1b[0m") . 'B');
+        $zones = Scan::parse('AA' . Mark::zone('e', "\x1b[1m\x1b[0m") . 'B');
 
         self::assertSame([], $zones);
     }
@@ -290,7 +290,7 @@ final class ScanMalformedMarkupTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("'e'");
-        (new Scan())->parse(Mark::zone('e', '') . Mark::zone('e', 'x'));
+        Scan::parse(Mark::zone('e', '') . Mark::zone('e', 'x'));
     }
 
     // ─── documented lenient cases ───────────────────────────────────────────
@@ -300,7 +300,7 @@ final class ScanMalformedMarkupTest extends TestCase
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
         // A frame clipped below a zone's open tag still carries its close.
-        $zones = (new Scan())->parse("AA{$o}/gone{$c}" . Mark::zone('z', 'Q'));
+        $zones = Scan::parse("AA{$o}/gone{$c}" . Mark::zone('z', 'Q'));
 
         self::assertSame([3, 1, 3, 1], self::box($zones['z']));
         self::assertCount(1, $zones);
@@ -311,7 +311,7 @@ final class ScanMalformedMarkupTest extends TestCase
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
         // A frame clipped above a zone's close tag still carries its open.
-        $zones = (new Scan())->parse(Mark::zone('z', 'Q') . "{$o}cut{$c}BB");
+        $zones = Scan::parse(Mark::zone('z', 'Q') . "{$o}cut{$c}BB");
 
         self::assertSame(['z'], array_keys($zones));
     }
@@ -327,14 +327,13 @@ final class ScanMalformedMarkupTest extends TestCase
 
     public function testOneInstanceIsReusableAfterAThrow(): void
     {
-        $scan = new Scan();
         try {
-            $scan->parse(Mark::zone('d', 'A') . Mark::zone('d', 'B'));
+            Scan::parse(Mark::zone('d', 'A') . Mark::zone('d', 'B'));
             self::fail('duplicate id must throw');
         } catch (\InvalidArgumentException) {
         }
 
-        $zones = $scan->parse(Mark::zone('d', 'A'));
+        $zones = Scan::parse(Mark::zone('d', 'A'));
 
         self::assertSame([1, 1, 1, 1], self::box($zones['d']));
     }
@@ -347,7 +346,7 @@ final class ScanMalformedMarkupTest extends TestCase
         // old walk swallowed the ESC and terminated on the next '[' — the
         // rest of the cancel-introducing sequence then painted as text and
         // the zone registered two phantom columns.
-        $zones = (new Scan())->parse('12345' . Mark::zone('z', "\x1b[3\x1b[0mAB"));
+        $zones = Scan::parse('12345' . Mark::zone('z', "\x1b[3\x1b[0mAB"));
 
         self::assertSame([6, 1, 7, 1], self::box($zones['z']), 'AB paints cols 6-7; "\x1b[0m" is consumed as a sequence');
     }
@@ -357,7 +356,7 @@ final class ScanMalformedMarkupTest extends TestCase
         // A malformed OSC (no BEL/ST before a CR): the walk must stop before
         // the CR so the carriage-return branch resets the column, and the
         // text after it must be measured, not swallowed to end of render.
-        $zones = (new Scan())->parse("AA\x1b]0;title\rBB" . Mark::zone('z', 'Q'));
+        $zones = Scan::parse("AA\x1b]0;title\rBB" . Mark::zone('z', 'Q'));
 
         self::assertSame(['z'], array_keys($zones), 'the CR must not keep the OSC walk alive into the zone tag');
         self::assertSame([3, 1, 3, 1], self::box($zones['z']), 'CR distributed: BB is back at cols 1-2, so z paints col 3');
@@ -365,14 +364,14 @@ final class ScanMalformedMarkupTest extends TestCase
 
     public function testLfMidOscEndsSequenceAndAdvancesRow(): void
     {
-        $zones = (new Scan())->parse("AA\x1b]0;t\nBB" . Mark::zone('z', 'Q'));
+        $zones = Scan::parse("AA\x1b]0;t\nBB" . Mark::zone('z', 'Q'));
 
         self::assertSame([3, 2, 3, 2], self::box($zones['z']), 'the LF is distributed: BB lands on row 2, z follows it');
     }
 
     public function testEscMidDcsCancelsAndNextSequenceIsRead(): void
     {
-        $zones = (new Scan())->parse('XY' . "\x1bPq#0;2\x1b[0m" . Mark::zone('z', 'Q'));
+        $zones = Scan::parse('XY' . "\x1bPq#0;2\x1b[0m" . Mark::zone('z', 'Q'));
 
         self::assertSame([3, 1, 3, 1], self::box($zones['z']), 'ESC cancels the DCS; the SGR reset is then consumed as a sequence, not text');
     }
@@ -384,7 +383,7 @@ final class ScanMalformedMarkupTest extends TestCase
         // payload the branch exists to pass through).  Ending the walk on one
         // would measure the graphics data as visible text and drift every
         // zone below the image.
-        $zones = (new Scan())->parse('AB' . "\x1bPq#0;2;0\r\n?1;1;0,64#1;2;0,64\x1b\\" . Mark::zone('z', 'Q'));
+        $zones = Scan::parse('AB' . "\x1bPq#0;2;0\r\n?1;1;0,64#1;2;0,64\x1b\\" . Mark::zone('z', 'Q'));
 
         self::assertSame([3, 1, 3, 1], self::box($zones['z']), 'a sixel with CRLF payload stays zero-width');
     }
@@ -395,7 +394,7 @@ final class ScanMalformedMarkupTest extends TestCase
         // terminated OSC 8 hyperlink all walk exactly as before.
         $frame = "AB\x1b[1m\x1b]0;title\x07\x1b]8;;http://example.com\x1b\\CD" . Mark::zone('z', 'Q');
 
-        $zones = (new Scan())->parse($frame);
+        $zones = Scan::parse($frame);
 
         self::assertSame([5, 1, 5, 1], self::box($zones['z']), 'ABCD paints cols 1-4; z paints col 5');
     }

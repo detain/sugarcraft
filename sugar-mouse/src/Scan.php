@@ -15,7 +15,8 @@ use SugarCraft\Core\Util\Width;
  * via {@see Width::string()}.
  *
  * Stateless and reentrant: {@see parse()} keeps every piece of scan state in
- * locals, so one instance may be reused, shared, or re-entered freely.
+ * locals and is itself static — `Scan::parse($frame, $width)` — so no
+ * instance state exists to corrupt, share, or re-enter.
  *
  * ## Markup grammar (the decode side of {@see Mark::wrap()})
  *
@@ -55,6 +56,8 @@ use SugarCraft\Core\Util\Width;
  * | orphan close (no matching open)         | tag skipped, no zone                     |
  * | unclosed open (no close before EOS)     | tag skipped, no zone                     |
  * | zone whose content paints no cell       | no zone (it has no cell to hit)          |
+ * | clamped zone left painting no cell      | dropped too — never an edge sliver       |
+ * |                                         | (viewport clamp, see `parse()` width)    |
  * | lone sentinel / invalid id              | 3 sentinel bytes skipped, text measured  |
  *
  * The orphan-close and unclosed-open rows are deliberately lenient: a frame
@@ -101,7 +104,12 @@ use SugarCraft\Core\Util\Width;
  *
  * {@see strip()} removes the tags from a frame without computing bounds —
  * it applies exactly the tag rule {@see parse()} decodes, so the cleaned
- * display string and the scanned bounds stay in lock-step.
+ * display string and the scanned bounds stay in lock-step. The one
+ * documented divergence: strip's walk is byte-wise, so a sentinel-shaped
+ * run hidden INSIDE an OSC/DCS payload is cut there while parse skips the
+ * sequence whole — no zone shifts (payload is invisible markup either
+ * way), but the surviving sequence's payload bytes come out mangled.
+ * Sweep untrusted content before it reaches either side.
  *
  * Design note — streaming/chunked parsing: for large terminals or
  * streaming renderers, a ScanIterator (implementing IteratorAggregate)
@@ -119,9 +127,12 @@ final class Scan
      * @param int|null $width  When provided, both startCol and endCol are
      *                         clamped into [1, width].  Useful when rendering
      *                         in a known viewport: zones cannot extend past
-     *                         the visible area, and a zone that opens beyond
-     *                         the right edge collapses to a degenerate
-     *                         column at the edge instead of an inverted bbox.
+     *                         the visible area. A zone that would paint no
+     *                         cell after clamping — one opening fully past
+     *                         the right edge, or any viewport narrower than
+     *                         one column — is DROPPED, not collapsed onto
+     *                         the edge column (an edge sliver would steal
+     *                         clicks from the real content there).
      *                         null = no clamp (default).
      *
      * @return array<string, Zone> id => Zone, in close order
@@ -129,7 +140,7 @@ final class Scan
      * @throws \InvalidArgumentException When the same zone id is opened twice
      *         in one render (see the class docblock's malformed-markup matrix).
      */
-    public function parse(string $rendered, ?int $width = null): array
+    public static function parse(string $rendered, ?int $width = null): array
     {
         /**
          * Zones whose open tag has been seen and whose close has not.
@@ -488,14 +499,30 @@ final class Scan
             $endRow = max($endRow, $bounds['maxRow']);
         }
         if ($width !== null) {
-            // Clamp BOTH ends into the viewport.  A zone that opens past the
-            // right edge would otherwise keep an unclamped startCol above a
-            // clamped endCol — an inverted bbox with a negative width().
-            // Clamping both sides monotonically leaves in-viewport zones
-            // untouched and collapses fully-offscreen ones to a degenerate
-            // column at the edge.
+            if ($width < 1) {
+                // A viewport with fewer than one column owns no cell —
+                // nothing can paint inside it, so nothing may claim it.
+                return null;
+            }
+            if ($startCol > $width) {
+                // The zone opens fully past the right edge. Clamping its
+                // ends into [1, width] would collapse it onto the edge
+                // column — a sliver that steals clicks from whatever the
+                // terminal really painted there. No visible cell of the
+                // frame belongs to the zone, so per the paints-no-cell /
+                // claims-nothing rule it is dropped, not clamped.
+                return null;
+            }
+            // Clamp BOTH ends into the viewport.  Clamping both sides
+            // monotonically leaves in-viewport zones untouched; a residual
+            // inverted span (endCol < startCol after clamping) paints no
+            // cell either and is dropped below rather than kept as a
+            // negative-width bbox.
             $startCol = max(1, min($startCol, $width));
             $endCol   = max(1, min($endCol, $width));
+            if ($endCol < $startCol) {
+                return null;
+            }
         }
         return new Zone($id, $startCol, $startRow, $endCol, $endRow);
     }
@@ -560,9 +587,12 @@ final class Scan
      * (id charsets forbid ESC and control bytes, so an escape byte always
      * breaks the tag shape) — hostile input that {@see strip()} removes while
      * parse never saw it as a tag. Removing bytes parse considered invisible
-     * markup cannot shift any zone the consumer will act on; sweeping
-     * untrusted content before it reaches either side stays the consumer's
-     * duty (see {@see Sentinel}).
+     * markup cannot shift any zone the consumer will act on; it DOES mangle
+     * the surviving sequence's payload (a window title or DCS graphic loses
+     * the cut bytes) — a documented consequence of the fail-safe byte-wise
+     * posture (gate G11 default: document, do not re-shape the walk).
+     * Sweeping untrusted content before it reaches either side stays the
+     * consumer's duty (see {@see Sentinel}).
      */
     public static function strip(string $rendered): string
     {

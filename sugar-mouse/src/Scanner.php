@@ -57,8 +57,7 @@ final class Scanner
      */
     public function scan(string $rendered, ?int $width = null): self
     {
-        $parser = new Scan();
-        $this->zones = $parser->parse($rendered, $width);
+        $this->zones = Scan::parse($rendered, $width);
         $this->grid = null; // invalidate the spatial index — zones changed.
         return $this;
     }

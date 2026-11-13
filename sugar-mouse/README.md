@@ -69,7 +69,7 @@ if ($click !== null) {
 | Class | Role |
 |---|---|
 | `Mark` | Wrap content with private-use sentinel tags (`Mark::new()`, `Mark::zone()`, `Mark::disabled()`; `Mark::isValidId()` is the id predicate both encoder and decoder share; `Mark::untrusted()` sweeps foreign framing bytes off untrusted labels; `Mark::escapeForMessage()` renders hostile ids safely in errors) |
-| `Scan` | Stateless, reentrant decoder behind `Scanner` — an instance method: `(new Scan())->parse($rendered, $width)` returns `id => Zone`; `Scan::strip($rendered)` is the public static byte-wise marker remover |
+| `Scan` | Stateless, reentrant decoder behind `Scanner` — the static `Scan::parse($rendered, $width)` returns `id => Zone`; `Scan::strip($rendered)` is the public static byte-wise marker remover |
 | `Scanner` | Parse sentinels; `get(id)` and `hit(col, row)` lookups |
 | `Zone` | Readonly bounding box (start/end col/row) with `width()` / `height()` and `inBounds(MouseEvent)` |
 | `ZoneClickTracker` | Press+Release dedup per button |
@@ -247,6 +247,7 @@ tags — the public half of the parse/strip pair:
 | Duplicate id in one render | throws `InvalidArgumentException` |
 | Orphan close / unclosed open | tag skipped, no zone (a frame clipped to the viewport legitimately cuts one end off a zone) |
 | Zone whose content paints no cell (`''`, `"\n"`, SGR only) | no zone — there is no cell to hit, so it cannot steal a neighbour's clicks |
+| Zone whose clamped rect paints no cell (opens past `?width`, or width < 1) | dropped too — never collapsed to an edge sliver claiming the viewport's last column |
 | Empty-id tag (`U+E000 U+E001`) | zero-width, inert |
 | Lone sentinel, or an id with spaces/escapes/non-ASCII/over `Mark::MAX_ID_BYTES` | only the 3 sentinel bytes are skipped; the following bytes count as visible text |
 
@@ -417,7 +418,11 @@ close: U+E000 /<id> U+E001
 
 `Manager::scan()` computes each zone's bounding box in 1-based terminal
 cells, accounting for ANSI styling and Unicode (CJK) width, and takes the
-optional `?int $width` clamp the primitive exposes.
+optional `?int $width` clamp the primitive exposes: ends clamp into
+`[1, width]`, and a zone left painting no cell after clamping — one that
+opens fully past the right edge, or any viewport narrower than one column
+— is dropped rather than collapsed onto the edge column (the same
+paints-no-cell/claims-nothing rule as the malformed-markup table above).
 
 **Two engines, two rules — and a persistent registry.** The primitive
 `Scanner::scan()` REPLACES its whole zone set from the frame it parses, and

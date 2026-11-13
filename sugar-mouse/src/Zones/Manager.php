@@ -235,7 +235,7 @@ final class Manager
         }
 
         // The primitive layer (Scan) is the single source of truth for parsing + bounds.
-        foreach ((new Scan())->parse($rendered, $width) as $id => $mouseZone) {
+        foreach (Scan::parse($rendered, $width) as $id => $mouseZone) {
             if ($this->idPrefix !== '' && !str_starts_with($id, $this->idPrefix)) {
                 continue; // foreign namespace in the same frame — strip it, don't own it
             }

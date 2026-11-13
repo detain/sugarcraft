@@ -64,6 +64,12 @@ final class Mark
     public const MAX_CONTENT_BYTES = 1_048_576;
 
     /**
+     * Raw constructor — kept public only for the existing `new Mark()`
+     * call sites across the legacy monorepo. New code takes
+     * {@see new()} / {@see disabled()}; see also {@see withEnabled()}.
+     *
+     * @internal Prefer {@see new()} (house factory idiom).
+     *
      * @param bool $enabled Whether sentinels are emitted.  Defaults to true.
      *                     Set to false to suppress all sentinel output.
      */
