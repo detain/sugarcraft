@@ -473,8 +473,10 @@ line — `type()` neutralizes newlines and control bytes inside the quotes,
 files describe, so only feed it trusted, generated directives. Beyond the fence
 above, the builder roster is `to()`, `header()`, `type()`, `enter()`, `sleep()`,
 `resize()`, `comment()`, `line()`, `save()` — and `resize()` is disclosure-only:
-VHS carries no mid-tape resize directive (dimensions are fixed by `header()`), so
-it records a `# Resize CxR` comment line and changes nothing. The tape-side
+the harness supports initial dimensions only (fixed by `header()`), so it records
+a `# Resize CxR` comment line and changes nothing; whether upstream VHS grew a
+mid-tape resize directive is unverified (2026-11 probe), and emission is
+deliberately out of scope — not asserted impossible. The tape-side
 companion to the key builders is the static `keyMsgToVhs(KeyMsg): ?string` — it
 renders a decoded key message back into VHS `Type` syntax (a quoted rune for
 character keys, `Enter`/`PageUp`/`F12` and friends for named keys, `null` for

@@ -130,9 +130,14 @@ final class TapeRecorder
     /**
      * Emit a resize annotation.
      *
-     * VHS tapes carry no mid-tape resize directive — output dimensions are
-     * fixed by {@see header()} — so this records the intent as a comment
-     * line, nothing more.
+     * The harness supports initial dimensions only: {@see header()} fixes
+     * Width/Height at the top of the tape, so this records the intent as a
+     * comment line rather than a directive.
+     *
+     * Dated probe (2026-11): no vhs binary on this host and no Resize
+     * directive in the repo's committed .vhs/*.tape corpus — whether
+     * upstream VHS supports a mid-tape resize remains unverified; emitting
+     * one is deliberately out of scope here, not asserted impossible.
      *
      * @param int $cols
      * @param int $rows
