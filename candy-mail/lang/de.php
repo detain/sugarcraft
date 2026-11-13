@@ -79,5 +79,7 @@ return [
     'cli.stdin_too_large' => 'Die STDIN-Eingabe hat die Grenze von {limit} Byte überschritten; Eingabe kürzen oder als Datei anhängen.',
     'smtp.invalid_host' => 'SMTP-Host {host} ist kein gültiger Hostname und keine gültige Adresse (nur Buchstaben, Ziffern, Punkte und Bindestriche)',
     'smtp.invalid_port' => 'SMTP-Port {port} liegt außerhalb des Bereichs (muss zwischen 1 und 65535 liegen)',
-    'smtp.invalid_timeout' => 'SMTP-Timeout {timeout} ist keine Anzahl Sekunden zwischen 1 und 3600',    'resend.cid_unsupported' => 'Die Resend-API-Nutzlast hat kein Content-ID-Feld: Der Anhang {filename} ist inline — eingebettete Bilder laufen nur über SMTP.',
+    'smtp.invalid_timeout' => 'SMTP-Timeout {timeout} ist keine Anzahl Sekunden zwischen 1 und 3600',
+    'resend.cid_unsupported' => 'Die Resend-API-Nutzlast hat kein Content-ID-Feld: Der Anhang {filename} ist inline — eingebettete Bilder laufen nur über SMTP.',
+    'smtp.incomplete_credentials' => 'SMTP-Zugangsdaten unvollständig: Benutzername und Passwort zusammen angeben oder beide leer lassen für anonyme Übermittlung',
 ];

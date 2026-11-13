@@ -72,5 +72,7 @@ return [
     'cli.stdin_too_large' => 'Dane ze STDIN przekroczyły limit {limit} bajtów; skróć wejście lub dołącz je jako plik.',
     'smtp.invalid_host' => 'Host SMTP {host} nie jest prawidłową nazwą hosta ani adresem (dozwolone są tylko litery, cyfry, kropki i myślniki)',
     'smtp.invalid_port' => 'Port SMTP {port} jest poza zakresem (musi być między 1 a 65535)',
-    'smtp.invalid_timeout' => 'Limit czasu SMTP {timeout} nie jest liczbą sekund od 1 do 3600',    'resend.cid_unsupported' => 'Ładunek API Resend nie ma pola Content-ID: załącznik {filename} jest inline; obrazy wbudowane wędrują tylko przez SMTP.',
+    'smtp.invalid_timeout' => 'Limit czasu SMTP {timeout} nie jest liczbą sekund od 1 do 3600',
+    'resend.cid_unsupported' => 'Ładunek API Resend nie ma pola Content-ID: załącznik {filename} jest inline; obrazy wbudowane wędrują tylko przez SMTP.',
+    'smtp.incomplete_credentials' => 'Dane uwierzytelniania SMTP niekompletne: podaj nazwę użytkownika i hasło razem albo pozostaw oba puste dla wysyłki anonimowej',
 ];

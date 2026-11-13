@@ -195,6 +195,10 @@ $email2 = new Email(
 
 - **Fail-closed credentials.** `AUTH LOGIN` never runs on an unencrypted channel —
   regardless of `requireTls`. There is no `allowInsecureAuth` escape hatch by design.
+- **Half-set credentials are refused at construction.** Both `username` and `password`
+  means AUTH; both empty means the legal anonymous posture. Exactly one set throws
+  immediately, so a mail can never depart unauthenticated behind a half-configured
+  credential that would have silently skipped `AUTH LOGIN`.
 - **AUTH mechanisms.** The EHLO AUTH advertisement is parsed as a list
   (RFC 4954 — both `AUTH <sp>` and `AUTH=` shapes). SASL PLAIN is preferred
   and travels as a single command once the channel is encrypted; the LOGIN

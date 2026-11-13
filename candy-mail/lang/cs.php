@@ -72,5 +72,7 @@ return [
     'cli.stdin_too_large' => 'Vstup ze STDIN překročil limit {limit} bajtů; zkraťte vstup, nebo jej přiložte jako soubor.',
     'smtp.invalid_host' => 'Hostitel SMTP {host} není platný název hostitele ani adresa (pouze písmena, číslice, tečky a pomlčky)',
     'smtp.invalid_port' => 'Port SMTP {port} je mimo rozsah (musí být mezi 1 a 65535)',
-    'smtp.invalid_timeout' => 'Timeout SMTP {timeout} není počet sekund mezi 1 a 3600',    'resend.cid_unsupported' => 'Payload API Resend nemá pole Content-ID: příloha {filename} je inline; vložené obrázky přepravuje pouze SMTP.',
+    'smtp.invalid_timeout' => 'Timeout SMTP {timeout} není počet sekund mezi 1 a 3600',
+    'resend.cid_unsupported' => 'Payload API Resend nemá pole Content-ID: příloha {filename} je inline; vložené obrázky přepravuje pouze SMTP.',
+    'smtp.incomplete_credentials' => 'Údaje SMTP nejsou kompletní: zadejte uživatelské jméno i heslo společně, nebo obojí prázdné pro anonymní odeslání',
 ];

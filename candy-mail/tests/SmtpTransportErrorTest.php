@@ -6,6 +6,7 @@ namespace SugarCraft\Mail\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mail\Email;
+use SugarCraft\Mail\Lang;
 use SugarCraft\Mail\SmtpTransport;
 
 /**
@@ -136,26 +137,23 @@ final class SmtpTransportErrorTest extends TestCase
         $this->assertNull($socket->getValue($transport));
     }
 
-    public function testAuthenticateIfNeededSkipsWhenNoUsername(): void
+    public function testConstructorRefusesPasswordWithoutUsername(): void
     {
-        $transport = new SmtpTransport('smtp.example.com', 587, '', 'password');
+        // A half-set pair used to no-op authenticateIfNeeded() in silence —
+        // the mail would depart unauthenticated while the operator believed
+        // AUTH would run. Construction now refuses it, named, up front.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(Lang::t('smtp.incomplete_credentials'));
 
-        $this->invokePrivate($transport, 'authenticateIfNeeded');
-
-        $socket = new \ReflectionProperty($transport, 'socket');
-        $socket->setAccessible(true);
-        $this->assertNull($socket->getValue($transport));
+        new SmtpTransport('smtp.example.com', 587, '', 'password');
     }
 
-    public function testAuthenticateIfNeededSkipsWhenNoPassword(): void
+    public function testConstructorRefusesUsernameWithoutPassword(): void
     {
-        $transport = new SmtpTransport('smtp.example.com', 587, 'username', '');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(Lang::t('smtp.incomplete_credentials'));
 
-        $this->invokePrivate($transport, 'authenticateIfNeeded');
-
-        $socket = new \ReflectionProperty($transport, 'socket');
-        $socket->setAccessible(true);
-        $this->assertNull($socket->getValue($transport));
+        new SmtpTransport('smtp.example.com', 587, 'username', '');
     }
 
     public function testStartTlsIfNeededSkipsWhenAlreadyEncrypted(): void

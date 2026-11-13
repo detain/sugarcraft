@@ -124,6 +124,14 @@ final class SmtpTransport implements Transport
         if (!self::isValidTimeout($timeout)) {
             throw new \InvalidArgumentException(Lang::t('smtp.invalid_timeout', ['timeout' => (string) $timeout]));
         }
+        // Exactly one credential half is a configuration accident, not a
+        // posture: authenticateIfNeeded() no-ops when EITHER half is empty,
+        // so a lone username (or lone password) used to depart unauthenticated
+        // while the operator believed AUTH would run. Both empty is the legal
+        // anonymous relay posture and stands; a half pair is refused loudly.
+        if (($username === '') !== ($password === '')) {
+            throw new \InvalidArgumentException(Lang::t('smtp.incomplete_credentials'));
+        }
         $this->host        = $host;
         $this->port        = $port;
         $this->username    = $username;

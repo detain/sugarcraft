@@ -72,5 +72,7 @@ return [
     'cli.stdin_too_large' => 'Вывод STDIN превысил лимит в {limit} байт; сократите входные данные или приложите их как файл.',
     'smtp.invalid_host' => 'Хост SMTP {host} — не допустимое имя хоста и не допустимый адрес (только буквы, цифры, точки и дефисы)',
     'smtp.invalid_port' => 'Порт SMTP {port} вне диапазона (должен быть от 1 до 65535)',
-    'smtp.invalid_timeout' => 'Тайм-аут SMTP {timeout} — не число секунд от 1 до 3600',    'resend.cid_unsupported' => 'Полезная нагрузка API Resend не содержит поля Content-ID: вложение {filename} является inline; встроенные изображения отправляются только через SMTP.',
+    'smtp.invalid_timeout' => 'Тайм-аут SMTP {timeout} — не число секунд от 1 до 3600',
+    'resend.cid_unsupported' => 'Полезная нагрузка API Resend не содержит поля Content-ID: вложение {filename} является inline; встроенные изображения отправляются только через SMTP.',
+    'smtp.incomplete_credentials' => 'Учётные данные SMTP неполны: укажите и имя пользователя, и пароль — или оба пустыми для анонимной отправки',
 ];
