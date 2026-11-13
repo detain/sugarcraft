@@ -1,0 +1,46 @@
+{
+    "name": "sugarcraft/candy-msteams",
+    "description": "Microsoft Teams channel bundle for candy-code serve: dialogs from Teams personal chats, group chats, and channel posts into a served session - webhook inbound with in-bundle Bot Framework JWT validation, activity-referenced REST outbound, pairing gates, group allowlists, queue modes, chunked redacted replies, adaptive-card approvals with a same-chat text fallback. Policy in the user-tier channels.msteams settings; credentials only in the 0600 channels store. Graph/RSC media and file consent are deferred to P3.5.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "candy-code",
+        "bundle",
+        "channel",
+        "microsoft-teams",
+        "teams"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-msteams",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-msteams/issues",
+        "source": "https://github.com/sugarcraft/candy-msteams",
+        "docs": "https://github.com/sugarcraft/candy-msteams#readme"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-code": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "CandyCode\\Bundles\\MsTeams\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CandyCode\\Bundles\\MsTeams\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
