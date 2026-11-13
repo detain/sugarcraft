@@ -286,9 +286,24 @@ final class Application extends SymfonyApplication
             $command = $this->find($name);
             try {
                 $input->bind($command->getDefinition());
-            } catch (\Symfony\Component\Console\Exception\RuntimeException) {
-                // Input binding failed (e.g., unrecognized options); continue
-                // with env-var fallback which applies values best-effort.
+            } catch (\Symfony\Component\Console\Exception\RuntimeException $error) {
+                // The gate bind is advisory: the command-name token is still
+                // in the stream, so argument-arity complaints are always
+                // artifacts (the authoritative bind happens inside
+                // Command::run), and an UNDECLARED OPTION is exactly what the
+                // CANDY_SCRIPTUI_* fallback is about to supply. Everything
+                // else — an option missing its value, a malformed token — the
+                // fallback can never repair, so it propagates from the gate
+                // instead of coasting on into an accidental exit shape
+                // (scriptui-75, finding 101).
+                $message = $error->getMessage();
+                $tolerated = str_contains($message, 'option does not exist')
+                    || str_contains($message, 'Too many arguments')
+                    || str_contains($message, 'Not enough arguments')
+                    || str_contains($message, 'No arguments expected');
+                if (!$tolerated) {
+                    throw $error;
+                }
             }
             $this->applyEnvVarFallbackToInput($input, $command);
 
