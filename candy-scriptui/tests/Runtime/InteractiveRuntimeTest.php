@@ -52,18 +52,89 @@ final class InteractiveRuntimeTest extends TestCase
 
     public function testEveryInteractiveCommandLaunchesThroughTheChokepoint(): void
     {
-        $commands = [
-            'ChooseCommand', 'ConfirmCommand', 'FileCommand', 'FilterCommand',
-            'InputCommand', 'PagerCommand', 'SpinCommand', 'WriteCommand',
+        // scriptui-53: the chokepoint is now proven by EXECUTION. Under
+        // setsid (no controlling terminal) every interactive command must
+        // answer with the runtime's own refusal sentence, on captured
+        // STDERR, exit FAILURE, captured STDOUT empty — only a command that
+        // actually consulted programOptions() can produce that shape. A
+        // command that reverted to a raw-STDIN Program would hang or
+        // fabricate an answer from the piped byte instead, and the
+        // timeout(1) bound turns that regression into a loud 124/137.
+        // SpinCommand cannot refuse (its honest headless shape is the
+        // direct-run arm): a live child whose status and bytes survive
+        // proves the isHeadless() consultation routed it there.
+        $setsid = $this->locateSetsid();
+        if ($setsid === null) {
+            $this->markTestSkipped('util-linux setsid(1) not on PATH — cannot force the no-tty shape');
+        }
+
+        /** @var array<string, list<string>> $shapes */
+        $shapes = [
+            'choose' => ['choose', 'a', 'b'],
+            'confirm' => ['confirm', 'Deploy?'],
+            'file'    => ['file'],
+            'filter'  => ['filter'],
+            'input'   => ['input'],
+            'pager'   => ['pager'],
+            'write'   => ['write'],
         ];
-        foreach ($commands as $name) {
-            $source = (string) file_get_contents(__DIR__ . "/../../src/Command/$name.php");
-            self::assertStringContainsString(
-                'InteractiveRuntime::programOptions(',
-                $source,
-                "$name must launch Programs through the shared runtime (CC1/CC2)",
+        foreach ($shapes as $name => $args) {
+            [$status, $stdout, $stderr] = $this->runHeadlessChild($setsid, $args, "alpha\n");
+            $this->assertSame(1, $status, $name . ' must refuse the no-terminal shape with FAILURE');
+            $this->assertSame('', $stdout, $name . ' must keep the data channel clean on refusal');
+            $this->assertStringContainsString(
+                $name . ' needs an interactive terminal',
+                $stderr,
+                $name . ' must refuse through the shared runtime (CC1/CC2)',
             );
         }
+
+        [$status, $stdout, $stderr] = $this->runHeadlessChild($setsid, [
+            'spin', '--', '/bin/sh', '-c', 'printf SPIN-53; exit 5',
+        ]);
+        $this->assertSame(5, $status, 'the direct-run arm must pass the child status through');
+        $this->assertSame('SPIN-53', $stdout, 'the direct-run arm must pass the child bytes through');
+        $this->assertStringNotContainsString("\x1b", $stdout, 'no DEC chrome may touch the data channel (CC2)');
+    }
+
+    /** ?string absolute path of util-linux setsid, or null. */
+    private function locateSetsid(): ?string
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return null;
+        }
+        $path = trim((string) @shell_exec('command -v setsid 2>/dev/null'));
+
+        return $path !== '' ? $path : null;
+    }
+
+    /**
+     * @param list<string> $args
+     *
+     * @return array{0:int,1:string,2:string} [exitCode, stdout, stderr]
+     */
+    private function runHeadlessChild(string $setsid, array $args, string $stdin = ''): array
+    {
+        $bin = realpath(__DIR__ . '/../../bin/candy-scriptui');
+        self::assertIsString($bin);
+        $proc = proc_open(
+            ['timeout', '-s', 'KILL', '20', $setsid, '-w', PHP_BINARY, $bin, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname($bin),
+            ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
+        );
+        self::assertIsResource($proc, 'the setsid bin child must spawn');
+        if ($stdin !== '') {
+            fwrite($pipes[0], $stdin);
+        }
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $stdout, $stderr];
     }
 
     /**
