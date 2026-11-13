@@ -556,6 +556,53 @@ each, so a hostile `38;5;300` cannot push the grayscale-ramp formula
 `0xRRGGBB` range the cell model stores (unclamped, it would have run the
 ramp to 688 per channel — a value no frame can round-trip).
 
+## Wiring into a program
+
+Everything so far is string-in/string-out; a live terminal program needs
+the one place render state LIVES. The rule is short: **the session rides
+in the model, not in the view.** Hold exactly one `Veil` in program
+state and return its `composite()` from `view()`/redraw each tick. The
+fresh-`Veil::new()`-per-frame habit that keeps demo snippets honest is a
+bandwidth trade in a redraw loop — every frame primes full, correct but
+paying the whole undimmed frame cost each tick. The live consumers
+show both sides: candy-code composites overlays through four files —
+`src/Renderer.php` and `src/Tui/Renderer.php` paint modal frames,
+`src/Chat.php` latches its session picker into the same `Veil` slot the
+palette uses, and `src/Tui/Components/AgentDashboardPane.php` renders
+through `Veil` — and today those composite sites news a veil per paint,
+so each modal frame is a full frame, safe-but-heavy. For a modal that
+lives across ticks and pays per keystroke over SSH, hold the veil in
+state instead. `sugar-overlay/examples/` are the executable references
+that run without a TTY.
+
+```php
+<?php
+use SugarCraft\Overlay\{Position, Veil};
+
+$bg = str_repeat("..............................\n", 3);
+
+// The model holds ONE veil; the view() pass composites through it.
+$veil = Veil::new();
+
+echo $veil->composite('[dialog v1]', $bg, Position::CENTER, Position::CENTER) . "\n";
+// First paint: the full frame (the cold prime prints, per the rule above).
+echo $veil->composite('[dialog v2]', $bg, Position::CENTER, Position::CENTER) . "\n";
+// Second paint: a diff — anchor plus the changed cells only.
+
+$veil->resetPreviousFrame();
+// A child process (editor, pager, shell command) just owned stdout: the
+// cursor position the delta chain trusts is no longer trustworthy.
+
+echo $veil->composite('[dialog v2]', $bg, Position::CENTER, Position::CENTER) . "\n";
+// Next frame comes out FULL again — the chain resynchronises itself.
+```
+
+Two corollaries of the shared-session warning above: hit-testing on this
+path scans `lastFullFrame()`, never the delta just returned (deltas carry
+no zone markers), and anything derived from the model veil — a
+`withContent()` variant per tick — renders through the SAME delta chain,
+which is the point: one remembered frame, one screen.
+
 ## Security — untrusted content
 
 The compositor is marker-sensitive: U+E000/U+E001 zone sentinels become
