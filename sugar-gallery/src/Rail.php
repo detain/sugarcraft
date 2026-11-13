@@ -115,9 +115,9 @@ final readonly class Rail
 
     /**
      * Replace a single card by id (e.g. when its poster finishes loading).
-     * A card whose id is not in the list is a SILENT no-op: the copy is
-     * returned with the original cards, cursor, and scroll untouched
-     * (this was pinned by tests but undocumented).
+     * A card whose id is not in the list is a silent no-op: the RECEIVER
+     * comes back unchanged — the same identity law synced() and
+     * withoutItemsOutside() follow (this was pinned by tests but undocumented).
      */
     public function withCard(PosterCard $card): self
     {
@@ -125,11 +125,12 @@ final readonly class Rail
         foreach ($cards as $i => $existing) {
             if ($existing->id === $card->id) {
                 $cards[$i] = $card;
-                break;
+
+                return $this->carrying(['cards' => $cards]);
             }
         }
 
-        return $this->carrying(['cards' => $cards]);
+        return $this;
     }
 
     /** Return a copy with a different title (immutable+fluent). */

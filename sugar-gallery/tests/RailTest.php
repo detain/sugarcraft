@@ -147,6 +147,7 @@ final class RailTest extends TestCase
         $rail = new Rail('R', $this->cards(2));
         $same = $rail->withCard((new PosterCard('99', 'Ghost'))->withPoster('IMG'));
 
+        self::assertSame($rail, $same, 'identity no-op on unknown id (sugar-gallery-022)');
         self::assertCount(2, $same->cards);
         self::assertFalse($same->cards[0]->hasPoster());
         self::assertFalse($same->cards[1]->hasPoster());
@@ -376,6 +377,7 @@ final class RailTest extends TestCase
         $rail = new Rail('R', $this->cards(2));
         $unchanged = $rail->withCard(new PosterCard('99', 'Ghost'));
 
+        self::assertSame($rail, $unchanged, 'the receiver comes back byte-for-byte, same object');
         self::assertCount(2, $unchanged->cards);
         self::assertSame('Card 0', $unchanged->cards[0]->title);
         self::assertSame('Card 1', $unchanged->cards[1]->title);
