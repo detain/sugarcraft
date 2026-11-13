@@ -458,10 +458,10 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         if ($identity === $this->dialIdentity) {
             return;
         }
-        $this->rebuildRouter($wsUrl, $serveToken);
+        $this->rebuildRouter($wsUrl, $serveToken, $identity);
     }
 
-    private function rebuildRouter(string $wsUrl, string $serveToken): void
+    private function rebuildRouter(string $wsUrl, string $serveToken, string $identity): void
     {
         $cfg = method_exists(Bootstrap::class, 'channelsMsteamsSettings') ? Bootstrap::channelsMsteamsSettings() : [];
         $this->serve?->stop();
@@ -503,21 +503,23 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             $this->router->addChannel($face, $face->accountName());
         }
 
-        $dial = $this->dialIdentity;
         $this->dialIdentity = ''; // any failure below re-dials fresh
         $this->serve->start(
             function (string $why): void {
                 $this->log?->warn('channels.msteams.serve_down', ['why' => $why]);
             },
-            function () use ($dial): void {
+            function () use ($identity): void {
                 // The ladder gave up (gone serve / dead host): back off the
                 // discovery poll itself, keep the channel alive.
                 $this->nextDialAt = time() + 30;
                 $this->dialIdentity = '';
                 $this->log?->warn('channels.msteams.serve_giveup', ['retry' => 'in 30s']);
             },
-        )->then(function () use ($dial): void {
-            $this->dialIdentity = $dial !== '' ? $dial : $this->dialIdentity;
+        )->then(function () use ($identity): void {
+            // Record the dial that succeeded: the next tick with the same
+            // discovery + token must NOT rebuild (without this the router
+            // churned every 5 s and the re-dial law was untested).
+            $this->dialIdentity = $identity;
             $this->router?->adoptBindings();
             $this->log?->info('channels.msteams.serve_connected');
         }, function (\Throwable $e): void {

@@ -6,6 +6,10 @@ namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 
 use CandyCode\Bundles\MsTeams\MsTeams\Jwk;
 use CandyCode\Bundles\MsTeams\MsTeamsChannel;
+use CandyCode\Bundles\MsTeams\Tests\Fixture\FakeServe;
+use SugarCraft\Code\Server\Auth\TokenStore;
+use SugarCraft\Code\Server\DiscoveryFile;
+use SugarCraft\Code\Server\StateDir;
 use CandyCode\Bundles\MsTeams\Support\CredentialStore;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use GuzzleHttp\Psr7\ServerRequest;
@@ -302,6 +306,99 @@ final class MsTeamsChannelTest extends TestCase
         } finally {
             $channel->dispose();
         }
+    }
+
+    /**
+     * msteams-02: the 5 s discovery poll must dial ONE router per serve,
+     * not one per tick. Two ticks over an unchanged discovery + token keep
+     * the ServeBridge/ConversationRouter objects; flipping the token rotates
+     * them. This is the finding's evidence gap: nothing on disk ever touched
+     * dialIdentity/pollServe before this pin.
+     */
+    public function testAnUnchangedDiscoveryKeepsTheRouterAcrossPollTicks(): void
+    {
+        $serve = new FakeServe($this->loop, 'tick-token');
+        $port = $serve->listen();
+        $serverDir = $this->homeRoot . '/server-state';
+        putenv('CANDY_CODE_SERVER_DIR=' . $serverDir);
+        mkdir($serverDir, 0o700, true);
+        $dir = StateDir::existing($serverDir);
+        self::assertNotNull($dir, 'the state dir must be creatable under the sandbox HOME');
+        DiscoveryFile::forThisProcess(
+            '0.0.0-test',
+            'http://127.0.0.1:' . $port,
+            '127.0.0.1',
+            $port,
+            null,
+            false,
+            null,
+        )->write($dir);
+        $tokenPath = $dir->path . '/' . TokenStore::FILE;
+        file_put_contents($tokenPath, 'tick-token');
+        chmod($tokenPath, 0o600);
+
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-tick', 'appPassword' => 'tick-secret', 'tenantId' => '9f8e7d6c-5b4a-4321-8765-4321fedcba09',
+        ]);
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line): void {
+        }));
+
+        $dialProp = new \ReflectionProperty(MsTeamsChannel::class, 'dialIdentity');
+        $dialProp->setAccessible(true);
+        $serveProp = new \ReflectionProperty(MsTeamsChannel::class, 'serve');
+        $serveProp->setAccessible(true);
+        $routerProp = new \ReflectionProperty(MsTeamsChannel::class, 'router');
+        $routerProp->setAccessible(true);
+        $poll = new \ReflectionMethod(MsTeamsChannel::class, 'pollServe');
+        $poll->setAccessible(true);
+
+        try {
+            // Boot already fired one pollServe; pump until that dial lands
+            // (a rejected/never-dial serve would leave dialIdentity '' and
+            // rebuild for the wrong reason).
+            $deadline = microtime(true) + 5.0;
+            while ($dialProp->getValue($channel) === '' && microtime(true) < $deadline) {
+                $this->pump(100);
+            }
+            self::assertNotSame('', $dialProp->getValue($channel), 'the first dial never succeeded');
+
+            $serveBefore = $serveProp->getValue($channel);
+            $routerBefore = $routerProp->getValue($channel);
+            self::assertNotNull($serveBefore);
+            self::assertNotNull($routerBefore);
+
+            $poll->invoke($channel);
+            self::assertSame($serveBefore, $serveProp->getValue($channel), 'an unchanged discovery must not rebuild the serve bridge');
+            self::assertSame($routerBefore, $routerProp->getValue($channel), 'an unchanged discovery must not rebuild the router');
+
+            // A rotated token is a new dial: the objects must turn over.
+            file_put_contents($tokenPath, 'tick-token-rotated');
+            chmod($tokenPath, 0o600);
+            $poll->invoke($channel);
+            self::assertNotSame($serveBefore, $serveProp->getValue($channel), 'a rotated serve token must re-dial');
+            self::assertNotSame($routerBefore, $routerProp->getValue($channel), 'a rotated serve token must rebuild the router');
+        } finally {
+            $channel->dispose();
+            $serve->stop();
+            @unlink($tokenPath);
+            @unlink($dir->discoveryPath());
+            @rmdir($serverDir);
+            putenv('CANDY_CODE_SERVER_DIR');
+        }
+    }
+
+    /** Run the shared loop for $ms of wall time (timer stops it). */
+    private function pump(int $ms): void
+    {
+        $loop = $this->loop;
+        $timer = $loop->addTimer($ms / 1000.0, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+        $loop->cancelTimer($timer);
     }
 
     /** Well-formed invoke Activity — fast-ack law answers 200 inside the request. */
