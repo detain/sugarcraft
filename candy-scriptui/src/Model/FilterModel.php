@@ -13,6 +13,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
@@ -340,9 +341,14 @@ final class FilterModel implements Model
         // keeps the cursor top-anchored. Single-select plain runs otherwise
         // delegate byte-for-byte as they always did.
         $needsCustom  = $this->multi || $this->promptGlyph !== '' || $this->tailRows > 0;
-        $body = $fuzzyActive
-            ? $this->fuzzyView()
-            : ($needsCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view()));
+        // scriptui-14 belt: same model-side clip for both custom bodies and
+        // the delegated ItemList path (idempotent where the widget already
+        // clips), so no shipped vendor copy can re-widen the frame.
+        $body = implode("\n", $this->clipLines(explode("\n",
+            $fuzzyActive
+                ? $this->fuzzyView()
+                : ($needsCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view()))
+        )));
         if ($this->multi) {
             $count = count(array_filter($this->checked));
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
@@ -371,6 +377,13 @@ final class FilterModel implements Model
 
         $bare  = $this->promptGlyph !== '' ? $this->promptGlyph : '/';
         $ghost = $bare . Emphasis::sgr(Ansi::FAINT) . $this->placeholder . Emphasis::reset();
+        // scriptui-14 (finding 004): the ghost replaces the probe line AFTER
+        // the bodies clipped — a long --placeholder would re-introduce the
+        // wrapped tail the clip just removed. Same budget, same no-ellipsis
+        // form as ItemList::clip.
+        if ($this->list->width > 0) {
+            $ghost = Width::truncateAnsi($ghost, $this->list->width);
+        }
         $lines = explode("\n", $body);
         foreach ($lines as $i => $line) {
             if ($line === $bare) {
@@ -438,7 +451,7 @@ final class FilterModel implements Model
         if ($this->list->showStatusBar && ($status = $this->list->status()) !== '') {
             $lines[] = $status;
         }
-        return implode("\n", $lines);
+        return implode("\n", $this->clipLines($lines));
     }
 
     /**
@@ -484,7 +497,32 @@ final class FilterModel implements Model
                 $lines[] = $this->list->unselectedPrefix . $highlighted;
             }
         }
-        return implode("\n", $lines);
+        return implode("\n", $this->clipLines($lines));
+    }
+
+    /**
+     * scriptui-14 (finding 004): same clip contract as
+     * {@see ChooseModel::clipLines()} — the delegated path rides
+     * ItemList::view()'s own truncation, so the model-mirror bodies
+     * (marked/fuzzy) must clamp to the identical width budget in the
+     * identical no-ellipsis form, or one item would render two different
+     * ways depending on the drawing path.
+     *
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function clipLines(array $lines): array
+    {
+        $width = $this->list->width;
+        if ($width <= 0) {
+            return $lines;
+        }
+
+        return array_map(
+            static fn(string $line): string => Width::truncateAnsi($line, $width),
+            $lines
+        );
     }
 
     /**

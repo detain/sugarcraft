@@ -210,7 +210,15 @@ final class ChooseModel implements Model
         // ItemList cannot express — those frames (and every multi frame)
         // ride the model's own mirror renderer.
         $useCustom = $this->multi || count($this->cursorCycle) > 1;
-        $body = $useCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view());
+        // scriptui-14 (finding 004) belt: clip the composed body line-wise
+        // regardless of the drawing path. The delegated ItemList::view()
+        // carries its own SF-002 clip stage in the development tree, but a
+        // published sibling copy without it must not silently re-open the
+        // overflow — Width::truncateAnsi is idempotent on rows already
+        // within budget, so when both stages run nothing changes byte-wise.
+        $body = implode("\n", $this->clipLines(explode("\n",
+            $useCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view())
+        )));
         if ($this->multi) {
             // Append a status line: '(N selected)'.
             $count = $this->selectedCount();

@@ -7,7 +7,9 @@ namespace SugarCraft\ScriptUi\Model;
 use SugarCraft\Forms\TextInput\EchoMode;
 use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\ScriptUi\Runtime\Emphasis;
+use SugarCraft\ScriptUi\Runtime\Geometry;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -42,6 +44,22 @@ final class InputModel implements Model
         if ($charLimit > 0) {
             $ti = $ti->withCharLimit($charLimit);
         }
+        // scriptui-14 (finding 004): `input` never consulted Geometry — a
+        // 0 width left the TextInput scroll window unbounded, so long
+        // values emitted lines past the terminal columns and the wrapped
+        // tail desynced the line-addressed frame diff. Same resolution
+        // rule as the lists: an explicit width is capped by the terminal,
+        // an unset one takes the columns minus the line chrome (the prompt
+        // and any prefix/suffix, which ride OUTSIDE the widget's width
+        // budget); no knowable size keeps the historical uncapped window.
+        $cols   = Geometry::columnsOrNull();
+        $chrome = Width::string($ti->prefix . $ti->prompt . $ti->suffix);
+        $frame  = $cols ?? 0;
+        if ($width > 0) {
+            $width = $cols !== null ? min($width, $cols - $chrome) : $width;
+        } elseif ($cols !== null) {
+            $width = max(1, $cols - $chrome);
+        }
         if ($width > 0) {
             $ti = $ti->withWidth($width);
         }
@@ -52,7 +70,7 @@ final class InputModel implements Model
             $ti = $ti->withEchoMode(EchoMode::Password);
         }
         [$ti, ] = $ti->focus();
-        return new self($ti, false, false, $header);
+        return new self($ti, false, false, $header, frameCols: $frame);
     }
 
     private function __construct(
@@ -61,6 +79,11 @@ final class InputModel implements Model
         public readonly bool $aborted,
         public readonly string $header = '',
         public readonly bool $interrupted = false,
+        // scriptui-14: the terminal columns resolved at launch (0 = not
+        // knowable, no cap). The header line and the ghost placeholder are
+        // composed around the widget, so the per-line budget is enforced on
+        // the WHOLE frame, not just the editor window.
+        public readonly int $frameCols = 0,
     ) {}
 
     public function init(): ?\Closure
@@ -78,22 +101,43 @@ final class InputModel implements Model
         }
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c')) {
-                return [new self($this->input, false, true, $this->header, $msg->ctrl), Cmd::quit()];
+                return [new self($this->input, false, true, $this->header, $msg->ctrl, $this->frameCols), Cmd::quit()];
             }
             if ($msg->type === KeyType::Enter) {
-                return [new self($this->input, true, false, $this->header), Cmd::quit()];
+                return [new self($this->input, true, false, $this->header, frameCols: $this->frameCols), Cmd::quit()];
             }
         }
         [$next, $cmd] = $this->input->update($msg);
-        return [new self($next, false, false, $this->header), $cmd];
+        return [new self($next, false, false, $this->header, frameCols: $this->frameCols), $cmd];
     }
 
     public function view(): string
     {
         $body = $this->ghostText();
-        return $this->header === ''
-            ? $body
-            : $this->header . "\n" . $body;
+        return $this->frame(
+            $this->header === ''
+                ? $body
+                : $this->header . "\n" . $body
+        );
+    }
+
+    /**
+     * scriptui-14 (finding 004): last-line budget for every emitted line.
+     * The widget window already respects it; this catches the header row and
+     * the composed ghost line (the same per-line no-ellipsis truncation the
+     * list bodies use). 0 cols = historical unbounded frame.
+     */
+    private function frame(string $body): string
+    {
+        if ($this->frameCols <= 0) {
+            return $body;
+        }
+        $cols = $this->frameCols;
+
+        return implode("\n", array_map(
+            static fn(string $line): string => Width::truncateAnsi($line, $cols),
+            explode("\n", $body)
+        ));
     }
 
     /**

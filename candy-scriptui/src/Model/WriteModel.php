@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Model;
 
 use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\ScriptUi\Runtime\Emphasis;
+use SugarCraft\ScriptUi\Runtime\Geometry;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -41,6 +43,26 @@ final class WriteModel implements Model
         $header = \SugarCraft\Core\Util\Sanitize::cellValue($header);
 
         $area = TextArea::new()->withPlaceholder($placeholder);
+        // scriptui-14 (finding 004): same Geometry auto-width treatment as
+        // the lists and InputModel — an unset width used to leave the
+        // wrap budget unbounded, so long buffer lines emitted physical
+        // rows past the terminal. The chrome is the prompt plus the
+        // line-number gutter TextArea prefixes onto every row
+        // (`str_pad(n, max(2, digits+1)) . ' '`); the gutter digit count
+        // grows with the buffer, so a row can only overflow by digit
+        // crossings — the frame epilogue clips those too.
+        $cols   = Geometry::columnsOrNull();
+        $chrome = Width::string($prompt);
+        if ($showLineNumbers) {
+            $digits    = strlen((string) max(1, substr_count($value, "\n") + 1));
+            $chrome   += max(2, $digits + 1) + 1;
+        }
+        $frame = $cols ?? 0;
+        if ($width > 0) {
+            $width = $cols !== null ? min($width, $cols - $chrome) : $width;
+        } elseif ($cols !== null) {
+            $width = max(1, $cols - $chrome);
+        }
         if ($width  > 0)            { $area = $area->withWidth($width); }
         if ($height > 0)            { $area = $area->withHeight($height); }
         if ($charLimit > 0)         { $area = $area->withCharLimit($charLimit); }
@@ -52,7 +74,7 @@ final class WriteModel implements Model
         }
         if ($value !== '')          { $area = $area->setValue($value); }
         [$area, ] = $area->focus();
-        return new self($area, false, false, $header);
+        return new self($area, false, false, $header, frameCols: $frame);
     }
 
     private function __construct(
@@ -61,6 +83,8 @@ final class WriteModel implements Model
         public readonly bool $aborted,
         public readonly string $header = '',
         public readonly bool $interrupted = false,
+        // scriptui-14: terminal columns at launch (0 = unknowable, no cap).
+        public readonly int $frameCols = 0,
     ) {}
 
     public function init(): ?\Closure
@@ -78,25 +102,43 @@ final class WriteModel implements Model
         }
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Escape) {
-                return [new self($this->area, false, true, $this->header), Cmd::quit()];
+                return [new self($this->area, false, true, $this->header, frameCols: $this->frameCols), Cmd::quit()];
             }
             if ($msg->ctrl && $msg->rune === 'd') {
-                return [new self($this->area, true, false, $this->header), Cmd::quit()];
+                return [new self($this->area, true, false, $this->header, frameCols: $this->frameCols), Cmd::quit()];
             }
             if ($msg->ctrl && $msg->rune === 'c') {
                 // Same distinction as everywhere else: cancellation is 130,
                 // not the Esc-abort code.
-                return [new self($this->area, false, true, $this->header, true), Cmd::quit()];
+                return [new self($this->area, false, true, $this->header, true, $this->frameCols), Cmd::quit()];
             }
         }
         [$next, $cmd] = $this->area->update($msg);
-        return [new self($next, false, false, $this->header), $cmd];
+        return [new self($next, false, false, $this->header, frameCols: $this->frameCols), $cmd];
     }
 
     public function view(): string
     {
         $body = $this->ghostText();
-        return $this->header === '' ? $body : $this->header . "\n" . $body;
+        return $this->frame($this->header === '' ? $body : $this->header . "\n" . $body);
+    }
+
+    /**
+     * scriptui-14 (finding 004): per-line column budget for the composed
+     * frame (the wrap budget covers buffer rows; this catches the header,
+     * the ghost, and gutter digit crossings). 0 cols = historical unbounded.
+     */
+    private function frame(string $body): string
+    {
+        if ($this->frameCols <= 0) {
+            return $body;
+        }
+        $cols = $this->frameCols;
+
+        return implode("\n", array_map(
+            static fn(string $line): string => Width::truncateAnsi($line, $cols),
+            explode("\n", $body)
+        ));
     }
 
     /**
