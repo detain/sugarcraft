@@ -252,6 +252,24 @@ final class NavStack
     }
 
     /**
+     * PUBLIC display facade for a raw title: the byte-identical sweep that
+     * {@see view()}, {@see viewHtml()}, `Breadcrumb::render()` and
+     * `Breadcrumb::renderTitles()` run every stack-sourced title through
+     * before emitting it. Hosts echoing an UNTRUSTED title outside those
+     * surfaces (a `<title>` tag, a log line, a custom renderer closure)
+     * call this instead of reaching into the `@internal` sanitizer — or,
+     * worse, printing the raw accessor output.
+     *
+     * Terminal controls, zone sentinels, invisible-formatting spoofers, and
+     * CR/LF/tab are stripped; result may be EMPTY (the input sanitized to
+     * nothing) — empty is display-safe, not an error.
+     */
+    public static function safeTitle(string $title): string
+    {
+        return TitleSanitizer::sanitize($title);
+    }
+
+    /**
      * Render the navigation stack as a breadcrumb string.
      * e.g. "Home › Settings › Display"
      *

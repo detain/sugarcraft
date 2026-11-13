@@ -78,8 +78,9 @@ echo $stack->current()->title;   // "Settings"
 > from outside your code (paths, URLs, user data), print them through the
 > public surfaces that sanitize at the boundary — `view()`, `viewHtml()`,
 > `Breadcrumb::render()`, or `Breadcrumb::renderTitles()` — or escape the raw
-> title yourself before echoing. (`TitleSanitizer` is `@internal` machinery
-> behind those surfaces, not a published API.)
+> title yourself before echoing. (`TitleSanitizer` behind those surfaces is
+> `@internal` machinery — the published door for your own echo sites is
+> `NavStack::safeTitle()`, byte-identical to what the surfaces apply.)
 
 `NavStack` is **mutable by design** — `push`, `popTo`, `updateTop`,
 `setItems`, and `clear` mutate in place and return `$this` for chaining (`pop`
@@ -105,6 +106,7 @@ returns a new instance.
 | `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
 | `viewHtml(?callable $href = null, string $label = 'Breadcrumb'): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped |
 | `filter(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive substring (array payloads match when any nested scalar/Stringable value does); payloads nested deeper than 64 levels throw |
+| `static safeTitle(string $title): string` | The published display-sweep facade — byte-identical to what every library render path applies to titles; use it when echoing an untrusted title outside those surfaces |
 
 ### Guards — limits & refusals
 
@@ -315,8 +317,9 @@ design — they are yours to feed safely:
 
 - `setItemRenderer()`: a custom closure's return string is emitted RAW so
   theme ANSI styling survives (the trust split in the `Breadcrumb` class
-  docblock). Sanitize any user data you embed in it yourself — the library's
-  `TitleSanitizer` is `@internal` machinery, not a published API.
+  docblock). Sanitize any user data you embed in it yourself — the published
+  door for that is `NavStack::safeTitle()` (byte-identical to the sanitizer
+  the library surfaces run; `TitleSanitizer` itself stays `@internal`).
 - `viewHtml($href)`: your callback's URL lands in `href="..."` with only
   quote-escaping applied, so a returned `javascript:` or `data:` URL passes
   straight through — `$href` MUST return a validated absolute path or an

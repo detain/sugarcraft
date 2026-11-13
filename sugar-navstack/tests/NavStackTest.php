@@ -478,4 +478,51 @@ final class NavStackTest extends TestCase
         $stack->setItems([new NavigationItem('Home'), new NavigationItem('Settings')]);
         $this->assertSame(2, $stack->depth());
     }
+
+    // ─── NS-12: safeTitle — the published display facade ─────────────────────
+
+    public function testSafeTitleIsByteIdenticalToTheSurfaceSweep(): void
+    {
+        $hostile = "Ho\x1b[31mm\u{E000}u\r\n\u{200E}x";
+
+        // view() runs the library's own sweep over each title; the facade
+        // must produce the SAME bytes (no forked sanitizer).
+        $stack = new NavStack();
+        $stack->push($hostile);
+        $this->assertSame($stack->view(), NavStack::safeTitle($stack->current()->title));
+
+        // Exact bytes so a facade fork or sweep-order change goes red:
+        // ANSI + U+E000 stripped, the U+200E LRM bidi control stripped, and
+        // CR/LF collapsed to ONE space (TitleSanitizer docblock).
+        $this->assertSame('Homu x', NavStack::safeTitle($hostile));
+
+        // And the breadcrumb default path agrees through the facade:
+        $bc = new \SugarCraft\NavStack\Breadcrumb();
+        $one = new NavStack();
+        $one->push("a\x1b[0mb\u{E001}");
+        $this->assertSame($bc->render($one), NavStack::safeTitle($one->current()->title));
+    }
+
+    public function testSafeTitleAdmitsDegenerateResultsWithoutThrowing(): void
+    {
+        // The constructor REFUSES sanitize-to-empty titles at the front door;
+        // the facade is a sweep over arbitrary strings — whitespace-only and
+        // empty output are legitimate (display-safe) answers, not errors.
+        $this->assertSame(' ', NavStack::safeTitle("\x1b[31m\u{E000}\r"));
+        $this->assertSame('', NavStack::safeTitle(''));
+    }
+
+    public function testTitleSanitizerRemainsInternalWhileTheFacadeIsPublic(): void
+    {
+        // The README's claim, pinned structurally: the docblock of
+        // TitleSanitizer keeps @internal (no accidental promotion), and
+        // NavStack::safeTitle is the public door.
+        $doc = (new \ReflectionClass(\SugarCraft\NavStack\TitleSanitizer::class))->getDocComment();
+        $this->assertIsString($doc);
+        $this->assertStringContainsString('@internal', (string) $doc);
+
+        $method = new \ReflectionMethod(NavStack::class, 'safeTitle');
+        $this->assertTrue($method->isPublic());
+        $this->assertTrue($method->isStatic());
+    }
 }
