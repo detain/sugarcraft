@@ -12,8 +12,8 @@ use PHPUnit\Framework\TestCase;
  * Unit tests for Kernel32 FFI bindings.
  *
  * These tests verify the Kernel32 class methods that can be tested on
- * non-Windows platforms. Platform-specific methods that require actual
- * kernel32.dll FFI are marked as skipped with clear reasons.
+ * non-Windows platforms. The methods that need the real kernel32.dll run
+ * for real on Windows and skip by name elsewhere.
  *
  * ## Coverage strategy
  *
@@ -67,52 +67,99 @@ final class Kernel32Test extends TestCase
 
     public function testStdInRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - stdIn() calls getStdHandle() which calls ffi()');
+        self::requireWindows();
+
+        $this->assertIsInt(self::live()->stdIn());
     }
 
     public function testStdOutRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - stdOut() calls getStdHandle() which calls ffi()');
+        self::requireWindows();
+
+        // INVALID_HANDLE_VALUE (-1) is the documented failure; any other int
+        // (0 included, for a process with no stdout) is a real answer.
+        $this->assertNotSame(-1, self::live()->stdOut());
     }
 
     public function testStdErrRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - stdErr() calls getStdHandle() which calls ffi()');
+        self::requireWindows();
+
+        $this->assertNotSame(-1, self::live()->stdErr());
     }
 
     public function testGetStdHandleRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        // Before the long long return, reading the returned pointer back
+        // through FFI::cast('intptr_t') SEGFAULTED the process (exit 139):
+        // the CI sugar-core Windows cell died here with no summary.
+        $k = self::live();
+        $this->assertSame($k->stdOut(), $k->getStdHandle(Kernel32Interface::STD_OUTPUT_HANDLE));
     }
 
     public function testFfiRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - FFI::cdef() throws when DLL not found');
+        self::requireWindows();
+
+        $this->assertInstanceOf(\FFI::class, self::live()->ffi());
+        // The real INPUT_RECORD is 20 bytes; the old 8-byte declaration let
+        // ReadConsoleInputW overflow its buffer.
+        $this->assertSame(20, \FFI::sizeof(self::live()->ffi()->new('INPUT_RECORD')));
     }
 
     public function testGetConsoleCPRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $this->assertIsInt(self::live()->getConsoleCP());
     }
 
     public function testGetConsoleOutputCPRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $this->assertIsInt(self::live()->getConsoleOutputCP());
     }
 
     public function testSetConsoleCPRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $k = self::live();
+        $cp = $k->getConsoleCP();
+        if ($cp === 0) {
+            $this->markTestSkipped('no console attached to this process, so there is no input code page to set');
+        }
+        $this->assertTrue($k->setConsoleCP($cp));
     }
 
     public function testSetConsoleOutputCPRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $k = self::live();
+        $cp = $k->getConsoleOutputCP();
+        if ($cp === 0) {
+            $this->markTestSkipped('no console attached to this process, so there is no output code page to set');
+        }
+        $this->assertTrue($k->setConsoleOutputCP($cp));
     }
 
     public function testGetConsoleModeRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $k = self::live();
+        $h = $k->createFile('NUL', Kernel32Interface::GENERIC_READ, Kernel32Interface::FILE_SHARE_READ | Kernel32Interface::FILE_SHARE_WRITE);
+        $this->assertIsInt($h);
+        try {
+            // NUL is not a console: the honest answer is false, not a crash.
+            $this->assertFalse($k->getConsoleMode($h));
+        } finally {
+            $k->closeHandle($h);
+        }
     }
 
     /**
@@ -165,52 +212,122 @@ final class Kernel32Test extends TestCase
 
     public function testSetConsoleModeRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $k = self::live();
+        $h = $k->createFile('NUL', Kernel32Interface::GENERIC_READ, Kernel32Interface::FILE_SHARE_READ | Kernel32Interface::FILE_SHARE_WRITE);
+        $this->assertIsInt($h);
+        try {
+            $this->assertFalse($k->setConsoleMode($h, 0), 'NUL is not a console, so SetConsoleMode must refuse it');
+        } finally {
+            $k->closeHandle($h);
+        }
     }
 
     public function testGetConsoleScreenBufferInfoRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $k = self::live();
+        $info = $k->getConsoleScreenBufferInfo($k->stdOut());
+        // null without a console (a CI runner's piped stdout), a positive
+        // geometry with one: either way, never a crash.
+        if ($info === null) {
+            $this->assertNull($info);
+
+            return;
+        }
+        $this->assertGreaterThan(0, $info['cols']);
+        $this->assertGreaterThan(0, $info['rows']);
     }
 
     public function testCreateFileRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        // \FFI::NULL is not a constant on any PHP, so this method used to
+        // throw on every call and openTty: true never worked on Windows.
+        $k = self::live();
+        $h = $k->createFile('NUL', Kernel32Interface::GENERIC_READ, Kernel32Interface::FILE_SHARE_READ | Kernel32Interface::FILE_SHARE_WRITE);
+        $this->assertIsInt($h);
+        $this->assertTrue($k->closeHandle($h));
     }
 
     public function testCloseHandleRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $this->assertFalse(self::live()->closeHandle(0), 'a NULL handle is not closable');
     }
 
     public function testGetLastErrorRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $k = self::live();
+        $k->closeHandle(0);
+        $this->assertSame(6, $k->getLastError(), 'CloseHandle(NULL) leaves ERROR_INVALID_HANDLE');
     }
 
     public function testWaitForSingleObjectRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $this->assertSame(0xFFFFFFFF, self::live()->waitForSingleObject(0, 0), 'a NULL handle is WAIT_FAILED');
     }
 
     public function testPeekConsoleInputRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        $records = [];
+        $k = self::live();
+        $h = $k->createFile('NUL', Kernel32Interface::GENERIC_READ, Kernel32Interface::FILE_SHARE_READ | Kernel32Interface::FILE_SHARE_WRITE);
+        $this->assertIsInt($h);
+        try {
+            // Not a console input buffer: false, never the \FFI::ptr() fatal.
+            $this->assertFalse($k->peekConsoleInput($h, $records, 4));
+        } finally {
+            $k->closeHandle($h);
+        }
     }
 
     public function testReadConsoleInputRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls ffi() internally');
+        self::requireWindows();
+
+        // ReadConsoleInputW blocks until an event arrives; the binding must
+        // never wait. NUL is always signalled, so the read runs and is
+        // refused (not a console) rather than blocking.
+        $k = self::live();
+        $h = $k->createFile('NUL', Kernel32Interface::GENERIC_READ, Kernel32Interface::FILE_SHARE_READ | Kernel32Interface::FILE_SHARE_WRITE);
+        $this->assertIsInt($h);
+        try {
+            $started = \microtime(true);
+            $this->assertFalse($k->readConsoleInput($h, 4));
+            $this->assertLessThan(1.0, \microtime(true) - $started);
+        } finally {
+            $k->closeHandle($h);
+        }
     }
 
     public function testSetConsoleCtrlHandlerRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll + PHP 8.4+ FFI::dynamicFunction - calls ffi() internally');
+        self::requireWindows();
+
+        // FFI::dynamicFunction exists on no PHP release; the method is an
+        // honest refusal, not a registration.
+        $this->assertFalse(@self::live()->setConsoleCtrlHandler(static fn (int $e): bool => true));
     }
 
     public function testToWideStringRequiresWindows(): void
     {
-        $this->markTestSkipped('Requires Windows kernel32.dll - calls lib() which calls ffi() internally');
+        self::requireWindows();
+
+        // Beyond the BMP a character is a surrogate PAIR; the old per-codepoint
+        // store truncated it into one 16-bit unit.
+        $w = self::live()->toWideString("a\u{1F600}");
+        $this->assertSame([0x61, 0xD83D, 0xDE00, 0], [$w[0], $w[1], $w[2], $w[3]]);
     }
 
     // ─── Interface constants ──────────────────────────────────────────────────
@@ -343,5 +460,23 @@ final class Kernel32Test extends TestCase
     public function testCtrlShutdownEventConstant(): void
     {
         $this->assertSame(6, Kernel32Interface::CTRL_SHUTDOWN_EVENT);
+    }
+
+    /**
+     * Skip by name off Windows. On Windows these run for real: they were
+     * skipped unconditionally before, which is how a segfaulting
+     * getStdHandle(), a CreateFile that always threw and an overflowing
+     * INPUT_RECORD buffer all shipped unseen.
+     */
+    private static function requireWindows(): void
+    {
+        if (\PHP_OS_FAMILY !== 'Windows' || !\extension_loaded('ffi')) {
+            self::markTestSkipped('Requires Windows kernel32.dll through ext-ffi');
+        }
+    }
+
+    private static function live(): Kernel32
+    {
+        return new Kernel32();
     }
 }

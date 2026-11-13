@@ -117,7 +117,12 @@ typedef unsigned long DWORD;
 typedef unsigned int  UINT;
 typedef int           BOOL;
 
-HANDLE GetStdHandle(DWORD nStdHandle);
+/* Handles RETURN as long long for the same reason C5 passes them that way:
+   reading a returned void* back out through FFI::cast('intptr_t', ...)
+   segfaulted the process on Windows (measured, PHP 8.4.27: exit 139 from
+   every stdIn()/stdOut()/WindowsBackend::size() call). An int64 return is
+   the plain value. */
+long long GetStdHandle(DWORD nStdHandle);
 
 /*
  * C5: handle-taking parameters are declared long long, not HANDLE. A
@@ -145,10 +150,10 @@ BOOL SetConsoleCtrlHandler(void *HandlerRoutine, BOOL Add);
    kernel32 symbol was reached. `unsigned short` is grammar-level, and
    Windows wchar_t is exactly 16 bits, so the parameter type agrees with
    the "unsigned short[]" buffer toWideString() allocates by construction. */
-HANDLE CreateFileW(const unsigned short *lpFileName, DWORD dwDesiredAccess,
+long long CreateFileW(const unsigned short *lpFileName, DWORD dwDesiredAccess,
                    DWORD dwShareMode, void *lpSecurityAttributes,
                    DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes,
-                   HANDLE hTemplateFile);
+                   long long hTemplateFile);
 
 BOOL CloseHandle(long long h);
 DWORD GetLastError(void);
@@ -160,9 +165,14 @@ BOOL PeekConsoleInputW(long long hConsoleInput, void *lpBuffer,
 BOOL ReadConsoleInputW(long long hConsoleInput, void *lpBuffer,
                        DWORD nLength, DWORD *lpNumberOfEventsRead);
 
+/* The real INPUT_RECORD is 20 bytes: a WORD tag, 2 bytes of padding, then
+   a 16-byte union (KEY_EVENT_RECORD is the largest member and is 4-byte
+   aligned). The old 8-byte shape let ReadConsoleInputW write 20*N bytes
+   into an 8*N buffer. */
 typedef struct _INPUT_RECORD {
     unsigned short EventType;
-    unsigned char  EventData[6];
+    unsigned short _padding;
+    unsigned char  Event[16];
 } INPUT_RECORD;
 
 enum {
@@ -189,22 +199,16 @@ CPROTO
      */
     public function getStdHandle(int $nStdHandle): int
     {
-        $stdHandle = $this->ffi()->new('unsigned long');
-        // WHY not \FFI::memcpy($stdHandle, [$nStdHandle], 4): a PHP array is
-        // not an accepted source on ANY shipped PHP — CI on both Windows
-        // runner minors (8.3.36 and 8.4) threw 'TypeError: FFI::memcpy():
-        // Argument #2 ($from) must be of type FFI\CData or string, array
-        // given'. Scalar CData assignment is the documented since-7.4 shape
-        // and stores with C wrap-around, so the negative pseudo-handle
-        // constants (-10/-11/-12) land in the DWORD as (HANDLE)-N's low-bit
-        // encoding exactly as the 4-byte copy intended. This DWORD value
-        // slot is the file's only remaining scalar-CData materialization;
-        // every handle-taking parameter is int64-declared (C5) and takes the
-        // plain int directly.
-        $stdHandle->cdata = $nStdHandle;
-        $h = $this->ffi()->GetStdHandle($stdHandle);
-
-        return (int) \FFI::cast('intptr_t', $h)->cdata;
+        // The pseudo-handle constants are negative (-10/-11/-12); the DWORD
+        // parameter takes their 32-bit two's-complement, so mask rather than
+        // hand FFI a negative for an unsigned slot. The previous shape passed
+        // a DWORD CData as the argument (PHP warned "could not be converted
+        // to int" and the call saw garbage) and then cast the returned
+        // pointer through FFI::cast('intptr_t'), which SEGFAULTED the process
+        // on Windows (PHP 8.4.27, exit 139): the CI sugar-core Windows cell
+        // died on its last test with no summary. GetStdHandle is declared
+        // long long in the cdef, so the result is already the plain int.
+        return (int) $this->ffi()->GetStdHandle($nStdHandle & 0xFFFFFFFF);
     }
 
     // ─── Console input reading ───────────────────────────────────────────────
@@ -237,14 +241,17 @@ CPROTO
      */
     public function peekConsoleInput(int $h, array &$records, int $recordSize = 1): int|false
     {
-        $handle = $h;
-
-        $buf = $this->ffi()->new("unsigned char[8][{$recordSize}]");
+        $recordSize = \max(1, $recordSize);
+        // INPUT_RECORD[N]: 20 bytes each, matching what the kernel writes.
+        // The old `unsigned char[8][N]` was 8*N bytes, an overflow on every
+        // record, and the read-back went through \FFI::ptr(), which does not
+        // exist on any PHP release.
+        $buf = $this->ffi()->new("INPUT_RECORD[{$recordSize}]");
         $count = $this->ffi()->new('unsigned long');
 
         $ok = $this->ffi()->PeekConsoleInputW(
-            $handle,
-            \FFI::addr($buf),
+            $h,
+            $buf,
             $recordSize,
             \FFI::addr($count),
         );
@@ -255,9 +262,7 @@ CPROTO
 
         $records = [];
         for ($i = 0; $i < $count->cdata; $i++) {
-            $type = \FFI::cast('unsigned short*', \FFI::ptr($buf, $i))
-                ->cdata;
-            $records[] = ['type' => $type, 'index' => $i];
+            $records[] = ['type' => (int) $buf[$i]->EventType, 'index' => $i];
         }
 
         return (int) $count->cdata;
@@ -272,14 +277,20 @@ CPROTO
      */
     public function readConsoleInput(int $h, int $recordSize = 1): array|false
     {
-        $handle = $h;
+        // ReadConsoleInputW BLOCKS until an event arrives. This method is a
+        // drain, never a wait: a zero-timeout wait first says whether
+        // anything is pending, and "nothing" answers [] immediately.
+        if ($this->waitForSingleObject($h, 0) !== self::WAIT_OBJECT_0) {
+            return [];
+        }
 
-        $buf   = $this->ffi()->new("unsigned char[8][{$recordSize}]");
+        $recordSize = \max(1, $recordSize);
+        $buf   = $this->ffi()->new("INPUT_RECORD[{$recordSize}]");
         $count = $this->ffi()->new('unsigned long');
 
         $ok = $this->ffi()->ReadConsoleInputW(
-            $handle,
-            \FFI::addr($buf),
+            $h,
+            $buf,
             $recordSize,
             \FFI::addr($count),
         );
@@ -290,9 +301,7 @@ CPROTO
 
         $records = [];
         for ($i = 0; $i < $count->cdata; $i++) {
-            $type = \FFI::cast('unsigned short*', \FFI::ptr($buf, $i))
-                ->cdata;
-            $records[] = ['type' => $type, 'index' => $i];
+            $records[] = ['type' => (int) $buf[$i]->EventType, 'index' => $i];
         }
 
         return $records;
@@ -434,17 +443,21 @@ CPROTO
     ): int|false {
         $nameW = $this->toWideString($name);
 
-        $h = $this->ffi()->CreateFileW(
+        // null for the pointer argument and 0 for the template handle: the
+        // old \FFI::NULL is not a constant on any PHP release ("Undefined
+        // constant FFI::NULL"), so this method always threw, WindowsBackend's
+        // openTty() swallowed it, and `openTty: true` never worked. The
+        // result is declared long long (see GetStdHandle), so there is no
+        // pointer cast to crash on.
+        $ptrVal = (int) $this->ffi()->CreateFileW(
             $nameW,
             $dwDesiredAccess,
             $dwShareMode,
-            \FFI::NULL,
+            null,
             $dwCreationDisposition,
             0,
-            \FFI::NULL,
+            0,
         );
-
-        $ptrVal = (int) \FFI::cast('intptr_t', $h)->cdata;
 
         return ($ptrVal === -1 || $ptrVal === 0) ? false : $ptrVal;
     }
@@ -470,10 +483,13 @@ CPROTO
      * process-shared memory.  See the class docblock and caveat 1 in
      * the `x/windows.md` plan for thread-safety requirements.
      *
-     * **Requires PHP FFI with `FFI::dynamicFunction`** (PHP 8.4+ FFI).
-     * On builds without it, this method returns `false` and emits a
-     * warning.  The interrupt flag can still be set via
-     * {@see InterruptFlags} for testing.
+     * **Unsupported on every shipped PHP.** `FFI::dynamicFunction` does not
+     * exist on any release (an earlier version of this docblock said
+     * "PHP 8.4+"; measured absent on 8.4.27), so this method always returns
+     * `false` with a warning. Even with a trampoline, Windows runs the
+     * handler on a foreign OS thread, which the Zend VM cannot survive, and
+     * the callback type would have to be `BOOL WINAPI (DWORD)`. The
+     * interrupt flag can still be set via {@see InterruptFlags} for testing.
      *
      * @param \Closure(int $dwCtrlEvent):bool $handler reentrant-safe only
      * @return bool true on success, false if registration failed or dynamicFunction unavailable
@@ -538,13 +554,17 @@ CPROTO
      */
     public function toWideString(string $str): \FFI\CData
     {
-        $len = \mb_strlen($str, 'UTF-8');
-        $w   = $this->lib()->new("unsigned short[{$len} + 1]");
+        // UTF-16LE through mbstring, so a character beyond U+FFFF becomes
+        // its surrogate PAIR. The old per-codepoint mb_ord() store truncated
+        // such a character into a single 16-bit unit.
+        $bytes = (string) \mb_convert_encoding($str, 'UTF-16LE', 'UTF-8');
+        $units = \intdiv(\strlen($bytes), 2);
+        $w     = $this->lib()->new("unsigned short[" . ($units + 1) . "]");
 
-        for ($i = 0; $i < $len; $i++) {
-            $w[$i] = \mb_ord(\mb_substr($str, $i, 1, 'UTF-8'), 'UTF-8');
+        if ($units > 0) {
+            \FFI::memcpy($w, $bytes, $units * 2);
         }
-        $w[$len] = 0;
+        $w[$units] = 0;
 
         return $w;
     }

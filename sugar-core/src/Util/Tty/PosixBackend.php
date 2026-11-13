@@ -185,6 +185,17 @@ final class PosixBackend implements Backend
             }
         }
 
+        // Arms 4-6 shell out with POSIX redirections. On a native Windows PHP
+        // (Tty picks this backend there whenever MSYSTEM is set, i.e. under
+        // Git Bash) shell_exec() runs cmd.exe, which reads `2>/dev/null` as
+        // \dev\null on the current drive: it prints "The system cannot find
+        // the path specified." or, where that folder exists, creates a stray
+        // file in it (measured: F:\dev\null). There is no /dev/tty to ask
+        // either, so the honest answer there is the last-resort size.
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return self::LAST_RESORT_SIZE;
+        }
+
         // 4. stty -F /dev/tty — queries the controlling terminal directly (most reliable)
         // This avoids the stdin redirection problem where "stty size" reads from pipe
         $sttyTty = trim((string) shell_exec('stty -F /dev/tty size 2>/dev/null'));

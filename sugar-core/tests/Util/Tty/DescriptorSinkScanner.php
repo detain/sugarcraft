@@ -114,7 +114,7 @@ final class DescriptorSinkScanner
      */
     public static function methodSinks(): array
     {
-        return self::$methodSinks ??= self::sinksFromCdef(Libc::cdef());
+        return self::$methodSinks ??= self::sinksFromCdef(Libc::cdefFor('Linux'));
     }
 
     /**

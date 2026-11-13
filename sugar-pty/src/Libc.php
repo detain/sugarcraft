@@ -200,14 +200,29 @@ final class Libc
      */
     public static function cdef(): string
     {
-        $openpty = \PHP_OS_FAMILY === 'Darwin'
+        return self::cdefFor(\PHP_OS_FAMILY);
+    }
+
+    /**
+     * The cdef for a NAMED platform family, independent of the host.
+     *
+     * Static readers of the declaration (sugar-core's descriptor-sink census
+     * parses it as text) must not depend on where they run: {@see cdef()}
+     * asks for the host's errno accessor, and on a Windows host, which has
+     * no libc to bind, that throws, which made 9 census tests error on the
+     * sugar-core Windows CI cell. Families without a validated accessor
+     * still throw here, exactly as {@see errnoSymbolFor()} does.
+     */
+    public static function cdefFor(string $family): string
+    {
+        $openpty = $family === 'Darwin'
             ? "int   openpty(int *amaster, int *aslave, char *name, void *termp, void *winp);\n"
             : '';
 
         // FFI::cdef() resolves every declared symbol eagerly, so declaring
         // the wrong platform's errno accessor fails the WHOLE libc load
         // ("Failed resolving C function '__errno_location'" on macOS).
-        $errnoFn = self::errnoSymbol();
+        $errnoFn = self::errnoSymbolFor($family);
 
         return <<<CPROTO
 int   setsid(void);
