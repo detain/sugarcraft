@@ -53,6 +53,51 @@ final class ToastHostZoneCarryTest extends TestCase
         $this->assertStringContainsString('APPZ', $out);
     }
 
+    public function testCarryDefaultsOnAndIsByteIdenticalWhenExplicitlyEnabled(): void
+    {
+        // The knob must not perturb published bytes: unset == withHostZoneCarry(true).
+        $bg = $this->markedBackground([
+            self::OPEN . 'APPZ' . self::CLOSE . ' tail text',
+            ...(\array_fill(1, 11, 'plain background row')),
+        ]);
+        $toast = $this->toast();
+
+        $this->assertSame(
+            $toast->view($bg, 80, 12),
+            $toast->withHostZoneCarry(true)->view($bg, 80, 12)
+        );
+    }
+
+    public function testOptOutBlitsOpaqueChromeAndDropsTheCoveredZone(): void
+    {
+        // OFF is the mirror trade: full chrome, zone span sacrificed. Every
+        // zone cell here (cols 0..15 of row 0) sits under the 40-wide
+        // TopLeft box, so the composited frame must be byte-identical to
+        // the same frame rendered over an UNMARKED background of identical
+        // cell content — no sentinels, no payload, no holes.
+        $marked = $this->markedBackground([
+            self::OPEN . 'APPZ' . self::CLOSE . ' tail text',
+            ...(\array_fill(1, 11, 'plain background row')),
+        ]);
+        $plain = $this->markedBackground([
+            'ABCDEFGHIJKLMNOP tail text',
+            ...(\array_fill(1, 11, 'plain background row')),
+        ]);
+        $toast = $this->toast()->withHostZoneCarry(false);
+
+        $off = $toast->view($marked, 80, 12);
+        $this->assertSame($toast->view($plain, 80, 12), $off);
+        $this->assertStringNotContainsString(self::OPEN, $off);
+        $this->assertStringNotContainsString(self::CLOSE, $off);
+        $this->assertStringNotContainsString('APPZ', $off);
+
+        // And the same object with carry ON keeps the markers paired —
+        // discriminative against a guard wired to the wrong branch.
+        $on = $toast->withHostZoneCarry(true)->view($marked, 80, 12);
+        $this->assertSame(1, \substr_count($on, self::OPEN));
+        $this->assertSame(1, \substr_count($on, self::CLOSE));
+    }
+
     public function testSpanStraddlingTheBoxEdgeStaysPaired(): void
     {
         // TopRight at 20 cols clipped spans mid-way — the consolidator's

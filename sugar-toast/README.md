@@ -486,6 +486,7 @@ already over the new cap survive until the next push evicts them.
 | `->withSymbolSet(SymbolSet)` | Icon glyph set: NerdFont, Unicode, or Ascii — icons only; borders and bar stay box-drawing |
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
 | `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + numeric percentage on progress rows; default off keeps every frame byte-identical |
+| `->withHostZoneCarry(bool $on = true)` | Carry the host's U+E000..U+E001 zone markers through the composite: on (default) keeps every open marker paired (chrome shows holes where a marker was restored); off restores full chrome at the cost of the zone spans |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited; `< 1` throws `InvalidArgumentException`) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded; `0` is accepted as a no-history sentinel — negatives alone throw, unlike `withMaxConcurrent`, which refuses anything below 1) |
@@ -602,7 +603,9 @@ are.
   open marker keeps its close (pairing preserved in all nine positions;
   unmarked frames stay byte-identical). The deliberate cost is cosmetic: box
   chrome shows holes where a marker was restored. The sweep duty above still
-  applies to attacker-authored *toast text*, never to the host's own markers.
+  applies to attacker-authored *toast text*, never to the host's own markers. A host that would rather have unbroken chrome than carried
+  markers can opt out with `withHostZoneCarry(false)`: the box then blits
+  opaquely and any zone span running under it loses its covered half.
 - **Host OSC-8 hyperlinks survive compositing**: background rows are parsed,
   not echoed — an `\e]8;;url\e\\…\e]8;;\e\\` link run is re-attached to the
   grid as a real hyperlink and re-emitted intact on the rows the toast does

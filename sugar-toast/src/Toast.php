@@ -104,6 +104,19 @@ final class Toast
     private bool $accessibleText = false;
 
     /**
+     * Carry the host's U+E000..U+E001 zone markers through the composite.
+     *
+     * ON (default) preserves every published frame byte-for-byte: covered
+     * sentinel cells are restored from the background so open/close pairing
+     * survives the blit, at the documented cosmetic cost of holes in the box
+     * chrome. OFF restores full chrome at the mirror-image cost: a marker
+     * span running under the toast loses its covered half — hosts that read
+     * zone spans back out of the composited output but prefer visual
+     * integrity opt out. See sugar-toast finding 061.
+     */
+    private bool $hostZoneCarry = true;
+
+    /**
      * Maximum number of concurrent alerts (null = unlimited).
      *
      * Growth caveat, stated honestly: with the default null cap the queue only
@@ -230,6 +243,17 @@ final class Toast
     public function withAccessibleText(bool $on = true): self
     {
         return $this->mutate(['accessibleText' => $on]);
+    }
+
+    /**
+     * Opt in/out of carrying host zone markers through the composite.
+     *
+     * Default ON is today's published byte shape (see the $hostZoneCarry
+     * property); OFF trades zone-span fidelity for unbroken box chrome.
+     */
+    public function withHostZoneCarry(bool $on = true): self
+    {
+        return $this->mutate(['hostZoneCarry' => $on]);
     }
 
     /** Returns the accessible-text preference flag (see {@see withAccessibleText()}). */
@@ -859,7 +883,9 @@ final class Toast
             $box = $placed['buffer'];
             $region = new Region(BufferPosition::new($placed['x'], $placed['y']), $box->width(), $box->height());
             $viewport = $viewport->withRegion($region, $box);
-            $viewport = $this->carryHostZoneMarkers($viewport, $bgGrid, $placed['x'], $placed['y'], $box->width(), $box->height());
+            if ($this->hostZoneCarry) {
+                $viewport = $this->carryHostZoneMarkers($viewport, $bgGrid, $placed['x'], $placed['y'], $box->width(), $box->height());
+            }
         }
 
         return $viewport->toAnsi();
