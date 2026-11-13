@@ -49,12 +49,12 @@ final class LangParityTest extends TestCase
         return $cases;
     }
 
-    public function testEnglishCatalogCarriesTheTwentyFourCliKeys(): void
+    public function testEnglishCatalogCarriesTheTwentyFiveCliKeys(): void
     {
         $en = require self::LANG_DIR . '/en.php';
-        $this->assertCount(24, $en);
+        $this->assertCount(25, $en);
         $this->assertArrayHasKey('cli.usage', $en);
-        foreach (['missing_value', 'bad_number', 'png_ignores', 'highlight_rejected', 'format_mismatch', 'input_too_large', 'render_failed', 'pixels_exceeded', 'font_too_large'] as $key) {
+        foreach (['missing_value', 'bad_number', 'png_ignores', 'highlight_rejected', 'format_mismatch', 'input_too_large', 'render_failed', 'pixels_exceeded', 'font_too_large', 'read_failed_stdin'] as $key) {
             $this->assertArrayHasKey('cli.' . $key, $en, "new bin message '$key' must live in en.php");
         }
     }

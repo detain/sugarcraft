@@ -17,7 +17,8 @@ return [
     'cli.font_not_found'      => "candy-codeshot：フォントファイルが見つかりません：'{path}'",
     'cli.font_invalid'        => "candy-codeshot：'{path}'は有効なフォントファイルではありません（TTF、OTF、WOFFまたはWOFF2が必要）",
     'cli.bad_highlight'       => "candy-codeshot：不正なハイライト形式 '{format}'。開始:終了（例 3:7）または開始:終了:#色（例 3:7:#fffbe6）を使用してください",
-    'cli.read_failed'          => 'candy-codeshot：入力の読み取りに失敗',
+    'cli.read_failed'          => "candy-codeshot：入力の読み取りに失敗：'{path}'",
+    'cli.read_failed_stdin'     => 'candy-codeshot：stdin の読み取りに失敗',
     'cli.input_too_large'     => 'candy-codeshot：入力が上限 {limit} バイトを超過しています（読み取りを拒否）',
     'cli.path_outside_cwd'    => "candy-codeshot：パス '{path}' は現在の作業ディレクトリの外にあります（許可するには --unsafe-paths を使用）",
     'cli.write_failed'        => "candy-codeshot：書き込みに失敗 '{path}'",
@@ -33,7 +34,7 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
   echo "hello" | candy-codeshot --theme dracula > out.svg
   candy-codeshot input.txt --theme tokyo-night --no-window --line-numbers
 
-フラグの値は個別の引数です: "--theme dracula"（"--theme=dracula" ではない）
+フラグの値は個別の引数です："--theme dracula"（"--theme=dracula" ではない）
 （"=" 形式は認識できないフラグとして拒否されます）。
 
 オプション:
@@ -66,7 +67,7 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
 終了コード:
   0  成功
   1  I/O 失敗 (入力読み込み不可、出力書き込み不可、autoload 欠落)
-  2  使い方のエラーまたは入力エラー (不正なフラグ、値の欠落、不正な数値、拒否されたパスまたはフォント、拒否されたハイライト、ext-gd の欠如、ターミナルへの PNG 出力拒否)
+  2  使い方のエラーまたは入力エラー (不正なフラグ、値の欠落、不正な数値、不明なテーマ/形式/スタイル、拒否されたパスまたはフォント、拒否されたハイライト、ディレクトリ入力、ext-gd の欠如、ターミナルへの PNG 出力拒否、描画中の拒否)
 
 例:
   cat script.php | candy-codeshot --theme dracula
@@ -74,9 +75,9 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: 入力パス "{path}" はディレクトリです - ファイルを渡すか stdin でパイプしてください',
-    'cli.png_to_tty'          => 'candy-codeshot: 生の PNG バイトを端末に書き込むことは拒否されました (--output <file.png> を使用)',
-    'cli.stdin_tty'           => 'candy-codeshot: stdin から読み込み中 - ファイルを渡すか入力してください (Ctrl-D で終了)',
+    'cli.is_directory'        => 'candy-codeshot：入力パス "{path}" はディレクトリです - ファイルを渡すか stdin でパイプしてください',
+    'cli.png_to_tty'          => 'candy-codeshot：生の PNG バイトを端末に書き込むことは拒否されました (--output <file.png> を使用)',
+    'cli.stdin_tty'           => 'candy-codeshot：stdin から読み込み中 - ファイルを渡すか入力してください (Ctrl-D で終了)',
     'cli.render_failed'     => 'candy-codeshot：描画に失敗しました: {reason}',
     'cli.pixels_exceeded'    => 'candy-codeshot：{format} 出力が大きすぎます ({width} x {height} = {pixels} ピクセル; 上限 {cap})。内容、余白または行数を減らしてください。',
     'cli.font_too_large'     => 'candy-codeshot：フォントファイルが大きすぎて埋め込めません: {size} バイトは上限 {cap} を超えています ({path})',

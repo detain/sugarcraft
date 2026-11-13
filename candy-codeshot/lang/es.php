@@ -17,7 +17,8 @@ return [
     'cli.font_not_found'      => "candy-codeshot: archivo de fuente no encontrado: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}' no es un archivo de fuente válido (se esperaba TTF, OTF, WOFF o WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: formato de resaltado inválido '{format}'. Use inicio:fin (p. ej. 3:7) o inicio:fin:#color (p. ej. 3:7:#fffbe6)",
-    'cli.read_failed'          => 'candy-codeshot: error al leer la entrada',
+    'cli.read_failed'          => "candy-codeshot: error al leer la entrada de '{path}'",
+    'cli.read_failed_stdin'     => 'candy-codeshot: error al leer la entrada estándar (stdin)',
     'cli.input_too_large'     => 'candy-codeshot: la entrada supera el límite de {limit} bytes (lectura rechazada)',
     'cli.path_outside_cwd'    => "candy-codeshot: la ruta '{path}' está fuera del directorio de trabajo actual (use --unsafe-paths para permitirlo)",
     'cli.write_failed'        => "candy-codeshot: error al escribir '{path}'",
@@ -66,7 +67,7 @@ Notas:
 Códigos de salida:
   0  éxito
   1  fallo de E/S (entrada ilegible, salida no escribible, autoload ausente)
-  2  error de uso o de entrada (opción desconocida, valor ausente, número no válido, ruta o fuente rechazada, resaltado rechazado, falta ext-gd, PNG a terminal rechazado)
+  2  error de uso o de entrada (opción desconocida, valor ausente, número no válido, tema/formato/estilo desconocidos, ruta o fuente rechazada, resaltado rechazado, directorio como entrada, falta ext-gd, PNG a terminal rechazado, rechazo durante el renderizado)
 
 Ejemplos:
   cat script.php | candy-codeshot --theme dracula

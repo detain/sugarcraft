@@ -454,7 +454,12 @@ $text = $inputPath !== null
     ? @file_get_contents($inputPath, false, null, 0, $maxInputBytes + 1)
     : stream_get_contents(STDIN, $maxInputBytes + 1);
 if ($text === false || $text === null) {
-    fwrite(STDERR, Lang::t('cli.read_failed') . "\n");
+    // candy-codeshot-095 (cs-34): the only failure string that did not name
+    // its subject. File legs quote the path (Lang::t's choke sweeps it); the
+    // stdin leg gets its own message — there is no path to show.
+    fwrite(STDERR, ($inputPath !== null
+        ? Lang::t('cli.read_failed', ['path' => $inputPath])
+        : Lang::t('cli.read_failed_stdin')) . "\n");
     exit(1);
 }
 if (strlen($text) > $maxInputBytes) {

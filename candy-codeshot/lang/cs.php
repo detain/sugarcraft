@@ -17,7 +17,8 @@ return [
     'cli.font_not_found'      => "candy-codeshot: soubor písma nenalezen: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}' není platný soubor písma (očekáváno TTF, OTF, WOFF nebo WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: neplatný formát zvýraznění '{format}'. Použijte start:konec (např. 3:7) nebo start:konec:#barva (např. 3:7:#fffbe6)",
-    'cli.read_failed'          => 'candy-codeshot: nelze číst vstup',
+    'cli.read_failed'          => "candy-codeshot: nelze číst vstup ze souboru '{path}'",
+    'cli.read_failed_stdin'     => 'candy-codeshot: nelze číst ze stdinu',
     'cli.input_too_large'     => 'candy-codeshot: vstup překračuje limit {limit} bajtů (čtení zamítnuto)',
     'cli.path_outside_cwd'    => "candy-codeshot: cesta '{path}' je mimo aktuální pracovní adresář (povolte pomocí --unsafe-paths)",
     'cli.write_failed'        => "candy-codeshot: nelze zapisovat do '{path}'",
@@ -66,7 +67,7 @@ Poznámky:
 Návratové kódy:
   0  úspěch
   1  chyba I/O (nečitelný vstup, nezapisovatelný výstup, chybějící autoload)
-  2  chyba použití nebo vstupu (neznámý příznak, chybějící hodnota, neplatné číslo, zamítnutá cesta nebo písmo, zamítnuté zvýraznění, chybějící ext-gd, zamítnut výstup PNG do terminálu)
+  2  chyba použití nebo vstupu (neznámý příznak, chybějící hodnota, neplatné číslo, neznámé téma/formát/styl, zamítnutá cesta nebo písmo, zamítnuté zvýraznění, adresář jako vstup, chybějící ext-gd, zamítnut výstup PNG do terminálu, zamítnutí při vykreslování)
 
 Příklady:
   cat script.php | candy-codeshot --theme dracula

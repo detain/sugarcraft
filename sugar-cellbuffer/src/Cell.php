@@ -113,6 +113,73 @@ final class Cell implements \JsonSerializable
     }
 
     /**
+     * Factory: the padding identity — one space, default style, no link,
+     * width 1. Named preset so erase paths read as intent (Cell::blank())
+     * rather than as an argumentless default.
+     */
+    public static function blank(): self
+    {
+        return new self(' ', null, null, 1);
+    }
+
+    /**
+     * Copy carrying a different rune; style, link and width are kept.
+     *
+     * Construction-time validation runs exactly once, in the constructor —
+     * a rune that cannot legally ride this cell's width (the span law) is
+     * refused here the same way `new` would refuse it.
+     */
+    public function withRune(string $rune): self
+    {
+        return new self(
+            rune: $rune,
+            style: $this->style,
+            link: $this->link,
+            width: $this->width,
+        );
+    }
+
+    /** Copy carrying a different style (null clears it); the rest is kept. */
+    public function withStyle(?Style $style): self
+    {
+        return new self(
+            rune: $this->rune,
+            style: $style,
+            link: $this->link,
+            width: $this->width,
+        );
+    }
+
+    /** Copy carrying a different hyperlink anchor (null clears it). */
+    public function withLink(?Hyperlink $link): self
+    {
+        return new self(
+            rune: $this->rune,
+            style: $this->style,
+            link: $link,
+            width: $this->width,
+        );
+    }
+
+    /**
+     * Copy declaring a different display width.
+     *
+     * The span law re-fires through the constructor: resizing a width-1 'a'
+     * cell to 2 is refused unless the rune actually occupies the new span —
+     * a derivation can never smuggle an under-painted pairing past the law
+     * CB-15 froze.
+     */
+    public function withWidth(int $width): self
+    {
+        return new self(
+            rune: $this->rune,
+            style: $this->style,
+            link: $this->link,
+            width: $width,
+        );
+    }
+
+    /**
      * Displayed grapheme(s), returned verbatim.
      *
      * The value is emitted unescaped by {@see Buffer::toAnsi()} / the diff

@@ -17,7 +17,8 @@ return [
     'cli.font_not_found'      => "candy-codeshot: 글꼴 파일을 찾을 수 없습니다: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}'는 유효한 글꼴 파일이 아닙니다 (TTF, OTF, WOFF 또는 WOFF2 필요)",
     'cli.bad_highlight'       => "candy-codeshot: 잘못된 강조 형식 '{format}'. 시작:끝 (예: 3:7) 또는 시작:끝:#색 (예: 3:7:#fffbe6)을 사용하세요",
-    'cli.read_failed'          => 'candy-codeshot: 입력 읽기 실패',
+    'cli.read_failed'          => "candy-codeshot: '{path}' 입력을 읽지 못했습니다",
+    'cli.read_failed_stdin'     => 'candy-codeshot: stdin을 읽지 못했습니다',
     'cli.input_too_large'     => 'candy-codeshot: 입력이 제한값 {limit}바이트를 초과합니다(읽기 거부)',
     'cli.path_outside_cwd'    => "candy-codeshot: 경로 '{path}'가 현재 작업 디렉터리 밖에 있습니다 (허용하려면 --unsafe-paths 사용)",
     'cli.write_failed'        => "candy-codeshot: 쓰기 실패 '{path}'",
@@ -65,7 +66,7 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
 종료 코드:
   0  성공
   1  I/O 실패 (입력 읽기 실패, 출력 쓰기 실패, autoload 없음)
-  2  사용법 또는 입력 오류 (잘못된 플래그, 값 누락, 잘못된 숫자, 거부된 경로 또는 글꼴, 거부된 강조 표시, ext-gd 누락, 터미널로 PNG 출력 거부)
+  2  사용법 또는 입력 오류 (잘못된 플래그, 값 누락, 잘못된 숫자, 알 수 없는 테마/형식/스타일, 거부된 경로 또는 글꼴, 거부된 강조 표시, 디렉터리 입력, ext-gd 누락, 터미널로 PNG 출력 거부, 렌더링 중 거부)
 
 예시:
   cat script.php | candy-codeshot --theme dracula

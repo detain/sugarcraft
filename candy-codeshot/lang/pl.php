@@ -17,7 +17,8 @@ return [
     'cli.font_not_found'      => "candy-codeshot: nie znaleziono pliku czcionki: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}' nie jest prawidłowym plikiem czcionki (oczekiwano TTF, OTF, WOFF lub WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: nieprawidłowy format podświetlenia '{format}'. Użyj start:koniec (np. 3:7) lub start:koniec:#kolor (np. 3:7:#fffbe6)",
-    'cli.read_failed'          => 'candy-codeshot: nie można odczytać danych wejściowych',
+    'cli.read_failed'          => "candy-codeshot: nie można odczytać danych wejściowych z pliku '{path}'",
+    'cli.read_failed_stdin'     => 'candy-codeshot: nie można odczytać danych ze stdin',
     'cli.input_too_large'     => 'candy-codeshot: dane wejściowe przekraczają limit {limit} bajtów (odczyt odrzucony)',
     'cli.path_outside_cwd'    => "candy-codeshot: ścieżka '{path}' jest poza bieżącym katalogiem roboczym (użyj --unsafe-paths, aby zezwolić)",
     'cli.write_failed'        => "candy-codeshot: nie można zapisać do '{path}'",
@@ -66,7 +67,7 @@ Uwagi:
 Kody wyjścia:
   0  sukces
   1  błąd I/O (nieczytelne wejście, niezapisywalne wyjście, brakujący autoload)
-  2  błąd użycia lub wejścia (zła flaga, brak wartości, błędny numer, odrzucona ścieżka lub czcionka, odrzucone podświetlenie, brak ext-gd, odmowa PNG do terminala)
+  2  błąd użycia lub wejścia (zła flaga, brak wartości, błędny numer, nieznany motyw/format/styl, odrzucona ścieżka lub czcionka, odrzucone podświetlenie, katalog jako wejście, brak ext-gd, odmowa PNG do terminala, odrzucenie podczas renderowania)
 
 Przykłady:
   cat script.php | candy-codeshot --theme dracula

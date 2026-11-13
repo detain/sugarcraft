@@ -17,7 +17,8 @@ return [
     'cli.font_not_found'      => "candy-codeshot: لم يتم العثور على ملف الخط: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}' ليس ملف خط صالح (المتوقع TTF أو OTF أو WOFF أو WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: صيغة تظليل غير صالحة '{format}'. استخدم البداية:النهاية (مثل 3:7) أو البداية:النهاية:#اللون (مثل 3:7:#fffbe6)",
-    'cli.read_failed'          => 'candy-codeshot: تعذر قراءة الإدخال',
+    'cli.read_failed'          => "candy-codeshot: تعذر قراءة الإدخال من '{path}'",
+    'cli.read_failed_stdin'     => 'candy-codeshot: تعذر قراءة stdin',
     'cli.input_too_large'     => 'candy-codeshot: يتجاوز الإدخال حد {limit} بايت (تم رفض القراءة)',
     'cli.path_outside_cwd'    => "candy-codeshot: المسار '{path}' يقع خارج مجلد العمل الحالي (استخدم --unsafe-paths للسماح)",
     'cli.write_failed'        => "candy-codeshot: تعذر الكتابة إلى '{path}'",
@@ -65,7 +66,7 @@ candy-codeshot - يعرض الشفرة أو مخرجات الطرفية كلقط
 رموز الخروج:
   0  نجاح
   1  خطأ إدخال/إخراج (تعذر قراءة الإدخال، تعذر كتابة الإخراج، autoload مفقود)
-  2  خطأ استخدام أو إدخال (علامة غير معروفة، قيمة مفقودة، رقم غير صالح، مسار أو خط مرفوض، تظليل مرفوض، غياب ext-gd، رفض PNG إلى الطرفية)
+  2  خطأ استخدام أو إدخال (علامة غير معروفة، قيمة مفقودة، رقم غير صالح، سمة أو تنسيق أو نمط غير معروف، مسار أو خط مرفوض، تظليل مرفوض، إدخال من مجلد، غياب ext-gd، رفض PNG إلى الطرفية، رفض أثناء العرض)
 
 أمثلة:
   cat script.php | candy-codeshot --theme dracula

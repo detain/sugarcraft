@@ -17,7 +17,8 @@ return [
     'cli.font_not_found'      => "candy-codeshot: Schriftdatei nicht gefunden: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}' ist keine gültige Schriftdatei (erwartet TTF, OTF, WOFF oder WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: ungültiges Highlight-Format '{format}'. Format start:end (z. B. 3:7) oder start:end:#farbe (z. B. 3:7:#fffbe6)",
-    'cli.read_failed'          => 'candy-codeshot: Eingabe konnte nicht gelesen werden',
+    'cli.read_failed'          => "candy-codeshot: Eingabe aus '{path}' konnte nicht gelesen werden",
+    'cli.read_failed_stdin'     => 'candy-codeshot: Eingabe von stdin konnte nicht gelesen werden',
     'cli.input_too_large'     => 'candy-codeshot: Eingabe überschreitet das Limit von {limit} Bytes (Lesen verweigert)',
     'cli.path_outside_cwd'    => "candy-codeshot: Pfad '{path}' liegt außerhalb des aktuellen Arbeitsverzeichnisses (mit --unsafe-paths erlauben)",
     'cli.write_failed'        => "candy-codeshot: Schreiben fehlgeschlagen '{path}'",
@@ -34,7 +35,7 @@ Aufruf:
   candy-codeshot input.txt --theme tokyo-night --no-window --line-numbers
 
 Flag-Werte sind eigene Argumente: "--theme dracula", nicht "--theme=dracula"
-(die "=" Form wird als unbekanntes Flag abgelehnt).
+(die Schreibweise mit "=" wird als unbekanntes Flag abgelehnt).
 
 Optionen:
   --theme <name>          Theme-Name: dark, light, dracula, tokyo-night, nord (Standard: dark)
@@ -66,7 +67,7 @@ Hinweise:
 Exit-Codes:
   0  Erfolg
   1  E/A-Fehler (unlesbare Eingabe, nicht schreibbare Ausgabe, fehlender Autoload)
-  2  Benutzungs- oder Eingabefehler (ungültiger Flag, fehlender Wert, ungültige Zahl, abgelehnter Pfad oder Font, abgelehnte Hervorhebung, fehlende ext-gd, abgelehntes PNG-ins-Terminal)
+  2  Benutzungs- oder Eingabefehler (ungültiger Flag, fehlender Wert, ungültige Zahl, unbekanntes Thema/Format/Stil, abgelehnter Pfad oder Font, abgelehnte Hervorhebung, Verzeichnis als Eingabe, fehlende ext-gd, abgelehntes PNG-ins-Terminal, Ablehnung während des Renderns)
 
 Beispiele:
   cat script.php | candy-codeshot --theme dracula
@@ -74,9 +75,9 @@ Beispiele:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: Eingabepfad "{path}" ist ein Verzeichnis - bitte eine Datei übergeben oder über stdin pipe-n',
+    'cli.is_directory'        => 'candy-codeshot: Eingabepfad "{path}" ist ein Verzeichnis - bitte eine Datei übergeben oder die Eingabe über stdin weiterleiten',
     'cli.png_to_tty'          => 'candy-codeshot: rohe PNG-Daten werden nicht auf ein Terminal geschrieben (--output <Datei.png> verwenden)',
-    'cli.stdin_tty'           => 'candy-codeshot: lese von stdin - Datei übergeben oder Eingabe pipe-n (Strg-D beendet)',
+    'cli.stdin_tty'           => 'candy-codeshot: lese von stdin - Datei übergeben oder die Eingabe über stdin lesen (Strg-D beendet)',
     'cli.render_failed'     => 'candy-codeshot: Rendern fehlgeschlagen: {reason}',
     'cli.pixels_exceeded'    => 'candy-codeshot: {format}-Ausgabe zu groß ({width} x {height} = {pixels} Pixel; Grenze {cap}). Inhalt, Padding oder Zeilenanzahl reduzieren.',
     'cli.font_too_large'     => 'candy-codeshot: Schriftdatei zu groß zum Einbetten: {size} Bytes überschreiten das {cap}-Limit ({path})',

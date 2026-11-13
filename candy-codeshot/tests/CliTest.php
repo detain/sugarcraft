@@ -823,6 +823,31 @@ final class CliTest extends TestCase
         }
     }
 
+    public function testReadFailureNamesItsSubject(): void
+    {
+        // candy-codeshot-095 (cs-34): the read-failure row used to be the one
+        // refusal that never said what it failed on. A file leg must quote
+        // the offending path; the stdin leg keeps its own distinct message.
+        if (function_exists('posix_geteuid') && (int) posix_geteuid() === 0) {
+            $this->markTestSkipped('unreadable-file leg requires a non-root user');
+        }
+        $dir  = $this->makeTempDir();
+        $path = $dir . '/locked.txt';
+        file_put_contents($path, "x\n");
+        chmod($path, 0000);
+        try {
+            $r = $this->runCli(['--no-window', 'locked.txt'], null, $dir);
+
+            $this->assertSame(1, $r['exitCode'], $r['stderr']);
+            $this->assertStringContainsString("failed to read input from '{$path}'", $r['stderr']);
+        } finally {
+            chmod($path, 0600);
+            $this->rmTree($dir);
+        }
+        $bin = (string) file_get_contents(dirname(__DIR__) . '/bin/candy-codeshot');
+        $this->assertStringContainsString("Lang::t('cli.read_failed_stdin')", $bin, 'the stdin leg must answer with its own key');
+    }
+
     public function testBareSgrResetSurvivesTheCliCapturePath(): void
     {
         // cs-06 CLI arm — the P2 repro driven through the real bin: `tput

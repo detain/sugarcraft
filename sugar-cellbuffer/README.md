@@ -113,7 +113,9 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 
 - `Cell::new(string $rune = ' ', ?Style $style = null, ?Hyperlink $link = null, int $width = 1): self` — negative widths are refused; `0` marks a continuation, `2` a wide lead (the only width that carries a continuation partner), larger values are single run-length spans (see sugar-table's border fills). Spans must MEASURE UP: a width `N > 2` cell requires a rune exactly `N` display columns wide (the span law, checked with sugar-core's `Width::of`) — a short rune behind a big declared width under-paints every frame it touches, so the pairing is refused at construction (and again on unserialization).
 - `Cell::continuation(): self` — blank width-0 partner cell.
+- `Cell::blank(): self` — the named padding preset (one space, default style, width 1); same value as `Cell::new()`, so erase paths read as intent.
 - `Cell::rune(): string`, `Cell::style(): ?Style`, `Cell::link(): ?Hyperlink`, `Cell::width(): int`, `Cell::equals(Cell $other): bool`.
+- Immutable derivations mirroring the `Style::with*()` law — each returns a new cell keeping every untouched field: `Cell::withRune(string)`, `Cell::withStyle(?Style)` (null clears), `Cell::withLink(?Hyperlink)` (null clears), `Cell::withWidth(int)`. The span law re-fires through the constructor on `withRune`/`withWidth`, so a derivation can never mint an under-painted pairing the direct constructor would refuse.
 
 ### Style
 

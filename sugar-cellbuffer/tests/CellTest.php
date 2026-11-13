@@ -396,4 +396,59 @@ final class CellTest extends TestCase
             $this->assertTrue($threw, "expected refusal naming '{$needle}'");
         }
     }
+
+    public function testBlankIsTheNamedPaddingIdentity(): void
+    {
+        $blank = Cell::blank();
+        self::assertSame(' ', $blank->rune());
+        self::assertNull($blank->style());
+        self::assertNull($blank->link());
+        self::assertSame(1, $blank->width());
+        // Same value as the default factory, different naming intent.
+        self::assertTrue($blank->equals(Cell::new()));
+    }
+
+    public function testDerivationsKeepEveryUntouchedField(): void
+    {
+        $style = new Style(fg: 0x102030, bg: 0x405060, attrs: Style::ATTR_BOLD);
+        $link = new Hyperlink('https://example.test/a', 'id-1');
+        $base = Cell::new('中', $style, $link, 2);
+
+        $other = new Style(bg: 0x0F0F0F);
+
+        self::assertTrue(
+            $base->withStyle($other)->equals(new Cell('中', $other, $link, 2)),
+            'withStyle must keep rune, link and width',
+        );
+        self::assertTrue(
+            $base->withLink(null)->equals(new Cell('中', $style, null, 2)),
+            'withLink(null) must clear only the link',
+        );
+        self::assertTrue(
+            $base->withRune('X')->equals(new Cell('X', $style, $link, 2)),
+            'withRune must keep style, link and width',
+        );
+        self::assertTrue(
+            $base->withWidth(1)->equals(new Cell('中', $style, $link, 1)),
+            'withWidth must keep rune, style and link',
+        );
+
+        // Derived width-2 leads keep riding the pair law unchanged, and a
+        // derivation never mutates its source (readonly clone law).
+        $derived = $base->withStyle($other);
+        self::assertSame(2, $derived->width());
+        self::assertSame(0x102030, $base->style()->fg());
+    }
+
+    public function testWithWidthRefiresTheSpanLaw(): void
+    {
+        $span = Cell::new('一二', null, null, 4);
+
+        // Shrinking a span within the pair-law band (<=2) is legal:
+        self::assertSame(2, $span->withWidth(2)->width());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires a rune exactly 5 display columns');
+        $span->withWidth(5);
+    }
 }

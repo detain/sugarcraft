@@ -16,8 +16,9 @@ return [
     'cli.gd_required'         => 'candy-codeshot: ext-gd é obrigatório para saída PNG',
     'cli.font_not_found'      => "candy-codeshot: arquivo de fonte não encontrado: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}' não é um arquivo de fonte válido (esperado TTF, OTF, WOFF ou WOFF2)",
-    'cli.bad_highlight'       => "candy-codeshot: formato de destaque inválido '{format}'. Use inicio:fim (ex. 3:7) ou inicio:fim:#cor (ex. 3:7:#fffbe6)",
-    'cli.read_failed'          => 'candy-codeshot: falha ao ler a entrada',
+    'cli.bad_highlight'       => "candy-codeshot: formato de destaque inválido '{format}'. Use início:fim (ex. 3:7) ou início:fim:#cor (ex. 3:7:#fffbe6)",
+    'cli.read_failed'          => "candy-codeshot: falha ao ler a entrada de '{path}'",
+    'cli.read_failed_stdin'     => 'candy-codeshot: falha ao ler a entrada padrão (stdin)',
     'cli.input_too_large'     => 'candy-codeshot: a entrada excede o limite de {limit} bytes (leitura recusada)',
     'cli.path_outside_cwd'    => "candy-codeshot: o caminho '{path}' está fora do diretório de trabalho atual (use --unsafe-paths para permitir)",
     'cli.write_failed'        => "candy-codeshot: falha ao escrever '{path}'",
@@ -48,8 +49,8 @@ Opções:
   --ligatures             Ativar ligaduras (font-variant-ligatures: normal; somente SVG)
   --font <caminho>        Caminho de um arquivo de fonte TTF/OTF/WOFF/WOFF2 para incorporar no SVG (somente SVG)
   --unsafe-paths          Permitir caminhos de entrada/--font/--output fora do CWD
-  --highlight <inicio:fim[:cor]>
-                          Destaca linhas inicio:fim com cor opcional (cor padrão: a cor de destaque do tema; somente SVG)
+  --highlight <início:fim[:cor]>
+                          Destaca linhas início:fim com cor opcional (cor padrão: a cor de destaque do tema; somente SVG)
   --format <svg|png>      Formato de saída (padrão: svg; png requer ext-gd)
   -t, --type <idioma>     Força o idioma do realce de sintaxe (padrão: nome do arquivo, shebang, conteúdo)
   -o, --output <caminho>  Escrever a saída em arquivo em vez de stdout
@@ -66,7 +67,7 @@ Notas:
 Códigos de saída:
   0  sucesso
   1  falha de E/S (entrada ilegível, saída não gravável, autoload ausente)
-  2  erro de uso ou de entrada (opção desconhecida, valor ausente, número inválido, caminho ou fonte rejeitados, destaque rejeitado, ext-gd ausente, PNG para terminal rejeitado)
+  2  erro de uso ou de entrada (opção desconhecida, valor ausente, número inválido, tema/formato/estilo desconhecidos, caminho ou fonte rejeitados, destaque rejeitado, diretório como entrada, ext-gd ausente, PNG para terminal rejeitado, rejeição durante a renderização)
 
 Exemplos:
   cat script.php | candy-codeshot --theme dracula

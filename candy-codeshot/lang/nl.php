@@ -17,12 +17,13 @@ return [
     'cli.font_not_found'      => "candy-codeshot: lettertypebestand niet gevonden: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}' is geen geldig lettertypebestand (verwacht TTF, OTF, WOFF of WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: ongeldig markeringformaat '{format}'. Gebruik begin:einde (bijv. 3:7) of begin:einde:#kleur (bijv. 3:7:#fffbe6)",
-    'cli.read_failed'          => 'candy-codeshot: kan invoer niet lezen',
+    'cli.read_failed'          => "candy-codeshot: kan invoer uit '{path}' niet lezen",
+    'cli.read_failed_stdin'     => 'candy-codeshot: kan stdin niet lezen',
     'cli.input_too_large'     => 'candy-codeshot: invoer overschrijdt de limiet van {limit} bytes (lezen geweigerd)',
     'cli.path_outside_cwd'    => "candy-codeshot: pad '{path}' valt buiten de huidige werkmap (gebruik --unsafe-paths om dit toe te staan)",
     'cli.write_failed'        => "candy-codeshot: kan niet schrijven naar '{path}'",
     'cli.missing_value'       => "candy-codeshot: {option} vereist een waarde",
-    'cli.bad_number'          => "candy-codeshot: {option} verwacht een niet-negatief getal, gekregen '{value}'",
+    'cli.bad_number'          => "candy-codeshot: {option} verwacht een niet-negatief geheel getal, gekregen '{value}'",
     'cli.png_ignores'         => "candy-codeshot: PNG-uitvoer negeert SVG-only-opties: {options} (gebruik --format svg)",
     'cli.highlight_rejected'  => "candy-codeshot: markering '{spec}' geweigerd: {reason}",
     'cli.format_mismatch'     => "candy-codeshot: uitvoerformaat '{format}' komt niet overeen met de extensie van '{path}'",
@@ -66,7 +67,7 @@ Opmerkingen:
 Exitcodes:
   0  succes
   1  I/O-fout (onleesbare invoer, niet-schrijfbare uitvoer, ontbrekende autoload)
-  2  gebruiksfout of invoerfout (onbekende vlag, ontbrekende waarde, ongeldig getal, geweigerd pad of lettertype, geweigerde markering, ext-gd ontbreekt, PNG naar terminal geweigerd)
+  2  gebruiksfout of invoerfout (onbekende vlag, ontbrekende waarde, ongeldig getal, onbekend thema/format/stijl, geweigerd pad of lettertype, geweigerde markering, map als invoer, ext-gd ontbreekt, PNG naar terminal geweigerd, weigering tijdens het renderen)
 
 Voorbeelden:
   cat script.php | candy-codeshot --theme dracula

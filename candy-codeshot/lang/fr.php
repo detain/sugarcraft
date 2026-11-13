@@ -17,7 +17,8 @@ return [
     'cli.font_not_found'      => "candy-codeshot : fichier de police introuvable : '{path}'",
     'cli.font_invalid'        => "candy-codeshot : '{path}' n'est pas un fichier de police valide (attendu TTF, OTF, WOFF ou WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot : format de surbrillance invalide '{format}'. Utiliser debut:fin (ex. 3:7) ou debut:fin:#couleur (ex. 3:7:#fffbe6)",
-    'cli.read_failed'          => 'candy-codeshot : impossible de lire la donnée',
+    'cli.read_failed'          => "candy-codeshot : impossible de lire la donnée depuis '{path}'",
+    'cli.read_failed_stdin'     => "candy-codeshot : impossible de lire l'entrée standard",
     'cli.input_too_large'     => "candy-codeshot : l'entrée dépasse la limite de {limit} octets (lecture refusée)",
     'cli.path_outside_cwd'    => "candy-codeshot : le chemin '{path}' est hors du répertoire de travail courant (utiliser --unsafe-paths pour autoriser)",
     'cli.write_failed'        => "candy-codeshot : impossible d'écrire '{path}'",
@@ -66,7 +67,7 @@ Remarques :
 Codes de sortie :
   0  succès
   1  échec d'E/S (entrée illisible, sortie non inscriptible, autoload manquant)
-  2  erreur d'utilisation ou d'entrée (option inconnue, valeur manquante, nombre invalide, chemin ou police refusé, surlignage refusé, ext-gd manquant, PNG vers terminal refusé)
+  2  erreur d'utilisation ou d'entrée (option inconnue, valeur manquante, nombre invalide, thème/format/style inconnu, chemin ou police refusé, surlignage refusé, répertoire en entrée, ext-gd manquant, PNG vers terminal refusé, refus pendant le rendu)
 
 Exemples :
   cat script.php | candy-codeshot --theme dracula

@@ -16,8 +16,9 @@ return [
     'cli.gd_required'         => 'candy-codeshot: PNG çıktısı için ext-gd gerekli',
     'cli.font_not_found'      => "candy-codeshot: yazı tipi dosyası bulunamadı: '{path}'",
     'cli.font_invalid'        => "candy-codeshot: '{path}' geçerli bir yazı tipi dosyası değil (TTF, OTF, WOFF veya WOFF2 bekleniyordu)",
-    'cli.bad_highlight'       => "candy-codeshot: geçersiz vurgu biçemi '{format}'. baş:bitiş (örn. 3:7) veya baş:bitiş:#renk (örn. 3:7:#fffbe6) kullanın",
-    'cli.read_failed'          => 'candy-codeshot: girdi okunamadı',
+    'cli.bad_highlight'       => "candy-codeshot: geçersiz vurgu biçemi '{format}'. Kullanım: baş:bitiş (örn. 3:7) veya baş:bitiş:#renk (örn. 3:7:#fffbe6) kullanın",
+    'cli.read_failed'          => "candy-codeshot: girdi okunamadı: '{path}'",
+    'cli.read_failed_stdin'     => 'candy-codeshot: stdin okunamadı',
     'cli.input_too_large'     => 'candy-codeshot: giriş {limit} bayt sınırını aşıyor (okuma reddedildi)',
     'cli.path_outside_cwd'    => "candy-codeshot: '{path}' geçerli çalışma dizininin dışında (izin vermek için --unsafe-paths kullanın)",
     'cli.write_failed'        => "candy-codeshot: yazılamadı '{path}'",
@@ -66,7 +67,7 @@ Notlar:
 Çıkış kodları:
   0  başarılı
   1  G/Ç hatası (okunamayan girdi, yazılamayan çıktı, eksik autoload)
-  2  kullanım veya girdi hatası (bilinmeyen bayrak, eksik değer, geçersiz sayı, reddedilen yol veya yazı tipi, reddedilen vurgu, eksik ext-gd, terminale PNG reddi)
+  2  kullanım veya girdi hatası (bilinmeyen bayrak, eksik değer, geçersiz sayı, bilinmeyen tema/biçim/stil, reddedilen yol veya yazı tipi, reddedilen vurgu, dizin girdisi, eksik ext-gd, terminale PNG reddi, oluşturulma sırasında red)
 
 Örnekler:
   cat script.php | candy-codeshot --theme dracula
