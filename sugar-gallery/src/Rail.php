@@ -32,6 +32,9 @@ final readonly class Rail
      * @param array{railWidth:int, cardWidth:int, spacing:int}|null $geometry
      *                          Optional stored layout (see {@see withGeometry()});
      *                          null until a host stores one.
+     * @throws InvalidArgumentException when $cards violates the shared card-map
+     *         shape law (int keys, PosterCard values) — admission-time, naming
+     *         this entry point (sugar-gallery-003).
      */
     public function __construct(
         public string $title,
@@ -40,6 +43,8 @@ final readonly class Rail
         int $scroll = 0,
         public ?array $geometry = null,
     ) {
+        PosterGrid::assertCardList('Rail::__construct', $cards);
+
         $last = $this->cards === [] ? 0 : count($this->cards) - 1;
         $cursor = max(0, min($last, $cursor));
 
@@ -98,13 +103,14 @@ final readonly class Rail
 
     /**
      * Replace the card list; the constructor clamp pulls cursor/scroll back
-     * into range for the new list.
+     * into range for the new list. The shared card-map shape law refuses bad
+     * maps at this ingress, naming withCards() (sugar-gallery-003).
      *
      * @param list<PosterCard> $cards
      */
     public function withCards(array $cards): self
     {
-        return $this->carrying(['cards' => $cards]);
+        return $this->carrying(['cards' => PosterGrid::assertCardList('Rail::withCards', $cards)]);
     }
 
     /**

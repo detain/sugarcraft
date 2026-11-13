@@ -105,13 +105,65 @@ final class PosterGrid
     }
 
     /**
+     * The shared card-map ingress law. A host-supplied card map must have
+     * int keys and PosterCard values, or it is refused AT ADMISSION naming
+     * the entry method (2026-11-03 fail-loud law; sugar-gallery-003: Rail
+     * ran its own unguarded copy of this shape, so a string key entered
+     * there and detonated later as a frame-wide TypeError inside render()).
+     *
+     * @param array<array-key, mixed> $items
+     * @return array<int, PosterCard> the same map, typed after the guard
+     */
+    public static function assertCardList(string $entryMethod, array $items): array
+    {
+        foreach ($items as $index => $card) {
+            if (!is_int($index) || !($card instanceof PosterCard)) {
+                throw new InvalidArgumentException(sprintf(
+                    '%s() expects int keys and %s values, got key %s and value %s',
+                    $entryMethod,
+                    PosterCard::class,
+                    get_debug_type($index),
+                    get_debug_type($card),
+                ));
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * The shared inclusive-window pair law: exactly [int $start, int $end],
+     * with null allowed where the call site documents it. An associative
+     * ['start' => …, 'end' => …] used to fall through to unguarded [0]/[1]
+     * reads — null bounds that silently lied (sugar-gallery-004).
+     *
+     * @param array<array-key, mixed>|null $pair
+     * @return array{0:int, 1:int}|null
+     */
+    private static function assertIntPair(?array $pair, string $entryMethod): ?array
+    {
+        if ($pair === null) {
+            return null;
+        }
+        if (count($pair) !== 2 || !array_key_exists(0, $pair) || !array_key_exists(1, $pair)
+            || !is_int($pair[0]) || !is_int($pair[1])) {
+            throw new InvalidArgumentException(
+                sprintf('%s() expects an inclusive [int $start, int $end] pair', $entryMethod),
+            );
+        }
+
+        return $pair;
+    }
+
+    /**
      * Splice a page of cards in at their ABSOLUTE indices, merging with whatever
      * is already loaded (new cards win). This is how a range fetch lands.
      *
      * Non-integer keys and wrong-typed values are refused loudly at this
-     * ingress: `'abc' >= 0` evaluates TRUE in PHP 8, so a string key used to
-     * slip into the sparse map and detonate later as a frame-wide TypeError
-     * deep inside render() — fail-fast, not silent-drop.
+     * ingress via the shared {@see assertCardList()} law: `'abc' >= 0`
+     * evaluates TRUE in PHP 8, so a string key used to slip into the sparse
+     * map and detonate later as a frame-wide TypeError deep inside render() —
+     * fail-fast, not silent-drop.
      * Intentionally-negative indices are skipped quietly (a pinned contract for
      * hosts that splice whole API pages without pre-filtering).
      *
@@ -119,16 +171,10 @@ final class PosterGrid
      */
     public function withItems(array $items): self
     {
+        $items = self::assertCardList('withItems', $items);
+
         $clone = clone $this;
         foreach ($items as $index => $card) {
-            if (!is_int($index) || !($card instanceof PosterCard)) {
-                throw new InvalidArgumentException(sprintf(
-                    'withItems() expects int keys and %s values, got key %s and value %s',
-                    PosterCard::class,
-                    get_debug_type($index),
-                    get_debug_type($card),
-                ));
-            }
             if ($index >= 0) {
                 $clone->items[$index] = $card;
             }
@@ -166,14 +212,10 @@ final class PosterGrid
      */
     public function withoutItemsOutside(array $range): self
     {
-        // Shape-gate before the destructure: ['start' => 0, 'end' => 5] used to
-        // fatal with "Cannot access offset of type string".
-        if (count($range) !== 2 || !array_key_exists(0, $range) || !array_key_exists(1, $range)
-            || !is_int($range[0]) || !is_int($range[1])) {
-            throw new InvalidArgumentException(
-                'withoutItemsOutside() expects an inclusive [int $start, int $end] pair',
-            );
-        }
+        // Shape-gate before the destructure via the shared pair law:
+        // ['start' => 0, 'end' => 5] used to fatal with
+        // "Cannot access offset of type string".
+        self::assertIntPair($range, 'withoutItemsOutside');
         [$start, $end] = $range;
 
         $kept = [];
@@ -313,9 +355,18 @@ final class PosterGrid
      * false on an empty grid — there is nothing to load.
      *
      * @param array{0:int, 1:int}|null $lastFetched inclusive [start, end] already loaded
+     * @throws InvalidArgumentException if $lastFetched is neither null nor an
+     *         inclusive [int $start, int $end] pair (shared pair law).
      */
     public function needsFetch(?array $lastFetched, int $overscanRows = 0): bool
     {
+        // Parse at the boundary (sugar-gallery-004): the raw [0]/[1] reads
+        // below turned an associative ['start' => …, 'end' => …] — the shape
+        // hosts reach for when they name their tuple — into null bounds, so
+        // needsFetch() answered TRUE for every window: a permanent
+        // over-fetch loop instead of the documented dedup.
+        $lastFetched = self::assertIntPair($lastFetched, 'needsFetch');
+
         [$start, $end] = $this->visibleRange($overscanRows);
         if ($end < $start) {
             return false;

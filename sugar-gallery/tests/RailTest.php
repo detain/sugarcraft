@@ -72,6 +72,35 @@ final class RailTest extends TestCase
         self::assertLessThanOrEqual(2, $rail->scroll);
     }
 
+    public function testStringKeyedCardsAreRefusedAtTheRailConstructor(): void
+    {
+        // sugar-gallery-003: the rail used to accept any array — the grid's
+        // fail-loud ingress law existed but Rail ran without it, so a string
+        // key rode through to a frame-wide TypeError inside render().
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Rail::__construct() expects int keys');
+
+        new Rail('R', ['a' => new PosterCard('x', 'X')]);
+    }
+
+    public function testWithCardsRefusesNonCardValuesAtTheIngress(): void
+    {
+        // QA repro from the finding: Rail::withCards(['a' => $card]) must
+        // name the method at admission, not at the next paint.
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Rail::withCards() expects int keys and');
+
+        Rail::new('R')->withCards(['a' => new PosterCard('x', 'X')]);
+    }
+
+    public function testWithCardsRefusesAWrongTypedValue(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('got key int and value string');
+
+        Rail::new('R')->withCards([0 => 'not-a-card']);
+    }
+
     public function testWithCardReplacesById(): void
     {
         $rail = new Rail('R', $this->cards(3));

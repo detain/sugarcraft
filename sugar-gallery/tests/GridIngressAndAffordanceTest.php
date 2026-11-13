@@ -92,6 +92,37 @@ final class GridIngressAndAffordanceTest extends TestCase
         $this->grid()->withoutItemsOutside(['start' => 0, 'end' => 5]);
     }
 
+    public function testNeedsFetchRefusesAnAssociatedPairAtTheIngress(): void
+    {
+        // sugar-gallery-004 (QA repro): hosts who name their tuple
+        // ['start' => …, 'end' => …] hit unguarded [0]/[1] reads — null
+        // bounds made needsFetch() answer TRUE for every window, a permanent
+        // over-fetch loop instead of the documented dedup. The shared pair
+        // law now refuses the shape at admission.
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('needsFetch() expects an inclusive [int $start, int $end] pair');
+
+        $this->grid()->reset(10)->needsFetch(['start' => 1, 'end' => 2]);
+    }
+
+    public function testNeedsFetchRefusesATruncatedPair(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('needsFetch() expects an inclusive');
+
+        $this->grid()->reset(10)->needsFetch([5]);
+    }
+
+    public function testNeedsFetchStillAcceptsNullAndRealPairs(): void
+    {
+        // The guard must not eat the documented null ("nothing fetched yet")
+        // or the honest [int, int] window.
+        $grid = $this->grid()->reset(10);
+
+        self::assertTrue($grid->needsFetch(null));
+        self::assertFalse($grid->needsFetch([0, 20]));
+    }
+
     public function testShrinkingToZeroResetsTheWindowInsteadOfFreezingIt(): void
     {
         $grid = $this->grid()->reset(20)->moveTo(15);
