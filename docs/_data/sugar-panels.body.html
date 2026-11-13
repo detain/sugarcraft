@@ -12,7 +12,7 @@ $layout = $panels-&gt;vertical(
     $panels-&gt;horizontal(
         $panels-&gt;leaf("Left panel"),
         $panels-&gt;leaf("Right panel"),
-    )-&gt;withBorder(false),
+    )-&gt;withBorder(false)-&gt;withGrow(),
     $panels-&gt;leaf("Bottom bar")-&gt;withBorder(false),
 )-&gt;withBorder(false);
 
@@ -21,8 +21,11 @@ echo $panels-&gt;render($layout, 60, 7);</code></pre>
     <pre class="code"><code class="language-text">╭────────────────────────────╮╭────────────────────────────╮
 │Left panel                  ││Right panel                 │
 │                            ││                            │
+│                            ││                            │
+│                            ││                            │
 ╰────────────────────────────╯╰────────────────────────────╯
 Bottom bar</code></pre>
+    <p>The horizontal row carries <code>withGrow()</code>, so it flexes to six of the seven rows while <code>Bottom bar</code> — the fixed child — claims its measured natural single row at the bottom. Every row the renderer emits is padded to the viewport width, <code>Bottom bar</code>'s included.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
