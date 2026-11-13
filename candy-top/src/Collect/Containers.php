@@ -43,7 +43,7 @@ namespace SugarCraft\Top\Collect;
  */
 final class Containers implements ContainerCollector
 {
-    public const CGROUP_ROOT = '/sys/fs/cgroup';
+    public const CGROUP_ROOT = Cgroup::DEFAULT_V2_ROOT;
 
     /**
      * @param list<ContainerInfo> $current
@@ -64,11 +64,14 @@ final class Containers implements ContainerCollector
     /**
      * @param ?\Closure(): string $docker defaults to {@see DockerSocket::fetch()}
      * @param ?\Closure(): int    $clock  defaults to hrtime in microseconds
+     *
+     * `$root` null means "this host": the cgroup v2 hierarchy is resolved
+     * from /proc/mounts (hybrid hosts keep working, candy-top-057).
      */
-    public static function new(string $root = self::CGROUP_ROOT, ?\Closure $docker = null, ?\Closure $clock = null): self
+    public static function new(?string $root = null, ?\Closure $docker = null, ?\Closure $clock = null): self
     {
         return new self(
-            rtrim($root, '/'),
+            rtrim($root ?? Cgroup::v2Root(Paths::system()), '/'),
             $docker ?? static fn (): string => DockerSocket::fetch(),
             $clock ?? static fn (): int => intdiv(hrtime(true), 1000),
             true,

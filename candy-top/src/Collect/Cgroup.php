@@ -128,4 +128,43 @@ final class Cgroup
     {
         return (string) preg_replace('/[^A-Za-z0-9_.:-]/', '?', $text);
     }
+
+    /** The cgroup v2 mount btop-shaped readers fall back to. */
+    public const DEFAULT_V2_ROOT = '/sys/fs/cgroup';
+
+    /** @var array<string, string> memoized resolver, keyed by Paths root */
+    private static array $v2Roots = [];
+
+    /**
+     * Where the cgroup v2 hierarchy actually is (candy-top-057).
+     *
+     * The hardcoded /sys/fs/cgroup assumes a unified host. Hybrid boxes
+     * (≤systemd 244, RHEL7-era `unified` option) mount cgroup2 elsewhere
+     * — typically /sys/fs/cgroup/unified — and every reader of the
+     * hardcoded path then silently degrades to process-sum fallback /
+     * UNMEASURED quota. Resolve from /proc/mounts once per Paths root
+     * (the mount table is boot-stable; re-reading it per tick buys
+     * nothing), first cgroup2 row wins; absent a v2 entry the classic
+     * default is returned — the same path the old literals carried.
+     *
+     * The discovered mount point is resolved under $paths exactly like
+     * every other kernel path, so fixture trees keep working.
+     */
+    public static function v2Root(Paths $paths): string
+    {
+        if (isset(self::$v2Roots[$paths->root])) {
+            return self::$v2Roots[$paths->root];
+        }
+
+        $root = $paths->path(self::DEFAULT_V2_ROOT);
+        foreach (explode("\n", Read::file($paths->proc('mounts')) ?? '') as $line) {
+            $cols = preg_split('/\s+/', trim($line));
+            if (($cols[2] ?? '') === 'cgroup2' && ($cols[1] ?? '') !== '') {
+                $root = $paths->path($cols[1]);
+                break;
+            }
+        }
+
+        return self::$v2Roots[$paths->root] = $root;
+    }
 }

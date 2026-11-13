@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Top\Collect\Cgroup;
 use SugarCraft\Top\Collect\ContainerRef;
+use SugarCraft\Top\Tests\Collect\Support\FixtureTree;
 
 /**
  * Cases ported from aristocratos/btop PR #1873 tests/container.cpp.
@@ -99,5 +100,50 @@ final class CgroupTest extends TestCase
         $this->assertNull(Cgroup::fromProcFile("0::/init.scope\n"));
         $this->assertNull(Cgroup::fromProcFile(null));
         $this->assertNull(Cgroup::fromProcFile("garbage\n"));
+    }
+
+    public function testV2RootFollowsTheMountsTableOnHybridHosts(): void
+    {
+        $tree = FixtureTree::copy();
+        // RHEL7-era `unified`: cgroup2 lives under /sys/fs/cgroup/unified.
+        $tree->write('proc/mounts', "sysfs /sys sysfs rw 0 0\ncgroup2 /sys/fs/cgroup/unified cgroup2 rw 0 0\nproc /proc proc rw 0 0\n");
+        try {
+            $this->assertSame(
+                $tree->paths()->sys('fs/cgroup/unified'),
+                Cgroup::v2Root($tree->paths()),
+            );
+        } finally {
+            $tree->destroy();
+        }
+    }
+
+    public function testV2RootFallsBackToTheClassicMountWithoutACgroup2Row(): void
+    {
+        $tree = FixtureTree::copy();
+        $tree->write('proc/mounts', "tmpfs /sys/fs/cgroup tmpfs rw 0 0\ncgroup /sys/fs/cgroup/cpu cgroup rw 0 0\n");
+        try {
+            $this->assertSame($tree->paths()->sys('fs/cgroup'), Cgroup::v2Root($tree->paths()));
+        } finally {
+            $tree->destroy();
+        }
+    }
+
+    public function testV2RootFirstRowWinsAndMissingTableFallsBack(): void
+    {
+        $tree = FixtureTree::copy();
+        $tree->write('proc/mounts', "cgroup2 /a cgroup2 rw 0 0\ncgroup2 /b cgroup2 rw 0 0\n");
+        try {
+            $this->assertSame($tree->paths()->path('/a'), Cgroup::v2Root($tree->paths()));
+        } finally {
+            $tree->destroy();
+        }
+
+        $bare = FixtureTree::copy();
+        try {
+            $bare->remove('proc/mounts');
+            $this->assertSame($bare->paths()->sys('fs/cgroup'), Cgroup::v2Root($bare->paths()));
+        } finally {
+            $bare->destroy();
+        }
     }
 }

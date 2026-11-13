@@ -43,7 +43,7 @@ namespace SugarCraft\Top\Collect;
  */
 final class VmFleet
 {
-    public const CGROUP_ROOT = '/sys/fs/cgroup';
+    public const CGROUP_ROOT = Cgroup::DEFAULT_V2_ROOT;
 
     public const LIBVIRT_RUN = '/run/libvirt/qemu';
 
@@ -137,7 +137,7 @@ final class VmFleet
         $macMap = $this->macMap;
         $netScanned = false;
         $limited = $xml === [] && $scopes !== [];
-        $cgroup = $this->paths->sys('fs/cgroup');
+        $cgroup = Cgroup::v2Root($this->paths);
         foreach ($scopes as $path => [$domainId, $scopeName]) {
             $dir = $cgroup . $path;
             $domain = ($domainId >= 0 ? $byId[$domainId] ?? null : null) ?? $byName[$scopeName] ?? null;
@@ -182,7 +182,7 @@ final class VmFleet
     {
         $out = [];
         foreach (self::SCOPE_PARENTS as $parent) {
-            foreach (Read::entries($paths->sys('fs/cgroup/' . $parent)) as $entry) {
+            foreach (Read::entries(Cgroup::v2Root($paths) . '/' . $parent) as $entry) {
                 $path = '/' . $parent . '/' . $entry;
                 $scope = Vm::scope($path);
                 if ($scope !== null && $scope['path'] === $path && !str_contains($entry, "\0")) {
