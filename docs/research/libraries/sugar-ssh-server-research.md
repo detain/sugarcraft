@@ -10,7 +10,49 @@
 
 sugar-ssh-server currently implements middleware composition and session handling that parallels Go's `charmbracelet/wish`, but relies on external sshd for the SSH wire protocol. This research compares patterns across Go, Rust, Python, and PHP SSH implementations to identify improvements for session handling, authentication, channel management, PTY spawning, and middleware composition.
 
-**Key Finding:** Most SSH server libraries separate connection-level concerns (auth, session channels) from application-level middleware. sugar-ssh-server's flat middleware stack conflates these. The most significant improvement would be introducing a proper **connection/session分层** (layered) handler pattern.
+**Key Finding:** Most SSH server libraries separate connection-level concerns (auth, session channels) from application-level middleware. sugar-ssh-server's flat middleware stack conflates these. The most significant improvement would be introducing a proper **connection/session layering** handler pattern.
+
+## Status correction (2026-11-13)
+
+This document predates the P1/P2 waves; the "Current" snippets below
+showed the pre-Context middleware shape and the Limitations lists have
+since been closed out in-tree. Corrected here in place and recorded,
+dated, per house law — the analysis prose stays as written:
+
+- **Middleware signature:** `handle()` is ctx-first as shipped —
+  `public function handle(Context $ctx, Session $session, callable $next)`
+  (`sugar-ssh-server/src/Middleware.php:48`); the
+  `void|PromiseInterface` result is a docblock-side contract because
+  PHP forbids `void` inside a native return union, and every
+  implementation declares the tightest type it actually honours. The
+  two "Current" snippets in §1.2/§1.3 now carry the shipped form. Note
+  that ctx-first is the *closer* match to wish's Go idiom (handlers
+  thread `context.Context` first-class), so §1.2 UNDERSELLS the parity
+  it recommends.
+- **Phase 1 (Context + session metadata): SHIPPED** — `src/Context.php`,
+  `Session::withProtocolMetadata()`, the nine-field `toLogContext()`.
+- **Phase 2 (channel handler layer): SHIPPED** — `src/Channel/*`
+  (`ChannelHandler`, `ChannelMsg` + the 7 `Msg/*` classes,
+  `DefaultChannelHandler`, `DelegatingChannelHandler`); the transport
+  seam is `InProcessTransport::setChannelHandler()`.
+- **Phase 3 (auth patterns): SHIPPED** —
+  `src/Middleware/Auth/{PasswordAuth,CertificateAuth,AuthMethods,KeyboardInteractive}.php`
+  plus `AuthRateLimitBridge`; `Auth` itself gained the `userKeys`
+  pairing surface. Every §1.3 auth gap has a shipped counterpart now,
+  with one honest caveat: real method *negotiation* remains owned by
+  the host sshd — `AuthMethods` declares and records, it cannot reopen
+  a finished auth exchange.
+- **Phase 4 (subsystem): SHIPPED** — `src/Middleware/Subsystem.php`,
+  `src/Middleware/Subsystem/SftpStub.php` (honest stub — no SFTP wire
+  server ships; see the README Status section).
+- **§7 pointer:** `plans/x-xpty.md` no longer exists — the removal
+  record is `docs/plans/README.md:39`.
+- Typo mended in passing: the Executive Summary's stray CJK token
+  (分层, "layered") is replaced by its English gloss.
+- Scope note: the code sketches under §4 (Recommended Next Steps) are
+  proposal-vintage as written — some show a ctx-last signature that
+  was never the shipped shape; the §1.2/§1.3 "Current" blocks were the
+  factual claims and are corrected above.
 
 ---
 
@@ -51,12 +93,12 @@ final class Session
 
 **Current:** Linear middleware chain with `$next` continuation pattern.
 
-**Source:** `sugar-ssh-server/src/Middleware.php:L22-L24`
+**Source:** `sugar-ssh-server/src/Middleware.php:L48` (shipped form as of the 2026-11-13 status correction)
 
 ```php
 interface Middleware
 {
-    public function handle(Session $session, callable $next): void;
+    public function handle(Context $ctx, Session $session, callable $next);
 }
 ```
 
@@ -71,27 +113,18 @@ interface Middleware
 
 **Current:** Simple allowlist-based `Auth` middleware checking users and key fingerprints.
 
-**Source:** `sugar-ssh-server/src/Middleware/Auth.php:L60-L74`
+**Source:** `sugar-ssh-server/src/Middleware/Auth.php:L208` (shipped form as of the 2026-11-13 status correction; the three allowlist axes elided)
 
 ```php
-public function handle(Session $session, callable $next): void
+public function handle(Context $ctx, Session $session, callable $next): void
 {
-    if ($this->users !== [] && !in_array($session->user, $this->users, true)) {
-        $this->reject('user not allowed: ' . $session->user);
-        return;
-    }
-    if ($this->keyFingerprints !== []) {
-        $fp = $this->fingerprint();
-        if ($fp === null || !in_array($fp, $this->keyFingerprints, true)) {
-            $this->reject('key not allowed: ' . ($fp ?? '<missing>'));
-            return;
-        }
-    }
-    $next($session);
+    // users / keyFingerprints / userKeys axes, each refusing via
+    // $this->reject($session, ...) and returning without $next...
+    $next($ctx, $session);
 }
 ```
 
-**Limitations:**
+**Limitations:** *(each has a shipped counterpart after the Phase 3 wave — see the dated Status correction above for the negotiation caveat; list kept as written)*
 
 - No support for password authentication
 - No keyboard-interactive (2FA/challenge-response)
@@ -604,7 +637,7 @@ interface AsyncMiddleware
 
 ## 6. Recommended Next Steps
 
-### Phase 1: Context and Session Metadata (P1)
+### Phase 1: Context and Session Metadata (P1) — SHIPPED 2026-11 (`src/Context.php`, `Session::withProtocolMetadata()`, `toLogContext()`)
 
 1. **Add `Context` class** with thread-safe array storage
 2. **Update `Middleware` interface** to include context: `handle(Session, callable, Context)`
@@ -624,7 +657,7 @@ interface AsyncMiddleware
 - `src/Middleware/Spawn.php` - update
 - `src/Middleware/BubbleTea.php` - update
 
-### Phase 2: Channel Handler Layer (P1)
+### Phase 2: Channel Handler Layer (P1) — SHIPPED 2026-11 (`src/Channel/*` incl. the 7 `Msg/*` classes; seam: `InProcessTransport::setChannelHandler()`)
 
 1. **Add `ChannelHandler` interface** with all SSH channel request types
 2. **Update `Transport` interface** to include channel handler
@@ -639,7 +672,7 @@ interface AsyncMiddleware
 - `src/Transport/InProcessTransport.php` - emit channel events
 - `src/Transport/HostSshdTransport.php` - emit channel events
 
-### Phase 3: Enhanced Auth Patterns (P2)
+### Phase 3: Enhanced Auth Patterns (P2) — SHIPPED 2026-11 (`src/Middleware/Auth/{PasswordAuth,CertificateAuth,AuthMethods,KeyboardInteractive}.php` + `AuthRateLimitBridge`)
 
 1. **Add `PasswordAuth` middleware** - for deployments with sshd password auth
 2. **Add `CertificateAuth` middleware** - for CA-based key validation
@@ -651,7 +684,7 @@ interface AsyncMiddleware
 - `src/Middleware/CertificateAuth.php` - new
 - `src/Middleware/AuthMethods.php` - new
 
-### Phase 4: Subsystem Support (P2)
+### Phase 4: Subsystem Support (P2) — SHIPPED 2026-11 (`src/Middleware/Subsystem.php`, `src/Middleware/Subsystem/SftpStub.php` — honest stub, no SFTP wire server)
 
 1. **Add `Subsystem` middleware** with registered handlers
 2. **Add `SftpSubsystem` example** handler
@@ -673,7 +706,9 @@ interface AsyncMiddleware
 - SFTP server implementation
 - Direct X11 forwarding
 
-This is tracked separately under `plans/x-xpty.md` Option A.
+This was tracked under `plans/x-xpty.md` Option A; that plan file no
+longer exists in the tree — the removal record is
+`docs/plans/README.md:39` (as of the 2026-11-13 status correction).
 
 ---
 
