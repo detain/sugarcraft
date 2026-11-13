@@ -247,7 +247,7 @@ final readonly class Rail
         // title cannot overflow the rail (the width twin of the README's
         // exact-width invariant).
         $prefix = ($focused ? '●' : '○') . ' ';
-        $counter = $count > 0 ? '  (' . ($this->cursor + 1) . '/' . $count . ')' : '';
+        $counter = $count > 0 ? PosterGrid::positionString($this->cursor + 1, $count) : '';
         $title = AnsiGuard::stripControls($this->title);
 
         // The position/total counter is DATA, not decoration: it is reserved

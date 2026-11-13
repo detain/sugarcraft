@@ -32,6 +32,19 @@ final class PosterGridTest extends TestCase
         return $items;
     }
 
+    public function testPositionStringIsTheOneCounterHome(): void
+    {
+        // sugar-gallery-045: the padded '(n/total)' readout was hand-built in
+        // two places (grid print path + Rail header) where one drifts and the
+        // docs' promise of a shared shape dies quietly.
+        self::assertSame('  (3/12)', PosterGrid::positionString(3, 12));
+        self::assertSame(
+            PosterGrid::positionString(3, 12),
+            $this->grid(12)->moveTo(2)->positionText(),
+            'positionText() delegates byte-identically',
+        );
+    }
+
     public function testGeometry(): void
     {
         $g = $this->grid(50);

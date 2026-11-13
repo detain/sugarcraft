@@ -552,7 +552,8 @@ final class PosterGrid
      * (every row is cell geometry the owner composes), so unlike Rail it prints
      * no heading: the composing screen places this string where it belongs
      * (before this seam, the 2-D view had no way to tell the user where they
-     * were).
+     * were). The bytes come from the one shared {@see positionString()} home
+     * so grid and rail can never drift apart (sugar-gallery-045).
      */
     public function positionText(): string
     {
@@ -560,7 +561,17 @@ final class PosterGrid
             return '';
         }
 
-        return '  (' . ($this->cursor + 1) . '/' . $this->total . ')';
+        return self::positionString($this->cursor + 1, $this->total);
+    }
+
+    /**
+     * One home for the padded `(n/total)` counter: two-space gutter, one-based
+     * position, digits never localised — built here and only here (grid print
+     * path and Rail header alike delegate).
+     */
+    public static function positionString(int $oneBased, int $total): string
+    {
+        return '  (' . $oneBased . '/' . $total . ')';
     }
 
     /**
