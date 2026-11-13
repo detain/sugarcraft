@@ -51,7 +51,12 @@ store, or manage an inbox.
 - **CC/BCC support** — full carbon-copy / blind carbon-copy routing (envelope RCPT for all,
   headers for visible sets)
 - **Header-injection defense** — CR/LF in subjects, addresses, attachment names, and MIME
-  types is refused, not folded
+  types is refused, not folded.
+- **Body hygiene is a different posture.** Plain-text and HTML bodies have stray C0/DEL
+  characters silently **deleted** (tabs and newlines survive); that is tidying, not a
+  refusal — a body is never rejected for it. And the HTML part ships as authored: no tag
+  or attribute filtering happens here, so sanitize untrusted HTML caller-side before
+  handing it to `--html`/`withHtmlBody()`.
 - **TLS by default** — STARTTLS is required on SMTP unless explicitly relaxed (see below);
   credentials are never sent over a plaintext channel
 - **CLI** — one-shot sending with STDIN compose, `--render` for offline MIME preview, and
@@ -140,12 +145,17 @@ Ubuntu the three ship as `sudo apt install php8.3-curl php8.3-openssl php8.3-fil
 
 ## Quick Start
 
+Both construction styles ship. The examples below lead with constructor
+arguments (the form that mirrors pop's wiring); the fluent house style —
+`Email::new()` with `with*()` setters where every setter returns a fresh
+instance — appears in the Attachment section.
+
 ### Resend API
 
 ```php
 use SugarCraft\Mail\{Email, Mailer, ResendTransport};
 
-$transport = new ResendTransport('re_xxxxxxxxxxxxx'); // or new ResendTransport('') to read RESEND_API_KEY
+$transport = new ResendTransport('re_xxxxxxxxxxxxx'); // or omit the argument to read RESEND_API_KEY from the environment
 $mailer = new Mailer($transport);
 
 $email = new Email(
@@ -169,8 +179,13 @@ $transport = new SmtpTransport(
     host:     'smtp.gmail.com',
     port:     587,
     username: 'you@gmail.com',
-    password: 'your-16-char-app-password', // Gmail rejects raw account passwords
+    // Gmail rejects raw account passwords: app passwords, see
+    // https://support.google.com/accounts/answer/185833
+    password: 'your-16-char-app-password',
 );
+// In unattended code feed these four arguments from your environment or
+// secrets store - the CLI builds the same object from CANDY_MAIL_SMTP_*
+// rows in bin/candy-mail (buildTransport), a good worked example.
 $mailer = new Mailer($transport);
 
 $mailer->send(new Email(
