@@ -29,7 +29,7 @@ final class Decoder
      * excessive memory allocation from untrusted input.
      *
      * Public so a caller can SIZE ITS REQUEST rather than discover the bound
-     * by catching the exception: {@see sampleCanvas()} area-averages in PHP,
+     * by catching the exception: {@see CellSampler} area-averages in PHP,
      * one `imagecolorat()` per source pixel per cell, so the grid is both the
      * memory and the time budget (MEASURED: a 6-frame GIF at 316×316 ≈ 100k
      * cells costs ~1.1s and ~288MB). sugar-video's graphics modes ask in
@@ -428,9 +428,18 @@ final class Decoder
             : null;
 
         $prevInfo = null;
+        $sampler = null; // built at the first successful paint — that frame samples the full grid
 
         try {
             foreach ($header['frameInfos'] as $info) {
+                // SA-D3 -013: canvas writes since the last yield are exactly
+                // (a) the previous frame's disposal effect applied below and
+                // (b) this frame's composited rect. Track their union; a
+                // DISPOSAL_PREVIOUS restore is the full-screen case.
+                $restoredFull = false;
+                $dirtyX0 = $dirtyY0 = PHP_INT_MAX;
+                $dirtyX1 = $dirtyY1 = -1;
+
                 // Before painting frame N, apply frame N-1's disposal.
                 if ($prevInfo !== null) {
                     $prevDisposal = $prevInfo['disposal'];
@@ -441,9 +450,14 @@ final class Decoder
                         $prevW = $prevInfo['frameW'];
                         $prevH = $prevInfo['frameH'];
                         imagefilledrectangle($canvas, $prevLeft, $prevTop, $prevLeft + $prevW - 1, $prevTop + $prevH - 1, $transparentBg);
+                        $dirtyX0 = min($dirtyX0, $prevLeft);
+                        $dirtyY0 = min($dirtyY0, $prevTop);
+                        $dirtyX1 = max($dirtyX1, $prevLeft + $prevW - 1);
+                        $dirtyY1 = max($dirtyY1, $prevTop + $prevH - 1);
                     } elseif ($prevDisposal === Frame::DISPOSAL_PREVIOUS && $snapshot !== null) {
                         // Restore to the snapshot taken before the previous frame.
                         imagecopy($canvas, $snapshot, 0, 0, 0, 0, $screenW, $screenH);
+                        $restoredFull = true;
                     }
                 }
 
@@ -497,12 +511,30 @@ final class Decoder
                 }
                 imagedestroy($frameImg);
 
+                // The composited rect writes the canvas pixels the loop above
+                // touched — union it into the dirty rect (SA-D3 -013).
+                $dirtyX0 = min($dirtyX0, $left);
+                $dirtyY0 = min($dirtyY0, $top);
+                $dirtyX1 = max($dirtyX1, $left + $frameImgW - 1);
+                $dirtyY1 = max($dirtyY1, $top + $frameImgH - 1);
+
                 // Grab the composited canvas BEFORE downsampling (E-07): the
                 // lossless pre-cell representation, chicle-style.
                 $rgba = $withCanvasRgba ? self::grabCanvasRgba($canvas, $screenW, $screenH) : null;
 
-                // Downsample the composited canvas to produce this frame.
-                yield self::sampleCanvas($canvas, $cellsW, $cellsH, $info['delay'], $info['disposal'], $info['transparent'], $rgba, $screenW, $screenH);
+                // Sample the composited canvas into this frame's cell grid —
+                // incrementally: only the cells the canvas writes could have
+                // moved are re-averaged, the rest are carried.
+                if ($sampler === null) {
+                    $sampler = new CellSampler($screenW, $screenH, $cellsW, $cellsH);
+                    $sampler->resampleAll($canvas);
+                } elseif ($restoredFull) {
+                    $sampler->resampleAll($canvas);
+                } else {
+                    $sampler->resampleRect($canvas, $dirtyX0, $dirtyY0, $dirtyX1, $dirtyY1);
+                }
+
+                yield new Frame($sampler->cells(), $info['delay'], $info['disposal'], $info['transparent'], $rgba, $screenW, $screenH);
 
                 $prevInfo = $info;
             }
@@ -554,48 +586,74 @@ final class Decoder
      * alpha 127 (fully transparent) to 0, linearly in between; the GIF
      * canvas only ever holds the two extremes, but the linear map keeps a
      * semi-transparent pixel honest if one is ever composited.
+     *
+     * SA-D3 -013: one row-packed chunk per line. The extraction per pixel
+     * is what it always was; the old `.= chr()` chain re-allocated the
+     * growing string four times per pixel, which at screen scale is the
+     * walk's dominant cost next to the sampling itself.
      */
     private static function grabCanvasRgba(\GdImage $canvas, int $screenW, int $screenH): string
     {
-        $out = '';
+        $format = 'C' . (4 * $screenW);
+        $rows = [];
         for ($y = 0; $y < $screenH; $y++) {
+            $ints = [];
             for ($x = 0; $x < $screenW; $x++) {
                 $pixel = imagecolorat($canvas, $x, $y);
                 $a = ($pixel >> 24) & 0x7F;
-                $out .= chr(($pixel >> 16) & 0xFF)
-                    . chr(($pixel >> 8) & 0xFF)
-                    . chr($pixel & 0xFF)
-                    . chr(intdiv((127 - $a) * 255, 127));
+                $ints[] = ($pixel >> 16) & 0xFF;
+                $ints[] = ($pixel >> 8) & 0xFF;
+                $ints[] = $pixel & 0xFF;
+                $ints[] = intdiv((127 - $a) * 255, 127);
             }
+            $rows[] = pack($format, ...$ints);
         }
 
-        return $out;
+        return implode('', $rows);
     }
 
     /**
      * Pack a palette frame image into RGBA bytes — the static-fallback twin
      * of {@see self::grabCanvasRgba()}: the transparent index becomes
      * (0,0,0,0), every other pixel is its palette colour at alpha 255.
+     *
+     * SA-D3 -013: same row packing; the palette is stable inside a frame,
+     * so index→RGB resolves through a lazily-filled map — the same trick
+     * the compositing loop uses for its packed-colour lookup.
      */
     private static function grabPaletteRgba(\GdImage $img): string
     {
         $w = imagesx($img);
         $h = imagesy($img);
         $transparentIndex = imagecolortransparent($img);
-        $out = '';
+        $format = 'C' . (4 * $w);
+        $rgbMap = [];
+        $rows = [];
         for ($y = 0; $y < $h; $y++) {
+            $ints = [];
             for ($x = 0; $x < $w; $x++) {
                 $index = imagecolorat($img, $x, $y);
                 if ($transparentIndex >= 0 && $index === $transparentIndex) {
-                    $out .= "\x00\x00\x00\x00";
+                    $ints[] = 0;
+                    $ints[] = 0;
+                    $ints[] = 0;
+                    $ints[] = 0;
                     continue;
                 }
-                $rgb = imagecolorsforindex($img, $index);
-                $out .= chr($rgb['red']) . chr($rgb['green']) . chr($rgb['blue']) . "\xff";
+                if (!isset($rgbMap[$index])) {
+                    $rgb = imagecolorsforindex($img, $index);
+                    $rgbMap[$index] = [$rgb['red'], $rgb['green'], $rgb['blue']];
+                }
+                $c = $rgbMap[$index];
+                $ints[] = $c[0];
+                $ints[] = $c[1];
+                $ints[] = $c[2];
+                $ints[] = 255;
             }
+            $rows[] = pack($format, ...$ints);
         }
 
-        return $out;
+        return implode('', $rows);
     }
 
     /**
@@ -684,69 +742,6 @@ final class Decoder
         $gifData .= "\x3B";
 
         return $gifData;
-    }
-
-    /**
-     * Downsample a GD image (the composited canvas) to a cell grid.
-     *
-     * The optional `$rgba` rides through to {@see Frame} untouched (E-07):
-     * it was grabbed from the same canvas before this sampling pass, so the
-     * frame carries both the lossy cell view and the packed pixel view.
-     */
-    private static function sampleCanvas(\GdImage $canvas, int $cellsW, int $cellsH, int $delay, int $disposal, bool $transparent, ?string $rgba = null, int $rgbaWidth = 0, int $rgbaHeight = 0): Frame
-    {
-        $w = imagesx($canvas);
-        $h = imagesy($canvas);
-
-        $rows = [];
-        for ($cy = 0; $cy < $cellsH; $cy++) {
-            $row = [];
-            for ($cx = 0; $cx < $cellsW; $cx++) {
-                $x0 = (int) ($cx * $w / $cellsW);
-                $x1 = (int) (($cx + 1) * $w / $cellsW) - 1;
-                $y0 = (int) ($cy * $h / $cellsH);
-                $y1 = (int) (($cy + 1) * $h / $cellsH) - 1;
-                $x1 = max($x0, $x1);
-                $y1 = max($y0, $y1);
-
-                $sumR = 0;
-                $sumG = 0;
-                $sumB = 0;
-                $count = 0;
-                for ($sy = $y0; $sy <= $y1; $sy++) {
-                    for ($sx = $x0; $sx <= $x1; $sx++) {
-                        $pixel = imagecolorat($canvas, $sx, $sy);
-                        // For truecolor with alpha, the pixel is packed ARGB.
-                        // Alpha=0 means fully opaque, alpha=127 (0x7F) means fully transparent.
-                        // In PHP's GD, imagesavealpha preserves the full 8-bit alpha.
-                        $a = ($pixel >> 24) & 0xFF;
-                        if ($a !== 0) {
-                            continue; // Transparent or semi-transparent — skip in average.
-                        }
-                        $r = ($pixel >> 16) & 0xFF;
-                        $g = ($pixel >> 8) & 0xFF;
-                        $b = $pixel & 0xFF;
-                        $sumR += $r;
-                        $sumG += $g;
-                        $sumB += $b;
-                        $count++;
-                    }
-                }
-                if ($count > 0) {
-                    $row[] = [
-                        (int) round($sumR / $count),
-                        (int) round($sumG / $count),
-                        (int) round($sumB / $count),
-                    ];
-                } else {
-                    // No opaque pixel was sampled — the cell shows the
-                    // terminal background.
-                    $row[] = null;
-                }
-            }
-            $rows[] = $row;
-        }
-        return new Frame($rows, $delay, $disposal, $transparent, $rgba, $rgbaWidth, $rgbaHeight);
     }
 
     /**
