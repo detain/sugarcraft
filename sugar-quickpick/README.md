@@ -718,3 +718,37 @@ MIT
 ## Credits & inspiration
 
 Originally inspired by [Genekkion/theHermit](https://github.com/Genekkion/theHermit) — fuzzy finder / quick-fix overlay for terminal UIs; SugarCraft is developed as a native PHP project.
+
+### Divergences from the antecedent
+
+Three upstream behaviors were consciously not ported; each is a design
+stance, not a gap (dated 2026-11, reviewed against the whole surface):
+
+- **No `title`/`titleStyle` channel** — upstream's framed heading row above
+  the list has no equivalent here. The header IS the prompt+filter line;
+  hosts that need a title render it in the background view or attach a
+  `StatusBar`. (`withPrompt()` covers the in-frame label role.)
+- **No auto-centering** — upstream recomputes its left padding on every
+  resize message; this lib keeps positioning MANUAL (`withOffset(x, y)`).
+  The frame is composed over the host's own string, so centering math
+  belongs to whoever owns that string — an automatic padding would fight
+  host layouts that are not full-screen.
+- **Frameless, colorless by default** — upstream ships bordered, colored
+  lipgloss styling out of the box. The default here is pure Unicode runes
+  (no SGR at all, border off), because the overlay is designed to sit on
+  arbitrary host output without repainting it; border and style are opt-in
+  (`withBorder()`, `withStyle()`, `withMatchStyle()`).
+
+### Where it fits
+
+QuickPick is a TRANSIENT SELECTION overlay: a fuzzy-filtered choice on top of
+a view string you already render — command palette, file picker, quick-fix.
+It is not a form control: if the choice is one field inside a larger
+input flow, `sugar-forms`/`sugar-widgets` own that lifecycle (focus, submit,
+validation); if you need a persistent interactive table, that is
+`sugar-table` or `sugar-treelist`. As of this writing no in-repo app consumes
+it — it is published as a building block. Upstream mapping lives in
+`docs/MATCHUPS.md`; the pre-port pattern research (Bubble Tea, bubbles/list,
+readline histories, Fish) is kept in
+`docs/research/libraries/sugar-quickpick-research.md`, which carries a dated
+status banner against the shipped surface.

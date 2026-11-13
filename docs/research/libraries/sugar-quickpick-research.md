@@ -7,6 +7,28 @@
 
 ---
 
+> **STATUS BANNER (dated 2026-11-13): SUPERSEDED as a gap analysis.**
+> Every row §1.3 marks 🔴 Missing or ⚠️ Partial has since shipped:
+> Item interface + numbered items (§3.1 → `Item`/`FilteredItem`), filter
+> function injection (§3.2 → `withFilterFn()` plus a sugar-fuzzy ranker door,
+> `withRanker()`), persistent history (§3.3 → `History\FileHistory`, JSONL +
+> trust-contract hardening), border/structured style (§3.4 → sugar-style
+> `withBorder()`/`withStyle()`/`withMatchStyle()`), window resize (§3.5 →
+> shared width memo + SIGWINCH attach + shrink-only row budget),
+> Help/Status bars (§3.6 → `HelpBar`/`StatusBar`, rendering delegated to the
+> shared sugar-style bar primitives).
+> Naming: the package was `Candy-hermit` with main class `Hermit` before the
+> 2026-10 rename; `src/Hermit.php` no longer exists — the class is
+> `SugarCraft\QuickPick\QuickPick`. The §2 pattern research (Bubble Tea,
+> bubbles/list, readline/Fish histories) is durable background and unchanged.
+> Deliberate NON-ports, stated in the README ("Divergences from the
+> antecedent", 2026-11): upstream `title`/`titleStyle` is not mirrored,
+> there is no auto-centering (offset is manual `withOffset()`), and the
+> default is frameless/colorless rather than bordered/colored. Shipped
+> reality: `sugar-quickpick/README.md` + `docs/MATCHUPS.md`.
+
+---
+
 ## Executive Summary
 
 Candy-hermit is a well-implemented PHP port of the theHermit Go library, correctly capturing the core overlay/quick-fix pattern. However, the current implementation has significant gaps compared to modern shell/TUI libraries in Go (bubbletea/bubbles), Rust (Helix), and Fish Shell. This research identifies **6 high-priority improvements** with effort estimates.
@@ -16,6 +38,10 @@ Candy-hermit is a well-implemented PHP port of the theHermit Go library, correct
 ## 1. Current Implementation Analysis
 
 ### 1.1 Source Files
+
+_Enumerated at research time (2026-05-13) under the pre-rename names; current
+layout is `sugar-quickpick/src/QuickPick.php` + `QuickPickHost.php` (the
+`Model` interface survives only as a deprecated alias)._
 
 - `/home/sites/sugarcraft/sugar-quickpick/src/Hermit.php` — Main overlay renderer (430 lines)
 - `/home/sites/sugarcraft/sugar-quickpick/src/Model.php` — Bubble-Tea-style model interface (31 lines)
@@ -33,15 +59,18 @@ Candy-hermit is a well-implemented PHP port of the theHermit Go library, correct
 
 ### 1.3 Gaps vs Upstream theHermit
 
+_Statuses re-derived 2026-11-13 against the shipped surface (see banner);
+the ❌/🔴 column below is the 2026-05-13 reading and must not be cited._
+
 | Feature | Upstream (Go) | Sugar-Quickpick (PHP) | Status |
 |---------|---------------|-------------------|--------|
-| Tea.Model integration | ✅ Full BubbleTea | ✅ Interface only | ⚠️ Partial |
-| Item interface | ✅ `Item` interface with `Title()` | ❌ Plain strings | 🔴 Missing |
-| Border styling | ✅ Lipgloss borders | ❌ Plain ASCII | 🔴 Missing |
-| Numbered items | ✅ Yes | ❌ No | 🔴 Missing |
-| Window auto-resize | ✅ `tea.WindowSizeMsg` | ❌ Fixed dimensions | 🔴 Missing |
+| Tea.Model integration | ✅ Full BubbleTea | ✅ Package-local `QuickPickHost` contract, tuple-carried | ✅ shipped |
+| Item interface | ✅ `Item` interface with `Title()` | ✅ `Item` + `FilteredItem` | ✅ shipped |
+| Border styling | ✅ Lipgloss borders | ✅ sugar-style `withBorder()`/`withStyle()` | ✅ shipped |
+| Numbered items | ✅ Yes | ✅ ordinals rendered by the item formatter | ✅ shipped |
+| Window auto-resize | ✅ `tea.WindowSizeMsg` | ✅ width memo + SIGWINCH attach + row-budget clamp (centering deliberately manual) | ✅ shipped |
 | Fuzzy match highlighting | ❌ Basic | ✅ ANSI SGR codes | ✅ Better |
-| Filter algorithm | ❌ Simple substring | ✅ Anchor-biased fuzzy | ✅ Better |
+| Filter algorithm | ❌ Simple substring | ✅ Anchor-biased fuzzy + `withFilterFn()` + sugar-fuzzy `withRanker()` | ✅ Better |
 | Background compositing | ✅ Yes | ✅ Yes | ✅ Equal |
 
 ### 1.4 The Hermit `Model` Struct (Go upstream for reference)
