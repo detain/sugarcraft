@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CellBuffer;
 
 use SugarCraft\CellBuffer\Support\WidePairPlacement;
+use SugarCraft\Core\Util\Width;
 
 /**
  * A 2-D grid of terminal cells with immutable mutation semantics.
@@ -134,53 +135,20 @@ final class Buffer implements \JsonSerializable
                     // OSC sequence (e.g. toAnsi()'s OSC 8 hyperlink frames):
                     // consume through its ST (ESC \) or BEL terminator so the
                     // bytes never leak into the cell grid as garbage runes.
-                    $tail = $idx + 2 + strcspn($ansi, "\x07\x1b", $idx + 2);
-                    if ($tail < $ansiLen && $ansi[$tail] === "\x1b") {
-                        $idx = $tail + 2; // swallow ESC + the ST backslash
-                    } else {
-                        $idx = $tail + 1; // BEL consumed; unterminated OSC swallows the rest
-                    }
+                    [$idx, ] = self::consumeOsc($ansi, $idx, $ansiLen);
                     continue;
                 }
 
                 if ($next === '[') {
-                    // CSI frame: consume exactly what a terminal consumes —
-                    // parameter/intermediate bytes (0x20-0x3F) up to a final
-                    // byte (0x40-0x7E) — instead of hunting for a bare 'm'
-                    // anywhere later (which mis-swallowed private modes like
-                    // \x1b[?25l and turned non-SGR frames into throw bait or
-                    // printable garbage). Only an SGR-shaped frame (final 'm',
-                    // digits with ;/: separators, or empty == reset) touches
-                    // the live style; Multi-segment styling such as
-                    // "\x1b[1m\x1b[31m" accumulates. Every other CSI — cursor
-                    // addressing, DEC modes, this package's own CUP/ECH/REP —
-                    // is dropped without entering the grid, keeping the
-                    // documented leniency of a test-support parser.
-                    $scan = $idx + 2;
-                    while ($scan < $ansiLen) {
-                        $byte = ord($ansi[$scan]);
-                        if ($byte < 0x20 || $byte > 0x3F) {
-                            break;
-                        }
-                        $scan++;
+                    // CSI frame: consumed exactly as a terminal consumes it
+                    // (see scanCsi); only an SGR-shaped frame touches the
+                    // live style, every other CSI is dropped without
+                    // entering the grid. Multi-segment styling such as
+                    // "\x1b[1m\x1b[31m" accumulates.
+                    [$idx, $sgrParams] = self::scanCsi($ansi, $idx, $ansiLen);
+                    if ($sgrParams !== null) {
+                        $currentStyle = self::styleFromSgr($sgrParams === '' ? '0' : $sgrParams, $currentStyle);
                     }
-                    if ($scan >= $ansiLen) {
-                        // Unterminated CSI: the frame swallows the rest of
-                        // the stream, exactly like a terminal holding a
-                        // pending sequence.
-                        break;
-                    }
-                    if ($ansi[$scan] === 'm') {
-                        $params = substr($ansi, $idx + 2, $scan - $idx - 2);
-                        if ($params === '' || preg_match('/^[\d;:]+$/', $params) === 1) {
-                            $currentStyle = self::styleFromSgr($params === '' ? '0' : $params, $currentStyle);
-                        }
-                        // Else: 'm' terminus polluted with private/intermediate
-                        // bytes — discard the frame (a direct Style::fromSgr()
-                        // call still refuses it loudly; that contract lives
-                        // with its own callers, not this fixture parser).
-                    }
-                    $idx = $scan + 1; // consume through the final byte
                     continue;
                 }
             }
@@ -239,6 +207,267 @@ final class Buffer implements \JsonSerializable
         }
 
         return new self($width, $height, $grid);
+    }
+
+    /**
+     * Parse a styled ANSI text stream into a full width×height Buffer —
+     * the supported production counterpart of the byte-wise test-support
+     * {@see self::fromString()}.
+     *
+     * Contract:
+     *  - runes are tokenized by GRAPHEME CLUSTER (never per UTF-8 byte):
+     *    combining sequences land on one cell, and display width comes
+     *    from the canonical sugar-core Width table, so a width-2 glyph is
+     *    placed as a lead + continuation pair under the SAME
+     *    WidePairPlacement law every write path uses (a straddle at the
+     *    last column degrades to a blank, rows never overrun the frame);
+     *  - SGR frames accumulate the live pen through the library's own
+     *    {@see Style::fromSgr()} (truecolor, palette slots, attributes,
+     *    underline colour, colon sub-parameters — the full vocabulary,
+     *    not a fixture subset);
+     *  - OSC 8 frames attach real {@see Hyperlink} anchors: both the
+     *    CB-01 spec form `ESC ] 8 ; ; URI ST` (empty params, the double
+     *    semicolon kept) and the `id=` form are accepted; the empty-URI
+     *    close frame detaches the link;
+     *  - rows split on bare LF (the toAnsi() separator — no CR, no cursor
+     *    addressing: this parses THIS package's frame grammar, it is not a
+     *    terminal emulator); content past the last row or column is
+     *    truncated, missing cells stay blank;
+     *  - every other CSI is consumed and dropped exactly as the CB-22
+     *    scanner learned to do (shared with fromString: one scanner,
+     *    two doors), and stray C0/DEL bytes never materialize cells.
+     *
+     * A malformed or control-bearing link frame is ignored (the pen
+     * keeps the previous link), and an SGR stream is never throw bait:
+     * like fromString(), this walks untrusted-shaped bytes, so it refuses
+     * nothing — validate at your own boundary if the input is hostile.
+     *
+     * Mirrors charmbracelet/x/cellbuf's text-loading intent; the seed
+     * semantics are the fleet's most-correct wrapper (sugar-flexbox
+     * TableRenderer::splitStyledLine grapheme law) lifted to carry this
+     * library's full style/link state.
+     */
+    public static function fromStyledText(string $text, int $width, int $height): self
+    {
+        if ($width <= 0 || $height <= 0) {
+            throw new \InvalidArgumentException(
+                "Buffer dimensions must be positive (got {$width}x{$height})"
+            );
+        }
+
+        $builder = new BufferBuilder($width, $height);
+        $len = strlen($text);
+        if ($len === 0) {
+            return $builder->toBuffer();
+        }
+
+        $style = null;
+        $link = null;
+        $row = 0;
+        $col = 0;
+        $idx = 0;
+
+        while ($idx < $len) {
+            $ch = $text[$idx];
+
+            if ($ch === "\x1b" && isset($text[$idx + 1])) {
+                $next = $text[$idx + 1];
+                if ($next === ']') {
+                    [$idx, $body] = self::consumeOsc($text, $idx, $len);
+                    if (str_starts_with($body, '8;')) {
+                        $link = self::oscLink($body, $link);
+                    }
+                    continue;
+                }
+                if ($next === '[') {
+                    [$idx, $sgrParams] = self::scanCsi($text, $idx, $len);
+                    if ($sgrParams !== null) {
+                        $style = self::styleFromSgr($sgrParams === '' ? '0' : $sgrParams, $style);
+                    }
+                    continue;
+                }
+                // Unrecognised ESC digraph: consume the introducer pair. A
+                // control introducer is not a printable cell, and leaving
+                // one mid-stream must not desync the rows that follow.
+                $idx += 2;
+                continue;
+            }
+
+            if ($ch === "\n") {
+                $row++;
+                $col = 0;
+                if ($row >= $height) {
+                    break; // rows past the frame are truncated by contract
+                }
+                $idx++;
+                continue;
+            }
+
+            if ($ch < "\x20" || $ch === "\x7f") {
+                $idx++; // stray control — skipped, never a cell
+                continue;
+            }
+
+            // Printable literal run: everything up to the next ESC, LF or
+            // control byte. Cluster-split the WHOLE run (per-run splitting
+            // keeps the UTF-8 scanner in grapheme mode, not byte mode).
+            $runEnd = $idx + strcspn($text, "\x1b\n\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f", $idx);
+            foreach (self::clusters(substr($text, $idx, $runEnd - $idx)) as $cluster) {
+                if ($col >= $width) {
+                    break; // row overflow truncates the rest of the run
+                }
+                $clusterWidth = Width::of($cluster);
+                if ($clusterWidth >= 2 && $col + 1 < $width) {
+                    $builder->setCellAt($col, $row, new Cell($cluster, $style, $link, 2));
+                    $col += 2;
+                } elseif ($clusterWidth >= 2) {
+                    // Straddle at the last column: the pair law's degrade
+                    // (blank in place) is exactly what placeWithPair
+                    // applies — reserve one column and drop the glyph.
+                    $builder->setCellAt($col, $row, Cell::blank());
+                    $col += 1;
+                } else {
+                    $builder->setCellAt($col, $row, new Cell($cluster, $style, $link, 1));
+                    $col += 1;
+                }
+            }
+            $idx = $runEnd;
+        }
+
+        return $builder->toBuffer();
+    }
+
+    /**
+     * Consume one OSC frame (the `ESC ]` introducer sits at $idx): payload
+     * runs to its ST (`ESC \`) or BEL, whichever arrives first; an
+     * unterminated OSC swallows the rest of the stream, exactly like a
+     * terminal holding a pending string sequence.
+     *
+     * @return array{0:int,1:string} [index past the frame, raw payload
+     *                               without the `ESC ]` introducer or the
+     *                               terminator]
+     */
+    private static function consumeOsc(string $ansi, int $idx, int $len): array
+    {
+        $bodyStart = $idx + 2;
+        $tail = $bodyStart + strcspn($ansi, "\x07\x1b", $bodyStart);
+        $body = substr($ansi, $bodyStart, $tail - $bodyStart);
+        if ($tail < $len && $ansi[$tail] === "\x1b") {
+            return [$tail + 2, $body]; // swallow ESC + the ST backslash
+        }
+        return [$tail + 1, $body]; // BEL consumed; unterminated OSC swallows the rest
+    }
+
+    /**
+     * Scan one CSI frame (the `ESC [` introducer sits at $idx), consuming
+     * exactly what a terminal consumes: parameter/intermediate bytes
+     * (0x20-0x3F) up to a final byte (0x40-0x7E). Only an SGR-shaped frame
+     * (final 'm', empty params == reset, or digits with ;/: separators)
+     * yields parameters; every other CSI — cursor addressing, DEC modes,
+     * this package's own CUP/ECH/REP — yields null so callers drop it
+     * without depositing runes (the documented leniency shared by both
+     * parse doors). An 'm' terminus polluted with private/intermediate
+     * bytes is likewise dropped (a direct Style::fromSgr() call still
+     * refuses it loudly; that contract lives with its own callers, not
+     * these parsers). An unterminated CSI swallows the rest of the stream.
+     *
+     * @return array{0:int,1:string|null} [index past the final byte (or
+     *                                     stream end when unterminated),
+     *                                     SGR parameter string or null]
+     */
+    private static function scanCsi(string $ansi, int $idx, int $len): array
+    {
+        $scan = $idx + 2;
+        while ($scan < $len) {
+            $byte = ord($ansi[$scan]);
+            if ($byte < 0x20 || $byte > 0x3F) {
+                break;
+            }
+            $scan++;
+        }
+        if ($scan >= $len) {
+            return [$len, null]; // unterminated: the frame swallows the rest
+        }
+        $params = null;
+        if ($ansi[$scan] === 'm') {
+            $raw = substr($ansi, $idx + 2, $scan - $idx - 2);
+            if ($raw === '' || preg_match('/^[\d;:]+$/', $raw) === 1) {
+                $params = $raw;
+            }
+        }
+        return [$scan + 1, $params];
+    }
+
+    /**
+     * Resolve one OSC 8 frame body (`8;<params>;<URI>`) to the pending
+     * hyperlink: empty URI is the close frame (no link), empty params is
+     * the CB-01 id-less form, `id=<value>` carries the named form. Any
+     * other params grammar, missing field, or control-bearing URI cannot
+     * describe a real anchor on this wire, so the frame is ignored and the
+     * caller keeps the previous link — lenient by documented contract.
+     */
+    private static function oscLink(string $body, ?Hyperlink $current): ?Hyperlink
+    {
+        $rest = substr($body, 2);
+        $sep = strpos($rest, ';');
+        if ($sep === false) {
+            return $current;
+        }
+        $params = substr($rest, 0, $sep);
+        $url = substr($rest, $sep + 1);
+        if ($url === '') {
+            return null;
+        }
+        if ($params === '') {
+            $id = '';
+        } elseif (str_starts_with($params, 'id=')) {
+            $id = substr($params, 3);
+        } else {
+            return $current;
+        }
+        try {
+            return new Hyperlink($url, $id);
+        } catch (\InvalidArgumentException) {
+            return $current;
+        }
+    }
+
+    /**
+     * Grapheme-cluster tokenizer for literal runs: ext-intl when present
+     * (full UAX #29), UTF-8 codepoints as the documented degradation
+     * (precomposed text is unaffected). Same ladder the fleet's wrapper
+     * doors use, lifted so cellbuffer owns its parse width law.
+     *
+     * @return list<string>
+     */
+    private static function clusters(string $s): array
+    {
+        if ($s === '') {
+            return [];
+        }
+        if (\function_exists('grapheme_str_split')) {
+            $g = \grapheme_str_split($s);
+            if (\is_array($g)) {
+                return $g;
+            }
+        }
+        if (\class_exists(\IntlBreakIterator::class)) {
+            $iterator = \IntlBreakIterator::createCharacterInstance();
+            $iterator->setText($s);
+            $out = [];
+            $previous = 0;
+            foreach ($iterator as $end) {
+                if ($end > $previous) {
+                    $out[] = \substr($s, $previous, $end - $previous);
+                    $previous = $end;
+                }
+            }
+            return $out;
+        }
+        if (\function_exists('mb_str_split')) {
+            return \mb_str_split($s, 1, 'UTF-8');
+        }
+        return \preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [];
     }
 
     /**
