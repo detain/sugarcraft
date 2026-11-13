@@ -68,6 +68,7 @@ final class TmuxPassthroughTest extends TestCase
         putenv('TMUX=/tmp/fake.sock,1.0');
         putenv('FAKE_TMUX_SHOW_EXIT=0');
         putenv('FAKE_TMUX_SET_EXIT=0');
+        putenv('SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL'); // lease tests set it per-leg
         Detect::reset();
         Detect::setAutoPassthrough(true);
         $this->assertFalse(TmuxPassthrough::isApplied(), 'state leaked from an earlier test into ' . __METHOD__);
@@ -94,6 +95,7 @@ final class TmuxPassthroughTest extends TestCase
         putenv('FAKE_TMUX_PANE_SHOW_EXIT');
         putenv('FAKE_TMUX_GLOBAL_SHOW_EXIT');
         putenv('FAKE_TMUX_GLOBAL_SET_EXIT');
+        putenv('SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL');
 
         foreach ((array) scandir($this->dir) as $entry) {
             if ($entry !== '.' && $entry !== '..' && is_file($this->dir . '/' . $entry)) {
@@ -164,6 +166,79 @@ final class TmuxPassthroughTest extends TestCase
         // A fresh transaction after the retired one re-runs the show.
         $this->assertTrue(TmuxPassthrough::ensure());
         $this->assertCount(5, $this->calls());
+    }
+
+    public function testTheLeaseRequeriesAndReappliesWhenTheOptionIsFlippedOffMidSession(): void
+    {
+        // SI-40's core scenario: an open latch that never re-reads keeps
+        // vouching after something else flips allow-passthrough off on a
+        // long-lived server, and the decorator pours envelopes into a
+        // swallowing pane — silent image loss behind a cached true. With
+        // the TTL seam at 0 every ensure() re-verifies: the flip is
+        // detected and undone, and the restore ledger SURVIVES the
+        // re-query (the -u polarity remembered at intake still rules).
+        putenv('SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL=0');
+        $this->assertTrue(TmuxPassthrough::ensure());
+        $this->assertSame([self::SHOW_CALL, self::SET_CALL], $this->calls());
+
+        file_put_contents($this->state, 'off'); // an external set-option off
+
+        $this->assertTrue(TmuxPassthrough::ensure(), 'an expired lease re-verifies and re-applies');
+        $this->assertSame([self::SHOW_CALL, self::SET_CALL, self::SHOW_CALL, self::SET_CALL], $this->calls());
+        $this->assertSame('on', file_get_contents($this->state), 'the flip was undone before the next envelope');
+
+        $this->assertTrue(TmuxPassthrough::retire());
+        $this->assertSame(self::CLEAR_CALL, $this->calls()[4], 'the intake-unset ledger still restores via -u');
+    }
+
+    public function testAStillPassingOptionRenewsTheLeaseWithoutWrites(): void
+    {
+        putenv('SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL=0');
+        file_put_contents($this->state, 'all');
+
+        $this->assertTrue(TmuxPassthrough::ensure());
+        $this->assertTrue(TmuxPassthrough::ensure());
+        $this->assertSame([self::SHOW_CALL, self::SHOW_CALL], $this->calls(), 'verification of an untouched option never writes');
+    }
+
+    public function testRevalidationTakesOverWhenTheUntouchedOriginalFlipsAway(): void
+    {
+        // First transaction only READ (option was already on, not ours).
+        // A later flip makes the NEXT write ours: the ledger adopts the
+        // flipper's current value so retire hands the pane back exactly
+        // as the last external state, not as some older one.
+        putenv('SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL=0');
+        file_put_contents($this->state, 'on');
+
+        $this->assertTrue(TmuxPassthrough::ensure());
+        $this->assertSame([self::SHOW_CALL], $this->calls());
+
+        file_put_contents($this->state, 'off'); // external flip
+        $this->assertTrue(TmuxPassthrough::ensure());
+        $this->assertSame([self::SHOW_CALL, self::SHOW_CALL, self::SET_CALL], $this->calls(),
+            'the re-query is its own child, then the takeover write');
+
+        $this->assertTrue(TmuxPassthrough::retire());
+        $this->assertSame('set-option -p allow-passthrough off', $this->calls()[3]);
+        $this->assertSame('off', file_get_contents($this->state));
+    }
+
+    public function testAnUnverifiableReQueryFailsSoftWithoutNewWrites(): void
+    {
+        // Re-query honesty mirrors intake honesty: an answer that could
+        // never be restored faithfully (here a garbage value written
+        // externally) stops the vouching — false, zero new writes — while
+        // the ORIGINAL ledger stays intact for retire/shutdown.
+        putenv('SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL=0');
+        $this->assertTrue(TmuxPassthrough::ensure());
+
+        file_put_contents($this->state, 'sideways'); // externally scribbled
+        $this->assertFalse(TmuxPassthrough::ensure(), 'cannot verify, cannot restore faithfully: hands off');
+        $this->assertSame([self::SHOW_CALL, self::SET_CALL, self::SHOW_CALL], $this->calls(), 'no set follows the unrestorable answer');
+        $this->assertSame('sideways', file_get_contents($this->state));
+
+        $this->assertTrue(TmuxPassthrough::retire(), 'the intake-unset ledger still clears');
+        $this->assertFileDoesNotExist($this->state);
     }
 
     public function testRetireWithoutEnsureIsANoOpThatNeverSpawns(): void

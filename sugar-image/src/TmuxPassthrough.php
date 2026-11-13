@@ -98,6 +98,29 @@ final class TmuxPassthrough
     /** Which scope the open transaction actually owns; reset when it closes. */
     private static string $scope = self::SCOPE_PANE;
 
+    /**
+     * Seconds an open latch may keep vouching for the option without
+     * looking at it again. The process-global latch was once permanent,
+     * so a mid-session `set-option allow-passthrough off` elsewhere on a
+     * long-lived server kept the decorator emitting graphics envelopes the
+     * pane then swallowed: silent image loss pinned behind a cached true.
+     * On expiry ensure() re-queries and, when needed, re-applies (SI-40).
+     */
+    private const REQUERY_SECONDS = 30.0;
+
+    /**
+     * Env seam overriding {@see REQUERY_SECONDS} in seconds (a negative or
+     * unparsable value falls back to the default; `0` means EVERY ensure()
+     * re-verifies — the strongest honesty mode, at one show per render
+     * bracket). Same override idiom as TmuxBinary::ENV_OVERRIDE; embedders
+     * that own their tmux configuration would rather opt out wholesale
+     * with Detect::setAutoPassthrough(false).
+     */
+    private const ENV_REQUERY_SECONDS = 'SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL';
+
+    /** Monotonic moment the current latch stops vouching; null = no lease. */
+    private static ?float $leaseExpiresAt = null;
+
     /** True once ensure() has completed for this process (idempotence latch). */
     private static bool $applied = false;
 
@@ -135,7 +158,16 @@ final class TmuxPassthrough
             return false;
         }
         if (self::$applied) {
-            return true;
+            // The latch vouches only for its lease (SI-40): inside the
+            // window the no-process fast path answers; at expiry the
+            // option is re-read (and re-applied if it was flipped away)
+            // so a mid-session toggle elsewhere cannot keep asserting
+            // envelopes the pane has stopped passing through.
+            if (self::$leaseExpiresAt === null || hrtime(true) / 1_000_000_000 <= self::$leaseExpiresAt) {
+                return true;
+            }
+
+            return self::revalidate();
         }
 
         // Exit-aware answer legs (SI-39): the pane child's exit code is part
@@ -167,6 +199,7 @@ final class TmuxPassthrough
         }
         if (!$wasUnset && in_array($value, self::ALREADY_PASSTHROUGH, true)) {
             self::$applied = true;
+            self::$leaseExpiresAt = hrtime(true) / 1_000_000_000 + self::leaseSeconds();
             return true; // already fine; leave the option exactly as found
         }
 
@@ -180,12 +213,79 @@ final class TmuxPassthrough
         self::$applied = true;
         self::$changed = true;
         self::$original = $wasUnset ? null : $value;
+        self::$leaseExpiresAt = hrtime(true) / 1_000_000_000 + self::leaseSeconds();
         if (!self::$shutdownRegistered) {
             self::$shutdownRegistered = true;
             register_shutdown_function([self::class, 'retire']);
         }
 
         return true;
+    }
+
+    /**
+     * Re-read the option behind an expired lease (SI-40). The restore
+     * ledger ($original/$changed/$scope) survives the re-query untouched:
+     * revalidating is not a new transaction, it is the same one proving
+     * it is still worth vouching for.
+     */
+    private static function revalidate(): bool
+    {
+        $answer = self::showOption(self::$scope);
+        if ($answer === null || !$answer[0]) {
+            return false; // cannot verify: stop vouching, keep the ledger for the shutdown restore
+        }
+
+        $value = $answer[1];
+        if (in_array($value, self::ALREADY_PASSTHROUGH, true)) {
+            self::$leaseExpiresAt = hrtime(true) / 1_000_000_000 + self::leaseSeconds();
+            return true; // still passing — renewed lease, zero writes
+        }
+        if ($value !== '' && !in_array($value, self::KNOWN_VALUES, true)) {
+            return false; // someone wrote an unrestorable value: hands off, exactly as at intake
+        }
+
+        // Flipped off (or unset) mid-session: re-apply on the transaction's
+        // scope. A transaction that originally only READ an already-on
+        // option now owns the flip-back it is performing, with the flipper's
+        // current value remembered so retire still lands faithfully — and
+        // the takeover registers the shutdown restore too, exactly as a
+        // first-set does: from this moment a forgotten retire must still
+        // leave the pane as the flipper left it.
+        if (!self::$changed) {
+            self::$changed = true;
+            self::$original = $value === '' ? null : $value;
+            if (!self::$shutdownRegistered) {
+                self::$shutdownRegistered = true;
+                register_shutdown_function([self::class, 'retire']);
+            }
+        }
+
+        $set = self::$scope === self::SCOPE_PANE
+            ? self::runTmux(['set-option', '-p', self::OPTION, 'on'])
+            : self::runTmux(['set-option', '-g', self::OPTION, 'on']);
+        if ($set === null || $set['exit'] !== 0) {
+            return false;
+        }
+
+        self::$leaseExpiresAt = hrtime(true) / 1_000_000_000 + self::leaseSeconds();
+
+        return true;
+    }
+
+    /**
+     * Lease length in seconds: {@see ENV_REQUERY_SECONDS} when it parses
+     * to a non-negative number, the default otherwise (fail-safe to the
+     * conservative window, never to "always expired" on junk input).
+     */
+    private static function leaseSeconds(): float
+    {
+        $raw = getenv(self::ENV_REQUERY_SECONDS);
+        if ($raw === false || !is_numeric($raw)) {
+            return self::REQUERY_SECONDS;
+        }
+        $seconds = (float) $raw;
+
+        return $seconds < 0 ? self::REQUERY_SECONDS : $seconds;
     }
 
     /**
