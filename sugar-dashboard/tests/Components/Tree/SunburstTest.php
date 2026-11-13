@@ -382,6 +382,39 @@ final class SunburstTest extends TestCase
             ->render()));
     }
 
+    /**
+     * D-04 (CRITICAL): the ring loop used to call $segment->totalValue() for
+     * EVERY painted cell, re-walking each subtree hundreds of times per render
+     * for a pure number. The totals are now resolved once per segment per
+     * render and reused by index; the children list is an untyped public array
+     * at runtime, so duck-typed counter stubs pin the call budget exactly:
+     * one subtree walk per segment per render — and a second render doubles
+     * it (no stale cache across renders). The sha1 render pins above prove the
+     * hoist moved no bytes.
+     */
+    public function testSegmentTotalsWalkedOncePerRender(): void
+    {
+        $stubA = new class {
+            public int $calls = 0;
+            public function totalValue(): float { $this->calls++; return 5.0; }
+        };
+        $stubB = new class {
+            public int $calls = 0;
+            public function totalValue(): float { $this->calls++; return 2.0; }
+        };
+
+        $sunburst = self::asciiBase()
+            ->withSegment((new SunburstSegment('c', 'Childed', 1.0))->withChildren([$stubA, $stubB]));
+
+        $sunburst->render();
+        $this->assertSame(1, $stubA->calls, 'subtree walked once per render, not once per cell');
+        $this->assertSame(1, $stubB->calls);
+
+        $sunburst->render();
+        $this->assertSame(2, $stubA->calls, 'each render re-resolves totals — no stale cache');
+        $this->assertSame(2, $stubB->calls);
+    }
+
     private static function asciiBase(): Sunburst
     {
         return Sunburst::new()

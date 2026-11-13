@@ -178,10 +178,16 @@ final class Sunburst implements \SugarCraft\Dashboard\Foundation\SizedItem
         $titleX = intval(($width - strlen($title)) / 2);
         $result .= $tl . str_repeat('─', $titleX - 1) . $title . str_repeat('─', $width - 2 - $titleX - strlen($title)) . $tr . "\n";
 
-        // Calculate total value
+        // Calculate total value — each segment's RECURSIVE total is resolved
+        // once here (and reused by index in the cell loop below). The ring
+        // walk ran totalValue() per painted cell, re-walking every subtree for
+        // each (row, col) — O(cells x segments x subtree) for a pure number.
+        $segmentValues = [];
         $totalValue = 0.0;
         foreach ($this->segments as $segment) {
-            $totalValue += $segment->totalValue();
+            $segmentValue = $segment->totalValue();
+            $segmentValues[] = $segmentValue;
+            $totalValue += $segmentValue;
         }
 
         if ($totalValue <= 0) {
@@ -288,8 +294,8 @@ final class Sunburst implements \SugarCraft\Dashboard\Foundation\SizedItem
                     // Check if we're in a ring segment
                     $inSegment = false;
 
-                    foreach ($this->segments as $segment) {
-                        $proportion = $segment->totalValue() / $totalValue;
+                    foreach ($this->segments as $segmentIndex => $segment) {
+                        $proportion = $segmentValues[$segmentIndex] / $totalValue;
                         $segmentRadius = intval($proportion * $maxRadius);
 
                         if ($distance <= $segmentRadius && $distance > intval($centerDiameter / 2)) {
