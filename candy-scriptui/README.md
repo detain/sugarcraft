@@ -46,10 +46,10 @@ sha256sum -c candy-scriptui.phar.sha256 && chmod +x candy-scriptui.phar
 
 The published `.phar.sha256` sidecar is `<hex>  candy-scriptui.phar`, so
 `sha256sum -c` verifies the download verbatim before you make it executable.
-Whichever route you took, put the launcher on your `PATH` — add `vendor/bin`
-from the composer route, or rename the verified phar to `candy-scriptui` on
-a `PATH` directory from the phar route — so every example below runs
-verbatim; otherwise invoke the full path instead.
+Put the launcher on your `PATH` whichever route you took: add `vendor/bin`
+from your project, or copy the verified phar to a `PATH` directory as
+`candy-scriptui`. Every example below then runs verbatim; otherwise invoke
+the launcher by its full path.
 
 ```sh
 # Apply styling.
@@ -147,7 +147,7 @@ below.
 
 ## Auto-discovery
 
-CandyScriptui uses PHP attributes to auto-discover commands at runtime.
+candy-scriptui uses PHP attributes to auto-discover commands at runtime.
 Mark any class extending `Symfony\Component\Console\Command\Command` with
 `#[Command]` and it will be picked up by `Application::scan()`.
 
@@ -161,7 +161,7 @@ registers nothing):
   (e.g. a custom `treasure` command gaining the name `t`) when the command
   is discovered through `Application::scan()`. Multiple aliases are
   supported via repeated attributes. No shipped command currently
-  registers one — the built-in roster answers under its real name only.
+  registers one — the built-in roster resolves by its real name only.
 - **`#[Example('usage', 'description')]`** — adds an example line to the
   command's help block. The `description` parameter is optional. Multiple
   examples are supported via repeated attributes.
@@ -174,13 +174,14 @@ Commands without the attributes get the stock help verbatim.
 ### Typo suggestion
 
 When a user types an unknown command name, `Application::find()` refuses it
-outright — commands are only ever matched by exact name, never by prefix —
-after running the name through a `TypoSuggester`. A candidate qualifies when
-it starts with the typed text (prefix matches score distance 0 whatever their
-length) or lies within edit distance 2; at most five are kept. One near
-alternative is quoted back (`Did you mean "choose"?`), several are listed
-(`Did you mean one of: "choose", "completion", "confirm"?` for the input
-`c`), and anything neither prefixed nor within distance 2 names no suggestion.
+outright: commands are matched by exact name only, never by prefix. Before
+refusing, it runs the typed text through a `TypoSuggester`. A candidate
+qualifies when it starts with the typed text (a prefix match scores distance
+0 regardless of length) or lies within edit distance 2; at most five are
+kept. One near match is quoted back (`Did you mean "choose"?`); several are
+listed (`Did you mean one of: "choose", "completion", "confirm"?` for the
+typed text `c`). A name that is neither a prefix match nor within distance 2
+produces no suggestion.
 
 ### Output channels
 
@@ -188,11 +189,11 @@ Every subcommand keeps two streams apart. **Data** (the styled text, the
 chosen value, the rendered table, the completion script) goes to STDOUT
 raw — never through the console formatter, so a value that happens to look
 like `<info>` survives byte-exact. **Diagnostics** (refusals, malformed
-flag values, I/O failures) go to STDERR — the ones the application emits
-itself are plain sentences, while Symfony's own unknown-command and
-unknown-option errors arrive as boxed error blocks — and either shape stays
-off STDOUT, so scripts that `eval` completion output or capture `confirm`
-answers can never consume an error message as data.
+flag values, I/O failures) go to STDERR. The application's own diagnostics
+are plain sentences; Symfony's unknown-command and unknown-option errors
+arrive as boxed error blocks. Either shape stays off STDOUT, so a script
+that `eval`s completion output or captures `confirm` answers can never
+consume an error message as data.
 
 ```php
 use SugarCraft\ScriptUi\Attribute\Flag;
@@ -213,8 +214,8 @@ final class MyCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $format = $input->getOption('format');
-        // Scans into a ScriptUi application enforce `enum:` before the
-        // command runs (invalid values exit 2); custom runners such as
+        // Commands discovered via Application::scan() have `enum:` enforced
+        // before they run (invalid values exit 2); custom runners such as
         // CommandTester validate the value themselves via ValueEnum::validate().
         // ...
         return self::SUCCESS;
@@ -242,7 +243,7 @@ $app->run();
 `Application::scan($namespace)` iterates all loaded classes under that
 namespace, picks those bearing `#[Command]`, and registers them into the
 application. Classes must be autoloaded (or `require`d) before `scan()` can
-find them — the scanner harvests through `get_declared_classes()` and never
+find them — the scanner reads the class list through `get_declared_classes()` and never
 triggers autoloading itself, though its re-snapshot pass also collects
 classes that resolved during the scan window. A scan that matches zero
 `#[Command]` classes announces itself loudly on STDERR rather than staying
@@ -252,26 +253,26 @@ reasons, in `CommandScanner::skipped()`.
 ## Flag reference (selected highlights)
 
 Some `gum` flags exist here under different spellings and a few niche knobs
-were dropped rather than shipped as silent no-ops: every flag listed by
-`--help` is live. The shipped surface covers the 80 % case for shell
-scripts. Common
-flags across commands:
+were dropped rather than shipped as silent no-ops. Of the flags `--help`
+lists, the only no-op is `--timeout` on `join`, `log`, `style`, and `table`
+(see Compatibility below); every other listed flag is live. The shipped
+surface covers the 80 % case for shell scripts. Selected flags, by
+command:
 
 - `--limit N` / `--no-limit` / `--selected="a,b"` — multi-select on
   `choose` and `filter`; `--selected` is repeatable and comma-separated
-  lists are split into separate items (previously the whole string named
-  ONE item, silently selecting nothing).
+  lists are split into separate items.
 - `--ordered` — keep selection order instead of click order on `choose`
   only (`filter` has no such flag).
 - `--strict` / `--fuzzy` / `--no-fuzzy` — matching mode on `filter`.
   Substring matching is the default; fuzzy Smith-Waterman is opt-in.
 - `--header "Email:"` / `--prompt "> "` / `--value "$LAST"` /
   `--char-limit N` / `--width N` on `input` and `write`; `--max-lines N`
-  exists on `write` only, while `--show-line-numbers` exists on `write`
-  AND `pager`.
+  exists on `write` only, while `--show-line-numbers` exists on both `write`
+  and `pager`.
 - `--affirmative "Yes"` / `--negative "No"` / `--default=yes|no` /
   `--show-output` on `confirm`. `--default` also accepts the one-letter
-  spellings `y` / `n` (case-insensitive); any other unknown word is refused
+  spellings `y` / `n` (case-insensitive); any other value is refused
   (exit `1`) rather than silently treated as "no".
 - `--show-output` / `--show-error` (aliased `--show-stdout` /
   `--show-stderr`) plus 12 spinner styles
@@ -290,7 +291,7 @@ flags across commands:
 
 ## Environment
 
-CandyScriptui respects the standard CLI colour conventions. Resolution
+candy-scriptui respects the standard CLI colour conventions. Resolution
 lives in `Runtime/ColourGate.php`, which pins sugar-style's ambient
 colour profile before each command runs, so every styled byte stream —
 flag-built `style` output, `log` badges, and the `format` markdown
@@ -299,28 +300,29 @@ sugar-core's ColorProfile semantics: `Ascii` drops colour but keeps
 decoration, `NoTty` emits no escapes at all, and `Ansi`/`Ansi256`
 re-quantise colours to that depth.
 
-- **`--no-ansi`** (global flag) is FINAL — it outranks every other rule,
+- **`--no-ansi`** (global flag) is **final** — it outranks every other rule,
   including `--ansi`: every SGR escape is dropped, decoration included.
   The interactive frames' hand-composed emphasis — cursor-row reverse
   video, fuzzy-match bold, pager highlight — rides the same gate, so a
   `NoTty` frame is entirely escape-free.
-  `--ansi` overrides the ENV tiers only.
+  `--ansi` overrides the environment tiers only.
 - **`NO_COLOR`** (any truthy value) disables colour; decoration (bold,
   underline, …) and layout survive.
-- **`CLICOLOR=0`** disables colour when stdout is not a TTY (otherwise
-  defaults to colour).
+- **`CLICOLOR=0`** disables colour when stdout is not a TTY; when stdout
+  is a TTY, colour stays on.
 - **`CLICOLOR_FORCE=1`** keeps full colour even when stdout is piped or
   redirected, winning over `NO_COLOR`.
 - **`FORCE_COLOR=1|2|3`** forces a specific tier (16 / 256 /
   TrueColor) and wins over every other env rule.
 - **`TERM=dumb`** (or an empty/unset `TERM`) emits plain bytes (the
-  no-escape tier) — but it is the LAST tier checked: `NO_COLOR` or
+  no-escape tier) — but it is the **last** tier checked: `NO_COLOR` or
   `CLICOLOR=0` resolve earlier to the decoration-kept tier (colour off,
   bold/underline survive), and `FORCE_COLOR` / `CLICOLOR_FORCE` outrank
   the dumb ladder entirely.
 
 Being a pipe does not by itself strip colour — styled bytes flow to
-redirected output as always; set `CLICOLOR=0` for pipe-aware muting.
+redirected output as always. Set `CLICOLOR=0` to disable colour when
+stdout is redirected.
 
 ### `CANDY_SCRIPTUI_*` env var fallbacks
 
@@ -339,8 +341,8 @@ other value is ignored exactly like an unknown name. The permitted names are
 CANDY_SCRIPTUI_FOREGROUND=#ff0000 CANDY_SCRIPTUI_BOLD=1 candy-scriptui style "Hello"
 ```
 
-Everything else is CLI-only **by construction**: options that answer for
-the user (`--default`, `--selected`, `--value`), grant capability
+Everything else is CLI-only **by construction**: options that ask the
+user (`--default`, `--selected`, `--value`), grant capability
 (`format --allow-env`), or redirect data (`--file`, whose `log` shortcut is
 `-o`) are never
 read from the environment — a stray `CANDY_SCRIPTUI_*` in a shared CI
@@ -351,9 +353,9 @@ The pre-rename `CANDYSHELL_<NAME>` spellings still work for the same
 allow-listed names: the launcher mirrors them onto `CANDY_SCRIPTUI_<NAME>`
 with a deprecation notice, and the new name wins if both are set.
 
-The fallback is applied when no explicit CLI option is provided. An
-explicit flag on the command line always takes precedence over the env var.
-Negatable options (`--no-<name>`, `InputOption::VALUE_NEGATABLE`) are not
+An explicit option on the command line always beats the environment:
+the fallback consults the raw tokens for `--<name>` before honouring an
+env value. Negatable options (`--no-<name>`, `InputOption::VALUE_NEGATABLE`) are not
 sourced from the environment — the fallback skips them (the shipped
 command surface currently defines none).
 
@@ -388,14 +390,14 @@ the shell's init file.
 ### Version
 
 `candy-scriptui --version` (and the matching `candy-scriptui version`
-subcommand, scriptui-40) answer through `Application::versionString()`, in
+subcommand) report their version through `Application::versionString()`, in
 precedence order:
 
 1. When running from a phar, the version stamped into the archive's phar
    metadata at build time (a `dev-build` working-tree stamp is refused, so a
    dev archive never impersonates a release).
 2. Otherwise this package's own `composer.json` — the walk is identity-gated
-   to `sugarcraft/candy-scriptui` (scriptui-39), so a monorepo checkout
+   to `sugarcraft/candy-scriptui`, so a monorepo checkout
    never reports the host root's version as the tool's own. The package
    manifest carries no `version` field until a release stamps one.
 3. Otherwise `0.0.0` — the honest answer when no version metadata is
@@ -406,7 +408,7 @@ precedence order:
 ### Language
 
 `candy-scriptui` reads `LC_ALL`, then `LC_MESSAGES`, then `LANG` at startup
-and answers its UI and hint strings in that language — a handful of
+and renders its UI and hint strings in that language — a handful of
 programmer-facing diagnostics (the `format` unknown-value refusal
 scaffolding, the `find()` did-you-mean suggestions) are English-only by
 design. Seventeen catalogs ship
@@ -450,31 +452,31 @@ a fallback of `zh-cn` — the naming rulebook lists the pair as divergent.
 - `143` — terminated by SIGTERM (128 + 15). Other OS signals follow the
   same `128 + signum` convention.
 
-`spin` forwards the external command's own exit code verbatim (gum parity),
-which means a child exiting `2`, `124`, `130`, or `143` is indistinguishable
-from candy-scriptui's own codes for those numbers; gate on the child's
-success (`0`) rather than specific non-zero values.
+`spin` forwards the external command's own exit code verbatim, matching
+`gum`'s behaviour. A child exiting `2`, `124`, `130`, or `143` is therefore
+indistinguishable from the tool's own use of those codes; gate on the
+child's success (`0`) rather than specific non-zero values.
 
 ## Keyboard map (interactive commands)
 
 | Key | Effect |
 |-----|--------|
 | ↑ / ↓ | Move the highlighted item (`choose`, `filter` paging — see the `filter` row — `file`, `pager`). In `write`, move the caret one line. In `input`, Up/Down walk the widget's command-history slot — a list this CLI never fills — so there they are inert. |
-| Enter | Submit `choose`, `confirm`, `filter`, `input` (in `write`, inserts a newline). In `filter`, Enter with zero matches submits the empty selection and exits `0` — the session always ends on Enter. In `choose`, while a typed filter is OPEN the first Enter commits the narrowing (the text and reduced list stay), and the next Enter submits. |
+| Enter | Submit `choose`, `confirm`, `filter`, `input` (in `write`, inserts a newline). In `filter`, Enter with zero matches submits the empty selection and exits `0` — the session always ends on Enter. In `choose`, while a typed filter is **open** the first Enter commits the narrowing (the text and reduced list stay), and the next Enter submits. |
 | y / n | Answer `confirm` directly. |
-| ← / → · h / l | Toggle the `confirm` answer (like `Tab` there); in `pager`, `h`/`l` scroll sideways. |
+| ← / →, h / l | Toggle the `confirm` answer (like `Tab` there); in `pager`, `h`/`l` scroll sideways. |
 | Ctrl+D | Submit `write` (end-of-input convention). |
 | Space | Toggle selection in multi-select `choose`; page down in `pager`. In multi-select `filter` the toggle is `Tab` — a Space is typed into the filter text instead, as it is in `input` / `write`. |
 | Tab | Toggle the highlighted item in multi-select `filter`; toggle the answer in `confirm`; in `write`, insert four spaces. |
 | Any printable key | Filter text in `filter`; in `choose` typing opens the filter immediately too (`--no-filter` keeps the historical inert keys). |
-| `j`/`k` · `g`/`G` · `Home`/`End` · `PgUp`/`PgDn` | Move, jump to top / bottom, and page the list in `choose` (and the `pager` view). In `file`, `j`/`k` move and `Home`/`End` jump to the first / last entry. |
-| `filter` navigation | `filter` opens in permanent filter mode with no exit, so the vim-style keys above are NOT its navigation: `j`/`k`/`g`/`G` are typed into the query and `Home`/`End` are inert in the default substring mode. Move with ↑/↓, page with `PgUp`/`PgDn`, delete query characters with `Backspace`, and end the session with Enter or Esc; in `--fuzzy` mode ↑/↓, `PgUp`/`PgDn`, `Home`/`End` all navigate the match set. |
-| `b`/`f` · `Ctrl+U`/`Ctrl+D` · `q` | Page, half-page, and quit keys of the `pager`. |
+| `j`/`k`, `g`/`G`, Home/End, PgUp/PgDn | Move, jump to top / bottom, and page the list in `choose` (and the `pager` view). In `file`, `j`/`k` move and Home/End jump to the first / last entry. |
+| `filter` navigation | `filter` opens in permanent filter mode with no exit, so the vim-style keys above are **not** its navigation: `j`/`k`/`g`/`G` are typed into the query and Home/End are inert in the default substring mode. Move with ↑/↓, page with PgUp/PgDn, delete query characters with Backspace, and end the session with Enter or Esc; in `--fuzzy` mode ↑/↓, PgUp/PgDn, Home/End all navigate the match set. |
+| `b`/`f`, Ctrl+U/Ctrl+D, q | Page, half-page, and quit keys of the `pager`. |
 | Esc | Abort (exit `1`, or `2` on `confirm`) — except in `pager`, where Esc is a normal finish like `q` (exit `0`). |
 | Ctrl+C | Abort with exit `130` everywhere, `spin` included (it also terminates its child). In `write` it cancels — it never copies (copy/cut bindings need a selection, and the shipped `write` surface anchors none). |
 | Backspace | Ascend a directory in `file` (`←` does the same); delete before the caret elsewhere. |
 
-There is no mouse: every frame runs with terminal mouse reporting OFF,
+There is no mouse: every frame runs with terminal mouse reporting **off**,
 so clicks and wheel turns are not consumed (the underlying sugar-forms
 widgets implement click-select and wheel-scroll, but no shipped
 candy-scriptui command arms the tracking).
@@ -508,9 +510,9 @@ update arms, and those arms are exercised by the model tests.
 - The `pager` sizes itself from the terminal at launch, in both
   dimensions (COLUMNS/LINES, then an ioctl against the controlling
   stream); an explicit `--width`/`--height` wins, and both default to
-  `0` = auto. The interactive lists size only their WIDTH from the
+  `0` = auto. The interactive lists size only their width from the
   terminal the same way (overridable with `--width`, `0` = auto); their
-  HEIGHT is the visible item count (`--height`), a literal defaulting
+  height is the visible item count (`--height`), a literal defaulting
   to 10 and never read from the terminal. When nothing is knowable the
   historical literals (lists 60 cells, pager 80×20) keep piped output
   byte-stable.
@@ -522,7 +524,7 @@ update arms, and those arms are exercised by the model tests.
   the live view (removed from the resolved/final frame).
 - `choose` / `filter` / `pager` / `write` / `file` accept
   `--no-alt-screen` to render inline. Note the flip side: entering the
-  alternate screen (the default) ERASES the rendered frames on exit —
+  alternate screen (the default) **erases** the rendered frames on exit —
   pass `--no-alt-screen` when you want the interaction to remain in
   scrollback.
 - On a dumb-equivalent `TERM` — `dumb`, empty, or unset — the runtime
@@ -549,7 +551,7 @@ update arms, and those arms are exercised by the model tests.
   screen, so a transcript stays linear and inspectable. Diagnostics and
   refusals always go to STDERR, never into the STDOUT payload a script
   captures.
-- **Reduced motion is NOT honoured (known gap).** All twelve `spin`
+- **Reduced motion is not honoured (known gap).** All twelve `spin`
   styles animate on a fixed interval — there is no static/`none` style
   and no environment gate for reduced-motion preference. If animated
   output is a problem, run the command without `spin` and emit plain
@@ -560,7 +562,7 @@ update arms, and those arms are exercised by the model tests.
 
 ## Untrusted content
 
-This tool's documented purpose is rendering THIRD-PARTY content, so the
+This tool's documented purpose is rendering **third-party** content, so the
 data channel of the render commands carries a control-byte policy: `table`
 cells, `style` text, `join` parts, and `pager` content have escape
 sequences, C0/C1 controls, and invisible bidi/zero-width marks stripped at
@@ -570,7 +572,7 @@ the operator's terminal. Decoration comes only from the operator's own
 flags. Pipe trusted byte-exact data through `--raw` on `table`, `style`,
 and `join` to ship input verbatim instead. `format --type markdown` is the
 documented exception to byte-clean output: its renderer strips control
-BYTES but leaves visible bracket residue (`\x1b[5m` survives as `[5m`), so
+bytes but leaves visible bracket residue (`\x1b[5m` survives as `[5m`), so
 treat markdown-rendered hostile input as corrupted-content-prone and pipe
 trusted sources only.
 
@@ -605,7 +607,7 @@ behavioural differences:
   command including `file` (on `file` it is capped at 86400 seconds — one
   day). On the four non-interactive commands that still list it
   (`join`, `log`, `style`, `table`) it is an accepted no-op: they run no
-  interaction to bound. On `format` it is REFUSED loudly instead (exit `1`
+  interaction to bound. On `format` it is **refused** loudly instead (exit `1`
   on STDERR), since a deadline there would be silently ignored.
 - `--show-help` is honoured as an alias for `--help` on every command that
   defines it.
@@ -703,7 +705,7 @@ embed the lipgloss style surface — `--border`, `--border-foreground`,
 `--border-background`, `--padding`, `--margin`, `--align`, `--foreground`,
 `--background` and the decoration flags — as real frame chrome painted by
 `StyleBuilder` → `Style::render` around the model body; `--width`/`--height`
-stay CONTENT dimensions (the frame grows around them), and the ColourGate
+stay **content** dimensions (the frame grows around them), and the ColourGate
 keeps themed frames honest under `--no-ansi`/`NO_COLOR`/dumb terminals.
 The `SubStyleParser` utility parses gum-style `element.prop=value` entries
 into per-element `Style` maps for **extension** commands; no built-in
@@ -733,8 +735,9 @@ the port lands.
 ## Related
 
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
-- Originally inspired by [charmbracelet/gum](https://github.com/charmbracelet/gum)
 
 ## Credits & inspiration
 
-Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+Originally inspired by the Go [Charm](https://github.com/charmbracelet)
+ecosystem — [charmbracelet/gum](https://github.com/charmbracelet/gum) in
+particular; SugarCraft is developed as a native PHP project.
