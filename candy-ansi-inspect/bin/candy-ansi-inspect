@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 use SugarCraft\AnsiInspect\Inspector;
 use SugarCraft\AnsiInspect\Lang;
+use SugarCraft\AnsiInspect\StreamingInspector;
 
 $autoloadCandidates = [
     __DIR__ . '/../vendor/autoload.php',     // dev: standalone
@@ -53,7 +54,42 @@ if (!empty($argv[1])) {
     $input = (string) file_get_contents($argv[1]);
 } elseif (!stream_isatty(STDIN)) {
     $sawSource = true;
-    $input = (string) stream_get_contents(STDIN);
+    // Stream, do not slurp: a slow producer (`tail -f log | candy-ansi-inspect`)
+    // must see each completed sequence the moment it dispatches, not only after
+    // the writer closes — the old `stream_get_contents()` waited for EOF and
+    // then rendered everything at once. Output is byte-identical to the
+    // file-argument path: one `describe()` line per segment, newline-joined.
+    stream_set_write_buffer(STDOUT, 0);
+    $streaming = new StreamingInspector();
+    $gotBytes = false;
+    $printed = false;
+    while (!feof(STDIN)) {
+        $chunk = fread(STDIN, 8192);
+        if ($chunk === false) {
+            break;
+        }
+        if ($chunk === '') {
+            if (feof(STDIN)) {
+                break;
+            }
+            continue;
+        }
+        $gotBytes = true;
+        foreach ($streaming->feed($chunk) as $segment) {
+            $printed = true;
+            fwrite(STDOUT, $segment->describe() . "\n");
+        }
+    }
+    foreach ($streaming->finish() as $segment) {
+        $printed = true;
+        fwrite(STDOUT, $segment->describe() . "\n");
+    }
+    if ($gotBytes && !$printed) {
+        // Non-empty stream that dispatched nothing (a lone invalid byte — README
+        // deviation 10): the old slurp echoed the one empty `report()` line.
+        echo PHP_EOL;
+    }
+    exit(0);
 }
 
 if ($input === '') {

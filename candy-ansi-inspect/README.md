@@ -57,6 +57,11 @@ ESC[0m  SGR reset
 A saved capture works exactly like a pipe: pass the file as the argument and the
 same report comes out.
 
+A pipe is reported live: stdin is read chunk by chunk and each segment's line is
+written as soon as the sequence completes, so `tail -f log | candy-ansi-inspect`
+emits per sequence instead of waiting for the writer to close — and the bytes of
+that live report are the same bytes the file argument produces.
+
 An empty source is a valid report of nothing: an empty file, or a command that
 printed nothing, yields an empty report and exit status **0**, so
 `cmd | candy-ansi-inspect` stays chainable when `cmd` has no output. Usage is printed on

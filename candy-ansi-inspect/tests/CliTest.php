@@ -222,6 +222,78 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('red', $stdout);
     }
 
+    public function testStreamedStdinBytesEqualTheFileArgumentReport(): void
+    {
+        // The streaming read must not change the report — only when lines
+        // arrive. Same corpus through both source arms has to agree byte for
+        // byte (the final terminator is the one tolerated difference: the file
+        // path ends with PHP_EOL, the stream with the "\n" that joins lines).
+        $corpus = "a\x1b[31mred\x1b[0m b\x1b]0;title\x07tail\x1b[1;2\x1bZ";
+        $tmp = tempnam(sys_get_temp_dir(), 'inspect-parity');
+        $this->assertIsString($tmp);
+        try {
+            file_put_contents($tmp, $corpus);
+            [$fileCode, $fileOut, $fileErr] = self::runCli($tmp);
+            [$pipeCode, $pipeOut, $pipeErr] = self::runCliWithStdin($corpus);
+            $this->assertSame(0, $fileCode, $fileErr);
+            $this->assertSame(0, $pipeCode, $pipeErr);
+            $this->assertSame(rtrim($fileOut, "\r\n"), rtrim($pipeOut, "\r\n"), $corpus);
+            $this->assertMatchesRegularExpression('/\r?\n\z/', $pipeOut, 'stream output is newline-terminated');
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    public function testPipedSequencesAreReportedBeforeTheWriterCloses(): void
+    {
+        // The whole point of streaming (finding 004): a slow producer's first
+        // completed sequence must reach stdout while the pipe is still open.
+        $proc = proc_open(
+            [PHP_BINARY, self::bin()],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        stream_set_blocking($pipes[1], false);
+        try {
+            fwrite($pipes[0], "\x1b[31m");
+            fflush($pipes[0]); // one complete SGR, pipe stays open
+            $seen = '';
+            $deadline = microtime(true) + 5.0;
+            while (microtime(true) < $deadline) {
+                $read = [$pipes[1]];
+                $write = $except = [];
+                if (stream_select($read, $write, $except, 0, 100_000) > 0) {
+                    $seen .= (string) fread($pipes[1], 4096);
+                    if (str_contains($seen, "\n")) {
+                        break;
+                    }
+                }
+                if (feof($pipes[1])) {
+                    break;
+                }
+            }
+            // Decisive assertion while the child's stdin is still open: if the
+            // bin still slurped, nothing could have arrived yet.
+            $this->assertStringContainsString('SGR foreground red', $seen, 'sequence reported before EOF');
+
+            fwrite($pipes[0], "later\x1b[0m");
+            fclose($pipes[0]);
+            stream_set_blocking($pipes[1], true); // drain to EOF, not non-blocking peek
+            $rest = (string) stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            $code = proc_close($proc);
+            $this->assertSame(0, $code);
+            $this->assertStringContainsString('SGR reset', $rest);
+            $this->assertStringContainsString('later', $rest);
+        } finally {
+            if (is_resource($proc)) {
+                proc_terminate($proc);
+                proc_close($proc);
+            }
+        }
+    }
+
     public function testReadsRealLocalFile(): void
     {
         $tmp = tempnam(sys_get_temp_dir(), 'inspect');
