@@ -43,7 +43,7 @@ final class SyntaxHighlighter
      * candy-codeshot ChromaThemeLoader / VsCodeThemeLoader); oversized
      * input degrades gracefully to the plain code-block style.
      */
-    private const MAX_HIGHLIGHT_BYTES = 1_000_000;
+    public const MAX_HIGHLIGHT_BYTES = 1_000_000;
 
     /**
      * The line-number gutter separator: a box rule flanked by spaces —

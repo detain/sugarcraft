@@ -141,6 +141,11 @@ value carries `foreground` / `background` (hex / `ansi:N` /
 
 ## Word-wrap + OSC 8 hyperlinks
 
+Wrapping is **off** unless you call `withWordWrap($cols)` — rendered
+lines follow the source (glamour's `NewTermRenderer` defaults to 80;
+this port deliberately does not, dated 2026-11: consumers that manage
+width downstream would otherwise get double-wrapped).
+
 ```php
 use SugarCraft\Markdown\{Renderer, Theme};
 
@@ -196,7 +201,7 @@ stripping is likewise always on. See the fleet-wide trust model in
 styled ANSI as each top-level section is proven complete — so bytes
 can reach the terminal while the tail of the document is still
 arriving. Chunk boundaries never influence output: for every split of
-the same input bytes, `implode('', iterator_to_array($renderer->stream($chunks)))`
+the same input bytes into string chunks, `implode('', iterator_to_array($renderer->stream($chunks)))`
 equals `$renderer->render($bytes)` byte for byte.
 
 ```php
@@ -209,10 +214,12 @@ foreach ($renderer->stream(["# Heading\n\n", "body prose\n\n## Next heading\n"])
 ```
 
 A section is proven complete when the next top-level ATX heading
-arrives (column one, after a blank line — or on the line directly
-after a closing code fence, which proves the split with no blank
-line; see `src/Render/SectionScanner.php`) or the input ends — the tail
-after the final heading never emits before the stream finishes. A
+arrives in column one, after a blank line. One edge case: a heading on
+the line directly after a closing code fence proves the split with no
+blank line at all (the authority is `src/Render/SectionScanner.php`).
+And the tail rule: after the final heading the input ending is what
+proves the last section — the tail never emits before the stream
+finishes. A
 section that still holds an unresolved `[label]` pair is held (its
 source and first render both kept) and re-rendered only when a later
 definition names one of the labels it left unresolved, so
@@ -270,7 +277,12 @@ $writer->close();
   above. Only syntax highlighting refuses to try — a fenced body over
   `SyntaxHighlighter`'s `MAX_HIGHLIGHT_BYTES` = 1,000,000 bytes
   (≈ 0.95 MiB) degrades to the plain code-block style instead of
-  tokenising.
+  tokenising. Proportional is not instantaneous though: a 4 MB
+  pathologically nested corpus still spends seconds inside the
+  league/commonmark parse before any section can be proven, so a
+  `cat evil.md | php examples/stdin-stdout.php` pipeline stalls
+  silently mid-parse. The caps above bound the output, not the
+  intake — put the size guard on hostile stdin yourself.
 - Word-wrapping takes a fast path around pathological tokens: a
   whitespace-free run longer than four times the wrap width is packed
   into hard-break rows before the ANSI-aware wrapper sees it, so a

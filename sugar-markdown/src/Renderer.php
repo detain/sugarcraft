@@ -344,7 +344,7 @@ final class Renderer
      * forward bytes while the tail of the document is still arriving.
      *
      * Lawful invariant, pinned by tests: chunk boundaries never influence
-     * output. For every split of the same input bytes,
+     * output. For every split of the same input bytes into string chunks,
      *   implode('', iterator_to_array($r->stream($chunks))) === $r->render($bytes)
      * holds byte-for-byte.
      *
