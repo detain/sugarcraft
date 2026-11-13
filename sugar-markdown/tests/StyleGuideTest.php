@@ -456,4 +456,36 @@ final class StyleGuideTest extends TestCase
         $this->assertStringNotContainsString("\x1b]2;pwned", $rendered);
         $this->assertStringNotContainsString("\x1b]8;;", $rendered);
     }
+
+    /**
+     * SM-S58 projection: the decoder can now feed the Theme's imageText
+     * slot from either glamour image primitive — before the fix the slot
+     * was unreachable from a style file, so an `inline_image` colour
+     * changed nothing in the alt-text bytes.
+     */
+    public function testGlamourImagePrimitivesFeedTheImageTextSlot(): void
+    {
+        $theme = StyleGuide::fromJsonString('{"document":{},"inline_image":{"color":"#ff0000"}}')->theme();
+        $this->assertNotNull($theme->imageText);
+        $this->assertSame("\x1b[38;2;255;0;0malt\x1b[0m", $theme->imageText->render('alt'));
+        $this->assertStringContainsString(
+            "\x1b[38;2;255;0;0malt\x1b[0m",
+            (new Renderer($theme))->render('![alt](img.png)'),
+            'the projected colour reaches the rendered alt text byte-exact',
+        );
+
+        $block = StyleGuide::fromJsonString('{"document":{},"block_image":{"bold":true}}')->theme();
+        $this->assertNotNull($block->imageText);
+        $this->assertSame("\x1b[1malt\x1b[0m", $block->imageText->render('alt'));
+
+        $both = StyleGuide::fromJsonString('{"document":{},"block_image":{"bold":true},"inline_image":{"color":"#00ff00"}}')->theme();
+        $this->assertSame(
+            "\x1b[38;2;0;255;0malt\x1b[0m",
+            $both->imageText->render('alt'),
+            'inline wins when a document spells both',
+        );
+
+        $absent = StyleGuide::fromJsonString('{"document":{}}')->theme();
+        $this->assertNull($absent->imageText, 'no image block keeps the null slot (render falls through to image)');
+    }
 }

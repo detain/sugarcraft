@@ -35,8 +35,11 @@ use SugarCraft\Style\Style;
  * WHAT DECODES: colours and attribute flags, the document's
  * `block_prefix` / `block_suffix` / `indent` / `margin`, `paragraph` block
  * affixes, the chroma families Keyword / LiteralString / LiteralNumber
- * / Comment, and the `uppercase` / `lowercase` spellings on the heading
- * blocks (folded into the Theme's single `headingCase` selector).
+ * / Comment, the `uppercase` / `lowercase` spellings on the heading
+ * blocks (folded into the Theme's single `headingCase` selector), and
+ * the `inline_image` / `block_image` primitives (folded into the Theme's
+ * single `imageText` alt-text slot — inline wins when a document spells
+ * both, mirroring the headingCase tie-break).
  *
  * WHAT THEME() DROPS, and why: line-control `block_prefix` /
  * `block_suffix` on NON-document elements (glamour uses "\n" there purely
@@ -257,6 +260,7 @@ final class StyleGuide
             number:              $this->chromaStyle('LiteralNumber') ?? $this->chromaStyle('Number'),
             comment:             $this->chromaStyle('Comment'),
             strike:              $this->style('strikethrough'),
+            imageText:           $this->style('inline_image') ?? $this->style('block_image'),
             headingCase:         $this->headingCase(),
             documentMargin:      $this->documentMargin,
             documentIndent:      $this->documentIndent,
