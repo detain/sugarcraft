@@ -66,8 +66,8 @@ return [
     'undo.rename' => 'Umbenannte Objekte: {count}',
     'undo.move' => 'Verschobene Objekte: {count}',
     'undo.copy' => 'Kopierte Objekte: {count}',
-    'keyhelp.default' => 'Tab Wechsel · ↑↓ jk bewegen · Home/End g/G springen · Enter öffnen · l Ansehen · ← h hoch · Space wählen · s sortieren · . versteckte · c kopieren · m verschieben · R umbenennen · d löschen · r neu laden · q beenden · / suchen · Esc Auswahl leeren · t Tab duplizieren · ^w Tab schließen · ^tab wechseln · ^PgUp/^PgDn Tabs · u/^z Rückgängig · ^y Wiederholen · ? Hilfe · Ctrl+O öffnen · 1-9 Tabs · Strg+a alle · v umkehren · * Muster',
-    'keyhelp.terse' => 'Tab Wechsel · ↑↓ jk bewegen · Enter öffnen · l Ansehen · ← h hoch · Space wählen · s sortieren · c kopieren · m verschieben · R umbenennen · d löschen · q beenden · / suchen · u/^z Rückgängig · ^y Wiederholen',
+    'keyhelp.default' => 'Tab Wechsel · ↑↓ jk bewegen · Home/End g/G springen · Enter öffnen · l Ansehen · ← h hoch · Space wählen · s sortieren · e Erweiterung · . versteckte · c kopieren · m verschieben · R umbenennen · d löschen · r neu laden · q beenden · / suchen · Esc Auswahl leeren · t Tab duplizieren · ^w Tab schließen · ^tab wechseln · ^PgUp/^PgDn Tabs · u/^z Rückgängig · ^y Wiederholen · ? Hilfe · Ctrl+O öffnen · 1-9 Tabs · Strg+a alle · v umkehren · * Muster',
+    'keyhelp.terse' => 'Tab Wechsel · ↑↓ jk bewegen · Enter öffnen · l Ansehen · ← h hoch · Space wählen · s sortieren · e Erweiterung · c kopieren · m verschieben · R umbenennen · d löschen · q beenden · / suchen · u/^z Rückgängig · ^y Wiederholen',
     'keyhelp.minimal' => 'Enter öffnen · l Ansehen · q beenden · / suchen',
     'help.title' => '{count} Tastenbefehle',
     'help.more' => '+{count} weitere',
@@ -97,6 +97,7 @@ return [
     'sort.name' => 'Name',
     'sort.mtime' => 'Datum',
     'sort.size' => 'Größe',
+    'sort.ext' => 'Erweiterung',
     'cli.usage' => 'candy-files — Zwei-Fenster-Dateimanager
 
 Verwendung:

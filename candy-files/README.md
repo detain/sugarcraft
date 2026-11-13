@@ -32,7 +32,7 @@ works, and a German `(j/n)` answers to `j`.
 ┃    notes.md                    12.0KB    ┃  │    Xorg.0.log                   4.0KB    │
 ┃    todo.txt                      512B    ┃  └──────────────────────────────────────────┘
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
- focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern
+ focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern
 ```
 
 ## Run it
@@ -100,7 +100,8 @@ on a bare php-cli machine the step that refuses is `composer install`, naming `s
 | `Ctrl+a`        | Select every listed entry (CF-31); the `..` sentinel is never marked |
 | `v`             | Invert the selection (CF-31) — complement over the listing, so pressing it twice restores the set |
 | `*`             | Pattern-select prompt (CF-31): type a glob-lite pattern (`*.txt`), `Enter` marks every match and clears the rest — `fnmatch` semantics, never regex |
-| `s`             | Cycle sort order (name → mtime → size, asc / desc)  |
+| `s`             | Cycle sort order (name → mtime → size → extension, asc / desc)  |
+| `e`             | Direct-select extension sort (CF-46) — from any other field it lands on extension ascending; on the extension field it only flips direction |
 | `.`             | Toggle hidden-file visibility                       |
 | `c`             | Copy (selection or cursor) to inactive pane; confirm the armed gate (see Status)  |
 | `m`             | Move (selection or cursor) to inactive pane; confirm the armed gate (see Status)  |
@@ -183,6 +184,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 - Localized chrome (CF-16): search prompt, DIR/LINK size tokens and the sort header label ride the catalogues (dynamic size-column width, byte-stable at `en`), and the launcher activates the detected locale before its first printed byte (order-pinned; German `--help` proven in a pinned child environment)
 - Symlink rows (CF-45): a link's row names its target in the same leg (`mylink -> /dir`), the size column answers `LINK` even for a link-to-directory, and a target that does not resolve is tagged `(broken)`
 - Normalization-insensitive matching (CF-48): search and pattern-select compare names NFC-normalized on both sides — a composed query finds macOS's decomposed bytes and vice versa — while display and selection keep the raw on-disk name
+- Extension sort (CF-46): `s` cycles an eighth order — names group by the suffix after the last dot (case-folded; a dot-file like `.bashrc` has no suffix and groups first) — and `e` selects the field directly instead of cycling to it. The order is total (suffix → mtime → name), so an unchanged listing re-sorts identically every pass; the field is remembered per pane like every other sort, with no per-directory field memory (deliberately scoped out)
 - Glyph tiers (CF-35): `Support\GlyphSet` picks unicode vs strictly-ASCII chrome from lang/charset/TERM (deterministic table units, `CANDY_FILES_GLYPHS` escape hatch), the ascii frame carries no Ambiguous glyph and fits `termCols`, and user filenames keep their bytes on every tier
 
 ## Demos

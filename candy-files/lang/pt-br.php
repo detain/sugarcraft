@@ -66,8 +66,8 @@ return [
     'undo.rename' => 'renomear {count} item(ns)',
     'undo.move' => 'mover {count} item(ns)',
     'undo.copy' => 'copiar {count} item(ns)',
-    'keyhelp.default' => 'Tab alternar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · . ocultos · c copiar · m mover · R renomear · d excluir · r atualizar · q sair · / pesquisar · Esc limpar · t duplicar aba · ^w fechar aba · ^tab circular · ^PgUp/^PgDn abas · u/^z desfazer · ^y refazer · ? ajuda · Ctrl+O abrir · 1-9 separadores · Ctrl+a todos · v inverter · * padrão',
-    'keyhelp.terse' => 'Tab alternar · ↑↓ jk mover · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · c copiar · m mover · R renomear · d excluir · q sair · / pesquisar · u/^z desfazer · ^y refazer',
+    'keyhelp.default' => 'Tab alternar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · e extensão · . ocultos · c copiar · m mover · R renomear · d excluir · r atualizar · q sair · / pesquisar · Esc limpar · t duplicar aba · ^w fechar aba · ^tab circular · ^PgUp/^PgDn abas · u/^z desfazer · ^y refazer · ? ajuda · Ctrl+O abrir · 1-9 separadores · Ctrl+a todos · v inverter · * padrão',
+    'keyhelp.terse' => 'Tab alternar · ↑↓ jk mover · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · e extensão · c copiar · m mover · R renomear · d excluir · q sair · / pesquisar · u/^z desfazer · ^y refazer',
     'keyhelp.minimal' => 'Enter abrir · l ver · q sair · / pesquisar',
     'help.title' => '{count} atalhos de teclado',
     'help.more' => '+{count} mais',
@@ -97,6 +97,7 @@ return [
     'sort.name' => 'Nome',
     'sort.mtime' => 'Data',
     'sort.size' => 'Tamanho',
+    'sort.ext' => 'Extensão',
     'cli.usage' => 'candy-files — gerenciador de arquivos de dois painéis
 
 Uso:

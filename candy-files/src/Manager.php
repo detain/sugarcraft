@@ -554,6 +554,8 @@ final class Manager implements Model
                 => $this->armPatternPrompt(),
             $plain && $msg->rune === 's'
                 => $this->cycleSort(),
+            $plain && $msg->rune === 'e'
+                => $this->selectExtSort(),
             $plain && $msg->rune === '.'
                 => $this->withActivePane(fn(Pane $p) => $p->toggleHidden($this->lister)),
             $plain && $msg->rune === 'd'
@@ -874,6 +876,19 @@ final class Manager implements Model
     {
         $active = $this->activePane();
         return $this->withActivePane(fn(Pane $p) => $p->withSort($active->sort->cycle()));
+    }
+
+    /**
+     * CF-46 (closes 082): direct selection of the extension field —
+     * from any other sort `e` lands on extension-ascending; once on
+     * the extension field it only flips direction, because cycling
+     * fields through `e` is what `s` is for.
+     */
+    private function selectExtSort(): self
+    {
+        $active = $this->activePane();
+        $sort = $active->sort === Sort::ExtAsc ? Sort::ExtDesc : Sort::ExtAsc;
+        return $this->withActivePane(fn(Pane $p) => $p->withSort($sort));
     }
 
     private function refresh(): self

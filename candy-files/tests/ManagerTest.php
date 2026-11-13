@@ -15,6 +15,7 @@ use SugarCraft\Files\Entry;
 use SugarCraft\Files\FsLister;
 use SugarCraft\Files\Manager;
 use SugarCraft\Files\Msg\CopyCompletedMsg;
+use SugarCraft\Files\Sort;
 use PHPUnit\Framework\TestCase;
 
 final class ManagerTest extends TestCase
@@ -359,6 +360,32 @@ final class ManagerTest extends TestCase
         [$next] = $m->update(new KeyMsg(KeyType::Char, 's'));
         $this->assertNotSame($m->left->sort, $next->left->sort);
         $this->assertSame($m->right->sort, $next->right->sort);
+    }
+
+    public function testEDirectSelectsExtensionField(): void
+    {
+        // CF-46 (closes 082): from any other field e lands on extension
+        // ascending; once there it only flips direction, and s resumes
+        // the field cycle from the extension family's tail.
+        $m = $this->start();                                                 // name-asc
+        [$ext] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame(Sort::ExtAsc, $ext->left->sort);
+        $this->assertSame($m->right->sort, $ext->right->sort, 'inactive pane keeps its field');
+        [$flip] = $ext->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame(Sort::ExtDesc, $flip->left->sort);
+        [$again] = $flip->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame(Sort::ExtAsc, $again->left->sort, 'e on the field only flips direction');
+        [$wrapped] = $flip->update(new KeyMsg(KeyType::Char, 's'));
+        $this->assertSame(Sort::NameAsc, $wrapped->left->sort, 's from ext-desc wraps to name-asc');
+    }
+
+    public function testCtrlEIsNotTheDirectSelectBinding(): void
+    {
+        // The e arm rides the $plain predicate: ^E (Ctrl+E) must not
+        // hijack someone's readline end-of-line.
+        $m = $this->start();
+        [$next] = $m->update(new KeyMsg(KeyType::Char, 'e', ctrl: true));
+        $this->assertSame(Sort::NameAsc, $next->activePane()->sort);
     }
 
     public function testDelArmsConfirmation(): void

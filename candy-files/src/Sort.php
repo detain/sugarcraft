@@ -23,6 +23,8 @@ enum Sort: string
     case MtimeDesc = 'mtime-desc';
     case SizeAsc   = 'size-asc';
     case SizeDesc  = 'size-desc';
+    case ExtAsc    = 'ext-asc';
+    case ExtDesc   = 'ext-desc';
 
     /**
      * Sort `$entries` in place (returns a new list — pure).
@@ -73,7 +75,34 @@ enum Sort: string
                 $a->size <=> $b->size),
             self::SizeDesc  => static fn(Entry $a, Entry $b) => $dirsFirst($a, $b, static fn(Entry $a, Entry $b) =>
                 $b->size <=> $a->size),
+            // CF-46 (closes 082): the file-suffix family. Name-only arms
+            // have no secondary key at all, so a directory of same-named
+            // extensions (or a bulk touch) leaves the order at the mercy
+            // of scandir; the extension arms therefore carry a total
+            // order - suffix, then mtime, then name - so a re-sort of an
+            // unchanged listing is byte-identical to the last one.
+            self::ExtAsc    => static fn(Entry $a, Entry $b) => $dirsFirst($a, $b, static fn(Entry $a, Entry $b) =>
+                (self::extension($a->name) <=> self::extension($b->name))
+                ?: ($a->mtime <=> $b->mtime)
+                ?: strcasecmp($a->name, $b->name)),
+            self::ExtDesc   => static fn(Entry $a, Entry $b) => $dirsFirst($a, $b, static fn(Entry $a, Entry $b) =>
+                (self::extension($b->name) <=> self::extension($a->name))
+                ?: ($b->mtime <=> $a->mtime)
+                ?: strcasecmp($b->name, $a->name)),
         };
+    }
+
+    /**
+     * CF-46: the sort suffix of a file name — the run after the LAST
+     * dot, lower-cased so 'Photo.JPG' groups with 'notes.jpg'. A name
+     * with no dot, or whose only dot leads it (.bashrc — a dot-file is
+     * a NAME, not an extension), has the empty suffix and so groups at
+     * the front of an ascending run.
+     */
+    public static function extension(string $name): string
+    {
+        $dot = strrpos($name, '.');
+        return $dot === false || $dot === 0 ? '' : strtolower(substr($name, $dot + 1));
     }
 
     /**
@@ -89,6 +118,7 @@ enum Sort: string
             self::NameAsc, self::NameDesc  => Lang::t('sort.name'),
             self::MtimeAsc, self::MtimeDesc => Lang::t('sort.mtime'),
             self::SizeAsc, self::SizeDesc  => Lang::t('sort.size'),
+            self::ExtAsc, self::ExtDesc    => Lang::t('sort.ext'),
         };
     }
 
@@ -96,8 +126,8 @@ enum Sort: string
     public function isAscending(): bool
     {
         return match ($this) {
-            self::NameAsc, self::MtimeAsc, self::SizeAsc => true,
-            self::NameDesc, self::MtimeDesc, self::SizeDesc => false,
+            self::NameAsc, self::MtimeAsc, self::SizeAsc, self::ExtAsc => true,
+            self::NameDesc, self::MtimeDesc, self::SizeDesc, self::ExtDesc => false,
         };
     }
 
@@ -105,7 +135,8 @@ enum Sort: string
      * Cycle the active sort: every tap of `s` alternates the
      * direction, and the field advances on the following tap —
      * from NameAsc the order is NameDesc, MtimeAsc, MtimeDesc,
-     * SizeAsc, SizeDesc, back to NameAsc.
+     * SizeAsc, SizeDesc, ExtAsc, ExtDesc, back to NameAsc.
+     * `e` is the CF-46 direct selection of the extension field.
      */
     public function cycle(): self
     {
@@ -115,7 +146,9 @@ enum Sort: string
             self::MtimeAsc  => self::MtimeDesc,
             self::MtimeDesc => self::SizeAsc,
             self::SizeAsc   => self::SizeDesc,
-            self::SizeDesc  => self::NameAsc,
+            self::SizeDesc  => self::ExtAsc,
+            self::ExtAsc    => self::ExtDesc,
+            self::ExtDesc   => self::NameAsc,
         };
     }
 }

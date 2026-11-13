@@ -66,8 +66,8 @@ return [
     'undo.rename' => 'Elementos renombrados: {count}',
     'undo.move' => 'Elementos movidos: {count}',
     'undo.copy' => 'Elementos copiados: {count}',
-    'keyhelp.default' => 'Tab intercambiar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espacio seleccionar · s ordenar · . ocultos · c copiar · m mover · R renombrar · d eliminar · r refrescar · q salir · / buscar · Esc limpiar · t duplicar pestaña · ^w cerrar pestaña · ^tab ciclar · ^PgUp/^PgDn pestañas · u/^z deshacer · ^y rehacer · ? ayuda · Ctrl+O abrir · 1-9 pestañas · Ctrl+a todos · v invertir · * patrón',
-    'keyhelp.terse' => 'Tab intercambiar · ↑↓ jk mover · Enter abrir · l ver · ← h subir · espacio seleccionar · s ordenar · c copiar · m mover · R renombrar · d eliminar · q salir · / buscar · u/^z deshacer · ^y rehacer',
+    'keyhelp.default' => 'Tab intercambiar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espacio seleccionar · s ordenar · e extensión · . ocultos · c copiar · m mover · R renombrar · d eliminar · r refrescar · q salir · / buscar · Esc limpiar · t duplicar pestaña · ^w cerrar pestaña · ^tab ciclar · ^PgUp/^PgDn pestañas · u/^z deshacer · ^y rehacer · ? ayuda · Ctrl+O abrir · 1-9 pestañas · Ctrl+a todos · v invertir · * patrón',
+    'keyhelp.terse' => 'Tab intercambiar · ↑↓ jk mover · Enter abrir · l ver · ← h subir · espacio seleccionar · s ordenar · e extensión · c copiar · m mover · R renombrar · d eliminar · q salir · / buscar · u/^z deshacer · ^y rehacer',
     'keyhelp.minimal' => 'Enter abrir · l ver · q salir · / buscar',
     'help.title' => '{count} atajos de teclado',
     'help.more' => '+{count} más',
@@ -97,6 +97,7 @@ return [
     'sort.name' => 'Nombre',
     'sort.mtime' => 'Fecha',
     'sort.size' => 'Tamaño',
+    'sort.ext' => 'Extensión',
     'cli.usage' => 'candy-files — gestor de archivos de doble panel
 
 Uso:

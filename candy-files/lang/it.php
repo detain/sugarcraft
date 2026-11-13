@@ -66,8 +66,8 @@ return [
     'undo.rename' => 'Elementi rinominati: {count}',
     'undo.move' => 'Elementi spostati: {count}',
     'undo.copy' => 'Elementi copiati: {count}',
-    'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Home/End g/G salta · Invio apri · l vista · ← h su · spazio seleziona · s ordina · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · Esc cancella · t duplica scheda · ^w chiudi scheda · ^tab cicla · ^PgUp/^PgDn schede · u/^z annulla · ^y ripeti · ? aiuto · Ctrl+O apri · 1-9 schede · Ctrl+a tutti · v inverti · * motivo',
-    'keyhelp.terse' => 'Tab scambia · ↑↓ jk muovi · Invio apri · l vista · ← h su · spazio seleziona · s ordina · c copia · m sposta · R rinomina · d elimina · q esci · / cerca · u/^z annulla · ^y ripeti',
+    'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Home/End g/G salta · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · Esc cancella · t duplica scheda · ^w chiudi scheda · ^tab cicla · ^PgUp/^PgDn schede · u/^z annulla · ^y ripeti · ? aiuto · Ctrl+O apri · 1-9 schede · Ctrl+a tutti · v inverti · * motivo',
+    'keyhelp.terse' => 'Tab scambia · ↑↓ jk muovi · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · c copia · m sposta · R rinomina · d elimina · q esci · / cerca · u/^z annulla · ^y ripeti',
     'keyhelp.minimal' => 'Invio apri · l vista · q esci · / cerca',
     'help.title' => '{count} scorciatoie da tastiera',
     'help.more' => '+{count} in più',
@@ -97,6 +97,7 @@ return [
     'sort.name' => 'Nome',
     'sort.mtime' => 'Data',
     'sort.size' => 'Dimensione',
+    'sort.ext' => 'Estensione',
     'cli.usage' => 'candy-files — file manager a doppio pannello
 
 Uso:

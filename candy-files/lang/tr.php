@@ -66,8 +66,8 @@ return [
     'undo.rename' => '{count} ögeyi yeniden adlandır',
     'undo.move' => '{count} ögeyi taşı',
     'undo.copy' => '{count} ögeyi kopyala',
-    'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Home/End g/G atla · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · Esc temizle · t sekmeyi çoğalt · ^w sekmeyi kapat · ^tab dön · ^PgUp/^PgDn sekmeler · u/^z geri al · ^y yinele · ? yardım · Ctrl+O aç · 1-9 sekme · Ctrl+a tümü · v tersine · * desen',
-    'keyhelp.terse' => 'Tab değiştir · ↑↓ jk hareket · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · c kopyala · m taşı · R adlandır · d sil · q çık · / ara · u/^z geri al · ^y yinele',
+    'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Home/End g/G atla · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · e uzantı · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · Esc temizle · t sekmeyi çoğalt · ^w sekmeyi kapat · ^tab dön · ^PgUp/^PgDn sekmeler · u/^z geri al · ^y yinele · ? yardım · Ctrl+O aç · 1-9 sekme · Ctrl+a tümü · v tersine · * desen',
+    'keyhelp.terse' => 'Tab değiştir · ↑↓ jk hareket · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · e uzantı · c kopyala · m taşı · R adlandır · d sil · q çık · / ara · u/^z geri al · ^y yinele',
     'keyhelp.minimal' => 'Enter aç · l görüntüle · q çık · / ara',
     'help.title' => '{count} tuş bağı',
     'help.more' => '+{count} daha',
@@ -97,6 +97,7 @@ return [
     'sort.name' => 'Ad',
     'sort.mtime' => 'Tarih',
     'sort.size' => 'Boyut',
+    'sort.ext' => 'Uzantı',
     'cli.usage' => 'candy-files — çift panelli dosya yöneticisi
 
 Kullanım:

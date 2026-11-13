@@ -66,8 +66,8 @@ return [
     'undo.rename' => 'Éléments renommés : {count}',
     'undo.move' => 'Éléments déplacés : {count}',
     'undo.copy' => 'Éléments copiés : {count}',
-    'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Home/End g/G sauter · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · Esc effacer · t dupliquer l’onglet · ^w fermer l’onglet · ^tab cycler · ^PgUp/^PgDn onglets · u/^z annuler · ^y rétablir · ? aide · Ctrl+O ouvrir · 1-9 onglets · Ctrl+a tous · v inverser · * motif',
-    'keyhelp.terse' => 'Tab permuter · ↑↓ jk déplacer · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · c copier · m déplacer · R renommer · d supprimer · q quitter · / rechercher · u/^z annuler · ^y rétablir',
+    'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Home/End g/G sauter · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · Esc effacer · t dupliquer l’onglet · ^w fermer l’onglet · ^tab cycler · ^PgUp/^PgDn onglets · u/^z annuler · ^y rétablir · ? aide · Ctrl+O ouvrir · 1-9 onglets · Ctrl+a tous · v inverser · * motif',
+    'keyhelp.terse' => 'Tab permuter · ↑↓ jk déplacer · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · c copier · m déplacer · R renommer · d supprimer · q quitter · / rechercher · u/^z annuler · ^y rétablir',
     'keyhelp.minimal' => 'Entrée ouvrir · l voir · q quitter · / rechercher',
     'help.title' => '{count} raccourcis clavier',
     'help.more' => '+{count} de plus',
@@ -97,6 +97,7 @@ return [
     'sort.name' => 'Nom',
     'sort.mtime' => 'Date',
     'sort.size' => 'Taille',
+    'sort.ext' => 'Extension',
     'cli.usage' => 'candy-files — gestionnaire de fichiers à deux volets
 
 Utilisation :
