@@ -66,11 +66,11 @@ works — inline-protocol rendering is a different route, offered by
 
 | Option                | Meaning                                                          |
 |-----------------------|------------------------------------------------------------------|
-| `--fps=N`             | Play at a uniform N frames/second instead of the GIF's delays. Values above `Player::MAX_FPS` clamp silently, and the scheduler's one-centisecond tick floor caps the real rate near 100 fps anyway. |
-| `--speed=N`           | N × the GIF's nominal rate (decoded delays averaged), landing on the same single uniform period as `--fps`. |
-| `--speed=Nfps`        | An absolute rate of N frames/second.                              |
+| `--fps=N`             | Play at a uniform N frames/second instead of the GIF's delays. N is a positive number; fractions work (`--fps=12.5`). Values above `Player::MAX_FPS` clamp silently, and the scheduler's one-centisecond tick floor caps the real rate near 100 fps anyway. |
+| `--speed=N`           | Plays at the GIF's average rate multiplied by N — like `--fps` but relative. N positive, fractions accepted. |
+| `--speed=Nfps`        | An absolute rate of N frames/second (shares the rate slot with `--fps`). |
 | `--speed=max`         | Burn frames as fast as the scheduler's floors allow.              |
-| `--duration=SECONDS`  | Stop after SECONDS of playback time — paused time never accrues (a schedule deadline in the model — no wall-clock kill). Needs at least two frames: a single-frame file combined with `--duration` is refused. |
+| `--duration=N`        | Stop after N seconds of playback time — paused time never accrues (a schedule deadline in the model — no wall-clock kill). N positive, fractions accepted. Needs at least two frames: a single-frame file combined with `--duration` is refused. |
 | `--watch`             | Reload automatically when the source file changes, via a 10 ms event-loop poll. Bare flag — it takes no value. |
 | `--paused`            | Start paused on the first frame (step with the arrow keys, `Space` resumes). Bare flag — it takes no value. |
 | `--help` / `-h`       | Print the usage line (localised) and exit 0.                      |

@@ -108,6 +108,39 @@ final class LocaleParityTest extends TestCase
     }
 
     /**
+     * gifview-021 rider: the bad-value hint is generalised — it fires for
+     * --fps, --speed AND --duration, so it must never name a flag other than
+     * the offender (the offender arrives interpolated as {flag}); a future
+     * per-flag split is free, but a re-added cross-flag clause is not.
+     */
+    #[DataProvider('localeFiles')]
+    public function testBadValueHintNeverNamesAnotherFlag(string $code, string $path): void
+    {
+        $locale = require $path;
+        $this->assertStringNotContainsString(
+            '--speed',
+            $locale['cli.bad_value'],
+            "locale '$code' cli.bad_value must stay flag-neutral",
+        );
+    }
+
+    /**
+     * gifview-022 rider: the intake-cap reason speaks IEC mebibytes — the
+     * number interpolated into {max} comes from intdiv(MAX_INPUT_BYTES,
+     * 1048576), so labelling it MB would misstate the unit in every locale.
+     */
+    #[DataProvider('localeFiles')]
+    public function testBytesOverReasonSpeaksMebibytes(string $code, string $path): void
+    {
+        $locale = require $path;
+        $this->assertStringContainsString(
+            '{max} MiB',
+            $locale['cli.reason_bytes_over'],
+            "locale '$code' cli.reason_bytes_over must print the {max} value with the MiB symbol",
+        );
+    }
+
+    /**
      * Every refusal key the code actually speaks must exist in en.php, and
      * en.php may not carry undisclosed silent keys either (bidirectional
      * census — the fleet REVERSE/PARITY genre). The sole tolerated
