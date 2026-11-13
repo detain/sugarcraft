@@ -249,6 +249,6 @@ final class Pane
     public static function join(string $cwd, string $name): string
     {
         $cwd = rtrim($cwd, '/');
-        return ($cwd === '' ? '' : $cwd) . '/' . $name;
+        return $cwd . '/' . $name;
     }
 }

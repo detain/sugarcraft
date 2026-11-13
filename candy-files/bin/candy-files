@@ -36,6 +36,7 @@ declare(strict_types=1);
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Files\Manager;
+use SugarCraft\Files\Support\Home;
 use SugarCraft\Files\Support\Version;
 
 // Answered before the positional directory scan: a packaging script or a
@@ -69,7 +70,10 @@ if (!stream_isatty(STDOUT)) {
 }
 
 $cwd = getcwd() ?: '/';
-$home = getenv('HOME') ?: '/';
+// CF-18 (closes 092): bare getenv('HOME') is POSIX-only and parked the right
+// pane at the drive root on Windows shells without MSYS — the cascade lives in
+// Support\Home where the unit can pin it.
+$home = Home::resolve();
 $leftCwd  = $argv[1] ?? $cwd;
 $rightCwd = $argv[2] ?? $home;
 

@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-files",
-    "description": "Dual-pane terminal file manager built on the SugarCraft stack. Inspired by superfile and Midnight Commander. Navigate two directories side-by-side, sort by name / mtime / size, multi-select, delete with confirmation, swap focus with Tab.",
+    "description": "Dual-pane terminal file manager on the SugarCraft stack: copy, move, rename, delete with undo, tabs and fuzzy search, next to plain two-directory browsing. Inspired by superfile and Midnight Commander.",
     "type": "project",
     "license": "MIT",
     "keywords": [

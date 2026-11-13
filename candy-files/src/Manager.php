@@ -85,7 +85,7 @@ final class Manager implements Model
         public readonly int $activeIdx = 0,
         public readonly string $status = '',
         public readonly ConfirmState $confirm = ConfirmState::None,
-        \Closure $lister = null,
+        ?\Closure $lister = null,
         public readonly ?string $searchQuery = null,
         public readonly array $searchResults = [],
         public readonly int $searchCursor = 0,
