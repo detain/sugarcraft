@@ -72,6 +72,28 @@ final class StdioMcpServerNestedArgumentsWireTest extends TestCase
         );
     }
 
+    public function testAPositionalArgumentsListRefusesAtTheClientDoorNotTheServer(): void
+    {
+        $server = $this->started();
+
+        // A non-empty list has no object reading under any schema repair —
+        // every conforming server answers the JSON array shape with -32602.
+        // The door must refuse BEFORE a byte is written, with the client's
+        // own words: the fixture's refusal ('expected object, received
+        // array') must never be the one the caller sees.
+        $startedAt = microtime(true);
+        $result = $server->callTool('not-advertised', ['positional']);
+        $elapsed = microtime(true) - $startedAt;
+
+        self::assertLessThan(1.0, $elapsed, 'a list of arguments reached the wire and paid a round trip');
+        self::assertArrayHasKey('error', $result);
+        self::assertStringContainsString('got a list', (string) $result['error']);
+        self::assertStringNotContainsString('-32602', (string) $result['error'], 'the refusal came from the server, not the door');
+
+        // Nothing went on the wire: the session stays in step.
+        self::assertSame('{}', $server->callTool('not-advertised', [])['content'][0]['text'] ?? null);
+    }
+
     public function testAnUnknownToolGetsNoGuessesOnlyTheTopLevelObject(): void
     {
         // No schema to consult: a nested [] keeps its decoded shape (the

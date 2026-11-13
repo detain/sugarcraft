@@ -1070,6 +1070,18 @@ final class StdioMcpServer implements McpServer
         $this->lastFailureCause = null;
 
         try {
+            // A NON-EMPTY list cannot be a JSON object under any repair: the
+            // wire would carry `"arguments":[…]`, which every conforming
+            // server answers -32602. That round trip is wasted traffic the
+            // transport can assert against right here; the empty case below
+            // stays repairable (`[]` → stdClass) because it IS a valid empty
+            // object the moment it is re-encoded.
+            if (array_is_list($arguments) && $arguments !== []) {
+                throw new \InvalidArgumentException(
+                    'arguments must be a JSON object, got a list.',
+                );
+            }
+
             // Encode HERE, apart from the wait: the InvalidArgumentException
             // that reports argument-encoding trouble may only come from this
             // line — nothing has been written yet. A handler's malformed
