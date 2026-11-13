@@ -6,6 +6,7 @@ namespace SugarCraft\Diff\Tests;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use SugarCraft\Diff\Diff;
 use SugarCraft\Diff\DiffOptions;
 use SugarCraft\Diff\LineKind;
@@ -145,7 +146,7 @@ final class DiffTest extends TestCase
         $this->assertSame('', $diff->unified('f'));
         $this->assertSame('', $diff->hunkText());
         $this->assertSame([], $diff->hunks);
-        $this->assertSame([], $diff->lines);
+        $this->assertSame([], $diff->lines());
         $this->assertSame(0, $diff->addedLines());
         $this->assertSame(0, $diff->removedLines());
     }
@@ -239,18 +240,79 @@ final class DiffTest extends TestCase
     public function testLinesCarryPerSideLineNumbers(): void
     {
         $diff = Diff::compute("a\nb\nc\n", "a\nx\nc\n");
+        $lines = $diff->lines();
 
-        $kinds = array_map(static fn ($l) => $l->kind->value, $diff->lines);
+        $kinds = array_map(static fn ($l) => $l->kind->value, $lines);
         $this->assertSame(['eq', 'del', 'ins', 'eq'], $kinds);
 
-        $this->assertSame(1, $diff->lines[0]->oldNumber);
-        $this->assertSame(1, $diff->lines[0]->newNumber);
-        $this->assertSame(2, $diff->lines[1]->oldNumber);
-        $this->assertNull($diff->lines[1]->newNumber, 'a removal has no new-side line');
-        $this->assertNull($diff->lines[2]->oldNumber, 'an addition has no old-side line');
-        $this->assertSame(2, $diff->lines[2]->newNumber);
-        $this->assertSame(3, $diff->lines[3]->oldNumber);
-        $this->assertSame(3, $diff->lines[3]->newNumber);
+        $this->assertSame(1, $lines[0]->oldNumber);
+        $this->assertSame(1, $lines[0]->newNumber);
+        $this->assertSame(2, $lines[1]->oldNumber);
+        $this->assertNull($lines[1]->newNumber, 'a removal has no new-side line');
+        $this->assertNull($lines[2]->oldNumber, 'an addition has no old-side line');
+        $this->assertSame(2, $lines[2]->newNumber);
+        $this->assertSame(3, $lines[3]->oldNumber);
+        $this->assertSame(3, $lines[3]->newNumber);
+    }
+
+    /**
+     * sugar-diff-021 (leg B): compute() must retain the changed regions and
+     * the packed op bytes only — never one Line per input row — and the full
+     * row sequence must come back identical, on demand, from lines(). The
+     * eager model cost ~19 MB (Line objects + two full-size anchor arrays) at
+     * this 100k-row scale on the same host; the lazy model holds the one-byte-
+     * per-row op sequence plus 8 body rows. The 8 MB ceiling is ~2.4x under
+     * the eager cost and ~25x above the lazy one — a regression alarm for a
+     * return to eager assembly, not a tight budget.
+     */
+    public function testComputeRetainsHunkBodiesOnlyAndLinesIsDerivedOnDemand(): void
+    {
+        $n = 100_000;
+        $lines = [];
+        for ($i = 0; $i < $n; $i++) {
+            $lines[] = "line $i of the file";
+        }
+        $before = implode("\n", $lines) . "\n";
+        $lines[50_000] = 'CHANGED line';
+        $after = implode("\n", $lines) . "\n";
+        unset($lines);
+
+        $peakBefore = memory_get_usage();
+        $diff = Diff::compute($before, $after);
+        $heldByCompute = memory_get_usage() - $peakBefore;
+
+        $this->assertLessThan(
+            8 * 1024 * 1024,
+            $heldByCompute,
+            sprintf('compute() retained %.1f MB — the per-row eager Line model is back', $heldByCompute / 1048576),
+        );
+
+        // Counting must stay on the packed bytes, not materialize rows.
+        $this->assertSame(1, $diff->addedLines());
+        $this->assertSame(1, $diff->removedLines());
+        $cache = new ReflectionProperty(Diff::class, 'lineCache');
+        $this->assertNull($cache->getValue($diff), 'counting must not have materialized the row sequence');
+        $this->assertCount(1, $diff->hunks, 'the single change holds one bounded hunk body');
+
+        // lines() derives the FULL sequence, memoized and faithful to the
+        // numbers the hunk body carries at the same positions.
+        $rows = $diff->lines();
+        $this->assertCount($n + 1, $rows, 'the n before-rows plus the replacement row');
+        $this->assertSame($rows, $diff->lines(), 'the derived walk is memoized — same rows on re-access');
+        $this->assertSame(LineKind::Delete, $rows[50_000]->kind);
+        $this->assertSame('line 50000 of the file', $rows[50_000]->text);
+        $this->assertSame(50_001, $rows[50_000]->oldNumber);
+        $this->assertNull($rows[50_000]->newNumber);
+        $this->assertSame(LineKind::Insert, $rows[50_001]->kind);
+        $this->assertSame('CHANGED line', $rows[50_001]->text);
+        $this->assertNull($rows[50_001]->oldNumber);
+        $this->assertSame(50_001, $rows[50_001]->newNumber);
+        $this->assertSame(LineKind::Equal, $rows[49_999]->kind);
+        $this->assertSame('line 49999 of the file', $rows[49_999]->text);
+        $this->assertSame(49_999, $rows[49_998]->oldNumber);
+        $this->assertSame('line 99999 of the file', $rows[$n]->text, 'the tail rows keep walking after the change');
+        $this->assertSame($n, $rows[$n]->oldNumber);
+        $this->assertSame($n, $rows[$n]->newNumber);
     }
 
     public function testAddedAndRemovedCounts(): void

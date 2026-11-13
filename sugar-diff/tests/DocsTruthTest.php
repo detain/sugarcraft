@@ -99,9 +99,12 @@ final class DocsTruthTest extends TestCase
 
     public function test_the_source_carries_no_phantom_method_sees_targets(): void
     {
-        // Diff exposes readonly PROPERTIES (lines/hunks), never methods of
-        // those names — an unresolvable {@see} is a docs time-bomb.
-        $phantoms = ['{@see lines()}', '{@see hunks()}', '{@see unified()}', '{@see Diff::lines()}'];
+        // Diff retains hunks as a readonly PROPERTY and materializes the row
+        // sequence through the derived lines() accessor (sugar-diff-021-era);
+        // an unresolvable {@see} is a docs time-bomb — neither the never-
+        // existing bare-method spellings nor the pre-laziness property shape
+        // may creep back into a docblock.
+        $phantoms = ['{@see hunks()}', '{@see unified()}', '{@see Diff::$lines}'];
 
         foreach (self::sourceFiles() as $file => $text) {
             foreach ($phantoms as $phantom) {

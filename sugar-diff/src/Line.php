@@ -10,8 +10,9 @@ namespace SugarCraft\Diff;
  * that side has no line there (a `del` row has no new line, an `ins` row no
  * old line).
  *
- * Rows are what {@see Diff::$lines} holds for line-mode walking; hunks
- * are the same rows grouped with context by {@see Hunk}.
+ * Rows are what `Diff::lines()` materializes for line-mode walking (the
+ * derived lazy sequence) and what {@see Hunk} groups with context into the
+ * retained hunks.
  *
  * Mirrors the `list<array{0:'eq'|'del'|'ins',1:string}>` ops plus the
  * per-op `[$type, $line, $oldLine, $newLine]` annotation of

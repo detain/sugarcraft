@@ -55,8 +55,8 @@ $wide = Diff::compute($before, $after, DiffOptions::new()
 echo $wide->unified('file.txt') === $patchText ? "same patch\n" : "wider patch\n";
 // same patch
 
-// Row model for renderers:
-foreach ($diff->lines as $line) {
+// Row model for renderers (derived on demand — see the note below the table):
+foreach ($diff->lines() as $line) {
     // $line->kind (LineKind enum), $line->text, $line->oldNumber, $line->newNumber
     // $line->marker(), $line->toUnifiedRow()
 }
@@ -71,7 +71,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 
 | Class | Purpose |
 |-------|---------|
-| `Diff` | `compute()` entry point; `lines`, `hunks`, `options`, `beforeCount`/`afterCount`, `beforeHasFinalNewline`/`afterHasFinalNewline`, `degraded`; `isEmpty()`, `addedLines()`, `removedLines()`, `unified($oldPath, ?$newPath = null)` (second argument names the new side only — the before side uses the first), `hunkText()` |
+| `Diff` | `compute()` entry point; `hunks` (retained row model — hunk bodies only), `options`, `beforeCount`/`afterCount`, `beforeHasFinalNewline`/`afterHasFinalNewline`, `degraded`; `lines()` (full row sequence, materialized on demand and memoized), `isEmpty()`, `addedLines()`, `removedLines()`, `unified($oldPath, ?$newPath = null)` (second argument names the new side only — the before side uses the first), `hunkText()` |
 | `DiffOptions` | `new()`; `withContextLines(int)` (negative clamps to 0; `DEFAULT_CONTEXT_LINES` = 3), `withMaxLcsCells(int)` (0 = a middle with rows on both sides falls back degraded; a one-sided middle is linear work and stays exact; `DEFAULT_MAX_LCS_CELLS` = 250 000), `withIgnoreWhitespace(bool $ignore = true)`, `withIgnoreCase(bool $ignore = true)`, `withNoNewlineMarker(bool $on = true)`, `withDevNullOnEmptySide(bool $on = true)` |
 | `Hunk` | `header()`, `lines()`, `removedCount()`/`addedCount()` (`-`/`+` rows only), the `oldStart`/`oldLines`/`newStart`/`newLines` anchors |
 | `Line` / `LineKind` | One numbered row (verbatim text, side numbers, `marker()`, `toUnifiedRow()`); `eq`/`del`/`ins` vocabulary |
@@ -80,7 +80,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 | `Reader\UnifiedScan` | `lines()` / `fileHeaders()` / `rowsOf()` row walks with declared-count budgets and fail-closed boundaries; `isHunkHeader()` recognition predicate; `MAX_LINE_NUMBER_DIGITS` |
 | `Reader\ScannedLine` / `Reader\ScanRowKind` | Per-row `(old, new, fileHeader, kind)` region model; row classification enum — `isContentRow()` is true exactly for `Context`/`Insert`/`Delete`, so a pairing renderer gates its runs on the kind instead of re-sniffing the marker column |
 
-Non-visual engine: no ANSI, no rendering, no demos — view layers (gutters, coloring) consume the model and stay downstream. Sides accept a raw `string` or a `list<string>` (one element = one line; an element containing `"\n"` is refused — `file()` callers pass `FILE_IGNORE_NEW_LINES`). The model is eagerly materialised: `compute()` allocates the full `Line`/`Hunk` row set, and `addedLines()`/`removedLines()` re-walk it per call.
+Non-visual engine: no ANSI, no rendering, no demos — view layers (gutters, coloring) consume the model and stay downstream. Sides accept a raw `string` or a `list<string>` (one element = one line; an element containing `"\n"` is refused — `file()` callers pass `FILE_IGNORE_NEW_LINES`). The model is lazy at the row level: `compute()` materializes `Line` rows only for hunk bodies (changed ± context) and keeps the op sequence as one packed byte per row, so a one-line change in a huge file retains hunk-sized state — not one `Line` per input line; `lines()` derives the full row sequence on demand (memoized after the first call), and `addedLines()`/`removedLines()` count the packed bytes without materializing anything.
 
 ### Diffing two files
 

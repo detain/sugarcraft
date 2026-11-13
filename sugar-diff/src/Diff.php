@@ -17,15 +17,19 @@ use SugarCraft\Diff\Writer\UnifiedFormat;
  * are separated by no more than `2 * contextLines + 1` op positions). The
  * cell budget of the LCS table is capped ({@see DiffOptions::$maxLcsCells})
  * so a pathological scattered edit degrades to a valid — if non-minimal —
- * delete-all/insert-all block instead of hanging; {@see self::$degraded}
+ * delete-all/insert-all block instead of hanging; {@see self::degraded}
  * reports when that fired. In practice, with the default budget an ordinary
  * few-hundred-line file whose edits sit far apart can still degrade, and the
  * caller — not the engine — decides whether to re-run with a bigger
  * {@see DiffOptions::withMaxLcsCells()}.
  *
- * Immutable value object: computed once, read many times. {@see self::$lines}
- * is the raw line-mode op sequence; {@see self::$hunks} the same rows grouped
- * with context; {@see self::unified()} renders the whole patch.
+ * Immutable value object: computed once, read many times. {@see self::$hunks}
+ * is the RETAINED row model — numbered `Line` rows for the changed regions
+ * plus context only; the op sequence survives as one packed byte per row, so
+ * a one-line change in a huge file keeps hunk-sized state instead of one
+ * `Line` per input row (sugar-diff-021). {@see self::lines()} materializes
+ * the full raw line-mode sequence on demand (memoized after the first call),
+ * and {@see self::unified()} renders the whole patch from the retained hunks.
  *
  * Mirrors candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php — the trait
  * this library was extracted from, with the hardcoded constants widened
@@ -33,13 +37,20 @@ use SugarCraft\Diff\Writer\UnifiedFormat;
  */
 final class Diff
 {
+    /** Packed op-sequence byte codes: one byte per row of the line-mode walk. */
+    private const K_EQUAL = "\x00";
+    private const K_DELETE = "\x01";
+    private const K_INSERT = "\x02";
+
     /**
-     * @param list<Line> $lines line-mode op sequence, in order, with 1-based
-     *                          old/new line numbers per side
-     * @param list<Hunk> $hunks context-grouped projection of $lines
+     * @param list<Hunk>   $hunks  context-grouped rows for the changed regions
+     * @param int          $beforeCount rows on the before side
+     * @param int          $afterCount rows on the after side
+     * @param string       $kinds  packed line-mode op sequence, one byte per row
+     * @param string       $beforeSource verbatim before side, re-walked by lines()
+     * @param string       $afterSource verbatim after side, re-walked by lines()
      */
     private function __construct(
-        public readonly array $lines,
         public readonly array $hunks,
         public readonly DiffOptions $options,
         public readonly int $beforeCount,
@@ -47,7 +58,13 @@ final class Diff
         public readonly bool $beforeHasFinalNewline,
         public readonly bool $afterHasFinalNewline,
         public readonly bool $degraded,
+        private readonly string $kinds,
+        private readonly string $beforeSource,
+        private readonly string $afterSource,
     ) {}
+
+    /** @var ?list<Line> memoized full row sequence for the lazy lines() accessor */
+    private ?array $lineCache = null;
 
     /**
      * Diff two sides. A `string` input is counted the way `git diff` counts
@@ -70,11 +87,10 @@ final class Diff
         [$beforeLines, $beforeNewline] = self::parseSide($before, 'before');
         [$afterLines, $afterNewline] = self::parseSide($after, 'after');
 
-        [$ops, $degraded] = self::diffLines($beforeLines, $afterLines, $options);
-        [$lines, $hunks] = self::assemble($ops, $options);
+        [$kinds, $degraded] = self::diffLines($beforeLines, $afterLines, $options);
+        $hunks = self::assemble($kinds, $beforeLines, $afterLines, $options);
 
         return new self(
-            lines: $lines,
             hunks: $hunks,
             options: $options,
             beforeCount: count($beforeLines),
@@ -82,6 +98,9 @@ final class Diff
             beforeHasFinalNewline: $beforeNewline,
             afterHasFinalNewline: $afterNewline,
             degraded: $degraded,
+            kinds: $kinds,
+            beforeSource: is_string($before) ? $before : self::joinSide($beforeLines),
+            afterSource: is_string($after) ? $after : self::joinSide($afterLines),
         );
     }
 
@@ -91,24 +110,36 @@ final class Diff
         return $this->hunks === [];
     }
 
-    /** Total added rows across every hunk. */
-    public function addedLines(): int
+    /**
+     * The full line-mode op sequence, in order, with 1-based old/new line
+     * numbers per side — the derived half of the model. compute() retains
+     * only the hunk bodies and the packed op bytes; this walk materializes
+     * one `Line` per input row on first call and returns the memoized list
+     * thereafter. Consumers that render changed regions should read
+     * {@see self::$hunks}; calling this on a huge diff costs what the old
+     * eager model always cost.
+     *
+     * @return list<Line>
+     */
+    public function lines(): array
     {
-        return array_reduce(
-            $this->lines,
-            static fn (int $carry, Line $line): int => $carry + ($line->kind === LineKind::Insert ? 1 : 0),
-            0,
-        );
+        if ($this->lineCache === null) {
+            $this->lineCache = $this->materialize();
+        }
+
+        return $this->lineCache;
     }
 
-    /** Total removed rows across every hunk. */
+    /** Total added rows — counted on the packed op bytes, no materialization. */
+    public function addedLines(): int
+    {
+        return substr_count($this->kinds, self::K_INSERT);
+    }
+
+    /** Total removed rows — counted on the packed op bytes, no materialization. */
     public function removedLines(): int
     {
-        return array_reduce(
-            $this->lines,
-            static fn (int $carry, Line $line): int => $carry + ($line->kind === LineKind::Delete ? 1 : 0),
-            0,
-        );
+        return substr_count($this->kinds, self::K_DELETE);
     }
 
     /**
@@ -125,6 +156,71 @@ final class Diff
     public function hunkText(): string
     {
         return UnifiedFormat::hunksOnly($this);
+    }
+
+    /** Rebuild the full numbered row sequence from the packed op bytes and the raw sides. */
+    private function materialize(): array
+    {
+        $lines = [];
+        $oldPos = 0;
+        $newPos = 0;
+        $oldNumber = 0;
+        $newNumber = 0;
+        $count = strlen($this->kinds);
+
+        for ($i = 0; $i < $count; $i++) {
+            $code = $this->kinds[$i];
+
+            if ($code === self::K_EQUAL) {
+                $oldNumber++;
+                $newNumber++;
+                [$text, $oldPos] = self::sourceLine($this->beforeSource, $oldPos);
+                // The row stands on both sides: the after-side cursor skips
+                // it too (the fold may make the bytes differ — only the old
+                // side's verbatim text is ever emitted).
+                $newPos += strcspn($this->afterSource, "\n", $newPos) + 1;
+                $lines[] = new Line(kind: LineKind::Equal, text: $text, oldNumber: $oldNumber, newNumber: $newNumber);
+                continue;
+            }
+
+            if ($code === self::K_DELETE) {
+                $oldNumber++;
+                [$text, $oldPos] = self::sourceLine($this->beforeSource, $oldPos);
+                $lines[] = new Line(kind: LineKind::Delete, text: $text, oldNumber: $oldNumber, newNumber: null);
+                continue;
+            }
+
+            $newNumber++;
+            [$text, $newPos] = self::sourceLine($this->afterSource, $newPos);
+            $lines[] = new Line(kind: LineKind::Insert, text: $text, oldNumber: null, newNumber: $newNumber);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * One verbatim line of a raw side starting at $pos, plus the byte offset
+     * after it. The newline is a separator, never part of the text — the
+     * same reading parseSide's explode gives.
+     *
+     * @return array{0:string,1:int}
+     */
+    private static function sourceLine(string $source, int $pos): array
+    {
+        $length = strcspn($source, "\n", $pos);
+
+        return [substr($source, $pos, $length), $pos + $length + 1];
+    }
+
+    /**
+     * Re-join a validated list side into raw text so lines() can re-walk it
+     * from one string (list sides are always read as newline-terminated).
+     *
+     * @param list<string> $lines
+     */
+    private static function joinSide(array $lines): string
+    {
+        return $lines === [] ? '' : implode("\n", $lines) . "\n";
     }
 
     /**
@@ -183,14 +279,15 @@ final class Diff
     /**
      * Line-level diff: common-prefix/common-suffix trimming (cheap, and exact
      * for the localized edits this engine exists for) followed by an LCS
-     * number-and-annotate pass. Returns the ops as kind/text tuples —
-     * numbering and hunk grouping happen in {@see self::assemble()} — plus
-     * whether the middle was too large for the LCS table and took the
+     * number-and-annotate pass. Returns the packed op-byte sequence (text is
+     * never carried through the ops — numbering and hunk grouping happen in
+     * {@see self::assemble()}, and the lazy rows come from the raw sides)
+     * plus whether the middle was too large for the LCS table and took the
      * delete-all/insert-all fallback.
      *
      * @param list<string> $old
      * @param list<string> $new
-     * @return array{0:list<array{0:LineKind,1:string}>,1:bool}
+     * @return array{0:string,1:bool}
      */
     private static function diffLines(array $old, array $new, DiffOptions $options): array
     {
@@ -214,59 +311,45 @@ final class Diff
         $oldMid = array_slice($old, $prefix, $oldCount - $prefix - $suffix);
         $newMid = array_slice($new, $prefix, $newCount - $prefix - $suffix);
 
-        $ops = [];
-        for ($i = 0; $i < $prefix; $i++) {
-            $ops[] = [LineKind::Equal, $old[$i]];
-        }
-
         // Only a MIDDLE with rows on both sides is quadratic work; with one
         // side empty the table is linear, there is nothing to fall back to,
         // and a zero budget must not label untouched input "degraded".
         $degraded = $oldMid !== []
             && $newMid !== []
             && (count($oldMid) + 1) * (count($newMid) + 1) > $options->maxLcsCells;
-        if ($degraded) {
-            // Pathological case (a scattered replace across a huge file):
-            // skip the O(n*m) table and emit a correct, if non-minimal,
-            // delete-all/insert-all block for the middle. The bound is the
-            // table lcsOps actually allocates — (n+1)*(m+1) cells, the padding
-            // row and column included — not n*m.
-            foreach ($oldMid as $line) {
-                $ops[] = [LineKind::Delete, $line];
-            }
-            foreach ($newMid as $line) {
-                $ops[] = [LineKind::Insert, $line];
-            }
-        } else {
-            foreach (self::lcsOps($oldMid, $newMid, $options) as [$kind, $text]) {
-                $ops[] = [$kind, $text];
-            }
-        }
 
-        for ($i = 0; $i < $suffix; $i++) {
-            $ops[] = [LineKind::Equal, $old[$oldCount - $suffix + $i]];
-        }
+        // Pathological case (a scattered replace across a huge file): skip the
+        // O(n*m) table and emit a correct, if non-minimal, delete-all/insert-all
+        // block for the middle. The bound is the table lcsKinds actually
+        // allocates — (n+1)*(m+1) cells, the padding row and column included —
+        // not n*m.
+        $middle = $degraded
+            ? str_repeat(self::K_DELETE, count($oldMid)) . str_repeat(self::K_INSERT, count($newMid))
+            : self::lcsKinds($oldMid, $newMid, $options);
 
-        return [$ops, $degraded];
+        return [
+            str_repeat(self::K_EQUAL, $prefix) . $middle . str_repeat(self::K_EQUAL, $suffix),
+            $degraded,
+        ];
     }
 
     /**
-     * Classic O(n*m) longest-common-subsequence backtrack, turned into a
-     * sequence of equal/delete/insert ops. Ties break toward deleting the old
-     * side first (`>=`), exactly as the ported implementation does, so
+     * Classic O(n*m) longest-common-subsequence backtrack, turned into packed
+     * equal/delete/insert op bytes. Ties break toward deleting the old side
+     * first (`>=`), exactly as the ported implementation does, so
      * insertion-after-context shapes stay byte-identical.
      *
      * @param list<string> $a
      * @param list<string> $b
-     * @return list<array{0:LineKind,1:string}>
+     * @return string one op byte per emitted row
      */
-    private static function lcsOps(array $a, array $b, DiffOptions $options): array
+    private static function lcsKinds(array $a, array $b, DiffOptions $options): string
     {
         $n = count($a);
         $m = count($b);
 
         if ($n === 0 && $m === 0) {
-            return [];
+            return '';
         }
 
         $aKeys = self::fingerprints($a, $options);
@@ -281,32 +364,24 @@ final class Diff
             }
         }
 
-        $ops = [];
+        $kinds = '';
         $i = 0;
         $j = 0;
         while ($i < $n && $j < $m) {
             if ($aKeys[$i] === $bKeys[$j]) {
-                $ops[] = [LineKind::Equal, $a[$i]];
+                $kinds .= self::K_EQUAL;
                 $i++;
                 $j++;
             } elseif ($dp[$i + 1][$j] >= $dp[$i][$j + 1]) {
-                $ops[] = [LineKind::Delete, $a[$i]];
+                $kinds .= self::K_DELETE;
                 $i++;
             } else {
-                $ops[] = [LineKind::Insert, $b[$j]];
+                $kinds .= self::K_INSERT;
                 $j++;
             }
         }
-        while ($i < $n) {
-            $ops[] = [LineKind::Delete, $a[$i]];
-            $i++;
-        }
-        while ($j < $m) {
-            $ops[] = [LineKind::Insert, $b[$j]];
-            $j++;
-        }
 
-        return $ops;
+        return $kinds . str_repeat(self::K_DELETE, $n - $i) . str_repeat(self::K_INSERT, $m - $j);
     }
 
     /**
@@ -366,86 +441,105 @@ final class Diff
     }
 
     /**
-     * Number every op row and group the changed ones into hunks: two changed
-     * regions join whenever their context windows touch — separated by no more
-     * than `2 * contextLines + 1` positions — matching `diff -u`'s hunk
-     * merging.
+     * Group the changed op runs into hunks and materialize their rows: two
+     * changed regions join whenever their context windows touch — separated by
+     * no more than `2 * contextLines + 1` positions — matching `diff -u`'s
+     * hunk merging. Each window's anchor is the walk's own counter state at
+     * its first row (what the old full-size $oldAnchors/$newAnchors arrays
+     * held), derived on the fly — only the group starts are ever read, and
+     * the groups are walked in order.
      *
-     * @param list<array{0:LineKind,1:string}> $ops
-     * @return array{0:list<Line>,1:list<Hunk>}
+     * @param string       $kinds packed op bytes, one per row
+     * @param list<string> $beforeLines
+     * @param list<string> $afterLines
+     * @return list<Hunk>
      */
-    private static function assemble(array $ops, DiffOptions $options): array
+    private static function assemble(string $kinds, array $beforeLines, array $afterLines, DiffOptions $options): array
     {
-        $oldLine = 1;
-        $newLine = 1;
-        $lines = [];
-        $oldAnchors = [];
-        $newAnchors = [];
-        $changedIdx = [];
-
-        foreach ($ops as $idx => [$kind, $text]) {
-            // The anchors are the counter STATE at this row — a hunk opening
-            // on an insertion still needs the old-side line its context sits
-            // after, exactly like the ported annotation tuple did.
-            $oldAnchors[$idx] = $oldLine;
-            $newAnchors[$idx] = $newLine;
-            $lines[] = new Line(
-                kind: $kind,
-                text: $text,
-                oldNumber: $kind === LineKind::Insert ? null : $oldLine,
-                newNumber: $kind === LineKind::Delete ? null : $newLine,
-            );
-            if ($kind === LineKind::Equal) {
-                $oldLine++;
-                $newLine++;
-            } elseif ($kind === LineKind::Delete) {
-                $oldLine++;
-                $changedIdx[] = $idx;
-            } else {
-                $newLine++;
-                $changedIdx[] = $idx;
+        $n = strlen($kinds);
+        $changed = [];
+        for ($i = 0; $i < $n; $i++) {
+            if ($kinds[$i] !== self::K_EQUAL) {
+                $changed[] = $i;
             }
         }
 
-        if ($changedIdx === []) {
-            return [$lines, []];
+        if ($changed === []) {
+            return [];
         }
 
         $context = $options->contextLines;
-        $n = count($ops);
         $groups = [];
-        $groupStart = $changedIdx[0];
-        $groupEnd = $changedIdx[0];
-        for ($k = 1, $count = count($changedIdx); $k < $count; $k++) {
-            if ($changedIdx[$k] - $groupEnd <= $context * 2 + 1) {
-                $groupEnd = $changedIdx[$k];
+        $groupStart = $changed[0];
+        $groupEnd = $changed[0];
+        for ($k = 1, $count = count($changed); $k < $count; $k++) {
+            if ($changed[$k] - $groupEnd <= $context * 2 + 1) {
+                $groupEnd = $changed[$k];
             } else {
                 $groups[] = [$groupStart, $groupEnd];
-                $groupStart = $changedIdx[$k];
-                $groupEnd = $changedIdx[$k];
+                $groupStart = $changed[$k];
+                $groupEnd = $changed[$k];
             }
         }
         $groups[] = [$groupStart, $groupEnd];
 
         $hunks = [];
+        $walk = 0;
+        $oldIdx = 0;
+        $newIdx = 0;
+
         foreach ($groups as [$groupStart, $groupEnd]) {
             $start = max(0, $groupStart - $context);
             $end = min($n - 1, $groupEnd + $context);
 
+            while ($walk < $start) {
+                if ($kinds[$walk] !== self::K_INSERT) {
+                    $oldIdx++;
+                }
+                if ($kinds[$walk] !== self::K_DELETE) {
+                    $newIdx++;
+                }
+                $walk++;
+            }
+            $oldAnchor = $oldIdx + 1;
+            $newAnchor = $newIdx + 1;
+
             $oldLen = 0;
             $newLen = 0;
             $body = [];
-            $oldAnchor = $oldAnchors[$start];
-            $newAnchor = $newAnchors[$start];
-
-            for ($idx = $start; $idx <= $end; $idx++) {
-                $body[] = $lines[$idx];
-                if ($lines[$idx]->kind !== LineKind::Insert) {
+            while ($walk <= $end) {
+                $code = $kinds[$walk];
+                if ($code === self::K_DELETE) {
+                    $body[] = new Line(
+                        kind: LineKind::Delete,
+                        text: $beforeLines[$oldIdx],
+                        oldNumber: $oldIdx + 1,
+                        newNumber: null,
+                    );
+                    $oldIdx++;
                     $oldLen++;
-                }
-                if ($lines[$idx]->kind !== LineKind::Delete) {
+                } elseif ($code === self::K_INSERT) {
+                    $body[] = new Line(
+                        kind: LineKind::Insert,
+                        text: $afterLines[$newIdx],
+                        oldNumber: null,
+                        newNumber: $newIdx + 1,
+                    );
+                    $newIdx++;
+                    $newLen++;
+                } else {
+                    $body[] = new Line(
+                        kind: LineKind::Equal,
+                        text: $beforeLines[$oldIdx],
+                        oldNumber: $oldIdx + 1,
+                        newNumber: $newIdx + 1,
+                    );
+                    $oldIdx++;
+                    $newIdx++;
+                    $oldLen++;
                     $newLen++;
                 }
+                $walk++;
             }
 
             // A zero-length side anchors at the line the hunk sits AFTER
@@ -463,6 +557,6 @@ final class Diff
             );
         }
 
-        return [$lines, $hunks];
+        return $hunks;
     }
 }
