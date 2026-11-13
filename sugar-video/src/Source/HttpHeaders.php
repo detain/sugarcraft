@@ -55,6 +55,25 @@ final class HttpHeaders
     private const VALID_NAME = '/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$/';
 
     /**
+     * Sanity ceilings (SV-L82), enforced AT PARSE.
+     *
+     * A validated HttpHeaders lands VERBATIM in the child's argv — ffmpeg's
+     * `-headers` blob is one argument, mpv repeats one argument per field.
+     * Linux bounds a single argv entry at MAX_ARG_STRLEN (128 KiB): an
+     * unbounded obs-text value therefore does not fail as "too big", it fails
+     * as proc_open E2BIG, which the decoder reports as a missing binary —
+     * a lie about the real cause.  These caps refuse the oversized input by
+     * name at parse time instead.  They are deliberately generous: no honest
+     * caller sends 128 header fields or a 64 KiB value, so the refusal never
+     * bites a legitimate use; it only replaces a confusing spawn failure.
+     */
+    private const MAX_HEADER_COUNT = 128;
+
+    private const MAX_VALUE_BYTES = 65_536;    // 64 KiB per value
+
+    private const MAX_AGGREGATE_BYTES = 262_144; // 256 KiB across the emitted set
+
+    /**
      * @param list<array{name: string, value: string}> $pairs Validated, in submission order.
      */
     private function __construct(private readonly array $pairs)
@@ -74,11 +93,20 @@ final class HttpHeaders
      *
      * @param array<array-key, string> $headers Name => value, or a list of "Name: value" lines.
      * @throws \InvalidArgumentException When a name is empty/not a token/contains a line break,
-     *         when a value contains a line break, or when a field line has no colon.
+     *         when a value contains a line break, when a field line has no colon, or
+     *         when the set breaks a sanity ceiling (count, per-value size, aggregate size).
      */
     public static function parse(array $headers): self
     {
+        if (count($headers) > self::MAX_HEADER_COUNT) {
+            throw new \InvalidArgumentException(Lang::t('header.too_many', [
+                'count' => (string) count($headers),
+                'max' => (string) self::MAX_HEADER_COUNT,
+            ]));
+        }
+
         $pairs = [];
+        $aggregate = 0;
         foreach ($headers as $key => $item) {
             if (is_int($key)) {
                 // A full "Name: value" field line — split on the FIRST colon only,
@@ -95,7 +123,27 @@ final class HttpHeaders
                 $value = (string) $item;
             }
 
-            $pairs[] = ['name' => self::checkedName($name), 'value' => self::checkedValue($name, $value)];
+            $name = self::checkedName($name);
+            $value = self::checkedValue($name, $value);
+
+            if (strlen($value) > self::MAX_VALUE_BYTES) {
+                throw new \InvalidArgumentException(Lang::t('header.value_too_long', [
+                    'name' => $name,
+                    'len' => (string) strlen($value),
+                    'max' => (string) self::MAX_VALUE_BYTES,
+                ]));
+            }
+
+            // The bytes that actually travel: "Name: value\r\n" per emitted field.
+            $aggregate += strlen($name) + strlen($value) + 4;
+            if ($aggregate > self::MAX_AGGREGATE_BYTES) {
+                throw new \InvalidArgumentException(Lang::t('header.aggregate_too_large', [
+                    'len' => (string) $aggregate,
+                    'max' => (string) self::MAX_AGGREGATE_BYTES,
+                ]));
+            }
+
+            $pairs[] = ['name' => $name, 'value' => $value];
         }
 
         return new self($pairs);

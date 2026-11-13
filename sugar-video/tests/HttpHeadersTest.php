@@ -315,4 +315,90 @@ final class HttpHeadersTest extends TestCase
         $ok = HttpHeaders::parse(['X-Tab' => "kept\ttab"]);
         $this->assertCount(1, $ok->pairs(), 'HTAB stays legal in a field value');
     }
+
+    // ---------------------------------------------------------------- SV-L82
+    // Sanity ceilings: oversized header sets must refuse BY NAME at parse,
+    // never survive to surface as a proc_open E2BIG misread as a missing
+    // binary. Each ceiling gets a just-over refusal and a just-under pass.
+
+    public function testTheCountCeilingRefusesJustOver(): void
+    {
+        $headers = [];
+        for ($i = 0; $i <= 128; $i++) {
+            $headers['X-Count-' . $i] = 'v';
+        }
+
+        $this->assertSame(129, count($headers), 'the fixture must sit exactly one over the ceiling');
+
+        try {
+            HttpHeaders::parse($headers);
+            $this->fail('a 129-field set sailed past the count ceiling');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Refused 129 HTTP header fields', $e->getMessage());
+            $this->assertStringContainsString('ceiling is 128', $e->getMessage());
+        }
+    }
+
+    public function testTheCountCeilingServesJustUnder(): void
+    {
+        $headers = [];
+        for ($i = 0; $i < 128; $i++) {
+            $headers['X-Count-' . $i] = 'v';
+        }
+
+        $this->assertCount(128, HttpHeaders::parse($headers)->pairs());
+    }
+
+    public function testAValueOverThePerValueCeilingNamesTheHeader(): void
+    {
+        try {
+            HttpHeaders::parse(['X-Obs' => str_repeat('x', 65_537)]);
+            $this->fail('a 64 KiB + 1 byte value sailed past the per-value ceiling');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('X-Obs', $e->getMessage());
+            $this->assertStringContainsString('per-value ceiling of 65536 bytes', $e->getMessage());
+        }
+    }
+
+    public function testAValueAtThePerValueCeilingSurvives(): void
+    {
+        $ok = HttpHeaders::parse(['X-Obs' => str_repeat('x', 65_536)]);
+        $this->assertSame(65_536, strlen($ok->pairs()[0]['value']));
+    }
+
+    public function testTheAggregateRefusesAPileOfLegalValues(): void
+    {
+        $headers = [];
+        for ($i = 0; $i < 5; $i++) {
+            $headers['X-Big-' . $i] = str_repeat('y', 60_000); // each under the per-value cap
+        }
+
+        try {
+            HttpHeaders::parse($headers);
+            $this->fail('300 KiB of individually legal values sailed past the aggregate ceiling');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('aggregate ceiling of 262144 bytes', $e->getMessage());
+        }
+    }
+
+    public function testAnAggregateJustUnderTheCeilingSurvives(): void
+    {
+        $headers = [
+            'X-A' => str_repeat('y', 65_536),
+            'X-B' => str_repeat('y', 65_536),
+            'X-C' => str_repeat('y', 65_536),
+        ];
+
+        $this->assertCount(3, HttpHeaders::parse($headers)->pairs());
+    }
+
+    /** Drift pin: the refusal prose quotes these numbers, so they may not move quietly. */
+    public function testTheCeilingsAreTheDocumentedNumbers(): void
+    {
+        $constants = (new \ReflectionClass(HttpHeaders::class))->getConstants();
+
+        $this->assertSame(128, $constants['MAX_HEADER_COUNT']);
+        $this->assertSame(65_536, $constants['MAX_VALUE_BYTES']);
+        $this->assertSame(262_144, $constants['MAX_AGGREGATE_BYTES']);
+    }
 }
