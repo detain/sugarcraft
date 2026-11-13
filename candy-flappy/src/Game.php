@@ -392,6 +392,15 @@ final class Game implements Model
             if ($msg->profile === $this->colorProfile) {
                 return [$this, null];
             }
+            // flappy-02 (finding -002): a NoTty frame is unplayable by
+            // definition — the refusal is the final frame. Quit through the
+            // Model so Program's full teardown runs (framerate timer closed,
+            // terminal restored) instead of baking the player into a game
+            // that only Ctrl+C ends.
+            if ($msg->profile === ColorProfile::NoTty) {
+                return [$this->withColorProfile($msg->profile), Cmd::quit()];
+            }
+
             return [$this->withColorProfile($msg->profile), null];
         }
         if ($msg instanceof KeyMsg) {

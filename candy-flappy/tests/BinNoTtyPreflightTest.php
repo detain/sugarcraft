@@ -91,8 +91,15 @@ final class BinNoTtyPreflightTest extends TestCase
         @rmdir($home);
     }
 
-    public function testDiagnosticFlagsStillAnswerWhilePiped(): void
+    public function testTermDumbPipedLaunchRefusesThroughTheSameDoor(): void
     {
+        // flappy-02 bin-seam arm: every unplayable launch ends rc 1 without
+        // a signal death; TERM=dumb must not find a different door.
+        [$exit] = self::drive(['TERM' => 'dumb']);
+        self::assertSame(1, $exit);
+    }
+
+    public function testDiagnosticFlagsStillAnswerWhilePiped(): void    {
         // Order law: the preflight sits AFTER the flag legs — diagnostics
         // must stay usable from CI pipes and shell scripts.
         $proc = proc_open(

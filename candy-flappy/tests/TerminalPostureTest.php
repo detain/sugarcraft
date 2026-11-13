@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
@@ -76,11 +77,16 @@ final class TerminalPostureTest extends TestCase
 
     public function testNoTtyProfileRefusesToPlay(): void
     {
-        [$g,] = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())
+        // flappy-02 (finding -002): the refusal frame carries a quit Cmd —
+        // this test used to BAKE the hang in (assert view + empty subs and
+        // nothing else, i.e. a game only Ctrl+C ends).
+        [$g, $cmd] = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())
             ->update(new ColorProfileMsg(ColorProfile::NoTty));
         $this->assertStringContainsString('interactive terminal', $g->view());
         $this->assertStringNotContainsString("\x1b[", $g->view());
         $this->assertSame([], $g->subscriptions()->all());
+        $this->assertNotNull($cmd, 'NoTty must dispatch a quit, not hang until killed');
+        $this->assertInstanceOf(QuitMsg::class, $cmd());
     }
 
     public function testAsciiProfileDrawsPlainGlyphs(): void

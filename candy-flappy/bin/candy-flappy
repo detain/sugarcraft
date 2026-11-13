@@ -71,6 +71,7 @@ declare(strict_types=1);
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\LegacyPaths;
 use SugarCraft\Flappy\Game;
 use SugarCraft\Flappy\Support\Version;
@@ -174,4 +175,13 @@ if ($final instanceof Game) {
 }
 // m5: surface a signal death to the shell as the conventional 128+signo.
 $signal = $program->stopSignal();
-exit($signal === null ? 0 : 128 + $signal);
+if ($signal !== null) {
+    exit(128 + $signal);
+}
+// flappy-02 (finding -002): the in-band NoTty refusal now quits through the
+// Model; report it to the shell as an error the same way the pre-flight
+// refuses a piped launch with exit 1 — rc 1, never a signal death.
+if ($final instanceof Game && $final->colorProfile === ColorProfile::NoTty) {
+    exit(1);
+}
+exit(0);
