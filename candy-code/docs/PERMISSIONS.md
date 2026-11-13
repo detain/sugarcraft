@@ -429,8 +429,12 @@ cannot judge with certainty to `Ask`, not to `Allow`. Concretely:
   `./.g*/hooks/x` prompts while `touch ./*` still auto-runs; `.gitignore` and
   `.github/` are different names and are unaffected. `.claude/` and `.opencode/`
   are not on the list. The same list guards the `Edit`/`Write` grant above.
-- Flags are a **whitelist** (`-p -f -i -r -R -v -n -d` and their long forms, plus
-  `--`). An unrecognised flag prompts. "Anything starting with `-` is a flag,
+- Flags are a **per-command whitelist**: `mkdir` and `rmdir` take `-p` and `-v`
+  (and `--parents`, `--verbose`), `touch` takes the value flags `-d` and `-t`
+  (a date, which is not a path and is not judged as one) and `-r` (a reference
+  file, which is judged by containment like any operand), plus `--` for all
+  three. A flag from another command's list, or a clustered or `=`-attached
+  value flag, prompts. An unrecognised flag prompts. "Anything starting with `-` is a flag,
   skip it" silently skipped flags that take a path, so `mv -t ../../etc ./x`
   auto-ran.
 - The command word is matched **case-sensitively**. `MKDIR ./x` is not `mkdir`
