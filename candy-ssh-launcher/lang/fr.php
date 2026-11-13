@@ -44,7 +44,7 @@ return [
     'cli.no_config'     => 'candy-ssh-launcher : aucune configuration trouvée. Créez ~/.config/wishlist.yml (voir le démarrage rapide du README) ou passez --config <chemin>.',
     'cli.error'         => 'candy-ssh-launcher : {message}',
     'cli.cancelled'     => 'candy-ssh-launcher : annulé.',
-    'cli.ssh_not_executable' => 'candy-ssh-launcher : binaire ssh introuvable ou non exécutable : {bin}',
+    'cli.ssh_not_executable' => 'candy-ssh-launcher : binaire ssh introuvable ou non exécutable : {bin} — passez --ssh <chemin> si ssh se trouve ailleurs',
     'cli.missing_value'  => 'candy-ssh-launcher : {arg} nécessite une valeur',
     'cli.no_endpoints'   => 'candy-ssh-launcher : aucun endpoint dans {path}',
     'cli.not_a_terminal' => 'le sélecteur nécessite un terminal interactif : stdin et stdout doivent être des TTY. Utilisez --list pour une sortie lisible par machine.',

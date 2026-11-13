@@ -22,8 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'nieznane pole `{key}` zignorowane — chodziło o `{field}`?',
     'config.duplicate_name' => 'zdublowana nazwa endpointu `{name}` — wszystkie wiersze się ładują; nazwy są identyfikatorami',
     'config.field_not_scalar'  => 'wpis wishlist: pole [{field}] musi być skalarem, otrzymano {type}',
-    'config.too_large'          => 'plik konfiguracji wishlistu przekracza limit {limit} bajt\u00f3w: {path}',
-    'config.list_too_long'      => 'wpis wishlistu: pole [{field}] zawiera wi\u0119cej ni\u017e {limit} element\u00f3w dozwolonych przez loader',
+    'config.too_large'          => 'plik konfiguracji wishlistu przekracza limit {limit} bajtów: {path}',
+    'config.list_too_long'      => 'wpis wishlistu: pole [{field}] zawiera więcej niż {limit} elementów dozwolonych przez loader',
     'config.field_not_list'       => 'wpis wishlistu: pole [{field}] musi być listą wartości, nie mapą klucz-wartość',
     'config.encoding_utf16'       => 'plik {path} ma kodowanie UTF-16 — zapisz konfigurację ponownie jako UTF-8',
     'config.unreadable'       => 'nie można odczytać konfiguracji wishlist: {path}',
@@ -42,9 +42,9 @@ return [
     'cli.no_config'     => 'candy-ssh-launcher: nie znaleziono konfiguracji. Utwórz ~/.config/wishlist.yml (patrz szybki start w README) lub podaj --config <ścieżka>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: anulowano.',
-    'cli.ssh_not_executable' => 'candy-ssh-launcher: plik binarny ssh nie znaleziony lub wykonywalny: {bin}',
+    'cli.ssh_not_executable' => 'candy-ssh-launcher: plik binarny ssh nie znaleziony lub nie wykonywalny: {bin} — użyj --ssh <ścieżka>, jeśli ssh znajduje się gdzieś indziej',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} wymaga wartości',
-    'cli.no_endpoints'   => 'candy-ssh-launcher: brak endpointów w {path}',
+    'cli.no_endpoints'   => 'candy-ssh-launcher: brak punktów końcowych w {path}',
     'cli.not_a_terminal' => 'wybieranie wymaga interaktywnego terminala — stdin i stdout muszą być TTY. Użyj --list dla wyjścia maszynowego.',
 
     // picker chrome

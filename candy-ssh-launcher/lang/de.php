@@ -21,7 +21,7 @@ return [
     'config.unknown_key' => 'Wishlist-Eintrag: unbekanntes Feld `{key}` ignoriert — kein dokumentierter Schlüssel',
     'config.unknown_key_nearmiss' => 'Wishlist-Eintrag: unbekanntes Feld `{key}` ignoriert — meinten Sie `{field}`?',
     'config.duplicate_name' => 'Wishlist: doppelter Endpoint-Name `{name}` — alle Zeilen werden geladen; Namen sind Identifikatoren',
-    'config.field_not_scalar'  => 'wishlist-Eintrag: Feld [{field}] muss ein Skalar sein, erhalten {type}',
+    'config.field_not_scalar'  => 'Wishlist-Eintrag: Feld [{field}] muss ein Skalar sein, erhalten {type}',
     'config.too_large'          => 'Wishlist-Konfiguration ist größer als das Limit von {limit} Bytes: {path}',
     'config.list_too_long'      => 'Wishlist-Eintrag: Feld [{field}] enthält mehr als die {limit} Einträge, die der Lader erlaubt',
     'config.field_not_list'       => 'Wishlist-Eintrag: Feld [{field}] muss eine Werteliste sein, keine Schlüssel-Wert-Zuordnung',
@@ -31,11 +31,11 @@ return [
     'config.yaml_inline_flow' => 'Wishlist-YAML: Inline-Flow-Sammlung nicht unterstützt: {value} (verschachtelte Liste verwenden)',
 
     // endpoint security
-    'endpoint.option_injection' => 'wishlist-Endpunkt: Feld [{field}] enthält unsicheren Wert mit führendem Bindestrich [{value}]',
+    'endpoint.option_injection' => 'Wishlist-Endpoint: Feld [{field}] enthält unsicheren Wert mit führendem Bindestrich [{value}]',
     'endpoint.host_empty' => 'Endpoint `{name}` hat einen leeren Host — eine wählbare Zeile braucht einen Hostnamen',
     'endpoint.name_empty' => 'Endpoint hat einen leeren Namen — eine auswählbare Zeile braucht einen Namen',
     'endpoint.option_empty' => 'Endpoint `{name}` hat einen leeren Options-Eintrag — ein leerer -o-Wert wird abgelehnt',
-    'endpoint.port_invalid'     => 'wishlist-Endpunkt [{host}]: ungültiger Port [{port}] — muss eine Ganzzahl von 1 bis 65535 sein',
+    'endpoint.port_invalid'     => 'Wishlist-Endpoint [{host}]: ungültiger Port [{port}] — muss eine Ganzzahl von 1 bis 65535 sein',
 
 
     // bin/candy-ssh-launcher
@@ -44,9 +44,9 @@ return [
     'cli.no_config'     => 'candy-ssh-launcher: keine Konfiguration gefunden. Erstellen Sie ~/.config/wishlist.yml (siehe Schnellstart im README) oder übergeben Sie --config <pfad>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: abgebrochen.',
-    'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh-Binary nicht gefunden oder nicht ausführbar: {bin}',
+    'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh-Binary nicht gefunden oder nicht ausführbar: {bin} — geben Sie --ssh <pfad> an, wenn ssh woanders liegt',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} benötigt einen Wert',
-    'cli.no_endpoints'   => 'candy-ssh-launcher: keine Endpunkte in {path}',
+    'cli.no_endpoints'   => 'candy-ssh-launcher: keine Endpoints in {path}',
     'cli.not_a_terminal' => 'candy-ssh-launcher: Der Picker benötigt ein interaktives Terminal — stdin und stdout müssen TTYs sein. Verwenden Sie --list für maschinenlesbare Ausgabe.',
 
     // picker chrome

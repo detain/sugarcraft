@@ -19,16 +19,16 @@ return [
     'config.yaml_unterminated_quote' => 'wishlist yaml: virgoletta non chiusa nel valore: {found}',
     'config.entry_missing_field' => 'voce wishlist #{index}: campo obbligatorio mancante: {field}',
     'config.unknown_key' => 'voce wishlist: campo sconosciuto `{key}` ignorato — chiave non documentata',
-    'config.unknown_key_nearmiss' => 'campo sconosciuto `{key}` ignorato — intendevi `{field}`?',
+    'config.unknown_key_nearmiss' => 'campo sconosciuto `{key}` ignorato — intendeva `{field}`?',
     'config.duplicate_name' => 'wishlist: nome endpoint duplicato `{name}` — tutte le righe vengono caricate; i nomi sono identificatori',
     'config.field_not_scalar'  => 'voce wishlist: il campo [{field}] deve essere uno scalare, ottenuto {type}',
     'config.too_large'          => 'la configurazione wishlist supera il limite di {limit} byte: {path}',
     'config.list_too_long'      => 'voce wishlist: il campo [{field}] contiene più dei {limit} elementi consentiti dal caricatore',
     'config.field_not_list'       => 'voce wishlist: il campo [{field}] deve essere un elenco di valori, non una mappa chiave-valore',
-    'config.encoding_utf16'       => '{path} è codificato in UTF-16 — salva di nuovo la configurazione in UTF-8',
+    'config.encoding_utf16'       => '{path} è codificato in UTF-16 — salvare di nuovo la configurazione in UTF-8',
     'config.unreadable'       => 'impossibile leggere la configurazione wishlist: {path}',
     'config.home_unset'       => 'impossibile espandere ~ senza $HOME: {path}',
-    'config.yaml_inline_flow' => 'wishlist yaml: raccolta di flusso inline non supportata: {value} (usa un elenco annidato)',
+    'config.yaml_inline_flow' => 'wishlist yaml: raccolta di flusso inline non supportata: {value} (usare un elenco annidato)',
 
     // endpoint security
     'endpoint.option_injection' => 'endpoint wishlist: il campo [{field}] ha un valore non sicuro con trattino iniziale [{value}]',
@@ -42,10 +42,10 @@ return [
     'cli.no_config'     => 'candy-ssh-launcher: nessuna configurazione trovata. Creare ~/.config/wishlist.yml (vedi l\'avvio rapido nel README) oppure passare --config <percorso>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: annullato.',
-    'cli.ssh_not_executable' => 'candy-ssh-launcher: binario ssh non trovato o non eseguibile: {bin}',
+    'cli.ssh_not_executable' => 'candy-ssh-launcher: binario ssh non trovato o non eseguibile: {bin} — indicare --ssh <percorso> se ssh si trova altrove',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} richiede un valore',
     'cli.no_endpoints'   => 'candy-ssh-launcher: nessun endpoint in {path}',
-    'cli.not_a_terminal' => 'candy-ssh-launcher: il selettore richiede un terminale interattivo: stdin e stdout devono essere TTY. Usa --list per output machine-readable.',
+    'cli.not_a_terminal' => 'candy-ssh-launcher: il selettore richiede un terminale interattivo: stdin e stdout devono essere TTY. Utilizzare --list per output machine-readable.',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

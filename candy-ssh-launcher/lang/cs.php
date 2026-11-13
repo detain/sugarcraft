@@ -32,9 +32,9 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'endpoint wishlist: pole [{field}] má nebezpečnou hodnotu začínající pomlčkou [{value}]',
-    'endpoint.host_empty' => 'koncový bod `{name}` má prázdného hostitele — vybraný řádek potřebuje hostname',
-    'endpoint.name_empty' => 'endpoint má prázdný název — vyhledávaný řádek potřebuje název',
-    'endpoint.option_empty' => 'koncový bod `{name}` má prázdnou položku options — prázdná hodnota -o je odmítnuta',
+    'endpoint.host_empty' => 'endpoint `{name}` má prázdný host — řádek pro výběr potřebuje hostname',
+    'endpoint.name_empty' => 'endpoint má prázdný název — řádek pro výběr potřebuje název',
+    'endpoint.option_empty' => 'endpoint `{name}` má prázdnou položku options — prázdná hodnota -o je odmítnuta',
     'endpoint.port_invalid'     => 'endpoint wishlist [{host}]: neplatný port [{port}] — musí to být celé číslo od 1 do 65535',
 
     'cli.usage'         => 'Použití: candy-ssh-launcher [--config <cesta>] [--ssh <ssh-binární>] [--list] [-h|--help] [-v|--version]',
@@ -42,7 +42,7 @@ return [
     'cli.no_config'     => 'candy-ssh-launcher: konfigurace nenalezena. Vytvořte ~/.config/wishlist.yml (viz rychlý start v README) nebo předejte --config <cesta>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: zrušeno.',
-    'cli.ssh_not_executable' => 'candy-ssh-launcher: binární soubor ssh nenalezen nebo není spustitelný: {bin}',
+    'cli.ssh_not_executable' => 'candy-ssh-launcher: binární soubor ssh nenalezen nebo není spustitelný: {bin} — zadejte --ssh <cesta>, pokud je ssh jinde',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} vyžaduje hodnotu',
     'cli.no_endpoints'   => 'candy-ssh-launcher: žádné endpointy v {path}',
     'cli.not_a_terminal' => 'výběr vyžaduje interaktivní terminál — stdin a stdout musí být TTY. Pro strojově čitelný výstup použijte --list.',

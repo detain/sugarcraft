@@ -43,7 +43,7 @@ return [
     'cli.no_config'     => 'candy-ssh-launcher: no config found. Create ~/.config/wishlist.yml (see the README Quick start) or pass --config <path>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: cancelled.',
-    'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh binary not found or not executable: {bin}',
+    'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh binary not found or not executable: {bin} — pass --ssh <path> to name your ssh binary',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} requires a value',
     'cli.no_endpoints'   => 'candy-ssh-launcher: no endpoints in {path}',
     'cli.not_a_terminal' => 'candy-ssh-launcher: the picker needs an interactive terminal — stdin and stdout must be TTYs. Use --list for machine-readable output.',

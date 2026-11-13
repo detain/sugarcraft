@@ -22,8 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'неизвестное поле `{key}` проигнорировано — вы имели в виду `{field}`?',
     'config.duplicate_name' => 'повтор имени endpoint `{name}` — все строки загружаются; имена — идентификаторы',
     'config.field_not_scalar'  => 'запись wishlist: поле [{field}] должно быть скаляром, получено {type}',
-    'config.too_large'          => '\u0444\u0430\u0439\u043b \u043a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438 \u0432\u0438\u0448\u043b\u0438\u0441\u0442\u0430 \u043f\u0440\u0435\u0432\u044b\u0448\u0430\u0435\u0442 \u043b\u0438\u043c\u0438\u0442 \u0432 {limit} \u0431\u0430\u0439\u0442: {path}',
-    'config.list_too_long'      => '\u0437\u0430\u043f\u0438\u0441\u044c \u0432\u0438\u0448\u043b\u0438\u0441\u0442\u0430: \u043f\u043e\u043b\u0435 [{field}] \u0441\u043e\u0434\u0435\u0440\u0436\u0438\u0442 \u0431\u043e\u043b\u0435\u0435 {limit} \u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432, \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043d\u043d\u044b\u0445 \u0437\u0430\u0433\u0440\u0443\u0437\u0447\u0438\u043a\u043e\u043c',
+    'config.too_large'          => 'файл конфигурации вишлиста превышает лимит в {limit} байт: {path}',
+    'config.list_too_long'      => 'запись вишлиста: поле [{field}] содержит более {limit} элементов, разрешённых загрузчиком',
     'config.field_not_list'       => 'запись вишлиста: поле [{field}] должно быть списком значений, а не отображением ключ-значение',
     'config.encoding_utf16'       => 'файл {path} имеет кодировку UTF-16 — пересохраните конфигурацию в UTF-8',
     'config.unreadable'       => 'не удалось прочитать конфигурацию wishlist: {path}',
@@ -42,9 +42,9 @@ return [
     'cli.no_config'     => 'candy-ssh-launcher: конфигурация не найдена. Создайте ~/.config/wishlist.yml (см. быстрый запуск в README) или передайте --config <путь>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: отменено.',
-    'cli.ssh_not_executable' => 'candy-ssh-launcher: бинарный файл ssh не найден или не является исполняемым: {bin}',
+    'cli.ssh_not_executable' => 'candy-ssh-launcher: бинарный файл ssh не найден или не является исполняемым: {bin} — передайте --ssh <путь>, если ssh находится в другом месте',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} требует значение',
-    'cli.no_endpoints'   => 'candy-ssh-launcher: нет endpoints в {path}',
+    'cli.no_endpoints'   => 'candy-ssh-launcher: нет эндпоинтов в {path}',
     'cli.not_a_terminal' => 'для выбора требуется интерактивный терминал: stdin и stdout должны быть TTY. Используйте --list для машинного вывода.',
 
     // picker chrome

@@ -42,7 +42,7 @@ return [
     'cli.no_config'     => 'candy-ssh-launcher: geen configuratie gevonden. Maak ~/.config/wishlist.yml aan (zie de snelstart in de README) of geef --config <pad> door.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
     'cli.cancelled'     => 'candy-ssh-launcher: geannuleerd.',
-    'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh-binary niet gevonden of niet uitvoerbaar: {bin}',
+    'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh-binary niet gevonden of niet uitvoerbaar: {bin} — geef --ssh <pad> op als ssh elders staat',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} vereist een waarde',
     'cli.no_endpoints'   => 'candy-ssh-launcher: geen endpoints in {path}',
     'cli.not_a_terminal' => 'de kiezer heeft een interactieve terminal nodig — stdin en stdout moeten TTY\'s zijn. Gebruik --list voor machineleesbare uitvoer.',
