@@ -744,16 +744,28 @@ final class PosterGrid
      * (sugar-gallery-047); without one, the length+hash guard below still keys
      * the memo — same bytes, same key.
      */
+    /**
+     * Full memo key of a boxed cell: the content identity (a card's
+     * {@see PosterCard::renderMemoKey()}, a skeleton's dimension-only key,
+     * or box()'s length+hash fallback) plus the geometry the box pads or
+     * truncates to. ONE construction site — skeletonCell's consult-before-
+     * generate fast path and box()'s own consult must not drift apart, or
+     * the fast path would lookup keys nothing ever stores.
+     */
+    private function boxKey(string $contentKey): string
+    {
+        return $contentKey . '|' . $this->cardWidth . '|' . $this->cellHeight();
+    }
+
     private function box(string $block, ?string $contentKey = null): string
     {
-        $width = $this->cardWidth;
-        $height = $this->cellHeight();
-
-        $key = ($contentKey ?? 'h|' . strlen($block) . '|' . md5($block)) . '|' . $width . '|' . $height;
+        $key = $this->boxKey($contentKey ?? 'h|' . strlen($block) . '|' . md5($block));
         if (isset(self::$boxCache[$key])) {
             return self::$boxCache[$key];
         }
 
+        $width = $this->cardWidth;
+        $height = $this->cellHeight();
         $lines = explode("\n", AnsiGuard::stripSentinels($block));
 
         if (count($lines) > $height) {
@@ -799,6 +811,19 @@ final class PosterGrid
 
     private function skeletonCell(bool $focused = false): string
     {
+        // sugar-gallery-045: unloaded cells ARE the majority of a scrolled
+        // library, and every one of them is the same two numbers plus a
+        // focus bit — keying the memo on the dimensions (the box suffix
+        // carries cardWidth/cellHeight) lets a warm frame return the cached
+        // block from an isset() instead of paying str_repeat, array_fill,
+        // implode and a full-content md5 per cell per frame. Generation runs
+        // only on the miss path, so the bytes are unchanged by construction.
+        $contentKey = 'k|' . ($focused ? 'f' : '-');
+        $fullKey = $this->boxKey($contentKey);
+        if (isset(self::$boxCache[$fullKey])) {
+            return self::$boxCache[$fullKey];
+        }
+
         // The focus marker replaces the first skeleton cell rather than adding
         // one, so the row stays exactly cardWidth wide (the grid invariant).
         $row = $focused
@@ -806,7 +831,7 @@ final class PosterGrid
             : str_repeat('░', $this->cardWidth);
         $rows = array_fill(0, $this->posterHeight, $row);
 
-        return $this->box(implode("\n", $rows));
+        return $this->box(implode("\n", $rows), $contentKey);
     }
 
     private function blankCell(): string

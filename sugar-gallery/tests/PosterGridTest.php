@@ -701,4 +701,30 @@ final class PosterGridTest extends TestCase
         self::assertSame($early[2100], $draw(2100), 'a surviving geometry re-renders byte-identical from the memo');
         self::assertSame($early[20], $draw(20), 'an evicted geometry recomputes byte-identical');
     }
+
+    public function testSkeletonCellsRideTheDimensionOnlyFastPath(): void
+    {
+        // sugar-gallery-045: an unloaded cell is two dimensions and a focus
+        // bit, and a scrolled library is mostly unloaded cells. The grid keys
+        // its box memo on exactly that (k|f/k|- + the geometry the box pads
+        // to) instead of content-hashing generated skeleton bytes per frame;
+        // a steady frame then grows the memo by nothing and re-emits the
+        // same bytes.
+        PosterGrid::clearBoxCache();
+        $cacheRef = new \ReflectionClass(PosterGrid::class);
+
+        $g = $this->grid(200); // cardWidth 10, posterHeight 3 → cellHeight 5
+        $first = $g->render(true);
+
+        $keys = array_keys($cacheRef->getStaticPropertyValue('boxCache'));
+        sort($keys);
+        self::assertSame(['k|-|10|5', 'k|f|10|5'], $keys, 'every box is a dimension-keyed skeleton — no h| content-hash was born');
+
+        $second = $g->render(true);
+        $keysAgain = array_keys($cacheRef->getStaticPropertyValue('boxCache'));
+        sort($keysAgain);
+        self::assertSame($keys, $keysAgain, 'a warm frame stores nothing new');
+        self::assertSame($first, $second, 'the fast path changes no bytes');
+        self::assertStringContainsString('▸', $first, 'the focus twin is really in play');
+    }
 }

@@ -70,8 +70,37 @@ final class GitDaemon
     /** Shutdown flag */
     private bool $shutdownRequested = false;
 
-    /** Client connections */
+    /**
+     * Client connections, keyed by transport-stable id
+     * ({@see clientId()}) — the HttpListener already maps seats by
+     * resource id; a spliced list made every callback pay a linear
+     * `clientIndex()` scan and every close a reindex.
+     *
+     * @var array<string, array{socket: \Socket|resource, connected_at: int, last_activity: int, buffer: string, handled: bool}>
+     */
     private array $clients = [];
+
+    /**
+     * Disk-fallback misses, name => unix second of the miss. Re-probing
+     * is_dir + marker for a name that was not there a moment ago is the
+     * cheapest path for a flood, so a miss is remembered briefly; the
+     * TTL keeps `repo create` between requests reachable.
+     */
+    private array $diskMisses = [];
+
+    /** Short negative-cache window for {@see findRepoByPath()} misses. */
+    private const DISK_MISS_TTL_SECONDS = 5;
+
+    /**
+     * Signal dispositions captured at install time, restored on stop
+     * (process-global handlers and the async-signals flag must not
+     * outlive the daemon in an embedded host).
+     *
+     * @var array<int, mixed>|null
+     */
+    private ?array $priorSignalHandlers = null;
+
+    private ?bool $priorAsyncSignals = null;
 
     /** Subscriptions for graceful shutdown */
     private Subscriptions $subscriptions;
@@ -105,6 +134,9 @@ final class GitDaemon
 
     /** Absolute pre-auth lifetime: bytes alone never extend this. */
     public const PREAUTH_DEADLINE_SECONDS = 10;
+
+    /** Signals the daemon borrows from the process (captured + restored). */
+    private const SIGNALS = [\SIGTERM, \SIGINT, \SIGHUP];
 
     /** Stats collector override (null = shared instance). */
     private ?Stats $stats = null;
@@ -383,17 +415,21 @@ final class GitDaemon
                 continue;
             }
 
-            if (\in_array($this->serverSocket, $read, true)) {
-                $this->acceptConnection();
-            }
+            // socket_select() returns $read trimmed to the ready handles,
+            // so one pass over it serves accept AND clients — the old
+            // shape in_array()'d every client against the ready list per
+            // tick (O(n²) per iteration, same bookkeeping law as 102).
+            foreach ($read as $handle) {
+                if ($handle === $this->serverSocket) {
+                    $this->acceptConnection();
 
-            foreach ($this->clients as $idx => $client) {
-                if (\in_array($client['socket'], $read, true)) {
-                    // The client may close itself mid-dispatch (every error
-                    // path); only feed sockets still registered.
-                    if (isset($this->clients[$idx])) {
-                        $this->handleClientData($idx);
-                    }
+                    continue;
+                }
+                $id = self::clientId($handle);
+                // The client may close itself mid-dispatch (every error
+                // path); only feed seats still registered.
+                if (isset($this->clients[$id]) && $this->clients[$id]['socket'] === $handle) {
+                    $this->handleClientData($id);
                 }
             }
 
@@ -414,6 +450,9 @@ final class GitDaemon
 
         // Set socket to non-blocking for timeout handling
         \socket_set_nonblock($client);
+        // Seat opens clean: an unrelated prior error must never be
+        // mistaken for this socket's read verdict in handleClientData.
+        \socket_clear_error($client);
 
         // Capacity refuses the NEWCOMER (git-daemon's own behavior); the
         // old code killed the OLDEST established connection instead, so
@@ -431,13 +470,29 @@ final class GitDaemon
         // over-capacity probe inflate the handled-connections figure.
         $this->stats()->recordConnection();
 
-        $this->clients[] = [
+        $this->clients[self::clientId($client)] = [
             'socket' => $client,
             'connected_at' => \time(),
             'last_activity' => \time(),
             'buffer' => '',
             'handled' => false,
         ];
+    }
+
+    /**
+     * Transport-stable seat id: sockets are keyed by object identity,
+     * stream resources by their int id (the same scheme HttpListener's
+     * seat map uses). Every read path re-checks the stored socket BE the
+     * handle the callback holds, so a recycled id cannot act for a
+     * stranger's seat (finding 143 law).
+     *
+     * @param \Socket|resource $handle
+     */
+    private static function clientId($handle): string
+    {
+        return $handle instanceof \Socket
+            ? 'sock-' . \spl_object_id($handle)
+            : 'res-' . (int) $handle;
     }
 
     // -------------------------------------------------------------------------
@@ -469,7 +524,7 @@ final class GitDaemon
 
         $this->stats()->recordConnection();
 
-        $this->clients[] = [
+        $this->clients[self::clientId($client)] = [
             'socket' => $client,
             'connected_at' => \time(),
             'last_activity' => \time(),
@@ -477,8 +532,9 @@ final class GitDaemon
             'handled' => false,
         ];
 
-        // The callback captures the stream (not the array index) because
-        // closeClient() splices the clients list and reindexes it.
+        // The callback captures the stream; the seat guard below re-checks
+        // both the id AND the stored handle so a recycled resource id can
+        // never act for a stranger's connection.
         $this->loop->addReadStream($client, fn () => $this->onAsyncClientReadable($client));
     }
 
@@ -490,17 +546,18 @@ final class GitDaemon
      */
     private function onAsyncClientReadable($stream): void
     {
-        $idx = $this->clientIndex($stream);
-        if ($idx === null) {
-            // Client already closed; drop the stale registration.
-            $this->loop->removeReadStream($stream);
+        $id = self::clientId($stream);
+        if (!isset($this->clients[$id]) || $this->clients[$id]['socket'] !== $stream) {
+            // Seat gone (or the id was recycled by a stranger); drop this
+            // stale registration and let the real owner keep serving.
+            $this->loop?->removeReadStream($stream);
 
             return;
         }
 
         $data = @\fread($stream, 65536);
         if ($data === false || ($data === '' && \feof($stream))) {
-            $this->closeClient($idx);
+            $this->closeClient($id);
 
             return;
         }
@@ -508,28 +565,26 @@ final class GitDaemon
             return;
         }
 
-        $client = &$this->clients[$idx];
-        $client['buffer'] .= $data;
-        $client['last_activity'] = \time();
-        unset($client);
+        $this->clients[$id]['buffer'] .= $data;
+        $this->clients[$id]['last_activity'] = \time();
 
-        if (!$this->clients[$idx]['handled']) {
+        if (!$this->clients[$id]['handled']) {
             // Same pre-auth caps as the blocking transport.
-            if (\strlen($this->clients[$idx]['buffer']) >= self::MAX_REQUEST_BYTES
-                || \time() - $this->clients[$idx]['connected_at'] > self::PREAUTH_DEADLINE_SECONDS
+            if (\strlen($this->clients[$id]['buffer']) >= self::MAX_REQUEST_BYTES
+                || \time() - $this->clients[$id]['connected_at'] > self::PREAUTH_DEADLINE_SECONDS
             ) {
-                $this->closeClient($idx);
+                $this->closeClient($id);
 
                 return;
             }
-            $this->dispatchClientRequest($idx);
+            $this->dispatchClientRequest($id);
         }
     }
 
     /**
      * Async housekeeping tick: turn a signal-set shutdown flag into a
-     * teardown and sweep idle connections (the async analogue of the
-     * sync loop's checkConnectionTimeouts()).
+     * teardown and sweep idle connections (the sync analogue of the
+     * loop's checkConnectionTimeouts()).
      */
     private function onAsyncTick(): void
     {
@@ -540,14 +595,18 @@ final class GitDaemon
         }
 
         $idleTimeout = $this->config->gitIdleTimeout;
-        if ($idleTimeout <= 0) {
-            return;
-        }
-
         $now = \time();
-        for ($idx = \count($this->clients) - 1; $idx >= 0; $idx--) {
-            if (($now - $this->clients[$idx]['last_activity']) > $idleTimeout) {
-                $this->closeClient($idx);
+        foreach (\array_keys($this->clients) as $id) {
+            $client = $this->clients[$id];
+            $idleExpired = $idleTimeout > 0 && ($now - $client['last_activity']) > $idleTimeout;
+            // The absolute pre-auth deadline is policed HERE (and in the
+            // sync sweep), independent of git.idle_timeout: with the idle
+            // knob off, a silent zero-byte seat used to be unexpirable —
+            // anonymous slot lockout was one idle connection away (029).
+            $preauthExpired = !$client['handled']
+                && ($now - $client['connected_at']) > self::PREAUTH_DEADLINE_SECONDS;
+            if ($idleExpired || $preauthExpired) {
+                $this->closeClient($id);
             }
         }
     }
@@ -572,9 +631,10 @@ final class GitDaemon
             $this->asyncTimer = null;
         }
 
-        // Newest-first so array_splice() reindexing cannot skip entries.
-        for ($idx = \count($this->clients) - 1; $idx >= 0; $idx--) {
-            $this->closeClient($idx);
+        // Close every seat; the map loses entries by unset, so iteration
+        // order carries no reindex hazard.
+        foreach (\array_keys($this->clients) as $id) {
+            $this->closeClient($id);
         }
 
         if ($this->serverStream !== null) {
@@ -587,6 +647,9 @@ final class GitDaemon
         // mechanism the sync cleanup() uses.
         $this->subscriptions->unsubscribe();
 
+        // Give the host back the signal dispositions we borrowed.
+        $this->restoreSignalHandlers();
+
         $this->removePidFile();
 
         \fwrite(\STDERR, "Git daemon stopped\n");
@@ -597,46 +660,57 @@ final class GitDaemon
     }
 
     /**
-     * Find the current index of a client by its stream/socket identity.
-     *
-     * @param resource|\Socket $socket
+     * Close a client connection (either transport). Async clients also
+     * get their read stream deregistered from the loop.
      */
-    private function clientIndex($socket): ?int
+    private function closeClient(string $id): void
     {
-        foreach ($this->clients as $idx => $client) {
-            if ($client['socket'] === $socket) {
-                return $idx;
-            }
+        if (!isset($this->clients[$id])) {
+            return;
         }
 
-        return null;
+        $socket = $this->clients[$id]['socket'];
+        unset($this->clients[$id]);
+        if ($socket instanceof \Socket) {
+            @\socket_close($socket);
+        } else {
+            $this->loop?->removeReadStream($socket);
+            @\fclose($socket);
+        }
     }
 
     /**
-     * Check for idle timeouts and close stale connections.
+     * Check for idle timeouts, pre-auth expiries, and stale buffered
+     * data on existing connections.
      */
     private function checkConnectionTimeouts(): void
     {
         $now = \time();
         $idleTimeout = $this->config->gitIdleTimeout;
 
-        // Newest-first index sweep: handleClientData() can closeClient()
-        // and splice the list mid-sweep, which the previous by-reference
-        // foreach iterated over a shifted array (same discipline the
-        // async tick uses).
-        for ($idx = \count($this->clients) - 1; $idx >= 0; $idx--) {
-            if (!isset($this->clients[$idx])) {
+        // Key-snapshot sweep: handleClientData() can closeClient() mid
+        // sweep (an unset cannot invalidate the remaining ids, only the
+        // seats themselves are touched).
+        foreach (\array_keys($this->clients) as $id) {
+            if (!isset($this->clients[$id])) {
                 continue;
             }
-            $client = $this->clients[$idx];
-            if ($idleTimeout > 0 && ($now - $client['last_activity']) > $idleTimeout) {
-                $this->closeClient($idx);
+            $client = $this->clients[$id];
+            $idleExpired = $idleTimeout > 0 && ($now - $client['last_activity']) > $idleTimeout;
+            // 029: with git.idle_timeout <= 0 the sweep used to police
+            // nothing, and a zero-byte seat never reaches the read path
+            // where the pre-auth deadline lives — so the deadline is
+            // enforced here unconditionally for unhandled connections.
+            $preauthExpired = !$client['handled']
+                && ($now - $client['connected_at']) > self::PREAUTH_DEADLINE_SECONDS;
+            if ($idleExpired || $preauthExpired) {
+                $this->closeClient($id);
                 continue;
             }
 
             // Handle buffered data
             if (!$client['handled'] && $client['buffer'] !== '') {
-                $this->handleClientData($idx);
+                $this->handleClientData($id);
             }
         }
     }
@@ -644,9 +718,12 @@ final class GitDaemon
     /**
      * Handle data from a client.
      */
-    private function handleClientData(int $idx): void
+    private function handleClientData(string $id): void
     {
-        $client = &$this->clients[$idx];
+        if (!isset($this->clients[$id])) {
+            return;
+        }
+        $client = &$this->clients[$id];
 
         // Pre-auth guardrails: an unhandled client gets a bounded request
         // line AND a bounded lifetime. Without these, anonymous sockets
@@ -655,22 +732,33 @@ final class GitDaemon
         if (!$client['handled']) {
             if (\strlen($client['buffer']) >= self::MAX_REQUEST_BYTES) {
                 unset($client);
-                $this->closeClient($idx);
+                $this->closeClient($id);
 
                 return;
             }
             if (\time() - $client['connected_at'] > self::PREAUTH_DEADLINE_SECONDS) {
                 unset($client);
-                $this->closeClient($idx);
+                $this->closeClient($id);
 
                 return;
             }
         }
 
-        // Read from socket
+        // Read from socket. A non-blocking read that finds nothing is
+        // EWOULDBLOCK, not a hangup: the old shape closed the client on
+        // every empty read, so a request straddling two reads was dropped
+        // on the next tick (034). EOF reads as '' with no error.
         $data = @\socket_read($client['socket'], 65536);
         if ($data === false || $data === '') {
-            $this->closeClient($idx);
+            $errno = \socket_last_error($client['socket']);
+            \socket_clear_error($client['socket']);
+            if ($errno === \SOCKET_EWOULDBLOCK) {
+                unset($client);
+
+                return; // live peer, nothing arrived yet
+            }
+            $this->closeClient($id);
+
             return;
         }
 
@@ -678,7 +766,7 @@ final class GitDaemon
         $client['last_activity'] = \time();
         unset($client);
 
-        $this->dispatchClientRequest($idx);
+        $this->dispatchClientRequest($id);
     }
 
     /**
@@ -733,9 +821,13 @@ final class GitDaemon
      * loop) transports — this is the single copy of the protocol
      * front-end.
      */
-    private function dispatchClientRequest(int $idx): void
+    private function dispatchClientRequest(string $id): void
     {
-        $client = &$this->clients[$idx];
+        if (!isset($this->clients[$id])) {
+            return;
+        }
+        $socket = $this->clients[$id]['socket'];
+        $buffer = $this->clients[$id]['buffer'];
 
         // Check if we have a complete request. Git daemon protocol: the
         // first line is "git-upload-pack /repo\0host=...\0" PKT-LINE framed
@@ -749,71 +841,83 @@ final class GitDaemon
         // never pretends to parse the rest of the stream. The
         // one-shot advertisement child does not read them; a later
         // stateless-rpc relay is the disclosed upgrade path.
-        $request = self::parseRequest($client['buffer']);
-        if ($request !== null
-            && \preg_match('/^(git-upload-pack|git-receive-pack)\s+(\/\S*)/', $request[0], $matches)
-        ) {
-            $gitCmd = $matches[1];
-            $repoPath = $matches[2];
-            $repoName = \ltrim(\pathinfo($repoPath, \PATHINFO_BASENAME) ?: \basename($repoPath), '/');
-
-            // Containment: basename() of '/..' is '..', which the old charset
-            // gate accepted — that addressed (and auto-init could CREATE)
-            // repositories outside the repos jail over a socket with no
-            // authentication whatsoever.
-            if (!Repo::isJailSafeName($repoName)) {
-                $this->writePacket($client['socket'], "err Invalid repository name\n");
-                $this->closeClient($idx);
-                return;
-            }
-
-            // The git daemon protocol carries no authentication, so serving
-            // receive-pack here means UNAUTHENTICATED writes the moment a
-            // repo is public with push allowed. The daemon is read-only by
-            // construction; pushes go over an authenticated transport (HTTP
-            // Basic / SSH). Refuse before any repo-existence oracle.
-            if ($gitCmd === 'git-receive-pack') {
-                $this->writePacket($client['socket'], "err git-receive-pack is not served over the anonymous daemon; push over authenticated HTTP or SSH\n");
-                $this->closeClient($idx);
-                return;
-            }
-
-            // Find repo
-            $repo = $this->repos[$repoName] ?? $this->findRepoByPath($repoPath);
-
-            if ($repo === null) {
-                $this->writePacket($client['socket'], "err Repository not found: {$repoName}\n");
-                $this->closeClient($idx);
-                return;
-            }
-
-            $ac = AccessControl::instance();
-            // The daemon's only identity is the config lever: with
-            // git.allow_anonymous_read off, this anonymous transport
-            // refuses EVERY request before serving a byte —
-            // fail-closed: the same lever the HTTP surface consults,
-            // armed once at construction).
-            if (!$this->anonymousRead) {
-                $this->writePacket($client['socket'], "err Access denied\n");
-                $this->closeClient($idx);
-
-                return;
-            }
-
-            // Only git-upload-pack can reach this point (receive-pack was
-            // refused above), and the daemon's only identity is anonymous.
-            if (!$ac->canRead(null, $repo)) {
-                $this->writePacket($client['socket'], "err Access denied\n");
-                $this->closeClient($idx);
-                return;
-            }
-
-            $this->stats()->recordPackDownload();
-            $this->handleUploadPack($client['socket'], $repo, \substr($client['buffer'], $request[1]));
-
-            $client['handled'] = true;
-            $this->closeClient($idx);
+        $request = self::parseRequest($buffer);
+        if ($request === null) {
+            return;
         }
+        if (!\preg_match('/^(git-upload-pack|git-receive-pack)\s+(\/\S*)/', $request[0], $matches)) {
+            return;
+        }
+        $gitCmd = $matches[1];
+        $repoPath = $matches[2];
+        $repoName = \ltrim(\pathinfo($repoPath, \PATHINFO_BASENAME) ?: \basename($repoPath), '/');
+
+        // Containment: basename() of '/..' is '..', which the old charset
+        // gate accepted — that addressed (and auto-init could CREATE)
+        // repositories outside the repos jail over a socket with no
+        // authentication whatsoever.
+        if (!Repo::isJailSafeName($repoName)) {
+            $this->writePacket($socket, "err Invalid repository name\n");
+            $this->closeClient($id);
+
+            return;
+        }
+
+        // The git daemon protocol carries no authentication, so serving
+        // receive-pack here means UNAUTHENTICATED writes the moment a
+        // repo is public with push allowed. The daemon is read-only by
+        // construction; pushes go over an authenticated transport (HTTP
+        // Basic / SSH). Refuse before any repo-existence oracle.
+        if ($gitCmd === 'git-receive-pack') {
+            $this->writePacket($socket, "err git-receive-pack is not served over the anonymous daemon; push over authenticated HTTP or SSH\n");
+            $this->closeClient($id);
+
+            return;
+        }
+
+        // 098: the lever decides BEFORE any repo-existence oracle. The
+        // old order answered "Repository not found: <name>" to anonymous
+        // probers while git.allow_anonymous_read was OFF — a free repo
+        // census (and the daemon named the HTTP instance as an accepted
+        // disclosure shape). With the lever off every request now gets
+        // the same uniform "Access denied", existent or not; wording is
+        // uniform with the HTTP surface. README admission sentence rides
+        // S45 as a rider note.
+        if (!$this->anonymousRead) {
+            $this->writePacket($socket, "err Access denied\n");
+            $this->closeClient($id);
+
+            return;
+        }
+
+        // Find repo (registered instances first, then the memoized disk
+        // fallback below).
+        $repo = $this->repos[$repoName] ?? $this->findRepoByPath($repoPath);
+
+        if ($repo === null) {
+            $this->writePacket($socket, "err Repository not found: {$repoName}\n");
+            $this->closeClient($id);
+
+            return;
+        }
+
+        $ac = AccessControl::instance();
+        // Only git-upload-pack can reach this point (receive-pack was
+        // refused above), and the daemon's only identity is anonymous
+        // with the lever on: the per-repo posture still gates private
+        // jails, fail-closed.
+        if (!$ac->canRead(null, $repo)) {
+            $this->writePacket($socket, "err Access denied\n");
+            $this->closeClient($id);
+
+            return;
+        }
+
+        $this->stats()->recordPackDownload();
+        $this->handleUploadPack($socket, $repo, \substr($buffer, $request[1]));
+
+        $this->clients[$id]['handled'] = true;
+        $this->closeClient($id);
     }
 
     /**
@@ -935,26 +1039,6 @@ final class GitDaemon
         }
     }
 
-    /**
-     * Close a client connection (either transport). Async clients also
-     * get their read stream deregistered from the loop.
-     */
-    private function closeClient(int $idx): void
-    {
-        if (!isset($this->clients[$idx])) {
-            return;
-        }
-
-        $socket = $this->clients[$idx]['socket'];
-        if ($socket instanceof \Socket) {
-            @\socket_close($socket);
-        } else {
-            $this->loop?->removeReadStream($socket);
-            @\fclose($socket);
-        }
-        \array_splice($this->clients, $idx, 1);
-    }
-
     // -------------------------------------------------------------------------
     // Server socket setup
     // -------------------------------------------------------------------------
@@ -1000,7 +1084,12 @@ final class GitDaemon
     private function listenHostPort(): array
     {
         $parts = \explode(':', $this->config->gitListenAddr);
-        $host = $parts[0] ?: '0.0.0.0';
+        // Security floor (037): an omitted host binds LOOPBACK, mirroring
+        // the stats and HTTP transports (StatsServer::parseListenAddr) —
+        // the old ':9418' default silently bound the wildcard address
+        // while the docs claimed the loopback law. An operator wanting
+        // the world writes 0.0.0.0 out loud.
+        $host = $parts[0] !== '' ? $parts[0] : '127.0.0.1';
         $port = isset($parts[1]) ? (int) $parts[1] : 9418;
 
         return [$host, $port];
@@ -1024,19 +1113,39 @@ final class GitDaemon
         // Try to find by name in repos dir
         $name = \basename($path);
         $fullPath = $this->config->reposPath() . '/' . $name;
+        $now = \time();
 
         // gitDirFor() resolves the layout the same way the marker writer
         // does — a true bare directory (HEAD at root) keeps its marker at
         // its own root, so a hardcoded '/.git' probe would miss the
         // publication an operator persisted via registerRepo.
+        //
+        // 103: the same lookup SSHServer memoizes — on the transport that
+        // is cheapest to flood, an unmatched path used to re-probe
+        // is_dir + marker + new Repo on EVERY request. Positives memo
+        // into the repo map (visibility stays marker-honest at lookup);
+        // misses are held briefly by DISK_MISS_TTL_SECONDS so a repo
+        // created between requests still arrives within a tick or two.
+        if (isset($this->diskMisses[$name])) {
+            if ($now - $this->diskMisses[$name] <= self::DISK_MISS_TTL_SECONDS) {
+                return null;
+            }
+            unset($this->diskMisses[$name]);
+        }
+
         $gitDir = Repo::gitDirFor($fullPath);
         if (\is_dir($gitDir)) {
             // Marker-honest fallback: the on-disk visibility marker decides
             // publication — a directory that merely exists is fail-closed
             // PRIVATE for the daemon transport, never public-by-presence.
-            return Repo::new($name, $fullPath)
+            $repo = Repo::new($name, $fullPath)
                 ->withVisibility(Repo::markerVisibility($gitDir));
+            $this->repos[$name] = $repo;
+
+            return $repo;
         }
+
+        $this->diskMisses[$name] = $now;
 
         return null;
     }
@@ -1047,11 +1156,50 @@ final class GitDaemon
 
     private function registerSignalHandlers(): void
     {
-        if (\function_exists('pcntl_signal') && \function_exists('pcntl_async_signals')) {
-            \pcntl_async_signals(true);
-            \pcntl_signal(\SIGTERM, fn() => $this->handleSignal());
-            \pcntl_signal(\SIGINT, fn() => $this->handleSignal());
-            \pcntl_signal(\SIGHUP, fn() => $this->handleSignal());
+        if (!\function_exists('pcntl_signal') || !\function_exists('pcntl_async_signals')) {
+            return;
+        }
+        if ($this->priorSignalHandlers !== null) {
+            return; // already installed on this instance; capture once
+        }
+
+        // 110: these handlers are PROCESS-GLOBAL and the async-signals
+        // flag is a process switch — an embedded host that starts and
+        // stops daemons loses default signal behavior permanently unless
+        // the dispositions are captured first and restored on stop.
+        $this->priorAsyncSignals = \pcntl_async_signals(true);
+        foreach (self::SIGNALS as $signal) {
+            $this->priorSignalHandlers[$signal] = \pcntl_signal_get_handler($signal);
+            \pcntl_signal($signal, fn () => $this->handleSignal());
+        }
+    }
+
+    /**
+     * Hand the process back the signal dispositions the daemon borrowed
+     * at start. Idempotent: a daemon that never registered has nothing
+     * to restore.
+     */
+    private function restoreSignalHandlers(): void
+    {
+        if ($this->priorSignalHandlers === null) {
+            return;
+        }
+        $handlers = $this->priorSignalHandlers;
+        $async = $this->priorAsyncSignals;
+        $this->priorSignalHandlers = null;
+        $this->priorAsyncSignals = null;
+
+        if (!\function_exists('pcntl_signal')) {
+            return;
+        }
+        foreach ($handlers as $signal => $handler) {
+            // get_handler reports null when a userland handler was set
+            // without a recoverable callable (post-fork shape); the only
+            // honest restoration for that is the C default.
+            \pcntl_signal($signal, $handler ?? \SIG_DFL);
+        }
+        if ($async !== null && \function_exists('pcntl_async_signals')) {
+            \pcntl_async_signals($async);
         }
     }
 
@@ -1093,9 +1241,16 @@ final class GitDaemon
 
         // Close all client connections
         foreach ($this->clients as $client) {
-            @\socket_close($client['socket']);
+            if ($client['socket'] instanceof \Socket) {
+                @\socket_close($client['socket']);
+            } else {
+                @\fclose($client['socket']);
+            }
         }
         $this->clients = [];
+
+        // Hand the borrowed signal dispositions back (110).
+        $this->restoreSignalHandlers();
 
         // Close server socket
         if ($this->serverSocket !== null) {
