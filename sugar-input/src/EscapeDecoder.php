@@ -486,7 +486,7 @@ final class EscapeDecoder
         // codepoints shorter sequences already own), and F4 90+ passes
         // U+10FFFF. mbstring/json/MySQL reject all of them, so a stream
         // carrying one must resync byte-by-byte instead of producing a
-        // multi-byte key every downstream codec chokes on (m12). A not-yet
+        // multi-byte key every downstream codec chokes on. A not-yet
         // -visible second byte stays a hold-partial; the law re-checks when
         // the completion arrives.
         if ($leadPos + 1 < strlen($stream)) {
@@ -1290,7 +1290,7 @@ final class EscapeDecoder
 
             // xterm modified keys carry num=1 and a modifier parameter; ";1"
             // (and the parameter-less "1<final>") are an explicit NO-modifier —
-            // accepted, not refused (m6): the shape is unmistakable and decoding
+            // accepted, not refused: the shape is unmistakable and decoding
             // it agrees with the unmodified CSI final anyway.
             if ($num === 1 && $modRaw >= 1) {
                 $modifiers = KeyModifier::fromXtermParam($modRaw);

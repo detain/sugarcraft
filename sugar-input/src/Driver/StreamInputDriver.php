@@ -33,7 +33,7 @@ final class StreamInputDriver implements InputDriver
     /**
      * Cursor into {@see $eventBuffer}: events are consumed by advancing this
      * offset instead of array_shift-ing, so no drain ever reindexes bytes the
-     * loop has already handed out (M17). The buffer compacts to empty once
+     * loop has already handed out. The buffer compacts to empty once
      * fully consumed.
      */
     private int $bufferOffset = 0;

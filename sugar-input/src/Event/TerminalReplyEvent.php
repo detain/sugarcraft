@@ -71,7 +71,7 @@ final readonly class TerminalReplyEvent implements Event
     ];
 
     /**
-     * Hard ceiling on carried CSI parameters (m11). A hostile or buggy
+     * Hard ceiling on carried CSI parameters. A hostile or buggy
      * terminal can pack a reply with hundreds of semicolon-separated ints;
      * the first MAX_PARAMS ride on the event and the excess is counted,
      * never unbounded memory keyed off attacker bytes.

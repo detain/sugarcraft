@@ -79,7 +79,7 @@ final class SignalResizeDriver implements InputDriver
 
     /**
      * The SIGWINCH disposition as it stood BEFORE the first arm() in this
-     * process, captured lazily so disarm() can hand it back (m3). 'captured'
+     * process, captured lazily so disarm() can hand it back. 'captured'
      * is the sentinel — the stored handler may legitimately be 0 (SIG_DFL)
      * or a Closure owned by other code.
      *
@@ -226,7 +226,7 @@ final class SignalResizeDriver implements InputDriver
      * Record a SIGWINCH for THIS instance only.
      *
      * Deliberately a bare flag write: this runs from the async-signal
-     * handler, and the two tput forks used to ride it (m2). A resize-drag
+     * handler, and the two tput forks used to ride it. A resize-drag
      * storm nesting shell_exec mid-dispatch is both slow and hostile to
      * non-reentrant state; the refresh now happens lazily in read(), where
      * N coalesced signals cost exactly one probe pair.
@@ -241,7 +241,7 @@ final class SignalResizeDriver implements InputDriver
      *
      * Per-path honesty: the null fast path (no SIGWINCH since the last call)
      * is non-blocking and does nothing else. When a resize IS delivered, the
-     * dimensions are re-probed HERE — not in the signal handler (m2) — and
+     * dimensions are re-probed HERE — not in the signal handler — and
      * the probe only forks on the tput last-resort arm: the Tty ioctl/env
      * legs are in-process (see probeDimensions).
      *
@@ -348,7 +348,7 @@ final class SignalResizeDriver implements InputDriver
             // The message quotes the offender (control bytes folded to '.')
             // and states the rule in prose — no hand-copied regex literal,
             // which would drift from CAPABILITY_PATTERN the moment either
-            // side moved (n21).
+            // side moved.
             $quoted = preg_replace('/[^\x20-\x7e]/', '.', $capability) ?? '';
 
             throw new \InvalidArgumentException(
@@ -362,7 +362,7 @@ final class SignalResizeDriver implements InputDriver
         // resolved (no tty, unknown TERM); probeTput() reads the empty stdout
         // as "keep last known dimensions". POSIX-sh idiom — on cmd.exe the
         // redirect is inert and the error text lands on stdout, where the
-        // numeric cast yields 0: the same safe answer by a different road (n24).
+        // numeric cast yields 0: the same safe answer by a different road.
         return 'tput ' . \escapeshellarg($capability) . ' 2>/dev/null';
     }
 }

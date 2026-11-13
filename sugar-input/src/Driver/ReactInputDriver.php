@@ -251,7 +251,7 @@ final class ReactInputDriver implements ReadableStreamInterface
      *
      * Consumption advances a cursor instead of array_shift-ing so a listener
      * that re-pauses mid-drain can never have already-delivered events
-     * reindexed and re-emitted (M17).
+     * reindexed and re-emitted.
      */
     private function flushBuffer(): void
     {
