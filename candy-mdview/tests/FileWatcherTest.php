@@ -54,9 +54,16 @@ final class FileWatcherTest extends TestCase
         $mtime = filemtime($path);
         $watcher = new FileWatcher($path);
 
-        // Wait at least 1 second for mtime to change (filesystem mtime granularity)
-        sleep(1);
+        // Deterministic instead of wall-clock: the edit lands first, then an
+        // explicit future mtime GUARANTEES hasChangedSince() sees a value
+        // distinct from the baseline on any filesystem granularity (the same
+        // future-touch idiom MdViewModelReloadTest uses; touching AFTER the
+        // write matters — file_put_contents would rewind a pre-write touch
+        // back to "now", inside the very second that caused the race). The
+        // old sleep(1) burned ~45% of the suite's runtime anyway.
         file_put_contents($path, 'modified content');
+        touch($path, (int) $mtime + 7);
+        clearstatcache(true, $path);
 
         self::assertTrue($watcher->hasChangedSince($mtime));
 
@@ -75,14 +82,7 @@ final class FileWatcherTest extends TestCase
         // File no longer exists, should return false
         self::assertFalse($watcher->hasChangedSince($mtime));
     }
-
-    public function testConstructorStoresPath(): void
-    {
-        $path = '/test/path.txt';
-        $watcher = new FileWatcher($path);
-
-        // Use hasChangedSince to verify the path is stored correctly
-        $result = $watcher->hasChangedSince(time());
-        self::assertFalse($result); // non-existent file returns false
-    }
+    // testConstructorStoresPath removed: its assertion was byte-identical to
+    // testHasChangedSinceReturnsFalseForNonExistentFile above (a false
+    // answer on a never-existing path proves nothing about stored state).
 }

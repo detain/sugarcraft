@@ -160,6 +160,28 @@ final class MdViewModelTest extends TestCase
         $this->assertFalse($m->isExited());
     }
 
+    public function testStatusHeaderExactBytesAndNarrowClip(): void
+    {
+        // Finding 048: the header was pinned only via contains('%') plus the
+        // ↻/'·' markers — dropping '%' into a separate segment or swapping
+        // the divide stayed green, and the mid-number clip at narrow width
+        // was unpinned. Exact literals now.
+        $frame = MdViewModel::fromContent($this->content(5), 80, 4)
+            ->withDocument('name')
+            ->view();
+        // 'name · 0%' spans 9 CELLS ('·' is one cell but two bytes), so the
+        // pad is 80 − 9 spaces — a byte-counting str_pad would be one short
+        // and this is precisely the cell-vs-byte seam the header keeps.
+        $this->assertSame('name · 0%' . str_repeat(' ', 71), explode("\n", $frame)[0]);
+
+        // Narrow clip: at width 6 the truncation lands after the separator,
+        // before any digit — a regression that reorders segments shows here.
+        $narrow = MdViewModel::fromContent($this->content(5), 6, 4)
+            ->withDocument('name')
+            ->view();
+        $this->assertSame('name ·', explode("\n", $narrow)[0]);
+    }
+
     public function testFromContentClampsHeightToAtLeastOne(): void
     {
         // height of 0 should be clamped to 1

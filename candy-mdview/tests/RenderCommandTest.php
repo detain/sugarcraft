@@ -285,22 +285,70 @@ final class RenderCommandTest extends TestCase
 
     public function testExecuteWithThemeConfigOverridesTheme(): void
     {
+        // The original fixture used {"paragraph":{"fg":…,"bg":…}} — DEAD
+        // keys the flat schema never consumes (canonical spelling is
+        // `foreground`) — so SUCCESS + 'test' passed under any theme and the
+        // name lied. This version has discriminating power: the same input
+        // under a live-key red/bold paragraph config must render differing
+        // bytes versus the implicit plain pipe theme, with real SGR on the
+        // configured side and none on the control.
         $configTmp = tempnam(sys_get_temp_dir(), 'mdview-config-');
         $this->assertNotFalse($configTmp);
-        file_put_contents($configTmp, '{"paragraph":{"fg":"white","bg":"black"}}');
+        file_put_contents($configTmp, '{"paragraph":{"foreground":"#ff0000","bold":true}}');
         try {
-            [$result, $payload] = $this->runPrint("test", [
-                ['theme-config', $configTmp],
-                ['style', null],
-                ['theme', null],
-                ['width', 0],
-                ['pager', false],
-                ['no-hyperlinks', false],
-            ]);
+            [$result, $payload] = $this->runPrint("test paragraph", $this->optionMap([
+                'theme-config' => $configTmp,
+            ]));
             $this->assertSame(Command::SUCCESS, $result);
-            $this->assertStringContainsString('test', $payload);
+            $this->assertStringContainsString('test paragraph', $payload);
+
+            [$controlResult, $controlPayload] = $this->runPrint("test paragraph", $this->optionMap());
+            $this->assertSame(Command::SUCCESS, $controlResult);
+
+            $this->assertNotSame($controlPayload, $payload, 'the config must change rendered bytes');
+            $this->assertStringContainsString("\x1b[", $payload, 'styled theme output carries SGR');
+            $this->assertStringNotContainsString("\x1b[", $controlPayload, 'implicit pipe theme is plain');
         } finally {
             unlink($configTmp);
+        }
+    }
+
+    public function testBinaryControlRatioBoundaryIsPinned(): void
+    {
+        // Finding 023: every shipped binary pin routes through NUL, so the
+        // documented BINARY_CONTROL_RATIO = 0.05 branch was never exercised.
+        // Two NUL-free cases pin it at today's exact semantics: 50 control
+        // bytes in 1000 is AT the ratio (not above) and passes; 51 is over
+        // and refuses with the localized message.
+        $atRatio = str_repeat('a', 950) . str_repeat("\x01", 50);
+        [$passRc] = $this->runPrint($atRatio, $this->optionMap());
+        $this->assertSame(Command::SUCCESS, $passRc, 'exactly-at-ratio text must render');
+
+        $overRatio = str_repeat('a', 949) . str_repeat("\x01", 51);
+        [$failRc, $msg] = $this->runUsageRun($overRatio, $this->optionMap());
+        $this->assertSame(Command::INVALID, $failRc, 'one byte over the ratio must refuse');
+        $this->assertStringContainsString('not a text file', $msg);
+    }
+
+    public function testFileLaneEnforcesTheInputSizeCap(): void
+    {
+        // Finding 024: the 64 MiB cap's enforcement lane had zero coverage —
+        // only its message formatting was pinned via Lang interpolation, so
+        // dropping the pre-read filesize() guard kept the suite green.
+        // A sparse ftruncate is metadata-only (instant), yet filesize()
+        // answers the over-cap length the guard reads.
+        $path = sys_get_temp_dir() . '/mdview-overcap-' . uniqid() . '.md';
+        $handle = fopen($path, 'wb');
+        $this->assertNotFalse($handle);
+        $this->assertTrue(ftruncate($handle, 67_108_865));
+        fclose($handle);
+        try {
+            [$rc, $msg] = $this->runUsageRun(null, $this->optionMap(), ['file' => $path]);
+            $this->assertSame(Command::INVALID, $rc, 'a file past MAX_INPUT_BYTES must refuse on the file lane');
+            $this->assertStringContainsString('67108864', $msg);
+            $this->assertStringContainsString('exceeds', $msg);
+        } finally {
+            unlink($path);
         }
     }
 
