@@ -32,12 +32,9 @@ use RecursiveIteratorIterator;
  * class without a row is red, and a row whose class has since gained a test
  * or been deleted is red too, so the list only ever shrinks.
  *
- * ADJUDICATION, 2026-11-13: the 64 rows below are seeded from the tree as it
- * stood on that date and are accepted as covered-by-collaborators: pure value
- * records and enum-like carriers, per-domain settings catalogues exercised
- * through the one registry test, and `Host/Commands/*` slash-command seats
- * exercised through the host surface census. New code does not get a row by
- * default: write the mirror test.
+ * ADJUDICATION, 2026-11-13: the 64 rows seeded that day were all retired by
+ * mirror tests; the roster is empty. New code does not get a row by default:
+ * write the mirror test.
  */
 final class ClassTestFloorCensusTest extends TestCase
 {
@@ -47,72 +44,7 @@ final class ClassTestFloorCensusTest extends TestCase
      *
      * @var list<string>
      */
-    private const UNCOVERED_ROSTER = [
-        'Context/Pruning/ProjectedContext',
-        'Session/Import/SessionImportLedger',
-        'Session/Gc/GcVacuum',
-        'Session/Gc/GcStoreFiles',
-        'Skills/LearnedSkillRevision',
-        'Tools/Web/Search/SearchHit',
-        'Tools/Web/Search/SearchResponse',
-        'Tools/Edit/PatchHunk',
-        'Tools/Edit/LineWindows',
-        'Tools/Edit/LineTrimmedMatcher',
-        'Tools/Edit/PatchOperation',
-        'Tools/Edit/UnicodeNormalisedMatcher',
-        'Tools/Edit/ExactMatcher',
-        'Tools/Edit/IndentFlexibleMatcher',
-        'Tools/Edit/LineIndex',
-        'Tools/Edit/WhitespaceNormalisedMatcher',
-        'Tools/Edit/MatchCandidate',
-        'Acp/AcpSession',
-        'App/Tabs/CycleTabMsg',
-        'Notebook/NotebookPages',
-        'Workflows/RunContextValue',
-        'Config/Settings/Definitions/ContextSettings',
-        'Config/Settings/Definitions/GitSettings',
-        'Config/Settings/Definitions/SkillSettings',
-        'Config/Settings/Definitions/HooksMcpSettings',
-        'Config/Settings/Definitions/PermissionSettings',
-        'Config/Settings/Definitions/ModelProviderSettings',
-        'Config/Settings/Definitions/ServerSettings',
-        'Config/Settings/Definitions/MemoryRuleSettings',
-        'Config/Settings/Definitions/AgentLoopSettings',
-        'Config/Settings/Definitions/EngineSettings',
-        'Config/Settings/Definitions/ToolSettings',
-        'Config/Settings/Definitions/InterfaceSettings',
-        'Config/Settings/Validator/SpendCapValidator',
-        'Agents/Board/BoardLease',
-        'Agents/Board/ActiveBoardSeat',
-        'Support/Directories/DirectoryListing',
-        'Support/ReservedSessionGrammar',
-        'Support/ParentProcessGuard',
-        'Support/ShellInvocation',
-        'Tui/FirstRunWizard/FirstRunWizardAction',
-        'Tui/Settings/SettingsTabStrip',
-        'Tui/Menu/MenuStep',
-        'Tui/AgentSnapshot',
-        'Cli/NonsenseSettings',
-        'Cli/WorkflowEngineWiring',
-        'Cli/ChannelsSettings',
-        'Share/ShareRecord',
-        'Host/SessionTurnRules',
-        'Host/Commands/DiffCommand',
-        'Host/Commands/RulesHostCommand',
-        'Host/Commands/PruningHostCommand',
-        'Host/Commands/NoticesHostCommand',
-        'Host/Commands/SweepHostCommand',
-        'Host/Commands/CompactHostCommand',
-        'Host/Commands/LedgerCommand',
-        'Host/Commands/WebSearchHostCommand',
-        'Host/Commands/RecompressHostCommand',
-        'Host/Commands/RedoCommand',
-        'Host/Commands/UndoCommand',
-        'Host/Commands/ForkCommand',
-        'Host/Commands/DecompressHostCommand',
-        'Protocol/Methods/TodoMethods',
-        'Protocol/Methods/WorkspaceMethods',
-    ];
+    private const UNCOVERED_ROSTER = [];
 
     public function testEveryClassWithPublicMethodsHasATestOrARosterRow(): void
     {
