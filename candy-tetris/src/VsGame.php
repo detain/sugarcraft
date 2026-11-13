@@ -76,6 +76,14 @@ final class VsGame implements Model
          * forward at {@see self::update()} re-stamps for them.
          */
         public readonly int $gravityChain = 0,
+        /**
+         * Identity tag of the AI's own tick chain (candy-tetris-085): a
+         * second generation space beside the human epoch, bumped together
+         * with it at restarts. The computer advances one planned input
+         * per ComputerTickMsg at ITS board's gravity interval — the human
+         * clock no longer throttles the AI in either direction.
+         */
+        public readonly int $computerChain = 0,
     ) {}
 
     /**
@@ -122,7 +130,13 @@ final class VsGame implements Model
 
     public function init(): ?\Closure
     {
-        return self::scheduleTick($this->player, $this->gravityChain);
+        // Two clocks start together (candy-tetris-085): the human gravity
+        // chain and the AI's own tick chain, each a generation-tagged
+        // singleton from here on.
+        return Cmd::batch(
+            self::scheduleTick($this->player, $this->gravityChain),
+            self::scheduleComputerTick($this->computer, $this->computerChain),
+        );
     }
 
     /**
@@ -134,6 +148,18 @@ final class VsGame implements Model
     {
         $interval = $player->score->gravityIntervalUs() / 1_000_000;
         return Cmd::tick($interval, static fn(): Msg => new GravityMsg($chain));
+    }
+
+    /**
+     * Arm the AI's next planned input at the COMPUTER board's own gravity
+     * interval (candy-tetris-007/-085). Same singleton law as the human
+     * chain: only the arms above and the ComputerTickMsg answer below ever
+     * re-arm it, and the live epoch tag decides which chain owns an arrival.
+     */
+    private static function scheduleComputerTick(Game $computer, int $chain): \Closure
+    {
+        $interval = $computer->score->gravityIntervalUs() / 1_000_000;
+        return Cmd::tick($interval, static fn(): Msg => new ComputerTickMsg($chain));
     }
 
     public function update(Msg $msg): array
@@ -162,6 +188,9 @@ final class VsGame implements Model
         if ($msg instanceof GravityMsg && $msg->chain !== $this->gravityChain) {
             return [$this, null];
         }
+        if ($msg instanceof ComputerTickMsg && $msg->chain !== $this->computerChain) {
+            return [$this, null];
+        }
 
         // Below the frame floor the VS pair freezes the way pause freezes
         // it: q still quits, the tick chain keeps its heartbeat, and a
@@ -172,6 +201,9 @@ final class VsGame implements Model
             }
             if ($msg instanceof GravityMsg) {
                 return [$this, self::scheduleTick($this->player, $this->gravityChain)];
+            }
+            if ($msg instanceof ComputerTickMsg) {
+                return [$this, self::scheduleComputerTick($this->computer, $this->computerChain)];
             }
             if ($msg instanceof LockDelayMsg) {
                 // A resize never parks a live window (solo timers keep
@@ -204,6 +236,7 @@ final class VsGame implements Model
                 $freshPair = self::start($this->bindings, $this->scores, $this->scoresPath);
                 $fresh = $freshPair->mutate([
                     'gravityChain' => $bumped,
+                    'computerChain' => $this->computerChain + 1,
                     'player' => $freshPair->player->mutate(['gravityChain' => $bumped]),
                     // The live terminal size survives the restart: the
                     // Program only re-reports on the next SIGWINCH.
@@ -211,7 +244,10 @@ final class VsGame implements Model
                     'frameRows' => $this->frameRows,
                     'colorProfile' => $this->colorProfile,
                 ]);
-                return [$fresh, self::scheduleTick($fresh->player, $fresh->gravityChain)];
+                return [$fresh, Cmd::batch(
+                    self::scheduleTick($fresh->player, $fresh->gravityChain),
+                    self::scheduleComputerTick($fresh->computer, $fresh->computerChain),
+                )];
             }
             return [$this, null];
         }
@@ -228,7 +264,17 @@ final class VsGame implements Model
         // stray repeat must not flip the flag a second time on the way
         // (m11 — this gate is load-bearing, not a pass-through).
         if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'pause')) {
-            return [$this->mutate(['player' => $this->player->mutate(['paused' => !$this->player->paused])]), null];
+            $toggled = $this->mutate(['player' => $this->player->mutate(['paused' => !$this->player->paused])]);
+            if ($this->player->paused === false) {
+                // This press PAUSES: the in-flight AI tick lands on the
+                // paused branch below and dies there on purpose, so nothing
+                // is armed here; the resume leg revives the chain once.
+                return [$toggled, null];
+            }
+
+            // This press RESUMES: the AI chain was dropped while frozen —
+            // re-arm it exactly once, here.
+            return [$toggled, self::scheduleComputerTick($toggled->computer, $toggled->computerChain)];
         }
 
         // While paused, only the tick chain keeps beating: gravity re-arms
@@ -237,6 +283,11 @@ final class VsGame implements Model
         if ($this->player->paused === true) {
             if ($msg instanceof GravityMsg) {
                 return [$this, self::scheduleTick($this->player, $this->gravityChain)];
+            }
+            if ($msg instanceof ComputerTickMsg) {
+                // Dropped WITHOUT re-arm on purpose: the AI is frozen and
+                // its chain revives exactly once from the resume leg above.
+                return [$this, null];
             }
             if ($msg instanceof LockDelayMsg) {
                 // Solo's survival law mirrored (candy-tetris-017): a window
@@ -257,9 +308,12 @@ final class VsGame implements Model
         // fresh pair after restart carries 0 while the outer epoch has moved
         // on (candy-tetris-003; the inner chain only ever bumps via paths
         // VS never drives — see the same law in {@see GravityMsg}'s docblock).
-        [$newPlayer, $playerCmd] = $this->player->update(
-            $msg instanceof GravityMsg ? new GravityMsg($this->player->gravityChain) : $msg
-        );
+        $isComputerTick = $msg instanceof ComputerTickMsg;
+        [$newPlayer, $playerCmd] = $isComputerTick
+            ? [$this->player, null]
+            : $this->player->update(
+                $msg instanceof GravityMsg ? new GravityMsg($this->player->gravityChain) : $msg
+            );
 
         // Check if player's game is over (computer wins)
         if ($newPlayer->over === true) {
@@ -272,7 +326,7 @@ final class VsGame implements Model
         $hasPlan = $this->hasComputerPlan;
         $rotationsLeft = $this->computerRotationsLeft;
         $shiftLeft = $this->computerShiftLeft;
-        if ($msg instanceof GravityMsg) {
+        if ($isComputerTick) {
             [$newComputer, $hasPlan, $rotationsLeft, $shiftLeft] = self::stepComputer(
                 $this->computer,
                 $this->hasComputerPlan,
@@ -340,7 +394,14 @@ final class VsGame implements Model
             // take over. On key messages only the window timer survives.
             $msg instanceof GravityMsg
                 ? ($playerCmd ?? self::scheduleTick($finalPlayer, $this->gravityChain))
-                : $playerCmd,
+                : ($isComputerTick
+                    ? ($playerCmd === null
+                        ? self::scheduleComputerTick($processedComputer, $this->computerChain)
+                        : Cmd::batch(
+                            self::scheduleComputerTick($processedComputer, $this->computerChain),
+                            $playerCmd,
+                        ))
+                    : $playerCmd),
         ];
     }
 
@@ -370,10 +431,12 @@ final class VsGame implements Model
         if ($rotationsLeft > 0) {
             $rotated = $computer->piece->rotated(1);
             if ($computer->board->fits($rotated) === false) {
-                // Blocked rotation — abandon the rest of the plan's
-                // rotations rather than force the piece into an illegal
-                // state (mirrors the blocked-shift arm below).
-                return [$computer, true, 0, $shiftLeft];
+                // Blocked rotation — the recorded plan is no longer
+                // executable, so RE-EVALUATE: the piece stays untouched and
+                // the next tick records a fresh bestMove for the real board
+                // (candy-tetris-085; forcing the old legs through would be
+                // the wasted-drop the old abandon-then-continue produced).
+                return [$computer, false, 0, 0];
             }
             $stepped = $computer->mutate([
                 'piece' => $rotated,
@@ -392,8 +455,8 @@ final class VsGame implements Model
                 ]);
                 return [$stepped, true, 0, $shiftLeft - $direction];
             }
-            // Blocked sideways — abandon the rest of the shift this piece.
-            return [$computer, true, 0, 0];
+            // Blocked sideways — same law: re-evaluate from the next tick.
+            return [$computer, false, 0, 0];
         }
 
         if ($computer->board->fits($computer->piece->moved(0, 1))) {
@@ -501,6 +564,7 @@ final class VsGame implements Model
             $changes['scores'] ?? $this->scores,
             $changes['scoresPath'] ?? $this->scoresPath,
             $changes['gravityChain'] ?? $this->gravityChain,
+            $changes['computerChain'] ?? $this->computerChain,
         );
     }
 }

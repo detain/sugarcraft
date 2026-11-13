@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris\Tests;
 
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\TickRequest;
 use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
+use SugarCraft\Tetris\ComputerTickMsg;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\GravityMsg;
 use SugarCraft\Tetris\LockDelayMsg;
 use SugarCraft\Tetris\Piece;
+use SugarCraft\Tetris\Score;
 use SugarCraft\Tetris\Tetromino;
 use SugarCraft\Tetris\VsGame;
 use SugarCraft\Tetris\VsRenderer;
@@ -34,6 +37,11 @@ final class VsGameTest extends TestCase
     private function gravity(): GravityMsg
     {
         return new GravityMsg();
+    }
+
+    private function aiTick(): ComputerTickMsg
+    {
+        return new ComputerTickMsg();
     }
 
     private function deterministicBag(): Bag
@@ -148,7 +156,7 @@ final class VsGameTest extends TestCase
         $vs = new VsGame($vs->player, $computer, hasComputerPlan: true);
 
         $playerBoardBefore = $vs->player->board;
-        [$updated] = $vs->update($this->gravity());
+        [$updated] = $vs->update($this->aiTick());
 
         $this->assertSame($computer->score->lines + 1, $updated->computer->score->lines,
             'the computer must really have cleared the line');
@@ -200,7 +208,7 @@ final class VsGameTest extends TestCase
         $player = $this->seedCeilingCell($vs->player);
         $vs = new VsGame($player, $computer, hasComputerPlan: true);
 
-        [$updated] = $vs->update($this->gravity());
+        [$updated] = $vs->update($this->aiTick());
 
         $this->assertTrue($updated->over, 'a lethal garbage arrival must end the match');
         $this->assertSame('COMPUTER', $updated->winner);
@@ -285,14 +293,68 @@ final class VsGameTest extends TestCase
         ]);
         $vs = new VsGame($player, $computer, hasComputerPlan: true);
 
-        [$after, $cmd] = $vs->update($this->gravity()); // the computer's lock leg sends garbage
+        [$after, $cmd] = $vs->update($this->aiTick()); // the computer's lock leg sends garbage
 
         $this->assertNull($after->player->lockWindowGeneration, 'the lift cleared the stale window');
         $this->assertTrue($after->player->gravityPending, 'the strand rule must re-anchor the chain');
-        $this->assertNotNull($cmd, 'a heartbeat must be in flight so the game resumes');
+        $this->assertNotNull($cmd, 'both chains must be in flight so the game resumes');
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch, 'a re-anchored arrival carries both clocks');
+        $classes = [];
+        foreach ($batch->cmds as $inner) {
+            $request = $inner();
+            $this->assertInstanceOf(TickRequest::class, $request);
+            $classes[] = get_class(($request->produce)());
+        }
+        $this->assertContains(GravityMsg::class, $classes, 'the strand rule arms a gravity tick, not a stale lock');
+        $this->assertContains(ComputerTickMsg::class, $classes, 'and the AI chain keeps its own clock');
+    }
+
+    /**
+     * candy-tetris-085 pause composition: the AI chain dies on purpose at
+     * the paused branch (a frozen board must not tick), and every resume
+     * revives it with EXACTLY one anchor — never stacked revives.
+     */
+    public function testVsPauseFreezesTheAiAndResumeRevivesItsChain(): void
+    {
+        $vs = $this->createVsPlayerPerched();
+
+        [$paused] = $vs->update($this->key('p'));
+        [$held, $dropCmd] = $paused->update($this->aiTick());
+        $this->assertNull($dropCmd, 'an AI tick landing while paused dies without re-arming');
+        $this->assertSame($paused->computer, $held->computer, 'the frozen AI does not step');
+
+        [$resumed, $reviveCmd] = $held->update($this->key('p'));
+        $this->assertFalse($resumed->player->paused);
+        $this->assertNotNull($reviveCmd, 'resume revives the AI chain exactly once');
+        $msg = ($reviveCmd()) instanceof BatchMsg
+            ? null
+            : (($reviveCmd())->produce)();
+        $this->assertInstanceOf(ComputerTickMsg::class, $msg, 'the revive is the AI clock, not a stray gravity tick');
+        $this->assertSame($resumed->computerChain, $msg->chain, 'armed under the live AI epoch');
+
+        [$pausedAgain] = $resumed->update($this->key('p'));
+        [, $second] = $pausedAgain->update($this->key('p'));
+        $this->assertNotNull($second, 'every resume carries one fresh AI anchor');
+    }
+
+    /**
+     * candy-tetris-085 freeze composition: below the frame floor BOTH
+     * clocks keep beating and NEITHER board steps, so a resize back into
+     * fit resumes with live anchors instead of dead chains.
+     */
+    public function testTooSmallFrameKeepsBothClocksBeating(): void
+    {
+        $vs = VsGame::start();
+        $tiny = new VsGame($vs->player, $vs->computer, frameCols: 10, frameRows: 5);
+        $this->assertTrue($tiny->tooSmall());
+
+        [, $cmd] = $tiny->update($this->aiTick());
         $request = $cmd();
-        $this->assertInstanceOf(TickRequest::class, $request);
-        $this->assertInstanceOf(GravityMsg::class, ($request->produce)(), 'the re-anchor arms a gravity tick, not a stale lock');
+        $this->assertInstanceOf(ComputerTickMsg::class, ($request->produce)(), 'the AI heartbeat survives the freeze');
+
+        [, $gcmd] = $tiny->update($this->gravity());
+        $this->assertInstanceOf(GravityMsg::class, (($gcmd())->produce)(), 'and so does the human chain');
     }
 
     /** Fresh VS pair whose player piece sits grounded on the floor, ready to window. */
@@ -376,16 +438,18 @@ final class VsGameTest extends TestCase
             'key-only updates must not rebuild the computer side at all');
     }
 
-    public function testComputerTakesExactlyOneActionPerGravityTick(): void
+    public function testComputerTakesExactlyOneActionPerAiTick(): void
     {
         // MAJ(4): the old loop memo-stored the AI decision, dropped the memo
         // on every mutate, and applied the whole placement (rotate+shift+drop
         // +lock) in a single tick. The plan now lives in the model and each
-        // gravity tick spends exactly one input.
+        // AI-clock tick spends exactly one input (candy-tetris-085 moved the
+        // step off the human's gravity chain — it no longer waits on 'p'
+        // presses or a slow human level).
         $vs = VsGame::start();
         $initialPiece = $vs->computer->piece;
 
-        [$state] = $vs->update($this->gravity());
+        [$state] = $vs->update($this->aiTick());
         $this->assertTrue($state->hasComputerPlan, 'the first tick records the plan');
         $this->assertSame($initialPiece, $state->computer->piece,
             'the decision tick itself moves nothing');
@@ -395,7 +459,7 @@ final class VsGameTest extends TestCase
         $x = $initialPiece->x;
         $y = $initialPiece->y;
         for ($i = 0; $i < 8; $i++) {
-            [$next] = $state->update($this->gravity());
+            [$next] = $state->update($this->aiTick());
             $p = $next->computer->piece;
             $dRot = abs($p->rotation - $rot);
             $dX = abs($p->x - $x);
@@ -425,8 +489,8 @@ final class VsGameTest extends TestCase
         $b = new VsGame(Game::start($this->deterministicBag()), Game::start($this->deterministicBag()));
 
         for ($i = 0; $i < 6; $i++) {
-            [$a] = $a->update($this->gravity());
-            [$b] = $b->update($this->gravity());
+            [$a] = $a->update($this->aiTick());
+            [$b] = $b->update($this->aiTick());
         }
 
         $this->assertEquals($a->computer->piece, $b->computer->piece);
@@ -584,13 +648,15 @@ final class VsGameTest extends TestCase
     }
 
     /**
-     * MA-4-vs: a plan rotation that does not fit is ABANDONED, never forced.
-     * The computer's T sits at spawn with one rot1 owed; cell (4,2) is the
-     * rot1-exclusive cell (rot0 does not touch it), so the naive rotation is
-     * illegal. Pre-guard the piece was rotated blind into the blocker —
+     * MA-4-vs: a plan rotation that does not fit is never forced. The
+     * computer's T sits at spawn with one rot1 owed; cell (4,2) is the
+     * rot1-exclusive cell (rot0 does not touch it), so the naive rotation
+     * is illegal. Pre-guard the piece was rotated blind into the blocker —
      * an overlapping, illegal state that then dropPiece'd and locked over
-     * occupied cells. Post-guard the rotation is skipped (mirrors the
-     * blocked-shift arm) and the piece stays legal.
+     * occupied cells. Post-guard the rotation is skipped, the piece stays
+     * legal, and (candy-tetris-085) the unexecutable plan is RE-EVALUATED
+     * from the next tick rather than run out leg by leg into a wasted
+     * drop at the old target.
      */
     public function testComputerRotationPlanSkipsIllegalRotation(): void
     {
@@ -608,7 +674,7 @@ final class VsGameTest extends TestCase
             computerShiftLeft: 0,
         );
 
-        [$after] = $vs->update($this->gravity());
+        [$after] = $vs->update($this->aiTick());
 
         $this->assertSame(
             0,
@@ -619,6 +685,66 @@ final class VsGameTest extends TestCase
             $after->computer->board->fits($after->computer->piece),
             'the computer piece must always be in a legal state',
         );
+        $this->assertFalse(
+            $after->hasComputerPlan,
+            'a blocked plan is re-evaluated from the next tick, not continued toward a stale target',
+        );
+
+        [$retargeted, $retargetCmd] = $after->update($this->aiTick());
+        $this->assertTrue($retargeted->hasComputerPlan, 'the next AI tick records a fresh bestMove');
+        $this->assertNotNull($retargetCmd);
+    }
+
+    /**
+     * candy-tetris-007/-085: the AI runs on its own clock. The ComputerTick
+     * anchor carries the COMPUTER board's gravity interval, so a sprinting
+     * human can no longer drag the opponent through 20 plies a second, and
+     * a crawling human level cannot starve it either.
+     */
+    public function testComputerClockRunsAtTheComputersOwnInterval(): void
+    {
+        $vs = VsGame::start();
+        $sprinting = $vs->player->mutate(['score' => new Score(0, 0, 20)]);
+        $vs = new VsGame($sprinting, $vs->computer);
+
+        $playerInterval = $vs->player->score->gravityIntervalUs() / 1_000_000;
+        $computerInterval = $vs->computer->score->gravityIntervalUs() / 1_000_000;
+        $this->assertLessThan($computerInterval, $playerInterval, 'the boards must actually disagree on pace');
+
+        [, $cmd] = $vs->update($this->aiTick());
+        $request = $cmd();
+        $this->assertInstanceOf(TickRequest::class, $request);
+        $this->assertSame($computerInterval, $request->seconds, 'the AI re-arms at ITS interval');
+        $this->assertGreaterThan($playerInterval, $request->seconds, 'never throttled to the human clock');
+
+        [, $humanCmd] = $vs->update($this->gravity());
+        $humanRequest = $humanCmd();
+        $this->assertSame($playerInterval, $humanRequest->seconds, 'the human chain keeps the human pace');
+    }
+
+    /**
+     * candy-tetris-007/-085 eventuality: with ZERO human input the match
+     * still finishes — the AI keeps placing on its own clock until a board
+     * dies — and it visibly progresses (the stack grows), it does not
+     * stall behind the parked human chain.
+     */
+    public function testMatchFinishesWithZeroHumanInput(): void
+    {
+        $vs = new VsGame(
+            player: Game::start($this->deterministicBag()),
+            computer: Game::start($this->deterministicBag()),
+        );
+
+        $boardBefore = $vs->computer->board;
+        $ticks = 0;
+        while ($vs->over === false && $ticks < 4000) { // a full stack is ~60 pieces at ~25 ticks each
+            [$vs] = $vs->update(new ComputerTickMsg(0)); // one clock beats; the other idles
+            $ticks++;
+        }
+
+        $this->assertNotSame($boardBefore, $vs->computer->board, 'the AI must visibly progress with no human input at all');
+        $this->assertTrue($vs->over, "the match must finish (took {$ticks} AI ticks)");
+        $this->assertContains($vs->winner, ['PLAYER', 'COMPUTER'], 'a finished match carries its verdict');
     }
 
     /**
@@ -671,10 +797,29 @@ final class VsGameTest extends TestCase
         );
         [$fresh, $cmd] = $over->update($this->key('r'));
         $this->assertSame(5, $fresh->gravityChain, 'the restart bumps the epoch once');
-        $request = $cmd();
-        $msg = ($request->produce)();
-        $this->assertInstanceOf(GravityMsg::class, $msg, 'the arm fires a gravity tick');
-        $this->assertSame(5, $msg->chain, 'armed under the live epoch, never a bare 0');
+        $this->assertSame(1, $fresh->computerChain, 'and the AI epoch with it, once');
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch, 'restart arms both clocks exactly once each');
+        $gravity = $ai = [];
+        foreach ($batch->cmds as $inner) {
+            $request = $inner();
+            $this->assertInstanceOf(TickRequest::class, $request);
+            $msg = ($request->produce)();
+            if ($msg instanceof GravityMsg) {
+                $gravity[] = $msg;
+            } else {
+                $ai[] = $msg;
+            }
+        }
+        $this->assertCount(1, $gravity, 'one gravity tick armed');
+        $this->assertSame(5, $gravity[0]->chain, 'armed under the live epoch, never a bare 0');
+        $this->assertCount(1, $ai, 'one AI tick armed');
+        $this->assertInstanceOf(ComputerTickMsg::class, $ai[0]);
+        $this->assertSame(1, $ai[0]->chain, 'the AI chain is armed under its own live epoch');
+
+        [$staleAi, $staleAiArm] = $fresh->update(new ComputerTickMsg(0)); // dead chain's in-flight tick
+        $this->assertSame($fresh, $staleAi, 'a superseded AI tick may not step the fresh pair');
+        $this->assertNull($staleAiArm, 'nor leak a second AI timer');
 
         [$stale, $staleArm] = $fresh->update(new GravityMsg(4)); // dead chain's in-flight tick
         $this->assertSame($fresh, $stale, 'a superseded tick may not step the fresh pair');
@@ -696,19 +841,27 @@ final class VsGameTest extends TestCase
      *
      * @param list<float> $restartAt times at which the match is over and 'r' is pressed
      */
-    private function simulateVsChain(array $restartAt, float $window = 10.0): int
+    private function simulateVsChain(array $restartAt, float $window = 10.0): array
     {
         $vs = VsGame::start();
         $now = 0.0;
         /** @var list<array{0: float, 1: \Closure}> $queue */
         $queue = [];
-        $arm = static function (?\Closure $cmd) use (&$queue, &$now): void {
+        $arm = null;
+        $arm = function (?\Closure $cmd) use (&$arm, &$queue, &$now): void {
             if ($cmd === null) {
                 return;
             }
             $request = $cmd();
+            if ($request instanceof BatchMsg) {
+                foreach ($request->cmds as $inner) {
+                    $arm($inner);
+                }
+
+                return;
+            }
             if ($request instanceof \SugarCraft\Core\TickRequest) {
-                $queue[] = [$now + $request->seconds, $request->produce];
+                $queue[] = [$now + $request->seconds, $request->produce, get_class(($request->produce)())];
             }
         };
         $arm($vs->init());
@@ -731,6 +884,7 @@ final class VsGameTest extends TestCase
                     computer: $vs->computer,
                     over: true,
                     gravityChain: $vs->gravityChain,
+                    computerChain: $vs->computerChain,
                 );
                 [$vs, $cmd] = $vs->update($this->key('r'));
                 $arm($cmd);
@@ -748,7 +902,16 @@ final class VsGameTest extends TestCase
             $arm($cmd);
         }
 
-        return count($queue);
+        $g = $c = 0;
+        foreach ($queue as [, , $cls]) {
+            if ($cls === GravityMsg::class) {
+                $g++;
+            } else {
+                $c++;
+            }
+        }
+
+        return [$g, $c];
     }
 
     /**
@@ -760,12 +923,12 @@ final class VsGameTest extends TestCase
      */
     public function testVsRestartTwiceKeepsExactlyOneTickChain(): void
     {
-        $this->assertSame(1, $this->simulateVsChain([]), 'baseline: the chain is a singleton');
+        $this->assertSame([1, 1], $this->simulateVsChain([]), 'baseline: each clock is a singleton');
 
         $this->assertSame(
-            1,
+            [1, 1],
             $this->simulateVsChain([3.0, 6.0]),
-            'after two restarts exactly one tick chain may still be in flight',
+            'after two restarts exactly one tick chain per clock may still be in flight',
         );
     }
 }

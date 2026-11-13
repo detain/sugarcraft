@@ -103,7 +103,7 @@ render as `·` so the grid stays readable even without colour.
 
 ## VS Computer Mode
 
-Compete against an AI opponent in split-screen mode. When you clear lines, garbage rows are sent to the computer. When the computer clears lines, garbage rows are sent to you. Last player standing wins!
+Compete against an AI opponent in split-screen mode. When you clear lines, garbage rows are sent to the computer. When the computer clears lines, garbage rows are sent to you. The opponent plays on its own clock: one planned input per tick of its board (a depth-1 placement, re-evaluated the moment a plan leg is blocked), so the AI is neither throttled by a slow human level nor rushed by a sprint — the difficulty lives on its own board's pace. Last player standing wins!
 
 ![vs-computer demo](.vhs/vs-computer.gif)
 
