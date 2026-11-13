@@ -369,4 +369,82 @@ final class SqliteBackendTest extends TestCase
             'PRAGMA synchronous must be armed behind a conditional that reads journal_mode back and compares to wal, never unconditionally',
         );
     }
+
+    /**
+     * CT-S22 (finding 023): the durable schema must carry a declared
+     * version, or the first future column change silently no-ops against
+     * every existing database and bricks all writes at the first prepare().
+     */
+    public function testAFreshDatabaseCarriesTheSchemaVersionStamp(): void
+    {
+        $raw = new \SQLite3($this->dbPath);
+        $this->assertSame(1, (int) $raw->querySingle('PRAGMA user_version'));
+        $raw->close();
+    }
+
+    /**
+     * Every database shipped before versioning IS the v1 layout, so a
+     * version-0 file is established idempotently, stamped once, and stays
+     * readable and writable through the stamping open.
+     */
+    public function testAPreVersioningDatabaseIsEstablishedStampedAndStillWorks(): void
+    {
+        $legacy = $this->dbPath . '-legacy';
+        $raw = new \SQLite3($legacy);
+        $q = chr(39);
+        $raw->exec('CREATE TABLE heartbeats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            time INTEGER NOT NULL,
+            project TEXT NOT NULL,
+            language TEXT NOT NULL,
+            file TEXT NOT NULL,
+            duration INTEGER NOT NULL DEFAULT 60,
+            tags TEXT NOT NULL DEFAULT ' . $q . '[]' . $q . '
+        )');
+        $raw->exec('INSERT INTO heartbeats (time, project, language, file, duration, tags)
+            VALUES (1717747200, ' . $q . 'old-proj' . $q . ', ' . $q . 'php' . $q . ', ' . $q . '/x/y.php' . $q . ', 60, ' . $q . '[]' . $q . ')');
+        $raw->close();
+
+        $backend = new SqliteBackend($legacy);
+        $rows = $backend->query(1717747100, 1717747300);
+        $this->assertCount(1, $rows);
+        $this->assertSame('old-proj', $rows[0]->project, 'the pre-versioning row survives the stamping open');
+
+        $backend->insert(new Heartbeat(
+            time: 1717747260,
+            project: 'new-proj',
+            language: 'go',
+            file: '/x/z.go',
+            duration: 30,
+        ));
+        $this->assertCount(2, $backend->query(1717747100, 1717747400));
+
+        $check = new \SQLite3($legacy);
+        $this->assertSame(1, (int) $check->querySingle('PRAGMA user_version'), 'stamped exactly once');
+        $this->assertNotFalse($check->querySingle('SELECT id FROM milestones LIMIT 1') === null, 'the missing milestones table was established');
+        $check->close();
+        foreach (['', '-wal', '-shm'] as $suffix) {
+            @unlink($legacy . $suffix);
+        }
+    }
+
+    /**
+     * The refusal half: a file claiming a version this build does not know
+     * is shut out with one owned line naming the number — no silent no-op,
+     * no half-migration, no raw PHP warning stack.
+     */
+    public function testAnUnknownSchemaVersionIsRefusedLoudly(): void
+    {
+        $raw = new \SQLite3($this->dbPath);
+        $raw->exec('PRAGMA user_version = 99');
+        $raw->close();
+
+        try {
+            new SqliteBackend($this->dbPath);
+            $this->fail('a database from a future schema must not open silently');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('schema version 99', $error->getMessage());
+            $this->assertStringContainsString('does not understand', $error->getMessage());
+        }
+    }
 }

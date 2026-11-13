@@ -23,6 +23,20 @@ final class SqliteBackend implements HeartbeatReader
      */
     private const BUSY_TIMEOUT_MS = 5000;
 
+    /**
+     * Schema stamp written into SQLite's user_version pragma. The tables
+     * were long established solely by CREATE TABLE IF NOT EXISTS — forever.
+     * A durable file plus an unversioned schema means the first future
+     * column change silently no-ops against every existing database and
+     * then bricks every write at the first prepare(); a no-telemetry tool
+     * cannot learn the layouts in the wild after the fact. So the version
+     * is declared on open, and any version this build does not know is
+     * refused loudly. 0 (pre-versioning) is exactly the layout below, so
+     * legacy files are established idempotently and stamped once — the
+     * migration ladder is the one-arm match until a v2 needs the rungs.
+     */
+    public const SCHEMA_VERSION = 1;
+
     private \SQLite3 $db;
 
     public function __construct(string $dbPath)
@@ -59,6 +73,12 @@ final class SqliteBackend implements HeartbeatReader
         // No PRAGMA foreign_keys: heartbeats and milestones are standalone
         // tables, so enabling it would be dead configuration implying
         // relations the schema declares nowhere.
+        $version = (int) @$this->db->querySingle('PRAGMA user_version');
+        if ($version !== 0 && $version !== self::SCHEMA_VERSION) {
+            throw new \RuntimeException(
+                "candy-codetime: {$dbPath} carries schema version {$version}, which this build does not understand — refusing to open it (README Data layout documents the supported version)",
+            );
+        }
         @$this->db->exec('CREATE TABLE IF NOT EXISTS heartbeats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             time INTEGER NOT NULL,
@@ -85,6 +105,15 @@ final class SqliteBackend implements HeartbeatReader
         if (@$this->db->querySingle('SELECT count(*) FROM heartbeats') === false) {
             throw new \RuntimeException(
                 "candy-codetime: {$dbPath} is not a usable candy-codetime database: "
+                . $this->db->lastErrorMsg(),
+            );
+        }
+
+        // Stamp only once the health probe has passed: a broken file must
+        // never leave wearing a version it does not actually carry.
+        if ($version === 0 && @$this->db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION) === false) {
+            throw new \RuntimeException(
+                "candy-codetime: could not stamp schema version " . self::SCHEMA_VERSION . ' on ' . $dbPath . ': '
                 . $this->db->lastErrorMsg(),
             );
         }

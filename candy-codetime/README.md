@@ -163,7 +163,11 @@ instead of failing with "database is locked", `synchronous=NORMAL` as WAL's
 companion (a power cut can cost the last transaction of heartbeat telemetry —
 one sample, never the file), and a 64,000 KiB (62.5 MiB) page cache
 (`cache_size=-64000`) that keeps the `idx_heartbeats_time` range scans in
-memory. The `-wal`/`-shm` sidecars are swept to `0600` with the database
+memory. The schema is declared in SQLite's `user_version` pragma (version
+`1`): a file stamped with a version this build does not know is refused on
+open rather than silently no-op'ed against a layout it cannot read, and
+pre-versioning databases are stamped once after their tables are verified.
+The `-wal`/`-shm` sidecars are swept to `0600` with the database
 itself (Privacy below) and carry recent commits until checkpointed — one
 more reason the copy-only `backup` archive cannot cover sqlite; use
 `sqlite3 <db> ".backup <dest>"`.
