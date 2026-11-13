@@ -86,7 +86,11 @@ final class TableShrinkTest extends FrameworkTestCase
         $view = Table::new(['A', 'B', 'C'], [['xxxx', 'yyyy', 'zzzz']], 1, 10)->view();
         foreach (explode("\n", $view) as $line) {
             $plain = preg_replace('/\e\[[0-9;]*m/', '', $line) ?? $line;
-            $this->assertSame('  ', $plain, 'all-zero columns leave only the two gutters');
+            // W-36/056 golden move: the old pin ('  ') ENCODED the bug —
+            // two gutters at width 1 emitted a line WIDER than the
+            // caller's budget. Unpayable gutters now collapse, so the
+            // all-zero columns render an empty line inside the cap.
+            $this->assertSame('', $plain, 'unpayable gutters collapse; lines never exceed the width');
         }
     }
 

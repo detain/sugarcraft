@@ -459,6 +459,9 @@ final class Table implements Model
      * unbounded. The README dimension table enumerates every surface's
      * `0` meaning; unifying them into one law is a gated product call
      * (DimensionPolicy pass — see W-14's clamp and W-36's minimums).
+     * The sane width minimum is (cols − 1) gutters plus at least one
+     * cell per column; below that the gutters collapse to '' so no
+     * rendered line ever exceeds the configured width (W-36/056).
      */
     public function withSize(int $width, int $height): self
     {
@@ -873,7 +876,18 @@ final class Table implements Model
             }
             $cells[] = $padded;
         }
-        return implode(' ', $cells);
+        // W-36/056: the gutters are part of the budget. columnWidths()
+        // reserves cols−1 separator cells; when the configured width is
+        // too small to even pay for them, collapse the gutters to '' —
+        // an over-budget line silently breaks host line-wrap guards,
+        // which is worse than an airless table. At any width that can
+        // pay, the join keeps its single space byte-for-byte.
+        $sep = ' ';
+        $gap = count($widths) - 1;
+        if ($this->width > 0 && $gap > 0 && $this->width < $gap) {
+            $sep = '';
+        }
+        return implode($sep, $cells);
     }
 
     private function moveCursor(int $idx): self
