@@ -176,16 +176,10 @@ final class ChooseModel implements Model
             return implode("\n", $lines);
         }
 
-        // toggle() keys $checked by the FIRST item carrying a title; map
-        // the same way so the mark lands on exactly the row Space ticks.
-        $firstByTitle = [];
-        foreach ($this->list->items as $i => $item) {
-            $t = $item->title();
-            if (!isset($firstByTitle[$t])) {
-                $firstByTitle[$t] = $i;
-            }
-        }
-
+        // scriptui-13 (finding 041): row ↔ checked mapping via ITEM
+        // IDENTITY (same space toggle() writes) — title-first mapping
+        // ticked and marked the FIRST copy of a duplicated title no
+        // matter which row the cursor stood on.
         $top    = max(0, $this->list->offset);
         $window = array_slice($visible, $top, $this->list->height);
         $cursor = $this->list->index();
@@ -195,8 +189,8 @@ final class ChooseModel implements Model
             if ($idx === $cursor) {
                 $lines[] = $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $itemTitle . Ansi::reset();
             } else {
-                $orig    = $firstByTitle[$item->title()] ?? null;
-                $lines[] = $orig !== null && !empty($this->checked[$orig])
+                $orig    = array_search($item, $this->list->items, true);
+                $lines[] = $orig !== false && !empty($this->checked[$orig])
                     ? "\u{2713} " . $itemTitle
                     : $this->list->unselectedPrefix . $itemTitle;
             }
@@ -272,18 +266,13 @@ final class ChooseModel implements Model
         if ($items === []) {
             return $this;
         }
-        // Map cursor to the underlying item index (filtering may have
-        // reordered).
+        // Map cursor to the underlying item index by IDENTITY — the
+        // filtered view re-positions rows, and a title search would
+        // collapse duplicate titles onto the first copy (scriptui-13).
         $cursor = $this->list->index();
-        $title  = $items[$cursor]->title();
-        $idx = null;
-        foreach ($this->list->items as $i => $item) {
-            if ($item->title() === $title) {
-                $idx = $i;
-                break;
-            }
-        }
-        if ($idx === null) {
+        $item   = $items[$cursor] ?? null;
+        $idx    = $item === null ? false : array_search($item, $this->list->items, true);
+        if ($idx === false) {
             return $this;
         }
         $checked = $this->checked;

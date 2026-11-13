@@ -140,6 +140,11 @@ final class FilterModel implements Model
         // input that can invalidate the cache.
         public readonly string $lastFilterText = '',
         public readonly bool $interrupted = false,
+        // scriptui-12: cursor/offset INSIDE the fuzzy match set. The inner
+        // ItemList cursor navigates the substring-filtered set, which is
+        // not the set painted in fuzzy mode — these carry the real one.
+        public readonly int $fuzzyCursor = 0,
+        public readonly int $fuzzyOffset = 0,
         ?FuzzyMatcher $matcher = null,
     ) {
         $this->matcher = $matcher ?? new SmithWatermanMatcher();
@@ -178,6 +183,44 @@ final class FilterModel implements Model
             if ($this->multi && $msg->type === KeyType::Tab) {
                 return [$this->toggle(), null];
             }
+            // scriptui-12: with the fuzzy set painted, navigation is owned
+            // HERE — the inner ItemList moves its cursor through ITS
+            // substring-filtered set, which is a different set (and a
+            // different index space) whenever a query fuzzy-matches rows
+            // substring would drop. Arrows/PG/HOME/END step $fuzzyCursor
+            // against the match rows themselves; the inner cursor stays
+            // parked (every fuzzy-mode reader uses $fuzzyCursor).
+            if ($this->fuzzyActive()) {
+                $step = match ($msg->type) {
+                    KeyType::Up        => -1,
+                    KeyType::Down      => 1,
+                    KeyType::PageUp    => -max(1, $this->list->height),
+                    KeyType::PageDown  => max(1, $this->list->height),
+                    default            => null,
+                };
+                if ($step !== null || $msg->type === KeyType::Home || $msg->type === KeyType::End) {
+                    $count = count($this->fuzzyResults);
+                    if ($count === 0) {
+                        return [$this, null];
+                    }
+                    $cursor = match (true) {
+                        $msg->type === KeyType::Home => 0,
+                        $msg->type === KeyType::End  => $count - 1,
+                        default => max(0, min($count - 1, $this->fuzzyCursor + $step)),
+                    };
+                    $height = max(1, $this->list->height);
+                    // Keep the cursor inside the window: slide the offset
+                    // only as far as needed (same math ItemList's viewport
+                    // pan applies).
+                    $offset = max(0, min($this->fuzzyOffset, max(0, $count - $height)));
+                    if ($cursor < $offset) {
+                        $offset = $cursor;
+                    } elseif ($cursor >= $offset + $height) {
+                        $offset = $cursor - $height + 1;
+                    }
+                    return [$this->copy(fuzzyCursor: $cursor, fuzzyOffset: $offset), null];
+                }
+            }
         }
         [$next, $cmd] = $this->list->update($msg);
 
@@ -186,12 +229,39 @@ final class FilterModel implements Model
             // Cursor-only keys (arrows, Tab, …) leave the filter text
             // unchanged — reuse the cached results instead of re-running
             // O(n·m) Smith-Waterman scoring on every keystroke.
-            $newResults = $filterText === $this->lastFilterText
+            $textChanged = $filterText !== $this->lastFilterText;
+            $newResults = !$textChanged
                 ? $this->fuzzyResults
                 : $this->computeFuzzyResults($filterText);
-            return [$this->copy(list: $next, fuzzyResults: $newResults, lastFilterText: $filterText), $cmd];
+            if ($textChanged) {
+                // A re-narrowed set restarts selection at the top row
+                // (ItemList's own edit arms do exactly this: cursor: 0).
+                return [$this->copy(list: $next, fuzzyResults: $newResults, lastFilterText: $filterText, fuzzyCursor: 0, fuzzyOffset: 0), $cmd];
+            }
+            $cursor = min($this->fuzzyCursor, max(0, count($newResults) - 1));
+            return [$this->copy(list: $next, fuzzyResults: $newResults, lastFilterText: $filterText, fuzzyCursor: $cursor), $cmd];
         }
         return [$this->copy(list: $next, fuzzyResults: [], lastFilterText: ''), $cmd];
+    }
+
+    /**
+     * True while the painted list is the fuzzy match set (scriptui-12):
+     * fuzzy mode is on AND a filter query is live. The zero-match case
+     * counts as active too — "No matches." is then painted from THIS
+     * space, never from the substring space, so what the user sees and
+     * what Enter submits can never disagree.
+     */
+    private function fuzzyActive(): bool
+    {
+        return $this->fuzzy && $this->list->filterValue() !== '';
+    }
+
+    /** @return list<int> the match set's original-item indices, painted order */
+    private function fuzzyOrder(): array
+    {
+        $order = array_keys($this->fuzzyResults);
+        sort($order, SORT_NUMERIC);
+        return $order;
     }
 
     /**
@@ -278,16 +348,10 @@ final class FilterModel implements Model
             return implode("\n", $lines);
         }
 
-        // toggle() keys $checked by the FIRST allItems entry carrying a
-        // title; map the same way so the mark lands on the toggled row.
-        $firstByTitle = [];
-        foreach ($this->allItems as $i => $item) {
-            $t = $item->title();
-            if (!isset($firstByTitle[$t])) {
-                $firstByTitle[$t] = $i;
-            }
-        }
-
+        // scriptui-13 (finding 041): the row ↔ checked mapping runs
+        // through ITEM IDENTITY (array_search, strict), not title-first
+        // matching — duplicate titles tick and mark per ROW, the same
+        // space toggle() now writes.
         $top    = max(0, $this->list->offset);
         $window = array_slice($visible, $top, $this->list->height);
         $cursor = $this->list->index();
@@ -297,8 +361,8 @@ final class FilterModel implements Model
             if ($idx === $cursor) {
                 $lines[] = $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $itemTitle . Ansi::reset();
             } else {
-                $orig    = $firstByTitle[$item->title()] ?? null;
-                $lines[] = $orig !== null && !empty($this->checked[$orig])
+                $orig    = array_search($item, $this->allItems, true);
+                $lines[] = $orig !== false && !empty($this->checked[$orig])
                     ? "\u{2713} " . $itemTitle
                     : $this->list->unselectedPrefix . $itemTitle;
             }
@@ -332,8 +396,10 @@ final class FilterModel implements Model
         $originalIndices = array_keys($this->fuzzyResults);
         sort($originalIndices, SORT_NUMERIC);
 
-        $cursor = min($this->list->index(), count($visible) - 1);
-        $top    = max(0, $this->list->offset);
+        // scriptui-12: the cursor and scroll window are the fuzzy-set's
+        // own (see fuzzyActive()), not the inner ItemList's substring view.
+        $cursor = max(0, min($this->fuzzyCursor, count($visible) - 1));
+        $top    = max(0, $this->fuzzyOffset);
         foreach (array_slice($visible, $top, $this->list->height, true) as $idx => $item) {
             $highlighted = self::emphasize(
                 $item->title(),
@@ -399,9 +465,9 @@ final class FilterModel implements Model
             // No filter typed: the full list is painted; the cursor row wins.
             return $this->allItems[$this->list->index()] ?? null;
         }
-        $cursor = $this->list->index();
-        $visible = $this->fuzzyVisibleItems();
-        return $visible[$cursor] ?? null;
+        $cursor = $this->fuzzyCursor;
+        $order  = $this->fuzzyOrder();
+        return isset($order[$cursor]) ? $this->allItems[$order[$cursor]] : null;
     }
 
     /** @return list<string> */
@@ -410,7 +476,11 @@ final class FilterModel implements Model
         if (!$this->submitted || !$this->multi) {
             return [];
         }
-        $items = $this->fuzzy ? $this->fuzzyVisibleItems() : $this->list->items;
+        // scriptui-13: $checked keys are ORIGINAL allItems positions in
+        // both modes now — the previous fuzzy branch indexed the
+        // re-sorted subset, silently dropping or swapping rows when the
+        // painted set was narrower than the full list.
+        $items = $this->allItems;
         $out = [];
         // ksort() takes its array by reference, which fatals on a readonly
         // property — sort a local copy instead.
@@ -441,36 +511,36 @@ final class FilterModel implements Model
         if (!$this->fuzzy || $this->fuzzyResults === []) {
             return [];
         }
-        $cursor = $this->list->index();
-        $visible = $this->fuzzyVisibleItems();
-        if (!isset($visible[$cursor])) {
-            return [];
-        }
-        $selectedTitle = $visible[$cursor]->title();
-        foreach ($this->fuzzyResults as $idx => $match) {
-            if ($this->allItems[$idx]->title() === $selectedTitle) {
-                return $match->indices();
-            }
-        }
-        return [];
+        // scriptui-13: resolve the highlighted row through the order
+        // bridge directly to its original index — the previous
+        // title-string search mis-resolved onto a colliding copy when the
+        // same title existed twice.
+        $order = $this->fuzzyOrder();
+        $orig  = $order[$this->fuzzyCursor] ?? null;
+        return $orig !== null && isset($this->fuzzyResults[$orig])
+            ? $this->fuzzyResults[$orig]->indices()
+            : [];
     }
 
     private function toggle(): self
     {
-        $visible = $this->fuzzy ? $this->fuzzyVisibleItems() : $this->list->visibleItems();
-        if ($visible === []) {
-            return $this;
+        // scriptui-13 (finding 017/041): resolve the toggled row to its
+        // ORIGINAL index by row identity, in one shared key space with
+        // selectedAll()/markedBody(). The old shape searched by
+        // title-first-match, which (a) dropped or fabricated entries
+        // whenever the painted list was a re-indexed subset (fuzzy), and
+        // (b) ticked the first copy of a duplicate title while the user
+        // stood on a later one.
+        if ($this->fuzzyActive()) {
+            $order = $this->fuzzyOrder();
+            $idx   = $order[$this->fuzzyCursor] ?? null;
+        } else {
+            $visible = $this->list->visibleItems();
+            $item    = $visible[$this->list->index()] ?? null;
+            $found   = $item === null ? false : array_search($item, $this->allItems, true);
+            $idx     = $found === false ? null : $found;
         }
-        $cursor = $this->list->index();
-        $title  = $visible[$cursor]->title();
-        $idx = null;
-        foreach ($this->allItems as $i => $item) {
-            if ($item->title() === $title) {
-                $idx = $i;
-                break;
-            }
-        }
-        if ($idx === null) {
+        if ($idx === null || !isset($this->allItems[$idx])) {
             return $this;
         }
         $checked = $this->checked;
@@ -494,6 +564,8 @@ final class FilterModel implements Model
         ?array $fuzzyResults = null,
         ?string $lastFilterText = null,
         ?bool $interrupted = null,
+        ?int $fuzzyCursor = null,
+        ?int $fuzzyOffset = null,
     ): self {
         return new self(
             list:           $list           ?? $this->list,
@@ -508,6 +580,8 @@ final class FilterModel implements Model
             fuzzyResults:   $fuzzyResults   ?? $this->fuzzyResults,
             lastFilterText: $lastFilterText ?? $this->lastFilterText,
             interrupted:    $interrupted    ?? $this->interrupted,
+            fuzzyCursor:    $fuzzyCursor    ?? $this->fuzzyCursor,
+            fuzzyOffset:    $fuzzyOffset    ?? $this->fuzzyOffset,
             matcher:        $this->matcher,
         );
     }
