@@ -28,6 +28,15 @@ enum ColorDistance: string
     case Cie2000 = 'cie2000';
 
     /**
+     * The one nearest-color default seat for the legacy matcher: Euclidean.
+     * PaletteIndex defaults to Cie76 (perceptual, matches chafa re-search);
+     * NearestColor stays Euclidean (byte-compat legacy — CALIBER
+     * [perceptual-distance]); documented split, 2.0 candidate — referenced
+     * by NearestColor's signature default so the pair cannot drift silently.
+     */
+    public const DEFAULT_METRIC = self::Euclidean;
+
+    /**
      * Distance between two colors under this metric.
      */
     public function between(Color $a, Color $b): float

@@ -66,8 +66,17 @@ final class NearestColor
     /** Damping applied to the stored error before it pushes the query, per chafa chafa-palette.c:1170. */
     private const ERROR_DAMPING = 0.9;
 
+    /**
+     * @param ColorDistance $metric distance strategy, defaulting to the shared
+     *                              seat {@see ColorDistance::DEFAULT_METRIC}:
+     *                              PaletteIndex defaults to Cie76 (perceptual,
+     *                              matches chafa re-search), NearestColor stays
+     *                              Euclidean (byte-compat legacy — CALIBER
+     *                              [perceptual-distance]); documented split,
+     *                              2.0 candidate.
+     */
     public function __construct(
-        private readonly ColorDistance $metric = ColorDistance::Euclidean,
+        private readonly ColorDistance $metric = ColorDistance::DEFAULT_METRIC,
     ) {
     }
 

@@ -73,6 +73,10 @@ final class PaletteIndex
     /**
      * Build (or reuse) an index over $colors under $metric.
      *
+     * PaletteIndex defaults to Cie76 (perceptual, matches chafa re-search);
+     * NearestColor stays Euclidean (byte-compat legacy — CALIBER
+     * [perceptual-distance]); documented split, 2.0 candidate.
+     *
      * Cache key: the metric case value, a chr(31) separator, then md5 over the
      * packed RGBA bytes of the palette in order — full value identity, so two
      * structurally equal palettes share one index and any channel difference

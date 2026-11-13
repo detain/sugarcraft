@@ -9,6 +9,7 @@ use SugarCraft\ColorProfile\Color;
 use SugarCraft\ColorProfile\ColorDistance;
 use SugarCraft\ColorProfile\ColorMath;
 use SugarCraft\ColorProfile\DeltaE;
+use SugarCraft\ColorProfile\NearestColor;
 
 /**
  * Strategy-enum coverage: dispatch, RGB/Lab separation of concerns, back-compat scale.
@@ -81,5 +82,26 @@ final class ColorDistanceTest extends TestCase
                 $metric->value,
             );
         }
+    }
+
+    /**
+     * CP-19 pin: the shared default seat. ColorDistance::DEFAULT_METRIC is
+     * Euclidean (the byte-compat legacy CALIBER blesses — NOT a silent
+     * alignment onto PaletteIndex's Cie76), and NearestColor's constructor
+     * default resolves THROUGH the const so the signature stays
+     * byte-compatible while the split can no longer drift unnoted.
+     */
+    public function testTheSharedNearestColorDefaultSeatIsEuclidean(): void
+    {
+        $this->assertSame(ColorDistance::Euclidean, ColorDistance::DEFAULT_METRIC);
+
+        $default = (new \ReflectionParameter([NearestColor::class, '__construct'], 'metric'))
+            ->getDefaultValue();
+        $this->assertSame(ColorDistance::DEFAULT_METRIC, $default);
+        $this->assertSame(
+            ColorDistance::Euclidean,
+            (new NearestColor())->metric(),
+            'the resolved default answer is unchanged — BC by construction',
+        );
     }
 }
