@@ -4,12 +4,13 @@
 **Project:** candy-tetris (SugarCraft monorepo)
 **Upstream:** Broderick-Westrope/tetrigo
 **Focus:** SRS rotation, scoring, bag randomizer, ghost piece
+**Errata pass:** 2026-11-12 — the rotation/scoring status below was written against a pre-SRS-wiring snapshot; shipped reality has been marked with dated corrections (era text kept for history).
 
 ---
 
 ## Executive Summary
 
-The candy-tetris implementation is in **Phase 9+**, with all core mechanics working. However, it uses a **simplified wall-kick system** rather than true SRS. This research compares approaches across Go (tetrigo), Rust (rubtle/tetrs), and classic implementations to identify specific improvements.
+The candy-tetris implementation is in **Phase 9+**, with all core mechanics working. As written it used a **simplified wall-kick system** rather than true SRS — **superseded 2026-11-12: full SRS now ships** (official kick tables wired into the game loop; see §1). This research compares approaches across Go (tetrigo), Rust (rubtle/tetrs), and classic implementations to identify specific improvements.
 
 **Current Implementation Status:**
 
@@ -18,12 +19,12 @@ The candy-tetris implementation is in **Phase 9+**, with all core mechanics work
 | 7-Bag Randomizer | ✅ Complete | Fisher-Yates shuffle, injectable RNG |
 | Ghost Piece | ✅ Complete | Rendered via `Board::dropPiece()` |
 | NES Scoring | ✅ Complete | 40/100/300/1200 × (level+1) |
-| SRS Rotation | ⚠️ Partial | Only ±2 horizontal nudge, not full SRS |
+| SRS Rotation | ✅ Complete | 2026-11-12: `SrsKickTable` + `Piece::rotationsWithKicks()` wired into `Game::tryRotate()` |
 | Lock Delay | ✅ Complete | 15 tick delay, resets on movement |
 | Hold Piece | ✅ Complete | Full implementation with `canHold` |
-| T-Spin Detection | ❌ Missing | Not in scope for v0 |
-| Back-to-Back Bonus | ❌ Missing | Not in scope for v0 |
-| Combo System | ❌ Missing | Not in scope for v0 |
+| T-Spin Detection | ✅ Complete | 2026-11-12: `Scoring/TSpin.php` 3-corner rule shipped |
+| Back-to-Back Bonus | ✅ Complete | 2026-11-12: `Game::B2B_MULTIPLIER` 1.5× shipped |
+| Combo System | ✅ Complete | 2026-11-12: combo counter shipped in `Game` (combo × 10 × (level+1)) |
 
 ---
 
@@ -31,7 +32,7 @@ The candy-tetris implementation is in **Phase 9+**, with all core mechanics work
 
 ### Current Implementation (candy-tetris)
 
-**Source:** `candy-tetris/src/Game.php:L194-213`
+**Source:** `candy-tetris/src/Game.php:L194-213` (2026-05-13 era — shown for history; superseded, see correction below)
 
 ```php
 private function tryRotate(int $delta): self
@@ -56,12 +57,12 @@ private function tryRotate(int $delta): self
 }
 ```
 
-**Issues:**
+**Issues (all resolved 2026-11-12):**
 
-- Only horizontal kicks (±1, ±2) - no vertical kicks
-- No distinction between piece types (I vs J/L/S/T/Z)
-- No distinction between clockwise/counter-clockwise rotations
-- Does not use official SRS wall-kick tables
+- ~~Only horizontal kicks (±1, ±2) - no vertical kicks~~ — fixed: full vertical kick offsets ship
+- ~~No distinction between piece types (I vs J/L/S/T/Z)~~ — fixed: `SrsKickTable::kicks()` is per-kind
+- ~~No distinction between clockwise/counter-clockwise rotations~~ — fixed: per direction-pair transitions
+- ~~Does not use official SRS wall-kick tables~~ — fixed: official tables transcribed verbatim; single y-sign flip at the `Piece::rotationsWithKicks()` choke; behaviour pinned by `tests/Rotation/SrsKickBehaviorTest.php`
 
 ### Upstream Implementation (tetrigo)
 
@@ -396,22 +397,22 @@ Guideline specifies 3 modes:
 
 | # | Improvement | Effort | Benefit | Notes |
 |---|-------------|--------|---------|-------|
-| 1 | **Full SRS Rotation** | 4-6h | Authentic feel, enables advanced spins | Use official kick tables from Tetris Wiki |
+| 1 | ~~**Full SRS Rotation**~~ ✅ SHIPPED | — | — | 2026-11-12: official kick tables wired via `Piece::rotationsWithKicks()` |
 
 ### Medium Priority
 
 | # | Improvement | Effort | Benefit | Notes |
 |---|-------------|--------|---------|-------|
-| 2 | T-Spin Detection | 6-8h | Advanced scoring for skilled play | Requires 3-corner detection method |
-| 3 | Back-to-Back Bonus | 2-3h | Rewards consistency | Tracks difficult clears |
-| 4 | Combo System | 2-3h | Rewards streak play | Combo counter with decay |
+| 2 | ~~T-Spin Detection~~ ✅ SHIPPED | — | — | 2026-11-12: `Scoring/TSpin.php` 3-corner rule |
+| 3 | ~~Back-to-Back Bonus~~ ✅ SHIPPED | — | — | 2026-11-12: 1.5× `B2B_MULTIPLIER` in `Game` |
+| 4 | ~~Combo System~~ ✅ SHIPPED | — | — | 2026-11-12: combo counter in `Game` |
 
 ### Low Priority (Nice-to-Have)
 
 | # | Improvement | Effort | Benefit | Notes |
 |---|-------------|--------|---------|-------|
-| 5 | DAS/ARR | 2-3h | Better keyboard feel | For hardcore players |
-| 6 | Perfect Clear Detection | 2-3h | Special bonus scoring | Score table available |
+| 5 | DAS/ARR | 2-3h | Better keyboard feel | For hardcore players — **still open 2026-11-12** (no `src/Input/` exists; repeat is terminal-level) |
+| 6 | ~~Perfect Clear Detection~~ ✅ SHIPPED | — | — | 2026-11-12: `Board::isPerfectClear()` + bonus in `Game` |
 | 7 | IRS/IHS | 2-4h | Guideline compliance | Not critical for v1.0 |
 
 ### No Changes Needed
@@ -588,8 +589,8 @@ Create test cases from official SRS test suite (see [Tetris Wiki SRS](https://te
 
 ## 9. Conclusion
 
-The candy-tetris implementation is solid and well-tested at **82 tests, 1669 assertions**. The core mechanics (bag randomizer, ghost piece, lock delay, hold) are correctly implemented.
+The candy-tetris implementation is solid and well-tested — **497 tests / 7401 assertions as of 2026-11-12** (82 tests / 1669 assertions when this document was written 2026-05-13). The core mechanics (bag randomizer, ghost piece, lock delay, hold) are correctly implemented.
 
-The main improvement opportunity is **full SRS rotation**, which would bring the implementation to true guideline compliance and enable the advanced "spins" that competitive players expect.
+The main improvement opportunity **identified here — full SRS rotation — has shipped** (2026-11-12): true guideline kicks are live and behaviour-pinned, enabling the advanced "spins" that competitive players expect.
 
-**Recommended next step:** Implement `RotationSystem` class with official SRS kick tables as outlined in Section 7.
+**Remaining input-side gap:** DAS/ARR tuning (the only roadmap item above still open; see §6 low-priority table).

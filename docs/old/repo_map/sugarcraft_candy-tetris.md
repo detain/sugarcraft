@@ -2,6 +2,7 @@
 
 **Date:** 2026-05-27
 **Status:** 🟢 v1.0 Ready
+**Errata pass:** 2026-11-12 — removed phantom `src/Input/Das.php` claims (DAS/ARR was never implemented here) and brought the SRS wiring status up to date (§3/§10/§13/§15–§17).
 **Upstream:** [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) (Go)
 **Dependencies:** `sugar-core`, `sugar-style` (candy-scriptui optional for VS mode)
 
@@ -9,9 +10,9 @@
 
 ## 1. Executive Summary
 
-`candy-tetris` is a complete, well-tested Tetris implementation ported from Go's `tetrigo` ecosystem to PHP 8.3+ using the SugarCraft TUI stack. It implements the full **Super Rotation System (SRS)**, **7-bag randomizer**, **ghost piece**, **NES-style scoring** with all guideline bonuses (T-Spin, B2B, Combo, Perfect Clear), **level-driven gravity**, **lock delay**, **hold piece**, **DAS/ARR input**, and a **VS Computer mode** with garbage row passing and AI opponent using weighted board-state heuristics.
+`candy-tetris` is a complete, well-tested Tetris implementation ported from Go's `tetrigo` ecosystem to PHP 8.3+ using the SugarCraft TUI stack. It implements the full **Super Rotation System (SRS)**, **7-bag randomizer**, **ghost piece**, **NES-style scoring** with all guideline bonuses (T-Spin, B2B, Combo, Perfect Clear), **level-driven gravity**, **lock delay**, **hold piece**, and a **VS Computer mode** with garbage row passing and AI opponent using weighted board-state heuristics. (2026-11-12 correction: **DAS/ARR input is not implemented** — the original summary listed it from a plan that never shipped; see §10.)
 
-The implementation is architecturally excellent: 9 pure-state classes (no mutations), 82+ tests with 1669 assertions, injectable RNG for deterministic testing, and clean separation between game logic (Model), rendering (View), and AI (Computer).
+The implementation is architecturally excellent: pure-state classes (no mutations), a full test suite with injectable RNG for deterministic testing, and clean separation between game logic (Model), rendering (View), and AI (Computer).
 
 ---
 
@@ -30,13 +31,22 @@ src/
 ├── Computer.php          AI opponent — weighted heuristic (height/holes/gaps/lines)
 ├── VsGame.php            Model — two Games + garbage passing + win/lose detection
 ├── VsRenderer.php        Split-screen view for VS mode
-├── Input/
-│   └── Das.php           DAS (167ms) + ARR (50ms) delayed-auto-shift input timing
-└── Rotation/
-    └── SrsKickTable.php  Official SRS wall-kick offset tables (J/L/S/T/Z + I)
-└── Scoring/
-    └── TSpin.php         T-Spin detector (3-corner rule) + T-Spin Mini
+├── Lang.php              i18n lookup wrapper (extends sugar-core Lang)
+├── LaunchMode.php        Single-player / VS launch selection
+├── LockDelayMsg.php      Marker Msg — drives the real-time lock-delay window
+├── Rotation/
+│   └── SrsKickTable.php  Official SRS wall-kick offset tables (J/L/S/T/Z + I)
+├── Scoring/
+│   └── TSpin.php         T-Spin detector (3-corner rule) + T-Spin Mini
+└── Support/
+    ├── Bindings.php      Shipped key table + help cards derived from it
+    ├── KeyMap.php        User JSON key-override file folded onto the table
+    ├── Paths.php         Data-directory / score-file path resolution
+    ├── Scores.php        High-score persistence
+    └── Version.php       Build/version metadata
 ```
+
+(2026-11-12: the tree previously listed an `Input/Das.php` that never existed; it now mirrors `src/`.)
 
 ### Key Design Decisions
 
@@ -108,11 +118,11 @@ public static function jlstzKicksProvider(): array
 }
 ```
 
-### Current Limitation
+### Wiring Status
 
-The `Game::tryRotate()` (`src/Game.php:227-250`) currently uses a **simplified horizontal-only nudge** (`[0, -1, 1, -2, 2]`), not the full SRS kick table with vertical offsets. The `SrsKickTable` class exists with correct data but is not yet wired into the game loop. The research document (`docs/research/libraries/candy-tetris-research.md`) outlines the implementation plan.
+**Shipped (verified 2026-11-12):** `Game::tryRotate()` iterates `Piece::rotationsWithKicks()`, which queries `SrsKickTable::kicks()` per rotation pair — true SRS with vertical offsets is live in the game loop (the board is y-down; the single sign flip lives at the `rotationsWithKicks()` choke). Behaviour is pinned by `tests/Rotation/SrsKickBehaviorTest.php`.
 
-**Opportunity:** Wire `Piece::rotationsWithKicks()` into `Game::tryRotate()` to enable true SRS with vertical kicks.
+(Historic note: the 2026-05-27 edition of this document recorded `tryRotate()` as a simplified horizontal-only nudge with the table unwired. That gap has since closed; the `docs/research/libraries/candy-tetris-research.md` plan it pointed at was executed.)
 
 ---
 
@@ -382,20 +392,7 @@ private function tryHold(): array
 
 ### DAS/ARR
 
-**File:** `src/Input/Das.php`
-
-```php
-public const DEFAULT_DAS_US = 167_000;   // 167 ms
-public const DEFAULT_ARR_US = 50_000;      // 50 ms
-```
-
-- **DAS (Delayed Auto Shift):** Initial delay before auto-repeat begins
-
-- **ARR (Auto Repeat Rate):** Interval between repeated actions after DAS threshold
-
-- Key down resets accumulator for that direction
-
-- Key up clears accumulator (stops in-progress repeat)
+**Not implemented (2026-11-12 correction).** This section formerly documented a `src/Input/Das.php` class with `DEFAULT_DAS_US`/`DEFAULT_ARR_US` constants; no such file, directory, or constant exists anywhere in the target. Key auto-repeat reaches the game through sugar-core's `KeyRepeatMsg` (terminal-level repeat), so movement repeat works, but there is no app-side DAS/ARR timing tuner. Treat the rest of this section as a design sketch, not shipped documentation; the genuine open item is listed under §15 opportunities.
 
 ### Game Controls
 
@@ -517,13 +514,13 @@ This is an **innovation opportunity**: spring-based ghost piece animation could 
 
 | Feature | tetrigo (Go) | candy-tetris (PHP) | Notes |
 |---------|-------------|-------------------|-------|
-| Rotation System | Full SRS | Partial (simplified kicks) | candy-tetris has SrsKickTable but Game uses horizontal-only |
+| Rotation System | Full SRS | ✓ Full SRS | Wired — verified 2026-11-12: `Game::tryRotate()` iterates `Piece::rotationsWithKicks()` → `SrsKickTable` (this doc formerly recorded horizontal-only while unwired) |
 | 7-Bag RNG | ✓ | ✓ | candy-tetris has cleaner injectable RNG |
 | Ghost Piece | ✓ | ✓ | Identical approach |
 | NES Scoring | ✓ | ✓ + T-Spin/B2B/Combo/PerfectClear | candy-tetris more complete |
 | Lock Delay | ✓ | ✓ | Identical |
 | Hold Piece | ✓ | ✓ | Identical |
-| DAS/ARR | Not in tetrigo | ✓ | candy-tetris has Input/Das.php |
+| DAS/ARR | Not in tetrigo | — Not implemented | 2026-11-12 correction: `src/Input/Das.php` never existed; repeat relies on terminal-level auto-repeat (see §10) |
 | T-Spin | Not in tetrigo | ✓ | 3-corner rule |
 | B2B | Not in tetrigo | ✓ | 1.5× multiplier |
 | Combo | Not in tetrigo | ✓ | combo × 10 × (level+1) |
@@ -542,21 +539,28 @@ This is an **innovation opportunity**: spring-based ghost piece animation could 
 | Test File | Coverage |
 |-----------|----------|
 | `BagTest.php` | 7-bag shuffle, peek, deterministic RNG |
+| `BinaryLaunchTest.php` / `BinaryWiringTest.php` | `bin/` launch contracts + wiring |
 | `BoardTest.php` | fits(), place(), clearLines(), dropPiece(), isPerfectClear() |
-| `GameTest.php` | Key handling, gravity, hard drop, pause, game over, hold |
-| `PieceTest.php` | Rotation, movement, cells() |
-| `RendererTest.php` | Output rendering (snapshot tests) |
-| `Rotation/SrsKickTableTest.php` | All kick data correctness |
-| `Scoring/TSpinTest.php` | 3-corner rule, mini detection, OOB corners |
+| `ColourPostureTest.php` | NO_COLOR / colour-capability posture |
+| `ComputerTest.php` | AI bestMove behavioural oracle + evaluate() weight pins |
+| `EarnedMomentsTest.php` / `IntroGateTest.php` | intro gate, milestone moments |
+| `GameTest.php` / `GameGravityChainTest.php` | Key handling, gravity, hard drop, pause, game over, hold; gravity chain scheduling |
+| `GoldenRenderTest.php` / `RendererTest.php` / `VsRendererTest.php` / `VsStripTest.php` | Snapshot byte goldens, split-screen rendering |
+| `I18nWiringTest.php` / `LangTest.php` / `LocaleParityTest.php` | locale roster + Lang::t wiring |
+| `KeyActuationTest.php` | press/repeat/release actuation rules |
+| `LaunchModeTest.php` | single-player / VS mode selection |
+| `PharBuildScriptTest.php` | phar build + boot contracts |
+| `PieceTest.php` | Rotation, movement, cells(), rotationsWithKicks() |
+| `Rotation/SrsKickTableTest.php` / `Rotation/SrsKickBehaviorTest.php` | Table transcription vs published SRS; board behaviour (candidate lists, ceiling/floor kicks) |
 | `ScoreTest.php` | Points/lines/level, framesPerRow() |
+| `Scoring/TSpinTest.php` | 3-corner rule, mini detection, OOB corners |
+| `Support/BindingsDerivationTest.php` / `Support/KeyMapTest.php` | Derived help cards; JSON key-override folding |
+| `Support/ScoresTest.php` / `Support/ScoresRecordingTest.php` | High-score persistence |
 | `TetrominoTest.php` | cells(), color(), all rotations |
-| `ComputerTest.php` | AI bestMove, board evaluation |
+| `ViewportTest.php` | sizing, refusal copy |
 | `VsGameTest.php` | Two-player sync, garbage passing |
-| `VsRendererTest.php` | Split-screen rendering |
-| `GravityMsgTest.php` | Marker message |
-| `Input/DasTest.php` | DAS/ARR timing logic |
 
-**Total:** 82+ tests, 1669 assertions, ~300ms execution.
+**Total (2026-11-12):** 497 tests, 7401 assertions. (Historic 2026-05-27 figures: 82 tests / 1669 assertions. Rows for `GravityMsgTest.php`, `Input/DasTest.php` removed — the former was deleted as a vacuous smoke in 2026-11 (behaviour lives in `GameTest`), the latter never existed.)
 
 ---
 
@@ -566,33 +570,31 @@ This is an **innovation opportunity**: spring-based ghost piece animation could 
 
 1. **Full Guideline Scoring** — T-Spin, B2B, Combo, Perfect Clear (supersedes upstream tetrigo)
 
-2. **DAS/ARR Input** — Professional-grade keyboard timing not in upstream
+2. **Full SRS Rotation** — official kick tables wired into the game loop via `Piece::rotationsWithKicks()` (2026-11-12: this replaces the former "DAS/ARR Input" claim, which documented a class that never shipped)
 
-3. **VS Computer Mode** — Garbage passing + AI opponent
+3. **Drop Scoring** — soft drop +1 point/cell, hard drop +2 points/cell (guideline standard; 2026-11-12: shipped, formerly listed as an open opportunity)
 
-4. **Pure State Architecture** — Every class immutable, Game update returns `[nextGame, ?Cmd]`
+4. **VS Computer Mode** — Garbage passing + AI opponent
 
-5. **Injectable RNG** — Deterministic testing without mocking global state
+5. **Pure State Architecture** — Every class immutable, Game update returns `[nextGame, ?Cmd]`
 
-6. **Clean Separation** — SrsKickTable, TSpin as independent, testable units
+6. **Injectable RNG** — Deterministic testing without mocking global state
+
+7. **Clean Separation** — SrsKickTable, TSpin as independent, testable units
 
 ### Opportunities for Enhancement
 
-1. **Full SRS in Game Loop** — Wire `Piece::rotationsWithKicks()` into `Game::tryRotate()` (currently uses simplified horizontal-only kicks)
+1. **DAS/ARR input timing** — an app-side delayed-auto-shift/ARR tuner (terminal repeat today; see §10 correction)
 
-2. **Soft Drop Scoring** — Currently soft drop moves piece but awards no points
+2. **sugar-spring Integration** — Spring-animated ghost piece, line-clear particles
 
-3. **Hard Drop Scoring** — 2 points per cell dropped (guideline standard)
+3. **Initial Rotation System (IRS)** — Allow rotation during ARE before piece appears
 
-4. **sugar-spring Integration** — Spring-animated ghost piece, line-clear particles
+4. **Initial Hold System (IHS)** — Allow hold during ARE
 
-5. **Initial Rotation System (IRS)** — Allow rotation during ARE before piece appears
+5. **Diminishing Lock Delay** — Lock delay speeds up with each reset (guideline option)
 
-6. **Initial Hold System (IHS)** — Allow hold during ARE
-
-7. **Diminishing Lock Delay** — Lock delay speeds up with each reset (guideline option)
-
-8. **Ghost Piece Toggle** — Allow hiding ghost per player preference
+6. **Ghost Piece Toggle** — Allow hiding ghost per player preference
 
 ---
 
@@ -600,20 +602,21 @@ This is an **innovation opportunity**: spring-based ghost piece animation could 
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `src/Game.php` | TEA Model orchestrator | 528 |
+| `src/Game.php` | TEA Model orchestrator | 1143 |
 | `src/Board.php` | Playfield state | 158 |
-| `src/Piece.php` | Falling piece VO | 85 |
-| `src/Tetromino.php` | Piece enum + SRS shapes | 103 |
-| `src/Bag.php` | 7-bag RNG | 84 |
-| `src/Score.php` | Points/level/gravity | 72 |
-| `src/Renderer.php` | Pure view function | 167 |
+| `src/Piece.php` | Falling piece VO + kick application site | 89 |
+| `src/Tetromino.php` | Piece enum + SRS shapes | 124 |
+| `src/Bag.php` | 7-bag RNG | 114 |
+| `src/Score.php` | Points/level/gravity | 86 |
+| `src/Renderer.php` | Pure view function | 440 |
 | `src/Computer.php` | AI opponent | 195 |
-| `src/VsGame.php` | VS mode model | 162 |
-| `src/VsRenderer.php` | VS mode view | 166 |
-| `src/Rotation/SrsKickTable.php` | SRS kick data | 75 |
-| `src/Scoring/TSpin.php` | T-Spin detection | 134 |
-| `src/Input/Das.php` | DAS/ARR timing | 141 |
-| `src/GravityMsg.php` | Gravity tick marker | 17 |
+| `src/VsGame.php` | VS mode model | 418 |
+| `src/VsRenderer.php` | VS mode view | 378 |
+| `src/Rotation/SrsKickTable.php` | SRS kick data | 111 |
+| `src/Scoring/TSpin.php` | T-Spin detection | 130 |
+| `src/GravityMsg.php` | Gravity tick marker | 25 |
+
+(2026-11-12: counts refreshed; the `src/Input/Das.php` row removed — file never existed.)
 
 ---
 
@@ -621,6 +624,6 @@ This is an **innovation opportunity**: spring-based ghost piece animation could 
 
 candy-tetris is a **production-ready, well-architected** Tetris implementation that has surpassed its Go upstream (tetrigo) in feature completeness. Its pure-state architecture, comprehensive test suite, and clean separation of concerns make it an excellent reference implementation of the SugarCraft TEA pattern.
 
-**Primary opportunity:** Wire the existing `SrsKickTable` into `Game::tryRotate()` to enable true SRS with vertical kicks, completing the full Guideline rotation system.
+**Rotation status (2026-11-12):** the former "primary opportunity" — wiring `SrsKickTable` into `Game::tryRotate()` — has shipped; the game now plays with true SRS including vertical kicks.
 
-**Secondary opportunity:** Integrate sugar-spring physics for smooth UI animations (ghost piece spring-easing, line-clear particles, camera shake on Tetris) to create a more polished visual experience.
+**Remaining opportunities:** DAS/ARR input timing (§10/§15) and sugar-spring physics for smooth UI animations (ghost piece spring-easing, line-clear particles, camera shake on Tetris) to create a more polished visual experience.
