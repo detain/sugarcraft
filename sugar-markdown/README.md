@@ -93,32 +93,42 @@ $theme = Theme::fromJsonString('{"heading1":{"foreground":"#ff5f87","bold":true}
 echo (new Renderer($theme))->render("# Styled\n");
 ```
 
-Two schemas are accepted. The one above is this library's FLAT schema;
-the flat reader decodes the listed style slots and leaves the rest
-(document margins and indent, affixes, heading prefixes, glyphs) at
-defaults. A payload that carries a `document` block is glamour's
-`styles.json` and routes through `StyleGuide`, which decodes the full
-element (`h1`, `block_quote`, `code_block`, …) and `chroma` token
-vocabulary — `new StyleGuide` helpers `fromJsonString()` / `fromFile()`
-/ `element()` / `theme()` are public if you want the guide itself.
-`theme()` projects a subset — about thirteen element names (`h1`–`h6`,
+**Two schemas.** The one above is this library's FLAT schema — the flat
+reader decodes the listed style slots and leaves the rest (document
+margins and indent, affixes, heading prefixes, glyphs) at defaults. A
+payload that carries a `document` block follows glamour's `styles.json`
+schema and routes through `StyleGuide`, which decodes the full element
+(`h1`, `block_quote`, `code_block`, …) and `chroma` token vocabulary.
+`StyleGuide`'s whole surface is public — the statics `isGlamourSchema()`
+/ `fromFile()` / `fromJsonString()` / `fromDecoded()` and the readers
+`element()` / `chroma()` / `indentToken()` / `theme()` — so you can
+drive the guide itself, not just the `Theme::fromJsonString()` door.
+
+**Projection.** `theme()` projects sixteen element names (`h1`–`h6`,
 `paragraph`, `strong`, `emph`, `codespan`, `code_block`, `link`,
-`block_quote`, `list`, `hr`, `strikethrough`) plus four chroma slots
-(keyword, string, number, comment). Heading casing carries across too:
-`"uppercase": true` / `"lowercase": true` on any `h1`–`h6` block feeds
-the Theme's `headingCase` selector, and a document spelling both lands
-on upper — a house tie-break, since glamour's own corpora never do.
-Everything else stays addressable
-through `element()` / `chroma()`, nothing is silently lost.
-`Theme::fromFile($path, ?int $maxBytes = null)` throws `RuntimeException`
-on an unreadable file or one exceeding the ceiling; `Theme::fromJsonString($json)` throws `InvalidArgumentException`
-on malformed JSON or a non-object payload. Within a well-formed object
-the flat reader is lenient about what it does not understand: unknown
-keys are ignored, slots the document omits keep their plain defaults,
-and a bare colour word matching no spec (`"crimson"`) yields no
-colour. It is strict about malformed specs it can parse the shape of:
-bad hex (`"#ff5f"`) and non-numeric or out-of-range `ansi:` /
-`ansi256:` (`"ansi:99"`) all throw `InvalidArgumentException`.
+`block_quote`, `list`, `hr`, `strikethrough`), four chroma slots
+(keyword, string, number, comment), and the `inline_image` /
+`block_image` pair into the alt-text slot — twenty keys in all, two of
+them fallback aliases: `heading` feeds every `h1`–`h6` whose own block
+is absent, and `blockquote` is an alternate spelling of `block_quote`.
+Heading casing carries across too: `"uppercase": true` /
+`"lowercase": true` on any `h1`–`h6` block feeds the Theme's
+`headingCase` selector, and a document spelling both lands on upper —
+a house tie-break, since glamour's own corpora never do. Everything
+else stays addressable through `element()` / `chroma()`, nothing is
+silently lost.
+
+**Exceptions — lenient keys, strict values.** `Theme::fromFile($path,
+?int $maxBytes = null)` throws `RuntimeException` on an unreadable file
+or one exceeding the byte ceiling; `Theme::fromJsonString($json)`
+throws `InvalidArgumentException` on malformed JSON or a non-object
+payload. Inside a well-formed object the reader is lenient about what
+it does not understand: unknown keys are ignored, slots the document
+omits keep their plain defaults, and a bare colour word matching no
+spec (`"crimson"`) yields no colour. But a spec whose shape parses and
+whose contents are wrong is refused outright: bad hex (`"#ff5f"`),
+non-numeric or out-of-range `ansi:` / `ansi256:` (`"ansi:99"`) all
+throw `InvalidArgumentException`.
 
 JSON shape (flat): an object keyed by element name (`heading1`–`heading6`, `paragraph`,
 `bold`, `italic`, `code`, `codeBlock`, `link`, `blockquote`,
