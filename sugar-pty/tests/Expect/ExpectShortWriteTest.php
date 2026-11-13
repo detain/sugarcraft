@@ -11,8 +11,15 @@ use SugarCraft\Pty\Exception\ExpectTimeoutException;
 use SugarCraft\Pty\Expect;
 
 /**
- * Tests for Expect remediation: partial-write flush loop (Step 8)
- * and maxBuffer / searchWindow / expectEof (Step 11).
+ * Expect buffer-discipline pins: the maxBuffer cap as observed through
+ * expectEof()'s retained before-buffer, the builder carries for
+ * maxBuffer/searchWindow/recorder, and expectEof() success semantics.
+ *
+ * The partial-write flush loop is NOT covered here despite the file name:
+ * FixtureMaster::write() below accepts every byte it is handed, so any
+ * short-write story told in this file would be fiction. That loop's home
+ * is ExpectSendRetryTest, whose busyMaster fixture would-blocks and
+ * accepts one chunk at a time.
  */
 final class ExpectShortWriteTest extends TestCase
 {
@@ -86,29 +93,55 @@ final class ExpectShortWriteTest extends TestCase
 
     public function testExpectEofWithMaxBufferTrimsLongBuffer(): void
     {
-        // Master returns a large chunk
+        // Master returns a large chunk, then EOF.
         $largeChunk = \str_repeat('x', 8192);
         $master = new FixtureMaster('', chunks: [$largeChunk, '']);
         $expect = Expect::on($master)->withMaxBuffer(1024);
 
         $result = $expect->expectEof(0.1);
 
-        // Buffer should be trimmed to maxBuffer (1024 bytes)
-        $this->assertLessThanOrEqual(1024, \strlen($result->buffer));
+        // The cap's observable oracle is the RETAINED before-buffer: 8192
+        // bytes were read, only the last 1024 survive the per-read trim.
+        // If trimBuffer() stops running, before is 8192 bytes and this
+        // fails — unlike the old assertLessThanOrEqual(1024, …) that sat
+        // above an emptiness assert on $result->buffer and could never
+        // fail independently (emptiness subsumes the cap).
+        $this->assertSame(1024, \strlen($result->before));
+        $this->assertSame(\str_repeat('x', 1024), $result->before);
         $this->assertSame('', $result->buffer); // final buffer after EOF is ''
     }
 
-    // ----- searchWindow behavior -----------------------------------------
-
-    public function testSearchWindowBoundsStrposScan(): void
+    public function testExpectEofWithMaxBufferKeepsTheNewestBytes(): void
     {
-        // When searchWindow is set, only the last N bytes are searched.
-        // With a buffer of "prefix" and a needle "suffix" at the very end,
-        // the strpos should still find it if the window covers it.
+        // 12 KiB arrives in three distinguishable chunks before EOF; the
+        // retained tail must be the NEWEST maxBuffer bytes, not a stale
+        // window from wherever a one-shot trim happened to land.
+        $master = new FixtureMaster('', chunks: [
+            \str_repeat('a', 4096),
+            \str_repeat('b', 4096),
+            \str_repeat('c', 4096),
+            '',
+        ]);
+        $result = Expect::on($master)->withMaxBuffer(1024)->expectEof(0.1);
+
+        $this->assertSame(\str_repeat('c', 1024), $result->before);
+    }
+
+    // ----- searchWindow builder ------------------------------------------
+
+    public function testWithSearchWindowEchoesTheBuilderField(): void
+    {
+        // Builder carry only: the value lands on the new instance and the
+        // old one is untouched. This leg never exercised a strpos scan —
+        // the window's scan-bound BEHAVIOUR (what stays findable inside
+        // the tail slice) is a property question, not a field-echo one,
+        // and belongs in a behaviour pin.
         $expect = Expect::on(new FixtureMaster(''));
         $expect2 = $expect->withSearchWindow(10);
 
         $this->assertSame(10, $expect2->searchWindow);
+        $this->assertNull($expect->searchWindow);
+        $this->assertNotSame($expect, $expect2);
     }
 
     // ----- withRecorder carries maxBuffer/searchWindow -------------------
