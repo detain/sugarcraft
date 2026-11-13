@@ -60,7 +60,14 @@ final class TapeToGif
      *   strict?: bool,
      *   shell?: string|null,
      *   exec?: bool,
+     *   maxFrames?: int,
+     *   maxRuntimeSeconds?: float,
      * } $options
+     *
+     * `maxFrames` / `maxRuntimeSeconds` override the frame-stream safety
+     * ceilings (defaults: 100 000 frames / 24 h of virtual tape). A corrupted
+     * timestamp breaches them with a named RuntimeException instead of
+     * rendering until an external timeout kills the process.
      *
      * The `shell` / `exec` options opt the render into exec mode (real PTY +
      * captured program output). Precedence: an explicit `shell` (CLI `--shell`)
@@ -111,7 +118,14 @@ final class TapeToGif
         // Null ⇒ the byte-identical echo path (the goldens' path), unchanged.
         $shell = $this->resolveShell($options);
 
-        $frameStream = $this->renderer->render($player, $terminal, $fps, $shell);
+        $frameStream = $this->renderer->render(
+            $player,
+            $terminal,
+            $fps,
+            $shell,
+            ($options['maxFrames'] ?? null) !== null ? (int) $options['maxFrames'] : null,
+            ($options['maxRuntimeSeconds'] ?? null) !== null ? (float) $options['maxRuntimeSeconds'] : null,
+        );
 
         // Same cell metrics the Compiler used to derive cols/rows, so the canvas
         // (cols * cellW) x (rows * cellH) lands within one cell of the tape's
@@ -131,11 +145,14 @@ final class TapeToGif
         $outputDir = dirname($output);
 
         // `Hide`/`Show` events flip the frame stream's cursor-capture flag as
-        // the generator advances, so the current value is read per frame: at
-        // each iteration the stream is suspended just after producing that
-        // snapshot, which is exactly the state the frame was captured in.
-        // (Hoisting this read above the loop froze every frame at the
-        // pre-iteration value and made the directives inert.)
+        // the generator advances, and `Snapshot` events park a screenshot path
+        // the same way: both must be sampled the instant the dedup iterator
+        // pulls a snapshot — the stream is suspended right after producing it,
+        // which is exactly the state that frame was captured in. (Hoisting the
+        // read above the loop froze every frame at the pre-iteration value and
+        // made the directives inert; reading it at yield time now that the
+        // builder holds one frame of lookahead would attach the NEXT frame's
+        // state.) The builder stamps both onto each frame array for this loop.
 
         // Long renders used to be silent: the first thing a caller heard was
         // 'GIF written', minutes later. The frame stream is lazy, so the total
@@ -143,8 +160,8 @@ final class TapeToGif
         $onProgress = $options['onProgress'] ?? null;
 
         try {
-            foreach ($this->buildFramesWithHolds($frameStream, 1.0 / $fps) as $index => $frameInfo) {
-                $renderCursor = $frameStream->captureCursor;
+            foreach ($this->buildFramesWithHolds($frameStream, 1.0 / $fps, $cassette->endTime) as $index => $frameInfo) {
+                $renderCursor = $frameInfo['renderCursor'];
                 if ($onProgress !== null && $index % 100 === 99) {
                     /** @var callable(int, int, int): void $onProgress */
                     $onProgress($index + 1, $cellW, $cellH);
@@ -168,7 +185,15 @@ final class TapeToGif
                 }
 
                 $pngPaths[] = $framePath;
-                $frameHoldsMs[] = (int) round($frameInfo['hold'] * 1000);
+                // GIF Graphic Control delay is 16-bit centiseconds: a hold
+                // beyond 655.35s saturates, and a non-finite hold (a corrupted
+                // tape clock reaching the encoder) must die named, not silently
+                // cast into a bogus delay.
+                $holdSeconds = $frameInfo['hold'];
+                if (!is_finite($holdSeconds)) {
+                    throw new \RuntimeException("Non-finite frame hold duration at frame {$index} of {$tapePath}");
+                }
+                $frameHoldsMs[] = (int) round(min(655.35, max(0.0, $holdSeconds)) * 1000);
 
                 // Handle screenshot capture — confined to output directory for safety
                 if (($frameInfo['screenshotPath'] ?? null) !== null) {
@@ -358,24 +383,28 @@ final class TapeToGif
     }
 
     /**
-     * @return \Generator<int, array{snapshot: Snapshot, hold: float, screenshotPath: string|null}>
+     * Turn the deduped snapshot stream into frames carrying a hold duration.
+     *
+     * The builder holds ONE frame of lookahead: a pulled frame's true hold is
+     * only known when the NEXT distinct frame appears (the gap between their
+     * timestamps), and the final frame's hold extends to the tape's end time —
+     * without that, a trailing `Sleep` had nothing left to hold (finding 003).
+     * The cursor-capture flag and pending screenshot are sampled at PULL time
+     * (the stream sits exactly at that frame) and travel inside the frame
+     * array, immune to the one-frame deferral.
+     *
+     * @return \Generator<int, array{snapshot: Snapshot, hold: float, screenshotPath: string|null, renderCursor: bool}>
      */
-    private function buildFramesWithHolds(FrameStream $frameStream, float $frameInterval): \Generator
+    private function buildFramesWithHolds(FrameStream $frameStream, float $frameInterval, ?float $endTime = null): \Generator
     {
-        $prevTime = 0.0;
         $dedupIterator = FrameDedup::dedup($frameStream);
 
         $emittedIndex = 0;
-        $lastSnapshot = null;
+        /** @var array{snapshot: Snapshot, screenshotPath: string|null, renderCursor: bool}|null $pending */
+        $pending = null;
+        $pendingTime = 0.0;
+
         foreach ($dedupIterator as $snapshot) {
-            $lastSnapshot = $snapshot;
-            $frameTime = $snapshot->time;
-            $hold = $emittedIndex === 0
-                ? $frameInterval
-                : max($frameInterval, $frameTime - $prevTime);
-
-            $prevTime = $frameTime;
-
             // Capture any pending screenshot BEFORE clearing it — this
             // associates the screenshot with exactly the frame that was
             // current when the Snapshot event fired.
@@ -384,22 +413,41 @@ final class TapeToGif
                 $frameStream->pendingScreenshotPath = null;
             }
 
-            yield $emittedIndex => [
+            $pulled = [
                 'snapshot' => $snapshot,
-                'hold' => $hold,
                 'screenshotPath' => $screenshotPath,
+                'renderCursor' => $frameStream->captureCursor,
             ];
-            $emittedIndex++;
+
+            if ($pending !== null) {
+                yield $emittedIndex++ => $pending + [
+                    'hold' => max($frameInterval, $snapshot->time - $pendingTime),
+                ];
+            }
+
+            $pending = $pulled;
+            $pendingTime = $snapshot->time;
+        }
+
+        if ($pending !== null) {
+            // The last held frame lives until the tape's true end — that IS
+            // the visible pause a trailing Sleep buys (previously every tape
+            // collapsed to a uniform 1/fps hold).
+            $hold = $endTime !== null && $endTime > $pendingTime
+                ? max($frameInterval, $endTime - $pendingTime)
+                : $frameInterval;
+            yield $emittedIndex++ => $pending + ['hold' => $hold];
         }
 
         // If a Snapshot event was processed after the last yielded frame
         // (e.g., because subsequent frames were deduped away), capture it
         // using the last yielded snapshot.
-        if ($frameStream->pendingScreenshotPath !== null && $lastSnapshot !== null) {
+        if ($frameStream->pendingScreenshotPath !== null && $pending !== null) {
             yield $emittedIndex => [
-                'snapshot' => $lastSnapshot,
+                'snapshot' => $pending['snapshot'],
                 'hold' => 0.0,
                 'screenshotPath' => $frameStream->pendingScreenshotPath,
+                'renderCursor' => $pending['renderCursor'],
             ];
             $frameStream->pendingScreenshotPath = null;
         }

@@ -80,11 +80,34 @@ final class FrameStream implements \IteratorAggregate
     /** True once the PTY master has reported EOF, to stop draining a dead child. */
     private bool $execEof = false;
 
+    /**
+     * Hard ceiling on emitted frames (overridable per render via the
+     * `maxFrames` option). A degenerate tape must die loudly on this number,
+     * never loop until the harness timeout-kills it (finding 001).
+     */
+    public const DEFAULT_MAX_FRAMES = 100_000;
+
+    /**
+     * Hard ceiling on virtual tape runtime in seconds (overridable via the
+     * `maxRuntimeSeconds` option) — one day. `{"t":1e17}` style corruptions
+     * hit this guard and raise a named error instead of spinning.
+     */
+    public const DEFAULT_MAX_RUNTIME_SECONDS = 86_400.0;
+
+    /**
+     * Longest run of unchanged frame boundaries FrameStream will suppress
+     * before re-emitting identically — mirrors the default hold ceiling of
+     * FrameDedup::dedup() so the two layers' max-hold contract agrees.
+     */
+    private const HOLD_MAX_CADENCE = 300;
+
     public function __construct(
         private Player $player,
         private Terminal $terminal,
         private float $fps = 30.0,
         private ?string $shell = null,
+        private int $maxFrames = self::DEFAULT_MAX_FRAMES,
+        private ?float $maxRuntimeSeconds = null,
     ) {
         // Parse-don't-validate at the boundary — getIterator
         // divides 1.0/$fps on the shared clock, and TapeToGif casts the
@@ -94,6 +117,16 @@ final class FrameStream implements \IteratorAggregate
         if (!is_finite($fps) || $fps <= 0.0) {
             throw new \InvalidArgumentException(
                 "FrameStream fps must be a positive finite number of frames per second, got {$fps}."
+            );
+        }
+        if ($maxFrames < 1) {
+            throw new \InvalidArgumentException(
+                "FrameStream maxFrames must be at least 1, got {$maxFrames}."
+            );
+        }
+        if ($maxRuntimeSeconds !== null && (!is_finite($maxRuntimeSeconds) || $maxRuntimeSeconds <= 0.0)) {
+            throw new \InvalidArgumentException(
+                "FrameStream maxRuntimeSeconds must be a positive finite number of seconds, got {$maxRuntimeSeconds}."
             );
         }
     }
@@ -110,8 +143,10 @@ final class FrameStream implements \IteratorAggregate
 
         $events = $cassette->events;
         $eventCount = count($events);
+        $endTime = $cassette->endTime;
+        $runtimeCap = $this->maxRuntimeSeconds ?? self::DEFAULT_MAX_RUNTIME_SECONDS;
 
-        if ($eventCount === 0) {
+        if ($eventCount === 0 && ($endTime === null || $endTime <= 0.0)) {
             return;
         }
 
@@ -126,6 +161,16 @@ final class FrameStream implements \IteratorAggregate
             $frameIndex = 0;
             $lastSnapshotTime = -1.0;
             $previousEventTime = 0.0;
+            $lastYieldedRevision = null;
+            $lastYieldedCaptureCursor = null;
+            $skippedBoundaries = 0;
+
+            // Boundary emission is decided by frameDue() below; the yields
+            // themselves stay inline in each drive loop because generators
+            // propagate yields lexically — this stream is the render
+            // pipeline's feed. (No closure wrapper: the terminal instance
+            // mutates across Resize events and by-value capture would go
+            // stale.)
 
             for ($i = 0; $i < $eventCount; $i++) {
                 $event = $events[$i];
@@ -140,33 +185,130 @@ final class FrameStream implements \IteratorAggregate
                     $previousEventTime = $event->t;
                 }
 
-                $terminal = $this->processEvent($event, $terminal);
+                // Fail fast on a corrupted clock: a tape whose virtual time
+                // leaps past the runtime cap dies here, loudly, with the
+                // offending timestamp in the message — never an hour of frames.
+                if ($virtualTime > $runtimeCap) {
+                    throw new \RuntimeException(
+                        "tape event at t={$event->t}s exceeds the render runtime cap of {$runtimeCap}s "
+                            . '(frame/loop safety); raise the maxRuntimeSeconds option if this tape is genuine.'
+                    );
+                }
 
+                // Two-phase flush: boundaries strictly earlier than this event
+                // must show the PRE-event grid; only the boundary exactly at
+                // the event time (or, failing that, the flush after the loop)
+                // shows it fed. Feeding before the flush rendered typing
+                // ~0.6s early and made the opening frame show the first
+                // keystroke (finding 003).
+                $fed = false;
                 while ($virtualTime >= $nextSnapshotTime) {
+                    if (!$fed && $nextSnapshotTime >= $virtualTime) {
+                        $terminal = $this->processEvent($event, $terminal);
+                        $fed = true;
+                    }
                     if ($exec) {
                         // The wall-clock frame boundary IS the read window: drain
                         // program output for up to one frame interval before the
                         // snapshot, so output lands on the frame it arrived on.
                         $this->drainExec($terminal, $frameInterval);
                     }
-                    $lastSnapshotTime = $nextSnapshotTime;
-                    yield $frameIndex => $terminal->snapshot($nextSnapshotTime);
-                    $frameIndex++;
+                    if ($this->frameDue($terminal, $lastYieldedRevision, $lastYieldedCaptureCursor, $skippedBoundaries)) {
+                        $lastSnapshotTime = $nextSnapshotTime;
+                        yield $frameIndex => $terminal->snapshot($nextSnapshotTime);
+                        $frameIndex++;
+                        $this->guardFrameCap($frameIndex);
+                        $lastYieldedRevision = $terminal->revision();
+                        $lastYieldedCaptureCursor = $this->captureCursor;
+                        $skippedBoundaries = 0;
+                    } else {
+                        $skippedBoundaries++;
+                    }
                     $nextSnapshotTime += $frameInterval;
+                }
+                if (!$fed) {
+                    $terminal = $this->processEvent($event, $terminal);
                 }
             }
 
-            if ($frameIndex === 0 || $virtualTime > $lastSnapshotTime) {
+            // Trailing flush: hold the final grid until the tape's true end.
+            // A compiled tape knows its end even past the last event (a
+            // trailing Sleep), so the GIF keeps that pause visible (finding 003).
+            $endAt = max($virtualTime, $endTime ?? 0.0);
+            if ($endAt > $runtimeCap) {
+                throw new \RuntimeException(
+                    "tape end time at t={$endAt}s exceeds the render runtime cap of {$runtimeCap}s "
+                        . '(frame/loop safety); raise the maxRuntimeSeconds option if this tape is genuine.'
+                );
+            }
+            while ($endAt >= $nextSnapshotTime) {
                 if ($exec) {
                     $this->drainExec($terminal, $frameInterval);
                 }
-                yield $frameIndex => $terminal->snapshot($virtualTime);
+                if ($this->frameDue($terminal, $lastYieldedRevision, $lastYieldedCaptureCursor, $skippedBoundaries)) {
+                    $lastSnapshotTime = $nextSnapshotTime;
+                    yield $frameIndex => $terminal->snapshot($nextSnapshotTime);
+                    $frameIndex++;
+                    $this->guardFrameCap($frameIndex);
+                    $lastYieldedRevision = $terminal->revision();
+                    $lastYieldedCaptureCursor = $this->captureCursor;
+                    $skippedBoundaries = 0;
+                } else {
+                    $skippedBoundaries++;
+                }
+                $nextSnapshotTime += $frameInterval;
+            }
+            if ($frameIndex === 0 || $endAt > $lastSnapshotTime) {
+                if ($exec) {
+                    $this->drainExec($terminal, $frameInterval);
+                }
+                yield $frameIndex => $terminal->snapshot($endAt);
             }
         } finally {
             if ($exec) {
                 $this->teardownExec();
             }
         }
+    }
+
+    /**
+     * Hard frame ceiling: past it the stream aborts with a named error rather
+     * than streaming duplicates until something external kills the process.
+     */
+    private function guardFrameCap(int $frameIndex): void
+    {
+        if ($frameIndex > $this->maxFrames) {
+            $cap = $this->maxFrames;
+            throw new \RuntimeException(
+                "tape exceeded the render cap of {$cap} frames (frame/loop safety); "
+                    . 'raise the maxFrames option if this tape is genuine.'
+            );
+        }
+    }
+
+    /**
+     * Decide whether the frame boundary at hand must be emitted: the opening
+     * frame always is; a Hide/Show flip or a pending Screenshot is contractual
+     * (the encoder reads those flags off this frame); every 300th consecutive
+     * idle boundary re-emits to honour the dedup hold ceiling; otherwise the
+     * terminal's monotonic revision answers for the grid.
+     */
+    private function frameDue(Terminal $terminal, ?int $lastRevision, ?bool $lastCaptureCursor, int $skipped): bool
+    {
+        if ($lastRevision === null) {
+            return true;
+        }
+        if ($this->captureCursor !== $lastCaptureCursor) {
+            return true;
+        }
+        if ($this->pendingScreenshotPath !== null) {
+            return true;
+        }
+        if ($skipped + 1 >= self::HOLD_MAX_CADENCE) {
+            return true;
+        }
+
+        return $terminal->revision() !== $lastRevision;
     }
 
     /**

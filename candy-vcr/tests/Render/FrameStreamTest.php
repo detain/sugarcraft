@@ -19,9 +19,10 @@ use SugarCraft\Vterm\Terminal;
 final class FrameStreamTest extends TestCase
 {
     /**
-     * With playbackSpeed=2.0 and 500ms between events, frames should be
-     * rendered at 2x speed (250ms scaled time for the 500ms gap).
-     * At fps=60, this means ~15 frames instead of ~30 for the same gap.
+     * With playbackSpeed=2.0 and 500ms between events, the virtual gap the
+     * frame clock carries is halved (250ms). Since finding 052 the raw stream
+     * emits only CHANGED frames, so the observable contract is the timestamp
+     * distance between the two emits, not the count of duplicates.
      */
     public function testPlaybackSpeedHalvesInterEventDelay(): void
     {
@@ -51,11 +52,13 @@ final class FrameStreamTest extends TestCase
             $snapshots[] = $snap;
         }
 
-        // With 2.0x speed, the 500ms gap becomes 250ms.
-        // At 60fps, 250ms yields approximately 15 frames (250/16.67 ≈ 15).
-        // Without speedup, 500ms would yield ~30 frames.
-        $this->assertLessThan(25, count($snapshots), 'With 2x playback speed, frame count should be roughly halved');
-        $this->assertGreaterThan(10, count($snapshots), 'Should still produce a reasonable number of frames');
+        // The grid moves exactly twice ('a' then 'b'); the 2x speed shows up
+        // as the 0.25s distance between their timestamps (was 0.5s of frames
+        // padded with duplicates pre-052).
+        $this->assertGreaterThanOrEqual(2, count($snapshots), 'Both changed frames must be emitted');
+        $gap = $snapshots[1]->time - $snapshots[0]->time;
+        $this->assertLessThan(0.35, $gap, 'With 2x playback speed the inter-frame gap must be ~250ms');
+        $this->assertGreaterThan(0.15, $gap, 'The gap must still carry real scaled time');
     }
 
     public function testPlaybackSpeedDefaultYieldsNormalFrameCount(): void
@@ -86,8 +89,11 @@ final class FrameStreamTest extends TestCase
             $snapshots[] = $snap;
         }
 
-        // Without speedup, 500ms at 60fps yields approximately 30 frames
-        $this->assertGreaterThan(25, count($snapshots), 'Without speedup, frame count should be higher');
+        // Without speedup the two emits sit 500ms apart on the frame clock.
+        $this->assertGreaterThanOrEqual(2, count($snapshots));
+        $gap = $snapshots[1]->time - $snapshots[0]->time;
+        $this->assertGreaterThan(0.4, $gap, 'Without speedup the emitted frames stay 500ms apart');
+        $this->assertLessThan(0.6, $gap);
     }
 
     public function testPlaybackSpeedDoublesSpeedWithSpeedHalf(): void
@@ -118,9 +124,11 @@ final class FrameStreamTest extends TestCase
             $snapshots[] = $snap;
         }
 
-        // With 0.5x speed, the 250ms gap becomes 500ms.
-        // At 60fps, 500ms yields approximately 30 frames.
-        $this->assertGreaterThan(25, count($snapshots), 'With 0.5x playback speed, frame count should be doubled');
+        // With 0.5x speed the 250ms tape gap becomes 500ms of frame clock.
+        $this->assertGreaterThanOrEqual(2, count($snapshots));
+        $gap = $snapshots[1]->time - $snapshots[0]->time;
+        $this->assertGreaterThan(0.4, $gap, 'With 0.5x playback speed the gap doubles to ~500ms');
+        $this->assertLessThan(0.6, $gap);
     }
 
     public function testCaptureCursorFlagToggledByHideShowEvents(): void

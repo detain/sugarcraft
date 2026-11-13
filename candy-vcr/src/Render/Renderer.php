@@ -35,11 +35,28 @@ final class Renderer
      * @param string|null $shell When non-null, enable exec mode: keystrokes are
      *   written to a real PTY running this shell and the program's output is fed
      *   back into the terminal on the frame clock. Null keeps echo-only rendering.
+     * @param int|null $maxFrames Frame ceiling for the stream; null applies
+     *   FrameStream::DEFAULT_MAX_FRAMES.
+     * @param float|null $maxRuntimeSeconds Virtual-runtime ceiling in seconds;
+     *   null applies FrameStream::DEFAULT_MAX_RUNTIME_SECONDS.
      *
      * @return FrameStream
      */
-    public function render(Player $player, Terminal $terminal, float $fps = 30.0, ?string $shell = null): FrameStream
-    {
-        return new FrameStream($player, $terminal, $fps, $shell);
+    public function render(
+        Player $player,
+        Terminal $terminal,
+        float $fps = 30.0,
+        ?string $shell = null,
+        ?int $maxFrames = null,
+        ?float $maxRuntimeSeconds = null,
+    ): FrameStream {
+        return new FrameStream(
+            $player,
+            $terminal,
+            $fps,
+            $shell,
+            $maxFrames ?? FrameStream::DEFAULT_MAX_FRAMES,
+            $maxRuntimeSeconds,
+        );
     }
 }

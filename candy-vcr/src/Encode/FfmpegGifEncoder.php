@@ -60,7 +60,7 @@ final class FfmpegGifEncoder implements GifEncoder
             $filter = $this->buildFilterComplex();
 
             if ($useVfr) {
-                $concatList = $this->buildConcatList($pngPaths, $durations, $tempDir);
+                $concatList = $this->buildConcatList($pngPaths, $durations, $tempDir, $fps);
                 $args = [
                     $this->ffmpegBin,
                     '-y',
@@ -131,7 +131,7 @@ final class FfmpegGifEncoder implements GifEncoder
      * @param list<string> $pngPaths
      * @param list<int>    $durationsMs
      */
-    private function buildConcatList(array $pngPaths, array $durationsMs, string $tempDir): string
+    private function buildConcatList(array $pngPaths, array $durationsMs, string $tempDir, int $fps = 30): string
     {
         $listPath = $tempDir . '/concat.txt';
         $lines = [];
@@ -142,7 +142,14 @@ final class FfmpegGifEncoder implements GifEncoder
                 throw new \RuntimeException("Frame file vanished before encode: {$pngPaths[$i]}");
             }
             $escapedPath = "'" . str_replace("'", "'\\''", $absPath) . "'";
-            $durationSec = max($durationsMs[$i] / 1000.0, 0.02);
+            // The TapeToGif loop clamps holds before they reach the encoder;
+            // this door catches any direct encoder caller (or a regression):
+            // a missing/non-finite/absurd delay falls back to the 1/fps
+            // default rather than poisoning the concat script.
+            $delayMs = $durationsMs[$i] ?? null;
+            $durationSec = $delayMs !== null && is_finite((float) $delayMs)
+                ? min(max($delayMs / 1000.0, 0.02), 655.35)
+                : max(1.0 / $fps, 0.02);
             $lines[] = 'file ' . $escapedPath;
             $lines[] = 'duration ' . sprintf('%.4f', $durationSec);
         }

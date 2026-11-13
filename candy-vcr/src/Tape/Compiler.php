@@ -149,7 +149,10 @@ final class Compiler
             heightPx: $this->heightPx,
         );
 
-        return new Cassette($header, $this->events);
+        // The clock the directives advanced to (trailing Sleep/Wait included) is
+        // the tape's true end — later than the final event's timestamp whenever
+        // the tape closes with unemitted time (finding 003).
+        return new Cassette($header, $this->events, $this->currentTime);
     }
 
     /**
