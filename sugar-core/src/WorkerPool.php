@@ -137,7 +137,7 @@ final class WorkerPool
     ) {
         if ($maxOutstandingJobs < 0) {
             throw new \InvalidArgumentException(
-                'WorkerPool outstanding-job cap must be 0 (unbounded) or positive, got ' . $maxOutstandingJobs
+                Lang::t('worker.cap_invalid', ['cap' => $maxOutstandingJobs])
             );
         }
         $this->concurrency = max(1, $concurrency);
@@ -833,7 +833,7 @@ while (!feof($fd)) {
     try {
         $inner = base64_decode($envelope['callable'], true);
         if ($inner === false) {
-            throw new \RuntimeException('Invalid task encoding');
+            throw new \RuntimeException(Lang::t('worker.task_encoding_invalid'));
         }
         // The task object materialises ONLY from the class list the
         // parent computed from the real callable — not from a guess,
@@ -843,7 +843,7 @@ while (!feof($fd)) {
         // autoloader.)
         $callable = unserialize($inner, ['allowed_classes' => $envelope['allowed']]);
         if (!is_callable($callable)) {
-            throw new \RuntimeException('Worker payload is not callable');
+            throw new \RuntimeException(Lang::t('worker.payload_not_callable'));
         }
         $result = $callable();
         // sc-33 contract at both ends: values cross as scalars/arrays, or
@@ -921,7 +921,7 @@ PHP;
                 return $worker;
             }
         }
-        throw new \RuntimeException('No idle worker available');
+        throw new \RuntimeException(Lang::t('worker.no_idle_worker'));
     }
 
     private function hasQueuedJob(): bool

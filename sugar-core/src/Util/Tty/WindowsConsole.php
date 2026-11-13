@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util\Tty;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Output-side console-mode negotiation for native Windows consoles.
  *
@@ -84,10 +86,7 @@ final class WindowsConsole
     public function __construct(?Kernel32Interface $kernel32 = null, ?int $handle = null)
     {
         if ($kernel32 === null && !self::isSupported()) {
-            throw new \LogicException(
-                'WindowsConsole drives kernel32.dll through FFI and only exists on native Windows;'
-                . ' gate callers with WindowsConsole::isSupported(), or inject a Kernel32Interface seam.',
-            );
+            throw new \LogicException(Lang::t('windows_console.native_only'));
         }
 
         $this->kernel32 = $kernel32 ?? Kernel32::self();

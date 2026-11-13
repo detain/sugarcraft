@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Raw-hex single-source-of-truth for the named theme colour schemes that
  * SugarCraft consumer libs (sugar-style, candy-codeshot, sugar-vterm, …) all
@@ -88,10 +90,13 @@ final class Palettes
 
         $key = strtolower($scheme);
         if (!isset($schemes[$key])) {
-            throw new \InvalidArgumentException("Unknown palette scheme: {$scheme}");
+            throw new \InvalidArgumentException(Lang::t('palettes.scheme_unknown', ['scheme' => $scheme]));
         }
         if (!isset($schemes[$key][$name])) {
-            throw new \InvalidArgumentException("Unknown colour '{$name}' in scheme '{$scheme}'");
+            throw new \InvalidArgumentException(Lang::t('palettes.color_unknown', [
+                'name'   => $name,
+                'scheme' => $scheme,
+            ]));
         }
 
         return $schemes[$key][$name];

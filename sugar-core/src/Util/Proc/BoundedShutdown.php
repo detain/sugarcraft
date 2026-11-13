@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util\Proc;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Bounded shutdown ladder for a `proc_open()` child: SIGTERM, a polled grace
  * period, signal 9, a bounded confirmation poll — and only then the reap.
@@ -372,7 +374,7 @@ final class BoundedShutdown
         float $killGraceSeconds = self::KILL_GRACE_SECONDS,
     ): bool {
         if ($pid <= 0) {
-            throw new \InvalidArgumentException("pid must be positive, got {$pid}");
+            throw new \InvalidArgumentException(Lang::t('proc.pid_positive', ['pid' => $pid]));
         }
 
         if (self::pidExited($pid)) {
@@ -401,7 +403,7 @@ final class BoundedShutdown
     public static function pidExited(int $pid): bool
     {
         if ($pid <= 0) {
-            throw new \InvalidArgumentException("pid must be positive, got {$pid}");
+            throw new \InvalidArgumentException(Lang::t('proc.pid_positive', ['pid' => $pid]));
         }
 
         if (\function_exists('pcntl_waitpid')) {

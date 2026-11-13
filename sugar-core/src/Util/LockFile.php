@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Cross-process advisory lock on a file, with a bounded wait — the one place
  * the "poll LOCK_NB against a deadline" loop and the stale-holder law live.
@@ -119,12 +121,11 @@ final class LockFile
     {
         $guard = $this->tryAcquire($timeoutSeconds);
         if ($guard === null) {
-            throw new \RuntimeException(\sprintf(
-                'Timed out after %.1fs waiting for the %s lock on %s — another process holds it.',
-                $timeoutSeconds,
-                $this->exclusive ? 'exclusive' : 'shared',
-                $this->path,
-            ));
+            throw new \RuntimeException(Lang::t('lock_file.acquire_timeout', [
+                'seconds' => \sprintf('%.1f', $timeoutSeconds),
+                'kind'    => $this->exclusive ? 'exclusive' : 'shared',
+                'path'    => $this->path,
+            ]));
         }
 
         return $guard;

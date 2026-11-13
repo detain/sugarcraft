@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Atomic temp+fsync+rename publisher for raw bytes (markdown notes, generated
  * indexes, tokens) — {@see AtomicJsonFile}'s publish law with the JSON codec
@@ -64,8 +66,10 @@ final class AtomicTextFile
     {
         if ($mode < 0 || $mode > self::MODE_CEILING) {
             throw new \InvalidArgumentException(
-                'AtomicTextFile mode must be plain permission bits (0000..0777), got '
-                . \sprintf('%o', $mode) . ' for ' . $this->path,
+                Lang::t('atomic_text.mode_invalid', [
+                    'mode' => \sprintf('%o', $mode),
+                    'path' => $this->path,
+                ]),
             );
         }
 
@@ -92,35 +96,33 @@ final class AtomicTextFile
     {
         $dir = \dirname($this->path);
         if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
-            throw new \RuntimeException(\sprintf('Failed to create directory "%s" for atomic write.', $dir));
+            throw new \RuntimeException(Lang::t('atomic_text.dir_create_failed', ['dir' => $dir]));
         }
 
         $tmp = $dir . \DIRECTORY_SEPARATOR . '.' . basename($this->path) . '.tmp.' . bin2hex(random_bytes(8));
         $handle = @fopen($tmp, 'wb');
         if ($handle === false) {
-            throw new \RuntimeException(\sprintf(
-                'Failed to open temporary file "%s" for write of "%s".',
-                $tmp,
-                $this->path,
-            ));
+            throw new \RuntimeException(Lang::t('atomic_text.temp_open_failed', [
+                'tmp'  => $tmp,
+                'path' => $this->path,
+            ]));
         }
 
         try {
             if ($this->fileMode !== null && !@chmod($tmp, $this->fileMode)) {
-                throw new \RuntimeException(\sprintf(
-                    'Failed to set permissions 0%o on "%s" (target "%s").',
-                    $this->fileMode,
-                    $tmp,
-                    $this->path,
-                ));
+                throw new \RuntimeException(Lang::t('atomic_text.permissions_failed', [
+                    'mode' => \sprintf('%o', $this->fileMode),
+                    'tmp'  => $tmp,
+                    'path' => $this->path,
+                ]));
             }
 
             $written = @fwrite($handle, $bytes);
             if ($written === false || $written !== \strlen($bytes)) {
-                throw new \RuntimeException(\sprintf('Short write to temporary file "%s" of "%s".', $tmp, $this->path));
+                throw new \RuntimeException(Lang::t('atomic_text.short_write', ['tmp' => $tmp, 'path' => $this->path]));
             }
             if (!fflush($handle)) {
-                throw new \RuntimeException(\sprintf('Failed to flush temporary file "%s" of "%s".', $tmp, $this->path));
+                throw new \RuntimeException(Lang::t('atomic_text.flush_failed', ['tmp' => $tmp, 'path' => $this->path]));
             }
             if (\function_exists('fsync')) {
                 @fsync($handle);
@@ -128,7 +130,7 @@ final class AtomicTextFile
             fclose($handle);
 
             if (!@rename($tmp, $this->path)) {
-                throw new \RuntimeException(\sprintf('Failed to atomically write "%s".', $this->path));
+                throw new \RuntimeException(Lang::t('atomic_text.publish_failed', ['path' => $this->path]));
             }
         } catch (\Throwable $e) {
             if (\is_resource($handle)) {

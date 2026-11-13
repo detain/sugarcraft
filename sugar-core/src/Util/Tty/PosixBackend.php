@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util\Tty;
 
+use SugarCraft\Core\Lang;
+
 use SugarCraft\Pty\Contract\Termios;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\SizeIoctl;
@@ -265,12 +267,12 @@ final class PosixBackend implements Backend
     public static function queryWinsize(int $fd): array
     {
         if (!\posix_isatty($fd)) {
-            throw new \RuntimeException('descriptor ' . $fd . ' is not a terminal');
+            throw new \RuntimeException(Lang::t('tty.fd_not_terminal', ['fd' => $fd]));
         }
         $ws = SizeIoctl::emptyBuffer();
         $rc = SizeIoctl::getSizeViaLibc(Libc::lib(), $fd, $ws);
         if ($rc !== 0) {
-            throw new \RuntimeException('TIOCGWINSZ ioctl failed on fd ' . $fd . ' with rc=' . $rc);
+            throw new \RuntimeException(Lang::t('tty.winsize_failed', ['fd' => $fd, 'rc' => $rc]));
         }
 
         return SizeIoctl::unpack($ws);

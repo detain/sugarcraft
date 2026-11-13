@@ -66,18 +66,18 @@ final class Editor
 
         try {
             if (@file_put_contents($tmp, $seed) === false) {
-                throw new \RuntimeException("Could not seed editor temp file: {$tmp}");
+                throw new \RuntimeException(Lang::t('editor.temp_seed_failed', ['path' => $tmp]));
             }
 
             $runner = self::$runner ?? self::defaultRunner();
             $exit   = $runner([...$argv, $tmp]);
             if ($exit !== 0) {
-                throw new \RuntimeException("Editor exited with status {$exit}");
+                throw new \RuntimeException(Lang::t('editor.exited_status', ['status' => $exit]));
             }
 
             $content = @file_get_contents($tmp);
             if ($content === false) {
-                throw new \RuntimeException("Could not read editor output file: {$tmp}");
+                throw new \RuntimeException(Lang::t('editor.temp_read_failed', ['path' => $tmp]));
             }
             return $content;
         } finally {
@@ -141,11 +141,9 @@ final class Editor
             }
         }
 
-        throw new \RuntimeException(
-            'No usable editor found ($VISUAL/$EDITOR/'
-            . (DIRECTORY_SEPARATOR === '\\' ? 'notepad' : 'vi/nano')
-            . ').',
-        );
+        throw new \RuntimeException(Lang::t('editor.none_found', [
+            'candidates' => DIRECTORY_SEPARATOR === '\\' ? 'notepad' : 'vi/nano',
+        ]));
     }
 
     private static function envOrNull(string $name): ?string
@@ -171,7 +169,7 @@ final class Editor
     {
         $base = tempnam(sys_get_temp_dir(), 'sc-editor-');
         if ($base === false) {
-            throw new \RuntimeException('Could not create temp file for editor.');
+            throw new \RuntimeException(Lang::t('editor.temp_create_failed'));
         }
 
         $ext = ltrim($extension, '.');
@@ -193,7 +191,7 @@ final class Editor
         $renamed = $base . '.' . $ext;
         if (!@rename($base, $renamed)) {
             @unlink($base);
-            throw new \RuntimeException("Could not rename temp file to {$renamed}.");
+            throw new \RuntimeException(Lang::t('editor.temp_rename_failed', ['path' => $renamed]));
         }
         return $renamed;
     }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Display-width measurement for terminal text.
  *
@@ -651,7 +653,7 @@ final class Width
             $words = preg_split('/([ \t\n\r\x0B\x0C]+)/', $s, -1, PREG_SPLIT_DELIM_CAPTURE);
             if ($words === false) {
                 throw new \RuntimeException(
-                    'Width::wrap() could not split paragraph: ' . preg_last_error_msg(),
+                    Lang::t('width.wrap_split_failed', ['reason' => preg_last_error_msg()]),
                 );
             }
         }

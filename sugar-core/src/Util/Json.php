@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Guarded JSON helpers for the SugarCraft monorepo.
  *
@@ -37,7 +39,7 @@ final class Json
 
         if (!is_array($decoded)) {
             throw new \RuntimeException(
-                'Expected JSON top level to be an array, got ' . get_debug_type($decoded) . '.'
+                Lang::t('json.top_not_array', ['type' => get_debug_type($decoded)])
             );
         }
 

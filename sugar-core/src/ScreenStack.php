@@ -61,7 +61,7 @@ final class ScreenStack implements \Countable
     public function current(): Screen
     {
         if ($this->screens === []) {
-            throw new \RuntimeException('ScreenStack is empty');
+            throw new \RuntimeException(Lang::t('screen_stack.empty'));
         }
         return $this->screens[count($this->screens) - 1];
     }

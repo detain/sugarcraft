@@ -128,6 +128,11 @@ final class T
     public static function register(string $namespace, string $dir): void
     {
         if (str_contains($namespace, '.')) {
+            // sc-20 adjudicated exemption (dated 2026-11-13): T is the SHARED,
+            // zero-dependency i18n machinery every lib calls with its own
+            // namespace — routing this guard through the core catalog would
+            // make T itself depend on core's lang/ registration. Developer-
+            // facing API contract; the raw English stays here by design.
             throw new \InvalidArgumentException(
                 "i18n namespace must not contain '.': $namespace"
             );

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Imports env vars set under a package's pre-rename prefix into its new prefix,
  * so a user's existing SUGARCRUSH_* exports keep working after the rename. // @rename-keep
@@ -40,7 +42,7 @@ final class LegacyEnv
         foreach ($prefixMap as $old => $new) {
             if ($old === '') {
                 throw new \InvalidArgumentException(
-                    'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.'
+                    Lang::t('legacy_env.empty_old_prefix')
                 );
             }
         }

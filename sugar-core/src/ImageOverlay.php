@@ -97,7 +97,10 @@ final class ImageOverlay
     public static function marker(int $id): string
     {
         if ($id < 0 || $id >= self::MAX_IMAGES) {
-            throw new \InvalidArgumentException("image id {$id} out of range 0.." . (self::MAX_IMAGES - 1));
+            throw new \InvalidArgumentException(Lang::t('image_overlay.id_out_of_range', [
+                'id'  => $id,
+                'max' => self::MAX_IMAGES - 1,
+            ]));
         }
 
         return self::MARKER_OSC . $id . self::MARKER_ST . self::encode(self::MARKER_BASE + $id);

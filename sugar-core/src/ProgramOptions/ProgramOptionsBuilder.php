@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\ProgramOptions;
 
+use SugarCraft\Core\Lang;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Pty\Contract\Termios;
@@ -99,7 +100,7 @@ final class ProgramOptionsBuilder
     public function withFramerate(float $framerate): self
     {
         if ($framerate <= 0) {
-            throw new \InvalidArgumentException('Framerate must be positive');
+            throw new \InvalidArgumentException(Lang::t('builder.framerate_positive'));
         }
         return $this->mutate('framerate', $framerate);
     }
@@ -158,10 +159,10 @@ final class ProgramOptionsBuilder
     {
         if ($windowSize !== null) {
             if (!isset($windowSize['cols'], $windowSize['rows'])) {
-                throw new \InvalidArgumentException('windowSize must have cols and rows keys');
+                throw new \InvalidArgumentException(Lang::t('builder.window_size_keys'));
             }
             if ($windowSize['cols'] <= 0 || $windowSize['rows'] <= 0) {
-                throw new \InvalidArgumentException('windowSize cols and rows must be positive');
+                throw new \InvalidArgumentException(Lang::t('builder.window_size_positive'));
             }
         }
         return $this->mutate('windowSize', $windowSize);

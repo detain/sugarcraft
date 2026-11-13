@@ -97,8 +97,10 @@ final class AtomicJsonFile
     {
         if ($mode < 0 || $mode > self::MODE_CEILING) {
             throw new \InvalidArgumentException(
-                'AtomicJsonFile mode must be plain permission bits (0000..0777), got '
-                . \sprintf('%o', $mode) . ' for ' . $this->path,
+                Lang::t('atomic_json.mode_invalid', [
+                    'mode' => \sprintf('%o', $mode),
+                    'path' => $this->path,
+                ]),
             );
         }
 
@@ -152,7 +154,7 @@ final class AtomicJsonFile
 
         $raw = @file_get_contents($this->path);
         if ($raw === false) {
-            throw new \RuntimeException("Failed to read state file: {$this->path}");
+            throw new \RuntimeException(Lang::t('atomic_json.read_failed', ['path' => $this->path]));
         }
 
         return Json::decodeArray($raw);
@@ -298,7 +300,7 @@ final class AtomicJsonFile
         $lockPath = $this->lockPath();
         $lockHandle = @fopen($lockPath, 'cb');
         if ($lockHandle === false) {
-            throw new \RuntimeException("Failed to open lock file: {$lockPath}");
+            throw new \RuntimeException(Lang::t('atomic_json.lock_open_failed', ['path' => $lockPath]));
         }
         @chmod($lockPath, 0600);
 
@@ -316,7 +318,10 @@ final class AtomicJsonFile
                     // Report the OS reason immediately — do not mask a broken
                     // fd behind a timeout message the reader cannot act on.
                     $error = \error_get_last();
-                    throw new \RuntimeException("Failed to lock {$lockPath}: " . ($error['message'] ?? 'unknown flock error'));
+                    throw new \RuntimeException(Lang::t('atomic_json.lock_failed', [
+                        'path'   => $lockPath,
+                        'reason' => $error['message'] ?? 'unknown flock error',
+                    ]));
                 }
                 \usleep(self::LOCK_POLL_MICROS);
             } while (\microtime(true) < $deadline);
@@ -349,17 +354,17 @@ final class AtomicJsonFile
         try {
             $handle = @fopen($tmp, 'wb');
             if ($handle === false) {
-                throw new \RuntimeException("Failed to open temp file: {$tmp}");
+                throw new \RuntimeException(Lang::t('atomic_json.temp_open_failed', ['path' => $tmp]));
             }
 
             $this->applyPermissions($tmp);
 
             if (fwrite($handle, $payload) === false) {
-                throw new \RuntimeException("Failed to write temp file: {$tmp}");
+                throw new \RuntimeException(Lang::t('atomic_json.temp_write_failed', ['path' => $tmp]));
             }
 
             if (!fflush($handle)) {
-                throw new \RuntimeException("Failed to flush temp file: {$tmp}");
+                throw new \RuntimeException(Lang::t('atomic_json.temp_flush_failed', ['path' => $tmp]));
             }
 
             // Durability before publish: fflush() alone leaves payload bytes
@@ -384,7 +389,7 @@ final class AtomicJsonFile
             // AtomicJsonFileTest matches the call by substring, so the '@'
             // prefix keeps it green.
             if (!@rename($tmp, $this->path)) {
-                throw new \RuntimeException("Failed to rename temp file onto: {$this->path}");
+                throw new \RuntimeException(Lang::t('atomic_json.rename_failed', ['path' => $this->path]));
             }
 
             // The rename is a mutation of the DIRECTORY, not of either file:
@@ -470,7 +475,7 @@ final class AtomicJsonFile
         // Race-safe: mkdir may fail because a concurrent writer just made it.
         $created = @mkdir($dir, $this->directoryMode(), true);
         if (!$created && !is_dir($dir)) {
-            throw new \RuntimeException("Cannot create state directory: {$dir}");
+            throw new \RuntimeException(Lang::t('atomic_json.dir_create_failed', ['dir' => $dir]));
         }
 
         if (!$created || $this->fileMode === null) {
@@ -479,9 +484,10 @@ final class AtomicJsonFile
 
         $mode = $this->directoryMode();
         if (!@chmod($dir, $mode)) {
-            throw new \RuntimeException(
-                'Cannot set mode ' . \sprintf('%04o', $mode) . " on state directory: {$dir}"
-            );
+            throw new \RuntimeException(Lang::t('atomic_json.dir_mode_failed', [
+                'mode' => \sprintf('%04o', $mode),
+                'dir'  => $dir,
+            ]));
         }
     }
 
@@ -504,9 +510,10 @@ final class AtomicJsonFile
         }
 
         if (!@chmod($tmp, $this->fileMode)) {
-            throw new \RuntimeException(
-                'Cannot set mode ' . \sprintf('%04o', $this->fileMode) . " on temp state file: {$tmp}"
-            );
+            throw new \RuntimeException(Lang::t('atomic_json.temp_mode_failed', [
+                'mode' => \sprintf('%04o', $this->fileMode),
+                'tmp'  => $tmp,
+            ]));
         }
     }
 
@@ -552,7 +559,7 @@ final class AtomicJsonFile
     {
         $realBase = realpath($baseDir);
         if ($realBase === false) {
-            throw new \RuntimeException("Base directory does not exist: {$baseDir}");
+            throw new \RuntimeException(Lang::t('atomic_json.base_missing', ['dir' => $baseDir]));
         }
         $realBase = rtrim($realBase, \DIRECTORY_SEPARATOR);
 
@@ -561,12 +568,12 @@ final class AtomicJsonFile
         if ($realParent === false) {
             // Parent must already exist to be confined; a not-yet-created
             // parent cannot be proven inside the base.
-            throw new \RuntimeException("Parent directory does not exist: {$parent}");
+            throw new \RuntimeException(Lang::t('atomic_json.parent_missing', ['dir' => $parent]));
         }
 
         $prefix = $realBase . \DIRECTORY_SEPARATOR;
         if ($realParent !== $realBase && !str_starts_with($realParent . \DIRECTORY_SEPARATOR, $prefix)) {
-            throw new \RuntimeException("Path escapes base directory: {$path}");
+            throw new \RuntimeException(Lang::t('atomic_json.path_escapes_base', ['path' => $path]));
         }
 
         // Re-anchor to the resolved parent so downstream ops act on the real,
@@ -578,10 +585,10 @@ final class AtomicJsonFile
         if (is_link($resolved)) {
             $linkReal = realpath($resolved);
             if ($linkReal === false) {
-                throw new \RuntimeException("Dangling symlink at target: {$resolved}");
+                throw new \RuntimeException(Lang::t('atomic_json.symlink_dangling', ['path' => $resolved]));
             }
             if ($linkReal !== $realBase && !str_starts_with($linkReal . \DIRECTORY_SEPARATOR, $prefix)) {
-                throw new \RuntimeException("Symlinked target escapes base directory: {$resolved}");
+                throw new \RuntimeException(Lang::t('atomic_json.symlink_escapes_base', ['path' => $resolved]));
             }
         }
 

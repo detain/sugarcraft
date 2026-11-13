@@ -842,12 +842,7 @@ final class Program
             $root->screens = $nextStack;
             return;
         }
-        throw new \LogicException(sprintf(
-            'Screen stack root %s can neither be cloned (no public withScreens()) nor written '
-            . '(no public writable $screens property) — pushed screens cannot persist their state. '
-            . 'Add withScreens(ScreenStack): static or make $screens a public writable property.',
-            $class
-        ));
+        throw new \LogicException(Lang::t('program.screen_stack_root_unwritable', ['class' => $class]));
     }
 
     /**
