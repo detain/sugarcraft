@@ -166,6 +166,16 @@ final class LoopPinTest extends TestCase
      * whether or not `pinStableClock()` was ever called, so the assertion below
      * cannot fail there and proves nothing about the pin. It only has teeth
      * where the autodetected loop would have been an at-risk one.
+     *
+     * Dated note (2026-11): no CI job in .github/workflows installs ext-uv,
+     * so today every runner hits exactly that vacuous path (and the ExtUvLoop
+     * type test skips — the suite's standing 2-skip roster). The guarantee is
+     * verified by the MANUAL protocol instead: enable ext-uv locally
+     * (`php -m | grep -i uv` shows it armed) and run
+     * `vendor/bin/phpunit --filter LoopPin` — the skip vanishes and this test
+     * only passes if the pin genuinely holds. Wiring a CI job that installs
+     * ext-uv (the fix this note names but does not ship) needs the matrix
+     * owner's call on setup-php extensions cost; see the lane report.
      */
     public function testPinnedLoopTimerIsNotShortenedByIdleTimeOutsideTheLoop(): void
     {
