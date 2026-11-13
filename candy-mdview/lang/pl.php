@@ -14,6 +14,8 @@ return [
     'render.theme_config_too_large' => 'konfiguracja motywu przekracza {limit} bajtów: {path}',
     'glamour.json_invalid' => 'konfiguracja motywu nie jest prawidłowym JSON-em',
     'glamour.json_object' => 'konfiguracja motywu musi być obiektem JSON',
+    'glamour.decoration_unsafe' => 'pole {slot} motywu może zawierać tylko nowe wiersze, tabulatory i spacje',
+    'glamour.value_too_large' => 'klucz {key} motywu przekracza maksimum wynoszące {limit}',
     'render.no_input_tty' => 'brak wejścia: podaj plik lub prześlij Markdown na standardowe wejście',
     'render.no_input_empty' => 'brak wejścia: standardowe wejście jest puste',
     'render.pager_needs_tty' => 'pager wymaga terminala; renderuj na standardowe wyjście bez -p',

@@ -170,6 +170,16 @@ included — reaches the terminal's opener unfiltered, so treat a hostile
 document's non-`http(s)`/`mailto` links the way you would treat raw terminal
 input. See the fleet [trust boundary](../docs/TRUST-BOUNDARY.md).
 
+`--theme-config` files are untrusted input too, and the glamour adapter treats
+them that way at its parse door: the document/paragraph decoration slots
+(`block_prefix` / `block_suffix`) accept only inert whitespace, so a style
+file cannot inject title-setting escapes, arbitrary SGR, or forged hyperlink
+envelopes into every frame; `document.indent` and `document.margin` refuse
+values beyond `Theme::MAX_DOCUMENT_DECORATION` (256) instead of multiplying
+into a memory blowup. Both refusals name themselves and exit 2. Colour and
+spacing values that pass are painted verbatim, so style files should still
+come from sources you trust.
+
 ## Output languages
 
 The CLI localizes its messages via `LANG` / `LC_ALL` / `LC_MESSAGES` across 16
@@ -227,7 +237,16 @@ margin, heading/paragraph/inline element styles, and the Keyword /
 LiteralString / LiteralNumber / Comment chroma families. `isGlamourSchema()`
 detects the shape; `fromFile()` / `fromJsonString()` parse it, and
 `fromDecoded()` is the entry the CLI's `--theme-config` path actually takes.
-Unmappable fields are exposed verbatim through `element()` / `chroma()` /
+Parsing is hygiene-gated: decoration slots are whitespace-only, decoration
+ints are capped at `Theme::MAX_DOCUMENT_DECORATION`. What is DELIBERATELY
+DROPPED, in full: line-control `block_prefix` / `block_suffix` on
+non-document, non-paragraph elements (vertical spacing SugarMarkdown manages
+itself), the `image` / `table_header` / `table_row` / `table_cell` /
+`table_separator` styles (no mapping is decided for them — mapping would
+silently change what existing style files render, so they stay disclosed and
+addressable instead), per-heading-level prefixes, and chroma families beyond
+the four slots. Unmappable fields are exposed verbatim through `element()` /
+`chroma()` /
 `indentToken()` for integrations that need them — no silent loss. This —
 plus the three JSON preset files — is the theme extension point; the built-in
 theme set itself is fixed.

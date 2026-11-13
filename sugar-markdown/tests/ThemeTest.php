@@ -504,6 +504,28 @@ final class ThemeTest extends TestCase
             @unlink($path);
         }
     }
+
+    public function testDocumentDecorationSaturatesAtTheSharedCap(): void
+    {
+        // Mirror-clamp rider (finding 018's belt): every producer is
+        // bounded at construction, so a forgetful parser saturates instead
+        // of handing str_repeat a 1.5 GB ask. candy-mdview's GlamourTheme
+        // refuses over-cap values by name BEFORE crossing here; this clamp
+        // is what makes the ceiling hold for every other producer too.
+        $theme = new Theme(documentIndent: 1_500_000_000, documentMargin: -5);
+        self::assertSame(Theme::MAX_DOCUMENT_DECORATION, $theme->documentIndent);
+        self::assertSame(0, $theme->documentMargin);
+
+        // At the cap the value is untouched (candy-mdview's accept-edge
+        // pin stays consistent with this saturation point).
+        $edge = new Theme(documentIndent: Theme::MAX_DOCUMENT_DECORATION);
+        self::assertSame(Theme::MAX_DOCUMENT_DECORATION, $edge->documentIndent);
+
+        // with() reconstructs through the constructor, so the belt survives
+        // every slot edit path.
+        $moved = (new Theme(documentIndent: 999_999))->with('bold', Style::new()->bold());
+        self::assertSame(Theme::MAX_DOCUMENT_DECORATION, $moved->documentIndent);
+    }
 }
 
 /**

@@ -26,6 +26,23 @@ final class Theme
     private static array $stockInstances = [];
 
     /**
+     * Ceiling on the document's decoration integers (finding 018's mirror
+     * side, candy-mdview lane): stock glamour themes never exceed 4, a few
+     * hundred is generous, and without a ceiling a 60-byte style file
+     * multiplied into a 1.5 GB str_repeat and died rc 255 below any
+     * consumer's own validation. Producers that parse user input SHOULD
+     * refuse over-limit values with a message (candy-mdview's GlamourTheme
+     * does); this belt makes every producer bounded at construction, so a
+     * forgetful one saturates instead of exhausting memory.
+     */
+    public const MAX_DOCUMENT_DECORATION = 256;
+
+    private static function boundedDecoration(int $value): int
+    {
+        return max(0, min(self::MAX_DOCUMENT_DECORATION, $value));
+    }
+
+    /**
      * Whether $theme is one of the memoised stock instances (identity, not
      * value equality — a custom theme that happens to match a stock theme's
      * bytes deliberately stays outside the render-bundle cache).
@@ -55,6 +72,19 @@ final class Theme
     public readonly Style $blockquote;
     public readonly Style $listMarker;
     public readonly Style $rule;
+
+    /**
+     * Outer document margin: number of blank lines emitted before
+     * the document body. Mirrors charmbracelet/glamour.Document.Margin.
+     * Saturating-bounded at {@see self::MAX_DOCUMENT_DECORATION}.
+     */
+    public readonly int $documentMargin;
+    /**
+     * Number of cells the document is indented from the left edge.
+     * Mirrors charmbracelet/glamour.Document.Indent.
+     * Saturating-bounded at {@see self::MAX_DOCUMENT_DECORATION}.
+     */
+    public readonly int $documentIndent;
 
     public function __construct(
         ?Style $heading1 = null,
@@ -95,17 +125,10 @@ final class Theme
         /** Auto-detected URLs (`https://x`) when not wrapped in `[...]`. */
         public readonly ?Style $autolink = null,
 
-        // ---- glamour-element parity ----
-        /**
-         * Outer document margin: number of blank lines emitted before
-         * the document body. Mirrors charmbracelet/glamour.Document.Margin.
-         */
-        public readonly int $documentMargin = 0,
-        /**
-         * Number of cells the document is indented from the left edge.
-         * Mirrors charmbracelet/glamour.Document.Indent.
-         */
-        public readonly int $documentIndent = 0,
+        // ---- glamour-element parity (de-promoted: the ctor body below applies
+        // the decoration ceiling — see MAX_DOCUMENT_DECORATION) ----
+        int $documentMargin = 0,
+        int $documentIndent = 0,
         /**
          * Indentation cells per list nesting level. Mirrors charmbracelet/glamour's
          * per-list `LevelIndent`. Default 0 means "use bullet width
@@ -243,6 +266,8 @@ final class Theme
         $this->blockquote = $blockquote ?? $noop;
         $this->listMarker = $listMarker ?? $noop;
         $this->rule       = $rule       ?? $noop;
+        $this->documentMargin = self::boundedDecoration($documentMargin);
+        $this->documentIndent = self::boundedDecoration($documentIndent);
     }
 
     /** Default ANSI theme: bright accents on each heading, coloured code, etc.

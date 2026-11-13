@@ -41,6 +41,14 @@ final class GlamourThemeTest extends TestCase
             'hr'          => ['color' => '238'],
             'strikethrough' => ['strikethrough' => true],
             'list'        => ['color' => '252'],
+            // 085: real glamour dark.json ships these too; the adapter
+            // drops them by decision, and
+            // testDroppedTableAndImageStylesStayAddressable pins that.
+            'image'         => ['color' => '252', 'block_prefix' => "\n"],
+            'table_header'  => ['color' => '228', 'bold' => true],
+            'table_row'     => ['color' => '252'],
+            'table_cell'    => ['color' => '252'],
+            'table_separator' => ['color' => '238', 'bold' => true],
             'chroma'      => [
                 'Keyword'       => ['color' => '205', 'bold' => true],
                 'KeywordType'   => ['color' => '141'],
@@ -171,15 +179,19 @@ final class GlamourThemeTest extends TestCase
 
     public function testParagraphBlockAffixesRouteToMarkdownPrefixSuffix(): void
     {
+        // S08 tightened these slots to the whitespace class (glamour's own
+        // usage is vertical spacing only), so the routing proof now rides
+        // distinct whitespace bytes — an arbitrary-glyph affix is the
+        // refusal test's subject, not this one's.
         $json = json_encode([
             'document'  => [],
-            'paragraph' => ['block_prefix' => '> ', 'block_suffix' => ' <'],
+            'paragraph' => ['block_prefix' => "\n", 'block_suffix' => "\t "],
         ], JSON_THROW_ON_ERROR);
 
         $shine = GlamourTheme::fromJsonString($json)->toMarkdownTheme();
 
-        self::assertSame('> ', $shine->paragraphPrefix);
-        self::assertSame(' <', $shine->paragraphSuffix);
+        self::assertSame("\n", $shine->paragraphPrefix);
+        self::assertSame("\t ", $shine->paragraphSuffix);
     }
 
     public function testColourVocabularyHexAutoAndRanges(): void
@@ -264,7 +276,7 @@ final class GlamourThemeTest extends TestCase
         self::assertNotFalse($config);
         file_put_contents($md, "body text\n");
         file_put_contents($config, json_encode([
-            'document' => ['block_prefix' => '[DOC_OPEN]', 'block_suffix' => '[DOC_CLOSE]', 'margin' => 0],
+            'document' => ['block_prefix' => "\n", 'block_suffix' => "\t", 'margin' => 0],
         ], JSON_THROW_ON_ERROR));
 
         try {
@@ -292,8 +304,11 @@ final class GlamourThemeTest extends TestCase
             self::assertSame(0, $invoke->invoke($command, $input, $output));
 
             self::assertIsString($captured);
-            self::assertStringStartsWith('[DOC_OPEN]', $captured);
-            self::assertStringEndsWith('[DOC_CLOSE]', $captured);
+            // S08's whitespace-only decoration law: the routing proof is now
+            // the affix bytes themselves (the old bracket glyphs refuse at
+            // the parse door — see testUnsafeDecorationSlotsRefuseByName).
+            self::assertStringStartsWith("\n", $captured);
+            self::assertStringEndsWith("\t", $captured);
         } finally {
             unlink($md);
             unlink($config);
@@ -349,5 +364,101 @@ final class GlamourThemeTest extends TestCase
 
         $markdownTheme = $theme->toMarkdownTheme();
         $this->assertInstanceOf(Theme::class, $markdownTheme);
+    }
+
+    /** @return iterable<string, array{string,string}> slot-key => [json, expected message] */
+    public static function unsafeDecorationProvider(): iterable
+    {
+        // The P2 evidence class (evil-theme.json): every payload a style
+        // file could use to speak to the terminal through a decoration
+        // slot — title-set OSC, raw SGR, a forged OSC 8 envelope that
+        // would bypass the renderer's refused-scheme gate, and a CSI
+        // cursor-move prefix.
+        yield 'document OSC 0 title' => ['document.block_prefix', "\x1b]0;pwned\x07"];
+        yield 'document SGR'         => ['document.block_suffix', "\x1b[31m"];
+        yield 'paragraph OSC 8'      => ['paragraph.block_prefix', "\x1b]8;;javascript:alert(1)\x1b\\CLICK"];
+        yield 'paragraph DCS'         => ['paragraph.block_suffix', "\x1bP1;2\$pwned\x1b\\"];
+    }
+
+    public function testUnsafeDecorationSlotsRefuseByName(): void
+    {
+        // Finding 005: decoration slots are glamour's vertical-spacing
+        // channel; accepting arbitrary strings let a style file inject live
+        // terminal control sequences into EVERY rendered frame at rc 0.
+        foreach (self::unsafeDecorationProvider() as [$slot, $payload]) {
+            [$element, $field] = explode('.', $slot);
+            $decoded = json_decode($this->stockGlamourJson(), true);
+            $decoded[$element][$field] = $payload;
+
+            try {
+                GlamourTheme::fromDecoded($decoded);
+                self::fail("slot $slot accepted an escape payload");
+            } catch (\InvalidArgumentException $refusal) {
+                self::assertStringContainsString($slot, $refusal->getMessage(), 'the refusal names the slot');
+                self::assertStringContainsString('newlines, tabs and spaces', $refusal->getMessage());
+            }
+        }
+    }
+
+    public function testWhitespaceDecorationsStillPass(): void
+    {
+        // Stock glamour ships "\n" affixes — the whitespace class must stay
+        // accepted untouched or every real style file breaks.
+        $decoded = json_decode($this->stockGlamourJson(), true);
+        $decoded['paragraph']['block_prefix'] = "\n";
+        $decoded['paragraph']['block_suffix'] = " \t\n";
+        $theme = GlamourTheme::fromDecoded($decoded);
+
+        self::assertSame("\n", $theme->toMarkdownTheme()->paragraphPrefix);
+        self::assertSame(" \t\n", $theme->toMarkdownTheme()->paragraphSuffix);
+    }
+
+    public function testDecorationIntsOverCapRefuseWithoutSlurping(): void
+    {
+        // Finding 018: document.indent/margin crossed straight into
+        // str_repeat — a 60-byte style file produced a 1.5 GB allocation
+        // and rc 255 below any consumer's own guards.
+        $cap = Theme::MAX_DOCUMENT_DECORATION;
+
+        $huge = json_decode($this->stockGlamourJson(), true);
+        $huge['document']['indent'] = 1_500_000_000;
+        try {
+            GlamourTheme::fromDecoded($huge);
+            self::fail('a 1.5e9-cell indent must refuse');
+        } catch (\InvalidArgumentException $refusal) {
+            self::assertStringContainsString('document.indent', $refusal->getMessage());
+            self::assertStringContainsString((string) $cap, $refusal->getMessage());
+        }
+
+        // Numeric strings carry the same payload through the coercion path.
+        $stringy = json_decode($this->stockGlamourJson(), true);
+        $stringy['document']['margin'] = '999999999';
+        try {
+            GlamourTheme::fromDecoded($stringy);
+            self::fail('a 999999999-line margin must refuse');
+        } catch (\InvalidArgumentException $refusal) {
+            self::assertStringContainsString('document.margin', $refusal->getMessage());
+        }
+
+        // Cap-edge honesty: exactly the cap is stock-plus-generous, accepted.
+        $edge = json_decode($this->stockGlamourJson(), true);
+        $edge['document']['margin'] = $cap;
+        self::assertSame($cap, GlamourTheme::fromDecoded($edge)->documentMargin);
+    }
+
+    public function testDroppedTableAndImageStylesStayAddressable(): void
+    {
+        // Finding 085's default arm: the drop-list is DISCLOSED, not
+        // silently mapped. The fixture now carries the five glamour table/
+        // image blocks stock dark.json ships; the projection deliberately
+        // leaves the matching SugarMarkdown slots untouched (mapping them
+        // would change what existing style files render — owner-gated),
+        // while element() keeps every dropped primitive readable.
+        $theme = GlamourTheme::fromJsonString($this->stockGlamourJson());
+
+        self::assertNotNull($theme->element('image'), 'dropped keys stay readable — no silent loss');
+        self::assertNull($theme->toMarkdownTheme()->image, 'image is NOT mapped (disclosed drop)');
+        self::assertNull($theme->toMarkdownTheme()->tableHeader, 'table_header is NOT mapped (disclosed drop)');
+        self::assertNull($theme->toMarkdownTheme()->tableCell, 'table_cell is NOT mapped (disclosed drop)');
     }
 }

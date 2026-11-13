@@ -14,6 +14,8 @@ return [
     'render.theme_config_too_large' => 'la configuration du thème dépasse {limit} octets : {path}',
     'glamour.json_invalid' => 'la configuration du thème n\'est pas un JSON valide',
     'glamour.json_object' => 'la configuration du thème doit être un objet JSON',
+    'glamour.decoration_unsafe' => 'le champ {slot} du thème ne doit contenir que retours à la ligne, tabulations et espaces',
+    'glamour.value_too_large' => 'la clé {key} du thème dépasse le maximum de {limit}',
     'render.no_input_tty' => 'aucune entrée : indiquez un fichier ou envoyez du Markdown sur l\'entrée standard',
     'render.no_input_empty' => 'aucune entrée : l\'entrée standard est vide',
     'render.pager_needs_tty' => 'le paginateur exige un terminal ; rendez plutôt en sortie standard (retirez -p)',

@@ -313,6 +313,30 @@ final class RenderCommandTest extends TestCase
         }
     }
 
+    public function testGlamourConfigWithInjectedDecorationExitsTwoAndPaintsNothing(): void
+    {
+        // Finding 005 across the CLI door: the evil style file used to
+        // reach the renderer and ride EVERY frame with its escape payloads
+        // at rc 0. The parse-door refusal turns it into a named usage
+        // fault, and the success channel stays byte-empty.
+        $configTmp = tempnam(sys_get_temp_dir(), 'mdview-evil-');
+        $this->assertNotFalse($configTmp);
+        file_put_contents($configTmp, json_encode([
+            'document'  => ['block_prefix' => "\x1b]0;pwned\x07"],
+            'paragraph' => ['block_suffix' => "\x1b[31m"],
+        ], JSON_THROW_ON_ERROR));
+        try {
+            [$rc, $msg] = $this->runUsageRun("# doc\n", $this->optionMap([
+                'theme-config' => $configTmp,
+            ]));
+            $this->assertSame(Command::INVALID, $rc);
+            $this->assertStringContainsString('document.block_prefix', $msg, 'the refusal names the slot');
+            $this->assertStringContainsString('newlines, tabs and spaces', $msg);
+        } finally {
+            unlink($configTmp);
+        }
+    }
+
     public function testBinaryControlRatioBoundaryIsPinned(): void
     {
         // Finding 023: every shipped binary pin routes through NUL, so the

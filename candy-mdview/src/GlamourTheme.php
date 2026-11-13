@@ -37,13 +37,25 @@ use SugarCraft\Style\Style;
  * (into Theme's four syntax-token slots).
  *
  * WHAT IT DELIBERATELY DROPS, and why: line-control `block_prefix` /
- * `block_suffix` values on NON-document elements (glamour uses "\n" there
- * purely for vertical spacing sugar-markdown manages itself), per-heading-level
+ * `block_suffix` values on NON-document, NON-paragraph elements (glamour
+ * uses "\n" there purely for vertical spacing sugar-markdown manages
+ * itself), the `image` / `table_header` / `table_row` / `table_cell` /
+ * `table_separator` styles (sugar-markdown keeps its own slots for these
+ * but the adapter has no mapping decided — mapping them would change what
+ * existing style files render, so they are DISCLOSED here and stay
+ * addressable rather than silently repurposed), per-heading-level
  * prefixes (sugar-markdown exposes one global headingPrefix whose semantics
  * are a visible glyph, not a newline), and chroma families beyond the four
  * slots (no target field exists). Nothing is silently mis-mapped: dropped
  * keys stay readable on this object via {@see element()} / {@see chroma()},
  * so a future richer Theme slot can adopt them without re-parsing.
+ *
+ * HYGIENE AT THE PARSE DOOR: the four decoration slots that cross into
+ * Theme accept only inert whitespace ([\n\t ]*) — style files are input,
+ * and everything else is an escape-sequence injection channel; the two
+ * decoration integers (`document.indent` / `document.margin`) refuse values
+ * over {@see Theme::MAX_DOCUMENT_DECORATION} by name instead of multiplying
+ * into a str_repeat blowup.
  *
  * Colour vocabulary: `#rrggbb` / `#rgb` hex (invalid hex THROWS — fail fast
  * on a corrupt file), `"N"` numeric strings / ints as xterm-256 indices
@@ -153,11 +165,21 @@ final class GlamourTheme
 
         $document = $elements['document'] ?? [];
 
+        // Parse-boundary hygiene: the four decoration slots that cross into
+        // sugar-markdown's Theme are whitespace-only (finding 005), and the
+        // two decoration integers are capped (finding 018). Refusing here —
+        // at fromDecoded — covers EVERY entrance (fromFile, fromJsonString,
+        // RenderCommand's stream route) with one law.
+        $docPrefix  = self::whitespaceSlot($document['block_prefix'] ?? '', 'document.block_prefix');
+        $docSuffix  = self::whitespaceSlot($document['block_suffix'] ?? '', 'document.block_suffix');
+        self::whitespaceSlot($elements['paragraph']['block_prefix'] ?? '', 'paragraph.block_prefix');
+        self::whitespaceSlot($elements['paragraph']['block_suffix'] ?? '', 'paragraph.block_suffix');
+
         return new self(
-            blockPrefix:     self::stringOrEmpty($document['block_prefix'] ?? ''),
-            blockSuffix:     self::stringOrEmpty($document['block_suffix'] ?? ''),
-            documentIndent:  self::nonNegativeInt($document['indent'] ?? 0),
-            documentMargin:  self::nonNegativeInt($document['margin'] ?? 0),
+            blockPrefix:     $docPrefix,
+            blockSuffix:     $docSuffix,
+            documentIndent:  self::boundedDecoration($document['indent'] ?? 0, 'document.indent'),
+            documentMargin:  self::boundedDecoration($document['margin'] ?? 0, 'document.margin'),
             elements:        $elements,
             chroma:          $chroma,
         );
@@ -223,22 +245,58 @@ final class GlamourTheme
             strike:            $this->style('strikethrough'),
             documentMargin:    $this->documentMargin,
             documentIndent:    $this->documentIndent,
-            paragraphPrefix:   self::stringOrEmpty($paragraph['block_prefix'] ?? ''),
-            paragraphSuffix:   self::stringOrEmpty($paragraph['block_suffix'] ?? ''),
+            paragraphPrefix:   self::whitespaceSlot($paragraph['block_prefix'] ?? '', 'paragraph.block_prefix'),
+            paragraphSuffix:   self::whitespaceSlot($paragraph['block_suffix'] ?? '', 'paragraph.block_suffix'),
             documentBlockPrefix: $this->blockPrefix,
             documentBlockSuffix: $this->blockSuffix,
         );
     }
 
     /**
-     * Decorator fields must be strings; a config carrying a nested
-     * array/object where a decorator string belongs is malformed. Coerce to
-     * empty rather than emitting PHP's 'Array to string conversion'
-     * warning into the user's terminal.
+     * The decoration law for the four slots that cross into Theme (finding
+     * 005): glamour uses document/paragraph `block_prefix` / `block_suffix`
+     * for VERTICAL SPACING only, so exactly the inert whitespace class
+     * [\n\t ]* is accepted. Anything else is an injection channel — before
+     * this guard a style file could smuggle a bare OSC 0 title-set,
+     * arbitrary SGR, or a forged OSC 8 envelope (past the renderer's
+     * refused-scheme gate) into every rendered frame, rc 0. Non-strings
+     * still coerce to '' (malformed shape reads as empty, not fatal — the
+     * array case cannot carry a payload); payload-bearing strings refuse by
+     * naming the slot.
      */
-    private static function stringOrEmpty(mixed $value): string
+    private static function whitespaceSlot(mixed $value, string $slot): string
     {
-        return is_string($value) ? $value : '';
+        if (!is_string($value)) {
+            return '';
+        }
+
+        if (preg_match('/\A[\n\t ]*\z/', $value) === 1) {
+            return $value;
+        }
+
+        throw new \InvalidArgumentException(Lang::t('glamour.decoration_unsafe', ['slot' => $slot]));
+    }
+
+    /**
+     * Non-negative int with the shared decoration ceiling (finding 018 —
+     * sugar-markdown's Theme::MAX_DOCUMENT_DECORATION is the single source
+     * of truth the lib's own constructor saturates to). At this door an
+     * over-cap value REFUSES with its name rather than saturating: a style
+     * file asking for a 1.5-billion-cell indent is broken, and silence is
+     * the wrong answer for the one door that speaks to the user.
+     */
+    private static function boundedDecoration(mixed $value, string $key): int
+    {
+        $number = self::nonNegativeInt($value);
+
+        if ($number > Theme::MAX_DOCUMENT_DECORATION) {
+            throw new \InvalidArgumentException(Lang::t('glamour.value_too_large', [
+                'key'   => $key,
+                'limit' => Theme::MAX_DOCUMENT_DECORATION,
+            ]));
+        }
+
+        return $number;
     }
 
     /** Parsed Style for one element block, null when the block is absent. */

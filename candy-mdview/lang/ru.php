@@ -14,6 +14,8 @@ return [
     'render.theme_config_too_large' => 'конфигурация темы превышает {limit} байт: {path}',
     'glamour.json_invalid' => 'конфигурация темы не является допустимым JSON',
     'glamour.json_object' => 'конфигурация темы должна быть объектом JSON',
+    'glamour.decoration_unsafe' => 'поле темы {slot} должно содержать только переводы строк, табуляции и пробелы',
+    'glamour.value_too_large' => 'ключ темы {key} превышает максимум {limit}',
     'render.no_input_tty' => 'нет ввода: укажите файл или передайте Markdown на стандартный ввод',
     'render.no_input_empty' => 'нет ввода: стандартный ввод пуст',
     'render.pager_needs_tty' => 'пагинатору нужен терминал; выполните рендер в стандартный вывод без -p',

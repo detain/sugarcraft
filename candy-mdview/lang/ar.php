@@ -14,6 +14,8 @@ return [
     'render.theme_config_too_large' => 'إعدادات السمة تتجاوز {limit} بايت: {path}',
     'glamour.json_invalid' => 'إعدادات السمة ليست JSON صالحًا',
     'glamour.json_object' => 'إعدادات السمة يجب أن تكون كائن JSON',
+    'glamour.decoration_unsafe' => 'حقل السمة {slot} يجب ألّا يحتوي سوى على أسطر جديدة ومحاذات وفراغات',
+    'glamour.value_too_large' => 'مفتاح السمة {key} يتجاوز الحد الأقصى {limit}',
     'render.no_input_tty' => 'لا يوجد إدخال: حدد ملفًا أو أرسل Markdown إلى الإدخال القياسي',
     'render.no_input_empty' => 'لا يوجد إدخال: الإدخال القياسي فارغ',
     'render.pager_needs_tty' => 'المُستعرض يحتاج إلى طرفية؛ اعرض في الإخراج القياسي بدلاً من ذلك (بدون -p)',

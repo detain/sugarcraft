@@ -14,6 +14,8 @@ return [
     'render.theme_config_too_large' => 'la configuración del tema supera los {limit} bytes: {path}',
     'glamour.json_invalid' => 'la configuración del tema no es un JSON válido',
     'glamour.json_object' => 'la configuración del tema debe ser un objeto JSON',
+    'glamour.decoration_unsafe' => 'el campo {slot} del tema solo puede contener saltos de línea, tabulaciones y espacios',
+    'glamour.value_too_large' => 'la clave {key} del tema supera el máximo de {limit}',
     'render.no_input_tty' => 'sin entrada: indique un archivo o envíe Markdown por la entrada estándar',
     'render.no_input_empty' => 'sin entrada: la entrada estándar está vacía',
     'render.pager_needs_tty' => 'el paginador necesita una terminal; renderizad a la salida estándar sin -p',

@@ -14,6 +14,8 @@ return [
     'render.theme_config_too_large' => 'thema-configuratie overschrijdt {limit} bytes: {path}',
     'glamour.json_invalid' => 'thema-configuratie is geen geldige JSON',
     'glamour.json_object' => 'thema-configuratie moet een JSON-object zijn',
+    'glamour.decoration_unsafe' => 'thema-veld {slot} mag alleen newlines, tabs en spaties bevatten',
+    'glamour.value_too_large' => 'themasleutel {key} overschrijdt het maximum van {limit}',
     'render.no_input_tty' => 'geen invoer: geef een bestand op of stuur Markdown naar standard input',
     'render.no_input_empty' => 'geen invoer: standard input is leeg',
     'render.pager_needs_tty' => 'de pager heeft een terminal nodig; render naar standaarduitvoer zonder -p',
