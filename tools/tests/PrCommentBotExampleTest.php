@@ -19,7 +19,7 @@ use PHPUnit\Framework\TestCase;
  * so the review sees the tree, move the comment step into the run job to save
  * a handoff, pass the review text straight into the script because it is only
  * Markdown) reintroduces the exfiltration or script-injection shape the
- * doctrine in docs/CI.md spends two jobs avoiding. Comments say "do not";
+ * doctrine in candy-code/docs/CI.md spends two jobs avoiding. Comments say "do not";
  * only a red build does.
  *
  * THE PINS, each one a named load-bearing choice of the example:
@@ -338,7 +338,7 @@ final class PrCommentBotExampleTest extends TestCase
      * Pin 3: the two shapes that would put attacker-controlled CODE next to
      * the base-context token. The safe design uses neither at all, so bare
      * presence is the accusation (fail-closed by omission, the doctrine
-     * spelled in docs/CI.md).
+     * spelled in candy-code/docs/CI.md).
      */
     public function testTheExampleNeverChecksOutHeadCodeOrTargetsThePullRequestEvent(): void
     {

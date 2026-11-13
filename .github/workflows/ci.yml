@@ -13,7 +13,7 @@ on:
 # packages.sury.org, since the ondrej PPA never published past noble and
 # the old 1.14.6 scrape curl-404'd the whole job in ~1s). ubuntu-latest
 # went 24.04 -> 26.04 in Nov 2026; do NOT down-pin runs-on — update the
-# pins instead (owner ruling). docs/CI.md carries the refresh cadence.
+# pins instead (owner ruling). candy-code/docs/CI.md carries the refresh cadence.
 env:
   # Belt-and-suspenders: every action below is already pinned to its
   # Node-24-native major (checkout@v5, cache@v5, setup-php@v2 ≥2.40),
@@ -591,7 +591,7 @@ jobs:
         # placeholder leg, and a host-side skip would hide the same void.
         # Deliberately UNPINNED while ubuntu-latest migrates 24.04 -> 26.04 (Oct-Nov 2026):
         # a version pin is only sound once runs-on names a fixed label. Verified noble string
-        # for whoever lands it after that: ripgrep=14.1.0-1. Refresh cadence: docs/CI.md.
+        # for whoever lands it after that: ripgrep=14.1.0-1. Refresh cadence: candy-code/docs/CI.md.
         run: |
           set -euo pipefail
           command -v rg >/dev/null 2>&1 && exit 0
