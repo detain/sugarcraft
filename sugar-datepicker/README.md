@@ -175,6 +175,10 @@ clamped into `[natural grid: 21 without a week column / 25 with one, 63]` and
 never rejected. The floor guarantees all seven day columns stay visible (a
 narrower request would amputate the Friday/Saturday columns while leaving their
 days selectable), so the rendered width is never below the natural grid.
+Those two arguments are optional: a null argument falls back to the picker's
+configured render state (`withWidth()` / `withShowWeekNumbers()`), so the
+argless contract render honours the host's intent without every caller
+re-passing it.
 
 ## Styling
 
@@ -271,10 +275,12 @@ Beyond `DatePicker` itself, the shipped public classes are:
   the outcome by polling `picker()->selectedDate()`/`rangeStart()`/`rangeEnd()`
   after each update, never from a returned command. The `EventStore` reports the
   same transitions for convenience, but not on range mode's cancel and restart
-  paths (see Events above), so polling stays authoritative. Because
-  the shared `Core\Model::view()` contract is argless, a framework-driven host
-  renders the default 21×9 grid; call `picker()->view($width, $showWeekNumbers)`
-  directly for a sized render.
+  paths (see Events above), so polling stays authoritative. The shared
+  `Core\Model::view()` contract is argless, and it honours the picker's
+  render state: configure width and the week-number column with
+  `withWidth()`/`withShowWeekNumbers()` and every contract-driven render
+  uses them; an explicit `picker()->view($width, $showWeekNumbers)` still
+  wins per call (a null argument falls back to state either way).
 - **`DatePicker` accessors** — `minDate()`, `maxDate()`, `isRangeMode()`,
   `cursorIndex()`, `viewMonth()`, `viewYear()`, `dateAtCursor()`, and
   `moveToDate()` (aim the cursor at an existing value).

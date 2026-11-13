@@ -868,4 +868,55 @@ final class DatePickerTest extends TestCase
         );
         $this->assertNotNull($cells[9][1]->fg(), 'the stale selection keeps its selected colour');
     }
+
+    public function testWithWidthDrivesArglessView(): void
+    {
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withWidth(30);
+
+        $this->assertSame($picker->view(30), $picker->view());
+    }
+
+    public function testExplicitWidthOverridesRenderState(): void
+    {
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withWidth(30);
+        $plain  = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+
+        $this->assertSame($plain->view(), $picker->view(21));
+    }
+
+    public function testWidthStateIsClampedAtRenderNeverRejected(): void
+    {
+        $base = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->view();
+
+        // Absurd widths are stored as intent and clamped at draw time: below
+        // the natural floor the grid renders at full 21-column width again.
+        $this->assertSame($base, DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withWidth(0)->view());
+        $this->assertSame($base, DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withWidth(-99)->view());
+        // Above the ceiling, the 63-column cap applies exactly as before.
+        $this->assertSame(
+            DatePicker::new(new \DateTimeImmutable('2026-05-01'))->view(63),
+            DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withWidth(999_999)->view(),
+        );
+    }
+
+    public function testShowWeekNumbersStateDrivesArglessView(): void
+    {
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withShowWeekNumbers(true);
+        $plain  = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+
+        $this->assertSame($picker->view(21, true), $picker->view());
+        $this->assertSame($plain->view(), $picker->view(21, false));
+    }
+
+    public function testRenderStateSurvivesNavigationWithers(): void
+    {
+        // Navigation clones preserve the configured render state: the June
+        // grid still renders by state, matching its explicit twin.
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withWidth(30)
+            ->withShowWeekNumbers(true);
+        $next = $picker->goToNextMonth();
+
+        $this->assertSame($next->view(30, true), $next->view());
+    }
 }

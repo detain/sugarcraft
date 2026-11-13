@@ -108,6 +108,16 @@ final class DatePicker
     /** Latest selectable/visible date (null = unbounded above). */
     private ?\DateTimeImmutable $maxDate = null;
 
+    /**
+     * Configured render width, as stored by withWidth(). The intent is kept
+     * verbatim; the renderer clamps into the visible band at draw time, so a
+     * host sizing from a live terminal never needs a pre-validation dance.
+     */
+    private int $renderWidth = 21;
+
+    /** Configured week-number column intent, as stored by withShowWeekNumbers(). */
+    private bool $showWeekNumbers = false;
+
     /** Styling (SGR ANSI codes). */
     private string $headerStyle        = '1;37';  // bold white
     private string $dayNameStyle       = '90';    // bright black
@@ -757,18 +767,24 @@ final class DatePicker
     /**
      * Render the date-picker view as an ANSI string using a Buffer.
      *
-     * @param int $width    Requested calendar-area width in characters
-     *                      (default 21 = 7 day columns × 3 cells). The TOTAL
-     *                      buffer width (calendar area + the optional 4-cell
-     *                      week column) is clamped into [natural, 63]: the
-     *                      floor guarantees all seven day columns stay visible
-     *                      (21 without a week column, 25 with one); the ceiling
-     *                      is 63. Widths outside that band are silently
-     *                      clamped, never rejected.
-     * @param bool $showWeekNumbers Show ISO week number column on the left (default false).
+     * @param ?int $width    Requested calendar-area width in characters.
+     *                      Null (default) falls back to the withWidth() state
+     *                      intent, so the argless Core\Model contract renders
+     *                      the configured grid. The TOTAL buffer width
+     *                      (calendar area + the optional 4-cell week column)
+     *                      is clamped into [natural, 63]: the floor
+     *                      guarantees all seven day columns stay visible
+     *                      (21 without a week column, 25 with one); the
+     *                      ceiling is 63. Widths outside that band are
+     *                      silently clamped, never rejected.
+     * @param ?bool $showWeekNumbers Show ISO week number column on the left.
+     *                      Null (default) falls back to the
+     *                      withShowWeekNumbers() state intent.
      */
-    public function view(int $width = 21, bool $showWeekNumbers = false): string
+    public function view(?int $width = null, ?bool $showWeekNumbers = null): string
     {
+        $width ??= $this->renderWidth;
+        $showWeekNumbers ??= $this->showWeekNumbers;
         $weekColWidth = $showWeekNumbers ? self::WEEK_COL_CHARS : 0;
         $minTotal = self::DAYS_IN_WEEK * self::CELL_CHARS + $weekColWidth;
         $totalWidth = \max($minTotal, \min(self::MAX_TOTAL_WIDTH, $width + $weekColWidth));
@@ -932,6 +948,33 @@ final class DatePicker
         self::assertSgr($s);
         $clone = clone $this;
         $clone->rangeStyle = $s;
+
+        return $clone;
+    }
+
+    /**
+     * Configure the render width used by view() and Model::view() whenever no
+     * explicit width argument is passed. The intent is stored as given — the
+     * renderer clamps into the visible band at draw time (a host sizing from
+     * a live terminal may set anything; it will never be rejected).
+     */
+    public function withWidth(int $width): self
+    {
+        $clone = clone $this;
+        $clone->renderWidth = $width;
+
+        return $clone;
+    }
+
+    /**
+     * Configure whether the ISO week-number column renders by default. As
+     * with withWidth(), this is the state-side default; an explicit
+     * view($width, $showWeekNumbers) argument still wins per call.
+     */
+    public function withShowWeekNumbers(bool $show): self
+    {
+        $clone = clone $this;
+        $clone->showWeekNumbers = $show;
 
         return $clone;
     }

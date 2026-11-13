@@ -450,4 +450,17 @@ final class ModelTest extends TestCase
         $this->assertSame($model->picker()->View(), $model->view());
         $this->assertNotSame($model->view(40, true), $model->view());
     }
+
+    public function testArglessModelViewHonoursPickerRenderState(): void
+    {
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withWidth(30)
+            ->withShowWeekNumbers(true);
+        $model = new Model($picker);
+
+        // The argless Core\Model contract renders the CONFIGURED grid.
+        $this->assertSame($picker->view(30, true), $model->view());
+        // Explicit arguments through Model::view() still win per call.
+        $this->assertSame($picker->view(21, false), $model->view(21, false));
+    }
 }

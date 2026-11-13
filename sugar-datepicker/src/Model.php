@@ -159,7 +159,13 @@ final class Model implements \SugarCraft\Core\Model
      * To choose a width or the week-number column, call View() on the picker
      * (or this view() with arguments) directly rather than via the contract.
      */
-    public function view(int $width = 21, bool $showWeekNumbers = false): string
+    /**
+     * Render the grid. Null arguments fall back to the picker's configured
+     * state (withWidth()/withShowWeekNumbers()), so a framework-driven host
+     * invoking the argless Core\Model contract gets the configured grid —
+     * not a hard-coded 21×9.
+     */
+    public function view(?int $width = null, ?bool $showWeekNumbers = null): string
     {
         return $this->picker->view($width, $showWeekNumbers);
     }
