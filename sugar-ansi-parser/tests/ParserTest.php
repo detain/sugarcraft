@@ -116,6 +116,46 @@ final class ParserTest extends TestCase
         $this->assertCount(1, $handler->filter('osc'), 'reset() flush semantics unchanged');
     }
 
+    public function testIncompleteCsiAtEndDispatchesNothing(): void
+    {
+        // sap-16 (finding 019): flush() recovers STRING states only — an
+        // in-flight CSI at end-of-stream is the documented lossy edge,
+        // test-cited here. (Contrast arm below: a bare ESC/CsiParam tail
+        // never dispatches, while an in-flight OSC does.)
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b[1;2");
+        $parser->flush();
+
+        $this->assertSame([], $handler->filter('csi'), 'the unrecovered sequence dispatches nothing');
+        $this->assertSame([], $handler->log, 'not even executes or prints may leak from the tail');
+        $this->assertSame(State::Ground, $parser->currentState(), 'flush always lands in Ground');
+
+        // The documented contrast: a string state IS recovered by flush().
+        $stringEnd = new DebugHandler();
+        $stringParser = new Parser($stringEnd);
+        $stringParser->parseComplete("\x1b]0;x");
+        $this->assertCount(1, $stringEnd->filter('osc'), 'string states keep their end-of-stream dispatch');
+    }
+
+    public function testDoubledEscapeNeitherCancelsNorCorruptsTheFollowingFinal(): void
+    {
+        // sap-16 (finding 019) re-pin of the (Escape, 0x1B) -> Clear -> Escape
+        // anywhere edge: the second ESC re-enters Escape with cleared slots,
+        // so `ESC ESC M` still dispatches escDispatch(ord('M')) exactly once.
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b\x1bM");
+
+        $escs = $handler->filter('esc');
+        $this->assertCount(1, $escs);
+        $this->assertSame(ord('M'), $escs[0]['detail']['final']);
+        $this->assertSame(0, $escs[0]['detail']['intermediate']);
+        $this->assertSame(State::Ground, $parser->currentState());
+    }
+
     public function testDiscardAbandonsUtf8AssemblyWithoutEmission(): void
     {
         // Emission is a dispatch too: even $replaceMalformed mode must stay
