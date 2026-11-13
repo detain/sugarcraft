@@ -79,6 +79,26 @@ $report = static function (string $message): void {
 $args = array_slice($argv ?? [], 1);
 $fake = false;
 $configPath = null;
+// btop's launch overrides (-p/-t/-u): session-only config edits that feed
+// the existing keys without persisting (S-O06). null = flag not given.
+$presetIndex = null;
+$themeArg = null;
+$updateMs = null;
+// Pulls the value of a space-or-equals option arm: space form takes the
+// next argument (and CONSUMES it — the --config law), the `short=`/`long=`
+// form the remainder after the '='. Returns null when absent or empty.
+$takeValue = static function (string $arg, array $args, int &$i, string $short, string $long): ?string {
+    if ($arg === $short) {
+        $value = $args[++$i] ?? null;
+    } elseif ($arg === $long) {
+        $value = $args[++$i] ?? null;
+    } elseif (str_starts_with($arg, $short . '=')) {
+        $value = substr($arg, strlen($short) + 1);
+    } else {
+        $value = substr($arg, strlen($long) + 1);
+    }
+    return $value === '' ? null : $value;
+};
 for ($i = 0; $i < count($args); $i++) {
     $arg = $args[$i];
     if ($arg === 'self-update') {
@@ -107,10 +127,13 @@ for ($i = 0; $i < count($args); $i++) {
             $pairs,
         ));
         fwrite(STDOUT, Lang::t('cli.help.title') . "\n\n"
-            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]\n\n"
+            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [-p N] [-t theme] [-u ms] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]\n\n"
             . Lang::t('cli.help.options') . "\n" . $rows([
                 '--fake' => Lang::t('cli.help.opt.fake'),
                 '--config <path>' => Lang::t('cli.help.opt.config'),
+                '-p, --preset <N>' => Lang::t('cli.help.opt.preset'),
+                '-t, --theme <name>' => Lang::t('cli.help.opt.theme'),
+                '-u, --update <ms>' => Lang::t('cli.help.opt.update'),
                 '--version' => Lang::t('cli.help.opt.version'),
                 '-h, --help' => Lang::t('cli.help.opt.help'),
                 '--check' => Lang::t('cli.help.opt.check'),
@@ -131,6 +154,48 @@ for ($i = 0; $i < count($args); $i++) {
             exit(2);
         }
         $configPath = $value;
+    } elseif ($arg === '-p' || $arg === '--preset' || str_starts_with($arg, '-p=') || str_starts_with($arg, '--preset=')) {
+        $space = $arg === '-p' || $arg === '--preset';
+        $value = $takeValue($arg, $args, $i, '-p', '--preset');
+        $name = explode('=', $arg, 2)[0];
+        // btop takes the preset index as a single digit; a flag-eaten or
+        // non-numeric value is a usage error, refused before the tty gate
+        // like --config's. The file may define fewer presets than 9 — that
+        // miss is the startup refusal after load, where the roster lives.
+        if ($value === null || ($space && str_starts_with($value, '-'))) {
+            $report(Lang::t('cli.missing_value', ['option' => $name]));
+            exit(2);
+        }
+        if (preg_match('/^\d$/', $value) !== 1) {
+            $report(Lang::t('cli.bad_value', ['option' => $name, 'value' => $value]));
+            exit(2);
+        }
+        $presetIndex = (int) $value;
+    } elseif ($arg === '-u' || $arg === '--update' || str_starts_with($arg, '-u=') || str_starts_with($arg, '--update=')) {
+        $space = $arg === '-u' || $arg === '--update';
+        $value = $takeValue($arg, $args, $i, '-u', '--update');
+        $name = explode('=', $arg, 2)[0];
+        if ($value === null || ($space && str_starts_with($value, '-'))) {
+            $report(Lang::t('cli.missing_value', ['option' => $name]));
+            exit(2);
+        }
+        if (preg_match('/^\d+$/', $value) !== 1) {
+            $report(Lang::t('cli.bad_value', ['option' => $name, 'value' => $value]));
+            exit(2);
+        }
+        // The Schema floor/ceiling clamp rides withUpdateMs (btop clamps too).
+        $updateMs = (int) $value;
+    } elseif ($arg === '-t' || $arg === '--theme' || str_starts_with($arg, '-t=') || str_starts_with($arg, '--theme=')) {
+        $space = $arg === '-t' || $arg === '--theme';
+        $value = $takeValue($arg, $args, $i, '-t', '--theme');
+        if ($value === null || ($space && str_starts_with($value, '-'))) {
+            $report(Lang::t('cli.missing_value', ['option' => explode('=', $arg, 2)[0]]));
+            exit(2);
+        }
+        // Resolved against the theme catalogue after load; an unknown name
+        // is a startup refusal there, not here. A path typed in the equals
+        // form is data, not a flag.
+        $themeArg = $value;
     } else {
         $report(Lang::t('cli.unknown_argument', ['argument' => $arg]));
         exit(2);
@@ -166,6 +231,36 @@ foreach ($loaded->warnings as $warning) {
 // (btop.cpp) — /dev/tty1 and serial consoles like /dev/ttyS0 alike.
 $tty = function_exists('posix_ttyname') ? (posix_ttyname(STDIN) ?: '') : '';
 $config = $loaded->config->withTtyModeResolved(null, str_starts_with($tty, '/dev/tty'));
+// btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
+$catalog = ThemeRegistry::new();
+// btop launch flags -p/-t/-u (S-O06): session-only overrides — they steer this
+// run but never reach the config file (Config::persistedValue keeps the file's
+// bytes). Applied before the accelerator probe so a preset's gpu boxes settle
+// exactly like the file's shown_boxes would; a ctrl+r reload takes the file
+// wholesale and ends them.
+if ($updateMs !== null) {
+    // The parser guarantees digits; the clamp is Schema's floor/ceiling (btop clamps too).
+    $config = $config->withSessionUpdateMs($updateMs);
+}
+if ($themeArg !== null) {
+    // Refused here, not at load: the palette loader silently falls back to the
+    // default theme on a miss, which would paint over the user's typo.
+    $entry = $catalog->find($themeArg);
+    if ($entry === null) {
+        $report(Lang::t('cli.theme_unknown', ['theme' => $themeArg]));
+        exit(2);
+    }
+    $config = $config->withSessionOverrides(['color_theme' => $catalog->configValue($entry)]);
+}
+if ($presetIndex !== null) {
+    try {
+        $preset = $config->presets()->at($presetIndex);
+    } catch (\OutOfRangeException) {
+        $report(Lang::t('cli.preset_unknown', ['index' => $presetIndex]));
+        exit(2);
+    }
+    $config = $config->withSessionPreset($preset);
+}
 
 // btop picks its collector per OS at compile time; candy-top per PHP_OS here.
 $platform = Platform::detect();
@@ -184,8 +279,6 @@ if (($boxReset = $config->shownBoxesSettlement($detected)) !== null) {
     $report($boxReset);
 }
 $config = $config->withShownBoxesSettled($detected);
-// btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
-$catalog = ThemeRegistry::new();
 $palette = $catalog->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
 $panels = Panels::standard($host, $config, $fake, $platform, $gpuProbe);
 // btop PR #1791c, proc_tree_persist_state: remembered tree collapse choices live in

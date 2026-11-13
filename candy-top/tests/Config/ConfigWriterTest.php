@@ -7,6 +7,7 @@ namespace SugarCraft\Top\Tests\Config;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\ConfigWriter;
+use SugarCraft\Top\Config\Presets;
 use SugarCraft\Top\Config\Schema;
 
 /** btop Config::current_config layout. */
@@ -82,5 +83,23 @@ final class ConfigWriterTest extends TestCase
         $this->assertStringContainsString("\nupdate_ms = 500\n", $out);
         $this->assertStringContainsString("\nvim_keys = true\n", $out);
         $this->assertStringContainsString("\nnet_iface = \"eth0\"\n", $out);
+    }
+
+    /**
+     * S-O06 acceptance byte: a -u/-p/-t launch override steers the run, but
+     * the rendered file keeps the pre-override values — quitting after only
+     * overrides leaves the config file byte-for-byte what it was.
+     */
+    public function testRenderKeepsLaunchOverridesOutOfTheFile(): void
+    {
+        $plain = ConfigWriter::render(Config::new());
+        $session = ConfigWriter::render(
+            Config::new()
+                ->withSessionUpdateMs(500)
+                ->withSessionOverrides(['color_theme' => 'TTY'])
+                ->withSessionPreset(Presets::parse('cpu:1:block,mem:1:tty,proc:1:default,gpu0:0:braille')->at(1)),
+        );
+
+        $this->assertSame($plain, $session, 'launch overrides never reach the rendered file');
     }
 }

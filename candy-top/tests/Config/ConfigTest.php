@@ -294,4 +294,105 @@ final class ConfigTest extends TestCase
     {
         $this->assertSame(['cpu', 'proc'], Config::new()->with('shown_boxes', ' cpu   proc ')->shownBoxes());
     }
+
+    /**
+     * S-O06: btop's launch flags -p/-t/-u steer the running session only —
+     * Config::persistedValue (what ConfigWriter renders) keeps the file's
+     * bytes for every overridden key until the session itself claims it.
+     */
+    public function testSessionOverridesSteerTheRunButKeepTheFileValue(): void
+    {
+        $file = Config::new();
+        $session = $file->withSessionUpdateMs(500)
+            ->withSessionOverrides(['color_theme' => 'TTY'])
+            ->withSessionPreset(Presets::new()->at(0));
+
+        $this->assertSame(500, $session->updateMs());
+        $this->assertSame('TTY', $session->string('color_theme'));
+        $this->assertSame($file->shownBoxes(), $session->shownBoxes());
+        $this->assertSame(2000, $session->persistedValue('update_ms'));
+        $this->assertSame('pastel', $session->persistedValue('color_theme'));
+        $this->assertSame($file->string('shown_boxes'), $session->persistedValue('shown_boxes'));
+        $this->assertSame($file->bool('cpu_bottom'), $session->persistedValue('cpu_bottom'));
+        // A key no override touched answers through both doors alike.
+        $this->assertSame($session->bool('vim_keys'), $session->persistedValue('vim_keys'));
+    }
+
+    public function testSessionClaimAfterAnOverridePersists(): void
+    {
+        // The + key path (withUpdateMs) after a -u override is the user's
+        // change from then on: what the run sees AND what the file keeps.
+        $session = Config::new()->withSessionUpdateMs(500)->withUpdateMs(900);
+
+        $this->assertSame(900, $session->updateMs());
+        $this->assertSame(900, $session->persistedValue('update_ms'));
+    }
+
+    public function testRepeatSessionOverrideKeepsTheFirstAnchor(): void
+    {
+        $session = Config::new()->withSessionUpdateMs(500)->withSessionUpdateMs(900);
+
+        $this->assertSame(900, $session->updateMs());
+        $this->assertSame(2000, $session->persistedValue('update_ms'));
+    }
+
+    public function testSessionOverridesValidateExactlyLikeWith(): void
+    {
+        try {
+            Config::new()->withSessionOverrides(['no_such_option' => 1]);
+            $this->fail('an unknown key must throw');
+        } catch (InvalidOptionValue $e) {
+            $this->assertStringContainsString('no_such_option', $e->getMessage());
+        }
+
+        try {
+            Config::new()->withSessionOverrides(['proc_box_width_percent' => 101]);
+            $this->fail('a rejected value must throw');
+        } catch (InvalidOptionValue $e) {
+            $this->assertStringContainsString('proc_box_width_percent', $e->getMessage());
+        }
+
+        // Nothing half-applied: the same instance answers both doors with its
+        // own values, as if the calls had never happened.
+        $untouched = Config::new();
+        $this->assertSame($untouched->int('proc_box_width_percent'), $untouched->persistedValue('proc_box_width_percent'));
+    }
+
+    public function testPersistedValueRejectsUnknownKeyLikeValue(): void
+    {
+        $this->expectException(InvalidOptionValue::class);
+        Config::new()->persistedValue('no_such_option');
+    }
+
+    public function testSessionPresetMatchesWithPresetAtRuntime(): void
+    {
+        $preset = Presets::parse('cpu:1:block,mem:1:tty,proc:1:default,gpu0:0:braille')->at(1);
+        $base = Config::new()->with('cpu_bottom', false);
+
+        $viaSession = $base->withSessionPreset($preset);
+        $viaMenu = $base->withPreset($preset);
+
+        // Same runtime picture...
+        $this->assertSame($viaMenu->toArray(), $viaSession->toArray());
+        // ...but a preset applied at launch never reaches the file.
+        $this->assertSame($base->string('shown_boxes'), $viaSession->persistedValue('shown_boxes'));
+        $this->assertSame($base->string('graph_symbol_cpu'), $viaSession->persistedValue('graph_symbol_cpu'));
+        // The same preset applied from the menu (a session claim) does persist.
+        $this->assertSame($viaMenu->string('shown_boxes'), $viaMenu->persistedValue('shown_boxes'));
+    }
+
+    public function testReloadEndsSessionOverrides(): void
+    {
+        // ctrl+r takes the file wholesale (btop init_config over live maps):
+        // withPersistedFrom sets every persisted key through mutate, which
+        // consumes the launch base as it goes.
+        $file = Config::new()->withUpdateMs(1500)->with('color_theme', 'TTY');
+        $session = Config::new()->withSessionUpdateMs(500);
+        $reloaded = $session->withPersistedFrom($file);
+
+        $this->assertSame(1500, $reloaded->updateMs());
+        $this->assertSame('TTY', $reloaded->string('color_theme'));
+        $this->assertSame(1500, $reloaded->persistedValue('update_ms'));
+        $this->assertSame('TTY', $reloaded->persistedValue('color_theme'));
+    }
 }

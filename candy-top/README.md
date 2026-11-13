@@ -121,6 +121,7 @@ state, and prefer re-tagging a fresh release over widening anyone's bypass.
 ```sh
 vendor/bin/candy-top                     # live host, default config
 vendor/bin/candy-top --config ~/top.conf # another config file (also the save target)
+vendor/bin/candy-top -p 2                # btop layout preset, this session only
 vendor/bin/candy-top --fake              # deterministic demo data, never the real host
 vendor/bin/candy-top --help              # options plus the full key list
 vendor/bin/candy-top --version           # version line, no tty needed
@@ -130,9 +131,14 @@ vendor/bin/candy-top --version           # version line, no tty needed
 |---|---|
 | `--fake` | Uses the seeded fake collectors (`Source\Fake\*`) instead of the live host. The data is deterministic and the pids are invented, so it suits demos and VHS tapes. The fake host has two GPUs and one NPU (gpu boxes `gpu0`-`gpu2`), with per-process GPU use. It is still a full start, so it still needs a tty: `--fake` never bypasses the "No tty detected!" gate (only `--help`, `--version` and `self-update` answer before it). For a non-interactive look at the drawing, run it under a pty (`script -qec 'candy-top --fake' /dev/null`) or use the VHS tape. |
 | `--config <path>`, `--config=<path>` | Reads the config from `<path>` instead of `$XDG_CONFIG_HOME/candy-top/config.conf`. That file is also where the config is saved. A missing value is an error (exit 2). So is a following argument that starts with `-` in the space-separated form (`--config -x`); `--config=-x` is accepted as a path. |
+| `-p N`, `--preset N`, `--preset=N` | Applies btop layout preset N from the `presets` option — for this session only; see the launch-override note below the table. N is a single digit; a missing or malformed value exits 2, as does an index the config never defines (the refusal names it). Boxes the machine cannot show hit the same layout settlement a file-sourced layout would. |
+| `-t <name>`, `--theme <name>`, `--theme=<name>` | Runs with the theme named `<name>` — a `.theme` file stem, or `Default`/`TTY` — for this session only. An unknown name is refused at startup with exit 2 rather than falling back to the default theme: a typo on the command line should cost a word, not a silent style change. |
+| `-u <ms>`, `--update <ms>`, `--update=<ms>` | Sets the frame update period to `<ms>` milliseconds for this session only. The Schema clamps (`+`/`-` bounds: 100–86400000); a missing value or non-digits exit 2. |
 | `--version` | Prints `candy-top <version>` on stdout and exits 0, before any config, theme or host probe. Works without a tty. A tagged phar build prints the tag it was built from; a plain checkout prints the dev version and short sha (`+dirty` when the tree is modified), and `unknown` when the package's composer metadata is unavailable. |
 | `-h`, `--help` | Prints usage and the KEYS section, which is generated from the same key table as the help overlay, then exits 0. Works without a tty. |
 | `self-update [flags]` | The updater verb for a phar install: `--check`, `--rollback` and `--allow-unsigned` (see [Phar release and self-update](#phar-release-and-self-update)). It answers before the tty gate, so it works over ssh and in cron; every argument after `self-update` belongs to the updater, not to candy-top. A composer install is refused loudly rather than silently no-op'd. `--channel=latest` currently resolves against the frozen 2026-11-04 dev build named in that section. |
+
+The three launch flags mirror btop's `-p`/`-t`/`-u` and steer the running session only: the config file keeps the pre-launch value of everything they override, even across the save-on-quit. Claim an overridden option in the options menu (or with `+`/`-`) and from then on it is your change that gets saved. `ctrl+r` re-reads the config file wholesale, so an override ends there too.
 
 On first run you get four boxes: **cpu** (per-core meters and load), **memory** (the legend, plus disks when `show_disks` is on), **network** (one interface with its rates) and **processes** (the sortable list). `1` to `4` toggle the four boxes, `5` to `0` the gpu slots, `F1` (or `h`) opens the help overlay that lists every key, and `q` quits — saving the layout on the way out, as btop does. Nothing needs configuring to start: the defaults are btop's — except the theme, which is candy-top's own pastel (see [Themes](#themes)) — and a copied `btop.conf` loads as-is. Run it against fake data (`--fake`) to see all of that without touching your host.
 

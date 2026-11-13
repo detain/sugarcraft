@@ -140,11 +140,13 @@ final class BinTest extends TestCase
         }
         $this->assertSame(1, $inChoke, 'the choke owns exactly one raw write');
 
-        // The nine startup diagnostics route through it: two flag refusals,
-        // the config-path refusal, every load warning, the box-layout reset
-        // notice, and the four exit/save-state error reports (2 in the crash
-        // path, 2 after run()).
-        $this->assertSame(9, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
+        // The startup diagnostics route through it: two flag refusals, the
+        // config-path refusal, every load warning, the box-layout reset
+        // notice, the four exit/save-state error reports (2 in the crash
+        // path, 2 after run()), the five launch-flag usage refusals (-p/-u/-t,
+        // S-O06) and the two after-load roster refusals (unknown theme,
+        // unknown preset). Raised 9 -> 16 on 2026-11-13 with S-O06.
+        $this->assertSame(16, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
         $this->assertStringContainsString('foreach ($loaded->warnings as $warning) {', $source);
 
         $at = strpos($source, '$file = ConfigFile::new($configPath);');
@@ -175,6 +177,74 @@ final class BinTest extends TestCase
             (int) strpos($window, '$report($boxReset);'),
             'notice first: the reset is what the next save persists',
         );
+    }
+
+    /**
+     * S-O06: -p/-t/-u usage refusals come before the tty gate, like --config's,
+     * so a child without a terminal can pin them.
+     *
+     * @return iterable<string, array{list<string>, string}>
+     */
+    public static function launchFlagUsageErrors(): iterable
+    {
+        yield 'preset last argument' => [['-p'], 'missing value for -p'];
+        yield 'preset eaten by a flag' => [['--preset', '--fake'], 'missing value for --preset'];
+        yield 'preset empty equals form' => [['--preset='], 'missing value for --preset'];
+        yield 'preset not a digit' => [['-p=x'], 'bad value for -p: x'];
+        yield 'preset two digits' => [['--preset', '12'], 'bad value for --preset: 12'];
+        yield 'update last argument' => [['-u'], 'missing value for -u'];
+        yield 'update not a number' => [['--update=fast'], 'bad value for --update: fast'];
+        yield 'update negative' => [['-u=-5'], 'bad value for -u: -5'];
+        yield 'theme eaten by a flag' => [['-t', '--fake'], 'missing value for -t'];
+        yield 'theme empty equals form' => [['--theme='], 'missing value for --theme'];
+    }
+
+    /**
+     * @param list<string> $args
+     */
+    #[DataProvider('launchFlagUsageErrors')]
+    public function testLaunchFlagUsageRefusals(array $args, string $needle): void
+    {
+        [$code, , $err] = self::invoke($args);
+        $this->assertSame(2, $code, implode(' ', $args) . ' is a usage error');
+        $this->assertStringStartsWith('candy-top: ', $err, 'the refusal names the program (m34)');
+        $this->assertStringContainsString($needle, $err);
+        $this->assertStringNotContainsString('No tty', $err, 'usage answers before the tty gate');
+    }
+
+    public function testHelpListsTheLaunchFlags(): void
+    {
+        [$code, $out] = self::invoke(['--help']);
+        $this->assertSame(0, $code);
+        foreach (['-p, --preset <N>', '-t, --theme <name>', '-u, --update <ms>', '[-p N] [-t theme] [-u ms]'] as $row) {
+            $this->assertStringContainsString($row, $out, $row . ' is in the help');
+        }
+        foreach (['cli.help.opt.preset', 'cli.help.opt.theme', 'cli.help.opt.update'] as $key) {
+            $this->assertStringContainsString(Lang::t($key), $out, "{$key} comes from the lang table");
+        }
+    }
+
+    /**
+     * The unknown-theme and unknown-preset refusals sit behind the tty gate
+     * (they need the loaded roster), so a child probe cannot reach them —
+     * pinned structurally: each refusal reports through $report and exits 2,
+     * and the three session legs ride on Config's override API.
+     */
+    public function testLaunchFlagStartupRefusalsAreWiredAfterLoad(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../bin/candy-top');
+
+        foreach (['theme_unknown', 'preset_unknown'] as $key) {
+            $this->assertMatchesRegularExpression(
+                '/\$report\(Lang::t\(\'cli\.' . $key . '\'[^\n]*\n\s*exit\(2\);/',
+                $source,
+                "cli.{$key} reports and exits 2",
+            );
+        }
+        $this->assertStringContainsString('$catalog->find($themeArg)', $source, 'the theme is refused before the silent palette fallback');
+        $this->assertStringContainsString('->withSessionUpdateMs($updateMs)', $source);
+        $this->assertStringContainsString("withSessionOverrides(['color_theme'", $source);
+        $this->assertStringContainsString('->withSessionPreset($preset)', $source);
     }
 
     /**

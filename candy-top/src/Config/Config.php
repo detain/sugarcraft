@@ -18,9 +18,14 @@ use SugarCraft\Top\Lang;
  */
 final class Config
 {
-    /** @param array<string, bool|int|string> $values Complete — one entry per Schema option. */
+    /**
+     * @param array<string, bool|int|string> $values Complete — one entry per Schema option.
+     * @param array<string, bool|int|string> $launchBase Values the config file must keep for
+     *        keys set by a session-only launch override (btop's -p/-t/-u, S-O06).
+     */
     private function __construct(
         private readonly array $values,
+        private readonly array $launchBase = [],
     ) {
     }
 
@@ -195,6 +200,63 @@ final class Config
     }
 
     /**
+     * Apply $changes as session-only launch overrides — btop's `-p`/`-t`/`-u`
+     * (S-O06): the running session sees the new values, but every write of
+     * the config file keeps the pre-override value until a session-side set
+     * of the same key claims it, and a ctrl+r reload takes the file wholesale.
+     *
+     * @param array<string, bool|int|string> $changes Raw values, validated through Schema exactly like with().
+     *
+     * @throws InvalidOptionValue For an unknown key or a rejected value — nothing half-applies.
+     */
+    public function withSessionOverrides(array $changes): self
+    {
+        $validated = [];
+        foreach ($changes as $key => $value) {
+            $option = Schema::option($key) ?? throw self::unknown($key);
+            $validated[$key] = $option->check($value);
+        }
+
+        // The base is anchored BEFORE mutate(): mutate() consumes the launch
+        // base for these keys (a session-side set would win over the override
+        // ledger), so the file values are captured first. The first override
+        // of a key owns the file value; a repeat override keeps that anchor
+        // and moves only the runtime value.
+        $preBase = $this->launchBase;
+        foreach (array_keys($validated) as $key) {
+            $preBase[$key] ??= $this->values[$key];
+        }
+
+        return $this->mutate($validated)->withBase($preBase);
+    }
+
+    /**
+     * Copy carrying $base as the launch-override ledger (values unchanged).
+     *
+     * @param array<string, bool|int|string> $base
+     */
+    private function withBase(array $base): self
+    {
+        return new self($this->values, $base);
+    }
+
+    /**
+     * The value the config file carries for $name: a session-only launch
+     * override never writes, so ConfigWriter renders the pre-override value
+     * while the live session still runs on value() (S-O06).
+     *
+     * @throws InvalidOptionValue For an unknown key.
+     */
+    public function persistedValue(string $key): bool|int|string
+    {
+        if (!$this->has($key)) {
+            throw self::unknown($key);
+        }
+
+        return $this->launchBase[$key] ?? $this->values[$key];
+    }
+
+    /**
      * Whether any persisted option differs from $other — btop's `write_new`
      * trigger (any Config::set of a `descriptions` key).
      */
@@ -237,7 +299,22 @@ final class Config
      */
     public function withUpdateMs(int $ms): self
     {
-        return $this->with('update_ms', max(Schema::MIN_UPDATE_MS, min(Schema::ONE_DAY_MILLIS, $ms)));
+        return $this->with('update_ms', self::clampedUpdateMs($ms));
+    }
+
+    /**
+     * Copy with update_ms applied as a session-only launch override — btop's
+     * `-u`: the frame period changes for this run, the config file keeps what
+     * it had until a session-side set claims the key (S-O06).
+     */
+    public function withSessionUpdateMs(int $ms): self
+    {
+        return $this->withSessionOverrides(['update_ms' => self::clampedUpdateMs($ms)]);
+    }
+
+    private static function clampedUpdateMs(int $ms): int
+    {
+        return max(Schema::MIN_UPDATE_MS, min(Schema::ONE_DAY_MILLIS, $ms));
     }
 
     /**
@@ -252,6 +329,32 @@ final class Config
      * a preset always resets a width the user nudged with Shift+arrows.
      */
     public function withPreset(Preset $preset): self
+    {
+        $next = $this;
+        foreach (self::presetChanges($preset) as $key => $value) {
+            $next = $next->with($key, $value);
+        }
+
+        return $next;
+    }
+
+    /**
+     * Copy with $preset applied as a session-only launch override — btop's
+     * `-p`: layout and symbols change for this run, the config file keeps what
+     * it had until a session-side set claims a key (S-O06).
+     */
+    public function withSessionPreset(Preset $preset): self
+    {
+        return $this->withSessionOverrides(self::presetChanges($preset));
+    }
+
+    /**
+     * The option map a preset stands for (positions, width, symbols, box list);
+     * values run through the same per-key law as with().
+     *
+     * @return array<string, bool|int|string>
+     */
+    private static function presetChanges(Preset $preset): array
     {
         $changes = [];
         foreach ($preset->boxes as $box) {
@@ -276,12 +379,7 @@ final class Config
         }
         $changes['shown_boxes'] = implode(' ', $preset->boxNames());
 
-        $next = $this;
-        foreach ($changes as $key => $value) {
-            $next = $next->with($key, $value);
-        }
-
-        return $next;
+        return $changes;
     }
 
     /** Data/frame period in milliseconds (default 2000). */
@@ -454,7 +552,9 @@ final class Config
             $changes[Schema::CTR_SELECTED] = '';
         }
 
-        return new self(array_replace($this->values, $changes));
+        // A session-side set claims the key: what gets persisted from now on
+        // is the live value, not the launch-override base (S-O06).
+        return new self(array_replace($this->values, $changes), \array_diff_key($this->launchBase, $changes));
     }
 
     private static function unknown(string $key): InvalidOptionValue

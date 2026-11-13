@@ -42,7 +42,9 @@ final class ConfigWriter
                     $out .= '#* ' . $line . "\n";
                 }
             }
-            $out .= $name . ' = ' . self::format($config->value($name)) . "\n";
+            // persistedValue, not value(): a session-only launch override
+            // (-p/-t/-u, S-O06) must never reach the file.
+            $out .= $name . ' = ' . self::format($config->persistedValue($name)) . "\n";
         }
 
         return $out;
