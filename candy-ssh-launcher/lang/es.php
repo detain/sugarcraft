@@ -41,7 +41,7 @@ return [
 
 
     // bin/candy-ssh-launcher
-    'cli.usage'         => 'Uso: candy-ssh-launcher [--config <ruta>] [--ssh <binario-ssh>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "Uso: candy-ssh-launcher [--config <ruta>] [--ssh <ruta>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]\nTeclas: las flechas mueven (también j/k con el filtro vacío), escribir filtra, Enter conecta, Ctrl+U limpia la línea, Ctrl+W borra una palabra, Ctrl+H borra atrás, Esc cancela\nCódigos de salida: 0 lanzado o listado, 1 sin configuración, configuración rota o binario rechazado, 2 opción o argumento desconocido, o sin terminal, 3 endpoint rechazado al lanzar, 130 cancelado\n¿Sin terminal interactivo? --list imprime todos los endpoints, y un endpoint nombrado exactamente se lanza igual.\nUn -- a secas termina el análisis de opciones; lo que sigue se ignora — nombre el endpoint antes.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: argumento desconocido: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: no se encontró configuración. Cree ~/.config/wishlist.yml (consulte el inicio rápido del README) o pase --config <ruta>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

@@ -89,7 +89,7 @@ If step 2 exits `1` with a "no config found" refusal, the launcher never saw the
 ## Usage
 
 ```
-candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]
+candy-ssh-launcher [--config <path>] [--ssh <path>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]
 ```
 
 | Argument | Meaning |
@@ -99,7 +99,7 @@ candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--from-ssh-config] [-
 | `--from-ssh-config` | Import the endpoint list from an OpenSSH config instead of a wishlist file. With `--config <path>` it reads that file; without it the default `~/.ssh/config` is used — auto-discovered, so the same ownership/writability trust gate applies as on the wishlist ladder. The resolved source is named on stderr. A wishlist-format refusal on an ssh-config-style file names this flag as the route instead of printing a fake-YAML parse error. |
 | `--ssh <path>` | ssh binary to exec. Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. Without the flag the binary resolves through the environment variable `SSH_LAUNCHER_SSH`, then the candidate list (`/usr/bin/ssh`, `/run/current-system/sw/bin/ssh`, `/opt/homebrew/bin/ssh` — first existing executable wins), then the default `/usr/bin/ssh`. A config row may override this for itself with `command:` (see the field table). |
 | `--list` | Print the resolved endpoints to stdout as TAB-joined `name`, `host:port`, `user` columns (an unset or empty user prints as a literal `-`; a name that occurs more than once is suffixed with its 1-based config index, `dup#1`/`dup#3`), and exit `0` — no terminal, no ssh, no picker, and no `--ssh` executability check. Control and line bytes in every column are folded to spaces, so the output is exactly one physical row per endpoint and safe to `awk -F'\t'`. |
-| `-h`, `--help` | Print the usage line and exit `0`. |
+| `-h`, `--help` | Print the usage block (synopsis, picker keys, exit codes, no-terminal and `--` notes) and exit `0`. |
 | `-v`, `--version` | Print `candy-ssh-launcher <version>` and exit `0` — reads no config, touches no terminal. |
 | `--` | End of options — remaining arguments are ignored (the terminator ends option parsing; it does not introduce the positional). |
 

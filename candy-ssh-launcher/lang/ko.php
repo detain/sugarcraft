@@ -39,7 +39,7 @@ return [
     'endpoint.option_empty' => '엔드포인트 `{name}`에 빈 옵션 항목이 있습니다 — 빈 -o 값은 거부됩니다',
     'endpoint.port_invalid'     => 'wishlist 엔드포인트 [{host}]: 잘못된 포트 [{port}] — 1에서 65535 사이의 정수여야 합니다',
 
-    'cli.usage'         => '사용법: candy-ssh-launcher [--config <경로>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "사용법: candy-ssh-launcher [--config <경로>] [--ssh <경로>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [엔드포인트]\n키: 화살표로 이동(필터가 비면 j/k 도), 입력은 필터, Enter 접속, Ctrl+U 줄 지움, Ctrl+W 단어 지움, Ctrl+H 앞 지움, Esc 취소\n종료 코드: 0 실행 또는 목록 출력, 1 설정 없음·손상·실행 파일 거부, 2 알 수 없는 옵션이나 인자 또는 터미널 없음, 3 실행 시 엔드포인트 거부, 130 취소됨\n대화형 터미널이 없나요? --list 가 모든 엔드포인트를 출력하고, 이름을 정확히 지정한 엔드포인트는 그대로 실행됩니다.\n단독 -- 는 옵션 해석을 끝냅니다. 이후는 무시되니 엔드포인트를 앞에 두세요.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: 알 수 없는 인수: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: 구성을 찾을 수 없습니다. ~/.config/wishlist.yml을 작성하세요(README의 빠른 시작 참조). 또는 --config <경로>를 전달하세요.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

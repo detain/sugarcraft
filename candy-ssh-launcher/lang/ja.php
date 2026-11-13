@@ -39,7 +39,7 @@ return [
     'endpoint.option_empty' => 'エンドポイント `{name}` に空の options エントリがあります — 空の -o 値は拒否されます',
     'endpoint.port_invalid'     => 'wishlist エンドポイント [{host}]：無効なポート [{port}] — 1 から 65535 の整数である必要があります',
 
-    'cli.usage'                => '用法：candy-ssh-launcher [--config <パス>] [--ssh <sshバイナリ>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'                => "用法：candy-ssh-launcher [--config <パス>] [--ssh <パス>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [エンドポイント]\nキー：矢印で移動（フィルタが空のとき j/k も）、入力はフィルタ、Enter で接続、Ctrl+U で行を消去、Ctrl+W で語を消去、Ctrl+H で戻る消去、Esc で中止\n終了コード：0 起動または一覧、1 設定なし・破損・実行ファイル拒否、2 不明なフラグ・引数または非対話、3 起動時のエンドポイント拒否、130 キャンセル\n対話型ターミナルがないときは：--list は全エンドポイントを表示し、名前を完全指定するとそのまま起動します。\n単体の -- はオプション解釈を打ち切ります。以降は無視されるのでエンドポイントは前に書いてください。",
     'cli.unknown_arg'          => 'candy-ssh-launcher：不明な引数：{arg}',
     'cli.no_config'            => 'candy-ssh-launcher：設定が見つかりません。~/.config/wishlist.yml を作成してください（README のクイックスタートを参照）。または --config <パス> を渡してください。',
     'cli.error'                => 'candy-ssh-launcher：{message}',

@@ -39,7 +39,7 @@ return [
     'endpoint.option_empty' => "l'endpoint `{name}` ha una voce options vuota — un valore -o vuoto è rifiutato",
     'endpoint.port_invalid'     => 'endpoint wishlist [{host}]: porta non valida [{port}] — deve essere un intero da 1 a 65535',
 
-    'cli.usage'         => 'Uso: candy-ssh-launcher [--config <percorso>] [--ssh <binario-ssh>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "Uso: candy-ssh-launcher [--config <percorso>] [--ssh <percorso>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]\nTasti: le frecce spostano (anche j/k con il filtro vuoto), digitare filtra, Invio connette, Ctrl+U svuota la riga, Ctrl+W cancella una parola, Ctrl+H cancella a sinistra, Esc annulla\nCodici d'uscita: 0 avviato o elencato, 1 configurazione assente o difettosa o binario rifiutato, 2 opzione o argomento sconosciuto o nessun terminale, 3 endpoint rifiutato all'avvio, 130 annullato\nNessun terminale interattivo? --list stampa tutti gli endpoint, e un endpoint nominato esattamente viene avviato comunque.\nUn -- da solo termina l'analisi delle opzioni; ciò che segue è ignorato — nomina l'endpoint prima.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: argomento sconosciuto: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: nessuna configurazione trovata. Creare ~/.config/wishlist.yml (vedi l\'avvio rapido nel README) oppure passare --config <percorso>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

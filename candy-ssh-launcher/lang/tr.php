@@ -39,7 +39,7 @@ return [
     'endpoint.option_empty' => '`{name}` uç noktasında boş bir seçenek girdisi var — boş bir -o değeri reddedilir',
     'endpoint.port_invalid'     => 'wishlist uç noktası [{host}]: geçersiz bağlantı noktası [{port}] — 1 ile 65535 arasında bir tam sayı olmalı',
 
-    'cli.usage'         => 'Kullanım: candy-ssh-launcher [--config <yol>] [--ssh <ssh-ikili>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "Kullanım: candy-ssh-launcher [--config <yol>] [--ssh <yol>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [uç nokta]\nTuşlar: oklar taşır (filtre boşken j/k de), yazma süzer, Enter bağlanır, Ctrl+U satırı temizler, Ctrl+W bir kelimeyi siler, Ctrl+H geri siler, Esc iptal eder\nÇıkış kodları: 0 başlatıldı ya da listelendi, 1 yapılandırma yok ya da bozuk ya da ikili reddedildi, 2 bilinmeyen bayrak ya da argüman ya da terminal yok, 3 uç nokta başlatmada reddedildi, 130 iptal edildi\nEtkileşimli terminal yok mu? --list tüm uç noktaları basar ve tam adıyla belirtilen uç nokta yine de başlar.\nYalın -- seçenek ayrıştırmayı bitirir; sonrasında her şey yoksayılır — uç nokta adını önce verin.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: bilinmeyen argüman: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: yapılandırma bulunamadı. ~/.config/wishlist.yml dosyasını oluşturun (README içindeki hızlı başlangıca bakın) veya --config <yol> iletin.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

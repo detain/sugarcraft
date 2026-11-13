@@ -39,7 +39,7 @@ return [
     'endpoint.option_empty' => 'endpoint `{name}` má prázdnou položku options — prázdná hodnota -o je odmítnuta',
     'endpoint.port_invalid'     => 'endpoint wishlist [{host}]: neplatný port [{port}] — musí to být celé číslo od 1 do 65535',
 
-    'cli.usage'         => 'Použití: candy-ssh-launcher [--config <cesta>] [--ssh <ssh-binární>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "Použití: candy-ssh-launcher [--config <cesta>] [--ssh <cesta>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]\nKlávesy: šipky pohybují (také j/k když je filtr prázdný), psaní filtruje, Enter připojí, Ctrl+U vymaže řádek, Ctrl+W smaže slovo, Ctrl+H smaže zpět, Esc zruší\nKódy ukončení: 0 spuštěno nebo vypsáno, 1 žádný nebo rozbitý config nebo zamítnutý binární soubor, 2 neznámá volba nebo argument nebo žádný terminál, 3 endpoint zamítnut při spuštění, 130 zrušeno\nŽádný interaktivní terminál? --list vytiskne všechny endpointy a přesně pojmenovaný endpoint se spustí i tak.\nSamotné -- ukončuje zpracování voleb; vše za ním se ignoruje — pojmenujte endpoint před ním.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: neznámý argument: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: konfigurace nenalezena. Vytvořte ~/.config/wishlist.yml (viz rychlý start v README) nebo předejte --config <cesta>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

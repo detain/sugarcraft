@@ -39,7 +39,7 @@ return [
     'endpoint.option_empty' => '端点 `{name}` 含空选项条目——空的 -o 值会被拒绝',
     'endpoint.port_invalid'     => 'wishlist 端点 [{host}]：无效端口 [{port}] —— 必须是 1 到 65535 之间的整数',
 
-    'cli.usage'                => '用法：candy-ssh-launcher [--config <路径>] [--ssh <ssh二进制>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'                => "用法：candy-ssh-launcher [--config <路径>] [--ssh <路径>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [端点]\n按键：方向键移动（筛选框为空时也可用 j/k），输入即筛选，回车连接，Ctrl+U 清空行，Ctrl+W 删词，Ctrl+H 退格，Esc 取消\n退出码：0 已启动或已列出，1 无配置、配置损坏或二进制被拒，2 未知选项或参数、或非终端，3 启动时端点被拒，130 已取消\n没有交互式终端？--list 会列出全部端点，精确命名的端点仍会直接启动。\n单独的 -- 结束选项解析；其后的内容一律忽略 —— 端点名请写在它之前。",
     'cli.unknown_arg'          => 'candy-ssh-launcher：未知参数：{arg}',
     'cli.no_config'            => 'candy-ssh-launcher：未找到配置。请创建 ~/.config/wishlist.yml（参见 README 的快速开始），或传递 --config <路径>。',
     'cli.error'                => 'candy-ssh-launcher：{message}',

@@ -39,7 +39,7 @@ return [
     'endpoint.option_empty' => 'endpoint `{name}` heeft een lege optie-ingang — een lege -o-waarde wordt geweigerd',
     'endpoint.port_invalid'     => 'wishlist-endpoint [{host}]: ongeldige poort [{port}] — moet een geheel getal zijn van 1 tot 65535',
 
-    'cli.usage'         => 'Gebruik: candy-ssh-launcher [--config <pad>] [--ssh <ssh-binair>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "Gebruik: candy-ssh-launcher [--config <pad>] [--ssh <pad>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]\nToetsen: pijltjes bewegen (ook j/k als het filter leeg is), typen filtert, Enter verbindt, Ctrl+U wist de regel, Ctrl+W wist een woord, Ctrl+H wist terug, Esc annuleert\nExitcodes: 0 gestart of vermeld, 1 geen of defecte config of geweigerd programma, 2 onbekende vlag of argument of geen terminal, 3 endpoint bij start geweigerd, 130 geannuleerd\nGeen interactieve terminal? --list print alle endpoints, en een exact genoemde endpoint start nog steeds.\nEen kale -- beëindigt de optieverwerking; alles daarna wordt genegeerd — noem de endpoint ervoor.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: onbekend argument: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: geen configuratie gevonden. Maak ~/.config/wishlist.yml aan (zie de snelstart in de README) of geef --config <pad> door.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

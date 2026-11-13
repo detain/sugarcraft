@@ -40,7 +40,7 @@ return [
     'endpoint.port_invalid'     => 'wishlist endpoint [{host}]: invalid port [{port}] — must be an integer from 1 to 65535',
 
     // bin/candy-ssh-launcher
-    'cli.usage'         => 'Usage: candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "Usage: candy-ssh-launcher [--config <path>] [--ssh <path>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]\nKeys: arrows move (j/k too when the filter is empty), type to filter, Enter connects, Ctrl+U clears the line, Ctrl+W deletes a word, Ctrl+H deletes back, Esc cancels\nExit codes: 0 launched or listed, 1 no config, broken config or refused binary, 2 bad flag or argument, or no terminal, 3 endpoint refused at launch, 130 cancelled\nNo interactive terminal? --list prints every endpoint, and an exact endpoint name still dispatches.\nA bare -- ends option parsing; anything after it is ignored — name the endpoint before it.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: unknown arg: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: no config found. Create ~/.config/wishlist.yml (see the README Quick start) or pass --config <path>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

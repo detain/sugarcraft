@@ -39,7 +39,7 @@ return [
     'endpoint.option_empty' => 'punkt `{name}` ma pustą pozycję options — pusta wartość -o jest odrzucana',
     'endpoint.port_invalid'     => 'punkt końcowy wishlist [{host}]: nieprawidłowy port [{port}] — musi to być liczba całkowita od 1 do 65535',
 
-    'cli.usage'         => 'Użycie: candy-ssh-launcher [--config <ścieżka>] [--ssh <ssh-binarny>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "Użycie: candy-ssh-launcher [--config <ścieżka>] [--ssh <ścieżka>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [punkt końcowy]\nKlawisze: strzałki przesuwają (też j/k gdy filtr jest pusty), pisanie filtruje, Enter łączy, Ctrl+U czyści wiersz, Ctrl+W usuwa słowo, Ctrl+H usuwa wstecz, Esc anuluje\nKody wyjścia: 0 uruchomiono lub wypisano, 1 brak konfiguracji, uszkodzona konfiguracja albo odmowa pliku binarnego, 2 nieznana opcja lub argument albo brak terminala, 3 punkt końcowy odrzucony przy starcie, 130 anulowano\nBrak terminala interaktywnego? --list wypisuje wszystkie punkty końcowe, a dokładnie nazwany punkt i tak się uruchamia.\nSamo -- kończy przetwarzanie opcji; wszystko po nim jest ignorowane — nazwij punkt przed nim.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: nieznany argument: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: nie znaleziono konfiguracji. Utwórz ~/.config/wishlist.yml (patrz szybki start w README) lub podaj --config <ścieżka>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',

@@ -140,7 +140,7 @@ final class BinCliTest extends TestCase
         $this->assertStringContainsString('candy-ssh-launcher', $out);
         $this->assertStringContainsString('--config', $out);
         $this->assertStringContainsString('--ssh', $out);
-        $this->assertSame(Lang::t('cli.usage') . "\n", $out, 'usage line comes from the cli.usage key verbatim');
+        $this->assertSame(Lang::t('cli.usage') . "\n", $out, 'the usage block comes from the cli.usage key verbatim');
         $this->assertSame('', $err);
     }
 
@@ -727,7 +727,7 @@ final class BinCliTest extends TestCase
 
     public function testLocaleIsLiveUnderDe_DE(): void
     {
-        // M4 production-reachability proof: with LANG set, the usage line
+        // M4 production-reachability proof: with LANG set, the usage block
         // must come back in German — this fails red if the bin drops its
         // T::setLocale(T::detect()) call, because the lang files are
         // otherwise dead weight. The expected string is re-read from the

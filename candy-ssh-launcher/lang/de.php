@@ -41,7 +41,7 @@ return [
 
 
     // bin/candy-ssh-launcher
-    'cli.usage'         => 'Aufruf: candy-ssh-launcher [--config <pfad>] [--ssh <ssh-binär>] [--list] [-h|--help] [-v|--version]',
+    'cli.usage'         => "Aufruf: candy-ssh-launcher [--config <pfad>] [--ssh <pfad>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]\nTasten: Pfeiltasten bewegen (bei leerem Filter auch j/k), Tippen filtert, Enter verbindet, Ctrl+U leert die Zeile, Ctrl+W löscht ein Wort, Ctrl+H löscht zurück, Esc bricht ab\nExit-Codes: 0 gestartet oder aufgelistet, 1 keine oder fehlerhafte Config oder verweigertes Programm, 2 unbekannter Schalter oder Argument oder kein Terminal, 3 Endpoint beim Start verweigert, 130 abgebrochen\nKein interaktives Terminal? --list gibt alle Endpoints aus, und ein exakt benannter Endpoint verbindet sich trotzdem.\nEin bloßes -- beendet die Optionsauswertung; alles danach wird ignoriert — den Endpoint vorher nennen.",
     'cli.unknown_arg'   => 'candy-ssh-launcher: unbekanntes Argument: {arg}',
     'cli.no_config'     => 'candy-ssh-launcher: keine Konfiguration gefunden. Erstellen Sie ~/.config/wishlist.yml (siehe Schnellstart im README) oder übergeben Sie --config <pfad>.',
     'cli.error'         => 'candy-ssh-launcher: {message}',
