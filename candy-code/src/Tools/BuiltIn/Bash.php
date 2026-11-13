@@ -524,7 +524,8 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // the previous jailPath('') got the same string by relying on an
         // edge case of a join helper that checks no containment at all.
         $cwd = $this->worktreeJail?->root() ?? $this->root ?? null;
-        // Mirrors charmbracelet/bubbletea.*.Exec.
+        // Mirrors no upstream file: bubbletea's tea.Exec hands the terminal to a
+        // child process, whereas this runs a captured, jailed child via proc_open.
         // Use bash -c to interpret shell syntax; PosixShellQuote prevents
         // command injection.
         //

@@ -13,7 +13,8 @@ use Stringable;
  * and splits remaining text into positional arguments respecting
  * shell-style quoting.
  *
- * Mirrors charmbracelet/crush input parsing.
+ * Mirrors no upstream file: crush has no standalone slash-command parser;
+ * this is a house parser for `/command arg "quoted arg"` input.
  */
 final class CommandParser
 {
