@@ -105,7 +105,7 @@ deprecated forwarder to it).
 | `setItems(array $items): self` | Replace the whole list (used by `Shell` for its immutable ops) |
 | `clear(): self` | Remove everything |
 | `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
-| `viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?list<string> $allowSchemes = null): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped; `$allowSchemes` gates callback-returned URLs (null = trusted legacy bytes) |
+| `viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?list<string> $allowSchemes = null): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped; `$href` receives (item, stack index); `$allowSchemes` gates callback-returned URLs (null = trusted legacy bytes) |
 | `filtered(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive (Unicode-folded, `mb_stripos`) substring (array payloads match when any nested scalar/Stringable value does); payloads nested deeper than 64 levels throw. `filter()` is a deprecated forwarder to it |
 | `static safeTitle(string $title): string` | The published display-sweep facade — byte-identical to what every library render path applies to titles; use it when echoing an untrusted title outside those surfaces |
 
@@ -278,9 +278,12 @@ zones carry — so a jump target can be checked against elision before use.
 non-current crumb becomes a real `<a href>` — tab-navigable and discoverable
 in a screen reader's link list — while the current crumb stays text bearing
 `aria-current="page"`, and the `$label` argument localizes the landmark's
-visually-hidden heading. Pair it with `Url::derive()` (the natural `$href`)
-after sanitizing the titles yourself, and the same trail serves pointer,
-keyboard, and assistive-technology users without extra state.
+visually-hidden heading. The natural `$href` is `Url::deriveTo()`: the
+callback's second argument is the crumb's stack index, so
+`fn($item, $i) => Url::deriveTo($stack, $i)` links every ancestor to its
+sanitized, percent-encoded prefix path (NS-22's rule, one shared encoder —
+the titles need no pre-sanitizing by the host). The same trail then serves
+pointer, keyboard, and assistive-technology users without extra state.
 
 The terminal path has a modality-neutral jump story too: `Breadcrumb::
 visibleIndices()` plus `NavStack::popTo()` is the keyboard route to exactly

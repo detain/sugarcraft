@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\NavStack\Tests;
 
-use SugarCraft\NavStack\{NavStack, NavigationItem};
+use SugarCraft\NavStack\{NavStack, NavigationItem, Url};
 use PHPUnit\Framework\TestCase;
 
 final class NavStackHtmlTest extends TestCase
@@ -292,5 +292,53 @@ final class NavStackHtmlTest extends TestCase
         $this->assertStringContainsString('<a href="/keep/me">Home</a>', $html);
         $this->assertStringContainsString('<li>Docs</li>', $html);
         $this->assertStringNotContainsString('vbscript', $html);
+    }
+
+    public function testViewHtmlOneArgHrefClosuresKeepWorkingUnchanged(): void
+    {
+        $stack = NavStack::new();
+        $stack->push('Home')->push('Settings')->push('Display');
+
+        // Typed for the item ALONE — the extra index argument is tolerated.
+        $href = static fn (NavigationItem $item): string => '/x/' . $item->title;
+        $html = $stack->viewHtml($href);
+
+        $this->assertStringContainsString('<a href="/x/Home">Home</a>', $html);
+        $this->assertStringContainsString('<a href="/x/Settings">Settings</a>', $html);
+        $this->assertStringContainsString('<li aria-current="page">Display</li>', $html);
+    }
+
+    public function testViewHtmlHrefReceivesCrumbStackIndex(): void
+    {
+        $seen = [];
+        $stack = NavStack::new();
+        $stack->push('Home')->push('Settings')->push('Display');
+
+        $html = $stack->viewHtml(static function (NavigationItem $item, int $index) use (&$seen): ?string {
+            $seen[] = [$item->title, $index];
+            return null;
+        });
+
+        // Non-final crumbs only, in stack order — the live crumb is text.
+        $this->assertSame([['Home', 0], ['Settings', 1]], $seen);
+        $this->assertStringContainsString('<li>Home</li>', $html);
+    }
+
+    public function testViewHtmlDuplicateTitlesGetDistinctDeriveToHrefs(): void
+    {
+        $stack = NavStack::new();
+        $stack->push('Home')->push('Settings')->push('Settings');
+
+        $html = $stack->viewHtml(
+            static fn (NavigationItem $item, int $index): string => Url::deriveTo($stack, $index)
+        );
+
+        $this->assertStringContainsString('<a href="/Home">Home</a>', $html);
+        $this->assertStringContainsString('<a href="/Home/Settings">Settings</a>', $html);
+        $this->assertStringContainsString('<li aria-current="page">Settings</li>', $html);
+        // The same title at two depths is not interchangeable: the linked
+        // crumb carries the SHORTER prefix. The full trail belongs to the
+        // current page, which is deliberately text, not an anchor.
+        $this->assertStringNotContainsString('/Home/Settings/Settings', $html);
     }
 }

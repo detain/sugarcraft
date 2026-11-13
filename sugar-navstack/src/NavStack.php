@@ -347,10 +347,14 @@ final class NavStack
      * into a terminal would otherwise reanimate.
      *
      * Pass `$href` to wrap every non-final crumb in an anchor:
-     * `fn(NavigationItem $item): ?string` returning the URL, or null to
-     * leave that crumb as plain text (unlinked ancestor). The callback MUST
-     * return a validated absolute path or allow-listed-scheme URL — or you
-     * can make the library enforce it: pass `$allowSchemes` (NS-06).
+     * `fn(NavigationItem $item, int $index): ?string` returning the URL for
+     * that crumb, or null to leave it as plain text (unlinked ancestor).
+     * The second argument is the crumb's stack index — pair it with
+     * {@see Url::deriveTo()} to link each ancestor to its prefix path.
+     * Callbacks typed for the item ALONE keep working: extra arguments are
+     * tolerated by callable semantics. The callback MUST return a validated
+     * absolute path or allow-listed-scheme URL — or you can make the
+     * library enforce it: pass `$allowSchemes` (NS-06).
      *
      * `$allowSchemes` gates the URL STRINGS the callback returns:
      *  - `null` (default): today's byte-stable behavior — the callback is
@@ -363,12 +367,12 @@ final class NavStack
      *    the crumb as PLAIN TEXT (the same shape a null return takes) —
      *    the title is never lost, only the anchor.
      *
-     * Example output (with `$href = fn($i) => Url::derive(...)` style links):
+     * Example output (with `$href = fn($item, $i) => Url::deriveTo($stack, $i)`):
      * <nav class="breadcrumb" aria-label="Breadcrumb">
      *   <ol><li><a href="/home">Home</a></li><li><a href="/home/settings">Settings</a></li><li aria-current="page">Display</li></ol>
      * </nav>
      *
-     * @param (callable(NavigationItem): ?string)|null $href
+     * @param (callable(NavigationItem, int): ?string)|null $href — called with the crumb and its stack index; 1-arg callables remain acceptable
      * @param list<string>|null                        $allowSchemes scheme tokens ('http','https', …) plus '/' for paths; null = trust the callback (legacy bytes)
      */
     public function viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?array $allowSchemes = null): string
@@ -387,7 +391,7 @@ final class NavStack
                 $parts[] = '<li aria-current="page">' . $escaped . '</li>';
                 continue;
             }
-            $url  = $href !== null ? $href($item) : null;
+            $url  = $href !== null ? $href($item, $i) : null;
             if (\is_string($url) && !self::schemeAllowed($url, $allowSchemes)) {
                 $url = null; // rejected by the allow-list: plain-text crumb (NS-06)
             }

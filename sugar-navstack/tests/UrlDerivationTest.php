@@ -180,4 +180,56 @@ final class UrlDerivationTest extends TestCase
         $back = Url::parse(Url::derive($stack));
         $this->assertSame($titles, array_map(static fn (NavigationItem $i): string => $i->title, $back->items()));
     }
+
+    public function testDeriveToIsASegmentSliceOfDeriveByteForByte(): void
+    {
+        $stack = NavStack::new();
+        $stack->push('Home')->push('My Settings')->push('Café')->push('100%zz');
+
+        $segments = \explode('/', Url::derive($stack)); // ['', 'Home', ...] — rawurlencode keeps '/' encoded inside segments
+        for ($i = 0, $n = \count($stack->items()); $i < $n; $i++) {
+            $expected = '/' . \implode('/', \array_slice($segments, 1, $i + 1));
+            $this->assertSame($expected, Url::deriveTo($stack, $i));
+        }
+    }
+
+    public function testDeriveToExactBytes(): void
+    {
+        $stack = NavStack::new();
+        $stack->push('Home')->push('Settings');
+
+        $this->assertSame('/Home', Url::deriveTo($stack, 0));
+        $this->assertSame('/Home/Settings', Url::deriveTo($stack, 1));
+    }
+
+    public function testDeriveToDuplicateTitlesYieldDistinctPrefixes(): void
+    {
+        $stack = NavStack::new();
+        $stack->push('Home')->push('Settings')->push('Settings');
+
+        $this->assertSame('/Home/Settings', Url::deriveTo($stack, 1));
+        $this->assertSame('/Home/Settings/Settings', Url::deriveTo($stack, 2));
+    }
+
+    public function testDeriveToRefusesIndicesOutsideTheStack(): void
+    {
+        $stack = NavStack::new();
+        $stack->push('Home');
+
+        foreach ([-1, 1] as $bad) {
+            try {
+                Url::deriveTo($stack, $bad);
+                $this->fail('deriveTo() accepted out-of-stack index ' . $bad);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('deriveTo() index ' . $bad, $e->getMessage());
+            }
+        }
+    }
+
+    public function testDeriveToRefusesEmptyStack(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('deriveTo() index 0 is outside the stack of 0 items');
+        Url::deriveTo(NavStack::new(), 0);
+    }
 }

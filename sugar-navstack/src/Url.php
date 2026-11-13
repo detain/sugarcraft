@@ -28,14 +28,52 @@ final class Url
      */
     public static function derive(NavStack $stack): string
     {
-        $segments = \array_map(
-            static fn(NavigationItem $item): string => \rawurlencode(TitleSanitizer::sanitize($item->title)),
-            $stack->items()
-        );
+        $segments = \array_map(self::segment(...), $stack->items());
         if ($segments === []) {
             return '/';
         }
         return '/' . \implode('/', $segments);
+    }
+
+    /**
+     * Derive the ancestor-prefix path up to AND INCLUDING stack index
+     * $index: the first $index+1 crumbs of {@see derive()}'s output.
+     *
+     * This is the `$href` pairing for {@see NavStack::viewHtml()} — the
+     * callback receives (item, index) and the index selects how much of
+     * the trail the link carries. Encoding is the SAME single source as
+     * {@see derive()}: the shared segment() sweep (sanitize-then-
+     * rawurlencode, NS-22), so every prefix is byte-for-byte a segment
+     * slice of the full path and the two can never drift. A duplicate
+     * title at two depths still yields two DIFFERENT hrefs — the index,
+     * not the title, bounds the prefix.
+     *
+     * @throws \InvalidArgumentException When $index is outside the stack.
+     *                                   A prefix of a trail that does not
+     *                                   exist is a caller bug, not a clamp
+     *                                   case: clamping would mint a link
+     *                                   to the wrong depth.
+     */
+    public static function deriveTo(NavStack $stack, int $index): string
+    {
+        $items = $stack->items();
+        if ($index < 0 || $index >= \count($items)) {
+            throw new \InvalidArgumentException(
+                'deriveTo() index ' . $index . ' is outside the stack of ' . \count($items) . ' items'
+            );
+        }
+        $segments = \array_map(self::segment(...), \array_slice($items, 0, $index + 1));
+        return '/' . \implode('/', $segments);
+    }
+
+    /**
+     * The ONE segment encoder — sanitize for display, then RFC 3986 §2
+     * percent-encode. Shared by derive()/deriveTo() so the full path and
+     * every prefix travel under identical bytes (NS-07).
+     */
+    private static function segment(NavigationItem $item): string
+    {
+        return \rawurlencode(TitleSanitizer::sanitize($item->title));
     }
 
     /**
