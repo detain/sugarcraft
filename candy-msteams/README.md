@@ -90,6 +90,11 @@ The path is `/channels/msteams` followed by `transport.webhookPath`
 request to the bundle, which answers `404` for any other path and `405` for
 anything but `POST`. The endpoint must be HTTPS; Microsoft will not post to plain HTTP.
 
+Request bodies over **1 MiB** are refused with `413` before any parsing (log
+`channels.msteams.webhook_body_too_large`, size only). The v1 posture is
+"no inline attachment bytes": media arrives as URLs the bundle fetches, so a
+post big enough to trip this cap is not something Teams sends in normal use.
+
 ## Credentials store
 
 Credentials live in `~/.candy-code/channels.json` (the trusted config
@@ -208,6 +213,10 @@ is not consulted; only paired users pass.
   served only when it has a `groups.rows.<conversationId>` row, or when
   `groups.groupPolicy` is `open`. The `conversationId` is the `conversation.id`
   on the activity (`19:…@thread.v2` style for channels and group chats).
+  If you @-mention the bot in a conversation it does not serve, it answers
+  **once** with that conversation's full id — copy that into a
+  `groups.rows` key. The reveal is once per conversation per process; a
+  non-mention blocked message is never answered.
 - Per row: `policy: "disabled"` closes it; `requireMention` (default `true`)
   decides whether a plain message needs an @mention; `allowFrom` (new, see
   below) restricts who may prompt.
@@ -354,6 +363,26 @@ tier only). Defaults are what the code uses when a key is absent.
 | `transport.jwksUrl` | `https://login.botframework.com/v1/.well-known/keys` | Override needs https, loopback with the opt-in, or `file:///`. |
 | `transport.insecureLoopbackProxy` | `false` | Allows `http://` for a loopback host only. |
 | `accounts.<name>` | none | Per-account overrides of the rows above. |
+
+### Environment overrides
+
+Two transport values can also come from the process environment, and they
+**beat** the settings rows — a stray unit-file or container-env value
+outranks the file on disk, deliberately, because these two exist for
+deployment-time plumbing (a proxy sidecar, an air-gapped mirror), not for
+per-conversation behaviour:
+
+| Env var | Overrides setting | Same floor |
+| --- | --- | --- |
+| `MSTEAMS_AUTH_BASE` | `transport.authBaseUrl` | https, or loopback `http://` with `insecureLoopbackProxy`. |
+| `MSTEAMS_JWKS_URL` | `transport.jwksUrl` | https, loopback with the opt-in, or a `file:///` path. |
+
+The `file:///` roster form is for offline mirrors and test/dev (a blocking
+roster GET inside the synchronous webhook door would otherwise stall a loop
+that is, by construction, not running). Treat that file the way you would
+treat Microsoft's signing keys: whoever writes it signs what the webhook
+accepts. The auth base carries the app password on the wire and therefore
+accepts no `file:` scheme.
 
 ## Troubleshooting
 

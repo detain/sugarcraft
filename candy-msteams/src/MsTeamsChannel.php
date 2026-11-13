@@ -326,6 +326,10 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         $body = (string) $request->getBody();
         if (strlen($body) > self::MAX_BODY_BYTES) {
             // Over-cap BEFORE any parse or comparison (HookWebhooks doctrine).
+            // Debug beside the 413 so a user chasing a silently-dropped big
+            // post sees WHY in the log (size only — the body never enters it).
+            $this->log->debug('channels.msteams.webhook_body_too_large', ['bytes' => strlen($body)]);
+
             return self::json(413, ['error' => 'payload_too_large']);
         }
         $remote = (string) ($request->getServerParams()['REMOTE_ADDR'] ?? '');

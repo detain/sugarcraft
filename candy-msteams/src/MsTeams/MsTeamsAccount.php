@@ -74,6 +74,19 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
     /** @var array<string, TimerInterface> askId → the expiry timer (§9.6 30-min posture) */
     private array $approvalTimers = [];
 
+    /**
+     * Conversation ids whose blocked-group reveal already went out this
+     * process. Bounded FIFO: the reveal answers the "I added the bot and it
+     * is silent" discovery problem once per conversation, and a wall of
+     * blocked mentions in one channel must not become a flood (the door
+     * msteams-17 keeps shut upstream must stay shut behind us too).
+     *
+     * @var array<string, true>
+     */
+    private array $revealedGroups = [];
+
+    private const REVEAL_MEMO_CAP = 64;
+
     public function __construct(
         private readonly string $account,
         private readonly string $appId,
@@ -390,7 +403,7 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
             if (!$this->handleDmPolicy($authorId, $serviceUrl, $conversationId, $content)) {
                 return;
             }
-        } elseif (!$this->allowedGroup($conversationId, $authorId, $isMention, $degraded)) {
+        } elseif (!$this->allowedGroup($conversationId, $authorId, $isMention, $degraded, $serviceUrl)) {
             return;
         }
         // The access floor passed: this conversation is one the bot serves,
@@ -649,12 +662,21 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
      * explicitly. `requireMention` defaults true per row and globally; the
      * degraded floor (§8.3 without the RSC consent) forces mention-only.
      */
-    private function allowedGroup(string $conversationId, string $authorId, bool $isMention, bool $degraded): bool
+    private function allowedGroup(string $conversationId, string $authorId, bool $isMention, bool $degraded, string $serviceUrl = ''): bool
     {
         $row = $this->groupRow($conversationId);
         $groupPolicy = $this->strCfg('groupPolicy', 'allowlist');
         if ($row === null && $groupPolicy !== 'open') {
             $this->log->debug('msteams_group_blocked_default', ['conversation' => \substr($conversationId, 0, 24)]);
+            // A blocked mention IS somebody trying to turn the bot on in this
+            // conversation; silence there just relocates the support question.
+            // Answer it once with the FULL conversation id they need for the
+            // `groups.rows` door — the debug line above stays truncated, the
+            // chat answer is the id's one legitimate full-length surface
+            // (same charter as the pairing code's notice).
+            if ($isMention) {
+                $this->revealBlockedGroup($conversationId, $serviceUrl);
+            }
 
             return false;
         }
@@ -678,6 +700,35 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         }
 
         return true;
+    }
+
+    /**
+     * One-shot reveal of a blocked conversation's full id to the chat that
+     * asked, logged content-free. The memo is process-scoped on purpose: a
+     * restart that re-answers the still-open question is acceptable, an
+     * in-session repeat is the flood this door shuts.
+     */
+    private function revealBlockedGroup(string $conversationId, string $serviceUrl): void
+    {
+        if (isset($this->revealedGroups[$conversationId]) || $serviceUrl === '') {
+            return;
+        }
+        if (\count($this->revealedGroups) >= self::REVEAL_MEMO_CAP) {
+            unset($this->revealedGroups[\array_key_first($this->revealedGroups)]);
+        }
+        $this->revealedGroups[$conversationId] = true;
+        // Delivered literal English pending the host-keyspace ruling (the
+        // msteams-09/-10/-14 family posture); rides raw REST like the
+        // pairing notice, NOT safety->outbound — nothing secret in it.
+        $text = "This conversation is not enabled for this bot yet. To allow it, add a row under groups.rows with this conversation id:\n\n"
+            . "`" . $conversationId . "`\n\nThen mention the bot again.";
+        $this->rest->sendActivity($serviceUrl, $conversationId, [
+            'type' => 'message',
+            'from' => ['id' => $this->appId],
+            'textFormat' => 'markdown',
+            'text' => $text,
+        ])->then(null, fn (\Throwable $e) => $this->log->warn('group_reveal_failed', ['error' => $e->getMessage()]));
+        $this->log->info('group_conversation_id_revealed', ['account' => $this->account]);
     }
 
     /**

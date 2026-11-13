@@ -142,6 +142,51 @@ final class MsTeamsAccountTest extends TestCase
         self::assertStringContainsString('Could not open a session', (string) $body['text']);
     }
 
+    public function testABlockedGroupMentionIsRevealedItsFullConversationIdOnce(): void
+    {
+        // The discovery problem: bot added to a channel, nobody knows the id
+        // for the groups.rows door. A MENTIONED blocked post gets the full id
+        // in chat, once; a non-mention stays silent (that is every spectator
+        // message in every channel the bot lurks in — the flood door).
+        $longId = '19:abcdef0123456789abcdef0123456789@thread.v2';
+        $this->buildFace(['dmPolicy' => 'pairing']);
+        $mention = ['type' => 'mention', 'mentioned' => ['user' => ['id' => '28:' . self::APP_ID]]];
+
+        $quiet = $this->activity('u1', 'unmentioned noise', 'groupChat');
+        $quiet['conversation'] = ['id' => $longId, 'conversationType' => 'groupChat'];
+        $this->face->handleActivity($quiet);
+        $this->settle();
+        self::assertSame([], $this->api->calls, 'a blocked non-mention gets no reveal');
+
+        $ask = $this->activity('u1', '<at>candy</at> are you there?', 'groupChat', [$mention]);
+        $ask['conversation'] = ['id' => $longId, 'conversationType' => 'groupChat'];
+        $this->face->handleActivity($ask);
+        $this->settle(600);
+        $call = $this->api->lastCallFor('/activities', 'POST');
+        self::assertIsArray($call, 'the mentioner gets an answer');
+        $body = (array) \json_decode((string) $call['body'], true);
+        self::assertStringContainsString($longId, (string) $body['text'], 'the reveal carries the FULL untruncated conversation id');
+
+        $again = $this->activity('u1', '<at>candy</at> hello?', 'groupChat', [$mention]);
+        $again['conversation'] = ['id' => $longId, 'conversationType' => 'groupChat'];
+        $this->face->handleActivity($again);
+        $this->settle(600);
+        self::assertCount(1, $this->postedTexts(), 'one reveal per conversation per process — no repeat spam');
+    }
+
+    public function testARegisteredGroupsUserNotListedGetsNoIdReveal(): void
+    {
+        // The row exists, so the conversation id is already known to the
+        // operator; a per-user refusal is not a discovery problem and the
+        // reveal leg must not fire.
+        $this->buildFace(['groups' => ['conv-1' => ['policy' => 'allowlist', 'allowFrom' => ['someone-else']]]]);
+        $this->face->handleActivity($this->activity('u1', '<at>candy</at> hello', 'groupChat', [
+            ['type' => 'mention', 'mentioned' => ['user' => ['id' => '28:' . self::APP_ID]]],
+        ]));
+        $this->settle(600);
+        self::assertSame([], $this->api->calls, 'unlisted-in-a-registered-group stays silent');
+    }
+
     public function testTheDegradedPostureForcesMentionOnlyEvenForAnOpenRow(): void
     {
         $this->buildFace(['degraded' => true, 'groups' => ['conv-1' => ['policy' => 'open', 'requireMention' => false]]]);

@@ -47,7 +47,10 @@ final class Endpoint
      * synchronous webhook door could otherwise stall on a loop that is, by
      * construction, not running. The file never leaves the operator's own
      * tier (transport settings are USER-tier), and the auth base — which
-     * carries the app password on the wire — accepts no such scheme.
+     * carries the app password on the wire — accepts no such scheme. The
+     * trust consequence is spelled: treat a file:/// roster as you would
+     * Microsoft's signing keys — whoever writes that file signs what the
+     * webhook accepts.
      *
      * @throws RuntimeException when the override is not an allowed endpoint
      */
