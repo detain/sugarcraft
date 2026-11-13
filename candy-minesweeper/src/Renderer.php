@@ -26,7 +26,8 @@ use SugarCraft\Style\Style as SugarStyle;
  * {@see Scanner::hit()} can resolve mouse coordinates to cell
  * positions on click/flag events.
  *
- * Mirrors maxpaulus43/go-sweep — Minesweeper renderer.
+ * Board + status + help layout follows the go-sweep screen model;
+ * glyphs, colours and mouse zones are SugarCraft-native.
  */
 final class Renderer
 {

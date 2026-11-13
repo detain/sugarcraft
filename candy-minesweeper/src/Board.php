@@ -9,9 +9,13 @@ namespace SugarCraft\Minesweeper;
  * or flag returns a fresh Board with the changed cells swapped in.
  *
  * The mine layout is deferred until the first reveal so the player
- * never loses on click 1 — the upstream go-sweep behaviour. The PRNG
- * is injected as a `Closure(int $maxInclusive): int` so tests can
- * pin the layout to a known seed without touching the runtime.
+ * never loses on click 1 — a guarantee this port adds, not one it
+ * ports: upstream go-sweep left first-click safety as an
+ * unimplemented TODO (docs/old/repo_map/sugarcraft_candy-minesweeper.md
+ * :412, :423-428 record the verbatim `// TODO instantiate the mines
+ * after the first sweep...`). The PRNG is injected as a
+ * `Closure(int $maxInclusive): int` so tests can pin the layout to a
+ * known seed without touching the runtime.
  */
 final class Board
 {
@@ -85,9 +89,13 @@ final class Board
 
     /**
      * Empty board — all cells unrevealed, no mines. The first reveal
-     * triggers mine placement (avoiding the clicked cell + its eight
-     * neighbours, so the player gets a non-trivial flood-fill on
-     * click 1).
+     * triggers mine placement, avoiding the clicked cell + its eight
+     * neighbours whenever the mine count leaves room (so the player
+     * gets a non-trivial flood-fill on click 1). A board dense enough
+     * that the exclusion would starve the placement falls back to
+     * keeping only the clicked cell mine-free — see
+     * {@see placeMines()}. That regime is unreachable through the
+     * CLI: the launcher caps mines at cells − 9.
      */
     public static function blank(int $width, int $height, int $mineCount): self
     {
@@ -116,8 +124,10 @@ final class Board
     /**
      * Reveal the cell at (x, y). If it has no adjacent mines, also
      * reveal every neighbour transitively (classic flood fill). If
-     * mines aren't yet placed, place them first while excluding the
-     * clicked cell's 3×3 neighbourhood.
+     * mines aren't yet placed, place them first, excluding the clicked
+     * cell's 3×3 neighbourhood — or, on a board too dense for that
+     * exclusion to leave enough candidates, the clicked cell alone
+     * ({@see placeMines()}).
      *
      * @param \Closure(int):int $rand
      */
@@ -540,7 +550,11 @@ final class Board
      * "satisfied" would let a stray click on empty ground look like a move
      * that did something. Chording an unrevealed cell likewise does nothing.
      *
-     * Mirrors standard minesweeper left+right / middle-click chord.
+     * Mirrors the chord press of maxpaulus43/go-sweep (`autoSweep()`,
+     * transcribed at docs/old/repo_map/sugarcraft_candy-minesweeper.md
+     * :346-354); the divergences from it — `===` strictness and the
+     * unchordable revealed zero above — are port tightenings, listed
+     * under "Differences from the antecedent" in the README.
      */
     public function chord(int $x, int $y): self
     {
@@ -572,7 +586,7 @@ final class Board
 
         // Reveal all unflagged, unrevealed neighbors, cascading through
         // floodReveal so any zero-adjacent pocket adjacent to a chorded
-        // neighbour is fully cleared (standard minesweeper chord behaviour).
+        // neighbour is fully cleared.
         $b = $this;
         for ($dy = -1; $dy <= 1; $dy++) {
             for ($dx = -1; $dx <= 1; $dx++) {

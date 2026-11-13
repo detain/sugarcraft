@@ -7,7 +7,10 @@ namespace SugarCraft\Minesweeper;
 /**
  * Difficulty levels for minesweeper.
  *
- * Mirrors common minesweeper presets:
+ * EASY, MEDIUM and EXPERT carry the classic Windows Minesweeper
+ * shapes — no transcribed go-sweep counterpart for the set (the repo_map
+ * parity record, docs/old/repo_map/sugarcraft_candy-minesweeper.md,
+ * transcribes none). STANDARD is this port's own plain-boot shape:
  *   - EASY     (9×9, 10 mines)
  *   - STANDARD (10×10, 12 mines) — the shape `Game::start()` ships with
  *   - MEDIUM   (16×16, 40 mines)

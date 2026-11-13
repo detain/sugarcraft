@@ -119,7 +119,7 @@ Pure-state classes plus the runtime Model, renderer, UI helper, and persistence:
 
 **Numbers are the clue**: a revealed cell shows how many of its eight neighbours hide mines — the same rule the in-game help footer teaches on the first line, so a first-timer never has to guess what the digits mean.
 
-The first reveal is always safe — mines are placed only after click 1, excluding the clicked cell and (whenever the mine count leaves room) its whole 3×3 neighbourhood, so the player gets a non-trivial flood-fill on every game. On dense boards that cannot afford the full exclusion the fallback shrinks the guarantee: the clicked cell itself is always kept mine-free, while edge and corner clicks shed the off-board corners (6 or 4 guaranteed-safe cells instead of 9).
+The first reveal is always safe — mines are placed only after click 1. The normal rule excludes the clicked cell and its whole 3×3 neighbourhood, so the player gets a non-trivial flood-fill on every game; at edges and corners the zone truncates to the cells that exist on the board — 6 or 4 guaranteed-safe cells instead of 9. The fallback rule covers dense boards that cannot afford the full exclusion: only the clicked cell itself is kept mine-free (its neighbours may hold mines), and every requested mine is still placed so win detection stays reachable. Falling into the fallback takes more mines than any CLI or picker game can carry — the −9 cap on custom mine counts always leaves room for the full safe zone — so this is a library-only regime for hand-built boards.
 
 **Chord click** (`c` / middle-click): when a revealed number has exactly the right number of flagged neighbours, chording reveals the neighbours your flags say are clear — the flagged cells stay flagged, and if any of those flags is wrong the chord detonates on it. This mirrors the standard left+right simultaneous press in classic minesweeper.
 
@@ -147,6 +147,28 @@ The minefield renderer builds output via [sugar-cellbuffer](https://github.com/d
 composer install
 vendor/bin/phpunit
 ```
+
+## Differences from the antecedent
+
+The design antecedent [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep) was transcribed, not cloned — the full parity record lives in `docs/old/repo_map/sugarcraft_candy-minesweeper.md`. The rows that still hold at this commit, updated:
+
+| Aspect | go-sweep | candy-minesweeper |
+|---|---|---|
+| Language | Go | PHP 8.3+ |
+| Framework | Bubble Tea | sugar-core (ReactPHP) |
+| First-click safety | TODO comment (unimplemented) | **implemented here** — deferred placement with a 3×3 safe zone (dense-board fallback: clicked cell alone) |
+| Win detection | O(n) grid scan | O(1) via `revealedCount` |
+| Mine placement | Shuffle all cells upfront | Deferred until first click, safe-zone exclusion |
+| Recursion | Recursive `sweep()` | Iterative `floodReveal()` (stack-based) |
+| Chord rule | Satisfied at `adjFlags >= adjMines`, revealed zeros chordable | Tightened — exact `===` match, revealed zeros not chordable (`Board::chord()`) |
+| RNG | `rand.New(rand.NewSource(time…))` | Injectable `Closure(int):int` |
+| Board representation | Mutating `[][]cell` | Immutable `list<list<Cell>>` |
+| Serialization | None | Versioned JSON — the in-game `S` / `L` slot uses exactly this format |
+| i18n | None | 16 locales |
+| Stats persistence | None | `DifficultyStats` atomic JSON, opted in via `CANDY_MINESWEEPER_STATS` |
+| Timers | Integer seconds only | Sub-second via `microtime(true)`, shown by a 1 Hz `TickMsg` |
+
+Added with no transcribed upstream counterpart: the `STANDARD` 10×10 / 12 plain-boot shape and the `n` new-game picker (presets plus the custom-board form), the versioned save payload above, and light-console colour degradation.
 
 ## Credits & inspiration
 
