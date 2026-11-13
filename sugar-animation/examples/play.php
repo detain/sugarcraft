@@ -25,8 +25,13 @@ if (extension_loaded('gd') === false) {
     exit(1);
 }
 
-$path = sys_get_temp_dir() . '/sugar-animation-demo.gif';
+// Per-run unique name + shutdown cleanup: the old fixed shared path let two
+// runs clobber each other's bytes and left the demo GIF in tmp forever.
+$path = sys_get_temp_dir() . '/sugar-animation-demo-' . getmypid() . '-' . bin2hex(random_bytes(6)) . '.gif';
 file_put_contents($path, build_demo_gif());
+register_shutdown_function(static function () use ($path): void {
+    @unlink($path);
+});
 
 $frames = Decoder::decode($path, cellsW: 60, cellsH: 18);
 
