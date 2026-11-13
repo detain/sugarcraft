@@ -336,3 +336,10 @@ History: the `Honey-` family (math / physics / motion) was retired with the
 <!-- @rename-keep -->
 
 Don't mint new prefixes without a discussion in this file.
+
+## Argv convention (S-L06)
+
+Argument grammars are per-app house convention: each app keeps its own parser
+(`candy-code`'s `Cli/ArgvParser`), and there is no shared argv library — refusal
+copy, exit codes and `--` handling are pinned by each app's own goldens, so a
+`sugar-argv` lib would need its own design pass first.

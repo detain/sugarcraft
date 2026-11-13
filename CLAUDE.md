@@ -38,7 +38,7 @@ PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 ## Conventions
 
 - `declare(strict_types=1);` first line. PSR-12 + PSR-4. Public classes `final` unless extension is contract.
-- **Immutable + fluent**: every `with*()` returns a new instance via `mutate()`; public `readonly` state. Canonical `sugar-style/src/Style.php`; trait `sugar-core/src/Concerns/Mutable.php`. Nullable fields pair a `bool $XSet` sentinel.
+- **Immutable + fluent**: every `with*()` returns a new instance via `mutate()`; public `readonly` state. Canonical `sugar-style/src/Style.php`; trait `sugar-core/src/Concerns/Mutable.php`. Nullable fields pair a `bool $XSet` sentinel. `with*()` setters must return a new instance via `mutate()` (S-X06); carriers with >=7 positional fields use sugar-core `Concerns\Mutable`; non-immutable setters are named `set*`/`attach*`, and small value objects carry a dated exemption docblock — guarded by `candy-code/tests/Support/MutateDriftGuardTest.php`.
 - Bare accessors (no `get`). Factories mirror upstream: `Theme::ansi()`, `Spinner::line()`. `::new()` is the default root — never `::create()`/`::make()`/`::default()`.
 - TUI `Model` (`sugar-core/src/Model.php`): `init()` · `update(Msg): [Model, ?Cmd]` · `view()`. Side effects → `Cmd`, never `view()`.
 - Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. i18n via `Lang::t($key,$params)` wrapping `SugarCraft\Core\I18n\T` (`sugar-pty/src/Lang.php`).

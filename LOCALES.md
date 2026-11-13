@@ -108,6 +108,15 @@ English" form fall through to `en` in `T::detect()`.
 | ------------- | --------- | ----- |
 | `candy-code` | `crush`   | Only user-facing text (TUI, CLI, command and key-binding descriptions) goes through `Lang::t()`. Tool descriptions, prompt layers and tool errors are read by the model and stay English in every locale. The doc-drift tests compare the docs against English registry text, so they pin `en`. `bin/candy-code` selects the locale once at launch from `LC_ALL` / `LC_MESSAGES` / `LANG` (`Lang::useLaunchLocale()`; `C`/`POSIX` or unset → `en`). |
 
+## Plural policy
+
+No `(s)` splicing (S-L12): a string whose sentence names one counter takes a whole
+sentence per plural class, keys `<base>_one` / `<base>_other`, chosen at the call
+site (`$n === 1 ? 'x_one' : 'x_other'`); languages without number agreement carry
+the same sentence under both keys. `(s)` is tolerated only where one sentence
+carries two or more counters. Precedent: `cli.noticerow.*` and the `cli.doctor.*`
+keys in `candy-code` (see `candy-code/CALIBER_LEARNINGS.md`).
+
 ## How to contribute a translation
 
 1. Pick a code from the **Recommended set** (or open an issue first
