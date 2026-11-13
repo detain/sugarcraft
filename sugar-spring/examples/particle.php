@@ -23,12 +23,22 @@ $particleCount = 80;
 $frames        = 60;        // ~1 simulated second at 60 FPS
 $dt            = Spring::fps(60);
 
+// Projectile is a pure time function with no target to snap to — it
+// deliberately ignores the reduced-motion signal (see README "Reduced
+// motion"). Surfaced as one line, only when the env is set.
+$reduceMotion = getenv('REDUCE_MOTION');
+if ($reduceMotion !== false && $reduceMotion !== '' && $reduceMotion !== '0') {
+    echo "REDUCE_MOTION is set: Projectile ignores it by design (pure math, no target to snap to).\n\n";
+}
+
 mt_srand(42);
 /** @var list<Projectile> $particles */
 $particles = [];
 for ($i = 0; $i < $particleCount; $i++) {
-    // Fan a swarm out from the origin: random angle in [-15°, +15°]
-    // off the vertical, magnitude in [15, 25].
+    // Fan a swarm out from the origin: random angle in [-0.15, +0.15]
+    // radians off the vertical (about ±8.6°), magnitude in [15, 25].
+    // (Comment fixed to match the code — the literals are RADIANS, not
+    // degrees: 0.15 rad ≈ 8.6°, not the ±15° an earlier draft claimed.)
     $angle = (mt_rand(-150, 150) / 1000.0);
     $speed = 15.0 + (mt_rand(0, 1000) / 100.0);
     $vx    = sin($angle) * $speed;

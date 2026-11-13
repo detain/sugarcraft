@@ -55,6 +55,13 @@ $bar = static function (float $pos) use ($barWidth, $scale): string {
 };
 
 $labels = array_keys($regimes);
+// Under REDUCE_MOTION every Spring::update() snaps straight to target — the
+// whole point of the a11y door, and why this demo prints flat lines. The
+// library gates the motion; the host gates the demo. One line, env only.
+$reduceMotion = getenv('REDUCE_MOTION');
+if ($reduceMotion !== false && $reduceMotion !== '' && $reduceMotion !== '0') {
+    echo "REDUCE_MOTION is set: every spring snaps to target — demo flattened deliberately.\n\n";
+}
 echo "Damped spring — three regimes converging to target=100 (angularFrequency=6)\n\n";
 printf("frame │ %-23s │ %-23s │ %-23s\n", $labels[0], $labels[1], $labels[2]);
 echo str_repeat('─', 6) . '┼' . str_repeat('─', 25) . '┼' . str_repeat('─', 25) . '┼' . str_repeat('─', 25) . "\n";
