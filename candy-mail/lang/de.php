@@ -42,7 +42,7 @@ return [
     'smtp.send_cancelled' => 'SMTP-Versand vor dem Start abgebrochen',
     'smtp.write_error' => 'Schreiben auf den SMTP-Server fehlgeschlagen',
     'smtp.incomplete_write' => 'Unvollständiger Schreibvorgang auf den SMTP-Server',
-    'smtp.invalid_helo_host' => 'HELO-Host {helo} ist kein gueltiger Hostname (nur Buchstaben, Ziffern, Punkte und Bindestriche)',
+    'smtp.invalid_helo_host' => 'HELO-Host {helo} ist kein gültiger Hostname (nur Buchstaben, Ziffern, Punkte und Bindestriche)',
     'smtp.auth_unavailable' => 'Der SMTP-Server {host} hat AUTH nicht beworben; Senden ohne Authentifizierung wird abgelehnt, obwohl Zugangsdaten konfiguriert sind',
     'smtp.response_too_long' => 'Die Antwort des SMTP-Servers überschritt das Größenlimit',
     'smtp.response_timeout' => 'Die Antwort des SMTP-Servers überschritt das Zeitbudget',

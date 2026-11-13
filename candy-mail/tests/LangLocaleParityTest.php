@@ -120,6 +120,70 @@ final class LangLocaleParityTest extends TestCase
     }
 
     /**
+     * The same mechanical sweep (docs-fix-1023) stripped diacritics and
+     * hamzas from the Latin/Arabic catalogs (finding candy-mail-004):
+     * gueltiger/valido/nao/neni/gecerli/prawidlowa/صالحا-style values with
+     * their accents gone. Floor: each swept key must carry the corrected
+     * characters — a re-stripping goes red here.
+     *
+     * @return array<string, array{0: string, 1: array<string, list<string>>}>
+     */
+    public static function orthographyFloorProvider(): array
+    {
+        return [
+            'de'    => ['de.php', ['smtp.invalid_helo_host' => ['ü']]],
+            'es'    => ['es.php', [
+                'smtp.invalid_helo_host'   => ['á', 'í'],
+                'transport.not_serializable' => ['ú'],
+                'resend.curl_missing'      => ['ñ'],
+            ]],
+            'pt'    => ['pt.php', [
+                'smtp.invalid_helo_host'   => ['ã', 'é', 'á', 'í'],
+                'transport.not_serializable' => ['ã'],
+            ]],
+            'pt-br' => ['pt-br.php', [
+                'smtp.invalid_helo_host'   => ['ã', 'é', 'á', 'í'],
+                'transport.not_serializable' => ['ã'],
+            ]],
+            'cs'    => ['cs.php', [
+                'smtp.invalid_helo_host'   => ['í', 'ý', 'á', 'č'],
+                'transport.not_serializable' => ['ř', 'í', 'ú', 'á'],
+            ]],
+            'tr'    => ['tr.php', [
+                'smtp.invalid_helo_host'   => ['ç', 'ı', 'ğ'],
+                'transport.not_serializable' => ['ş', 'ı', 'ğ', 'ç'],
+            ]],
+            'pl'    => ['pl.php', [
+                'smtp.invalid_helo_host'   => ['ł', 'ą', 'ś'],
+                'transport.not_serializable' => ['ą', 'ż', 'ó', 'ć'],
+            ]],
+            'ar'    => ['ar.php', [
+                'smtp.invalid_helo_host'   => ['ً', 'أ'],
+                'transport.not_serializable' => ['أ', 'ً'],
+            ]],
+        ];
+    }
+
+    /**
+     * @param array<string, list<string>> $floor key => required characters
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('orthographyFloorProvider')]
+    public function testSweptKeysKeepTheirDiacritics(string $file, array $floor): void
+    {
+        $values = require \dirname(__DIR__) . '/lang/' . $file;
+
+        foreach ($floor as $key => $chars) {
+            foreach ($chars as $char) {
+                $this->assertStringContainsString(
+                    $char,
+                    $values[$key],
+                    \sprintf('%s[%s] lost the character %s (candy-mail-004)', $file, $key, $char)
+                );
+            }
+        }
+    }
+
+    /**
      * @param string $file
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('localeProvider')]
