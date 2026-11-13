@@ -188,6 +188,13 @@ final class Player
      *                                rather than the compressed timeline. Has no effect
      *                                on cassettes recorded without idle-trim. Mirrors
      *                                the `--no-trim` flag of {@see ReplayCommand}.
+     * @param LoopInterface|null $loop  Test seam (finding 014): schedule every
+     *                                event timer on the supplied loop instead of
+     *                                owning a fresh StreamSelectLoop. A fake-clock
+     *                                loop makes the idle-trim clamps directly
+     *                                observable (scheduled interval == clamped
+     *                                delta) instead of being inferred from wall
+     *                                clock elapsed time. Omit in production.
      */
     public function play(
         \Closure $programFactory,
@@ -199,6 +206,7 @@ final class Player
         ?EventMatcher $matcher = null,
         ?float $idleThresholdSeconds = null,
         bool $useRawTimestamps = false,
+        ?LoopInterface $loop = null,
     ): ReplayResult {
         $assertion ??= new ByteAssertion();
         $registry = $serializerRegistry ?? Registry::default();
@@ -223,7 +231,9 @@ final class Player
                 throw new \RuntimeException('fopen(php://memory) failed');
             }
 
-            $loop = new \React\EventLoop\StreamSelectLoop();
+            // The seam: honour an injected loop (fake-clock tests), else own
+            // a fresh StreamSelectLoop exactly as before (finding 014).
+            $loop ??= new \React\EventLoop\StreamSelectLoop();
             $program = ($programFactory)($inputRead, $output, $loop);
 
             // 'undecoded' counts Input events that reached no message at the
