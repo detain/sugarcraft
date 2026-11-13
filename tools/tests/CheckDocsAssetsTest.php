@@ -59,13 +59,15 @@ final class CheckDocsAssetsTest extends TestCase
         // RT-20: sight-pins. A zero-findings answer is ALSO what "the legs
         // scanned nothing" returns (a root-path bug silently downgrades this
         // arm to the empty-dir arm), so pin the live corpus the checker must
-        // engage with. Floors re-derived from disk 2026-11-12 (measured
-        // 72/64/64/634/71) with slack for additive churn only — a corpus
-        // shrinking below a floor is a red worth reading.
+        // engage with. Floors re-derived from disk 2026-11-12 with slack for
+        // additive churn only — a corpus shrinking below a floor is a red
+        // worth reading. RT-43 rode the same step: demo-GIF refs now count
+        // PUBLISHED surfaces only (docs/_data generator fragments dropped),
+        // measured 72/64/64/359/71.
         $this->assertGreaterThanOrEqual(70, $census['chrome_pages'], 'chrome pages scanned (0 = the walk never saw docs/)');
         $this->assertGreaterThanOrEqual(60, $census['icon_files'], 'media/icons pngs scanned');
         $this->assertGreaterThanOrEqual(60, $census['site_icons'], 'docs/img/icons pngs scanned');
-        $this->assertGreaterThanOrEqual(600, $census['demo_gif_refs'], 'demo-GIF references examined');
+        $this->assertGreaterThanOrEqual(340, $census['demo_gif_refs'], 'demo-GIF references examined (published surfaces)');
         $this->assertGreaterThanOrEqual(60, $census['sitemap_pages'], 'sitemap universe pages scanned');
     }
 

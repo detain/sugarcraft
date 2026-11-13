@@ -80,10 +80,39 @@ final class CheckDocsAssets
     ];
 
     /**
+     * RT-43: the dead-path roster check in the CLI main reads the otherwise
+     * private SITEMAP_EXCLUSIONS through this window (no visibility widening
+     * of the const itself).
+     *
+     * @return array<string,string>
+     */
+    public static function sitemapExclusions(): array
+    {
+        return self::SITEMAP_EXCLUSIONS;
+    }
+
+    /**
+     * RT-43 (repo-tooling-055): the legs enumerate the same corpus up to
+     * 6-7 times (chrome membership per leg, the sitemap walk, the gif/link
+     * passes). Reads are memoized PER derive() call — fixtures mutate
+     * between calls, and every derive() re-derives from a clean slate, so
+     * the cache can never freeze bytes across a mutation.
+     *
+     * @var array<string,string>
+     */
+    private static array $readCache = [];
+
+    private static function readCached(string $path): string
+    {
+        return self::$readCache[$path] ??= (string) @file_get_contents($path);
+    }
+
+    /**
      * @return list<string> human-readable findings, empty when the tree is clean
      */
     public static function derive(string $root, ?array &$census = null): array
     {
+        self::$readCache = [];
         $findings = array_merge(
             self::iconSetEquality($root),
             self::demoGifRefs($root),
@@ -131,7 +160,7 @@ final class CheckDocsAssets
     {
         $findings = [];
         foreach (glob("$root/docs/lib/*.html") ?: [] as $file) {
-            $html = (string) file_get_contents($file);
+            $html = (string) self::readCached($file);
             preg_match_all('~<img\b[^>]*>~i', $html, $tags);
             foreach ($tags[0] as $tag) {
                 if (preg_match('~\bsrc="([^"]*)"~i', $tag, $src) !== 1) {
@@ -169,7 +198,7 @@ final class CheckDocsAssets
     {
         $findings = [];
         foreach (self::chromePages($root) as $file) {
-            $html = (string) file_get_contents($file);
+            $html = (string) self::readCached($file);
             $triggers = substr_count($html, 'id="search-trigger"');
             if ($triggers !== 1) {
                 $findings[] = $triggers === 0
@@ -222,7 +251,7 @@ final class CheckDocsAssets
 
         return array_values(array_unique(array_filter(
             $pages,
-            static fn (string $p): bool => is_file($p) && str_contains((string) file_get_contents($p), '<div class="nav-links">'),
+            static fn (string $p): bool => is_file($p) && str_contains(self::readCached($p), '<div class="nav-links">'),
         )));
     }
 
@@ -240,7 +269,7 @@ final class CheckDocsAssets
         $reference = null;
         $referenceFile = '';
         foreach (self::chromePages($root) as $file) {
-            $html = (string) file_get_contents($file);
+            $html = (string) self::readCached($file);
             if (!str_contains($html, '<nav class="nav"')) {
                 continue;
             }
@@ -286,7 +315,7 @@ final class CheckDocsAssets
 
         $findings = [];
         $rows = [];
-        preg_match_all('~<loc>([^<]*)</loc>~', (string) file_get_contents($sitemap), $m);
+        preg_match_all('~<loc>([^<]*)</loc>~', self::readCached($sitemap), $m);
         foreach ($m[1] as $loc) {
             if (!str_starts_with($loc, self::SITE_BASE)) {
                 $findings[] = 'sitemap: <loc>' . $loc . '</loc> is outside the site base ' . self::SITE_BASE;
@@ -338,7 +367,7 @@ final class CheckDocsAssets
             }
             $display = self::relative($root, $file->getPathname());
             $sitePath = substr($display, strlen('docs/'));
-            if (!str_contains((string) file_get_contents($file->getPathname()), '<div class="nav-links">')) {
+            if (!str_contains(self::readCached($file->getPathname()), '<div class="nav-links">')) {
                 continue;
             }
             if (isset(self::SITEMAP_EXCLUSIONS[$sitePath])) {
@@ -347,9 +376,14 @@ final class CheckDocsAssets
             $universe[$sitePath === 'index.html' ? '' : $sitePath] = $display;
         }
 
+        // RT-43: the dead-path half of roster staleness lives in the CLI main
+        // (scoped to the real repo root, where the roster is a claim about the
+        // COMMITTED tree — synthetic fixture roots legitimately lack the
+        // pages). Here stays the direction a fixture can exercise: an entry
+        // whose page EXISTS but lost its nav chrome.
         foreach (self::SITEMAP_EXCLUSIONS as $sitePath => $why) {
             $file = "$root/docs/$sitePath";
-            if (is_file($file) && !str_contains((string) file_get_contents($file), '<div class="nav-links">')) {
+            if (is_file($file) && !str_contains(self::readCached($file), '<div class="nav-links">')) {
                 $findings[] = "sitemap: exclusion roster entry docs/$sitePath ($why) no longer carries nav chrome — the roster is stale";
             }
         }
@@ -390,7 +424,7 @@ final class CheckDocsAssets
     {
         $findings = [];
         foreach (self::docsHtmlFiles($root) as $file) {
-            $html = (string) file_get_contents($file);
+            $html = (string) self::readCached($file);
             $pattern = '~' . preg_quote(self::RAW_GIF, '~') . '([^"\']+\.gif)~';
             foreach (array_unique((preg_match_all($pattern, $html, $m) ? $m[1] : [])) as $ref) {
                 if (!is_file("$root/$ref")) {
@@ -413,7 +447,7 @@ final class CheckDocsAssets
     {
         $refs = 0;
         foreach (self::docsHtmlFiles($root) as $file) {
-            $html = (string) file_get_contents($file);
+            $html = (string) self::readCached($file);
             $pattern = '~' . preg_quote(self::RAW_GIF, '~') . '([^"\']+\.gif)~';
             $refs += count(array_unique(preg_match_all($pattern, $html, $m) ? $m[1] : []));
         }
@@ -451,7 +485,7 @@ final class CheckDocsAssets
             if (!is_file($file)) {
                 continue;
             }
-            $html = (string) file_get_contents($file);
+            $html = (string) self::readCached($file);
             $pattern = '~(?<![-\w])(?:href|src)="([^"]+)"~';
             foreach (array_unique((preg_match_all($pattern, $html, $m) ? $m[1] : [])) as $raw) {
                 $path = self::localTarget($raw);
@@ -484,7 +518,7 @@ final class CheckDocsAssets
         if (!is_file($index)) {
             return [];
         }
-        $html = (string) file_get_contents($index);
+        $html = self::readCached($index);
         if (preg_match('~<span class="num">(\d+)</span><span class="label">VHS demos</span>~', $html, $m) !== 1) {
             return ['gifs: docs/index.html has no parseable "VHS demos" stat'];
         }
@@ -534,8 +568,11 @@ final class CheckDocsAssets
      */
     private static function docsHtmlFiles(string $root): array
     {
+        // RT-43: docs/_data/*.html are GENERATOR FRAGMENTS, never published
+        // surfaces — scanning them cost whole-corpus reads for zero check
+        // value. They are excluded by path before anything is read.
         $files = ["$root/docs/index.html", "$root/docs/libraries.html", "$root/docs/apps.html"];
-        foreach (["$root/docs/lib/*.html", "$root/docs/_data/*.html"] as $glob) {
+        foreach (["$root/docs/lib/*.html"] as $glob) {
             foreach (glob($glob) ?: [] as $file) {
                 $files[] = $file;
             }
@@ -573,6 +610,22 @@ if (PHP_SAPI === 'cli' && realpath((string) ($argv[0] ?? '')) === realpath(__FIL
     if (!is_dir($root)) {
         fwrite(STDERR, "check-docs-assets: --root is not a directory: $root\n");
         exit(2);
+    }
+
+    // RT-43 (repo-tooling-048): SITEMAP_EXCLUSIONS "must not lie about the
+    // tree" (its own header law) — enforced one way only until now: a roster
+    // entry whose docs/ path had vanished was silent dead weight. On the real
+    // repo root (the roster's referent; --root scratch trees are exempt, they
+    // legitimately carry minimal corpora) every exclusion must name an
+    // existing page, or the tool exits 2 naming the entry — the
+    // IDLE_DEFERRAL-census model this repo already runs for rosters.
+    if (realpath($root) === realpath(dirname(__DIR__))) {
+        foreach (CheckDocsAssets::sitemapExclusions() as $sitePath => $why) {
+            if (!is_file("$root/docs/$sitePath")) {
+                fwrite(STDERR, "check-docs-assets: exclusion roster entry docs/$sitePath ($why) names a path that no longer exists — the roster lies about the tree\n");
+                exit(2);
+            }
+        }
     }
 
     $findings = CheckDocsAssets::derive($root);
