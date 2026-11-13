@@ -25,7 +25,7 @@ export CANDY_ANSI_INSPECT_BIN
 run_ansi_inspect() { "$CANDY_ANSI_INSPECT_BIN" "$@"; }
 export -f run_ansi_inspect
 
-echo "── SGR (foreground colours) ────────────────────"
+echo "── SGR (foreground colours) ─────────────────────"
 printf '\e[31mred\e[32m green\e[34m blue\e[0m default\n' | run_ansi_inspect
 echo
 
