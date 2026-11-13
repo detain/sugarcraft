@@ -168,6 +168,29 @@ $baker = $log->with(['user' => 'chef', 'session' => 'am']);
 $baker->info('Batch started'); // also has user + session
 ```
 
+## Configuration mutators
+
+Every mutable knob comes in two forms: `with*()` returns a modified **clone**
+(the original is untouched — safe to derive shared loggers from it), while
+`set*()` mutates the instance in place. Both apply identical validation.
+
+| Knob | Clone | In place |
+|---|---|---|
+| Persistent fields | `with(array $fields)` | — |
+| Prefix | `withPrefix(string)` | `setPrefix(?string)` |
+| Formatter | `withFormatter(Formatter)` | `setFormatter(Formatter)` |
+| Minimum level | `withMinLevel(Level)` | `setMinLevel(Level)` |
+| Parts order | `withPartsOrder(PartsOrder)` | `setPartsOrder(PartsOrder)` |
+| Output stream | `withOutput(mixed)` | `setOutput(mixed)` |
+| Error stream | `withErrorStream(mixed, ?Level)` | `setErrorStream(mixed, ?Level)` |
+| Timestamps | — | `setReportTimestamp(bool)` |
+| Caller info | — | `setReportCaller(bool)` |
+| Styles | — | `setStyles(Styles)` |
+
+When `withFormatter()`/`setFormatter()` receives a plain `TextFormatter`, the
+logger's timestamp/caller settings are preserved into the adopted formatter
+(other formatter types are taken as-is).
+
 ## Formatters
 
 ```php
@@ -497,6 +520,8 @@ final class MetricsHook implements Hook
     }
 }
 ```
+
+Structured implementations register through `HookRegistry::addHook(Level, Hook): int` — the object-taking twin of `onLevel()`, whose second parameter is a bare `callable` (handing a `MetricsHook` to `onLevel()` is a `TypeError`). Both return a registration id that `remove()` accepts.
 
 ## Parts Order
 
