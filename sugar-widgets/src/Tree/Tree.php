@@ -51,6 +51,19 @@ use SugarCraft\Style\Style;
  * - `←` / `h`  : collapse the focused node (no-op if already closed / leaf)
  * - `g`        : go to top
  * - `G`        : go to bottom
+ * - `Home`/`End`: jump to top / bottom (same targets as `g`/`G`)
+ * - `PageUp` / `PageDown` : stride the visible window height
+ *   (the whole list at height 0)
+ *
+ * Scroll position is silent by design, exactly as in {@see
+ * \SugarCraft\Widgets\Table\Table}: the viewport is an offset/height
+ * slice of the flattened visible rows with NO built-in indicator. The
+ * intended pairing is the CANONICAL `SugarCraft\Forms\Scrollbar\Scrollbar`
+ * (`::vertical()` fed a `ScrollbarState(total: visibleCount(), position:
+ * offset, viewport: height)`, rendered via `view($state, $height)`);
+ * this lib's `Scrollbar` row is the deprecated alias family pointing at
+ * that same canonical class. A first-party `withScrollIndicator()`
+ * convenience is the GATED half of this row — recorded, not shipped.
  *
  * Models that wrap Tree can extend this surface by intercepting Msg
  * before delegating to {@see update()}.

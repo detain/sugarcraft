@@ -25,6 +25,18 @@ use SugarCraft\Style\Style;
  *
  * Column widths are computed from header + cell widths and capped at
  * {@see $width} (when > 0) by truncating individual cells.
+ *
+ * Scroll position is silent by design: {@see view()} paints the visible
+ * window (the `array_slice` of {@see $offset} / {@see $height}) but
+ * draws NO indicator of where that window sits in the full row set. The intended pairing is the CANONICAL
+ * `SugarCraft\Forms\Scrollbar\Scrollbar` — `::vertical()` (or
+ * `::horizontal()` for the {@see $width} scroll) fed a
+ * `ScrollbarState(total: count($rows), position: offset, viewport:
+ * height)` renders beside the table via `view($state, $height)`. This
+ * lib's `Scrollbar` row is the deprecated alias family pointing at that
+ * same canonical class (facade law). A first-party
+ * `withScrollIndicator()` convenience is the GATED half of this row —
+ * recorded, not shipped.
  */
 final class Table implements Model
 {
