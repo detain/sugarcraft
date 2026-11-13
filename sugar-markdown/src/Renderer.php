@@ -674,8 +674,15 @@ final class Renderer
      * Whether links inside table cells render as inline `[text](url)`
      * pairs (default — terse, scannable) or as full hyperlinks. When
      * false, table cells suppress the trailing `(url)` and OSC-8 envelope
-     * since they bloat narrow columns. Mirrors
-     * charmbracelet/glamour.WithInlineTableLinks.
+     * since they bloat narrow columns — which discards the destination
+     * ENTIRELY: probe `| [x](https://e.com) |` with the flag off and every
+     * byte of the URL is gone from the output (no visible text, no
+     * envelope), not demoted to plain text. Glamour instead collects the
+     * destinations below the table as a footnote-style appendix; adopting
+     * that here is the owner-gated behaviour alternative (table bytes
+     * shift, a theme slot is needed), so the loss stands on the port's own
+     * terms — dated note 2026-11 (sugar-markdown-079).
+     * Mirrors charmbracelet/glamour.WithInlineTableLinks.
      */
     public function withInlineTableLinks(bool $on = true): self
     {
@@ -1761,6 +1768,10 @@ final class Renderer
         $insideTable = $this->inTableCell;
         // An empty destination is no target: no OSC-8 envelope, no
         // ` ()` noise (n4).
+        // With `inlineTableLinks` off, the table cell loses the `(url)`
+        // suffix AND the envelope — the destination is discarded whole,
+        // not relocated (loss stamp: withInlineTableLinks() docblock,
+        // sugar-markdown-079).
         $hyperlinks  = $this->emitHyperlinks
             && $url !== ''
             && !self::refusesUrl($url)
