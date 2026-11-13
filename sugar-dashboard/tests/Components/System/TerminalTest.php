@@ -9,6 +9,8 @@ use SugarCraft\Dashboard\Components\System\PromptStyle;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class TerminalTest extends TestCase
@@ -27,6 +29,54 @@ final class TerminalTest extends TestCase
     {
         $terminal = Terminal::new();
         $this->assertInstanceOf(Item::class, $terminal);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Output cap (D-76, finding sugar-dashboard-071)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testNonSgrControlDoesNotDefeatTheOutputCap(): void
+    {
+        // The retired inline escaper only recognized 'm' as a sequence
+        // terminator: a \e[2K latched it into escape state, so the cap
+        // never engaged and the raw oversized line blew past the box.
+        $rendered = Terminal::new()
+            ->withOutput("\e[2Kdata: the quick brown fox")
+            ->setSize(20, 8)
+            ->render();
+
+        foreach (explode("\n", $rendered) as $line) {
+            $this->assertLessThanOrEqual(20, Width::string(Ansi::strip($line)));
+        }
+        $this->assertStringContainsString('...', $rendered);
+        $this->assertStringContainsString('quick', $rendered);
+    }
+
+    public function testWideGlyphsAreCountedAsCellsWhenCapping(): void
+    {
+        // The old walker counted codepoints, so 30 CJK glyphs (60 cells)
+        // "fit" a 18-cell budget after a 15-codepoint cut — still 30 cells.
+        $rendered = Terminal::new()
+            ->withOutput(str_repeat('あ', 30))
+            ->setSize(20, 8)
+            ->render();
+
+        foreach (explode("\n", $rendered) as $line) {
+            $this->assertLessThanOrEqual(20, Width::string(Ansi::strip($line)));
+        }
+        $this->assertStringContainsString('...', $rendered);
+    }
+
+    public function testFittingStyledLinePassesThroughByteIdentical(): void
+    {
+        $line = "\e[31mshort\e[0m";
+        $rendered = Terminal::new()
+            ->withOutput($line)
+            ->setSize(40, 8)
+            ->render();
+
+        $this->assertStringContainsString($line, $rendered);
+        $this->assertStringNotContainsString('...', $rendered);
     }
 
     // ═══════════════════════════════════════════════════════════════

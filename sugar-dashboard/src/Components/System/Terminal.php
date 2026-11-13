@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
+use SugarCraft\Dashboard\Output\Truncate;
 
 /**
  * A terminal emulator component with command history and scrollback.
@@ -418,47 +419,23 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Format an output line for display.
+     *
+     * D-76 (finding sugar-dashboard-071): the old inline escaper treated
+     * 'm' as the only sequence terminator, so any non-SGR control (\e[2K,
+     * an OSC) latched the walker into escape state and it swallowed the
+     * rest of the line as "escape bytes" while counting codepoints as
+     * display cells. The cut now rides the canonical style-preserving
+     * truncation (the D-22 route over Core Width::truncateAnsi); the
+     * three-cell '...' marker this terminal has always shown is kept and
+     * charged inside the budget, and the cap behavior — long lines
+     * clipped to the box — stays exactly as present-PERF praised it.
+     * Behavior delta disclosed: a box narrower than the marker used to
+     * still print the 3-cell '...' over budget; the canonical now clips
+     * with no marker when the marker alone cannot fit.
      */
     private function formatOutputLine(string $line, int $maxWidth): string
     {
-        // Count visible characters (accounting for ANSI codes)
-        $displayWidth = $this->calculateDisplayWidth($line);
-
-        if ($displayWidth <= $maxWidth) {
-            return $line;
-        }
-
-        // Truncate while preserving ANSI
-        $result = '';
-        $visibleCount = 0;
-        $inEscape = false;
-        $chars = mb_str_split($line);
-
-        foreach ($chars as $char) {
-            if ($char === "\033" || str_starts_with($char, "\x1b")) {
-                $inEscape = true;
-                $result .= $char;
-                continue;
-            }
-
-            if ($inEscape) {
-                $result .= $char;
-                if ($char === 'm') {
-                    $inEscape = false;
-                }
-                continue;
-            }
-
-            if ($visibleCount >= $maxWidth - 3) {
-                $result .= '...';
-                break;
-            }
-
-            $result .= $char;
-            $visibleCount++;
-        }
-
-        return $result;
+        return Truncate::truncate($line, $maxWidth, '...');
     }
 
     /**
