@@ -212,7 +212,12 @@ final class DockLayout
 
     /**
      * Undock a pane from whichever side holds it. Unknown pane ids are a no-op
-     * returning the identical instance.
+     * returning the identical instance — the deliberate counterpart to
+     * {@see withSlotMovedTo()}, which THROWS on an unknown id: removals run in
+     * idempotent teardown paths where "already gone" is success, while a move
+     * of a never-docked pane can only be a caller bug. The README's Dock
+     * walkthrough names this asymmetry so hosts do not have to read both
+     * docblocks to find it.
      */
     public function withSlotRemoved(string $paneId): self
     {
@@ -232,7 +237,8 @@ final class DockLayout
     /**
      * Move a pane across sides or reorder it within its side. Null index moves
      * to the end of the destination stack. Unknown pane ids throw — a move of
-     * a pane that was never docked is a caller bug, not a no-op.
+     * a pane that was never docked is a caller bug, not a no-op (the
+     * idempotent no-op side of this asymmetry is {@see withSlotRemoved()}).
      */
     public function withSlotMovedTo(string $paneId, Side $side, ?int $index = null): self
     {
@@ -271,12 +277,64 @@ final class DockLayout
     /**
      * Set a side's column share. Invalid rationals throw; the pair rule
      * leftShare + rightShare <= 1/2 is enforced by CLAMPING the requested share
-     * (never throwing) — chat is the primary surface and must keep at least
-     * half the usable columns once the host starts tightening shares. The
-     * creation default (thirds) predates any tightening and is documented on
-     * the class.
+     * (never throwing) — the center is the primary surface and must keep at
+     * least half the usable columns once the host starts tightening shares.
+     * The creation default (thirds) predates any tightening and is documented
+     * on the class.
+     *
+     * The mutator stores the EFFECTIVE share: read {@see columnShare()} back
+     * to observe a clamp that fired. For hosts that would rather learn about
+     * the clamp at the call, {@see withColumnShareExact()} refuses the request
+     * loudly instead of tightening it.
      */
     public function withColumnShare(Side $side, int $num, int $denom): self
+    {
+        $pair = $this->resolveSharePair($side, $num, $denom);
+
+        if ($side === Side::Left) {
+            return $this->mutate([
+                'leftShareNum' => $pair['num'],
+                'leftShareDenom' => $pair['denom'],
+            ]);
+        }
+
+        return $this->mutate([
+            'rightShareNum' => $pair['num'],
+            'rightShareDenom' => $pair['denom'],
+        ]);
+    }
+
+    /**
+     * Strict sibling of {@see withColumnShare()}: identical validation and the
+     * identical pair rule, but a share that WOULD be clamped is refused with
+     * {@see \InvalidArgumentException} naming the request and the ceiling,
+     * never silently tightened — for hosts that treat "asked for what the
+     * rule cannot grant" as a caller bug.
+     */
+    public function withColumnShareExact(Side $side, int $num, int $denom): self
+    {
+        $pair = $this->resolveSharePair($side, $num, $denom);
+        if ($pair['clamped']) {
+            throw new \InvalidArgumentException(
+                "Column share {$num}/{$denom} for {$side->name} side exceeds the pair ceiling "
+                . $pair['capNum'] . '/' . $pair['capDenom']
+                . ' (' . $side->other()->name . " holds {$pair['otherNum']}/{$pair['otherDenom']}"
+                . '; the center keeps at least 1/2)'
+            );
+        }
+
+        return $this->withColumnShare($side, $num, $denom);
+    }
+
+    /**
+     * The pair-rule engine shared by the clamping and the strict mutator so
+     * the two can never drift: validates the rational, computes
+     * cap = 1/2 - other (floored to the smallest representable share), and
+     * resolves the EFFECTIVE pair the rule grants.
+     *
+     * @return array{num:int,denom:int,clamped:bool,capNum:int,capDenom:int,otherNum:int,otherDenom:int}
+     */
+    private function resolveSharePair(Side $side, int $num, int $denom): array
     {
         if ($num < 1 || $denom < 1) {
             throw new \InvalidArgumentException(
@@ -292,23 +350,17 @@ final class DockLayout
             $capNum = 1; // floor to the smallest representable share
         }
 
-        if ($num * $capDenom <= $capNum * $denom) {
-            [$shareNum, $shareDenom] = [$num, $denom];
-        } else {
-            [$shareNum, $shareDenom] = [$capNum, $capDenom];
-        }
+        $clamped = $num * $capDenom > $capNum * $denom;
 
-        if ($side === Side::Left) {
-            return $this->mutate([
-                'leftShareNum' => $shareNum,
-                'leftShareDenom' => $shareDenom,
-            ]);
-        }
-
-        return $this->mutate([
-            'rightShareNum' => $shareNum,
-            'rightShareDenom' => $shareDenom,
-        ]);
+        return [
+            'num' => $clamped ? $capNum : $num,
+            'denom' => $clamped ? $capDenom : $denom,
+            'clamped' => $clamped,
+            'capNum' => $capNum,
+            'capDenom' => $capDenom,
+            'otherNum' => $other['num'],
+            'otherDenom' => $other['denom'],
+        ];
     }
 
     /**
@@ -327,6 +379,24 @@ final class DockLayout
         $slots[$index] = $slots[$index]->withWeight($num, $denom);
 
         return $this->mutate([$key => $slots]);
+    }
+
+    /**
+     * Id-keyed sibling of {@see withStackWeight()}: the slot is found by pane
+     * id, so a removal that shifted the stack since the caller last looked can
+     * never make a positional index weight the wrong pane. An id that is not
+     * docked on `$side` throws, naming the miss.
+     */
+    public function withStackWeightFor(Side $side, string $paneId, int $num, int $denom): self
+    {
+        $found = $this->findSlot($paneId);
+        if ($found === null || $found['side'] !== $side) {
+            throw new \InvalidArgumentException(
+                "Cannot weight undocked pane '{$paneId}' on {$side->name} side"
+            );
+        }
+
+        return $this->withStackWeight($side, $found['index'], $num, $denom);
     }
 
     /**

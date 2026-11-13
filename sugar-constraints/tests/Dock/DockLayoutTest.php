@@ -57,6 +57,60 @@ final class DockLayoutTest extends TestCase
         $this->assertSame('main', DockLayout::new('main')->centerPaneId);
     }
 
+    public function testWithColumnShareExactRefusesTheClampAndStoresWhatFits(): void
+    {
+        $layout = DockLayout::new()->withSlotAdded(Side::Left, 'files');
+
+        // Default counterpart 1/3 => pair ceiling 1/6: the clamping variant
+        // tightens, the exact variant refuses naming the ceiling.
+        $this->assertSame(['num' => 1, 'denom' => 6], $layout->withColumnShare(Side::Left, 1, 2)->columnShare(Side::Left));
+        try {
+            $layout->withColumnShareExact(Side::Left, 1, 2);
+            $this->fail('1/2 over a 1/3 counterpart must be refused, not clamped');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('exceeds the pair ceiling 1/6', $e->getMessage());
+            $this->assertStringContainsString('Right holds 1/3', $e->getMessage());
+        }
+
+        $fits = $layout->withColumnShareExact(Side::Left, 1, 6);
+        $this->assertSame(['num' => 1, 'denom' => 6], $fits->columnShare(Side::Left));
+
+        // Malformed rationals ride the SAME refusal as the clamping variant.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Column share must carry numerator and denominator >= 1; got 0/3');
+        $layout->withColumnShareExact(Side::Left, 0, 3);
+    }
+
+    public function testWithStackWeightForRetargetsAcrossIndexShifts(): void
+    {
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'a')
+            ->withSlotAdded(Side::Left, 'b')
+            ->withSlotAdded(Side::Left, 'c');
+
+        // Removing 'b' slides 'c' from index 2 to 1 — the id door weights the
+        // right slot without the caller tracking the shift.
+        $shrunk = $layout->withSlotRemoved('b');
+        $retuned = $shrunk->withStackWeightFor(Side::Left, 'c', 7, 2);
+
+        $this->assertSame(7, $retuned->slots(Side::Left)[1]->weightNum);
+        $this->assertSame(2, $retuned->slots(Side::Left)[1]->weightDenom);
+        $this->assertSame('a', $shrunk->slots(Side::Left)[0]->paneId, 'unrelated slots ride untouched');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Cannot weight undocked pane 'ghost' on Left side");
+        $shrunk->withStackWeightFor(Side::Left, 'ghost', 1, 1);
+    }
+
+    public function testWithStackWeightForRefusesIdsDockedOnTheOtherSide(): void
+    {
+        $layout = DockLayout::new()->withSlotAdded(Side::Right, 'term');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Cannot weight undocked pane 'term' on Left side");
+        $layout->withStackWeightFor(Side::Left, 'term', 3, 1);
+    }
+
     public function testResolvePaintPathRidesTheConstructorCache(): void
     {
         $layout = DockLayout::new()

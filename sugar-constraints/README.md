@@ -254,6 +254,14 @@ dismantling a large stack is quadratic: a 1,500-slot add chain and its
 removal chain each measured ~2 s here. Batch with `fromArray()` (a single
 linear pass) or keep stacks human-sized.
 
+The two unknown-pane mutators differ **deliberately**: `withSlotRemoved()` is
+an idempotent no-op for an undocked id (teardown paths want "already gone" to
+be success), while `withSlotMovedTo()` throws (a move of a never-docked pane
+can only be a caller bug). For stack weights, `withStackWeightFor(side, paneId,
+num, denom)` retargets by pane id — a removal that shifted the stack after the
+caller last looked can never make a positional index weight the wrong slot —
+and names the miss instead of trusting `0..count-1`.
+
 ## Expressivity limits
 
 - **One constraint per region, no combination API.** "30% but never under
@@ -348,7 +356,11 @@ share, a tightened side caps at 1/2 minus that share, that is
 default right share of 1/3 the left side caps at 1/6: on a 100-column frame
 that floors to 16 columns, which `resolve()` then raises to the 20-column side
 minimum while the centre keeps its 24; on a 300-column frame the cap is 49.
-Chat stays the primary surface. The comparison is an integer cross-product —
+The mutator stores the **effective** share — read `columnShare($side)` back to
+observe a clamp that fired; hosts that would rather hear about it at the call
+use `withColumnShareExact()`, which refuses a clamped request with
+`InvalidArgumentException` naming the ceiling. The centre stays the primary
+surface. The comparison is an integer cross-product —
 exact for realistic magnitudes; shares near `PHP_INT_MAX` overflow it into
 float arithmetic and the ceiling can bind incorrectly, while `resolve()`
 itself still degrades safely and never throws. The shipped creation default is thirds left+right, which
