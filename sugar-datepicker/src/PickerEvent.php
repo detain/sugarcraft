@@ -47,11 +47,12 @@ final class PickerEvent
     public const RANGE_CLEARED = 'range_cleared';
 
     /**
-     * A bare Enter acted on a day that could not be selected (dp-09);
-     * payload `{date, reason}` with reason out_of_bounds | empty_cell |
-     * year_unresolvable. The announcement of a refusal does NOT make it
-     * optional to poll — state stays authoritative; this is the error state
-     * a host may now surface without diffing picker state.
+     * A bare Enter that could not select (dp-09); payload `{date, reason}`
+     * with reason out_of_bounds (dimmed day under the cursor) or empty_cell
+     * (blank lead-in/trailing cell — refused symmetrically in both modes,
+     * dp-26; `date` is null there). The announcement of a refusal does NOT
+     * make polling optional — state stays authoritative; this is the error
+     * state a host may now surface without diffing picker state.
      */
     public const SELECTION_REFUSED = 'selection_refused';
 

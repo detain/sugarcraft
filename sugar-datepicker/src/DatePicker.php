@@ -422,22 +422,23 @@ final class DatePicker
 
     /**
      * The date an Enter on the CURRENT cursor state would attempt to apply:
-     * the cursor date (range mode — and single mode when the cell holds a
-     * day), or the first of the viewed month as single mode's lead-in blank
-     * fallback. Pure query over current state (dp-09 refusal seam), which is
-     * exactly what {@see selectDate()} and {@see handleRangeEnter()} act on.
+     * the cursor date, or null on a blank lead-in/trailing cell — the
+     * single-mode first-of-month fallback was retired in dp-26 so both modes
+     * treat the blank cell identically (refuse, announce). Pure query over
+     * current state (dp-09 refusal seam), which is exactly what
+     * {@see selectDate()} and {@see handleRangeEnter()} act on.
      */
     public function selectionTarget(): ?\DateTimeImmutable
     {
-        return $this->dateAtCursor() ?? ($this->isRangeMode() ? null : $this->firstOfViewMonth());
+        return $this->dateAtCursor();
     }
 
     /**
      * Why a bare Enter on the CURRENT cursor state would be refused, or null
-     * when it would apply (dp-09). Vocabulary mirrors PickerEvent::SELECTION_REFUSED
-     * payloads: `out_of_bounds` (dimmed day under cursor), `empty_cell` (blank
-     * lead-in/trailing cell whose fallback the bounds also reject), and
-     * `year_unresolvable` (defensive — the floored view makes it unreachable).
+     * when it would apply (dp-09, symmetric for both modes by dp-26).
+     * Vocabulary mirrors PickerEvent::SELECTION_REFUSED payloads:
+     * `out_of_bounds` (dimmed day under cursor) and `empty_cell` (blank
+     * lead-in/trailing cell — Enter there never selects a distant day).
      */
     public function selectionRefusal(): ?string
     {
@@ -446,16 +447,7 @@ final class DatePicker
             return null;
         }
 
-        if ($this->dateAtCursor() !== null) {
-            return 'out_of_bounds';
-        }
-
-        // Blank cell: single mode fell back to a first-of-month the bounds
-        // also reject; range mode has no fallback at all. The reason only
-        // escalates to year_unresolvable when even the month floor fails.
-        return !$this->isRangeMode() && $this->firstOfViewMonth() === null
-            ? 'year_unresolvable'
-            : 'empty_cell';
+        return $this->dateAtCursor() !== null ? 'out_of_bounds' : 'empty_cell';
     }
 
     /**
@@ -545,8 +537,9 @@ final class DatePicker
     // the first selectable day and pressing Left, the cursor steps into the
     // lead-in (empty or dimmed) and stays there (no month-boundary wrap); the
     // same on the trailing edge. Arrow keys therefore CAN rest on empty or
-    // dimmed cells — Enter falls back to the first of the month from a lead-in
-    // blank (and is refused when that date is out of bounds) — while Home and
+    // dimmed cells — Enter there is REFUSED in every mode (dp-26 retired the
+    // single-mode first-of-month fallback), announced as selection_refused
+    // through the Model — while Home and
     // End always land on a SELECTABLE day (dp-11: min/max consulted).
     // This is an architectural difference from upstream.
     // -------------------------------------------------------------------------
@@ -589,17 +582,17 @@ final class DatePicker
 
     /**
      * Enter selection mode and set the selected date to the cursor date.
-     * Falls back to the first of the viewed month when the cursor is on
-     * an empty cell (before the 1st or past the last day of the month).
      *
-     * Early exit: when no date can be resolved (month beyond 4-digit
-     * representation) or the resolved date lies outside the configured
-     * [minDate, maxDate] bounds, selection is REFUSED — the receiver is
-     * returned unchanged (same reference, not a copy).
+     * Early exit: Enter on a BLANK lead-in/trailing cell is refused in every
+     * mode (dp-26 — the single-mode first-of-month fallback that could select
+     * a day up to six cells away is retired), and a dimmed out-of-bounds day
+     * is refused too. The receiver is returned unchanged (same reference,
+     * not a copy); the Model surfaces the refusal as a SELECTION_REFUSED
+     * event with reason out_of_bounds / empty_cell.
      */
     public function selectDate(): self
     {
-        $date = $this->dateAtCursor() ?? $this->firstOfViewMonth();
+        $date = $this->dateAtCursor();
         if ($date === null || !$this->inBounds($date)) {
             return $this;
         }
@@ -722,8 +715,8 @@ final class DatePicker
      * Arrow keys: move cursor (grid clamp, no month-boundary wrap)
      * Enter:      range mode — set range start (first press) or range end
      *             (second press); single mode — select the highlighted date
-     *             (same semantics as SelectDate(), incl. the empty-cell
-     *             fallback and min/max refusal)
+     *             (same semantics as SelectDate(): blank cells and dimmed
+     *             out-of-bounds days are refused in BOTH modes, dp-26)
      * Escape / esc: range mode — clear the range; single mode — clear the
      *             selection (same as ClearDate()); both spellings act (dp-18
      *             accepts the core spelling alongside the BC 'esc' wire value)

@@ -532,53 +532,54 @@ final class ModelTest extends TestCase
             'A chorded Enter is ignored, not refused — no event either way');
     }
 
-    public function testEmptyCellFallbackBeyondBoundRefusesWithReason(): void
+    public function testEnterOnBlankCellRefusesWithReasonSingleMode(): void
     {
-        // Single mode on a lead-in blank: the fallback is the first of the
-        // month, May 1 — before the bound, so the refusal carries that date
-        // with reason empty_cell.
-        $store = new EventStore();
-        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
-        $model = new Model($model->picker()->withMinDate(new \DateTimeImmutable('2026-05-10')), $store);
-        // Park on the empty lead-in: Home clamps to May 10 (index 14), then
-        // walk left past May 1 (index 5) into the blanks (indices 0-4).
-        $model = $model->update(new KeyMsg(KeyType::Home))[0];
-        for ($i = 0; $i < 14; $i++) {
-            $model = $model->update(new KeyMsg(KeyType::Left))[0];
-        }
-        $this->assertNull($model->picker()->dateAtCursor());
-        $store->release();
-
-        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
-
-        $events = $store->release();
-        $this->assertCount(1, $events);
-        $this->assertSame(PickerEvent::SELECTION_REFUSED, $events[0]['type']);
-        $this->assertSame('2026-05-01', $events[0]['payload']['date'],
-            'The refused attempt is the fallback date, not a phantom');
-        $this->assertSame('empty_cell', $events[0]['payload']['reason']);
-        $this->assertNull($model->picker()->selectedDate());
-    }
-
-    public function testEmptyCellWithInBoundsFallbackSelectsQuietly(): void
-    {
-        // Unbounded May: Enter on the lead-in blank falls back to May 1 and
-        // SUCCEEDS — empty_cell is a refusal only when the fallback is also
-        // out of bounds. Deliberate-negative pin.
+        // dp-26: a blank lead-in cell is refused in single mode too, and the
+        // refused attempt carries NO phantom date — the retired fallback means
+        // there is no candidate date to name.
         $store = new EventStore();
         $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
         $model = $model->update(new KeyMsg(KeyType::Left))[0];
         $this->assertNull($model->picker()->dateAtCursor());
         $store->release();
 
+        $prev = $model->picker();
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
 
-        $this->assertTrue($model->picker()->isSelecting());
-        $this->assertSame('2026-05-01', $model->picker()->selectedDate()?->format('Y-m-d'));
         $events = $store->release();
-        $types = array_column($events, 'type');
-        $this->assertNotContains(PickerEvent::SELECTION_REFUSED, $types);
-        $this->assertContains(PickerEvent::DATE_SELECTED, $types);
+        $this->assertCount(1, $events);
+        $this->assertSame(PickerEvent::SELECTION_REFUSED, $events[0]['type']);
+        $this->assertNull($events[0]['payload']['date']);
+        $this->assertSame('empty_cell', $events[0]['payload']['reason']);
+        $this->assertSame($prev, $model->picker(), 'Refusal keeps the same picker instance');
+    }
+
+    public function testEnterOnBlankCellIsSymmetricAcrossModes(): void
+    {
+        // dp-26 accept-and-compare: single and range modes now answer a blank
+        // Enter identically — refuse, announce empty_cell, change nothing.
+        $results = [];
+        foreach ([false, true] as $range) {
+            $store = new EventStore();
+            $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+                ->withRangeMode($range);
+            $model = (new Model($picker, $store))->update(new KeyMsg(KeyType::Left))[0];
+            $this->assertNull($model->picker()->dateAtCursor());
+            $store->release();
+
+            $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+            $events = $store->release();
+
+            $this->assertCount(1, $events);
+            $this->assertSame(PickerEvent::SELECTION_REFUSED, $events[0]['type']);
+            $this->assertSame(['date' => null, 'reason' => 'empty_cell'], $events[0]['payload']);
+            $this->assertNull($model->picker()->selectedDate());
+            $this->assertNull($model->picker()->rangeStart());
+            $results[$range] = $events;
+        }
+
+        $this->assertSame($results[false], $results[true],
+            'Both modes emit the identical refusal');
     }
 
     public function testMonthStepRecordsMonthChanged(): void

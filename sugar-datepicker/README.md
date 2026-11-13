@@ -135,11 +135,11 @@ $picker = $picker->clearDate();                       // programmatic equivalent
 $picker = $picker->toggleSelection();                 // select-or-clear in one call
 ```
 
-If the cursor rests on an empty lead-in/trailing grid cell, Enter in single mode
-falls back to the first of the viewed month (the cursor only moves within the
-current grid; arrow keys do not wrap into neighbouring months). In range mode
-the fallback does not apply: Enter on an empty cell — or on an out-of-bounds
-day — is a silent no-op and records no range step.
+If the cursor rests on an empty lead-in/trailing grid cell, Enter is REFUSED in
+every mode (the cursor only moves within the current grid; arrow keys do not
+wrap into neighbouring months). A dimmed, out-of-bounds day is refused too.
+Both refusals return the picker unchanged and surface as a `selection_refused`
+event when a bare Enter drove the key through `Model` (see Events).
 
 Range mode — the first Enter sets the start, the second the end (normalized so
 start ≤ end), a third restarts:
@@ -281,8 +281,8 @@ runtime — no throw). A TEA application never needs to call `handleKey()`: the
 `Model` maps every `KeyType` arm itself.
 
 Honest limitations: there is no month-wrap on arrow keys (they clamp at the grid
-edge and can rest on empty lead-in/trailing cells, where single-mode Enter falls
-back to the first of the month but range-mode Enter does nothing), and no
+edge and can rest on empty lead-in/trailing cells, where Enter is refused in
+every mode — dp-26), and no
 typeahead year entry. The year/today jumps stay programmatic on purpose:
 upstream's Focus enum, tab-cycling and per-focus arrows were DROPPED in this
 port (single-cursor design — an intentional divergence, not an omission), so no
@@ -326,12 +326,12 @@ constant does not):
   `{year, month}` — the viewed month stepped (PageUp/PageDown); a step
   clamped by the bound months records nothing.
 - **`PickerEvent::SELECTION_REFUSED`** (`'selection_refused'`) — payload
-  `{date, reason}` — a bare Enter acted on a day it could not apply
-  (dp-09). `reason` is `out_of_bounds` (dimmed day under cursor),
-  `empty_cell` (blank cell whose first-of-month fallback is also out of
-  bounds — range mode has no fallback, so a blank always refuses), or
-  `year_unresolvable` (defensive vocabulary; the floored view makes it
-  unreachable). A chorded Enter never acts, so it is never refused either.
+  `{date, reason}` — a bare Enter could not select (dp-09, symmetric across
+  modes since dp-26). `reason` is `out_of_bounds` (dimmed day under cursor,
+  `date` carries it) or `empty_cell` (blank lead-in/trailing cell — the
+  single-mode first-of-month fallback that could select a day up to six cells
+  away is retired; `date` is null there). A chorded Enter never acts, so it is
+  never refused either.
 
 Recording channel (settled ruling): the TEA `Model` is the *only* emitter.
 `DatePicker::handleKey()` and the imperative methods are the non-TEA surface

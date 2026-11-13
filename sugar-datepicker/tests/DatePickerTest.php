@@ -236,7 +236,7 @@ final class DatePickerTest extends TestCase
     public function testDateAtCursorOnEmptyLeadCellIsNull(): void
     {
         // The empty lead-in cell (before the 1st) is still reachable by arrow
-        // and yields null — Enter from it falls back to the first of month.
+        // and yields null — Enter there is refused in every mode (dp-26).
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         for ($i = 0; $i < 5; $i++) {
             $dp = $dp->moveCursorLeft(); // idx5 (May1) -> idx0 (Sun blank)
@@ -1105,10 +1105,11 @@ final class DatePickerTest extends TestCase
         $this->assertSame(12, $pinned->goToToday()->viewMonth());
     }
 
-    public function testSelectDateFallsBackToFirstOfMonthOnEmptyCell(): void
+    public function testSelectDateOnEmptyCellIsRefused(): void
     {
-        // The empty-cell fallback is now also a BOUND-checked candidate
-        // (docs-fix-1023 E2): with no bound set it selects May 1 from index 0.
+        // dp-26: the single-mode first-of-month fallback that let Enter on a
+        // blank select a day up to six cells away is RETIRED — a blank cell is
+        // refused symmetrically with range mode, receiver returned unchanged.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'));
         for ($i = 0; $i < 5; $i++) {
@@ -1118,8 +1119,9 @@ final class DatePickerTest extends TestCase
         $this->assertNull($dp->dateAtCursor(), 'Index 0 is an empty lead-in cell');
 
         $selected = $dp->selectDate();
-        $this->assertTrue($selected->isSelecting());
-        $this->assertSame('2026-05-01', $selected->selectedDate()?->format('Y-m-d'));
+        $this->assertSame($dp, $selected, 'Refusal returns the SAME instance, not a copy');
+        $this->assertFalse($selected->isSelecting());
+        $this->assertNull($selected->selectedDate());
     }
 
     public function testOutOfBoundsSelectedDayRendersFaint(): void
