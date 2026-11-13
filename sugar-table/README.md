@@ -24,7 +24,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
   placeholder (see Missing Data Indicator)
 - **Styled cells**: `StyledCell` wraps value + ANSI style, overrides row/column/base styles (never string-cast one directly — see Rows)
 - **Row styles**: zebra striping, bold rows, per-row ANSI styling
-- **Selection**: single-row cursor via `selectNext()`/`selectPrevious()`/`withSelectedIndex()`; row 0 carries the highlight on first render (use `withSelectable(false)` for a cursorless table); `handleKey()` scrolls
+- **Selection**: single-row cursor via `selectNext()`/`selectPrevious()`/`withSelectedIndex()`; row 0 carries the highlight on first render (use `withSelectable(false)` for a cursorless table); `handleScrollKey()` scrolls
 - **Pagination**: page size, page navigation, auto footer
 - **Sorting**: asc/desc, multi-column sort, numeric + string sort
 - **Filtering**: filter by column text
@@ -243,9 +243,9 @@ $t = $t->sortBy('city')
 
 ## Keyboard Navigation
 
-Scroll the table vertically using keyboard input via `scrollYForKey()` and `handleKey()`:
+Scroll the table vertically using keyboard input via `scrollYForKey()` and `handleScrollKey()` (`handleKey()` is the older, deprecated alias — the name promised navigation while it only ever scrolls):
 
-`handleKey()` drives vertical scrolling ONLY. Moving the row cursor
+`handleScrollKey()` drives vertical scrolling ONLY. Moving the row cursor
 (`selectNext()`/`selectPrevious()`), turning pages (`withPage()`/`nextPage()`/
 `previousPage()`) and horizontal panning (`withScrollX()`) are separate API
 calls — no key constant performs them, so the host must map its own keys to them.
@@ -254,12 +254,12 @@ calls — no key constant performs them, so the host must map its own keys to th
 use SugarCraft\Table\Table;
 
 // Key constants for navigation
-$t = $t->handleKey(Table::KEY_ARROW_UP);    // scroll up one row
-$t = $t->handleKey(Table::KEY_ARROW_DOWN);  // scroll down one row
-$t = $t->handleKey(Table::KEY_PAGE_UP);     // scroll up one viewport
-$t = $t->handleKey(Table::KEY_PAGE_DOWN);   // scroll down one viewport
-$t = $t->handleKey(Table::KEY_HOME);        // scroll to top
-$t = $t->handleKey(Table::KEY_END);         // scroll to bottom
+$t = $t->handleScrollKey(Table::KEY_ARROW_UP);    // scroll up one row
+$t = $t->handleScrollKey(Table::KEY_ARROW_DOWN);  // scroll down one row
+$t = $t->handleScrollKey(Table::KEY_PAGE_UP);     // scroll up one viewport
+$t = $t->handleScrollKey(Table::KEY_PAGE_DOWN);   // scroll down one viewport
+$t = $t->handleScrollKey(Table::KEY_HOME);        // scroll to top
+$t = $t->handleScrollKey(Table::KEY_END);         // scroll to bottom
 ```
 
 ### Key Constants
@@ -284,12 +284,12 @@ $t = $t->withScrollY($newScrollY);
 
 This is useful when you need the raw integer value for your own integration logic.
 
-### handleKey() — Convenience Wrapper
+### handleScrollKey() — Convenience Wrapper
 
 Returns a new Table with `scrollY` already adjusted:
 
 ```php
-$t = $t->handleKey($keyFromInputHandler);
+$t = $t->handleScrollKey($keyFromInputHandler);
 ```
 
 This combines `scrollYForKey()` + `withScrollY()` in one call.
@@ -305,27 +305,15 @@ $t = Table::fromColumns([...])
     ->withRows([...])  // Row objects — see Rows
     ->withViewportHeight(15);
 
-// sugar-input decodes key presses into KeyEvent (sugar-pty carries the raw
-// bytes; sugar-mouse is the pointer companion). A KeyEvent's key name is
-// PascalCase — "ArrowDown" — while Table::handleKey() and scrollYForKey()
-// match the Table::KEY_* constant values strictly — 'arrowDown'. So a
-// sugar-input key must be translated before it reaches the table:
+// sugar-input decodes key presses into KeyEvent; pass it straight in. Key
+// names match case-insensitively, so 'ArrowDown' (sugar-input spelling) and
+// 'arrowDown' (Table::KEY_* spelling) both work, and a key RELEASE event
+// is a no-op.
 /** @var KeyEvent $event */
-$key = match ($event->key) {
-    'ArrowUp'   => Table::KEY_ARROW_UP,
-    'ArrowDown' => Table::KEY_ARROW_DOWN,
-    'PageUp'    => Table::KEY_PAGE_UP,
-    'PageDown'  => Table::KEY_PAGE_DOWN,
-    'Home'      => Table::KEY_HOME,
-    'End'       => Table::KEY_END,
-    default     => null,
-};
-if ($key !== null) {
-    $t = $t->handleKey($key);
-}
+$t = $t->handleScrollKey($event);
 
 // Or pass the constants directly
-$t = $t->handleKey(Table::KEY_PAGE_DOWN);
+$t = $t->handleScrollKey(Table::KEY_PAGE_DOWN);
 ```
 
 ### How It Works
@@ -1179,8 +1167,9 @@ in this README is still documented — this table is the completeness floor.
 | `selectPage(int $page): self` | Jump to a page and park the cursor on its first row. Same semantics as |
 | `nextPage(): self` | — |
 | `previousPage(): self` | — |
-| `scrollYForKey(string $key): int` | Return the new scrollY value for a given keyboard key. |
-| `handleKey(string $key): self` | Return a new Table with scrollY adjusted for the given keyboard key. |
+| `scrollYForKey(string\|KeyEvent $key): int` | Return the new scrollY value for a given keyboard key. |
+| `handleScrollKey(string\|KeyEvent $key): self` | Scroll-only key handler; no-op without a viewport. |
+| `handleKey(string\|KeyEvent $key): self` | Deprecated alias of `handleScrollKey()`. |
 | `maxScrollY(): int` | The largest scrollY the current view can show. |
 | `sortBy(string $colKey, bool $ascending = true, bool $primary = true): self` | Sort by $colKey. If already sorting by it, toggle asc/desc. |
 | `clearSort(): self` | — |

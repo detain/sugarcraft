@@ -36,6 +36,7 @@ use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Border;
@@ -1206,12 +1207,24 @@ final class Table
      *
      * Keys that have no mapping return the current scrollY unchanged (no-op).
      *
-     * @param string $key One of the KEY_* constants
+     * Key names match case-insensitively, so both the KEY_* spelling
+     * ('arrowUp') and the sugar-input spelling ('ArrowUp') resolve (OG-4 /
+     * ST-22); a sugar-input KeyEvent is accepted directly, and a key RELEASE
+     * event is a no-op so a Kitty-protocol host does not scroll twice.
+     *
+     * @param string|KeyEvent $key A KEY_* constant, its PascalCase spelling, or a KeyEvent
      * @return int The new scrollY value (already clamped to valid range)
      */
-    public function scrollYForKey(string $key): int
+    public function scrollYForKey(string|KeyEvent $key): int
     {
         $maxScroll = $this->maxScrollY();
+        if ($key instanceof KeyEvent) {
+            if ($key->isRelease()) {
+                return $this->scrollY;
+            }
+            $key = $key->key;
+        }
+        $key = self::normalizeKeyName($key);
 
         return match ($key) {
             self::KEY_ARROW_UP   => \max(0, $this->scrollY - 1),
@@ -1240,14 +1253,45 @@ final class Table
      * toward the highlight, never past it. Use withSelectedIndex()/selectNext()
      * to travel — cursor travel scrolls the window to reveal itself.
      *
-     * @param string $key One of the KEY_* constants
+     * Scroll-only by design (OG-4 / ST-22): it never moves the row cursor
+     * and is a no-op without withViewportHeight(). Use selectNext()/
+     * selectPrevious() for cursor travel.
+     *
+     * @param string|KeyEvent $key A KEY_* constant, its PascalCase spelling, or a KeyEvent
      * @return self New Table instance with adjusted scrollY
      *
      * @see scrollYForKey()  For the raw (uncoupled) scrollY calculation
      */
-    public function handleKey(string $key): self
+    public function handleScrollKey(string|KeyEvent $key): self
     {
         return $this->withScrollY($this->scrollYForKey($key));
+    }
+
+    /**
+     * Delegating alias of {@see handleScrollKey()}, kept because the old name
+     * promised navigation while only ever scrolling.
+     *
+     * Prefer handleScrollKey(); no runtime notice, the name simply stays resolvable.
+     */
+    public function handleKey(string|KeyEvent $key): self
+    {
+        return $this->handleScrollKey($key);
+    }
+
+    /** Fold the two key-name spellings ('arrowUp' / 'ArrowUp') onto the KEY_* roster. */
+    private static function normalizeKeyName(string $key): string
+    {
+        static $canon = null;
+        $canon ??= [
+            'arrowup' => self::KEY_ARROW_UP,
+            'arrowdown' => self::KEY_ARROW_DOWN,
+            'pageup' => self::KEY_PAGE_UP,
+            'pagedown' => self::KEY_PAGE_DOWN,
+            'home' => self::KEY_HOME,
+            'end' => self::KEY_END,
+        ];
+
+        return $canon[\strtolower($key)] ?? $key;
     }
 
     /**
