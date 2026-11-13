@@ -370,25 +370,98 @@ final class AlertManagerTest extends TestCase
         return ConnectionCounters::fromSnapshot($snapshot, $maxConnections);
     }
 
-    /**
-     * Documented-limitation truth (adminpages-003): every checkAllMetrics()
-     * watch is MySQL-keyed, so a pg-shaped snapshot — numbackends screaming
-     * at 999, log_min_duration_statement far past the slow-query budget —
-     * fires nothing. This is the pg arm the alert suite never had (it only
-     * ever fed MySQL shapes, making the limitation unfalsifiable). If a pg
-     * wiring lands without this pin and the README's Watched-metrics note
-     * being updated, that leg goes red here first.
-     */
-    public function testPgShapedSnapshotNeverMatchesTheMysqlKeyedWatches(): void
+    private function pgManager(): AlertManager
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
+        return AlertManager::new()
+            ->withThresholds(AlertThresholds::standard())
+            ->withFlavor(\SugarCraft\Sql\Db\Flavor::Postgres);
+    }
 
-        $alerts = $manager->checkAllMetrics(
-            ['pg_stat_database.numbackends' => '999', 'pg_stat_database.xact_commit' => '10'],
-            ['log_min_duration_statement' => '99999'],
+    /**
+     * SQL-P05 (flips the adminpages-003 blindness pin): a pg-shaped snapshot
+     * over threshold now alerts once the manager is told it is Postgres.
+     */
+    public function testPostgresSnapshotOverThresholdAlerts(): void
+    {
+        $alerts = $this->pgManager()->checkAllMetrics(
+            ['pg_stat_database.numbackends' => '90'],
+            ['max_connections' => '100', 'log_min_duration_statement' => '9000'],
         );
 
-        $this->assertSame([], $alerts, 'the MySQL-keyed seam must stay provably blind to pg shapes until the wiring leg lands');
+        $this->assertArrayHasKey('max_connections_usage', $alerts);
+        $this->assertSame(Severity::Critical, $alerts['max_connections_usage']->severity);
+        $this->assertStringContainsString('90/100', $alerts['max_connections_usage']->message);
+        $this->assertArrayHasKey('slow_query', $alerts);
+        $this->assertSame(9.0, $alerts['slow_query']->value);
+    }
+
+    public function testPostgresWarningBandAndUserThresholdsApply(): void
+    {
+        $status = ['pg_stat_database.numbackends' => '65'];
+        $vars = ['max_connections' => '100'];
+
+        $warn = $this->pgManager()->checkAllMetrics($status, $vars);
+        $this->assertSame(Severity::Warning, $warn['max_connections_usage']->severity);
+
+        // A stricter user threshold escalates the same snapshot: not the old hardcoded 60/80.
+        $strict = $this->pgManager()
+            ->withThresholds(AlertThresholds::new()->withConnectionWarningThreshold(0.3)->withConnectionCriticalThreshold(0.6))
+            ->checkAllMetrics($status, $vars);
+        $this->assertSame(Severity::Critical, $strict['max_connections_usage']->severity);
+    }
+
+    public function testPostgresCalmSnapshotStaysSilent(): void
+    {
+        $alerts = $this->pgManager()->checkAllMetrics(
+            ['pg_stat_database.numbackends' => '5', 'pg_stat_database.deadlocks' => '0'],
+            ['max_connections' => '100', 'log_min_duration_statement' => '-1'],
+        );
+
+        $this->assertSame([], $alerts);
+    }
+
+    public function testPostgresMissingMaxConnectionsIsNotFabricated(): void
+    {
+        $alerts = $this->pgManager()->checkAllMetrics(['pg_stat_database.numbackends' => '999'], []);
+
+        $this->assertSame([], $alerts, 'no max_connections setting -> no invented denominator');
+    }
+
+    public function testPostgresLogEverythingZeroIsNotASlowBudget(): void
+    {
+        $alerts = $this->pgManager()->checkAllMetrics([], ['log_min_duration_statement' => '0']);
+
+        $this->assertArrayNotHasKey('slow_query', $alerts);
+    }
+
+    public function testPostgresRespectsWatchedMetricsFilter(): void
+    {
+        $alerts = $this->pgManager()
+            ->withThresholds(AlertThresholds::standard()->withWatchedMetrics(['slow_query']))
+            ->checkAllMetrics(['pg_stat_database.numbackends' => '99'], ['max_connections' => '100']);
+
+        $this->assertSame([], $alerts);
+    }
+
+    public function testMysqlKeysStayBlindOnPostgresAndPgKeysOnMysql(): void
+    {
+        $this->assertSame([], $this->pgManager()->checkAllMetrics(
+            ['Threads_connected' => '999', 'Connection_errors_total' => '9999'],
+            ['max_connections' => '100', 'long_query_time' => '99'],
+        ));
+
+        $mysql = AlertManager::new()->withThresholds(AlertThresholds::standard());
+        $this->assertSame([], $mysql->checkAllMetrics(['pg_stat_database.numbackends' => '999'], ['max_connections' => '100']));
+        $this->assertNull($mysql->flavor());
+        $this->assertSame(\SugarCraft\Sql\Db\Flavor::Postgres, $this->pgManager()->flavor());
+    }
+
+    public function testWithFlavorSurvivesOtherWithers(): void
+    {
+        $m = $this->pgManager()->withNotifier(\SugarCraft\Sql\Admin\Alerts\AlertNotifier::new());
+
+        $this->assertSame(\SugarCraft\Sql\Db\Flavor::Postgres, $m->flavor());
+        $this->assertSame(\SugarCraft\Sql\Db\Flavor::Postgres, $m->withThresholds(AlertThresholds::new())->flavor());
     }
 
     /**

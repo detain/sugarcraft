@@ -282,7 +282,7 @@ these tables.
 | `Admin\Alerts\Alert` | Immutable alert value object: severity, metric, message, value, threshold, firedAt, metricKind. Factory helpers: `::warning()`, `::critical()`, `::info()`. `toToastMessage()` formats based on `MetricKind` — `Ratio` multiplies by 100 (percentage), `Seconds` appends "s", `Count` renders as integer. |
 | `Admin\Alerts\AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::standard()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
 | `Admin\Alerts\AlertNotifier` | Toast notification dispatcher. Mute-safe by default (no factory = all calls no-op). `::withDefaults()` bootstraps a standard factory. `notify(Alert)`, `notifyWarning()`, `notifyCritical()`, `notifyError()`, `notifyInfo()`, `view()` composites toast over a background viewport. |
-| `Admin\Alerts\AlertManager` | Stateless alert checker. `checkAllMetrics(statusVariables, serverVariables)` returns `array<string, Alert>` and is the app's only wired alert seam (dashboard tick; MySQL-keyed watches). Each alert carries a `MetricKind` (`Ratio`, `Seconds`, `Count`) that controls how its value is formatted in toast messages. The counters pair `checkConnectionUsage(ConnectionCounters)`/`checkAndDispatch()` is public but unwired — deprecated toward 2.0.0 (see Alerting → Watched metrics). No state held between calls. |
+| `Admin\Alerts\AlertManager` | Stateless alert checker. `checkAllMetrics(statusVariables, serverVariables)` returns `array<string, Alert>` and is the app's only wired alert seam (dashboard tick; MySQL watches, plus the pg arm via `withFlavor(Flavor::Postgres)`). Each alert carries a `MetricKind` (`Ratio`, `Seconds`, `Count`) that controls how its value is formatted in toast messages. The counters pair `checkConnectionUsage(ConnectionCounters)`/`checkAndDispatch()` is public but unwired — deprecated toward 2.0.0 (see Alerting → Watched metrics). No state held between calls. |
 | `Admin\PerfSchema\PerfSchemaPage` | Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Version-gated loading: `setup_actors` table skipped on <5.6; `setup_objects.ENABLED` column omitted on <5.6.3; `setup_timers` (mutable) used on <8.0 vs `performance_timers` (read-only) on >=8.0. Threads tab shows `INSTRUMENTED` column from `performance_schema.threads`. `[c]` stages a commit — the page lists the prepared statements and waits for `[y]`; any other key cancels (destructive-confirmation parity with the kill and SET GLOBAL prompts). `[r]` reverts. |
 | `Admin\PerfSchema\SetupTimers` | Mutable model for a PS timer entry. On MySQL <8.0, loaded from `performance_schema.setup_timers` and can be modified via `withTimerName()`. `isDirty()` tracks unsaved changes; `commitStatements()` returns a fully-literal statement — e.g. `UPDATE performance_schema.setup_timers SET TIMER_NAME = 'MICROSECOND' WHERE NAME = 'wait/cpu'` — with identifiers backtick-quoted and values interpolated as escaped quoted literals (no `?` placeholders: MySQL has no native placeholder in the SET-value position, and PDO_MYSQL's emulation does the client-side quoting). On MySQL >=8.0, loaded from `performance_schema.performance_timers` as clean (read-only) instances. |
 | `Admin\PerfSchema\SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (wiring deferred to a planned follow-up). |
@@ -450,7 +450,7 @@ $rows     = $provider->fetchProcesslist();      // performance_schema.threads, S
 
 Available providers:
 - **`MysqlAdminProvider`** — adapter over `ServerContext`: `SHOW GLOBAL STATUS`, `SHOW GLOBAL VARIABLES`, and `SHOW PLUGINS` are issued by the context; the provider adds `fetchProcesslist()` (Performance Schema `performance_schema.threads`, falling back to `SHOW FULL PROCESSLIST`)
-- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. `fetchStatusVariables()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`) into prefixed keys alongside a derived `pg_settings.shared_buffers` byte count. Its `checkAllMetrics()`/`checkConnectionUsage()` compute PostgreSQL rates and thresholds but are an **unwired island** (zero production callers, hardcoded 60 %/80 % verdicts; see the class docblock): the app's alert path is `AlertManager`'s MySQL-keyed seam, so PostgreSQL never alerts in-app — adoption behind the `Alert` value objects is an open owner-gated leg.
+- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. `fetchStatusVariables()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`) into prefixed keys alongside a derived `pg_settings.shared_buffers` byte count. Alerting is not done in the provider: the dashboard reads its maps through `AlertManager::withFlavor(Flavor::Postgres)` (the former `checkAllMetrics()`/`checkConnectionUsage()` island was deleted).
 
 ## Result table
 
@@ -657,19 +657,18 @@ foreach ($alerts as $alert) {
 
 | Metric | What it checks | Reachable through |
 |--------|----------------|-------------------|
-| `slow_query` | `long_query_time` server variable | `AlertManager::checkAllMetrics()` — the dashboard tick |
+| `slow_query` | `long_query_time` server variable (pg: `log_min_duration_statement`) | `AlertManager::checkAllMetrics()` — the dashboard tick |
 | `connection_errors` | `Connection_errors_total` status variable | `AlertManager::checkAllMetrics()` — the dashboard tick |
-| `max_connections` | `threads_connected / max_connections` | `AlertManager::checkAllMetrics()` — the dashboard tick |
+| `max_connections` | `threads_connected / max_connections` (pg: `numbackends / max_connections`) | `AlertManager::checkAllMetrics()` — the dashboard tick |
 | `connection_usage` | `threads_connected / max_connections` from a live `ConnectionCounters` | `checkConnectionUsage()`/`checkAndDispatch()` — **unwired**, deprecated toward 2.0.0 (no candy-sql caller ever supplies counters; the dashboard covers the same signal via `max_connections`) |
 | `aborted_rate` | `aborted_connects / total_connections` | same unwired counters pair — deprecated toward 2.0.0 |
 | `thread_running` | `threads_running / max_connections` | same unwired counters pair — deprecated toward 2.0.0 |
 
-**Flavour limitation:** every `checkAllMetrics()` watch reads MySQL-named keys. A PostgreSQL
-snapshot (`pg_stat_database.numbackends`, `log_min_duration_statement`) matches none of them,
-so **PostgreSQL never alerts** in the shipped app — current design, documented as such
-(`AlertManager::checkAllMetrics()` docblock). `PostgresAdminProvider::checkAllMetrics()`/
-`checkConnectionUsage()` compute the pg-side numbers but are an unwired island; adopting them
-behind the `Alert` value objects + user-configurable thresholds is an open owner-gated leg.
+**Flavour arms:** `AlertManager::withFlavor(Flavor::Postgres)` (the dashboard passes its connection's
+flavor) reads the pg shapes: `slow_query` from `log_min_duration_statement` (ms; `-1`/`0` never alert),
+`max_connections` from `pg_stat_database.numbackends` over the `max_connections` setting (no setting ->
+the watch skips, nothing is fabricated). `connection_errors` has no pg analogue and stays silent there.
+Both arms use the user's `AlertThresholds` and the same `Alert` value objects.
 
 ### DashboardPage integration
 

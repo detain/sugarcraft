@@ -222,4 +222,30 @@ final class DashboardPageBlocksTest extends TestCase
         $this->assertStringNotContainsString('Uptime:', $view); // omit, never assert
         $this->assertStringNotContainsString('N/A', $view);
     }
+
+    // ─── SQL-P05: Postgres reaches the alert seam ────────────────────────────
+
+    public function testPostgresDashboardTickRaisesConnectionAlert(): void
+    {
+        $page = new DashboardPage($this->context(
+            ['pg_stat_database.numbackends' => '95'],
+            ['max_connections' => '100'],
+            Flavor::Postgres,
+        ));
+        $page->view();
+
+        $this->assertArrayHasKey('max_connections_usage', $page->pendingAlerts());
+    }
+
+    public function testPostgresDashboardTickStaysSilentWhenCalm(): void
+    {
+        $page = new DashboardPage($this->context(
+            ['pg_stat_database.numbackends' => '3'],
+            ['max_connections' => '100'],
+            Flavor::Postgres,
+        ));
+        $page->view();
+
+        $this->assertSame([], $page->pendingAlerts());
+    }
 }

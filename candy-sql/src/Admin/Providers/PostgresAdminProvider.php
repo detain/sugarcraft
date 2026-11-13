@@ -21,20 +21,13 @@ use SugarCraft\Sql\Db\Flavor;
  *   pg_read_all_stats role, or sessions of the same user
  * - pg_stat_database / pg_settings are readable by PUBLIC on stock clusters
  *
- * The checkAllMetrics()/checkConnectionUsage() pair is an ISLAND
- * (adminpages-011, SQL-P05 doc verdict): not interface members, zero
- * production callers — the dashboard's only alert seam is
- * AlertManager::checkAllMetrics(), whose watches are MySQL-keyed, so
- * PostgreSQL never alerts in-app (adminpages-003). The pair also diverges
- * from the AlertManager doctrine it would have to meet before adoption:
- * raw float/string arrays where Alert value objects belong, hardcoded
- * 60 %/80 % verdicts that ignore AlertThresholds the user can configure,
- * a fabricated max_connections fallback of 100, and two different
- * elapsed-time clamps inside one file (checkAllMetrics folds
- * elapsed <= 0 to 1.0 s while its own computeRate returns a zero rate —
- * neither is the Sampler's rate law). Wiring this island behind the Alert
- * VOs + user thresholds, or deleting it, is the separate owner-gated leg;
- * both methods stay public and functional until that ruling.
+ * Alerting is NOT done here: the dashboard evaluates this provider's
+ * status/variable maps through AlertManager::withFlavor(Flavor::Postgres)
+ * (SQL-P05), so PostgreSQL shares the Alert value objects, the user's
+ * AlertThresholds and the MySQL path's notifier dedup. The former
+ * checkAllMetrics()/checkConnectionUsage() island (hardcoded 60/80 verdicts,
+ * fabricated max_connections=100 fallback, two elapsed-time clamps) was
+ * deleted in favour of that single seam.
  *
  * @see AdminProviderInterface
  */
@@ -44,10 +37,6 @@ final class PostgresAdminProvider implements AdminProviderInterface
     private ?float $statusVariablesTsCache = null;
     private ?array $serverVariablesCache = null;
     private ?int $maxConnectionsCache = null;
-
-    /** @var array<string, string>|null */
-    private ?array $previousStatusVariables = null;
-    private ?float $previousStatusVariablesTs = null;
 
     public function __construct(
         private readonly DatabaseInterface $connection,
@@ -307,211 +296,6 @@ final class PostgresAdminProvider implements AdminProviderInterface
         $this->statusVariablesTsCache = null;
         $this->serverVariablesCache = null;
         $this->maxConnectionsCache = null;
-        $this->previousStatusVariables = null;
-        $this->previousStatusVariablesTs = null;
-    }
-
-    /**
-     * Compute PostgreSQL metrics (rates and ratios) from pg_stat_database.
-     *
-     * ISLAND — zero production callers (see class docblock, adminpages-011):
-     * the wired alert seam is AlertManager::checkAllMetrics(), which never
-     * reaches pg shapes (adminpages-003).
-     *
-     * Uses time deltas between calls to compute per-second rates for
-     * tuple operations and block I/O. Also computes cache hit ratio.
-     *
-     * First call returns zeros for rates (no previous snapshot).
-     *
-     * @return array<string, float> Computed metrics:
-     *   - tuples_returned_rate:   tup_returned per second
-     *   - tuples_fetched_rate:   tup_fetched per second
-     *   - tuples_inserted_rate:  tup_inserted per second
-     *   - tuples_updated_rate:   tup_updated per second
-     *   - tuples_deleted_rate:   tup_deleted per second
-     *   - writes_rate:            total DML rate (insert+update+delete)/s
-     *   - blocks_read_rate:       blks_read per second
-     *   - blocks_hit_rate:       blks_hit per second
-     *   - cache_hit_ratio:       blks_hit / (blks_hit + blks_read) as percentage
-     *   - xact_commit_rate:      transaction commits per second
-     *   - xact_rollback_rate:    transaction rollbacks per second
-     */
-    public function checkAllMetrics(): array
-    {
-        $currentVars = $this->fetchStatusVariables();
-        if ($currentVars === []) {
-            return [];
-        }
-
-        $currentTs = $this->statusVariablesTs();
-        $metrics = [];
-
-        // Compute cache hit ratio (instantaneous, no delta needed)
-        $blksHit = (float) ($currentVars['pg_stat_database.blks_hit'] ?? 0);
-        $blksRead = (float) ($currentVars['pg_stat_database.blks_read'] ?? 0);
-        $blksTotal = $blksHit + $blksRead;
-        $metrics['cache_hit_ratio'] = $blksTotal > 0 ? ($blksHit / $blksTotal) * 100.0 : 0.0;
-
-        // Rate calculations require previous snapshot
-        if ($this->previousStatusVariables === null || $this->previousStatusVariablesTs === null) {
-            // First call - initialize previous and return zero rates
-            $this->previousStatusVariables = $currentVars;
-            $this->previousStatusVariablesTs = $currentTs;
-
-            return array_merge($metrics, [
-                'tuples_returned_rate' => 0.0,
-                'tuples_fetched_rate' => 0.0,
-                'tuples_inserted_rate' => 0.0,
-                'tuples_updated_rate' => 0.0,
-                'tuples_deleted_rate' => 0.0,
-                'writes_rate' => 0.0,
-                'blocks_read_rate' => 0.0,
-                'blocks_hit_rate' => 0.0,
-                'xact_commit_rate' => 0.0,
-                'xact_rollback_rate' => 0.0,
-            ]);
-        }
-
-        $elapsed = $currentTs - $this->previousStatusVariablesTs;
-        if ($elapsed <= 0) {
-            $elapsed = 1.0; // Avoid division by zero
-        }
-
-        // Compute per-second rates using previous snapshot
-        $metrics['tuples_returned_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_returned', $elapsed
-        );
-        $metrics['tuples_fetched_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_fetched', $elapsed
-        );
-        $metrics['tuples_inserted_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_inserted', $elapsed
-        );
-        $metrics['tuples_updated_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_updated', $elapsed
-        );
-        $metrics['tuples_deleted_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.tup_deleted', $elapsed
-        );
-        $metrics['blocks_read_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.blks_read', $elapsed
-        );
-        $metrics['blocks_hit_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.blks_hit', $elapsed
-        );
-        $metrics['xact_commit_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.xact_commit', $elapsed
-        );
-        $metrics['xact_rollback_rate'] = $this->computeRate(
-            $currentVars, $this->previousStatusVariables, 'pg_stat_database.xact_rollback', $elapsed
-        );
-
-        // writes_rate = insert + update + delete rates combined
-        $metrics['writes_rate'] = $metrics['tuples_inserted_rate']
-            + $metrics['tuples_updated_rate']
-            + $metrics['tuples_deleted_rate'];
-
-        // Store current as previous for next call
-        $this->previousStatusVariables = $currentVars;
-        $this->previousStatusVariablesTs = $currentTs;
-
-        return $metrics;
-    }
-
-    /**
-     * Compute connection usage and fire alerts when thresholds are exceeded.
-     *
-     * ISLAND — zero production callers, and its 60 %/80 % verdicts are
-     * hardcoded, ignoring the AlertThresholds a user can configure (see
-     * class docblock, adminpages-011).
-     *
-     * Uses numbackends / max_connections to compute usage ratio.
-     * Warning threshold: 60%, Critical threshold: 80%.
-     *
-     * @return array<string, mixed> Connection data:
-     *   - numbackends:        current active backends
-     *   - max_connections:    server max_connections setting
-     *   - connection_usage:   ratio as decimal (0.0 to 1.0+)
-     *   - alert:             null, 'warning', or 'critical' based on threshold
-     *   - alert_message:     human-readable message when alert is set
-     */
-    public function checkConnectionUsage(): array
-    {
-        $statusVars = $this->fetchStatusVariables();
-        $maxConn = $this->maxConnections();
-
-        if ($statusVars === [] || $maxConn <= 0) {
-            return [
-                'numbackends' => 0,
-                'max_connections' => $maxConn > 0 ? $maxConn : 100,
-                'connection_usage' => 0.0,
-                'alert' => null,
-                'alert_message' => null,
-            ];
-        }
-
-        $numbackends = (int) ($statusVars['pg_stat_database.numbackends'] ?? 0);
-        $usage = (float) $numbackends / (float) $maxConn;
-
-        $result = [
-            'numbackends' => $numbackends,
-            'max_connections' => $maxConn,
-            'connection_usage' => $usage,
-            'alert' => null,
-            'alert_message' => null,
-        ];
-
-        // Warning at 60%, Critical at 80%
-        if ($usage >= 0.8) {
-            $result['alert'] = 'critical';
-            $result['alert_message'] = sprintf(
-                'Connection usage critically high: %.1f%% (%d/%d)',
-                $usage * 100,
-                $numbackends,
-                $maxConn,
-            );
-        } elseif ($usage >= 0.6) {
-            $result['alert'] = 'warning';
-            $result['alert_message'] = sprintf(
-                'Connection usage elevated: %.1f%% (%d/%d)',
-                $usage * 100,
-                $numbackends,
-                $maxConn,
-            );
-        }
-
-        return $result;
-    }
-
-    /**
-     * Compute the rate of change for a status variable.
-     *
-     * @param array<string, string> $current    Current status variables
-     * @param array<string, string> $previous  Previous status variables
-     * @param string $key                        Status variable key
-     * @param float $elapsed                     Seconds elapsed
-     * @return float Rate per second (clamped to zero on counter wrap)
-     */
-    private function computeRate(
-        array $current,
-        array $previous,
-        string $key,
-        float $elapsed,
-    ): float {
-        if ($elapsed <= 0) {
-            return 0.0;
-        }
-
-        $newVal = (float) ($current[$key] ?? 0);
-        $oldVal = (float) ($previous[$key] ?? 0);
-        $delta = $newVal - $oldVal;
-
-        // Clamp negative deltas (counter wrap/reset) to zero
-        if ($delta < 0) {
-            $delta = 0;
-        }
-
-        return $delta / $elapsed;
     }
 
     /**

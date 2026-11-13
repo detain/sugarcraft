@@ -352,10 +352,9 @@ final class DashboardPage extends PageBase
      * entries. This prevents alert storms when a threshold remains breached
      * across consecutive 1s poll cycles.
      *
-     * The watches are MySQL-keyed, so on a Postgres connection the snapshot
-     * arrives (pg_stat_database shapes) but matches nothing and no alert can
-     * fire — documented limitation, not a silent hole (adminpages-003; see
-     * AlertManager::checkAllMetrics()).
+     * The manager is told the connection's flavor so a Postgres snapshot
+     * (pg_stat_database / pg_settings shapes) is read through its own keys
+     * and alerts like MySQL does (SQL-P05).
      *
      * @param array $statusVars  SHOW GLOBAL STATUS (or pg_stat_database for Postgres)
      * @param array $serverVars  SHOW GLOBAL VARIABLES (or pg_settings for Postgres)
@@ -364,6 +363,7 @@ final class DashboardPage extends PageBase
     {
         $manager = AlertManager::new()
             ->withThresholds(AlertThresholds::standard())
+            ->withFlavor($this->context->flavor())
             ->withNotifier($this->alertNotifier);
 
         $alerts = $manager->checkAllMetrics($statusVars, $serverVars);
