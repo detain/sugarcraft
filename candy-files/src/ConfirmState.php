@@ -10,10 +10,12 @@ namespace SugarCraft\Files;
  * `None` → the manager dispatches keys normally. Any other value →
  * the next keystroke is consumed by the confirmation handler, which
  * takes one of two shapes: DeleteSelected/CopySelected/MoveSelected
- * run a single-key y/n gate (`y` confirms, anything else cancels),
- * while RenameSelected and MkdirPrompt are the same text-entry
- * submode — printable runes append to the buffer, Enter commits,
- * Esc cancels (CF-10: `N` creates a directory through it).
+ * run a single-key gate (`y` OR the affirmative the active locale's
+ * prompt teaches — German `j`, Russian `д`, Turkish `e` — confirms,
+ * anything else cancels), while RenameSelected and MkdirPrompt are
+ * the same text-entry submode — printable runes append to the
+ * buffer, Enter commits, Esc cancels (CF-10: `N` creates a directory
+ * through it).
  */
 enum ConfirmState
 {

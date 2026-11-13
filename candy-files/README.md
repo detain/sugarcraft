@@ -40,9 +40,13 @@ Three channels, same as every SugarCraft app:
 **1. Composer consumer** — install the package into a project and run its vendor bin:
 
 ```bash
-composer require sugarcraft/candy-files
+composer require sugarcraft/candy-files:@dev
 vendor/bin/candy-files [LEFT_DIR] [RIGHT_DIR]
 ```
+
+The inline `:@dev` is required while the release channel is dev-only: Packagist
+carries just `dev-master`, so a fresh project's default `minimum-stability:
+stable` refuses the bare command.
 
 **2. Source checkout** — from a clone of this repo:
 
@@ -52,8 +56,10 @@ composer install
 ```
 
 **3. Rolling phar** — the self-contained build published on GitHub Releases under
-`candy-files/dev` as `candy-files.phar` (with `.sha256` and `.sig` sidecars);
-stable cuts ride the same release pipeline on `candy-files/v*` tags. The launcher
+`candy-files/dev` as `candy-files.phar` (with `.sha256`/`.sig` verification sidecars,
+plus the `.phar.commit` build stamp and `.phar.pins.json` sibling pin-map — the latter
+pair is what to quote in a bug report); stable cuts ride the same release pipeline on
+`candy-files/v*` tags. The launcher
 detects that it is running from inside a phar and `--version` reports that archive's
 own build stamp (see `Support\Version` below):
 
@@ -84,28 +90,31 @@ on a bare php-cli machine the step that refuses is `composer install`, naming `s
 | `↓` / `j`       | Move cursor down                                    |
 | `Home` / `g`    | Top of listing                                      |
 | `End` / `G`     | Bottom of listing                                   |
-| `Enter` / `→`   | Open directory (or no-op on a file)                 |
+| `Enter` / `→`   | Open: a directory navigates, a file launches `$EDITOR` (via the `VISUAL`/`EDITOR` chain; refused with a status when none resolves) |
+| `l`             | Page the file under cursor through `$PAGER` (binary or > 32 MiB payloads are refused with a status); on a directory it opens — the right half of the vim diamond `h j k l` |
+| `x`             | Run the entry under cursor when it carries the exec bit (argv spawn — never a shell string) |
 | `←` / `h`       | Go up one directory                                 |
 | `Space`         | Toggle selection on the entry under cursor + advance|
 | `s`             | Cycle sort order (name → mtime → size, asc / desc)  |
 | `.`             | Toggle hidden-file visibility                       |
-| `c`             | Copy (selection or cursor) to inactive pane; `y` confirm  |
-| `m`             | Move (selection or cursor) to inactive pane; `y` confirm  |
-| `R`             | Rename cursor entry: text-entry submode — type the new name; `Enter` commits (empty buffer cancels); `Esc` cancels; printable chars INCLUDING `y` append to the buffer; other keys no-op and stay armed |
-| `d`             | Delete (selection or cursor); requires `y` confirm        |
+| `c`             | Copy (selection or cursor) to inactive pane; confirm the armed gate (see Status)  |
+| `m`             | Move (selection or cursor) to inactive pane; confirm the armed gate (see Status)  |
+| `R`             | Rename cursor entry: text-entry submode — type the new name; `Enter` commits (empty buffer cancels); `Backspace` edits the buffer; `Esc` cancels; every printable char — `y` included — appends |
+| `N`             | Create a directory in the active pane: same text-entry submode — `Enter` commits, empty buffer or `Esc` cancels; `u` removes it again while it is empty |
+| `d`             | Delete (selection or cursor); confirm the armed gate (see Status)        |
 | `r`             | Refresh active pane                                       |
 | `q`             | Quit                                                      |
-| `/`             | Start search mode; filter by type (fuzzy rank, matches within the active pane's directory only); `k`/`j` move the result cursor (so typing a name containing them needs mouse/paste); `/` cannot be typed; `Enter` opens a directory result, or exits search without opening a file result; `Backspace` on an empty query exits search mode; dotfiles appear even when `.` hides them |
-| `Escape`        | Exit search mode; cancels armed confirmations (any non-`y` answer incl. Esc cancels the pending `d`/`c`/`m` op); otherwise clears the selection |
+| `/`             | Start search mode: fuzzy filter by **name** over the active pane's listing (current directory only; dotfiles obey the `.` visibility law); `↑`/`↓` move the result cursor, every printable char — `k`, `j`, even `.` — types into the query (`/` itself cannot); `Enter` opens a directory result, and on a file result exits search with the pane cursor landed on it; a `Backspace` that empties the query exits search |
+| `Escape`        | Exit search mode; cancels armed confirmations and text-entry (cancel-intent is never a confirm — only the gate's taught affirmative confirms the pending `d`/`c`/`m` op); otherwise clears the selection |
 | `t`             | Duplicate current tab                                     |
 | `Ctrl+w`        | Close current tab (refused on the last tab: "cannot close last tab") |
-| `Ctrl+Tab`      | Cycle to next tab — on an empty tab stack, duplicates a tab instead; needs a terminal that reports modified Tab (see below) |
-| `Ctrl+Shift+Tab`| Cycle to previous tab — same terminal-support caveat; on an empty stack, no-op |
-| `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — on an empty stack, Ctrl+PgUp duplicates a tab (no previous-arm for PgDn, which is a no-op); standard terminal emulators (tmux/browser terminals may intercept modified Page keys) |
+| `Ctrl+Tab`      | Cycle to next tab — needs a terminal that reports modified Tab (see below) |
+| `Ctrl+Shift+Tab`| Cycle to previous tab — same terminal-support caveat |
+| `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — standard terminal emulators report the modified Page keys unambiguously (tmux/browser terminals may intercept them) |
 | `u` / `Ctrl+z`  | Undo last operation                                      |
 | `Ctrl+y`        | Redo last undone operation                               |
 
- Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and `^tab` is Ctrl+Tab. That in-app line is a partial cheat sheet; the full binding table is the one above. Plain `PageUp`/`PageDown` (unmodified) are not bound to anything. The trailing `_` shown while renaming is the text-entry caret. The active pane is marked two ways: a thick border, and a localized `focus: left` / `focus: right` label leading every status line (the label is the cue that survives linearized or screen-reader reading).
+ Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and `^tab` is Ctrl+Tab. That in-app line is a partial cheat sheet; the full binding table is the one above. Plain `PageUp`/`PageDown` (unmodified) are not bound to anything. The trailing `_` shown while renaming is the text-entry caret. The active pane is marked two ways: a thick border, and a localized `focus: left` / `focus: right` label leading every status line (the label is the cue that survives linearized or screen-reader reading). The tab chords are read by the key dispatcher only after search and confirmation modes release it: while either is armed, press `Esc` first, then cycle.
 
 ### Terminal support for Ctrl+Tab
 
@@ -123,9 +132,9 @@ Page keys themselves.
 
 ## Layout & terminal size
 
-The two panes split the live terminal width (`WindowSizeMsg`, reported at startup and on every resize): each pane gets `max(40, (cols − 2) ÷ 2)` cells, so the layout is usable from about **82 columns** up, and widens gracefully on larger frames. Below that floor the panes stay 40 cells wide and the outer frame will wrap — there is no horizontal scroll. The name column, header clip and separator rule all derive from the same width. Before the first size report (and in unit tests) the renderer keeps its historical fixed 40-cell pane.
+The two panes split the live terminal width (`WindowSizeMsg`, reported at startup and on every resize): each pane box measures `(cols − 2) ÷ 2` cells **outer** — border and padding eat four of those, and the name column, header clip, size column and separator rule all derive from the same content width, so two boxes plus the 2-cell gutter land exactly on `cols` at any size (a whole-frame property test pins `Width::of(line) ≤ cols` for every line at 40/80/120/200). The bottom help line is width-responsive: the full roster, then a terse tier, then a minimal tier on narrow frames, and every composed status/search line is cell-clamped — nothing wraps. Before the first size report (and in unit tests) the renderer keeps its historical fixed 40-cell pane.
 
-Honest limitation: there is **no scroll viewport**. A listing longer than the frame is clipped by the window; the cursor moves through entries but the view does not follow it past the bottom row. Tall directories need a tall terminal (or `Home`/`End`/search) until a scroll window is built.
+The vertical axis is windowed too: the frame is clipped to the terminal's live row count, each pane scrolls a window that follows the cursor (fold hints `↑ N more` / `↓ N more` mark the hidden head and tail), and border, status line and any confirmation prompt are ALWAYS on screen. `Home`/`End`/`g`/`G` and search jump past the window edges.
 
 ## Architecture
 
@@ -149,9 +158,9 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Test plan
 
-- 243 tests / 3212 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
+- 305 tests / 4738 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
 - Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / relist-with-selection-preservation / navigate / move / select / sort / hidden toggle / parent-path / join)
-- `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths, other non-key Msgs dropped)
+- `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` or the prompt's taught localized affirmative confirms, anything else cancels; modified chords never confirm), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths **and rows**, other non-key Msgs dropped)
 - `t` duplicates the current tab; `Manager::openNewTab(path)` lands a tab on the given directory as an API (no key binding carries a path)
 - Async copy end-to-end: the `c`/`y` command is executed against the real event loop and its `CopyCompletedMsg` re-enters `update()` — status, undo entry and refreshed destination pane are all asserted, plus the error-count path, the skipped-name path, the overwrite announcement and undo-recording-successes-only
 - Status-line injection defense: filenames carrying raw ESC/OSC bytes render inert in every rename/copy/move message (adversarial pins), plus the structural pins for the rename containment boundary and the single copyDir home
@@ -218,15 +227,15 @@ The direct constructor is kept for backward compatibility only — new code shou
 
 ## Status
 
-Copy / move / rename / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). The `d`/`c`/`m` operations use a three-phase confirm gate (`y` confirms, any other keystroke — including `Escape` — cancels the pending op); `R` rename is instead a text-entry submode: type the new name, `Enter` commits it (an empty buffer cancels), `Esc` cancels. The undo stack is capped at 50 operations (`UNDO_LIMIT`); the oldest entries fall off. Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
+Copy / move / rename / mkdir / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). The `d`/`c`/`m` operations use a two-phase confirm gate keyed by three keys: one press **arms** it, the next answers — `y` **or the affirmative the prompt teaches** (a localized letter: `j` under German `(j/n)`, `д` under Russian, `e` under Turkish) confirms; anything else, including `Escape`, cancels, and modified chords never answer on your behalf. `R` rename and `N` mkdir are instead the text-entry submode: type the name, `Enter` commits it (an empty buffer cancels), `Backspace` edits, `Esc` cancels. The undo stack is capped at 50 operations (`UNDO_LIMIT`); the oldest entries fall off. Undo restores delete/move/rename and never renames onto an occupied path — a file created after the delete stays, the original is left in the trash, and the status names the refusal; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
 
 Status-line semantics (all counts are **actions applied**, never arm-time intentions):
 
 - `deleted N entries` / `copied N entries` / `moved N entries` count entries that really landed.
 - When a stale or filtered name was skipped (`..`, empty), the message appends `(S skipped)`; when a leg failed, it says `N entries with E errors` instead — error precedence wins over skipped, and skipped wins over the overwrite note.
-- Copying a file onto an existing **file** silently replaces it; the completion message announces `(O overwrote)` for the legs that landed on a pre-existing target (measured at schedule time). Directory copies **merge**: destination-only entries survive. A copied **symlink** whose destination already exists fails silently — replace-onto-existing is guaranteed for regular files only (symlink replacement is a known gap tracked in the findings ledger).
-- Copy does **not** preserve source file modes: the destination gets default-permission bits, and copied directories are created `0755` (umask-filtered) regardless of the source — a `0600` secret routed through copy lands widened.
-- A delete that had to fall back to **permanent removal** (cross-device EXDEV) cannot be undone — undo reports it as an error rather than claiming a restore that has no bytes to recover.
+- Copying a file onto an existing **file** silently replaces it; the completion message announces `(O overwrote)` for the legs that landed on a pre-existing target (measured at schedule time). Directory copies **merge**: destination-only entries survive. A copied **symlink** replaces an existing file-or-link destination (unlink-then-relink); a symlink landing on a directory destination fails as a counted error leg — the destination keeps its bytes.
+- Copy **preserves** source metadata: file legs arrive with the source mode bits (a `0600` secret stays `0600`) and mtime, and copied directories are created in the source mode — the mode lands after the children so a directory is never chmod'd shut mid-walk.
+- A delete that had to fall back to **permanent removal** (cross-device EXDEV) says so BEFORE the `y`: the armed gate prompts `PERMANENT (y/n)` and the status counts the permanent legs (`deleted N entries (P permanent)`); undo reports those as an error rather than claiming a restore that has no bytes to recover.
 - The selection survives `r` (refresh) and `.` (hidden toggle) for entries that still exist, and `Escape` clears it; failed copy/move legs never enter the undo history.
 
 ## Credits & inspiration

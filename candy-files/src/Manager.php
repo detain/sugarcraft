@@ -26,13 +26,15 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  *
  * Holds two {@see Pane}s plus an active-pane index (Tab swaps),
  * a status line, and a confirmation-state enum so destructive
- * operations route through an explicit "press y to confirm,
- * anything else to cancel" gate.
+ * operations route through an explicit gate: "press `y` — or the
+ * affirmative the prompt's locale teaches — to confirm, anything
+ * else to cancel".
  *
  * Mutations (delete) are gated by ConfirmState. The first press
- * of `d` arms the confirmation; the next `y` actually deletes.
- * Any other key cancels. This is one TUI pattern that's worth
- * the extra state — accidental deletes are too annoying to ship.
+ * of `d` arms the confirmation; the next `y` (or the localized
+ * affirmative) actually deletes. Any other key cancels. This is
+ * one TUI pattern that's worth the extra state — accidental
+ * deletes are too annoying to ship.
  *
  * Filesystem reads happen through an injected lister closure.
  * `FsLister::lister()` is the prod default; tests pass a fake.

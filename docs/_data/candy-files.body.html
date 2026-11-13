@@ -1,7 +1,8 @@
 <p class="lede" style="margin-top: 28px;">Two panes side-by-side, Midnight Commander style. Tab to swap focus, multi-select, sort cycling, hidden-file toggle, delete-with-confirm. Pure-state transition layer — filesystem is injected, every transition is unit-testable.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-files</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-files:@dev</code></pre>
+    <p>While the release channel is dev-only the inline <code>:@dev</code> is required — Packagist carries just <code>dev-master</code>, and a fresh project's default stable minimum-refuses the bare command.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># 1. Composer consumer — the package bin (composer.json "bin"):
@@ -12,7 +13,9 @@ composer install
 ./bin/candy-files [LEFT_DIR] [RIGHT_DIR]
 
 # 3. Rolling phar — published on GitHub Releases under the
-#    candy-files/dev tag (with .sha256 and .sig sidecars):
+#    candy-files/dev tag (with .sha256/.sig verification sidecars and
+#    the .phar.commit build stamp + .phar.pins.json pin-map — quote
+#    the latter pair in bug reports):
 php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 
 # Flags (answered before the positional directory scan):
@@ -21,10 +24,12 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 # A missing/unreadable start directory fail-fasts with exit 1
 # ("left/right directory does not exist: <dir>").
 # Default: left = cwd, right = $HOME.
-# Size honesty: the panes split the live terminal width from ~82 columns
-# up (40-cell minimum each, wrapping below — no horizontal scroll), and
-# there is no scroll viewport: listings longer than the frame are clipped
-# (Home/End/search reach the rest).
+# Size honesty: each pane box measures (cols − 2) ÷ 2 cells outer — the
+# name column, header clip and separator all derive from the content
+# width inside it, so the composed frame lands exactly on the live
+# terminal width at any size. Rows are windowed: the listing scrolls a
+# window that follows the cursor (↑/↓ fold hints mark hidden head/tail),
+# and the status line and confirm prompts are always on screen.
 
 # Keys
 # Tab        Swap focus
@@ -32,18 +37,21 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 # ↓ / j      Move down
 # Home / g   Top
 # End / G    Bottom
-# Enter / →  Open directory
+# Enter / →  Open: directory navigates, file launches $EDITOR
+# l          Page a file through $PAGER; on a dir it opens (vim-diamond right)
+# x          Run the entry under cursor when it carries the exec bit
 # ← / h      Up one directory
 # Space      Toggle selection + advance
 # s          Cycle sort order (6 modes)
 # .          Toggle hidden files
-# c          Copy selection or cursor → inactive pane (y confirm)
-# m          Move selection or cursor → inactive pane (y confirm)
-# R          Rename cursor entry — type new name, Enter commits, Esc cancels
-# d          Delete (selection or cursor) — y to confirm
+# c          Copy selection or cursor → inactive pane (confirm: y or the locale's affirmative)
+# m          Move selection or cursor → inactive pane (confirm: y or the locale's affirmative)
+# R          Rename cursor entry — type new name, Enter commits, Backspace edits, Esc cancels
+# N          Create directory in the active pane — same text-entry; u removes it while empty
+# d          Delete (selection or cursor) — confirm gate arms first
 # r          Refresh active pane
 # q          Quit
-# /          Search mode — fuzzy filter of the active directory; k/j move, Enter opens dirs, Esc exits
+# /          Search mode — fuzzy filter by name of the active directory; arrows move the result cursor, Enter opens dirs / lands on files, Backspace-to-empty exits
 # Escape     Exit search mode · clear selection (outside prompts)
 # t          Duplicate current tab
 # Ctrl+w     Close current tab
@@ -63,7 +71,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
       <div class="feature"><strong>Delete-with-confirm</strong><span><code>d</code> stages, <code>y</code> commits — protects against fat-finger deletes.</span></div>
       <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
       <div class="feature"><strong>Requirements</strong><span>PHP <code>^8.3</code> with <code>ext-intl</code> and <code>ext-mbstring</code> — both hard-required transitively by <code>sugar-core</code>, whose cell-width math segments through ICU, so <code>composer install</code> is the step that refuses on a bare php-cli machine.</span></div>
-      <div class="feature"><strong>Live search</strong><span><code>/</code> fuzzy-filters the active pane's current directory (not recursive). <code>↑↓</code>/<code>k</code>/<code>j</code> move the result cursor — so <code>k</code>/<code>j</code> cannot be typed into a query; <code>/</code> cannot be typed either. <code>Enter</code> opens a directory result; on a file result it just exits search. Backspace-to-empty exits.</span></div>
+      <div class="feature"><strong>Live search</strong><span><code>/</code> fuzzy-filters the active pane's current directory <strong>by name</strong> (not recursive; dotfiles obey the <code>.</code> visibility law). <code>↑</code>/<code>↓</code> move the result cursor, so <code>k</code>, <code>j</code> and every other printable type into the query (<code>/</code> itself cannot). <code>Enter</code> opens a directory result; on a file result it exits search with the pane cursor landed on the hit. A <code>Backspace</code> that empties the query exits.</span></div>
       <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates the current tab, <code>Ctrl+Tab</code>/<code>Ctrl+Shift+Tab</code> cycle (needs a terminal that reports modified Tab; <code>Ctrl+PgUp</code>/<code>Ctrl+PgDn</code> are the alternative — tmux and browser terminals may intercept modified Page keys), <code>Ctrl+w</code> closes (refuses the last tab).</span></div>
       <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores the last delete / move / rename; <code>Ctrl+y</code> redoes.</span></div>
       <div class="feature"><strong>Localized prompts</strong><span>The executable activates a language detected from <code>$LC_ALL</code>/<code>$LANG</code> (16 catalogues, English default). Confirmation gates honor the affirmative each locale's prompt teaches — a German <code>(j/n)</code> answers <code>j</code>, a Russian <code>(д/н)</code> answers <code>д</code> — and <code>y</code> works everywhere.</span></div>
@@ -114,7 +122,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/search.gif" alt="Search">
                 <h3>Search</h3>
-                <span class="demo-caption">Type "/" to fuzzy-filter the active directory, k/j (or arrows) move results, Enter opens directories.</span>
+                <span class="demo-caption">Type "/" to fuzzy-filter the active directory by name, arrows move the result cursor, Enter lands on the hit.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/multi-select.gif" alt="Multi-select">
