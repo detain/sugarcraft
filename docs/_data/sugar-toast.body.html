@@ -47,7 +47,7 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Toast</td><td>new(int $maxWidth = 50)</td><td>Factory — max width in cells</td></tr>
 <tr><td>Toast</td><td>withPosition(Position)</td><td>Set screen position (9 positions)</td></tr>
-<tr><td>Toast</td><td>withDuration(?float $seconds)</td><td>Auto-dismiss after N seconds (null = no expiry is armed — alerts persist unless an explicit expiry is given)</td></tr>
+<tr><td>Toast</td><td>withDuration(?float $seconds)</td><td>Auto-dismiss after N seconds (null = no expiry is armed — alerts persist unless an explicit expiry is given; NAN/INF and values &lt;= 0 throw, the fail-fast door matching withMaxConcurrent)</td></tr>
 <tr><td>Toast</td><td>withAllowEscToClose(bool)</td><td>Set the Escape-dismiss preference flag (the renderer handles no input; the host reads it)</td></tr>
 <tr><td>Toast</td><td>withMaxWidth(int)</td><td>Set maximum alert width in cells</td></tr>
 <tr><td>Toast</td><td>withMinWidth(int)</td><td>Set minimum alert width in cells</td></tr>
@@ -55,7 +55,7 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Toast</td><td>withMaxConcurrent(?int)</td><td>Cap concurrent alerts (<code>null</code> = unlimited; values &lt; 1 throw)</td></tr>
 <tr><td>Toast</td><td>withOverflow(Overflow)</td><td>Strategy when cap exceeded: DropOldest, DropNewest, Enqueue</td></tr>
 <tr><td>Toast</td><td>withHistoryLimit(?int $n)</td><td>Cap history log, oldest evicted first (default 100; <code>null</code> = unbounded)</td></tr>
-<tr><td>Toast</td><td>alert(ToastType|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)</td><td>Add alert; string type = case-insensitive lookup; $expiresAt is an absolute epoch (duration-shaped values throw); <code>null</code> inherits the configured duration; an $id re-queue updates the live alert in place</td></tr>
+<tr><td>Toast</td><td>alert(ToastType|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)</td><td>Add alert; string type = case-insensitive lookup; $expiresAt is an absolute epoch (duration-shaped and non-finite NAN/INF values throw); <code>null</code> inherits the configured duration; an $id re-queue updates the live alert in place</td></tr>
 <tr><td>Toast</td><td>progressToast(ToastType|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)</td><td>Add alert with progress bar (finite 0.0–1.0; out-of-range clamps, NAN/INF throw); same expiry semantics as alert(); re-calling with the same $id advances one box instead of appending</td></tr>
 <tr><td>Toast</td><td>push(Alert $alert)</td><td>Enqueue a pre-built Alert (styled/actioned)</td></tr>
 <tr><td>Toast</td><td>cancelAlert(int $index)</td><td>Make a queued alert persistent (never auto-dismisses); $index addresses the <code>activeAlerts()</code> order</td></tr>

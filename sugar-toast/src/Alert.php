@@ -15,7 +15,11 @@ final class Alert
      * @param ToastType $type  Alert severity
      * @param string|null $message  User-visible message text (null renders as empty)
      * @param float|null $expiresAt  Absolute seconds-since-epoch instant the
-     *        alert stops rendering. null means INHERIT — Toast::alert(),
+     *        alert stops rendering. Must be finite and at or above the epoch
+     *        floor (1e9): NAN/INF never expire and a duration-shaped value is
+     *        born expired — all three silently, so they throw here, the type
+     *        that carries the invariant (see also Toast::alert()'s friendlier
+     *        front-door wording). null means INHERIT — Toast::alert(),
      *        progressToast() and push() arm the configured withDuration()
      *        timer when one is set; a truly never-expiring alert is expressed
      *        by $persistent (via withoutExpiry()/withCancelledExpiry() or
@@ -38,6 +42,8 @@ final class Alert
      *        appending a second box — progress toasts once had no
      *        lifecycle at all. null = anonymous, always
      *        appends.
+     * @throws \InvalidArgumentException when $progress is non-finite, or when
+     *         $expiresAt is non-finite or below the epoch floor
      */
     public function __construct(
         public readonly ToastType $type,
@@ -51,6 +57,13 @@ final class Alert
         public readonly bool $persistent = false,
         public readonly ?string $id = null,
     ) {
+        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < 1_000_000_000)) {
+            throw new \InvalidArgumentException(
+                'Alert $expiresAt must be a finite absolute epoch timestamp (microtime(true)); '
+                . 'NAN/INF never expire and a sub-epoch (duration-shaped) value is born expired — '
+                . "both silently; relative lifetimes belong in withDuration()/withExpiry() — got {$expiresAt}"
+            );
+        }
         if ($progress !== null && !\is_finite($progress)) {
             throw new \InvalidArgumentException(
                 'Alert progress must be a finite 0.0-1.0 float (out-of-range values '

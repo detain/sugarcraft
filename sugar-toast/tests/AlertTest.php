@@ -266,7 +266,7 @@ final class AlertTest extends TestCase
         $fg = \SugarCraft\Core\Util\Color::hex('#222');
         $border = \SugarCraft\Core\Util\Color::hex('#333');
         $args = [
-            ToastType::Success, 'built', 123.5, 0.5, $actions, $bg, $fg, $border, true, 'id-1',
+            ToastType::Success, 'built', 2_000_000_000.5, 0.5, $actions, $bg, $fg, $border, true, 'id-1',
         ];
 
         $viaCtor = new Alert(...$args);

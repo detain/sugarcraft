@@ -152,9 +152,25 @@ final class Toast
     /**
      * Auto-dismiss alerts after $duration seconds.
      * Pass null to disable auto-dismiss.
+     *
+     * The fail-fast counterpart of withMaxConcurrent()'s cap-below-1 and
+     * withHistoryLimit()'s negative-argument refusals: a zero or negative
+     * timer silently births every queued alert already expired — nothing
+     * renders, nothing errors, and secondsUntilNextExpiry() pins at 0.0
+     * for a host ticking on it. NAN/INF never expire anything honestly.
+     *
+     * @throws \InvalidArgumentException when $seconds is set but not a finite
+     *         positive duration (null = never expires; positive seconds = TTL)
      */
     public function withDuration(?float $seconds): self
     {
+        if ($seconds !== null && (!\is_finite($seconds) || $seconds <= 0)) {
+            throw new \InvalidArgumentException(
+                'withDuration(): null = never expires; positive seconds = TTL — '
+                . "NAN/INF and values <= 0 are refused (a zero/negative timer silently "
+                . "suppresses every alert), got {$seconds}"
+            );
+        }
         return $this->mutate(['duration' => $seconds]);
     }
 
@@ -293,17 +309,19 @@ final class Toast
      * Expired alerts sitting in the queue are pruned first, on this write.
      *
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the message
-     * @throws \InvalidArgumentException when $expiresAt is a number below the
-     *         epoch floor — a relative duration typed into the wrong slot is a
-     *         silently invisible alert otherwise.
+     * @throws \InvalidArgumentException when $expiresAt is not a finite
+     *         absolute epoch — NAN/INF never expire, and a duration-shaped
+     *         value below the epoch floor is a silently invisible alert
+     *         otherwise.
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
     {
-        if ($expiresAt !== null && $expiresAt < 1_000_000_000) {
+        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < 1_000_000_000)) {
             throw new \InvalidArgumentException(
-                'alert() $expiresAt must be an absolute epoch timestamp (microtime(true)); '
-                . "a relative duration belongs in withDuration() — got {$expiresAt}"
+                'alert() $expiresAt must be a finite absolute epoch timestamp (microtime(true)); '
+                . 'NAN/INF never expire, and a relative duration belongs in '
+                . "withDuration() — got {$expiresAt}"
             );
         }
         $resolvedType = $type instanceof ToastType
@@ -326,16 +344,18 @@ final class Toast
      *
      * @param float $progress  Value between 0.0 and 1.0 (clamped)
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the progress bar
-     * @throws \InvalidArgumentException when $expiresAt is below the epoch floor,
+     * @throws \InvalidArgumentException when $expiresAt is not a finite absolute
+     *         epoch (NAN/INF, or a duration-shaped value below the floor),
      *         or $progress is non-finite (it reaches the Alert constructor)
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
     {
-        if ($expiresAt !== null && $expiresAt < 1_000_000_000) {
+        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < 1_000_000_000)) {
             throw new \InvalidArgumentException(
-                'progressToast() $expiresAt must be an absolute epoch timestamp (microtime(true)); '
-                . "a relative duration belongs in withDuration() — got {$expiresAt}"
+                'progressToast() $expiresAt must be a finite absolute epoch timestamp (microtime(true)); '
+                . 'NAN/INF never expire, and a relative duration belongs in '
+                . "withDuration() — got {$expiresAt}"
             );
         }
         $resolvedType = $type instanceof ToastType

@@ -37,6 +37,87 @@ final class ToastFailFastTest extends TestCase
         $this->assertInstanceOf(Toast::class, $t); // accepted at the door; expiry semantics untouched
     }
 
+    public function testNonFiniteExpiresAtIsRefusedAtEveryDoor(): void
+    {
+        // 004: NAN slips through every comparison, so it cleared the old
+        // epoch floor and minted an immortal alert — nextExpiry() answers
+        // NAN, pruneExpired() never removes it, and secondsUntilNextExpiry()
+        // pins at 0.0, livelocking a host following the documented
+        // Cmd::tick recipe. INF is the same silent-immortal outcome.
+        foreach ([\NAN, \INF] as $bad) {
+            $label = \is_nan($bad) ? 'NAN' : 'INF';
+            try {
+                Toast::new(50)->alert(ToastType::Info, 'hi', $bad);
+                $this->fail("alert() must refuse \$expiresAt {$label}");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('NAN/INF', $e->getMessage());
+            }
+            try {
+                Toast::new(50)->progressToast(ToastType::Info, 'p', 0.5, $bad);
+                $this->fail("progressToast() must refuse \$expiresAt {$label}");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('NAN/INF', $e->getMessage());
+            }
+            try {
+                new Alert(ToastType::Info, 'hi', $bad);
+                $this->fail("the Alert constructor must refuse \$expiresAt {$label}");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('NAN/INF', $e->getMessage());
+            }
+        }
+    }
+
+    public function testTheAlertConstructorGuardsItsOwnExpiryInvariant(): void
+    {
+        // 006 parse-don't-validate: the type carrying the invariant enforced
+        // it nowhere — a pre-built sub-epoch Alert rode push() straight into
+        // the queue, born expired and unrefused.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('duration-shaped');
+        new Alert(ToastType::Info, 'hi', 5.0);
+    }
+
+    public function testExpiryMethsCannotSmuggleNonFinitePastTheCtorGuard(): void
+    {
+        // withExpiry()/withExtendedExpiry() resolve microtime + duration and
+        // rebuild through mutate() → the constructor leg fires for a
+        // non-finite request instead of minting an immortal alert.
+        $alert = Alert::new(ToastType::Info, 'x');
+        foreach ([\NAN, \INF] as $bad) {
+            try {
+                $alert->withExpiry($bad);
+                $this->fail('withExpiry() must refuse non-finite durations');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('NAN/INF', $e->getMessage());
+            }
+            try {
+                $alert->withExtendedExpiry($bad);
+                $this->fail('withExtendedExpiry() must refuse non-finite durations');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('NAN/INF', $e->getMessage());
+            }
+        }
+    }
+
+    public function testNonPositiveAndNonFiniteDurationAreRefused(): void
+    {
+        // 005: withDuration(0)/(-1) was accepted — every later alert born
+        // expired, nothing rendered, nothing errored, and
+        // secondsUntilNextExpiry() pinned at 0.0 until the next write
+        // pruned. The sibling knobs already refused this shape; so does
+        // this door now.
+        foreach ([0.0, -1.0, \NAN, \INF] as $bad) {
+            try {
+                Toast::new(50)->withDuration($bad);
+                $this->fail('withDuration(' . \var_export($bad, true) . ') must throw');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('positive seconds = TTL', $e->getMessage());
+            }
+        }
+        $this->assertNotNull(Toast::new(50)->withDuration(5.0));
+        $this->assertNotNull(Toast::new(50)->withDuration(null));
+    }
+
     public function testZeroAndNegativeMaxConcurrentAreRefused(): void
     {
         foreach ([0, -1] as $bad) {

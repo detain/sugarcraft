@@ -466,7 +466,7 @@ already over the new cap survive until the next push evicts them.
 |--------|-------------|
 | `Toast::new(int $maxWidth = 50)` | Factory |
 | `->withPosition(Position)` | Screen position (9 positions) |
-| `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables. The value is not range-checked (contrast `withMaxConcurrent`): `0`/negative is accepted, and alerts queued behind it are born expired — never rendered, and `secondsUntilNextExpiry()` answers `0.0` for them, so a host ticking on that value spins until the next write prunes them |
+| `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables. `null` = never expires, positive seconds = TTL: NAN/INF and `<= 0` throw — a zero/negative timer would birth every queued alert already expired (never rendered, `secondsUntilNextExpiry()` pinned at `0.0`) in silence, so the door refuses it like `withMaxConcurrent` does its below-1 cap |
 | `->withMaxWidth(int)` | Maximum alert width in cells. Non-positive values are not rejected — the renderer floors the effective cap to 1 cell (same for a `Toast::new(0)` width) |
 | `->withMinWidth(int)` | Minimum alert width in cells |
 | `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or Ascii symbols |
@@ -475,7 +475,7 @@ already over the new cap survive until the next push evicts them.
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited; `< 1` throws `InvalidArgumentException`) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded; `0` is accepted as a no-history sentinel — negatives alone throw, unlike `withMaxConcurrent`, which refuses anything below 1) |
-| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` is an absolute epoch — duration-shaped values throw, durations belong in `withDuration()`) |
+| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` is an absolute epoch — duration-shaped and non-finite (NAN/INF) values throw, durations belong in `withDuration()`) |
 | `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0 — out-of-range clamps on attach, NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws |
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
