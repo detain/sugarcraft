@@ -35,6 +35,13 @@ interface Prefixer
     /**
      * Called once per item within a rendering pass to initialise state.
      *
+     * The returned reservation must cover the widest cell count any
+     * prefix() emission can carry; measure it with Width::string()
+     * (\SugarCraft\Core\Util\Width — the same oracle the Model uses) when
+     * the gutter carries East-Asian-Ambiguous glyphs (• ★ ✦ ◉): they are
+     * 1 or 2 cells depending on host config, and a hand-typed constant
+     * desyncs from the renderer on ambiguous-wide hosts.
+     *
      * @param \Stringable $value          The current item's value (raw, unsanitized — sanitize before echoing/logging)
      * @param int         $currentIndex   Index of the current item in the list
      * @param int         $cursorIndex    The currently selected item index

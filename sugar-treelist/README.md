@@ -126,19 +126,33 @@ To implement the contract yourself:
 
 ```php
 use SugarCraft\TreeList\{Prefixer, Model};
+use SugarCraft\Core\Util\Width;
 
 $model = $model->withPrefixer(new class implements Prefixer {
     public function initPrefixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
         int $lineOffset, int $width, int $height, int $totalItems
     ): int {
-        return 0; // no prefix width
+        return Width::string('• '); // widest emission, measured — see below
     }
     public function prefix(int $currentLine, int $totalLines): string {
         return $currentLine === 0 ? '• ' : '  ';
     }
 });
 ```
+
+Return the **cell width your `prefix()` can emit** (here: `Width::string('• ')`,
+the widest of the two strings) — the Model subtracts the declared reservation
+from the content budget verbatim and never re-measures the emitted prefix, so
+a `return 0` for a two-cell gutter reproduces ragged, over-wide rows. Prefer
+measuring with `Width::string()` over typing the number by hand:
+East-Asian-Ambiguous glyphs (`•` `★` `✦` `◉`) are 1 cell on ordinary hosts but
+2 on ambiguous-wide CJK configs, and a hand-computed reservation silently
+desyncs from the renderer there (the shipped `DefaultPrefixer` chose
+Wide-stable box glyphs for exactly this reason). An emitted prefix wider than
+its reservation no longer overruns the viewport — every assembled row is
+clamped to it — but the clamp is a safety net, not a budget: the overflow is
+lost to the eye.
 
 ## Custom Suffixer
 

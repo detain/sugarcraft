@@ -11,18 +11,26 @@ declare(strict_types=1);
  * sweeps control/ANSI bytes and zone sentinels and drops any line break from
  * them before they enter the row, so style through the Model's setters, not
  * through escape sequences here.
+ *
+ * Reservation note: initPrefixer()/initSuffixer() must declare the cell width
+ * your widest emission can carry. Measure it with Width::string() — the same
+ * oracle the Model uses — because East-Asian-Ambiguous glyphs (★ ✦ ◉) are
+ * 1 cell on ordinary hosts yet 2 on ambiguous-wide CJK configs, where a
+ * hand-typed constant silently desyncs from the renderer.
  */
 
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\TreeList\{Model, StringItem, Prefixer, Suffixer};
+use SugarCraft\Core\Util\Width;
 
 class StarsPrefixer implements Prefixer {
     public function initPrefixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
         int $lineOffset, int $width, int $height, int $totalItems
     ): int {
-        return 3; // width for '★  ' / '✦  ' — each glyph string is 3 cells
+        return Width::string('★  '); // measured, never hand-computed: the glyph
+                                     // is 3 cells here, 4 on ambiguous-wide hosts
     }
     public function prefix(int $currentLine, int $totalLines): string {
         return $currentLine === 0 ? '★  ' : '✦  ';
@@ -32,7 +40,7 @@ class StarsPrefixer implements Prefixer {
 class CursorMarker implements Suffixer {
     private int $itemIndex = 0;
     private int $cursorIndex = 0;
-    private int $markerWidth = 3; // ' ◉ ' is 3 cells; reserve the real width
+    private int $markerWidth = 0; // measured at init from the widest emission
 
     public function initSuffixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
@@ -40,6 +48,7 @@ class CursorMarker implements Suffixer {
     ): int {
         $this->itemIndex   = $currentIndex;
         $this->cursorIndex = $cursorIndex;
+        $this->markerWidth = Width::string(' ◉ '); // the width you can emit
         return $this->markerWidth;
     }
 

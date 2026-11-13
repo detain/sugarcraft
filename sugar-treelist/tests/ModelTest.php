@@ -1870,6 +1870,37 @@ final class ModelTest extends TestCase
         $method->invoke($this->model, 'text', 0);
     }
 
+    public function testDocumentedPrefixerSnippetHoldsTheViewport(): void
+    {
+        // sugar-treelist-009/038 acceptance: the README 'Custom Prefixer'
+        // snippet, run verbatim at width 20 with a 20-cell item, keeps every
+        // row inside the viewport — the reservation is derived through the
+        // Width oracle instead of hand-typed (the old 'return 0' example put
+        // 22-cell rows through a 20-wide pane).
+        $prefixer = new class implements Prefixer {
+            public function initPrefixer(
+                \Stringable $value, int $currentIndex, int $cursorIndex,
+                int $lineOffset, int $width, int $height, int $totalItems
+            ): int {
+                return Width::string('• ');
+            }
+
+            public function prefix(int $currentLine, int $totalLines): string
+            {
+                return $currentLine === 0 ? '• ' : '  ';
+            }
+        };
+        $lines = $this->model
+            ->withItem(new StringItem(\str_repeat('x', 20)))
+            ->withPrefixer($prefixer)
+            ->withViewport(20, 24)
+            ->lines();
+        $this->assertNotEmpty($lines);
+        foreach ($lines as $row) {
+            $this->assertLessThanOrEqual(20, Width::string($row), 'no row overruns the documented geometry');
+        }
+    }
+
     public function testPrefixerAndSuffixerReturnsAreSweptIntoTheFrame(): void
     {
         // Extension points splice INSIDE an already-wrapped row: a hostile
