@@ -304,4 +304,44 @@ final class MarkedFrameTest extends TestCase
         // A link alone is not a pen.
         $this->assertSame('', MarkedFrame::isolation("\e]8;;http://x\x07A"));
     }
+
+    public function testTakeNeverSynthesizesTheClosingHalfOfAnEmptyIdClaim(): void
+    {
+        // SO-24 (sugar-overlay-035): an unmatched forged zone-open
+        // tokenizes to id '' — sentinel garbage, not a zone. The synth at
+        // the take-leg used to complete that claim into a full empty-id
+        // envelope (OPEN + "/" + CLOSE) riding the wire as a zone-shaped
+        // claim. The guard keeps the raw garbage verbatim and mints
+        // nothing; a MATCHED zone left open at the cut still gets its
+        // synth close (second leg below).
+        $close = "\xEE\x80\x81";
+
+        $clipped = MarkedFrame::take('Y' . self::OPEN . 'QQ', 2);
+        $this->assertSame('Y' . self::OPEN . 'QQ', $clipped, 'the dangling open rides raw; no closing half is minted');
+        $this->assertStringNotContainsString($close, $clipped);
+
+        // Wire format: an open claim is OPEN+id+CLOSE and a real close is
+        // OPEN+'/id'+CLOSE — this row leaves zone 'z' open across the cut.
+        $matched = MarkedFrame::take('Y' . self::OPEN . 'z' . $close . 'ZA', 2);
+        $this->assertStringEndsWith(self::OPEN . '/z' . $close, $matched, 'a real zone left open at the cut keeps its synth close');
+    }
+
+    public function testDropReplaySkipsEmptyIdZoneClaims(): void
+    {
+        // SO-24 drop-side belt (sugar-overlay-035): the head-replay guard
+        // refuses an empty-id $zone the same way; segments() itself can
+        // currently only produce this shape on the take leg, so the belt
+        // is pinned at the public segment-input door.
+        $forged = [
+            ['kind' => 'zone-open',  'bytes' => self::OPEN . 'head', 'width' => 0, 'id' => ''],
+            ['kind' => 'text',       'bytes' => 'B',                'width' => 1, 'id' => ''],
+            ['kind' => 'text',       'bytes' => 'C',                'width' => 1, 'id' => ''],
+        ];
+
+        [$tail, $width] = MarkedFrame::dropSegments($forged, 1);
+
+        $this->assertStringNotContainsString("\xEE\x80\x81", $tail, 'no closing half is replayed for an empty-id claim');
+        $this->assertStringNotContainsString(self::OPEN, $tail, 'nor is the opening half re-minted');
+        $this->assertSame(1, $width);
+    }
 }

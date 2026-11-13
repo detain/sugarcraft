@@ -241,7 +241,10 @@ final class MarkedFrame
             }
         }
 
-        if ($zone !== null) {
+        // An unmatched forged zone-open tokenizes to id ''; that claim is
+        // sentinel garbage, not a zone — synthesizing its closing half
+        // would complete an empty-id envelope onto the wire (sugar-overlay-035).
+        if ($zone !== null && $zone !== '') {
             $out .= self::envelope('/' . $zone);
         }
         if ($linkActive) {
@@ -342,7 +345,10 @@ final class MarkedFrame
             return ['', 0, []];
         }
 
-        if ($zone !== null) {
+        // Belt for segment lists that never came from segments(): an
+        // empty-id open is a forged claim, never replayed as an envelope
+        // (sugar-overlay-035, the drop() head-replay leg).
+        if ($zone !== null && $zone !== '') {
             $replay = self::envelope($zone);
         }
         // Captured NOW: the tail phase reassigns $zone as envelopes pair off.
