@@ -38,6 +38,7 @@ return [
     'format.template_unresolved' => 'テンプレート: {count} 個のプレースホルダーが空に展開されました: {names} — 変数を設定し --allow-env で許可する必要があります。',
     'runtime.empty_input' => '入力行がありません。何も実行しません。',
     'runtime.empty_input_filter' => 'フィルターする行がありません：標準入力に行がありませんでした。',
+    'runtime.empty_input_pager' => 'ページングする行がありません：標準入力に行がありませんでした。',
     'runtime.conflicting_flags' => 'フラグ {first} と {second} は異なる値と同時に指定できません。',
     'runtime.empty_selection' => '項目が選択されていません — Enterの前にスペースキーで少なくとも1項目をマークしてください。',
 ];

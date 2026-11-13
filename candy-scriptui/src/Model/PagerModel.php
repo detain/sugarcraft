@@ -50,6 +50,12 @@ final class PagerModel implements Model
         // Multi-line untrusted paint: control/escape bytes out, CR mapped to
         // LF so overwrite tricks cannot reach the viewport (cluster 12).
         $content = \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($content);
+        // scriptui-78: an empty input used to paint a 0-line viewport — the
+        // last "nothing happened" surface in the tool. Say so, in the same
+        // nothing-to-do family as the filter/table refusals.
+        if ($content === '') {
+            $content = Lang::t('runtime.empty_input_pager');
+        }
         // scriptui-72 (finding): --match used to run AFTER numberLines,
         // so a needle like "1" (or "│") reverse-videoed the gutter digits
         // and separator too — painting match styling onto chrome the user

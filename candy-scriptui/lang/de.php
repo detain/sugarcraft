@@ -51,6 +51,7 @@ return [
     'format.template_unresolved' => 'Vorlage: {count} Platzhalter wurde(n) als leer expandiert: {names} — eine Variable muss gesetzt und über --allow-env erlaubt sein.',
     'runtime.empty_input' => 'Die Eingabe enthielt keine Zeilen; nichts zu tun.',
     'runtime.empty_input_filter' => 'Nichts zu filtern; die Eingabe enthielt keine Zeilen.',
+    'runtime.empty_input_pager' => 'Nichts zu blättern; die Eingabe enthielt keine Zeilen.',
     'runtime.conflicting_flags' => 'Die Optionen {first} und {second} können nicht mit unterschiedlichen Werten kombiniert werden.',
     'runtime.empty_selection' => 'Kein Eintrag ausgewählt — drücken Sie Leertaste, um vor Enter mindestens einen Eintrag zu markieren.',
 ];
