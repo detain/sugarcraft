@@ -275,6 +275,30 @@ final class CliTest extends TestCase
         }
     }
 
+    public function testVersionFlagsPrintCurrentAheadOfTheGdPreflight(): void
+    {
+        // Outside an archive the answer is CURRENT verbatim — and it must be
+        // printed before the capability refusal can possibly fire: even an
+        // image-hostile host has to be able to ask for its version.
+        foreach (['--version', '-v'] as $flag) {
+            [$stdout, $stderr] = self::pipes();
+            $exit = Cli::main(['candy-gifview', $flag], $stdout, $stderr);
+
+            $this->assertSame(0, $exit, self::drain($stderr));
+            $this->assertSame("candy-gifview 0.1.0\n", self::drain($stdout), $flag);
+            $this->assertSame('', self::drain($stderr), $flag);
+        }
+
+        // The ordering itself is the contract; on a gd-equipped host the
+        // in-process arms above cannot prove precedence, so pin the layout.
+        $src = (string) file_get_contents(__DIR__ . '/../src/Cli.php');
+        $this->assertLessThan(
+            strpos($src, "if (!\\extension_loaded('gd')) {"),
+            strpos($src, "token === '--version'"),
+            "the --version arm drifted behind the gd preflight — archives must answer it everywhere",
+        );
+    }
+
     private function gifFixture(): string
     {
         if (!extension_loaded('gd')) {

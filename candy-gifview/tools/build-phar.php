@@ -22,9 +22,10 @@ declare(strict_types=1);
  * version stamp itself is read back at runtime by
  * `SugarCraft\GifView\Support\Version::fromPharMetadata()`. The frozen
  * vendor/ inside the artifact makes Composer's
- * InstalledVersions report the build root's dev guess, so a stamp NOTHING
- * consumes means `--version` lies. PharBuildScriptTest pins the stamp field
- * and its reader agree.
+ * InstalledVersions report the build root's dev guess, so if nothing consumed
+ * the stamp, `--version` would lie. PharBuildScriptTest pins the stamp field
+ * and its reader agree, and every stamp — explicit or derived — is refused
+ * here unless Support\Version::isStampable() accepts it.
  *
  * WHY THE BUILD MUST RUN FROM A CLEAN PUBLISHED VENDOR
  * ====================================================
@@ -108,6 +109,19 @@ foreach (array_slice($argv, 1) as $arg) {
     }
     fwrite(STDERR, "build-phar: unrecognized option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH] [--gz] [--version=X] [--vendor=published|monorepo])\n");
     exit(2);
+}
+
+// Grammar gate: the consumer decides what is stampable. An explicit
+// --version= is refused BEFORE any build work, checked against the runtime
+// reader's own rule — the builder runs pre-autoload, so require the single
+// pure file (it has no dependencies of its own).
+if ($version !== null) {
+    require_once $package . '/src/Support/Version.php';
+
+    if (!\SugarCraft\GifView\Support\Version::isStampable($version)) {
+        fwrite(STDERR, "build-phar: version stamp '{$version}' is not consumable by Support\\Version::normalizeStamp() (want a candy-gifview/vX.Y.Z tag, a bare X.Y.Z, or a dev-<hex>/dev-build identity) — refusing to bake a lying artifact\n");
+        exit(2);
+    }
 }
 
 // Guard 1: the build needs to WRITE an archive; the runtime never does.
@@ -235,6 +249,17 @@ if ($version === null) {
         ? trim($described)
         : 'dev-' . ($head !== '' ? substr($head, 0, 7) : 'build');
 }
+
+// The derived identity passes the same gate as the explicit one: a shared
+// monorepo tag stream can describe something the runtime reader would drop,
+// and a dropped stamp means `--version` printing CURRENT — a lie.
+require_once $package . '/src/Support/Version.php';
+
+if (!\SugarCraft\GifView\Support\Version::isStampable($version)) {
+    fwrite(STDERR, "build-phar: derived version stamp '{$version}' is not consumable by Support\\Version::normalizeStamp() — refusing to bake a lying artifact\n");
+    exit(2);
+}
+
 $commit = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse HEAD 2>/dev/null'));
 
 // Reproducibility: honor SOURCE_DATE_EPOCH so a release workflow can export

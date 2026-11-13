@@ -26,8 +26,9 @@ final class Version
     private const COMPARABLE = '/^\d+\.\d+\.\d+$/';
 
     /**
-     * A development stamp: the CI dev channel writes 'dev-<shortsha>' and a local
-     * build writes 'dev-<sha7>' ('dev-build' when git cannot answer). These are NOT
+     * A development stamp: both the CI dev channel and a local build write
+     * 'dev-<7-hex>' ('dev-build' when git cannot answer; a pasted full
+     * 40-hex HEAD also parses). These are NOT
      * releases — they must self-report verbatim so a dev phar never silently
      * impersonates the stable version CURRENT would print.
      */
@@ -73,7 +74,20 @@ final class Version
             return null;
         }
 
-        $stamped = $metadata['version'];
+        return self::normalizeStamp($metadata['version']);
+    }
+
+    /**
+     * Normalize a build stamp to a printable version, or null when it names
+     * neither a comparable release nor a recognised development identity:
+     * TAG_PREFIX stripped, a leading `v` stripped, then the COMPARABLE
+     * release shape, then the DEV grammar. One grammar, one home — the
+     * producer (tools/build-phar.php) validates against exactly this rule
+     * through isStampable(), so a stamp that would be dropped at runtime is
+     * refused at build time instead of silently printing CURRENT.
+     */
+    public static function normalizeStamp(string $stamped): ?string
+    {
         if (str_starts_with($stamped, self::TAG_PREFIX)) {
             $stamped = substr($stamped, strlen(self::TAG_PREFIX));
         }
@@ -86,5 +100,11 @@ final class Version
         }
 
         return preg_match(self::DEV, $stamped) === 1 ? $stamped : null;
+    }
+
+    /** Whether a producer may stamp this string at all (the consumer decides). */
+    public static function isStampable(string $stamped): bool
+    {
+        return self::normalizeStamp($stamped) !== null;
     }
 }

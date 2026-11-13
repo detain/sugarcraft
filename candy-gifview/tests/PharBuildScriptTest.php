@@ -130,5 +130,41 @@ final class PharBuildScriptTest extends TestCase
         self::assertStringContainsString('Support\\Version::resolve', $cli);
         self::assertStringContainsString("token === '--version'", $cli);
         self::assertStringContainsString("'candy-gifview ' . self::runningVersion()", $cli);
+        // Producer gate (gifview-05): every stamp — explicit or derived —
+        // is validated through the reader's own isStampable().
+        self::assertStringContainsString('Version::isStampable', $build);
+        self::assertStringContainsString("require_once \$package . '/src/Support/Version.php'", $build);
+        // ...and the archive seat of runningVersion() must stay spelled IN
+        // THE BODY (the class docblock legitimately quotes the call too).
+        $rvStart = strpos($cli, 'function runningVersion');
+        self::assertNotFalse($rvStart, 'Cli must keep a runningVersion() seat');
+        $rvBody = substr($cli, $rvStart, strpos($cli, "\n    }", $rvStart) ?: $rvStart);
+        self::assertStringContainsString('Phar::running(false)', $rvBody);
+        self::assertStringContainsString('public static function normalizeStamp', $reader);
+        self::assertStringContainsString('public static function isStampable', $reader);
+    }
+
+    public function testTheBuilderRefusesAnUnstampableVersionBeforeAnyBuildWork(): void
+    {
+        $cmd = [
+            'timeout', '15', \PHP_BINARY,
+            realpath(__DIR__ . '/../tools/build-phar.php') ?: __DIR__ . '/../tools/build-phar.php',
+            '--version=release-0.2',
+        ];
+        $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $this->assertIsResource($proc, 'could not start the builder child');
+
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($proc);
+
+        // The grammar gate sits BEFORE the phar.readonly guard: the refusal
+        // must name the version, proving no runtime flag was ever consulted.
+        $this->assertSame(2, $code, "builder said: {$err}");
+        $this->assertStringContainsString('not consumable', $err);
+        $this->assertStringNotContainsString('phar.readonly', $err);
+        $this->assertSame('', $out);
     }
 }
