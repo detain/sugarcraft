@@ -215,6 +215,8 @@ pub fn jump(mut query: Query<&mut Bird>, keyboard_input: Res<ButtonInput<KeyCode
 
 ### 5.1 Bird Rotation (High Priority)
 
+**Status:** ✅ shipped — as velocity-following glyph pitch, not float rotation (`Renderer::pitchGlyph()`, flappy-32: `^` climbing / `v` falling / `>` level; a terminal cell has no rotation axis, the pitch bucket is the honest equivalent).
+
 **Reference:** rust-adventure/floppy-corgi + Rustfinity
 
 Add visual rotation based on velocity to communicate bird pitch.
@@ -238,6 +240,8 @@ public function rotation(): float
 
 ### 5.2 Variable Pipe Gap Height (Medium Priority)
 
+**Status:** ✅ shipped — `PipeGenerator::gapHeightForScore()` (6 cells, −1 every 5 points, floors at 3) with the README Difficulty-scaling table and `PipeGeneratorTest` band pins. (The sketch's `score > 10` onset and `max(4, …)` floor were beaten by the shipped curve.)
+
 **Reference:** flapioca uses dynamic obstacle generation
 
 Currently fixed gap of 6 cells. Vary difficulty based on score.
@@ -256,6 +260,8 @@ if ($this->score > 10) {
 
 ### 5.3 Progressive Difficulty (Medium Priority)
 
+**Status:** ⏭ partial — the gap-shrink lever shipped (see §5.2); the score-scaled speed and spacing multipliers below are FROZEN by the compiled-in tuning ruling (README "Scoring": one coherent game, no knobs — the 30 cells/s cadence is the game's identity; a speed multiplier would also break the per-cell collision and scoring law `x === BIRD_COL - 1`).
+
 **Reference:** flapioca spawn logic
 
 Modify pipe spawn rate and speed based on score.
@@ -270,6 +276,8 @@ $pipeSpacing = max(12, self::PIPE_EVERY - intdiv($this->score, 5));
 **Impact:** Medium
 
 ### 5.4 Screen Shake on Collision (Low Priority)
+
+**Status:** ⏳ open — not implemented; the crash card (💥 tint + cause noun, flappy-78) is the current collision feedback.
 
 **Reference:** Game feel common pattern
 
@@ -286,6 +294,8 @@ Add brief screen shake when bird crashes.
 
 ### 5.5 Sound Effects via candy-scriptui (Low Priority)
 
+**Status:** ⏳ open — no audio surface; owner scope call before any wiring.
+
 **Reference:** Rustfinity plays wing.ogg on flap
 
 Use sugar-widgets or candy-scriptui audio integration for:
@@ -297,6 +307,8 @@ Use sugar-widgets or candy-scriptui audio integration for:
 **Impact:** Medium (immersion)
 
 ### 5.6 Smooth Pipe Scrolling (Medium Priority)
+
+**Status:** ❄ frozen — same ruling as §5.3: the world advances exactly one integer column per tick (per-cell collision and scoring are defined on that lattice; sub-cell positions float the `x === BIRD_COL - 1` strike point away). 30 ticks/s already renders the discrete march as smooth scroll.
 
 **Reference:** Continuous movement vs discrete ticks
 
@@ -323,6 +335,8 @@ foreach ($pipes as $p) {
 
 ### 5.7 Test Coverage for Collision Edge Cases (High Priority)
 
+**Status:** ✅ shipped — the lib-reviews-1103 wave pinned the named cases: gap-boundary rows per even/odd band (`PipeTest` collides series, corrected by flappy-22), floor/ceiling/pipe crash-cause matrix (`GameTest`, flappy-78), spawn-band endpoints (`PipeGeneratorTest`, flappy-52), plus 8 posture/golden files beyond the original four.
+
 **Reference:** Current tests are basic
 
 **Missing tests:**
@@ -336,6 +350,8 @@ foreach ($pipes as $p) {
 **Impact:** High (reliability)
 
 ### 5.8 Velocity-Based Terminal Velocity (Low Priority)
+
+**Status:** ✅ shipped — `Bird.php:58-62` clamps downward velocity to sugar-core `Projectile::TERMINAL_GRAVITY` (53 cells/sec) on every tick; the proposed 100.0 lib-local constant was not needed.
 
 **Reference:** SugarSpring Projectile::TERMINAL_GRAVITY
 
@@ -355,42 +371,44 @@ public const TERMINAL_VELOCITY = 100.0;
 
 ## 6. Prioritized Recommendations
 
-### Tier 1: Quick Wins
+Stamped 2026-11-13 (flappy-37) against the shipped tree — do not re-implement rows 1-3, 5 or 8; they exist.
+
+### Done (shipped)
+
+| # | Improvement | Where |
+|---|-------------|-------|
+| 1 | **Bird pitch** | `Renderer::pitchGlyph()` (flappy-32) |
+| 2 | **Collision edge case tests** | `PipeTest` / `GameTest` / `PipeGeneratorTest` (lib-reviews wave) |
+| 3 | **Variable gap height** | `PipeGenerator::gapHeightForScore()` + README table |
+| 8 | **Terminal velocity** | `Bird.php:58-62` clamp at `Projectile::TERMINAL_GRAVITY` |
+
+### Ruled out (compiled-in tuning law — README "Scoring")
+
+| # | Improvement | Why frozen |
+|---|-------------|------------|
+| 4 | **Progressive speed/spacing** | cadence is the game's identity; breaks the per-cell scoring lattice (§5.3) |
+| 5 | **Smooth (sub-cell) scrolling** | collision/scoring is defined on the integer-column lattice (§5.6) |
+
+### Still open (nice to have)
 
 | # | Improvement | Effort | Impact | Description |
 |---|-------------|--------|--------|-------------|
-| 1 | **Bird rotation** | 2-3h | High | Velocity-based tilt for game feel |
-| 2 | **Collision edge case tests** | 3-4h | High | Reliability for edge cases |
-| 3 | **Variable gap height** | 1-2h | Medium | Difficulty scaling |
-
-### Tier 2: Medium Effort
-
-| # | Improvement | Effort | Impact | Description |
-|---|-------------|--------|--------|-------------|
-| 4 | **Progressive difficulty** | 2h | Medium | Speed/spacing increases with score |
-| 5 | **Smooth pipe scrolling** | 4-5h | Medium | Sub-cell pipe movement |
-
-### Tier 3: Nice to Have
-
-| # | Improvement | Effort | Impact | Description |
-|---|-------------|--------|--------|-------------|
-| 6 | **Screen shake** | 3-4h | Med-Low | Juice on collision |
-| 7 | **Sound effects** | 4-6h | Medium | Audio feedback via candy-scriptui |
-| 8 | **Terminal velocity** | 2h | Low | Physics realism |
+| 6 | **Screen shake** | 3-4h | Med-Low | Juice on collision (§5.4) |
+| 7 | **Sound effects** | 4-6h | Medium | Audio feedback via candy-scriptui (§5.5) — owner scope call |
 
 ---
 
 ## 7. Key Insights
 
-1. **Physics approach difference:** candy-flappy uses continuous physics (SugarSpring Projectile) vs Rust discrete timestep. The 30fps tick rate with 70.0 gravity gives ~2.3 cells/tick² acceleration.
+1. **Physics approach difference:** candy-flappy uses continuous physics (SugarSpring Projectile) vs Rust discrete timestep. At 30 ticks/s the 18.0 cells/s² gravity adds 0.6 cells/s of fall velocity per tick.
 
-2. **No rotation in current impl:** Both Go upstream and PHP candy-flappy lack bird rotation. Bevy implementations all add velocity-based rotation for game feel.
+2. **Bird pitch shipped:** the "no rotation" gap closed as glyph pitch (flappy-32, `Renderer::pitchGlyph()`): a terminal cell rotates nothing, it swaps the `^ / > / v` bucket.
 
 3. **Collision is simple cell-based:** Works for ASCII but limits visual polish. Rust implementations use AABB/Circle for pixel-perfect detection.
 
 4. **High score persistence is unique to candy-flappy:** Neither flapioca nor Rust implementations persist scores.
 
-5. **Test coverage is decent:** 4 test files covering Bird, Game, Pipe, Renderer. Missing edge cases around collision timing.
+5. **Test coverage is deep:** the lib-reviews-1103 wave grew the suite to 190+ tests across twelve files including golden byte pins, posture sweeps and child-process preflight legs.
 
 ---
 
