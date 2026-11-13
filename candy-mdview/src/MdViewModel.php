@@ -113,7 +113,7 @@ final class MdViewModel implements Model
      */
     public function withDocument(string $name): self
     {
-        $vp = $this->viewport->withSize($this->viewport->width, max(1, $this->viewport->height - 1));
+        $vp = $this->viewport->withSize($this->viewport->width, max(0, $this->viewport->height - 1));
         return $this->copy(['viewport' => $vp, 'documentName' => $name]);
     }
 
@@ -172,7 +172,12 @@ final class MdViewModel implements Model
         if ($msg instanceof WindowSizeMsg) {
             // The shared Viewport discards non-key messages, so geometry
             // repair must happen here, before the passthrough.
-            $height = max(1, $msg->rows - $this->chromeRows());
+            // 1-row terminal (finding 038): the header reserves its row from
+            // the REAL height, so at rows=1 the body gets zero rows — never
+            // the old max(1, …) overshoot that painted 2 frame lines into a
+            // 1-row alt screen and tore every later row (same corruption
+            // class as the width leg).
+            $height = max(0, $msg->rows - $this->chromeRows());
             if ($msg->cols === $this->viewport->width && $height === $this->viewport->height) {
                 return [$this, null];
             }
@@ -347,6 +352,13 @@ final class MdViewModel implements Model
         }
         if ($this->documentName === null) {
             return $body;
+        }
+        if ($this->viewport->height <= 0) {
+            // Zero body rows (a 1-row terminal, finding 038): the header
+            // ALONE is the frame — appending "\n" to it would paint a
+            // second line the terminal cannot hold. An empty document at
+            // a real height still gets its blank body row above.
+            return $this->statusLine();
         }
         return $this->statusLine() . "\n" . $body;
     }

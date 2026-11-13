@@ -290,6 +290,37 @@ final class MdViewModelReloadTest extends TestCase
         self::assertSame(7, $grown->viewport->height, 'the reserved header row survives resizes');
     }
 
+    public function testOneRowTerminalPaintsTheHeaderAlone(): void
+    {
+        // Finding 038: rows=1 plus a document name used to emit TWO frame
+        // lines into a 1-row alt screen — the overflow row wrapped and tore
+        // every later repaint (height leg of the same corruption class as
+        // finding 001; reachable via `resize -s 1 80` in a tmux pane).
+        $m = MdViewModel::fromContent(str_repeat("x\n", 30), 40, 1)->withDocument('tiny.md');
+
+        $lines = \explode("\n", $m->view());
+
+        self::assertCount(1, $lines, 'the frame must never exceed the terminal height');
+        self::assertStringContainsString('tiny.md', $lines[0]);
+        self::assertSame(0, $m->viewport->height, 'the header reserves the only row');
+    }
+
+    public function testResizingToOneRowShedsTheBodyRowAndBackGrowsIt(): void
+    {
+        $m = MdViewModel::fromContent(str_repeat("x\n", 30), 40, 10)->withDocument('doc.md');
+
+        [$one, ] = $m->update(new WindowSizeMsg(40, 1));
+        self::assertCount(1, \explode("\n", $one->view()), 'rows=1 paints the header only');
+
+        [$two, ] = $m->update(new WindowSizeMsg(40, 2));
+        self::assertCount(2, \explode("\n", $two->view()), 'rows=2 = header plus one body line');
+
+        // Chrome-free documents keep their single body row at rows=1.
+        $plain = MdViewModel::fromContent('body', 40, 10);
+        [$plainOne, ] = $plain->update(new WindowSizeMsg(40, 1));
+        self::assertSame(['body'], \explode("\n", $plainOne->view()));
+    }
+
     public function testReloadMarkerAppearsInHeaderAfterReloads(): void
     {
         $path = $this->createSourceFile('v1');
