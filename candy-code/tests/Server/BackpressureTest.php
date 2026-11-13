@@ -59,13 +59,30 @@ final class BackpressureTest extends TestCase
         $client = WireClient::open(new ProtocolPendingHandler());
         $outbox = Outbox::for($client->connection, Loop::get(), static fn (int $d): string => '{"overflow":' . $d . '}', 10, 100, 60.0);
         $client->toClient->pause();
-        $outbox->push('{"n":0}');
-        self::assertTrue($client->connection->isCongested());
+        $first = '{"n":0}';
+        $outbox->push($first);
+        self::assertTrue($client->connection->isCongested(), 'fixture: the paused socket is congested');
         $outbox->pushEphemeral(self::delta('e', 0));
-        $outbox->push(\str_repeat('x', 150));
+        $heldBefore = $outbox->count();
 
+        $big = '{"n":1,"pad":"' . \str_repeat('x', 140) . '"}';
+        $outbox->push($big);
+
+        // The shed's whole outcome, not just "overflowing": the first message
+        // went straight to the socket (it only turned congested afterwards), the
+        // one queued ephemeral is gone and counted, the big durable is kept and
+        // the single notice sits behind it with exactly its bytes accounted.
+        $notice = '{"overflow":1}';
         self::assertTrue($outbox->isOverflowing());
+        self::assertSame(1, $outbox->dropped());
+        self::assertSame(1, $heldBefore, 'fixture: only the ephemeral was queued before the shed');
+        self::assertSame(2, $outbox->count(), 'the kept durable, then the notice');
+        self::assertSame(\strlen($big) + \strlen($notice), $outbox->bufferedBytes());
+
         $client->toClient->resume();
+        $received = $client->received();
+        self::assertSame([0, 1], \array_column($received, 'n'), 'durables arrive in order');
+        self::assertSame([1], \array_column($received, 'overflow'), 'one notice, after them');
         $outbox->discard();
     }
 
