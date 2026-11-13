@@ -253,12 +253,6 @@ final class ImageSource
     /**
      * Load from raw bytes in memory.
      *
-     * @throws \InvalidArgumentException  if the bytes are not a supported image
-     * @throws \RuntimeException          if ext-gd is not available
-     */
-    /**
-     * Load from raw bytes in memory.
-     *
      * Detects the image format from magic bytes and takes the dimensions
      * from the parsed header — no full GD decode at intake (SI-32; the law
      * and the measured evidence are in fromFile()). Also avoids the
@@ -1039,17 +1033,6 @@ final class ImageSource
     }
 
     /**
-     * Count a GIF's image-descriptor blocks — the honest container frame count.
-     * Equivalent to `count(self::gifHonestDescriptorOffsets())`.
-     *
-     * @throws \InvalidArgumentException on a structurally corrupt container
-     */
-    private static function countGifFrames(string $bytes): int
-    {
-        return count(self::gifHonestDescriptorOffsets($bytes));
-    }
-
-    /**
      * The byte offsets of every image-descriptor block in a GIF, found by walking the
      * container structure (extension/data sub-blocks) WITHOUT decoding LZW. This is the
      * spec-correct walk: it skips the local colour table AND the mandatory LZW
@@ -1137,17 +1120,6 @@ final class ImageSource
         }
 
         return $i;
-    }
-
-    /**
-     * How many image-descriptor frames sugar-animation's header walk records for this GIF —
-     * `count(self::gifFlipWalkDescriptorOffsets())`. Retained as a thin int wrapper for
-     * tests that assert the predictor/flip frame-count relationship directly; the
-     * production loader reconciles the offset LIST, not this count.
-     */
-    private static function countGifFramesAsFlipWalks(string $bytes): int
-    {
-        return count(self::gifFlipWalkDescriptorOffsets($bytes));
     }
 
     /**
@@ -2298,10 +2270,15 @@ final class ImageSource
 
     /**
      * Aspect ratio as a float (width / height).
+     *
+     * Every ImageSource is constructed through the positive-dimension door, so
+     * the denominator is never zero and the quotient is always finite — the
+     * old `$height === 0 ? 1.0` arm was unreachable and is gone (its guard
+     * `:127`/`:606` predate it and still make it so).
      */
     public function aspectRatio(): float
     {
-        return $this->height === 0 ? 1.0 : $this->width / $this->height;
+        return $this->width / $this->height;
     }
 
     /**

@@ -47,19 +47,10 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
     }
 
     /**
-     * @return \Closure(string):int
-     */
-    private function gifCountProbe(string $method): \Closure
-    {
-        $rm = new \ReflectionMethod(ImageSource::class, $method);
-        $rm->setAccessible(true);
-
-        return static fn(string $bytes): int => $rm->invoke(null, $bytes);
-    }
-
-    /**
-     * Like {@see self::gifCountProbe()} but for the descriptor-offset-list walkers
-     * (which return `list<int>`, not an int).
+     * Reflect one of the private static GIF descriptor-offset-list walkers into
+     * the test (they return `list<int>` of byte offsets; frame counts are
+     * derived by `count()` at the call site — the thin int wrappers that used
+     * to hide that were test-only and are gone, SI-36).
      */
     private function gifOffsetsProbe(string $method): \Closure
     {
@@ -78,9 +69,14 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
      */
     public function testFlipWalkPredictorEqualsFlipActualReturnOnCleanGifs(): void
     {
-        $predicted = $this->gifCountProbe('countGifFramesAsFlipWalks');
-        $declared  = $this->gifCountProbe('countGifFrames');
-        $colors    = [[0, 0, 0], [255, 0, 0], [0, 255, 0]];
+        // Derive counts from the SAME offset lists production reconciles at
+        // :969-970 — the thin int wrappers are gone (SI-36). `count()` of each
+        // walker's list is exactly what they returned.
+        $flipOffsets   = $this->gifOffsetsProbe('gifFlipWalkDescriptorOffsets');
+        $honestOffsets = $this->gifOffsetsProbe('gifHonestDescriptorOffsets');
+        $predicted     = static fn(string $bytes): int => count($flipOffsets($bytes));
+        $declared      = static fn(string $bytes): int => count($honestOffsets($bytes));
+        $colors        = [[0, 0, 0], [255, 0, 0], [0, 255, 0]];
 
         foreach ([2, 4] as $n) {
             $frames = [];
