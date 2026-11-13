@@ -1094,6 +1094,10 @@ lists, the MCP clients started once per launch). So a second root runs in a
   session from its store. A host that nobody follows and that runs no turn is
   stopped after 15 minutes idle, which bounds a long-running PHP process's
   memory.
+- **A host that wedges** (alive, never answering) cannot park a call forever:
+  every forwarded call has a 300-second deadline, after which the client gets
+  the retryable `busy` error (`kind: "host_timeout"`) and the call stops
+  counting as in flight, so the idle recycle can reap the host.
 
 The host is spawned the way `/bg` spawns a session daemon: an argv (`php -r`
 with the entry point, nothing secret on it), in its own process group, with the

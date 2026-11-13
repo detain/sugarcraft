@@ -90,6 +90,13 @@ final class Gateway implements MessageHandler
     /** How often idle hosts are looked for. */
     public const RECYCLE_CHECK_SECONDS = 60.0;
 
+    /**
+     * A forwarded call must settle within this long (start of the host
+     * included); past it the client gets a retryable `busy` and the root stops
+     * counting the call in flight, so a wedged host cannot pin it unreapable.
+     */
+    public const FORWARD_DEADLINE_SECONDS = 300.0;
+
     /** Most session-to-root routing rows kept; idle least-recently-used rows go first. */
     public const MAX_SESSION_ROOTS = 4096;
 
@@ -106,6 +113,8 @@ final class Gateway implements MessageHandler
     private array $sessionRoots = [];
 
     private int $maxSessionRoots = self::MAX_SESSION_ROOTS;
+
+    private float $forwardDeadline = self::FORWARD_DEADLINE_SECONDS;
 
     /** @var array<string, array<string, Connection>> sessionId => connection id => subscriber */
     private array $subscribers = [];
@@ -435,12 +444,48 @@ final class Gateway implements MessageHandler
         }
 
         $this->inFlight[$root] = ($this->inFlight[$root] ?? 0) + 1;
+        // Exactly one of the answer, a failure or the deadline settles the call.
+        $settled = false;
+        $timer = null;
+        $settle = function () use (&$settled, &$timer, $root): bool {
+            if ($settled) {
+                return false;
+            }
+            $settled = true;
+            if ($timer !== null) {
+                $this->loop->cancelTimer($timer);
+            }
+            $this->inFlight[$root] = \max(0, ($this->inFlight[$root] ?? 1) - 1);
+
+            return true;
+        };
+        $fail = function (\Throwable $e) use ($connection, $id, $root): void {
+            if ($connection->isOpen()) {
+                $this->send($connection, JsonRpc::error($id, $e instanceof RpcError ? $e : RpcError::of(
+                    ErrorCode::Internal,
+                    \sprintf('the workspace host for %s failed: %s', $root, \substr($e->getMessage(), 0, 300)),
+                    'workspace_failed',
+                )));
+            }
+        };
+        $timer = $this->loop->addTimer($this->forwardDeadline, function () use ($settle, $fail, $root, $method): void {
+            if ($settle()) {
+                $fail(RpcError::of(
+                    ErrorCode::Busy,
+                    \sprintf('the workspace host for %s did not answer %s in time; retry', $root, \substr($method, 0, 64)),
+                    'host_timeout',
+                ));
+            }
+        });
         $this->hostFor($root)->then(
-            function (WorkspaceHostClient $host) use ($connection, $id, $root, $method, $params, $sessionId): PromiseInterface {
+            function (WorkspaceHostClient $host) use ($connection, $id, $root, $method, $params, $sessionId, &$settled): PromiseInterface {
                 $host->touch();
 
-                return $host->rpc()->callPreserving($method, $params)->then(
-                    function (mixed $result) use ($connection, $id, $root, $method, $params, $sessionId): void {
+                return $host->rpc()->callPreserving($method, $params, $this->forwardDeadline, $this->loop)->then(
+                    function (mixed $result) use ($connection, $id, $root, $method, $params, $sessionId, &$settled): void {
+                        if ($settled) {
+                            return; // the deadline already answered the client
+                        }
                         $this->learn($root, $method, $result);
                         if ($method === 'session.subscribe' && $sessionId !== null) {
                             $this->subscribers[$sessionId][$connection->id()] = $connection;
@@ -463,16 +508,12 @@ final class Gateway implements MessageHandler
                     },
                 );
             },
-        )->then(null, function (\Throwable $e) use ($connection, $id, $root): void {
-            if ($connection->isOpen()) {
-                $this->send($connection, JsonRpc::error($id, $e instanceof RpcError ? $e : RpcError::of(
-                    ErrorCode::Internal,
-                    \sprintf('the workspace host for %s failed: %s', $root, \substr($e->getMessage(), 0, 300)),
-                    'workspace_failed',
-                )));
+        )->then(null, function (\Throwable $e) use ($settle, $fail): void {
+            if ($settle()) {
+                $fail($e);
             }
-        })->finally(function () use ($root): void {
-            $this->inFlight[$root] = \max(0, ($this->inFlight[$root] ?? 1) - 1);
+        })->finally(static function () use ($settle): void {
+            $settle();
         });
     }
 

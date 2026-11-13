@@ -351,7 +351,7 @@ final class RemoteSessionHost
      *
      * @return PromiseInterface<mixed>
      */
-    public function callPreserving(string $method, array|\stdClass $params): PromiseInterface
+    public function callPreserving(string $method, array|\stdClass $params, ?float $deadline = null, ?\React\EventLoop\LoopInterface $loop = null): PromiseInterface
     {
         if (!$this->open) {
             return reject(new \RuntimeException($this->closeReason ?? 'not connected to a server'));
@@ -367,6 +367,22 @@ final class RemoteSessionHost
             'method' => $method,
             'params' => $params === [] ? new \stdClass() : $params,
         ]));
+
+        if ($deadline !== null) {
+            // A host that never answers must not park this Deferred (and its
+            // pending row) forever; a late answer finds no row and is dropped.
+            $loop ??= Loop::get();
+            $timer = $loop->addTimer($deadline, function () use ($id, $deferred, $method): void {
+                if (isset($this->pending[$id])) {
+                    unset($this->pending[$id], $this->preserving[$id]);
+                    $deferred->reject(new \RuntimeException(\sprintf('no answer to %s in time', \substr($method, 0, 64))));
+                }
+            });
+            $promise = $deferred->promise();
+            $promise->then(static fn () => $loop->cancelTimer($timer), static fn () => $loop->cancelTimer($timer));
+
+            return $promise;
+        }
 
         return $deferred->promise();
     }
