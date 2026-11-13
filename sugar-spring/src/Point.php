@@ -43,6 +43,24 @@ final class Point implements \JsonSerializable
     }
 
     /**
+     * The motion primitive: the {@see Vector} from this point to `$to`
+     * (`$to − $this` — the displacement a spring or projectile must traverse
+     * to get HERE there). Feeds Vector-returning callers (normalize for a
+     * direction, length for a budget) without hand-writing the subtraction.
+     * Coordinates near 1e308 overflow the difference to INF, which the Vector
+     * door refuses outright — distance() answers INF for that pair instead
+     * (it never builds a Vector); the asymmetry is by construction, not drift.
+     */
+    public function delta(self $to): Vector
+    {
+        return new Vector(
+            $to->x - $this->x,
+            $to->y - $this->y,
+            $to->z - $this->z,
+        );
+    }
+
+    /**
      * Euclidean distance to another point. Returns INF when the squared
      * deltas sum past PHP_FLOAT_MAX (extreme coordinates ~1e154 and up).
      */

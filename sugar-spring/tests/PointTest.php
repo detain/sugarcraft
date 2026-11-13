@@ -98,6 +98,44 @@ final class PointTest extends TestCase
         $this->assertEqualsWithDelta($a->distance($b), $b->distance($a), self::EPS);
     }
 
+    public function testDeltaIsTheToMinusFromComponentwiseDifference(): void
+    {
+        $a = new Point(1.0, 2.0, 3.0);
+        $b = new Point(4.0, 6.0, -1.0);
+
+        $delta = $a->delta($b);
+
+        $this->assertInstanceOf(Vector::class, $delta);
+        $this->assertSame(3.0, $delta->x);   // 4 - 1
+        $this->assertSame(4.0, $delta->y);   // 6 - 2
+        $this->assertSame(-4.0, $delta->z);  // -1 - 3
+    }
+
+    public function testAddOwnDeltaLandsExactlyOnTheTargetPoint(): void
+    {
+        $a = new Point(-7.5, 2.25, 0.0);
+        $b = new Point(11.0, -3.75, 6.5);
+
+        $landed = $a->add($a->delta($b));
+
+        $this->assertSame($b->x, $landed->x);
+        $this->assertSame($b->y, $landed->y);
+        $this->assertSame($b->z, $landed->z);
+    }
+
+    public function testDeltaLengthEqualsDistance(): void
+    {
+        $a = new Point(0.0, 0.0, 0.0);
+        $b = new Point(3.0, 4.0, 12.0); // length 13
+
+        $this->assertEqualsWithDelta($a->distance($b), $a->delta($b)->length(), self::EPS);
+        // The motion primitive composes in both directions: b->a is the exact
+        // negation of a->b, and the round trip returns the origin.
+        $back = $b->delta($a);
+        $this->assertSame(-3.0, $back->x);
+        $this->assertEqualsWithDelta(0.0, $a->add($a->delta($b))->add($b->delta($a))->distance($a), self::EPS);
+    }
+
     public function testToString(): void
     {
         $p = new Point(1.5, 2.5, 3.5);

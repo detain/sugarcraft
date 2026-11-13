@@ -644,7 +644,8 @@ back-flavoured control points — same honesty rule as `Easing`.
   `sub` / `scale` / `length` / `lengthSquared` / `dot` / `cross` / `lerp` /
   `normalize` / `jsonSerialize` / `__toString` / `Vector::zero()`.
 - **`Point`** — immutable 3D point (finite components enforced) with
-  `add(Vector)` / `distance` / `__toString` / `jsonSerialize` /
+  `add(Vector)` / `delta(Point)` (the `$to − $from` motion primitive, returns a
+  `Vector`) / `distance` / `__toString` / `jsonSerialize` /
   `Point::zero()`.
 - **`Easing`** — enum implementing `EasingFunction` (the extension seam) with
   `ease(float $t): float`. Cases: `Linear`, `QuadraticIn/Out/InOut`,
