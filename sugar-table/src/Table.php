@@ -60,7 +60,7 @@ final class Table
     private string $baseStyle = '';
 
     /** Missing data placeholder. */
-    private string $missingIndicator = '-';
+    private string|StyledCell $missingIndicator = '-';
 
     /** Border style. */
     private string $borderStyle = '';
@@ -420,7 +420,17 @@ final class Table
         return $clone;
     }
 
-    public function withMissingIndicator(string $s): self
+    /**
+     * Set the placeholder that paints any cell whose value is missing
+     * (raw null or StyledCell(null) — one no-value law, audit ST-50).
+     *
+     * ST-72 (finding 089, upstream WithMissingDataIndicatorStyled parity):
+     * a StyledCell indicator paints its SGR style in ordinary cells — the
+     * cell chain reads the substituted value's style like any other cell.
+     * The expanded-detail join is plain text by construction, so a styled
+     * indicator contributes only its text there.
+     */
+    public function withMissingIndicator(string|StyledCell $s): self
     {
         $clone = clone $this;
         $clone->missingIndicator = $s;

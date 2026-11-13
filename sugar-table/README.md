@@ -420,8 +420,16 @@ placeholder instead of blank space (an empty string is a value and does NOT
 trigger it):
 
 ```php
-$t = $t->withMissingIndicator('(empty)');   // default is a lone '-'
+$t = $t->withMissingIndicator('(empty)');                    // default is a lone '-'
+$t = $t->withMissingIndicator(StyledCell::new('?', '1;31')); // bold red placeholder
 ```
+
+A cell counts as missing under the one no-value law (ST-50): a raw `null` or
+a `StyledCell` wrapping `null` — never an empty string, which is a value.
+The indicator accepts a plain string or a `StyledCell`; a styled indicator
+paints its SGR style in ordinary cells like any other cell value, while the
+expanded-detail join is plain text by construction, so there it contributes
+only its text.
 
 The default `-` is a single hyphen — it reads ambiguously beside real hyphens
 inside data (host names, minus signs), so pick a placeholder that cannot collide

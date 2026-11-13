@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Table\Column;
 use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;
+use SugarCraft\Table\StyledCell;
 use SugarCraft\Table\Table;
 
 /**
@@ -100,6 +101,42 @@ final class TableEmptyStateTest extends TestCase
         $view = self::plain(self::wideTable()->withRows([])->View());
         self::assertStringContainsString('No data', $view);
         self::assertStringNotContainsString('match', $view);
+    }
+
+    public function testStyledMissingIndicatorPaintsItsStyle(): void
+    {
+        // ST-72 (finding 089, upstream styled-indicator parity): the
+        // placeholder rides the cell style chain in ordinary cells...
+        $view = Table::fromColumns([Column::new('v', 'Value', 8)])
+            ->withRows([Row::new(RowData::from([]))])
+            ->withMissingIndicator(StyledCell::new('?', '1;31'))
+            ->View();
+
+        $this->assertStringContainsString('?', self::plain($view));
+        // '31' canonicalises to truecolour red, and bold composes with it.
+        $this->assertStringContainsString('38;2;205;0;0', $view);
+        $this->assertMatchesRegularExpression('/1;38;2;205;0;0|38;2;205;0;0;1/', $view);
+    }
+
+    public function testStyledIndicatorIsPlainTextInDetailRows(): void
+    {
+        // The expanded-detail join unwraps styles by construction, so the
+        // styled indicator contributes its text exactly like the string form.
+        $styled = Table::fromColumns([Column::new('v', 'V', 8)])
+            ->withRows([Row::new(RowData::from([]))])
+            ->withMissingIndicator(StyledCell::new('(x)', '31'))
+            ->withExpandedRows([0])
+            ->View();
+        $plain = Table::fromColumns([Column::new('v', 'V', 8)])
+            ->withRows([Row::new(RowData::from([]))])
+            ->withMissingIndicator('(x)')
+            ->withExpandedRows([0])
+            ->View();
+
+        $this->assertStringContainsString('(x)', self::plain($styled));
+        $this->assertStringNotContainsString('38;2;205;0;0', $styled);
+        // Identical where the detail row lives: text-only both forms.
+        $this->assertStringContainsString(self::plain($styled), self::plain($plain));
     }
 
     public function testHidingEveryColumnRendersNothingInsteadOfCrashing(): void
