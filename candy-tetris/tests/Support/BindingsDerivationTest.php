@@ -94,15 +94,16 @@ final class BindingsDerivationTest extends TestCase
 
     public function testEveryLocaleCarriesTheVerbColumnsTheDerivationZipsAgainst(): void
     {
-        // help_card is a nine-verb column shared by BOTH derived surfaces
+        // help_card is a ten-verb column shared by BOTH derived surfaces
         // since candy-tetris-015 (the versus strip used to zip its own
-        // five-verb roster, which drifted). A row-count mismatch would
-        // blank a label's verb — verbColumn() throws instead, so the
-        // column shape is pinned directly, in every locale.
+        // five-verb roster, which drifted; candy-tetris-016's flip row is
+        // the tenth). A row-count mismatch would blank a label's verb —
+        // verbColumn() throws instead, so the column shape is pinned
+        // directly, in every locale.
         foreach (self::LOCALES as $locale) {
             T::setLocale($locale);
 
-            self::assertCount(9, explode("\n", Lang::t('help_card')), $locale . ' help_card verbs');
+            self::assertCount(10, explode("\n", Lang::t('help_card')), $locale . ' help_card verbs');
         }
     }
 
@@ -129,15 +130,18 @@ final class BindingsDerivationTest extends TestCase
     {
         // candy-tetris-077: the old `?? ''` legs rendered a silent blank
         // verb column. The roster is now a hard contract — a catalogue
-        // that lost a line throws, naming both counts.
-        $short = implode("\n", array_slice(explode("\n", Lang::t('help_card')), 0, 8));
+        // that lost a line throws, naming both counts. Derived from the
+        // row table so candy-tetris-016-style growth cannot stale-pin it.
+        $missing = 2;
+        $kept = count(Bindings::GAMEPLAY_ROWS) - $missing;
+        $short = implode("\n", array_slice(explode("\n", Lang::t('help_card')), 0, $kept));
 
         try {
             Bindings::verbColumnFrom($short);
             self::fail('a truncated verb column must throw, not blank the card');
         } catch (\LogicException $problem) {
             self::assertMatchesRegularExpression(
-                '/help_card carries 8 verb lines but the row table has 9 rows/',
+                sprintf('/help_card carries %d verb lines but the row table has %d rows/', $kept, $kept + $missing),
                 $problem->getMessage(),
             );
         }
@@ -176,7 +180,8 @@ final class BindingsDerivationTest extends TestCase
         // player's table, so the versus frame remaps with the same file.
         $frame = VsRenderer::render(VsGame::start(bindings: $this->remappedTable()));
 
-        self::assertStringContainsString('h hard drop  c hold', $frame, 'the strip moves with the remap');
+        self::assertStringContainsString('h hard drop', $frame, 'the strip moves with the remap');
+        self::assertStringContainsString('a rotate 180  ↓ soft drop  h hard drop', $frame, 'the re-chunked flip row leads its chunk');
         self::assertStringNotContainsString('spc hard', $frame, 'the strip must not keep advertising the old key');
     }
 

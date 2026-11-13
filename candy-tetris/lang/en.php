@@ -26,7 +26,7 @@ declare(strict_types=1);
 return [
     // Single-player renderer
     'score_card'   => "score:  {score}\nlines:  {lines}\nlevel:  {level}",
-    'help_card'    => "move\nrotate cw\nrotate ccw\nsoft drop\nhard drop\nhold\npause\nrestart (over)\nquit",
+    'help_card'    => "move\nrotate cw\nrotate ccw\nrotate 180\nsoft drop\nhard drop\nhold\npause\nrestart (over)\nquit",
     'next_label'   => 'next:',
     'hold_label'   => 'hold:',
     'paused'       => '[ paused — press {keys} to resume ]',

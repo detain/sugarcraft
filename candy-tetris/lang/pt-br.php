@@ -20,6 +20,7 @@ nível:  {level}',
     'help_card'  => 'mover
 girar horário
 girar anti-horário
+girar 180
 queda suave
 queda rápida
 guardar

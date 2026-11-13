@@ -20,6 +20,7 @@ livello: {level}',
     'help_card'  => 'muovi
 rotazione oraria
 rotazione antior.
+ruota 180
 discesa lenta
 discesa rapida
 riserva

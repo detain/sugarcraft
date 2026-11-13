@@ -763,6 +763,10 @@ final class Game implements Model
                 => $this->tryRotate(1),
             Support\Bindings::actuates($this->keys(), $msg, 'rotate-ccw')
                 => $this->tryRotate(-1),
+            // candy-tetris-016: the flip rides the same kick path — delta
+            // 2 walks the 0↔2 transitions the SRS table already carries.
+            Support\Bindings::actuates($this->keys(), $msg, 'rotate-180')
+                => $this->tryRotate(2),
             Support\Bindings::actuates($this->keys(), $msg, 'hard-drop')
                 => $this->hardDrop(),
             // candy-tetris-006: the meta press sits BEHIND the gameplay

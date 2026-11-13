@@ -20,6 +20,7 @@ seviye: {level}',
     'help_card'  => 'hareket
 saat yönünde
 ters yönde
+180 döndür
 yumuşak iniş
 sert iniş
 bekleme

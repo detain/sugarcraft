@@ -36,12 +36,13 @@ final class VsRenderer
     /**
      * Natural VS frame (both panels complete) — provisional, validated
      * by the viewport tests; see {@see self::MIN_*} for the floor law.
-     * candy-tetris-015 grew the match strip to the full teaching table
-     * (three key rows + the garbage rule), so 23 board rows + a 9-row
-     * card = 32 — the same height law the solo frame already names.
+     * candy-tetris-015 grew the match strip to the full teaching table,
+     * and candy-tetris-016's flip row made it four key rows + the garbage
+     * rule — 23 board rows + a 10-row card = 33 (the same height law the
+     * solo frame already names).
      */
     public const NATURAL_COLS = 54;
-    public const NATURAL_ROWS = 32;
+    public const NATURAL_ROWS = 33;
 
     /**
      * Hard floor for the split screen: both framed boards with their
@@ -50,7 +51,7 @@ final class VsRenderer
      * frame (C-2).
      */
     public const MIN_COLS = 54;
-    public const MIN_ROWS = 32;
+    public const MIN_ROWS = 33;
 
     public static function render(VsGame $game): string
     {

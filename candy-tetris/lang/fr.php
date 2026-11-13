@@ -20,6 +20,7 @@ niveau : {level}',
     'help_card'  => 'déplacer
 rotation horaire
 rotation anti-hor.
+rotation 180
 chute lente
 chute rapide
 réserve

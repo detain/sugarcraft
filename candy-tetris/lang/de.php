@@ -20,6 +20,7 @@ Level:  {level}',
     'help_card'  => 'bewegen
 im Uhrzeigersinn
 gegen den Uhrz.
+180° drehen
 langsam fallen
 schnell fallen
 Lager

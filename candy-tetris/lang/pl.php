@@ -20,6 +20,7 @@ poziom: {level}',
     'help_card'  => 'ruch
 obrót w prawo
 obrót w lewo
+obrót o 180
 powolny zjazd
 szybki zjazd
 bufor

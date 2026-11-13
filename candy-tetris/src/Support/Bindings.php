@@ -64,6 +64,10 @@ final class Bindings
         'soft-drop'  => ['down'],
         'rotate-cw'  => ['up', 'x'],
         'rotate-ccw' => ['z'],
+        // candy-tetris-016: the guideline's flip key. The SRS tables have
+        // always carried the 0↔2 transitions; this id is the control path
+        // that made reading them possible.
+        'rotate-180' => ['a'],
         'hard-drop'  => ['space'],
         'begin'      => ['space', 'enter'],
         // candy-tetris-006: the meta key of the teaching surface itself —
@@ -137,6 +141,7 @@ final class Bindings
         ['move-left', 'move-right'],
         ['rotate-cw'],
         ['rotate-ccw'],
+        ['rotate-180'],
         ['soft-drop'],
         ['hard-drop'],
         ['hold'],
@@ -145,7 +150,7 @@ final class Bindings
         ['quit'],
     ];
 
-    /** Rows per versus-strip line (three × three rows keep ≤48 cells). */
+    /** Rows per versus-strip line (chunks of three keep every line ≤48 cells). */
     private const STRIP_CHUNK = 3;
 
     public static function table(): KeyBindings

@@ -23,6 +23,7 @@
                 │ ← →  move            │
                 │ ↑ x  rotate cw       │
                 │ z    rotate ccw      │
+                │ a    rotate 180      │
                 │ ↓    soft drop       │
                 │ spc  hard drop       │
                 │ c    hold            │

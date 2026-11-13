@@ -20,6 +20,7 @@ niveau: {level}',
     'help_card'  => 'verplaats
 met klok mee
 tegen klok in
+180° draaien
 langzaam laten
 snel laten
 opslag

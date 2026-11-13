@@ -52,13 +52,15 @@ final class Renderer
 {
     /**
      * Natural frame: the full board + full sidebar as laid out below
-     * (measured: 32 rows x 40 cols, matching the constants two lines
-     * down and the README's "frame is 40x32"). A terminal at least
+     * (measured: 33 rows x 40 cols — candy-tetris-016's rotate-180 row
+     * grew the derived card to ten verbs and the natural height with it;
+     * matching the constants two lines down and the README's frame
+     * figure, which the docs chain row re-spells). A terminal at least
      * this wide and tall gets the complete experience with nothing
      * reflowed.
      */
     public const NATURAL_COLS = 40;
-    public const NATURAL_ROWS = 32;
+    public const NATURAL_ROWS = 33;
 
     /**
      * Hard floor: the framed board is 22 rows x 14 cols and the sidebar

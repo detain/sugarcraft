@@ -15,6 +15,7 @@ use SugarCraft\Tetris\LockDelayMsg;
 use SugarCraft\Tetris\Piece;
 use SugarCraft\Tetris\Score;
 use SugarCraft\Tetris\Tetromino;
+use SugarCraft\Tetris\VsGame;
 use PHPUnit\Framework\TestCase;
 
 final class GameTest extends TestCase
@@ -1743,5 +1744,62 @@ final class GameTest extends TestCase
         $paused = $game->mutate(['paused' => true]);
         $beat = $this->arm($paused, $stamp);
         $this->assertEqualsWithDelta(self::GRAVITY_INTERVAL_S, $beat->seconds, 0.03, 'the paused heartbeat waits a full fresh interval');
+    }
+
+    // ------------------------------------------------------------------
+    // candy-tetris-016: the 'a' flip — the SRS tables' 0↔2 transitions
+    // stopped being dead code.
+    // ------------------------------------------------------------------
+
+    public function testTheFlipKeyWalksEveryRotationStateThroughTheKickPath(): void
+    {
+        foreach ([0, 1, 2, 3] as $from) {
+            $game = $this->deterministicGame()->mutate([
+                'piece' => new Piece(Tetromino::T, $from, 3, 10),
+            ]);
+
+            [$flipped] = $game->update($this->key('a'));
+
+            self::assertSame(
+                ($from + 2) % 4,
+                $flipped->piece->rotation,
+                "the flip must land two quarters away from state $from",
+            );
+            self::assertTrue($flipped->lastActionWasRotation, 'a flip is a rotation for T-Spin purposes');
+        }
+    }
+
+    public function testTheFlipRefusesWhenTheNaiveHalfTurnDoesNotFit(): void
+    {
+        // The shipped 180 transitions carry only the naive offset: a flip
+        // that does not fit is REFUSED, never smuggled through by a fake
+        // kick (the table stays honest until real 180 kicks ship).
+        $game = $this->deterministicGame()->mutate([
+            'piece' => new Piece(Tetromino::I, 0, 0, 11),
+        ]);
+        $rot2Row = (function (Piece $p): int {
+            foreach ($p->cells() as [, $y]) {
+                return $y;
+            }
+            throw new \LogicException('empty piece');
+        })(new Piece(Tetromino::I, 2, 0, 11));
+
+        $rows = $game->board->rows();
+        $rows[$rot2Row][1] = Tetromino::O;
+        $blocked = $game->mutate(['board' => new Board($rows)]);
+
+        [$same] = $blocked->update($this->key('a'));
+
+        self::assertSame(0, $same->piece->rotation, 'a blocked flip must leave the piece alone');
+        self::assertSame($blocked->board->rows(), $same->board->rows());
+    }
+
+    public function testTheVersusFlipReachesThePlayerSeatOnly(): void
+    {
+        $match = VsGame::start();
+        [$after] = $match->update(new KeyMsg(KeyType::Char, 'a'));
+
+        self::assertSame(2, $after->player->piece->rotation);
+        self::assertSame(0, $after->computer->piece->rotation, 'human keys never steer the computer');
     }
 }

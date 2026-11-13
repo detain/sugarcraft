@@ -20,6 +20,7 @@ return [
     'help_card'  => 'posun
 otočit ve směru
 otočit proti směru
+rotace o 180°
 pomalý pád
 rychlý pád
 hold
