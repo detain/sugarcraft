@@ -32,7 +32,10 @@ use SugarCraft\ColorProfile\Env;
  * {@see self::isInteractive()}, {@see self::infocmpAvailable()} and
  * {@see self::runCommand()} are the documented injection points consumers'
  * tests override (sugar-image's DetectTerminfoTest fakes the last two). The
- * class is deliberately NOT final for that reason.
+ * class is deliberately NOT final for that reason. TERM classification
+ * helpers are deliberately not offered as a seam — DetectionChain owns the
+ * TERM grammar; subclasses customize through the runProbe seam instead (as
+ * sugar-image does).
  *
  * Additional capability detection (all env/terminfo lookups):
  * - Sixel: terminfo (`infocmp -1` Sixel capability name)
@@ -445,32 +448,4 @@ class TerminalProbe
         return InfocmpBinary::runBounded($term ?? '');
     }
 
-    // -------------------------------------------------------------------------
-    // TERM pattern matchers (case-insensitive — the chain lowercases too, so
-    // these seams and their subclasses answer like every other surface)
-    // -------------------------------------------------------------------------
-
-    protected function termIsXterm(string $term): bool
-    {
-        return str_starts_with(strtolower($term), 'xterm');
-    }
-
-    protected function termIsScreen(string $term): bool
-    {
-        return str_starts_with(strtolower($term), 'screen');
-    }
-
-    protected function termIsTmux(string $term): bool
-    {
-        return str_starts_with(strtolower($term), 'tmux');
-    }
-
-    protected function termIs256Color(string $term): bool
-    {
-        $lower = strtolower($term);
-
-        return str_contains($lower, '-256color')
-            || $lower === 'xterm-kitty'
-            || $lower === 'xterm-ghostty';
-    }
 }
