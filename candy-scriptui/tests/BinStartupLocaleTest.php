@@ -43,12 +43,55 @@ final class BinStartupLocaleTest extends TestCase
         return [$status, (string) $stdout, (string) $stderr];
     }
 
-    public function testLauncherWiresLocaleAndAnnouncesAMissingAutoloader(): void
+    public function testAMissingAutoloaderIsAnnouncedLoudlyNotAsAClassFatal(): void
     {
-        $bin = (string) file_get_contents(self::BIN);
-        self::assertStringContainsString('Core\\I18n\\T::setLocale', $bin);
-        self::assertStringContainsString('T::detect()', $bin);
-        self::assertStringContainsString('no vendor/autoload.php found', $bin);
+        // scriptui-53: the locale wiring that this test used to grep out of
+        // the launcher is proven by the three child probes below — the full
+        // LC_ALL -> LC_MESSAGES -> LANG -> base-language chain runs through
+        // the real bin, so the call-text greps retired. What replaces them
+        // is the one launcher promise the probes cannot show from the happy
+        // path: booting from a tree with NO vendor/ must fail loud.
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX bin launcher only.');
+        }
+        $launcher = (string) file_get_contents(self::BIN);
+        $root = sys_get_temp_dir() . '/sc53-noautoloader-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        // Deep enough that EVERY candidate the launcher walks up to lands
+        // inside $root (which we own and never populate).
+        $deep = $root . '/one/two/three/bin';
+        self::assertTrue(mkdir($deep, 0777, true));
+        $tmpBin = $deep . '/candy-scriptui';
+        self::assertTrue((bool) file_put_contents($tmpBin, $launcher));
+
+        try {
+            $proc = proc_open(
+                ['timeout', '-s', 'KILL', '20', PHP_BINARY, $tmpBin, 'version'],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                $deep,
+                ['PATH' => '/usr/bin:/bin', 'HOME' => sys_get_temp_dir()],
+            );
+            self::assertIsResource($proc, 'the isolated launcher must still start');
+            fclose($pipes[0]);
+            $stdout = (string) stream_get_contents($pipes[1]);
+            $stderr = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $status = proc_close($proc);
+
+            self::assertSame(1, $status, 'a missing autoloader must exit 1, not fatal 255');
+            self::assertSame('', $stdout);
+            self::assertStringContainsString('no vendor/autoload.php found', $stderr);
+            self::assertStringNotContainsString('Class "', $stderr,
+                'the silent fall-through used to surface as a Class-not-found fatal');
+        } finally {
+            @unlink($tmpBin);
+            @rmdir($deep);
+            @rmdir($root . '/one/two/three');
+            @rmdir($root . '/one/two');
+            @rmdir($root . '/one');
+            @rmdir($root);
+        }
     }
 
     public function testTerritorySpellingLandsOnTheBaseLanguageCatalog(): void
@@ -86,6 +129,10 @@ final class BinStartupLocaleTest extends TestCase
         self::assertStringNotContainsString('Erlaubt', $stderr);
         $pt = (string) file_get_contents(__DIR__ . '/../lang/pt.php');
         $ptBr = (string) file_get_contents(__DIR__ . '/../lang/pt-br.php');
+        // scriptui-53 KEEP (data-pin): the expected wording is read from the
+        // catalogs themselves (the only ground truth for it) and asserted
+        // against the executed child's STDERR — the behaviour leg above the
+        // data compare is the test, this only sources the needle.
         // Values may be single- or double-quoted PHP literals (scriptui-56
         // re-quotes values containing apostrophes as doubles); either form
         // satisfies the contract, so the pin accepts both.

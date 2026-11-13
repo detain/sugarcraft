@@ -70,11 +70,40 @@ final class ScannerNamespaceAutowireAndEnumTest extends TestCase
 
     public function testZeroMatchNamespaceWarnsStructurally(): void
     {
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Discovery/CommandScanner.php');
-        $this->assertStringContainsString(
+        // scriptui-53: the vacuum warning is captured from a real process
+        // running the real class — scanning a namespace that matches nothing
+        // must say so loudly on captured STDERR. (The old arm grepped the
+        // warning sentence out of CommandScanner.php, which passes even if
+        // the runtime stops emitting it.)
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+        $root = \dirname(__DIR__, 2);
+        $code = 'require ' . var_export($root . '/vendor/autoload.php', true) . ';'
+            . ' (new \SugarCraft\ScriptUi\Application())->scan('
+            . var_export('SugarCraft\\ScriptUi\\Tests\\NoSuchNamespace\\Ghost', true) . ');';
+
+        $proc = proc_open(
+            ['timeout', '-s', 'KILL', '20', PHP_BINARY, '-r', $code],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $root,
+            ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
+        );
+        self::assertIsResource($proc, 'the probe child must spawn');
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $status = proc_close($proc);
+
+        self::assertSame(0, $status, 'a vacuum scan warns, it does not fail');
+        self::assertSame('', $stdout, 'the warning is a diagnostic, never program output');
+        self::assertStringContainsString(
             'no classes found under namespace',
-            $src,
-            'a vacuum scan must stay paired with its loud STDERR warning (CC5)',
+            $stderr,
+            'a vacuum scan must stay loud on STDERR (CC5)',
         );
     }
 
