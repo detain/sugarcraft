@@ -309,7 +309,7 @@ final class Graph
      *
      * @return list<array{0:int,1:int}>
      */
-    public static function getCirclePoints(int $cx, int $cy, int $radius, int $samples = 32): array
+    public static function circlePoints(int $cx, int $cy, int $radius, int $samples = 32): array
     {
         $samples = min(self::MAX_SAMPLES, max(8, $samples));
         $pts = [];
@@ -329,14 +329,14 @@ final class Graph
      *
      * @return list<array{0:int,1:int}>
      */
-    public static function getCirclePointsWithLimit(
+    public static function circlePointsWithLimit(
         int $cx,
         int $cy,
         int $radius,
         int $limit,
         int $samples = 32,
     ): array {
-        $pts = self::getCirclePoints($cx, $cy, $radius, $samples);
+        $pts = self::circlePoints($cx, $cy, $radius, $samples);
         if ($limit > 0 && count($pts) > $limit) {
             $pts = array_slice($pts, 0, $limit);
         }
@@ -352,14 +352,14 @@ final class Graph
      *
      * @return list<array{0:int,1:int}>
      */
-    public static function getFullCirclePoints(int $cx, int $cy, int $radius): array
+    public static function fullCirclePoints(int $cx, int $cy, int $radius): array
     {
         // 4×r enumeration is caller-controlled through $radius — clamp
         // it to the same pre-allocation ceiling (sugar-charts-114).
         $samples = min(self::MAX_SAMPLES, max(16, 4 * max(1, $radius)));
         $seen = [];
         $pts = [];
-        foreach (self::getCirclePoints($cx, $cy, $radius, $samples) as [$x, $y]) {
+        foreach (self::circlePoints($cx, $cy, $radius, $samples) as [$x, $y]) {
             $key = $x . ',' . $y;
             if (isset($seen[$key])) {
                 continue;
@@ -371,14 +371,14 @@ final class Graph
     }
 
     /**
-     * {@see getFullCirclePoints()} capped to `$limit` points (no-op when
+     * {@see fullCirclePoints()} capped to `$limit` points (no-op when
      * `$limit <= 0`). Mirrors ntcharts' `GetFullCirclePointsWithLimit`.
      *
      * @return list<array{0:int,1:int}>
      */
-    public static function getFullCirclePointsWithLimit(int $cx, int $cy, int $radius, int $limit): array
+    public static function fullCirclePointsWithLimit(int $cx, int $cy, int $radius, int $limit): array
     {
-        $pts = self::getFullCirclePoints($cx, $cy, $radius);
+        $pts = self::fullCirclePoints($cx, $cy, $radius);
         if ($limit > 0 && count($pts) > $limit) {
             $pts = array_slice($pts, 0, $limit);
         }
@@ -392,7 +392,7 @@ final class Graph
      *
      * @return list<array{0:int,1:int}>
      */
-    public static function getLinePointsWithLimit(int $x0, int $y0, int $x1, int $y1, int $limit): array
+    public static function linePointsWithLimit(int $x0, int $y0, int $x1, int $y1, int $limit): array
     {
         if ($limit <= 0) {
             return [];
@@ -419,39 +419,39 @@ final class Graph
     }
 
     /**
-     * Bare-name aliases for the sampling helpers — the house law is
-     * accessors/factories without a `get` prefix. The `get*` spellings
-     * remain as the ntcharts mirror surface.
+     * @deprecated the bare spelling is primary (sugar-charts-016); the
+     *             ntcharts mirror name is kept one minor as the house
+     *             alias window.
      *
      * @return list<array{0:int,1:int}>
      */
-    public static function circlePoints(int $cx, int $cy, int $radius, int $samples = 32): array
+    public static function getCirclePoints(int $cx, int $cy, int $radius, int $samples = 32): array
     {
-        return self::getCirclePoints($cx, $cy, $radius, $samples);
+        return self::circlePoints($cx, $cy, $radius, $samples);
     }
 
-    /** @return list<array{0:int,1:int}> */
-    public static function circlePointsWithLimit(int $cx, int $cy, int $radius, int $limit, int $samples = 32): array
+    /** @deprecated bare spelling is primary (sugar-charts-016). */
+    public static function getCirclePointsWithLimit(int $cx, int $cy, int $radius, int $limit, int $samples = 32): array
     {
-        return self::getCirclePointsWithLimit($cx, $cy, $radius, $limit, $samples);
+        return self::circlePointsWithLimit($cx, $cy, $radius, $limit, $samples);
     }
 
-    /** @return list<array{0:int,1:int}> */
-    public static function fullCirclePoints(int $cx, int $cy, int $radius): array
+    /** @deprecated bare spelling is primary (sugar-charts-016). */
+    public static function getFullCirclePoints(int $cx, int $cy, int $radius): array
     {
-        return self::getFullCirclePoints($cx, $cy, $radius);
+        return self::fullCirclePoints($cx, $cy, $radius);
     }
 
-    /** @return list<array{0:int,1:int}> */
-    public static function fullCirclePointsWithLimit(int $cx, int $cy, int $radius, int $limit): array
+    /** @deprecated bare spelling is primary (sugar-charts-016). */
+    public static function getFullCirclePointsWithLimit(int $cx, int $cy, int $radius, int $limit): array
     {
-        return self::getFullCirclePointsWithLimit($cx, $cy, $radius, $limit);
+        return self::fullCirclePointsWithLimit($cx, $cy, $radius, $limit);
     }
 
-    /** @return list<array{0:int,1:int}> */
-    public static function linePointsWithLimit(int $x0, int $y0, int $x1, int $y1, int $limit): array
+    /** @deprecated bare spelling is primary (sugar-charts-016). */
+    public static function getLinePointsWithLimit(int $x0, int $y0, int $x1, int $y1, int $limit): array
     {
-        return self::getLinePointsWithLimit($x0, $y0, $x1, $y1, $limit);
+        return self::linePointsWithLimit($x0, $y0, $x1, $y1, $limit);
     }
 
     /**

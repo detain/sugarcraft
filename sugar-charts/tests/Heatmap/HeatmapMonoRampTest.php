@@ -90,7 +90,7 @@ final class HeatmapMonoRampTest extends TestCase
         $this->assertTrue($h->getMonoRamp());
         // withSize() round-trips through copy(); the mode flag must carry.
         $this->assertTrue($h->withSize(4, 2)->getMonoRamp());
-        $this->assertTrue($h->monoRamp()->getMonoRamp());
+        $this->assertTrue($h->monoRamp(true)->monoRamp()); // dual-form: arg sets, bare reads
     }
 
     public function testStyleCacheKeyIncludesThePaletteIndex(): void

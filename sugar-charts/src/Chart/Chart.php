@@ -442,31 +442,46 @@ abstract class Chart implements ChromeAccessors
     }
 
     /**
-     * Returns current animation progress (0.0 to 1.0).
-     *
-     * Kept `get`-prefixed by exception: the bare short form
-     * `animationProgress()` is taken by the {@see withAnimationProgress()}
-     * alias (see README "Accessor conventions").
+     * Dual-form knob for animation progress (0.0 to 1.0): bare
+     * `animationProgress()` reads the current value, `animationProgress($p)`
+     * returns a new instance via {@see withAnimationProgress()} — the
+     * house bare-accessor law (sugar-charts-016) with the alias window
+     * kept open for the setter-only call shape.
      */
-    public function getAnimationProgress(): float
+    public function animationProgress(?float $progress = null): float|self
     {
-        return $this->animationProgress;
+        if ($progress === null) {
+            return $this->animationProgress;
+        }
+        return $this->withAnimationProgress($progress);
+    }
+
+    /** Dual-form knob for animation duration in milliseconds. */
+    public function animationDuration(?int $durationMs = null): int|self
+    {
+        if ($durationMs === null) {
+            return $this->animationDuration;
+        }
+        return $this->withAnimationDuration($durationMs);
     }
 
     /**
-     * Returns animation duration in milliseconds. Bare name occupied by
-     * the setter alias — see {@see getAnimationProgress()} for the
-     * exception note.
+     * @deprecated use {@see self::animationProgress()} (bare read form) —
+     *             kept one minor as the house alias window.
+     */
+    public function getAnimationProgress(): float
+    {
+        return $this->animationProgress();
+    }
+
+    /**
+     * @deprecated use {@see self::animationDuration()} (bare read form) —
+     *             kept one minor as the house alias window.
      */
     public function getAnimationDuration(): int
     {
-        return $this->animationDuration;
+        return $this->animationDuration();
     }
-
-    /** Short-form alias for {@see withAnimationProgress()}. */
-    public function animationProgress(float $progress): self { return $this->withAnimationProgress($progress); }
-    /** Short-form alias for {@see withAnimationDuration()}. */
-    public function animationDuration(int $durationMs): self { return $this->withAnimationDuration($durationMs); }
 
     /**
      * Internal copy-with-overrides helper.

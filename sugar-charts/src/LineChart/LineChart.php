@@ -749,7 +749,7 @@ final class LineChart extends Chart
         }
 
         // Handle animation progress - return empty canvas if progress <= 0
-        $progress = $this->getAnimationProgress();
+        $progress = $this->animationProgress();
         if ($progress <= 0.0) {
             return (new Canvas($this->width, $this->height))->view();
         }
@@ -1388,8 +1388,8 @@ final class LineChart extends Chart
             showDataLabels:     $showDataLabels     ?? $this->showDataLabels,
             dataLabelFormatter: ($dataLabelFormatterSet || $dataLabelFormatter !== null) ? $dataLabelFormatter : $this->dataLabelFormatter,
             legendItems:        $legendItems        ?? $this->legendItems,
-            animationProgress:  $animationProgress  ?? $this->getAnimationProgress(),
-            animationDuration:  $animationDuration  ?? $this->getAnimationDuration(),
+            animationProgress:  $animationProgress  ?? $this->animationProgress(),
+            animationDuration:  $animationDuration  ?? $this->animationDuration(),
             fill:              $fill              ?? $this->fill,
             lineStyle:         $lineStyleSet ? $lineStyle : $this->lineStyle,
             markLines:         $markLines        ?? $this->markLines,

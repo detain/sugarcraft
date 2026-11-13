@@ -237,11 +237,10 @@ final class Heatmap
     }
 
     /**
-     * Read the pre-styled overlay. The bare `cellStyle()` name is taken
-     * by the setter alias ({@see withCellStyle()}), so this accessor keeps
-     * the `get` prefix as a documented exception to the house law.
+     * @deprecated use {@see self::cellStyle()} (bare read form) — kept
+     *             one minor as the house alias window (sugar-charts-016).
      */
-    public function getCellStyle(): ?Style { return $this->cellStyle; }
+    public function getCellStyle(): ?Style { return $this->cellStyle(); }
 
     /**
      * Toggle the implicit `min` / `max` rescale done at {@see view()}
@@ -288,18 +287,14 @@ final class Heatmap
     }
 
     /**
-     * Read the auto-range flag. The bare `autoValueRange()` name is taken
-     * by the setter alias ({@see withAutoValueRange()}), so this accessor
-     * keeps the `get` prefix as a documented exception to the house law.
+     * @deprecated use {@see self::autoValueRange()} (bare read form).
      */
-    public function getAutoValueRange(): bool { return $this->autoValueRange; }
+    public function getAutoValueRange(): bool { return $this->autoValueRange(); }
 
     /**
-     * Read the mono-ramp flag. The bare `monoRamp()` name is taken by the
-     * setter alias ({@see withMonoRamp()}), so this accessor keeps the
-     * `get` prefix as a documented exception to the house law.
+     * @deprecated use {@see self::monoRamp()} (bare read form).
      */
-    public function getMonoRamp(): bool { return $this->monoRamp; }
+    public function getMonoRamp(): bool { return $this->monoRamp(); }
 
     // Short-form aliases.
     public function size(int $w, int $h): self    { return $this->withSize($w, $h); }
@@ -310,12 +305,24 @@ final class Heatmap
     /** @param list<Color> $stops */
     public function palette(array $stops): self   { return $this->withPalette($stops); }
     public function legend(bool $on = true): self { return $this->withLegend($on); }
-    public function cellStyle(?Style $style): self { return $this->withCellStyle($style); }
-    public function monoRamp(bool $on = true): self { return $this->withMonoRamp($on); }
+    /** Dual-form knob (sugar-charts-016): bare read / setter with an argument. */
+    public function cellStyle(?Style $style = null): Style|self|null
+    {
+        return func_num_args() === 0 ? $this->cellStyle : $this->withCellStyle($style);
+    }
+
+    /** Dual-form knob (sugar-charts-016): bare read / setter with an argument. */
+    public function monoRamp(?bool $on = null): bool|self
+    {
+        return $on === null ? $this->monoRamp : $this->withMonoRamp($on);
+    }
     /** Short-form alias for {@see withColorProfile()}. */
     public function colorProfile(ColorProfile $p): self { return $this->withColorProfile($p); }
-    /** Short-form alias for {@see withAutoValueRange()}. */
-    public function autoValueRange(bool $on = true): self { return $this->withAutoValueRange($on); }
+    /** Dual-form knob (sugar-charts-016): bare read / setter with an argument. */
+    public function autoValueRange(?bool $on = null): bool|self
+    {
+        return $on === null ? $this->autoValueRange : $this->withAutoValueRange($on);
+    }
 
     /**
      * Empty-data contract: returns '' (no canvas at all) when the grid

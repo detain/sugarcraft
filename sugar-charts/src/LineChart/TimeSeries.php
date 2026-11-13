@@ -296,8 +296,18 @@ final class TimeSeries
     public function timeFormat(?string $fmt): self { return $this->withTimeFormat($fmt); }
     /** Short-form alias for {@see withXLabelCount()}. */
     public function xLabelCount(int $n): self     { return $this->withXLabelCount($n); }
-    /** Short-form alias for {@see withTimeRange()}. */
-    public function timeRange(?\DateTimeImmutable $start, ?\DateTimeImmutable $end): self {
+    /**
+     * Dual-form knob (sugar-charts-016): a bare `timeRange()` call reads
+     * the pinned range as [start, end] (either may be null); any argument
+     * shape routes to the setter alias {@see withTimeRange()}.
+     *
+     * @return array{0: ?\DateTimeImmutable, 1: ?\DateTimeImmutable}|self
+     */
+    public function timeRange(?\DateTimeImmutable $start = null, ?\DateTimeImmutable $end = null): array|self
+    {
+        if (func_num_args() === 0) {
+            return [$this->rangeStart, $this->rangeEnd];
+        }
         return $this->withTimeRange($start, $end);
     }
     public function size(int $w, int $h): self                    { return $this->withSize($w, $h); }
@@ -319,16 +329,16 @@ final class TimeSeries
     public function axes(bool $on = true): self                   { return $this->withAxes($on); }
 
     /**
-     * Read the pinned time range as [start, end] (either may be null).
-     * The bare `timeRange()` name is taken by the setter alias
-     * ({@see withTimeRange()}), so this accessor keeps the `get` prefix
-     * as a documented exception to the house law.
+     * @deprecated use {@see self::timeRange()} (bare read form) — kept
+     *             one minor as the house alias window (sugar-charts-016).
      *
      * @return array{0: ?\DateTimeImmutable, 1: ?\DateTimeImmutable}
      */
     public function getTimeRange(): array
     {
-        return [$this->rangeStart, $this->rangeEnd];
+        /** @var array{0: ?\DateTimeImmutable, 1: ?\DateTimeImmutable} $pair */
+        $pair = $this->timeRange();
+        return $pair;
     }
 
     public function view(): string
