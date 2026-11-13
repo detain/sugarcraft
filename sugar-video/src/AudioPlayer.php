@@ -229,8 +229,11 @@ class AudioPlayer
         // Stamp the monotonic time this (re)start so pause() can advance the
         // tracked position by however long the subprocess actually played.
         // Set only on a real spawn: with no binary there is no playback to
-        // account for.
+        // account for. The alive-upper-bound starts at the same instant: a
+        // spawn is an observation, nothing later is claimed until someone
+        // sees the child running (SV-L89/089).
         $this->runningSince = ($this->clock ?? self::monotonic())();
+        $this->lastAliveAt = $this->runningSince;
         // No pipe cleanup needed — file sinks open no parent-side pipes.
     }
 
@@ -300,6 +303,18 @@ class AudioPlayer
      * Every teardown of a running subprocess (pause, resume's terminate-and-
      * restart, stop) calls this first, so position survives regardless of which
      * path ended the child. No-op when nothing is running (runningSince null).
+     *
+     * SV-L89/089: the segment billed is bounded by the last moment the child
+     * was KNOWN alive, not by parent wall-clock. A companion that ended on its
+     * own (`-autoexit` at EOF) sits unobserved until the next teardown; the
+     * old arithmetic billed the whole dead interval into seekMs, so the respawn
+     * `-ss` overshot past the true position — or past EOF, producing a
+     * silent-immediate-exit companion the UI painted as playing. A fresh
+     * liveness probe here keeps the healthy case exact (nothing is ever
+     * under-billed while the child demonstrably runs); a dead child stops
+     * billing at its last observed-alive sample, and the settle clears the
+     * running anchor so a later pause()/stop() cannot bill the same segment
+     * twice.
      */
     private function bankElapsed(): void
     {
@@ -308,8 +323,20 @@ class AudioPlayer
         }
 
         $now = ($this->clock ?? self::monotonic())();
-        $this->seekMs += (int) round(($now - $this->runningSince) * 1000);
+        $upper = max($this->runningSince, $this->lastAliveAt ?? $this->runningSince);
+
+        if (is_resource($this->processHandle)
+            && ($status = proc_get_status($this->processHandle)) !== false
+            && $status['running']) {
+            // Observed alive RIGHT NOW: the whole segment is real play time.
+            $upper = $now;
+        }
+
+        if ($upper > $this->runningSince) {
+            $this->seekMs += (int) round(($upper - $this->runningSince) * 1000);
+        }
         $this->runningSince = null;
+        $this->lastAliveAt = null;
     }
 
     /**
@@ -418,7 +445,23 @@ class AudioPlayer
             return false;
         }
 
-        return $status['running'];
+        if ($status['running']) {
+            // SV-L89/089: an alive observation is data — it lifts the
+            // billing ceiling to this instant, so a child that dies later
+            // with no one watching still gets billed exactly as far as it
+            // was last seen playing.
+            $this->lastAliveAt = ($this->clock ?? self::monotonic())();
+
+            return true;
+        }
+
+        // Death observed: settle the segment HERE (bounded by the last alive
+        // sample) and clear the running anchor, so no later teardown bills
+        // parent wall-clock across a long-dead companion. Settling is
+        // bookkeeping only — it never spawns, never reaps, never throws.
+        $this->bankElapsed();
+
+        return false;
     }
 
     /**
@@ -468,6 +511,14 @@ class AudioPlayer
 
     /** Monotonic time the running subprocess started, or null when not playing. */
     private ?float $runningSince = null;
+
+    /**
+     * Highest monotonic instant at which the running subprocess was OBSERVED
+     * alive (spawn stamps it, isPlaying() lifts it) — the billing ceiling of
+     * SV-L89/089: a child that died unwatched is billed to this, not to the
+     * parent's wall-clock at teardown time.
+     */
+    private ?float $lastAliveAt = null;
 
     /**
      * Validated request headers for a network source, empty otherwise — parsed

@@ -737,6 +737,87 @@ final class AudioPlayerTest extends TestCase
     }
 
     /**
+     * @testdox L89: banking stops at the last alive observation when the child died unwatched
+     *
+     * The finding's exact shape: the companion ends itself (here: a sleep that
+     * simply finishes, standing in for -autoexit at EOF), nobody looks, and
+     * minutes later pause()/stop() used to bill the FULL parent interval into
+     * seekMs — the respawn `-ss` then starts past where the viewer actually
+     * stopped hearing. isPlaying()'s death branch settles the segment at the
+     * last alive sample; the later teardown finds nothing left to bill.
+     */
+    public function testBankingStopsAtTheLastAliveObservationWhenTheChildDiedUnwatched(): void
+    {
+        $player = new class('/tmp/video.mp4') extends AudioPlayer {
+            /** @return list<string>|null */
+            protected function buildCommand(): ?array
+            {
+                return ['sleep', '0.3'];
+            }
+        };
+
+        $player->start();
+        $this->assertTrue($this->waitUntil(static fn (): bool => $player->isPlaying(), 2.0), 'the companion must be observably alive first');
+
+        // Let it die, and let the death be OBSERVED (that is what settles).
+        $this->assertTrue($this->waitUntil(static fn (): bool => !$player->isPlaying(), 6.0), 'the short-lived companion must end on its own');
+        $settledAt = $player->position();
+        // The death branch settled the segment AT OBSERVATION: the played
+        // milliseconds are banked now, not owed to some future teardown — a
+        // UI reading position() between death and stop() sees the truth
+        // (the pre-L89 shape reported 0 until someone happened to stop it).
+        $this->assertGreaterThanOrEqual(50, $settledAt, 'the ~300 ms this companion could have played is already banked at death observation');
+        $this->assertLessThanOrEqual(1000, $settledAt, 'billed play time cannot exceed what could have been observed alive');
+
+        // The overdue teardown: the old arithmetic added this whole dead
+        // interval; the L89 shape bills nothing more.
+        sleep(2);
+        $player->stop();
+        $this->assertSame($settledAt, $player->position(), 'no parent wall-clock may be billed across a long-dead companion');
+    }
+
+    /**
+     * @testdox L89: a child that died before anyone saw it alive banks zero
+     *
+     * The spawn is the only alive observation available, so the billing
+     * ceiling equals the spawn instant — an immediate-exit companion (the
+     * documented no-audio-track case isPlaying() already degrades quietly on)
+     * lands the viewer back at the original seek, not at seek+dead-interval.
+     * Death is observed through the raw handle, NOT isPlaying(), so the
+     * settle-under-test stays undisturbed until stop() runs its own bank.
+     */
+    public function testAChildDeadSinceBeforeSpawnBanksZero(): void
+    {
+        $player = new class('/tmp/video.mp4') extends AudioPlayer {
+            /** @return list<string>|null */
+            protected function buildCommand(): ?array
+            {
+                return ['sleep', '0.3'];
+            }
+        };
+
+        $player->start();
+
+        $handle = new \ReflectionProperty(AudioPlayer::class, 'processHandle');
+        $handle->setAccessible(true);
+        $died = $this->waitUntil(static function () use ($handle, $player): bool {
+            $proc = $handle->getValue($player);
+            if (!is_resource($proc)) {
+                return true;
+            }
+            $status = proc_get_status($proc);
+
+            return $status !== false && !$status['running'];
+        }, 6.0);
+        $this->assertTrue($died, 'the companion must have ended before the teardown');
+
+        sleep(1); // the interval the old code would have billed in full
+        $player->stop();
+
+        $this->assertSame(0, $player->position(), 'zero play time was observed; zero play time is billed');
+    }
+
+    /**
      * @testdox exitCode() retrieves the last process exit code
      */
     public function testGetExitCodeReturnsCodeAfterExit(): void
