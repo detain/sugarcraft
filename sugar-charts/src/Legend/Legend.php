@@ -136,7 +136,13 @@ final class Legend
         }
         $line = implode('  ', $parts);
         if ($this->showBorder) {
-            return $line . "\n" . '┌' . str_repeat('─', Width::string($line)) . '┐';
+            // CH-35 (sugar-charts-014): the bottom position must mirror
+            // renderTop's frame math — previously this emitted the TOP
+            // corner pair ('┌…┐') at full line width, hanging two
+            // columns past the content and lying about which edge was
+            // drawn. Same -2 gutter rule as the top frame.
+            $w = max(0, Width::string($line) - 2);
+            return $line . "\n" . '└' . str_repeat('─', $w) . '┘';
         }
         return $line;
     }
