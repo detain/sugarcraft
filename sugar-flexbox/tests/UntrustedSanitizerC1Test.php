@@ -60,12 +60,19 @@ final class UntrustedSanitizerC1Test extends TestCase
     }
 
     /**
-     * @return array<string, array{0:string,1:string}> case label => [input, surviving-text-must-contain]
+     * @return array<string, array{0:string,1:string}> case label => [input, exact-expected-output]
+     *
+     * finding-046: the old table pinned only surviving WORDS ('done', 'A'),
+     * which a dead sanitizer satisfies just as happily as a live one — the
+     * truncated-sequence rows ('A' from "A\x1bPtmux;echo pwned") proved
+     * nothing about payload consumption. Each expectation is now the exact
+     * sanitized output: control bytes AND swallowed payloads are pinned, the
+     * visible survivors ride the same assertSame.
      */
     private static function c1Vectors(): array
     {
         return [
-            '8-bit CSI cursor-move'    => ["A\x9bH\x9b2Jdone", 'done'],
+            '8-bit CSI cursor-move'    => ["A\x9bH\x9b2Jdone", 'Adone'],
             '8-bit CSI truecolor'      => ["\x9b38;2;255;0;0mRED", 'RED'],
             '8-bit OSC title-set'      => ["A\x9d0;pwn\x07B", 'AB'],
             'nested OSC-in-CSI'        => ["A\x1b]0;\x1b[31mB", 'AB'],
@@ -83,12 +90,10 @@ final class UntrustedSanitizerC1Test extends TestCase
     public function testColumnFormatStripsEveryC1Vector(): void
     {
         $col = Column::make('X', 200);
-        foreach (self::c1Vectors() as $case => [$input, $survivor]) {
+        foreach (self::c1Vectors() as $case => [$input, $expected]) {
             $out = $col->format($input, 0);
+            $this->assertSame($expected, $out, "Column::format $case");
             $this->assertStrippedToAscii($out, "Column::format $case");
-            if ($survivor !== '') {
-                $this->assertStringContainsString($survivor, $out, "Column::format $case dropped visible text");
-            }
         }
     }
 
@@ -103,15 +108,15 @@ final class UntrustedSanitizerC1Test extends TestCase
 
     public function testFlexBoxRenderStripsEveryC1Vector(): void
     {
-        foreach (self::c1Vectors() as $case => [$input, $survivor]) {
+        foreach (self::c1Vectors() as $case => [$input, $expected]) {
             // No withStyle() → the library adds no escape, so anything hostile
-            // in the content must be stripped by sanitize().
+            // in the content must be stripped by sanitize(). The box pads to
+            // 200 cells, so compare the trimmed row against the same exact
+            // expectation the Column seam pins (finding-046: no word-only pins).
             $box = FlexBox::row(FlexItem::new($input));
             $out = $box->render(200, 1);
             $this->assertStrippedToAscii($out, "FlexBox::render $case");
-            if ($survivor !== '') {
-                $this->assertStringContainsString(trim($survivor), trim($out), "FlexBox::render $case dropped visible text");
-            }
+            $this->assertSame($expected, trim($out), "FlexBox::render $case");
         }
     }
 

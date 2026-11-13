@@ -66,11 +66,24 @@ final class ColumnTest extends TestCase
 
     public function testSanitizeRemovesBareEscIntroducer(): void
     {
+        // finding-045: the old pin fed a FULL CSI and only asserted the
+        // literals survived — total sanitizer deletion kept it green, so the
+        // test never earned its name. A bare ESC introducer (ESC + final char,
+        // no sequence to complete) must have the escape itself stripped:
+        // 'hello' + ESC + 'Z' + 'world' → exact 'helloworld', no residue.
         $col = Column::make('Test', 20);
-        $input = "hello\x1b[31mworld"; // This is CSI, not bare ESC
-        $result = $col->format($input, 0);
-        $this->assertStringContainsString('hello', $result);
-        $this->assertStringContainsString('world', $result);
+        $result = $col->format("hello\x1bZworld", 0);
+        $this->assertStringNotContainsString("\x1b", $result);
+        $this->assertSame('helloworld', $result);
+    }
+
+    public function testSanitizeStripsFullCsiResidueFree(): void
+    {
+        // The payload companion of the bare-introducer pin: the CSI's bytes
+        // vanish entirely — the SGR parameters do not survive as text.
+        $col = Column::make('Test', 20);
+        $result = $col->format("hello\x1b[31mworld", 0);
+        $this->assertSame('helloworld', $result);
     }
 
     public function testSanitizeRemovesC0Controls(): void
