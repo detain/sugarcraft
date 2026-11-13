@@ -53,6 +53,8 @@ final class PrefixPolicyTest extends TestCase
      */
     private const APP_RULE_EXEMPTIONS = [
         'candy-code-web' => 'asset bundle shipped with candy-code',
+        'candy-msteams' => 'channel bundle loaded by candy-code serve; not runnable on its own',
+        'candy-discord' => 'channel bundle loaded by candy-code serve; not runnable on its own',
     ];
 
     private static function root(): string
