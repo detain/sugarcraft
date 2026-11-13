@@ -40,14 +40,19 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
     private bool $showGrid = true;
     private bool $showLegend = true;
 
+    // The style fields are private (encapsulation unchanged) but NOT readonly:
+    // the six withers below must clone-and-overwrite like every other setter
+    // in this file. Rebuilding via `new self(...)` silently dropped all
+    // accumulated data/series/labels/size/state (finding D-06 CRITICAL), and a
+    // clone cannot re-initialise readonly promoted properties.
     public function __construct(
         private readonly ?int $maxDataPoints = null,
-        private readonly GraphType $graphType = GraphType::Line,
-        private readonly ?Color $lineColor = null,
-        private readonly ?Color $gridColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $backgroundColor = null,
-        private readonly string $style = 'rounded',
+        private GraphType $graphType = GraphType::Line,
+        private ?Color $lineColor = null,
+        private ?Color $gridColor = null,
+        private ?Color $textColor = null,
+        private ?Color $backgroundColor = null,
+        private string $style = 'rounded',
     ) {}
 
     /**
@@ -367,15 +372,9 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withGraphType(GraphType $type): self
     {
-        return new self(
-            maxDataPoints: $this->maxDataPoints,
-            graphType: $type,
-            lineColor: $this->lineColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->graphType = $type;
+        return $clone;
     }
 
     /**
@@ -383,15 +382,9 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withLineColor(?Color $color): self
     {
-        return new self(
-            maxDataPoints: $this->maxDataPoints,
-            graphType: $this->graphType,
-            lineColor: $color,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->lineColor = $color;
+        return $clone;
     }
 
     /**
@@ -399,15 +392,9 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withGridColor(?Color $color): self
     {
-        return new self(
-            maxDataPoints: $this->maxDataPoints,
-            graphType: $this->graphType,
-            lineColor: $this->lineColor,
-            gridColor: $color,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->gridColor = $color;
+        return $clone;
     }
 
     /**
@@ -415,15 +402,9 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            maxDataPoints: $this->maxDataPoints,
-            graphType: $this->graphType,
-            lineColor: $this->lineColor,
-            gridColor: $this->gridColor,
-            textColor: $color,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -431,15 +412,9 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withBackgroundColor(?Color $color): self
     {
-        return new self(
-            maxDataPoints: $this->maxDataPoints,
-            graphType: $this->graphType,
-            lineColor: $this->lineColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $color,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->backgroundColor = $color;
+        return $clone;
     }
 
     /**
@@ -447,14 +422,8 @@ final class Graph implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withStyle(string $style): self
     {
-        return new self(
-            maxDataPoints: $this->maxDataPoints,
-            graphType: $this->graphType,
-            lineColor: $this->lineColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $style,
-        );
+        $clone = clone $this;
+        $clone->style = $style;
+        return $clone;
     }
 }

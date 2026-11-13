@@ -112,4 +112,72 @@ final class GraphTest extends TestCase
         $rendered = $graph->render();
         $this->assertSame('', $rendered);
     }
+
+    /**
+     * D-06 (CRITICAL): the six style withers rebuilt the object through
+     * `new self(ctor-only)`, silently dropping every accumulated state — data,
+     * series, labels, size, min/max, grid/legend flags. A card built as
+     * Graph::new()->withData(...)->withSeries(...)->withLineColor(...) rendered
+     * an EMPTY chart. Each wither must now carry the whole object forward:
+     * legend entry and axis labels survive every one of them.
+     */
+    public function testStyleWithersPreserveAccumulatedState(): void
+    {
+        $base = Graph::new()
+            ->setSize(60, 20)
+            ->withData([10.0, 40.0, 70.0, 25.0])
+            ->withLabels(['jan', 'feb', 'mar', 'apr'])
+            ->withSeries('cpu', [5.0, 50.0, 90.0, 30.0]);
+
+        $variants = [
+            'withGraphType' => $base->withGraphType(GraphType::Bar),
+            'withLineColor' => $base->withLineColor(\SugarCraft\Core\Util\Color::hex('#F38BA8')),
+            'withGridColor' => $base->withGridColor(\SugarCraft\Core\Util\Color::hex('#A6E3A1')),
+            'withTextColor' => $base->withTextColor(\SugarCraft\Core\Util\Color::hex('#CDD6F4')),
+            'withBackgroundColor' => $base->withBackgroundColor(\SugarCraft\Core\Util\Color::hex('#11111B')),
+            'withStyle' => $base->withStyle('bold'),
+        ];
+
+        foreach ($variants as $name => $graph) {
+            $rendered = $graph->render();
+            $this->assertStringContainsString('◆ cpu', $rendered, "{$name} dropped the series");
+            $this->assertStringContainsString('jan', $rendered, "{$name} dropped the labels");
+            $this->assertStringContainsString('●', $rendered, "{$name} dropped the plot");
+            $this->assertSame([60, 20], $graph->innerSize(), "{$name} dropped the size");
+        }
+    }
+
+    /** D-06: color-only withers change NOTHING but the SGR — geometry stays byte-identical. */
+    public function testColorWithersLeaveGeometryIdentical(): void
+    {
+        $base = Graph::new()
+            ->setSize(60, 20)
+            ->withData([10.0, 40.0, 70.0, 25.0])
+            ->withSeries('cpu', [5.0, 50.0, 90.0, 30.0]);
+
+        $plain = self::stripSgr($base->render());
+        $colored = self::stripSgr(
+            $base
+                ->withLineColor(\SugarCraft\Core\Util\Color::hex('#F38BA8'))
+                ->withGridColor(\SugarCraft\Core\Util\Color::hex('#A6E3A1'))
+                ->withTextColor(\SugarCraft\Core\Util\Color::hex('#F9E2AF'))
+                ->withBackgroundColor(\SugarCraft\Core\Util\Color::hex('#11111B'))
+                ->render()
+        );
+        $this->assertSame($plain, $colored);
+    }
+
+    /** D-06: the ctor fields are plain privates — immutability must hold from the outside. */
+    public function testStyleFieldsRemainExternallyWriteProtected(): void
+    {
+        $graph = Graph::new();
+        $this->expectException(\Error::class);
+        /** @phpstan-ignore-next-line intentional external write */
+        $graph->style = 'double';
+    }
+
+    private static function stripSgr(string $rendered): string
+    {
+        return (string) preg_replace('/\x1b\[[0-9;]*m/', '', $rendered);
+    }
 }
