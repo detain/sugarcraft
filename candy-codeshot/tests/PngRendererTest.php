@@ -221,7 +221,7 @@ final class PngRendererTest extends TestCase
             border: false,
         );
 
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(\SugarCraft\CodeShot\Support\OutputTooLarge::class);
         $this->expectExceptionMessage('too large');
         $renderer->render(str_repeat('x', 5000) . "\n");
     }

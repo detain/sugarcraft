@@ -77,4 +77,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: girdi yolu "{path}" bir dizin - bir dosya verin veya stdin ile pipe edin',
     'cli.png_to_tty'          => 'candy-codeshot: ham PNG baytları terminale yazılmıyor (--output <dosya.png> kullanın)',
     'cli.stdin_tty'           => 'candy-codeshot: stdin\'den okunuyor - bir dosya verin veya girdi pipe\'layın (bitirmek için Ctrl-D)',
+    'cli.render_failed'     => 'candy-codeshot: oluşturulama başarısız: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot: {format} çıktısı çok büyük ({width} x {height} = {pixels} piksel; sınır {cap}). İçeriği, dolgu payını veya satır sayısını azaltın.',
+    'cli.font_too_large'     => 'candy-codeshot: yazı tipi dosyası yansıtmak için çok büyük: {size} bayt, {cap} sınırını aşıyor ({path})',
 ];

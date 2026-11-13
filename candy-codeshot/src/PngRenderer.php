@@ -157,10 +157,7 @@ final class PngRenderer
         $frameHeight = (int) ($contentHeight + $this->padding * 2 + $headerHeight);
 
         if ($totalW * $totalH > self::MAX_PNG_PIXELS) {
-            throw new \RuntimeException(sprintf(
-                'PNG output too large (%d x %d = %d pixels; cap %d). Reduce content, padding or line count.',
-                $totalW, $totalH, $totalW * $totalH, self::MAX_PNG_PIXELS,
-            ));
+            throw new Support\OutputTooLarge('PNG', $totalW, $totalH, self::MAX_PNG_PIXELS);
         }
 
         $img = imagecreatetruecolor((int) $totalW, (int) $totalH);

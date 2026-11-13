@@ -77,4 +77,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: ścieżka wejściowa "{path}" jest katalogiem - podaj plik albo prześlij przez stdin',
     'cli.png_to_tty'          => 'candy-codeshot: odmowa zapisu surowych bajtów PNG na terminal (użyj --output <plik.png>)',
     'cli.stdin_tty'           => 'candy-codeshot: czytam ze stdin - podaj plik lub prześlij dane (Ctrl-D kończy)',
+    'cli.render_failed'     => 'candy-codeshot: renderowanie nie powiodło się: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot: wyjście {format} jest zbyt duże ({width} x {height} = {pixels} pikseli; limit {cap}). Zmniejsz treść, margines lub liczbę linii.',
+    'cli.font_too_large'     => 'candy-codeshot: plik czcionki zbyt duży do osadzenia: {size} bajtów przekracza limit {cap} ({path})',
 ];

@@ -77,4 +77,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: 入力パス "{path}" はディレクトリです - ファイルを渡すか stdin でパイプしてください',
     'cli.png_to_tty'          => 'candy-codeshot: 生の PNG バイトを端末に書き込むことは拒否されました (--output <file.png> を使用)',
     'cli.stdin_tty'           => 'candy-codeshot: stdin から読み込み中 - ファイルを渡すか入力してください (Ctrl-D で終了)',
+    'cli.render_failed'     => 'candy-codeshot：描画に失敗しました: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot：{format} 出力が大きすぎます ({width} x {height} = {pixels} ピクセル; 上限 {cap})。内容、余白または行数を減らしてください。',
+    'cli.font_too_large'     => 'candy-codeshot：フォントファイルが大きすぎて埋め込めません: {size} バイトは上限 {cap} を超えています ({path})',
 ];

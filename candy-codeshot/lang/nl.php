@@ -77,4 +77,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: invoerpad "{path}" is een map - geef een bestand op of pipe via stdin',
     'cli.png_to_tty'          => 'candy-codeshot: weigert ruwe PNG-bytes naar een terminal te schrijven (gebruik --output <bestand.png>)',
     'cli.stdin_tty'           => 'candy-codeshot: leest van stdin - geef een bestand op of pipe de invoer (Ctrl-D om te beëindigen)',
+    'cli.render_failed'     => 'candy-codeshot: renderen mislukt: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot: {format}-uitvoer te groot ({width} x {height} = {pixels} pixels; limiet {cap}). Verklein inhoud, opvulling of aantal regels.',
+    'cli.font_too_large'     => 'candy-codeshot: lettertypebestand te groot om in te bedden: {size} bytes overschrijden de limiet van {cap} ({path})',
 ];

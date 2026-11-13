@@ -282,9 +282,52 @@ final class SvgRendererTest extends TestCase
         // PNG engine's 40 Mpx number; refusal happens in the layout
         // arithmetic, before the per-line loop spends any CPU.
         $huge = str_repeat('x', 40_000) . "\n"; // ~336k px wide x ~131 tall ≈ 44M px
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(\SugarCraft\CodeShot\Support\OutputTooLarge::class);
         $this->expectExceptionMessageMatches('/SVG output too large \(\d+ x \d+ = \d+ pixels; cap 40000000\)/');
         SvgRenderer::dark()->withWindow(false)->render($huge);
+    }
+
+    public function testGeometryCeilingCarriesTypedFields(): void
+    {
+        // candy-codeshot-021 (cs-16): the CLI localizes this refusal from the
+        // exception's typed fields, not from its English message — so the
+        // fields must be exact. (cs-31 discipline: reads, no re-derivation.)
+        $huge = str_repeat('x', 40_000) . "\n";
+        try {
+            SvgRenderer::dark()->withWindow(false)->render($huge);
+            $this->fail('an over-cap geometry must not render');
+        } catch (\SugarCraft\CodeShot\Support\OutputTooLarge $e) {
+            $this->assertSame('SVG', $e->format);
+            $this->assertSame(40_000_000, $e->cap);
+            $this->assertGreaterThan(40_000_000, $e->pixels);
+            $this->assertSame($e->width * $e->height, $e->pixels);
+            $this->assertMatchesRegularExpression('/^SVG output too large \(\d+ x \d+ = \d+ pixels; cap 40000000\)\. Reduce content, padding or line count\.$/', $e->getMessage());
+        }
+    }
+
+    public function testOversizedRegularFontThrowsTypedFontTooLarge(): void
+    {
+        // The font leg of the same pair: real TTF magic so the size door is
+        // what refuses, and the fields the CLI interpolates must be honest.
+        $path = tempnam(sys_get_temp_dir(), 'cs16font') . '.ttf';
+        $fh = fopen($path, 'wb');
+        $this->assertNotFalse($fh);
+        fwrite($fh, "\x00\x01\x00\x00");
+        ftruncate($fh, 33_554_433);
+        fclose($fh);
+        try {
+            try {
+                SvgRenderer::dark()->withFont($path)->withWindow(false)->render("x\n");
+                $this->fail('an over-cap font must not embed');
+            } catch (\SugarCraft\CodeShot\Support\FontTooLarge $e) {
+                $this->assertSame(33_554_432, $e->cap);
+                $this->assertSame('32 MiB', $e->capLabel());
+                $this->assertSame(33_554_433, $e->size);
+                $this->assertSame($path, $e->path);
+            }
+        } finally {
+            unlink($path);
+        }
     }
 
     public function testCeilingDoesNotEatLegitimateScreenshots(): void

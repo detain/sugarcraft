@@ -227,10 +227,7 @@ final class SvgRenderer
         // (bin turns this into exit 2 via its render catch). The ceiling is
         // the PNG engine's number: one advertised pipeline, one posture.
         if ((int) $totalW * (int) $totalH > self::MAX_SVG_PIXELS) {
-            throw new \RuntimeException(sprintf(
-                'SVG output too large (%d x %d = %d pixels; cap %d). Reduce content, padding or line count.',
-                $totalW, $totalH, (int) $totalW * (int) $totalH, self::MAX_SVG_PIXELS,
-            ));
+            throw new Support\OutputTooLarge('SVG', (int) $totalW, (int) $totalH, self::MAX_SVG_PIXELS);
         }
 
         $svgWidth  = (int) ($totalW - $shadowMargin * 2);
@@ -275,9 +272,7 @@ final class SvgRenderer
                 throw new \RuntimeException("Cannot stat font file: {$this->fontPath}");
             }
             if ($fontSize > self::MAX_EMBEDDED_FONT_BYTES) {
-                throw new \RuntimeException(
-                    "Font file too large to embed: {$fontSize} bytes exceed the 32 MiB limit ({$this->fontPath})"
-                );
+                throw new Support\FontTooLarge($this->fontPath, $fontSize, self::MAX_EMBEDDED_FONT_BYTES);
             }
             $handle = @fopen($this->fontPath, 'rb');
             if ($handle === false) {

@@ -759,14 +759,14 @@ final class CliTest extends TestCase
 
     public function testEscapeBytesCannotReachTerminalThroughEngineRefusalMessage(): void
     {
-        // The one stderr leg that does NOT ride Lang::t is the mid-render engine
-        // catch. Its message interpolates the confined font path verbatim, and a
-        // Linux filename may carry ESC bytes — so the raw-message precedent needs
-        // its own Sanitize::untrustedForDisplay sweep. We plant an over-cap TTF
-        // (real 4-byte magic so it clears the signature door, then a sparse 34 MiB
-        // size to trip MAX_EMBEDDED_FONT_BYTES inside render()) whose basename
-        // carries CSI bytes. Pre-fix the ESC reached the terminal; the choke must
-        // now neutralise it.
+        // The mid-render engine catch interpolates the confined font path
+        // verbatim, and a Linux filename may carry ESC bytes. Since
+        // candy-codeshot-021 (cs-16) every stderr row here rides Lang::t,
+        // whose interpolation choke sweeps each parameter — but the sweep
+        // must still be proven live on this lane: we plant an over-cap TTF
+        // (real 4-byte magic so it clears the signature door, then a sparse
+        // 34 MiB size to trip MAX_EMBEDDED_FONT_BYTES inside render()) whose
+        // basename carries CSI bytes. Pre-choke the ESC reached the terminal.
         $dir = $this->makeTempDir();
         $font = "\x1b[31moversized.ttf";
         try {
@@ -784,12 +784,42 @@ final class CliTest extends TestCase
             );
 
             $this->assertSame(2, $r['exitCode'], $r['stderr']);
-            $this->assertStringContainsString('rendering failed', $r['stderr']);
+            // cs-16: the font leg now answers with its own catalogued refusal.
+            $this->assertStringContainsString('font file too large to embed', $r['stderr']);
             // The refusal reason survives, only its CSI bytes are swept.
             $this->assertStringContainsString('too large', $r['stderr']);
             $this->assertStringNotContainsString("\x1b", $r['stderr']);
         } finally {
             $this->rmTree($dir);
+        }
+    }
+
+    public function testGermanLocaleLocalizesThePixelCeilingRefusal(): void
+    {
+        // candy-codeshot-021 (cs-16): the actionable engine conditions ride
+        // the catalog, so a German user's pixel-cap refusal is German — the
+        // old lane sprayed English at every neighbour of a translated run.
+        // Same ~45M px repro the English ceiling leg uses.
+        $r = $this->runCli(['--no-window', '--no-shadow'], str_repeat('x', 80_000) . "\n", null, ['LC_ALL' => 'de']);
+
+        $this->assertSame(2, $r['exitCode'], $r['stderr']);
+        $this->assertStringContainsString('Ausgabe zu groß', $r['stderr']);
+        $this->assertStringContainsString('SVG', $r['stderr']);
+        $this->assertStringNotContainsString('output too large', $r['stderr']);
+        $this->assertStringNotContainsString('rendering failed', $r['stderr']);
+    }
+
+    public function testRenderFailureLaneIsFullyCataloguedInBinSource(): void
+    {
+        // Structural pin (cs-31 roster genre): the render-failure catch must
+        // reach the user only through catalog keys — the raw literal prefix
+        // that bypassed the catalog is gone, and all three lanes (typed
+        // ceilings + generic catch) name keys the en catalog carries.
+        $bin = file_get_contents(dirname(__DIR__) . '/bin/candy-codeshot');
+        $this->assertIsString($bin);
+        $this->assertStringNotContainsString("'candy-codeshot: rendering failed: '", $bin);
+        foreach (["Lang::t('cli.render_failed'", "Lang::t('cli.pixels_exceeded'", "Lang::t('cli.font_too_large'"] as $needle) {
+            $this->assertStringContainsString($needle, $bin, "every render-failure lane must ride the catalog");
         }
     }
 

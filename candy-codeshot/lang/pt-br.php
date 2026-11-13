@@ -77,4 +77,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: o caminho de entrada "{path}" é um diretório - passe um arquivo ou envie via stdin',
     'cli.png_to_tty'          => 'candy-codeshot: recusando gravar bytes PNG brutos em um terminal (use --output <arquivo.png>)',
     'cli.stdin_tty'           => 'candy-codeshot: lendo de stdin - passe um arquivo ou envie a entrada (Ctrl-D para encerrar)',
+    'cli.render_failed'     => 'candy-codeshot: falha na renderização: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot: saída {format} grande demais ({width} x {height} = {pixels} pixels; limite {cap}). Reduza o conteúdo, o espaçamento ou o número de linhas.',
+    'cli.font_too_large'     => 'candy-codeshot: arquivo de fonte grande demais para incorporar: {size} bytes excedem o limite de {cap} ({path})',
 ];

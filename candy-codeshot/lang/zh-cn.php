@@ -76,4 +76,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: 输入路径 "{path}" 是目录 - 请传入文件或经 stdin 管道输入',
     'cli.png_to_tty'          => 'candy-codeshot: 拒绝向终端写入原始 PNG 字节 (使用 --output <file.png>)',
     'cli.stdin_tty'           => 'candy-codeshot: 正在从 stdin 读取 - 请传入文件或管道输入 (Ctrl-D 结束)',
+    'cli.render_failed'     => 'candy-codeshot：渲染失败: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot：{format} 输出过大 ({width} x {height} = {pixels} 像素; 上限 {cap})。请减少内容、边距或行数。',
+    'cli.font_too_large'     => 'candy-codeshot：字体文件过大无法嵌入: {size} 字节超过 {cap} 限制 ({path})',
 ];

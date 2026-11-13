@@ -76,4 +76,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: 입력 경로 "{path}"는 디렉터리입니다 - 파일을 전달하거나 stdin으로 파이프하세요',
     'cli.png_to_tty'          => 'candy-codeshot: 원시 PNG 바이트를 터미널에 쓰는 것을 거부합니다 (--output <file.png> 사용)',
     'cli.stdin_tty'           => 'candy-codeshot: stdin에서 읽는 중 - 파일을 전달하거나 입력을 파이프하세요 (Ctrl-D로 종료)',
+    'cli.render_failed'     => 'candy-codeshot: 렌더링 실패: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot: {format} 출력이 너무 큽니다 ({width} x {height} = {pixels}픽셀; 제한 {cap}). 콘텐츠, 여백 또는 줄 수를 줄이세요.',
+    'cli.font_too_large'     => 'candy-codeshot: 글꼴 파일을 포함하기에 너무 큽니다: {size}바이트가 제한 {cap}를 초과합니다 ({path})',
 ];

@@ -77,4 +77,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: vstupní cesta "{path}" je adresář - zadejte soubor, nebo vstup převeďte přes stdin',
     'cli.png_to_tty'          => 'candy-codeshot: odmítám zapisovat surová PNG data do terminálu (použijte --output <soubor.png>)',
     'cli.stdin_tty'           => 'candy-codeshot: čtu ze stdin - zadejte soubor nebo převeďte vstup (Ctrl-D ukončí)',
+    'cli.render_failed'     => 'candy-codeshot: vykreslení selhalo: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot: výstup {format} je příliš velký ({width} x {height} = {pixels} pixelů; limit {cap}). Zmenšte obsah, odsazení nebo počet řádků.',
+    'cli.font_too_large'     => 'candy-codeshot: font je příliš velký na vložení: {size} bytů překračuje limit {cap} ({path})',
 ];

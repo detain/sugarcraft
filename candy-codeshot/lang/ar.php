@@ -76,4 +76,7 @@ USAGE,
     'cli.is_directory'        => 'candy-codeshot: مسار الإدخال "{path}" دليل - مرر ملفًا أو ادخل عبر stdin',
     'cli.png_to_tty'          => 'candy-codeshot: رفض كتابة بايتات PNG أولية إلى الطرفية (استخدم --output <file.png>)',
     'cli.stdin_tty'           => 'candy-codeshot: القراءة من stdin - مرر ملفًا أو ادخل البيانات (Ctrl-D للإنهاء)',
+    'cli.render_failed'     => 'candy-codeshot: فشل العرض: {reason}',
+    'cli.pixels_exceeded'    => 'candy-codeshot: مخرج {format} كبير جدًا ({width} x {height} = {pixels} بكسل؛ الحد {cap}). قلل المحتوى أو الحشو أو عدد الأسطر.',
+    'cli.font_too_large'     => 'candy-codeshot: ملف الخط كبير جدًا للتضمين: {size} بايت تتجاوز حد {cap} ({path})',
 ];
