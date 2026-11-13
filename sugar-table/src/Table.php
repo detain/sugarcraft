@@ -2326,6 +2326,9 @@ final class Table
 
         $style = $bandStyle !== '' ? $this->styleFor($bandStyle) : null;
         $sepStyle = $this->styleOrNull($this->borderStyle);
+        // ST-67: the rightmost visible column is fixed for the whole row —
+        // resolve it once instead of re-ending() the index list per line.
+        $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);
 
         // Collect cell lines for each column (only visible columns)
         $cellLines = [];
@@ -2393,7 +2396,7 @@ final class Table
             [$canvas, $col] = $this->writeLeftEdge($canvas, $bufferRow, $style);
 
             // Render each visible cell, laid out contiguously (audit #4).
-            $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);
+            // $lastCi is resolved once per row above (ST-67).
             foreach ($visibleColumnIndices as $ci) {
                 $colWidth = $colWidths[$ci];
                 $cellData = $cellLines[$ci];
