@@ -33,7 +33,13 @@ final class Hyperlink implements \JsonSerializable
     public const CLOSE = "\x1b]8;;\x1b\\";
 
     public function __construct(
+        /**
+         * @deprecated the accessors are the canonical read surface (AGENTS.md
+         * bare-accessor house law); these stay published readonly for
+         * byte-compat with existing consumers. Use {@see self::url()}.
+         */
         public readonly string $url,
+        /** @deprecated use {@see self::id()} — canonical read surface. */
         public readonly string $id = '',
     ) {
         if (self::containsForbiddenControls($url)) {
@@ -84,7 +90,7 @@ final class Hyperlink implements \JsonSerializable
      */
     public function equals(self $other): bool
     {
-        return $this->url === $other->url && $this->id === $other->id;
+        return $this->url === $other->url() && $this->id === $other->id();
     }
 
     /**

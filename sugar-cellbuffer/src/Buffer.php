@@ -295,14 +295,14 @@ final class Buffer implements \JsonSerializable
     {
         $region ??= $this->region();
         $rows = [];
-        for ($dy = 0; $dy < $region->height; $dy++) {
-            $row = $region->origin->row + $dy;
+        for ($dy = 0; $dy < $region->height(); $dy++) {
+            $row = $region->origin()->row() + $dy;
             if ($row < 0 || $row >= $this->height) {
                 continue;
             }
             $line = '';
-            for ($dx = 0; $dx < $region->width; $dx++) {
-                $col = $region->origin->col + $dx;
+            for ($dx = 0; $dx < $region->width(); $dx++) {
+                $col = $region->origin()->col() + $dx;
                 if ($col < 0 || $col >= $this->width) {
                     continue;
                 }
@@ -359,8 +359,8 @@ final class Buffer implements \JsonSerializable
      * Blit (composite) $source into this buffer's $region.
      *
      * Cells from $source are copied into the region defined by
-     * $region->origin and $region->width/$region->height, clipped to the
-     * buffer edges.
+     * $region->origin(), $region->width() and $region->height(), clipped to
+     * the buffer edges.
      *
      * Note: negative origins are silently clipped — a region origin at
      * (-1, -1) starts one cell left/above the buffer's top-left corner
@@ -382,19 +382,21 @@ final class Buffer implements \JsonSerializable
         // intersection, never the full area. Source cells sit at their
         // offsets from the region origin inside that destination.
         $clip = $region
-            ->intersect(Region::new($region->origin, $srcW, $srcH))
+            ->intersect(Region::new($region->origin(), $srcW, $srcH))
             ?->intersect($this->region());
 
         if ($clip !== null) {
             $colEnd = $clip->right();
             $rowEnd = $clip->bottom();
-            for ($row = $clip->origin->row; $row <= $rowEnd; $row++) {
-                for ($col = $clip->origin->col; $col <= $colEnd; $col++) {
+            $originCol = $region->origin()->col();
+            $originRow = $region->origin()->row();
+            for ($row = $clip->origin()->row(); $row <= $rowEnd; $row++) {
+                for ($col = $clip->origin()->col(); $col <= $colEnd; $col++) {
                     $this->placeWithPair(
                         $grid,
                         $col,
                         $row,
-                        $source->grid[($row - $region->origin->row) * $srcW + ($col - $region->origin->col)],
+                        $source->grid[($row - $originRow) * $srcW + ($col - $originCol)],
                     );
                 }
             }
@@ -428,8 +430,8 @@ final class Buffer implements \JsonSerializable
         if ($clip !== null) {
             $colEnd = $clip->right();
             $rowEnd = $clip->bottom();
-            for ($row = $clip->origin->row; $row <= $rowEnd; $row++) {
-                for ($col = $clip->origin->col; $col <= $colEnd; $col++) {
+            for ($row = $clip->origin()->row(); $row <= $rowEnd; $row++) {
+                for ($col = $clip->origin()->col(); $col <= $colEnd; $col++) {
                     $this->placeWithPair($grid, $col, $row, $cell);
                 }
             }
@@ -465,28 +467,33 @@ final class Buffer implements \JsonSerializable
      */
     public function copy(Region $region): self
     {
-        if ($region->width <= 0 || $region->height <= 0) {
+        $regionWidth = $region->width();
+        $regionHeight = $region->height();
+        $originCol = $region->origin()->col();
+        $originRow = $region->origin()->row();
+
+        if ($regionWidth <= 0 || $regionHeight <= 0) {
             throw new \InvalidArgumentException(
-                "Buffer::copy() requires a region with positive dimensions (got {$region->width}x{$region->height})",
+                "Buffer::copy() requires a region with positive dimensions (got {$regionWidth}x{$regionHeight})",
             );
         }
 
-        if ($region->width * $region->height > self::MAX_COPY_CELLS) {
+        if ($regionWidth * $regionHeight > self::MAX_COPY_CELLS) {
             throw new \InvalidArgumentException(sprintf(
                 'Buffer::copy() region of %d cells exceeds the %d-cell safety cap.',
-                $region->width * $region->height,
+                $regionWidth * $regionHeight,
                 self::MAX_COPY_CELLS,
             ));
         }
 
-        $newWidth = $region->width;
-        $newHeight = $region->height;
+        $newWidth = $regionWidth;
+        $newHeight = $regionHeight;
         $newGrid = [];
 
-        for ($dy = 0; $dy < $region->height; $dy++) {
-            for ($dx = 0; $dx < $region->width; $dx++) {
-                $srcCol = $region->origin->col + $dx;
-                $srcRow = $region->origin->row + $dy;
+        for ($dy = 0; $dy < $regionHeight; $dy++) {
+            for ($dx = 0; $dx < $regionWidth; $dx++) {
+                $srcCol = $originCol + $dx;
+                $srcRow = $originRow + $dy;
 
                 if ($srcCol < 0 || $srcRow < 0) {
                     // Outside source bounds — use blank cell.
@@ -721,13 +728,15 @@ final class Buffer implements \JsonSerializable
 
         foreach ($ops as $op) {
             if ($op instanceof Diff\MoveCursorOp) {
-                if ($op->col < 0 || $op->row < 0) {
+                $opCol = $op->col();
+                $opRow = $op->row();
+                if ($opCol < 0 || $opRow < 0) {
                     throw new \InvalidArgumentException(
-                        "MoveCursorOp coordinates must not be negative: ({$op->col}, {$op->row})"
+                        "MoveCursorOp coordinates must not be negative: ({$opCol}, {$opRow})"
                     );
                 }
-                $cursorCol = $op->col;
-                $cursorRow = $op->row;
+                $cursorCol = $opCol;
+                $cursorRow = $opRow;
             } elseif ($op instanceof Diff\SetStyleOp) {
                 $pendingStyle = $op->style;
             } elseif ($op instanceof Diff\SetHyperlinkOp) {

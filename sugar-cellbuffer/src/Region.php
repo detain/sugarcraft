@@ -31,8 +31,15 @@ final class Region implements \JsonSerializable
      * @throws \InvalidArgumentException when $width or $height is negative
      */
     public function __construct(
+        /**
+         * @deprecated the accessor is the canonical read surface (AGENTS.md
+         * bare-accessor house law); the property stays published for
+         * byte-compat with existing consumers. Use {@see self::origin()}.
+         */
         public readonly Position $origin,
+        /** @deprecated use {@see self::width()} — canonical read surface. */
         public readonly int $width,
+        /** @deprecated use {@see self::height()} — canonical read surface. */
         public readonly int $height,
     ) {
         if ($width < 0 || $height < 0) {
@@ -59,13 +66,13 @@ final class Region implements \JsonSerializable
     /** Rightmost column (inclusive). */
     public function right(): int
     {
-        return $this->origin->col + $this->width - 1;
+        return $this->origin()->col() + $this->width() - 1;
     }
 
     /** Bottommost row (inclusive). */
     public function bottom(): int
     {
-        return $this->origin->row + $this->height - 1;
+        return $this->origin()->row() + $this->height() - 1;
     }
 
     /**
@@ -74,9 +81,9 @@ final class Region implements \JsonSerializable
      */
     public function contains(int $col, int $row): bool
     {
-        return $col >= $this->origin->col
+        return $col >= $this->origin()->col()
             && $col <= $this->right()
-            && $row >= $this->origin->row
+            && $row >= $this->origin()->row()
             && $row <= $this->bottom();
     }
 
@@ -92,8 +99,8 @@ final class Region implements \JsonSerializable
      */
     public function intersect(self $other): ?self
     {
-        $col = max($this->origin->col, $other->origin->col);
-        $row = max($this->origin->row, $other->origin->row);
+        $col = max($this->origin()->col(), $other->origin()->col());
+        $row = max($this->origin()->row(), $other->origin()->row());
         $right = min($this->right(), $other->right());
         $bottom = min($this->bottom(), $other->bottom());
 

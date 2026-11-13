@@ -15,7 +15,13 @@ namespace SugarCraft\CellBuffer;
 final class Position implements \JsonSerializable
 {
     public function __construct(
+        /**
+         * @deprecated the accessor is the canonical read surface (AGENTS.md
+         * bare-accessor house law); the property stays published for
+         * byte-compat with existing consumers. Use {@see self::col()}.
+         */
         public readonly int $col,
+        /** @deprecated use {@see self::row()} — canonical read surface. */
         public readonly int $row,
     ) {}
 
@@ -36,7 +42,7 @@ final class Position implements \JsonSerializable
      */
     public function equals(self $other): bool
     {
-        return $this->col === $other->col && $this->row === $other->row;
+        return $this->col === $other->col() && $this->row === $other->row();
     }
 
     /**

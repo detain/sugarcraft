@@ -64,12 +64,19 @@ final class Style implements \JsonSerializable
      * @throws \InvalidArgumentException when a palette slot is outside 0-255
      *                                   or an RGB contradicts its co-set slot.
      */
+    /** @deprecated use {@see self::fg()} — accessors are the canonical read surface. */
     public readonly ?int $fg;      // 0xRRGGBB or null = default
+    /** @deprecated use {@see self::bg()} — canonical read surface. */
     public readonly ?int $bg;      // 0xRRGGBB or null = default
+    /** @deprecated use {@see self::attrs()} — canonical read surface. */
     public readonly int $attrs;    // bitmask of ATTR_* constants
+    /** @deprecated use {@see self::fgSlot()} — canonical read surface. */
     public readonly ?int $fgSlot;  // 0-255 palette identity, or null
+    /** @deprecated use {@see self::bgSlot()} — canonical read surface. */
     public readonly ?int $bgSlot;  // 0-255 palette identity, or null
+    /** @deprecated use {@see self::ul()} — canonical read surface. */
     public readonly ?int $ul;      // underline 0xRRGGBB or null
+    /** @deprecated use {@see self::ulSlot()} — canonical read surface. */
     public readonly ?int $ulSlot;  // 0-255 palette identity, or null
 
     public function __construct(
@@ -371,13 +378,13 @@ final class Style implements \JsonSerializable
      */
     public function equals(self $other): bool
     {
-        return $this->fg === $other->fg
-            && $this->bg === $other->bg
-            && $this->attrs === $other->attrs
-            && $this->fgSlot === $other->fgSlot
-            && $this->bgSlot === $other->bgSlot
-            && $this->ul === $other->ul
-            && $this->ulSlot === $other->ulSlot;
+        return $this->fg === $other->fg()
+            && $this->bg === $other->bg()
+            && $this->attrs === $other->attrs()
+            && $this->fgSlot === $other->fgSlot()
+            && $this->bgSlot === $other->bgSlot()
+            && $this->ul === $other->ul()
+            && $this->ulSlot === $other->ulSlot();
     }
 
     /**

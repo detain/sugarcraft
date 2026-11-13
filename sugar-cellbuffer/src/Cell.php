@@ -62,9 +62,17 @@ final class Cell implements \JsonSerializable
      *         width > 2 span declares more columns than its rune occupies.
      */
     public function __construct(
+        /**
+         * @deprecated the accessors are the canonical read surface (AGENTS.md
+         * bare-accessor house law); these stay published readonly for
+         * byte-compat with existing consumers. Use {@see self::rune()}.
+         */
         public readonly string $rune,
+        /** @deprecated use {@see self::style()} — canonical read surface. */
         public readonly ?Style $style,
+        /** @deprecated use {@see self::link()} — canonical read surface. */
         public readonly ?Hyperlink $link,
+        /** @deprecated use {@see self::width()} — canonical read surface. */
         public readonly int $width,
     ) {
         // Negative widths desync every column computation (toAnsi, diff,

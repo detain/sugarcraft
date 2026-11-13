@@ -143,8 +143,8 @@ final class DiffEncoder
     {
         // 1-based for CUP; negatives clamp to the grid edge (fail-soft render
         // path — applyDiff refuses negative coords fail-loud).
-        $row = max(0, $op->row) + 1;
-        $col = max(0, $op->col) + 1;
+        $row = max(0, $op->row()) + 1;
+        $col = max(0, $op->col()) + 1;
 
         if ($col === $this->cursorCol && $row === $this->cursorRow) {
             return ''; // Already there.
