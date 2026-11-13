@@ -552,7 +552,7 @@ final class VeilStackTest extends TestCase
      */
     public function testMemberVeilsKeepANullLastFullFrameAfterStackRender(): void
     {
-        // SO-34 declared contract (sugar-overlay-034): the stack renders on
+        // SO-23 declared contract (sugar-overlay-034): the stack renders on
         // throwaway withoutSession() clones, so member sessions never
         // remember a frame — dismissal wiring must scan the RETURNED canvas.
         $panel  = Veil::new()->withContent('[panel]')->withZIndex(1);
@@ -567,7 +567,7 @@ final class VeilStackTest extends TestCase
 
     public function testPerLayerAnimationIsInertOnTheStackPasses(): void
     {
-        // SO-34 declared contract (sugar-overlay-034): composite()/
+        // SO-23 declared contract (sugar-overlay-034): composite()/
         // compositeAll() never call animate(), so a member's driver changes
         // no bytes — pinned as byte-equality against the same stack un-animated.
         $base = Veil::new()->withContent('[a]')->withBackdrop(30);
