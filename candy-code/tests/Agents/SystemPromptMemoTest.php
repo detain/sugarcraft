@@ -25,7 +25,7 @@ final class SystemPromptMemoTest extends TestCase
 
     protected function tearDown(): void
     {
-        exec('rm -rf ' . escapeshellarg($this->dir));
+        exec('rm -rf ' . escapeshellarg($this->dir) . ' 2>&1');
         SystemPromptMemo::reset();
     }
 

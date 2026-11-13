@@ -18,7 +18,7 @@ final class GatewayRecycleLoopClockTest extends TestCase
 {
     public function testAsyncLadderKeepsTheLoopTickingWhileAWedgedChildIsReaped(): void
     {
-        $process = \proc_open(['sh', '-c', 'trap "" TERM; while :; do sleep 0.05; done'], [], $pipes);
+        $process = \proc_open(['sh', '-c', 'trap "" TERM; while :; do sleep 0.05; done'], [2 => ['pipe', 'w']], $pipes);
         $this->assertIsResource($process);
         \usleep(100_000);
 
@@ -44,6 +44,9 @@ final class GatewayRecycleLoopClockTest extends TestCase
         $loop->run();
         $loop->cancelTimer($ticker);
         $loop->cancelTimer($guard);
+        if (\is_resource($pipes[2])) {
+            \fclose($pipes[2]);
+        }
 
         $this->assertLessThan(0.1, $returned, 'the async variant returns without waiting');
         $this->assertNotSame('unset', $status, 'the ladder completed');

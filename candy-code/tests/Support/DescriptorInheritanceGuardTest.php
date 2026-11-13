@@ -760,6 +760,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'count' => 1,
             'reason' => 'function_exists() capability probe: with proc_open disabled an @pr:<n> mention is a notice, not a GhRunner spawn (roadmap GAP-GIT-04)',
         ],
+        'Agents/SystemPromptMemo.php::keyFor' => [
+            'count' => 1,
+            'reason' => 'function_exists() capability probe: with proc_open disabled the fingerprint is unavailable and the memo is bypassed; the status read itself goes through GitRunner::capture()',
+        ],
         'Context/EnvironmentBlock.php::gitField' => [
             'count' => 1,
             'reason' => 'function_exists() capability probe for a build with proc_open disabled',

@@ -43,6 +43,9 @@ use SugarCraft\Code\MCP\OAuthClientRegistration;
  */
 final class McpRedirectRefusalTest extends TestCase
 {
+    /** @var resource|null the metadata fixture server's stderr pipe (read end) */
+    private $metadataServerStderr = null;
+
     private const REFUSAL_PROBE_URL = 'http://locked.example:9777/mcp';
 
     private const BEARER_CANARY = 'Bearer mcp-4-http-canary';
@@ -348,11 +351,15 @@ final class McpRedirectRefusalTest extends TestCase
 
         $proc = proc_open(
             [PHP_BINARY, '-S', '127.0.0.1:' . $port, $dir . '/router.php'],
-            [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $dir,
         );
         self::assertIsResource($proc);
+        // The server logs each request to fd 2. The read end stays open for the
+        // fixture's life (a closed one would SIGPIPE the server on its first
+        // log line) and is closed with the server.
+        $this->metadataServerStderr = $pipes[2];
 
         $deadline = microtime(true) + 5.0;
         while (microtime(true) < $deadline) {
@@ -373,6 +380,10 @@ final class McpRedirectRefusalTest extends TestCase
     {
         proc_terminate($proc, 9);
         proc_close($proc);
+        if (\is_resource($this->metadataServerStderr)) {
+            fclose($this->metadataServerStderr);
+        }
+        $this->metadataServerStderr = null;
         foreach (glob($dir . '/*') ?: [] as $f) {
             @unlink($f);
         }
