@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '已记录 {duration}s：{project} ({language})',
-    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   [<project> <language>] <file> [duration] [tags] | --  记录心跳\n  milestone              add [name] [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days | from [to]]  导出心跳 (默认 7 天)\n  gaps                   [days | from [to]] [--min=<secs>]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  删除匹配筛选的存储心跳（不加 --apply 仅预演）\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  --time=<unix>          push: 将心跳记录到指定的 unix 秒，而不是现在\n  --sqlite               backup：用 VACUUM INTO 归档 SQLite 数据库（崩溃安全快照）\n  --theme=<name>         仪表盘：使用命名调色板绘制 (default, light, dracula, solarized, gruvbox, high-contrast)
+    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   [<project> <language>] <file> [duration] [tags] | --  记录心跳 (秒为单位，默认 60)\n  milestone              add <name> [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days | from [to]]  导出心跳 (默认 7 天)\n  gaps                   [days | from [to]] [--min=<secs>]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  删除匹配筛选的存储心跳（不加 --apply 仅预演）\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  --time=<unix>          push: 将心跳记录到指定的 unix 秒，而不是现在\n  --sqlite               backup：用 VACUUM INTO 归档 SQLite 数据库（崩溃安全快照）\n  --theme=<name>         仪表盘：使用命名调色板绘制 (default, light, dracula, solarized, gruvbox, high-contrast)
   CANDY_CODETIME_THEME   以环境变量给出同样选择（命令行开关优先）\n  --project=<name>       export/gaps：仅保留此项目的记录\n  --tag=<label>          export/gaps：仅保留带此标签的记录\n  --min=<secs>           gaps：仅报告不少于该秒数的未跟踪空档（默认 300）\n  --file-prefix=<path>   forget：仅存储路径以此前缀开头的心跳\n  --apply                forget：实际删除匹配的心跳，而非预演\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime，未设置时用 \$HOME/.local/share/candy-codetime，HOME 也未设置时用 ./.local/share/candy-codetime)",
     'cli.push_usage' => '用法: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin 批量 JSON 行)',
     'cli.push_missing_args' => "candy-codetime: push: 缺少必需参数 (project, language, file)",
@@ -33,7 +33,7 @@ return [
     'cli.storage_error' => 'candy-codetime: 存储错误：{message}',
     'cli.ignore_too_large' => 'candy-codetime: {message}',
     'cli.dashboard_needs_tty' => 'candy-codetime：仪表板需要交互式终端（stdin 与 stdout 不是 TTY）。无终端输出请使用：candy-codetime export <csv|json|ics>',
-    'cli.milestone_usage' => "用法: candy-codetime milestone add [name] [description] | list",
+    'cli.milestone_usage' => "用法: candy-codetime milestone add <name> [description] | list",
     'cli.milestone_missing_args' => "candy-codetime: milestone add: 缺少必需参数 (name)",
     'cli.milestone_added' => "里程碑已添加: {name}",
     'cli.milestone_list_header' => "里程碑:",

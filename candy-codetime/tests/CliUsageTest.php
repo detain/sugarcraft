@@ -89,6 +89,26 @@ final class CliUsageTest extends TestCase
         );
     }
 
+    /**
+     * CT-S50 (finding 062/078): three facts used to live in only one of the
+     * two manuals — the default duration, the "of at least" threshold and
+     * the mandatory milestone name. Pin the shipped catalogue and the
+     * README table against each other so either side drifting goes red.
+     */
+    public function testTheDocumentedFactsAgreeBetweenUsageAndReadme(): void
+    {
+        $usage = self::usage();
+        $readme = (string) file_get_contents(dirname(__DIR__) . '/README.md');
+
+        $this->assertStringContainsString('Record a heartbeat (duration in seconds, default 60)', $usage);
+        $this->assertStringContainsString('default 60', $readme);
+        $this->assertStringContainsString('Show untracked gaps of at least 300 seconds', $usage);
+        $this->assertStringContainsString('| `milestone` | `add <name> [description]`', $readme);
+        $this->assertStringContainsString('add <name> [description] | list', $usage);
+        $this->assertStringNotContainsString('[name] [description]', $usage);
+        $this->assertStringNotContainsString('release markers', $readme);
+    }
+
     public function testEveryCommandRowInUsageIsActuallyDispatched(): void
     {
         $dispatched = self::dispatchedCommands();
