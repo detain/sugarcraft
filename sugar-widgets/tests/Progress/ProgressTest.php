@@ -532,4 +532,31 @@ final class ProgressTest extends TestCase
         $p = Progress::new(0.5)->withWidth(10);
         $this->assertSame($p->view(), (string) $p, '__toString is view() — no second render path');
     }
+
+    public function testRenderModeFeatureMatrixMatchesCode(): void
+    {
+        // The withRenderMode docblock's feature matrix must match the
+        // actual per-mode honour-list in the source (W-30 announcement:
+        // nothing is silently withheld from Line/Slim any more).
+        $src   = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Progress/Progress.php');
+        $lineS = strpos($src, 'ProgressRenderMode::Line) {');
+        $slimS = strpos($src, 'ProgressRenderMode::Slim) {');
+        $block = strpos($src, '// Block mode');
+        $this->assertNotFalse($lineS);
+        $this->assertNotFalse($slimS);
+        $this->assertNotFalse($block);
+        $lineBranch  = substr($src, $lineS, $slimS - $lineS);
+        $slimBranch  = substr($src, $slimS, $block - $slimS);
+        $blockBranch = substr($src, $block);
+        $this->assertStringNotContainsString('renderColorFunc(', $lineBranch, 'Line ignores colorFunc — announced');
+        $this->assertStringNotContainsString('renderGradient(', $lineBranch, 'Line ignores gradients — announced');
+        $this->assertStringNotContainsString('fullChar', $lineBranch, 'Line ignores custom runes — announced');
+        $this->assertStringNotContainsString('renderColorFunc(', $slimBranch, 'Slim ignores colorFunc — announced');
+        $this->assertStringNotContainsString('renderGradient(', $slimBranch, 'Slim ignores gradients — announced');
+        $this->assertStringNotContainsString('fullChar', $slimBranch, 'Slim ignores custom runes — announced');
+        $this->assertStringContainsString('pctText', $slimBranch, 'Slim honours the percent suffix');
+        $this->assertStringContainsString('renderColorFunc(', $blockBranch, 'Block honours colorFunc');
+        $this->assertStringContainsString('renderGradient(', $blockBranch, 'Block honours gradients');
+        $this->assertStringContainsString('fullChar', $blockBranch, 'Block honours custom runes');
+    }
 }

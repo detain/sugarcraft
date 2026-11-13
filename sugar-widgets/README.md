@@ -62,7 +62,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | `Key\Binding` | One key list + label + help row: readonly `keys`/`help`/`disabled`, `matches()` / static `any()` for dispatch, `withHelp()`, `disable()`/`setEnabled()` (plus legacy `setKeys()`/`setHelp()`), `unbind()`; factories `Binding::new(...)`, `Binding::withDisabled(...)` | — |
 | `Key\KeyMap` | Interface — implement it so `Help` can render your bindings: `shortHelp(): list<Binding>` for the inline row, `fullHelp(): list<list<Binding>>` for the expanded pane (one inner list per column); `Tabs\TabsKeyMap` is the shipped example. Note `Key\Help` — the small `{key, desc}` value object bindings render through — is a *different* type from the `Help\Help` component | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |
-| `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`; render modes via `withRenderMode(ProgressRenderMode)` — `Block` / `Line` / `Slim` — and custom percent copy via `withPercentFormat(string)`) | — |
+| `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`; render modes via `withRenderMode(ProgressRenderMode)` — `Block` / `Line` / `Slim`, see *Render-mode feature matrix* below — and custom percent copy via `withPercentFormat(string)`) | — |
 | `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); reduced motion is honoured BY THE ENGINE — every `Spring` consults `Probe::reducedMotion()` (`sugar-colorprofile`; any value outside `''`/`0`/`false`/`no`/`off`) and snaps to target, a per-spring override always winning — not by widget code | `SpringTickMsg` |
 | `Timer\Timer` | Countdown timer — `Timer::new($duration, $interval = 1.0)` (duration is required); `remaining` / `interval` are promoted readonly properties, the methods are `interval(): float`, `timeout(): float` (remaining seconds — `0` once `TimeoutMsg` has fired) and `withInterval(float)`; there is no `remaining()` method. When not running, `view()` appends a dim state tag (`paused`, or `timeout` once `TimeoutMsg` has fired) so the state is visible in the frame — running bytes are byte-identical; hosts style it themselves from the plain-text `stateLabel()`. In-flight ticks from stopped generations are refused via the tick `epoch` | `Timer\TimerTick` (deprecated alias `TickMsg`), `TimeoutMsg` |
 | `Stopwatch\Stopwatch` | Count-up timer; `elapsed`, `interval()`, `withInterval(float)`. `elapsed` is a **tick-count accumulator** (ticks × interval), not wall-clock — it advances only while `update()` consumes ticks. Same dim state tag as `Timer` while not running, with `not started` and `paused` distinct (`stateLabel()`) | `Stopwatch\StopwatchTick` (deprecated alias `TickMsg`) |
@@ -644,6 +644,25 @@ This gives btop's *colouring*, not its fill count (Progress fills
 measured percent-suffix when the `%` label fits — see the `computeBarLayout()`
 reserved-suffix maths). For an exact btop meter use sugar-dashboard
 `Meter::withGradient($stops, positionWise: true)`.
+
+## Render-mode feature matrix (Line / Slim / Block)
+
+`withRenderMode()` picks the glyph vocabulary; which colour APIs are
+honoured **depends on the mode** (verified against the source branches,
+pinned by `ProgressTest::testRenderModeFeatureMatrixMatchesCode`):
+
+| API | `Block` (default) | `Line` | `Slim` |
+|---|---|---|---|
+| runes via `withRunes()` | ✓ | ✗ fixed `━`/`─` | ✗ fixed `▌`/`▒` |
+| `withGradient()` / `withColorFunc()` | ✓ | ✗ | ✗ |
+| solid `withColors()` | ✓ | ✓ | ✓ |
+| percent suffix | ✓ (reserved inside width) | ✗ never printed | ✓ (yields: hidden if it cannot fit) |
+
+The per-cell colouring Line and Slim drop is a deliberate announcement,
+not a silent gap — upgrading those modes is an open design call. Also
+keep `width >= label + 6` when the percent suffix is on: Block reserves
+the suffix inside the configured width, Line mode lets the whole row
+overflow, and `viewWidth()` reports the honest rendered width.
 
 ## Localization
 

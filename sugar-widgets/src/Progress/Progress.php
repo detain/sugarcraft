@@ -175,8 +175,25 @@ final class Progress
         return $this->withPercent($this->percent - $delta);
     }
 
-    /** Bar width in cells; 0 collapses the bar to its label (N3). */
+    /**
+     * Bar width in cells; 0 collapses the bar to its label (N3). The
+     * promise is BAR GEOMETRY only: a percent/value suffix is priced
+     * on top (sugar-widgets-054, bubbles parity) — Block reserves cells
+     * for the bare percent but a value suffix always extends the row
+     * past `n`, and Slim yields only while the percent fits. Use
+     * {@see viewWidth()} for the honest total measurement, or budget
+     * `width >= n + 6` when a suffix is on.
+     */
     public function withWidth(int $w): self        { return $this->mutate(width: $w); }
+
+    /**
+     * Fill/empty bar runes. Honoured by `Block` renders only — Line and
+     * Slim carry fixed glyphs (see the {@see withRenderMode()} feature
+     * matrix).
+     *
+     * @throws \InvalidArgumentException when either rune is not exactly
+     *         one display cell wide (rejected at ingress).
+     */
     public function withRunes(string $full, string $empty): self
     {
         return $this->mutate(
@@ -232,8 +249,9 @@ final class Progress
     /**
      * Multi-stop colour gradient. Two or more {@see Color}s are evenly
      * distributed across the bar's filled cells; pairs of adjacent
-     * stops drive linear blends. Mirrors upstream Bubbles'
-     * `WithColors(...colors)`.
+     * stops drive linear blends. Mirrors charmbracelet/bubbles
+     * `WithColors(...colors)`. Honoured by `Block` renders only — see
+     * the {@see withRenderMode()} feature matrix.
      *
      * Passing a single colour acts like {@see withSolidFill()};
      * passing zero clears every gradient setting.
@@ -275,7 +293,8 @@ final class Progress
      * `Meter::withGradient(..., positionWise: true)`. The arg is appended, so existing three-param closures keep
      * working (PHP drops surplus args to user closures).
      *
-     * Pass `null` to clear.
+     * Pass `null` to clear. Honoured by `Block` renders only — see the
+     * {@see withRenderMode()} feature matrix.
      */
     public function withColorFunc(?\Closure $fn): self
     {
@@ -298,7 +317,20 @@ final class Progress
 
     /**
      * Set the render mode for the progress bar.
-     * Mirrors ratatui's LineGauge render modes.
+     * Mirrors charmbracelet/bubbles `ProgressBar` render modes +
+     * ratatui's LineGauge variants.
+     *
+     * Feature matrix (sugar-widgets-041 announced; per-cell colouring
+     * in Line/Slim is a future ruling, NOT silently withheld):
+     * - `Block` — honours everything: custom {@see withRunes()},
+     *   {@see withGradient()}/{@see withColorFunc()}, solid colours,
+     *   percent and value suffixes.
+     * - `Line`  — fixed ━/─ (U+2501/U+2500) glyphs; solid
+     *   fill/empty colours honoured, NO percent text and the gradient,
+     *   colorFunc and custom runes are ignored.
+     * - `Slim`  — fixed ▌/▒ (U+258C/U+2592) glyphs; solid colours and
+     *   the percent suffix honoured; custom runes, gradient and
+     *   colorFunc are ignored.
      */
     public function withRenderMode(ProgressRenderMode $mode): self
     {
