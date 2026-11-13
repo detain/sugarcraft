@@ -29,6 +29,8 @@ use SugarCraft\Style\Style;
  * ```
  *
  * The component is immutable — every setter returns a new instance.
+ * Disabled bindings are skipped unless {@see withShowDisabled()} pins
+ * them into the footer (the toggle never fires on a disabled binding).
  */
 final class Help
 {
@@ -47,6 +49,7 @@ final class Help
         public readonly string $ellipsis   = '…',
         public readonly string $fullSeparator = "\n",
         public readonly ?Styles $styles    = null,
+        public readonly bool   $showDisabled = false,
     ) {}
 
     /**
@@ -63,6 +66,7 @@ final class Help
         string  $ellipsis      = '…',
         string  $fullSeparator = "\n",
         ?Styles $styles        = null,
+        bool    $showDisabled  = false,
     ): self {
         return new self(
             separator:     $separator,
@@ -73,6 +77,7 @@ final class Help
             ellipsis:      $ellipsis,
             fullSeparator: $fullSeparator,
             styles:        $styles,
+            showDisabled:  $showDisabled,
         );
     }
 
@@ -121,6 +126,20 @@ final class Help
     public function showAll(bool $on = true): self
     {
         return $this->withShowAll($on);
+    }
+
+    /**
+     * Include DISABLED bindings in the rendered help (both views).
+     * Off by default — the skip-disabled posture mirrors Bubbles'; with
+     * it on, greyed-out bindings still document what exists: a host can
+     * grey the row in its own `Binding` help text and let the footer
+     * show the full command surface. `updateWithBinding()` never toggles
+     * on a disabled binding regardless of this flag, and a binding with
+     * no help text stays skipped either way.
+     */
+    public function withShowDisabled(bool $on = true): self
+    {
+        return $this->copy(showDisabled: $on);
     }
 
     /**
@@ -355,7 +374,11 @@ final class Help
 
     private function renderBinding(Binding $b, bool $full = false): string
     {
-        if ($b->disabled || ($b->help->key === '' && $b->help->desc === '')) {
+        // Disabled entries are skipped by default; with `showDisabled` on
+        // they render normally so a host can document what exists and is
+        // merely greyed out (W-45). A binding with NO help text has
+        // nothing to render either way — it stays skipped.
+        if (($b->disabled && !$this->showDisabled) || ($b->help->key === '' && $b->help->desc === '')) {
             return '';
         }
         // Marked-frame world: hosts may wrap rendered help rows in
@@ -417,6 +440,7 @@ final class Help
         ?string $fullSeparator = null,
         ?Styles $styles = null,
         bool    $stylesSet = false,
+        ?bool   $showDisabled = null,
     ): self {
         return new self(
             separator:     $separator     ?? $this->separator,
@@ -427,6 +451,7 @@ final class Help
             ellipsis:      $ellipsis      ?? $this->ellipsis,
             fullSeparator: $fullSeparator ?? $this->fullSeparator,
             styles:        $stylesSet ? $styles : $this->styles,
+            showDisabled:  $showDisabled ?? $this->showDisabled,
         );
     }
 }

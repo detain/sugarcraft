@@ -337,4 +337,33 @@ final class HelpTest extends TestCase
         // col1 '↑ up' (4 cells) + gap + col2 'q quit', row rtrimmed.
         $this->assertSame('↑ up  |  q quit', $help->fullView($map));
     }
+
+    // ─── showDisabled (W-45) ─────────────────────────────────────────
+
+    public function testShowDisabledPinsDisabledRowsIntoBothViews(): void
+    {
+        $enabled  = $this->b('ctrl+a', 'all');
+        $disabled = (new Binding(['ctrl+d'], disabled: true))->withHelp('ctrl+d', 'greyed');
+        $map = new FakeKeyMap([$enabled, $disabled], [[$enabled], [$disabled]]);
+        $help = new Help();
+        $this->assertFalse($help->showDisabled, 'default-off: skip-disabled posture preserved');
+        $this->assertStringNotContainsString('greyed', $help->shortView($map));
+        $this->assertStringNotContainsString('greyed', $help->fullView($map));
+        $shown = $help->withShowDisabled();
+        $this->assertStringContainsString('ctrl+a all', $shown->shortView($map));
+        $this->assertStringContainsString('greyed', $shown->shortView($map), 'disabled row documents what exists');
+        $this->assertStringContainsString('ctrl+d', $shown->fullView($map));
+        $this->assertNotSame($help, $shown, 'value verb returns a new instance');
+    }
+
+    public function testShowDisabledKeepsEmptyHelpHiddenAndToggleRefused(): void
+    {
+        $bare = new Binding(['ctrl+x'], disabled: true); // no help text at all
+        $map = new FakeKeyMap([$bare], [[$bare]]);
+        $this->assertSame('', (new Help())->withShowDisabled()->shortView($map));
+        $toggle = (new Binding(['h'], disabled: true))->withHelp('h', 'help');
+        $h = new Help();
+        $h2 = $h->updateWithBinding(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'h'), $toggle);
+        $this->assertSame($h->showAll, $h2->showAll, 'a disabled binding never toggles, flag or not');
+    }
 }
