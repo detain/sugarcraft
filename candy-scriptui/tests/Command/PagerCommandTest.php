@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Command;
 
 use SugarCraft\ScriptUi\Application;
+use SugarCraft\ScriptUi\Command\PagerCommand;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -113,5 +114,40 @@ final class PagerCommandTest extends TestCase
         $this->assertStringContainsString("fwrite(STDERR, Lang::t('io.read_failed'", $src);
         // Before the Lang import fix this path fataled: "Class ... not found".
         $this->assertStringNotContainsString('Class "', $display);
+    }
+
+    /**
+     * scriptui-21 — --soft-wrap pre-wrapping must preserve SGR sequences.
+     * Width::wrap starts with Ansi::strip, so the old call silently
+     * unstyled every colourised input; the byte-level contract is that
+     * the codes survive, the visible text still wraps, and no physical
+     * line exceeds the budget.
+     */
+    public function testSoftWrapPrewrapKeepsAnsiCodes(): void
+    {
+        $in  = "\x1b[31maaaa bbbb cccc dddd\x1b[0m";
+        $out = PagerCommand::prewrapSoftWrap($in, 10);
+
+        $this->assertStringContainsString("\x1b[31m", $out, 'red SGR must survive pre-wrap');
+        $this->assertStringContainsString("\x1b[0m", $out, 'reset SGR must survive pre-wrap');
+        $this->assertSame(
+            'aaaa bbbb cccc dddd',
+            strtr(\SugarCraft\Core\Util\Ansi::strip($out), "\n", ' '),
+        );
+    }
+
+    public function testSoftWrapPrewrapBoundsVisibleLineWidth(): void
+    {
+        $in  = "prefix \x1b[1;33m" . str_repeat('word ', 40) . "\x1b[0m suffix";
+        $out = PagerCommand::prewrapSoftWrap($in, 20);
+
+        $this->assertGreaterThan(1, count(explode("\n", $out)), 'input must actually wrap');
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(
+                20,
+                \SugarCraft\Core\Util\Width::of($line),
+                'wrapped line overflows budget: ' . var_export($line, true),
+            );
+        }
     }
 }

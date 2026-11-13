@@ -68,7 +68,7 @@ final class PagerCommand extends Command
             if ($width <= 0) {
                 $width = \SugarCraft\ScriptUi\Runtime\Geometry::columnsOrNull() ?? 80;
             }
-            $raw = \SugarCraft\Core\Util\Width::wrap($raw, max(1, $width));
+            $raw = self::prewrapSoftWrap($raw, $width);
         }
 
         $model   = PagerModel::fromContent(
@@ -110,6 +110,19 @@ final class PagerCommand extends Command
             return SignalExit::EXIT_INTERRUPTED;
         }
         return Command::SUCCESS;
+    }
+
+    /**
+     * scriptui-21: --soft-wrap must only change line breaks, never
+     * styling. Width::wrap begins with Ansi::strip, so colourised input
+     * (ls --color, git diff) arrived at the viewport unstyled while the
+     * non-wrap clip path is ANSI-aware. Width::wrapAnsi keeps every CSI
+     * sequence intact and holds the visible width contract; an active
+     * SGR simply continues across the break.
+     */
+    public static function prewrapSoftWrap(string $raw, int $width): string
+    {
+        return \SugarCraft\Core\Util\Width::wrapAnsi($raw, max(1, $width));
     }
 
     private static function readStdin(): string
