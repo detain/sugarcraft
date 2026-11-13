@@ -14,7 +14,7 @@ use SugarCraft\Core\Util\Width;
  * the terminal cell grid and honouring CJK wide-char column accounting
  * via {@see Width::string()}.
  *
- * Stateless and reentrant: {@see parse()} keeps every piece of scan state in
+ * Stateless and reentrant. {@see parse()} keeps every piece of scan state in
  * locals and is itself static — `Scan::parse($frame, $width)` — so no
  * instance state exists to corrupt, share, or re-enter.
  *
@@ -41,8 +41,8 @@ use SugarCraft\Core\Util\Width;
  *
  * A sentinel that does NOT begin a valid tag — a bare U+E000 whose would-be
  * id contains a space, an escape, a newline, a non-ASCII byte or more than
- * {@see Mark::MAX_ID_BYTES} bytes, or a bare U+E001 — is a *lone sentinel*:
- * only its own 3 bytes are skipped (zero-width, matching
+ * {@see Mark::MAX_ID_BYTES} bytes, or a bare U+E001 — is a *lone sentinel*.
+ * Only its own 3 bytes are skipped (zero-width, matching
  * {@see \SugarCraft\Core\Util\Sanitize::stripZoneSentinels()}), and whatever
  * follows is measured as ordinary visible text. A lone sentinel can never
  * swallow a span of text, so column and row tracking stay exact.
@@ -70,24 +70,24 @@ use SugarCraft\Core\Util\Width;
  * ## Line endings
  *
  * `\n` and `\r\n` both end a row (column back to 1, row + 1). A lone `\r`
- * returns the cursor to column 1 on the SAME row, as a terminal does; zones
- * still open keep the extent they had already painted — never the cell they
- * opened on unless they painted it — and a zone that paints again after the
+ * returns the cursor to column 1 on the same row, as a terminal does. Zones
+ * still open keep the extent they had already painted, never the cell they
+ * opened on unless they painted it. A zone that paints again after the
  * `\r` widens its bbox to start at column 1. The same painted-cells-only
- * rule governs rows: a `\n` that ends a row holding no cell of the zone
+ * rule governs rows. A `\n` that ends a row holding no cell of the zone
  * extends nothing, so a box opened around 'abc' followed by two newlines
- * and its close tag stays a one-row box over 'abc' — the trailing blank
- * lines inside the tags are content the zone
- * owns but never drew, and a bbox may not claim undrawn rows.
+ * and its close tag stays a one-row box over 'abc'. The trailing blank
+ * lines inside the tags are content the zone owns but never drew, and a
+ * bbox may not claim undrawn rows.
  *
- * A zone still open at a `\n` that has painted NOTHING yet (its content
- * starts with `\n`, possibly behind SGR) owns no cell of the row being
- * ended, so it is re-anchored at column 1 of the next row — the bbox it
+ * A zone still open at a `\n` that has painted nothing yet — its content
+ * starts with `\n`, possibly behind SGR — owns no cell of the row being
+ * ended. It is re-anchored at column 1 of the next row: the bbox it
  * would get had its zero-width open tag sat there.  This applies whatever
  * column the zone opened on, column 1 included: `'123456789' .
  * zone("\nabc")` and a bare `zone("\nabc")` are both cols 1-3 of row 2.
  * It deliberately departs from upstream bubblezone, which keeps the open
- * position (column AND row) as Start (measured against bubblezone v2
+ * position (column and row) as Start (measured against bubblezone v2
  * 9615dc0, 0-based coordinates):
  *
  * | Input                          | bubblezone                 | port            |
@@ -97,8 +97,8 @@ use SugarCraft\Core\Util\Width;
  * | `zone("\nabc")` (opened at column 1) | Start(0,0) End(2,1): claims unpainted cols 1-3 of row 1 | cols 1-3, row 2 |
  *
  * Copying any of these upstream shapes would emit a zone that can never be
- * hit or that claims cells it never painted (a neighbour's, or blank ones);
- * the port reports the cells the zone actually painted instead (the same
+ * hit or that claims cells it never painted (a neighbour's, or blank ones).
+ * The port reports the cells the zone actually painted instead (the same
  * rule as the leading lone `\r`).
  *
  * ## Stripping
@@ -130,7 +130,7 @@ final class Scan
      *                         the visible area. A zone that would paint no
      *                         cell after clamping — one opening fully past
      *                         the right edge, or any viewport narrower than
-     *                         one column — is DROPPED, not collapsed onto
+     *                         one column — is dropped, not collapsed onto
      *                         the edge column (an edge sliver would steal
      *                         clicks from the real content there).
      *                         null = no clamp (default).
@@ -264,7 +264,7 @@ final class Scan
 
             // CSI sequence — pass through with no width.  Following ctlseqs/
             // xterm, a bare ESC before the final byte CANCELS the sequence:
-            // the walk stops AT the ESC so the dispatcher re-enters and reads
+            // the walk stops at the ESC so the dispatcher re-enters and reads
             // it as the next introducer.  A CR/LF ends the sequence and is
             // distributed: the walk stops before it so the newline branches
             // below move the cursor exactly as for ordinary bytes.  Without
@@ -287,7 +287,7 @@ final class Scan
             }
 
             // OSC sequence — pass through with no width.  A bare ESC that does
-            // not introduce an ST cancels the OSC (ctlseqs/xterm): stop AT the
+            // not introduce an ST cancels the OSC (ctlseqs/xterm): stop at the
             // ESC so the dispatcher re-enters.  A CR/LF ends the string and is
             // distributed, letting the newline branch move the cursor.  A
             // swallowed ESC here would eat the next sequence's introducer and
@@ -312,8 +312,8 @@ final class Scan
             // bytes were measured as text and every zone below them started
             // columns too far right (sixel/kitty graphics hosts emit these).
             // A bare ESC that does not introduce an ST cancels the string
-            // (ctlseqs/xterm): stop AT the ESC so the dispatcher re-enters.
-            // Unlike OSC, CR/LF are NOT breaks here — they are legitimate
+            // (ctlseqs/xterm): stop at the ESC so the dispatcher re-enters.
+            // Unlike OSC, CR/LF are not breaks here — they are legitimate
             // payload bytes inside sixel streams, and ending the walk on one
             // would measure the rest of the graphics payload as text, the
             // exact drift this branch exists to prevent.
@@ -560,18 +560,18 @@ final class Scan
      * Applies exactly the tag rule {@see parse()} decodes, so the cleaned
      * display string and the scanned bounds stay in lock-step:
      *
-     * - A *tag* is `U+E000 [/] <id> U+E001`, where `<id>` runs to the FIRST
+     * - A *tag* is `U+E000 [/] <id> U+E001`, where `<id>` runs to the first
      *   U+E001 after the sentinel and passes
      *   {@see Mark::isValidId()} — the same predicate Mark
      *   enforces when encoding. The whole tag is removed; the content BETWEEN
      *   an open and its close is preserved.
-     * - An empty id (`U+E000 U+E001`, `U+E000 / U+E001`) is consumed whole too:
-     *   parse treats it as zero-width foreign markup, so it must not reach the
-     *   terminal either.
+     * - An empty id (`U+E000 U+E001`, `U+E000 / U+E001`) is consumed whole too.
+     *   Parse treats it as zero-width foreign markup, so it must not reach
+     *   the terminal either.
      * - Any other U+E000 — no U+E001 ahead, or an id with a space, newline,
      *   CR, escape, non-ASCII byte, or more than
      *   {@see Mark::MAX_ID_BYTES} bytes — is a *lone
-     *   sentinel*: only its own 3 bytes are dropped, and the text after it is
+     *   sentinel*. Only its own 3 bytes are dropped and the text after it is
      *   kept, because parse measures that text as visible cells. Swallowing it
      *   (the old "everything up to the next U+E001" rule) shifted every zone
      *   to its right or below it off the cells it actually painted.
@@ -583,12 +583,13 @@ final class Scan
      *
      * Lock-step caveat: the tag rule here is byte-wise, while parse walks the
      * cell grid and passes ANSI sequences through zero-width. The two
-     * diverge only when a WELL-FORMED tag hides inside an OSC/CSI payload
+     * diverge only when a well-formed tag hides inside an OSC/CSI payload
      * (id charsets forbid ESC and control bytes, so an escape byte always
-     * breaks the tag shape). Only hostile input is affected: {@see strip()}
+     * breaks the tag shape). Only hostile input is affected. {@see strip()}
      * removes bytes that were never tags for parse, so deleting markup parse
      * treated as invisible
-     * markup cannot shift any zone the consumer will act on; it DOES mangle
+     * markup cannot shift any zone the consumer will
+     * act on. It does mangle
      * the surviving sequence's payload (a window title or DCS graphic loses
      * the cut bytes) — a documented consequence of the fail-safe byte-wise
      * posture (gate G11 default: document, do not re-shape the walk).
@@ -688,7 +689,7 @@ final class Scan
     {
         // Function-local memo of the extension probe: availability is fixed
         // for the process, so pay function_exists() once instead of once per
-        // cluster.  Deliberately NOT a class property — Scan carries no
+        // cluster.  Deliberately not a class property — Scan carries no
         // static scan state (reentrancy, pinned by ScanMalformedMarkupTest),
         // and this flag cannot affect any parse result.
         static $hasGraphemeExtract = null;

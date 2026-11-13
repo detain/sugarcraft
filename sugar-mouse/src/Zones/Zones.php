@@ -90,7 +90,7 @@ final class Zones
 
     /**
      * Mirrors bubblezone's `Close`. After calling this the default manager
-     * is disabled (mark / scan become pass-through) AND its registry is
+     * is disabled (mark / scan become pass-through) and its registry is
      * dropped — Idempotent. WARNING: subsequent package-level calls
      * (`Zones::define` / `Zones::scan` / `Zones::get` …) then pass through
      * silently and hit-tests resolve nothing, i.e. a whole dead UI with no

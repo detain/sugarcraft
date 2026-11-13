@@ -54,7 +54,7 @@ $scanner = Scanner::new()->scan($rendered);
 $zone = $scanner->hit(4, 1); // Zone 'btn-ok'
 
 // 4. A click fires only when the release's fresh re-hit agrees with the
-//    press zone on id AND box — resolve each event against the frame it
+//    press zone on id and box — resolve each event against the frame it
 //    arrived in; never reuse the press-side zone for the release.
 $tracker = ZoneClickTracker::new();
 $tracker->track(MouseEvent::press(4, 1), $scanner->hit(4, 1));
@@ -121,7 +121,7 @@ the house convention from AGENTS.md, landed in SM-S31).
 | `Selection` | `clear()` | End the gesture (anchor and head released) |
 | `Selection` | `range()` | The covered `SelectionRange` while active, else null |
 | `Selection` | `active()` | A gesture holds an anchor (press until `clear()`) |
-| `Selection` | `dragging()` | Head left the anchor — GEOMETRIC truth; a there-and-back sweep un-drags. Apps wanting a latched flag past a click tolerance latch their own (candy-code's adapter does) |
+| `Selection` | `dragging()` | Head left the anchor — geometric truth; a there-and-back sweep un-drags. Apps wanting a latched flag past a click tolerance latch their own (candy-code's adapter does) |
 | `SelectionRange` | `new(rowA, colA, rowB, colB, ?edgeFrom, ?edgeTo)` | Normalize the pair; edges may widen, never cross (see Edge cells); 0/negative cells throw `selection.off_terminal` naming the parameter |
 | `SelectionRange` | `spanOnRow(row)` | `[from, to]` cells cut on this row's own start/end, or null outside the range |
 | `SelectionRange` | `cellContains(row, col)` | Is this cell selected |
@@ -137,13 +137,14 @@ Two state idioms share this package, split by layer:
 | Primitive | `Selection`, `ZoneClickTracker`, `Scanner` | Mutates in place; `begin()` / `dragTo()` / `track()` update the receiver and return a plain value (`bool` / `?ClickResult` / chainable `$this`) |
 | Zones trackers | `DragTracker`, `ZoneHoverTracker`, `MultiClickTracker` | Fork-returning; `update()` yields a `[tracker, ?Msg]` pair and the caller rebinds the returned tracker after every event |
 
-The split is deliberate — a live gesture is sequential state, and the
-primitive machines are ports of in-place codebases — but the ecosystem
-cost is real: candy-code hand-wrote an immutable adapter over `Selection`
-(its `Tui\TextSelection` works on a clone per step) and declined the
-Zones `DragTracker` in favour of its own `PaneDragController`. Pick one
-idiom per UI and bridge at the boundary; converging the primitives onto
-fork-returning is a family-wide BC break and an open owner decision.
+The split is deliberate: a live gesture is sequential state, and the
+primitive machines are ports of in-place codebases. But the ecosystem
+cost is real. candy-code hand-wrote an immutable adapter over
+`Selection` (its `Tui\TextSelection` works on a clone per step) and
+declined the Zones `DragTracker` in favour of its own
+`PaneDragController`. Pick one idiom per UI and bridge at the
+boundary. Converging the primitives onto fork-returning is a
+family-wide BC break — an open owner decision.
 
 `Selection` / `SelectionRange` were ported from candy-code's
 `Tui\TextSelection`, and candy-code now runs on them: `Tui\TextSelection` is
@@ -189,16 +190,16 @@ structurally indistinguishable from a marker this lib emitted — the sentinels
   costs its own three bytes when scanning (an unterminated-open run at
   end-of-string loses the same three and keeps any id-shaped text after
   it); everything else is measured as visible text. The rule protects zone
-  **identity** — foreign bytes cannot swallow a span and re-rectangle the
-  frame — but it is NOT width-neutral: other private-use codepoints
+  **identity**: foreign bytes cannot swallow a span and re-rectangle the
+  frame. But it is NOT width-neutral. Other private-use codepoints
   (`U+E002+` image-overlay markers, Nerd Font glyphs) count as one visible
-  cell each, so a host that masks them for its own width math must measure
-  against what actually reaches the terminal, or every such glyph drifts the
-  recorded geometry one cell. That masking is a consumer-side duty like the
-  sweep below (candy-code's `maskImageMarkers` is the precedent).
+  cell each. A host that masks them for its own width math must measure
+  against what actually reaches the terminal, or every such glyph drifts
+  the recorded geometry one cell. That masking is a consumer-side duty
+  like the sweep below (candy-code's `maskImageMarkers` is the precedent).
 - **Bounded work.** `Mark::MAX_ID_BYTES` (256) is checked before any
   substring is materialized, so an attacker-sized span between a stray
-  `U+E000` and a distant `U+E001` is rejected in O(1);
+  `U+E000` and a distant `U+E001` is rejected in O(1).
   `Mark::MAX_CONTENT_BYTES` (1 MiB) caps what `Mark` will emit around a
   chunk. Both caps bound the EMIT side. Parsing has no cap of its own: feed
   `Scan::parse()` only frames you expect to be terminal-sized. A hostile
@@ -243,8 +244,8 @@ text selection is addressed like a file:
 
 `SelectionRange`'s promoted fields are named (`startRow`, `startCol`, …),
 so construction from a `range()` result is unambiguous. And every cell is
-1-based: a 0 (or negative) row/col is refused loudly at construction with
-`selection.off_terminal`, whose message names the offending parameter
+1-based. A 0 (or negative) row/col is refused loudly at construction with
+`selection.off_terminal`; its message names the offending parameter
 ("got 0 for parameter colA — clamp or rebase the pointer before building
 a range").
 
@@ -253,11 +254,11 @@ a range").
 Zone tags are private-use-area codepoints: screen readers announce them as
 dotted-circle placeholder glyphs or "unknown character" noise, and the mouse
 trackers (hover, drag, multi-click) are pointer-only affordances. Ship a
-keyboard path for every zone-driven action, print ONLY the stripped frame —
-at the `Zones\Manager` layer `scan()` returns it display-ready, and at the
-primitive layer the standalone tag remover is `Scan::strip()` (`Scanner`
-never modifies the string; stripping what you print is the consumer's job)
-— never `echo` marked bytes. Follow the mode-lifecycle rules under
+keyboard path for every zone-driven action. Print only the stripped
+frame. At the `Zones\Manager` layer, `scan()` returns it display-ready;
+at the primitive layer, the standalone tag remover is `Scan::strip()`
+(`Scanner` never modifies the string — stripping what you print is the
+consumer's job). Never `echo` marked bytes. Follow the mode-lifecycle rules under
 [Mouse-tracking modes](#mouse-tracking-modes) so assistive terminals are
 not flooded by leaked `?1003` motion reporting.
 
@@ -302,18 +303,18 @@ tags — the public half of the parse/strip pair:
 | Lone sentinel, or an id with spaces/escapes/non-ASCII/over `Mark::MAX_ID_BYTES` | only the 3 sentinel bytes are skipped; the following bytes count as visible text |
 
 Line endings: `\n` and `\r\n` both start a new row. A lone `\r` returns to
-column 1 on the same row, as a terminal does; a zone that paints again after
-it widens its bounding box to start at column 1, and a zone that opened
-mid-row but painted nothing before the `\r` (a progress-bar redraw) covers only
-the cells it painted after it. The same holds for a leading `\n`: a zone
+column 1 on the same row, as a terminal does. A zone that paints again
+after it widens its bounding box to start at column 1. A zone that
+opened mid-row but painted nothing before the `\r` (a progress-bar
+redraw) covers only the cells it painted after it. The same holds for a leading `\n`: a zone
 that painted nothing before the newline starts on the first row it paints,
 at column 1, whatever column it opened on — `'123456789' . zone("\nabc")`
 and a bare `zone("\nabc")` opened at column 1 are both cols 1-3 of row 2.
-This departs from bubblezone's behavior, which keeps the open position: opened
-past the content's last column it reports an inverted rectangle no click
-ever matches; opened short of it (`'12' . zone("\nabcdef")`) a box that
-claims unpainted cols 3-6 of row 1 while missing the painted cols 1-2 of
-row 2; and opened at column 1 a box that also spans the unpainted row 1.
+This departs from bubblezone's behavior, which keeps the open position.
+Opened past the content's last column, it reports an inverted rectangle
+no click ever matches. Opened short of it (`'12' . zone("\nabcdef")`),
+it claims unpainted cols 3-6 of row 1 while missing the painted cols 1-2
+of row 2. Opened at column 1, its box also spans the unpainted row 1.
 
 **Grapheme clustering is host-dependent.** Cell columns advance one
 grapheme cluster at a time, so how a cluster *ends* decides where zones
@@ -323,7 +324,7 @@ lead-byte fallback consumes one scalar at a time. ZWJ emoji families,
 regional-indicator flags and base+combining runs therefore cluster — and
 advance — differently between hosts, shifting the bounding boxes around
 them. Layouts that mark wide glyphs and ship on machines without a pinned
-ICU should install `ext-intl`; the column math is otherwise correct per
+ICU should install `ext-intl`. The column math is otherwise correct per
 cluster, just not identical per cluster *set*.
 
 ## Multi-row zones
@@ -364,15 +365,16 @@ what your input layer must speak, not just what the coordinates mean.
 `Manager::motionTrackingAnsi(bool)` returns the all-motion byte string:
 `\x1b[?1003h\x1b[?1006h` on enable and the LIFO `\x1b[?1006l\x1b[?1003l` on
 disable — motion tracking plus the SGR coordinate companion, byte-identical
-to sugar-core's `Ansi::mouseAllMotionOn()/Off()`. Core ships the same pairing
-for the plain-click case (`mouseAllOn/Off` = 1000+1006) and the held-drag
-case (`mouseCellMotionOn/Off` = 1002+1006). The other modes are the host
-app's enable sequence; its input layer (e.g. sugar-input) turns the reports
-into `MouseMsg` / `MouseEvent` values, which means the `b` field is decoded
-before this lib ever sees a message: strip the modifier bits (4 shift, 8
-alt, 16 ctrl; 32 marks a held-drag motion) before comparing button numbers,
-and fold xterm's wheel pair (`MouseAction::BUTTON_WHEEL_UP` /
-`BUTTON_WHEEL_DOWN`) into one wheel event.
+to sugar-core's `Ansi::mouseAllMotionOn()/Off()`. Core also pairs the
+plain-click case (`mouseAllOn/Off` = 1000+1006) and the held-drag case
+(`mouseCellMotionOn/Off` = 1002+1006) the same way. The other modes are the host
+app's enable sequence. Its input layer (e.g. sugar-input) turns the
+reports into `MouseMsg` / `MouseEvent` values, so the `b` field is
+decoded before this lib ever sees a message. Strip the modifier bits
+(4 shift, 8 alt, 16 ctrl; 32 marks a held-drag motion) before comparing
+button numbers, and fold xterm's wheel pair
+(`MouseAction::BUTTON_WHEEL_UP` / `BUTTON_WHEEL_DOWN`) into one wheel
+event.
 Consequence: the hover tracker reacts to press and motion reports —
 enter/exit fire on a plain `1000` press — but wheel reports are inert for
 all three `Zones` trackers — hover, drag and `MultiClickTracker` alike (a scroll
@@ -390,8 +392,8 @@ its SGR companion produces **zero** mouse messages this lib can see. The two
 modes therefore go together, exactly as core's `Ansi::mouseAllOn()` emits
 them (`?1000h ?1006h`); `mouseCellMotionOn()` / `mouseAllMotionOn()` pair
 `?1002h` / `?1003h` with the same `?1006h` companion. Readers that do speak
-X10 live outside this dependency set: sugar-mouse requires
-`sugarcraft/sugar-core` only, and sugar-input's X10 path is an opt-in host
+X10 live outside this dependency set. Sugar-mouse requires
+`sugarcraft/sugar-core` only; sugar-input's X10 path is an opt-in host
 arrangement, not something this lib relies on.
 
 **Mode lifecycle.** This lib never touches the TTY, so it cannot undo what
@@ -400,17 +402,17 @@ disable on every exit path — including crashes (a `register_shutdown` hook
 or the frame runner's `finally`). A leaked `?1003` streams every mouse move
 into the session for its remaining lifetime, a continuous byte flood that
 hits assistive tech hardest (Orca and brltty users cannot wave it away).
-Interop floor: `1002`/`1003` are the xterm family — Konsole ships no 1003
-and tmux re-encodes reports — so design for `1000`-only degradation when
-motion reports never arrive.
+Interop floor: `1002`/`1003` are the xterm family (Konsole ships no 1003,
+tmux re-encodes reports). Design for `1000`-only degradation when motion
+reports never arrive.
 
 ## Zones `Manager` layer (`SugarCraft\Mouse\Zones`)
 
 Wrap rendered chunks with named markers, let the `Manager` discover their
 bounding boxes, then ask zones whether a
-{@see \SugarCraft\Core\Msg\MouseMsg} fell inside them. The `Zones` layer is
-the app-facing surface; the marker scheme and its parser live once in the
-primitive `Mark` / `Scan` classes of this same package and are reused by
+{@see \SugarCraft\Core\Msg\MouseMsg} fell inside them. The `Zones` layer
+is the app-facing surface. The marker scheme and its parser live once in
+the primitive `Mark` / `Scan` classes of this same package, reused by
 every SugarCraft zone consumer. `mark()` encodes through
 `SugarCraft\Mouse\Mark::wrap()` on an instance carrying the manager's
 enabled flag (not the `Mark::zone()` static convenience, which is
@@ -422,7 +424,7 @@ the markers so the returned frame is display-ready.
 
 ```php
 use SugarCraft\Core\MouseButton;
-use SugarCraft\Core\MouseAction;   // the WIRE enum (Press / Release / Motion)
+use SugarCraft\Core\MouseAction;   // the wire enum (Press / Release / Motion)
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Manager;
 
@@ -477,11 +479,11 @@ opens fully past the right edge, or any viewport narrower than one column
 paints-no-cell/claims-nothing rule as the malformed-markup table above).
 
 **Two engines, two rules — and a persistent registry.** The primitive
-`Scanner::scan()` REPLACES its whole zone set from the frame it parses, and
+`Scanner::scan()` replaces its whole zone set from the frame it parses, and
 its `hit()` resolves ties by earliest registration. `Manager::scan()`
-MERGES into its registry: ids re-recorded in a new frame are replaced, and
+merges into its registry: ids re-recorded in a new frame are replaced, and
 ids not present are kept. The consequence: a zone whose widget stopped
-rendering STAYS clickable until something replaces it under the same id,
+rendering stays clickable until something replaces it under the same id,
 `clear($id)` removes it, or `close()` wipes the registry. So re-scan every
 frame you want authoritative, and clear ids you retire —
 `idsAbsentFromFrame($seen)` turns a frame's painted-id list into exactly the
@@ -570,7 +572,7 @@ tooltips, highlights, or data-fetch-on-hover. Hover is a pointer-only
 affordance: pair every hover reveal with a keyboard-focus equivalent, see
 [Accessibility](#accessibility). `update()` treats wheel reports
 (`MouseWheelMsg` — filtered by type, not by action) as inert and hit-tests
-everything else: press, release AND motion all count. A plain mode-`1000`
+everything else: press, release and motion all count. A plain mode-`1000`
 press inside a zone fires `ZoneEnterMsg`, scrolling does not; and because
 entry is triggered by any in-zone event arriving with no hovered zone
 current, a release inside a zone that was never entered fires
@@ -605,14 +607,15 @@ if ($msg instanceof ZoneEnterMsg) {
 an exit for A first; call `update()` again to receive the enter for B.
 This two-step pattern lets the application animate the exit before
 routing the enter. If a re-feed is awkward (the pointer already sits on B and no
-further motion will arrive), read `pendingEnter()` — it reports the owed
-zone without consuming it — or re-invoke `update()` with a synthetic
-motion at the same coordinates; the emitted `ZoneEnterMsg` then matches.
+further motion will arrive), there are two ways in. Read
+`pendingEnter()`: it reports the owed zone without consuming it. Or
+re-invoke `update()` with a synthetic motion at the same coordinates;
+the emitted `ZoneEnterMsg` then matches.
 **Vanished zones clear silently:** if the hovered zone is removed from
 the registry before its exit can be built, no message is emitted (an
 Exit must name a live `Zone`) but the tracker state clears, so the next
 in-zone event correctly re-enters. `DragTracker` is deliberately the opposite: one boundary
-crossing emits its `ZoneDragMoveMsg` in the same call — do not re-feed
+crossing emits its `ZoneDragMoveMsg` in the same call. Do not re-feed
 the event there or you will spin.
 
 **State accessors:**
@@ -679,16 +682,17 @@ ends the drag — even when the origin zone has been removed from the manager.
 That end is silent: no message, but the tracker clears so it cannot wedge.
 A second
 Press while a drag is open — the right-press steal — closes the first
-gesture before anything else can claim it: `ZoneDragEndMsg(origin, null)`
-(null target: abandoned, not released over a zone) and the tracker idles;
-the stealing Press starts nothing, and the next Press opens the new drag.
+gesture before anything else can claim it. `ZoneDragEndMsg(origin, null)`
+is emitted (null target: abandoned, not released over a zone) and the
+tracker idles. The stealing Press starts nothing; the next Press opens
+the new drag.
 
 **Click vs. zero-distance drag:** a press and release in the same spot of
 the same zone satisfies both state machines — `MultiClickTracker` counts it and
 `DragTracker` emits `ZoneDragStartMsg` followed by `ZoneDragEndMsg` with
 `currentZone === originZone`. The Start firing on the Press itself means a
 plain click inside a zone flashes the drag UI for one event pair unless the
-app gates it: paint drag effects only from the first emitted
+app gates it. Paint drag effects only from the first emitted
 `ZoneDragMoveMsg` (candy-code's selection controller gates exactly this
 way). Neither tracker ships a travel threshold (bubblezone has none
 either); if a widget wants EITHER a click OR a drag per gesture, gate drag
@@ -784,7 +788,7 @@ Three action vocabularies meet here, and mixing them up is the classic
 integration bug:
 
 - **Core wire** (`SugarCraft\Core\MouseAction`): `Press` / `Release` /
-  `Motion`, carried on `MouseMsg`; wheel is a distinct MESSAGE TYPE
+  `Motion`, carried on `MouseMsg`. Wheel is a distinct message type
   (`MouseWheelMsg`) whose action field core's reader fills with `Press`.
 - **Primitive** (`SugarCraft\Mouse\MouseAction`): `Press` / `Release` /
   `Drag` / `Scroll`, carried on `MouseEvent` with X10 button ints — what
@@ -822,9 +826,9 @@ you can tell the first cause from the other two. The two-call
 - Organic shapes (ASCII art) report a rectangular bounding box —
   the marker pair only carries 4 corners' worth of information.
 - Exception and refusal messages resolve through `SugarCraft\Mouse\Lang`
-  against `lang/en.php` — five keys with bare names under the Lang
-  namespace `mouse`, and the `sugar-mouse:` label rides inside each
-  message value, not in the keys; the package ships `en` only.
+  against `lang/en.php`. Five keys carry bare names under the Lang
+  namespace `mouse`. The `sugar-mouse:` label rides inside each
+  message value, not in the keys. The package ships `en` only.
 - `scan()` is synchronous (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
@@ -857,7 +861,7 @@ the Zones rows answer "what does the app-facing manager and its trackers do".
 
 | Class | Method | Description |
 |---|---|---|
-| `Manager` | `newUnprefixed()` | Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is `Zones::defaultManager()`); formerly spelled `newGlobal()`, which remains as a deprecated alias |
+| `Manager` | `newUnprefixed()` | Build a fresh un-prefixed manager independent of every other instance — not the shared default (that is `Zones::defaultManager()`); formerly spelled `newGlobal()`, which remains as a deprecated alias |
 | `Manager` | `newPrefix(prefix)` | Create prefixed manager for isolation |
 | `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
 | `Manager` | `scan(output, ?width = null)` | Merge-record zones into the registry (re-recorded ids replace, absent ids persist; a `newPrefix()` manager skips ids outside its prefix, a `newUnprefixed()` manager records every id), strip markers, clamp columns to `?width` |

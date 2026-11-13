@@ -6,9 +6,9 @@ declare(strict_types=1);
  * Clickable list with focus-on-click. Mirrors bubblezone's
  * `list-default` example. Each row is its own zone; a synthetic mouse
  * event is dispatched against the manager, and `anyInBounds()` returns
- * the matched zone — the model uses that to refocus the list cursor.
+ * the matched zone. The model uses that to refocus the cursor.
  *
- * The second act drives the SAME cursor with keyboard messages only: the
+ * The second act drives the same cursor with keyboard messages only: the
  * row the click reached is also reachable with Down/Enter, because a
  * zone-driven action without a no-pointer route is a dead end for
  * keyboard users (README's Accessibility section — focus policy lives

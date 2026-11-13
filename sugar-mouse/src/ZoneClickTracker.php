@@ -27,7 +27,7 @@ namespace SugarCraft\Mouse;
  *
  * Either way the RELEASE call must carry its own fresh re-resolution of the
  * release coordinate against the CURRENT frame: the click fires only when
- * that fresh zone agrees with the press zone on id AND box (the
+ * that fresh zone agrees with the press zone on id and box (the
  * release-agreement gate).  A re-render between press and release that moved the
  * zone or slid another control under the cursor drops the pending press —
  * a lost click beats firing the wrong control (permission-grant zones are
@@ -143,9 +143,9 @@ final class ZoneClickTracker
     /**
      * Read-only view of the release-agreement gate: would a track() call
      * with THIS release event and re-hit zone complete the click? Answers
-     * without consuming the pending press, so a caller can distinguish "I
+     * without consuming the pending press. A caller can distinguish "I
      * forgot to re-resolve" (false with null, true once passed the fresh
-     * hit) from "the zone genuinely moved" (false either way) — the silent
+     * hit) from "the zone genuinely moved" (false either way). The silent
      * null from track() cannot tell those apart, and misclick-protection
      * consumers want to know which one they hit.
      *

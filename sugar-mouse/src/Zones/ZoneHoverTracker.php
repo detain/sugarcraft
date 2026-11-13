@@ -113,7 +113,7 @@ final class ZoneHoverTracker
      * (gated, not shipped). The state still re-arms either way — the old
      * dangling-id branch wedged hover off forever.
      *
-     * Wheel reports never move the hover: scrolling is not a cursor move
+     * Wheel reports never move the hover. Scrolling is not a cursor move
      * (the cursor does not teleport to the wheel coordinate), and core
      * currently stamps wheel events with action Press, so the exclusion is
      * by {@see MouseWheelMsg} type, not by action.

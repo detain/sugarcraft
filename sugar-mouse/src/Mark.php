@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\Sanitize;
  * U+E000 / + id + U+E001 is the zone close.
  *
  * The sentinels are Private Use Area codepoints (U+E000/U+E001), not C0
- * controls or anything adjacent to them: they are ZERO WIDTH to the
+ * controls or anything adjacent to them. They are zero width to the
  * scanner and normally render as nothing, but they are NOT
  * guaranteed invisible on every host — terminals fall back to rendering
  * unused PUA codepoints as boxes or dotted-circle placeholder glyphs, and
@@ -29,7 +29,7 @@ use SugarCraft\Core\Util\Sanitize;
  * Marking can be globally disabled (e.g. for non-interactive output such
  * as width-only measurement passes).  When {@see $enabled} is false,
  * {@see wrap()} returns $content byte-for-byte with no sentinels — but it
- * still validates id AND content, so a measurement pass and a marked render
+ * still validates id and content, so a measurement pass and a marked render
  * agree on what input is acceptable.
  *
  * Mirrors bubblezone's Mark function.
@@ -39,7 +39,7 @@ final class Mark
     /**
      * Allowed id charset — ASCII letters, digits, and the punctuation used by
      * real zone ids (`cell:5:3`, `crumb-2`, `a.b_c`).  Anchored with \A…\z
-     * (NOT $, which would also match before a trailing newline) and matched
+     * (not $, which would also match before a trailing newline) and matched
      * byte-wise (no /u) so any byte >= 0x80 is rejected.  This inherently bars
      * the PUA sentinel bytes U+E000 (\xEE\x80\x80) / U+E001 (\xEE\x80\x81) plus
      * any CSI/OSC/APC/control byte — an id carrying those would desync
@@ -58,7 +58,7 @@ final class Mark
      * Upper bound on wrapped-content length in bytes.  A single zone wraps
      * one widget's rendered cells (with SGR), so 1 MiB is far above any real
      * terminal region.  The guard bounds {@see Scan::parse()}'s work when a
-     * caller reflects untrusted text through {@see wrap()} (mild-DoS defence:
+     * caller reflects untrusted text through {@see wrap()} (mild-DoS defense:
      * an unbounded region would give an attacker an arbitrarily large buffer
      * to scan).
      */
@@ -128,8 +128,8 @@ final class Mark
      * CONTENT legitimately may: nesting a marked child inside a marked parent
      * is a supported pattern.  That same freedom means content that carries
      * foreign sentinels (pasted glyphs, upstream renders, reflected model
-     * output) will forge zones at parse time — sweeping untrusted text is the
-     * consumer's duty, and {@see self::untrusted()} is the tool: pass any
+     * output) will forge zones at parse time. Sweeping untrusted text is the
+     * consumer's duty, and {@see self::untrusted()} is the tool. Pass any
      * untrusted string through it before wrapping it (or before composing it
      * into a marked frame). This seam follows the fleet trust-boundary story,
      * documented at docs/TRUST-BOUNDARY.md in the sugarcraft monorepo — a
@@ -222,11 +222,11 @@ final class Mark
     }
 
     /**
-     * Quoted single-line repr of $value for exception messages: printable
-     * ASCII passes through (with quote/backslash escapes and \n \r \t), every
+     * Quoted single-line repr of $value for exception messages. Printable
+     * ASCII passes through (with quote/backslash escapes and \n \r \t); every
      * other byte becomes \xHH. var_export() and print_r() re-emit control and
-     * UTF-8 bytes RAW into the message, so a hostile id could smuggle terminal
-     * traffic into every log or terminal that later prints the refusal; this
+     * UTF-8 bytes raw into the message, so a hostile id could smuggle terminal
+     * traffic into every log or terminal that later prints the refusal. This
      * function escapes everything that is not printable ASCII instead.
      */
     public static function escapeForMessage(string $value): string

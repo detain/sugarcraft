@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\Width;
  * this class is that gesture's geometry and nothing else: no model, no
  * clipboard, no painting.
  *
- * STREAM, NOT BLOCK. The first row runs from the start cell to the text
+ * stream, not block. The first row runs from the start cell to the text
  * column's right edge, middle rows are whole, the last row stops at the end
  * cell — reading order, the shape a drag across wrapped prose means. Both
  * ends are INCLUSIVE, so the cell under the pointer is always part of what a
@@ -52,7 +52,7 @@ final class SelectionRange
      * (Parse, Don't Validate).
      *
      * The edges default to the endpoints' own column extent, which makes a
-     * directly constructed range a plain bounding-box band; a range from
+     * directly constructed range a plain bounding-box band. A range from
      * {@see Selection::range()} arrives with the region's text column
      * instead, so its middle rows sweep whole.
      *

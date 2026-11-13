@@ -31,7 +31,7 @@ namespace SugarCraft\Mouse;
  * full. Feed the reported cells straight in; the region is just four
  * viewport numbers, never a pane's geometry.
  *
- * The release itself is NOT modelled here: copying, toasts and dismissal
+ * The release itself is not modelled here: copying, toasts and dismissal
  * policy belong to the app. It reads {@see range()} (or
  * {@see SelectionRange::extract()}) when the release arrives and calls
  * {@see clear()} when its own dismiss rules fire.
@@ -49,10 +49,10 @@ final class Selection
      * The region is the text column a drag may cover — the caller measures
      * it (a pane's borders and padding are chrome, and a whole-row selection
      * that ran through chrome would copy `│  ` before every line). An
-     * inverted pair ($rowTo < $rowFrom or $colTo < $colFrom) is an EMPTY
+     * inverted pair ($rowTo < $rowFrom or $colTo < $colFrom) is an empty
      * region — the viewport has no text rows yet — and every gesture attempt
-     * declines. Empty is never an error, so nothing is swapped or thrown:
-     * inventing selectable cells out of a degenerate viewport would simply
+     * declines. Empty is never an error, so nothing is swapped or thrown.
+     * Inventing selectable cells out of a degenerate viewport would simply
      * be wrong.
      *
      * @param int $rowFrom region's first row    (1-based, inclusive)
@@ -76,10 +76,10 @@ final class Selection
 
     /**
      * Floor one region bound-pair to the 1-based terminal grid, preserving
-     * emptiness: when the input was inverted and the floor would have made
+     * emptiness. When the input was inverted and the floor would have made
      * it non-inverted, the pair is re-inverted just above the floor, so
-     * {@see self::coversRegion()} still says "no cells" and every gesture
-     * attempt declines — empty stays empty, never an error.
+     * {@see self::coversRegion()} still says "no cells". Empty stays
+     * empty, never an error.
      *
      * @return array{0:int,1:int} [from, to]
      */
@@ -180,9 +180,9 @@ final class Selection
      * MouseEvent carries terminal (x, y) — that is (col, row) — while a
      * Selection is row-first by design (a text region is addressed like a
      * file). The wrapper performs that single transpose so the call sites
-     * stop hand-rolling it: a mis-ordered manual transpose here silently
-     * selects the wrong cell (verified: both orders are plain `int,int`,
-     * so nothing type-checks it for you).
+     * stop hand-rolling it. A mis-ordered manual transpose here silently
+     * selects the wrong cell (both orders are plain `int,int`, so nothing
+     * type-checks it for you).
      */
     public function beginEvent(MouseEvent $event, bool $shiftExtend = false): bool
     {
@@ -239,9 +239,9 @@ final class Selection
      *
      * Geometric truth: a drag that returns to its own anchor cell ends the
      * drag, so a there-and-back sweep releases as a click and copies
-     * nothing. The downstream original latched the flag beyond a drift
-     * tolerance instead;
-     * an app that wants latching tracks its own max-drift (candy-code's
+     * nothing. The upstream implementation this model was ported from latched the flag beyond a drift
+     * tolerance instead.
+     * An app that wants latching tracks its own max-drift (candy-code's
      * `Tui\TextSelection` adapter latches its own flag past its click
      * tolerance on top of this machine) — the model
      * tells the truth about where the pointer is right now.

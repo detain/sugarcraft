@@ -129,11 +129,10 @@ final class Zone
      * button-held flag on plain motion, and geometry consumers treat the
      * two alike). Wheel reports carry Core action `Press` only because
      * sugar-core's InputReader hardcodes it there — the `MouseWheelMsg`
-     * type is the discriminator, so it is matched FIRST. Buttons map to
+     * type is the discriminator, so it is matched first. Buttons map to
      * the X10 numbers the primitive keys on (`MouseAction::BUTTON_*`,
      * including the wheel pair `BUTTON_WHEEL_UP` / `BUTTON_WHEEL_DOWN`);
-     * unmapped Core buttons become LEFT, mirroring
-     * the placeholder the private path always used.
+     * unmapped Core buttons become LEFT.
      *
      * `inBounds()` / `pos()` still read only x/y from the result, so the
      * richer translation cannot change geometry outcomes — it exists for

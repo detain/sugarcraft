@@ -13,7 +13,7 @@ use SugarCraft\Mouse\Scan;
 
 /**
  * Mouse-zone manager. Wraps content with sentinel-tagged zone markers
- * identifying a logical "zone"; {@see scan()} later finds those markers,
+ * identifying a logical "zone". {@see scan()} later finds those markers,
  * records each zone's bounding box in terminal cells, and returns the
  * cleaned-up frame.
  *
@@ -30,7 +30,7 @@ use SugarCraft\Mouse\Scan;
  * The sentinels cannot appear in ANSI escape sequences or ASCII text, but
  * they do live in the private-use area shared with pasted foreign glyphs —
  * the id charset below and the lone-sentinel rule in {@see \SugarCraft\Mouse\Scan}
- * are what keep foreign PUA bytes from forging a zone; sweeping untrusted
+ * are what keep foreign PUA bytes from forging a zone. Sweeping untrusted
  * content is the consumer's duty (see {@see \SugarCraft\Mouse\Sentinel}).
  * Ids must match the primitive's charset `\A[A-Za-z0-9._:-]+\z` (letters,
  * digits, and `._:-`) — the single statement of this rule; the helpers below
@@ -43,7 +43,7 @@ use SugarCraft\Mouse\Scan;
  * previously known zones for the same id; other ids persist. A recorded
  * zone stays queryable until a later scan replaces its id, {@see clear()}
  * drops it, or {@see close()} empties the registry. Zones from an
- * off-screen frame are NOT forgotten on their own. A consumer whose
+ * off-screen frame are not forgotten on their own. A consumer whose
  * layout reuses ids must therefore re-scan every frame it renders (or
  * clear) before trusting {@see get()} / {@see anyInBounds()} results.
  */
@@ -140,7 +140,7 @@ final class Manager
      * what the method is.
      *
      * When `$on` is true, returns the paired sequence enabling
-     * all-motion tracking (mode 1003) AND SGR extended coordinate
+     * all-motion tracking (mode 1003) and SGR extended coordinate
      * reporting (mode 1006); when false, the LIFO disable pair.
      * ("SGR" names 1006 — the report byte format — not 1003.)
      * Bare 1003 would leave coordinates on legacy X10 single-byte
@@ -251,7 +251,7 @@ final class Manager
      * Look up a recorded zone.
      *
      * Accepts the SHORT id passed to {@see mark()} (this manager's prefix is
-     * tried first) as well as the WIRE id stored in a hit result
+     * tried first) as well as the wire id stored in a hit result
      * (`$zone->id`, already prefixed) — the trackers hand back wire ids, so
      * both spellings must round-trip on a prefixed manager.
      *
@@ -270,7 +270,7 @@ final class Manager
     }
 
     /**
-     * Generation-diff prune helper: the registered ids that did NOT appear
+     * Generation-diff prune helper: the registered ids that did not appear
      * among `$scannedIds`, in insertion order.
      *
      * Feed it the ids the current frame actually painted (ids as registered
@@ -326,7 +326,7 @@ final class Manager
      * resolves nothing and markers stop appearing. To run a fresh UI
      * through the facade, re-arm with `Zones::setDefaultManager(null)`
      * (or use a new manager instance); `setEnabled(true)` alone revives
-     * marking but NOT the dropped zones.
+     * marking but not the dropped zones.
      */
     public function close(): void
     {
@@ -442,7 +442,7 @@ final class Manager
     public function anyInBoundsAndUpdate(Model $model, Msg $mouse): array
     {
         $zone = $this->anyInBounds($mouse);
-        // The instanceof is TYPE NARROWING, not a behavior guard:
+        // The instanceof is type narrowing, not a behavior guard:
         // anyInBounds() already returns null for non-MouseMsg traffic, so a
         // non-null $zone proves the type — restated here so static analysis
         // accepts the MsgZoneInBounds construction.

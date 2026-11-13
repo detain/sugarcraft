@@ -114,12 +114,12 @@ final class DragTracker
      * Process a mouse event and detect drag state transitions.
      *
      * - Press inside a zone → start drag, emit {@see ZoneDragStartMsg}.
-     * - Press while a drag is already open → CLOSE that gesture first: the
+     * - Press while a drag is already open → close that gesture first: the
      *   tracker forks back to idle and emits its {@see ZoneDragEndMsg} with
      *   a null target (abandoned by the steal, not released over a zone);
      *   the stealing Press starts nothing — the next Press opens a new drag.
      * - Motion while dragging → crossing a boundary emits one
-     *   {@see ZoneDragMoveMsg} for the new zone in the SAME call.
+     *   {@see ZoneDragMoveMsg} for the new zone in the same call.
      * - Release of the drag button → end drag, emit {@see ZoneDragEndMsg}
      *   carrying the origin zone and the zone under the cursor at release
      *   (null when the release happened outside every zone).
@@ -170,7 +170,7 @@ final class DragTracker
                 // drag ends silently with state cleared.
                 return [$tracker, null];
             }
-            // The end message names the zone under the cursor AT RELEASE,
+            // The end message names the zone under the cursor at release,
             // not a stale motion-tracked id, and null when outside all zones.
             return [$tracker, new ZoneDragEndMsg($origin, $hit)];
         }
@@ -178,7 +178,7 @@ final class DragTracker
         // --- Press: one gesture at a time ---
         if ($msg->action === MouseAction::Press) {
             if ($this->originZoneId !== null) {
-                // A second Press while a drag is active CLOSES the open
+                // A second Press while a drag is active closes the open
                 // gesture before anything else can claim it: fork back to
                 // idle, emitting the abandoned gesture's End (null target —
                 // it ended by steal, not by a release over a zone).

@@ -12,7 +12,7 @@ use SugarCraft\Core\Util\Sanitize;
  * Both Mark (encoder) and Scan (decoder) must agree on these values.
  * U+E000 / U+E001 are in the Unicode Private Use Area and cannot
  * appear in ANSI escape sequences (CSI begins ESC-[; OSC begins ESC-]).
- * Private use is not the same as reserved, though: pasted foreign
+ * Private use is not the same as reserved, though. Pasted foreign
  * frames and Nerd Font / powerline glyph runs legitimately carry
  * private-use codepoints — which is why the lone-sentinel rule in
  * {@see Scan} and the consumer sweep below exist, not a collision
@@ -24,8 +24,8 @@ use SugarCraft\Core\Util\Sanitize;
  * never drift apart by a re-typed byte literal.
  *
  * Trust boundary: these codepoints are public constants, not secrets — the
- * sentinel DELIMITS our markup but authenticates nothing, so neutralising
- * foreign-sentinel bytes inside untrusted content is the CONSUMER's duty
+ * sentinel delimits our markup but authenticates nothing, so neutralising
+ * foreign-sentinel bytes inside untrusted content is the consumer's duty
  * (candy-code sweeps pasted/foreign frames through
  * {@see Sanitize::stripZoneSentinels()} / {@see Sanitize::untrustedForMarkedFrames()}
  * before they can forge a zone boundary; any other host of marked frames

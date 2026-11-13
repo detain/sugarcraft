@@ -34,7 +34,7 @@ use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
  * alias; see `ClickCounter.php`.
  *
  * dedup overlap with {@see \SugarCraft\Mouse\ZoneClickTracker} deferred: the
- * primitive's ZoneClickTracker does Press+Release single-click dedup, NOT the
+ * primitive's ZoneClickTracker does Press+Release single-click dedup, not the
  * interval-based double/triple streak counting this class implements.
  * Routing this counter's single-click detection through it would change
  * the emitted DoubleClickMsg/TripleClickMsg timing, so the delegation is
@@ -83,7 +83,7 @@ final class MultiClickTracker
      *                       instead of sleeping (a real-sleep test is CI
      *                       noise waiting to happen under co-shard load).
      *
-     *                       The default is deliberately NOT wall-clock:
+     *                       The default is deliberately not wall-clock:
      *                       an NTP step during a streak could otherwise
      *                       jump the elapsed figure backwards (swallowing
      *                       the streak) or far forwards (coalescing two
@@ -117,12 +117,12 @@ final class MultiClickTracker
      * Process a mouse press event and detect double/triple click streaks.
      *
      * Only press events advance the streak; other mouse actions are no-ops.
-     * Wheel events are excluded by TYPE, not by action: sugar-core's
+     * Wheel events are excluded by type, not by action: sugar-core's
      * InputReader currently stamps wheel reports with
      * {@see \SugarCraft\Core\MouseAction::Press}, so an action-only check
      * would let every wheel tick advance the streak (a scroll across a zone
      * would "double-click" it). The {@see MouseWheelMsg} gate is this layer's
-     * defence; the root cause is the core seam (InputReader hardcodes Press).
+     * defense; the root cause is the core seam (InputReader hardcodes Press).
      * When two presses occur in the same zone within the click interval,
      * a {@see DoubleClickMsg} is emitted on the second press, and a
      * {@see TripleClickMsg} is emitted on the third press. The streak
