@@ -32,7 +32,7 @@ use SugarCraft\Markdown\Render\SectionStream;
  * LogicException; a second close() is an idempotent no-op that does not
  * double-close the sink's handle.
  *
- * Pure channel aside from the sink: no timers, no ReactPHP, no reads
+ * Pure channel aside from the sink: no timers, no ReactPHP, no reads.
  * All doors — writable path, writable resource — fire at
  * construction via the {@see StreamSink} factories, before any rendering.
  */
