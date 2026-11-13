@@ -537,8 +537,14 @@ Runnable examples live in [`examples/`](examples/):
 
 The `filter` command uses [sugar-fuzzy](../sugar-fuzzy/README.md) for
 opt-in fuzzy-matching (`--fuzzy`; the default is substring) via
-`FilterModel` → `SmithWatermanMatcher`. The
-`SubStyleParser` utility parses gum-style `element.prop=value` entries
+`FilterModel` → `SmithWatermanMatcher`. All seven interactive commands
+embed the lipgloss style surface — `--border`, `--border-foreground`,
+`--border-background`, `--padding`, `--margin`, `--align`, `--foreground`,
+`--background` and the decoration flags — as real frame chrome painted by
+`StyleBuilder` → `Style::render` around the model body; `--width`/`--height`
+stay CONTENT dimensions (the frame grows around them), and the ColourGate
+keeps themed frames honest under `--no-ansi`/`NO_COLOR`/dumb terminals.
+The `SubStyleParser` utility parses gum-style `element.prop=value` entries
 into per-element `Style` maps for **extension** commands; no built-in
 command consumes it today, and `choose`'s `--cursor`/`--header` flags are
 plain strings, not sub-style entries.

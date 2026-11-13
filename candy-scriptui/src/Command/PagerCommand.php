@@ -8,6 +8,9 @@ use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\PagerModel;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
+use SugarCraft\ScriptUi\Runtime\StyledFrame;
+use SugarCraft\ScriptUi\Runtime\StyleOptions;
+use SugarCraft\ScriptUi\Style\StyleBuilder;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Runtime\PositiveInt;
@@ -38,6 +41,9 @@ final class PagerCommand extends Command
             ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
             ->addOption('no-alt-screen',      null, InputOption::VALUE_NONE,     'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-exit after N seconds (0 = none).', 0);
+
+        // scriptui-26: themed frames (border/margin/padding/colour/decoration).
+        StyleOptions::register($this);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -81,12 +87,24 @@ final class PagerCommand extends Command
             $raw = self::prewrapSoftWrap($raw, $wrapWidth);
         }
 
+        try {
+            // scriptui-26: the shared lipgloss surface gum embeds everywhere.
+            $frame = StyleOptions::frame(StyleOptions::flags($input));
+        } catch (\InvalidArgumentException $e) {
+            // A bad theme refuses before any paint.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+
+        $frameRows = $frame !== null ? StyleBuilder::frameRows(StyleOptions::flags($input)) : 0;
+
         $model   = PagerModel::fromContent(
             $raw,
             $width,
             $height,
             (bool)   $input->getOption('show-line-numbers'),
             (string) $input->getOption('match'),
+            frameRows: $frameRows,
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(loop: $loop, 
@@ -97,10 +115,11 @@ final class PagerCommand extends Command
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'pager']) . "\n");
             return Command::FAILURE;
         }
-        $program = new Program($model, $options);
+        $program = new Program($frame !== null ? new StyledFrame($model, $frame) : $model, $options);
         $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var PagerModel $final */
         $final = $program->run();
+        $final = $final instanceof StyledFrame ? $final->inner : $final;
         $guard->disarm();
 
         // Deadline elapsed — the pager auto-exits with the timeout code.

@@ -262,8 +262,41 @@ final class StyleBuilder
      *
      * @return list<int>
      */
-    public static function parseSides(string $raw): array
+    /**
+     * Vertical chrome rows a flag-set adds OUTSIDE the content: border
+     * top+bottom (a configured border occupies rows even when `hidden` —
+     * that vocabulary is a placeholder posture, not an absence), plus the
+     * vertical margin and padding sides. scriptui-26: the pager subtracts
+     * this from its auto height so a themed frame never grows past the
+     * screen (the --height/--width contract stays CONTENT dimensions).
+     *
+     * @param array<string, mixed> $flags same vocabulary as {@see fromFlags()}
+     */
+    public static function frameRows(array $flags): int
     {
+        $rows = 0;
+        $border = $flags['border'] ?? null;
+        if (is_string($border) && $border !== '' && !in_array(strtolower($border), ['0', 'none'], true)) {
+            $rows += 2;
+        }
+        foreach (['margin', 'padding'] as $key) {
+            $raw = $flags[$key] ?? null;
+            if ($raw === null || $raw === '' || $raw === false) {
+                continue;
+            }
+            $sides = self::parseSides((string) $raw);
+            $vertical = match (count($sides)) {
+                1       => 2 * $sides[0],
+                2       => 2 * $sides[0],
+                default => $sides[0] + $sides[2],
+            };
+            $rows += $vertical;
+        }
+
+        return max(0, $rows);
+    }
+
+    public static function parseSides(string $raw): array    {
         $parts = preg_split('/[\s,]+/', trim($raw)) ?: [];
         $parts = array_values(array_filter($parts, static fn($p) => $p !== ''));
 

@@ -39,6 +39,7 @@ final class PagerModel implements Model
         int $height = 0,
         bool $showLineNumbers = false,
         string $match = '',
+        int $frameRows = 0,
     ): self {
         // A 0 dimension means "use the terminal": resolve it from Geometry
         // now (the initial WindowSizeMsg then keeps it current on resize);
@@ -47,7 +48,7 @@ final class PagerModel implements Model
         $width  = $width  > 0 ? $width  : (Geometry::columnsOrNull() ?? 80);
         // Auto height reserves the hint footer rows; the historical
         // 20-row fallback (no knowable size) keeps pinned output stable.
-        $height = $height > 0 ? $height : ($rows !== null ? max(1, $rows - self::HINT_ROWS) : 20);
+        $height = $height > 0 ? $height : ($rows !== null ? max(1, $rows - self::HINT_ROWS - $frameRows) : 20);
         // Multi-line untrusted paint: control/escape bytes out, CR mapped to
         // LF so overwrite tricks cannot reach the viewport (cluster 12).
         $content = \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($content);
@@ -69,7 +70,7 @@ final class PagerModel implements Model
             $content = self::numberLines($content);
         }
         $vp = Viewport::new($width, max(1, $height))->setContent($content);
-        return new self($vp, false, terminalRows: $rows ?? 0);
+        return new self($vp, false, terminalRows: $rows ?? 0, frameRows: $frameRows);
     }
 
     /**
@@ -111,6 +112,7 @@ final class PagerModel implements Model
         public readonly bool $exited,
         public readonly bool $interrupted = false,
         public readonly int $terminalRows = 0,
+        public readonly int $frameRows = 0,
     ) {}
 
     public function init(): ?\Closure
@@ -133,7 +135,7 @@ final class PagerModel implements Model
                 // 'q'/Esc are a normal finish (exit 0); Ctrl+C is a
                 // cancellation and the command must exit 130, not pretend
                 // the page was read to the end.
-                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c', $this->terminalRows), Cmd::quit()];
+                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c', $this->terminalRows, $this->frameRows), Cmd::quit()];
             }
         }
         if ($msg instanceof WindowSizeMsg) {
@@ -145,9 +147,9 @@ final class PagerModel implements Model
             // within the screen.
             $width  = max(1, $msg->cols);
             $rows   = max(1, $msg->rows);
-            $height = max(1, $rows - self::HINT_ROWS);
+            $height = max(1, $rows - self::HINT_ROWS - $this->frameRows);
             if ($width !== $this->viewport->width || $height !== $this->viewport->height || $rows !== $this->terminalRows) {
-                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted, $rows), null];
+                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted, $rows, $this->frameRows), null];
             }
             return [$this, null];
         }

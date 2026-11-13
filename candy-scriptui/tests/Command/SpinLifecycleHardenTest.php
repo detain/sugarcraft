@@ -42,6 +42,12 @@ final class SpinLifecycleHardenTest extends TestCase
                 $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
                 \assert($pair !== false);
                 [$reader, $writer] = $pair;
+                // scriptui-26 era rider: sugar-core sc-0467a290d4 made EOF on
+                // a non-TTY input a cooperative quit. This harness wants a
+                // stream that STAYS OPEN for the run (it is emulating a live
+                // terminal with no keystrokes), so the write side must
+                // outlive the factory scope — parked on a class-held ledger.
+                SpinLifecycleHardenTest::$openWriters[] = $writer;
                 return new Program($model, new ProgramOptions(
                     useAltScreen:    false,
                     hideCursor:      false,
@@ -54,6 +60,9 @@ final class SpinLifecycleHardenTest extends TestCase
             },
         );
     }
+
+    /** @var list<resource> Held open on purpose: closing these EOFs the reader. */
+    public static array $openWriters = [];
 
     public function testTerminateThrowInsideDeadlineStillExits124WithReap(): void
     {

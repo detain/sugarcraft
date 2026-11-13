@@ -9,6 +9,8 @@ use SugarCraft\ScriptUi\Model\WriteModel;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\CursorMode;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
+use SugarCraft\ScriptUi\Runtime\StyledFrame;
+use SugarCraft\ScriptUi\Runtime\StyleOptions;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Runtime\PositiveInt;
@@ -43,6 +45,9 @@ final class WriteCommand extends Command
             ->addOption('show-help',          null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
             ->addOption('no-alt-screen',      null, InputOption::VALUE_NONE,     'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
+
+        // scriptui-26: themed frames (border/margin/padding/colour/decoration).
+        StyleOptions::register($this);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -75,7 +80,15 @@ final class WriteCommand extends Command
             return Command::FAILURE;
         }
 
-        $model   = WriteModel::newPrompt(
+        try {
+            // scriptui-26: the shared lipgloss surface gum embeds everywhere.
+            $frame = StyleOptions::frame(StyleOptions::flags($input));
+        } catch (\InvalidArgumentException $e) {
+            // A bad theme refuses before any paint.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+                $model   = WriteModel::newPrompt(
             placeholder:     (string) $input->getOption('placeholder'),
             width:           $width,
             height:          $height,
@@ -98,10 +111,11 @@ final class WriteCommand extends Command
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'write']) . "\n");
             return Command::FAILURE;
         }
-        $program = new Program($model, $options);
+        $program = new Program($frame !== null ? new StyledFrame($model, $frame) : $model, $options);
         $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var WriteModel $final */
         $final = $program->run();
+        $final = $final instanceof StyledFrame ? $final->inner : $final;
         $guard->disarm();
 
         // Deadline elapsed before submit — discard the buffer, exit timeout.

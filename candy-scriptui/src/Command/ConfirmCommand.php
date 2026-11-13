@@ -8,6 +8,8 @@ use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\ConfirmModel;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
+use SugarCraft\ScriptUi\Runtime\StyledFrame;
+use SugarCraft\ScriptUi\Runtime\StyleOptions;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Attribute\Example;
@@ -44,6 +46,9 @@ final class ConfirmCommand extends Command
             ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header banner rendered above the prompt.', '')
             ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
             ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
+
+        // scriptui-26: themed frames (border/margin/padding/colour/decoration).
+        StyleOptions::register($this);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -78,7 +83,15 @@ final class ConfirmCommand extends Command
             InteractiveRuntime::paint(\SugarCraft\Core\Util\Sanitize::cellValue($header) . "\n");
         }
 
-        $model   = ConfirmModel::newPrompt(
+        try {
+            // scriptui-26: the shared lipgloss surface gum embeds everywhere.
+            $frame = StyleOptions::frame(StyleOptions::flags($input));
+        } catch (\InvalidArgumentException $e) {
+            // A bad theme refuses before any paint.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+                $model   = ConfirmModel::newPrompt(
             title:       (string) $input->getArgument('question'),
             default:     $defaultYes,
             affirmative: $affirm,
@@ -90,10 +103,11 @@ final class ConfirmCommand extends Command
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'confirm']) . "\n");
             return Command::FAILURE;
         }
-        $program = new Program($model, $options);
+        $program = new Program($frame !== null ? new StyledFrame($model, $frame) : $model, $options);
         $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var ConfirmModel $final */
         $final = $program->run();
+        $final = $final instanceof StyledFrame ? $final->inner : $final;
         $guard->disarm();
 
         // Deadline elapsed with no answer — surface the timeout exit code

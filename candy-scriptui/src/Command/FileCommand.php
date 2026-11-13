@@ -9,6 +9,8 @@ use SugarCraft\ScriptUi\Attribute\Example;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\FileModel;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
+use SugarCraft\ScriptUi\Runtime\StyledFrame;
+use SugarCraft\ScriptUi\Runtime\StyleOptions;
 use SugarCraft\ScriptUi\Runtime\OptionList;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
@@ -46,6 +48,9 @@ final class FileCommand extends Command
             ->addOption('extensions', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Only show files with these extensions; repeatable and comma-split (.png,.jpg).', [])
             ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, max 86400).', 0);
+
+        // scriptui-26: themed frames (border/margin/padding/colour/decoration).
+        StyleOptions::register($this);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -89,7 +94,15 @@ final class FileCommand extends Command
         $extensionsRaw = (array) $input->getOption('extensions');
         $allowedExtensions = OptionList::expand($extensionsRaw);
 
-        $model   = FileModel::newPrompt(
+        try {
+            // scriptui-26: the shared lipgloss surface gum embeds everywhere.
+            $frame = StyleOptions::frame(StyleOptions::flags($input));
+        } catch (\InvalidArgumentException $e) {
+            // A bad theme refuses before any paint.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+                $model   = FileModel::newPrompt(
             cwd:        $cwd,
             height:     $height,
             allowDirs:  $allowDirs,
@@ -107,7 +120,7 @@ final class FileCommand extends Command
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'file']) . "\n");
             return Command::FAILURE;
         }
-        $program = new Program($model, $options);
+        $program = new Program($frame !== null ? new StyledFrame($model, $frame) : $model, $options);
         // Oversized deadlines clamp to MAX_TIMEOUT_SECONDS (the help text
         // discloses the cap); the parse above already refused non-numerics
         // instead of silently casting them to 0 (= no deadline).
@@ -115,6 +128,7 @@ final class FileCommand extends Command
         $guard = TimeoutGuard::arm($loop, $seconds, fn () => $program->kill());
         /** @var FileModel $final */
         $final = $program->run();
+        $final = $final instanceof StyledFrame ? $final->inner : $final;
         $guard->disarm();
 
         if ($guard->fired()) {
