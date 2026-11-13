@@ -467,7 +467,12 @@ trait OpenAiResponsesWire
         }
 
         $bytes = (string) $msg->imageBytes();
-        if ($bytes === '' || strlen($bytes) > $this->responsesToolResultImageBudget()) {
+        if ($bytes === '') {
+            return null;
+        }
+        if (strlen($bytes) > $this->responsesToolResultImageBudget()) {
+            AttachmentEncoding::announceOversize('image', $bytes, $this->responsesToolResultImageBudget());
+
             return null;
         }
 
@@ -506,7 +511,12 @@ trait OpenAiResponsesWire
         }
 
         $bytes = (string) $msg->documentBytes();
-        if ($bytes === '' || strlen($bytes) > $this->responsesToolResultDocumentBudget()) {
+        if ($bytes === '') {
+            return null;
+        }
+        if (strlen($bytes) > $this->responsesToolResultDocumentBudget()) {
+            AttachmentEncoding::announceOversize('document', $bytes, $this->responsesToolResultDocumentBudget());
+
             return null;
         }
 

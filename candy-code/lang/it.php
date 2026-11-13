@@ -5318,4 +5318,6 @@ sovrascritti (la legge onlyUnset).',
     'mcp.secret_env_stripped' => 'I server MCP stdio si avviano senza credenziali ereditate: {servers}. Un server che ne ha bisogno la dichiara nel blocco "env" del suo .mcp.json, ad es. "GITHUB_TOKEN": "${GITHUB_TOKEN}", oppure il nome va in secretEnvAllowlist.',
     'mcp.auth_required_row' => '{server} (HTTP {status}): esegui `candy-code mcp auth login {target}`, poi riavvia',
     'mcp.auth_required' => 'I server MCP hanno rifiutato questo avvio per mancanza di credenziali: {servers}.',
+    'provider.attachment.oversize_image' => 'Un\'immagine del risultato di uno strumento ({bytes} byte) supera il limite di {budget} byte di questo provider, quindi il modello riceve solo la didascalia di testo.',
+    'provider.attachment.oversize_document' => 'Un documento del risultato di uno strumento ({bytes} byte) supera il limite di {budget} byte di questo provider, quindi il modello riceve solo la didascalia di testo.',
 ];

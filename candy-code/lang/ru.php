@@ -5317,4 +5317,6 @@ TXT,
     'mcp.secret_env_stripped' => 'MCP stdio-серверы запускаются без унаследованных учётных данных: {servers}. Серверу, которому они нужны, следует объявить их в блоке "env" своего .mcp.json, например "GITHUB_TOKEN": "${GITHUB_TOKEN}", либо добавить имя в secretEnvAllowlist.',
     'mcp.auth_required_row' => '{server} (HTTP {status}): выполните `candy-code mcp auth login {target}`, затем перезапустите',
     'mcp.auth_required' => 'MCP-серверы отклонили этот запуск из-за учётных данных: {servers}.',
+    'provider.attachment.oversize_image' => 'Изображение из результата инструмента ({bytes} байт) превышает лимит этого провайдера в {budget} байт, поэтому модель получит только текстовую подпись.',
+    'provider.attachment.oversize_document' => 'Документ из результата инструмента ({bytes} байт) превышает лимит этого провайдера в {budget} байт, поэтому модель получит только текстовую подпись.',
 ];

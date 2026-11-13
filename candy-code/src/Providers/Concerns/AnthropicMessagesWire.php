@@ -989,7 +989,12 @@ trait AnthropicMessagesWire
         }
 
         $bytes = (string) $msg->imageBytes();
-        if ($bytes === '' || strlen($bytes) > self::TOOL_RESULT_IMAGE_MAX_BYTES) {
+        if ($bytes === '') {
+            return null;
+        }
+        if (strlen($bytes) > self::TOOL_RESULT_IMAGE_MAX_BYTES) {
+            AttachmentEncoding::announceOversize('image', $bytes, self::TOOL_RESULT_IMAGE_MAX_BYTES);
+
             return null;
         }
 
@@ -1029,7 +1034,12 @@ trait AnthropicMessagesWire
         }
 
         $bytes = (string) $msg->documentBytes();
-        if ($bytes === '' || strlen($bytes) > self::TOOL_RESULT_DOCUMENT_MAX_BYTES) {
+        if ($bytes === '') {
+            return null;
+        }
+        if (strlen($bytes) > self::TOOL_RESULT_DOCUMENT_MAX_BYTES) {
+            AttachmentEncoding::announceOversize('document', $bytes, self::TOOL_RESULT_DOCUMENT_MAX_BYTES);
+
             return null;
         }
 

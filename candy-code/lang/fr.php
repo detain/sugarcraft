@@ -5318,4 +5318,6 @@ brouillon du formulaire de génération. Les valeurs déjà présentes dans le b
     'mcp.secret_env_stripped' => 'Les serveurs MCP stdio démarrent sans identifiants hérités : {servers}. Un serveur qui en a besoin le déclare dans le bloc "env" de son .mcp.json, p. ex. "GITHUB_TOKEN": "${GITHUB_TOKEN}", ou son nom figure dans secretEnvAllowlist.',
     'mcp.auth_required_row' => '{server} (HTTP {status}) : exécutez `candy-code mcp auth login {target}`, puis redémarrez',
     'mcp.auth_required' => 'Des serveurs MCP ont refusé ce lancement faute d’identifiants : {servers}.',
+    'provider.attachment.oversize_image' => 'Une image issue d’un résultat d’outil ({bytes} octets) dépasse la limite de {budget} octets de ce fournisseur ; le modèle ne reçoit que sa légende textuelle.',
+    'provider.attachment.oversize_document' => 'Un document issu d’un résultat d’outil ({bytes} octets) dépasse la limite de {budget} octets de ce fournisseur ; le modèle ne reçoit que sa légende textuelle.',
 ];

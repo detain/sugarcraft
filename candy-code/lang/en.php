@@ -5392,4 +5392,6 @@ overwritten (the onlyUnset law).',
     'mcp.secret_env_stripped' => 'MCP stdio servers start without inherited credentials: {servers}. A server that needs one declares it in its .mcp.json "env" block, e.g. "GITHUB_TOKEN": "${GITHUB_TOKEN}", or list the name in secretEnvAllowlist.',
     'mcp.auth_required_row' => '{server} (HTTP {status}): run `candy-code mcp auth login {target}`, then restart',
     'mcp.auth_required' => 'MCP servers refused this launch for credentials: {servers}.',
+    'provider.attachment.oversize_image' => 'A tool-result image ({bytes} bytes) is over this provider\'s {budget}-byte budget, so the model gets its text caption only.',
+    'provider.attachment.oversize_document' => 'A tool-result document ({bytes} bytes) is over this provider\'s {budget}-byte budget, so the model gets its text caption only.',
 ];

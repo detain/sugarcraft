@@ -5317,4 +5317,6 @@ Generierungsformular-Entwurf. Bereits im Entwurf vorhandene Werte werden nie
     'mcp.secret_env_stripped' => 'MCP-stdio-Server starten ohne geerbte Zugangsdaten: {servers}. Ein Server, der eine benötigt, deklariert sie in seinem „env“-Block in .mcp.json, z. B. "GITHUB_TOKEN": "${GITHUB_TOKEN}", oder der Name steht in secretEnvAllowlist.',
     'mcp.auth_required_row' => '{server} (HTTP {status}): führe `candy-code mcp auth login {target}` aus und starte dann neu',
     'mcp.auth_required' => 'MCP-Server haben diesen Start wegen fehlender Zugangsdaten abgelehnt: {servers}.',
+    'provider.attachment.oversize_image' => 'Ein Bild aus einem Werkzeugergebnis ({bytes} Bytes) überschreitet das Budget dieses Anbieters von {budget} Bytes, daher erhält das Modell nur die Textbeschreibung.',
+    'provider.attachment.oversize_document' => 'Ein Dokument aus einem Werkzeugergebnis ({bytes} Bytes) überschreitet das Budget dieses Anbieters von {budget} Bytes, daher erhält das Modell nur die Textbeschreibung.',
 ];

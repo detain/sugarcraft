@@ -5317,4 +5317,6 @@ sobrescritos (a lei onlyUnset).',
     'mcp.secret_env_stripped' => 'Os servidores MCP stdio iniciam sem credenciais herdadas: {servers}. Um servidor que precise de uma a declara no bloco "env" do seu .mcp.json, por exemplo "GITHUB_TOKEN": "${GITHUB_TOKEN}", ou o nome entra em secretEnvAllowlist.',
     'mcp.auth_required_row' => '{server} (HTTP {status}): execute `candy-code mcp auth login {target}` e reinicie',
     'mcp.auth_required' => 'Servidores MCP recusaram esta inicialização por falta de credenciais: {servers}.',
+    'provider.attachment.oversize_image' => 'Uma imagem de resultado de ferramenta ({bytes} bytes) excede o limite de {budget} bytes deste provedor, então o modelo recebe apenas a legenda em texto.',
+    'provider.attachment.oversize_document' => 'Um documento de resultado de ferramenta ({bytes} bytes) excede o limite de {budget} bytes deste provedor, então o modelo recebe apenas a legenda em texto.',
 ];

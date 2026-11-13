@@ -5312,4 +5312,6 @@ TXT,
     'mcp.secret_env_stripped' => 'MCP stdio 伺服器啟動時不繼承憑證：{servers}。需要憑證的伺服器應在其 .mcp.json 的 "env" 區塊中宣告，例如 "GITHUB_TOKEN": "${GITHUB_TOKEN}"，或將名稱加入 secretEnvAllowlist。',
     'mcp.auth_required_row' => '{server}（HTTP {status}）：執行 `candy-code mcp auth login {target}`，然後重新啟動',
     'mcp.auth_required' => 'MCP 伺服器因憑證問題拒絕了本次啟動：{servers}。',
+    'provider.attachment.oversize_image' => '工具結果中的圖片（{bytes} 位元組）超過了此供應商 {budget} 位元組的上限，因此模型只會收到其文字說明。',
+    'provider.attachment.oversize_document' => '工具結果中的文件（{bytes} 位元組）超過了此供應商 {budget} 位元組的上限，因此模型只會收到其文字說明。',
 ];

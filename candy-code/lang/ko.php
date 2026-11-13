@@ -5314,4 +5314,6 @@ TXT,
     'mcp.secret_env_stripped' => 'MCP stdio 서버는 상속된 자격 증명 없이 시작됩니다: {servers}. 필요한 서버는 .mcp.json의 "env" 블록에 선언하거나(예: "GITHUB_TOKEN": "${GITHUB_TOKEN}") 이름을 secretEnvAllowlist에 추가하세요.',
     'mcp.auth_required_row' => '{server}(HTTP {status}): `candy-code mcp auth login {target}`을 실행한 뒤 다시 시작하세요',
     'mcp.auth_required' => '자격 증명 문제로 MCP 서버가 이번 실행을 거부했습니다: {servers}.',
+    'provider.attachment.oversize_image' => '도구 결과 이미지({bytes}바이트)가 이 제공자의 한도 {budget}바이트를 초과하여 모델에는 텍스트 설명만 전달됩니다.',
+    'provider.attachment.oversize_document' => '도구 결과 문서({bytes}바이트)가 이 제공자의 한도 {budget}바이트를 초과하여 모델에는 텍스트 설명만 전달됩니다.',
 ];

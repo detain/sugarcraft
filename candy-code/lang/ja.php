@@ -5314,4 +5314,6 @@ TXT,
     'mcp.secret_env_stripped' => 'MCP stdio サーバーは継承された認証情報なしで起動します: {servers}。必要なサーバーは .mcp.json の "env" ブロックで宣言するか（例: "GITHUB_TOKEN": "${GITHUB_TOKEN}"）、その名前を secretEnvAllowlist に追加してください。',
     'mcp.auth_required_row' => '{server}（HTTP {status}）: `candy-code mcp auth login {target}` を実行してから再起動してください',
     'mcp.auth_required' => '認証情報が原因で、MCP サーバーがこの起動を拒否しました: {servers}。',
+    'provider.attachment.oversize_image' => 'ツール結果の画像（{bytes} バイト）がこのプロバイダーの上限 {budget} バイトを超えているため、モデルにはテキストの説明のみが渡されます。',
+    'provider.attachment.oversize_document' => 'ツール結果のドキュメント（{bytes} バイト）がこのプロバイダーの上限 {budget} バイトを超えているため、モデルにはテキストの説明のみが渡されます。',
 ];

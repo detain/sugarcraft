@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Providers;
 
 use SugarCraft\Code\Attachment;
 use SugarCraft\Code\Attachments\FileMentions;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Messages\UserMessage;
 
 /**
@@ -388,5 +390,37 @@ final class AttachmentEncoding
             . ' was not sent: this wire does not accept PDF document blocks.]';
 
         return $text === '' ? $line : $text . "\n\n" . $line;
+    }
+
+    /** Bound on {@see announceOversize()}'s once-per-payload memory. */
+    private const OVERSIZE_MEMO_LIMIT = 64;
+
+    /** @var array<string, true> payload fingerprints already announced */
+    private static array $oversizeAnnounced = [];
+
+    /**
+     * Say, once per distinct payload, that a tool-result attachment was over
+     * the provider's byte budget and so travels as its text caption only
+     * (audit once-022). The wire rebuilds the request every step, so without
+     * the memo a screenshot would repeat the notice on each replay; without the
+     * notice the user sees a model that "cannot see" an image it was handed.
+     *
+     * @param 'image'|'document' $kind
+     */
+    public static function announceOversize(string $kind, string $bytes, int $budget): void
+    {
+        $fingerprint = $kind . ':' . md5($bytes);
+        if (isset(self::$oversizeAnnounced[$fingerprint])) {
+            return;
+        }
+        if (count(self::$oversizeAnnounced) >= self::OVERSIZE_MEMO_LIMIT) {
+            self::$oversizeAnnounced = [];
+        }
+        self::$oversizeAnnounced[$fingerprint] = true;
+
+        $params = ['bytes' => number_format(strlen($bytes)), 'budget' => number_format($budget)];
+        RuntimeNoticeSink::warn($kind === 'image'
+            ? Lang::t('provider.attachment.oversize_image', $params)
+            : Lang::t('provider.attachment.oversize_document', $params));
     }
 }
