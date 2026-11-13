@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\App;
 
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Sql\Pane;
 
@@ -25,6 +26,14 @@ final class UiState
          * confirming run-key press; null when nothing is armed.
          */
         public readonly ?string $armedDestructive = null,
+        /**
+         * SQL-O08: the cancel handle of the currently in-flight user leg
+         * (async query run or browse load); null while nothing is running.
+         * Escape/Ctrl+C answer to it before the pane chords do. Like the
+         * AdminState recorder this is a live session mechanism parked on an
+         * otherwise-value object — only the reference is the value.
+         */
+        public readonly ?CancellationSource $inFlight = null,
     ) {}
 
     public static function new(): self
@@ -50,5 +59,10 @@ final class UiState
     public function withArmedDestructive(?string $sql): self
     {
         return $this->mutate(['armedDestructive' => $sql]);
+    }
+
+    public function withInFlight(?CancellationSource $source): self
+    {
+        return $this->mutate(['inFlight' => $source]);
     }
 }

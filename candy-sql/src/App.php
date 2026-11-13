@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql;
 
+use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\CancellationToken;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
@@ -323,6 +325,13 @@ final class App implements Model
         // every key while open, while a plain q returns to Tables via
         // handleAdminKey() (previously dead code behind this guard).
         if ($msg->ctrl && $msg->rune === 'c') {
+            // SQL-O08: while a user leg is genuinely in flight, Ctrl+C
+            // answers it with a cancel instead of quitting — the escape
+            // hatch never used to strand the user behind a 30 s wait they
+            // could not stop. Quit-on-idle is exactly as documented.
+            if ($this->ui->inFlight !== null) {
+                return [$this->cancelInFlight(), null];
+            }
             return [$this, Cmd::quit()];
         }
         if ($this->ui->pane === Pane::Admin) {
@@ -332,6 +341,18 @@ final class App implements Model
                 assert($newPage instanceof PageBase);
                 return [$this->withAdminPage($newPage), $cmd];
             }
+        }
+        // SQL-O08: Escape is the primary in-flight cancel chord from any
+        // pane (the Query pane included — the user keeps typing while a
+        // leg runs). The open-line owners keep priority: while the `/`
+        // filter, a file line or an edit line holds the keyboard, Escape
+        // belongs to the line, never to the leg behind it.
+        if ($msg->type === KeyType::Escape
+            && $this->ui->inFlight !== null
+            && !($this->ui->pane === Pane::Tables && $this->browse->filterMode)
+            && !$this->io->isPromptOpen()
+            && !$this->edit->isOpen()) {
+            return [$this->cancelInFlight(), null];
         }
         if (($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q'))
@@ -1415,6 +1436,12 @@ final class App implements Model
         // re-SELECT re-admitted the FIRST leg's pre-write rows over the fresh
         // run. A monotonic gen makes superseded legs unconditionally droppable.
         $query = $query->withIncrementedQueryGen();
+        // SQL-O08: mint a per-dispatch cancel handle. A superseded leg is
+        // cancelled at dispatch (its token would otherwise ride to the 30 s
+        // deadline while the fold is already gen-dropped — cancelling frees
+        // the server thread now, the A04 lifecycle retires the killer leg).
+        $this->cancelInFlightSilently();
+        $source = CancellationSource::new();
         $loading = $this->mutate([
             'browse' => $this->browse
                 ->withSelectedTable('(query)')
@@ -1423,9 +1450,9 @@ final class App implements Model
                 ->withResultTable(null)
                 ->withRowsLoading(true),
             'query' => $query,
-            'ui' => $this->ui->withError(null)->withStatus(Lang::t('status.running')),
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('status.running'))->withInFlight($source),
         ]);
-        return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed, $query->queryGen))];
+        return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed, $query->queryGen, $source->token()))];
     }
 
     /**
@@ -1443,6 +1470,35 @@ final class App implements Model
     }
 
     /**
+     * SQL-O08: answer the cancel chord — fire the in-flight leg's token
+     * (the connection's CancellableQuery rejects it with the named
+     * QueryCancelledException, driver-side KILL/CancelRequest included —
+     * A04's leak-free lifecycle) and retire the handle from the model so a
+     * second press is the ordinary pane chord again. Idempotent: the slot
+     * may already be gone when the fold beat the keypress.
+     */
+    private function cancelInFlight(): self
+    {
+        $source = $this->ui->inFlight;
+        if ($source === null) {
+            return $this;
+        }
+        $source->cancel();
+        return $this->mutate(['ui' => $this->ui->withInFlight(null)]);
+    }
+
+    /**
+     * SQL-O08: supersession side — a fresh dispatch fires off the leg it
+     * replaces (its reply is already gen-doomed; cancel only frees the
+     * server thread now instead of at the deadline) without touching the
+     * slot, which the dispatch's own mutate rewrites.
+     */
+    private function cancelInFlightSilently(): void
+    {
+        $this->ui->inFlight?->cancel();
+    }
+
+    /**
      * Build the async query execution promise for MySQL/Postgres.
      *
      * Runs the query on the React loop via the same pooled async connection
@@ -1451,7 +1507,7 @@ final class App implements Model
      *
      * @return \React\Promise\PromiseInterface<QueryRowsLoadedMsg>
      */
-    private function createQueryPromise(string $sql, int $queryGen): \React\Promise\PromiseInterface
+    private function createQueryPromise(string $sql, int $queryGen, ?CancellationToken $cancellation = null): \React\Promise\PromiseInterface
     {
         try {
             $context = $this->connection->serverContext ?? $this->createContext();
@@ -1485,7 +1541,7 @@ final class App implements Model
             return \React\Promise\resolve(new QueryRowsLoadedMsg($sql, [], $e->getMessage(), $queryGen));
         }
 
-        return $connection->query($sql)
+        return $connection->query($sql, $cancellation)
             ->then(
                 static fn (array $rows): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, $rows, null, $queryGen),
             )
@@ -1514,7 +1570,7 @@ final class App implements Model
         if ($msg->error !== null) {
             return $this->mutate([
                 'browse' => $this->browse->withRows([])->withResultTable(null)->withRowsLoading(false),
-                'ui' => $this->ui->withError($msg->error)->withStatus(null),
+                'ui' => $this->ui->withError($msg->error)->withStatus(null)->withInFlight(null),
             ]);
         }
         return $this->mutate([
@@ -1523,7 +1579,7 @@ final class App implements Model
                 ->withRowCursor(0)->withColCursor(0)
                 ->withResultTable(ResultTable::fromRows($msg->rows))
                 ->withRowsLoading(false),
-            'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($msg->rows))),
+            'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($msg->rows)))->withInFlight(null),
         ]);
     }
 
@@ -1556,12 +1612,14 @@ final class App implements Model
             ->withRowsLoading(true)
             ->withIncrementedLoadGen()
             ->withPageOffset($pageOffset);
+        $this->cancelInFlightSilently();
+        $browseSource = CancellationSource::new();
         $loading = $this->mutate([
             'browse' => $browse,
             'query' => $this->query->withPlan(null),
-            'ui' => $this->ui->withError(null)->withStatus(Lang::t('ui.loading')),
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('ui.loading'))->withInFlight($browseSource),
         ]);
-        return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name, $browse->loadGen, $pageOffset))];
+        return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name, $browse->loadGen, $pageOffset, $browseSource->token()))];
     }
 
     /**
@@ -1724,7 +1782,7 @@ final class App implements Model
         if ($msg->error !== null) {
             return [$this->mutate([
                 'browse' => $this->browse->withRows([])->withRowsLoading(false),
-                'ui' => $this->ui->withError($msg->error)->withStatus(null),
+                'ui' => $this->ui->withError($msg->error)->withStatus(null)->withInFlight(null),
             ]), null];
         }
         // SQL-O11: a PgDn onto an exactly-full last table answers with an
@@ -1757,7 +1815,7 @@ final class App implements Model
      * metadata query nor the row fetch blocks the UI. Reuses the same pooled
      * async connection as the admin pane (same DSN → same connection key).
      */
-    private function createRowsPromise(string $name, int $loadGen, int $pageOffset = 0): \React\Promise\PromiseInterface
+    private function createRowsPromise(string $name, int $loadGen, int $pageOffset = 0, ?CancellationToken $cancellation = null): \React\Promise\PromiseInterface
     {
         try {
             $context = $this->connection->serverContext ?? $this->createContext();
@@ -1791,10 +1849,13 @@ final class App implements Model
             return \React\Promise\resolve(new TableRowsLoadedMsg($name, [], $e->getMessage(), $loadGen));
         }
 
-        return $connection->query(PreviewQuery::columnsSql($flavor, $name))
-            ->then(function (array $colRows) use ($connection, $flavor, $name, $pageOffset): \React\Promise\PromiseInterface {
+        // SQL-O08: both legs ride the same token; a cancel landing between
+        // them rejects the second leg BEFORE it dials (CancellableQuery's
+        // pre-cancelled arm), so no orphan round-trip outlives the chord.
+        return $connection->query(PreviewQuery::columnsSql($flavor, $name), $cancellation)
+            ->then(function (array $colRows) use ($connection, $flavor, $name, $pageOffset, $cancellation): \React\Promise\PromiseInterface {
                 $columns = PreviewQuery::classify($flavor, $colRows);
-                return $connection->query(PreviewQuery::build($flavor, $name, $columns, PreviewQuery::DEFAULT_LIMIT, $pageOffset));
+                return $connection->query(PreviewQuery::build($flavor, $name, $columns, PreviewQuery::DEFAULT_LIMIT, $pageOffset), $cancellation);
             })
             ->then(
                 static fn (array $rows): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, $rows, null, $loadGen),
