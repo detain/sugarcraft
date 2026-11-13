@@ -98,6 +98,15 @@ final class Mark
         if ($this->enabled === $enabled) {
             return $this;
         }
+        return $this->mutate($enabled);
+    }
+
+    /**
+     * Clone with explicit state — the single construction seam behind every
+     * `with*()` setter (factories build directly; house fluent rule).
+     */
+    private function mutate(bool $enabled): self
+    {
         return new self($enabled);
     }
 

@@ -237,7 +237,7 @@ final class DragTracker
      */
     public function withManager(Manager $manager): self
     {
-        return new self($manager, $this->originZoneId, $this->currentZoneId, $this->dragButton);
+        return $this->mutate($this->originZoneId, $this->currentZoneId, $this->dragButton, $manager);
     }
 
     /**
@@ -253,9 +253,12 @@ final class DragTracker
 
     /**
      * Clone with explicit state.
+     *
+     * @param ?Manager $manager Override for the manager (null keeps the
+     *                          current one — the seam behind withManager()).
      */
-    private function mutate(?string $originZoneId, ?string $currentZoneId, ?MouseButton $dragButton): self
+    private function mutate(?string $originZoneId, ?string $currentZoneId, ?MouseButton $dragButton, ?Manager $manager = null): self
     {
-        return new self($this->manager, $originZoneId, $currentZoneId, $dragButton);
+        return new self($manager ?? $this->manager, $originZoneId, $currentZoneId, $dragButton);
     }
 }

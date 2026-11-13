@@ -164,7 +164,7 @@ final class ZoneHoverTracker
      */
     public function withManager(Manager $manager): self
     {
-        return new self($manager, $this->currentZoneId, $this->pendingEnterId);
+        return $this->mutate($this->currentZoneId, $this->pendingEnterId, $manager);
     }
 
     /**
@@ -183,9 +183,11 @@ final class ZoneHoverTracker
      *
      * @param ?string $currentZoneId Override for the current zone id.
      * @param ?string $pendingEnterId Override for the owed-enter zone id.
+     * @param ?Manager $manager Override for the manager (null keeps the
+     *                          current one — the seam behind withManager()).
      */
-    private function mutate(?string $currentZoneId, ?string $pendingEnterId): self
+    private function mutate(?string $currentZoneId, ?string $pendingEnterId, ?Manager $manager = null): self
     {
-        return new self($this->manager, $currentZoneId, $pendingEnterId);
+        return new self($manager ?? $this->manager, $currentZoneId, $pendingEnterId);
     }
 }
