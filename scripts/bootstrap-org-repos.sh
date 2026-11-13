@@ -31,7 +31,6 @@ declare -A DESCRIPTIONS=(
     [sugar-metrics]="Telemetry primitives — port of charmbracelet/promwish on the SugarCraft stack."
     [candy-starter]="Starter skeleton for SugarCraft apps — port of bubbletea-app-template."
     [candy-tetris]="Tetris on the SugarCraft stack — port of Broderick-Westrope/tetrigo."
-    [super-candy]="Dual-pane terminal file manager — port of yorukot/superfile."
     [candy-code]="AI coding-assistant chat shell — port of charmbracelet/crush."
     [candy-code-web]="Browser UI for candy-code's WebSocket server mode — Vite + Vue 3 bundle with a one-class PHP shim."
     [candy-git]="Terminal Git client — port of jesseduffield/lazygit on the SugarCraft stack."
@@ -42,6 +41,8 @@ declare -A DESCRIPTIONS=(
     [candy-gifview]="Terminal GIF + .ansi-art viewer — port of gifterm."
     [candy-top]="btop-style terminal system monitor — port of aristocratos/btop on the SugarCraft stack."
     [candy-flappy]="Flappy-Bird-style game — port of kbrgl/flapioca on the SugarCraft stack."
+    [candy-msteams]="Microsoft Teams channel bundle for candy-code serve — webhook inbound, Bot Framework JWT checks, pairing gates, adaptive-card approvals."
+    [candy-discord]="Discord channel bundle for candy-code serve — WebSocket dialogs, pairing gates, guild allowlists, approval buttons, slash commands."
 )
 
 # plan_rename.md step 2.4: offline metadata mode — print one description and
