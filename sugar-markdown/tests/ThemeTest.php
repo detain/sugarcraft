@@ -173,6 +173,31 @@ final class ThemeTest extends TestCase
         $this->assertEquals(Theme::plain(), Theme::fromEnvironment(Theme::plain()));
     }
 
+    /**
+     * SM-S20 (MDTEST-06): the literal `auto` preset routes through the TTY
+     * probe — colour-TTY stdout gets `dark`, anything else gets the notty
+     * fallback. Pinned under both branch outcomes (stdout's ttyness under a
+     * runner is environment, not code), and dropping the auto arm entirely
+     * falls through to byName('auto')=null and the ansi default, which this
+     * test flips red.
+     */
+    public function testFromEnvironmentAutoResolvesByTtynessOfStdout(): void
+    {
+        putenv('NO_COLOR');
+        putenv('GLAMOUR_STYLE=auto');
+        try {
+            $picked = Theme::fromEnvironment();
+            if (@stream_isatty(STDOUT)) {
+                $this->assertSame(Theme::dark(), $picked, 'auto on a colour TTY must land on dark');
+            } else {
+                $this->assertSame(Theme::notty(), $picked, 'auto off a TTY must fall back to the notty theme');
+            }
+            $this->assertNotSame(Theme::ansi(), $picked, 'auto must never silently return the no-env default');
+        } finally {
+            putenv('GLAMOUR_STYLE');
+        }
+    }
+
     public function testParseColorRejectsMalformedAnsiSpec(): void
     {
         $this->expectException(\InvalidArgumentException::class);

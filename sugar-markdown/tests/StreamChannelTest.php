@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
+use SugarCraft\Markdown\Writer;
 use SugarCraft\Style\Style;
 
 /**
@@ -402,6 +403,105 @@ final class StreamChannelTest extends TestCase
                     "seed $seed trial $trial: " . json_encode($pieces),
                 );
             }
+        }
+    }
+
+    /**
+     * SM-S20 (MDTEST-06): {@see Renderer::defersStreaming()} both-state legs
+     * per knob. Each `||` leg of the predicate gets a theme/option state that
+     * is the ONLY reason deferral fires, plus the false-state — dropping or
+     * mis-conjoining any single leg flips one of these legs red.
+     */
+    public function testDefersStreamingReportsBothStatesPerKnob(): void
+    {
+        $s    = Style::new();
+        $make = static fn(array $overrides): Theme => new Theme(
+            $s, $s, $s, $s, $s, $s, $s, $s, $s, $s, $s, $s, $s, $s, $s,
+            ...$overrides,
+        );
+
+        // False state: nothing set — plain() carries no document-scope
+        // affixes, so a streaming renderer must report no deferral.
+        self::assertFalse((new Renderer(Theme::plain()))->defersStreaming());
+        self::assertFalse(
+            (new Renderer(Theme::plain()))->withPreservedNewLines(false)->defersStreaming(),
+            'explicitly-off preserved newlines must not defer',
+        );
+
+        // True state, one knob at a time.
+        $knobs = [
+            'block prefix'   => $make(['documentBlockPrefix' => '<']),
+            'block suffix'   => $make(['documentBlockSuffix' => '>']),
+            'document indent' => $make(['documentIndent' => 2]),
+            'document margin' => $make(['documentMargin' => 1]),
+        ];
+        foreach ($knobs as $label => $theme) {
+            self::assertFalse(
+                (new Renderer(Theme::plain()))->defersStreaming(),
+                "$label alone off: baseline stays streaming",
+            );
+            self::assertTrue(
+                (new Renderer($theme))->defersStreaming(),
+                "$label alone must force the buffered single-chunk regime",
+            );
+        }
+        self::assertTrue(
+            (new Renderer(Theme::plain()))->withPreservedNewLines(true)->defersStreaming(),
+            'preserved newlines must force the buffered single-chunk regime',
+        );
+    }
+
+    /**
+     * SM-S20 (MDTEST-06): {@see Writer::toStream()} written end-to-end over
+     * php://memory — the static door was previously only exercised via the
+     * constructor with StreamSink::toStream inlined. Both regimes (streaming
+     * and deferred) must land the exact render() bytes at close().
+     */
+    public function testWriterToStreamWritesThroughEndToEnd(): void
+    {
+        $doc = "# Title\n\nbody one\n\n# Second\n\nbody two\n";
+
+        $cases = [
+            'streaming' => new Renderer(Theme::plain()),
+            // Document-scope affixes flip defersStreaming(): the whole
+            // document buffers and render() emits exactly once at close().
+            'deferred'  => new Renderer(new Theme(
+                ...array_fill(0, 15, Style::new()),
+                documentIndent: 2,
+            )),
+        ];
+
+        foreach ($cases as $label => $renderer) {
+            $stream = fopen('php://memory', 'w+');
+            self::assertNotFalse($stream);
+
+            $writer = Writer::toStream($renderer, $stream);
+            self::assertTrue($writer->isOpen(), "$label: writer must start open");
+            foreach (str_split($doc, 7) as $piece) {
+                $writer->feed($piece);
+            }
+            $writer->close();
+            self::assertFalse($writer->isOpen(), "$label: close must release the door");
+
+            rewind($stream);
+            $written = stream_get_contents($stream);
+            fclose($stream);
+
+            self::assertSame($renderer->render($doc), $written, $label);
+        }
+        self::assertTrue($cases['deferred']->defersStreaming(), 'the deferred leg must really defer');
+    }
+
+    public function testWriterToStreamRefusesReadOnlyResourceAtTheDoor(): void
+    {
+        $stream = fopen('php://memory', 'r');
+        self::assertNotFalse($stream);
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            Writer::toStream($this->plain(), $stream);
+        } finally {
+            fclose($stream);
         }
     }
 }
