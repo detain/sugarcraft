@@ -40,19 +40,20 @@ final class CoverageBoostTest extends TestCase
 
     public function testProfileAndWithProfileRoundTrip(): void
     {
-        // Force NoTTY via NO_COLOR so __construct lands deterministically.
+        // Force the colorless Ascii rung via NO_COLOR so __construct lands
+        // deterministically (CP-05 Shape B).
         $p = new Palette(env: ['NO_COLOR' => '1']);
-        $this->assertSame(Profile::NoTTY, $p->profile());
+        $this->assertSame(Profile::Ascii, $p->profile());
 
         $upgraded = $p->withProfile(Profile::TrueColor);
         $this->assertSame(Profile::TrueColor, $upgraded->profile());
         // Original palette unchanged (immutable).
-        $this->assertSame(Profile::NoTTY, $p->profile());
+        $this->assertSame(Profile::Ascii, $p->profile());
     }
 
     public function testStaticDetectShortcut(): void
     {
-        $this->assertSame(Profile::NoTTY, Palette::detect(env: ['NO_COLOR' => '1']));
+        $this->assertSame(Profile::Ascii, Palette::detect(env: ['NO_COLOR' => '1']));
     }
 
     public function testInstanceConvertDelegatesToProfile(): void

@@ -129,17 +129,13 @@ final class AsyncProbe
     {
         $chain = DetectionChain::detect();
 
-        // Env gate: suppression is terminal — the chain answer is final and
-        // there is nothing left for infocmp to add. Spawn nothing.
-        if (!$chain->allowsColor()) {
-            return \React\Promise\resolve($chain->toColorProfile());
-        }
-
         // Promotion gate (parity with the sync terminfo leg in Probe):
         // the infocmp child can only ever ADD TrueColor, so the terminfo
-        // leg runs solely on the Ansi/Ansi256 rungs. On the Ascii floor
-        // (FORCE_COLOR=0 and friends) the chain answer is final — spawning
-        // the child there let a TERM cap-claim upgrade past a forced floor.
+        // leg runs solely on the Ansi/Ansi256 rungs. On a colorless rung —
+        // the NO_COLOR/CLICOLOR=0/TERM=dumb suppressions and falsy
+        // FORCE_COLOR spellings all answer the Ascii floor since CP-05 —
+        // the chain answer is final: spawning the child there let a TERM
+        // cap-claim upgrade past a declared floor.
         $profile = $chain->toColorProfile();
         if ($profile !== ColorProfile::Ansi && $profile !== ColorProfile::Ansi256) {
             return \React\Promise\resolve($profile);

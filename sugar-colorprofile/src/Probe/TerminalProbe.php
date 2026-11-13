@@ -184,20 +184,24 @@ class TerminalProbe
         // value onto TrueColor with source env:CLICOLOR_FORCE.
         $chain = DetectionChain::detect($this->env);
 
-        // Suppressions (NO_COLOR, CLICOLOR=0, TERM=dumb) terminate the ladder.
-        if (!$chain->allowsColor()) {
-            $source = match (true) {
-                str_contains($chain->source(), 'NO_COLOR') => 'env:NO_COLOR',
-                str_contains($chain->source(), 'CLICOLOR=0') => 'env:CLICOLOR=0',
-                str_contains($chain->source(), 'TERM=dumb') => 'env:TERM=dumb',
-                default => $chain->source(),
-            };
-            $caps[Capability::key(Capability::NoColor)] = $source;
-            return $caps;
-        }
-
-        // FORCE_COLOR falsy spelling → ascii floor, no color capability.
+        // The colorless rung (CP-05 Shape B): suppressions AND falsy
+        // FORCE_COLOR spellings now answer LEVEL_ASCII. The report still
+        // separates them — NO_COLOR / CLICOLOR=0 / TERM=dumb are user- or
+        // owner-declared color-off (NoColor capability, byte-identical to
+        // the pre-CP-05 report), while a plain no-color floor (FORCE_COLOR=0
+        // and friends) is the BasicAscii arm with its phase-skip flag. The
+        // old !$chain->allowsColor() gate covered exactly the first group
+        // when it still answered LEVEL_NONE; the source identity carries it
+        // now.
         if ($chain->level() === DetectionChain::LEVEL_ASCII) {
+            $suppression = match ($chain->source()) {
+                'env:NO_COLOR', 'env:CLICOLOR=0', 'env:TERM=dumb' => $chain->source(),
+                default => null,
+            };
+            if ($suppression !== null) {
+                $caps[Capability::key(Capability::NoColor)] = $suppression;
+                return $caps;
+            }
             $caps[Capability::key(Capability::BasicAscii)] = $chain->source();
             $this->asciiAnswered = true;
             return $caps;

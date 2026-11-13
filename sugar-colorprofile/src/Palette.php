@@ -11,6 +11,15 @@ declare(strict_types=1);
  * - ProfileWriter for automatic ANSI degradation on write
  * - NO_COLOR / FORCE_COLOR / COLORTERM standard env var support
  *
+ * Chosen divergences, dated (fleet ladder-preamble discipline): 2026-11-13
+ * (CP-05 Shape B) — the Ascii rung is COLORLESS: env suppressions
+ * (NO_COLOR / CLICOLOR=0 / TERM=dumb) answer it and it drops color codes
+ * while keeping decoration, matching upstream's drop-down-the-color-ladder
+ * and no-color.org's "color attributes only" reading; NoTTY stays reserved
+ * for hardware absence (the stream/TTY gate). Fgbg alone keeps the
+ * black/white conversion. Chafa's INDEXED_240/INDEXED_16_8/FGBG arms are a
+ * request-side vocabulary upstream does not carry.
+ *
  * @see https://github.com/charmbracelet/colorprofile
  */
 namespace SugarCraft\ColorProfile;
@@ -113,7 +122,9 @@ final class Palette
 
     /**
      * Convert any TrueColor/ANSI256/ANSI sequence in a string to
-     * match the current profile, and strip if NoTTY.
+     * match the current profile. At the colorless Ascii rung every COLOR
+     * segment drops while decoration and all other sequences pass (CP-05);
+     * NoTTY strips everything.
      *
      * @param string $ansi  A string potentially containing SGR/CSI/OSC sequences
      * @return string       The string with color codes degraded/stripped
@@ -209,14 +220,13 @@ final class Palette
         // "hermetic" detect() call while an ambient NO_COLOR did not.)
         $chain = DetectionChain::detect($env);
 
-        // An advertised terminal name must not resurrect color over an
-        // explicit no-color environment: the iTerm rung sits BELOW the
-        // NO_COLOR/CLICOLOR=0/TERM=dumb suppressions inside the ladder, so
-        // this early return preserves that ordering.
-        if (!$chain->allowsColor()) {
-            return ColorProfile::NoTTY;
-        }
-
+        // Since CP-05 (Shape B) the chain's answer IS the profile — the
+        // suppressions land on the colorless Ascii rung, and only a reserved
+        // NONE (hardware absence, never derived from the env ladder) maps to
+        // NoTTY's full strip through toColorProfile(). The old early return
+        // here collapsed every !allowsColor answer onto NoTTY, which used to
+        // be exactly NO_COLOR's rung and stripped decoration the standards
+        // body and this lib's own docblocks promise to keep.
         $profile = $chain->toColorProfile();
 
         // TTY detection — Palette-specific (Probe and TerminalProbe don't
@@ -260,6 +270,12 @@ final class Palette
      */
     private function rewriteSgr(string $params, ColorProfile $target): string
     {
+        // The colorless rung never reaches the degrade walk — every color
+        // segment drops rather than re-emits, which is its own shape (CP-05).
+        if ($target === ColorProfile::Ascii) {
+            return $this->stripColorSgr($params);
+        }
+
         // Fast path: no extended-color introducer → byte-identical passthrough.
         // (Leading zeros are valid ECMA-48 padding: `038` introduces color 38.)
         // Absurdly long parameter lists also pass through untouched — real SGR
@@ -305,6 +321,81 @@ final class Palette
             [$kind, $values] = $spec;
             $out[] = $this->emitColor($intro, $kind, $values, $target);
             $i += $consumed;
+        }
+
+        return "\x1b[" . \implode(';', $out) . 'm';
+    }
+
+    /**
+     * The colorless rung (CP-05, Shape B): drop every COLOR-carrying segment
+     * from one SGR parameter list and keep everything else. Color codes are
+     * the 30-37/40-47 basics, the 90-97/100-107 brights, and the extended
+     * 38/48/58 specs (including underline color); decoration (bold, dim,
+     * italic, underline, inverse, blink …), the return-to-default resets
+     * 39/49/59 (they un-color — they paint nothing), and every unrecognized
+     * parameter pass through byte-identical. A parameter list reduced to
+     * nothing drops the WHOLE sequence: a bare `\e[m` is an SGR-0 reset and
+     * would erase decoration the caller asked to keep. Spec consumption
+     * reuses the degrade parser, so semicolon and colon forms drop exactly
+     * the same bytes the degrade walk would have rewritten.
+     */
+    private function stripColorSgr(string $params): string
+    {
+        if ($params === '') {
+            // `\e[m` uncolored is the full attribute reset — not a color code.
+            return "\x1b[m";
+        }
+
+        // Same hostile-input ceiling as the degrade walk: a megabyte-scale
+        // parameter list passes through untouched rather than being walked.
+        if (\strlen($params) > self::MAX_SGR_PARAMS_BYTES) {
+            return "\x1b[{$params}m";
+        }
+
+        $groups  = \explode(';', $params);
+        $out     = [];
+        $count   = \count($groups);
+
+        for ($i = 0; $i < $count; $i++) {
+            $subs = \explode(':', $groups[$i]);
+            $head = $subs[0];
+            if ($head === '' || !\ctype_digit($head)) {
+                $out[] = $groups[$i];
+                continue;
+            }
+
+            $value = self::sgrInt($head);
+
+            if ($value === 38 || $value === 48 || $value === 58) {
+                $consumed = 0;
+                $spec     = \count($subs) > 1
+                    ? $this->parseColonColor(\array_slice($subs, 1))
+                    : $this->parseSemicolonColor($groups, $i, $consumed);
+                if ($spec === null) {
+                    // Not a color spec we understand (e.g. `38;3` CMY) — the
+                    // degrade walk passes it through, so the colorless rung
+                    // keeps the very same bytes.
+                    $out[] = $groups[$i];
+                    continue;
+                }
+                $i += $consumed;
+                continue; // a real spec was parsed — the whole thing drops
+            }
+
+            if (
+                ($value >= 30 && $value <= 37)
+                || ($value >= 40 && $value <= 47)
+                || ($value >= 90 && $value <= 97)
+                || ($value >= 100 && $value <= 107)
+            ) {
+                continue;
+            }
+
+            $out[] = $groups[$i];
+        }
+
+        if ($out === []) {
+            return '';
         }
 
         return "\x1b[" . \implode(';', $out) . 'm';
@@ -440,6 +531,9 @@ final class Palette
      * instead of passed through. 38/48 at 16-color depth collapse to
      * the 4-bit SGR; 58 keeps its introducer (underlines need a color id a
      * 4-bit code cannot carry) pinned to the nearest of the 16 palette slots.
+     * The colorless Ascii rung never reaches this method — rewriteSgr routes
+     * it to stripColorSgr, which DROPS color segments instead of repainting
+     * them (CP-05 Shape B; Ascii ≠ Fgbg finally true).
      *
      * @param list<int> $values
      */
@@ -474,7 +568,9 @@ final class Palette
             return "{$intro};5;{$color->toAnsi256Index()}";
         }
 
-        // ANSI / ANSI 8 / FGBG / Ascii (58 keeps an indexed introducer).
+        // ANSI / ANSI 8 / FGBG (58 keeps an indexed introducer). Ascii was
+        // this fall-through's fourth customer until CP-05 gave it a strip,
+        // not a repaint — see stripColorSgr.
         $color = $kind === 2
             ? new Color($values[0], $values[1], $values[2])
             : Color::fromAnsi256Index($wireSlot);

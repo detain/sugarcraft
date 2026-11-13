@@ -264,10 +264,13 @@ final class DegradeFidelityTest extends TestCase
         $this->assertSame("\x1b[58;5;3m", $p->degrade("\x1b[58;5;3m"));
     }
 
-    public function testAsciiProfileKeepsUnderlineOnNearestBlackWhite(): void
+    public function testAsciiProfileKeepsUnderlineAndDropsColor(): void
     {
+        // CP-05 Shape B: the colorless rung is a strip, not a repaint — the
+        // underline (4) survives verbatim while both the 58;2 underline-color
+        // spec and the 38;2 foreground spec are dropped.
         $out = self::palette(Profile::Ascii)->degrade("\x1b[4;58;2;255;0;0;38;2;10;10;10m");
-        $this->assertSame("\x1b[4;58;5;15;30m", $out);
+        $this->assertSame("\x1b[4m", $out);
     }
 
     // -------------------------------------------------------------------------

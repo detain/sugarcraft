@@ -86,14 +86,15 @@ final class AsyncProbeTest extends TestCase
         }
     }
 
-    public function testProbeColorProfileReturnsNoTTYWhenDisabled(): void
+    public function testProbeColorProfileReturnsAsciiWhenDisabled(): void
     {
+        // CP-05 Shape B: suppression answers the colorless Ascii rung.
         $_ENV['NO_COLOR'] = '1';
         putenv('NO_COLOR=1');
 
         try {
             $profile = Probe::colorProfile();
-            $this->assertSame(ColorProfile::NoTTY, $profile);
+            $this->assertSame(ColorProfile::Ascii, $profile);
         } finally {
             unset($_ENV['NO_COLOR']);
             putenv('NO_COLOR');
@@ -179,9 +180,11 @@ final class AsyncProbeTest extends TestCase
                 $resolved = $p;
             });
 
-            // The suppression gate returns an ALREADY-resolved promise — a
-            // pending child would leave $resolved null until Loop::run().
-            $this->assertSame(ColorProfile::NoTTY, $resolved);
+            // The suppression legs resolve through an already-resolved
+            // promise — a pending child would leave $resolved null until
+            // Loop::run(). CP-05: the colorless rung skips the promotion
+            // leg (it can only ADD TrueColor), so the answer is Ascii.
+            $this->assertSame(ColorProfile::Ascii, $resolved);
         } finally {
             unset($_ENV['NO_COLOR'], $_ENV['TERM']);
             putenv('NO_COLOR');

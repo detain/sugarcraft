@@ -19,8 +19,10 @@ use SugarCraft\Core\Util\ColorProfile as CoreColorProfile;
  * + ColorProfile enum is the SSOT ... Do not re-implement detection logic in
  * consumers" — while sugar-style and candy-top in fact resolve through the
  * Core fork, which is the sentence the README row above states). Both doc rows
- * are reproduced here byte-exact (NO_COLOR: core Ascii vs chain NoTTY;
- * FORCE_COLOR=1: core TrueColor vs chain Ansi), plus the parity rows the forks
+ * are reproduced here byte-exact (NO_COLOR: core `Ascii` repaints the
+ * black/white pair while this ladder's CP-05 `Ascii` drops color codes and
+ * keeps decoration — names converged, semantics did not; FORCE_COLOR=1: core
+ * TrueColor vs chain Ansi), plus the parity rows the forks
  * DO share, so the pin has shape, not just flips.
  *
  * What reddens this file: ANY silent move of either ladder's answer to any
@@ -58,14 +60,14 @@ final class CoreForkDivergencePinTest extends TestCase
         return [
             // label => [env, chain answer (this library), core answer (sugar-core)]
             'empty' => [$row([]), 'Ansi', 'Ascii'],
-            'TERM=dumb' => [$row(['TERM' => 'dumb']), 'NoTTY', 'NoTty'],
-            'NO_COLOR=1' => [$row(['NO_COLOR' => '1']), 'NoTTY', 'Ascii'],
-            'NO_COLOR=1+TERM=dumb' => [$row(['NO_COLOR' => '1', 'TERM' => 'dumb']), 'NoTTY', 'NoTty'],
+            'TERM=dumb' => [$row(['TERM' => 'dumb']), 'Ascii', 'NoTty'],
+            'NO_COLOR=1' => [$row(['NO_COLOR' => '1']), 'Ascii', 'Ascii'],
+            'NO_COLOR=1+TERM=dumb' => [$row(['NO_COLOR' => '1', 'TERM' => 'dumb']), 'Ascii', 'NoTty'],
             'FORCE_COLOR=1' => [$row(['FORCE_COLOR' => '1']), 'Ansi', 'TrueColor'],
             'FORCE_COLOR=2' => [$row(['FORCE_COLOR' => '2']), 'Ansi256', 'TrueColor'],
             'FORCE_COLOR=yes' => [$row(['FORCE_COLOR' => 'yes']), 'TrueColor', 'TrueColor'],
-            'CLICOLOR=0' => [$row(['CLICOLOR' => '0']), 'NoTTY', 'Ascii'],
-            'COLORTERM+dumb' => [$row(['TERM' => 'dumb', 'COLORTERM' => 'truecolor']), 'NoTTY', 'NoTty'],
+            'CLICOLOR=0' => [$row(['CLICOLOR' => '0']), 'Ascii', 'Ascii'],
+            'COLORTERM+dumb' => [$row(['TERM' => 'dumb', 'COLORTERM' => 'truecolor']), 'Ascii', 'NoTty'],
             'TERM=xterm-256color' => [$row(['TERM' => 'xterm-256color']), 'Ansi256', 'Ansi256'],
             'TERM_PROGRAM=iTerm' => [$row(['TERM_PROGRAM' => 'iTerm.app']), 'TrueColor', 'TrueColor'],
             'CLICOLOR_FORCE=yes+dumb' => [$row(['CLICOLOR_FORCE' => 'yes', 'TERM' => 'dumb']), 'TrueColor', 'TrueColor'],

@@ -202,7 +202,8 @@ final class ColorTest extends TestCase
         $this->assertTrue(\SugarCraft\ColorProfile\ColorProfile::Ansi256->allowsColor());
         $this->assertTrue(\SugarCraft\ColorProfile\ColorProfile::TrueColor->allowsColor());
         $this->assertFalse(\SugarCraft\ColorProfile\ColorProfile::NoTTY->allowsColor());
-        $this->assertTrue(\SugarCraft\ColorProfile\ColorProfile::Ascii->allowsColor());
+        // CP-05 Shape B: the colorless rung emits no color — it does not allow color.
+        $this->assertFalse(\SugarCraft\ColorProfile\ColorProfile::Ascii->allowsColor());
     }
 
     // -------------------------------------------------------------------------

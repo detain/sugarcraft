@@ -24,9 +24,10 @@ namespace SugarCraft\ColorProfile;
  *  2. FORCE_COLOR (non-empty)     → level: true|yes|on|>=3 truecolor, 2 ansi256,
  *                                   1 ansi; any other spelling (0/false/off/…)
  *                                   → ascii (disable color, keep decoration)
- *  3. NO_COLOR (set and NON-empty; "" = unset per no-color.org) → none
- *  4. CLICOLOR=0                  → none
- *  5. TERM=dumb (case-insensitive) → none
+ *  3. NO_COLOR (set and NON-empty; "" = unset per no-color.org) → ascii
+ *     (colorless: color codes dropped, decoration kept)
+ *  4. CLICOLOR=0                  → ascii (same colorless routing)
+ *  5. TERM=dumb (case-insensitive) → ascii (same colorless routing)
  *  6. COLORTERM=24bit|truecolor|yes → truecolor
  *  7. TERM_PROGRAM=iTerm.app      → truecolor (inline image + 24-bit history)
  *  8. WT_SESSION (set, non-empty) → truecolor  (Windows Terminal)
@@ -112,28 +113,33 @@ final class DetectionChain
             return new self(self::forceColorLevel((int) $level), 'env:FORCE_COLOR', $term);
         }
 
-        // 3. NO_COLOR set and non-empty → none. "" means UNSET per no-color.org
-        //    (the convention every other tool in the ecosystem honours).
+        // 3. NO_COLOR set and non-empty → the colorless rung (CP-05 Shape B):
+        //    "no color" means COLOR off, not decoration off — the same answer
+        //    no-color.org asks for and what upstream colorprofile's Ascii
+        //    profile renders. "" means UNSET per no-color.org (the convention
+        //    every other tool in the ecosystem honours).
         $noColor = Env::value($resolved, 'NO_COLOR');
         if ($noColor !== null && $noColor !== '') {
-            return new self(self::LEVEL_NONE, 'env:NO_COLOR', $term);
+            return new self(self::LEVEL_ASCII, 'env:NO_COLOR', $term);
         }
 
-        // 4. CLICOLOR=0 → none
+        // 4. CLICOLOR=0 → colorless rung (same routing as NO_COLOR: a declared
+        //    color-off preference, decoration intact).
         if (Env::value($resolved, 'CLICOLOR') === '0') {
-            return new self(self::LEVEL_NONE, 'env:CLICOLOR=0', $term);
+            return new self(self::LEVEL_ASCII, 'env:CLICOLOR=0', $term);
         }
 
         // 5. TERM=dumb (case-insensitive — 'DUMB' must not smuggle a COLORTERM
-        //    past the fleet's no-vomit guarantee) → none. Checked BEFORE
-        //    COLORTERM: a dumb terminal is a promise of minimal capabilities
-        //    and a deliberate declaration by the environment owner, so it
-        //    outranks an advertised truecolor COLORTERM. This matches the
-        //    documented ladder in README/Probe/TerminalProbe and the upstream
-        //    rule ("TERM=dumb is always treated as NoTTY unless
-        //    CLICOLOR_FORCE=1") that sugar-core's Util\ColorProfile honours.
+        //    past the fleet's no-vomit guarantee) → colorless rung. Checked
+        //    BEFORE COLORTERM: a dumb terminal is a promise of minimal
+        //    capabilities and a deliberate declaration by the environment
+        //    owner, so it outranks an advertised truecolor COLORTERM. This
+        //    matches the documented ladder in README/Probe/TerminalProbe and
+        //    the upstream rule ("TERM=dumb is always treated as a colorless
+        //    profile unless CLICOLOR_FORCE=1") that sugar-core's
+        //    Util\ColorProfile honours.
         if ($termLower === 'dumb') {
-            return new self(self::LEVEL_NONE, 'env:TERM=dumb', $term);
+            return new self(self::LEVEL_ASCII, 'env:TERM=dumb', $term);
         }
 
         // 6. COLORTERM=24bit|truecolor|yes → truecolor
@@ -211,10 +217,10 @@ final class DetectionChain
             $level >= 3 => self::LEVEL_TRUECOLOR,
             $level === 2 => self::LEVEL_ANSI256,
             $level === 1 => self::LEVEL_ANSI,
-            // Chalk's convention is level 0 = "no color support", but this
-            // lib's floor is Ascii: color reduced to the black/white pair
-            // with decoration kept — what "disable color, keep the rest"
-            // renders as here (color is not dropped outright).
+            // Chalk's convention is level 0 = "no color support", and the
+            // colorless rung here is exactly that answer since CP-05: color
+            // codes dropped, decoration kept — what "disable color, keep the
+            // rest" renders as (color is not dropped outright).
             default => self::LEVEL_ASCII,
         };
     }
@@ -261,11 +267,16 @@ final class DetectionChain
     }
 
     /**
-     * Whether color is allowed (not disabled via NO_COLOR, CLICOLOR=0, TERM=dumb).
+     * Whether the ladder answered on a rung that renders color at all.
+     *
+     * Since CP-05 the suppression legs (NO_COLOR, CLICOLOR=0, TERM=dumb)
+     * answer the colorless Ascii rung, not NONE — NONE is reserved as the
+     * hardware-absence answer (the stream/TTY gate surfaces map that one
+     * straight onto NoTTY); it is no longer derived from the env ladder.
      */
     public function allowsColor(): bool
     {
-        return $this->level !== self::LEVEL_NONE;
+        return $this->level !== self::LEVEL_NONE && $this->level !== self::LEVEL_ASCII;
     }
 
     /**

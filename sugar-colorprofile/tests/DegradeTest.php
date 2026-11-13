@@ -49,14 +49,17 @@ final class DegradeTest extends TestCase
         $this->assertStringNotContainsString("\x1b[\x1b[", $out);
     }
 
-    public function testDegradeTrueColorToAsciiEmits4BitSGR(): void
+    public function testDegradeTrueColorToAsciiStripsColorKeepsReset(): void
     {
+        // CP-05 Shape B: the colorless rung drops the 38;2 spec entirely —
+        // the sequence empties out and goes with it; the SGR 0 reset is
+        // decoration-class and survives.
         $p = (new Palette(env: ['FORCE_COLOR' => '0']))->withProfile(Profile::Ascii);
         $input = "\x1b[38;2;0;0;0mX\x1b[0m";
         $out = $p->degrade($input);
 
-        $this->assertStringStartsWith("\x1b[3", $out);
-        $this->assertStringNotContainsString("\x1b[38;5;", $out);
+        $this->assertSame("X\x1b[0m", $out);
+        $this->assertStringNotContainsString("\x1b[38;", $out);
         $this->assertStringNotContainsString("\x1b[\x1b[", $out);
     }
 

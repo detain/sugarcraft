@@ -30,6 +30,9 @@ use SugarCraft\ColorProfile\Probe\TerminalProbe;
  */
 final class EnvUnificationTest extends TestCase
 {
+    /** Chain sources that are owner-declared suppressions (CP-05 colorless rung). */
+    private const SUPPRESSION_SOURCES = ['env:NO_COLOR', 'env:CLICOLOR=0', 'env:TERM=dumb'];
+
     /** @var array<string,string|false|null> */
     private array $saved = [];
 
@@ -136,9 +139,9 @@ final class EnvUnificationTest extends TestCase
         return [
             'uppercase 256color term' => [['TERM' => 'XTERM-256COLOR'], DetectionChain::LEVEL_ANSI256],
             'uppercase kitty' => [['TERM' => 'XTERM-KITTY'], DetectionChain::LEVEL_ANSI256],
-            'uppercase dumb' => [['TERM' => 'DUMB'], DetectionChain::LEVEL_NONE],
-            'DUMB smuggles no COLORTERM' => [['TERM' => 'DUMB', 'COLORTERM' => 'truecolor'], DetectionChain::LEVEL_NONE],
-            'dumb lowercase' => [['TERM' => 'dumb'], DetectionChain::LEVEL_NONE],
+            'uppercase dumb' => [['TERM' => 'DUMB'], DetectionChain::LEVEL_ASCII],
+            'DUMB smuggles no COLORTERM' => [['TERM' => 'DUMB', 'COLORTERM' => 'truecolor'], DetectionChain::LEVEL_ASCII],
+            'dumb lowercase' => [['TERM' => 'dumb'], DetectionChain::LEVEL_ASCII],
             'force color beats dumb' => [['FORCE_COLOR' => '3', 'TERM' => 'dumb'], DetectionChain::LEVEL_TRUECOLOR],
             'falsy force floors ascii' => [['FORCE_COLOR' => 'false'], DetectionChain::LEVEL_ASCII],
             'empty NO_COLOR is unset' => [['NO_COLOR' => '', 'TERM' => 'xterm'], DetectionChain::LEVEL_ANSI],
@@ -165,12 +168,19 @@ final class EnvUnificationTest extends TestCase
         );
 
         $report = $this->silentProbe($env)->runProbe();
-        $expectedCap = match ($expectedLevel) {
-            DetectionChain::LEVEL_TRUECOLOR => Capability::TrueColor,
-            DetectionChain::LEVEL_ANSI256 => Capability::Color256,
-            DetectionChain::LEVEL_ANSI => Capability::Color16,
-            DetectionChain::LEVEL_NONE => Capability::NoColor,
-            default => null, // ascii: floor-only answer
+        // CP-05 Shape B: the colorless rung surfaces differently by which leg
+        // answers it — an owner-declared suppression (NoColor capability, its
+        // own env: source, byte-identical report identity to the old NONE
+        // routing) versus the falsy-FORCE_COLOR floor (BasicAscii capability).
+        $isSuppression = $expectedLevel === DetectionChain::LEVEL_ASCII
+            && in_array($chain->source(), self::SUPPRESSION_SOURCES, true);
+        $expectedCap = match (true) {
+            $expectedLevel === DetectionChain::LEVEL_TRUECOLOR => Capability::TrueColor,
+            $expectedLevel === DetectionChain::LEVEL_ANSI256 => Capability::Color256,
+            $expectedLevel === DetectionChain::LEVEL_ANSI => Capability::Color16,
+            $expectedLevel === DetectionChain::LEVEL_NONE => Capability::NoColor,
+            $isSuppression => Capability::NoColor,
+            default => null, // falsy-force ascii: floor-only answer
         };
         if ($expectedCap !== null) {
             $this->assertTrue($report->has($expectedCap), "terminal probe lost {$expectedCap->value} for the same env");

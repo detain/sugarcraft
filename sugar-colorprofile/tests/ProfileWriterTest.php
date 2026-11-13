@@ -122,11 +122,9 @@ final class ProfileWriterTest extends TestCase
         $out = \stream_get_contents($mem);
         \fclose($mem);
 
-        // ASCII profile should degrade to black (30-37) or white (90-97) ANSI16
-        $this->assertTrue(
-            str_starts_with($out, "\x1b[3") || str_starts_with($out, "\x1b[9"),
-            "Expected ANSI 4-bit foreground, got: " . bin2hex($out)
-        );
+        // CP-05 Shape B: the colorless rung drops the 38;2 spec entirely —
+        // text and the SGR 0 reset survive, no 4-bit repaint is emitted.
+        $this->assertSame("red\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;2;", $out);
     }
 

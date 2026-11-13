@@ -53,10 +53,11 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_TRUECOLOR,
                 'env:FORCE_COLOR',
             ],
-            // NO_COLOR set → none
-            'no_color returns none' => [
+            // NO_COLOR set → ascii (the colorless rung — CP-05 Shape B:
+            // color SGR dropped, decoration kept; NoTTY is hardware absence only)
+            'no_color returns ascii' => [
                 ['NO_COLOR' => '1'],
-                DetectionChain::LEVEL_NONE,
+                DetectionChain::LEVEL_ASCII,
                 'env:NO_COLOR',
             ],
             // no-color.org: NO_COLOR set to the EMPTY string means UNSET —
@@ -67,10 +68,10 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_ANSI,
                 'fallback:default',
             ],
-            // CLICOLOR=0 → none
-            'clicolor_0 returns none' => [
+            // CLICOLOR=0 → ascii (colorless rung — CP-05)
+            'clicolor_0 returns ascii' => [
                 ['CLICOLOR' => '0'],
-                DetectionChain::LEVEL_NONE,
+                DetectionChain::LEVEL_ASCII,
                 'env:CLICOLOR=0',
             ],
             // COLORTERM=24bit|truecolor|yes → truecolor
@@ -89,16 +90,16 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_TRUECOLOR,
                 'env:COLORTERM=yes',
             ],
-            // TERM=dumb → none
-            'term_dumb returns none' => [
+            // TERM=dumb → ascii (colorless rung — CP-05)
+            'term_dumb returns ascii' => [
                 ['TERM' => 'dumb'],
-                DetectionChain::LEVEL_NONE,
+                DetectionChain::LEVEL_ASCII,
                 'env:TERM=dumb',
             ],
             // TERM=dumb outranks COLORTERM (unified dumb-first ladder)
             'term_dumb vetoes colorterm' => [
                 ['COLORTERM' => 'truecolor', 'TERM' => 'dumb'],
-                DetectionChain::LEVEL_NONE,
+                DetectionChain::LEVEL_ASCII,
                 'env:TERM=dumb',
             ],
             // WT_SESSION set → truecolor
@@ -251,11 +252,12 @@ final class DetectionChainTest extends TestCase
         $this->assertSame(Profile::Ascii, $chain->toProfile());
     }
 
-    public function testToProfileNoTTY(): void
+    public function testToProfileSuppressionAnswersAscii(): void
     {
+        // CP-05 Shape B: NO_COLOR lands on the colorless Ascii rung, not NoTTY.
         $chain = DetectionChain::detect(['NO_COLOR' => '1']);
 
-        $this->assertSame(Profile::NoTTY, $chain->toProfile());
+        $this->assertSame(Profile::Ascii, $chain->toProfile());
     }
 
     public function testToColorProfileTrueColor(): void
@@ -279,11 +281,12 @@ final class DetectionChainTest extends TestCase
         $this->assertSame(ColorProfile::Ansi, $chain->toColorProfile());
     }
 
-    public function testToColorProfileNoTTY(): void
+    public function testToColorProfileSuppressionAnswersAscii(): void
     {
+        // CP-05 Shape B: the suppression rung maps to ColorProfile::Ascii.
         $chain = DetectionChain::detect(['NO_COLOR' => '1']);
 
-        $this->assertSame(ColorProfile::NoTTY, $chain->toColorProfile());
+        $this->assertSame(ColorProfile::Ascii, $chain->toColorProfile());
     }
 
     public function testToColorProfileAscii(): void
@@ -370,7 +373,7 @@ final class DetectionChainTest extends TestCase
     {
         $chain = DetectionChain::detect(['CLICOLOR_FORCE' => $spelling, 'TERM' => 'dumb']);
 
-        $this->assertSame(DetectionChain::LEVEL_NONE, $chain->level(), "[$spelling]");
+        $this->assertSame(DetectionChain::LEVEL_ASCII, $chain->level(), "[$spelling]");
         $this->assertSame('env:TERM=dumb', $chain->source(), "[$spelling]");
     }
 

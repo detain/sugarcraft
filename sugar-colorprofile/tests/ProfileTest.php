@@ -48,7 +48,7 @@ final class ProfileTest extends TestCase
         $this->assertSame(16_777_216, Profile::TrueColor->maxColors());
         $this->assertSame(256, Profile::ANSI256->maxColors());
         $this->assertSame(16, Profile::ANSI->maxColors());
-        $this->assertSame(2, Profile::Ascii->maxColors());
+        $this->assertSame(0, Profile::Ascii->maxColors());
         $this->assertSame(0, Profile::NoTTY->maxColors());
     }
 
@@ -97,7 +97,7 @@ final class ProfileTest extends TestCase
         $this->assertSame('24-bit full color', Profile::TrueColor->description());
         $this->assertSame('256-color palette', Profile::ANSI256->description());
         $this->assertSame('16-color standard', Profile::ANSI->description());
-        $this->assertSame('black & white', Profile::Ascii->description());
+        $this->assertSame('no color codes (decoration kept)', Profile::Ascii->description());
         $this->assertSame('colors disabled', Profile::NoTTY->description());
     }
 
@@ -106,7 +106,7 @@ final class ProfileTest extends TestCase
         $this->assertSame(16_777_216, Profile::TrueColor->maxColors());
         $this->assertSame(256, Profile::ANSI256->maxColors());
         $this->assertSame(16, Profile::ANSI->maxColors());
-        $this->assertSame(2, Profile::Ascii->maxColors());
+        $this->assertSame(0, Profile::Ascii->maxColors());
         $this->assertSame(0, Profile::NoTTY->maxColors());
     }
 }

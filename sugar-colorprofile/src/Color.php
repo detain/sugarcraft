@@ -91,7 +91,10 @@ final class Color
      * - Ansi8:    rounds to one of the 8 basic terminal colors (slots 0-7)
      * - Fgbg:     black or white by perceived brightness (the palette layer
      *             of chafa's FGBG; inversion painting is render-side)
-     * - Ascii:    returns black or white based on perceived luminance
+     * - Ascii:    returns the nearest black/white COLOR VALUE — this enum
+     *             answers "what would this color be in one ink", while the
+     *             colorless rung EMITS no color SGR for it at all (CP-05;
+     *             see Palette::stripColorSgr)
      * - NoTTY:    returns a near-black or near-white for legibility
      */
     public function convert(ColorProfile $profile): self

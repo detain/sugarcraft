@@ -41,7 +41,10 @@ namespace SugarCraft\ColorProfile;
  * pass them to Palette::withProfile(), Color::convert() or ProfileWriter to
  * force that degradation level. The ASCII arm IS reachable from detection:
  * a falsy FORCE_COLOR spelling (0/false/off) lands there as step 2 of the
- * chain ladder — "disable color, keep decoration".
+ * chain ladder, and since CP-05 (Shape B) the NO_COLOR / CLICOLOR=0 /
+ * TERM=dumb suppressions land there too — all four mean the same thing:
+ * "disable color, keep decoration". Only hardware absence (the stream/TTY
+ * gate) still answers NoTTY's full strip.
  *
  * @see https://github.com/charmbracelet/colorprofile
  */
@@ -65,7 +68,8 @@ enum ColorProfile: string
     /** Two-color foreground/background (black or white by brightness). */
     case Fgbg = 'fgbg';
 
-    /** Two-color black/white mode. */
+    /** Colorless mode — no color codes are emitted; decoration and every
+     *  other sequence pass through (the color-only strip rung, CP-05). */
     case Ascii = 'ascii';
 
     /** No TTY connected — all ANSI sequences must be stripped. */
@@ -124,7 +128,7 @@ enum ColorProfile: string
             self::Ansi      => '16-color standard',
             self::Ansi8     => '8-color basic ANSI',
             self::Fgbg      => 'two-color foreground/background',
-            self::Ascii     => 'black & white',
+            self::Ascii     => 'no color codes (decoration kept)',
             self::NoTTY     => 'colors disabled',
         };
     }
@@ -141,7 +145,7 @@ enum ColorProfile: string
             self::Ansi      => 16,
             self::Ansi8     => 8,
             self::Fgbg      => 2,
-            self::Ascii     => 2,
+            self::Ascii     => 0,
             self::NoTTY     => 0,
         };
     }
@@ -165,10 +169,14 @@ enum ColorProfile: string
     }
 
     /**
-     * Whether this profile permits ANSI color rendering.
+     * Whether this profile permits ANSI COLOR rendering.
+     *
+     * NoTTY strips everything; the colorless Ascii rung (CP-05 Shape B)
+     * renders no color at all — decoration passes, color codes do not.
+     * Both answer false; every rung at Ansi8 depth or above answers true.
      */
     public function allowsColor(): bool
     {
-        return $this !== self::NoTTY;
+        return $this !== self::NoTTY && $this !== self::Ascii;
     }
 }

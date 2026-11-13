@@ -92,10 +92,10 @@ final class ProbeTest extends TestCase
                 ColorProfile::TrueColor,
             ],
 
-            // 2. NO_COLOR set (any value) → NoTTY
-            'no_color set returns NoTTY' => [
+            // 2. NO_COLOR set (any value) → Ascii (colorless rung — CP-05)
+            'no_color set returns ascii' => [
                 ['NO_COLOR' => '1', 'COLORTERM' => 'truecolor'],
-                ColorProfile::NoTTY,
+                ColorProfile::Ascii,
             ],
             // no-color.org: NO_COLOR="" is UNSET — falls through (flipped with MT2).
             'no_color empty string is unset' => [
@@ -103,16 +103,16 @@ final class ProbeTest extends TestCase
                 ColorProfile::Ansi,
             ],
 
-            // 3. CLICOLOR=0 → NoTTY
-            'clicolor_0 returns NoTTY' => [
+            // 3. CLICOLOR=0 → Ascii (colorless rung — CP-05)
+            'clicolor_0 returns ascii' => [
                 ['CLICOLOR' => '0'],
-                ColorProfile::NoTTY,
+                ColorProfile::Ascii,
             ],
 
-            // 4. TERM=dumb → NoTTY
-            'term_dumb returns NoTTY' => [
+            // 4. TERM=dumb → Ascii (colorless rung — CP-05)
+            'term_dumb returns ascii' => [
                 ['TERM' => 'dumb'],
-                ColorProfile::NoTTY,
+                ColorProfile::Ascii,
             ],
 
             // 5. COLORTERM=24bit|truecolor|yes → TrueColor

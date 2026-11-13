@@ -20,7 +20,7 @@ final class PaletteTest extends TestCase
 
         // Save original env values so tearDown can restore them.
         // This prevents parent-process env vars (NO_COLOR, CLICOLOR_FORCE, etc.)
-        // from leaking into tests and causing spurious NoTTY returns.
+        // from leaking into tests and causing spurious colorless-Ascii returns.
         $this->savedEnv = [
             'CLICOLOR_FORCE' => $_ENV['CLICOLOR_FORCE'] ?? null,
             'NO_COLOR'       => $_ENV['NO_COLOR'] ?? null,
@@ -40,11 +40,11 @@ final class PaletteTest extends TestCase
         // CLICOLOR_FORCE=0 won't force TrueColor.
         // NO_COLOR is REMOVED (not set to empty) because detection uses
         //   array_key_exists which returns true even for null/empty.
-        // CLICOLOR=0 won't force NoTTY.
+        // CLICOLOR=0 won't force the colorless rung.
         // NOTE: We do NOT set TERM here because tests that don't explicitly
         //   set TERM rely on the parent environment's TERM value to determine
         //   the appropriate color profile. Setting TERM=dumb would cause
-        //   an early NoTTY return before FORCE_COLOR/COLORTERM could be checked.
+        //   an early colorless (Ascii) return before FORCE_COLOR/COLORTERM could be checked.
         putenv('CLICOLOR_FORCE=0');
         putenv('NO_COLOR');  // Remove from process env entirely
         putenv('CLICOLOR=0');
@@ -100,10 +100,11 @@ final class PaletteTest extends TestCase
         $this->assertInstanceOf(Profile::class, $profile);
     }
 
-    public function testNoColorEnvSetsNoTTY(): void
+    public function testNoColorEnvSetsAsciiRung(): void
     {
+        // CP-05 Shape B: suppression answers the colorless Ascii rung.
         $profile = Palette::detect(null, ['NO_COLOR' => '1']);
-        $this->assertSame(Profile::NoTTY, $profile);
+        $this->assertSame(Profile::Ascii, $profile);
     }
 
     public function testForceColorTrueColor(): void
@@ -172,11 +173,11 @@ final class PaletteTest extends TestCase
         // polarity pair: '' and absent must NOT hit the force branch —
         // detection falls through to the chain (NO_COLOR below proves it).
         $this->assertSame(
-            Profile::NoTTY,
+            Profile::Ascii,
             Palette::detect(null, ['FORCE_COLOR' => '', 'NO_COLOR' => '1'])
         );
         $this->assertSame(
-            Profile::NoTTY,
+            Profile::Ascii,
             Palette::detect(null, ['NO_COLOR' => '1'])
         );
     }
@@ -194,7 +195,7 @@ final class PaletteTest extends TestCase
         // previous polarity here answered truecolor on dumb+COLORTERM while
         // TerminalProbe and the README documented the opposite.
         $profile = Palette::detect(null, ['COLORTERM' => 'truecolor', 'TERM' => 'dumb']);
-        $this->assertSame(Profile::NoTTY, $profile);
+        $this->assertSame(Profile::Ascii, $profile);
     }
 
     public function testITerm2DoesNotResurrectColorOverDumbTerminal(): void
@@ -202,19 +203,19 @@ final class PaletteTest extends TestCase
         // TERM=dumb disables color unconditionally — an advertised
         // iTerm.app session must not override it.
         $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'TERM' => 'dumb']);
-        $this->assertSame(Profile::NoTTY, $profile);
+        $this->assertSame(Profile::Ascii, $profile);
     }
 
     public function testITerm2DoesNotResurrectColorOverNoColor(): void
     {
         $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'NO_COLOR' => '1']);
-        $this->assertSame(Profile::NoTTY, $profile);
+        $this->assertSame(Profile::Ascii, $profile);
     }
 
     public function testITerm2DoesNotResurrectColorOverClicolorZero(): void
     {
         $profile = Palette::detect(null, ['TERM_PROGRAM' => 'iTerm.app', 'CLICOLOR' => '0']);
-        $this->assertSame(Profile::NoTTY, $profile);
+        $this->assertSame(Profile::Ascii, $profile);
     }
 
     public function testITerm2UpgradesColorCapableTerminalToTrueColor(): void
@@ -241,12 +242,13 @@ final class PaletteTest extends TestCase
         $this->assertSame(Profile::ANSI, $profile);
     }
 
-    public function testDumbTerminalReturnsNoTTY(): void
+    public function testDumbTerminalReturnsAsciiRung(): void
     {
         $profile = Palette::detect(null, ['TERM' => 'dumb']);
-        // dumb has no color, TERM_PROGRAM is absent, COLORTERM absent, NO_COLOR absent
-        // so it falls through to isatty check; if not a tty → NoTTY
-        $this->assertSame(Profile::NoTTY, $profile);
+        // CP-05 Shape B: TERM=dumb answers the colorless rung directly —
+        // it no longer falls through to the isatty check (that gate is the
+        // step-0 hardware-absence leg, reserved for NoTTY).
+        $this->assertSame(Profile::Ascii, $profile);
     }
 
     // -------------------------------------------------------------------------
@@ -393,7 +395,10 @@ final class PaletteTest extends TestCase
 
     public function testDegradeNoTTYStripsAnsi(): void
     {
-        $p = new Palette(null, ['NO_COLOR' => '1']);
+        // NoTTY is now reachable only as a pinned profile (hardware absence
+        // or an explicit withProfile) — CP-05 moved the env suppressions to
+        // the colorless Ascii rung, so pin the full-strip rung explicitly.
+        $p = (new Palette(null, ['NO_COLOR' => '1']))->withProfile(Profile::NoTTY);
         $degraded = $p->degrade("\x1b[38;2;255;0;0mred\x1b[0m");
         $this->assertSame('red', $degraded);
     }
