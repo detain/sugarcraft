@@ -88,4 +88,42 @@ final class WindowsPipes
     {
         return CoreWindowsPipes::drainUntilExit($pipes, $running, $deadline, $maxBytes);
     }
+
+    /**
+     * Streaming twin of {@see drainUntilExit()}: poll the output pipes until the
+     * child has exited and a last pass finds nothing, handing every chunk to
+     * $onChunk(slot, bytes) as it arrives. No deadline: the caller's own
+     * contract (a long-running agent turn) owns that.
+     *
+     * @param array<int|string, resource> $pipes
+     * @param \Closure(): bool $running
+     * @param \Closure(int|string, string): void $onChunk
+     */
+    public static function pumpUntilExit(array $pipes, \Closure $running, \Closure $onChunk): void
+    {
+        $exitedAt = null;
+
+        while (true) {
+            // Sampled BEFORE the reads, as in drainUntilExit().
+            if ($exitedAt === null && !$running()) {
+                $exitedAt = \microtime(true);
+            }
+
+            $got = false;
+            foreach ($pipes as $slot => $pipe) {
+                $chunk = CoreWindowsPipes::readAvailable($pipe);
+                if ($chunk !== '') {
+                    $got = true;
+                    $onChunk($slot, $chunk);
+                }
+            }
+
+            if ($exitedAt !== null && (!$got || \microtime(true) - $exitedAt >= self::EXIT_DRAIN_GRACE_SECONDS)) {
+                return;
+            }
+            if (!$got) {
+                \usleep(self::POLL_MICROSECONDS);
+            }
+        }
+    }
 }

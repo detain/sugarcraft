@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Providers;
 
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\WindowsPipes;
 
 /**
  * Encapsulates a Claude Code CLI invocation.
@@ -257,10 +258,22 @@ final readonly class ClaudeCodeInvocation
         // overrides. Empty-string values are dropped by proc_open() itself
         // (measured, recorded in ProcessContainment), so an unset key stays
         // unset rather than reaching the child as ''.
+        // Windows: a stdin pipe write blocks past 4 KiB until the child reads,
+        // and select()/non-blocking reads do not work on its pipes, so the
+        // prompt rides a staged file descriptor and the output is polled.
+        $win = WindowsPipes::runtimeNeedsIt();
+        $staged = null;
+        if ($win) {
+            $staged = WindowsPipes::stageStdin($stdin);
+            if ($staged === null) {
+                throw new ProviderException('Failed to stage the Claude Code prompt');
+            }
+        }
+
         $process = proc_open(
             ProcessContainment::spawnSpec($cmd),
             [
-                0 => ['pipe', 'r'],
+                0 => $staged !== null ? ['file', $staged, 'r'] : ['pipe', 'r'],
                 1 => ['pipe', 'w'],
                 2 => ['pipe', 'w'],
             ],
@@ -274,6 +287,9 @@ final readonly class ClaudeCodeInvocation
         );
 
         if (!is_resource($process)) {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
             // E664 (E27(a) family): this execute() is the SECOND Claude Code
             // subprocess site — the provider owns the first two, since retyped
             // in lane Q. Identical pattern: typed throw, exit code null = the
@@ -287,14 +303,35 @@ final readonly class ClaudeCodeInvocation
         // 64 KiB stdout or stderr pipe while this side is still writing. So
         // every pipe is non-blocking and serviced as `stream_select()` says
         // it is ready — the same shape as ClaudeCodeProvider::completeStream().
-        stream_set_blocking($pipes[0], false);
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-
-        $pending = self::feedStdin($pipes[0], $stdin);
         $output = '';
         $errors = '';
-        $open = [1 => $pipes[1], 2 => $pipes[2]];
+        $pending = '';
+        $open = [];
+
+        if ($win) {
+            WindowsPipes::pumpUntilExit(
+                [1 => $pipes[1], 2 => $pipes[2]],
+                WindowsPipes::runningProbe($process),
+                static function (int|string $fd, string $chunk) use (&$output, &$errors, $onChunk): void {
+                    if ($fd === 2) {
+                        $errors .= $chunk;
+
+                        return;
+                    }
+                    $output .= $chunk;
+                    if ($onChunk !== null) {
+                        $onChunk($chunk);
+                    }
+                }
+            );
+        } else {
+            stream_set_blocking($pipes[0], false);
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+
+            $pending = self::feedStdin($pipes[0], $stdin);
+            $open = [1 => $pipes[1], 2 => $pipes[2]];
+        }
 
         while ($open !== []) {
             $read = array_values($open);
@@ -355,6 +392,9 @@ final readonly class ClaudeCodeInvocation
         }
 
         $exitCode = proc_close($process);
+        if ($staged !== null) {
+            @unlink($staged);
+        }
 
         if ($exitCode !== 0 && $exitCode !== -1) {
             // E664: the shell exit code now rides as STRUCTURE on

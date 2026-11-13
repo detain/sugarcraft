@@ -17,6 +17,7 @@ use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Usage;
 
@@ -313,10 +314,23 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
 
         // E672/E674: choke-point spec + env; the three auth keys ride as
         // overrides (see ClaudeCodeInvocation for the same routing).
+        // Windows: the prompt rides a staged file descriptor (a stdin pipe write
+        // blocks past 4 KiB) and the output pipes are polled with fstat, since
+        // select()/non-blocking reads do not work on them there.
+        $win = WindowsPipes::runtimeNeedsIt();
+        $staged = $win ? WindowsPipes::stageStdin($prompt) : null;
+        if ($win && $staged === null) {
+            if ($spill !== null) {
+                @unlink($spill);
+            }
+
+            throw new ProviderException('Failed to stage the Claude Code prompt');
+        }
+
         $process = proc_open(
             ProcessContainment::spawnSpec($cmd),
             [
-                0 => ['pipe', 'r'],
+                0 => $staged !== null ? ['file', $staged, 'r'] : ['pipe', 'r'],
                 1 => ['pipe', 'w'],
                 2 => ['pipe', 'w'],
             ],
@@ -330,6 +344,9 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         );
 
         if (!is_resource($process)) {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
             if ($spill !== null) {
                 @unlink($spill);
             }
@@ -343,11 +360,15 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         // the prompt now rides it and can be far larger than one pipe buffer:
         // a blocking write of all of it would stall while the child fills its
         // stdout, which this side would not yet be reading.
-        stream_set_blocking($pipes[0], false);
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
+        $running = $win ? WindowsPipes::runningProbe($process) : null;
+        $pending = '';
+        if (!$win) {
+            stream_set_blocking($pipes[0], false);
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
 
-        $pending = ClaudeCodeInvocation::feedStdin($pipes[0], $prompt);
+            $pending = ClaudeCodeInvocation::feedStdin($pipes[0], $prompt);
+        }
         $lines = new Reader();
         $errors = '';
         $resultError = null;
@@ -375,12 +396,30 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
                 $write = $pending !== '' ? [$pipes[0]] : [];
                 $except = [];
 
-                // `@`, because a signal arriving mid-select (a SIGCHLD, a
-                // suite's `pcntl_alarm()`) makes `stream_select()` return false
-                // with an `Interrupted system call` warning. An EINTR is a retry,
-                // not an error — and under `failOnWarning="true"` the warning
-                // alone would red a passing run.
-                $ready = @stream_select($read, $write, $except, 1, 0);
+                if ($running !== null) {
+                    // Windows poll arm: the exit is sampled BEFORE the reads, so
+                    // an exit seen with nothing waiting is the EOF a Windows
+                    // pipe never shows.
+                    $exited = !$running();
+                    $read = array_values(array_filter($open, static fn($p): bool => WindowsPipes::available($p) > 0));
+                    if ($read === []) {
+                        if ($exited) {
+                            break;
+                        }
+                        usleep(WindowsPipes::POLL_MICROSECONDS);
+
+                        continue;
+                    }
+                    $write = [];
+                    $ready = count($read);
+                } else {
+                    // `@`, because a signal arriving mid-select (a SIGCHLD, a
+                    // suite's `pcntl_alarm()`) makes `stream_select()` return false
+                    // with an `Interrupted system call` warning. An EINTR is a retry,
+                    // not an error — and under `failOnWarning="true"` the warning
+                    // alone would red a passing run.
+                    $ready = @stream_select($read, $write, $except, 1, 0);
+                }
 
                 if ($ready === false) {
                     // EINTR, or a stream that has genuinely gone away. Drop
@@ -425,7 +464,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
                         continue;
                     }
 
-                    $chunk = fread($pipe, 8192);
+                    $chunk = $running !== null ? WindowsPipes::readAvailable($pipe) : fread($pipe, 8192);
                     if ($chunk === false || ($chunk === '' && feof($pipe))) {
                         unset($open[$fd]);
 
@@ -491,6 +530,9 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
             // startup, but nothing says when that is.
             if ($spill !== null) {
                 @unlink($spill);
+            }
+            if ($staged !== null) {
+                @unlink($staged);
             }
         }
 

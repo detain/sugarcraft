@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Providers;
 
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\WindowsPipes;
 
 /**
  * Encapsulates a Codex CLI (`codex exec`) invocation.
@@ -213,10 +214,17 @@ final readonly class CodexInvocation
         // this class owns — OPENAI_API_KEY rides the inherited environment and
         // the subscription token lives in ~/.codex, exactly as the operator's
         // own `codex` invocation would read them.
+        // Windows: staged-file stdin + fstat polling, as in ClaudeCodeInvocation.
+        $win = WindowsPipes::runtimeNeedsIt();
+        $staged = $win ? WindowsPipes::stageStdin($stdin) : null;
+        if ($win && $staged === null) {
+            throw new ProviderException('Failed to stage the Codex prompt');
+        }
+
         $process = proc_open(
             ProcessContainment::spawnSpec($cmd),
             [
-                0 => ['pipe', 'r'],
+                0 => $staged !== null ? ['file', $staged, 'r'] : ['pipe', 'r'],
                 1 => ['pipe', 'w'],
                 2 => ['pipe', 'w'],
             ],
@@ -226,6 +234,10 @@ final readonly class CodexInvocation
         );
 
         if (!is_resource($process)) {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
+
             throw new ProviderException('Failed to start Codex process');
         }
 
@@ -233,11 +245,15 @@ final readonly class CodexInvocation
         // closure is spelled out in ClaudeCodeInvocation::execute(); the
         // reasoning is byte-for-byte the same here (megabyte prompts, 64 KiB
         // pipes, non-blocking writes).
-        stream_set_blocking($pipes[0], false);
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
+        $running = $win ? WindowsPipes::runningProbe($process) : null;
+        $pending = '';
+        if (!$win) {
+            stream_set_blocking($pipes[0], false);
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
 
-        $pending = self::feedStdin($pipes[0], $stdin);
+            $pending = self::feedStdin($pipes[0], $stdin);
+        }
         $output = '';
         $errors = '';
         $open = [1 => $pipes[1], 2 => $pipes[2]];
@@ -247,9 +263,25 @@ final readonly class CodexInvocation
             $write = $pending !== '' ? [$pipes[0]] : [];
             $except = [];
 
-            // `@`: an EINTR (SIGCHLD, a suite's pcntl_alarm()) is a retry, and
-            // its warning would red a passing run under failOnWarning.
-            $ready = @stream_select($read, $write, $except, 1, 0);
+            if ($running !== null) {
+                // Windows poll arm (see ClaudeCodeProvider::completeStream()).
+                $exited = !$running();
+                $read = array_values(array_filter($open, static fn($p): bool => WindowsPipes::available($p) > 0));
+                if ($read === []) {
+                    if ($exited) {
+                        break;
+                    }
+                    usleep(WindowsPipes::POLL_MICROSECONDS);
+
+                    continue;
+                }
+                $write = [];
+                $ready = count($read);
+            } else {
+                // `@`: an EINTR (SIGCHLD, a suite's pcntl_alarm()) is a retry, and
+                // its warning would red a passing run under failOnWarning.
+                $ready = @stream_select($read, $write, $except, 1, 0);
+            }
 
             if ($ready === false) {
                 foreach ($open as $fd => $pipe) {
@@ -271,7 +303,7 @@ final readonly class CodexInvocation
                     continue;
                 }
 
-                $chunk = fread($pipe, 8192);
+                $chunk = $running !== null ? WindowsPipes::readAvailable($pipe) : fread($pipe, 8192);
                 if ($chunk === false || ($chunk === '' && feof($pipe))) {
                     unset($open[$fd]);
 
@@ -301,6 +333,9 @@ final readonly class CodexInvocation
         }
 
         $exitCode = proc_close($process);
+        if ($staged !== null) {
+            @unlink($staged);
+        }
 
         if ($exitCode !== 0 && $exitCode !== -1) {
             $reason = self::exitReason($errors, self::turnFailureError(self::lastLine($output)));

@@ -13,6 +13,7 @@ use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Usage;
 
 /**
@@ -257,10 +258,19 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
         $options = $this->options($request);
         $cmd = array_merge([$codexBinary], $this->invocation->execArgs($options));
 
+        // Windows: staged-file stdin + fstat polling (see ClaudeCodeProvider).
+        $win = WindowsPipes::runtimeNeedsIt();
+        $staged = $win ? WindowsPipes::stageStdin($prompt) : null;
+        if ($win && $staged === null) {
+            self::removeSchemaFile($options);
+
+            throw new ProviderException('Failed to stage the Codex prompt');
+        }
+
         $process = proc_open(
             ProcessContainment::spawnSpec($cmd),
             [
-                0 => ['pipe', 'r'],
+                0 => $staged !== null ? ['file', $staged, 'r'] : ['pipe', 'r'],
                 1 => ['pipe', 'w'],
                 2 => ['pipe', 'w'],
             ],
@@ -270,6 +280,9 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
         );
 
         if (!is_resource($process)) {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
             // The drain finally below never runs on this path; the spill's
             // third teardown site, exactly where the claude twin has it.
             self::removeSchemaFile($options);
@@ -277,11 +290,15 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
             throw new ProviderException('Failed to start Codex process');
         }
 
-        stream_set_blocking($pipes[0], false);
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
+        $running = $win ? WindowsPipes::runningProbe($process) : null;
+        $pending = '';
+        if (!$win) {
+            stream_set_blocking($pipes[0], false);
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
 
-        $pending = CodexInvocation::feedStdin($pipes[0], $prompt);
+            $pending = CodexInvocation::feedStdin($pipes[0], $prompt);
+        }
         $lines = new Reader();
         $errors = '';
         $failureError = null;
@@ -298,7 +315,22 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
                 $write = $pending !== '' ? [$pipes[0]] : [];
                 $except = [];
 
-                $ready = @stream_select($read, $write, $except, 1, 0);
+                if ($running !== null) {
+                    $exited = !$running();
+                    $read = array_values(array_filter($open, static fn($p): bool => WindowsPipes::available($p) > 0));
+                    if ($read === []) {
+                        if ($exited) {
+                            break;
+                        }
+                        usleep(WindowsPipes::POLL_MICROSECONDS);
+
+                        continue;
+                    }
+                    $write = [];
+                    $ready = count($read);
+                } else {
+                    $ready = @stream_select($read, $write, $except, 1, 0);
+                }
 
                 if ($ready === false) {
                     foreach ($open as $fd => $pipe) {
@@ -324,7 +356,7 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
                         continue;
                     }
 
-                    $chunk = fread($pipe, 8192);
+                    $chunk = $running !== null ? WindowsPipes::readAvailable($pipe) : fread($pipe, 8192);
                     if ($chunk === false || ($chunk === '' && feof($pipe))) {
                         unset($open[$fd]);
 
@@ -375,6 +407,9 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
             // After the reap: the child has certainly read (or never will
             // read) the schema file, so this is the last moment it may exist.
             self::removeSchemaFile($options);
+            if ($staged !== null) {
+                @unlink($staged);
+            }
         }
 
         if ($exitCode !== 0 && $exitCode !== -1 && $exitCode !== null) {
