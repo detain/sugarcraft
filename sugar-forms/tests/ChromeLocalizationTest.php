@@ -190,6 +190,7 @@ final class ChromeLocalizationTest extends TestCase
     {
         $formSrc = (string) file_get_contents(__DIR__ . '/../src/Form.php');
         $listSrc = (string) file_get_contents(__DIR__ . '/../src/ItemList/ItemList.php');
+        $pickerSrc = (string) file_get_contents(__DIR__ . '/../src/FilePicker/FilePicker.php');
 
         $this->assertStringNotContainsString("'Step %d of %d'", $formSrc);
         $this->assertStringNotContainsString('"\n\n[submitted]"', $formSrc);
@@ -200,5 +201,7 @@ final class ChromeLocalizationTest extends TestCase
         $this->assertStringNotContainsString("'next page'", $formSrc);
         $this->assertStringNotContainsString("'prev page'", $formSrc);
         $this->assertStringNotContainsString("'tab past last field'", $formSrc);
+        // SF-54 rider: the picker's empty-list row joined the catalogue.
+        $this->assertStringNotContainsString("'(empty)'", $pickerSrc);
     }
 }

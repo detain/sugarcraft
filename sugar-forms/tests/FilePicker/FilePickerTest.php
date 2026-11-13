@@ -462,4 +462,67 @@ final class FilePickerTest extends TestCase
             @rmdir($dir);
         }
     }
+
+    // ------------------------------------------------------------------
+    // SF-54 (sugar-forms-084): entry cap on the synchronous walk.
+    // setUp fixture, scan order after the dot-hidden filter:
+    // a.txt, b.md, sub.
+    // ------------------------------------------------------------------
+
+    public function testMaxEntriesCapsTheWalkAndCountsTheRest(): void
+    {
+        $p = FilePicker::new($this->root)->withMaxEntries(2);
+        $names = array_map(static fn(Entry $e): string => $e->name, $p->entries);
+        $this->assertSame(['a.txt', 'b.md'], $names);
+        // '.hidden' sorted ahead of the cap line but the dot-hidden filter
+        // runs first, so only 'sub' is a truncated CANDIDATE — hidden
+        // entries never reach the cap count.
+        $this->assertSame(1, $p->truncated);
+        $this->assertStringContainsString('… 1 more', $p->view());
+    }
+
+    public function testUnboundedZeroKeepsEveryCandidate(): void
+    {
+        $p = FilePicker::new($this->root)->withMaxEntries(0);
+        $this->assertCount(3, $p->entries);
+        $this->assertSame(0, $p->truncated);
+        $this->assertStringNotContainsString('more', $p->view());
+    }
+
+    public function testDefaultCapKeepsSmallDirectoriesWhole(): void
+    {
+        $p = FilePicker::new($this->root);
+        $this->assertSame(FilePicker::DEFAULT_MAX_ENTRIES, $p->maxEntries);
+        $this->assertCount(3, $p->entries);
+        $this->assertSame(0, $p->truncated);
+    }
+
+    public function testNegativeMaxEntriesThrowsNamingTheValue(): void
+    {
+        $p = FilePicker::new($this->root);
+        try {
+            $p->withMaxEntries(-1);
+            $this->fail('negative caps are rejected');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('got -1', $e->getMessage());
+        }
+    }
+
+    public function testMarkerRowStaysCleanAndCappedUnderAWidthBudget(): void
+    {
+        $p = FilePicker::new($this->root)->withMaxEntries(1)->withWidth(12);
+        $lines = explode("\n", $p->view());
+        $marker = end($lines);
+        $this->assertStringContainsString('more', $marker);
+        $this->assertLessThanOrEqual(12, \SugarCraft\Core\Util\Width::of($marker));
+    }
+
+    public function testTighteningTheCapRecountsOnRefresh(): void
+    {
+        $p = FilePicker::new($this->root)->withMaxEntries(0);
+        $this->assertSame(0, $p->truncated);
+        $p = $p->withMaxEntries(1);
+        $this->assertSame(2, $p->truncated);
+        $this->assertCount(1, $p->entries);
+    }
 }

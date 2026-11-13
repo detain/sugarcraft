@@ -157,6 +157,17 @@ must enforce their own containment on the selected value (realpath,
 prefix-check the resolved directory, re-verify the extension with a
 trailing-dot-safe matcher) before acting on it.
 
+**Synchronous walk and entry cap.** The listing is a synchronous `scandir()`
+plus per-entry stats on the live loop: a huge, FUSE, or network-mounted
+directory stalls rendering for the duration of the walk (an async,
+fetcher-style leg is future work). The blast radius is bounded — the walk
+keeps the first `maxEntries` candidates in scan order and stops stat-ing the
+rest, reporting them as a trailing `… N more` row. Tune with
+`withMaxEntries(int)` (default 512; `0` means unbounded). Past the cap the
+extension filter stops applying (it needs a stat), so the marker counts
+dot-hidden-filter survivors only; the cursor, window, and selection machinery
+never see the truncated remainder.
+
 All fields share a common navigation contract: `Tab` / `↓` advances,
 `Shift+Tab` / `↑` retreats (Shift+Tab arrives on the wire as CSI `Z`,
 decoded to `Tab` with `shift: true`; `Alt+Tab` remains an accepted

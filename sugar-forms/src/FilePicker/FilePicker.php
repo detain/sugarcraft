@@ -26,6 +26,18 @@ use SugarCraft\Forms\Util\ViewportPan;
  * The directory listing is read on construction and on each {@see refresh()};
  * calling code that wants to reflect external changes should re-`refresh()`.
  *
+ * SYNC CONTRACT (sugar-forms-084): the walk is a synchronous `scandir()`
+ * followed by per-entry stat calls ON THE LIVE LOOP — on a huge, FUSE, or
+ * network-mounted directory this blocks rendering for the duration of the
+ * walk; a fetcher-style async leg is future work. The blast radius is
+ * bounded: the walk keeps the first `maxEntries` candidates (default
+ * {@see DEFAULT_MAX_ENTRIES}, tune with {@see withMaxEntries()}, 0 =
+ * unbounded) in scan order and stops stat-ing the rest; the surviving
+ * candidates are reported as a trailing "… N more" row. That count is
+ * candidate entries past the cap — the dot-hidden filter still applies
+ * beyond the cap, but the extension filter is not re-evaluated there. The
+ * cursor, window and selection machinery only ever sees kept entries.
+ *
  * Filtering:
  * - `showHidden` — when false (default), entries beginning with `.` are
  *   hidden.
@@ -51,6 +63,12 @@ final class FilePicker implements Model
 {
     use HasThemeChrome;
 
+    /**
+     * Entry cap of the synchronous walk (sugar-forms-084): each refresh
+     * keeps at most this many candidates in scan order; 0 means unbounded.
+     */
+    public const DEFAULT_MAX_ENTRIES = 512;
+
     private function __construct(
         public readonly string $cwd,
         /** @var list<Entry> */ public readonly array $entries,
@@ -71,6 +89,10 @@ final class FilePicker implements Model
         public readonly ?string $error    = null,
         /** Horizontal budget in cells; 0 == natural width (uncapped). */
         public readonly int $width       = 0,
+        /** Entry cap of the sync walk; 0 = unbounded (sugar-forms-084). */
+        public readonly int $maxEntries  = self::DEFAULT_MAX_ENTRIES,
+        /** Candidates past the cap on the last walk (marker row count). */
+        public readonly int $truncated   = 0,
     ) {}
 
     /**
@@ -163,7 +185,9 @@ final class FilePicker implements Model
             $lines[] = self::themedErrorRow($fit(RenderSafe::clean($this->error)), $theme);
         }
         if ($this->entries === []) {
-            $lines[] = '(empty)';
+            // SF-54 rider: was the last raw chrome literal in this class —
+            // routed through the catalogue with a byte-identical en value.
+            $lines[] = Lang::t('filepicker.empty');
             return implode("\n", $lines);
         }
 
@@ -185,6 +209,13 @@ final class FilePicker implements Model
                 $line = self::themedHighlight($line, $theme);
             }
             $lines[] = $line;
+        }
+        if ($this->truncated > 0) {
+            // SF-54: display-only footer — cursor, window and selection
+            // machinery only ever walk the kept entries.
+            $lines[] = '  ' . $fit(RenderSafe::clean(Lang::t('filepicker.truncated', [
+                'count' => $this->truncated,
+            ])));
         }
         return implode("\n", $lines);
     }
@@ -274,8 +305,8 @@ final class FilePicker implements Model
         // never-written) error slot, which view() already renders as an
         // '! …' line. errorSet is unconditional so a repaired directory
         // clears the stale message on the next successful refresh.
-        [$entries, $error] = $this->readDir();
-        return $this->mutate(entries: $entries, error: $error, errorSet: true);
+        [$entries, $error, $truncated] = $this->readDir();
+        return $this->mutate(entries: $entries, error: $error, errorSet: true, truncated: $truncated);
     }
 
     public function withShowHidden(bool $on): self
@@ -296,6 +327,25 @@ final class FilePicker implements Model
     {
         $clean = array_values(array_map(static fn(string $e) => ltrim(strtolower($e), '.'), $exts));
         return $this->mutate(allowedExtensions: $clean)->refresh();
+    }
+
+    /**
+     * Tune the entry cap of the synchronous walk (sugar-forms-084): at most
+     * $limit candidates are kept in scan order per refresh and the rest are
+     * counted, not stat-ed, and reported as a trailing "… N more" row.
+     * 0 means unbounded — a documented escape hatch for hosts on tame
+     * filesystems that want the full listing. Past the cap the extension
+     * filter stops applying (it needs a stat); the dot-hidden filter still
+     * does.
+     */
+    public function withMaxEntries(int $limit): self
+    {
+        if ($limit < 0) {
+            throw new \InvalidArgumentException(Lang::t('filepicker.bad_max_entries', [
+                'limit' => $limit,
+            ]));
+        }
+        return $this->mutate(maxEntries: $limit)->refresh();
     }
 
     public function withDirAllowed(bool $on): self  { return $this->mutate(dirAllowed: $on); }
@@ -372,8 +422,10 @@ final class FilePicker implements Model
     }
 
     /**
-     * @return array{0: list<Entry>, 1: ?string} entries plus a surfaced read
-     *         error (E736-F2/2.7): null on success, human-readable on failure
+     * @return array{0: list<Entry>, 1: ?string, 2: int} entries plus a
+     *         surfaced read error (E736-F2/2.7: null on success,
+     *         human-readable on failure) plus the count of candidates past
+     *         the entry cap (sugar-forms-084)
      */
     private function readDir(): array
     {
@@ -382,15 +434,24 @@ final class FilePicker implements Model
             // SF-017: localized like every other user-surfaced string;
             // the test-pinned 'cannot read directory: ' shape rides as the
             // en default so consumers see byte-identical text.
-            return [[], Lang::t('filepicker.read_error', ['path' => $this->cwd])];
+            return [[], Lang::t('filepicker.read_error', ['path' => $this->cwd]), 0];
         }
-        $entries = [];
+        $entries   = [];
+        $truncated = 0;
         foreach ($names as $name) {
             if ($name === '.' || $name === '..') {
                 continue;
             }
             $hidden = str_starts_with($name, '.');
             if ($hidden && !$this->showHidden) {
+                continue;
+            }
+            if ($this->maxEntries > 0 && count($entries) >= $this->maxEntries) {
+                // SF-54: past the cap we count the candidate and pay no
+                // stat; the extension filter needs is_dir, so it stops
+                // applying here and the count may include names it would
+                // have hidden (documented marker semantics).
+                $truncated++;
                 continue;
             }
             $full   = Entry::join($this->cwd, $name);
@@ -421,7 +482,7 @@ final class FilePicker implements Model
             };
             return $cmp * $reverse;
         });
-        return [$entries, null];
+        return [$entries, null, $truncated];
     }
 
     private function moveCursor(int $idx): self
@@ -460,6 +521,8 @@ final class FilePicker implements Model
         ?bool $reverseSort = null,
         ?string $error = null, bool $errorSet = false,
         ?int $width = null,
+        ?int $maxEntries = null,
+        ?int $truncated = null,
     ): self {
         return new self(
             cwd:               $cwd               ?? $this->cwd,
@@ -480,6 +543,8 @@ final class FilePicker implements Model
             reverseSort:       $reverseSort       ?? $this->reverseSort,
             error:             $errorSet ? $error : $this->error,
             width:             $width            ?? $this->width,
+            maxEntries:        $maxEntries        ?? $this->maxEntries,
+            truncated:         $truncated         ?? $this->truncated,
         );
     }
 
