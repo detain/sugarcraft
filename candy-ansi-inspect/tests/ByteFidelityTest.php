@@ -1011,6 +1011,32 @@ final class ByteFidelityTest extends TestCase
         $this->assertSame("ab\x7fcd", self::reemit(Inspector::parse("ab\x7fcd")));
     }
 
+    public function testRawColumnCannotForgeSegmentLines(): void
+    {
+        // AIP-02 / finding 002: the raw column of a report line used to emit
+        // captured bytes verbatim, so a DCS payload carrying CR LF + a fake
+        // `ESC[0m  SGR reset` forged a byte-shape-identical segment line, and
+        // an OSC payload carrying C1 bytes replayed them at the terminal.
+        // Both probes now arrive as ONE line with named tokens only.
+        $forge = "\x1bP q abc\r\n\x1b[0m  SGR reset -- clean\r\ntail\x1b\\";
+        $segments = Inspector::parse($forge);
+        $report = Inspector::report($forge);
+        $this->assertStringNotContainsString("\r", $report);
+        $this->assertCount(count($segments), explode("\n", $report), 'exactly one report line per segment — nothing forged extra');
+
+        $eightBit = "\x1b]0;x\x8d\x88y\x07";
+        $report = Inspector::report($eightBit);
+        $this->assertStringNotContainsString("\x8d", $report);
+        $this->assertStringNotContainsString("\x88", $report);
+        $this->assertStringContainsString('RI', $report);
+        $this->assertStringContainsString('HTS', $report);
+
+        // The bytes survive: it is the DISPLAY that tokenizes, `raw()` of the
+        // segment keeps everything the sender sent (deviations aside).
+        $segments = Inspector::parse($forge);
+        $this->assertStringContainsString("\r", implode('', array_map(static fn($s): string => $s->raw(), $segments)));
+    }
+
     public function testEightBitCsiIntroducerIsReplayedInSevenBitForm(): void
     {
         // Deviation #9: sugar-ansi-parser opens the CSI family directly on 0x9B, but
@@ -1039,15 +1065,17 @@ final class ByteFidelityTest extends TestCase
     public function testUnterminatedEightBitTailsKeepTheirRawByteAndNameTheirFamily(): void
     {
         // The rewrite of deviation #9 applies to DISPATCHED sequences only. A
-        // tail reports the bytes in flight verbatim — and since step 10.16 it
-        // names the family from the 8-bit introducer instead of the generic
-        // "escape".
+        // tail reports the bytes in flight verbatim in `raw()` — and since
+        // step 10.16 it names the family from the 8-bit introducer instead of
+        // the generic "escape". Since AIP-02 the DISPLAY column tokenizes the
+        // raw C1 byte (`CSI`, `DCS`) exactly like the label sanitizer: the
+        // bytes are preserved in the segment, never replayed at the terminal.
         $this->assertSame(
-            [SequenceSegment::class . "|\x9b|\x9b  truncated CSI (unterminated)"],
+            [SequenceSegment::class . "|\x9b|CSI  truncated CSI (unterminated)"],
             self::fingerprint(Inspector::parse("\x9b")),
         );
         $this->assertSame(
-            [SequenceSegment::class . "|\x90|\x90  truncated DCS (unterminated)"],
+            [SequenceSegment::class . "|\x90|DCS  truncated DCS (unterminated)"],
             self::fingerprint(Inspector::parse("\x90")),
         );
     }

@@ -12,7 +12,10 @@ namespace SugarCraft\AnsiInspect;
  */
 final class SequenceSegment extends Segment
 {
-    /** Display form of an ESC byte: `ESC` instead of `\x1b`. */
+    /**
+     * The raw bytes are stored verbatim; the report renders them through
+     * {@see printable()}, which tokenizes every control byte.
+     */
     public function __construct(
         public readonly string $bytes,
         public readonly string $label,
@@ -26,9 +29,24 @@ final class SequenceSegment extends Segment
         return $printable . '  ' . $this->label;
     }
 
-    /** Render bytes with `\x1b` swapped for the display token `ESC`. */
+    /**
+     * Render bytes with control bytes replaced by visible tokens: `\x1b`
+     * becomes `ESC`, every C0/DEL/C1 byte becomes its named token (`CR`,
+     * `BEL`, `RI`, …), and printable ASCII plus well-formed UTF-8 runes
+     * survive verbatim.
+     *
+     * This is the single choke point of the report's raw column and it runs
+     * the same tokenizer as the label column (Inspector::sanitizeLabelBytes):
+     * captured bytes must not be able to forge segment lines or mutate the
+     * viewing terminal — a raw CR/LF would rewrite the report's own line
+     * framing, a raw 0x9B would re-arm a CSI parser on an 8-bit-capable
+     * terminal, and every BEL-normalized OSC raw would ring on render
+     * (finding 002). `raw()` stays untouched for library consumers who need
+     * the verbatim bytes; the tokenization is a display-layer contract, and
+     * README's fidelity list discloses the raw-column spelling it imposes.
+     */
     public static function printable(string $bytes): string
     {
-        return str_replace("\x1b", 'ESC', $bytes);
+        return Inspector::sanitizeLabelBytes($bytes);
     }
 }

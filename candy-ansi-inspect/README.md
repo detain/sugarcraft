@@ -146,6 +146,11 @@ inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
 alone; and a sequence the stream cut short still arrives, as a `truncated …`
 segment carrying its raw bytes.
 
+That is a contract about the bytes `raw()` returns. The report's display column
+tokenises them instead — control bytes arrive as named escapes (`ESC`, `BEL`,
+`RI`, `\x8B`) so a payload can never forge a segment line or replay controls at
+the terminal.
+
 Eleven deviations from exact byte equality are known, and each is pinned by a
 named test rather than hidden — anything *else* that loses a byte is a bug:
 
