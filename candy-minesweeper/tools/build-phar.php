@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * tools/build-phar.php — builds the single-file candy-minesweeper PHAR.
  *
- * Ported from candy-top/tools/build-phar.php (itself the DST-1 program from
+ * Ported from candy-top/tools/build-phar.php (itself the version-stamp program from
  * candy-code): the guard structure, refusal wording shape, stamp fields, and
  * stub law are the reference. candy-minesweeper ships no self-update verb, so this is
  * the packaging half only.
@@ -22,8 +22,8 @@ declare(strict_types=1);
  * pin it to the tag's commit date; the stamp is then that instant in UTC and
  * rebuilds agree byte-wise on this field). Unset, the wall clock answers. The
  * version stamp itself is read back at runtime by
- * `Support\Version::fromPharMetadata()` — candy-code's DST-1 lesson: the
- * frozen vendor/ inside the artifact makes Composer's InstalledVersions
+ * `Support\Version::fromPharMetadata()` — the lesson measured on candy-code's
+ * real builds: the frozen vendor/ inside the artifact makes Composer's InstalledVersions
  * report the build root's dev guess, so a stamp NOTHING consumes means
  * `--version` lies.
  *

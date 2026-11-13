@@ -89,9 +89,10 @@ final class Game implements Model
          */
         public readonly ?string $notice = null,
         /**
-         * True when the finished game below IS the preset's new best time —
-         * stamped once on the win/lose transition by afterAction() and
-         * rendered as the banner's trailing badge. Losing can never set it.
+         * True when this instance's finished game beat the preset's previous
+         * best time — stamped once on the win/lose transition by
+         * afterAction() and rendered as the banner's trailing badge. Losing
+         * can never set it.
          */
         public readonly bool $newBest = false,
         /**

@@ -64,7 +64,7 @@ final class Renderer
 
     /**
      * Geometry coupling between {@see frame()} and mouse hit-testing: the
-     * rounded border costs 1 cell and the padding(0,1) layer 1 more, so the
+     * rounded border costs 1 cell and the padding(0,1) layer adds 1 more, so the
      * first interior cell glyph sits at 0-based terminal coordinates
      * (2, 1). {@see Game::onMouse()} subtracts these constants to translate
      * 1-based MouseMsg positions into the Scanner's 1-based interior
@@ -90,7 +90,7 @@ final class Renderer
      * Test/host seam pinning whether the minefield may paint colour,
      * independent of the ambient environment (hermeticity): null consults
      * the fleet authority {@see ColorProfile}, true/false forces the answer.
-     * The suite arms TRUE from tests/bootstrap.php so the goldens and every
+     * The suite pins TRUE from tests/bootstrap.php so the goldens and every
      * colour-substring pin see the same bytes on any runner, while
      * {@see NoColorTest} flips the knob to prove the strip. Production code
      * never calls this; the binary routes capability through
@@ -209,7 +209,7 @@ final class Renderer
         // ship translated in all 16 locales, and every locale's lines fit
         // an 80-column terminal — FooterWidthGuardTest enforces that budget
         // across the whole set so a translation can never silently overflow
-        // it again (the French lines sat at 78-79 before this indent).
+        // it again.
         // The rules line leads the footer so a first-timer reads the
         // win condition before the key legend — TeachToPlayTest pins that
         // this copy reaches every frame via this call site.

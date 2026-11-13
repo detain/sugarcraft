@@ -147,8 +147,8 @@ final class DifficultyStats
      *
      * Delegates the tmp+flock+rename dance to {@see AtomicJsonFile::write()},
      * so the file is never in a partial-write state and no temp artifact is
-     * left behind. The `{version,data}` envelope is preserved on disk (now
-     * pretty-printed — still valid JSON that {@see load()} round-trips).
+     * left behind. The `{version,data}` envelope is preserved on disk and
+     * pretty-printed — still valid JSON that {@see load()} round-trips.
      *
      * @param string $path Absolute path to the target file.
      * @throws \RuntimeException If write or rename fails.

@@ -34,7 +34,7 @@ final class Board
      */
     public const MAX_SERIALIZED_BYTES = 81920;
 
-    /** @var list<list<Cell>> $rows[y][x] */
+    /** @var list<list<Cell>> indexed as [y][x] */
     private array $rows;
 
     /**
@@ -324,7 +324,7 @@ final class Board
         );
     }
 
-    /** True iff every non-mine cell has been revealed. O(1) via revealedCount. */
+    /** True exactly when every non-mine cell has been revealed. O(1) via revealedCount. */
     public function isWon(): bool
     {
         if ($this->exploded) return false;
@@ -397,7 +397,7 @@ final class Board
      *  - adjacency equals a full recompute from the planted bits (mine
      *    cells 0, non-mine cells the neighbour-mine count), so numbers
      *    cannot lie about the layout;
-     *  - exploded ⇔ a revealed mine exists (explosions reveal their mine;
+     *  - exploded is true exactly when a revealed mine exists (explosions reveal their mine;
      *    a revealed mine sets exploded), and exploded implies placement;
      *  - a cell is never simultaneously revealed and marked, and never
      *    carries both markers at once (Cell::reveal no-ops on flagged;
@@ -534,7 +534,7 @@ final class Board
         if ($placed && $plantedBits !== $m) {
             throw new \InvalidArgumentException('Invalid board serialization');
         }
-        // exploded ⇔ a revealed mine: an explosion is exactly the frame a
+        // exploded means a revealed mine: an explosion is exactly the frame a
         // flood reveals a mine, and no other path reveals mines.
         if ($exploded && !$placed) {
             throw new \InvalidArgumentException('Invalid board serialization');
@@ -598,7 +598,7 @@ final class Board
     }
 
     /**
-     * Chord click — reveal all unflagged neighbors of a "satisfied" number.
+     * Chord click — reveal all unflagged neighbours of a "satisfied" number.
      *
      * A cell is satisfied when its (positive) adjacent count equals the number
      * of flagged neighbours — EQUALS, not go-sweep's transcribed `adjFlags >=
@@ -626,7 +626,7 @@ final class Board
             return $this;
         }
 
-        // Count flagged neighbors.
+        // Count flagged neighbours.
         $flagCount = 0;
         for ($dy = -1; $dy <= 1; $dy++) {
             for ($dx = -1; $dx <= 1; $dx++) {
@@ -647,7 +647,7 @@ final class Board
             return $this;
         }
 
-        // Reveal all unflagged, unrevealed neighbors, cascading through
+        // Reveal all unflagged, unrevealed neighbours, cascading through
         // floodReveal so any zero-adjacent pocket adjacent to a chorded
         // neighbour is fully cleared.
         $b = $this;

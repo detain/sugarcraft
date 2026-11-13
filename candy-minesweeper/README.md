@@ -126,8 +126,8 @@ guarantees is the modified-LETTER promise: Ctrl+S, Ctrl+R, Alt+L and the rest
 of the editor-reach set steer nothing.
 
 Quitting is never silently lossy: the first `q`/`Esc` on a live board whose
-mines are not yet in the savegame slot arms a confirm toast — a second press
-quits, any other move disarms. Finished boards and unspoiled ones exit on the
+mines are not yet in the savegame slot sets a confirm toast — a second press
+quits, any other move clears it. Finished boards and unspoiled ones exit on the
 first press, and `Ctrl+C` keeps its instant terminal exit (candy-minesweeper-019).
 
 Flag placement follows the classic rulebook: once the flags equal the mine
@@ -137,7 +137,7 @@ flags than mines — a hand-restored savegame — reads a negative remaining
 counter rather than a false zero, so the impossibility shows before the
 wrong-chord detonation does.
 
-Mouse support arms SGR cell-tracking (`MouseMode::CellMotion`), so a click
+Mouse support installs SGR cell-tracking (`MouseMode::CellMotion`), so a click
 plus drag also reports motion rows, not just button presses. Terminals or
 multiplexers that do not honour the mode simply never deliver mouse rows —
 the game stays fully playable on the keyboard, and the absence is silent.
@@ -156,7 +156,7 @@ Colour degrades gracefully: with `NO_COLOR` set, `CLICOLOR=0`, or `TERM=dumb`, t
 
 ## Language
 
-The interface follows your locale. The binary arms `T::setLocale(T::detect())` before the program starts (`LC_ALL` → `LC_MESSAGES` → `LANG`, `C`/POSIX falling back to English), and every visible string — the mines/flags/remaining/time status line, the win and lose banners, the help footer, the new-game picker and its custom-board form — routes through `Lang::t`. Sixteen locales ship in `lang/` (ar, cs, de, en, es, fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr, zh-cn); the English file is the source of truth and `LocaleParityTest` fails if any locale drifts in key set or order. In right-to-left locales the legend keeps its PHYSICAL vocabulary: the arrows name the arrow keys (up, not "forward"), `hjkl` stays Latin, and the board never mirrors — expect the key tokens to sit inside RTL text as embedded runs, exactly as a bidi-correct terminal renders them.
+The interface follows your locale. The binary enables `T::setLocale(T::detect())` before the program starts (`LC_ALL` → `LC_MESSAGES` → `LANG`, `C`/POSIX falling back to English), and every visible string — the mines/flags/remaining/time status line, the win and lose banners, the help footer, the new-game picker and its custom-board form — routes through `Lang::t`. Sixteen locales ship in `lang/` (ar, cs, de, en, es, fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr, zh-cn); the English file is the source of truth and `LocaleParityTest` fails if any locale drifts in key set or order. In right-to-left locales the legend keeps its PHYSICAL vocabulary: the arrows name the arrow keys (up, not "forward"), `hjkl` stays Latin, and the board never mirrors — expect the key tokens to sit inside RTL text as embedded runs, exactly as a bidi-correct terminal renders them.
 
 The sixteen files cover 16 of the 17 codes `LOCALES.md` recommends — `zh-tw` is a deliberate exclusion: traditional wording does not diverge from the shipped simplified file at this app's copy scale, so the house rule for regional variants applies and the code falls through to English until a proper region hand-off changes that. Value style follows target-language convention: the English toasts and banners are deliberately lowercase while locales that capitalise their sentence-style copy do so in their own files — consistency is per-locale, not cross-locale. Each locale also keeps one grammatical register across its `ui.*` strings (cs and tr use informal imperatives, de impersonal infinitives), so the address a player meets in a toast never shifts from the one in a banner.
 
@@ -186,7 +186,7 @@ The first reveal is always safe — mines are placed only after click 1. The nor
 
 **O(1) win detection**: `Board::isWon()` compares `revealedCount` (the number of non-mine cells revealed) against `width × height − mineCount`. Win detection is constant-time regardless of board size — no full-grid scan on every move.
 
-**Save / restore mid-game**: `Board::serialize()` produces a versioned JSON payload keyed `{v:1, w, h, m, p, e, r, c}` — version, width, height, mine count, mines-placed flag (the deferred first-click placement), exploded flag, revealed count, and the per-cell grid. `Board::unserialize()` rebuilds a fresh, fully-valid `Board` — the mine count and revealed count are recomputed from the reconstructed cell grid rather than trusted from disk (the serialized `r` field is ignored on load), so a hand-edited count cannot desync the O(1) win check. This is the exact format the in-game `S` / `L` save slot uses (see Save / resume above), so sessions suspend and resume for real.
+**Save / restore mid-game**: `Board::serialize()` produces a versioned JSON payload keyed `{v:1, w, h, m, p, e, r, c}` — version, width, height, mine count, mines-placed flag (the deferred first-click placement), exploded flag, revealed count, and the per-cell grid. `Board::unserialize()` rebuilds a fresh, fully-valid `Board` — the mine count and revealed count are recomputed from the reconstructed cell grid rather than trusted from disk (the serialised `r` field is ignored on load), so a hand-edited count cannot desync the O(1) win check. This is the exact format the in-game `S` / `L` save slot uses (see Save / resume above), so sessions suspend and resume for real.
 
 ## Demos
 

@@ -10,8 +10,8 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * Per-library translation facade for candy-minesweeper.
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
- * `'minesweeper'` namespace baked in. Translated strings live in
- * {@see ../lang/en.php}.
+ * `'minesweeper'` namespace baked in. Translated strings live in this
+ * package's `lang/` directory, with `lang/en.php` the source of truth.
  *
  * @extends BaseLang
  */
