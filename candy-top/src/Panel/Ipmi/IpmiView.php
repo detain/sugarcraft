@@ -121,7 +121,10 @@ final class IpmiView
             $parts[] = [Lang::t('ipmi.bmc_ip', ['ip' => $info->bmcIp]), $ink->fg('graph_text')];
         }
         if (IpmiPanel::showSerials($frame->config) && $info->serials !== []) {
-            $parts[] = [Lang::t('ipmi.serial', ['serial' => (string) reset($info->serials)]), $ink->fg('inactive_fg')];
+            // reset() would rewind the array pointer — a write to a readonly
+            // property, fatal on every paint. Read the first value instead.
+            $first = $info->serials[array_key_first($info->serials)];
+            $parts[] = [Lang::t('ipmi.serial', ['serial' => $first]), $ink->fg('inactive_fg')];
         }
         $room = $r->width() - self::TITLE_RESERVE - 4;
         while ($parts !== [] && self::partsWidth($parts) > $room) {

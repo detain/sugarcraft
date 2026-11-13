@@ -101,6 +101,23 @@ final class IpmiPaintTest extends TestCase
         PanelPaint::assertGolden($this, 'ipmi', 'kvm521-40x7.txt', self::render('kvm521', 40, 7)[0]);
     }
 
+    /**
+     * #093: the header took the first serial with reset(), which rewinds the
+     * array pointer — a write through a `public readonly array`, fatal on
+     * every paint with the serials shown. Reproduce the serials-on header.
+     */
+    public function testTheHeaderWithSerialsShownPaintsTheChassisSerial(): void
+    {
+        $config = self::config()->with('ipmi_show_serials', true);
+        $panel = IpmiPaintKit::feed(IpmiPanel::new(self::reader('skynet2')), $config, 120, 40, 6);
+        $serials = $panel->data()->info?->serials ?? [];
+        $this->assertNotSame([], $serials, 'the capture carries serials');
+        $this->assertStringContainsString('S/N ' . $serials[array_key_first($serials)], PanelPaint::grid(
+            IpmiPaintKit::surface($panel, $config, 120, 40, 120, 40, ThemeConfig::new()),
+            Rect::new(0, 0, 120, 40),
+        ));
+    }
+
     public function testNoAccessReason(): void
     {
         PanelPaint::assertGolden($this, 'ipmi', 'noaccess-60x12.txt', self::render('noaccess', 60, 12)[0]);
