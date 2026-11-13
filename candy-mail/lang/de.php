@@ -32,7 +32,7 @@ return [
     'cli.email_sent' => '✓ E-Mail gesendet über {transport}.',
     'cli.no_to_recipient' => 'Kein --to-Empfänger angegeben',
     'cli.attachment_not_found' => 'Anhang nicht gefunden: {file}',
-    'cli.no_transport' => 'Kein Transport konfiguriert. Setzen Sie die Umgebungsvariable RESEND_API_KEY oder CANDY_MAIL_SMTP_HOST.',
+    'cli.no_transport' => 'Kein Transport konfiguriert. Setzen Sie die Umgebungsvariable RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY (mit CANDY_MAIL_MAILGUN_DOMAIN) oder CANDY_MAIL_SMTP_HOST.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => 'Versand vor dem Start abgebrochen',
@@ -111,8 +111,10 @@ return [
     'tui.field.to' => 'An',
     'tui.field.cc' => 'Cc',
     'tui.field.bcc' => 'Bcc',
+    'tui.field.replyto' => 'Antwort an',
     'tui.field.subject' => 'Betreff',
     'tui.field.body' => 'Text',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => 'Anhänge',
     'tui.help_edit' => 'Tab/Umschalt+Tab: Feld  Strg+S: senden  Strg+P: Vorschau  Strg+U: leeren  Strg+Q: beenden',
     'tui.help_preview' => 'Esc/Strg+P: zurück zum Bearbeiten  Strg+S: senden  Strg+Q: beenden',

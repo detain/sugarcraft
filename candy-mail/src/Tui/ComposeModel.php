@@ -20,7 +20,7 @@ use SugarCraft\Mail\Lang;
  * Interactive compose form: `candy-mail tui`.
  *
  * Mirrors the compose screen of charmbracelet/pop (From/To/Cc/Bcc/Subject/Body/
- * Attachments, send, quit) on the sugar-core Model contract. Send is a
+ * Attachments, plus Reply-To and an HTML alternative body, send, quit) on the sugar-core Model contract. Send is a
  * {@see Cmd} - the wire work never runs inside update() or view() - and goes
  * through an injected closure so the model is transport-agnostic and testable
  * with no network: the bin passes a Mailer-backed sender, tests a recorder.
@@ -33,7 +33,10 @@ use SugarCraft\Mail\Lang;
  */
 final class ComposeModel implements Model
 {
-    public const FIELDS = ['from', 'to', 'cc', 'bcc', 'subject', 'body', 'attach'];
+    /** Fields edited as multi-line text (Enter inserts a newline, Up/Down move the caret). */
+    private const MULTILINE = ['body', 'html'];
+
+    public const FIELDS = ['from', 'to', 'cc', 'bcc', 'replyto', 'subject', 'body', 'html', 'attach'];
 
     /**
      * @param \Closure(Email): string      $send   delivers the message, returns the transport name
@@ -65,7 +68,7 @@ final class ComposeModel implements Model
     {
         $fields = [];
         foreach (self::FIELDS as $name) {
-            $fields[$name] = TextBuffer::new($prefill[$name] ?? '', $name === 'body');
+            $fields[$name] = TextBuffer::new($prefill[$name] ?? '', \in_array($name, self::MULTILINE, true));
         }
 
         return new self($send, $render, $fields);
@@ -106,6 +109,8 @@ final class ComposeModel implements Model
         }
         $subject = \trim($val('subject'));
         $body    = $val('body');
+        $html    = $val('html');
+        $replyTo = \trim($val('replyto'));
 
         return new Email(
             from:        $list($val('from')),
@@ -114,6 +119,8 @@ final class ComposeModel implements Model
             body:        $body === '' ? null : $body,
             cc:          $list($val('cc')),
             bcc:         $list($val('bcc')),
+            htmlBody:    \trim($html) === '' ? null : $html,
+            replyTo:     $replyTo === '' ? null : $replyTo,
             attachments: $attachments,
         );
     }
@@ -172,7 +179,7 @@ final class ComposeModel implements Model
         }
 
         $buf = $this->fields[$this->focused()];
-        $body = $this->focused() === 'body';
+        $body = \in_array($this->focused(), self::MULTILINE, true);
 
         switch ($s) {
             case 'tab':
@@ -321,7 +328,11 @@ final class ComposeModel implements Model
             $labels[$n] = Lang::t('tui.field.' . $n);
         }
         $lw = \max(\array_map('mb_strwidth', $labels));
-        $bodyRoom = \max(3, $this->rows - 13);
+        // Seven one-line rows, two multi-line labels and the title/status/help
+        // chrome take 16 rows; the rest is split 2:1 between body and HTML.
+        $spare    = \max(0, $this->rows - 16);
+        $htmlRoom = \max(2, \intdiv($spare, 3));
+        $bodyRoom = \max(3, $spare - $htmlRoom);
 
         foreach (self::FIELDS as $i => $n) {
             $focused = $i === $this->focus;
@@ -330,10 +341,11 @@ final class ComposeModel implements Model
             $avail   = $w - $lw - 1;
             $layout  = $this->fields[$n]->layout();
 
-            if ($n === 'body') {
+            if (\in_array($n, self::MULTILINE, true)) {
+                $room  = $n === 'body' ? $bodyRoom : $htmlRoom;
                 $out[] = $label;
-                $start = \max(0, $layout['row'] - $bodyRoom + 1);
-                foreach (\array_slice($layout['lines'], $start, $bodyRoom) as $r => $chars) {
+                $start = \max(0, $layout['row'] - $room + 1);
+                foreach (\array_slice($layout['lines'], $start, $room) as $r => $chars) {
                     $out[] = '  ' . $this->paintLine($chars, $focused && $start + $r === $layout['row'] ? $layout['col'] : null, $w - 2);
                 }
                 continue;

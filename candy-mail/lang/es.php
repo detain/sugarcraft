@@ -32,7 +32,7 @@ return [
     'cli.email_sent' => '✓ Correo enviado vía {transport}.',
     'cli.no_to_recipient' => 'No se especificó destinatario --to',
     'cli.attachment_not_found' => 'Archivo adjunto no encontrado: {file}',
-    'cli.no_transport' => 'Sin transporte configurado. Establezca la variable de entorno RESEND_API_KEY o CANDY_MAIL_SMTP_HOST.',
+    'cli.no_transport' => 'Sin transporte configurado. Establezca la variable de entorno RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY (con CANDY_MAIL_MAILGUN_DOMAIN) o CANDY_MAIL_SMTP_HOST.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => 'Envío cancelado antes de comenzar',
@@ -111,8 +111,10 @@ return [
     'tui.field.to' => 'Para',
     'tui.field.cc' => 'Cc',
     'tui.field.bcc' => 'Cco',
+    'tui.field.replyto' => 'Responder a',
     'tui.field.subject' => 'Asunto',
     'tui.field.body' => 'Cuerpo',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => 'Adjuntos',
     'tui.help_edit' => 'Tab/Mayús+Tab: campo  Ctrl+S: enviar  Ctrl+P: vista previa  Ctrl+U: borrar  Ctrl+Q: salir',
     'tui.help_preview' => 'Esc/Ctrl+P: volver a editar  Ctrl+S: enviar  Ctrl+Q: salir',

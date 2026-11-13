@@ -25,7 +25,7 @@ return [
     'cli.email_sent' => '✓ E-mail verzonden via {transport}.',
     'cli.no_to_recipient' => 'Geen --to ontvanger opgegeven',
     'cli.attachment_not_found' => 'Bijlage niet gevonden: {file}',
-    'cli.no_transport' => 'Geen transport geconfigureerd. Stel de omgevingsvariabele RESEND_API_KEY of CANDY_MAIL_SMTP_HOST in.',
+    'cli.no_transport' => 'Geen transport geconfigureerd. Stel de omgevingsvariabele RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY (met CANDY_MAIL_MAILGUN_DOMAIN) of CANDY_MAIL_SMTP_HOST in.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => 'Verzending geannuleerd voordat deze begon',
@@ -104,8 +104,10 @@ return [
     'tui.field.to' => 'Aan',
     'tui.field.cc' => 'Cc',
     'tui.field.bcc' => 'Bcc',
+    'tui.field.replyto' => 'Antwoord aan',
     'tui.field.subject' => 'Onderwerp',
     'tui.field.body' => 'Tekst',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => 'Bijlagen',
     'tui.help_edit' => 'Tab/Shift+Tab: veld  Ctrl+S: verzenden  Ctrl+P: voorbeeld  Ctrl+U: wissen  Ctrl+Q: afsluiten',
     'tui.help_preview' => 'Esc/Ctrl+P: terug naar bewerken  Ctrl+S: verzenden  Ctrl+Q: afsluiten',

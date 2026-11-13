@@ -32,7 +32,7 @@ return [
     'cli.email_sent' => '✓ E-mail envoyé via {transport}.',
     'cli.no_to_recipient' => 'Aucun destinataire --to spécifié',
     'cli.attachment_not_found' => 'Fichier de pièce jointe introuvable : {file}',
-    'cli.no_transport' => 'Aucun transport configuré. Définissez la variable d’environnement RESEND_API_KEY ou CANDY_MAIL_SMTP_HOST.',
+    'cli.no_transport' => 'Aucun transport configuré. Définissez la variable d’environnement RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY (avec CANDY_MAIL_MAILGUN_DOMAIN) ou CANDY_MAIL_SMTP_HOST.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => 'Envoi annulé avant le démarrage',
@@ -111,8 +111,10 @@ return [
     'tui.field.to' => 'À',
     'tui.field.cc' => 'Cc',
     'tui.field.bcc' => 'Cci',
+    'tui.field.replyto' => 'Répondre à',
     'tui.field.subject' => 'Objet',
     'tui.field.body' => 'Corps',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => 'Pièces jointes',
     'tui.help_edit' => 'Tab/Maj+Tab : champ  Ctrl+S : envoyer  Ctrl+P : aperçu  Ctrl+U : effacer  Ctrl+Q : quitter',
     'tui.help_preview' => 'Échap/Ctrl+P : retour à l\'édition  Ctrl+S : envoyer  Ctrl+Q : quitter',

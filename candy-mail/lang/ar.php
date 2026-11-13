@@ -25,7 +25,7 @@ return [
     'cli.email_sent' => '✓ تم إرسال البريد الإلكتروني عبر {transport}.',
     'cli.no_to_recipient' => 'لم يتم تحديد مستلم --to',
     'cli.attachment_not_found' => 'المرفق غير موجود: {file}',
-    'cli.no_transport' => 'لم يتم تكوين النقل. اضبط متغير البيئة RESEND_API_KEY أو CANDY_MAIL_SMTP_HOST.',
+    'cli.no_transport' => 'لم يتم تكوين النقل. اضبط متغير البيئة RESEND_API_KEY أو CANDY_MAIL_MAILGUN_API_KEY (مع CANDY_MAIL_MAILGUN_DOMAIN) أو CANDY_MAIL_SMTP_HOST.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => 'تم إلغاء الإرسال قبل بدئه',
@@ -104,8 +104,10 @@ return [
     'tui.field.to' => 'إلى',
     'tui.field.cc' => 'نسخة',
     'tui.field.bcc' => 'نسخة مخفية',
+    'tui.field.replyto' => 'الرد إلى',
     'tui.field.subject' => 'الموضوع',
     'tui.field.body' => 'النص',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => 'المرفقات',
     'tui.help_edit' => 'Tab/Shift+Tab: الحقل  Ctrl+S: إرسال  Ctrl+P: معاينة  Ctrl+U: مسح  Ctrl+Q: خروج',
     'tui.help_preview' => 'Esc/Ctrl+P: العودة إلى التحرير  Ctrl+S: إرسال  Ctrl+Q: خروج',

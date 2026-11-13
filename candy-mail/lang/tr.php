@@ -25,7 +25,7 @@ return [
     'cli.email_sent' => '✓ E-posta {transport} ile gönderildi.',
     'cli.no_to_recipient' => '--to alıcısı belirtilmedi',
     'cli.attachment_not_found' => 'Ek dosya bulunamadı: {file}',
-    'cli.no_transport' => 'Taşıma yapılandırılmamış. RESEND_API_KEY veya CANDY_MAIL_SMTP_HOST ortam değişkenini ayarlayın.',
+    'cli.no_transport' => 'Taşıma yapılandırılmamış. RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY (CANDY_MAIL_MAILGUN_DOMAIN ile) veya CANDY_MAIL_SMTP_HOST ortam değişkenini ayarlayın.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => 'Gönderleme başlamadan önce iptal edildi',
@@ -104,8 +104,10 @@ return [
     'tui.field.to' => 'Kime',
     'tui.field.cc' => 'Bilgi',
     'tui.field.bcc' => 'Gizli',
+    'tui.field.replyto' => 'Yanıt adresi',
     'tui.field.subject' => 'Konu',
     'tui.field.body' => 'Gövde',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => 'Ekler',
     'tui.help_edit' => 'Tab/Shift+Tab: alan  Ctrl+S: gönder  Ctrl+P: önizleme  Ctrl+U: temizle  Ctrl+Q: çık',
     'tui.help_preview' => 'Esc/Ctrl+P: düzenlemeye dön  Ctrl+S: gönder  Ctrl+Q: çık',

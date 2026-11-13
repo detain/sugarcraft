@@ -78,7 +78,7 @@ final class LangTest extends TestCase
         $result = Lang::t('cli.no_transport');
 
         $this->assertSame(
-            'No transport configured. Set RESEND_API_KEY or CANDY_MAIL_SMTP_HOST environment variable.',
+            'No transport configured. Set RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY (with CANDY_MAIL_MAILGUN_DOMAIN) or CANDY_MAIL_SMTP_HOST environment variable.',
             $result
         );
     }

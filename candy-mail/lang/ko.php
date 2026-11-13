@@ -25,7 +25,7 @@ return [
     'cli.email_sent' => '✓ 이메일이 {transport}(으)로 전송되었습니다.',
     'cli.no_to_recipient' => '--to 수신자가 지정되지 않음',
     'cli.attachment_not_found' => '첨부 파일을 찾을 수 없음: {file}',
-    'cli.no_transport' => '전송이 구성되지 않았습니다. RESEND_API_KEY 또는 CANDY_MAIL_SMTP_HOST 환경 변수를 설정하세요.',
+    'cli.no_transport' => '전송이 구성되지 않았습니다. RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY(CANDY_MAIL_MAILGUN_DOMAIN과 함께) 또는 CANDY_MAIL_SMTP_HOST 환경 변수를 설정하세요.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => '전송 시작 전에 취소됨',
@@ -104,8 +104,10 @@ return [
     'tui.field.to' => '받는 사람',
     'tui.field.cc' => '참조',
     'tui.field.bcc' => '숨은 참조',
+    'tui.field.replyto' => '회신 주소',
     'tui.field.subject' => '제목',
     'tui.field.body' => '본문',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => '첨부 파일',
     'tui.help_edit' => 'Tab/Shift+Tab: 필드  Ctrl+S: 보내기  Ctrl+P: 미리보기  Ctrl+U: 지우기  Ctrl+Q: 종료',
     'tui.help_preview' => 'Esc/Ctrl+P: 편집으로 돌아가기  Ctrl+S: 보내기  Ctrl+Q: 종료',

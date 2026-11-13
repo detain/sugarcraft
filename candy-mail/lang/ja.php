@@ -25,7 +25,7 @@ return [
     'cli.email_sent' => '✓ メールは {transport} で送信されました。',
     'cli.no_to_recipient' => '--to 受信者が指定されていません',
     'cli.attachment_not_found' => '添付ファイルが見つかりません：{file}',
-    'cli.no_transport' => 'トランスポートが設定されていません。RESEND_API_KEY または CANDY_MAIL_SMTP_HOST 環境変数を設定してください。',
+    'cli.no_transport' => 'トランスポートが設定されていません。RESEND_API_KEY、CANDY_MAIL_MAILGUN_API_KEY（CANDY_MAIL_MAILGUN_DOMAIN とともに）、または CANDY_MAIL_SMTP_HOST 環境変数を設定してください。',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => '送信を開始する前にキャンセルされました',
@@ -104,8 +104,10 @@ return [
     'tui.field.to' => '宛先',
     'tui.field.cc' => 'Cc',
     'tui.field.bcc' => 'Bcc',
+    'tui.field.replyto' => '返信先',
     'tui.field.subject' => '件名',
     'tui.field.body' => '本文',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => '添付ファイル',
     'tui.help_edit' => 'Tab/Shift+Tab: 項目  Ctrl+S: 送信  Ctrl+P: プレビュー  Ctrl+U: クリア  Ctrl+Q: 終了',
     'tui.help_preview' => 'Esc/Ctrl+P: 編集に戻る  Ctrl+S: 送信  Ctrl+Q: 終了',

@@ -25,7 +25,7 @@ return [
     'cli.email_sent' => '✓ 郵件已透過 {transport} 傳送。',
     'cli.no_to_recipient' => '未指定 --to 收件人',
     'cli.attachment_not_found' => '附件檔案未找到：{file}',
-    'cli.no_transport' => '未設定傳輸。請設定 RESEND_API_KEY 或 CANDY_MAIL_SMTP_HOST 環境變數。',
+    'cli.no_transport' => '未設定傳輸。請設定 RESEND_API_KEY、CANDY_MAIL_MAILGUN_API_KEY（連同 CANDY_MAIL_MAILGUN_DOMAIN）或 CANDY_MAIL_SMTP_HOST 環境變數。',
 
     // Locale parity with en.php
     'mailer.send_cancelled' => '傳送開始前已取消',
@@ -106,8 +106,10 @@ return [
     'tui.field.to' => '收件者',
     'tui.field.cc' => '副本',
     'tui.field.bcc' => '密件副本',
+    'tui.field.replyto' => '回覆地址',
     'tui.field.subject' => '主旨',
     'tui.field.body' => '內文',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => '附件',
     'tui.help_edit' => 'Tab/Shift+Tab：切換欄位  Ctrl+S：傳送  Ctrl+P：預覽  Ctrl+U：清除  Ctrl+Q：結束',
     'tui.help_preview' => 'Esc/Ctrl+P：返回編輯  Ctrl+S：傳送  Ctrl+Q：結束',

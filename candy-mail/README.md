@@ -27,7 +27,7 @@ store, or manage an inbox.
   API (`MailgunTransport`, US and EU regions, multipart with attachments and inline
   images), or raw SMTP
 - **Compose TUI** — `candy-mail tui` (or a bare `candy-mail` on a terminal) opens an
-  interactive compose form: From/To/Cc/Bcc/Subject/Body/Attachments, Ctrl+S sends
+  interactive compose form: From/To/Cc/Bcc/Reply-To/Subject/Body/HTML body/Attachments, Ctrl+S sends
   through the same transport ladder as the CLI, Ctrl+P previews the MIME offline
 - **Email value object** — from, to, cc, bcc, subject, body, HTML body, reply-to, attachments,
   signature (the signature joins the plain-text body only — an HTML-only mail silently drops it)

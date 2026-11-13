@@ -25,7 +25,7 @@ return [
     'cli.email_sent' => '✓ Письмо отправлено через {transport}.',
     'cli.no_to_recipient' => 'Не указан получатель --to',
     'cli.attachment_not_found' => 'Файл вложения не найден: {file}',
-    'cli.no_transport' => 'Транспорт не настроен. Установите переменную окружения RESEND_API_KEY или CANDY_MAIL_SMTP_HOST.',
+    'cli.no_transport' => 'Транспорт не настроен. Установите переменную окружения RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY (вместе с CANDY_MAIL_MAILGUN_DOMAIN) или CANDY_MAIL_SMTP_HOST.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => 'Отправка отменена до начала',
@@ -104,8 +104,10 @@ return [
     'tui.field.to' => 'Кому',
     'tui.field.cc' => 'Копия',
     'tui.field.bcc' => 'Скрытая копия',
+    'tui.field.replyto' => 'Ответ на',
     'tui.field.subject' => 'Тема',
     'tui.field.body' => 'Текст',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => 'Вложения',
     'tui.help_edit' => 'Tab/Shift+Tab: поле  Ctrl+S: отправить  Ctrl+P: просмотр  Ctrl+U: очистить  Ctrl+Q: выход',
     'tui.help_preview' => 'Esc/Ctrl+P: назад к правке  Ctrl+S: отправить  Ctrl+Q: выход',

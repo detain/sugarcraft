@@ -25,7 +25,7 @@ return [
     'cli.email_sent' => '✓ E-mail odeslán přes {transport}.',
     'cli.no_to_recipient' => 'Příjemce --to nebyl specifikován',
     'cli.attachment_not_found' => 'Příloha nenalezena: {file}',
-    'cli.no_transport' => 'Transport není nakonfigurován. Nastavte proměnnou prostředí RESEND_API_KEY nebo CANDY_MAIL_SMTP_HOST.',
+    'cli.no_transport' => 'Transport není nakonfigurován. Nastavte proměnnou prostředí RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY (s CANDY_MAIL_MAILGUN_DOMAIN) nebo CANDY_MAIL_SMTP_HOST.',
 
     // Locale parity with en.php (docs-fix-1023 sweep)
     'mailer.send_cancelled' => 'Odeslání zrušeno před zahájením',
@@ -104,8 +104,10 @@ return [
     'tui.field.to' => 'Komu',
     'tui.field.cc' => 'Kopie',
     'tui.field.bcc' => 'Skrytá kopie',
+    'tui.field.replyto' => 'Odpovědět na',
     'tui.field.subject' => 'Předmět',
     'tui.field.body' => 'Text',
+    'tui.field.html' => 'HTML',
     'tui.field.attach' => 'Přílohy',
     'tui.help_edit' => 'Tab/Shift+Tab: pole  Ctrl+S: odeslat  Ctrl+P: náhled  Ctrl+U: smazat  Ctrl+Q: konec',
     'tui.help_preview' => 'Esc/Ctrl+P: zpět k úpravám  Ctrl+S: odeslat  Ctrl+Q: konec',

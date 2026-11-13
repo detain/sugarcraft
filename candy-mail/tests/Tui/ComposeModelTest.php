@@ -108,6 +108,42 @@ final class ComposeModelTest extends TestCase
         $this->model(['attach' => '/nonexistent/zzz.bin'])->email();
     }
 
+    public function testHtmlAndReplyToFieldsFeedTheEmail(): void
+    {
+        $m = $this->model(['replyto' => ' help@example.com ', 'html' => '<p>hi</p>']);
+        $e = $m->email();
+        $this->assertSame('help@example.com', $e->replyTo);
+        $this->assertSame('<p>hi</p>', $e->htmlBody);
+
+        $blank = $this->model()->email();
+        $this->assertNull($blank->replyTo);
+        $this->assertNull($blank->htmlBody);
+    }
+
+    public function testHtmlFieldIsMultilineAndEditable(): void
+    {
+        $m = $this->model();
+        while ($m->focused() !== 'html') {
+            $m = $this->press($m, 'tab');
+        }
+        $m = $this->press($m, 'enter');
+        $this->assertSame('html', $m->focused(), 'enter inside html is a newline, not a field change');
+        $this->assertSame("\n", $m->fields['html']->value());
+    }
+
+    public function testReplyToFieldIsEditableAndRendered(): void
+    {
+        $m = $this->model();
+        while ($m->focused() !== 'replyto') {
+            $m = $this->press($m, 'tab');
+        }
+        $m = $this->press($m, 'space');
+        $this->assertSame(' ', $m->fields['replyto']->value());
+        $view = $m->view();
+        $this->assertStringContainsString('Reply-To', $view);
+        $this->assertStringContainsString('HTML', $view);
+    }
+
     public function testTabShiftTabEnterUpDownMoveFocusAndWrap(): void
     {
         $m = $this->model();
@@ -143,7 +179,7 @@ final class ComposeModelTest extends TestCase
     public function testBodyTakesNewlinesAndVerticalMovement(): void
     {
         $m = $this->model();
-        for ($i = 0; $i < 5; $i++) {
+        for ($i = 0; $i < 6; $i++) {
             $m = $this->press($m, 'tab');
         }
         $this->assertSame('body', $m->focused());

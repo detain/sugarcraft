@@ -381,6 +381,8 @@ function runTui(array $opts): int
         'bcc'     => \implode(', ', $opts['bcc'] ?? []),
         'subject' => (string) ($opts['subject'] ?? ''),
         'body'    => (string) ($opts['body'] ?? ''),
+        'replyto' => (string) ($opts['reply_to'] ?? ''),
+        'html'    => (string) ($opts['html'] ?? ''),
         'attach'  => \implode(', ', $opts['attachments'] ?? []),
     ]);
     (new Program($model, new ProgramOptions(useAltScreen: true)))->run();
