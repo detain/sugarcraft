@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Model;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\ScriptUi\Model\ChooseModel;
 use SugarCraft\ScriptUi\Model\ConfirmModel;
 use SugarCraft\ScriptUi\Model\FilterModel;
@@ -15,49 +17,65 @@ use SugarCraft\ScriptUi\Model\WriteModel;
 use SugarCraft\ScriptUi\Process\FakeProcess;
 
 /**
- * Cluster 12 (untrusted paint): the model factories fold every caller-supplied
- * string through the cell sanitizer at entry, so no control/escape byte can
- * reach the rendered frame. These are RED before the sanitize chokepoint and
- * GREEN after.
+ * Cluster 12 (untrusted paint): no control or non-SGR escape byte from a
+ * caller-supplied string may ride the rendered frame. The folding lane
+ * differs per model by design (scriptui-15): the CHROME models fold at
+ * entry (their prompts/titles are pure display), while choose/filter keep
+ * the option payload RAW for the data channel and clean at the display
+ * sites instead — ItemList::view and the marked/fuzzy bodies fold through
+ * RenderSafe at render, exactly like sugar-forms Select.
  */
 final class UntrustedPaintTest extends TestCase
 {
-    private const ESCAPED = "\x1b[31mred\x1b[0m";
     private const CONTROL = "bad\x00\x07name";
 
-    public function testChooseModelNeutralisesEscapesInOptionsAndHeader(): void
+    public function testChooseModelEscapesTheFrameButKeepsTheRawDataChannel(): void
     {
+        // scriptui-15 (re-pins cluster 12): options are no longer folded
+        // at entry — the payload must survive raw for pipes. What the
+        // frame may NEVER carry is injection-capable bytes: C0 controls
+        // and non-SGR escape sequences. TRUE SGR (ESC [ digits/; m) is
+        // legitimate styling and survives by ItemList's documented
+        // display-site contract — the same posture sugar-forms Select
+        // takes.
         $model = ChooseModel::fromOptions(
-            [self::ESCAPED, self::CONTROL, 'clean'],
-            header: "\x1b[1mH\x1b[0meeader",
+            ["\x1b]0;pwned\x07title", self::CONTROL, 'clean'],
+            header: "\x1b[2J",
         );
 
         $view = $model->view();
-        self::assertStringNotContainsString("\x1b[31m", $view, 'red SGR must not reach the frame');
-        self::assertStringNotContainsString("\x1b[1m", $view, 'bold SGR from the header must not reach the frame');
+        self::assertStringNotContainsString("\x1b]0;", $view, 'OSC payload must not reach the wire');
+        self::assertStringNotContainsString("\x1b[2J", $view, 'screen-clear CSI from the header must not reach the wire');
         self::assertStringNotContainsString("\x00", $view);
         self::assertStringNotContainsString("\x07", $view);
-        // The visible text survives sanitisation.
-        self::assertStringContainsString('red', $view);
+        self::assertStringContainsString('title', $view);
         self::assertStringContainsString('name', $view);
         self::assertStringContainsString('clean', $view);
+
+        // The data channel round-trips untouched.
+        $submitted = $model->update(new KeyMsg(KeyType::Enter, ''))[0];
+        self::assertSame("\x1b]0;pwned\x07title", $submitted->selected());
     }
 
-    public function testFilterModelNeutralisesEscapesInOptionsHeaderAndValue(): void
+    public function testFilterModelEscapesTheFrameButKeepsTheRawDataChannel(): void
     {
         $model = FilterModel::fromOptions(
-            [self::ESCAPED, 'plain'],
-            header: "\x1b[5mblink\x1b[0m",
+            ["\x1b]0;evil\x07red", 'plain'],
+            header: "\x1b[2J",
         );
 
         $view = $model->view();
-        self::assertStringNotContainsString("\x1b[5m", $view);
-        self::assertStringNotContainsString("\x1b[31m", $view);
+        self::assertStringNotContainsString("\x1b]0;", $view);
+        self::assertStringNotContainsString("\x1b[2J", $view);
+        self::assertStringNotContainsString("\x07", $view);
         self::assertStringContainsString('plain', $view);
 
-        // The pre-filled filter value is neutralised too — it then acts as
-        // filter text on the sanitised bytes, as a user would experience.
-        $seeded = FilterModel::fromOptions([self::ESCAPED, 'plain'], value: "seed\x07text");
+        $submitted = $model->update(new KeyMsg(KeyType::Enter, ''))[0];
+        self::assertSame("\x1b]0;evil\x07red", $submitted->selected());
+
+        // The pre-filled filter value is still neutralised — it echoes
+        // raw onto the '/' input line, so it lives on the paint channel.
+        $seeded = FilterModel::fromOptions(['a', 'plain'], value: "seed\x07text");
         self::assertStringNotContainsString("\x07", $seeded->view());
         self::assertStringContainsString('seed', $seeded->view());
     }

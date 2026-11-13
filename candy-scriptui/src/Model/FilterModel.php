@@ -51,11 +51,16 @@ final class FilterModel implements Model
         ?FuzzyMatcher $matcher = null,
         int $width = 0,
     ): self {
-        // Untrusted paint (cluster 12): same sweep as ChooseModel plus the
-        // pre-filled filter value, which lands in the filter input line.
-        $options    = array_map(static fn (string $s): string => \SugarCraft\Core\Util\Sanitize::cellValue($s), $options);
-        $header     = \SugarCraft\Core\Util\Sanitize::cellValue($header);
-        $preselected = array_map(static fn (string $s): string => \SugarCraft\Core\Util\Sanitize::cellValue($s), $preselected);
+        // scriptui-15: the option payload stays RAW — it is the DATA
+        // channel (`printf 'a\tb\n' | filter` must hand back the real
+        // filename `a<TAB>b`, not the folded display form). Injection
+        // defence lives at the DISPLAY sites: ItemList::view cleans every
+        // title through RenderSafe at render, and the marked/fuzzy bodies
+        // here do the same. The header travels into ItemList's title,
+        // which the same display-site rule already covers. The pre-filled
+        // filter $value stays sanitised: it is echoed raw on the input
+        // line ('/' . filterText) and never emitted as a selection.
+        $options     = array_values($options);
         $value       = \SugarCraft\Core\Util\Sanitize::cellValue($value);
 
         // 0 = auto width: terminal columns when knowable, else the
@@ -401,8 +406,13 @@ final class FilterModel implements Model
         $cursor = max(0, min($this->fuzzyCursor, count($visible) - 1));
         $top    = max(0, $this->fuzzyOffset);
         foreach (array_slice($visible, $top, $this->list->height, true) as $idx => $item) {
+            // scriptui-15: clean at the DISPLAY site (ItemList::view does
+            // the same for its rows) — the title bytes stay raw in the
+            // model for the payload. Emphasis indices were scored on the
+            // raw bytes; drift inside an escaped title is cosmetic, the
+            // injection defence is not.
             $highlighted = self::emphasize(
-                $item->title(),
+                RenderSafe::clean($item->title()),
                 $this->fuzzyResults[$originalIndices[$idx]]->indices(),
             );
             if ($idx === $cursor) {

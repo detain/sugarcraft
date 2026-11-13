@@ -81,10 +81,12 @@ final class ChooseCommand extends Command
         // interactive selection below writes the operator's own bytes
         // VERBATIM because the chosen item IS the data channel — a pipe
         // downstream must receive it untouched. Program-echoed values
-        // (this auto-pick included) pass through Sanitize::cellValue.
+        // follow the same rule (scriptui-15): the auto-pick prints the
+        // operator's own option, unmutated. App-composed diagnostics are
+        // the only sanitised lane.
         // Auto-pick when exactly one option is supplied.
         if ($selectIfOne && count($options) === 1) {
-            $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($options[0]) . "\n", false, OutputInterface::OUTPUT_RAW);
+            $output->write($options[0] . "\n", false, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
 

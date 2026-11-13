@@ -76,7 +76,10 @@ final class FilterCommand extends Command
             return Command::FAILURE;
         }
         if ($input->getOption('select-if-one') && count($lines) === 1) {
-            $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($lines[0]) . "\n", false, OutputInterface::OUTPUT_RAW);
+            // scriptui-15: the auto-pick IS the selection — it joins the
+            // verbatim data channel, folded bytes would name a file that
+            // does not exist.
+            $output->write($lines[0] . "\n", false, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
 
