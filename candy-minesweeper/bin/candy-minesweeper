@@ -71,9 +71,12 @@ foreach (\SugarCraft\Core\Util\LegacyEnv::import([
 // board's frame, banner and footer decorations — renders within the detected
 // capability. Only the downgrades (Ascii / NoTty) are applied; the default
 // profile stays untouched so a plain TrueColor terminal keeps the colours the
-// style layer already renders. The deeper in-session renegotiation via
-// ColorProfileMsg is a separate seam (the Model discards that message today).
-$profile = ColorProfile::detect();
+// style layer already renders. STDOUT is passed so detect() can see a pipe or
+// redirect: without the handle its isatty rung never runs and a redirected
+// launch was classified by TERM alone. The deeper in-session renegotiation
+// via ColorProfileMsg is a separate seam (the Model discards that message
+// today).
+$profile = ColorProfile::detect(null, STDOUT);
 if ($profile === ColorProfile::Ascii || $profile === ColorProfile::NoTty) {
     Style::setDefaultProfile($profile);
 }
@@ -257,6 +260,18 @@ if ($preset !== null) {
     $game = Game::start($w, $h, $m, stats: $stats, statsPath: $statsPath, notice: $resumeNotice);
 }
 
+// A game nobody can see or steer is refused before anything paints: with
+// stdin a pipe or /dev/null (or a NoTty screen), the alt screen used to be
+// entered and the event loop ran until killed — 1001 escape bytes and no
+// way out. The diagnostics above (--version/--help) answer on a pipe by
+// design; PLAY requires a terminal on both ends. A truthy
+// CLICOLOR_FORCE/FORCE_COLOR lets stdout stay a pipe (detect answers a real
+// profile then); stdin must be a terminal regardless.
+if (!stream_isatty(STDIN) || $profile === ColorProfile::NoTty) {
+    fwrite(STDERR, "candy-minesweeper: stdin is not a terminal\n");
+    exit(1);
+}
+
 // Terminal fit: measure the real screen (the kernel size ioctl first, env
 // and stty behind it) and refuse BEFORE the Program paints anything if the
 // board cannot be shown whole. A clipped minefield is unplayable and
@@ -274,4 +289,11 @@ if ($screen['cols'] > 0 && $screen['rows'] > 0) {
     $game = $game->withFrame($screen['cols'], $screen['rows']);
 }
 
-(new Program($game, new ProgramOptions(useAltScreen: true, mouseMode: MouseMode::CellMotion)))->run();
+(new Program($game, new ProgramOptions(
+    // The alt screen and SGR mouse tracking are terminal-only promises:
+    // both ride behind the same NoTty answer as the boot gate above
+    // (unreachable today by construction, kept explicit so a future
+    // relaxation of the gate cannot silently re-arm them on a pipe).
+    useAltScreen: $profile !== ColorProfile::NoTty,
+    mouseMode: $profile !== ColorProfile::NoTty ? MouseMode::CellMotion : MouseMode::Off,
+)))->run();

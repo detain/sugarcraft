@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace SugarCraft\Minesweeper\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Minesweeper\Tests\Support\PtyLaunch;
 
 /**
  * E3 (docs-fix-1023) MINOR-13: `--expert 10 10` used to silently start the
  * PRESET and drop the positionals. The binary must refuse the combination
- * loudly. Each case is a bounded, pipe-stdin child — no ctty involvement —
- * and the refusals exit BEFORE any Program starts, so the runs are cheap and
- * deterministic. The two FIX-2 legs at the bottom do boot the Program (they
- * pin the stats-file echo and the resume-notice path); they quit through
- * runBootingBinary's stdin write and stay bounded the same way.
+ * loudly. Each refusal case is a bounded, pipe-stdin child — no ctty
+ * involvement — and the refusals exit BEFORE any Program starts, so the
+ * runs are cheap and deterministic. Since the no-TTY boot gate
+ * (candy-minesweeper-002) refuses piped PLAY launches outright (piped stdin
+ * used to spin the input pump until killed), the two FIX-2 legs that must
+ * actually BOOT (stats-file echo, resume notice) run under a pty via
+ * {@see PtyLaunch}; the pipe legs below pin the refusal itself. The
+ * diagnostics (--version/--help) answer on a pipe by design.
  */
 final class BinArgvTest extends TestCase
 {
@@ -54,63 +58,6 @@ final class BinArgvTest extends TestCase
         if (proc_get_status($proc)['running']) {
             proc_terminate($proc);
             self::fail('binary did not exit within 10s for args: ' . implode(' ', $args));
-        }
-        $out .= (string) stream_get_contents($pipes[1]);
-        $err .= (string) stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-
-        return [proc_close($proc), $out, $err];
-    }
-
-    /**
-     * Same bounded child, but the given bytes are written to stdin before it
-     * closes — needed by the legs that actually boot the Program: with stdin
-     * closed instantly the input pump spins forever, so the quit key must be
-     * in the pipe before the child starts reading.
-     *
-     * @param array<string,string> $extraEnv
-     *
-     * @return array{0:int,1:string,2:string} exit code, stdout, stderr
-     */
-    private static function runBootingBinary(array $args, string $stdinBytes, array $extraEnv = []): array
-    {
-        $bin = realpath(__DIR__ . '/../bin/candy-minesweeper');
-        self::assertIsString($bin, 'sanity: binary exists');
-
-        $proc = proc_open(
-            [PHP_BINARY, $bin, ...$args],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-            null,
-            // Same hermetic base env as runBinary; no LANG/LC_ALL reaches the
-            // child, so the boot's locale detection deterministically lands
-            // on English for the frame-copy assertions.
-            ['HOME' => sys_get_temp_dir(), 'PATH' => (string) getenv('PATH')] + $extraEnv,
-        );
-        self::assertIsResource($proc);
-
-        if ($stdinBytes !== '') {
-            fwrite($pipes[0], $stdinBytes);
-        }
-        fclose($pipes[0]);
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-
-        $out = $err = '';
-        $deadline = microtime(true) + 10.0;
-        while (microtime(true) < $deadline) {
-            $status = proc_get_status($proc);
-            $out .= (string) stream_get_contents($pipes[1]);
-            $err .= (string) stream_get_contents($pipes[2]);
-            if (!$status['running']) {
-                break;
-            }
-            usleep(20000);
-        }
-        if (proc_get_status($proc)['running']) {
-            proc_terminate($proc);
-            self::fail('booting binary did not exit within 10s for args: ' . implode(' ', $args));
         }
         $out .= (string) stream_get_contents($pipes[1]);
         $err .= (string) stream_get_contents($pipes[2]);
@@ -235,6 +182,10 @@ final class BinArgvTest extends TestCase
         // m1 (review R1): the load-failure notice interpolates the stats file's
         // own refused version value. Control bytes planted in that file must be
         // scrubbed on the way to stderr, exactly like the argv echoes above.
+        // Since candy-minesweeper-002 the stats seed runs at board build —
+        // BEFORE the no-TTY gate — so a pipe leg sees the warning and then the
+        // refusal: the warning must not be a fatal, and rc 1 is the gate's
+        // honest answer, not a stats failure.
         $dir = sys_get_temp_dir() . '/mines-stats-' . uniqid((string) getmypid(), true);
         mkdir($dir, 0700);
         $stats = $dir . '/stats.json';
@@ -242,15 +193,18 @@ final class BinArgvTest extends TestCase
         // and a string version fails the strict version===1 guard.
         file_put_contents($stats, '{"version":"\u001b[31m2","data":{}}');
 
-        [$code, , $err] = self::runBootingBinary(['--easy'], 'q', ['CANDY_MINESWEEPER_STATS' => $stats]);
+        [$code, $out, $err] = self::runBinary(['--easy'], ['CANDY_MINESWEEPER_STATS' => $stats]);
         unlink($stats);
         rmdir($dir);
 
-        $this->assertSame(0, $code, 'a refused stats file stays a warning, not a boot failure');
+        $this->assertSame(1, $code, 'a refused stats file stays a warning; exit 1 is the no-TTY gate');
         $this->assertStringContainsString('ignoring unreadable stats file', $err);
         $this->assertStringContainsString('Unsupported persistence version', $err);
+        $this->assertStringNotContainsString('Fatal error', $err);
         $this->assertStringNotContainsString("\x1b", $err, 'raw ESC from the stats file must never reach stderr');
         $this->assertStringContainsString('?[31m2', $err, 'the planted version must arrive with control bytes as ?');
+        $this->assertStringContainsString('stdin is not a terminal', $err);
+        $this->assertSame('', $out, 'a piped play boot paints nothing on stdout');
     }
 
     public function testBootWithSavegameInSlotAnnouncesResumeInsteadOfFataling(): void
@@ -259,20 +213,22 @@ final class BinArgvTest extends TestCase
         // Lang::t while the class was neither imported nor FQN-qualified in
         // the binary — every player holding a savegame got an immediate
         // 'Class "Lang" not found' fatal (exit 255) before frame one.
+        // Frame-one assertions need a terminal since candy-minesweeper-002,
+        // so this leg boots on a real pty.
         $dir = sys_get_temp_dir() . '/mines-slot-' . uniqid((string) getmypid(), true);
         mkdir($dir . '/candy-minesweeper', 0700, true);
         $slot = $dir . '/candy-minesweeper/savegame.json';
         file_put_contents($slot, '{}');
 
-        [$code, $out, $err] = self::runBootingBinary(['--easy'], 'q', ['XDG_CONFIG_HOME' => $dir]);
+        [$code, $output] = PtyLaunch::run(['--easy'], 30, 100, 'q', ['XDG_CONFIG_HOME' => $dir]);
         unlink($slot);
         rmdir($dir . '/candy-minesweeper');
         rmdir($dir);
 
-        $this->assertSame(0, $code, 'savegame in the slot must not fatal the boot — stderr: ' . $err);
-        $this->assertStringNotContainsString('Class "Lang" not found', $err);
+        $this->assertSame(0, $code, 'savegame in the slot must not fatal the boot — pty: ' . PtyLaunch::printable($output));
+        $this->assertStringNotContainsString('Class "Lang" not found', $output);
         $en = require __DIR__ . '/../lang/en.php';
-        $this->assertStringContainsString($en['ui.resume'], $out, 'frame one must announce the resume option');
+        $this->assertStringContainsString($en['ui.resume'], $output, 'frame one must announce the resume option');
     }
 
     public function testGiantDigitArgumentsRefuseWithoutFatalError(): void
@@ -311,5 +267,31 @@ final class BinArgvTest extends TestCase
         $this->assertTrue(mb_check_encoding($err), 'stderr must stay valid UTF-8 through the clip');
         $this->assertStringNotContainsString("\u{FFFD}", $err, 'no replacement glyph may appear');
         $this->assertStringContainsString('candy-minesweeper:', $err);
+    }
+
+    public function testPlayBootOnAPipeIsRefusedBeforePainting(): void
+    {
+        // candy-minesweeper-002 (critical): `timeout 5 php bin --easy
+        // </dev/null` used to run until killed (rc 124) after writing 1001
+        // bytes of alt-screen/mouse setup into the pipe. A play boot with no
+        // terminal on stdin is now refused with exit 1, plain text on
+        // stderr, and NOTHING painted anywhere.
+        [$code, $out, $err] = self::runBinary(['--easy']);
+        $this->assertSame(1, $code);
+        $this->assertSame('', $out, 'the refusal must not touch stdout — no escape bytes');
+        $this->assertStringContainsString('stdin is not a terminal', $err);
+    }
+
+    public function testDiagnosticFlagsStillAnswerOnAPipe(): void
+    {
+        // The gate protects PLAY; asking the binary for help or its version
+        // over a pipe (curl | php style, CI probes) must keep working.
+        [$code, $out, $err] = self::runBinary(['--help']);
+        $this->assertSame(0, $code, 'stderr was: ' . $err);
+        $this->assertStringContainsString('usage: candy-minesweeper', $out);
+
+        [$code, $out, $err] = self::runBinary(['--version']);
+        $this->assertSame(0, $code, 'stderr was: ' . $err);
+        $this->assertNotEmpty($out);
     }
 }
