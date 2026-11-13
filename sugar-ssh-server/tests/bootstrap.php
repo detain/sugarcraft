@@ -28,3 +28,15 @@ require __DIR__ . '/../vendor/autoload.php';
 // restores it).
 putenv('SSH_SERVER_LOG');
 unset($_ENV['SSH_SERVER_LOG'], $_SERVER['SSH_SERVER_LOG']);
+
+// Architectural boundary (audit 090): this suite tests the
+// env-contract as this library READS it — the SSH_USER_* /
+// SSH_CONNECTION shapes below are the facts a ForceCommand child is
+// handed, never claims about who wrote them. The wire codec — which
+// variables sshd actually exports, how the auth dance names them —
+// lives in sshd's and ForceCommand's design, outside this lib. A
+// drift on a live sshd is therefore invisible here by construction,
+// and that is the boundary, not a gap to chase; the optional
+// localhost-sshd integration seam stays deliberately unbuilt (CI
+// sshd availability unverified — a disclosed follow-up for whoever
+// can prove the server is there).

@@ -638,8 +638,12 @@ final class RateLimitTest extends TestCase
      */
     public function testSessionsWithNoClientAddressContendOnOneBucket(): void
     {
+        // Audit 089: the denial here must not leak to the runner's
+        // stderr — pass the memory sink like every sibling does.
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
         $served = [];
-        $limiter = new RateLimit($this->statePath, 1, 0.0);
+        $limiter = new RateLimit($this->statePath, 1, 0.0, $err);
 
         foreach (['', '', '198.51.100.9'] as $index => $ip) {
             $who = 'session-' . $index;
@@ -657,5 +661,12 @@ final class RateLimitTest extends TestCase
             $served,
             'the second address-less session should have spent the shared bucket, the addressed one should not',
         );
+        rewind($err);
+        $this->assertSame(
+            1,
+            substr_count((string) stream_get_contents($err), 'Rate limit exceeded'),
+            'the one contended denial is the one notice, and it lands in the sink',
+        );
+        fclose($err);
     }
 }
