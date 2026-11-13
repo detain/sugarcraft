@@ -777,7 +777,7 @@ principle:
 
 ### Contract interfaces (`src/Contract/`) — pure signatures, no logic
 
-| Contract | Counterpart primitive | Upcoming POSIX implementation |
+| Contract | Counterpart primitive | POSIX implementation |
 |---|---|---|
 | `PtySystem` | `portable-pty.PtySystem` | `PosixPtySystem` |
 | `PtyPair` | `portable-pty.PtyPair` | `PosixPtyPair` |
@@ -865,35 +865,38 @@ private arrow-key or Ctrl-key buffering.
   rest of the suite is POSIX-pinned (libc FFI, `/dev/ptmx`, signals) and
   cannot pass on a Windows cell; `tests\Windows` carries the ConPTY
   primitives and adapter arms, and its live legs skip below PHP 8.4.
-- **ext-ffi is required — and distro PHP often ships it switched off.**
-  Whether `ext-ffi` loads at all is php.ini policy; sugar-pty binds libc
-  lazily — `Libc::lib()` builds the FFI handle on first use, and
-  `FFI::cdef()` resolves symbols at that call, not at script startup. The
-  `ffi.enable` *directive* is what gets in the way: many Linux
-  distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening
-  measure; PHP's compiled-in default is `1`, while the bundled
-  `php.ini-development`/`php.ini-production` templates set `preload`) which causes sugar-pty to throw
-  `PtyException: Failed to load libc`.
-  To fix: set `ffi.enable=1` in `php.ini` and restart the web server or
-  PHP-FPM pool, or inline at process start: `php -d ffi.enable=1
-  your-script.php`. `ffi.enable` is `PHP_INI_SYSTEM` — `ini_set()` at runtime
-  has no effect. Two traps worth naming: PHP 8.3 accepts only `0`, `1` and
-  `preload` (8.4 adds `lazy`), and an unrecognised string such as `peer`
-  casts to `0` — silently disabling FFI and reproducing the exact failure
-  this bullet fixes. And `preload` is not "a safer `1`": it is designed for
-  FFI against libraries baked into a custom PHP build via the
-  `ffi.preload` / `ffi.preload_user` directives, and how it treats a runtime
-  `dlopen` of an arbitrary path like `libc.so.6` varies with the build (it
-  happened to be accepted on the distro build this was tested on; that is
-  incidental, not documented behavior). sugar-pty binds libc with a runtime
-  `FFI::cdef()`, so its
-  supported setting is `ffi.enable=1` — not `preload`, whose behavior sugar-pty
-  does not rely on. Verify what your PHP actually answered:
 
-  ```sh
-  php -r 'try { FFI::cdef("int getpid(void);"); echo "FFI cdef OK\n"; }
-           catch (Throwable $e) { echo "FFI unavailable: ", $e->getMessage(), "\n"; }'
-  ```
+### ext-ffi is required — and distro PHP often ships it switched off
+
+Whether `ext-ffi` loads at all is php.ini policy; sugar-pty binds libc
+lazily — `Libc::lib()` builds the FFI handle on first use, and
+`FFI::cdef()` resolves symbols at that call, not at script startup. The
+`ffi.enable` *directive* is what gets in the way: many Linux
+distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening
+measure; PHP's compiled-in default is `1`, while the bundled
+`php.ini-development`/`php.ini-production` templates set `preload`) which causes sugar-pty to throw
+`PtyException: Failed to load libc`.
+To fix: set `ffi.enable=1` in `php.ini` and restart the web server or
+PHP-FPM pool, or inline at process start: `php -d ffi.enable=1
+your-script.php`. `ffi.enable` is `PHP_INI_SYSTEM` — `ini_set()` at runtime
+has no effect. Two traps worth naming: PHP 8.3 accepts only `0`, `1` and
+`preload` (8.4 adds `lazy`), and an unrecognised string such as `peer`
+casts to `0` — silently disabling FFI and reproducing the exact failure
+this section fixes. And `preload` is not "a safer `1`": it is designed for
+FFI against libraries baked into a custom PHP build via the
+`ffi.preload` / `ffi.preload_user` directives, and how it treats a runtime
+`dlopen` of an arbitrary path like `libc.so.6` varies with the build (it
+happened to be accepted on the distro build this was tested on; that is
+incidental, not documented behavior). sugar-pty binds libc with a runtime
+`FFI::cdef()`, so its
+supported setting is `ffi.enable=1` — not `preload`, whose behavior sugar-pty
+does not rely on. Verify what your PHP actually answered:
+
+```sh
+php -r 'try { FFI::cdef("int getpid(void);"); echo "FFI cdef OK\n"; }
+         catch (Throwable $e) { echo "FFI unavailable: ", $e->getMessage(), "\n"; }'
+```
+
 - **`/dev/ptmx` access is required.** Every `PosixPtySystem::open()` asks the
   kernel for a new PTY master via `posix_openpt()`, which needs a readable and
   writable `/dev/ptmx` with a mounted `devpts` behind it. Minimal or locked-down
