@@ -2,9 +2,6 @@
 
 # Candy-Scriptui
 
-> Formerly published as `sugarcraft/candy-shell` (renamed 2026-10). <!-- @rename-keep -->
-> Namespace changed: `SugarCraft\Shell\` → `SugarCraft\ScriptUi\`. <!-- @rename-keep -->
-
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-scriptui)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-scriptui)
@@ -13,17 +10,31 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
+candy-scriptui is the PHP sibling of
+[charmbracelet/gum](https://github.com/charmbracelet/gum): a
+composer-installable CLI of interactive terminal primitives — pickers,
+prompts, editors, spinners, tables — whose flags and exit codes follow
+gum's, so a `gum X` line in a shell script usually runs verbatim as
+`candy-scriptui X` (PHP 8.3+).
 
-![demo](.vhs/style.gif)
+```sh
+git branch | candy-scriptui filter        # pick a branch, print its name
+```
+
 ```sh
 composer require sugarcraft/candy-scriptui
 ```
 
-candy-scriptui — a composer-installable CLI of SugarCraft TUI primitives for
-shell scripts, for PHP 8.3+. Composer installs the launcher at
-`vendor/bin/candy-scriptui`; the examples below assume it is on your `PATH`
-(add `vendor/bin` to it, or invoke the full path). Prebuilt single-file
-binaries are published per commit that changes this app as rolling dev phars:
+This package develops in the [SugarCraft monorepo](https://github.com/detain/sugarcraft)
+— the CI, release, and coverage badges above point there — and publishes
+standalone to Packagist as `sugarcraft/candy-scriptui`; either route
+installs the same code.
+
+![demo](.vhs/style.gif)
+
+Composer installs the launcher at `vendor/bin/candy-scriptui`. Prebuilt
+single-file binaries are published per commit that changes this app as
+rolling dev phars:
 
 ```sh
 curl -fsSLO \
@@ -34,8 +45,11 @@ sha256sum -c candy-scriptui.phar.sha256 && chmod +x candy-scriptui.phar
 ```
 
 The published `.phar.sha256` sidecar is `<hex>  candy-scriptui.phar`, so
-`sha256sum -c` verifies the download verbatim before you make it executable;
-run it as `./candy-scriptui.phar` (or rename it once verified).
+`sha256sum -c` verifies the download verbatim before you make it executable.
+Whichever route you took, put the launcher on your `PATH` — add `vendor/bin`
+from the composer route, or rename the verified phar to `candy-scriptui` on
+a `PATH` directory from the phar route — so every example below runs
+verbatim; otherwise invoke the full path instead.
 
 ```sh
 # Apply styling.
@@ -48,14 +62,44 @@ choice=$(candy-scriptui choose Pizza Burger Salad)
 name=$(candy-scriptui input --placeholder "Your name?")
 
 # Confirm a destructive action.
+file=old-build.log
 candy-scriptui confirm "Really delete $file?" && rm "$file"
+
+# Show a spinner while running a command.
+candy-scriptui spin --title "Building..." -- make build
+
+# Filter a list (substring by default; --fuzzy for fuzzy matching).
+git branch | candy-scriptui filter
 ```
+
+> Renamed 2026-10: formerly published as `sugarcraft/candy-shell` (renamed 2026-10). <!-- @rename-keep -->
+> Namespace changed: `SugarCraft\Shell\` → `SugarCraft\ScriptUi\`. <!-- @rename-keep -->
 
 ## Subcommands
 
 All 13 presentation subcommands ship, plus `completion` — 14 in the table
 below. Run `candy-scriptui <cmd> --help` for the full
-flag list per command.
+flag list per command. Bare `candy-scriptui --help` prints Symfony's stock
+`list`-command help rather than this roster — a built-in of the default
+console application, not a missing feature — so read the table below, or
+run `candy-scriptui list` to have the tool print it.
+
+| Command    | Role |
+|------------|------|
+| `choose`   | Pick one or many items from a list. |
+| `completion` | Emit shell completion script (bash · zsh · fish). |
+| `confirm`  | Yes/no prompt — exit `0` on confirm, `1` on cancel. |
+| `file`     | Interactive file picker. |
+| `filter`   | Incremental filter over stdin lines (substring default, `--fuzzy` opt-in). |
+| `format`   | Render Markdown / code / template / emoji to the terminal. |
+| `input`    | Read a single line; supports `--password` masking. |
+| `join`     | Join N strings (or stdin lines) with a separator — raw text, not styled fragments. |
+| `log`      | Levelled / structured log output (text · json · logfmt). |
+| `pager`    | Scrollable viewer for long input. |
+| `spin`     | Run an external command behind a spinner. |
+| `style`    | Apply ANSI styling to argv (or stdin). |
+| `table`    | Render a CSV / TSV table. |
+| `write`    | Multi-line text editor. |
 
 ## Auto-discovery
 
@@ -160,23 +204,6 @@ classes that resolved during the scan window. A scan that matches zero
 `#[Command]` classes announces itself loudly on STDERR rather than staying
 silently empty, and non-constructible candidates are named, with their
 reasons, in `CommandScanner::skipped()`.
-
-| Command    | Role |
-|------------|------|
-| `choose`   | Pick one or many items from a list. |
-| `completion` | Emit shell completion script (bash · zsh · fish). |
-| `confirm`  | Yes/no prompt — exit `0` on confirm, `1` on cancel. |
-| `file`     | Interactive file picker. |
-| `filter`   | Incremental filter over stdin lines (substring default, `--fuzzy` opt-in). |
-| `format`   | Render Markdown / code / template / emoji to the terminal. |
-| `input`    | Read a single line; supports `--password` masking. |
-| `join`     | Join N strings (or stdin lines) with a separator — raw text, not styled fragments. |
-| `log`      | Levelled / structured log output (text · json · logfmt). |
-| `pager`    | Scrollable viewer for long input. |
-| `spin`     | Run an external command behind a spinner. |
-| `style`    | Apply ANSI styling to argv (or stdin). |
-| `table`    | Render a CSV / TSV table. |
-| `write`    | Multi-line text editor. |
 
 ## Flag reference (selected highlights)
 
