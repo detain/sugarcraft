@@ -13,7 +13,7 @@
 > Formerly published as `sugarcraft/candy-lister` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Lister\` → `SugarCraft\TreeList\`. <!-- @rename-keep -->
 
-sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Renders items with custom prefix/suffix hooks (box-drawing gutters by default), whitespace-faithful word wrap, cursor navigation, and host-driven live filtering.
+sugar-treelist — a PHP port of the `charmbracelet/bubbles/list` rendering surface for terminal UIs, for PHP 8.3+ (naming and tree-gutter context from `treilik/bubblelister`). Renders items with custom prefix/suffix hooks (box-drawing gutters by default), whitespace-faithful word wrap, cursor navigation, and host-driven live filtering.
 
 ## Features
 
@@ -590,4 +590,7 @@ MIT
 
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
 
-Design antecedent: [treilik/bubblelister](https://github.com/treilik/bubblelister).
+Primary design source: [charmbracelet/bubbles/list](https://github.com/charmbracelet/bubbles/tree/main/list)
+(the ported cursor/filter/render surface). Naming and tree-gutter context:
+[treilik/bubblelister](https://github.com/treilik/bubblelister), the Go wrapper around
+bubbles/list whose gutter vocabulary this component keeps.

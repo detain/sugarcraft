@@ -52,6 +52,14 @@ use SugarCraft\Core\Util\Width;
  * The older `set*()`/`add*()`/`cursor*()` names survive as `@deprecated`
  * one-way aliases delegating to the `with*()` surface (removed in 2.0.0).
  *
+ * ## Upstream chain
+ *
+ * Primary design source: `charmbracelet/bubbles/list` (the cursor/filter/
+ * saturation surface ported here). Naming and tree-gutter vocabulary come
+ * from `treilik/bubblelister`, the Go wrapper around bubbles/list this
+ * component's ancestor credited.
+ *
+ * @see https://github.com/charmbracelet/bubbles/tree/main/list
  * @see https://github.com/treilik/bubblelister
  */
 final class Model
@@ -977,7 +985,8 @@ final class Model
     /**
      * Return the value at the cursor.
      *
-     * Mirrors Go upstream's GetCursorItem.
+     * Mirrors charmbracelet/bubbles/list.Model.CursorItem (Go exposes no
+     * Get-prefixed accessor; the port drops the prefix and keeps the noun).
      *
      * Error strategy: fail-fast (throws). Unlike view() which catches
      * exceptions and returns an error string for resilient TUI rendering,
@@ -1692,7 +1701,11 @@ final class Model
 
     /**
      * Render styled lines for a single item — applies prefix, optional padded
-     * suffix, and per-item style. Mirrors Go upstream's getItemLines.
+     * suffix, and per-item style. Behaviour-level cite: charmbracelet/
+     * bubbles/list composes styled rows inside its delegate; this port
+     * splits the same composition across the Prefixer/Suffixer doors and
+     * joins them here (no upstream symbol matches this shape one-to-one,
+     * so the cite names the design, not a method — sugar-treelist-016).
      *
      * @return list<string>
      */
@@ -1799,7 +1812,8 @@ final class Model
             $linePrefix = self::sweepForInline($this->prefixer?->prefix($lineIdx, $total) ?? '');
 
             // Suffix is only emitted (and content right-padded) when the suffixer
-            // actually produces a non-empty marker for this line. Matches Go upstream.
+            // actually produces a non-empty marker for this line. Matches the
+            // delegate composition in the primary design source (bubbles/list).
             // Padding is measured against the ACTUAL swept gutter widths so the
             // marker lands flush at the viewport edge and an extension that
             // returns more cells than it declared cannot push the row past the
