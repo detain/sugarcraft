@@ -29,159 +29,159 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ARCHIVE_CLONE_BASE="${SC_ARCHIVE_CLONE_BASE:-https://github.com}"
 
 usage() {
-    echo "usage: $(basename "$0") <old-slug> <new-slug>" >&2
-    echo "       $(basename "$0") --archive <slug> <successor-slug>" >&2
-    exit 1
+	echo "usage: $(basename "$0") <old-slug> <new-slug>" >&2
+	echo "       $(basename "$0") --archive <slug> <successor-slug>" >&2
+	exit 1
 }
 
 fail() {
-    echo "rename-remote: $*" >&2
-    exit 1
+	echo "rename-remote: $*" >&2
+	exit 1
 }
 
 # GitHub repo names: lowercase alphanumerics + single inner hyphens.
 assert_slug() {
-    local label="$1" value="$2"
-    [[ "$value" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] ||
-        fail "$label '$value' is not a valid slug (lowercase alphanumerics and hyphens)"
-    [ "${#value}" -le 50 ] || fail "$label '$value' exceeds 50 characters"
+	local label="$1" value="$2"
+	[[ "$value" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] ||
+		fail "$label '$value' is not a valid slug (lowercase alphanumerics and hyphens)"
+	[ "${#value}" -le 50 ] || fail "$label '$value' exceeds 50 characters"
 }
 
 # A composer keyword is a valid GitHub topic iff lowercase [a-z0-9-], <= 50 chars.
 is_valid_topic() {
-    [[ "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] && [ "${#1}" -le 50 ]
+	[[ "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] && [ "${#1}" -le 50 ]
 }
 
 current_repo_name() { # echoes the real name a slug resolves to (follows renames' 301), empty if absent
-    gh repo view "$ORG/$1" --json name -q .name 2>/dev/null || true
+	gh repo view "$ORG/$1" --json name -q .name 2>/dev/null || true
 }
 
 sync_topics() { # <new-slug> <composer-json-path> <old-slug>
-    local new="$1" composer="$2" old="$3"
-    local keywords
-    keywords="$(php -r '$j = json_decode(file_get_contents($argv[1]), true); if (!is_array($j)) { exit(1); } foreach ($j["keywords"] ?? [] as $k) { echo $k, "\n"; }' "$composer")" ||
-        fail "could not read keywords from $composer"
-    [ -n "$keywords" ] || fail "$composer carries no keywords — cannot derive topics"
+	local new="$1" composer="$2" old="$3"
+	local keywords
+	keywords="$(php -r '$j = json_decode(file_get_contents($argv[1]), true); if (!is_array($j)) { exit(1); } foreach ($j["keywords"] ?? [] as $k) { echo $k, "\n"; }' "$composer")" ||
+		fail "could not read keywords from $composer"
+	[ -n "$keywords" ] || fail "$composer carries no keywords — cannot derive topics"
 
-    local existing
-    existing="$(gh repo view "$ORG/$new" --json repositoryTopics -q '.repositoryTopics[]?.name' 2>/dev/null || true)"
+	local existing
+	existing="$(gh repo view "$ORG/$new" --json repositoryTopics -q '.repositoryTopics[]?.name' 2>/dev/null || true)"
 
-    local add_args=() keyword
-    while IFS= read -r keyword; do
-        [ -n "$keyword" ] || continue
-        is_valid_topic "$keyword" || continue
-        add_args+=(--add-topic "$keyword")
-    done <<<"$keywords"
-    [ "${#add_args[@]}" -gt 0 ] || fail "no composer keyword of $composer is a valid GitHub topic"
+	local add_args=() keyword
+	while IFS= read -r keyword; do
+		[ -n "$keyword" ] || continue
+		is_valid_topic "$keyword" || continue
+		add_args+=(--add-topic "$keyword")
+	done <<<"$keywords"
+	[ "${#add_args[@]}" -gt 0 ] || fail "no composer keyword of $composer is a valid GitHub topic"
 
-    # Drop the stale old-slug topic in its own call, and only when it is
-    # actually set — gh errors on removing an absent topic.
-    if printf '%s\n' "$existing" | grep -qxF "$old"; then
-        gh repo edit "$ORG/$new" --remove-topic "$old"
-    fi
-    gh repo edit "$ORG/$new" "${add_args[@]}"
+	# Drop the stale old-slug topic in its own call, and only when it is
+	# actually set — gh errors on removing an absent topic.
+	if printf '%s\n' "$existing" | grep -qxF "$old"; then
+		gh repo edit "$ORG/$new" --remove-topic "$old"
+	fi
+	gh repo edit "$ORG/$new" "${add_args[@]}"
 }
 
 cmd_rename() {
-    local old="$1" new="$2"
+	local old="$1" new="$2"
 
-    local old_name
-    old_name="$(current_repo_name "$old")"
-    [ -n "$old_name" ] || fail "sugarcraft/$old does not exist (or gh auth is not usable)"
+	local old_name
+	old_name="$(current_repo_name "$old")"
+	[ -n "$old_name" ] || fail "sugarcraft/$old does not exist (or gh auth is not usable)"
 
-    if [ "$old_name" = "$new" ]; then
-        # Idempotent replay: the rename already happened; still re-sync the
-        # metadata below (description/homepage/topics) so a partial earlier
-        # run converges instead of silently leaving a stale record.
-        echo "sugarcraft/$old already resolves to sugarcraft/$new — rename skipped, re-syncing metadata" >&2
-    else
-        if gh repo view "$ORG/$new" --json name >/dev/null 2>&1; then
-            echo "sugarcraft/$new already exists (and is not sugarcraft/$old) — refusing to clobber it" >&2
-            exit 2
-        fi
-        # Review MINOR-2: <old> may itself be a redirect to a THIRD canonical
-        # name X (double rename happened earlier); say so before touching X.
-        if [ "$old_name" != "$old" ]; then
-            echo "rename-remote: sugarcraft/$old already redirects to sugarcraft/$old_name — renaming that chain target to $new"
-        fi
-        gh repo rename "$new" -R "$ORG/$old" --yes
-    fi
+	if [ "$old_name" = "$new" ]; then
+		# Idempotent replay: the rename already happened; still re-sync the
+		# metadata below (description/homepage/topics) so a partial earlier
+		# run converges instead of silently leaving a stale record.
+		echo "sugarcraft/$old already resolves to sugarcraft/$new — rename skipped, re-syncing metadata" >&2
+	else
+		if gh repo view "$ORG/$new" --json name >/dev/null 2>&1; then
+			echo "sugarcraft/$new already exists (and is not sugarcraft/$old) — refusing to clobber it" >&2
+			exit 2
+		fi
+		# Review MINOR-2: <old> may itself be a redirect to a THIRD canonical
+		# name X (double rename happened earlier); say so before touching X.
+		if [ "$old_name" != "$old" ]; then
+			echo "rename-remote: sugarcraft/$old already redirects to sugarcraft/$old_name — renaming that chain target to $new"
+		fi
+		gh repo rename "$new" -R "$ORG/$old" --yes
+	fi
 
-    local desc
-    desc="$(bash "$SCRIPT_DIR/bootstrap-org-repos.sh" --print-description "$new")" ||
-        fail "--print-description $new failed: add the slug to DESCRIPTIONS in scripts/bootstrap-org-repos.sh (the old->new fallback needs a renames.json entry)"
-    [ -n "$desc" ] || fail "empty description for $new"
+	local desc
+	desc="$(bash "$SCRIPT_DIR/bootstrap-org-repos.sh" --print-description "$new")" ||
+		fail "--print-description $new failed: give $new/composer.json a \"description\" (the SSOT the fallback reads) or add a DESCRIPTIONS override in scripts/bootstrap-org-repos.sh (the old->new fallback needs a renames.json entry)"
+	[ -n "$desc" ] || fail "empty description for $new"
 
-    gh repo edit "$ORG/$new" --description "$desc" \
-        --homepage "https://sugarcraft.github.io/lib/$new.html"
+	gh repo edit "$ORG/$new" --description "$desc" \
+		--homepage "https://sugarcraft.github.io/lib/$new.html"
 
-    local composer=""
-    if [ -f "$REPO_ROOT/$old/composer.json" ]; then
-        composer="$REPO_ROOT/$old/composer.json"
-    elif [ -f "$REPO_ROOT/$new/composer.json" ]; then
-        composer="$REPO_ROOT/$new/composer.json"
-    else
-        fail "no $old/composer.json (nor $new/) under $REPO_ROOT — cannot derive topics; run from the monorepo checkout"
-    fi
-    sync_topics "$new" "$composer" "$old"
+	local composer=""
+	if [ -f "$REPO_ROOT/$old/composer.json" ]; then
+		composer="$REPO_ROOT/$old/composer.json"
+	elif [ -f "$REPO_ROOT/$new/composer.json" ]; then
+		composer="$REPO_ROOT/$new/composer.json"
+	else
+		fail "no $old/composer.json (nor $new/) under $REPO_ROOT — cannot derive topics; run from the monorepo checkout"
+	fi
+	sync_topics "$new" "$composer" "$old"
 
-    echo "verified record:"
-    gh repo view "$ORG/$new" --json name,url,description
+	echo "verified record:"
+	gh repo view "$ORG/$new" --json name,url,description
 }
 
 cmd_archive() {
-    local slug="$1" successor="$2"
-    [ "$slug" != "$successor" ] || fail "slug and successor are identical"
+	local slug="$1" successor="$2"
+	[ "$slug" != "$successor" ] || fail "slug and successor are identical"
 
-    gh repo view "$ORG/$slug" --json name >/dev/null 2>&1 ||
-        fail "sugarcraft/$slug does not exist (or gh auth is not usable)"
+	gh repo view "$ORG/$slug" --json name >/dev/null 2>&1 ||
+		fail "sugarcraft/$slug does not exist (or gh auth is not usable)"
 
-    if [ "$(gh repo view "$ORG/$slug" --json isArchived -q .isArchived)" = "true" ]; then
-        echo "sugarcraft/$slug is already archived — nothing to do (idempotent)" >&2
-        return 0
-    fi
+	if [ "$(gh repo view "$ORG/$slug" --json isArchived -q .isArchived)" = "true" ]; then
+		echo "sugarcraft/$slug is already archived — nothing to do (idempotent)" >&2
+		return 0
+	fi
 
-    gh repo view "$ORG/$successor" --json name >/dev/null 2>&1 ||
-        fail "successor sugarcraft/$successor does not yet exist — archive after the successor lands"
+	gh repo view "$ORG/$successor" --json name >/dev/null 2>&1 ||
+		fail "successor sugarcraft/$successor does not yet exist — archive after the successor lands"
 
-    local tmp work branch
-    tmp="$(mktemp -d)"
-    # shellcheck disable=SC2064  # freeze $tmp now, not at trap time
-    trap "rm -rf '$tmp'" EXIT
-    work="$tmp/repo"
+	local tmp work branch
+	tmp="$(mktemp -d)"
+	# shellcheck disable=SC2064  # freeze $tmp now, not at trap time
+	trap "rm -rf '$tmp'" EXIT
+	work="$tmp/repo"
 
-    git -c credential.helper='!gh auth git-credential' clone --quiet \
-        "$ARCHIVE_CLONE_BASE/$ORG/$slug.git" "$work"
-    branch="$(git -C "$work" symbolic-ref --short HEAD)"
+	git -c credential.helper='!gh auth git-credential' clone --quiet \
+		"$ARCHIVE_CLONE_BASE/$ORG/$slug.git" "$work"
+	branch="$(git -C "$work" symbolic-ref --short HEAD)"
 
-    printf '# %s has moved\n\nThis package is now part of [sugarcraft/%s](https://github.com/sugarcraft/%s).\n' \
-        "$slug" "$successor" "$successor" >"$work/README.md"
+	printf '# %s has moved\n\nThis package is now part of [sugarcraft/%s](https://github.com/sugarcraft/%s).\n' \
+		"$slug" "$successor" "$successor" >"$work/README.md"
 
-    git -C "$work" add README.md
-    if git -C "$work" diff --cached --quiet; then
-        echo "sugarcraft/$slug README already carries the move notice — nothing to push" >&2
-    else
-        # Commit identity per plan Part A rule 1 (assembled so no literal email
-        # pattern reaches the command line — see CALIBER_LEARNINGS).
-        local A='detain' B='interserver.net'
-        GIT_AUTHOR_NAME='Joe Huss' GIT_AUTHOR_EMAIL="${A}@${B}" \
-            GIT_COMMITTER_NAME='Joe Huss' GIT_COMMITTER_EMAIL="${A}@${B}" \
-            git -C "$work" commit --quiet -m "$slug: moved to sugarcraft/$successor"
-        git -C "$work" -c credential.helper='!gh auth git-credential' push --quiet origin "$branch"
-    fi
+	git -C "$work" add README.md
+	if git -C "$work" diff --cached --quiet; then
+		echo "sugarcraft/$slug README already carries the move notice — nothing to push" >&2
+	else
+		# Commit identity per plan Part A rule 1 (assembled so no literal email
+		# pattern reaches the command line — see CALIBER_LEARNINGS).
+		local A='detain' B='interserver.net'
+		GIT_AUTHOR_NAME='Joe Huss' GIT_AUTHOR_EMAIL="${A}@${B}" \
+			GIT_COMMITTER_NAME='Joe Huss' GIT_COMMITTER_EMAIL="${A}@${B}" \
+			git -C "$work" commit --quiet -m "$slug: moved to sugarcraft/$successor"
+		git -C "$work" -c credential.helper='!gh auth git-credential' push --quiet origin "$branch"
+	fi
 
-    gh repo archive "$ORG/$slug" --yes
-    echo "archived sugarcraft/$slug (successor: sugarcraft/$successor)"
+	gh repo archive "$ORG/$slug" --yes
+	echo "archived sugarcraft/$slug (successor: sugarcraft/$successor)"
 }
 
 [ "$#" -ge 1 ] || usage
 
 if [ "$1" = "--archive" ]; then
-    [ "$#" -eq 3 ] || usage
-    assert_slug slug "$2"
-    assert_slug successor "$3"
-    cmd_archive "$2" "$3"
-    exit 0
+	[ "$#" -eq 3 ] || usage
+	assert_slug slug "$2"
+	assert_slug successor "$3"
+	cmd_archive "$2" "$3"
+	exit 0
 fi
 
 [ "$#" -eq 2 ] || usage

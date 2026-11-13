@@ -198,9 +198,14 @@ gh workflow run sync-sugarcraft.yml -R detain/sugarcraft
 ./scripts/set-org-default-master.sh        # 3. flip every default branch from main → master
 ```
 
-Extend the script's inline `DESCRIPTIONS` map whenever you add a new
-lib to the monorepo. To make step 3 unnecessary for *future* repos,
-set the org-wide default-branch name to `master` in
+Each script derives its repo roster from the same discovery rule CI uses
+(`php scripts/affected-libs.php --all`), so adding a lib needs **no edit
+here**: its `composer.json` `"description"` is the metadata SSOT the
+scripts read, and the sync workflow auto-creates a missing
+`sugarcraft/<lib>` repo on its first push. `bootstrap-org-repos.sh`'s
+inline `DESCRIPTIONS` map is an optional phrasing override only. To make
+step 3 unnecessary for *future* repos, set the org-wide default-branch
+name to `master` in
 <https://github.com/organizations/sugarcraft/settings/repository-defaults>.
 
 ## License

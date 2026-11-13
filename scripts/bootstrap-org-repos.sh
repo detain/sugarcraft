@@ -2,6 +2,16 @@
 # Create the per-lib repositories under the sugarcraft org. Run once
 # by an org admin; idempotent — repos that already exist are skipped.
 #
+# The slug roster is DERIVED from the same discovery rule CI uses
+# (scripts/affected-libs.php --all), so a new lib never needs an edit
+# here at all. The DESCRIPTIONS map below is an OPTIONAL override for
+# phrasing; the fallback is the lib's own composer.json "description"
+# (the metadata SSOT per R4.2 — the same source --print-description
+# treats as last resort, and the same source the sync workflow's
+# auto-create arm reads). A map key naming a non-existent directory is
+# roster drift and aborts the run; tools/tests/ProvisioningRosterTest.php
+# enforces both laws offline.
+#
 # Auth: needs a `gh auth login` session (or `GH_TOKEN`) for a user
 # with admin rights on the sugarcraft org.
 #
@@ -90,16 +100,54 @@ if [ "${1:-}" = "--print-description" ]; then
 fi
 
 # Default topic set for every repo — the sync-sugarcraft workflow
-# expects these to exist so each push doesn't have to re-tag.
-TOPICS=(php tui terminal sugarcraft sugarcraft composer)
+# expects these to exist so each push doesn't have to re-tag. The
+# create loop below CONSUMES this array (it used to carry a stale
+# hardcoded copy with `sugarcraft` duplicated).
+TOPICS=(php tui terminal sugarcraft composer)
 
 if ! command -v gh >/dev/null 2>&1; then
     echo "error: gh CLI not found — install https://cli.github.com" >&2
     exit 1
 fi
 
-for slug in "${!DESCRIPTIONS[@]}"; do
-    desc="${DESCRIPTIONS[$slug]}"
+# Derive the roster from the CI discovery rule (same JSON the sync
+# workflow force-pushes from), then cross-check the override map for
+# drift in BOTH directions before touching the network.
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+mapfile -t SLUGS < <(php -r '
+    $j = json_decode((string) file_get_contents("php://stdin"), true);
+    if (!is_array($j) || !isset($j["all_libs"])) { fwrite(STDERR, "bootstrap: affected-libs.php --all produced no all_libs list\n"); exit(1); }
+    foreach ($j["all_libs"] as $s) { echo $s, "\n"; }
+' < <(php "$SCRIPT_DIR/affected-libs.php" --all)) || { echo "bootstrap: affected-libs discovery failed" >&2; exit 1; }
+[ "${#SLUGS[@]}" -gt 0 ] || { echo "bootstrap: empty derived roster — refusing" >&2; exit 1; }
+for key in "${!DESCRIPTIONS[@]}"; do
+    [ -d "$ROOT_DIR/$key" ] || { echo "bootstrap: DESCRIPTIONS key '$key' names no directory in $ROOT_DIR (roster drift — prune it)" >&2; exit 1; }
+done
+
+# Resolve one slug's description: optional override first, then the
+# lib's composer.json description (SSOT); unresolvable is a hard error.
+resolve_desc() {
+    local slug="$1"
+    if [ -n "${DESCRIPTIONS[$slug]:-}" ]; then
+        printf '%s' "${DESCRIPTIONS[$slug]}"
+        return 0
+    fi
+    if [ -f "$ROOT_DIR/$slug/composer.json" ]; then
+        local d
+        d="$(php -r '$j = json_decode(file_get_contents($argv[1]), true); echo $j["description"] ?? "";' "$ROOT_DIR/$slug/composer.json")"
+        if [ -n "$d" ]; then
+            printf '%s' "$d"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+for slug in "${SLUGS[@]}"; do
+    if ! desc="$(resolve_desc "$slug")"; then
+        echo "bootstrap: no description for '$slug' — set composer.json \"description\" or add a DESCRIPTIONS override" >&2
+        exit 1
+    fi
     if gh repo view "$ORG/$slug" >/dev/null 2>&1; then
         echo "skip  $ORG/$slug (already exists)"
         continue
@@ -110,9 +158,11 @@ for slug in "${!DESCRIPTIONS[@]}"; do
         --description "$desc" \
         --homepage "https://sugarcraft.github.io/lib/$slug.html"
     # Topics + features.
-    gh api -X PUT "/repos/$ORG/$slug/topics" \
-        -F "names[]=php" -F "names[]=tui" -F "names[]=terminal" \
-        -F "names[]=sugarcraft" -F "names[]=sugarcraft" -F "names[]=composer" \
+    topic_args=()
+    for t in "${TOPICS[@]}"; do
+        topic_args+=(-F "names[]=$t")
+    done
+    gh api -X PUT "/repos/$ORG/$slug/topics" "${topic_args[@]}" \
         -H "Accept: application/vnd.github.mercy-preview+json" >/dev/null
     gh api -X PATCH "/repos/$ORG/$slug" \
         -F has_issues=true \

@@ -158,6 +158,10 @@ jobs:
       - name: Split + force-push each affected lib
         env:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
+          # gh auth for the ensure_repo preflight below — same secret the
+          # push already carries, so a new lib's first sync creates its
+          # split repo instead of burning the 3-retry loop on a 404.
+          GH_TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
           FORCE_ALL: ${{ steps.affected.outputs.force_all }}
           AFFECTED_LIBS: ${{ steps.affected.outputs.affected_libs }}
           # Packagist auto-update: a sugarcraft/<lib> split repo only re-crawls
@@ -228,8 +232,39 @@ jobs:
             ' "$1"
           }
 
+          # First-sync preflight (RT-06): the split push used to fail three
+          # retries + red for any lib whose sugarcraft/<lib> repo did not
+          # exist yet — org provisioning was a manual bootstrap script only
+          # an admin could run. Now the sync self-heals: view → create with
+          # the lib's composer.json description (metadata SSOT, same source
+          # bootstrap-org-repos.sh resolves) → same topics bootstrap sets.
+          # If creation itself fails (token without admin on the org),
+          # refuse LOUD naming the lib and the manual path — never let the
+          # retry loop stand in for a missing repo.
+          ensure_repo() {
+            local lib="$1"
+            if gh repo view "$ORG/$lib" >/dev/null 2>&1; then
+              return 0
+            fi
+            echo "ensure_repo: sugarcraft/$lib missing — auto-creating (first sync of this lib)"
+            desc="$(php -r '$j = json_decode(file_get_contents($argv[1]), true); echo $j["description"] ?? "";' "$lib/composer.json" 2>/dev/null || true)"
+            create_args=(repo create "$ORG/$lib" --public --homepage "https://sugarcraft.github.io/lib/$lib.html")
+            if [ -n "$desc" ]; then
+              create_args+=(--description "$desc")
+            fi
+            if ! gh "${create_args[@]}"; then
+              echo "ensure_repo: cannot create sugarcraft/$lib — grant SUGARCRAFT_SYNC_TOKEN admin on the org, or run scripts/bootstrap-org-repos.sh as an org admin" >&2
+              exit 1
+            fi
+            gh api -X PUT "/repos/$ORG/$lib/topics" \
+              -F "names[]=php" -F "names[]=tui" -F "names[]=terminal" \
+              -F "names[]=sugarcraft" -F "names[]=composer" \
+              -H "Accept: application/vnd.github.mercy-preview+json" >/dev/null || true
+          }
+
           force_all="$FORCE_ALL"
           libs_str="$AFFECTED_LIBS"
+          ORG="sugarcraft"
 
           if [ "$force_all" = "yes" ]; then
             # Monorepo-wide change: push all libs
@@ -251,6 +286,7 @@ jobs:
 
           for lib in "${libs[@]}"; do
             [ -d "$lib" ] || { echo "skip $lib (no dir)"; continue; }
+            ensure_repo "$lib"
             # splitsh-lite prints the split-commit SHA for the prefix on stdout.
             sha=$(/tmp/splitsh-lite --prefix="$lib")
             push_url="https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git"
