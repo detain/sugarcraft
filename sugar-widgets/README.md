@@ -73,14 +73,28 @@ The counted inventory lives once, in the intro at the top of this file.
 
 ### Keyboard control
 
-The widgets above decode these keys inside their own `update()` — the
-host forwards `KeyMsg` rows and the component moves:
+The first-party widgets below decode these keys inside their own
+`update()` — the host forwards `KeyMsg` rows and the component moves:
 
 | Component | Keys |
 |---|---|
-| `Viewport` | `↑`/`k` line up, `↓`/`j` line down, `←`/`h` scroll left, `→`/`l` scroll right, `PageUp`/`b`, `PageDown`/`f`/`Space`, `Ctrl+u`/`Ctrl+d` half pages, `Home`/`g`, `End`/`G` |
+| `Tabs` | `Tab`/`Shift+Tab` next/prev (wraps by default; `wrap:` construction flag switches to clamp), `1`–`9` direct jump to tab N; only decoded while focused — the bindings are `TabsKeyMap` defaults and the map is replaceable |
 | `Table` | `↑`/`k`, `↓`/`j`, `Home`/`g`, `End`/`G`, `PageUp`/`PageDown` by `max(1, height)` rows — rows only, no vim letter bindings |
 | `Tree` | `↑`/`k`, `↓`/`j`, `Enter` toggles, `→`/`l` expands, `←`/`h` collapses, `g`/`G` jump |
+| `Help` | no hardcoded key — `updateWithBinding($msg, $toggle)` flips the full view when `$msg` matches whatever `Binding` the host wires in (the bubbles convention is `?`); plain `update()` is a pass-through |
+| `Menu\OptionRow` | renders the `←`/`→`/`↵` control glyphs on the selected row but decodes nothing itself — the consumer's keymap drives the actions |
+
+`Input\TextEdit` is likewise a value object with no key decoding: the
+consumer feeds edits.
+
+For the aliased widgets, this table lists the keys the canonical
+component decodes (verified against `sugar-forms` dev-master, 2026-11);
+the authoritative, kept-current key source is the sugar-forms README:
+
+| Component | Keys |
+|---|---|
+| `Viewport` _(alias)_ | `↑`/`k` line up, `↓`/`j` line down, `←`/`h` scroll left, `→`/`l` scroll right, `PageUp`/`b`, `PageDown`/`f`/`Space`, `Ctrl+u`/`Ctrl+d` half pages, `Home`/`g`, `End`/`G` |
+| `TextInput` / `TextArea` / `ItemList` / `FilePicker` / `Cursor` / `Spinner` / `Scrollbar` _(aliases)_ | decoded in `sugar-forms` — see its Keyboard section; `TextInput` vim-mode bindings are the shared `VimKeyHandler` (next section) |
 
 ### Vim mode
 
