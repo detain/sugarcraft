@@ -2821,21 +2821,23 @@ final class Program
     }
 
     /**
-     * Drain and execute any pending lifecycle Cmds accumulated in the
-     * current Composite model, then clear them for the next cycle.
+     * Drain and execute the lifecycle Cmds queued anywhere in the
+     * current model tree, then clear them for the next cycle.
+     *
+     * The walk itself lives on {@see Composite::drainPendingCmds()} —
+     * one home, whole tree: a nested subtree's mount Cmd::quit(),
+     * exec, or worker runs exactly like a root-level one.
      */
     private function drainCompositePendingCmds(): void
     {
         if (!$this->model instanceof Composite) {
             return;
         }
-        $cmds = $this->model->pendingCmds();
+        [$cleared, $cmds] = $this->model->drainPendingCmds();
         if ($cmds === []) {
             return;
         }
-        // Create a new Composite with the same children but no pending Cmds,
-        // so they are not re-drained on the next tick.
-        $this->model = new Composite($this->model->children());
+        $this->model = $cleared;
         foreach ($cmds as $cmd) {
             $this->scheduleCmd($cmd);
         }
