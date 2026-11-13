@@ -247,7 +247,7 @@ final class Auth implements Middleware
         if ($blob === '') {
             return null;
         }
-        if (preg_match('#\b(SHA256:[A-Za-z0-9+/=]+|MD5:[0-9a-f:]{32,})\b#', $blob, $m)) {
+        if (preg_match('#(SHA256:[A-Za-z0-9+/]+={0,2}(?![A-Za-z0-9+/])|MD5:[0-9a-f:]{32,})#', $blob, $m)) {
             return $m[1];
         }
         return null;

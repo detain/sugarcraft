@@ -124,6 +124,61 @@ final class AuthTest extends TestCase
         $this->assertTrue($reached);
     }
 
+    // sugar-ssh-server-001: a real OpenSSH SHA256 fingerprint ends in base64
+    // `=` padding. The old regex closed the token with `\b`, and `=` is a
+    // non-word char — so the extraction silently dropped the final `=` and
+    // hash_equals could never match the operator's stored value. Every
+    // legitimate padded key was denied via SSH_USER_AUTH (fails closed, but
+    // denies). The fix keeps `=` in the token and uses a negative look-ahead
+    // to stop at the token edge without re-introducing truncation.
+    public function testAllowsPaddedSha256FingerprintFromSshUserAuthBlob(): void
+    {
+        $fp = 'SHA256:abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQRSTUMbXc=';
+        $_SERVER['SSH_USER_AUTH'] = 'publickey ssh-ed25519 ' . $fp;
+        unset($_SERVER['SSH_USER_KEY_FINGERPRINT'], $_SERVER['KEY_FINGERPRINT']);
+        [$err] = $this->stderr();
+        $a = new Auth([], [$fp], $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached);
+    }
+
+    // The padded token rides inside a multi-line ExposeAuthInfo blob: the
+    // extraction must stop at the token edge (`=` followed by the newline,
+    // then the next line must not be absorbed into the fingerprint).
+    public function testPaddedFingerprintStopsAtTokenEdgeInMultilineBlob(): void
+    {
+        $fp = 'SHA256:abcdef/Mb+ghij=';
+        $_SERVER['SSH_USER_AUTH'] = "publickey ssh-ed25519 {$fp}\nfrom 10.0.0.1 port 2222 tun device";
+        unset($_SERVER['SSH_USER_KEY_FINGERPRINT'], $_SERVER['KEY_FINGERPRINT']);
+        [$err] = $this->stderr();
+        $a = new Auth([], [$fp], $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached);
+    }
+
+    // Over-match guard: a blob carrying a LONGER token than the allowlist
+    // entry must not extract the shorter prefix as a match (the look-ahead
+    // refuses an [A-Za-z0-9+/] continuation).
+    public function testLongerPaddedTokenInBlobDoesNotMatchShorterAllowlistPrefix(): void
+    {
+        $_SERVER['SSH_USER_AUTH'] = 'publickey ssh-ed25519 SHA256:abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQRSTUvwXY=';
+        unset($_SERVER['SSH_USER_KEY_FINGERPRINT'], $_SERVER['KEY_FINGERPRINT']);
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth([], ['SHA256:abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQRSTU'], $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached);
+        $this->assertStringContainsString('key not allowed', $readErr());
+    }
+
     public function testRejectsMismatchedFingerprintInBlob(): void
     {
         $_SERVER['SSH_USER_AUTH'] = 'publickey ssh-ed25519 SHA256:wrongvalue';
