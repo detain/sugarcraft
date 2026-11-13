@@ -21,10 +21,18 @@ final class RingBuffer
     private int $count = 0;
 
     /**
-     * @param int $size Maximum number of values to store (default: 60)
+     * @param int $size Maximum number of values to store (default: 60), at least 1
+     * @throws \ValueError if $size is less than 1
      */
     public function __construct(int $size = 60)
     {
+        // A zero-size buffer constructed fine and died with
+        // DivisionByZeroError inside push() — the live per-tick path
+        // (finding sugar-dashboard-188). Fail at the door instead.
+        if ($size < 1) {
+            throw new \ValueError("Ring buffer size must be at least 1, got {$size}");
+        }
+
         $this->size = $size;
         $this->data = array_fill(0, $size, null);
     }

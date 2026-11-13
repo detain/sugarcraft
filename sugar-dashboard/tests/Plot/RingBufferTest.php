@@ -353,10 +353,25 @@ final class RingBufferTest extends TestCase
 
     public function testZeroCapacityBuffer(): void
     {
-        $buffer = new RingBuffer(0);
-        $this->assertSame(0, $buffer->capacity());
-        $this->assertSame(0, $buffer->count());
-        $this->assertSame([], $buffer->toArray());
+        // D-95 (finding sugar-dashboard-188): size 0 used to construct
+        // and then die with DivisionByZeroError on the first push(); the
+        // ctor now refuses it. This pin used to freeze the landmine.
+        $this->expectException(\ValueError::class);
+        new RingBuffer(0);
+    }
+
+    public function testNegativeCapacityRejectedByConstructor(): void
+    {
+        $this->expectException(\ValueError::class);
+        new RingBuffer(-3);
+    }
+
+    public function testSingleCapacityBufferIsTheFloorEdge(): void
+    {
+        $buffer = new RingBuffer(1);
+        $buffer->push(7.5);
+        $buffer->push(8.5);
+        $this->assertSame([8.5], $buffer->toArray());
     }
 
     public function testPushNegativeValues(): void

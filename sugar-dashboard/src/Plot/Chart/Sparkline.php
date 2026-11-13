@@ -49,7 +49,9 @@ final class Sparkline implements \SugarCraft\Dashboard\Foundation\SizedItem
         private bool $fill = false,
         private bool $dimEdge = false,
     ) {
-        $this->buffer = new RingBuffer($this->widthConstraint);
+        // RingBuffer refuses size < 1 (finding sugar-dashboard-188);
+        // width 0 keeps a latest-value slot here but still renders empty.
+        $this->buffer = new RingBuffer(max(1, $this->widthConstraint));
     }
 
     /**
@@ -289,7 +291,7 @@ final class Sparkline implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function mutate(): self
     {
         $clone = clone $this;
-        $clone->buffer = new RingBuffer($this->widthConstraint);
+        $clone->buffer = new RingBuffer(max(1, $this->widthConstraint));
         foreach ($this->buffer->toArray() as $value) {
             $clone->buffer->push($value);
         }

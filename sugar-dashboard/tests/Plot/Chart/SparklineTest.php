@@ -257,6 +257,15 @@ final class SparklineTest extends TestCase
         $this->assertSame('', $sparkline->render());
     }
 
+    public function testZeroWidthAbsorbsPushesAndStillRendersEmpty(): void
+    {
+        // D-95 ride-along: the buffer floor of 1 must not leak into the
+        // render contract — width decides what shows, not the buffer.
+        $sparkline = Sparkline::new(0);
+        $sparkline = $sparkline->push(3.0)->push(4.0);
+        $this->assertSame('', $sparkline->render());
+    }
+
     public function testNegativeValue(): void
     {
         $sparkline = Sparkline::new(5)
