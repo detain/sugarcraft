@@ -216,9 +216,13 @@ echo $viewport->view();                    // Line 01 stays pinned; the numbered
 ## Trust boundary
 
 Table, Column and FlexBox treat everything they render as **untrusted data**.
-Cell values and column titles pass through `Sanitize::untrusted()`, and
-newlines, tabs and carriage returns are replaced with spaces at render time,
-so hostile content can never smuggle a terminal escape sequence into a frame.
+Cell values and column titles pass through `Sanitize::untrusted()`, which
+strips every terminal escape sequence (ESC, CSI, and the bare C0 control
+bytes NUL/BEL/DEL all vanish), and then the structural characters are swept:
+a line feed or a CRLF pair collapses to a single space, a tab becomes a
+single space, and a lone carriage return is DELETED (not replaced). No
+control byte survives to reach the screen, so hostile content can never
+smuggle a terminal escape sequence into a frame.
 Style strings (`FlexItem::withStyle()`, `Column::withStyle()`,
 `Table::withHeaderStyle()`, `Table::withCursorStyle()`) pass through one door:
 a legal SGR parameter string — codes 0..255 separated by single `;` — or the
@@ -227,16 +231,20 @@ naming the refused property, so the style knobs cannot be repurposed as an
 escape channel.
 
 Viewport and Scrollbar are **trusted-input by design**: the Viewport splits
-your `withContent()` string on `\n` and renders the lines as given (the
+your `setContent()` / `fromContent()` string on `\n` and renders the lines as given (the
 delegated widget stores content without a sweep), and the Scrollbar emits the
 track/thumb runes and labels you passed straight to the terminal. Feed them
 program-generated frames, or sanitize user input yourself first.
 
 One asymmetry to know about: the FlexBox **measures** an item's content —
 width, height and the ratio split are computed from the raw string — before
-the render-time sweep replaces control characters. Control bytes inside
-content therefore still consume measured cells even though the printed frame
-carries the swept text.
+the render-time sweep runs. Only one byte actually skews the two views: a
+**tab** is measured as four cells (the terminal's default tab stop) yet the
+sweep prints a single space, so a tabbed line reserves four cells and paints
+one — a small over-allocation, never a truncation. Every other stripped byte
+(ESC/CSI/NUL/BEL/DEL, and the lone carriage return) measures zero both before
+and after the sweep, so it cannot shift a layout at all; a line feed simply
+splits the content into two measured lines rather than consuming a cell.
 
 The cursor reads break the sweep the other way: `Table::rawCurrentRow()` and
 `Table::rawCurrentCell()` answer with the stored strings **as given** — the
