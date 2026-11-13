@@ -632,6 +632,71 @@ final class AnimatedWebpDecoder implements Decoder
     /** VP8X flags bit 5 (L): lossless — bit 4 (A) is alpha; ALPH-prefix repair sets alpha. */
     private const VP8X_FLAG_ALPHA = 0x10;
 
+    /** @var (callable(string): (\GdImage|false|null))|null test seam for the still decode */
+    private static $stillDecodeForTesting = null;
+
+    /**
+     * Test seam (same shape as the capability mock): scripted GD behaviour
+     * for decoding one ANMF still, so the build-variance fallback arm can
+     * be pinned on a host whose libwebp does not exhibit it. Null restores
+     * the live decode.
+     */
+    public static function setStillDecodeForTesting(?callable $decode): void
+    {
+        self::$stillDecodeForTesting = $decode;
+    }
+
+    /**
+     * Decode one ANMF still container.
+     *
+     * BUILD VARIANCE (review 096): the ALPH-repair synthesis above was
+     * MEASURED on PHP's bundled libwebp. System-libwebp builds (older
+     * Debian, FreeBSD ports) may refuse the SYNTHESIZED shape instead —
+     * while reading the verbatim chunk sequence the repair was invented to
+     * replace. A refusal of the repaired bytes therefore retries the
+     * unwrapped shape before the whole container is refused: degrade the
+     * repair, do not fatal the file.
+     */
+    private static function decodeStill(string $still): ?\GdImage
+    {
+        $decode = self::$stillDecodeForTesting ?? static fn (string $bytes) => imagecreatefromstring($bytes);
+
+        $img = $decode($still);
+        if ($img instanceof \GdImage) {
+            return $img;
+        }
+
+        $verbatim = self::unwrapRepairedStill($still);
+        if ($verbatim === null) {
+            return null;
+        }
+
+        $img = $decode($verbatim);
+
+        return $img instanceof \GdImage ? $img : null;
+    }
+
+    /**
+     * Strip the synthesized VP8X prefix stillForGd inserts (12 RIFF header
+     * + 18 VP8X chunk bytes) and re-wrap the original chunk sequence; null
+     * when the container was never a synthesized repair (nothing to fall
+     * back from).
+     */
+    private static function unwrapRepairedStill(string $still): ?string
+    {
+        if (strlen($still) < 38
+            || substr($still, 0, 4) !== 'RIFF'
+            || substr($still, 8, 4) !== 'WEBP'
+            || substr($still, 12, 12) !== 'VP8X' . pack('V', 10) . chr(self::VP8X_FLAG_ALPHA) . "\x00\x00\x00"
+            || substr($still, 30, 4) !== 'ALPH') {
+            return null;
+        }
+
+        $chunks = substr($still, 30);
+
+        return 'RIFF' . pack('V', 4 + strlen($chunks)) . 'WEBP' . $chunks;
+    }
+
     /**
      * The (width, height) declared by a VP8 lossy bitstream, or null when the
      * 3-byte start code 0x9D 0x01 0x2A is absent (in which case the caller
@@ -773,8 +838,8 @@ final class AnimatedWebpDecoder implements Decoder
                 ));
             }
 
-            $sub = imagecreatefromstring($frame['still']);
-            if ($sub === false) {
+            $sub = self::decodeStill($frame['still']);
+            if ($sub === null) {
                 throw new \RuntimeException(sprintf(
                     'animated WebP frame %d bitstream failed to decode',
                     count($this->canvases),

@@ -29,6 +29,7 @@ final class AnimatedWebpDecoderTest extends TestCase
     {
         AnimatedWebpDecoder::setWebpCapableForTesting(null);
         AnimatedWebpDecoder::setCompositeTouchBudgetForTesting(null);
+        AnimatedWebpDecoder::setStillDecodeForTesting(null);
         foreach ($this->dirs as $dir) {
             foreach (scandir($dir) ?: [] as $entry) {
                 if ($entry !== '.' && $entry !== '..') {
@@ -416,10 +417,13 @@ final class AnimatedWebpDecoderTest extends TestCase
         $compEnd = (int) strpos($src, 'private static function drawOnto');
         $compBody = substr($src, $compStart, $compEnd - $compStart);
         $declared = (int) strpos($compBody, 'self::stillDimensions($frame');
-        $decode = (int) strpos($compBody, 'imagecreatefromstring(');
+        // SV-X96 moved the raw call behind a door (decodeStill = the
+        // synthesized/verbatim retry); the order law is about the door.
+        $decode = (int) strpos($compBody, 'self::decodeStill(');
         self::assertGreaterThan(0, $declared);
         self::assertGreaterThan($declared, $decode, 'declared-dimension refusal must precede the decode');
         self::assertStringContainsString('decodes to a ', $compBody, 'the post-decode gate must police lying headers too');
+        self::assertStringContainsString('imagecreatefromstring(', $src, 'the decode door still wraps the live GD call');
     }
 
     // -------------------------------------------------------------------------
@@ -596,5 +600,42 @@ final class AnimatedWebpDecoderTest extends TestCase
         $d = new AnimatedWebpDecoder();
         $d->open($this->file($this->storyContainer(), 'ceiling-normal.webp'), 8, 4, 10.0);
         self::assertSame([100, 100, 100], $d->frameDelaysMs());
+    }
+
+    // ---- SV-X96: build-variance ALPH-repair fallback ----
+
+    public function testAGdRefusalOfTheSynthesizedRepairRetriesTheVerbatimShape(): void
+    {
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+        $attempts = [];
+        AnimatedWebpDecoder::setStillDecodeForTesting(function (string $bytes) use (&$attempts) {
+            $attempts[] = substr($bytes, 12, 4);
+            if (substr($bytes, 12, 4) === 'VP8X') {
+                // A system-libwebp build: refuses the synthesized VP8X-led
+                // repair that PHP's bundled libwebp needed.
+                return false;
+            }
+            $img = imagecreatetruecolor(16, 16);
+            imagesavealpha($img, true);
+            imagefill($img, 0, 0, imagecolorallocatealpha($img, 0, 0, 255, 0));
+
+            return $img;
+        });
+
+        $d = new AnimatedWebpDecoder();
+        $d->open($this->file($this->storyContainer(), 'syslib.webp'), 8, 4, 10.0);
+        self::assertNotNull($d->next(), 'the ALPH-led frame must fall back to the verbatim shape, not fatal the container');
+        // Frame 3 is the ALPH-led one: synthesized refusal then verbatim retry.
+        self::assertSame(['VP8 ', 'VP8 ', 'VP8X', 'ALPH'], $attempts);
+    }
+
+    public function testARefusalOfBothStillShapesStillRefusesTheContainerLoudly(): void
+    {
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+        AnimatedWebpDecoder::setStillDecodeForTesting(static fn (): bool => false);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('bitstream failed to decode');
+        (new AnimatedWebpDecoder())->open($this->file($this->storyContainer(), 'dead.webp'), 8, 4, 10.0);
     }
 }
