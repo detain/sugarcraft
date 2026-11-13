@@ -148,7 +148,8 @@ $ring = is_array($decoded)
 
   For an **array** payload, `restore()` prefers the `focused` id over the
   positional leg when both are present, and an *unknown* `focused` id lands on
-  the first region — the `index` leg is consulted only when the focus leg is
+  the first region — the first **enabled** one, or index 0 when every region is
+  disabled — the `index` leg is consulted only when the focus leg is
   absent or not a string, and then clamped into the surviving ring rather than
   trusted (a
   legacy session file from before a layout change cannot crash startup). It

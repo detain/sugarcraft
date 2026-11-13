@@ -712,18 +712,8 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         $ids = self::unique($rawIds);
         $count = count($ids);
 
-        $target = $count === 0 ? -1 : 0;
-        $focused = $snapshot['focused'] ?? null;
-        if (is_string($focused)) {
-            $pos = array_search($focused, $ids, true);
-            if ($pos !== false) {
-                $target = $pos;
-            }
-        } elseif ($count > 0 && isset($snapshot['index']) && is_int($snapshot['index'])) {
-            // Legacy positional snapshot: clamp it, never trust it.
-            $target = max(0, min($snapshot['index'], $count - 1));
-        }
-
+        // The disabled set is resolved BEFORE the focus legs: the fallback
+        // route needs it to honour the enabled wall below.
         $disabled = [];
         $rawDisabled = $snapshot['disabled'] ?? [];
         if (is_array($rawDisabled)) {
@@ -733,6 +723,39 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
                 if (is_string($id) && in_array($id, $ids, true)) {
                     $disabled[$id] = true;
                 }
+            }
+        }
+
+        $target = $count === 0 ? -1 : 0;
+        $needsEnabledWall = false;
+        $focused = $snapshot['focused'] ?? null;
+        if (is_string($focused)) {
+            $pos = array_search($focused, $ids, true);
+            if ($pos !== false) {
+                // An explicitly-matched id keeps parking on a disabled survivor:
+                // restore focuses before re-applying flags (documented order,
+                // see the class-note on focus()).
+                $target = $pos;
+            } else {
+                $needsEnabledWall = $count > 0;
+            }
+        } elseif ($count > 0 && isset($snapshot['index']) && is_int($snapshot['index'])) {
+            // Legacy positional snapshot: clamp it, never trust it.
+            $target = max(0, min($snapshot['index'], $count - 1));
+        } else {
+            $needsEnabledWall = $count > 0;
+        }
+
+        if ($needsEnabledWall) {
+            // The dropped/absent-focus fallback must not teleport onto a
+            // disabled head — the same wall reorder() respects. Park at index 0
+            // ONLY when every survivor is disabled (the legitimate parked
+            // state); otherwise land the first enabled region.
+            $enabled = self::computeEnabledPositions($ids, $disabled);
+            if ($enabled === []) {
+                $target = 0;
+            } elseif (!in_array($target, $enabled, true)) {
+                $target = $enabled[0];
             }
         }
 

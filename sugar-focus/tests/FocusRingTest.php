@@ -1185,6 +1185,32 @@ final class FocusRingTest extends TestCase
         self::assertSame(['a', 'b'], FocusRing::restore(['ids' => ['a', 'b', 'a']])->ids());
     }
 
+    public function testRestoreUnknownFocusSkipsDisabledHead(): void
+    {
+        $ring = FocusRing::restore(['ids' => ['a', 'b', 'c'], 'focused' => 'gone', 'disabled' => ['a']]);
+
+        self::assertSame('b', $ring->current(), 'the fallback lands on the first enabled region, never teleports onto a disabled head');
+        self::assertSame(0, $ring->enabledIndex());
+        self::assertCacheConsistent($ring);
+    }
+
+    public function testRestoreNoFocusLegHonoursTheEnabledWall(): void
+    {
+        $ring = FocusRing::restore(['ids' => ['a', 'b'], 'disabled' => ['a']]);
+
+        self::assertSame('b', $ring->current(), 'a snapshot with no focus leg defaults onto the first enabled region');
+        self::assertCacheConsistent($ring);
+    }
+
+    public function testRestoreExhaustivelyDisabledFallbackParksAtZero(): void
+    {
+        $ring = FocusRing::restore(['ids' => ['a', 'b'], 'focused' => 'zz', 'disabled' => ['a', 'b']]);
+
+        self::assertSame('a', $ring->current(), 'index 0 is the legitimate parked state when nothing is enabled');
+        self::assertNull($ring->enabledIndex());
+        self::assertCacheConsistent($ring);
+    }
+
     // ─── nextOf() / previousOf(): pure traversal queries ───────────────────
 
     public function testNextOfAndPreviousOfMirrorTraversalWithoutMovingFocus(): void
