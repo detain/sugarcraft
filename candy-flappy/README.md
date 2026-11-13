@@ -186,7 +186,7 @@ The pipe gap height adapts to the player's score:
 | 10–14       | 4 cells    |
 | 15+         | 3 cells    |
 
-Gap shrinks by 1 every 5 points, bottoming out at 3 cells to keep the game playable. This is implemented by `PipeGenerator::gapHeightForScore()` and applied automatically when `Game` spawns new pipes via `PipeGenerator::makePipe()`. The gap's centre row is drawn from the injected PRNG inside `[3 + intdiv(h,2), HEIGHT - 3 - intdiv(h,2)]` (endpoints included), so a gap never touches the floor or ceiling rows.
+Gap shrinks by 1 every 5 points, bottoming out at 3 cells to keep the game playable. This is implemented by `PipeGenerator::gapHeightForScore()` and applied automatically when `Game` spawns new pipes via `PipeGenerator::pipe()`. The gap's centre row is drawn from the injected PRNG inside `[3 + intdiv(h,2), HEIGHT - 3 - intdiv(h,2)]` (endpoints included), so a gap never touches the floor or ceiling rows.
 
 ## Bird physics & tuning
 

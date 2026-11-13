@@ -667,7 +667,7 @@ final class Game implements Model
         // Spawn a new pipe every PIPE_EVERY ticks.
         $tick = $this->tickIndex + 1;
         if ($tick % self::PIPE_EVERY === 0) {
-            $pipes[] = PipeGenerator::makePipe($this->score, $this->rand);
+            $pipes[] = PipeGenerator::pipe($this->score, $this->rand);
         }
 
         // Score = number of pipes the bird passed this tick. Each pipe slid

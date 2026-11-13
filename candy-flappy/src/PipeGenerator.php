@@ -44,7 +44,7 @@ final class PipeGenerator
      * @param \Closure(int $maxInclusive): int  $rand  PRNG returning an int in
      *     0..$maxInclusive, endpoints included (Game's default wraps random_int)
      */
-    public static function makePipe(int $score, \Closure $rand): Pipe
+    public static function pipe(int $score, \Closure $rand): Pipe
     {
         $gapHeight = self::gapHeightForScore($score);
         $halfGap = intdiv($gapHeight, 2);
