@@ -56,6 +56,15 @@ final class DefaultPrefixer implements Prefixer
     private int $sepWidth      = 1;       // width of separator
     private int $prefixWidth   = 0;       // total prefix width (set by initPrefixer)
 
+    /**
+     * House factory (sugar-treelist-027): stock knobs, mirroring the Go
+     * NewPrefixer() constructor the field set parallels.
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
     public function initPrefixer(
         \Stringable $value,
         int $currentIndex,

@@ -29,6 +29,15 @@ final class DefaultSuffixer implements Suffixer
     private int $markerWidth = 1;
     private int $suffixWidth = 1;
 
+    /**
+     * House factory (sugar-treelist-027): stock marker, mirroring the Go
+     * NewSuffixer() constructor the field set parallels.
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
     public function initSuffixer(
         \Stringable $value,
         int $currentIndex,

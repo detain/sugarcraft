@@ -17,6 +17,15 @@ final class DefaultSuffixerTest extends TestCase
         $this->assertGreaterThan(0, $width);
     }
 
+    /** sugar-treelist-027: the house factory yields the stock marker. */
+    public function testNewFactoryReturnsStockMarkerInstance(): void
+    {
+        $s = DefaultSuffixer::new();
+        $this->assertSame('<', $s->currentMarker);
+        $this->assertSame(1, $s->initSuffixer(new StringItem('i'), 0, 0, 5, 80, 24));
+        $this->assertSame('<', $s->suffix(0, 1));
+    }
+
     public function testSuffixOnCursorFirstLineShowsMarker(): void
     {
         $s = new DefaultSuffixer();

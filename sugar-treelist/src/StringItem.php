@@ -16,6 +16,16 @@ final class StringItem implements \Stringable
         $this->value = $value;
     }
 
+    /**
+     * House factory (sugar-treelist-027): `StringItem::new($s)` mirrors the
+     * constructor. Model's intake doors normalize plain strings internally,
+     * so hand-wrapping is rarely needed; typed slots use this.
+     */
+    public static function new(string $value): self
+    {
+        return new self($value);
+    }
+
     public function __toString(): string
     {
         return $this->value;

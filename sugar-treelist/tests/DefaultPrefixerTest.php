@@ -30,6 +30,18 @@ final class DefaultPrefixerTest extends TestCase
         $this->assertSame(6, $width);
     }
 
+    /** sugar-treelist-027: the house factory yields the stock knob set. */
+    public function testNewFactoryReturnsStockKnobInstance(): void
+    {
+        $p = DefaultPrefixer::new();
+        $this->assertTrue($p->number);
+        $this->assertFalse($p->numberRelative);
+        $this->assertFalse($p->numberZeroBased);
+        $this->assertSame('>', $p->currentMarker);
+        $this->assertSame(6, $p->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 5));
+        $this->assertSame('╭ 1 > ', $p->prefix(0, 1));
+    }
+
     public function testNumberColumnPadsToTotalNotCurrentIndex(): void
     {
         // The M6 defect: item 9 reserved a narrower column than item 10.

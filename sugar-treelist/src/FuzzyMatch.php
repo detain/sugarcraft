@@ -83,6 +83,19 @@ final class FuzzyMatch
     }
 
     /**
+     * House factory (sugar-treelist-027): mirrors the constructor's defaults.
+     *
+     * @param ScoringProfile|null $profile Scoring weights (default: canonical)
+     */
+    public static function new(
+        ?ScoringProfile $profile = null,
+        int $maxCandidateLength = SmithWatermanMatcher::DEFAULT_MAX_CANDIDATE_LENGTH,
+        bool $strictMode = false,
+    ): self {
+        return new self($profile, $maxCandidateLength, $strictMode);
+    }
+
+    /**
      * Set a custom scoring profile.
      *
      * The candidate cap and strict-mode knobs survive the swap — only the

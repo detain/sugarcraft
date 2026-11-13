@@ -24,6 +24,22 @@ final class FuzzyMatchTest extends TestCase
         $this->assertSame(0, $this->matcher->score('', 'hello'));
     }
 
+    /** sugar-treelist-027: the house factory mirrors the constructor (defaults, knobs, refusal). */
+    public function testNewFactoryMirrorsConstructor(): void
+    {
+        $f = FuzzyMatch::new();
+        $this->assertSame($this->matcher->score('hel', 'hello'), $f->score('hel', 'hello'));
+
+        $strict = FuzzyMatch::new(strictMode: true);
+        $this->assertSame([], $strict->match('bxz', ['abcdef']), 'strict: lone b does not cover the query');
+        $default = $f->match('bxz', ['abcdef']);
+        $this->assertNotSame([], $default, 'default: scattered hit still matches');
+        $this->assertSame('abcdef', $default[0][0]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        FuzzyMatch::new(maxCandidateLength: 0);
+    }
+
     public function testScoreEmptyCandidateReturnsZero(): void
     {
         // Empty candidate is a non-match; return 0 (match() drops non-positive scores).

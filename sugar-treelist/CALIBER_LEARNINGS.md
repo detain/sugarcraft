@@ -29,3 +29,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - While a filter is active, every mutation applies to the authoritative list and re-derives the projection (`reapplyFilter()`); `removeItem()` re-anchors the cursor by item identity. A filter is a live view, not a one-time snapshot.
 - Cursor movement saturates (`withCursorUp(PHP_INT_MAX)` lands at 0, never overflows to float under `strict_types`); pages span `height` ITEMS, not displayed lines.
+
+## Naming and factories
+
+- House factory vocabulary (sugar-treelist-027, 2026-11-13): every src class mirrors its constructor as a static `new()` — `Model::new()`, `Item::new()` (the sanctioned @internal mint, see sugar-treelist-026), `StringItem::new()`, `FuzzyMatch::new()`, `DefaultPrefixer::new()`, `DefaultSuffixer::new()`. `::create()`/`::make()`/`::default()` stay banned. Direct construction of the public-ctor classes still works — `new()` is parity with the upstream Go `NewX()` shape, not an enforcement door.

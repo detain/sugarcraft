@@ -15,6 +15,15 @@ final class StringItemTest extends TestCase
         $this->assertSame('hello', $item->value);
     }
 
+    /** sugar-treelist-027: the house factory mirrors the constructor. */
+    public function testNewFactoryMirrorsConstructor(): void
+    {
+        $item = StringItem::new('factory');
+        $this->assertInstanceOf(StringItem::class, $item);
+        $this->assertSame('factory', $item->value);
+        $this->assertSame('factory', (string) $item);
+    }
+
     public function testToStringReturnsValue(): void
     {
         $item = new StringItem('world');
