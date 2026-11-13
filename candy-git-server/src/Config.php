@@ -68,8 +68,11 @@ final class Config
     /**
      * RESERVED — NOT yet enforced. No HTTPS/TLS listener is wired (that is a
      * separate feature), so populating these does NOT enable TLS. To avoid a
-     * false sense of security, setting BOTH paths is rejected at config load
-     * (see the constructor) rather than silently ignored.
+     * false sense of security, setting EITHER path alone is rejected at
+     * config load (see the constructor's ||-disjunction): a half-configured
+     * TLS pair is the mistake most likely to be made, and refusing it beats
+     * silently ignoring it (043 — the old docblock said "BOTH", understating
+     * the guard as a drift trap).
      */
     public readonly string $tlsKeyPath;
     public readonly string $tlsCertPath;
@@ -115,7 +118,7 @@ final class Config
     public readonly bool $lfsEnabled;
     public readonly bool $lfsSshEnabled;
 
-    /** Mirror job schedule (cron format). */
+    /** Mirror job schedule: `@every <duration>` or an `@hourly`-family alias; a full cron expression throws at load (Schedule). */
     public readonly string $mirrorPullSchedule;
 
     /** Stats server. */
@@ -163,6 +166,11 @@ final class Config
             'ssh'      => [
                 'listen_addr'      => ':23231',
                 'public_url'       => 'ssh://localhost:23231',
+                // @rename-keep 2026-11-13 (094): the soft_serve_* default key
+                // paths are deliberate relics — renaming them would silently
+                // orphan host/client keys already written at those paths,
+                // while ssh.key_path overrides per install. init emits these
+                // names into config.yaml for exactly that compatibility.
                 'key_path'         => 'ssh/soft_serve_host',
                 'client_key_path'  => 'ssh/soft_serve_client',
                 'max_timeout'      => 0,
@@ -207,6 +215,8 @@ final class Config
         $ssh = $data['ssh'] ?? [];
         $this->sshListenAddr    = (string) ($ssh['listen_addr'] ?? ':23231');
         $this->sshPublicUrl     = (string) ($ssh['public_url'] ?? "ssh://localhost:23231");
+        // @rename-keep 2026-11-13 (094): soft_serve_* fallbacks mirror the
+        // dated-keep defaults above (relic paths protect issued keys).
         $this->sshKeyPath       = $this->resolvePath((string) ($ssh['key_path'] ?? 'ssh/soft_serve_host'), $dataPath);
         $this->sshClientKeyPath = $this->resolvePath((string) ($ssh['client_key_path'] ?? 'ssh/soft_serve_client'), $dataPath);
         $this->sshMaxTimeout    = self::parseInt('ssh.max_timeout', $ssh['max_timeout'] ?? null, 0, 0);

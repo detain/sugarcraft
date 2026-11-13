@@ -472,6 +472,10 @@ function cmdInit(array $args): int
     }
 
     // Create config
+    // @rename-keep 2026-11-13 (094): the soft_serve_* key_path relic emitted
+    // below is a dated-keep default (Config::fromDefaults carries the full
+    // reason — renaming would silently orphan already-issued keys); the
+    // S38 wave annotates this skeleton's live/dead keys per line.
     $config = Config::fromDefaults();
     $configYaml = <<<YAML
 name: "CandyGitServer"

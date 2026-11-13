@@ -10,7 +10,7 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * Per-library translation facade for candy-git-server.
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
- * `'serve'` namespace baked in. Translated strings live in
+ * `'gitserver'` namespace baked in. Translated strings live in
  * {@see ../lang/en.php}.
  *
  * @extends BaseLang
