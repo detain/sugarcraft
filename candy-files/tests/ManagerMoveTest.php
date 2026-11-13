@@ -146,7 +146,7 @@ final class ManagerMoveTest extends TestCase
         $this->assertSame(ConfirmState::MoveSelected, $armed->confirm);
         [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
 
-        $this->assertSame('moved 1 entries (1 overwrote)', $done->status);
+        $this->assertSame('moved 1 entries (1 overwritten)', $done->status);
         $this->assertFileDoesNotExist($src);
         $this->assertFileExists($victim);
         $this->assertSame('payload', file_get_contents($victim), 'the replacement really happened');

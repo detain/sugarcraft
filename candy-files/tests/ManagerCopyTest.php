@@ -390,7 +390,7 @@ final class ManagerCopyTest extends TestCase
         [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
 
         $final = $this->runToCompletion($pending, $cmd);
-        $this->assertSame('copied 1 entries (1 overwrote)', $final->status);
+        $this->assertSame('copied 1 entries (1 overwritten)', $final->status);
         $this->assertSame('new bytes', file_get_contents($dstDir . '/dup.txt'));
     }
 

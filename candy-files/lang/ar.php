@@ -9,14 +9,14 @@
 declare(strict_types=1);
 
 return [
-    'confirm.delete' => 'حذف {names}؟ (y/n)',
-    'confirm.delete_permanent' => 'حذف {names}؟ نهائي (y/n)',
-    'confirm.copy' => 'نسخ {names} إلى {dest}؟ (y/n)',
-    'confirm.move' => 'نقل {names} إلى {dest}؟ (y/n)',
+    'confirm.delete' => 'حذف {names}؟ (ن/ل)',
+    'confirm.delete_permanent' => 'حذف {names}؟ نهائي (ن/ل)',
+    'confirm.copy' => 'نسخ {names} إلى {dest}؟ (ن/ل)',
+    'confirm.move' => 'نقل {names} إلى {dest}؟ (ن/ل)',
     'confirm.rename' => 'إعادة تسمية \'{name}\' إلى: ',
     'prompt.mkdir' => 'إنشاء مجلد: ',
     'confirm.selected_entries' => '{count} عناصر محددة',
-    'confirm.affirmative' => 'y',
+    'confirm.affirmative' => 'ن',
     'status.nothing_to_delete' => 'لا شيء للحذف',
     'status.nothing_to_copy' => 'لا شيء للنسخ',
     'status.nothing_to_move' => 'لا شيء للنقل',
@@ -63,7 +63,7 @@ return [
     'keyhelp.default' => 'Tab تبديل · ↑↓ jk حركة · Home/End g/G انتقال · Enter فتح · ← h للأعلى · مسافة تحديد · s ترتيب · . المخفية · c نسخ · m نقل · R إعادة تسمية · d حذف · r تحديث · q خروج · / بحث · Esc مسح · t تبويب مكرر · ^w إغلاق التبويب · ^tab تنقّل · ^PgUp/^PgDn تبويبات · u/^z تراجع · ^y إعادة',
     'keyhelp.terse' => 'Tab تبديل · ↑↓ jk حركة · Enter فتح · ← h للأعلى · مسافة تحديد · s ترتيب · c نسخ · m نقل · R إعادة تسمية · d حذف · q خروج · / بحث · u/^z تراجع · ^y إعادة',
     'keyhelp.minimal' => 'Enter فتح · q خروج · / بحث',
-    'search.no_match' => '(لا تطابقات)',
+    'search.no_match' => '(لا توجد مطابقة)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[مجلد]',
     'search.type_file' => '[ملف]',

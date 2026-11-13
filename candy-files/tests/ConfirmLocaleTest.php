@@ -133,6 +133,29 @@ final class ConfirmLocaleTest extends TestCase
         $this->assertFileDoesNotExist($file);
     }
 
+    /**
+     * CF-37 (closes 077): the ar prompt teaches (ن/ل) and the gate must
+     * honor the Arabic letter — the single-rune affirmative seam is
+     * script-agnostic, this pins that it actually works end to end.
+     */
+    public function testArabicAffirmativeProceedsMultibyte(): void
+    {
+        T::setLocale('ar');
+        [$armed, $file] = $this->armDeleteOnVictim();
+        [$done] = $armed->update(new KeyMsg(KeyType::Char, 'ن'));
+        $this->assertSame(ConfirmState::None, $done->confirm);
+        $this->assertFileDoesNotExist($file, 'the Arabic letter the prompt teaches must execute the delete');
+        $this->assertTrue($done->canUndo());
+    }
+
+    public function testLatinYStillProceedsUnderArabicPrompt(): void
+    {
+        T::setLocale('ar');
+        [$armed, $file] = $this->armDeleteOnVictim();
+        [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertFileDoesNotExist($file, 'the universal y fallback holds under every catalogue');
+    }
+
     public function testEnglishDefaultAcceptsYAndCancelsEverythingElse(): void
     {
         [$armed, $file] = $this->armDeleteOnVictim();

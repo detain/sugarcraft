@@ -461,7 +461,7 @@ final class ManagerRenameTest extends TestCase
         }
         [$done] = $armed->update(new KeyMsg(KeyType::Enter, ''));
 
-        $this->assertSame('renamed source.txt to victim.txt (1 overwrote)', $done->status);
+        $this->assertSame('renamed source.txt to victim.txt (1 overwritten)', $done->status);
         $this->assertFileDoesNotExist($this->tmpDir . '/source.txt');
         $this->assertSame('payload', file_get_contents($this->tmpDir . '/victim.txt'));
     }

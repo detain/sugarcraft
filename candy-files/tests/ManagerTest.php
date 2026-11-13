@@ -397,7 +397,7 @@ final class ManagerTest extends TestCase
     {
         $m = $this->start();
         $m = $m->closeTab();
-        $this->assertSame('Cannot close last tab', $m->status);
+        $this->assertSame('cannot close last tab', $m->status);
     }
 
     public function testSwitchTabChangesIndex(): void

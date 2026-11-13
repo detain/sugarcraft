@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Files\Entry;
+use SugarCraft\Files\Lang;
 use SugarCraft\Files\Manager;
 use SugarCraft\Files\Manager\ManagerBuilder;
 use SugarCraft\Files\Pane;
@@ -127,5 +128,23 @@ final class ChromeLangTest extends TestCase
             $this->assertSame($expect[$i], $sort->label(), $sort->value);
             $this->assertSame($i % 2 === 0, $sort->isAscending(), $sort->value);
         }
+    }
+
+    /**
+     * CF-37 (closes 076): the Italian catalogue shipped status.focus as a
+     * byte-identical English copy while cs/pl/fr/ja all adapted the label —
+     * pin that it is genuinely localized.
+     */
+    public function testTheItalianFocusLabelIsLocalized(): void
+    {
+        T::setLocale('en');
+        $english = Lang::t('status.focus', ['side' => 'left']);
+
+        T::setLocale('it');
+        $italian = Lang::t('status.focus', ['side' => 'sinistro']);
+
+        $this->assertStringContainsString('attivo:', $italian);
+        $this->assertNotSame(str_replace('left', 'sinistro', $english), $italian, 'not the English frame re-skinned');
+        $this->assertStringNotContainsString('focus:', $italian, 'the English label must be gone');
     }
 }

@@ -17,7 +17,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::delete($items);
 
-        $this->assertSame('delete 1 item(s)', $action->description);
+        $this->assertSame('items deleted: 1', $action->description);
         $this->assertSame($items, $action->items);
         $this->assertSame(UndoActionType::Delete, $action->type);
     }
@@ -31,7 +31,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::delete($items);
 
-        $this->assertSame('delete 3 item(s)', $action->description);
+        $this->assertSame('items deleted: 3', $action->description);
         $this->assertCount(3, $action->items);
         $this->assertSame(UndoActionType::Delete, $action->type);
     }
@@ -43,7 +43,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::delete($items);
 
-        $this->assertSame('delete 1 item(s)', $action->description);
+        $this->assertSame('items deleted: 1', $action->description);
         $this->assertTrue($action->items[0]['isDir']);
         $this->assertSame(UndoActionType::Delete, $action->type);
     }
@@ -55,7 +55,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::rename($renames);
 
-        $this->assertSame('rename 1 item(s)', $action->description);
+        $this->assertSame('items renamed: 1', $action->description);
         $this->assertSame($renames, $action->items);
         $this->assertSame(UndoActionType::Rename, $action->type);
     }
@@ -68,7 +68,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::rename($renames);
 
-        $this->assertSame('rename 2 item(s)', $action->description);
+        $this->assertSame('items renamed: 2', $action->description);
         $this->assertCount(2, $action->items);
         $this->assertSame(UndoActionType::Rename, $action->type);
     }
@@ -80,7 +80,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::move($moves);
 
-        $this->assertSame('move 1 item(s)', $action->description);
+        $this->assertSame('items moved: 1', $action->description);
         $this->assertSame($moves, $action->items);
         $this->assertSame(UndoActionType::Move, $action->type);
     }
@@ -93,7 +93,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::move($moves);
 
-        $this->assertSame('move 2 item(s)', $action->description);
+        $this->assertSame('items moved: 2', $action->description);
         $this->assertCount(2, $action->items);
         $this->assertSame(UndoActionType::Move, $action->type);
     }
@@ -105,7 +105,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::copy($copies);
 
-        $this->assertSame('copy 1 item(s)', $action->description);
+        $this->assertSame('items copied: 1', $action->description);
         $this->assertSame($copies, $action->items);
         $this->assertSame(UndoActionType::Copy, $action->type);
     }
@@ -118,7 +118,7 @@ final class UndoActionTest extends TestCase
         ];
         $action = UndoAction::copy($copies);
 
-        $this->assertSame('copy 2 item(s)', $action->description);
+        $this->assertSame('items copied: 2', $action->description);
         $this->assertCount(2, $action->items);
         $this->assertSame(UndoActionType::Copy, $action->type);
     }
@@ -127,7 +127,7 @@ final class UndoActionTest extends TestCase
     {
         $action = UndoAction::delete([]);
 
-        $this->assertSame('delete 0 item(s)', $action->description);
+        $this->assertSame('items deleted: 0', $action->description);
         $this->assertSame([], $action->items);
         $this->assertSame(UndoActionType::Delete, $action->type);
     }
@@ -136,7 +136,7 @@ final class UndoActionTest extends TestCase
     {
         $action = UndoAction::rename([]);
 
-        $this->assertSame('rename 0 item(s)', $action->description);
+        $this->assertSame('items renamed: 0', $action->description);
         $this->assertSame([], $action->items);
         $this->assertSame(UndoActionType::Rename, $action->type);
     }
@@ -145,7 +145,7 @@ final class UndoActionTest extends TestCase
     {
         $action = UndoAction::move([]);
 
-        $this->assertSame('move 0 item(s)', $action->description);
+        $this->assertSame('items moved: 0', $action->description);
         $this->assertSame([], $action->items);
         $this->assertSame(UndoActionType::Move, $action->type);
     }
@@ -154,7 +154,7 @@ final class UndoActionTest extends TestCase
     {
         $action = UndoAction::copy([]);
 
-        $this->assertSame('copy 0 item(s)', $action->description);
+        $this->assertSame('items copied: 0', $action->description);
         $this->assertSame([], $action->items);
         $this->assertSame(UndoActionType::Copy, $action->type);
     }
@@ -163,8 +163,8 @@ final class UndoActionTest extends TestCase
     {
         $action = UndoAction::delete([['path' => '/tmp/x', 'isDir' => false, 'content' => null, 'stat' => []]]);
 
-        $this->assertSame('delete 1 item(s)', $action->description);
-        $this->assertSame('delete 1 item(s)', $action->description); // Ensure it's consistent
+        $this->assertSame('items deleted: 1', $action->description);
+        $this->assertSame('items deleted: 1', $action->description); // Ensure it's consistent
         $this->assertSame(UndoActionType::Delete, $action->type);
     }
 
