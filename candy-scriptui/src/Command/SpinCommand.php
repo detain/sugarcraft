@@ -27,6 +27,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.spin.
  * Run a command while showing a spinner.
  *
  *   $ candy-scriptui spin --title "Building..." -- npm run build
@@ -112,7 +113,7 @@ final class SpinCommand extends Command
             ->addOption('show-stdout', null, InputOption::VALUE_NONE,    'Alias for --show-output.')
             ->addOption('show-stderr', null, InputOption::VALUE_NONE,    'Alias for --show-error.')
             ->addOption('align',       'a',  InputOption::VALUE_REQUIRED, 'Title position relative to the spinner: left | right.', 'left')
-            ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
             ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Kill the spawned command after N seconds (0 = no limit).', 0);
     }
 

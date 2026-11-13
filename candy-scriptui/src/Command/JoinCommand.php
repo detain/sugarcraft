@@ -13,6 +13,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.join.
  * Concatenate every argument with a separator, optionally with horizontal
  * (per-line) joining. Lipgloss's `JoinHorizontal` / `JoinVertical` ship
  * here as `--horizontal` / `--vertical` modes. Reads from stdin when no
@@ -35,7 +36,7 @@ final class JoinCommand extends Command
               . "Vertical mode:   left|center|right (horizontal alignment of lines of unequal width).",
                 'top'
             )
-            ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
+            ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (candy extension).')
             ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive join).', 0);
     }
 

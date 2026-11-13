@@ -24,6 +24,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.choose.
  * Pick a single item from an interactive list. Prints the chosen text on
  * stdout; exits 1 when the user aborts.
  */
@@ -48,7 +49,7 @@ final class ChooseCommand extends Command
             ->addOption('cursor-prefix', null, InputOption::VALUE_REQUIRED, 'Alias for --cursor (single glyph).', null)
             ->addOption('selected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before checked items (multi mode; default check mark).', null)
             ->addOption('unselected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before non-cursor items.', null)
-            ->addOption('show-help', null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
+            ->addOption('show-help', null, InputOption::VALUE_NONE,    'Alias for --help (candy extension).')
             ->addOption('no-selected', null, InputOption::VALUE_REQUIRED, 'Message printed (with a non-zero exit) when the user exits without a selection.', null)
             ->addOption('width', null, InputOption::VALUE_REQUIRED, 'List width in cells (0 = auto).', 0)
             ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')

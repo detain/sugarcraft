@@ -17,6 +17,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.completion.
  * Built-in command that emits shell completion scripts for bash, zsh, and fish.
  */
 #[AsCommand(

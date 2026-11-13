@@ -21,6 +21,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.pager.
  * Scroll long input. Reads from stdin or `--file` and lets the user
  * navigate with the standard pager keys (↑/↓ / PgUp / PgDn / Home / End
  * / `q` to quit). Quitting with q or Esc exits 0; Ctrl+C exits 130, a
@@ -38,7 +39,7 @@ final class PagerCommand extends Command
             ->addOption('show-line-numbers',  null, InputOption::VALUE_NONE,     'Prefix every line with a 1-based line number.')
             ->addOption('match',              null, InputOption::VALUE_REQUIRED, 'Highlight every case-insensitive occurrence of the substring.', '')
             ->addOption('soft-wrap',          null, InputOption::VALUE_NONE,     'Wrap long lines at the pager width instead of clipping.')
-            ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
             ->addOption('no-alt-screen',      null, InputOption::VALUE_NONE,     'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-exit after N seconds (0 = none).', 0);
 

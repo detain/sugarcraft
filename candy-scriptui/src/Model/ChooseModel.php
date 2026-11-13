@@ -19,6 +19,7 @@ use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
+ * Mirrors charmbracelet/gum.choose (the interactive list).
  * Selection chooser used by {@see \SugarCraft\ScriptUi\Command\ChooseCommand}.
  *
  * Two modes:

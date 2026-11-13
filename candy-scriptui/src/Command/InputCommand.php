@@ -22,6 +22,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.input.
  * Read a single line from the user. Prints the entered value on stdout;
  * exits 1 when aborted (Esc), 130 on Ctrl+C cancellation, 124 when a
  * --timeout deadline elapses, and 128+signum on an OS signal.
@@ -42,7 +43,7 @@ final class InputCommand extends Command
             ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header text rendered above the prompt.', '')
             ->addOption('strip-ansi',  null, InputOption::VALUE_NONE,     'Strip ANSI escapes from the printed result.')
             ->addOption('cursor-mode', null, InputOption::VALUE_REQUIRED, 'Cursor mode: blink (default) | static | hidden.', 'blink')
-            ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
             ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
 
         // scriptui-26: themed frames (border/margin/padding/colour/decoration).

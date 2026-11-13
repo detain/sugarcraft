@@ -15,6 +15,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 
 /**
+ * Mirrors charmbracelet/gum.input (the single-line editor).
  * Single-line prompt used by {@see \SugarCraft\ScriptUi\Command\InputCommand}.
  * Wraps {@see TextInput}; Enter submits, Esc/Ctrl-C aborts.
  */

@@ -8,6 +8,7 @@ use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 
 /**
+ * Mirrors charmbracelet/gum.completion (the zsh emitter).
  * Generates Zsh completion script for a Symfony Console application.
  * Dynamically inspects the application to produce completions for all
  * registered commands and their flags.

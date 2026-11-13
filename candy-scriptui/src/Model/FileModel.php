@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 
 /**
+ * Mirrors charmbracelet/gum.file (the directory browser).
  * Filesystem picker used by {@see \SugarCraft\ScriptUi\Command\FileCommand}.
  * Wraps {@see FilePicker}; the picker handles Enter/Backspace internally
  * for navigation; we add Esc/Ctrl-C abort and short-circuit when a path

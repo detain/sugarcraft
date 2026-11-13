@@ -16,6 +16,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.style.
  * Apply ANSI styling to its argument text (or stdin when no
  * arguments are given) and print the result.
  *
@@ -47,7 +48,7 @@ final class StyleCommand extends Command
             ->addOption('trim',               null, InputOption::VALUE_NONE,     'Trim trailing whitespace from each line.')
             ->addOption('strip-ansi',         null, InputOption::VALUE_NONE,     'Strip ANSI escapes from input before styling.')
             ->addOption('raw',                null, InputOption::VALUE_NONE,     'Emit data bytes verbatim, skipping the control-byte display policy (trusted pipelines only).')
-            ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive style).', 0);
     }
 

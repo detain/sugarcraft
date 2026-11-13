@@ -14,6 +14,7 @@ use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\ScriptUi\Runtime\Emphasis;
 
 /**
+ * Mirrors charmbracelet/gum.confirm (the answer model).
  * Yes/no prompt used by {@see \SugarCraft\ScriptUi\Command\ConfirmCommand}.
  * Wraps {@see Confirm}; Enter / `y` / `n` commit, Esc/Ctrl-C aborts.
  *

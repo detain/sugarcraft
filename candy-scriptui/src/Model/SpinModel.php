@@ -16,6 +16,7 @@ use SugarCraft\ScriptUi\Process\Process;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 
 /**
+ * Mirrors charmbracelet/gum.spin (the spinner view).
  * Run a child {@see Process} while a {@see Spinner} animates beside an
  * optional status title. Each spinner tick polls the process; when the
  * child exits, the model captures its code and stops the loop. Pressing

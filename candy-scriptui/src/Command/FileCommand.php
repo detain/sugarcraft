@@ -23,6 +23,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.file.
  * Browse the filesystem and print the chosen file path. ↑/↓ navigate;
  * Enter descends into directories or selects files; Backspace ascends
  * to the parent. Esc aborts with exit 1; Ctrl-C exits 130 and a
@@ -44,7 +45,7 @@ final class FileCommand extends Command
             ->addOption('directory', null, InputOption::VALUE_NONE,     'Allow selecting directories.')
             ->addOption('file',      null, InputOption::VALUE_NONE,     'Allow selecting files (default).')
             ->addOption('show-size', null, InputOption::VALUE_NONE,     'Render the file-size column.')
-            ->addOption('show-help', null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('show-help', null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
             ->addOption('extensions', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Only show files with these extensions; repeatable and comma-split (.png,.jpg).', [])
             ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, max 86400).', 0);

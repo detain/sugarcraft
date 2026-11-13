@@ -22,6 +22,7 @@ use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
+ * Mirrors charmbracelet/gum.filter (the query-over-lines view).
  * Variant of {@see ChooseModel} that opens directly in filter mode and
  * sends every keystroke to the inner {@see ItemList}'s filter buffer.
  * Enter on the highlighted result submits; Esc / Ctrl-C aborts.

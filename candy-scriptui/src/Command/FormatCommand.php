@@ -16,6 +16,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.format.
  * Render a Markdown file (or stdin) as styled ANSI text using
  * {@see \SugarCraft\Markdown\Renderer}. Non-interactive — produces output
  * straight to stdout so it pipelines naturally:
@@ -41,7 +42,7 @@ final class FormatCommand extends Command
             ->addOption('language', 'l', InputOption::VALUE_REQUIRED, 'Source language for `--type code`.', '')
             ->addOption('allow-env', null, InputOption::VALUE_REQUIRED, 'Comma-separated allowlist of env var names permitted for {{VAR}} expansion in --type template. Empty = expand none; "*" = expand all (opt-in, unsafe with untrusted input).', '')
             ->addOption('strip-ansi', null, InputOption::VALUE_NONE, 'Strip ANSI escapes from the rendered output.')
-            ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
+            ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (candy extension).')
             ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Accepted for flag parity; a non-zero value is refused loudly because format is non-interactive.', 0);
     }
 

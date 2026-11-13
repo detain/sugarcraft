@@ -17,6 +17,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.table.
  * Render CSV / TSV from a file or stdin as a styled
  * {@see \SugarCraft\Style\Table\Table}.
  *

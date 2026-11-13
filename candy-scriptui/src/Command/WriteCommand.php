@@ -21,6 +21,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.write.
  * Multi-line text editor. Press Ctrl+D to submit; Esc aborts (exit 1),
  * Ctrl+C cancels (exit 130), a --timeout deadline exits 124, and an OS
  * signal exits 128+signum. Submitted text is printed verbatim on stdout.
@@ -42,7 +43,7 @@ final class WriteCommand extends Command
             ->addOption('header',             null, InputOption::VALUE_REQUIRED, 'Header text rendered above the editor.', '')
             ->addOption('end-of-buffer-character', null, InputOption::VALUE_REQUIRED, "Glyph rendered on lines past the buffer end (default '~').")
             ->addOption('cursor-mode',        null, InputOption::VALUE_REQUIRED, 'Cursor mode: blink (default) | static | hidden.', 'blink')
-            ->addOption('show-help',          null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
+            ->addOption('show-help',          null, InputOption::VALUE_NONE,    'Alias for --help (candy extension).')
             ->addOption('no-alt-screen',      null, InputOption::VALUE_NONE,     'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
 

@@ -14,6 +14,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.log.
  * Print a styled log line. The level badge (DEBUG / INFO / WARN / ERROR
  * / FATAL) is rendered in a colour matching the level; the message text
  * follows verbatim. Useful for shell scripts that want consistent log
@@ -37,7 +38,7 @@ final class LogCommand extends Command
             ->addOption('format',    'f',   InputOption::VALUE_REQUIRED, 'printf format for the message; "%s" is the text.', '')
             ->addOption('formatter', null,  InputOption::VALUE_REQUIRED, 'Output formatter: text (default) | json | logfmt.', 'text')
             ->addOption('structured', 's',  InputOption::VALUE_NONE,    'Alias for --formatter logfmt.')
-            ->addOption('show-help',  null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
+            ->addOption('show-help',  null, InputOption::VALUE_NONE,    'Alias for --help (candy extension).')
             ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive log).', 0);
     }
 

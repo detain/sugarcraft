@@ -23,6 +23,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.filter.
  * Pick one line from stdin via incremental fuzzy filter. Designed for
  * pipelines:
  *
@@ -58,10 +59,10 @@ final class FilterCommand extends Command
             ->addOption('unselected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before non-cursor items.', null)
             ->addOption('strict', null, InputOption::VALUE_NONE, 'Substring-only match (the default — flag accepted for gum compat).')
             ->addOption('fuzzy', null, InputOption::VALUE_NONE, 'Fuzzy match using Smith-Waterman scoring with highlight indices.')
-            ->addOption('no-fuzzy', null, InputOption::VALUE_NONE, 'Disable fuzzy matching (default — gum compat).')
+            ->addOption('no-fuzzy', null, InputOption::VALUE_NONE, 'Disable fuzzy matching (default — candy extension).')
             ->addOption('width', null, InputOption::VALUE_REQUIRED, 'Cap rendered width in cells (0 = auto).', 0)
             ->addOption('print-query', null, InputOption::VALUE_NONE, 'Print the final filter text on its own line before the result (gum compat).')
-            ->addOption('show-help', null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
+            ->addOption('show-help', null, InputOption::VALUE_NONE, 'Alias for --help (candy extension).')
             ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
 

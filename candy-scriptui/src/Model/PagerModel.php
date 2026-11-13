@@ -17,6 +17,7 @@ use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
+ * Mirrors charmbracelet/gum.pager (the scrollback model).
  * Read-only pager used by {@see \SugarCraft\ScriptUi\Command\PagerCommand}.
  * Wraps a {@see Viewport}; Esc / `q` / Ctrl-C exit. Standard navigation
  * keys (↑/↓/jk, PgUp/PgDn/space/b/f, Home/g/End/G, Ctrl-U/D) come from
@@ -91,8 +92,8 @@ final class PagerModel implements Model
 
     /**
      * Wrap every case-insensitive occurrence of `$needle` in reverse-
-     * video so users can spot it as the viewport scrolls. Mirrors
-     * gum's `--match` flag (substring-only — no regex).
+     * video so users can spot it as the viewport scrolls. Candy
+     * extension — not an established gum flag; substring-only, no regex.
      */
     private static function highlightMatches(string $content, string $needle): string
     {

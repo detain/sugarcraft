@@ -21,6 +21,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
+ * Mirrors charmbracelet/gum.confirm.
  * Confirmation prompt. Exit code reflects the answer: 0 for yes, 1 for
  * no, 2 for an Esc abort, 130 for a Ctrl+C cancellation (typed or
  * kill -INT), 124 when a --timeout deadline elapses, and 128+signum for
@@ -44,7 +45,7 @@ final class ConfirmCommand extends Command
             ->addOption('negative',    null, InputOption::VALUE_REQUIRED, 'Label for the no option.',   'No')
             ->addOption('show-output', null, InputOption::VALUE_NONE,     'Print the chosen label on stdout.')
             ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header banner rendered above the prompt.', '')
-            ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
             ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
 
         // scriptui-26: themed frames (border/margin/padding/colour/decoration).

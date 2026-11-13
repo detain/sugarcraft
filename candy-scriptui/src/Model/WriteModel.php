@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 
 /**
+ * Mirrors charmbracelet/gum.write (the multi-line editor).
  * Multi-line editor used by {@see \SugarCraft\ScriptUi\Command\WriteCommand}.
  * Wraps {@see TextArea}; **Ctrl+D** submits (Enter inserts a newline,
  * matching most multi-line editors), **Esc / Ctrl+C** abort.
