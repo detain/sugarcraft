@@ -194,4 +194,47 @@ final class PointTest extends TestCase
             yield "{$axis} -INF" => [$axis, -INF];
         }
     }
+
+    // ── SPR-24 (finding 074): fromArray — the missing half of the wire ─────
+
+    public function testFromArrayRoundTripsTheSerializedWire(): void
+    {
+        $point = new Point(1.5, -2.25, 3.0);
+        $wire  = json_decode(json_encode($point), true);
+
+        $rebuilt = Point::fromArray($wire);
+        $this->assertEquals($point, $rebuilt);
+        $this->assertSame([1.5, -2.25, 3.0], $rebuilt->jsonSerialize());
+    }
+
+    public function testFromArrayWidensIntegerComponents(): void
+    {
+        $rebuilt = Point::fromArray([1, 2, 3]);
+        $this->assertSame([1.0, 2.0, 3.0], $rebuilt->jsonSerialize());
+    }
+
+    /** @dataProvider malformedWireProvider */
+    public function testFromArrayRefusesMalformedWires(array $wire, string $needle): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage($needle);
+        Point::fromArray($wire);
+    }
+
+    /** @return iterable<string, array{array, string}> */
+    public static function malformedWireProvider(): iterable
+    {
+        yield 'empty'          => [[], 'expects the positional'];
+        yield 'two entries'    => [[1.0, 2.0], 'expects the positional'];
+        yield 'keyed map'      => [['x' => 1.0, 'y' => 2.0, 'z' => 3.0], 'expects the positional'];
+        yield 'string member'  => [['1.5', 0.0, 0.0], 'needs int or float'];
+        yield 'bool member'    => [[false, 0.0, 0.0], 'needs int or float'];
+    }
+
+    public function testFromArrayDefersFinitenessToTheConstructorDoor(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Point components must be finite');
+        Point::fromArray([0.0, NAN, 0.0]);
+    }
 }

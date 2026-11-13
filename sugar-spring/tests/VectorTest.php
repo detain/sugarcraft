@@ -314,4 +314,56 @@ final class VectorTest extends TestCase
         $this->expectExceptionMessage('Cannot normalize a zero-length vector');
         (new Vector(1e-10, 0.0, 0.0))->normalize();
     }
+
+    // ── SPR-24 (finding 074): fromArray — the missing half of the wire ─────
+
+    public function testFromArrayRoundTripsTheSerializedWire(): void
+    {
+        $vector = new Vector(1.5, -2.25, 3.0);
+        $wire   = json_decode(json_encode($vector), true);
+
+        $rebuilt = Vector::fromArray($wire);
+        $this->assertEquals($vector, $rebuilt);
+        $this->assertSame([1.5, -2.25, 3.0], $rebuilt->jsonSerialize());
+    }
+
+    public function testFromArrayWidensIntegerComponents(): void
+    {
+        // json_decode answers int for whole numbers — the door widens, it
+        // does not demand pre-floated payloads.
+        $rebuilt = Vector::fromArray([1, 2, 3]);
+        $this->assertSame([1.0, 2.0, 3.0], $rebuilt->jsonSerialize());
+    }
+
+    /** @dataProvider malformedWireProvider */
+    public function testFromArrayRefusesMalformedWires(array $wire, string $needle): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage($needle);
+        Vector::fromArray($wire);
+    }
+
+    /** @return iterable<string, array{array, string}> */
+    public static function malformedWireProvider(): iterable
+    {
+        yield 'empty'            => [[], 'expects the positional'];
+        yield 'two entries'      => [[1.0, 2.0], 'expects the positional'];
+        yield 'four entries'     => [[1.0, 2.0, 3.0, 4.0], 'expects the positional'];
+        yield 'keyed map'        => [['x' => 1.0, 'y' => 2.0, 'z' => 3.0], 'expects the positional'];
+        yield 'reordered keys'   => [[1 => 2.0, 0 => 1.0, 2 => 3.0], 'expects the positional'];
+        yield 'numeric string'   => [['1.5', 0.0, 0.0], 'needs int or float'];
+        yield 'null member'      => [[null, 0.0, 0.0], 'needs int or float'];
+        yield 'bool member'      => [[true, 0.0, 0.0], 'needs int or float'];
+        yield 'nested array'     => [[[1.0], 0.0, 0.0], 'needs int or float'];
+    }
+
+    public function testFromArrayDefersFinitenessToTheConstructorDoor(): void
+    {
+        // One guard, no duplicated policy: arity/type are fromArray's, the
+        // finite-components census is the constructor's — so the message is
+        // the constructor's.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Vector components must be finite');
+        Vector::fromArray([INF, 0.0, 0.0]);
+    }
 }

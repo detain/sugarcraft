@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection enthält in {plane} die unbekannte Feder-ID "{id}"',
     'spring.unknown_id' => 'SpringCollection hat keine Feder mit der ID "{id}"',
     'vector.components_finite' => 'Vector-Komponenten müssen endlich sein; erhalten: x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray erwartet die positionale [x, y, z]-Liste von jsonSerialize; {n} Einträge erhalten',
+    'wire.member' => '{class}::fromArray benötigt int- oder float-Einträge; Eintrag {index} ist {type}',
     'vector.normalize_zero' => 'Ein Vektor der Länge Null kann nicht normalisiert werden',
     'vector.normalize_overflow' => 'Ein Vektor, dessen Länge zu Unendlich übergelaufen ist, kann nicht normalisiert werden; erhalten: length={length}',
     'point.components_finite' => 'Point-Komponenten müssen endlich sein; erhalten: x={x}, y={y}, z={z}',

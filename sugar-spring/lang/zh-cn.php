@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection 的 {plane} 中包含未知的弹簧 id "{id}"',
     'spring.unknown_id' => 'SpringCollection 没有 id 为 "{id}" 的弹簧',
     'vector.components_finite' => 'Vector 分量必须为有限值；得到 x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray 需要 jsonSerialize 发出的按位 [x, y, z] 列表；收到 {n} 个元素',
+    'wire.member' => '{class}::fromArray 需要 int 或 float 元素；第 {index} 个元素的类型为 {type}',
     'vector.normalize_zero' => '无法归一化长度为零的向量',
     'vector.normalize_overflow' => '无法归一化长度溢出为无穷大的向量；得到 length={length}',
     'point.components_finite' => 'Point 分量必须为有限值；得到 x={x}, y={y}, z={z}',

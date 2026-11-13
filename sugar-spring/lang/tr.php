@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection, {plane} içinde bilinmeyen yay kimliği "{id}" taşıyor',
     'spring.unknown_id' => 'SpringCollection, "{id}" kimliğine sahip bir yay içermiyor',
     'vector.components_finite' => 'Vector bileşenleri sonlu olmalı; alınan x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray, jsonSerialize tarafından üretilen konumsal [x, y, z] listesini bekler; {n} öğe alındı',
+    'wire.member' => '{class}::fromArray int veya float girdi bekler; girdi {index} tipi {type}',
     'vector.normalize_zero' => 'uzunluğu sıfır olan vektör normalize edilemez',
     'vector.normalize_overflow' => 'uzunluğu sonsuzluğa taşan vektör normalize edilemez; alınan length={length}',
     'point.components_finite' => 'Point bileşenleri sonlu olmalı; alınan x={x}, y={y}, z={z}',

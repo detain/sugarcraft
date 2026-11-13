@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection contém em {plane} o id de mola desconhecido "{id}"',
     'spring.unknown_id' => 'SpringCollection não tem nenhuma mola com o id "{id}"',
     'vector.components_finite' => 'os componentes de Vector devem ser finitos; obtido x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray espera a lista posicional [x, y, z] emitida pelo jsonSerialize; obtidos {n} elementos',
+    'wire.member' => '{class}::fromArray precisa de entradas int ou float; a entrada {index} é {type}',
     'vector.normalize_zero' => 'não é possível normalizar um vetor de comprimento zero',
     'vector.normalize_overflow' => 'não é possível normalizar um vetor cujo comprimento estourou para infinito; obtido length={length}',
     'point.components_finite' => 'os componentes de Point devem ser finitos; obtido x={x}, y={y}, z={z}',

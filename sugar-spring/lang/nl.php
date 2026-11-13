@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection bevat in {plane} de onbekende veer-id "{id}"',
     'spring.unknown_id' => 'SpringCollection heeft geen veer met id "{id}"',
     'vector.components_finite' => 'componenten van Vector moeten eindig zijn; gekregen x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray verwacht de positionele [x, y, z]-lijst van jsonSerialize; {n} items ontvangen',
+    'wire.member' => '{class}::fromArray heeft int- of float-items nodig; item {index} is van type {type}',
     'vector.normalize_zero' => 'kan een vector met lengte nul niet normaliseren',
     'vector.normalize_overflow' => 'kan een vector wiens lengte naar oneindig is geoverload niet normaliseren; gekregen length={length}',
     'point.components_finite' => 'componenten van Point moeten eindig zijn; gekregen x={x}, y={y}, z={z}',

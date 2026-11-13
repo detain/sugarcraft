@@ -78,6 +78,45 @@ final class Point implements \JsonSerializable
     }
 
     /**
+     * Rebuild from the wire format {@see jsonSerialize()} emits: a positional
+     * `[x, y, z]` list (Point carries z like Vector — the serializer always
+     * emits three entries). **The index order is contractual and frozen**:
+     * this method and the serializer are two halves of one wire format. int
+     * entries (json_decode of `1` answers int) are widened here; wrong arity
+     * or type is refused before the constructor sees a partial tuple, and
+     * finiteness stays the constructor's own door.
+     *
+     * @param array<array-key, mixed> $wire
+     * @throws \InvalidArgumentException on wrong arity, a non-numeric entry,
+     *         or (via the constructor) a non-finite component.
+     */
+    public static function fromArray(array $wire): self
+    {
+        if (array_keys($wire) !== [0, 1, 2]) {
+            throw new \InvalidArgumentException(Lang::t('wire.arity', [
+                'class' => 'Point',
+                'n' => count($wire),
+            ]));
+        }
+        $components = [];
+        foreach ($wire as $index => $value) {
+            if (!is_int($value) && !is_float($value)) {
+                throw new \InvalidArgumentException(Lang::t('wire.member', [
+                    'class' => 'Point',
+                    'index' => $index,
+                    'type' => get_debug_type($value),
+                ]));
+            }
+            $components[] = (float) $value;
+        }
+        return new self(...$components);
+    }
+
+    /**
+     * Wire format: positional `[x, y, z]`. The index order is contractual —
+     * {@see fromArray()} decodes this exact shape and a re-ordered or keyed
+     * payload is a breaking change, not a style edit.
+     *
      * @return array{0: float, 1: float, 2: float}
      */
     public function jsonSerialize(): array

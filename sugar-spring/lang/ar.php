@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'تحتوي SpringCollection في {plane} على مُعرِّف نابض غير معروف "{id}"',
     'spring.unknown_id' => 'لا تحتوي SpringCollection على نابض بالمُعرِّف "{id}"',
     'vector.components_finite' => 'يجب أن تكون مركبات Vector منتهية؛ المُدخل x={x}, y={y}, z={z}',
+    'wire.arity' => 'يتوقع {class}::fromArray القائمة الموقعية [x, y, z] التي يصدرها jsonSerialize؛ عدد العناصر {n}',
+    'wire.member' => '{class}::fromArray يحتاج عناصر عددية (int أو float)؛ العنصر {index} من النوع {type}',
     'vector.normalize_zero' => 'لا يمكن تطبيع متجه بطول صفر',
     'vector.normalize_overflow' => 'لا يمكن تطبيع متجه فاض طوله إلى اللانهاية؛ المُدخل length={length}',
     'point.components_finite' => 'يجب أن تكون مركبات Point منتهية؛ المُدخل x={x}, y={y}, z={z}',

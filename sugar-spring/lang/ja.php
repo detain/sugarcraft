@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection の {plane} に不明なばね ID "{id}" が含まれています',
     'spring.unknown_id' => 'SpringCollection に ID "{id}" のばねはありません',
     'vector.components_finite' => 'Vector の成分は有限値でなければなりません。取得値: x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray は jsonSerialize が出力する位置指定の [x, y, z] リストを期待していますが、{n} 個の要素を受け取りました',
+    'wire.member' => '{class}::fromArray には int または float の要素が必要です。要素 {index} の型は {type} です',
     'vector.normalize_zero' => '長さがゼロのベクトルは正規化できません',
     'vector.normalize_overflow' => '長さが無限大にオーバーフローしたベクトルは正規化できません。取得値: length={length}',
     'point.components_finite' => 'Point の成分は有限値でなければなりません。取得値: x={x}, y={y}, z={z}',

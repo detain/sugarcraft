@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection contiene en {plane} el id de resorte desconocido "{id}"',
     'spring.unknown_id' => 'SpringCollection no tiene ningún resorte con el id "{id}"',
     'vector.components_finite' => 'los componentes de Vector deben ser finitos; se obtuvo x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray espera la lista posicional [x, y, z] que emite jsonSerialize; se obtuvieron {n} elementos',
+    'wire.member' => '{class}::fromArray necesita entradas int o float; la entrada {index} es {type}',
     'vector.normalize_zero' => 'no se puede normalizar un vector de longitud cero',
     'vector.normalize_overflow' => 'no se puede normalizar un vector cuya longitud desbordó a infinito; se obtuvo length={length}',
     'point.components_finite' => 'los componentes de Point deben ser finitos; se obtuvo x={x}, y={y}, z={z}',

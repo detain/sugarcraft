@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection obsahuje v {plane} neznámé id pružiny "{id}"',
     'spring.unknown_id' => 'SpringCollection nemá žádnou pružinu s id "{id}"',
     'vector.components_finite' => 'souřadnice Vector musí být konečné; obdrženo x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray očekává poziční seznam [x, y, z] vydaný jsonSerialize; obdrženo {n} položek',
+    'wire.member' => '{class}::fromArray vyžaduje položky int nebo float; položka {index} je {type}',
     'vector.normalize_zero' => 'nelze normalizovat vektor o nulové délce',
     'vector.normalize_overflow' => 'nelze normalizovat vektor, jehož délka přetekla do nekonečna; obdrženo length={length}',
     'point.components_finite' => 'souřadnice Point musí být konečné; obdrženo x={x}, y={y}, z={z}',

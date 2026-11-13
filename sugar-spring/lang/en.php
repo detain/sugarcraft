@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection {plane} carries unknown spring id "{id}"',
     'spring.unknown_id' => 'SpringCollection has no spring with id "{id}"',
     'vector.components_finite' => 'Vector components must be finite; got x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray expects the positional [x, y, z] list jsonSerialize emits; got {n} entries',
+    'wire.member' => '{class}::fromArray needs int or float entries; entry {index} is {type}',
     'vector.normalize_zero' => 'Cannot normalize a zero-length vector',
     'vector.normalize_overflow' => 'Cannot normalize a vector whose length overflowed to infinity; got length={length}',
     'point.components_finite' => 'Point components must be finite; got x={x}, y={y}, z={z}',

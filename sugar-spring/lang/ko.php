@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection의 {plane}에 알 수 없는 스프링 ID "{id}"가 있습니다',
     'spring.unknown_id' => 'SpringCollection에 ID "{id}"를 가진 스프링이 없습니다',
     'vector.components_finite' => 'Vector 성분은 유한해야 합니다. 입력값: x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray은 jsonSerialize가 내보내는 순서 기반 [x, y, z] 목록을 기대합니다. {n}개의 항목을 받았습니다',
+    'wire.member' => '{class}::fromArray은 int 또는 float 항목을 기대합니다. 항목 {index}의 유형: {type}',
     'vector.normalize_zero' => '길이가 0인 벡터는 정규화할 수 없습니다',
     'vector.normalize_overflow' => '길이가 무한대로 오버플로된 벡터는 정규화할 수 없습니다. 입력값: length={length}',
     'point.components_finite' => 'Point 성분은 유한해야 합니다. 입력값: x={x}, y={y}, z={z}',

@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection zawiera w {plane} nieznany identyfikator sprężyny "{id}"',
     'spring.unknown_id' => 'SpringCollection nie ma sprężyny o identyfikatorze "{id}"',
     'vector.components_finite' => 'składowe Vector muszą być skończone; otrzymano x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray oczekuje pozycyjnej listy [x, y, z] emitowanej przez jsonSerialize; otrzymano {n} elementów',
+    'wire.member' => '{class}::fromArray wymaga wpisów int lub float; wpis {index} ma typ {type}',
     'vector.normalize_zero' => 'nie można znormalizować wektora o długości zero',
     'vector.normalize_overflow' => 'nie można znormalizować wektora, którego długość przebrała się do nieskończoności; otrzymano length={length}',
     'point.components_finite' => 'składowe Point muszą być skończone; otrzymano x={x}, y={y}, z={z}',

@@ -163,6 +163,48 @@ final class Vector implements \JsonSerializable
     }
 
     /**
+     * Rebuild from the wire format {@see jsonSerialize()} emits: a positional
+     * `[x, y, z]` list. **The index order is contractual and frozen** — this
+     * method and the serializer are two halves of one wire format, so no
+     * component may ever move or gain a name. int entries (json_decode of
+     * `1` answers int) are widened here; everything else about the members —
+     * type, arity — is refused before the constructor ever sees a partial
+     * tuple, and finiteness stays the constructor's own door (one guard, no
+     * duplicated policy).
+     *
+     * @param array<array-key, mixed> $wire
+     * @throws \InvalidArgumentException on wrong arity, a non-numeric entry,
+     *         or (via the constructor) a non-finite component — the data
+     *         plane, per the class taxonomy.
+     */
+    public static function fromArray(array $wire): self
+    {
+        if (array_keys($wire) !== [0, 1, 2]) {
+            throw new \InvalidArgumentException(Lang::t('wire.arity', [
+                'class' => 'Vector',
+                'n' => count($wire),
+            ]));
+        }
+        $components = [];
+        foreach ($wire as $index => $value) {
+            if (!is_int($value) && !is_float($value)) {
+                throw new \InvalidArgumentException(Lang::t('wire.member', [
+                    'class' => 'Vector',
+                    'index' => $index,
+                    'type' => get_debug_type($value),
+                ]));
+            }
+            $components[] = (float) $value;
+        }
+        return new self(...$components);
+    }
+
+    /**
+     * Wire format: positional `[x, y, z]`. The index order is contractual —
+     * {@see fromArray()} decodes this exact shape and a re-ordered or keyed
+     * payload is a breaking change to every serialized vector, not a style
+     * edit.
+     *
      * @return array{0: float, 1: float, 2: float}
      */
     public function jsonSerialize(): array

@@ -648,11 +648,17 @@ back-flavoured control points — same honesty rule as `Easing`.
   `sub` / `scale` / `length` / `lengthSquared` / `dot` / `cross` / `lerp` /
   `normalize` (throws `RuntimeException` — zero-band and overflowed lengths;
   NOT the constructors' `InvalidArgumentException`) / `jsonSerialize` /
-  `__toString` / `Vector::zero()`.
+  `Vector::fromArray` / `__toString` / `Vector::zero()`.
 - **`Point`** — immutable 3D point (finite components enforced) with
   `add(Vector)` / `delta(Point)` (the `$to − $from` motion primitive, returns a
   `Vector`) / `distance` / `__toString` / `jsonSerialize` /
-  `Point::zero()`.
+  `Point::fromArray` / `Point::zero()`.
+
+Both types implement `JsonSerializable` as a positional `[x, y, z]` list and
+`fromArray()` decodes exactly that shape — the pair is the wire format, the
+index order is contractual, and an int component from `json_decode` is widened
+to float at the door (wrong arity, non-numeric entries, and non-finite values
+are refused with `InvalidArgumentException`).
 - **`Easing`** — enum implementing `EasingFunction` (the extension seam) with
   `ease(float $t): float`. Cases: `Linear`, `QuadraticIn/Out/InOut`,
   `CubicIn/Out/InOut`, `ElasticIn/Out/InOut`, `BounceIn/Out/InOut`,

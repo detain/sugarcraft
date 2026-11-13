@@ -30,6 +30,8 @@ return [
     'spring.collection_orphan' => 'SpringCollection содержит в {plane} неизвестный id пружины "{id}"',
     'spring.unknown_id' => 'в SpringCollection нет пружины с id "{id}"',
     'vector.components_finite' => 'компоненты Vector должны быть конечными; получено x={x}, y={y}, z={z}',
+    'wire.arity' => '{class}::fromArray ожидает позиционный список [x, y, z], выдаваемый jsonSerialize; получено элементов: {n}',
+    'wire.member' => '{class}::fromArray требует значений int или float; элемент {index} имеет тип {type}',
     'vector.normalize_zero' => 'невозможно нормализовать вектор нулевой длины',
     'vector.normalize_overflow' => 'невозможно нормализовать вектор, длина которого переполнилась до бесконечности; получено length={length}',
     'point.components_finite' => 'компоненты Point должны быть конечными; получено x={x}, y={y}, z={z}',
