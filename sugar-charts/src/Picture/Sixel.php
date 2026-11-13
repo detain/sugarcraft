@@ -9,8 +9,11 @@ use SugarCraft\Core\Util\Color;
 /**
  * Pure-PHP Sixel encoder. Translates a 2D RGB pixel grid into a
  * `ESC P q ... ESC \` Device Control String suitable for terminals
- * that speak Sixel (xterm, mlterm, foot, iTerm2, WezTerm, Windows
- * Terminal preview).
+ * that speak Sixel. Wire support: xterm (only --enable-sixel builds),
+ * mlterm, foot, iTerm2, WezTerm, Windows Terminal (preview-gated since
+ * 1.18). {@see Picture::detect()} auto-routes mlterm/foot/WezTerm/Windows
+ * Terminal (plus iTerm2/kitty to their native protocols); bare xterm has
+ * no reliable env signal and needs an explicit withProtocol().
  *
  * The encoder:
  *

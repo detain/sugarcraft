@@ -82,9 +82,26 @@ final class Picture
 
     /**
      * Pick a protocol based on the running terminal's capabilities.
-     * Honours `$TERM_PROGRAM` (iTerm2) and a few common terminals
-     * known to speak Kitty graphics or Sixel. Returns null when no
-     * supported protocol is detected.
+     * Honours `$TERM_PROGRAM` (iTerm2, WezTerm), `$TERM` (kitty, foot,
+     * mlterm), `$KITTY_WINDOW_ID`, and the Windows Terminal pair
+     * `$WT_SESSION`/`$WT_PROFILE_ID`.
+     *
+     * Auto-detected: foot, mlterm, WezTerm, iTerm2, kitty, Windows
+     * Terminal. Everything else — xterm included, whose sixel support
+     * depends on a compile-time flag with no env signal — is only
+     * reachable through an explicit {@see withProtocol()}
+     * (sugar-charts-115).
+     *
+     * Multiplexer state is first-class (sugar-charts-012): under TMUX or
+     * ZELLIJ the inherited `$TERM`/`$TERM_PROGRAM` pair lies in both
+     * directions — iTerm2-in-tmux keeps `TERM_PROGRAM` and would emit
+     * OSC 1337 the pane never forwards (silently invisible image), while
+     * kitty-in-tmux loses `TERM=xterm-kitty` and would detect as nothing.
+     * A pane therefore returns null (the placeholder path) unless the
+     * caller opts into raw escape forwarding with
+     * `CHARTS_PICTURE_PASSTHROUGH=1`, which re-enables the table below
+     * against the outer terminal's surviving env (kitty's own
+     * `KITTY_WINDOW_ID` rides through, hence that arm too).
      *
      * The detection is best-effort — terminals don't reliably
      * advertise these capabilities. Pass an explicit
@@ -98,21 +115,48 @@ final class Picture
         $program = strtolower($env['TERM_PROGRAM'] ?? '');
         $term    = strtolower($env['TERM']         ?? '');
 
+        if (self::muxed($env) && !self::passthroughRequested($env)) {
+            return null;
+        }
+
         if (str_contains($program, 'iterm')) {
             return Protocol::ITerm2;
         }
         if (str_contains($program, 'wezterm')) {
             return Protocol::Sixel;
         }
-        if (str_contains($term, 'kitty')) {
+        // kitty's TERM arm clobbers under a multiplexer; the window-id
+        // export survives and catches the passthrough case.
+        if (str_contains($term, 'kitty') || isset($env['KITTY_WINDOW_ID'])) {
             return Protocol::Kitty;
         }
         if (str_contains($term, 'foot') || str_contains($term, 'mlterm')) {
             return Protocol::Sixel;
         }
+        // Windows Terminal: sixel is preview-gated since 1.18 but renders
+        // inside the modern atlas; before the pair had no arm at all and
+        // WT users only ever saw the placeholder (sugar-charts-043).
+        if (isset($env['WT_SESSION']) || isset($env['WT_PROFILE_ID'])) {
+            return Protocol::Sixel;
+        }
         // xterm sometimes ships with sixel support, but only when
         // built with --enable-sixel. No reliable env signal — skip.
         return null;
+    }
+
+    /** Under a terminal multiplexer whose pane may not forward escapes? */
+    private static function muxed(array $env): bool
+    {
+        return ($env['TMUX'] ?? '') !== ''
+            || ($env['ZELLIJ'] ?? '') !== ''
+            || ($env['ZELLIJ_SESSION_NAME'] ?? '') !== '';
+    }
+
+    /** Opt-in raw-escape forwarding through the multiplexer. */
+    private static function passthroughRequested(array $env): bool
+    {
+        $flag = $env['CHARTS_PICTURE_PASSTHROUGH'] ?? '';
+        return $flag !== '' && $flag !== '0';
     }
 
     /**
