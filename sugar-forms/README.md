@@ -3,10 +3,10 @@
 > Formerly published as `sugarcraft/candy-forms` (renamed 2026-10). <!-- @rename-keep -->
 
 Form library (port of [charmbracelet/huh](https://github.com/charmbracelet/huh))
-and foundation lib for form and input primitives — the raw component
-implementations that `sugar-widgets` re-exports. The former standalone prompt
-façade has been folded in here, so the full interactive form engine and its
-primitives ship as a single standalone dependency.
+and foundation lib for form and input primitives; the raw component
+implementations are what `sugar-widgets` re-exports. The former standalone
+prompt façade has been folded in here, so the full interactive form engine
+and its primitives ship as a single standalone dependency.
 
 ## Install
 
@@ -87,7 +87,7 @@ Select::new('theme')->withOptions('Nocturne', 'Daylight', 'Midnight')
     ->withSelected('Midnight');                            // or ->withSelectedIndex(2)
 ```
 
-Standalone spinner (now lives here, was in sugar-widgets):
+Standalone spinner (moved here from sugar-widgets):
 
 ```php
 <?php
@@ -168,8 +168,8 @@ renders the active set, never the defaults.
   tab, enter, esc, ctrl+c and the arrows stop at the form door. Pass a
   custom map via `withKeyMap()` to free a key for the field; the
   field-types table above marks which arms need that.
-  `tests/FormKeyDispatchTest.php` pins both polarities.
-- **Paste:** the host reader delivers a PasteMsg; only TextArea consumes
+  `tests/FormKeyDispatchTest.php` verifies both directions.
+- **Paste:** the terminal sends pastes as a PasteMsg; only TextArea consumes
   it (replacing the selection). TextInput — and NumberField's typing
   surface — accept KeyMsg events only and drop PasteMsg (v1 limitation).
 - **History recall:** TextInput's Up/Down browse a host-populated list
@@ -234,7 +234,7 @@ call `string()`, `int()`, `bool()`, `array()`, or the keyed lookup
 `get(string $key, mixed $default = null)` — the only accessor that returns the raw untyped value with
 a fallback. For inspecting state during a run use `errors()`, `hasErrors()`,
 `focusedField()`, `keyBinds()`, `help()`.
-(`getString()` & friends are deprecated forwarders, to be removed in 2.0.0.)
+(`getString()` and friends are deprecated forwarders, to be removed in 2.0.0.)
 
 ### Themes & accessibility
 
@@ -274,7 +274,7 @@ second call replaces the first: `Text` holds one closure-only slot, and
 | `Email` | `Must be a valid email address` | Skipped when empty; uses `filter_var` |
 | `MinLength(int $min)` | `Must be at least N characters` | Uses `mb_strlen` (UTF-8 safe) |
 | `MaxLength(int $max)` | `Must be no more than N characters` | Uses `mb_strlen` (UTF-8 safe) |
-| `Pattern(string $pattern, ?string $message = null, ?int $backtrackLimit = null, ?int $recursionLimit = null)` | `$message`, else the `validator.pattern` locale text | Skipped when empty; uses `preg_match` under a bounded PCRE budget (see below) |
+| `Pattern(string $pattern, ?string $message = null, ?int $backtrackLimit = null, ?int $recursionLimit = null)` | `$message`, else the `validator.pattern` locale text | Skipped when empty. Uses `preg_match` under a bounded PCRE budget (see below) |
 
 `Pattern` compiles once at construction — an invalid pattern throws
 `InvalidArgumentException` at the door. Every match then runs under a bounded
@@ -325,8 +325,9 @@ arrives via the event loop when fresh results land.
 ### ActionSpinner
 
 A standalone blocking spinner for scripts and CLIs that need a visible
-"working…" indicator without a full Model–Update–View program (folded in
-from the retired prompt façade; the canonical class is `SugarCraft\Forms\ActionSpinner`):
+"working…" indicator without a full Model–Update–View program. It was folded
+in from the retired prompt façade; the canonical class is
+`SugarCraft\Forms\ActionSpinner`:
 
 ```php
 use SugarCraft\Forms\ActionSpinner;
@@ -363,13 +364,14 @@ host blocks forever.
 ![form](.vhs/form.gif) ![confirm](.vhs/confirm.gif) ![input](.vhs/input.gif) ![select](.vhs/select.gif)
 ![multi-select](.vhs/multi-select.gif) ![text](.vhs/text.gif) ![themes](.vhs/themes.gif)
 ![multi-page form](.vhs/prompt-form.gif)
+<!-- .vhs/prompt-form.gif is rendered from the prompt-form tape — filename predates the lib rename; rename is closeout care, committed bytes kept per the GIF law. -->
 
 ## Security & trust boundary
 
 Form content is frequently model- or network-produced (agent UIs), so every
 display surface runs hostile bytes through `RenderSafe::clean()`: C0/DEL
 bytes are stripped (TAB and LF survive) and every ESC-introduced sequence is
-disarmed **except true SGR** (`\x1b[[0-9;]*m`), so theme colour renders while
+disarmed **except true SGR** (`\x1b\[[0-9;]*m`), so theme colour renders while
 screen clears, cursor moves and OSC payloads (e.g. OSC-8 hyperlinks) become
 inert text. The sweep is idempotent and UTF-8 safe (C1 bytes are kept — they
 overlap multi-byte sequences).
@@ -403,8 +405,11 @@ sugar-forms is built on six shared sibling packages:
   surface — `Form::view()` does not consult it yet, so greedy vertical stacking
   is always used today.
 - **[sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scoring,
-  used ONLY by `Select::withFuzzySuggestions()` to rank the suggestion candidates
-  (`src/Field/Select.php:326-330`, suggestions listed score-ranked at `:131-135`).
+  used ONLY by `Select::withFuzzySuggestions()` to rank the suggestion
+  candidates. The ranking itself happens in the update arm —
+  `SmithWatermanMatcher::matchAll` at `src/Field/Select.php:350` feeds the
+  suggestion list; the `withFuzzySuggestions()` setter (`:131-135`) only
+  stores the candidate pool.
   The Select list filter itself is the plain case-insensitive substring match over
   `Item::filterValue()` inside this lib (`src/ItemList/ItemList.php:248-251`) —
   typing k finds Kitchen because 'kitchen' contains 'k', not by scoring. There is
@@ -414,10 +419,10 @@ sugar-forms is built on six shared sibling packages:
   `CancellationSource` for async suggestion fetchers (the lib's failure
   vocabulary is `OperationCancelledException` and `TimeoutException`). `withAsyncSuggestions` stores a
   `CancellationSource` on the model and cancels the previous in-flight fetch
-  before starting the next; the debounce timer itself is never cancelled — each
-  armed timer fires at most once into a cancellation check, so neither timer nor
-  fetch outlives its keystroke's replacement and rapid keystrokes collapse to
-  one live request.
+  before starting the next. The debounce timer itself is never cancelled —
+  each armed timer fires at most once into a cancellation check, so rapid
+  keystrokes collapse to one live request. An already-started fetch runs to
+  completion; pass `fetchTimeoutSeconds` to bound it.
 
 The lib also ships a shared **vim keybinding** layer: `VimKeyHandler` provides a
 shared vim mode handler (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`:
@@ -426,7 +431,7 @@ is an opt-in on the inner text widgets themselves — each runs on it when you a
 `TextInput::withVimMode(true)` (single-line) or the TextArea equivalent (`j`/`k`
 rows, `v` visual selection) — and sugar-readline's vi mode delegates to this same
 handler; sugar-widgets re-exports the fields unchanged and carries no vim layer of
-its own. New bindings benefit both hosts at once. In `VisualLine` mode, however,
+its own. New bindings reach `TextInput`, `TextArea` and sugar-readline at once. In `VisualLine` mode, however,
 `j`/`k` step between ENTRIES (the pinned horizontal CursorLeft/CursorRight
 vocabulary), not rows, and `V` currently aliases `v` into character-wise
 selection. Text objects (`ci"`, `da{`, `yiw`, …) resolve through
@@ -444,15 +449,15 @@ and the negative score for empty candidates (where the SSOT returns 0).
 
 ## Accessor deprecation (2026-10-24)
 
-The house accessor era (sugar-style precedent) renames bare reads off the
-`get*` prefix. In sugar-forms, 34 reads were renamed to bare twins with a
+The house accessor era (sugar-style precedent) renames `get*` reads to
+bare twins. In sugar-forms, 34 reads were renamed to bare twins with a
 one-line `@deprecated` forwarder (each marked `REMOVED-IN: 2.0.0`) riding the
 old name; 19 name-blocked reads keep their `get*` prefix as documented legal
 exceptions because the bare slot is a live fluent setter (or the `Field`
 contract itself binds the name) — PHP admits one method per name.
 
-The `Field` interface carries two abstract contract members through the same
-era: `getDescription()` and `getError()` are now `@deprecated` contract
+The `Field` interface carries two abstract contract members, swept in the
+same era: `getDescription()` and `getError()` are now `@deprecated` contract
 members whose canonical spelling is `description()` / `error()`. `getTitle()`
 is an interface-level exception: all twelve implementing fields
 bind the bare `title(string $title): self` setter, so the interface cannot
