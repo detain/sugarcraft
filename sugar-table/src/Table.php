@@ -2280,11 +2280,12 @@ final class Table
     {
         $maxLines = 1;
 
-        foreach ($this->columns as $ci => $column) {
-            if (!\in_array($ci, $visibleColumnIndices, true)) {
-                continue;
-            }
-
+        // ST-63: walk the visible list directly — the old columns-scan with a
+        // per-column in_array membership test re-checked every hidden column
+        // on every row. Same visit order as the paint path, which the
+        // ST-32 replay pairing depends on.
+        foreach ($visibleColumnIndices as $ci) {
+            $column = $this->columns[$ci];
             $colWidth = $computedWidths[$ci] ?? $column->width;
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
             $effectiveWidth = \max(1, $effectiveWidth);
