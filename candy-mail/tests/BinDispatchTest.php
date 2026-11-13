@@ -397,7 +397,10 @@ final class BinDispatchTest extends TestCase
         // legacy choke must wrap the composed string in Sanitize::untrusted.
         $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
 
-        $pos = \strpos($src, 'is deprecated');
+        // CM-13 routed the sentence through cli.deprecated_env (translated),
+        // so the literal English no longer lives in the bin — anchor on the
+        // Lang::t call that composes the warning instead.
+        $pos = \strpos($src, "Lang::t('cli.deprecated_env'");
         $this->assertNotFalse($pos, 'legacy deprecation warning drifted out of the bin');
         $window = \substr($src, \max(0, $pos - 220), 320);
         $this->assertStringContainsString('Sanitize::untrusted(', $window, 'legacy-name choke lost its untrusted sweep');

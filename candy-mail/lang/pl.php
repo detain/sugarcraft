@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'Transport Resend nie ma klucza API: przekaż go konstruktorowi lub ustaw RESEND_API_KEY',
     'attachment.unreadable' => 'Plik załącznika nie jest do odczytu: {path}',
     'attachment.no_path' => 'Podczas dołączania według nazwy pliku należy podać ścieżkę pliku',
-    'attachment.invalid_cid' => 'Nieprawidłowy format Content-ID: {cid} (RFC 2392 wymaga formatu msg-id)',
+    'attachment.invalid_cid' => 'Nieprawidłowy format Content-ID: {cid} (dozwolone: msg-id RFC 2392 user@host, opcjonalny przedrostek cid: lub prosty identyfikator)',
     'attachment.not_a_file' => 'Ścieżka załącznika {path} nie jest zwykłym plikiem',
     'attachment.too_large' => 'Załącznik przekracza limit {limit} bajtów',
     'cli.unknown_option' => 'Nieznana opcja: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => 'Limit czasu {timeout} nie jest liczbą sekund od 1 do 3600',
     'cli.render_resend_divergence' => 'Uwaga: --render podgląda kopertę SMTP MIME; skonfigurowany transport to Resend, który wysyła ładunek JSON. Poniższe bajty nie są tym, co zostanie wysłane.',
     'cli.empty_message' => 'Brak treści do wysłania: wiadomość nie zawiera ciała, części HTML ani załącznika. Użyj --body, przekaż dane standardowym wejściem albo użyj --html.',
+    'cli.deprecated_env' => '{old} jest przestarzałe; ustaw zamiast tego {new}.',
     'cli.stdin_too_large' => 'Dane ze STDIN przekroczyły limit {limit} bajtów; skróć wejście lub dołącz je jako plik.',
 ];

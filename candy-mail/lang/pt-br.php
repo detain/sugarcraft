@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'O transporte Resend não tem chave de API: passe uma ao construtor ou defina RESEND_API_KEY',
     'attachment.unreadable' => 'O arquivo anexado não é legível: {path}',
     'attachment.no_path' => 'Um caminho de arquivo deve ser fornecido ao anexar por nome de arquivo',
-    'attachment.invalid_cid' => 'Formato de Content-ID inválido: {cid} (a RFC 2392 exige o formato msg-id)',
+    'attachment.invalid_cid' => 'Formato de Content-ID inválido: {cid} (permitidos: msg-id da RFC 2392 user@host, prefixo cid: opcional ou identificador simples)',
     'attachment.not_a_file' => 'O caminho do anexo {path} não é um arquivo regular',
     'attachment.too_large' => 'O anexo excede o limite de {limit} bytes',
     'cli.unknown_option' => 'Opção desconhecida: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => 'O tempo limite {timeout} não é um número de segundos entre 1 e 3600',
     'cli.render_resend_divergence' => 'Nota: --render mostra uma prévia do envelope SMTP MIME; o transporte configurado é o Resend, que envia um payload JSON. Os bytes abaixo não são o que será enviado.',
     'cli.empty_message' => 'Nada para enviar: a mensagem não contém corpo, nem parte HTML, nem anexo. Use --body, canalize a entrada, ou utilize --html.',
+    'cli.deprecated_env' => '{old} está obsoleto; defina {new} em vez disso.',
     'cli.stdin_too_large' => 'A entrada STDIN excedeu o limite de {limit} bytes; reduza a entrada ou anexe-a como arquivo.',
 ];

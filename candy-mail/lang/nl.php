@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'Resend-transport heeft geen API-sleutel: geef er een mee in de constructor of stel RESEND_API_KEY in',
     'attachment.unreadable' => 'Bijlagebestand is niet leesbaar: {path}',
     'attachment.no_path' => 'Er moet een bestandspad worden opgegeven bij bijvoegen via bestandsnaam',
-    'attachment.invalid_cid' => 'Ongeldige Content-ID-indeling: {cid} (RFC 2392 vereist de msg-id-indeling)',
+    'attachment.invalid_cid' => 'Ongeldige Content-ID-indeling: {cid} (toegestaan: RFC 2392-msg-id user@host, optioneel cid:-voorvoegsel of eenvoudige identifier)',
     'attachment.not_a_file' => 'Pad van bijlage {path} is geen regulier bestand',
     'attachment.too_large' => 'Bijlage overschrijdt de limiet van {limit} bytes',
     'cli.unknown_option' => 'Onbekende optie: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => 'Timeout {timeout} is geen aantal seconden tussen 1 en 3600',
     'cli.render_resend_divergence' => 'Let op: --render toont een voorbeeld van de SMTP MIME-envelop; de geconfigureerde transport is Resend, die een JSON-payload plaatst. De onderstaande bytes zijn niet wat verzonden wordt.',
     'cli.empty_message' => 'Er is niets te verzenden: het bericht bevat geen tekstbody, geen HTML-onderdeel en geen bijlage. Gebruik --body, voer de invoer via een pipe in, of gebruik --html.',
+    'cli.deprecated_env' => '{old} is verouderd; stel in plaats daarvan {new} in.',
     'cli.stdin_too_large' => 'De STDIN-invoer overschreed de limiet van {limit} bytes; verkort de invoer of voeg deze toe als bestand.',
 ];

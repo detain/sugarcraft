@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'Resend 传输没有 API 密钥：请向构造函数传入密钥或设置 RESEND_API_KEY',
     'attachment.unreadable' => '附件文件不可读：{path}',
     'attachment.no_path' => '按文件名附加时必须提供文件路径',
-    'attachment.invalid_cid' => '无效的 Content-ID 格式：{cid}（RFC 2392 要求 msg-id 格式）',
+    'attachment.invalid_cid' => '无效的 Content-ID 格式：{cid}（允许：RFC 2392 msg-id user@host、可选的 cid: 前缀或简单标识符）',
     'attachment.not_a_file' => '附件路径 {path} 不是常规文件',
     'attachment.too_large' => '附件超过 {limit} 字节限制',
     'cli.unknown_option' => '未知选项：{option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => '超时 {timeout} 不是 1 到 3600 之间的秒数',
     'cli.render_resend_divergence' => '注意：--render 预览 SMTP MIME 信封；已配置的传输方式是 Resend，它提交 JSON 载荷。下面的字节不是实际发送的内容。',
     'cli.empty_message' => '没有可发送的内容：邮件不包含正文、HTML 部分或附件。请使用 --body、通过管道输入，或使用 --html。',
+    'cli.deprecated_env' => '{old} 已弃用；请改用 {new}。',
     'cli.stdin_too_large' => 'STDIN 输入超过了 {limit} 字节上限；请缩减输入或将其作为文件附件。',
 ];

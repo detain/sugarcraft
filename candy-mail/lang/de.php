@@ -57,7 +57,7 @@ return [
     'resend.no_api_key' => 'Der Resend-Transport hat keinen API-Schlüssel: übergeben Sie einen im Konstruktor oder setzen Sie RESEND_API_KEY',
     'attachment.unreadable' => 'Anhangsdatei ist nicht lesbar: {path}',
     'attachment.no_path' => 'Beim Anhängen über einen Dateinamen muss ein Dateipfad angegeben werden',
-    'attachment.invalid_cid' => 'Ungültiges Content-ID-Format: {cid} (RFC 2392 verlangt das msg-id-Format)',
+    'attachment.invalid_cid' => 'Ungültiges Content-ID-Format: {cid} (zulässig: RFC-2392-msg-id user@host, optionales cid:-Präfix oder einfacher Bezeichner)',
     'attachment.not_a_file' => 'Anhangspfad {path} ist keine reguläre Datei',
     'attachment.too_large' => 'Der Anhang überschreitet das Limit von {limit} Byte',
     'cli.unknown_option' => 'Unbekannte Option: {option}',
@@ -70,5 +70,6 @@ return [
     'cli.invalid_timeout' => 'Timeout {timeout} ist keine Anzahl Sekunden zwischen 1 und 3600',
     'cli.render_resend_divergence' => 'Hinweis: --render zeigt den SMTP-MIME-Umschlag als Vorschau; der konfigurierte Versandweg ist Resend und sendet eine JSON-Nutzlast. Die folgenden Bytes werden nicht versendet.',
     'cli.empty_message' => 'Nichts zu senden: Die Nachricht enthält keinen Textkörper, keinen HTML-Teil und keine Anlage. Geben Sie --body an, leiten Sie die Eingabe weiter, oder verwenden Sie --html.',
+    'cli.deprecated_env' => '{old} ist veraltet; setzen Sie stattdessen {new}.',
     'cli.stdin_too_large' => 'Die STDIN-Eingabe hat die Grenze von {limit} Byte überschritten; Eingabe kürzen oder als Datei anhängen.',
 ];

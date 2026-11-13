@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'Транспорт Resend не имеет API-ключа: передайте ключ в конструктор или установите RESEND_API_KEY',
     'attachment.unreadable' => 'Файл вложения не читается: {path}',
     'attachment.no_path' => 'При вложении по имени файла необходимо указать путь к файлу',
-    'attachment.invalid_cid' => 'Недопустимый формат Content-ID: {cid} (RFC 2392 требует формат msg-id)',
+    'attachment.invalid_cid' => 'Недопустимый формат Content-ID: {cid} (допускаются: msg-id по RFC 2392 user@host, необязательный префикс cid: или простой идентификатор)',
     'attachment.not_a_file' => 'Путь к вложению {path} не является обычным файлом',
     'attachment.too_large' => 'Вложение превышает лимит в {limit} байт',
     'cli.unknown_option' => 'Неизвестная опция: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => 'Тайм-аут {timeout} — не число секунд от 1 до 3600',
     'cli.render_resend_divergence' => 'Примечание: --render показывает предпросмотр SMTP MIME-конверта; настроенный транспорт — Resend, который отправляет JSON-поле. Приведённые ниже байты не будут отправлены.',
     'cli.empty_message' => 'Нечего отправлять: сообщение не содержит текста, HTML-части и вложений. Используйте --body, подайте данные на стандартный ввод или примените --html.',
+    'cli.deprecated_env' => '{old} устарел; установите вместо него {new}.',
     'cli.stdin_too_large' => 'Вывод STDIN превысил лимит в {limit} байт; сократите входные данные или приложите их как файл.',
 ];

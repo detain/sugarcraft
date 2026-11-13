@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'Resend 전송에 API 키가 없습니다: 생성자에 키를 전달하거나 RESEND_API_KEY를 설정하세요',
     'attachment.unreadable' => '첨부 파일을 읽을 수 없음: {path}',
     'attachment.no_path' => '파일 이름으로 첨부할 때 파일 경로를 제공해야 함',
-    'attachment.invalid_cid' => '잘못된 Content-ID 형식: {cid} (RFC 2392는 msg-id 형식 필요)',
+    'attachment.invalid_cid' => '잘못된 Content-ID 형식: {cid} (허용: RFC 2392 msg-id user@host, 선택적 cid: 접두사 또는 단순 식별자)',
     'attachment.not_a_file' => '첨부 파일 경로 {path}가 일반 파일이 아닙니다',
     'attachment.too_large' => '첨부 파일이 {limit}바이트 제한을 초과합니다',
     'cli.unknown_option' => '알 수 없는 옵션: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => '타임아웃 {timeout}이 1~3600 사이의 초 값이 아닙니다',
     'cli.render_resend_divergence' => '참고: --render는 SMTP MIME 봉투 미리보기를 표시합니다. 구성된 전송 수단은 Resend이며 JSON 페이로드를 보냅니다. 아래 바이트는 실제 전송 내용이 아닙니다.',
     'cli.empty_message' => '보낼 내용이 없습니다: 메시지에 본문, HTML 부분, 첨부 파일이 없습니다. --body를 사용하거나 입력을 파이프하거나 --html을 사용하세요.',
+    'cli.deprecated_env' => '{old}은(는) 더 이상 사용되지 않습니다. 대신 {new}을(를) 설정하세요.',
     'cli.stdin_too_large' => 'STDIN 입력이 {limit}바이트 상한을 초과했습니다. 입력을 줄이거나 파일로 첨부하세요.',
 ];

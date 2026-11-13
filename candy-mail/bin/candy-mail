@@ -131,7 +131,7 @@ function main(array $argv): int
         // Env var NAMES are attacker-settable in any
         // process environment — an OSC/BEL-bearing name would ride this
         // warning raw to the terminal. Sweep at the egress choke.
-        fwrite(STDERR, Sanitize::untrusted(sprintf("candy-mail: %s is deprecated; set CANDY_MAIL_%s instead.\n", $legacyVar, $suffix))); // @rename-keep
+        fwrite(STDERR, Sanitize::untrusted('candy-mail: ' . Lang::t('cli.deprecated_env', ['old' => $legacyVar, 'new' => 'CANDY_MAIL_' . $suffix]) . "\n")); // @rename-keep
     }
 
     try {

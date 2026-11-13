@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'ResendトランスポートにAPIキーがありません: コンストラクターに渡すか RESEND_API_KEY を設定してください',
     'attachment.unreadable' => '添付ファイルが読み取り可能ではありません: {path}',
     'attachment.no_path' => 'ファイル名で添付する場合はファイルパスを指定してください',
-    'attachment.invalid_cid' => '無効なContent-ID形式: {cid} (RFC 2392ではmsg-id形式が必要)',
+    'attachment.invalid_cid' => '無効なContent-ID形式: {cid} (使用可能: RFC 2392 の msg-id user@host、任意の cid: 接頭辞、または単純な識別子)',
     'attachment.not_a_file' => '添付ファイルのパス {path} は通常のファイルではありません',
     'attachment.too_large' => '添付ファイルが {limit} バイトの上限を超えています',
     'cli.unknown_option' => '不明なオプション: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => 'タイムアウト {timeout} は 1 から 3600 の秒数ではありません',
     'cli.render_resend_divergence' => '注意: --render は SMTP MIME エンベロープのプレビューを表示します。設定済みのトランスポートは Resend で、JSON ペイロードが送信されます。以下のバイトは実際の送信内容ではありません。',
     'cli.empty_message' => '送信する内容がありません: メッセージに本文、HTML パート、添付ファイルが含まれていません。--body を指定するか、入力パイプするか、--html を使用してください。',
+    'cli.deprecated_env' => '{old} は非推奨です。代わりに {new} を設定してください。',
     'cli.stdin_too_large' => 'STDIN 入力が上限 {limit} バイトを超過しました。入力を削減するか、ファイルとして添付してください。',
 ];

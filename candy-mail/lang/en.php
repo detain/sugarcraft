@@ -23,12 +23,12 @@ return [
     'smtp.not_connected' => 'Not connected',
     'smtp.no_response' => 'Server sent no response',
     'smtp.empty_response' => 'Server sent empty response',
-    'smtp.unexpected_response' => 'SMTP unexpected response: {response}',
+    'smtp.unexpected_response' => 'Unexpected SMTP response: {response}',
     'smtp.send_cancelled' => 'SMTP send cancelled before it started',
     'smtp.write_error' => 'Failed to write to SMTP server',
     'smtp.incomplete_write' => 'Incomplete write to SMTP server',
-    'smtp.invalid_helo_host' => 'HELO host {helo} is not a valid hostname (letters, digits, dots and hyphens only)',
-    'smtp.auth_unavailable' => 'The SMTP server {host} did not advertise AUTH; refusing to relay unauthenticated while credentials are configured',
+    'smtp.invalid_helo_host' => 'HELO host {helo} is not a valid hostname (letters, digits, dots, and hyphens only)',
+    'smtp.auth_unavailable' => 'The SMTP server {host} did not advertise AUTH; refusing to relay unauthenticated because credentials are configured',
     'smtp.response_too_long' => 'SMTP server response exceeded the size limit',
     'smtp.response_timeout' => 'SMTP server response exceeded the time budget',
     'transport.not_serializable' => 'A transport holding credentials cannot be serialized or re-imported; construct it where it is used',
@@ -42,7 +42,7 @@ return [
 
     // ResendTransport.php
     'resend.send_cancelled' => 'Resend send cancelled before it started',
-    'resend.curl_missing' => 'ext-curl is required for the Resend transport (SMTP transport needs no extensions for plain SMTP; ext-openssl for TLS)',
+    'resend.curl_missing' => 'ext-curl is required for the Resend transport (SMTP transport needs no extensions for plain SMTP; ext-openssl is required for TLS)',
     'resend.no_api_key' => 'Resend transport has no API key: pass one to the constructor or set RESEND_API_KEY',
     'resend.network_error' => 'Resend network error: {error}',
     'resend.api_error' => 'Resend API error ({status}): {body}',
@@ -50,7 +50,7 @@ return [
     // bin/candy-mail
     'attachment.unreadable' => 'Attachment file is not readable: {path}',
     'attachment.no_path' => 'Attachment path must be provided when attaching by filename',
-    'attachment.invalid_cid' => 'Invalid Content-ID format: {cid} (RFC 2392 requires msg-id format)',
+    'attachment.invalid_cid' => 'Invalid Content-ID format: {cid} (allowed: RFC 2392 msg-id user@host, optional cid: prefix, or a simple identifier)',
     'attachment.not_a_file' => 'Attachment path {path} is not a regular file',
     'attachment.too_large' => 'Attachment exceeds the {limit}-byte limit',
     'cli.error' => 'Error: {message}',
@@ -70,5 +70,6 @@ return [
     'cli.invalid_timeout' => 'Timeout {timeout} is not a number of seconds between 1 and 3600',
     'cli.render_resend_divergence' => 'Note: --render previews the SMTP MIME envelope; your configured transport is Resend, which posts a JSON payload instead. The bytes below are not what ships.',
     'cli.empty_message' => 'Nothing to send: the message carries no body, no HTML part, and no attachment. Pass --body, pipe input, or use --html.',
+    'cli.deprecated_env' => '{old} is deprecated; set {new} instead.',
     'cli.stdin_too_large' => 'STDIN input exceeded the {limit}-byte cap; trim the input or attach it as a file.',
 ];

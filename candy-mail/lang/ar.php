@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'نقل Resend ليس لديه مفتاح API: مرر مفتاحا إلى المُنشئ أو عيّن RESEND_API_KEY',
     'attachment.unreadable' => 'ملف المرفق غير قابل للقراءة: {path}',
     'attachment.no_path' => 'يجب توفير مسار الملف عند الإرفاق باسم الملف',
-    'attachment.invalid_cid' => 'تنسيق معرّف المحتوى غير صالح: {cid} (RFC 2392 يتطلب تنسيق msg-id)',
+    'attachment.invalid_cid' => 'تنسيق معرّف المحتوى غير صالح: {cid} (المسموح: معرّف رسالة RFC 2392 user@host، أو بادئة cid: الاختيارية، أو معرّف بسيط)',
     'attachment.not_a_file' => 'مسار المرفق {path} ليس ملفًا عاديًا',
     'attachment.too_large' => 'يتجاوز المرفق الحد الأقصى {limit} بايت',
     'cli.unknown_option' => 'خيار غير معروف: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => 'المهلة {timeout} ليست عدد ثوانٍ بين 1 و3600',
     'cli.render_resend_divergence' => 'ملاحظة: يعرض --render معاينة مظروف SMTP MIME؛ الناقل المُهيّأ هو Resend الذي ينشر حمولة JSON. البايتات أدناه ليست ما سيتم إرساله.',
     'cli.empty_message' => 'لا يوجد ما يُرسل: الرسالة لا تحتوي على متن أو جزء HTML أو مرفق. استخدم --body أو مرّر الإدخال أو استخدم --html.',
+    'cli.deprecated_env' => 'المتغير {old} مهمل؛ عيّن {new} بدلاً منه.',
     'cli.stdin_too_large' => 'تجاوز إدخال STDIN الحد البالغ {limit} بايتًا; قلّل الإدخال أو أرفقه كملف.',
 ];

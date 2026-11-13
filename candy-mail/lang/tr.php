@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'Resend taşıyıcısının API anahtarı yok: oluşturucuya bir anahtar verin veya RESEND_API_KEY ayarlayın',
     'attachment.unreadable' => 'Ek dosya okunamıyor: {path}',
     'attachment.no_path' => 'Dosya adıyla ek yapılırken bir dosya yolu sağlanmalıdır',
-    'attachment.invalid_cid' => 'Geçersiz Content-ID biçimi: {cid} (RFC 2392 msg-id biçimini gerektirir)',
+    'attachment.invalid_cid' => 'Geçersiz Content-ID biçimi: {cid} (izin verilen biçimler: RFC 2392 msg-id user@host, isteğe bağlı cid: ön eki veya basit bir tanımlayıcı)',
     'attachment.not_a_file' => 'Ek dosya yolu {path} normal bir dosya değil',
     'attachment.too_large' => 'Ek dosya {limit} bayt sınırını aşıyor',
     'cli.unknown_option' => 'Bilinmeyen seçenek: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => 'Zaman aşımı {timeout}, 1 ile 3600 arasında bir saniye sayısı değil',
     'cli.render_resend_divergence' => 'Not: --render SMTP MIME zarfının önizlemesini gösterir; yapılandırılan taşıyıcı Resend olup JSON yük gönderir. Aşağıdaki baytlar gönderilecek içerik değildir.',
     'cli.empty_message' => 'Gönderilecek bir şey yok: ileti gövde, HTML bölümü ya da ek taşımıyor. --body kullanın, girdiyi borulayın ya da --html kullanın.',
+    'cli.deprecated_env' => '{old} artık kullanılmıyor; bunun yerine {new} ayarlayın.',
     'cli.stdin_too_large' => 'STDIN girdisi {limit} bayt sınırını aştı; girdiyi kısaltın ya da dosya olarak ekleyin.',
 ];

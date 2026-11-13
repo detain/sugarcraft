@@ -455,7 +455,7 @@ final class SmtpSecurityTest extends TestCase
             $this->assertFalse($encrypted->getValue($transport), 'a plaintext connect must not inherit encrypted=true');
 
             $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('unexpected response');
+            $this->expectExceptionMessage('Unexpected SMTP response');
             // The fake server answers STARTTLS with its generic "250 OK", so the
             // 220 expectation fails — but only BECAUSE the client actually sent
             // STARTTLS, which is the point of the pin.

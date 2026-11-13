@@ -50,7 +50,7 @@ return [
     'resend.no_api_key' => 'Transport Resend nemá API klíč: předejte ho konstruktoru nebo nastavte RESEND_API_KEY',
     'attachment.unreadable' => 'Soubor přílohy není čitelný: {path}',
     'attachment.no_path' => 'Při přikládání podle názvu souboru musí být zadána cesta k souboru',
-    'attachment.invalid_cid' => 'Neplatný formát Content-ID: {cid} (RFC 2392 vyžaduje formát msg-id)',
+    'attachment.invalid_cid' => 'Neplatný formát Content-ID: {cid} (povolené: msg-id podle RFC 2392 user@host, volitelná předpona cid: nebo jednoduchý identifikátor)',
     'attachment.not_a_file' => 'Cesta přílohy {path} není běžný soubor',
     'attachment.too_large' => 'Příloha přesahuje limit {limit} bajtů',
     'cli.unknown_option' => 'Neznámá volba: {option}',
@@ -63,5 +63,6 @@ return [
     'cli.invalid_timeout' => 'Timeout {timeout} není počet sekund mezi 1 a 3600',
     'cli.render_resend_divergence' => 'Poznámka: --render zobrazuje náhled SMTP MIME obálky; nakonfigurovaný transport je Resend, který posílá JSON payload. Následující bajty se neodešlou.',
     'cli.empty_message' => 'Není co odeslat: zpráva neobsahuje tělo, HTML část ani přílohu. Použijte --body, převeďte vstup troubou, nebo použijte --html.',
+    'cli.deprecated_env' => '{old} je zastaralé; nastavte místo toho {new}.',
     'cli.stdin_too_large' => 'Vstup ze STDIN překročil limit {limit} bajtů; zkraťte vstup, nebo jej přiložte jako soubor.',
 ];
