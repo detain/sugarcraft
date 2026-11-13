@@ -44,7 +44,7 @@ final class AccessorDeprecationTest extends TestCase
             'Table::addRow' => [Table::class, 'addRow', 'withRow', [['Bob']], 'equal'],
             'Table::sortBy' => [Table::class, 'sortBy', 'withSort', [0, true], 'equal'],
             'Table::filter' => [Table::class, 'filter', 'withFilter', ['li'], 'equal'],
-            'Table::setCursor' => [Table::class, 'setCursor', 'withCursor', [1], 'equal'],
+            'Table::setCursor' => [Table::class, 'setCursor', 'withCursor', [0], 'equal'],
         ];
     }
 

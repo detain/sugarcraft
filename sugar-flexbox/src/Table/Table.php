@@ -47,6 +47,17 @@ final class Table
     private string $filterText = '';
     private int $cursorRow = 0;
 
+    /**
+     * Content of the row the cursor sat on when the last sort/filter
+     * writer fired. rebuildView() resolves it to the matching index in
+     * the new settled view — the selection travels with its row through
+     * a re-sort or refilter (first occurrence when equal rows exist:
+     * the view cannot tell them apart any more than the screen can).
+     * Null means "nothing to follow": the cursor addressed no visible
+     * row at capture time and simply keeps its index.
+     */
+    private ?array $cursorAnchor = null;
+
     /** Style for cursor row (ANSI string). */
     private string $cursorStyle = '';
 
@@ -191,7 +202,10 @@ final class Table
      *
      * The index must address a real column: silently sorting NOTHING for
      * an out-of-range index used to leave callers believing a sort had
-     * happened. Resets cursorRow to 0.
+     * happened. The selection FOLLOWS the row it stood on: the cursor's
+     * row is matched by its stored cell values in the re-sorted view, so
+     * re-sorting a list keeps the highlighted record highlighted (rows
+     * with identical cells resolve to the first survivor).
      *
      * Comparison semantics: when BOTH cells are numeric they compare as
      * numbers (2 sorts before 100); otherwise they compare as
@@ -207,12 +221,13 @@ final class Table
                 "Sort column index {$colIndex} is out of range for a table with {$n} column(s)."
             );
         }
+        $this->ensureView();
         $clone = clone $this;
+        $clone->followSelection();
         $clone->sortColIndex = $colIndex;
         $clone->sortAscending = $ascending;
         $clone->syncSortedColumns();
         $clone->viewDirty = true;
-        $clone->cursorRow  = 0;
         return $clone;
     }
 
@@ -226,8 +241,8 @@ final class Table
     /**
      * Toggle sort direction on column, or start ascending if different column.
      *
-     * Delegates to sortBy(), so the range guard and the cursorRow reset
-     * apply here too.
+     * Delegates to withSort(), so the range guard and the
+     * selection-follows-its-row law apply here too.
      */
     public function sortByNext(int $colIndex): self
     {
@@ -247,15 +262,18 @@ final class Table
      * match. A value that must only match its cleaned form should be
      * sanitized by the caller before being stored.
      *
-     * Resets cursorRow to 0: the visible row set changes identity, so the
-     * old index would silently address a different record.
+     * The selection follows its row: a row that survives the narrowed
+     * set keeps the cursor (at its new index), and only a cursor whose
+     * row got filtered away falls back to 0 — an index left alone would
+     * silently address a different record.
      */
     public function withFilter(string $text): self
     {
+        $this->ensureView();
         $clone = clone $this;
+        $clone->followSelection();
         $clone->filterText = $text;
         $clone->viewDirty  = true;
-        $clone->cursorRow  = 0;
         return $clone;
     }
 
@@ -272,13 +290,25 @@ final class Table
     }
 
     /**
-     * Move the cursor to $rowIndex of the materialized view. The index is
-     * stored as given — nothing clamps it — so an out-of-range row simply
-     * falls off the view: currentRow() and currentCell() answer null until
-     * a later setCursor() lands back inside.
+     * Move the cursor to $rowIndex of the materialized view.
+     *
+     * The view is settled FIRST (a pending sort or filter is applied),
+     * then the index must address a visible row: out-of-range refuses
+     * with the row count it checked. Silent acceptance used to let a
+     * typo'd index park the selection on nothing — currentRow() answered
+     * null and every keyboard interaction looked broken with no error
+     * to point at. The one legal null-answer state is an empty view
+     * holding the default index 0; cursor() names it.
      */
     public function withCursor(int $rowIndex): self
     {
+        $this->ensureView();
+        $visible = \count($this->rows);
+        if ($rowIndex < 0 || $rowIndex >= $visible) {
+            throw new \InvalidArgumentException(
+                "Cursor row {$rowIndex} is out of range for a settled view of {$visible} row(s); indexes run 0.." . max(0, $visible - 1) . '.'
+            );
+        }
         $clone = clone $this;
         $clone->cursorRow = $rowIndex;
         return $clone;
@@ -387,11 +417,27 @@ final class Table
     }
 
     /**
+     * The cursor's index in the materialized view, settling any pending
+     * sort/filter first — the same law as currentRow(). Null means the
+     * index addresses no visible row: with FBX-26's refused out-of-range
+     * cursors and the follow-its-row re-sort, the only reachable case is
+     * an empty view holding the default index 0.
+     */
+    public function cursor(): ?int
+    {
+        $this->ensureView();
+        return ($this->cursorRow >= 0 && $this->cursorRow < \count($this->rows))
+            ? $this->cursorRow
+            : null;
+    }
+
+    /**
      * The cursor row of the MATERIALIZED view: a pending sort or filter
      * is settled first, so this always answers about what render() would
-     * show, not about the stale last-settled frame. Null when the cursor
-     * falls off the view entirely (empty table, or an index left past
-     * the end by a filter).
+     * show, not about the stale last-settled frame. Null when the view
+     * has no rows at all — an out-of-range cursor cannot exist to fall
+     * off (withCursor() refuses it, and re-sorts carry the selection
+     * with its row), so the empty view is the one honest null source.
      *
      * The cells are returned RAW — exactly the strings addRow() stored,
      * before the render-time sanitize sweep (which lives inside
@@ -588,8 +634,12 @@ final class Table
      *
      * The rebuild is LAZY (m5): writers mark $viewDirty and readers settle
      * it through ensureView(), so N addRow() calls cost one sort instead
-     * of N. The cursor is NOT touched here — sort/filter writers reset it
-     * deliberately; an append does not.
+     * of N. The cursor is carried through here rather than reset: a
+     * sort/filter writer parked the content of the selected row in
+     * $cursorAnchor (see followSelection()), and the settle re-finds it
+     * in the new view — first occurrence when equal rows exist — or
+     * falls back to 0 when the row got filtered away. An append neither
+     * anchors nor moves the cursor.
      */
     private function rebuildView(): void
     {
@@ -621,6 +671,43 @@ final class Table
         }
 
         $this->rows = $this->applyFilter($rows);
+
+        if ($this->cursorAnchor !== null) {
+            $anchor = $this->cursorAnchor;
+            $this->cursorAnchor = null;
+            $this->cursorRow = $this->resolveCursorAnchor($anchor);
+        }
+    }
+
+    /**
+     * Index of the first row with the same stored cells as $anchor, or 0
+     * when the anchored row is gone (filtered away) — the cursor's
+     * settle-time remap for the selection-follows-its-row law.
+     *
+     * @param list<string> $anchor
+     */
+    private function resolveCursorAnchor(array $anchor): int
+    {
+        foreach ($this->rows as $i => $row) {
+            if ($row === $anchor) {
+                return $i;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Called on a freshly built clone BEFORE its sort/filter state moves
+     * the rows: parks the content currently under the cursor so the
+     * settle can re-find it. Must run after the receiver (and therefore
+     * this clone) is settled, or the capture would anchor a stale frame.
+     */
+    private function followSelection(): void
+    {
+        $this->cursorAnchor =
+            ($this->cursorRow >= 0 && $this->cursorRow < \count($this->rows))
+                ? $this->rows[$this->cursorRow]
+                : null;
     }
 
     /**

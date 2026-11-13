@@ -284,7 +284,12 @@ final class FlexboxTest extends TestCase
             ->addRow(['Alice', '30'])
             ->sortBy(0, true);
 
-        $this->assertSame('Alice', $t->currentRow()[0]);
+        // View order is Alice, Bob; the standing selection rode its row
+        // ('Bob') through the sort to index 1 (FBX-26 follow law), and
+        // asking explicitly is how you get the head row.
+        $this->assertSame(1, $t->cursor());
+        $this->assertSame('Bob', $t->currentRow()[0]);
+        $this->assertSame('Alice', $t->withCursor(0)->currentRow()[0]);
     }
 
     public function testTableSortByNumeric(): void
@@ -377,9 +382,14 @@ final class FlexboxTest extends TestCase
             ->addRow(['Alice'])
             ->sortBy(0, true);  // asc
 
-        $this->assertSame('Alice', $t->currentRow()[0]);
+        // Ascending view is Alice, Bob; the standing selection rode its
+        // row ('Bob', the default index 0) through the sort to index 1
+        // (FBX-26 follow law).
+        $this->assertSame(1, $t->cursor());
+        $this->assertSame('Bob', $t->currentRow()[0]);
 
-        $t = $t->sortByNext(0);  // toggle to desc
+        $t = $t->sortByNext(0);  // toggle to desc: Bob, Alice — 'Bob' heads it
+        $this->assertSame(0, $t->cursor());
         $this->assertSame('Bob', $t->currentRow()[0]);
     }
 
@@ -467,22 +477,21 @@ final class FlexboxTest extends TestCase
         $this->assertStringContainsString(' || ', $result);
     }
 
-    public function testTableCurrentRowReturnsNullWhenOutOfBounds(): void
+    public function testTableCursorDoorRefusesOutOfBoundsIndex(): void
     {
         $t = (new Table())
             ->addColumn(Column::make('Name', 10))
-            ->addRow(['Alice'])
-            ->setCursor(99);  // beyond row count
+            ->addRow(['Alice']);
 
-        $this->assertNull($t->currentRow());
+        // FBX-26: the door refuses; out-of-range cursors cannot exist.
+        $this->expectException(\InvalidArgumentException::class);
+        $t->setCursor(99);  // beyond row count
     }
 
     public function testTableCurrentCellReturnsNullWhenNoCurrentRow(): void
     {
-        $t = (new Table())
-            ->addColumn(Column::make('Name', 10))
-            ->addRow(['Alice'])
-            ->setCursor(99);  // beyond row count
+        // An empty view is the one honest null source.
+        $t = (new Table())->addColumn(Column::make('Name', 10));
 
         $this->assertNull($t->currentCell(0));
     }

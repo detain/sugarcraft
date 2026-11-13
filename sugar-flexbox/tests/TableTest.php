@@ -177,16 +177,17 @@ final class TableTest extends TestCase
         $this->assertSame(['3', '2', '1'], $this->dataColumn($t));
     }
 
-    public function testSortByResetsCursor(): void
+    public function testSortCarriesTheSelectionThroughTheFlip(): void
     {
         $t = (new Table())
             ->addColumn(Column::make('Name', 10))
             ->addRow(['A'])
             ->addRow(['B'])
             ->setCursor(1)
-            ->sortBy(0);
+            ->sortBy(0, false); // descending: 'B' moves to the top
 
-        $this->assertSame(0, $this->getCursorRow($t));
+        $this->assertSame(0, $t->cursor());
+        $this->assertSame(['B'], $t->currentRow());
     }
 
     // ---- filter -----------------------------------------------------------
@@ -226,7 +227,21 @@ final class TableTest extends TestCase
         $this->assertSame(2, $t->rowCount());
     }
 
-    public function testFilterResetsCursor(): void
+    public function testFilterKeepsSelectionWhenItsRowSurvives(): void
+    {
+        // Selection-follow law: the highlighted record stays highlighted.
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice'])
+            ->addRow(['Bob'])
+            ->setCursor(0)
+            ->filter('lice');
+
+        $this->assertSame(0, $t->cursor());
+        $this->assertSame(['Alice'], $t->currentRow());
+    }
+
+    public function testFilterFallsBackToRowZeroWhenSelectionIsFilteredAway(): void
     {
         $t = (new Table())
             ->addColumn(Column::make('Name', 10))
@@ -235,7 +250,8 @@ final class TableTest extends TestCase
             ->setCursor(1)
             ->filter('A');
 
-        $this->assertSame(0, $this->getCursorRow($t));
+        $this->assertSame(0, $t->cursor());
+        $this->assertSame(['A'], $t->currentRow());
     }
 
     // ---- withRow arity ---------------------------------------------------
@@ -290,14 +306,65 @@ final class TableTest extends TestCase
 
     // ---- currentRow / currentCell ----------------------------------------
 
-    public function testCurrentRowReturnsNullWhenOutOfBounds(): void
+    public function testCursorAnswersNullOnlyForAnEmptyView(): void
+    {
+        // Out-of-range indexes can no longer exist (the door refuses
+        // them), so null is reserved for the honest case: a view with no
+        // rows at all, holding the default index 0.
+        $t = (new Table())->addColumn(Column::make('Name', 10));
+
+        $this->assertNull($t->cursor());
+        $this->assertNull($t->currentRow());
+    }
+
+    public function testCursorDoorRefusesAnIndexPastTheEnd(): void
     {
         $t = (new Table())
             ->addColumn(Column::make('Name', 10))
             ->addRow(['Alice']);
 
-        $t2 = $t->setCursor(99);
-        $this->assertNull($t2->currentRow());
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('out of range for a settled view of 1 row(s)');
+        $t->setCursor(99);
+    }
+
+    public function testCursorDoorRefusesNegativeIndexes(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $t->withCursor(-1);
+    }
+
+    public function testCursorDoorChecksTheSettledViewNotTheStaleInput(): void
+    {
+        // A pending filter that would drop every row leaves NOTHING the
+        // cursor may address: the door settles the view and refuses.
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice'])
+            ->withFilter('zzz');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $t->withCursor(0);
+    }
+
+    public function testCursorRoundTripsTheSetIndex(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['A'])
+            ->addRow(['B'])
+            ->addRow(['C']);
+
+        $this->assertSame(2, $t->withCursor(2)->cursor());
+        $this->assertSame(['C'], $t->withCursor(2)->currentRow());
+        // The accessor answers about the receiver too — pending state is
+        // settled before the answer, same law as currentRow().
+        $filtered = $t->withFilter('B'); // one row survives: 'B' at index 0
+        $this->assertSame(0, $filtered->cursor());
     }
 
     public function testCurrentCellReturnsNullForInvalidColumn(): void
@@ -502,17 +569,38 @@ final class TableTest extends TestCase
         $this->assertSame(5, $t->computeTotalWidth());
     }
 
-    public function testAppendKeepsCursorWhileSortAndFilterResetIt(): void
+    public function testSelectionFollowsItsRowThroughReSort(): void
     {
+        // The three cursor laws, together: an append keeps the index (no
+        // row moved), a re-sort carries the selection WITH its row, and
+        // only a filter that drops the row sends it back to 0.
         $t = Table::new()
-            ->addColumn(Column::new('Name', 4))
+            ->addColumn(Column::new('Name', 8))
             ->addRow(['ann'])
             ->addRow(['bo'])
-            ->setCursor(1);
+            ->setCursor(1)          // 'bo'
+            ->addRow(['cy']);       // streaming append: index untouched
+        $this->assertSame(['bo'], $t->currentRow(), 'append must not move the selection');
 
-        $t2 = $t->addRow(['cy']);
-        $this->assertSame(3, $t2->rowCount());
-        $this->assertSame(['bo'], $t2->currentRow(), 'a streaming append must not move the selection');
+        $sorted = $t->withSort(0, false); // desc: cy, bo, ann — 'bo' moves to 1? it's already 1
+        $this->assertSame(1, $sorted->cursor());
+        $this->assertSame(['bo'], $sorted->currentRow());
+
+        $flipped = $t->withSort(0, true); // asc: ann, bo, cy — 'bo' at 1 both ways; pick a moving case
+        $this->assertSame(['bo'], $flipped->currentRow());
+
+        $moved = Table::new()
+            ->addColumn(Column::new('Name', 8))
+            ->addRow(['ann'])
+            ->addRow(['bo'])
+            ->setCursor(0)              // 'ann' at 0
+            ->withSort(0, false);       // desc: bo, ann — 'ann' moved to 1
+        $this->assertSame(1, $moved->cursor(), 'the selection must travel with its row');
+        $this->assertSame(['ann'], $moved->currentRow());
+
+        $dropped = $moved->withFilter('bo'); // 'ann' gone — selection falls to 0
+        $this->assertSame(0, $dropped->cursor());
+        $this->assertSame(['bo'], $dropped->currentRow());
     }
 
     public function testSortByOutOfRangeIndexIsRefused(): void
@@ -589,7 +677,11 @@ final class TableTest extends TestCase
             ->addRow(['100'])
             ->sortBy(0, false);
         $this->assertSame(2, $t->rowCount());
-        $this->assertSame(['100'], $t->currentRow());
+        // FBX-26 follow law: the standing selection rode its row ('10')
+        // through the whole mixed chain — after desc sort + filter the
+        // view is ['100'], ['10'], so the cursor sits at index 1.
+        $this->assertSame(['10'], $t->currentRow());
+        $this->assertSame('100', $t->withCursor(0)->currentCell(0), 'the settled view still heads with 100');
     }
 
     public function testStringSortIsCaseInsensitiveAcrossTheBinaryOrderBoundary(): void
