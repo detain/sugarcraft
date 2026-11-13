@@ -69,9 +69,23 @@ final class LiveProbe implements Probe
         if ($names === []) {
             return [];
         }
-        $out = $this->run(['sysctl', '-i', '-e', ...$names]);
+        $out = $this->run(self::sysctlArgv($names));
 
         return $out === null ? [] : Sysctl::parse($out);
+    }
+
+    /**
+     * The sysctl(8) argv: `-e` prints "name=value" (values-only is `-n`,
+     * which would leave Sysctl::parse nothing to key on), `-i` skips
+     * unknown OIDs. A pure seam so tests pin the flags without a host.
+     *
+     * @param list<string> $names
+     *
+     * @return list<string>
+     */
+    public static function sysctlArgv(array $names): array
+    {
+        return ['sysctl', '-i', '-e', ...$names];
     }
 
     public function run(array $argv): ?string

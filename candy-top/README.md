@@ -645,7 +645,7 @@ Per-process cmdline, status and cgroup are read once per process lifetime. Only 
 
 On FreeBSD (`PHP_OS` = `FreeBSD`) a separate collector family reads the same figures through `sysctl(8)` and base-system tools: `kern.cp_times`, `vm.loadavg`, `kern.boottime`, `vm.stats.*`, `swapinfo -k`, `netstat -i -b -n -W` with `ifconfig -a`, `iostat -x -I`, `mount -p` with statvfs, `ps`, `procstat -f` (detail cwd), `dev.cpu.N.{freq,temperature}`, `hw.acpi.thermal.*` and `hw.acpi.battery.*`. Each tool runs as a short, time-bounded child with `LC_ALL=C`. The memory classes use the semantics of the four open FreeBSD upstream PRs (#1851, #1728, #1830, #1787): laundry counts as used, and cached is the buffer cache plus the reclaimable ARC.
 
-The FreeBSD output parsing for `ps`, `netstat -W`, `ifconfig` and `iostat` has been checked against the man pages; captures from a live host are still pending.
+The FreeBSD output parsing for `ps`, `netstat -W`, `ifconfig` and `iostat` has been checked against the man pages; the `sysctl(8)` output grammar (`-e` name=value, default name: value) is pinned to the documented formats; no live-host capture exists.
 
 Known limitations on FreeBSD:
 

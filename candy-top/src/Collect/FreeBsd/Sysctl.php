@@ -10,6 +10,10 @@ namespace SugarCraft\Top\Collect\FreeBsd;
  * The live probe runs `sysctl -i -e <names>` ("name=value", unknown OIDs
  * skipped); captured reference output uses the default "name: value"
  * form. {@see parse()} reads both, so fixtures can be pasted verbatim.
+ * Grammar per sysctl(8): `-e` separates name and value with `=`, the
+ * default uses `: `, and `-n` prints values only (which parse() answers
+ * with an empty map rather than corrupted keys). The first separator
+ * splits, so values may themselves contain `=` or `:`.
  *
  * @internal FreeBSD collectors only.
  */
