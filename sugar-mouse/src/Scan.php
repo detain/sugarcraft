@@ -619,6 +619,13 @@ final class Scan
      * a grapheme that is technically a continuation of a sequence started
      * before $i, but in terminal output this is unlikely to cause issues
      * since combining characters are normally printed after their base.
+     *
+     * Known divergence class (portability): with ext-intl the boundary is the
+     * host ICU's UAX #29 answer; the fallback consumes one scalar. ZWJ emoji
+     * sequences, regional-indicator flags and base+combining runs split into
+     * several clusters without ext-intl — each advancing its own column — so
+     * identical frames can produce shifted bounding boxes across hosts. The
+     * README's Scan rules carry the consumer-facing version of this note.
      */
     private static function nextGrapheme(string $s, int $i): string
     {

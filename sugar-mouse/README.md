@@ -243,6 +243,17 @@ ever matches; opened short of it (`'12' . zone("\nabcdef")`) a box that
 claims unpainted cols 3-6 of row 1 while missing the painted cols 1-2 of
 row 2; and opened at column 1 a box that also spans the unpainted row 1.
 
+**Grapheme clustering is host-dependent.** Cell columns advance one
+grapheme cluster at a time, so how a cluster *ends* decides where zones
+land. With `ext-intl` the split follows the bundled ICU's UAX #29 rules;
+without it (or when `grapheme_extract()` returns `''` mid-sequence) the
+lead-byte fallback consumes one scalar at a time. ZWJ emoji families,
+regional-indicator flags and base+combining runs therefore cluster — and
+advance — differently between hosts, shifting the bounding boxes around
+them. Layouts that mark wide glyphs and ship on machines without a pinned
+ICU should install `ext-intl`; the column math is otherwise correct per
+cluster, just not identical per cluster *set*.
+
 ## Multi-row zones
 
 A zone spanning multiple rows (e.g. `"line1\nline2"`) is stored as the

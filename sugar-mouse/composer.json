@@ -31,6 +31,9 @@
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
+    "suggest": {
+        "ext-intl": "UAX #29 grapheme clustering in Scan::parse() — without it, ZWJ emoji, regional-indicator flags and combining runs split per lead byte and zone bounding-box columns can shift host-to-host"
+    },
     "autoload": {
         "psr-4": {
             "SugarCraft\\Mouse\\": "src/"
