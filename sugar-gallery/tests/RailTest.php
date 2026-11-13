@@ -7,6 +7,7 @@ namespace SugarCraft\Gallery\Tests;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Gallery\Rail;
 
@@ -423,5 +424,25 @@ final class RailTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('is not a constructor field');
         $carrying->invoke($rail, ['scrollRow' => 1]);
+    }
+
+    public function testTheCounterOutlivesTheBulletUnderExtremeClip(): void
+    {
+        // sugar-gallery-038: at railWidth 8 the reserved chrome alone — the
+        // 2-cell bullet and the 7-cell '  (1/3)' — already exceeds the
+        // budget with the title fully yielded. The right-truncating safety
+        // net used to eat the counter tail there, the exact data the
+        // reservation exists to protect. The bullet is decoration: it goes
+        // first, the counter stands whole.
+        $frame = (new Rail('Movies Forever And Ever', $this->cards(3)))->render(8, true, 4, 1);
+        $line = explode("\n", $frame)[0];
+        self::assertStringEndsWith('(1/3)', $line, 'the counter is the last thing standing');
+        self::assertLessThanOrEqual(8, Width::string($line));
+
+        // One step narrower still, where even the bare counter cannot fit,
+        // the safety net keeps the line inside the budget rather than
+        // painting past the rail — the ellipsis is the only honest tail.
+        $starved = (new Rail('T', $this->cards(3)))->render(6, true, 4, 1);
+        self::assertLessThanOrEqual(6, Width::string(explode("\n", $starved)[0]));
     }
 }

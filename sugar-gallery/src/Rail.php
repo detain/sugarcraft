@@ -267,13 +267,20 @@ final readonly class Rail
         $counter = $count > 0 ? PosterGrid::positionString($this->cursor + 1, $count) : '';
         $title = AnsiGuard::stripControls($this->title);
 
-        // The position/total counter is DATA, not decoration: it is reserved
-        // BEFORE the title is trimmed, so a narrow rail truncates the title
-        // and the counter survives whole. Before this the whole line went
-        // through one clamp and the counter died first.
+        // The position/total counter is DATA, not decoration, and the yield
+        // priority is single-sourced here: the TITLE gives way first (the
+        // reservation trims it with room cut out for the ellipsis), then the
+        // BULLET — when bullet and counter together still exceed the rail
+        // with the title fully yielded, fitHead's right-truncation would eat
+        // the counter tail, exactly the data the reservation exists to
+        // protect (sugar-gallery-038: the reservation and the safety net
+        // contradicted each other at extreme clip). The counter is last out.
         if (Width::string($prefix . $title . $counter) > $railWidth) {
             $room = $railWidth - Width::string($prefix . $counter) - 1;
             $title = $room > 0 ? Width::truncate($title, $room) . '…' : '';
+            if ($counter !== '' && Width::string($prefix . $counter) > $railWidth) {
+                $prefix = '';
+            }
         }
 
         $head = self::fitHead($prefix . $title . $counter, $railWidth);
