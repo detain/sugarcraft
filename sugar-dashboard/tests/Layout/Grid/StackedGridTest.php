@@ -37,13 +37,16 @@ final class StackedGridTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Dashboard\Foundation\Sizer::class, $result);
     }
 
-    public function testSetSizeReturnsSameInstance(): void
+    public function testSetSizeReturnsNewSizedClone(): void
     {
         $grid = new StackedGrid();
         $resized = $grid->setSize(100, 50);
 
-        // setSize returns $this (mutates in place)
-        $this->assertSame($grid, $resized);
+        // D-35 (finding sugar-dashboard-028): setSize joins the immutability
+        // law — a sized CLONE, receiver untouched.
+        $this->assertNotSame($grid, $resized);
+        $this->assertSame($grid->render(), 'Loading...');
+        $this->assertInstanceOf(\SugarCraft\Dashboard\Foundation\Sizer::class, $resized);
     }
 
     public function testSetSizeZeroWidthReturnsLoadingMessage(): void
@@ -60,7 +63,7 @@ final class StackedGridTest extends TestCase
     {
         $grid = new StackedGrid();
         $grid = $grid->withItem($this->strItem('test'), new ItemOptions());
-        $grid->setSize(100, 0);
+        $grid = $grid->setSize(100, 0);
 
         $rendered = $grid->render();
 
@@ -74,7 +77,7 @@ final class StackedGridTest extends TestCase
     public function testRenderEmptyGridReturnsEmpty(): void
     {
         $grid = new StackedGrid();
-        $grid->setSize(100, 50);
+        $grid = $grid->setSize(100, 50);
 
         $rendered = $grid->render();
 
@@ -84,7 +87,7 @@ final class StackedGridTest extends TestCase
     public function testRenderGridWithNoColumnsReturnsEmpty(): void
     {
         $grid = new StackedGrid();
-        $grid->setSize(100, 50);
+        $grid = $grid->setSize(100, 50);
 
         // No items added
 
@@ -209,7 +212,7 @@ final class StackedGridTest extends TestCase
     {
         $grid = new StackedGrid();
         $grid = $grid->withItem($this->strItem('item'), new ItemOptions());
-        $grid->setSize(100, 20);
+        $grid = $grid->setSize(100, 20);
         $theme = Theme::dark();
 
         $themed = $grid->withTheme($theme);
@@ -226,7 +229,7 @@ final class StackedGridTest extends TestCase
     {
         $grid = new StackedGrid();
         $grid = $grid->withItem($this->strItem('Column 0 Item'), new ItemOptions(column: 0));
-        $grid->setSize(100, 20);
+        $grid = $grid->setSize(100, 20);
 
         $rendered = $grid->render();
 
@@ -243,7 +246,7 @@ final class StackedGridTest extends TestCase
         $grid = new StackedGrid($options);
 
         $grid = $grid->withItem($this->strItem('test'), new ItemOptions());
-        $grid->setSize(100, 20);
+        $grid = $grid->setSize(100, 20);
 
         // Should render without error
         $rendered = $grid->render();
@@ -286,7 +289,7 @@ final class StackedGridTest extends TestCase
         $grid = new StackedGrid(new Options(fitScreen: false));
         $grid = $grid->withItem($this->strItem(str_repeat('A', 90)), new ItemOptions(column: 0));
         $grid = $grid->withItem($this->strItem(str_repeat('B', 90)), new ItemOptions(column: 1));
-        $grid->setSize(120, 3);
+        $grid = $grid->setSize(120, 3);
 
         $lines = explode("\n", $grid->render());
         foreach ($lines as $line) {
@@ -316,7 +319,7 @@ final class StackedGridTest extends TestCase
         $grid = new StackedGrid(new Options(fitScreen: false));
         $grid = $grid->withItem($this->strItem('Short'), new ItemOptions(column: 0));
         $grid = $grid->withItem($this->strItem('LongContent'), new ItemOptions(column: 1));
-        $grid->setSize(200, 3);
+        $grid = $grid->setSize(200, 3);
 
         $lines = explode("\n", $grid->render());
         // Plain non-expanding items occupy their natural one line each;
@@ -343,7 +346,7 @@ final class StackedGridTest extends TestCase
         $grid = new StackedGrid(new Options(fitScreen: true));
         $grid = $grid->withItem($this->strItem('Short'), new ItemOptions(column: 0));
         $grid = $grid->withItem($this->strItem('LongContent'), new ItemOptions(column: 1));
-        $grid->setSize(200, 3);
+        $grid = $grid->setSize(200, 3);
 
         $lines = explode("\n", $grid->render());
         foreach ($lines as $line) {
@@ -366,7 +369,7 @@ final class StackedGridTest extends TestCase
         $grid = new StackedGrid(new Options(fitScreen: false));
         $grid = $grid->withItem($inner, new ItemOptions(column: 0));
         $grid = $grid->withItem($this->strItem('LongContent'), new ItemOptions(column: 1));
-        $grid->setSize(200, 3);
+        $grid = $grid->setSize(200, 3);
 
         $lines = explode("\n", $grid->render());
         $this->assertStringContainsString('Inner', $lines[0]);
@@ -380,4 +383,75 @@ final class StackedGridTest extends TestCase
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // D-35: immutability + honest natural sizing (findings 028 + 120)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testWithItemIsAWither(): void
+    {
+        $empty = new StackedGrid();
+        $filled = $empty->withItem($this->strItem('child'));
+
+        $this->assertNotSame($empty, $filled);
+        $this->assertSame('', $empty->setSize(40, 5)->render(), 'receiver must still hold zero items');
+        $this->assertStringContainsString('child', $filled->setSize(40, 5)->render());
+    }
+
+    public function testParentRenderNeverMutatesASizedSharedChild(): void
+    {
+        // The 028 bug: renderItem's nested branch setSize()d the child IN
+        // PLACE, so a parent overwrote the child's own chosen box.
+        $child = (new StackedGrid())
+            ->withItem($this->strItem('AAA'))
+            ->withItem($this->strItem('BBB'))
+            ->setSize(40, 5);
+        $before = $child->render();
+
+        $parent = (new StackedGrid())
+            ->withItem($child, new ItemOptions(column: 0))
+            ->setSize(120, 5);
+        $parentOut = $parent->render();
+
+        $this->assertStringContainsString('AAA', $parentOut);
+        $this->assertSame($before, $child->render(), 'child kept its own 40x5 box after the parent rendered');
+        $this->assertSame($parentOut, $parent->render(), 'parent re-render is byte-stable');
+    }
+
+    public function testNestedGridGetsHonestRowBudget(): void
+    {
+        // The nested grid renders 2 lines; the old measure lied (it claimed
+        // the PARENT's height), so the expanding sibling was squeezed to 0
+        // budget and the column collapsed to 3 lines inside a 6-row frame.
+        $child = (new StackedGrid())
+            ->withItem($this->strItem('one'))
+            ->withItem($this->strItem('two'));
+        $parent = (new StackedGrid())
+            ->withItem($child, new ItemOptions(column: 0))
+            ->withItem($this->strItem('exp'), new ItemOptions(column: 0, expandVertical: true))
+            ->setSize(80, 6);
+
+        $this->assertCount(6, explode("\n", $parent->render()));
+    }
+
+    public function testSizerChildGetsHonestRowBudget(): void
+    {
+        // Old arm: every Sizer got a flat 1-row budget no matter what it
+        // emitted — a 3-line child overflowed the column.
+        $sizer = new class implements \SugarCraft\Dashboard\Foundation\Sizer {
+            public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
+            {
+                return $this;
+            }
+            public function render(): string
+            {
+                return "a\nb\nc";
+            }
+        };
+        $parent = (new StackedGrid())
+            ->withItem($sizer, new ItemOptions(column: 0))
+            ->withItem($this->strItem('exp'), new ItemOptions(column: 0, expandVertical: true))
+            ->setSize(80, 8);
+
+        $this->assertCount(8, explode("\n", $parent->render()));
+    }
 }

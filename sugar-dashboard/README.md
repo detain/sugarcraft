@@ -81,7 +81,7 @@ composer require sugarcraft/sugar-dashboard
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `StackedGrid` | Multi-column stacked grid layout with items in columns | `addItem(Item, ItemOptions)`, `new(Options)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stacked-grid.gif) |
+| `StackedGrid` | Multi-column stacked grid layout with items in columns | `withItem(Item, ItemOptions)`, `new(Options)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stacked-grid.gif) |
 | `GridLayout` | CSS Grid-style layout with rows/columns/gaps | `columns(int, items)`, `rows(int, items)`, `withGap()`, `withItem()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/grid-layout.gif) |
 | `FlexLayout` | Flexbox-style layout with direction/wrap/justify | `row()`, `column()`, `withJustify()`, `withAlignItems()`, `withGap()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/flex-layout.gif) |
 | `VStack` | Vertical stack with alignment and spacing | `new(...items)`, `spaced(int, ...items)`, `centered(...items)`, `right(...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/vstack.gif) |
@@ -930,8 +930,8 @@ $grid = $grid->withItem(
     new ItemOptions(column: 1)
 );
 
-// Set size and render
-$grid->setSize(80, 24);
+// Set size and render (setSize returns a sized clone — assign it)
+$grid = $grid->setSize(80, 24);
 echo $grid->render();
 ```
 
