@@ -69,7 +69,7 @@ return [
     'undo.rename' => '{count} ögeyi yeniden adlandır',
     'undo.move' => '{count} ögeyi taşı',
     'undo.copy' => '{count} ögeyi kopyala',
-    'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Home/End g/G atla · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · e uzantı · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · Esc temizle · t sekmeyi çoğalt · ^w sekmeyi kapat · ^tab dön · ^PgUp/^PgDn sekmeler · u/^z geri al · ^y yinele · ? yardım · Ctrl+O aç · 1-9 sekme · Ctrl+a tümü · v tersine · * desen · I bilgi · fare tık/tekerlek · y/Y işaretle · p yapıştır · a sabitle · B yer imleri',
+    'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Home/End g/G atla · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · e uzantı · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · Esc temizle · t sekmeyi çoğalt · ^w sekmeyi kapat · ^tab dön · ^PgUp/^PgDn sekmeler · u/^z geri al · ^y yinele · ? yardım · Ctrl+O aç · 1-9 sekme · Ctrl+a tümü · v tersine · * desen · I bilgi · fare tık/tekerlek · y/Y işaretle · p yapıştır · a sabitle · B yer imleri · w/W yol/ad kopyala',
     'keyhelp.terse' => 'Tab değiştir · ↑↓ jk hareket · Enter aç · l görüntüle · ← h yukarı · space seç · s sırala · e uzantı · c kopyala · m taşı · R adlandır · d sil · q çık · / ara · u/^z geri al · ^y yinele',
     'keyhelp.minimal' => 'Enter aç · l görüntüle · q çık · / ara',
     'help.title' => '{count} tuş bağı',
@@ -139,4 +139,8 @@ Kullanım:
     'bookmarks.title' => '{count} yer imi',
     'bookmarks.empty' => 'yer imi yok — a geçerli dizini sabitler',
     'bookmarks.dismiss' => 'Enter atlar · d kaldırır · B veya Esc kapatır',
+    'status.clipboard_unsupported' => 'bu terminal panoya yazmayı kabul etmiyor (TERM)',
+    'status.clipboard_copied' => '{what} panoya kopyalandı (OSC 52 — terminal yok sayabilir)',
+    'status.clipboard_copied_many' => '{count} öğe panoya kopyalandı (OSC 52 — terminal yok sayabilir)',
+    'status.clipboard_too_big' => '{count} öğe OSC 52 pano yazımı için çok büyük',
 ];

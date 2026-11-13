@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'Éléments renommés : {count}',
     'undo.move' => 'Éléments déplacés : {count}',
     'undo.copy' => 'Éléments copiés : {count}',
-    'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Home/End g/G sauter · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · Esc effacer · t dupliquer l’onglet · ^w fermer l’onglet · ^tab cycler · ^PgUp/^PgDn onglets · u/^z annuler · ^y rétablir · ? aide · Ctrl+O ouvrir · 1-9 onglets · Ctrl+a tous · v inverser · * motif · I infos · souris clic/molette · y/Y retenir · p coller · a épingler · B signets',
+    'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Home/End g/G sauter · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · Esc effacer · t dupliquer l’onglet · ^w fermer l’onglet · ^tab cycler · ^PgUp/^PgDn onglets · u/^z annuler · ^y rétablir · ? aide · Ctrl+O ouvrir · 1-9 onglets · Ctrl+a tous · v inverser · * motif · I infos · souris clic/molette · y/Y retenir · p coller · a épingler · B signets · w/W copier chemin/nom',
     'keyhelp.terse' => 'Tab permuter · ↑↓ jk déplacer · Entrée ouvrir · l voir · ← h monter · Espace sélectionner · s trier · e extension · c copier · m déplacer · R renommer · d supprimer · q quitter · / rechercher · u/^z annuler · ^y rétablir',
     'keyhelp.minimal' => 'Entrée ouvrir · l voir · q quitter · / rechercher',
     'help.title' => '{count} raccourcis clavier',
@@ -139,4 +139,8 @@ Utilisation :
     'bookmarks.title' => '{count} signets',
     'bookmarks.empty' => 'aucun signet — a épingle le répertoire courant',
     'bookmarks.dismiss' => 'Entrée saute · d retire · B ou Échap ferme',
+    'status.clipboard_unsupported' => 'ce terminal ne peut pas recevoir d’écriture dans le presse-papiers (TERM)',
+    'status.clipboard_copied' => '{what} copié dans le presse-papiers (OSC 52 — le terminal peut l’ignorer)',
+    'status.clipboard_copied_many' => '{count} entrées copiées dans le presse-papiers (OSC 52 — le terminal peut l’ignorer)',
+    'status.clipboard_too_big' => '{count} entrées sont trop volumineuses pour une écriture OSC 52 dans le presse-papiers',
 ];

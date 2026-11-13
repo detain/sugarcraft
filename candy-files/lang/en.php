@@ -76,7 +76,7 @@ return [
     'undo.copy'   => 'items copied: {count}',
 
     // Key help
-    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern · I info · mouse click/wheel · y/Y yank · p paste · a pin · B bookmarks',
+    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern · I info · mouse click/wheel · y/Y yank · p paste · a pin · B bookmarks · w/W copy path/name',
     'keyhelp.terse' => 'Tab swap · ↑↓ jk move · Enter open · l view · ← h up · space select · s sort · e ext · c copy · m move · R rename · d delete · q quit · / search · u/^z undo · ^y redo',
     'keyhelp.minimal' => 'Enter open · l view · q quit · / search',
     'help.title' => '{count} key bindings',
@@ -150,4 +150,8 @@ Usage:
     'bookmarks.title' => '{count} bookmarks',
     'bookmarks.empty' => 'no bookmarks — a pins the current directory',
     'bookmarks.dismiss' => 'Enter jumps · d removes · B or Esc closes',
+    'status.clipboard_unsupported' => 'this terminal cannot receive clipboard writes (TERM)',
+    'status.clipboard_copied' => 'copied {what} to the clipboard (OSC 52 — the terminal may ignore it)',
+    'status.clipboard_copied_many' => 'copied {count} entries to the clipboard (OSC 52 — the terminal may ignore it)',
+    'status.clipboard_too_big' => '{count} entries are too large for an OSC 52 clipboard write',
 ];

@@ -65,6 +65,9 @@ final class Manager implements Model
     /** CF-55: two left clicks on the same row within this many seconds are one double-click. */
     private const DOUBLE_CLICK_SECONDS = 0.4;
 
+    /** CF-50: OSC 52 payload ceiling in raw bytes (before base64). */
+    private const CLIPBOARD_MAX_BYTES = 100000;
+
     /** CF-55: rows one wheel notch scrolls. */
     private const WHEEL_ROWS = 3;
 
@@ -557,6 +560,12 @@ final class Manager implements Model
             return $this->runEntry();
         }
 
+        // CF-50: the clipboard chords are the one arm besides open/run that
+        // returns a Cmd, so they answer before the Model-only match below.
+        if ($plain && ($msg->rune === 'w' || $msg->rune === 'W')) {
+            return $this->copyToClipboard($msg->rune === 'w');
+        }
+
         $next = match (true) {
             $plain && $msg->rune === '/'
                 => $this->search(''),
@@ -1045,6 +1054,52 @@ final class Manager implements Model
         $head = fread($fh, 8192);
         fclose($fh);
         return !is_string($head) || str_contains($head, "\x00");
+    }
+
+    /**
+     * CF-50 `w` / `W`: put the full path (or the bare name) of the
+     * selection - the cursor entry when nothing is marked, the pane's own
+     * directory on `..` - on the system clipboard through sugar-core's
+     * Cmd::setClipboard (OSC 52). Several entries go newline-joined.
+     *
+     * HONEST DEGRADATION, two layers. A TERM that cannot carry OSC 52
+     * (dumb, the Linux console, an unset TERM) is REFUSED up front - the
+     * bytes would print as garbage there. Everywhere else the sequence is
+     * sent and the status says so plainly ("terminal may ignore OSC 52"):
+     * tmux defaults and many emulators drop the write without telling the
+     * application, so a bare "copied" would be a claim nobody can verify.
+     * The payload is capped at 100 KB (the figure most terminals accept)
+     * rather than truncated silently.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function copyToClipboard(bool $fullPath): array
+    {
+        $term = strtolower((string) getenv('TERM'));
+        if ($term === '' || $term === 'dumb' || $term === 'linux') {
+            return [$this->withStatus(Lang::t('status.clipboard_unsupported')), null];
+        }
+        $pane = $this->activePane();
+        $current = $pane->currentEntry();
+        $names = $pane->selected !== []
+            ? array_keys($pane->selected)
+            : ($current === null || $current->isParentSentinel() ? [] : [$current->name]);
+        $items = [];
+        foreach ($names as $name) {
+            $items[] = $fullPath ? Pane::join($pane->cwd, (string) $name) : (string) $name;
+        }
+        if ($items === []) {
+            // Cursor on `..` (or an empty pane): the directory itself.
+            $items[] = $fullPath ? $pane->cwd : (basename($pane->cwd) !== '' ? basename($pane->cwd) : $pane->cwd);
+        }
+        $payload = implode("\n", $items);
+        if (strlen($payload) > self::CLIPBOARD_MAX_BYTES) {
+            return [$this->withStatus(Lang::t('status.clipboard_too_big', ['count' => count($items)])), null];
+        }
+        $status = count($items) === 1
+            ? Lang::t('status.clipboard_copied', ['what' => Entry::sanitizeName($items[0])])
+            : Lang::t('status.clipboard_copied_many', ['count' => count($items)]);
+        return [$this->withStatus($status), Cmd::setClipboard($payload)];
     }
 
     /**

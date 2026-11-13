@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'Elementi rinominati: {count}',
     'undo.move' => 'Elementi spostati: {count}',
     'undo.copy' => 'Elementi copiati: {count}',
-    'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Home/End g/G salta · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · Esc cancella · t duplica scheda · ^w chiudi scheda · ^tab cicla · ^PgUp/^PgDn schede · u/^z annulla · ^y ripeti · ? aiuto · Ctrl+O apri · 1-9 schede · Ctrl+a tutti · v inverti · * motivo · I info · mouse clic/rotella · y/Y segna · p incolla · a fissa · B segnalibri',
+    'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Home/End g/G salta · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · Esc cancella · t duplica scheda · ^w chiudi scheda · ^tab cicla · ^PgUp/^PgDn schede · u/^z annulla · ^y ripeti · ? aiuto · Ctrl+O apri · 1-9 schede · Ctrl+a tutti · v inverti · * motivo · I info · mouse clic/rotella · y/Y segna · p incolla · a fissa · B segnalibri · w/W copia percorso/nome',
     'keyhelp.terse' => 'Tab scambia · ↑↓ jk muovi · Invio apri · l vista · ← h su · spazio seleziona · s ordina · e estensione · c copia · m sposta · R rinomina · d elimina · q esci · / cerca · u/^z annulla · ^y ripeti',
     'keyhelp.minimal' => 'Invio apri · l vista · q esci · / cerca',
     'help.title' => '{count} scorciatoie da tastiera',
@@ -139,4 +139,8 @@ Uso:
     'bookmarks.title' => '{count} segnalibri',
     'bookmarks.empty' => 'nessun segnalibro — a fissa la directory corrente',
     'bookmarks.dismiss' => 'Invio salta · d rimuove · B o Esc chiude',
+    'status.clipboard_unsupported' => 'questo terminale non accetta scritture negli appunti (TERM)',
+    'status.clipboard_copied' => '{what} copiato negli appunti (OSC 52 — il terminale può ignorarlo)',
+    'status.clipboard_copied_many' => '{count} voci copiate negli appunti (OSC 52 — il terminale può ignorarlo)',
+    'status.clipboard_too_big' => '{count} voci sono troppo grandi per una scrittura OSC 52 negli appunti',
 ];

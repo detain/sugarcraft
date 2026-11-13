@@ -69,7 +69,7 @@ return [
     'undo.rename' => 'renomear {count} item(ns)',
     'undo.move' => 'mover {count} item(ns)',
     'undo.copy' => 'copiar {count} item(ns)',
-    'keyhelp.default' => 'Tab alternar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · e extensão · . ocultos · c copiar · m mover · R renomear · d excluir · r atualizar · q sair · / pesquisar · Esc limpar · t duplicar aba · ^w fechar aba · ^tab circular · ^PgUp/^PgDn abas · u/^z desfazer · ^y refazer · ? ajuda · Ctrl+O abrir · 1-9 separadores · Ctrl+a todos · v inverter · * padrão · I info · rato clique/roda · y/Y marcar · p colar · a fixar · B favoritos',
+    'keyhelp.default' => 'Tab alternar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · e extensão · . ocultos · c copiar · m mover · R renomear · d excluir · r atualizar · q sair · / pesquisar · Esc limpar · t duplicar aba · ^w fechar aba · ^tab circular · ^PgUp/^PgDn abas · u/^z desfazer · ^y refazer · ? ajuda · Ctrl+O abrir · 1-9 separadores · Ctrl+a todos · v inverter · * padrão · I info · rato clique/roda · y/Y marcar · p colar · a fixar · B favoritos · w/W copiar caminho/nome',
     'keyhelp.terse' => 'Tab alternar · ↑↓ jk mover · Enter abrir · l ver · ← h subir · espaço selecionar · s ordenar · e extensão · c copiar · m mover · R renomear · d excluir · q sair · / pesquisar · u/^z desfazer · ^y refazer',
     'keyhelp.minimal' => 'Enter abrir · l ver · q sair · / pesquisar',
     'help.title' => '{count} atalhos de teclado',
@@ -139,4 +139,8 @@ Uso:
     'bookmarks.title' => '{count} favoritos',
     'bookmarks.empty' => 'nenhum favorito — a fixa a diretoria atual',
     'bookmarks.dismiss' => 'Enter salta · d remove · B ou Esc fecha',
+    'status.clipboard_unsupported' => 'este terminal não aceita escritas na área de transferência (TERM)',
+    'status.clipboard_copied' => '{what} copiado para a área de transferência (OSC 52 — o terminal pode ignorar)',
+    'status.clipboard_copied_many' => '{count} entradas copiadas para a área de transferência (OSC 52 — o terminal pode ignorar)',
+    'status.clipboard_too_big' => '{count} entradas são demasiado grandes para uma escrita OSC 52 na área de transferência',
 ];

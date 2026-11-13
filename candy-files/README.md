@@ -137,6 +137,7 @@ naming `sugar-core`.
 | `y` / `Y`       | Yank (CF-32): stage the selection (or the cursor entry) in the yank register as a copy (`y`) or a move (`Y`). Nothing touches the filesystem — the register remembers the source directory and names, so it survives navigation and tab switches |
 | `p`             | Paste the register into the **active pane's directory**: arms the same y/n confirm gate `c`/`m` use (overwrite, undo and in-flight rules unchanged). A copy-yank stays staged for further pastes; a move-yank is consumed once its bytes moved. Pasting into the source directory skips the legs (the CF-43 self-copy guard) |
 | `r`             | Refresh active pane                                       |
+| `w` / `W`       | Copy the full path (`w`) or the bare name (`W`) of the selection — or the cursor entry, or the pane's directory on `..` — to the system clipboard over OSC 52 (CF-50); several entries go newline-joined. The status says the terminal may ignore the sequence (tmux defaults and many emulators do; the app cannot observe that), a `dumb`/`linux`/unset `TERM` is refused up front, and a payload over 100 KB is refused rather than truncated |
 | `a`             | Pin the active pane's directory as a bookmark (CF-30); pinning twice says "already pinned" |
 | `B`             | Bookmarks overlay (CF-30): `j`/`k`/arrows move, `Enter` jumps the active pane there (through the `Ctrl+O` path door — a bookmark that vanished or went unreadable is refused and the pane stays put), `d`/`Delete` unpins, `B`/`Esc` closes. The list lives in `$XDG_DATA_HOME/candy-files/bookmarks.json` (default `~/.local/share/candy-files/`, `%APPDATA%` on Windows) — JSON written atomically (temp file + rename), directory `0700`, file `0600`, at most 256 entries; a missing or corrupt file reads as an empty list |
 | `I`             | Info overlay (CF-52) for the entry under the cursor (the pane's own directory on `..`): path, type, size in bytes, permissions (`drwxr-xr-x` + octal), owner:group, modified / accessed times, link target and the filesystem's free space — read fresh with `lstat` when the key is pressed. `I` or `Esc` closes it |
@@ -367,7 +368,7 @@ reads through `FsLister`.
 
 ## Test plan
 
-- 496 tests / 8330 assertions — this pair is hand-typed: candy-files runs its
+- 504 tests / 8550 assertions — this pair is hand-typed: candy-files runs its
   suite lib-local and its totals are not part of the repository-wide pinned
   count, so re-derive them by running `vendor/bin/phpunit` in this directory
   whenever tests change.
