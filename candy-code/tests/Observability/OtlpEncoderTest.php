@@ -327,4 +327,20 @@ final class OtlpEncoderTest extends TestCase
     {
         return self::attributeMap($body);
     }
+
+    public function testStaleOpenSpansAreCappedOldestFirstAndExported(): void
+    {
+        $enc = new OtlpEncoder();
+        $evictedBodies = 0;
+        for ($step = 1; $step <= OtlpEncoder::MAX_OPEN_SPANS + 3; $step++) {
+            $body = $enc->encode(new StepStarted($step, 100), 1000 + $step);
+            if (null !== $body) {
+                $evictedBodies++;
+            }
+        }
+
+        self::assertSame(OtlpEncoder::MAX_OPEN_SPANS, $enc->openSpanCount());
+        self::assertSame(3, $enc->evictedCount());
+        self::assertSame(3, $evictedBodies);
+    }
 }

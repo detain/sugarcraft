@@ -83,6 +83,17 @@ final class OtlpEncoder
      */
     private array $openSpans = [];
 
+    /**
+     * Ceiling on simultaneously open spans. A turn killed mid-report never
+     * sends its closing event, so without a bound each such step would sit in
+     * openSpans forever (and, worse, defeat targetStep()'s single-open-span
+     * attribution). Beyond the ceiling the OLDEST span is evicted: rendered
+     * at its last observed instant and exported, never silently lost.
+     */
+    public const MAX_OPEN_SPANS = 32;
+
+    private int $evictedCount = 0;
+
     /** Span-event name for every safety verdict (C-SEC-6.e). */
     public const SAFETY_EVENT_NAME = 'candy_code.safety_event';
 
@@ -147,9 +158,16 @@ final class OtlpEncoder
         $nanos = $nowUnixNanos ?? self::wallClockNanos();
 
         if ($event instanceof StepStarted) {
+            $evicted = null;
+            if (!isset($this->openSpans[$event->step]) && \count($this->openSpans) >= self::MAX_OPEN_SPANS) {
+                $oldest = (int) \array_key_first($this->openSpans);
+                $evicted = self::renderSpan($this->openSpans[$oldest]);
+                unset($this->openSpans[$oldest]);
+                $this->evictedCount++;
+            }
             $this->openSpans[$event->step] = self::openSpan($event, $nanos);
 
-            return null;
+            return $evicted;
         }
 
         $step = $this->targetStep($event);
@@ -197,6 +215,12 @@ final class OtlpEncoder
         }
 
         return $this->exportBody($spans);
+    }
+
+    /** How many stale spans the cap has evicted (anomaly counter). */
+    public function evictedCount(): int
+    {
+        return $this->evictedCount;
     }
 
     /** How many spans are currently open (test/diagnostic surface). */
