@@ -36,7 +36,7 @@ final class ReadmeTruthPinsTest extends TestCase
         'DELETED (not replaced)',
         'over-allocation, never a truncation',
         'announces neither colour nor shape',
-        'is not a `width × height` guarantee',
+        'row is exactly `width()` cells',
         'share one code path',
         // FBX-29 posture claims: load-bearing exactly because they age.
         'no in-repo package imports',
