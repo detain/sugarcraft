@@ -9,6 +9,19 @@
     --peach:   #fcd5b4;
     --sky:     #7dd3fc;
 
+    /* Light-mode link/accent inks (SD-S03): WCAG AA text on --bg #fff5fa
+       and --card #fff. The brand pink #ff5f87 measured 2.7:1 on the page
+       background, so body copy and UI links use these deeper stops; the
+       dark block re-points them back to the brand accents, which clear
+       ~6.4:1 on #16101f. */
+    --link:       #c2265e;  /* 5.3:1 --bg · 5.6:1 --card */
+    --link-hover: #9e2352;  /* 7.0:1 --bg · 7.5:1 --card */
+
+    /* Gradient stops for background-clip:text headlines (hero h1, .stat
+       .num): every stop ≥3:1 large-text on --bg/--card in light mode;
+       the dark block swaps back the decorative brand gradient. */
+    --gradient-hero-text: linear-gradient(135deg, #c2265e 0%, #6d28d9 50%, #0e7490 100%);
+
     --bg:      #fff5fa;   /* page bg, very pale pink */
     --card:    #ffffff;
     --ink:     #1f1233;   /* near-black, faint purple */
@@ -34,6 +47,12 @@
         --ink:   #fbeefa;
         --ink-2: #c5b6dd;
         --line:  rgba(255, 255, 255, 0.10);
+        /* SD-S03: dark mode keeps the brand accents untouched — pink is
+           6.4:1 and grape 6.8:1 on --bg, and the original gradient reads
+           ~6.5:1 as clip-text, so it is reinstated here verbatim. */
+        --link: var(--pink);
+        --link-hover: var(--grape);
+        --gradient-hero-text: var(--gradient-hero);
     }
 }
 
@@ -50,11 +69,11 @@ html, body {
     font-size: 17px;
 }
 
-a { color: var(--pink); text-decoration: underline; text-underline-offset: 3px; transition: color .15s ease; }
-a:hover { color: var(--grape); }
+a { color: var(--link); text-decoration: underline; text-underline-offset: 3px; transition: color .15s ease; }
+a:hover { color: var(--link-hover); }
 
-.skip-link { position: absolute; top: -40px; left: 0; background: var(--pink); color: #fff; padding: 8px 16px; z-index: 100; text-decoration: none; border-radius: 0 0 8px 0; }
-.skip-link:focus { top: 0; outline: 3px solid var(--grape); outline-offset: 2px; }
+.skip-link { position: absolute; top: -40px; left: 0; background: #1f1233; color: #fff; padding: 8px 16px; z-index: 100; text-decoration: none; border-radius: 0 0 8px 0; }
+.skip-link:focus { top: 0; outline: 3px solid var(--link); outline-offset: 2px; }
 
 code, pre, .mono {
     font-family: "JetBrains Mono", "Fira Code", "SF Mono", Menlo,
@@ -347,15 +366,15 @@ code, pre, .mono {
     margin: 0 0 16px 0;
     letter-spacing: -0.025em;
     line-height: 1.05;
-    /* Fallback: a solid color from the hero gradient's first stop. Without
-       background-clip:text support the transparent fill below would render
-       the heading invisible, so the trick is gated behind @supports. */
-    color: #ff5f87;
+    /* Fallback solid ink for engines without background-clip:text (the
+       transparent fill below would hide the heading): var(--link) is
+       5.3:1 on light --bg and re-points to brand pink 6.4:1 on dark. */
+    color: var(--link);
 }
 
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
     .hero h1 {
-        background: var(--gradient-hero);
+        background: var(--gradient-hero-text);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
@@ -390,14 +409,17 @@ code, pre, .mono {
 
 .btn-primary {
     background: var(--gradient-hero);
-    color: #fff;
+    /* SD-S03: white on the pink→sky gradient measured ~2.9:1 at the worst
+       stop; the dark purple ink clears 6.1:1 even on the lightest stop
+       (#7dd3fc 10.6:1). */
+    color: var(--ink);
     box-shadow: var(--shadow-md);
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
-    color: #fff;
+    color: var(--ink);
     filter: brightness(1.05);
 }
 
@@ -791,7 +813,7 @@ pre.code .num  { color: #fcd5b4; }
 }
 
 .footer a { color: var(--ink-2); }
-.footer a:hover { color: var(--pink); }
+.footer a:hover { color: var(--link); }
 
 /* ── Hero banner image ─────────────────────────────────────────── */
 .hero-banner {
@@ -835,16 +857,16 @@ pre.code .num  { color: #fcd5b4; }
     display: block;
     font-size: 2.2rem;
     font-weight: 700;
-    /* Fallback solid color; see the .hero h1 note above for why the
-       gradient-clip trick is gated behind @supports. */
-    color: #ff5f87;
+    /* Fallback solid ink for engines without background-clip:text;
+       see the .hero h1 note above (SD-S03). */
+    color: var(--link);
     line-height: 1.1;
     letter-spacing: -0.02em;
 }
 
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
     .stat .num {
-        background: var(--gradient-hero);
+        background: var(--gradient-hero-text);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
@@ -1305,7 +1327,7 @@ pre.code .num  { color: #fcd5b4; }
 }
 .doc-toc-list { list-style: none; margin: 0; padding: 0; }
 .doc-toc-list li { margin: 0 0 6px; }
-.doc-toc-list a { color: var(--pink); text-decoration: none; }
+.doc-toc-list a { color: var(--link); text-decoration: none; }
 .doc-toc-list a:hover { text-decoration: underline; }
 .toc-h3 { padding-left: 18px; }
 .docs-body p, .docs-body li { max-width: 78ch; line-height: 1.65; }
@@ -1326,7 +1348,7 @@ pre.code .num  { color: #fcd5b4; }
 .prose pre code { background: none; border: 0; padding: 0; }
 .prose table { width: 100%; border-collapse: collapse; margin: 0 0 20px; }
 .prose th, .prose td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; }
-.prose a { color: var(--pink); }
+.prose a { color: var(--link); }
 .prose a:hover { text-decoration: underline; }
 .prose .heading-permalink { opacity: .35; margin-left: .35em; text-decoration: none; }
 .prose .heading-permalink:hover { opacity: 1; }
