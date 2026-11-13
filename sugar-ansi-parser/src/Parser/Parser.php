@@ -37,7 +37,14 @@ namespace SugarCraft\AnsiParser\Parser;
  */
 final class Parser
 {
-    private State $state = State::Ground;
+    /**
+     * The machine's current state as the raw int backing of {@see State}
+     * (finding sugar-ansi-parser-001): `advance()` runs per byte, and the
+     * transition table is indexed by int, so the hot loop no longer hydrates
+     * enum cases per byte. {@see State} remains the public surface —
+     * {@see currentState()} converts exactly once at that boundary.
+     */
+    private int $state = self::S_GROUND;
 
     /** @var list<int> Numeric CSI/DCS params; -1 marks a default/missing slot. */
     private array $params = [];
@@ -76,14 +83,48 @@ final class Parser
     /** Parameter value saturates here so unbounded digit runs cannot overflow int math. */
     private const MAX_PARAM_VALUE = 65535;
 
-    /** States accumulating a string payload; an abort out of one drops it (see advance()). */
-    private const STRING_STATES = [
-        State::DcsString,
-        State::OscString,
-        State::SosString,
-        State::PmString,
-        State::ApcString,
-    ];
+    /**
+     * Raw int state backing (see {@see $state}). These are constant
+     * expressions of the enum's backing values, so the int and the enum can
+     * never drift apart; the enum remains everything a consumer sees.
+     */
+    private const S_GROUND = State::Ground->value;
+    private const S_DCS_ENTRY = State::DcsEntry->value;
+    private const S_DCS_PARAM = State::DcsParam->value;
+    private const S_DCS_INTERMEDIATE = State::DcsIntermediate->value;
+    private const S_DCS_STRING = State::DcsString->value;
+    private const S_ESCAPE = State::Escape->value;
+    private const S_ESCAPE_INTERMEDIATE = State::EscapeIntermediate->value;
+    private const S_OSC_STRING = State::OscString->value;
+    private const S_SOS_STRING = State::SosString->value;
+    private const S_PM_STRING = State::PmString->value;
+    private const S_APC_STRING = State::ApcString->value;
+    private const S_UTF8 = State::Utf8->value;
+
+    /** Raw int action backing for the `perform()` routing (see {@see Action}). */
+    private const A_NONE = Action::None->value;
+    private const A_CLEAR = Action::Clear->value;
+    private const A_COLLECT = Action::Collect->value;
+    private const A_PREFIX = Action::Prefix->value;
+    private const A_DISPATCH = Action::Dispatch->value;
+    private const A_EXECUTE = Action::Execute->value;
+    private const A_START = Action::Start->value;
+    private const A_PUT = Action::Put->value;
+    private const A_PARAM = Action::Param->value;
+    private const A_PRINT = Action::Print->value;
+
+    /**
+     * Bitset of the five state ints accumulating a string payload (DcsString,
+     * OscString, SosString, PmString, ApcString — not contiguous: Escape and
+     * EscapeIntermediate sit between, so no range test). An abort out of one
+     * of these drops the payload; membership is one `&` instead of the old
+     * per-byte STRING_STATES list scan (finding sugar-ansi-parser-032).
+     */
+    private const STRING_STATE_MASK = (1 << State::DcsString->value)
+        | (1 << State::OscString->value)
+        | (1 << State::SosString->value)
+        | (1 << State::PmString->value)
+        | (1 << State::ApcString->value);
 
     /** Bytes of the current UTF-8 rune in flight. */
     private string $utf8Buffer = '';
@@ -165,7 +206,7 @@ final class Parser
             // in order. 0x7F (DEL, Execute), C0 controls, ESC, C1 and UTF-8
             // lead bytes (>=0x80) all fall outside the range and route through
             // the normal state machine, preserving every boundary behaviour.
-            if ($this->state === State::Ground && $b >= 0x20 && $b <= 0x7E) {
+            if ($this->state === self::S_GROUND && $b >= 0x20 && $b <= 0x7E) {
                 $this->fastPathRuns++;
                 do {
                     $this->handler->printChar($bytes[$i]);
@@ -215,16 +256,13 @@ final class Parser
     public function flush(): void
     {
         $from = $this->state;
-        if ($from === State::OscString || $from === State::DcsString
-            || $from === State::SosString || $from === State::PmString
-            || $from === State::ApcString
-        ) {
+        if ((1 << $from) & self::STRING_STATE_MASK) {
             $this->dispatch(0, $from);
         }
         if ($this->replaceMalformed && $this->utf8Buffer !== '') {
             $this->handler->printChar("\xEF\xBF\xBD");
         }
-        $this->state = State::Ground;
+        $this->state = self::S_GROUND;
         $this->utf8Buffer = '';
         $this->utf8Need = 0;
         $this->clear();
@@ -288,7 +326,9 @@ final class Parser
     /** @internal Exposed for tests asserting partial-input progress. */
     public function currentState(): State
     {
-        return $this->state;
+        // The single int→enum conversion boundary of the machine (sap-01):
+        // internals store the backing value; consumers only ever see the enum.
+        return State::from($this->state);
     }
 
     /** @internal Exposed for tests asserting the Ground-state fast path is taken. */
@@ -355,7 +395,7 @@ final class Parser
 
     private function advance(int $byte): void
     {
-        if ($this->state === State::Utf8) {
+        if ($this->state === self::S_UTF8) {
             if ($byte >= 0x80 && $byte <= 0xBF) {
                 $this->utf8Buffer .= chr($byte);
                 if (strlen($this->utf8Buffer) >= $this->utf8Need) {
@@ -366,7 +406,7 @@ final class Parser
                     }
                     $this->utf8Buffer = '';
                     $this->utf8Need = 0;
-                    $this->state = State::Ground;
+                    $this->state = self::S_GROUND;
                 }
                 return;
             }
@@ -377,22 +417,27 @@ final class Parser
             }
             $this->utf8Buffer = '';
             $this->utf8Need = 0;
-            $this->state = State::Ground;
+            $this->state = self::S_GROUND;
         }
 
-        $entry = Transitions::get($this->state->value, $byte);
-        $action = Action::from(Transitions::action($entry));
-        $next = State::from(Transitions::nextState($entry));
+        // Everything below routes on raw ints (finding sugar-ansi-parser-001):
+        // the table already answers in ints, and hydrating Action/State enum
+        // cases per byte paid a constant-load plus a linear case scan on the
+        // hottest line of the library. The enum stays the public API; the
+        // machine works in its backing values.
+        $entry = Transitions::get($this->state, $byte);
+        $action = Transitions::action($entry);
+        $next = Transitions::nextState($entry);
 
         // UTF-8 lead bytes start a rune; bypass the regular Collect.
-        if ($next === State::Utf8) {
+        if ($next === self::S_UTF8) {
             $this->utf8Buffer = chr($byte);
             $this->utf8Need = match (true) {
                 $byte <= 0xDF => 2,
                 $byte <= 0xEF => 3,
                 default => 4,
             };
-            $this->state = State::Utf8;
+            $this->state = self::S_UTF8;
             return;
         }
 
@@ -406,7 +451,7 @@ final class Parser
         // bleed into the escape sequence that interrupted it: without this,
         // `ESC P 1 SP / q X ESC \` dispatches the final ESC \ with the stale
         // intermediate '/' (47) where upstream reports 0.
-        if ($next === State::Escape && $action !== Action::Clear) {
+        if ($next === self::S_ESCAPE && $action !== self::A_CLEAR) {
             $this->clear();
         }
         // Defense-in-depth: a string sequence that reaches Ground on a table
@@ -421,29 +466,36 @@ final class Parser
         // because a mid-string C1 re-introducer MUST keep the bytes collected
         // before it — pinned downstream by sugar-vterm and here by
         // ParserTest::testC1ReintroducerPreservesStringPayload.)
-        if ($next === State::Ground
-            && \in_array($from, self::STRING_STATES, true)
-            && $action !== Action::Dispatch
-            && $action !== Action::Clear
+        //
+        // Evaluation order is the fix for finding sugar-ansi-parser-032: the
+        // two int comparisons against the action (the discriminating tests —
+        // almost every edge carries Dispatch or Clear) run BEFORE the rarer
+        // Ground landing and the bitmask membership test, and the old
+        // per-byte STRING_STATES list scan is gone: one `&` on
+        // STRING_STATE_MASK answers it. Same truth, no allocation, no scan.
+        if ($action !== self::A_DISPATCH
+            && $action !== self::A_CLEAR
+            && $next === self::S_GROUND
+            && ((1 << $from) & self::STRING_STATE_MASK) !== 0
         ) {
             $this->stringBuffer = '';
         }
         $this->state = $next;
     }
 
-    private function perform(Action $action, int $byte, State $from): void
+    private function perform(int $action, int $byte, int $from): void
     {
         match ($action) {
-            Action::None => null,
-            Action::Print => $this->handler->printChar(chr($byte)),
-            Action::Execute => $this->handler->execute($byte),
-            Action::Clear => $this->clear(),
-            Action::Collect => $this->collect($byte),
-            Action::Prefix => $this->prefix($byte),
-            Action::Param => $this->param($byte),
-            Action::Start => $this->start($byte, $from),
-            Action::Put => $this->put($byte),
-            Action::Dispatch => $this->dispatch($byte, $from),
+            self::A_NONE => null,
+            self::A_PRINT => $this->handler->printChar(chr($byte)),
+            self::A_EXECUTE => $this->handler->execute($byte),
+            self::A_CLEAR => $this->clear(),
+            self::A_COLLECT => $this->collect($byte),
+            self::A_PREFIX => $this->prefix($byte),
+            self::A_PARAM => $this->param($byte),
+            self::A_START => $this->start($byte, $from),
+            self::A_PUT => $this->put($byte),
+            self::A_DISPATCH => $this->dispatch($byte, $from),
         };
     }
 
@@ -504,7 +556,7 @@ final class Parser
         $this->params[$last] = min($this->params[$last] * 10 + $digit, self::MAX_PARAM_VALUE);
     }
 
-    private function start(int $byte, State $from): void
+    private function start(int $byte, int $from): void
     {
         // A DIFFERENT-type C1 string introducer mid-sequence is
         // an implicit cancel of the pending one — its payload must not ride
@@ -515,28 +567,28 @@ final class Parser
         $target = $this->introducerTarget($byte);
         if ($target !== null
             && $target !== $from
-            && \in_array($from, self::STRING_STATES, true)
+            && ((1 << $from) & self::STRING_STATE_MASK) !== 0
         ) {
             $this->stringBuffer = '';
         }
 
         // For DCS, the byte that triggers Start IS the final command.
-        if ($from === State::DcsEntry || $from === State::DcsParam || $from === State::DcsIntermediate) {
+        if ($from === self::S_DCS_ENTRY || $from === self::S_DCS_PARAM || $from === self::S_DCS_INTERMEDIATE) {
             $this->cmd = ($this->cmd & ~0xFF) | $byte;
         }
     }
 
     /**
-     * The string state a C1 introducer byte opens, or null for any other
-     * byte. Used by the cross-type discard in {@see start()}.
+     * The string state a C1 introducer byte opens (raw int backing), or null
+     * for any other byte. Used by the cross-type discard in {@see start()}.
      */
-    private function introducerTarget(int $byte): ?State
+    private function introducerTarget(int $byte): ?int
     {
         return match ($byte) {
-            0x98 => State::SosString,
-            0x9D => State::OscString,
-            0x9E => State::PmString,
-            0x9F => State::ApcString,
+            0x98 => self::S_SOS_STRING,
+            0x9D => self::S_OSC_STRING,
+            0x9E => self::S_PM_STRING,
+            0x9F => self::S_APC_STRING,
             default => null,
         };
     }
@@ -549,16 +601,16 @@ final class Parser
         $this->stringBuffer .= chr($byte);
     }
 
-    private function dispatch(int $byte, State $from): void
+    private function dispatch(int $byte, int $from): void
     {
         $prefix = ($this->cmd >> 8) & 0xFF;
         $intermediate = ($this->cmd >> 16) & 0xFF;
 
         switch ($from) {
-            case State::OscString:
+            case self::S_OSC_STRING:
                 $this->handler->oscDispatch($this->stringBuffer);
                 break;
-            case State::DcsString:
+            case self::S_DCS_STRING:
                 $this->pushSubparams();
                 $this->handler->dcsDispatch(
                     $this->cmd & 0xFF,
@@ -568,17 +620,17 @@ final class Parser
                     $this->stringBuffer,
                 );
                 break;
-            case State::SosString:
+            case self::S_SOS_STRING:
                 $this->handler->sosPmApcDispatch('sos', $this->stringBuffer);
                 break;
-            case State::PmString:
+            case self::S_PM_STRING:
                 $this->handler->sosPmApcDispatch('pm', $this->stringBuffer);
                 break;
-            case State::ApcString:
+            case self::S_APC_STRING:
                 $this->handler->sosPmApcDispatch('apc', $this->stringBuffer);
                 break;
-            case State::Escape:
-            case State::EscapeIntermediate:
+            case self::S_ESCAPE:
+            case self::S_ESCAPE_INTERMEDIATE:
                 $this->handler->escDispatch($byte, $intermediate);
                 break;
             default:

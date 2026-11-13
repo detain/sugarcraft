@@ -870,4 +870,74 @@ final class ParserTest extends TestCase
         $this->assertCount(2, $oscs, 'post-reset feed starts a clean string buffer');
         $this->assertSame('2;after', $oscs[1]['detail'], 'the new OSC must not inherit the flushed payload');
     }
+
+    /**
+     * sap-01 law pin: the per-byte advance() routes on raw int state/action
+     * values, never hydrated enum cases (finding sugar-ansi-parser-001). The
+     * int-vs-enum choice is invisible to dispatch logs (both paths are
+     * behaviorally identical), so the only way to pin it is a source scan —
+     * house precedent: sugar-spring SPR-13 pins hot/cold divergence the same
+     * way. If a future refactor re-adds Action::from()/State::from() or an
+     * in_array list scan inside advance(), the per-byte cost silently
+     * returns; this test fails loudly instead.
+     */
+    public function testAdvanceBodyNeverHydratesEnumCasesOrScansLists(): void
+    {
+        $src = file_get_contents(__DIR__ . '/../src/Parser/Parser.php');
+        $this->assertIsString($src);
+
+        $start = strpos($src, 'private function advance(');
+        $this->assertNotFalse($start, 'advance() must exist on the Parser');
+        $end = strpos($src, "\n    private function perform(", $start);
+        $this->assertNotFalse($end, 'perform() must follow advance() in the source');
+
+        $body = substr($src, $start, $end - $start);
+        $this->assertStringNotContainsString(
+            'Action::from',
+            $body,
+            'advance() must route on raw int actions, not per-byte Action::from() hydrations',
+        );
+        $this->assertStringNotContainsString(
+            'State::from',
+            $body,
+            'advance() must route on raw int states; State::from belongs at the currentState() boundary only',
+        );
+        $this->assertStringNotContainsString(
+            'in_array(',
+            $body,
+            'string-state membership must stay the STRING_STATE_MASK bitmask, not a per-byte list scan',
+        );
+    }
+
+    /**
+     * sap-01 boundary pin: with the machine storing int state internally,
+     * currentState() must still surface genuine State enum cases (identity
+     * intact) across a hostile corpus that traverses every string state,
+     * Utf8, and the C1/CAN edges.
+     */
+    public function testHostileCorpusStillSurfacesExactStateEnums(): void
+    {
+        $parser = new Parser(new DebugHandler());
+        $corpus =
+            "\x1b[1;2:3m"                 // CSI param/subparam dispatch leg
+            . "\x1bP1;qabc\x18"           // DCS entry→param→string, CAN abort
+            . "\x1b]0;t\xc3\xa9\x07"      // OSC with an in-payload rune (Put, not Utf8 escape)
+            . "\x9e pm-payload\x9c"       // C1 PM introducer + ST
+            . "\x1b_X sos/PM/APC edge \x1b\\" // ESC _ APC, ESC-backslash ST via Escape
+            . "\xc3"                      // lone lead mid-Ground → Utf8
+            . "\xa9\x1b\x1b[31m"          // completes é, then doubled ESC into CSI
+            . "\xff\xfe";                 // invalid leads on the silent drop row
+        $seen = [];
+        foreach (str_split($corpus) as $byte) {
+            $parser->feed($byte);
+            $state = $parser->currentState();
+            $this->assertInstanceOf(State::class, $state, 'currentState() must always return a State enum, never a raw int');
+            $seen[$state->name] = true;
+        }
+        // Prove the pin exercised the int→enum boundary on many values (a
+        // corpus that only ever sat in Ground would pin nothing):
+        foreach (['DcsEntry', 'DcsParam', 'DcsString', 'OscString', 'PmString', 'ApcString', 'Utf8', 'CsiParam', 'Ground'] as $name) {
+            $this->assertArrayHasKey($name, $seen, "corpus must traverse State::{$name}");
+        }
+    }
 }
