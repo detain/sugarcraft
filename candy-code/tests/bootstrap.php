@@ -118,6 +118,9 @@ $GLOBALS['__candyCodeLaunchHomeServer'] = $_SERVER['HOME'] ?? null;
  */
 Loop::set(new StreamSelectLoop());
 
+// Fail the run (naming the test) when a test leaves timers/streams armed on the shared loop.
+\SugarCraft\Code\Tests\Support\SharedLoopResidueGuard::install();
+
 /*
  * The suite is hermetic against the terminal it happens to be run from.
  *
