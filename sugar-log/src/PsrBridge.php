@@ -115,14 +115,14 @@ final class PsrBridge implements LoggerInterface
             \is_string($level) => $level,
             $level instanceof \Stringable => (string) $level,
             default => throw new InvalidArgumentException(
-                'Log level must be one of the PSR-3 LogLevel constants; got ' . self::describe($level),
+                Lang::t('psrbridge.not_string', ['got' => self::describe($level)]),
             ),
         };
 
         $sugarCraftLevel = self::toSugarCraftLevel($psrLevel);
         if ($sugarCraftLevel === null) {
             throw new InvalidArgumentException(
-                "Unknown log level '" . self::quoteLevelForMessage($psrLevel) . "'; expected one of the PSR-3 LogLevel constants",
+                Lang::t('psrbridge.unknown_level', ['level' => self::quoteLevelForMessage($psrLevel)]),
             );
         }
 

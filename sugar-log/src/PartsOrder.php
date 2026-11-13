@@ -66,12 +66,12 @@ final class PartsOrder
 
         $unknown = \array_values(\array_filter($given, static fn (string $part): bool => !\in_array($part, $known, true)));
         if ($unknown !== []) {
-            throw new \InvalidArgumentException('unknown log line part(s): ' . \implode(', ', $unknown));
+            throw new \InvalidArgumentException(Lang::t('parts.unknown', ['parts' => \implode(', ', $unknown)]));
         }
 
         $duplicates = \array_keys(\array_filter(\array_count_values($given), static fn (int $count): bool => $count > 1));
         if ($duplicates !== []) {
-            throw new \InvalidArgumentException('duplicate log line part(s): ' . \implode(', ', $duplicates));
+            throw new \InvalidArgumentException(Lang::t('parts.duplicate', ['parts' => \implode(', ', $duplicates)]));
         }
 
         $this->parts = \array_values($given);

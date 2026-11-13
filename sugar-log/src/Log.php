@@ -351,12 +351,12 @@ final class Log
     private static function fatalTypeName(int $type): string
     {
         return match ($type) {
-            E_ERROR      => 'Fatal error',
-            E_PARSE      => 'Parse error',
-            E_CORE_ERROR => 'Core error',
-            E_COMPILE_ERROR => 'Compile error',
-            E_USER_ERROR => 'User error',
-            default      => 'Shutdown error',
+            E_ERROR      => Lang::t('log.fatal_error'),
+            E_PARSE      => Lang::t('log.fatal_parse'),
+            E_CORE_ERROR => Lang::t('log.fatal_core'),
+            E_COMPILE_ERROR => Lang::t('log.fatal_compile'),
+            E_USER_ERROR => Lang::t('log.fatal_user'),
+            default      => Lang::t('log.fatal_shutdown'),
         };
     }
 }

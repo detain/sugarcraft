@@ -234,6 +234,29 @@ final class LogTest extends TestCase
      * while the universal cursor-show survives — the byte that matters is
      * never held hostage by the byte that is optional.
      */
+
+    public function testFatalLabelsReresolveWhenTheLocaleChanges(): void
+    {
+        // [SL-27] The shutdown/fatal labels come from the lang table, not
+        // from literals in the match arms: under German every arm must
+        // render its translated label (a literal revert stays green under
+        // an English-only pin, never under this one).
+        $de   = require \dirname(__DIR__) . '/lang/de.php';
+        $peek = \Closure::bind(static fn (int $type): string => self::fatalTypeName($type), null, Log::class);
+        \SugarCraft\Core\I18n\T::setLocale('de');
+
+        try {
+            $this->assertSame($de['log.fatal_error'], $peek(\E_ERROR));
+            $this->assertSame($de['log.fatal_parse'], $peek(\E_PARSE));
+            $this->assertSame($de['log.fatal_core'], $peek(\E_CORE_ERROR));
+            $this->assertSame($de['log.fatal_compile'], $peek(\E_COMPILE_ERROR));
+            $this->assertSame($de['log.fatal_user'], $peek(\E_USER_ERROR));
+            $this->assertSame($de['log.fatal_shutdown'], $peek(\E_RECOVERABLE_ERROR));
+        } finally {
+            \SugarCraft\Core\I18n\T::reset();
+        }
+    }
+
     public function testRestoreTerminalSkipsTheAltscreenDecsetOnDumbTerminals(): void
     {
         $result = StderrNoticeCapture::run(<<<'CODE'

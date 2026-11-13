@@ -97,4 +97,52 @@ final class LangTest extends TestCase
         // so compare realpath() of both to normalize path resolution.
         $this->assertSame(realpath(__DIR__ . '/../lang'), realpath($constant));
     }
+
+    /**
+     * [SL-27] Every routed error-path key must resolve to its English
+     * template; a renamed or dropped key surfaces here as the fully
+     * qualified raw fallback rather than a near-miss message.
+     *
+     * @covers ::t
+     */
+    public function testRoutedErrorPathKeysResolveToTheirTemplates(): void
+    {
+        $roster = [
+            'logger.fatal'             => 'fatal log: {message}',
+            'logger.invalid_stream'    => 'stream must be a valid resource',
+            'psrbridge.not_string'     => 'Log level must be one of the PSR-3 LogLevel constants; got {got}',
+            'psrbridge.unknown_level'  => "Unknown log level '{level}'; expected one of the PSR-3 LogLevel constants",
+            'parts.unknown'            => 'unknown log line part(s): {parts}',
+            'parts.duplicate'          => 'duplicate log line part(s): {parts}',
+            'log.fatal_error'          => 'Fatal error',
+            'log.fatal_parse'          => 'Parse error',
+            'log.fatal_core'           => 'Core error',
+            'log.fatal_compile'        => 'Compile error',
+            'log.fatal_user'           => 'User error',
+            'log.fatal_shutdown'       => 'Shutdown error',
+        ];
+
+        foreach ($roster as $key => $template) {
+            $this->assertSame($template, Lang::t($key), "routed key {$key} must resolve to its template");
+        }
+    }
+
+    /**
+     * The 15 non-English locales all carry the same key set; a German
+     * sample proves selection actually re-resolves (not just the file
+     * sitting next to en.php).
+     *
+     * @covers ::t
+     */
+    public function testRoutedMessagesFollowTheSelectedLocale(): void
+    {
+        T::setLocale('de');
+
+        $this->assertSame('Schwerwiegender Fehler', Lang::t('log.fatal_error'));
+        $this->assertSame('Fatales Protokoll: {message}', Lang::t('logger.fatal'));
+        $this->assertSame(
+            'Die Protokollstufe muss eine der PSR-3-LogLevel-Konstanten sein; erhalten int',
+            Lang::t('psrbridge.not_string', ['got' => 'int']),
+        );
+    }
 }

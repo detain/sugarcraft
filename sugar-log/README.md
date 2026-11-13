@@ -634,13 +634,15 @@ time=2026-11-03T07:15:04+00:00 level=INFO msg="Starting oven" prefix=bakery degr
 
 ## Translations
 
-Error-path prose — the two messages thrown by `Logger` (`logger.fatal`,
-`logger.invalid_stream`) — is resolved through `sugar-core`'s `Lang` lookup in
+Error-path prose — the messages thrown by `Logger`, `PsrBridge`, `PartsOrder` and `Log`'s
+fatal labels (`logger.fatal`,
+`logger.invalid_stream`, `psrbridge.not_string`, `psrbridge.unknown_level`,
+`parts.unknown`, `parts.duplicate` and the `log.fatal_*` labels) — is resolved through `sugar-core`'s `Lang` lookup in
 `en` plus 15 locales (exact → base → `en` → raw). Log content (level labels,
 timestamps, field text) is never translated. Selection is the **host
 application's duty**: sugar-log never changes locale on its own — set it
-through `sugar-core`'s i18n entry point at process start, and the two
-error-path messages resolve accordingly.
+through `sugar-core`'s i18n entry point at process start, and the routed
+messages resolve accordingly.
 
 ## License
 

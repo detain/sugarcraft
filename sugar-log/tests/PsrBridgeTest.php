@@ -237,6 +237,38 @@ final class PsrBridgeTest extends TestCase
         $this->assertSame('', \file_get_contents($this->tempPath) ?: '', 'a refused level must write nothing');
     }
 
+    public function testThrownLevelMessagesRouteThroughTheLangTable(): void
+    {
+        // [SL-27] Byte-exact against the English table with the slots
+        // filled: a bad key in src would surface the namespaced raw
+        // fallback here, and describe()/quoteLevelForMessage() keep
+        // their exact insertion points.
+        $en = require \dirname(__DIR__) . '/lang/en.php';
+        $bridge = new PsrBridge(Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false));
+
+        try {
+            $bridge->log(42, 'never written');
+            $this->fail('a non-string level must be refused');
+        } catch (\Psr\Log\InvalidArgumentException $e) {
+            $this->assertSame(
+                \str_replace('{got}', 'int', $en['psrbridge.not_string']),
+                $e->getMessage(),
+            );
+        }
+
+        try {
+            $bridge->log('nope', 'never written');
+            $this->fail('an unknown level string must be refused');
+        } catch (\Psr\Log\InvalidArgumentException $e) {
+            $this->assertSame(
+                \str_replace('{level}', 'nope', $en['psrbridge.unknown_level']),
+                $e->getMessage(),
+            );
+        }
+
+        $this->assertSame('', \file_get_contents($this->tempPath) ?: '', 'refused levels must write nothing');
+    }
+
     public function testImplementsPsrLoggerInterface(): void
     {
         $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
