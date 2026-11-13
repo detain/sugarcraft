@@ -21,7 +21,7 @@ sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Re
 - **Customizable Suffixer** — generates per-line suffix strings (status markers, padding)
 - **Line wrapping** — items wrap to multiple lines within a fixed viewport width, whitespace-faithfully (indentation and inter-word runs survive)
 - **Cursor navigation** — current item highlighted with configurable style
-- **Viewport awareness** — fixed-height rendering via `setViewport()`; `setCursorOffset()` controls the context gap kept above the cursor (render-clamped so it can never exceed the viewport)
+- **Viewport awareness** — fixed-height rendering via `withViewport()`; `withCursorOffset()` controls the context gap kept above the cursor (render-clamped so it can never exceed the viewport)
 - **`Stringable` items** — any PHP object with `__toString()` or `Stringable` works as a list item
 - **`StringItem` adapter** — wrap plain strings as list items without a class
 - **`LessFunc` / `EqualsFunc`** — plug-in sorting and equality comparison
@@ -43,16 +43,28 @@ use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer, DefaultSuffixer};
 // Fluent setters RETURN NEW Models — rebind (or chain); instances are immutable
 // as far as data goes — but view()/resetPreviousFrame() mutate the delta-render
 // row memo in place (see Delta rendering).
-$model = Model::new()->setWidth(80)->setHeight(24);
-$model = $model->addItem(new StringItem('First item'));
-$model = $model->addItem(new StringItem('Second item'));
-$model = $model->addItem(new StringItem('Third item'));
-$model = $model->setPrefixer(new DefaultPrefixer());
-$model = $model->setSuffixer(new DefaultSuffixer());
+$model = Model::new()->withWidth(80)->withHeight(24);
+$model = $model->withItem(new StringItem('First item'));
+$model = $model->withItem(new StringItem('Second item'));
+$model = $model->withItem(new StringItem('Third item'));
+$model = $model->withPrefixer(new DefaultPrefixer());
+$model = $model->withSuffixer(new DefaultSuffixer());
 
 echo $model->view();
 // Renders the list with a ╭ ├ ╰ box-drawing gutter, 0-based line numbers, and > cursor marker
 ```
+
+### Naming: `with*` everywhere
+
+Clone-returning setters are named `with*()` (the house fluent vocabulary — a
+`with*()` call that is not rebinded is as loud as a forgotten assignment can
+be, and `set*()` on an immutable value would lie about what it does). The
+older `set*()`/`add*()`/`cursor*()` spellings survive as **one-way deprecated
+aliases** delegating to their `with*()` canonicals (`setWidth()` →
+`withWidth()`, `addItem()` → `withItem()`, `cursorUp()` → `withCursorUp()`,
+and so on for the full surface); they return a new Model and leave the
+receiver unchanged, exactly like the canonicals. The aliases are removed in
+2.0.0 — write new code against `with*()`.
 
 ## Item Types
 
@@ -63,7 +75,7 @@ mouse-zone sentinels (U+E000/U+E001) are stripped at render time, and carriage
 returns become line breaks (content splits, never overwrites) — item content
 can forge neither a frame nor a click zone. The only styles that reach the
 output are the SGR parameters you pass to
-`setLineStyle()`/`setCurrentStyle()` — each is sanitize-then-reject: leading
+`withLineStyle()`/`withCurrentStyle()` — each is sanitize-then-reject: leading
 escape/`[`/`m` decoration bytes are trimmed before the `[0-9;]` gate, so a
 style like `m1;3` is repaired to `1;3` and accepted, while anything else that
 survives the trim is refused (no escape bytes can ever ride through), and the
@@ -74,13 +86,13 @@ the `NO_COLOR` variable).
 
 ```php
 // Plain string adapter
-$model = $model->addItem(new StringItem('Plain string item'));
+$model = $model->withItem(new StringItem('Plain string item'));
 
 // Any Stringable object
 class MyItem implements \Stringable {
     public function __toString(): string { return 'Formatted item'; }
 }
-$model = $model->addItem(new MyItem());
+$model = $model->withItem(new MyItem());
 ```
 
 ## Custom Prefixer
@@ -102,11 +114,11 @@ the item text, which survives the whitespace-faithful wrapper verbatim.
 
 Guide the cursor with text, not colour alone. Keep a marker glyph
 (`$currentMarker`, or your suffixer's) so position survives monochrome
-terminals and screen readers — relying on `setCurrentStyle()`'s colour by
+terminals and screen readers — relying on `withCurrentStyle()`'s colour by
 itself is a WCAG 1.4.1 (use of colour) warning; if you do style-only, add a
 redundant cue. Passing `''` to any glyph knob drops that decoration (control
-bytes are refused loudly, empty is not). `setLineStyle('')` +
-`setCurrentStyle('')` + `lines()` is the full plain-text mode: `lines()` never
+bytes are refused loudly, empty is not). `withLineStyle('')` +
+`withCurrentStyle('')` + `lines()` is the full plain-text mode: `lines()` never
 styles and never deltas, so it is the right reader for assistive and
 scripted-output hosts.
 
@@ -115,7 +127,7 @@ To implement the contract yourself:
 ```php
 use SugarCraft\TreeList\{Prefixer, Model};
 
-$model = $model->setPrefixer(new class implements Prefixer {
+$model = $model->withPrefixer(new class implements Prefixer {
     public function initPrefixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
         int $lineOffset, int $width, int $height, int $totalItems
@@ -133,7 +145,7 @@ $model = $model->setPrefixer(new class implements Prefixer {
 ```php
 use SugarCraft\TreeList\{Suffixer, Model};
 
-$model = $model->setSuffixer(new class implements Suffixer {
+$model = $model->withSuffixer(new class implements Suffixer {
     public function initSuffixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
         int $lineOffset, int $width, int $height
@@ -157,24 +169,24 @@ follows the line past the reservation).
 Set the rendering viewport dimensions before calling `view()`:
 
 ```php
-$model = $model->setViewport(80, 25);     // or setWidth(80)->setHeight(25)
-$model = $model->setCursorOffset(3);
-$model = $model->setLineOffset(5);
-$model = $model->setWrap(2);
+$model = $model->withViewport(80, 25);     // or withWidth(80)->withHeight(25)
+$model = $model->withCursorOffset(3);
+$model = $model->withLineOffset(5);
+$model = $model->withWrap(2);
 ```
 
 | Setter | What it controls |
 | --- | --- |
-| `setCursorOffset(n)` | context gap kept **above** the cursor at the viewport top (render-clamped to `height - 1`) |
-| `setLineOffset(n)` | context value reported to `initPrefixer()`/`initSuffixer()` for relative markers — not the viewport anchor, not a scroll budget |
-| `setWrap(n)` | per-item displayed-row cap — `0` means **no per-item cap**; rows still stay bounded by the viewport height |
+| `withCursorOffset(n)` | context gap kept **above** the cursor at the viewport top (render-clamped to `height - 1`) |
+| `withLineOffset(n)` | context value reported to `initPrefixer()`/`initSuffixer()` for relative markers — not the viewport anchor, not a scroll budget |
+| `withWrap(n)` | per-item displayed-row cap — `0` means **no per-item cap**; rows still stay bounded by the viewport height |
 
 Geometry setters reject negative values and dimensions beyond the
 `MAX_DIMENSION` cap; the `MAX_TOTAL_CELLS` area cap applies to the viewport
 (width × height) only. Zero is accepted at set time for every knob; a zero
 viewport dimension is refused loudly at render, while zero
 `cursorOffset`/`lineOffset` are legal steady states and zero `wrap` means no
-per-item cap. `setCursorOffset` is additionally **clamped at
+per-item cap. `withCursorOffset` is additionally **clamped at
 render** to `height - 1`, so it can never ask for more context rows than the
 viewport has. Scrolling uses a scroll-end clamp: near the bottom of the list
 the window slides back so the frame stays full and the cursor row is always
@@ -190,9 +202,9 @@ use SugarCraft\TreeList\{Model, StringItem, FilterState};
 // Start with a list (rebind each step — setters return new Models;
 // only the delta-render frame memo is mutated in place, by view() and
 // resetPreviousFrame())
-$model = Model::new()->setWidth(80)->setHeight(24);
+$model = Model::new()->withWidth(80)->withHeight(24);
 foreach (['apple', 'banana', 'cherry', 'apricot', 'blueberry'] as $f) {
-    $model = $model->addItem(new StringItem($f));
+    $model = $model->withItem(new StringItem($f));
 }
 
 // Filter to items starting with "a"
@@ -218,7 +230,7 @@ Filter state transitions (the `unfiltered` from-state is the state once `without
 | `filtering` | `unfiltered` | `withoutFilter()` called (original items restored) |
 
 A filter is a **live view**, not a one-time snapshot: while filtering,
-`addItem()`/`addItems()`/`addItemsFromArray()`/`removeItem()`/`clear()`/`sort()`
+`withItem()`/`withItems()`/`withItemsFromArray()`/`removeItem()`/`clear()`/`sort()`
 all act on the authoritative list and the projection is re-derived immediately
 — added items appear when (and only when) the predicate accepts them, removals
 stick, and lifting the filter with `withoutFilter()` reveals exactly the
@@ -329,8 +341,8 @@ two routes are the supported ones.
 
 Beyond the fluent setters shown above, the navigation surface is:
 
-- `setCursor(int $index)` — clamped to `0..count-1` (an out-of-range value lands on the nearest end; the setter always returns a fresh clone).
-- `cursorUp(int $n = 1)`/`cursorDown(int $n = 1)` and the page helpers `cursorPageUp(int $pages = 1)`/`cursorPageDown(int $pages = 1)` — movement **saturates** at the list ends (`cursorDown(PHP_INT_MAX)` lands on the last item, never wraps or overflows). A page spans `height` **items**, not displayed lines — a list of multi-line items pages visually faster. `cursorToStart()`/`cursorToEnd()` jump to the ends.
+- `withCursor(int $index)` — clamped to `0..count-1` (an out-of-range value lands on the nearest end; the setter always returns a fresh clone).
+- `withCursorUp(int $n = 1)`/`withCursorDown(int $n = 1)` and the page helpers `withCursorPageUp(int $pages = 1)`/`withCursorPageDown(int $pages = 1)` — movement **saturates** at the list ends (`withCursorDown(PHP_INT_MAX)` lands on the last item, never wraps or overflows). A page spans `height` **items**, not displayed lines — a list of multi-line items pages visually faster. `withCursorToStart()`/`withCursorToEnd()` jump to the ends.
 - `cursorIndex()` — the cursor's **item** index (not a row position: with multi-line items, rows and items differ). `cursorItem()` — the cursor item's `\Stringable`; throws `RuntimeException` on an empty list. `tryCursorItem()` returns `null` instead, matching the `tryItemAt()`/`itemAt()` pair.
 - `length()`, `isEmpty()`, `itemAt(int)`, `tryItemAt(int)`, `find(\Stringable)`, `itemIds()` — read-only item access (indices address the **visible** projection, so they follow the active filter).
 - `lines()` — the laid-out frame rows without any delta bookkeeping; throws `RuntimeException` with a localized message (see below) on an empty list or zero viewport. `linesStream()` is a generator-shaped wrapper over the same eager computation — it interleaves nothing.

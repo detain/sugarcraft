@@ -13,10 +13,10 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer, DefaultSuffixer};
 
 $model = Model::new()
-    ->setViewport(60, 30)    // narrow viewport to trigger wrapping
-    ->setCursorOffset(5)
-    ->setPrefixer(new DefaultPrefixer())
-    ->setSuffixer(new DefaultSuffixer());
+    ->withViewport(60, 30)    // narrow viewport to trigger wrapping
+    ->withCursorOffset(5)
+    ->withPrefixer(new DefaultPrefixer())
+    ->withSuffixer(new DefaultSuffixer());
 
 $descriptions = [
     new StringItem('Short item'),
@@ -26,7 +26,7 @@ $descriptions = [
 ];
 
 foreach ($descriptions as $d) {
-    $model = $model->addItem($d); // rebind — instances are immutable
+    $model = $model->withItem($d); // rebind — instances are immutable
 }
 
 echo "=== Word-wrap demo (viewport: 60 cols) ===\n";

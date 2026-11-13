@@ -38,15 +38,15 @@ final class IntegrationTest extends TestCase
     public function testFullLifecycleCreateNavigateRender(): void
     {
         $m = Model::new()
-            ->setViewport(60, 10)
-            ->setCursorOffset(2)
-            ->addItem(new StringItem('first item'))
-            ->addItem(new StringItem('second item'))
-            ->addItem(new StringItem('third item'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setLineStyle("\x1b[2m")
-            ->setCurrentStyle("\x1b[1m");
+            ->withViewport(60, 10)
+            ->withCursorOffset(2)
+            ->withItem(new StringItem('first item'))
+            ->withItem(new StringItem('second item'))
+            ->withItem(new StringItem('third item'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withLineStyle("\x1b[2m")
+            ->withCurrentStyle("\x1b[1m");
 
         // Cursor is already on index 0 (first item) - no navigation needed
         $this->assertSame(0, $m->cursorIndex());
@@ -72,13 +72,13 @@ final class IntegrationTest extends TestCase
     public function testDiffPipelineEmitsFullThenDelta(): void
     {
         $build = static fn(int $cursor): Model => Model::new()
-            ->setViewport(80, 24)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->addItem(new StringItem('item 2'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setCursor($cursor);
+            ->withViewport(80, 24)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withItem(new StringItem('item 2'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withCursor($cursor);
 
         // Frame 1: full output
         $m = $build(0);
@@ -87,7 +87,7 @@ final class IntegrationTest extends TestCase
         $this->assertStringContainsString('item 0', $frame1);
 
         // Frame 2: cursor move → delta rewriting the two touched rows only
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $frame2 = $m2->view();
         $this->assertNotEmpty($frame2);
         $this->assertDeltaWritesRows($frame2, 2);
@@ -95,7 +95,7 @@ final class IntegrationTest extends TestCase
         $this->assertDeltaRebuildsFullFrame($frame1, $frame2, $build(1));
 
         // Frame 3: another cursor move → delta chained over the rebuilt screen
-        $m3 = $m2->setCursor(2);
+        $m3 = $m2->withCursor(2);
         $frame3 = $m3->view();
         $this->assertNotEmpty($frame3);
         $this->assertDeltaWritesRows($frame3, 2);
@@ -111,13 +111,13 @@ final class IntegrationTest extends TestCase
     public function testFilterCombinedWithRender(): void
     {
         $m = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('apricot'))
-            ->addItem(new StringItem('banana'))
-            ->addItem(new StringItem('cherry'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('apple'))
+            ->withItem(new StringItem('apricot'))
+            ->withItem(new StringItem('banana'))
+            ->withItem(new StringItem('cherry'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
 
         // Render unfiltered first (establishes previousFrame)
         $m->view();
@@ -146,12 +146,12 @@ final class IntegrationTest extends TestCase
     public function testSortCombinedWithCursorPreservationAndRender(): void
     {
         $m = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('zebra'))
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('mango'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('zebra'))
+            ->withItem(new StringItem('apple'))
+            ->withItem(new StringItem('mango'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
 
         // Cursor on 'zebra' (index 0)
         $this->assertSame('zebra', (string) $m->cursorItem());
@@ -175,25 +175,25 @@ final class IntegrationTest extends TestCase
     public function testResizeTriggersFullRepaint(): void
     {
         $build = static fn(int $width, int $cursor): Model => Model::new()
-            ->setViewport($width, 5)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->addItem(new StringItem('item 2'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setCursor($cursor);
+            ->withViewport($width, 5)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withItem(new StringItem('item 2'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withCursor($cursor);
 
         $m = $build(40, 0);
         $frame1 = $m->view();
 
         // Cursor move → delta over the two marker-touched rows
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $frame2 = $m2->view();
         $this->assertDeltaWritesRows($frame2, 2);
         $this->assertDeltaRebuildsFullFrame($frame1, $frame2, $build(40, 1));
 
         // Resize to wider viewport → full frame at the new width
-        $m3 = $m2->setViewport(80, 5);
+        $m3 = $m2->withViewport(80, 5);
         $frame3 = $m3->view();
         $this->assertSame($build(80, 1)->view(), $frame3);
         $this->assertStringContainsString('item 0', $frame3);
@@ -206,12 +206,12 @@ final class IntegrationTest extends TestCase
     public function testMultiLineItemsRenderWithinViewport(): void
     {
         $m = Model::new()
-            ->setViewport(30, 8)
-            ->addItem(new StringItem("line1\nline2\nline3"))
-            ->addItem(new StringItem('single line'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setWrap(2);  // limit to 2 lines per item
+            ->withViewport(30, 8)
+            ->withItem(new StringItem("line1\nline2\nline3"))
+            ->withItem(new StringItem('single line'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withWrap(2);  // limit to 2 lines per item
 
         $lines = $m->lines();
         // With wrap=2, the first item contributes at most 2 lines
@@ -231,13 +231,13 @@ final class IntegrationTest extends TestCase
     {
         // Model with cursor on item 0
         $m0 = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setLineStyle("\x1b[2m")   // dim for non-current
-            ->setCurrentStyle("\x1b[1m"); // bold for current
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withLineStyle("\x1b[2m")   // dim for non-current
+            ->withCurrentStyle("\x1b[1m"); // bold for current
 
         $out0 = $m0->view();
         $this->assertIsString($out0);
@@ -248,13 +248,13 @@ final class IntegrationTest extends TestCase
 
         // Different model with cursor on item 1 (tests currentStyle)
         $m1 = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setLineStyle("\x1b[2m")
-            ->setCurrentStyle("\x1b[7m"); // reverse video for current item
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withLineStyle("\x1b[2m")
+            ->withCurrentStyle("\x1b[7m"); // reverse video for current item
 
         $out1 = $m1->view();
         $this->assertIsString($out1);
@@ -268,13 +268,13 @@ final class IntegrationTest extends TestCase
     public function testFindAfterFilter(): void
     {
         $m = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('apricot'))
-            ->addItem(new StringItem('banana'))
-            ->addItem(new StringItem('cherry'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('apple'))
+            ->withItem(new StringItem('apricot'))
+            ->withItem(new StringItem('banana'))
+            ->withItem(new StringItem('cherry'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
 
         $filtered = $m->withFilterFn(fn($v) => str_starts_with((string) $v, 'a'));
         $this->assertSame(0, $filtered->find(new StringItem('apple')));
@@ -290,18 +290,18 @@ final class IntegrationTest extends TestCase
     public function testResetPreviousFrameForcesFullFrame(): void
     {
         $build = static fn(int $cursor): Model => Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setCursor($cursor);
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withCursor($cursor);
 
         $m = $build(0);
         $frame1 = $m->view();
 
         // Move cursor → delta over the two marker-touched rows
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $frame2 = $m2->view();
         $this->assertDeltaWritesRows($frame2, 2);
         $this->assertDeltaRebuildsFullFrame($frame1, $frame2, $build(1));
@@ -320,18 +320,18 @@ final class IntegrationTest extends TestCase
     public function testAllMutationsReturnNewInstances(): void
     {
         $original = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('item 0'));
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('item 0'));
 
         // Every mutating operation returns a new instance
         $modified = $original
-            ->addItem(new StringItem('item 1'))
-            ->setCursor(1)
-            ->setViewport(60, 10)
-            ->setCursorOffset(3)
-            ->setWrap(5)
-            ->setLineStyle("\x1b[2m")
-            ->setCurrentStyle("\x1b[1m");
+            ->withItem(new StringItem('item 1'))
+            ->withCursor(1)
+            ->withViewport(60, 10)
+            ->withCursorOffset(3)
+            ->withWrap(5)
+            ->withLineStyle("\x1b[2m")
+            ->withCurrentStyle("\x1b[1m");
 
         // Original is unchanged
         $this->assertSame(1, $original->length());
@@ -352,12 +352,12 @@ final class IntegrationTest extends TestCase
     public function testFilterDoesNotAffectOriginalModel(): void
     {
         $original = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('banana'))
-            ->addItem(new StringItem('cherry'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('apple'))
+            ->withItem(new StringItem('banana'))
+            ->withItem(new StringItem('cherry'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
 
         $filtered = $original->withFilterFn(fn($v) => (string) $v !== 'banana');
         $restored = $filtered->withoutFilter();
@@ -384,9 +384,9 @@ final class IntegrationTest extends TestCase
     public function testControlBytesStrippedButStyleSgrPreserved(): void
     {
         $m = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem("safe\x07value\x00mid\x7fend"))
-            ->setCurrentStyle("\x1b[1m"); // bold — injects a legit SGR ESC
+            ->withViewport(40, 5)
+            ->withItem(new StringItem("safe\x07value\x00mid\x7fend"))
+            ->withCurrentStyle("\x1b[1m"); // bold — injects a legit SGR ESC
 
         // First frame: full output path (`return $fullOutput`).
         $first = $m->view();
@@ -397,7 +397,7 @@ final class IntegrationTest extends TestCase
         $this->assertStringNotContainsString("\x7f", $first, 'DEL leaked');
         // Printable content around the stripped bytes survives.
         $this->assertStringContainsString('safevaluemidend', $first);
-        // The legitimate SGR ESC from setCurrentStyle() must be preserved.
+        // The legitimate SGR ESC from withCurrentStyle() must be preserved.
         $this->assertStringContainsString("\x1b[1m", $first, 'style SGR was stripped');
 
         // Second frame: diff-delta path (bufferFromOutput → DiffEncoder). The
@@ -429,10 +429,10 @@ final class IntegrationTest extends TestCase
         $sentinelClose = "\u{e001}";
 
         $m = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem("before{$sentinelOpen}zone:evil{$sentinelClose}after"))
-            ->addItem(new StringItem("second item"))
-            ->setCurrentStyle("\x1b[7m");
+            ->withViewport(40, 5)
+            ->withItem(new StringItem("before{$sentinelOpen}zone:evil{$sentinelClose}after"))
+            ->withItem(new StringItem("second item"))
+            ->withCurrentStyle("\x1b[7m");
 
         $first = $m->view();
         $this->assertStringNotContainsString($sentinelOpen, $first, 'open sentinel leaked (full frame)');
@@ -443,7 +443,7 @@ final class IntegrationTest extends TestCase
         // second frame's change set — the sentinels must still be absent, and
         // the delta must actually carry the row (anti-vacuity: an empty string
         // here would mean the pin never exercised the changed-row path).
-        $moved = $m->setCursor(1);
+        $moved = $m->withCursor(1);
         $second = $moved->view();
         $this->assertNotSame('', $second, 'cursor move must re-emit the restyled row through the delta sink');
         $this->assertStringNotContainsString($sentinelOpen, $second, 'sentinel on delta sink');

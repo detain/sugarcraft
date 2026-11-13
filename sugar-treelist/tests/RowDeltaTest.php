@@ -32,9 +32,9 @@ final class RowDeltaTest extends TestCase
     public function testRowMemoIsTheLastFrameStyledRows(): void
     {
         $m = Model::new()
-            ->setViewport(10, 3)
-            ->setCurrentStyle('1')
-            ->addItemsFromArray(['a', 'b', 'c']);
+            ->withViewport(10, 3)
+            ->withCurrentStyle('1')
+            ->withItemsFromArray(['a', 'b', 'c']);
 
         $this->assertNull($this->memo($m), 'fresh model has no memo');
         $m->view();
@@ -51,19 +51,19 @@ final class RowDeltaTest extends TestCase
     public function testCursorMoveRewritesExactlyTheChangedRowsWithExactBytes(): void
     {
         $m = Model::new()
-            ->setViewport(10, 3)
-            ->setCurrentStyle('1')
-            ->addItemsFromArray(['a', 'b', 'c']);
+            ->withViewport(10, 3)
+            ->withCurrentStyle('1')
+            ->withItemsFromArray(['a', 'b', 'c']);
 
         $this->assertSame("\x1b[1ma\x1b[0m\nb\nc\n", $m->view(), 'first frame must be the full output');
 
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $this->assertSame(
             "\x1b[1;1Ha\x1b[K\n\x1b[2;1H\x1b[1mb\x1b[0m\x1b[K\n",
             $m2->view(),
         );
 
-        $m3 = $m2->setCursor(2);
+        $m3 = $m2->withCursor(2);
         $this->assertSame(
             "\x1b[2;1Hb\x1b[K\n\x1b[3;1H\x1b[1mc\x1b[0m\x1b[K\n",
             $m3->view(),
@@ -76,7 +76,7 @@ final class RowDeltaTest extends TestCase
      */
     public function testUnchangedReRenderEmitsEmptyDelta(): void
     {
-        $m = Model::new()->setViewport(10, 2)->addItem(new StringItem('solo'));
+        $m = Model::new()->withViewport(10, 2)->withItem(new StringItem('solo'));
         $this->assertNotSame('', $m->view());
         $this->assertSame('', $m->view());
     }
@@ -87,7 +87,7 @@ final class RowDeltaTest extends TestCase
      */
     public function testRemovedTailRowIsClearedNotLeftStale(): void
     {
-        $m = Model::new()->setViewport(10, 3)->addItemsFromArray(['a', 'b', 'c']);
+        $m = Model::new()->withViewport(10, 3)->withItemsFromArray(['a', 'b', 'c']);
         $this->assertSame("a\nb\nc\n", $m->view());
 
         $shrunk = $m->removeItem(2);
@@ -103,19 +103,19 @@ final class RowDeltaTest extends TestCase
     public function testNoStrayEscapeBytesAccumulateAcrossStyledDeltaFrames(): void
     {
         $m = Model::new()
-            ->setViewport(20, 4)
-            ->setCursorOffset(1)
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setLineStyle('2')
-            ->setCurrentStyle('7')
-            ->addItemsFromArray(['alpha', 'beta', 'gamma', 'delta', 'epsilon'])
-            ->setCursor(1);
+            ->withViewport(20, 4)
+            ->withCursorOffset(1)
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withLineStyle('2')
+            ->withCurrentStyle('7')
+            ->withItemsFromArray(['alpha', 'beta', 'gamma', 'delta', 'epsilon'])
+            ->withCursor(1);
 
         $frame = $m->view();
         $this->assertNotSame('', $frame);
 
-        foreach (['cursorDown', 'cursorDown', 'cursorUp', 'cursorDown'] as $move) {
+        foreach (['withCursorDown', 'withCursorDown', 'withCursorUp', 'withCursorDown'] as $move) {
             $m = $m->$move();
             $delta = $m->view();
             $residue = (string) preg_replace('/\x1b\[[0-9;]*[A-Za-z]/', '', $delta);
@@ -134,16 +134,16 @@ final class RowDeltaTest extends TestCase
     public function testDeltaAppliedToPreviousFrameEqualsFreshFullFrame(): void
     {
         $build = static fn(int $cursor): Model => Model::new()
-            ->setViewport(16, 4)
-            ->setCursorOffset(1)
-            ->setPrefixer(new DefaultPrefixer())
-            ->setLineStyle('1')
-            ->addItemsFromArray(['one', 'two', 'three', 'four', 'five'])
-            ->setCursor($cursor);
+            ->withViewport(16, 4)
+            ->withCursorOffset(1)
+            ->withPrefixer(new DefaultPrefixer())
+            ->withLineStyle('1')
+            ->withItemsFromArray(['one', 'two', 'three', 'four', 'five'])
+            ->withCursor($cursor);
 
         $m = $build(0);
         $frame1 = $m->view();
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $delta = $m2->view();
 
         $this->assertSame($build(1)->view(), $this->applyDelta($frame1, $delta),
@@ -157,14 +157,14 @@ final class RowDeltaTest extends TestCase
      */
     public function testFailedFrameResetsMemoAndNextRenderRepaintsFull(): void
     {
-        $m = Model::new()->setViewport(10, 3)->addItemsFromArray(['a', 'b', 'c']);
+        $m = Model::new()->withViewport(10, 3)->withItemsFromArray(['a', 'b', 'c']);
         $this->assertSame("a\nb\nc\n", $m->view());
 
-        $broken = $m->setViewport(10, 0);
+        $broken = $m->withViewport(10, 0);
         $error = $broken->view();
         $this->assertStringContainsString('viewport', $error);
 
-        $repaired = $broken->setViewport(10, 3);
+        $repaired = $broken->withViewport(10, 3);
         $frame = $repaired->view();
         $this->assertSame("a\nb\nc\n", $frame, 'after a failed frame the next view must be a full repaint');
         $this->assertStringNotContainsString("\x1b[", $frame);
@@ -188,14 +188,14 @@ final class RowDeltaTest extends TestCase
             }
         };
 
-        $base = Model::new()->setViewport(10, 2)->addItemsFromArray(['a', 'b']);
+        $base = Model::new()->withViewport(10, 2)->withItemsFromArray(['a', 'b']);
         $this->assertSame("a\nb\n", $base->view()); // memo established
 
         // The poison sits at index 2 — off a 2-row window anchored at the
         // start. Moving the cursor to the end pulls it into the window, so
         // lines() dies mid-render at exactly the dimensions that rendered
         // fine one frame ago.
-        $atEnd = $base->addItem($poison)->cursorToEnd();
+        $atEnd = $base->withItem($poison)->withCursorToEnd();
         $error = $atEnd->view();
         $this->assertStringContainsString('boom-mid-render', $error);
 
@@ -225,7 +225,7 @@ final class RowDeltaTest extends TestCase
                 throw new \RuntimeException("boom\x07\x1b]0;title-stolen\x07!");
             }
         };
-        $m = Model::new()->setViewport(10, 3)->addItem($poison);
+        $m = Model::new()->withViewport(10, 3)->withItem($poison);
 
         $out = $m->view();
         $this->assertStringContainsString('boom', $out, 'error prose still surfaces (sanitized)');
@@ -241,17 +241,17 @@ final class RowDeltaTest extends TestCase
     public function testLargeViewportFullAndDeltaStayLinearTime(): void
     {
         $m = Model::new()
-            ->setViewport(500, 200)
-            ->setCursorOffset(0)
-            ->setCurrentStyle('1');
+            ->withViewport(500, 200)
+            ->withCursorOffset(0)
+            ->withCurrentStyle('1');
         for ($i = 0; $i < 200; $i++) {
-            $m = $m->addItem(new StringItem("x{$i}"));
+            $m = $m->withItem(new StringItem("x{$i}"));
         }
 
         $start = \hrtime(true);
         $frame1 = $m->view();
         $this->assertCount(200, \explode("\n", \rtrim($frame1, "\n")));
-        $delta = $m->setCursor(1)->view();
+        $delta = $m->withCursor(1)->view();
         $elapsed = (\hrtime(true) - $start) / 1e9;
 
         $this->assertNotSame('', $delta);
@@ -262,13 +262,13 @@ final class RowDeltaTest extends TestCase
     /** The exact small-frame bytes at a 2000×1 viewport, with timing guard. */
     public function testSingleRowWideFrameDeltaIsExactBytes(): void
     {
-        $m = Model::new()->setViewport(2000, 1)
-            ->addItem(new StringItem('alpha'))
-            ->addItem(new StringItem('beta'));
+        $m = Model::new()->withViewport(2000, 1)
+            ->withItem(new StringItem('alpha'))
+            ->withItem(new StringItem('beta'));
 
         $start = \hrtime(true);
         $this->assertSame("alpha\n", $m->view());
-        $this->assertSame("\x1b[1;1Hbeta\x1b[K\n", $m->setCursor(1)->view());
+        $this->assertSame("\x1b[1;1Hbeta\x1b[K\n", $m->withCursor(1)->view());
         $this->assertLessThan(5.0, (\hrtime(true) - $start) / 1e9);
     }
 

@@ -28,4 +28,4 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 ## State transitions
 
 - While a filter is active, every mutation applies to the authoritative list and re-derives the projection (`reapplyFilter()`); `removeItem()` re-anchors the cursor by item identity. A filter is a live view, not a one-time snapshot.
-- Cursor movement saturates (`cursorUp(PHP_INT_MAX)` lands at 0, never overflows to float under `strict_types`); pages span `height` ITEMS, not displayed lines.
+- Cursor movement saturates (`withCursorUp(PHP_INT_MAX)` lands at 0, never overflows to float under `strict_types`); pages span `height` ITEMS, not displayed lines.

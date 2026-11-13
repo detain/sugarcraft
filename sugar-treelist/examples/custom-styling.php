@@ -52,9 +52,9 @@ class CursorMarker implements Suffixer {
 }
 
 $model = Model::new()
-    ->setViewport(80, 25)
-    ->setPrefixer(new StarsPrefixer())
-    ->setSuffixer(new CursorMarker());
+    ->withViewport(80, 25)
+    ->withPrefixer(new StarsPrefixer())
+    ->withSuffixer(new CursorMarker());
 
 $items = [
     'File: main.php',
@@ -65,7 +65,7 @@ $items = [
 ];
 
 foreach ($items as $item) {
-    $model = $model->addItem(new StringItem($item)); // rebind — immutable model
+    $model = $model->withItem(new StringItem($item)); // rebind — immutable model
 }
 
 echo "=== Custom Prefixer (★) + Suffixer (◉) ===\n";

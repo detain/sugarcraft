@@ -34,12 +34,22 @@ use SugarCraft\Core\Util\Width;
  *
  * Usage:
  * ```php
- * $model = Model::new()->setWidth(80)->setHeight(24);
+ * $model = Model::new()->withWidth(80)->withHeight(24);
  * foreach (['apple', 'banana', 'cherry'] as $f) {
- *     $model = $model->addItem(new StringItem($f));
+ *     $model = $model->withItem(new StringItem($f));
  * }
  * echo $model->view();
  * ```
+ *
+ * ## Immutability
+ *
+ * Every fluent `with*()` setter returns a NEW Model; the receiver is never
+ * touched, so rebind (or chain) each step. The carve-out is the render
+ * bookkeeping: `view()` updates, and `resetPreviousFrame()` drops, the
+ * row-delta memo in place — frames travel down one instance lineage, and
+ * that memo is state about the SCREEN, not about item or configuration data.
+ * The older `set*()`/`add*()`/`cursor*()` names survive as `@deprecated`
+ * one-way aliases delegating to the `with*()` surface (removed in 2.0.0).
  *
  * @see https://github.com/treilik/bubblelister
  */
@@ -88,10 +98,10 @@ final class Model
     private ?Prefixer $prefixer = null;
     private ?Suffixer $suffixer = null;
 
-    /** Style for non-current items (ANSI string); set via setLineStyle(). */
+    /** Style for non-current items (ANSI string); set via withLineStyle(). */
     private string $lineStyle = '';
 
-    /** Style for current item (ANSI string); set via setCurrentStyle(). */
+    /** Style for current item (ANSI string); set via withCurrentStyle(). */
     private string $currentStyle = '';
 
     /** @var \Closure(\Stringable): bool|null */
@@ -159,7 +169,7 @@ final class Model
      * Create a new Model with sane defaults.
      *
      * Default prefixer (DefaultPrefixer) and default suffixer (DefaultSuffixer)
-     * are NOT set automatically — call setPrefixer/setSuffixer to enable them.
+     * are NOT set automatically — call withPrefixer/withSuffixer to enable them.
      */
     public static function new(): self
     {
@@ -170,27 +180,48 @@ final class Model
     // Public API — fluent setters
     // -------------------------------------------------------------------------
 
-    public function setWidth(int $width): self
+    public function withWidth(int $width): self
     {
         self::assertDimension($width, 'width');
         self::assertArea($width, $this->height);
         return $this->mutate(fn($m) => $m->width = $width);
     }
 
-    public function setHeight(int $height): self
+    /**
+     * @deprecated Renamed to {@see self::withWidth()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setWidth(int $width): self { return $this->withWidth($width); }
+
+    public function withHeight(int $height): self
     {
         self::assertDimension($height, 'height');
         self::assertArea($this->width, $height);
         return $this->mutate(fn($m) => $m->height = $height);
     }
 
-    public function setViewport(int $width, int $height): self
+    /**
+     * @deprecated Renamed to {@see self::withHeight()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setHeight(int $height): self { return $this->withHeight($height); }
+
+    public function withViewport(int $width, int $height): self
     {
         self::assertDimension($width, 'width');
         self::assertDimension($height, 'height');
         self::assertArea($width, $height);
         return $this->mutate(fn($m) => [$m->width, $m->height] = [$width, $height]);
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withViewport()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setViewport(int $width, int $height): self { return $this->withViewport($width, $height); }
 
     /**
      * Reject an out-of-range viewport dimension.
@@ -275,20 +306,34 @@ final class Model
      *
      * @param \Closure(\Stringable, \Stringable): int|null $fn
      */
-    public function setLessFunc(?\Closure $fn): self
+    public function withLessFunc(?\Closure $fn): self
     {
         return $this->mutate(fn($m) => $m->lessFunc = $fn);
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withLessFunc()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setLessFunc(?\Closure $fn): self { return $this->withLessFunc($fn); }
 
     /**
      * Install the comparison used by {@see find()}.
      *
      * @param \Closure(\Stringable, \Stringable): bool|null $fn
      */
-    public function setEqualsFunc(?\Closure $fn): self
+    public function withEqualsFunc(?\Closure $fn): self
     {
         return $this->mutate(fn($m) => $m->equalsFunc = $fn);
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withEqualsFunc()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setEqualsFunc(?\Closure $fn): self { return $this->withEqualsFunc($fn); }
 
     /**
      * Desired number of context lines kept above the cursor.
@@ -300,44 +345,86 @@ final class Model
      *
      * @throws \InvalidArgumentException on negative $n
      */
-    public function setCursorOffset(int $n): self
+    public function withCursorOffset(int $n): self
     {
         self::assertDimension($n, 'cursorOffset');
         return $this->mutate(fn($m) => $m->cursorOffset = $n);
     }
 
     /**
+     * @deprecated Renamed to {@see self::withCursorOffset()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setCursorOffset(int $n): self { return $this->withCursorOffset($n); }
+
+    /**
      * Maximum rendered lines per item (0 = unlimited, subject to the viewport).
      *
      * @throws \InvalidArgumentException on negative $maxLines
      */
-    public function setWrap(int $maxLines): self
+    public function withWrap(int $maxLines): self
     {
         self::assertDimension($maxLines, 'wrap');
         return $this->mutate(fn($m) => $m->wrap = $maxLines);
     }
 
-    public function setPrefixer(Prefixer $p): self
+    /**
+     * @deprecated Renamed to {@see self::withWrap()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setWrap(int $maxLines): self { return $this->withWrap($maxLines); }
+
+    public function withPrefixer(Prefixer $p): self
     {
         return $this->mutate(fn($m) => $m->prefixer = $p);
     }
 
-    public function setSuffixer(Suffixer $s): self
+    /**
+     * @deprecated Renamed to {@see self::withPrefixer()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setPrefixer(Prefixer $p): self { return $this->withPrefixer($p); }
+
+    public function withSuffixer(Suffixer $s): self
     {
         return $this->mutate(fn($m) => $m->suffixer = $s);
     }
 
-    public function setLineStyle(string $ansiStyle): self
+    /**
+     * @deprecated Renamed to {@see self::withSuffixer()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setSuffixer(Suffixer $s): self { return $this->withSuffixer($s); }
+
+    public function withLineStyle(string $ansiStyle): self
     {
         self::sgrCodes($ansiStyle); // reject non-SGR (escape-injection) input up front
         return $this->mutate(fn($m) => $m->lineStyle = $ansiStyle);
     }
 
-    public function setCurrentStyle(string $ansiStyle): self
+    /**
+     * @deprecated Renamed to {@see self::withLineStyle()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setLineStyle(string $ansiStyle): self { return $this->withLineStyle($ansiStyle); }
+
+    public function withCurrentStyle(string $ansiStyle): self
     {
         self::sgrCodes($ansiStyle); // reject non-SGR (escape-injection) input up front
         return $this->mutate(fn($m) => $m->currentStyle = $ansiStyle);
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withCurrentStyle()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setCurrentStyle(string $ansiStyle): self { return $this->withCurrentStyle($ansiStyle); }
 
     /**
      * Context-line offset handed to the prefixer/suffixer on every init call
@@ -345,11 +432,18 @@ final class Model
      *
      * @throws \InvalidArgumentException on negative $n
      */
-    public function setLineOffset(int $n): self
+    public function withLineOffset(int $n): self
     {
         self::assertDimension($n, 'lineOffset');
         return $this->mutate(fn($m) => $m->lineOffset = $n);
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withLineOffset()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setLineOffset(int $n): self { return $this->withLineOffset($n); }
 
     /**
      * Set a filter function and return a new Model with filtering active.
@@ -480,7 +574,7 @@ final class Model
      * invisible but is never lost — withoutFilter() (or a widened predicate)
      * reveals it.
      */
-    public function addItem(\Stringable $value): self
+    public function withItem(\Stringable $value): self
     {
         return $this->mutate(function ($m) use ($value) {
             $item = new Item($value, $m->idCounter++);
@@ -494,14 +588,21 @@ final class Model
     }
 
     /**
+     * @deprecated Renamed to {@see self::withItem()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function addItem(\Stringable $value): self { return $this->withItem($value); }
+
+    /**
      * Add multiple items in one call (one clone, multiple pushes).
      *
-     * Filtered models follow the {@see addItem()} rule: pushes go to the
+     * Filtered models follow the {@see withItem()} rule: pushes go to the
      * pristine list, the projection is recomputed once.
      *
      * @param \Stringable ...$values
      */
-    public function addItems(\Stringable ...$values): self
+    public function withItems(\Stringable ...$values): self
     {
         return $this->mutate(function ($m) use ($values) {
             foreach ($values as $value) {
@@ -517,13 +618,20 @@ final class Model
     }
 
     /**
+     * @deprecated Renamed to {@see self::withItems()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function addItems(\Stringable ...$values): self { return $this->withItems(...$values); }
+
+    /**
      * Add multiple items from a plain array (strings auto-wrapped in StringItem).
      *
-     * Filtered models follow the {@see addItem()} rule.
+     * Filtered models follow the {@see withItem()} rule.
      *
      * @param array<\Stringable|string> $values
      */
-    public function addItemsFromArray(array $values): self
+    public function withItemsFromArray(array $values): self
     {
         return $this->mutate(function ($m) use ($values) {
             foreach ($values as $value) {
@@ -540,6 +648,13 @@ final class Model
             $m->reapplyFilter();
         });
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withItemsFromArray()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function addItemsFromArray(array $values): self { return $this->withItemsFromArray($values); }
 
     /**
      * Remove an item by its VISIBLE index. Cursor is re-anchored by identity.
@@ -663,10 +778,17 @@ final class Model
         return ($this->items[$this->cursorIndex] ?? null)?->value;
     }
 
-    public function setCursor(int $index): self
+    public function withCursor(int $index): self
     {
         return $this->mutate(fn($m) => $m->cursorIndex = \max(0, \min($index, \count($m->items) - 1)));
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withCursor()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setCursor(int $index): self { return $this->withCursor($index); }
 
     /**
      * Move the cursor up by $n items (negative $n moves down).
@@ -676,39 +798,53 @@ final class Model
      * unreachable magnitudes clamp straight to the list bounds instead of
      * being arithmetically evaluated.
      */
-    public function cursorUp(int $n = 1): self
+    public function withCursorUp(int $n = 1): self
     {
         $count = \count($this->items);
         if ($n > $this->cursorIndex) {
-            return $this->setCursor(0);
+            return $this->withCursor(0);
         }
         if ($n < -$count) {
             // Negative beyond the whole list moving "up" = past the end.
-            return $this->setCursor($count - 1);
+            return $this->withCursor($count - 1);
         }
-        return $this->setCursor($this->cursorIndex - $n);
+        return $this->withCursor($this->cursorIndex - $n);
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withCursorUp()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function cursorUp(int $n = 1): self { return $this->withCursorUp($n); }
 
     /**
      * Move the cursor down by $n items (negative $n moves up).
      *
-     * Saturating — see {@see cursorUp()} for why raw addition is unsafe.
+     * Saturating — see {@see withCursorUp()} for why raw addition is unsafe.
      */
-    public function cursorDown(int $n = 1): self
+    public function withCursorDown(int $n = 1): self
     {
         $count = \count($this->items);
         if ($n > $count) {
-            return $this->setCursor($count - 1);
+            return $this->withCursor($count - 1);
         }
         if ($n < -$this->cursorIndex) {
             // Negative beyond the whole list moving "down" = past the top.
-            return $this->setCursor(0);
+            return $this->withCursor(0);
         }
-        return $this->setCursor($this->cursorIndex + $n);
+        return $this->withCursor($this->cursorIndex + $n);
     }
 
     /**
-     * Page size for cursorPageUp()/cursorPageDown(): one viewport height worth
+     * @deprecated Renamed to {@see self::withCursorDown()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function cursorDown(int $n = 1): self { return $this->withCursorDown($n); }
+
+    /**
+     * Page size for withCursorPageUp()/withCursorPageDown(): one viewport height worth
      * of ITEMS (not displayed lines — multi-line items advance by one per page
      * unit; this is the documented upstream semantic).
      */
@@ -729,34 +865,62 @@ final class Model
     /**
      * Move cursor up by one viewport height (page up).
      */
-    public function cursorPageUp(int $pages = 1): self
+    public function withCursorPageUp(int $pages = 1): self
     {
-        return $this->cursorUp($this->pageSpan($pages));
+        return $this->withCursorUp($this->pageSpan($pages));
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withCursorPageUp()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function cursorPageUp(int $pages = 1): self { return $this->withCursorPageUp($pages); }
 
     /**
      * Move cursor down by one viewport height (page down).
      */
-    public function cursorPageDown(int $pages = 1): self
+    public function withCursorPageDown(int $pages = 1): self
     {
-        return $this->cursorDown($this->pageSpan($pages));
+        return $this->withCursorDown($this->pageSpan($pages));
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withCursorPageDown()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function cursorPageDown(int $pages = 1): self { return $this->withCursorPageDown($pages); }
 
     /**
      * Move cursor to the first item (index 0).
      */
-    public function cursorToStart(): self
+    public function withCursorToStart(): self
     {
-        return $this->setCursor(0);
+        return $this->withCursor(0);
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withCursorToStart()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function cursorToStart(): self { return $this->withCursorToStart(); }
 
     /**
      * Move cursor to the last item.
      */
-    public function cursorToEnd(): self
+    public function withCursorToEnd(): self
     {
-        return $this->setCursor(\count($this->items) - 1);
+        return $this->withCursor(\count($this->items) - 1);
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withCursorToEnd()} for the fluent house
+     *             vocabulary; returns a new Model, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function cursorToEnd(): self { return $this->withCursorToEnd(); }
 
     /**
      * Return the item value at the given index.
@@ -867,7 +1031,7 @@ final class Model
         }
 
         // A top gap that cannot fit beside the cursor row is clamped at render
-        // time; setCursorOffset() accepts any sane int, so the frame geometry
+        // time; withCursorOffset() accepts any sane int, so the frame geometry
         // must not depend on the caller having sized the gap against height.
         $topGap = \min($this->cursorOffset, $this->height - 1);
 

@@ -183,11 +183,11 @@ final class DefaultPrefixerTest extends TestCase
      */
     public function testContentColumnIsUniformAcrossTenItemBoundary(): void
     {
-        $m = Model::new()->setViewport(40, 24); // default cursorOffset 5: no follow-shift for 11 lines
+        $m = Model::new()->withViewport(40, 24); // default cursorOffset 5: no follow-shift for 11 lines
         foreach (\range(0, 10) as $i) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
-        $m = $m->setPrefixer(new DefaultPrefixer());
+        $m = $m->withPrefixer(new DefaultPrefixer());
 
         $lines = $m->lines();
         $this->assertCount(11, $lines);

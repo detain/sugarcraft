@@ -17,8 +17,8 @@ final class ModelTest extends TestCase
     protected function setUp(): void
     {
         $this->model = Model::new()
-            ->setViewport(80, 24)
-            ->setCursorOffset(3);
+            ->withViewport(80, 24)
+            ->withCursorOffset(3);
     }
 
     public function testNewModelIsNotEmpty(): void
@@ -31,21 +31,21 @@ final class ModelTest extends TestCase
 
     public function testAddItem(): void
     {
-        $m = $this->model->addItem(new StringItem('hello'));
+        $m = $this->model->withItem(new StringItem('hello'));
         $this->assertSame(1, $m->length());
         $this->assertFalse($m->isEmpty());
-        // Original model unchanged (immutable addItem)
+        // Original model unchanged (immutable withItem)
         $this->assertSame(0, $this->model->length());
     }
 
     public function testFluentSetters(): void
     {
         $m = $this->model
-            ->setWidth(100)
-            ->setHeight(30)
-            ->setViewport(120, 40)
-            ->setCursorOffset(7)
-            ->setWrap(5);
+            ->withWidth(100)
+            ->withHeight(30)
+            ->withViewport(120, 40)
+            ->withCursorOffset(7)
+            ->withWrap(5);
 
         $this->assertSame(120, $m->width());
         $this->assertSame(40, $m->height());
@@ -57,31 +57,31 @@ final class ModelTest extends TestCase
     {
         $m = $this->model;
         foreach (['a', 'b', 'c'] as $v) {
-            $m = $m->addItem(new StringItem($v));
+            $m = $m->withItem(new StringItem($v));
         }
 
         $this->assertSame(0, $m->cursorIndex());
-        $m = $m->cursorDown();
+        $m = $m->withCursorDown();
         $this->assertSame(1, $m->cursorIndex());
-        $m = $m->cursorDown();
+        $m = $m->withCursorDown();
         $this->assertSame(2, $m->cursorIndex());
-        $m = $m->cursorUp();
+        $m = $m->withCursorUp();
         $this->assertSame(1, $m->cursorIndex());
     }
 
     public function testCursorClampAtBounds(): void
     {
-        $m = $this->model->addItem(new StringItem('only'));
-        $m->cursorUp();  // should not go below 0
+        $m = $this->model->withItem(new StringItem('only'));
+        $m->withCursorUp();  // should not go below 0
         $this->assertSame(0, $m->cursorIndex());
-        $m->cursorDown(100);  // should not exceed length-1
+        $m->withCursorDown(100);  // should not exceed length-1
         $this->assertSame(0, $m->cursorIndex());
     }
 
     public function testRemoveItem(): void
     {
         foreach (['a', 'b', 'c'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
         $this->assertSame(3, $this->model->length());
 
@@ -92,7 +92,7 @@ final class ModelTest extends TestCase
     public function testClear(): void
     {
         foreach (['a', 'b'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
         $this->assertSame(2, $this->model->length());
         $this->model = $this->model->clear();
@@ -102,11 +102,11 @@ final class ModelTest extends TestCase
     public function testSortWithLessFunc(): void
     {
         foreach (['z', 'a', 'm'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
 
         $this->model = $this->model
-            ->setLessFunc(fn($a, $b) => \strcmp((string) $a, (string) $b))
+            ->withLessFunc(fn($a, $b) => \strcmp((string) $a, (string) $b))
             ->sort();
 
         // After sort, cursor stays on the same logical item ('z' was at cursor index 0).
@@ -119,7 +119,7 @@ final class ModelTest extends TestCase
     {
         // Sorting an empty list must be a loud-free no-op: reading the (absent)
         // cursor item's id has to tolerate the gap, not warn about it.
-        $model = $this->model->setLessFunc(fn($a, $b) => \strcmp((string) $a, (string) $b));
+        $model = $this->model->withLessFunc(fn($a, $b) => \strcmp((string) $a, (string) $b));
         $sorted = $model->sort();
 
         $this->assertTrue($sorted->isEmpty());
@@ -129,7 +129,7 @@ final class ModelTest extends TestCase
     public function testFindItem(): void
     {
         foreach (['apple', 'banana', 'cherry'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
 
         $this->assertSame(1, $this->model->find(new StringItem('banana')));
@@ -139,10 +139,10 @@ final class ModelTest extends TestCase
     public function testFindWithEqualsFunc(): void
     {
         foreach (['aa', 'bb', 'cc'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
 
-        $this->model = $this->model->setEqualsFunc(fn($a, $b) => (string) $a === (string) $b);
+        $this->model = $this->model->withEqualsFunc(fn($a, $b) => (string) $a === (string) $b);
         $this->assertSame(0, $this->model->find(new StringItem('aa')));
         $this->assertSame(-1, $this->model->find(new StringItem('xx')));
     }
@@ -150,10 +150,10 @@ final class ModelTest extends TestCase
     public function testSetCursor(): void
     {
         foreach (['a', 'b', 'c'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
 
-        $this->model = $this->model->setCursor(2);
+        $this->model = $this->model->withCursor(2);
         $this->assertSame(2, $this->model->cursorIndex());
     }
 
@@ -165,7 +165,7 @@ final class ModelTest extends TestCase
 
     public function testLinesThrowsOnZeroViewport(): void
     {
-        $this->model->addItem(new StringItem('x'))->setViewport(0, 10);
+        $this->model->withItem(new StringItem('x'))->withViewport(0, 10);
         $this->expectException(\RuntimeException::class);
         $this->model->lines();
     }
@@ -173,10 +173,10 @@ final class ModelTest extends TestCase
     public function testViewReturnsString(): void
     {
         $m = $this->model
-            ->addItem(new StringItem('item one'))
-            ->addItem(new StringItem('item two'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->withItem(new StringItem('item one'))
+            ->withItem(new StringItem('item two'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
 
         $view = $m->view();
         $this->assertIsString($view);
@@ -187,10 +187,10 @@ final class ModelTest extends TestCase
     public function testPrefixerInterface(): void
     {
         $m = $this->model
-            ->addItem(new StringItem('test item'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setViewport(80, 24);
+            ->withItem(new StringItem('test item'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(80, 24);
 
         $lines = $m->lines();
         $this->assertNotEmpty($lines);
@@ -207,11 +207,11 @@ final class ModelTest extends TestCase
     {
         $longText = \str_repeat('word ', 50);  // long enough to wrap
         $m = $this->model
-            ->addItem(new StringItem($longText))
-            ->setViewport(20, 24)
-            ->setWrap(3)
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->withItem(new StringItem($longText))
+            ->withViewport(20, 24)
+            ->withWrap(3)
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
 
         $lines = $m->lines();
         $this->assertLessThanOrEqual(3, \count($lines));
@@ -219,7 +219,7 @@ final class ModelTest extends TestCase
 
     public function testAddItemReturnsNewInstance(): void
     {
-        $m = $this->model->addItem(new StringItem('x'));
+        $m = $this->model->withItem(new StringItem('x'));
         // Returns a new instance, not the same object.
         $this->assertNotSame($this->model, $m);
         // Original is unchanged.
@@ -233,25 +233,25 @@ final class ModelTest extends TestCase
         $counter = new \ReflectionProperty(Model::class, 'idCounter');
         $items = new \ReflectionProperty(Model::class, 'items');
 
-        // Mixed addItem/addItems chain on one model: every id in the list
+        // Mixed withItem/withItems chain on one model: every id in the list
         // stays unique and the stream keeps counting from the fork point.
-        $m1 = $this->model->addItem(new StringItem('A'));
-        $m2 = $m1->addItems(new StringItem('B'), new StringItem('C'));
-        $m3 = $m2->addItem(new StringItem('D'));
+        $m1 = $this->model->withItem(new StringItem('A'));
+        $m2 = $m1->withItems(new StringItem('B'), new StringItem('C'));
+        $m3 = $m2->withItem(new StringItem('D'));
         $ids = \array_map(
             static fn($item): int => $item->id,
             $items->getValue($m3)
         );
         $this->assertSame([0, 1, 2, 3], $ids);
 
-        // Adversarial sibling fork (m2): two addItem calls on the SAME base.
+        // Adversarial sibling fork (m2): two withItem calls on the SAME base.
         // The pre-fix `$id = $this->idCounter++` read the receiver's counter
         // and left it silently advanced; the base must emerge untouched.
-        $base = $this->model->addItems(new StringItem('S1'), new StringItem('S2'));
+        $base = $this->model->withItems(new StringItem('S1'), new StringItem('S2'));
         $before = $counter->getValue($base);
-        $x = $base->addItem(new StringItem('X'));
-        $y = $base->addItem(new StringItem('Y'));
-        $this->assertSame($before, $counter->getValue($base), 'addItem mutated the receiver counter');
+        $x = $base->withItem(new StringItem('X'));
+        $y = $base->withItem(new StringItem('Y'));
+        $this->assertSame($before, $counter->getValue($base), 'withItem mutated the receiver counter');
         // Each fork's own stream is well-formed: base ids 0,1 plus one new id.
         foreach ([$x, $y] as $fork) {
             $forkIds = \array_map(
@@ -273,7 +273,7 @@ final class ModelTest extends TestCase
     public function testWithFilterFnReturnsNewInstance(): void
     {
         foreach (['apple', 'banana', 'cherry'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
 
         $filtered = $this->model->withFilterFn(fn($v) => str_starts_with((string) $v, 'b'));
@@ -293,7 +293,7 @@ final class ModelTest extends TestCase
     public function testWithFilterFnFiltersItemsCorrectly(): void
     {
         foreach (['apple', 'apricot', 'banana', 'cherry'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
 
         $filtered = $this->model->withFilterFn(fn($v) => str_starts_with((string) $v, 'a'));
@@ -301,14 +301,14 @@ final class ModelTest extends TestCase
         $this->assertSame(2, $filtered->length());
         // Verify by navigating through cursorItem
         $this->assertSame('apple', (string) $filtered->cursorItem());
-        $filtered = $filtered->cursorDown();
+        $filtered = $filtered->withCursorDown();
         $this->assertSame('apricot', (string) $filtered->cursorItem());
     }
 
     public function testWithoutFilterRestoresOriginalItems(): void
     {
         foreach (['apple', 'banana', 'cherry'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
 
         $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'banana');
@@ -322,7 +322,7 @@ final class ModelTest extends TestCase
 
     public function testWithoutFilterOnUnfilteredModelReturnsSelf(): void
     {
-        $this->model = $this->model->addItem(new StringItem('apple'));
+        $this->model = $this->model->withItem(new StringItem('apple'));
         $result = $this->model->withoutFilter();
         // On an unfiltered model, withoutFilter is a no-op and returns $this unchanged.
         $this->assertSame($this->model, $result);
@@ -331,9 +331,9 @@ final class ModelTest extends TestCase
     public function testWithFilterFnCursorClampedToFilteredLength(): void
     {
         foreach (['a', 'b', 'c'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
-        $this->model = $this->model->setCursor(2);  // cursor on 'c'
+        $this->model = $this->model->withCursor(2);  // cursor on 'c'
 
         // Filter out 'c' — cursor should clamp to index 1 (last remaining item 'b')
         $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'c');
@@ -343,7 +343,7 @@ final class ModelTest extends TestCase
 
     public function testFilterStateIsFilteringAfterSet(): void
     {
-        $this->model = $this->model->addItem(new StringItem('apple'));
+        $this->model = $this->model->withItem(new StringItem('apple'));
         $this->assertNull($this->model->filterState());
 
         $filtered = $this->model->withFilterFn(fn() => true);
@@ -354,8 +354,8 @@ final class ModelTest extends TestCase
 
     public function testCursorUpClampsToZero(): void
     {
-        $m = $this->model->addItem(new StringItem('only'));
-        $result = $m->cursorUp(10);
+        $m = $this->model->withItem(new StringItem('only'));
+        $result = $m->withCursorUp(10);
         $this->assertSame(0, $result->cursorIndex());
     }
 
@@ -363,31 +363,31 @@ final class ModelTest extends TestCase
     {
         $m = $this->model;
         foreach (['a', 'b'] as $v) {
-            $m = $m->addItem(new StringItem($v));
+            $m = $m->withItem(new StringItem($v));
         }
-        $m = $m->setCursor(0);
-        $m = $m->cursorDown(100);
+        $m = $m->withCursor(0);
+        $m = $m->withCursorDown(100);
         $this->assertSame(1, $m->cursorIndex());
     }
 
     public function testSetCursorOffsetIsIndependentOfLineOffset(): void
     {
         // lineOffset is now an internal scroll anchor, no longer aliased to cursorOffset.
-        $m = $this->model->setCursorOffset(7);
+        $m = $this->model->withCursorOffset(7);
         $this->assertSame(7, $m->cursorOffset());
-        // lineOffset retains its default value (not overwritten by setCursorOffset).
+        // lineOffset retains its default value (not overwritten by withCursorOffset).
         $this->assertSame(5, $m->lineOffset());
     }
 
     public function testSetLineStyle(): void
     {
-        $m = $this->model->setLineStyle("\x1b[2m");
+        $m = $this->model->withLineStyle("\x1b[2m");
         $this->assertSame("\x1b[2m", $m->lineStyle());
     }
 
     public function testSetCurrentStyle(): void
     {
-        $m = $this->model->setCurrentStyle("\x1b[1m");
+        $m = $this->model->withCurrentStyle("\x1b[1m");
         $this->assertSame("\x1b[1m", $m->currentStyle());
     }
 
@@ -396,9 +396,9 @@ final class ModelTest extends TestCase
     public function testSetLineStyleAcceptsBareSgrCodes(): void
     {
         $m = $this->model
-            ->addItem(new StringItem('cur'))
-            ->addItem(new StringItem('row'))
-            ->setLineStyle('1;31');
+            ->withItem(new StringItem('cur'))
+            ->withItem(new StringItem('row'))
+            ->withLineStyle('1;31');
         $this->assertSame('1;31', $m->lineStyle());
         // lineStyle applies to non-current rows; the bare codes must render as a
         // well-formed SGR sequence (proving a legit "1;31" passes the guard).
@@ -409,13 +409,13 @@ final class ModelTest extends TestCase
     {
         // OSC title-set payload smuggled inside a "style" string.
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setLineStyle("\x1b]0;pwned\x07");
+        $this->model->withLineStyle("\x1b]0;pwned\x07");
     }
 
     public function testSetCurrentStyleRejectsEscapeInjection(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setCurrentStyle("1;31m\x1b]0;pwned");
+        $this->model->withCurrentStyle("1;31m\x1b]0;pwned");
     }
 
     public function testStylePropertiesAreNoLongerPubliclyWritable(): void
@@ -430,7 +430,7 @@ final class ModelTest extends TestCase
             $this->assertFalse($prop->isPublic(), "\${$field} must not be public");
         }
 
-        $m = $this->model->addItem(new StringItem('row'));
+        $m = $this->model->withItem(new StringItem('row'));
         $this->expectException(\Error::class);
         $m->width = 1_000_000; // PHP 8 raises Error on inaccessible property write
     }
@@ -440,7 +440,7 @@ final class ModelTest extends TestCase
         // Defense in depth (the original M7 hazard): even a worst-case write
         // straight into the private field must not splice a raw escape — the
         // render-time sgrCodes() guard re-validates at the splice point.
-        $m = $this->model->addItem(new StringItem('row'));
+        $m = $this->model->withItem(new StringItem('row'));
         $prop = new \ReflectionProperty(Model::class, 'currentStyle');
         $prop->setValue($m, "\x1b]0;pwned\x07");
         $this->expectException(\InvalidArgumentException::class);
@@ -452,39 +452,39 @@ final class ModelTest extends TestCase
     public function testSetWidthRejectsNegative(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setWidth(-1);
+        $this->model->withWidth(-1);
     }
 
     public function testSetHeightRejectsNegative(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setHeight(-1);
+        $this->model->withHeight(-1);
     }
 
     public function testSetWidthRejectsAbsurdlyLargeValue(): void
     {
         // A memory-exhaustion DoS: width×height cells would be allocated.
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setWidth(Model::MAX_DIMENSION + 1);
+        $this->model->withWidth(Model::MAX_DIMENSION + 1);
     }
 
     public function testSetViewportRejectsNegativeHeight(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setViewport(80, -5);
+        $this->model->withViewport(80, -5);
     }
 
     public function testSetWidthAllowsZeroAndUpperBound(): void
     {
         // Zero stays valid at the setter (lines() rejects a zero viewport at
         // render time); the upper bound itself is accepted.
-        $this->assertSame(0, $this->model->setWidth(0)->width());
-        $this->assertSame(Model::MAX_DIMENSION, $this->model->setWidth(Model::MAX_DIMENSION)->width());
+        $this->assertSame(0, $this->model->withWidth(0)->width());
+        $this->assertSame(Model::MAX_DIMENSION, $this->model->withWidth(Model::MAX_DIMENSION)->width());
     }
 
     public function testSortWithNullLessFuncReturnsSelf(): void
     {
-        $this->model->addItem(new StringItem('z'));
+        $this->model->withItem(new StringItem('z'));
         $result = $this->model->sort();
         $this->assertSame($this->model, $result);
     }
@@ -497,7 +497,7 @@ final class ModelTest extends TestCase
 
     public function testRemoveItemAtInvalidIndexReturnsNewInstance(): void
     {
-        $m = $this->model->addItem(new StringItem('item'));
+        $m = $this->model->withItem(new StringItem('item'));
         $result = $m->removeItem(99);
         // Returns a new instance (no-op clone) for referential transparency
         $this->assertNotSame($m, $result);
@@ -508,7 +508,7 @@ final class ModelTest extends TestCase
 
     public function testRemoveItemAtNegativeIndexReturnsNewInstance(): void
     {
-        $m = $this->model->addItem(new StringItem('item'));
+        $m = $this->model->withItem(new StringItem('item'));
         $result = $m->removeItem(-1);
         // Returns a new instance (no-op clone) for referential transparency
         $this->assertNotSame($m, $result);
@@ -520,10 +520,10 @@ final class ModelTest extends TestCase
     public function testMultilineItemRendersMultipleLines(): void
     {
         $m = $this->model
-            ->addItem(new StringItem("line1\nline2\nline3"))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setViewport(80, 24);
+            ->withItem(new StringItem("line1\nline2\nline3"))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(80, 24);
 
         $lines = $m->lines();
         $this->assertGreaterThan(1, count($lines));
@@ -531,13 +531,13 @@ final class ModelTest extends TestCase
 
     public function testSetPrefixer(): void
     {
-        $m = $this->model->setPrefixer(new DefaultPrefixer());
+        $m = $this->model->withPrefixer(new DefaultPrefixer());
         $this->assertInstanceOf(DefaultPrefixer::class, $m->prefixer());
     }
 
     public function testSetSuffixer(): void
     {
-        $m = $this->model->setSuffixer(new DefaultSuffixer());
+        $m = $this->model->withSuffixer(new DefaultSuffixer());
         $this->assertInstanceOf(DefaultSuffixer::class, $m->suffixer());
     }
 
@@ -550,12 +550,12 @@ final class ModelTest extends TestCase
     public function testLinesWithStyleApplied(): void
     {
         $m = $this->model
-            ->addItem(new StringItem('styled'))
-            ->setLineStyle("\x1b[2m")
-            ->setCurrentStyle("\x1b[1m")
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setViewport(80, 24);
+            ->withItem(new StringItem('styled'))
+            ->withLineStyle("\x1b[2m")
+            ->withCurrentStyle("\x1b[1m")
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(80, 24);
 
         $lines = $m->lines();
         $this->assertNotEmpty($lines);
@@ -563,7 +563,7 @@ final class ModelTest extends TestCase
 
     public function testFilterWithNoMatchingItems(): void
     {
-        $this->model = $this->model->addItem(new StringItem('apple'));
+        $this->model = $this->model->withItem(new StringItem('apple'));
         $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'apple');
         $this->assertSame(0, $filtered->length());
     }
@@ -571,9 +571,9 @@ final class ModelTest extends TestCase
     public function testFilterCursorsToLastItemWhenOnlyOneMatches(): void
     {
         foreach (['a', 'b', 'c'] as $v) {
-            $this->model = $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->withItem(new StringItem($v));
         }
-        $this->model = $this->model->setCursor(2); // cursor on 'c'
+        $this->model = $this->model->withCursor(2); // cursor on 'c'
         $filtered = $this->model->withFilterFn(fn($v) => (string) $v === 'a');
         // After filtering to just 'a', cursor should be 0
         $this->assertSame(0, $filtered->cursorIndex());
@@ -586,10 +586,10 @@ final class ModelTest extends TestCase
         // A single word longer than content width should be split
         $longWord = \str_repeat('a', 100);
         $m = $this->model
-            ->addItem(new StringItem($longWord))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setViewport(20, 24);
+            ->withItem(new StringItem($longWord))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(20, 24);
 
         $lines = $m->lines();
         $this->assertNotEmpty($lines);
@@ -606,8 +606,8 @@ final class ModelTest extends TestCase
     {
         // 8 CJK ideographs = 16 display cells, viewport width 12, no prefixer.
         $m = Model::new()
-            ->setViewport(12, 5)
-            ->addItem(new StringItem('日本語日本語日'));
+            ->withViewport(12, 5)
+            ->withItem(new StringItem('日本語日本語日'));
 
         $this->assertSame(['日本語日本語', '日'], $m->lines());
     }
@@ -616,10 +616,10 @@ final class ModelTest extends TestCase
     {
         // Multi-paragraph text (contains \n) exercises hardWrap
         $m = $this->model
-            ->addItem(new StringItem("para1\n\npara2"))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setViewport(80, 24);
+            ->withItem(new StringItem("para1\n\npara2"))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(80, 24);
 
         $lines = $m->lines();
         $this->assertNotEmpty($lines);
@@ -629,11 +629,11 @@ final class ModelTest extends TestCase
     {
         $multiline = "line1\nline2\nline3\nline4\nline5";
         $m = $this->model
-            ->addItem(new StringItem($multiline))
-            ->setWrap(2) // limit to 2 lines
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setViewport(80, 24);
+            ->withItem(new StringItem($multiline))
+            ->withWrap(2) // limit to 2 lines
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(80, 24);
 
         $lines = $m->lines();
         // Exact geometry (2026-11-03 strengthened pin — the old count-only
@@ -649,10 +649,10 @@ final class ModelTest extends TestCase
     public function testLinesWithContentWidthTooNarrowExercisingHardWrapEdgeCase(): void
     {
         $m = $this->model
-            ->addItem(new StringItem('word'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setViewport(5, 24);
+            ->withItem(new StringItem('word'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(5, 24);
 
         $lines = $m->lines();
         // Exact geometry (2026-11-03 strengthened pin): prefix + suffix leave
@@ -682,10 +682,10 @@ final class ModelTest extends TestCase
             foreach ([0, 2, 5, 100] as $offset) {
                 foreach (range(0, count($items) - 1) as $cursor) {
                     $m = Model::new()
-                        ->setViewport(40, $height)
-                        ->setCursorOffset($offset)
-                        ->addItemsFromArray($items)
-                        ->setCursor($cursor);
+                        ->withViewport(40, $height)
+                        ->withCursorOffset($offset)
+                        ->withItemsFromArray($items)
+                        ->withCursor($cursor);
                     $lines = $m->lines();
                     $this->assertLessThanOrEqual($height, count($lines),
                         "frame overflow at h={$height} offset={$offset} cursor={$cursor}");
@@ -715,15 +715,15 @@ final class ModelTest extends TestCase
     public function testScrollEndGeometryWithMultiLineItems(): void
     {
         $m = Model::new()
-            ->setViewport(20, 4)
-            ->setCursorOffset(1)
-            ->addItemsFromArray(["a1\na2", "b1\nb2", "c1\nc2"]);
+            ->withViewport(20, 4)
+            ->withCursorOffset(1)
+            ->withItemsFromArray(["a1\na2", "b1\nb2", "c1\nc2"]);
 
         $lines = $m->lines();
         $this->assertCount(4, $lines);
         $this->assertSame(['a1', 'a2', 'b1', 'b2'], $lines);
 
-        $tail = $m->setCursor(2);
+        $tail = $m->withCursor(2);
         $tailLines = $tail->lines();
         $this->assertCount(4, $tailLines, 'tail frame must be full, not collapsed');
         $this->assertContains('c1', $tailLines, 'cursor item first row must be visible');
@@ -740,9 +740,9 @@ final class ModelTest extends TestCase
     {
         $m = Model::new();
         foreach (range(0, 9) as $i) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
-        $lines = $m->cursorToEnd()->lines();
+        $lines = $m->withCursorToEnd()->lines();
 
         $this->assertCount(10, $lines, 'ten short items fit the stock 24-row viewport');
         $this->assertContains('item 9', $lines, 'cursor row must be on screen');
@@ -766,15 +766,15 @@ final class ModelTest extends TestCase
     public function testMarkerOnNonZeroCursorItem(): void
     {
         $m = Model::new()
-            ->setViewport(40, 5)
-            ->setCursorOffset(2)
-            ->addItem(new StringItem('item0'))
-            ->addItem(new StringItem('item1'))
-            ->addItem(new StringItem('item2'))
-            ->setPrefixer(new DefaultPrefixer());
+            ->withViewport(40, 5)
+            ->withCursorOffset(2)
+            ->withItem(new StringItem('item0'))
+            ->withItem(new StringItem('item1'))
+            ->withItem(new StringItem('item2'))
+            ->withPrefixer(new DefaultPrefixer());
 
         // Cursor on item 2 → its first line has '>'
-        $m2 = $m->setCursor(2);
+        $m2 = $m->withCursor(2);
         $lines = $m2->lines();
         $markerRows = array_filter($lines, fn(string $l): bool => str_contains($l, '>'));
         $this->assertCount(1, $markerRows, 'exactly one row may carry the cursor marker');
@@ -796,14 +796,14 @@ final class ModelTest extends TestCase
     public function testViewSnapshotOutputIsDeterministic(): void
     {
         $m = Model::new()
-            ->setViewport(40, 5)
-            ->setCursorOffset(2)
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('banana'))
-            ->addItem(new StringItem('cherry'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setCurrentStyle("\x1b[1m");
+            ->withViewport(40, 5)
+            ->withCursorOffset(2)
+            ->withItem(new StringItem('apple'))
+            ->withItem(new StringItem('banana'))
+            ->withItem(new StringItem('cherry'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withCurrentStyle("\x1b[1m");
 
         $out = $m->view();
         $this->assertIsString($out);
@@ -819,7 +819,7 @@ final class ModelTest extends TestCase
         // pin used to assert "delta shorter than full", a size heuristic that
         // stayed green while the cell projection shipped SGR bytes as glyph
         // cells.)
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $out2 = $m2->view();
         $this->assertIsString($out2);
         $this->assertDeltaWritesRows($out2, 2);
@@ -831,15 +831,15 @@ final class ModelTest extends TestCase
     private function snapshotFixture(int $cursor = 0): Model
     {
         return Model::new()
-            ->setViewport(40, 5)
-            ->setCursorOffset(2)
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('banana'))
-            ->addItem(new StringItem('cherry'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setCurrentStyle("\x1b[1m")
-            ->setCursor($cursor);
+            ->withViewport(40, 5)
+            ->withCursorOffset(2)
+            ->withItem(new StringItem('apple'))
+            ->withItem(new StringItem('banana'))
+            ->withItem(new StringItem('cherry'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withCurrentStyle("\x1b[1m")
+            ->withCursor($cursor);
     }
 
     /**
@@ -852,20 +852,20 @@ final class ModelTest extends TestCase
     public function testDiffOpsDescribeOnlyChangedCells(): void
     {
         $build = static fn(int $cursor): Model => Model::new()
-            ->setViewport(80, 24)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->addItem(new StringItem('item 2'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setLineStyle("\x1b[2m")
-            ->setCursor($cursor);
+            ->withViewport(80, 24)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withItem(new StringItem('item 2'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withLineStyle("\x1b[2m")
+            ->withCursor($cursor);
 
         $m = $build(0);
         $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
 
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $frame2Out = $m2->view();
 
         // Rows 0 and 1 swap faint/plain+marker; row 2 stays faint-unchanged.
@@ -887,12 +887,12 @@ final class ModelTest extends TestCase
     public function testFilterTriggersFullFrameNotDelta(): void
     {
         $build = static fn(): Model => Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('banana'))
-            ->addItem(new StringItem('cherry'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('apple'))
+            ->withItem(new StringItem('banana'))
+            ->withItem(new StringItem('cherry'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
 
         // Render unfiltered model first (stores the row memo in $m)
         $m = $build();
@@ -920,20 +920,20 @@ final class ModelTest extends TestCase
     public function testCursorMoveStyleOnlyDeltaIsNonEmpty(): void
     {
         $build = static fn(int $cursor): Model => Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('item zero'))
-            ->addItem(new StringItem('item one'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setLineStyle('')
-            ->setCurrentStyle("\x1b[7m")
-            ->setCursor($cursor);
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('item zero'))
+            ->withItem(new StringItem('item one'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withLineStyle('')
+            ->withCurrentStyle("\x1b[7m")
+            ->withCursor($cursor);
 
         $m = $build(0);
         $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
 
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $frame2Out = $m2->view();
 
         $this->assertNotEmpty($frame2Out);
@@ -950,25 +950,25 @@ final class ModelTest extends TestCase
     public function testResizeTriggersFullFrameRepaint(): void
     {
         $build = static fn(int $width, int $cursor): Model => Model::new()
-            ->setViewport($width, 5)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setCursor($cursor);
+            ->withViewport($width, 5)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withCursor($cursor);
 
         $m = $build(40, 0);
         $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
 
         // Same dimensions → delta over the two marker-touched rows.
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $frame2Out = $m2->view();
         $this->assertDeltaWritesRows($frame2Out, 2);
         $this->assertDeltaRebuildsFullFrame($frame1Out, $frame2Out, $build(40, 1));
 
         // Resize to wider viewport → must emit the FULL frame at the new width.
-        $m3 = $m2->setViewport(60, 5);
+        $m3 = $m2->withViewport(60, 5);
         $frame3Out = $m3->view();
         $this->assertSame($build(60, 1)->view(), $frame3Out);
         $this->assertStringNotContainsString("\x1b[", $frame3Out); // plain rows: full paint has no CUP preamble
@@ -981,17 +981,17 @@ final class ModelTest extends TestCase
     public function testResetPreviousFrameForcesFullFrame(): void
     {
         $build = static fn(int $cursor): Model => Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setCursor($cursor);
+            ->withViewport(40, 5)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withCursor($cursor);
 
         $m = $build(0);
         $frame1Out = $m->view();
 
-        $m2 = $m->setCursor(1);
+        $m2 = $m->withCursor(1);
         $frame2Out = $m2->view();
         $this->assertDeltaWritesRows($frame2Out, 2);
 
@@ -1013,7 +1013,7 @@ final class ModelTest extends TestCase
         $modelForItems = $m;
         $ids = [];
         for ($i = 0; $i < 5; $i++) {
-            $modelForItems = $modelForItems->addItem(new StringItem("item $i"));
+            $modelForItems = $modelForItems->withItem(new StringItem("item $i"));
         }
         // Access items via reflection (they are private, but ids are stable)
         $reflection = new \ReflectionClass($modelForItems);
@@ -1040,21 +1040,21 @@ final class ModelTest extends TestCase
     public function testDiffEmissionByteBenchmark(): void
     {
         $model = Model::new()
-            ->setViewport(80, 24)
-            ->addItem(new \SugarCraft\TreeList\StringItem('item 1'))
-            ->addItem(new \SugarCraft\TreeList\StringItem('item 2'));
+            ->withViewport(80, 24)
+            ->withItem(new \SugarCraft\TreeList\StringItem('item 1'))
+            ->withItem(new \SugarCraft\TreeList\StringItem('item 2'));
 
         // Frame 1: full render
         $out1 = $model->view();
         $bytes1 = \strlen($out1);
 
         // Frame 2: change cursor position (small visual change)
-        $model2 = $model->setCursor(1);
+        $model2 = $model->withCursor(1);
         $out2 = $model2->view();
         $bytes2 = \strlen($out2);
 
         // Frame 3: change cursor position again
-        $model3 = $model2->setCursor(0);
+        $model3 = $model2->withCursor(0);
         $out3 = $model3->view();
         $bytes3 = \strlen($out3);
 
@@ -1068,13 +1068,13 @@ final class ModelTest extends TestCase
 
     public function testSetLineOffset(): void
     {
-        $m = $this->model->setLineOffset(10);
+        $m = $this->model->withLineOffset(10);
         $this->assertSame(10, $m->lineOffset());
     }
 
     public function testAddItems(): void
     {
-        $m = $this->model->addItems(
+        $m = $this->model->withItems(
             new StringItem('a'),
             new StringItem('b'),
             new StringItem('c'),
@@ -1086,7 +1086,7 @@ final class ModelTest extends TestCase
     public function testAddItemsFromArray(): void
     {
         // Strings should be auto-wrapped in StringItem
-        $m = $this->model->addItemsFromArray(['apple', 'banana', 'cherry']);
+        $m = $this->model->withItemsFromArray(['apple', 'banana', 'cherry']);
         $this->assertSame(3, $m->length());
         $this->assertSame('apple', (string) $m->cursorItem());
     }
@@ -1094,45 +1094,45 @@ final class ModelTest extends TestCase
     public function testAddItemsFromArrayWithStringableObjects(): void
     {
         // Stringable objects should pass through directly
-        $m = $this->model->addItemsFromArray([new StringItem('x'), new StringItem('y')]);
+        $m = $this->model->withItemsFromArray([new StringItem('x'), new StringItem('y')]);
         $this->assertSame(2, $m->length());
     }
 
     public function testCursorPageUp(): void
     {
         // Use small height to make page movement more obvious
-        $m = Model::new()->setViewport(80, 3);
+        $m = Model::new()->withViewport(80, 3);
         for ($i = 0; $i < 10; $i++) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
-        $m = $m->setCursor(5);
+        $m = $m->withCursor(5);
         $this->assertSame(5, $m->cursorIndex());
 
         // Page up by 1: 5 - (3 * 1) = 2
-        $m2 = $m->cursorPageUp();
+        $m2 = $m->withCursorPageUp();
         $this->assertSame(2, $m2->cursorIndex());
 
         // Page up by 2: 2 - (3 * 2) = -4 → clamped to 0
-        $m3 = $m2->cursorPageUp(2);
+        $m3 = $m2->withCursorPageUp(2);
         $this->assertSame(0, $m3->cursorIndex());
     }
 
     public function testCursorPageDown(): void
     {
         // Use small height to make page movement more obvious
-        $m = Model::new()->setViewport(80, 3);
+        $m = Model::new()->withViewport(80, 3);
         for ($i = 0; $i < 10; $i++) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
-        $m = $m->setCursor(1);
+        $m = $m->withCursor(1);
         $this->assertSame(1, $m->cursorIndex());
 
         // Page down by 1: 1 + 3 = 4
-        $m2 = $m->cursorPageDown();
+        $m2 = $m->withCursorPageDown();
         $this->assertSame(4, $m2->cursorIndex());
 
         // Page down again: 4 + 3 = 7
-        $m3 = $m2->cursorPageDown();
+        $m3 = $m2->withCursorPageDown();
         $this->assertSame(7, $m3->cursorIndex());
     }
 
@@ -1140,9 +1140,9 @@ final class ModelTest extends TestCase
     {
         $m = $this->model;
         for ($i = 0; $i < 5; $i++) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
-        $m = $m->setCursor(0)->cursorPageDown(100);
+        $m = $m->withCursor(0)->withCursorPageDown(100);
         $this->assertSame(4, $m->cursorIndex()); // Last index
     }
 
@@ -1150,12 +1150,12 @@ final class ModelTest extends TestCase
     {
         $m = $this->model;
         for ($i = 0; $i < 3; $i++) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
-        $m = $m->setCursor(2);
+        $m = $m->withCursor(2);
         $this->assertSame(2, $m->cursorIndex());
 
-        $m2 = $m->cursorToStart();
+        $m2 = $m->withCursorToStart();
         $this->assertSame(0, $m2->cursorIndex());
     }
 
@@ -1163,10 +1163,10 @@ final class ModelTest extends TestCase
     {
         $m = $this->model;
         for ($i = 0; $i < 3; $i++) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
-        // cursorToEnd goes to the last item
-        $m2 = $m->cursorToEnd();
+        // withCursorToEnd goes to the last item
+        $m2 = $m->withCursorToEnd();
         $this->assertSame(2, $m2->cursorIndex());
     }
 
@@ -1174,7 +1174,7 @@ final class ModelTest extends TestCase
     {
         $m = $this->model;
         for ($i = 0; $i < 3; $i++) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
 
         $this->assertSame('item 0', (string) $m->itemAt(0));
@@ -1184,14 +1184,14 @@ final class ModelTest extends TestCase
 
     public function testItemAtThrowsOutOfBounds(): void
     {
-        $m = $this->model->addItem(new StringItem('only one'));
+        $m = $this->model->withItem(new StringItem('only one'));
         $this->expectException(\OutOfBoundsException::class);
         $m->itemAt(5);
     }
 
     public function testItemAtThrowsOnNegativeIndex(): void
     {
-        $m = $this->model->addItem(new StringItem('only one'));
+        $m = $this->model->withItem(new StringItem('only one'));
         $this->expectException(\OutOfBoundsException::class);
         $m->itemAt(-1);
     }
@@ -1200,7 +1200,7 @@ final class ModelTest extends TestCase
     {
         $m = $this->model;
         for ($i = 0; $i < 3; $i++) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
 
         $this->assertSame('item 0', (string) $m->tryItemAt(0));
@@ -1213,7 +1213,7 @@ final class ModelTest extends TestCase
     {
         $m = Model::new();
         for ($i = 0; $i < 3; $i++) {
-            $m = $m->addItem(new StringItem("item $i"));
+            $m = $m->withItem(new StringItem("item $i"));
         }
 
         $ids = $m->itemIds();
@@ -1227,11 +1227,11 @@ final class ModelTest extends TestCase
     public function testLinesStreamReturnsGenerator(): void
     {
         $m = $this->model
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('banana'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->setViewport(80, 24);
+            ->withItem(new StringItem('apple'))
+            ->withItem(new StringItem('banana'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(80, 24);
 
         $stream = $m->linesStream();
         $this->assertInstanceOf(\Generator::class, $stream);
@@ -1251,8 +1251,8 @@ final class ModelTest extends TestCase
         // View() catches exceptions from lines() and returns the error message as a string.
         // This tests the catch block in View() lines 680-683.
         $m = Model::new()
-            ->setViewport(0, 0) // Will trigger RuntimeException in lines()
-            ->addItem(new StringItem('x'));
+            ->withViewport(0, 0) // Will trigger RuntimeException in lines()
+            ->withItem(new StringItem('x'));
 
         $out = $m->view();
         // Should return the error message string, not throw
@@ -1265,9 +1265,9 @@ final class ModelTest extends TestCase
     public function testApplyStyleWithEmptyStyleReturnsOriginal(): void
     {
         // When style is empty, applyStyle should return the original string
-        // (default lineStyle is already ''; setLineStyle('') proves the setter
+        // (default lineStyle is already ''; withLineStyle('') proves the setter
         // path reaches the same early return).
-        $m = $this->model->addItem(new StringItem('test'))->setLineStyle('');
+        $m = $this->model->withItem(new StringItem('test'))->withLineStyle('');
 
         $lines = $m->lines();
         $this->assertNotEmpty($lines);
@@ -1289,20 +1289,20 @@ final class ModelTest extends TestCase
     public function testLinesViewportFollowBottomGap(): void
     {
         $m = Model::new()
-            ->setViewport(40, 5)
-            ->setCursorOffset(2)
-            ->addItem(new StringItem('item 0'))
-            ->addItem(new StringItem('item 1'))
-            ->addItem(new StringItem('item 2'))
-            ->addItem(new StringItem('item 3'))
-            ->addItem(new StringItem('item 4'))
-            ->addItem(new StringItem('item 5'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->withViewport(40, 5)
+            ->withCursorOffset(2)
+            ->withItem(new StringItem('item 0'))
+            ->withItem(new StringItem('item 1'))
+            ->withItem(new StringItem('item 2'))
+            ->withItem(new StringItem('item 3'))
+            ->withItem(new StringItem('item 4'))
+            ->withItem(new StringItem('item 5'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
 
         // Cursor near the bottom: the frame keeps the cursor visible AND stays
         // full by backfilling from above — it never strands the list tail.
-        $m2 = $m->setCursor(4);
+        $m2 = $m->withCursor(4);
         $lines = $m2->lines();
         $this->assertCount(5, $lines, 'frame must stay full at the list tail');
         $joined = \implode("\n", $lines);
@@ -1331,10 +1331,10 @@ final class ModelTest extends TestCase
     public function testViewportFollowEndOfListDoesNotDuplicateTail(): void
     {
         $m = Model::new()
-            ->setViewport(40, 10)
-            ->setCursorOffset(3)
-            ->addItemsFromArray(['A', 'B', 'C', 'D', 'E', 'F'])
-            ->setCursor(4);
+            ->withViewport(40, 10)
+            ->withCursorOffset(3)
+            ->withItemsFromArray(['A', 'B', 'C', 'D', 'E', 'F'])
+            ->withCursor(4);
 
         $lines = $m->lines();
         $this->assertSame(['A', 'B', 'C', 'D', 'E', 'F'], $lines);
@@ -1348,7 +1348,7 @@ final class ModelTest extends TestCase
      */
     public function testFilterReapplicationKeepsPristineOriginals(): void
     {
-        $m = Model::new()->addItemsFromArray(['apple', 'banana', 'apricot', 'cherry', 'avocado']);
+        $m = Model::new()->withItemsFromArray(['apple', 'banana', 'apricot', 'cherry', 'avocado']);
         $first = $m->withFilterFn(fn(\Stringable $v) => \str_starts_with((string) $v, 'a'));
         $second = $first->withFilterFn(fn(\Stringable $v) => \str_starts_with((string) $v, 'ap'));
 
@@ -1369,7 +1369,7 @@ final class ModelTest extends TestCase
     {
         // Both axes ≤ MAX_DIMENSION but the product is astronomic → rejected.
         $this->expectException(\InvalidArgumentException::class);
-        Model::new()->setViewport(Model::MAX_DIMENSION, Model::MAX_DIMENSION);
+        Model::new()->withViewport(Model::MAX_DIMENSION, Model::MAX_DIMENSION);
     }
 
     public function testViewportAreaBoundaryAcceptsFourMillionCells(): void
@@ -1377,17 +1377,17 @@ final class ModelTest extends TestCase
         // Exactly at the cap: accepted. Individually-large-but-realistic
         // default-height viewport (100000×24 = 2.4M) also stays legal, keeping
         // the existing MAX_DIMENSION upper-bound pin green.
-        $m = Model::new()->setViewport(2000, 2000);
+        $m = Model::new()->withViewport(2000, 2000);
         $this->assertSame(2000, $m->width());
         $this->assertSame(2000, $m->height());
-        $this->assertSame(Model::MAX_DIMENSION, Model::new()->setWidth(Model::MAX_DIMENSION)->width());
+        $this->assertSame(Model::MAX_DIMENSION, Model::new()->withWidth(Model::MAX_DIMENSION)->width());
     }
 
     public function testSetHeightRejectsAreaOverflowAgainstCurrentWidth(): void
     {
-        $m = Model::new()->setViewport(1900, 10);
+        $m = Model::new()->withViewport(1900, 10);
         $this->expectException(\InvalidArgumentException::class);
-        $m->setHeight(3000); // 1900×3000 = 5.7M > 4M
+        $m->withHeight(3000); // 1900×3000 = 5.7M > 4M
     }
 
     // -------------------------------------------------------------------------
@@ -1397,24 +1397,24 @@ final class ModelTest extends TestCase
     public function testSetCursorOffsetRejectsNegative(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setCursorOffset(-1);
+        $this->model->withCursorOffset(-1);
     }
 
     public function testSetLineOffsetRejectsNegative(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setLineOffset(-1);
+        $this->model->withLineOffset(-1);
     }
 
     public function testSetWrapRejectsNegative(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->model->setWrap(-1);
+        $this->model->withWrap(-1);
     }
 
     public function testSetCursorOffsetAcceptsZero(): void
     {
-        $this->assertSame(0, $this->model->setCursorOffset(0)->cursorOffset());
+        $this->assertSame(0, $this->model->withCursorOffset(0)->cursorOffset());
     }
 
     // -------------------------------------------------------------------------
@@ -1423,17 +1423,17 @@ final class ModelTest extends TestCase
 
     public function testAddingUnderFilterIsProjectedThroughThePredicate(): void
     {
-        $m = $this->model->addItemsFromArray(['apple', 'banana', 'cherry']);
+        $m = $this->model->withItemsFromArray(['apple', 'banana', 'cherry']);
         $m = $m->withFilterFn(fn($v) => str_starts_with((string) $v, 'a'));
         $this->assertSame(1, $m->length());
 
         // A matching add lands in the projection…
-        $m = $m->addItem(new StringItem('apricot'));
+        $m = $m->withItem(new StringItem('apricot'));
         $this->assertSame(2, $m->length());
 
         // …a non-matching add is NOT shown (old behavior: predicate bypassed),
         // yet it is NOT lost: widening the predicate reveals it.
-        $m = $m->addItem(new StringItem('DROPME'));
+        $m = $m->withItem(new StringItem('DROPME'));
         $this->assertSame(2, $m->length());
         $widened = $m->withFilterFn(fn($v) => !str_starts_with((string) $v, 'b'));
         $this->assertSame(4, $widened->length());
@@ -1446,7 +1446,7 @@ final class ModelTest extends TestCase
 
     public function testClearUnderFilterDoesNotResurrectItems(): void
     {
-        $m = $this->model->addItemsFromArray(['a', 'b', 'c'])->withFilterFn(
+        $m = $this->model->withItemsFromArray(['a', 'b', 'c'])->withFilterFn(
             fn($v) => (string) $v !== 'b'
         );
         $this->assertSame(2, $m->length());
@@ -1458,7 +1458,7 @@ final class ModelTest extends TestCase
 
     public function testRemoveUnderFilterRemovesFromThePristineList(): void
     {
-        $m = $this->model->addItemsFromArray(['apple', 'banana', 'cherry'])->withFilterFn(
+        $m = $this->model->withItemsFromArray(['apple', 'banana', 'cherry'])->withFilterFn(
             fn($v) => (string) $v !== 'cherry'
         );
         $this->assertSame(['apple', 'banana'], array_map(
@@ -1484,8 +1484,8 @@ final class ModelTest extends TestCase
     public function testSortUnderFilterSurvivesLiftingTheFilter(): void
     {
         $m = $this->model
-            ->setLessFunc(fn($a, $b) => strcmp((string) $a, (string) $b))
-            ->addItemsFromArray(['z', 'a', 'm'])
+            ->withLessFunc(fn($a, $b) => strcmp((string) $a, (string) $b))
+            ->withItemsFromArray(['z', 'a', 'm'])
             ->withFilterFn(fn($v) => (string) $v !== 'm');
         $this->assertSame(['z', 'a'], array_map(
             static fn(\Stringable $v): string => (string) $v,
@@ -1509,10 +1509,10 @@ final class ModelTest extends TestCase
 
     public function testBatchAddsUnderFilterAreProjected(): void
     {
-        $m = $this->model->addItemsFromArray(['keep'])->withFilterFn(
+        $m = $this->model->withItemsFromArray(['keep'])->withFilterFn(
             fn($v) => str_starts_with((string) $v, 'keep')
         );
-        $m = $m->addItems(new StringItem('keep2'), new StringItem('drop'));
+        $m = $m->withItems(new StringItem('keep2'), new StringItem('drop'));
         $this->assertSame(['keep', 'keep2'], array_map(
             static fn(\Stringable $v): string => (string) $v,
             $this->valuesOf($m)
@@ -1526,7 +1526,7 @@ final class ModelTest extends TestCase
 
     public function testCursorFollowsItsItemWhenARowAboveIsRemoved(): void
     {
-        $m = $this->model->addItemsFromArray(['a', 'b', 'c', 'd'])->setCursor(2); // on 'c'
+        $m = $this->model->withItemsFromArray(['a', 'b', 'c', 'd'])->withCursor(2); // on 'c'
         $m = $m->removeItem(1);                                                    // remove 'b'
 
         // Old behavior: cursor stayed at index 2 and silently named 'd'.
@@ -1536,7 +1536,7 @@ final class ModelTest extends TestCase
 
     public function testCursorStaysInPlaceWhenItsOwnItemIsRemoved(): void
     {
-        $m = $this->model->addItemsFromArray(['a', 'b', 'c', 'd'])->setCursor(1); // on 'b'
+        $m = $this->model->withItemsFromArray(['a', 'b', 'c', 'd'])->withCursor(1); // on 'b'
         $m = $m->removeItem(1);                                                    // remove 'b'
 
         // Same position, now holding the following item (listbox convention).
@@ -1546,7 +1546,7 @@ final class ModelTest extends TestCase
 
     public function testCursorClampsWhenLastItemIsRemovedFromUnderIt(): void
     {
-        $m = $this->model->addItemsFromArray(['a', 'b'])->setCursor(1); // on 'b' (last)
+        $m = $this->model->withItemsFromArray(['a', 'b'])->withCursor(1); // on 'b' (last)
         $m = $m->removeItem(1);
 
         $this->assertSame(0, $m->cursorIndex());
@@ -1555,7 +1555,7 @@ final class ModelTest extends TestCase
 
     public function testCursorSurvivesRemovalBelowIt(): void
     {
-        $m = $this->model->addItemsFromArray(['a', 'b', 'c'])->setCursor(0); // on 'a'
+        $m = $this->model->withItemsFromArray(['a', 'b', 'c'])->withCursor(0); // on 'a'
         $m = $m->removeItem(2);
 
         $this->assertSame(0, $m->cursorIndex());
@@ -1569,23 +1569,23 @@ final class ModelTest extends TestCase
 
     public function testCursorMovesSaturateInsteadOfOverflowing(): void
     {
-        $m = $this->model->addItemsFromArray(['a', 'b', 'c', 'd']);
+        $m = $this->model->withItemsFromArray(['a', 'b', 'c', 'd']);
 
-        $this->assertSame(3, $m->setCursor(0)->cursorDown(\PHP_INT_MAX)->cursorIndex());
-        $this->assertSame(0, $m->setCursor(3)->cursorUp(\PHP_INT_MAX)->cursorIndex());
-        $this->assertSame(0, $m->setCursor(2)->cursorDown(\PHP_INT_MIN)->cursorIndex());
-        $this->assertSame(3, $m->setCursor(2)->cursorUp(\PHP_INT_MIN)->cursorIndex());
+        $this->assertSame(3, $m->withCursor(0)->withCursorDown(\PHP_INT_MAX)->cursorIndex());
+        $this->assertSame(0, $m->withCursor(3)->withCursorUp(\PHP_INT_MAX)->cursorIndex());
+        $this->assertSame(0, $m->withCursor(2)->withCursorDown(\PHP_INT_MIN)->cursorIndex());
+        $this->assertSame(3, $m->withCursor(2)->withCursorUp(\PHP_INT_MIN)->cursorIndex());
 
-        $tall = $m->setViewport(80, 24);
-        $this->assertSame(3, $tall->setCursor(0)->cursorPageDown(\PHP_INT_MAX)->cursorIndex());
-        $this->assertSame(0, $tall->setCursor(3)->cursorPageUp(\PHP_INT_MAX)->cursorIndex());
+        $tall = $m->withViewport(80, 24);
+        $this->assertSame(3, $tall->withCursor(0)->withCursorPageDown(\PHP_INT_MAX)->cursorIndex());
+        $this->assertSame(0, $tall->withCursor(3)->withCursorPageUp(\PHP_INT_MAX)->cursorIndex());
     }
 
     public function testTryCursorItemIsNullOnEmptyList(): void
     {
         $this->assertNull($this->model->tryCursorItem());
 
-        $m = $this->model->addItem(new StringItem('solo'));
+        $m = $this->model->withItem(new StringItem('solo'));
         $this->assertSame('solo', (string) $m->tryCursorItem());
     }
 
@@ -1596,21 +1596,21 @@ final class ModelTest extends TestCase
 
     public function testIndentationAndInteriorRunsSurviveWrapping(): void
     {
-        $m = $this->model->addItem(new StringItem("    child-a   second\n  grandchild-b"));
+        $m = $this->model->withItem(new StringItem("    child-a   second\n  grandchild-b"));
 
         $this->assertSame(['    child-a   second', '  grandchild-b'], $m->lines());
     }
 
     public function testEmptyParagraphLinesRenderAsEmptyRows(): void
     {
-        $m = $this->model->addItem(new StringItem("para1\n\npara2"));
+        $m = $this->model->withItem(new StringItem("para1\n\npara2"));
 
         $this->assertSame(['para1', '', 'para2'], $m->lines());
     }
 
     public function testTabsBecomeSpacesAndRowsStayWithinBudget(): void
     {
-        $m = $this->model->setViewport(20, 10)->addItem(new StringItem("x\ty"));
+        $m = $this->model->withViewport(20, 10)->withItem(new StringItem("x\ty"));
 
         $this->assertSame(['x y'], $m->lines());
     }
@@ -1621,7 +1621,7 @@ final class ModelTest extends TestCase
         // /\s+/ delimiter); sweepForFrame() folds CRs at the frame choke now.
         // The old claim that the sanitize sweep STRIPPED CR was false — bare
         // CR survives untrusted() by design — so this pins the fold itself.
-        $m = $this->model->setViewport(20, 10)->addItem(new StringItem("a\r\nb"));
+        $m = $this->model->withViewport(20, 10)->withItem(new StringItem("a\r\nb"));
 
         foreach ($m->lines() as $row) {
             $this->assertStringNotContainsString("\r", $row);
@@ -1634,7 +1634,7 @@ final class ModelTest extends TestCase
         // A lone CR (no following LF) must become a line break: the content
         // SPLITS into two rows, it never splices into "visibleHIDDEN" and no
         // raw CR rides the frame to overwrite earlier columns.
-        $m = $this->model->setViewport(20, 10)->addItem(new StringItem("visible\rHIDDEN"));
+        $m = $this->model->withViewport(20, 10)->withItem(new StringItem("visible\rHIDDEN"));
 
         $this->assertSame(['visible', 'HIDDEN'], $m->lines());
         $this->assertStringNotContainsString("\r", $m->view());
@@ -1645,7 +1645,7 @@ final class ModelTest extends TestCase
         // CRLF must yield ONE break, not two rows plus an empty — this leg
         // discriminates a reversed fold order (["\r"] first would leave a
         // dangling "\n" and split "head\r\ntail" into three rows).
-        $m = $this->model->setViewport(20, 10)->addItem(new StringItem("head\r\ntail"));
+        $m = $this->model->withViewport(20, 10)->withItem(new StringItem("head\r\ntail"));
 
         $this->assertSame(['head', 'tail'], $m->lines());
     }
@@ -1673,9 +1673,9 @@ final class ModelTest extends TestCase
         };
 
         $frame = $this->model
-            ->setViewport(20, 10)
-            ->addItem(new StringItem('anything'))
-            ->setSuffixer($hostile)
+            ->withViewport(20, 10)
+            ->withItem(new StringItem('anything'))
+            ->withSuffixer($hostile)
             ->view();
 
         $this->assertStringNotContainsString("\r", $frame);
@@ -1726,10 +1726,10 @@ final class ModelTest extends TestCase
         };
 
         $m = $this->model
-            ->setViewport(20, 10)
-            ->addItem(new StringItem('alpha'))
-            ->setPrefixer($prefixer)
-            ->setSuffixer($suffixer);
+            ->withViewport(20, 10)
+            ->withItem(new StringItem('alpha'))
+            ->withPrefixer($prefixer)
+            ->withSuffixer($suffixer);
 
         $lines = $m->lines();
         $this->assertCount(1, $lines, 'a dropped break must never fragment the row');
@@ -1769,10 +1769,10 @@ final class ModelTest extends TestCase
         // most the budget; layout must stop there (the old code wrapped the
         // whole value first — measured 1.17s + 41MB per frame).
         $huge = new StringItem(implode("\n", array_fill(0, 200_000, 'filler line')));
-        $m = $this->model->setViewport(20, 5)->addItem($huge)->addItem(new StringItem('tail'));
+        $m = $this->model->withViewport(20, 5)->withItem($huge)->withItem(new StringItem('tail'));
 
         $started = \microtime(true);
-        $lines = $m->setCursor(0)->lines();
+        $lines = $m->withCursor(0)->lines();
         $elapsed = \microtime(true) - $started;
 
         $this->assertLessThanOrEqual(5, count($lines));
@@ -1780,7 +1780,7 @@ final class ModelTest extends TestCase
 
         // Same for the explicit wrap knob: the huge item is truncated to its
         // wrap rows and the next item still gets the remaining window.
-        $wrapped = $m->setWrap(2)->lines();
+        $wrapped = $m->withWrap(2)->lines();
         $this->assertSame(['filler line', 'filler line', 'tail'], $wrapped);
     }
 
