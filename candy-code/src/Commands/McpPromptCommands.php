@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Commands;
 use SugarCraft\Code\CommandParser;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\Tools\McpToolBridge;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * MCP-2 (plan_comparison §3, inv-65a A2): the server roster's prompts,
@@ -284,7 +285,7 @@ final class McpPromptCommands
     /** Control characters (newlines included) out of server text; a popup row is one line. */
     private static function flat(string $text): string
     {
-        return trim((string) preg_replace('/[\p{C}]+/u', ' ', $text));
+        return trim(Sanitize::stripInvisibleFormatting(Sanitize::controlChars(Sanitize::untrusted($text))));
     }
 
     private static function clipped(string $text): string

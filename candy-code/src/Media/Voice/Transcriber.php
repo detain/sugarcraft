@@ -9,6 +9,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use Psr\Http\Message\ResponseInterface;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use Throwable;
 
 /**
@@ -205,7 +206,7 @@ final class Transcriber
             $clean = \str_replace($key, '[redacted]', $clean);
         }
 
-        return \mb_substr(trim($clean), 0, self::EXCERPT_LIMIT);
+        return Width::truncate(trim($clean), self::EXCERPT_LIMIT);
     }
 
     private static function body(ResponseInterface $response): string

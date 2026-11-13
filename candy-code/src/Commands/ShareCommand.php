@@ -18,6 +18,8 @@ use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\SafeDelete;
 use SugarCraft\Code\Tools\PathJail;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Implements `/share`: export the session to a LOCAL file, and publish or
@@ -85,6 +87,7 @@ final class ShareCommand
      * (revoke takes the prefix straight back) and too short to BE the key.
      */
     public const TOKEN_PREFIX_CHARS = 12;
+    private const LABEL_MAX_CELLS = 60;
 
     /**
      * @param ?string $exportsDir Where an export with no path lands; null is
@@ -436,16 +439,13 @@ final class ShareCommand
     /**
      * The session name is read out of a database an operator can hand-edit,
      * so it is swept of control characters (which could forge terminal state
-     * in the transcript) and capped in codepoints before it is printed.
+     * in the transcript) and capped in terminal cells on a grapheme boundary before it is printed.
      */
     private function printableLabel(string $label): string
     {
-        $label = trim((string) preg_replace('/[\x00-\x1f\x7f]+/', ' ', $label));
-        if (preg_match('/^.{0,60}/us', $label, $m) === 1) {
-            return $m[0];
-        }
+        $label = trim(Sanitize::controlChars(Sanitize::untrusted($label)));
 
-        return substr($label, 0, 60);
+        return Width::truncate($label, self::LABEL_MAX_CELLS);
     }
 
     /**

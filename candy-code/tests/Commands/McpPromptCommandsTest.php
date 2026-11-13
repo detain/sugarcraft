@@ -95,7 +95,7 @@ final class McpPromptCommandsTest extends TestCase
         self::assertSame('mcp', $spec->tier);
         self::assertTrue($spec->isFileBased(), 'a placeholder must reach the file-shaped dispatch chain');
         self::assertTrue(McpPromptCommands::isMcpPrompt($spec));
-        self::assertSame('two lines of junk', $spec->description, 'popup rows are one flat line');
+        self::assertSame('two linesof junk', $spec->description, 'popup rows are one flat line; C0 controls other than whitespace are dropped, not spaced');
         self::assertSame('<target> [style]', $spec->argumentHint);
         self::assertSame('MCP', $spec->category);
         self::assertSame('weird srv', $spec->originName, 'C-SEC-3.b: the placeholder carries the RAW server key — mcpPromptShell matches this spelling, never the sanitized row name');
