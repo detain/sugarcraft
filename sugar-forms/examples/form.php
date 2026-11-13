@@ -3,9 +3,10 @@
 declare(strict_types=1);
 
 /**
- * Static render of a whole SugarForms form — the pieces sugar-widgets and
- * sugar-forms re-export. One {@see Form} composes an {@see Input}
- * (pre-filled), a {@see Select} (options with one highlighted), and a
+ * Static render of a whole SugarForms form — the pieces this library
+ * provides and sugar-widgets re-exports. One {@see Form} composes an
+ * {@see Input} (pre-filled), a {@see Select} (options with one
+ * highlighted), and a
  * {@see Confirm} (Yes / No toggle), then echoes the styled `view()`.
  *
  * No Program loop, no keystrokes — just build the model and print a

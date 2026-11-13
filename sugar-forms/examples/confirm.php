@@ -13,9 +13,9 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Forms\Field\Confirm;
 
 $cases = [
-    'default no'   => Confirm::new('proceed', false)->withTitle('Proceed?'),
-    'default yes'  => Confirm::new('save', true)->withTitle('Save changes?'),
-    'custom labels'=> Confirm::new('ship', true)
+    'default no'    => Confirm::new('proceed', false)->withTitle('Proceed?'),
+    'default yes'   => Confirm::new('save', true)->withTitle('Save changes?'),
+    'custom labels' => Confirm::new('ship', true)
         ->withTitle('Ship to production?')
         ->withLabels('Ship it', 'Hold'),
 ];

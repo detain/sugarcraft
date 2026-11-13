@@ -67,8 +67,10 @@ Model is immutable, so `Program` rebinds its own copy on every update — the
 happened during the run. Capture `run()`'s return value and use that as the
 final model. For a complete reference — multi-group paging and conditional
 visibility — see `examples/multi-page-form.php` (`php
-examples/multi-page-form.php`); the `examples/` directory holds eleven
-runnable demos.
+examples/multi-page-form.php`); the `examples/` directory holds twelve
+runnable demos — including `no-color.php`, which shows the NO_COLOR /
+CLICOLOR capability negotiation a host program is expected to run before
+styling anything.
 
 ### Pre-filling fields
 

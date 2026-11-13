@@ -10,6 +10,16 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+// Belt-braces (outside-group QA-01): the Program input reader never stops
+// on a closed stdin, so without a terminal this script would spin until
+// killed. The real EOF-stop fix lives in sugar-core Program.php:1302-1310;
+// until it lands, refuse non-interactive stdin up front with a clean rc=2
+// instead of hanging to a timeout rc=124.
+if (!stream_isatty(STDIN)) {
+    fwrite(STDERR, "interactive terminal required\n");
+    exit(2);
+}
+
 use SugarCraft\Core\Program;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\Input;
