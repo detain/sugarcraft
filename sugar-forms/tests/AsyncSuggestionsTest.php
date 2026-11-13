@@ -63,40 +63,82 @@ final class AsyncSuggestionsTest extends TestCase
 
     public function testWithAsyncSuggestionsSetsFetcher(): void
     {
-        $fetcherCalled = false;
-        $fetcher = static function (string $input) use (&$fetcherCalled): PromiseInterface {
-            $fetcherCalled = true;
+        $seenInput = null;
+        $fetcher = static function (string $input) use (&$seenInput): PromiseInterface {
+            $seenInput = $input;
             return \React\Promise\resolve(['suggestion']);
         };
 
-        $f = Input::new('test')->withAsyncSuggestions($fetcher);
+        $f = Input::new('test')->withAsyncSuggestions($fetcher); // default 150ms debounce
 
-        // The field should have the async suggestions configured
-        // We verify by checking that update returns a Cmd when Char is typed
+        // SF-32: "sets the fetcher" used to assert only that a Cmd closure
+        // came back — nothing could flip. It now means the fetcher RUNS with
+        // the live buffer and its list round-trips as the ready message.
         [$f, ] = $f->focus();
         [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'a'));
-
-        // A cmd should be returned when async suggestions are configured
-        $this->assertNotNull($cmd);
         $this->assertInstanceOf(\Closure::class, $cmd);
+
+        $async = self::s02AsyncCmdFrom($cmd);
+        [$fulfilled, ] = self::s02Settle($async);
+
+        $this->assertSame('a', $seenInput, 'the configured fetcher must receive the current value');
+        $this->assertInstanceOf(FormSuggestionsReadyMsg::class, $fulfilled);
+        $this->assertSame('test', $fulfilled->fieldKey);
+        $this->assertSame(['suggestion'], $fulfilled->suggestions);
     }
 
     public function testDebounceTimerIsScheduledOnCharKeystroke(): void
     {
-        $fetcher = static function (string $input): PromiseInterface {
+        $fetcherInvokedCount = 0;
+        $fetcher = static function (string $input) use (&$fetcherInvokedCount): PromiseInterface {
+            $fetcherInvokedCount++;
             return \React\Promise\resolve(["suggestion for: $input"]);
         };
 
         $f = Input::new('test')->withAsyncSuggestions($fetcher, 50); // 50ms debounce
         [$f, ] = $f->focus();
 
-        // Type a character - this should NOT fire the fetcher yet
-        [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'h'));
+        // Burst #1: 'h' then 'i'. The old leg asserted two non-null Cmds and
+        // never ran the loop, so its "the second one replaces the first" was
+        // prose. SF-32 makes the claim observable as a fire-COUNT over two
+        // keystroke rounds, mirroring testDebounceCancelCancelsPreviousFetch.
+        [$f, $cmd1] = $f->update(new KeyMsg(KeyType::Char, 'h'));
         [$f, $cmd2] = $f->update(new KeyMsg(KeyType::Char, 'i'));
+        $this->assertNotNull($cmd1, 'first keystroke schedules a fetch');
+        $this->assertNotNull($cmd2, 'second keystroke schedules its own fetch');
+        $cmd1();
+        $cmd2();
 
-        // Commands should be returned (one for each keystroke, the second one replaces the first)
-        $this->assertNotNull($cmd);
-        $this->assertNotNull($cmd2);
+        self::assertTrue(
+            self::pumpUntil(
+                function () use (&$fetcherInvokedCount): bool {
+                    return $fetcherInvokedCount >= 1;
+                },
+                self::jitterBudget(0.05),
+            ),
+            'the surviving debounce must fire',
+        );
+        self::advance();
+        $this->assertSame(1, $fetcherInvokedCount, 'within one burst only the newest keystroke fetches');
+
+        // Burst #2: another replaced pair adds exactly one more fire — the
+        // replacement contract held a second time, not just the first.
+        [$f, $cmd3] = $f->update(new KeyMsg(KeyType::Char, 'j'));
+        [$f, $cmd4] = $f->update(new KeyMsg(KeyType::Char, 'k'));
+        $cmd3();
+        $cmd4();
+
+        self::assertTrue(
+            self::pumpUntil(
+                function () use (&$fetcherInvokedCount): bool {
+                    return $fetcherInvokedCount >= 2;
+                },
+                self::jitterBudget(0.05),
+            ),
+            'the second burst must fire its surviving fetch',
+        );
+        self::advance();
+        $this->assertSame(2, $fetcherInvokedCount, 'a second burst adds one fire, not two');
     }
 
     public function testSuggestionsReadyMsgStructure(): void
@@ -109,9 +151,9 @@ final class AsyncSuggestionsTest extends TestCase
 
     public function testSelectWithAsyncSuggestionsSetsFetcher(): void
     {
-        $fetcherCalled = false;
-        $fetcher = static function (string $input) use (&$fetcherCalled): PromiseInterface {
-            $fetcherCalled = true;
+        $seenFilter = null;
+        $fetcher = static function (string $input) use (&$seenFilter): PromiseInterface {
+            $seenFilter = $input;
             return \React\Promise\resolve(['suggestion']);
         };
 
@@ -119,10 +161,21 @@ final class AsyncSuggestionsTest extends TestCase
             ->withOptions('PHP', 'Go', 'Rust')
             ->withAsyncSuggestions($fetcher);
 
-        // Select doesn't have Char keystrokes like Input
-        // The async suggestions are triggered when filter text changes
-        // This test verifies the method can be called without error
-        $this->assertInstanceOf(Select::class, $f);
+        // SF-32: the old body was an assertInstanceOf("can be called without
+        // error") that nothing could flip. Select fetches on FILTER-TEXT
+        // change, so the live shape is: enter filter mode, type, and the
+        // configured fetcher runs with the current filter.
+        [$f, ] = $f->focus();
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, '/'));
+        [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'P'));
+
+        $async = self::s02AsyncCmdFrom($cmd);
+        [$fulfilled, ] = self::s02Settle($async);
+
+        $this->assertSame('P', $seenFilter, 'the fetcher must receive the live filter text');
+        $this->assertInstanceOf(FormSuggestionsReadyMsg::class, $fulfilled);
+        $this->assertSame('test', $fulfilled->fieldKey);
+        $this->assertSame(['suggestion'], $fulfilled->suggestions);
     }
 
     public function testAsyncSuggestionsFactoryMethodExists(): void
@@ -153,9 +206,18 @@ final class AsyncSuggestionsTest extends TestCase
             return \React\Promise\resolve(['suggestion']);
         };
 
-        // This should accept null as workerPool without error
+        // SF-32: "accepts null without error" was an assertInstanceOf nothing
+        // could flip. The claim is that a null worker pool still wires a
+        // working in-process fetch, so we drive one and assert the flag flips.
         $f = Input::new('test')->withAsyncSuggestions($fetcher, 50, null);
-        $this->assertInstanceOf(Input::class, $f);
+        [$f, ] = $f->focus();
+        [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+
+        $async = self::s02AsyncCmdFrom($cmd);
+        [$fulfilled, ] = self::s02Settle($async);
+
+        $this->assertTrue($fetcherCalled, 'a null worker pool must still invoke the in-process fetcher');
+        $this->assertInstanceOf(FormSuggestionsReadyMsg::class, $fulfilled);
     }
 
     public function testInputHandlesSuggestionsReadyMsg(): void
