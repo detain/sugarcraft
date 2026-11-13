@@ -241,4 +241,24 @@ final class FormatCommandTest extends TestCase
         $this->assertStringContainsString('format.template_unresolved', $src);
         $this->assertStringContainsString('&$unresolved', $src);
     }
+
+    public function testControlByteResidueMatchesDocumentedContract(): void
+    {
+        $cmd = (new \SugarCraft\ScriptUi\Application())->find('format');
+        $tester = new \Symfony\Component\Console\Tester\CommandTester($cmd);
+        $tester->execute(['file' => "x \x1b[5mY \x07Z", '--theme' => 'plain']);
+        $tester->assertCommandIsSuccessful();
+        $display = $tester->getDisplay();
+
+        // scriptui-77 contract: the markdown renderer drops control BYTES
+        // but leaves visible bracket residue (\x1b[5m arrives as "[5m").
+        // The README documents the exception; this pin keeps both halves
+        // honest — bytes gone, residue present, sentence on disk.
+        $this->assertStringNotContainsString("\x1b", $display);
+        $this->assertStringNotContainsString("\x07", $display);
+        $this->assertStringContainsString('[5m', $display);
+
+        $readme = (string) file_get_contents(__DIR__ . '/../../README.md');
+        $this->assertStringContainsString('bracket residue', $readme);
+    }
 }

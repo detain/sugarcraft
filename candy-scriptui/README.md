@@ -411,7 +411,18 @@ intake (sugar-core `Sanitize::untrustedForDisplay`), so no OSC title
 spoof, clipboard write, cursor rewrite, or forged SGR can ride output into
 the operator's terminal. Decoration comes only from the operator's own
 flags. Pipe trusted byte-exact data through `--raw` on `table`, `style`,
-and `join` to ship input verbatim instead.
+and `join` to ship input verbatim instead. `format --type markdown` is the
+documented exception to byte-clean output: its renderer strips control
+BYTES but leaves visible bracket residue (`\x1b[5m` survives as `[5m`), so
+treat markdown-rendered hostile input as corrupted-content-prone and pipe
+trusted sources only.
+
+## Limits
+
+`file` navigation lists directories with synchronous readdir/stat/sort
+inside the message loop: on network mounts or huge directories a keystroke
+may stall behind a listing repaint, and `--timeout` keeps counting
+wall-clock across those stalls.
 
 ## Compatibility with `gum` invocations
 
