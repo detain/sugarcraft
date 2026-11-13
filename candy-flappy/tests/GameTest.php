@@ -1595,7 +1595,7 @@ final class GameTest extends TestCase
         // hasPendingEscape() and promotes after a short timeout via
         // flushPending()), and the promotion is a plain KeyType::Escape with
         // the ctrl flag never set. That is why the README and the Game
-        // docblock state legacy Ctrl+[ quits by hardware identity while the
+        // docblock state legacy Ctrl+[ quits by byte identity while the
         // model-level gate binds only the protocol-flagged chord (kitty
         // 27;5u) — pinning the decoder shape so a future change to it must
         // revisit that claim.

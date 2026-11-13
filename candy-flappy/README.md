@@ -101,12 +101,12 @@ deliberately ignores all flags (no `--version`/`--help`/refusal handling).
 | `q` / `Esc` / `Ctrl+C` | Quit                                              |
 
 Other `Ctrl`-combinations do nothing; `Ctrl+C` is the only chord the game
-reads. Legacy byte-degraded chords excepted: on terminals without kitty-protocol
-reporting, `Ctrl+M`/`Ctrl+J` arrive as Enter and `Ctrl+I` as Tab — so those
-byte sequences flap like the keys they decode to. Likewise `Ctrl+[` is
-byte-identical to `Esc` on such terminals and quits by hardware identity;
-under kitty-protocol reporting both `Ctrl+[` and `Ctrl+Esc` are read as
-chords and do nothing.
+reads. Legacy byte-degradation excepted: on terminals without kitty-protocol
+reporting the control codes arrive as plain bytes indistinguishable from the
+keys they collide with — `Ctrl+M`/`Ctrl+J` arrive as Enter and flap, `Ctrl+I`
+arrives as Tab, which the game does not bind, and `Ctrl+[` is byte-identical
+to `Esc`, so it quits by byte identity. Under kitty-protocol reporting all of
+these arrive as distinct chords, which none of the bindings reads.
 
 The board opens on a **ready card**: the bird hovers and the world is frozen
 until your first flap, so launching never drops you into the floor. Quitting
