@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError()는 3개 요소 목록 [r, g, b]을(를) 기대합니다. {count}개 요소를 받았습니다',
     'nearest.error_channel' => 'withError() 누적기 채널은 int 또는 float여야 합니다. 받은 유형: {type}',
     'palette_index.metric' => 'PaletteIndex는 거리를 보존하는 측정법(Euclidean 또는 Cie76)이 필요합니다. {metric}에는 고정된 PCA 기저가 없습니다 - 대신 NearestColor::closest()를 사용하세요',
+    'stream.invalid_resource' => '{label} 스트림은 유효한 리소스여야 합니다',
 ];

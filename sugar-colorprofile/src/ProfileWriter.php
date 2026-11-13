@@ -19,7 +19,11 @@ namespace SugarCraft\ColorProfile;
  */
 final class ProfileWriter
 {
-    /** The underlying stream resource. */
+    /**
+     * The underlying stream resource.
+     *
+     * @var resource
+     */
     private $stream;
 
     /** The color profile to degrade to. */
@@ -58,6 +62,12 @@ final class ProfileWriter
      */
     public static function wrap($stream, array $env = []): self
     {
+        // Shape is checked HERE, not three frames down inside the palette
+        // detection (-057/DX-16).
+        if (!is_resource($stream)) {
+            throw new \InvalidArgumentException(Lang::t('stream.invalid_resource', ['label' => 'ProfileWriter::wrap()']));
+        }
+
         // A non-empty $env is a COMPLETE hermetic replacement (see Env::resolve);
         // an empty one reads the ambient snapshot. TERM, COLORTERM, NO_COLOR,
         // FORCE_COLOR, TERM_PROGRAM and the rest of the documented ladder
@@ -72,8 +82,45 @@ final class ProfileWriter
      */
     public function __construct($stream, ColorProfile $profile)
     {
+        if (!is_resource($stream)) {
+            throw new \InvalidArgumentException(Lang::t('stream.invalid_resource', ['label' => 'ProfileWriter']));
+        }
+
         $this->stream = $stream;
         $this->profile = $profile;
+    }
+
+    /**
+     * The bytes written so far, read back — for consumers that wrap a
+     * memory stream (php://memory / php://temp) in tests and pipelines and
+     * want the accumulated output without the ftell/rewind dance themselves.
+     *
+     * Returns null for non-seekable streams (a real STDOUT, a pipe): there
+     * is no rewindable buffer to offer there, and draining the pipe would
+     * STEAL bytes from the caller's reader. For seekable files opened
+     * mid-stream the answer is the whole buffer from byte 0, not just what
+     * this writer appended — the memory-stream use is the honest contract.
+     * The stream's own write position is restored before returning.
+     */
+    public function contents(): ?string
+    {
+        $meta = @stream_get_meta_data($this->stream);
+        if (empty($meta['seekable'])) {
+            return null;
+        }
+
+        $position = (int) @ftell($this->stream);
+        if ($position === 0) {
+            return '';
+        }
+        if (@fseek($this->stream, 0) !== 0) {
+            return null;
+        }
+
+        $bytes = (string) @fread($this->stream, $position);
+        @fseek($this->stream, $position, SEEK_SET);
+
+        return $bytes;
     }
 
     /**

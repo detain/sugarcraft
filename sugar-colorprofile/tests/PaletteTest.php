@@ -421,4 +421,31 @@ final class PaletteTest extends TestCase
         $this->assertSame("\x1b[91mred\x1b[0m", $degraded);
         $this->assertStringNotContainsString("\x1b[38;2;", $degraded);
     }
+
+    public function testAStringStreamIsRefusedAtConstruction(): void
+    {
+        // -057/DX-16: the stream's shape is a construction-time fact — the
+        // old failure sat inside stream_isatty() three frames from the
+        // caller that passed the string.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('~Palette~');
+
+        new Palette('not-a-stream');
+    }
+
+    public function testValidResourceAndNullStillConstructCleanly(): void
+    {
+        // The guard fires on the wrong shape ONLY — the documented two
+        // legitimate inputs (a stream, null = env-only) are behavior-
+        // unchanged, byte-green with the 695-suite rule.
+        $mem = fopen('php://memory', 'r+b');
+        $this->assertIsResource($mem);
+
+        try {
+            $this->assertInstanceOf(Palette::class, new Palette($mem, ['TERM' => 'dumb']));
+            $this->assertInstanceOf(Palette::class, new Palette(null, ['TERM' => 'dumb']));
+        } finally {
+            fclose($mem);
+        }
+    }
 }

@@ -96,8 +96,7 @@ final class ProfileWriterTest extends TestCase
         $this->assertSame($input, $out);
     }
 
-    public function testWithProfileCreatesNewWriterWithDifferentProfile(): void
-    {
+    public function testWithProfileCreatesNewWriterWithDifferentProfile(): void    {
         $mem = \fopen('php://memory', 'r+');
         $writer = new ProfileWriter($mem, Profile::ANSI256);
         $writer->write("\x1b[38;2;255;0;0mred\x1b[0m");
@@ -158,5 +157,51 @@ final class ProfileWriterTest extends TestCase
         // never collapse to black (the old basic-8 + luminance hack's failure).
         $this->assertSame("\x1b[91mred\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;5;", $out);
+    }
+
+    public function testWrapRefusesANonResourceAtTheDoor(): void
+    {
+        // -057/DX-16: the shape check lives at wrap(), not inside the
+        // palette detection three frames down — so the refusal must NAME
+        // the seat it fires at (a label-only pin: the {label} parameter is
+        // untranslated in every locale, the prose around it is not).
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('~ProfileWriter::wrap\(\)~');
+
+        ProfileWriter::wrap('not-a-stream');
+    }
+
+    public function testAStringConstructorStreamIsRefusedToo(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('~ProfileWriter~');
+
+        new ProfileWriter(42, Profile::TrueColor);
+    }
+
+    public function testContentsReadsBackTheMemoryWriterWithoutTheFtellDance(): void
+    {
+        // DX-15 companion: the consumer-test ask — the accumulated bytes,
+        // with the write position restored so further writes append.
+        $mem = fopen('php://memory', 'r+b');
+        $writer = new ProfileWriter($mem, Profile::TrueColor);
+        $this->assertSame('', $writer->contents(), 'a fresh buffer reads empty, never null');
+
+        $payload = "plain \x1b[38;2;255;0;0mred\x1b[0m text";
+        $writer->write($payload);
+        $this->assertSame($payload, $writer->contents());
+
+        $writer->write(' and more');
+        $this->assertSame($payload . ' and more', $writer->contents(), 'the position survived the read-back');
+        fclose($mem);
+    }
+
+    public function testContentsIsHonestNullForNonSeekableStreams(): void
+    {
+        // php://output is the documented non-seekable face — no rewindable
+        // buffer exists, and draining would steal the caller's bytes.
+        $writer = new ProfileWriter(fopen('php://output', 'w'), Profile::TrueColor);
+
+        $this->assertNull($writer->contents(), 'no seekable buffer, no promise');
     }
 }

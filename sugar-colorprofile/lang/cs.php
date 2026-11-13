@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() očekává seznam 3 prvků [r, g, b]; obdrženo {count} prvek(prvků)',
     'nearest.error_channel' => 'kanály akumulátoru withError() musí být int nebo float; obdržen typ {type}',
     'palette_index.metric' => 'PaletteIndex vyžaduje metriku zachovávající vzdálenost (Euclidean nebo Cie76); {metric} nemá pevnou PCA bázi - místo toho použijte NearestColor::closest()',
+    'stream.invalid_resource' => 'Proud {label} musí být platný zdroj',
 ];

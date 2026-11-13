@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() erwartet eine 3-Elemente-Liste [r, g, b]; {count} Element(e) erhalten',
     'nearest.error_channel' => 'withError()-Akkumulatorkanäle müssen int oder float sein; erhalten: {type}',
     'palette_index.metric' => 'PaletteIndex benötigt eine distanzerhaltende Metrik (Euclidean oder Cie76); {metric} hat keine feste PCA-Basis - verwenden Sie stattdessen NearestColor::closest()',
+    'stream.invalid_resource' => 'Der {label}-Stream muss eine gültige Ressource sein',
 ];

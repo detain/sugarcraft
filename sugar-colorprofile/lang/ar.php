@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() يتوقع قائمة من 3 عناصر [r, g, b]; تم استلام {count} عنصر(عناصر)',
     'nearest.error_channel' => 'يجب أن تكون قنوات مجموعة withError() من النوع int أو float; المستلم: {type}',
     'palette_index.metric' => 'يطلب PaletteIndex مقياسًا يحافظ على المسافة (Euclidean أو Cie76); لا يحتوي {metric} على أساس PCA ثابت - استخدم NearestColor::closest() بدلاً من ذلك',
+    'stream.invalid_resource' => 'يجب أن تكون سلسلة {label} موردًا صالحًا',
 ];

@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() 需要一个 3 元素列表 [r, g, b]；收到 {count} 个元素',
     'nearest.error_channel' => 'withError() 累加器通道必须是 int 或 float；收到 {type}',
     'palette_index.metric' => 'PaletteIndex 需要保持距离的度量 (Euclidean 或 Cie76)；{metric} 没有固定的 PCA 基 - 请改用 NearestColor::closest()',
+    'stream.invalid_resource' => '{label} 流必须是有效资源',
 ];

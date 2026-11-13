@@ -55,6 +55,14 @@ final class Palette
         $stream = null,
         array $env = [],
     ) {
+        // Parse, don't validate late (-057/DX-16): the stream's SHAPE is a
+        // construction-time fact. A wrong value today surfaces as a TypeError
+        // deep inside stream_isatty()/detect(), far from the call that
+        // passed it — fail at the boundary instead.
+        if ($stream !== null && !is_resource($stream)) {
+            throw new \InvalidArgumentException(Lang::t('stream.invalid_resource', ['label' => 'Palette']));
+        }
+
         $this->profile = self::detectProfile($stream, $env);
     }
 

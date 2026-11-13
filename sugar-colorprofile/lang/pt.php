@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() espera uma lista de 3 elementos [r, g, b]; recebidos {count} elemento(s)',
     'nearest.error_channel' => 'os canais do acumulador withError() devem ser int ou float; recebido {type}',
     'palette_index.metric' => 'PaletteIndex requer uma métrica que preserve a distância (Euclidean ou Cie76); {metric} não tem base PCA fixa - use NearestColor::closest() em vez disso',
+    'stream.invalid_resource' => 'o fluxo {label} deve ser um recurso válido',
 ];

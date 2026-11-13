@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() は 3 要素のリスト [r, g, b] を期待しますが、{count} 要素を受け取りました',
     'nearest.error_channel' => 'withError() のアキュムレータチャネルは int または float である必要があります。受け取った型: {type}',
     'palette_index.metric' => 'PaletteIndex は距離を保つ計量 (Euclidean または Cie76) を必要とします。{metric} には固定の PCA 基底がありません - 代わりに NearestColor::closest() を使用してください',
+    'stream.invalid_resource' => '{label} ストリームは有効なリソースでなければなりません',
 ];

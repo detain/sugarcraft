@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() 3 öğeli bir liste [r, g, b] bekler; {count} öğe alındı',
     'nearest.error_channel' => 'withError() toplayıcı kanalları int veya float olmalıdır; alınan: {type}',
     'palette_index.metric' => 'PaletteIndex mesafe koruyan bir ölçüt gerektirir (Euclidean veya Cie76); {metric} sabit bir PCA tabanına sahip değil - bunun yerine NearestColor::closest() kullanın',
+    'stream.invalid_resource' => '{label} akışı geçerli bir kaynak olmalıdır',
 ];

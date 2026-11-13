@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() ожидает список из 3 элементов [r, g, b]; получено {count} элемент(ов)',
     'nearest.error_channel' => 'каналы накопителя withError() должны быть int или float; получено {type}',
     'palette_index.metric' => 'PaletteIndex требует метрику, сохраняющую расстояния (Euclidean или Cie76); у {metric} нет фиксированного базиса PCA - используйте вместо этого NearestColor::closest()',
+    'stream.invalid_resource' => 'поток {label} должен быть допустимым ресурсом',
 ];

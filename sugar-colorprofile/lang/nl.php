@@ -21,4 +21,5 @@ return [
     'nearest.error_shape' => 'withError() verwacht een lijst van 3 elementen [r, g, b]; {count} element(en) ontvangen',
     'nearest.error_channel' => 'withError()-accumulatorkanalen moeten int of float zijn; ontvangen: {type}',
     'palette_index.metric' => 'PaletteIndex vereist een afstandsbehoudende metriek (Euclidean of Cie76); {metric} heeft geen vaste PCA-basis - gebruik in plaats daarvan NearestColor::closest()',
+    'stream.invalid_resource' => 'de {label}-stream moet een geldige bron zijn',
 ];
