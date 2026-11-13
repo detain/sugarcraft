@@ -489,7 +489,9 @@ final class ProcListTest extends TestCase
             $this->assertSame('', self::byPid($first, 399)?->cmd, 'the tail degrades to blank columns for one tick');
             $this->assertGreaterThan(0, self::byPid($first, 399)?->mem, 'rss stays real (stat-based) even on a degraded row');
 
-            [$second] = $procs->withScanBudget(ProcList::SCAN_BUDGET_US)->sample();
+            // Unbounded, not SCAN_BUDGET_US: 25 ms of wall clock is not enough for
+            // ~240 deferred reads on a loaded box, and the pin is the drain, not the clock.
+            [$second] = $procs->withScanBudget(PHP_INT_MAX)->sample();
             $this->assertSame('/usr/bin/worker --id 399', self::byPid($second, 399)?->cmd, 'the deferred read lands on the next scan');
         } finally {
             $tree->destroy();
