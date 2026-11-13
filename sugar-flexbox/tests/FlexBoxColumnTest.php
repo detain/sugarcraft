@@ -162,6 +162,60 @@ final class FlexBoxColumnTest extends TestCase
         }
     }
 
+    // ---- Column layout: alignment DISCRIMINATED (findings-011/074) ----
+
+    /**
+     * Column-mode alignment places each line inside the width the ITEM
+     * MEASURES (Stretch: the container width), never inside the
+     * container itself — so the placement only shows between lines of
+     * DIFFERENT lengths within one item. These are the frames that
+     * finally discriminate Start/Center/End (the old pins asserted a
+     * width loop every align passed).
+     */
+    public function testColumnAlignPlacesWithinTheItemsMeasuredWidth(): void
+    {
+        $item = FlexItem::new("abc\nd");
+
+        $start  = FlexBox::column($item)->withAlign(Align::Start)->render(10, 2);
+        $center = FlexBox::column($item)->withAlign(Align::Center)->render(10, 2);
+        $end    = FlexBox::column($item)->withAlign(Align::End)->render(10, 2);
+
+        $this->assertSame("abc       \nd         ", $start);
+        $this->assertSame("abc       \n d        ", $center);
+        $this->assertSame("abc       \n  d       ", $end);
+    }
+
+    public function testColumnAlignIsInertForUniformWidthsByConstruction(): void
+    {
+        // The honest converse (finding-074): a single-width item answers
+        // byte-identical frames to Start/Center/End — inert by
+        // construction, NOW documented rather than silently promised.
+        // Container-relative centring lives one layer up (pad the box).
+        $uniform = FlexItem::new('ab');
+        $start = FlexBox::column($uniform)->withAlign(Align::Start)->render(6, 1);
+        $this->assertSame('ab    ', $start);
+        $this->assertSame($start, FlexBox::column($uniform)->withAlign(Align::Center)->render(6, 1));
+        $this->assertSame($start, FlexBox::column($uniform)->withAlign(Align::End)->render(6, 1));
+        $this->assertSame($start, FlexBox::column($uniform)->withAlign(Align::Stretch)->render(6, 1));
+    }
+
+    public function testRowModeAlignPlacesWithinTheAllocatedWidth(): void
+    {
+        // Row mode DID discriminate all along — the flex allocation
+        // gives each 1:1 item a 10-cell box for 2-cell content, and
+        // every align case rides inside that box (the row-mode tests
+        // that never existed per finding-011).
+        $box = static fn (Align $a): string => FlexBox::row(
+            FlexItem::new('ab'),
+            FlexItem::new('cd'),
+        )->withGap(0)->withAlign($a)->render(20, 1);
+
+        $this->assertSame('ab        cd        ', $box(Align::Start));
+        $this->assertSame('    ab        cd    ', $box(Align::Center));
+        $this->assertSame('        ab        cd', $box(Align::End));
+        $this->assertSame($box(Align::Start), $box(Align::Stretch), 'Stretch pads right like Start on one-liners');
+    }
+
     // ---- Column layout: style ----
 
     public function testColumnItemWithStyleRendersStyledOutput(): void

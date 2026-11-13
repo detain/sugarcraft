@@ -129,8 +129,12 @@ Every dimension is in **cells**, and allocation follows one deterministic model 
    is no separate cross-axis knob and no CSS `justify-content` counterpart, and rows are
    always placed top-down. In row mode the case selects the box height (`stretch` fills the
    declared height, every other case the tallest item) as well as how each item's text
-   sits inside its allocated cell; in column mode it selects the width each item's lines
-   render into plus the same horizontal placement. Content beyond the declared height is
+   sits inside its allocated cell; in column mode each line is placed inside the width
+   the ITEM MEASURES — `stretch` uses the container width, every other case the item's
+   own measured width — so column-mode alignment discriminates only lines of DIFFERENT
+   lengths within one item: a uniform-width item renders byte-identical under
+   `start`/`center`/`end` (centring a whole item against the container is padding's
+   layer, not alignment's). Content beyond the declared height is
    clamped, never distributed; `render(w, h)` output always fits the requested box.
 
 To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the panel
