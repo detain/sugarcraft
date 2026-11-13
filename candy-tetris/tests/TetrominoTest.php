@@ -73,6 +73,43 @@ final class TetrominoTest extends TestCase
         }
     }
 
+    /**
+     * Transcription pin: every kind × rotation state asserted as a full
+     * coordinate set (CALIBER candidate-coordinate-list form). Count and
+     * uniqueness checks pass for ANY four-cell scribble — these literals
+     * are what make a wrong transposition of a published SRS shape fail CI.
+     * Order-insensitive per state (cell listing order is not the spec);
+     * refactor-proof because it pins public cells() output, not how the
+     * shapes are stored inside the enum.
+     */
+    public function testEveryRotationStateIsThePublishedShapeCoordinateSet(): void
+    {
+        $expect = [
+            'I' => [[[0,1],[1,1],[2,1],[3,1]], [[2,0],[2,1],[2,2],[2,3]], [[0,2],[1,2],[2,2],[3,2]], [[1,0],[1,1],[1,2],[1,3]]],
+            'O' => [[[1,0],[2,0],[1,1],[2,1]], [[1,0],[2,0],[1,1],[2,1]], [[1,0],[2,0],[1,1],[2,1]], [[1,0],[2,0],[1,1],[2,1]]],
+            'T' => [[[1,0],[0,1],[1,1],[2,1]], [[1,0],[1,1],[2,1],[1,2]], [[0,1],[1,1],[2,1],[1,2]], [[1,0],[0,1],[1,1],[1,2]]],
+            'S' => [[[1,0],[2,0],[0,1],[1,1]], [[1,0],[1,1],[2,1],[2,2]], [[1,1],[2,1],[0,2],[1,2]], [[0,0],[0,1],[1,1],[1,2]]],
+            'Z' => [[[0,0],[1,0],[1,1],[2,1]], [[2,0],[1,1],[2,1],[1,2]], [[0,1],[1,1],[1,2],[2,2]], [[1,0],[0,1],[1,1],[0,2]]],
+            'J' => [[[0,0],[0,1],[1,1],[2,1]], [[1,0],[2,0],[1,1],[1,2]], [[0,1],[1,1],[2,1],[2,2]], [[1,0],[1,1],[0,2],[1,2]]],
+            'L' => [[[2,0],[0,1],[1,1],[2,1]], [[1,0],[1,1],[1,2],[2,2]], [[0,1],[1,1],[2,1],[0,2]], [[0,0],[1,0],[1,1],[1,2]]],
+        ];
+        $normalise = static function (array $cells): array {
+            $keys = array_map(static fn(array $c): string => "{$c[0]},{$c[1]}", $cells);
+            sort($keys);
+            return $keys;
+        };
+        foreach ($expect as $kind => $states) {
+            $piece = Tetromino::from($kind);
+            foreach ($states as $state => $cells) {
+                $this->assertSame(
+                    $normalise($cells),
+                    $normalise($piece->cells($state)),
+                    "{$kind} state {$state} coordinate set drifted",
+                );
+            }
+        }
+    }
+
     public function testEachPieceHasUniqueColor(): void
     {
         $colors = array_map(static fn(Tetromino $t) => $t->color(), Tetromino::cases());
