@@ -92,6 +92,11 @@ final class Column
      * Alias of withFlexibleWidth() under the upstream flex-width name, so
      * ports from Go read 1:1. Mirrors Evertras/bubble-table.NewFlexColumn's
      * flexFactor / the upstream FlexWidth naming.
+     *
+     * Like its primary, this sets the flex WEIGHT only — the column must
+     * still declare `ColumnWidth::Flex` (or `Dynamic`) via withWidthMode();
+     * a weight on a Fixed/Percent/Content column is measured but never
+     * honoured, exactly like a stale percent outside Percent mode.
      */
     public function withFlexWidth(int $share): self
     {
@@ -127,7 +132,30 @@ final class Column
         if ($columnWidth === ColumnWidth::Percent && (!\is_finite($percentValue) || $percentValue < 0.0 || $percentValue > 100.0)) {
             throw new \InvalidArgumentException('Percent value must be between 0.0 and 100.0');
         }
-        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $columnWidth, percentValue: $percentValue, wrapMode: $this->wrapMode);
+
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $columnWidth, percentValue: $columnWidth === ColumnWidth::Percent ? $percentValue : 0.0, wrapMode: $this->wrapMode);
+    }
+
+    /**
+     * The single spelling for (re)declaring a column's width mechanism
+     * (audit ST-27, findings 027+069): mode plus, for Percent only, the
+     * percentage. A non-Percent mode discards any stale percent — the
+     * ghost value that used to survive some withers and die in others;
+     * the resolver gates percent reads on the mode, so what is stored for
+     * other modes could never be honoured, only forgotten silently.
+     *
+     * Percent demands an explicit number: a 0% column was never a
+     * meaningful declaration, and announcing it at the boundary beats a
+     * zero-width slot discovered at render (contrast withColumnWidth()'s
+     * legacy default of 0.0, kept byte-compatible for existing callers).
+     */
+    public function withWidthMode(ColumnWidth $mode, ?float $percent = null): self
+    {
+        if ($mode === ColumnWidth::Percent && $percent === null) {
+            throw new \InvalidArgumentException('Percent width mode requires an explicit percent value');
+        }
+
+        return $this->withColumnWidth($mode, $percent ?? 0.0);
     }
 
     public function withWrapMode(WrapMode $wrapMode): self

@@ -69,11 +69,13 @@ echo $t->View();
 ```php
 Column::new($key, $title, $width)        // key, display title, fixed width
     ->withFlexibleWidth($share)          // weight when ColumnWidth::Flex splits leftover
+    ->withFlexWidth($share)              // same, under the upstream Go port name
     ->withMaxWidth($max)                 // hard width ceiling, applied after flex distribution (content truncates with '…'; 0 = none)
     ->withStyle('1;34')                  // ANSI SGR style
     ->withFilterable()                   // opt into search/Filter scanning (see Global Search)
     ->withAlignLeft()                    // left-align (default is right)
-    ->withColumnWidth($mode, $value)     // ColumnWidth::Fixed|Percent|Dynamic|Content|Flex
+    ->withWidthMode($mode, $percent)     // the single width-mechanism spelling: ColumnWidth::Fixed|Percent|Dynamic|Content|Flex; $percent required for Percent, discarded by every other mode
+    ->withColumnWidth($mode, $percent)   // legacy spelling, percent defaults 0.0; same normalization applies
     ->withWrapMode(WrapMode::None)       // WrapMode::None|WordWrap|Character
 ```
 
@@ -82,9 +84,10 @@ Column::new($key, $title, $width)        // key, display title, fixed width
 `ColumnWidth` specifies how a column's width is computed at render time.
 The table computes actual widths in `computeColumnWidths($tableWidth)` and uses
 them consistently throughout rendering (header, data cells, separators).
-A `Fixed` width is expected to be a positive integer: `Column::new()` does not
-validate it, so zero lays out an empty column and a negative value fails late
-at render time (a `ValueError` from the buffer fill) rather than at definition.
+A `Fixed` width is expected to be a positive integer: `Column::new()` throws
+on a negative width (`InvalidArgumentException` naming the column — the
+constructor is the choke point every wither passes through), while 0 is legal
+and lays out an empty column.
 
 | Case        | Description                                              |
 |-------------|----------------------------------------------------------|
@@ -97,21 +100,25 @@ at render time (a `ValueError` from the buffer fill) rather than at definition.
 ```php
 use SugarCraft\Table\ColumnWidth;
 
+// The single spelling is withWidthMode(mode[, percent]): percent belongs
+// only to Percent, and any other mode discards it rather than storing a
+// value the resolver can never honour.
+
 // Fixed 10-character column
 $col = Column::new('id', 'ID', 10)
-    ->withColumnWidth(ColumnWidth::Fixed, 0);
+    ->withWidthMode(ColumnWidth::Fixed);
 
 // 25% of table width
 $col = Column::new('name', 'Name', 20)
-    ->withColumnWidth(ColumnWidth::Percent, 25.0);
+    ->withWidthMode(ColumnWidth::Percent, 25.0);
 
 // Dynamic (content width or flex share, whichever is larger)
 $col = Column::new('city', 'City', 15)
-    ->withColumnWidth(ColumnWidth::Dynamic, 0);
+    ->withWidthMode(ColumnWidth::Dynamic);
 
 // Content-based (exact fit to widest cell)
 $col = Column::new('email', 'Email', 30)
-    ->withColumnWidth(ColumnWidth::Content, 0);
+    ->withWidthMode(ColumnWidth::Content);
 ```
 
 **Dynamic + Content example** — auto-size two columns while a third takes 25%:
@@ -119,13 +126,13 @@ $col = Column::new('email', 'Email', 30)
 ```php
 $t = Table::fromColumns([
     Column::new('id',   'ID',     5)
-        ->withColumnWidth(ColumnWidth::Fixed, 0),
+        ->withWidthMode(ColumnWidth::Fixed),
     Column::new('name', 'Name',  20)
-        ->withColumnWidth(ColumnWidth::Dynamic, 0),   // auto-size to content
+        ->withWidthMode(ColumnWidth::Dynamic),        // auto-size to content
     Column::new('note', 'Note',  10)
-        ->withColumnWidth(ColumnWidth::Content, 0),  // exact content fit
+        ->withWidthMode(ColumnWidth::Content),        // exact content fit
     Column::new('pct',  'Pct',    0)
-        ->withColumnWidth(ColumnWidth::Percent, 25.0), // always 25% of table
+        ->withWidthMode(ColumnWidth::Percent, 25.0),  // always 25% of table
 ])->withRows([...]);
 
 echo $t->View();  // pct takes 25% of the table width, id stays 5, the three border

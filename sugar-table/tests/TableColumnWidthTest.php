@@ -580,4 +580,81 @@ final class TableColumnWidthTest extends TestCase
             'contentWidthForColumn scans ALL rows regardless of the rendered view',
         );
     }
+
+    // ---- ST-27: one width mechanism ------------------------------------------
+
+    public function testWidthModeMatchesTheLegacySpellingPerMode(): void
+    {
+        $base = Column::new('k', 'K', 10);
+
+        $pairs = [
+            [ColumnWidth::Fixed, null],
+            [ColumnWidth::Percent, 25.0],
+            [ColumnWidth::Dynamic, null],
+            [ColumnWidth::Content, null],
+            [ColumnWidth::Flex, null],
+        ];
+
+        foreach ($pairs as [$mode, $percent]) {
+            $viaMode = $base->withWidthMode($mode, $percent);
+            $viaLegacy = $base->withColumnWidth($mode, $percent ?? 0.0);
+
+            $this->assertSame($mode, $viaMode->columnWidth, $mode->name);
+            $this->assertSame($viaLegacy->percentValue, $viaMode->percentValue, $mode->name);
+        }
+    }
+
+    public function testNonPercentModeDiscardsThePercentGhost(): void
+    {
+        $percent = Column::new('k', 'K', 10)->withWidthMode(ColumnWidth::Percent, 30.0);
+        $this->assertSame(30.0, $percent->percentValue);
+
+        // Re-declaring a different mode must FORGET the percent, not carry a
+        // value the resolver can never honour.
+        $flexed = $percent->withWidthMode(ColumnWidth::Flex);
+        $this->assertSame(0.0, $flexed->percentValue);
+
+        // Even an EXPLICIT percent against the wrong mode is discarded —
+        // this is the ghost input the old spelling stored verbatim.
+        $ghosted = $percent->withColumnWidth(ColumnWidth::Flex, 30.0);
+        $this->assertSame(0.0, $ghosted->percentValue);
+
+        // A style wither on a still-Percent column keeps the real percent.
+        $restyled = $percent->withStyle('1');
+        $this->assertSame(30.0, $restyled->percentValue);
+    }
+
+    public function testPercentModeRequiresAnExplicitNumberOnTheNewSpelling(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Percent width mode requires an explicit percent value');
+        Column::new('k', 'K', 10)->withWidthMode(ColumnWidth::Percent);
+    }
+
+    public function testLegacyPercentDefaultStaysByteCompatible(): void
+    {
+        // withColumnWidth(Percent) without a number historically meant 0.0;
+        // ST-27 adds the loud spelling but must not break the old call.
+        $col = Column::new('k', 'K', 10)->withColumnWidth(ColumnWidth::Percent);
+        $this->assertSame(0.0, $col->percentValue);
+    }
+
+    public function testAllWidthMechanismsSolveIdentically(): void
+    {
+        $rows = [Row::new(RowData::from(['a' => 'x', 'b' => 'y', 'c' => 'z']))];
+
+        $legacy = Table::fromColumns([
+            Column::new('a', 'A', 20)->withColumnWidth(ColumnWidth::Percent, 40.0),
+            Column::new('b', 'B', 10)->withFlexibleWidth(2)->withColumnWidth(ColumnWidth::Flex),
+            Column::new('c', 'C', 7),
+        ])->withRows($rows);
+
+        $modern = Table::fromColumns([
+            Column::new('a', 'A', 20)->withWidthMode(ColumnWidth::Percent, 40.0),
+            Column::new('b', 'B', 10)->withFlexWidth(2)->withWidthMode(ColumnWidth::Flex),
+            Column::new('c', 'C', 7),
+        ])->withRows($rows);
+
+        $this->assertSame($legacy->computeColumnWidths(80), $modern->computeColumnWidths(80));
+    }
 }
