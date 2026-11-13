@@ -78,7 +78,11 @@ final class FilterModel implements Model
         // Enter filter mode immediately by simulating the '/' keystroke.
         [$list, ] = $list->update(new KeyMsg(KeyType::Char, '/'));
         // Pre-fill the filter buffer if the caller supplied a value.
-        foreach (str_split($value) as $ch) {
+        // scriptui-19: replay whole codepoints, never raw bytes — a
+        // byte-per-keystroke replay arms a stream of transient invalid
+        // UTF-8 filter buffers (lead byte without its continuation) that
+        // every width/match consumer downstream must tolerate.
+        foreach (mb_str_split($value, 1, 'UTF-8') as $ch) {
             if ($ch === ' ') {
                 [$list, ] = $list->update(new KeyMsg(KeyType::Space, ' '));
             } else {
