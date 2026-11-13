@@ -277,6 +277,7 @@ is a guard against a pathological server, not a working budget:
 | `notifications/cancelled` delivery grace | 2 s (`CANCEL_NOTICE_SECONDS`) | The post-timeout cancellation notice gets this budget, no more |
 | Default handshake deadline | 60 s (`DEFAULT_START_TIMEOUT_SECONDS`, public — `startTimeoutSeconds:` overrides it per server) | One monotonic deadline shared by all three `start()` legs, sized for cold `npx` fetches |
 | Poll slice with nothing pending | 1 s (`READ_POLL_SECONDS`) | The select timeout that paces the liveness probe and `onWait:` beats |
+| Wire revision spoken | `2024-11-05` (`PROTOCOL_VERSION`, public) | The MCP revision this client implements and requires the server to answer with: a server claiming a different revision is refused at the handshake; one that omits the field proceeds |
 
 ## Failure shapes
 
