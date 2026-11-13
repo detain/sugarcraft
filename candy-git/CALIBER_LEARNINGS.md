@@ -247,3 +247,14 @@ same posture candy-codeshot documents for its highlighter).
 Anti-pattern: adding a dependency on candy-mdview to "consume" it — the pager
 exposes no API, and a dep bump on a CLI lib buys nothing at render time.
 Source: leftover-rollout step 10.06 Phase 4 (round-84 lane t2, E735)
+
+Pattern: OS differences in the subprocess runner live behind `Platform` (null
+device, PATH lookup, tree-kill) so the Windows ladder runs in the Linux suite via
+`Platform::windows()->withNullDevice('/dev/null')->withKillTree(...)`. On Windows
+child output goes to temp files and the parent polls `proc_get_status`
+(`stream_select` cannot poll proc pipes there); the exit code is only valid on
+the FIRST not-running status read.
+Anti-pattern: mapping every spawn RuntimeException to `cli.no_git` — probe
+`Platform::findExecutable('git')` first; a launchable-but-failing git needs the
+`git.spawn_failed` reason, not an install hint.
+Source: CG-21 (p5 gate B)

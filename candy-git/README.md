@@ -44,8 +44,35 @@ usage line rather than being silently ignored.
 - A checked-out work tree — bare repositories have no status pane to show and
   are refused at launch.
 
+- **Operating systems.** Linux and macOS use the pipe-based runner. On Windows
+  the runner takes a polled temp-file ladder instead (`stream_select` cannot poll
+  `proc_open` pipes there; child stdin is the `NUL` device or a payload file, and
+  a timed-out child's process tree is stopped with `taskkill /F /T`). The OS
+  differences live behind the injectable `Platform` seam, both branches are
+  unit-tested on every host, and `candy-git` is in the Windows CI leg
+  (`WINDOWS_LIBS`) so the real thing is exercised on `windows-latest`. A launch
+  failure that is not a missing git (the binary is on PATH but would not start)
+  prints the OS reason instead of the install hint.
+
 See **Trust boundary** below for what candy-git disables inside a repository's
 own git config.
+
+## Scope (v1)
+
+candy-git v1 covers the local-repository loop: status / stage / unstage /
+discard, branches (checkout, create, delete), log, the diff viewer, commit and
+amend, merge, cherry-pick, the sequencer menu (continue / abort / skip), stash
+list / apply / drop, worktrees (list / add / remove), an interactive-rebase todo
+preview, and undo / redo of the last operation.
+
+Not in v1 (absent, not hidden behind a key): **remotes** (fetch, pull, push,
+remote management), **tags**, **reflog**, **bisect**, **submodules**,
+hunk- and line-level **patch staging**, an in-app **conflict-resolution** view,
+creating a stash, and *executing* the interactive-rebase todo (it is a preview
+today). Every git call is a synchronous, timeout-bounded subprocess on the UI
+thread; moving git work onto the ReactPHP loop as async commands (so slow
+remotes cannot stall rendering) is the v2 direction and the prerequisite for the
+remote family.
 
 ## Keys
 
@@ -176,7 +203,8 @@ marker carries no color, so tab cycling stays visible under `NO_COLOR`,
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | `Git`             | Concrete `git` shell-out — `status --porcelain=v1 -b`, `for-each-ref`, `log --pretty=format:…`, `add`, `restore --staged`; `stagePatch()` pipes a selected hunk through `git apply --cached --unidiff-zero -`. Throws `RuntimeException` on non-zero exit. |
 | `GitDriver`        | Interface for all git operations. Tests inject a fixture-backed driver so transition correctness is asserted without staging a real repo. |
-| `Process`          | The ONLY proc_open site — bounded drain loop, pinned child env (`GIT_TERMINAL_PROMPT=0`, pagers and editors neutered), stdin isolated from the UI tty, TERM->grace->KILL teardown. |
+| `Platform`         | OS seam for `Process` — null device (`/dev/null` / `NUL`), PATH lookup, tree-kill (`taskkill /F /T`) — injectable so both ladders are tested on any host. |
+| `Process`          | The ONLY proc_open site — bounded drain loop (a polled temp-file loop on Windows), pinned child env (`GIT_TERMINAL_PROMPT=0`, pagers and editors neutered), stdin isolated from the UI tty, TERM->grace->KILL teardown. |
 | `HistoryEntry`     | One undoable operation with its forward args and inverse (or a `refuse` marker when undo would lie — discard, amend, merge, plus a checkout with no origin to return to and a branch delete whose pre-delete SHA was not recorded). |
 | `HistoryManager`   | Bounded undo/redo stacks (`MAX_HISTORY`); a new operation clears the redo lane. |
 | `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `hunkCount()` / `withHunkCursor()` drive navigation and `currentHunkPatch()` yields the selection to stage (applying it is `Git::stagePatch()`). |
