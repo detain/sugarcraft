@@ -40,7 +40,7 @@ final class Pattern implements Validator
         ?int $recursionLimit = null,
     ) {
         if (@preg_match($this->pattern, '') === false) {
-            throw new \InvalidArgumentException('Invalid regex pattern: ' . $this->pattern);
+            throw new \InvalidArgumentException(Lang::t('validator.bad_regex', ['pattern' => $this->pattern]));
         }
         $this->backtrackLimit = $backtrackLimit ?? self::DEFAULT_BACKTRACK_LIMIT;
         $this->recursionLimit = $recursionLimit ?? self::DEFAULT_RECURSION_LIMIT;

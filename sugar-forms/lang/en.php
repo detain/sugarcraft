@@ -79,4 +79,11 @@ return [
     'spinner.timeout_unrecoverable' => 'Spinner action exceeded its {seconds}s lifetime bound and could not be terminated (child abandoned, pid {pid})',
     'spinner.timeout_terminated' => 'Spinner action exceeded its {seconds}s lifetime bound and was terminated',
     'spinner.action_failed' => 'Spinner action failed (exit code {code})',
+    // SF-56 (sugar-forms-089/-090): the four dev-facing ctor/setter throws
+    // joined the catalogue so the localization policy is coherent at every
+    // boundary; en texts are byte-identical to the pre-catalogue literals.
+    'keys.unknown_binding' => 'Unknown key binding \'{binding}\' — expected next, prev, submit or abort.',
+    'input.bad_restrict' => 'Invalid restrict pattern: {pattern}',
+    'input.bad_mask' => 'Invalid mask pattern: {pattern}',
+    'validator.bad_regex' => 'Invalid regex pattern: {pattern}',
 ];

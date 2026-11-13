@@ -9,6 +9,7 @@ use SugarCraft\CellBuffer\Cell;
 use SugarCraft\Forms\Cursor\BlinkMsg;
 use SugarCraft\Forms\Cursor\Cursor;
 use SugarCraft\Forms\HasKeyOverrides;
+use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Vim\VimAction;
 use SugarCraft\Forms\Vim\VimKeyHandler;
 use SugarCraft\Forms\Vim\VimState;
@@ -940,7 +941,7 @@ final class TextInput implements Model
         // The @-suppression only hides the compile E_WARNING we already
         // branch on via === false.
         if ($pattern !== '' && @preg_match('/' . $pattern . '/', '') === false) {
-            throw new \InvalidArgumentException('Invalid restrict pattern: ' . $pattern);
+            throw new \InvalidArgumentException(Lang::t('input.bad_restrict', ['pattern' => $pattern]));
         }
         return $this->mutate(restrict: $pattern);
     }
@@ -971,7 +972,7 @@ final class TextInput implements Model
     public function withMask(string $pattern, string $echoChar = '*'): self
     {
         if ($pattern === '' || @preg_match('/' . $pattern . '/u', '') === false) {
-            throw new \InvalidArgumentException('Invalid mask pattern: ' . $pattern);
+            throw new \InvalidArgumentException(Lang::t('input.bad_mask', ['pattern' => $pattern]));
         }
         return $this->mutate(
             echoMode: EchoMode::Mask,

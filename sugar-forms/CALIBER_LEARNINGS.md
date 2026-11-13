@@ -96,3 +96,13 @@ Pattern: sugar-forms' bare-accessor era (2026-10-24) renamed 34 `get*` reads to 
 ## 2026-11-13 — sugar-added surface has no upstream counterpart
 
 The seven Theme presets beyond the researched pair are sugar additions; charmbracelet/huh ships no equivalent. Never cite charmbracelet for them — the honest wording is 'no upstream symbol' (SF-14 precedent: a paraphrased cite proved wrong the same way). Citation sweep of 2026-11-13 (sugar-forms-058) re-spelled shortened Mirrors prose to canonical grammar and footnoted the unverified claims; per-symbol verification stays gated on a pinned research checkout.
+
+## 2026-11-13 — Dev-facing throw localization IS the boundary policy
+
+Policy (SF-56, sugar-forms-089/-090): every throw raised at a constructor or
+setter boundary rides `Lang::t` with a literal key string (`keys.unknown_binding`,
+`input.bad_restrict`, `input.bad_mask`, `validator.bad_regex` joined the earlier
+`number.*` / `viewport.*` / `keys.override_*` family) — developer-facing prose
+localizes too, because a straggler makes the policy incoherent at the exact
+surface a coverage audit greps. A new raw-string throw at a boundary is a defect
+to fix, not style to flag twice.

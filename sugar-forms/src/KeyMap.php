@@ -110,7 +110,7 @@ final class KeyMap
             'submit' => $this->submit,
             'abort'  => $this->abort,
             default  => throw new \InvalidArgumentException(
-                "Unknown key binding '{$binding}' — expected next, prev, submit or abort."
+                Lang::t('keys.unknown_binding', ['binding' => $binding]),
             ),
         };
 
