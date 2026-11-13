@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Charts\Tests\LineChart;
+namespace SugarCraft\Charts\Tests;
 
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
@@ -127,18 +127,24 @@ final class TimeSeriesChromeTest extends TestCase
         $this->assertStringNotContainsString('└', $ts->withAxes(false)->view());
     }
 
-    public function testChromeFreeRenderIsByteIdenticalToLegacyPipeline(): void
+    public function testChromeFreeRenderIsBytePinned(): void
     {
-        // The old view() body, re-derived by hand — the forwarding rebuild
-        // may not move a single byte when no chrome was set.
-        $values = [0.0, 1.0, 2.0, 0.0, 1.0];
-        $labels = ['12:00', '14:00', '16:00'];
-        $legacy = LineChart::new($values, 30, 8)
-            ->withAxes()
-            ->withXLabels($labels)
-            ->view();
+        // Recorded 2026-11-13 at CH-06 (temporal x mapping). This replaces
+        // the CH-05 "identical to legacy ordinal pipeline" equivalence pin:
+        // mapping points at TIME positions is exactly what sugar-charts-009
+        // demanded, so the ordinal bytes are the defect, not the contract.
+        // Dense resampling of this evenly-spaced, piecewise-linear series
+        // traces the same line — the pin now guards any further drift.
+        $expected = "  │          ***\n" .
+            "  │       ***   *\n" .
+            "  │     **       **          *\n" .
+            "  │  ***           *      ***\n" .
+            "  │**               **  **\n" .
+            "  │                   **\n" .
+            "  └───────────────────────────\n" .
+            "  12:00        14:00     16:00";
         $this->assertSame(
-            $legacy,
+            $expected,
             TimeSeries::new(self::points(), 30, 8)->withXLabelCount(3)->withTimeFormat('H:i')->view(),
         );
     }

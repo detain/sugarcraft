@@ -40,4 +40,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'LineChart は値ラベルを印刷できません。BarChart::withDataLabels() を使うか、自前のデータから数値を描画してください',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries はランタイムで描画できない時刻フォーマットを拒否します: {fmt}',
 ];

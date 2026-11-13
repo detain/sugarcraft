@@ -40,4 +40,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'LineChart nemůže tisknout popisky hodnot; použijte BarChart::withDataLabels() nebo vykreslete čísla ze svých dat',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries zamítá formáty času, které prostředí nedokáže vykreslit: {fmt}',
 ];

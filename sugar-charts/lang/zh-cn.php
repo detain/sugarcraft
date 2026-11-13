@@ -40,4 +40,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'LineChart 无法打印数值标签；请使用 BarChart::withDataLabels() 或从你自己的数据渲染数值',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries 拒绝运行时无法渲染的时间格式：{fmt}',
 ];

@@ -63,4 +63,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'LineChart cannot print value labels; use BarChart::withDataLabels() or render the numbers from your own data',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries rejects time formats the runtime cannot render: {fmt}',
 ];

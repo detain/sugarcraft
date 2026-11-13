@@ -40,4 +40,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'LineChart не может печатать подписи значений; используйте BarChart::withDataLabels() или выведите числа из своих данных',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries отклоняет форматы времени, которые среда выполнения не может отрисовать: {fmt}',
 ];

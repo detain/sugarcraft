@@ -57,4 +57,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'LineChart ne peut pas imprimer d’étiquettes de valeurs ; utilisez BarChart::withDataLabels() ou affichez les nombres depuis vos propres données',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries rejette les formats d’heure que l’exécution ne peut pas rendre : {fmt}',
 ];

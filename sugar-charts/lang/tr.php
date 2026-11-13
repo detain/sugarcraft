@@ -40,4 +40,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'LineChart değer etiketleri yazamaz; BarChart::withDataLabels() kullanın veya sayıları kendi verinizden çizdirin',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries, çalışma zamanının oluşturamadığı saat biçimlerini reddeder: {fmt}',
 ];

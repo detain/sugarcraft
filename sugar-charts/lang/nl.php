@@ -40,4 +40,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'LineChart kan geen waardenlabels afdrukken; gebruik BarChart::withDataLabels() of geef de getallen uit je eigen data weer',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries wijst tijdnotaties af die de runtime niet kan weergeven: {fmt}',
 ];

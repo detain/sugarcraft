@@ -13,8 +13,10 @@ use SugarCraft\Style\Theme;
  * Time-series LineChart variant. Wraps {@see LineChart} but accepts
  * `[\DateTimeImmutable, value]` tuples and renders X-axis labels
  * formatted from the timestamps. Useful for live metrics dashboards.
- * Points that share a timestamp map to the same axis slot — their
- * markers overlap; pre-aggregate (see Aggregation) to collapse them.
+ * Samples are plotted at their TIME position (uneven gaps widen on the
+ * axis), and samples sharing a timestamp collapse to the same column —
+ * the later value wins; pre-aggregate (see Aggregation) to collapse
+ * them deliberately.
  *
  * Chrome is forwarded onto the wrapped chart (sugar-charts-006): every
  * `withTitle` / `withTheme` / `withYRange` … on this class configures the
@@ -43,13 +45,24 @@ final class TimeSeries
      */
     private readonly LineChart $inner;
 
-    /** @param list<array{0:\DateTimeImmutable,1:int|float}> $points */
+    /**
+     * `date()` format for X-axis labels, or null for the honest default:
+     * `'H:i'` within a day, widened to `'m-d H:i'` when the rendered span
+     * exceeds 24 hours (sugar-charts-100).
+     */
+    public readonly ?string $timeFormat;
+
+    /**
+     * The wrapped LineChart carrying forwarded chrome (sugar-charts-006).
+     * Held seeded with axes on; `view()` injects the time-derived values
+     * and labels through the inner chart's own copy plumbing.
+     */
     private function __construct(
         array $points,
         public readonly int $width,
         public readonly int $height,
-        public readonly string $timeFormat,
-        public readonly int $xLabelCount,
+        ?string $timeFormat = null,
+        public readonly int $xLabelCount = 5,
         public readonly ?\DateTimeImmutable $rangeStart = null,
         public readonly ?\DateTimeImmutable $rangeEnd = null,
         ?LineChart $inner = null,
@@ -65,7 +78,8 @@ final class TimeSeries
                 ]));
             }
         }
-        $this->points = array_values($points);
+        $this->points     = array_values($points);
+        $this->timeFormat = $timeFormat;
         // The default seed must match new()'s width/height defaults shape;
         // callers that override dims go through withSize(), which rebuilds
         // the seed — the null default here only serves defensive rebuilds.
@@ -110,7 +124,7 @@ final class TimeSeries
 
     public static function new(array $points = [], int $width = 40, int $height = 8): self
     {
-        return new self(array_values($points), $width, $height, 'H:i', 5);
+        return new self(array_values($points), $width, $height, null, 5);
     }
 
     /** @param list<array{0:\DateTimeImmutable,1:int|float}> $points */
@@ -134,10 +148,46 @@ final class TimeSeries
         );
     }
 
-    /** PHP `date()` format string for X axis labels. Default `'H:i'`. */
-    public function withTimeFormat(string $fmt): self
+    /**
+     * PHP `date()` format string for X axis labels. Pass null to return to
+     * the honest auto default: `'H:i'` inside a day, widened to `'m-d H:i'`
+     * when the rendered span exceeds 24 hours (sugar-charts-100). Formats
+     * the runtime rejects (warnings/throws from `date()`) are refused at
+     * this door (sugar-charts-107); beyond that probe the formatting is
+     * best-effort `date()` semantics.
+     */
+    public function withTimeFormat(?string $fmt): self
     {
+        if ($fmt !== null) {
+            self::assertTimeFormat($fmt);
+        }
         return new self($this->points, $this->width, $this->height, $fmt, $this->xLabelCount, $this->rangeStart, $this->rangeEnd, $this->inner);
+    }
+
+    /**
+     * Door probe (sugar-charts-107): a format that makes PHP's `date()`
+     * warn or throw would corrupt every label at render time — refuse it
+     * once at ingestion instead. PHP 8.3 accepts literal noise like
+     * `'not-a-format'` (echoed verbatim); that best-effort tail is
+     * documented on {@see withTimeFormat()} rather than guessed at.
+     */
+    private static function assertTimeFormat(string $fmt): void
+    {
+        $warned = false;
+        set_error_handler(static function (int $severity, string $message) use (&$warned): bool {
+            $warned = true;
+            return true;
+        });
+        try {
+            date($fmt, 0);
+        } catch (\Throwable) {
+            $warned = true;
+        } finally {
+            restore_error_handler();
+        }
+        if ($warned) {
+            throw new \InvalidArgumentException(Lang::t('timeseries.time_format', ['fmt' => $fmt]));
+        }
     }
 
     /** Number of labels rendered along the X axis (default 5). */
@@ -240,7 +290,7 @@ final class TimeSeries
     /** @param list<array{0:\DateTimeImmutable,1:int|float}> $points */
     public function points(array $points): self   { return $this->withPoints($points); }
     /** Short-form alias for {@see withTimeFormat()}. */
-    public function timeFormat(string $fmt): self { return $this->withTimeFormat($fmt); }
+    public function timeFormat(?string $fmt): self { return $this->withTimeFormat($fmt); }
     /** Short-form alias for {@see withXLabelCount()}. */
     public function xLabelCount(int $n): self     { return $this->withXLabelCount($n); }
     /** Short-form alias for {@see withTimeRange()}. */
@@ -283,6 +333,11 @@ final class TimeSeries
         if ($this->points === []) {
             return (new \SugarCraft\Charts\Canvas\Canvas($this->width, $this->height))->view();
         }
+        // sugar-charts-009: plot in TIME, not in arrival order. Samples are
+        // sorted, mapped to columns round((t-start)/span*(cols-1)) against
+        // the label range, and linearly re-sampled per column, so unevenly
+        // spaced points render proportionally wider gaps. Samples sharing a
+        // timestamp collapse to one column — the later sample wins.
         $points = $this->points;
         if ($this->rangeStart !== null || $this->rangeEnd !== null) {
             $start = $this->rangeStart;
@@ -293,47 +348,95 @@ final class TimeSeries
                 return true;
             }));
             if ($points === []) {
-                return (new \SugarCraft\Charts\Canvas\Canvas($this->width, $this->height))->view();
+                // sugar-charts-099: an empty window is a result, not silence.
+                return $this->noticeFrame('[no points in range]');
             }
         }
 
-        $values  = array_map(static fn(array $p): float => (float) $p[1], $points);
-        $stamps  = array_map(static fn(array $p): \DateTimeImmutable => $p[0], $points);
-        $count   = count($stamps);
+        usort($points, static fn(array $a, array $b): int => $a[0] <=> $b[0]);
+        $stamps = array_map(static fn(array $p): \DateTimeImmutable => $p[0], $points);
+        $values = array_map(static fn(array $p): float => (float) $p[1], $points);
+        $count  = count($stamps);
 
-        $labels = [];
-        $samples = min($this->xLabelCount, $count);
-        // When a range is pinned, label the explicit range endpoints
-        // rather than the data extent so axes don't collapse to the
-        // available samples only.
-        if (($this->rangeStart !== null || $this->rangeEnd !== null) && $samples >= 2) {
-            $start = $this->rangeStart ?? $stamps[0];
-            $end   = $this->rangeEnd ?? $stamps[$count - 1];
-            // Preserve the start's timezone for output so labels match
-            // the user-facing range, not the UTC equivalent.
-            $tz      = $start->getTimezone();
-            $startTs = $start->getTimestamp();
-            $endTs   = $end->getTimestamp();
-            $span    = max(1, $endTs - $startTs);
-            for ($i = 0; $i < $samples; $i++) {
-                $ts = $startTs + (int) round($i * $span / ($samples - 1));
-                $labels[] = (new \DateTimeImmutable('@' . $ts))
-                    ->setTimezone($tz)
-                    ->format($this->timeFormat);
-            }
+        $tz      = ($this->rangeStart ?? $stamps[0])->getTimezone();
+        $startTs = ($this->rangeStart ?? $stamps[0])->getTimestamp();
+        $endTs   = ($this->rangeEnd   ?? $stamps[$count - 1])->getTimestamp();
+        if ($endTs < $startTs) {
+            [$startTs, $endTs] = [$endTs, $startTs];
+        }
+        $span = $endTs - $startTs;
+        $fmt  = $this->timeFormat ?? ($span > 86400 ? 'm-d H:i' : 'H:i'); // sugar-charts-100
+
+        $cols = $span > 0 ? min(max($this->width, 2), $span + 1) : 0;
+        if ($cols < 2 || $count < 2) {
+            // Degenerate domain (single instant or single sample): ordinal
+            // placement is all the data can honestly support.
+            $plot   = $values;
+            $labels = [date($fmt, $startTs)];
         } else {
+            $plot = [];
+            for ($k = 0; $k < $cols; $k++) {
+                $t     = $startTs + (int) round($k * $span / ($cols - 1));
+                $plot[] = self::sampleAt($points, $t);
+            }
+            $samples = min($this->xLabelCount, $cols);
+            $labels  = [];
             for ($i = 0; $i < $samples; $i++) {
-                $idx = $samples === 1
-                    ? 0
-                    : (int) round($i * ($count - 1) / ($samples - 1));
-                $labels[] = $stamps[$idx]->format($this->timeFormat);
+                $ts = $samples === 1 ? $startTs : $startTs + (int) round($i * $span / ($samples - 1));
+                $labels[] = (new \DateTimeImmutable('@' . $ts))->setTimezone($tz)->format($fmt);
             }
         }
 
         return $this->inner
-            ->withData($values)
+            ->withData($plot)
             ->withXLabels($labels)
             ->view();
+    }
+
+    /**
+     * A frame the declared size holding one notice row (sugar-charts-099):
+     * Picture's always-visible placeholder posture.
+     */
+    private function noticeFrame(string $notice): string
+    {
+        $line  = \SugarCraft\Core\Util\Width::truncate($notice, $this->width);
+        $lines = [$line];
+        for ($i = 1, $h = max(1, $this->height); $i < $h; $i++) {
+            $lines[] = '';
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Linear interpolation of the sorted points at instant $t; the series
+     * extends flat outside the sample extent.
+     *
+     * @param list<array{0:\DateTimeImmutable,1:int|float}> $points
+     */
+    private static function sampleAt(array $points, int $t): float
+    {
+        $first = $points[0];
+        if ($t <= $first[0]->getTimestamp()) {
+            return (float) $first[1];
+        }
+        $last = $points[count($points) - 1];
+        if ($t >= $last[0]->getTimestamp()) {
+            return (float) $last[1];
+        }
+        $prev = $first;
+        for ($i = 1, $n = count($points); $i < $n; $i++) {
+            $curTs = $points[$i][0]->getTimestamp();
+            if ($curTs >= $t) {
+                $prevTs = $prev[0]->getTimestamp();
+                if ($curTs === $prevTs) {
+                    return (float) $points[$i][1];
+                }
+                $frac = ($t - $prevTs) / ($curTs - $prevTs);
+                return (float) $prev[1] + $frac * ((float) $points[$i][1] - (float) $prev[1]);
+            }
+            $prev = $points[$i];
+        }
+        return (float) $last[1];
     }
 
     public function __toString(): string

@@ -40,4 +40,7 @@ return [
 
     // LineChart/LineChart.php
     'chart.datalabels_unsupported' => 'لا يمكن لـ LineChart طباعة تسميات القيم؛ استخدم BarChart::withDataLabels() أو اعرض الأرقام من بياناتك',
+
+    // LineChart/TimeSeries.php withTimeFormat door
+    'timeseries.time_format' => 'TimeSeries يرفض تنسيقات الوقت التي لا يستطيع وقت التشغيل عرضها: {fmt}',
 ];
