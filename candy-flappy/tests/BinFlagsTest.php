@@ -88,13 +88,13 @@ final class BinFlagsTest extends TestCase
         // N3 (review round 2): the refusal used to fwrite raw argv bytes to
         // STDERR, so a crafted command line could paint the terminal (or
         // forge the message shape) through its own error report.
-        // (NUL cannot cross execve, so it is exercised via the sanitizer directly.)
+        // (NUL cannot cross execve, so it is exercised via the sanitiser directly.)
         $evil = "--\x1b[31mRED\x07bytes";
         [$code, $out, $err] = self::drive([$evil]);
         self::assertSame(2, $code);
         self::assertStringNotContainsString(\chr(27), $err, 'no ESC may reach the terminal');
         self::assertStringNotContainsString(\chr(7), $err);
-        // Byte-level fallback branch of the sanitizer (invalid UTF-8 argv):
+        // Byte-level fallback branch of the sanitiser (invalid UTF-8 argv):
         $raw = "--" . chr(27) . "[31mR\x00\x07ED";
         $fallback = preg_replace('/[\x00-\x1f\x7f]+/', '?', $raw);
         self::assertStringNotContainsString(chr(0), (string) $fallback);

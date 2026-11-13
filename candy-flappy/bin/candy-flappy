@@ -235,7 +235,7 @@ $final = $program->run();
 // idempotent, so the q path's re-write is the same bytes.
 if ($final instanceof Game) {
     // flappy-17: settleOnExit() reports a failed final save itself (one
-    // sanitized STDERR line) and never throws — a save failure cannot
+    // sanitised STDERR line) and never throws — a save failure cannot
     // replace the game's exit status, and there is no longer a swallow
     // here to repeat that law.
     $final->settleOnExit();

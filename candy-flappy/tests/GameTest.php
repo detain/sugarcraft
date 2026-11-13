@@ -1042,7 +1042,7 @@ final class GameTest extends TestCase
 
     public function testUpdateWithUnhandledMsgTypeReturnsSelf(): void
     {
-        // An unrecognized Msg type should fall through to return [$this, null]
+        // An unrecognised Msg type should fall through to return [$this, null]
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
         $otherMsg = new class implements \SugarCraft\Core\Msg {};
         [$next, $cmd] = $g->update($otherMsg);
@@ -1148,7 +1148,7 @@ final class GameTest extends TestCase
 
     /**
      * flappy-17 (finding -017): the settle/quit path has nothing left to
-     * protect, so a failed save must be announced — one fixed, sanitized
+     * protect, so a failed save must be announced — one fixed, sanitised
      * STDERR line, never a trace, exit status untouched. The write has to
      * actually fail for the child to announce it, and it must fail for
      * every uid (root included): configDir's path runs through a REGULAR

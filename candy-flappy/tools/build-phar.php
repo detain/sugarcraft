@@ -103,7 +103,7 @@ foreach (array_slice($argv, 1) as $arg) {
         $vendorMode = $candidate;
         continue;
     }
-    fwrite(STDERR, "build-phar: unrecognized option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH] [--gz] [--version=X] [--vendor=published|monorepo])\n");
+    fwrite(STDERR, "build-phar: unrecognised option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH] [--gz] [--version=X] [--vendor=published|monorepo])\n");
     exit(2);
 }
 

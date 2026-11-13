@@ -197,7 +197,7 @@ final class PharBuildScriptTest extends TestCase
         [$exit, $out, $err] = self::runBuild(['--nope']);
 
         self::assertSame(2, $exit, 'an unknown option must refuse with exit 2, got: ' . $err);
-        self::assertStringContainsString('unrecognized option --nope', $err);
+        self::assertStringContainsString('unrecognised option --nope', $err);
         self::assertSame('', $out, 'refusals are stderr-only; stdout stays clean');
     }
 

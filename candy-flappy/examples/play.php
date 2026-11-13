@@ -90,7 +90,7 @@ $program = new Program(
 $final = $program->run();
 if ($final instanceof Game) {
     // flappy-17: settleOnExit() reports a failed final save itself (one
-    // sanitized STDERR line) and never throws — mirrors bin/candy-flappy,
+    // sanitised STDERR line) and never throws — mirrors bin/candy-flappy,
     // the documented swallow is no longer needed here either.
     $final->settleOnExit();
 }
