@@ -384,4 +384,58 @@ final class ImageSourceTest extends TestCase
         self::assertLessThan($sniff, $ceiling, 'fromString: ceiling must precede the header sniff');
         self::assertLessThan($decode, $ceiling, 'fromString: ceiling must precede the GD allocation');
     }
+
+    public function testFromGdInternalHandoffKeepsEveryPixelLossless(): void
+    {
+        // SI-33 (finding 041): the deflate level of the fromGd re-encode is
+        // tuning; the pixels are the contract. Whatever the internal PNG
+        // level, the handoff must survive a full decode with every pixel
+        // byte-identical — the lossless half of "lossless PNG semantics".
+        $gd = imagecreatetruecolor(6, 4);
+        $seen = [];
+        for ($x = 0; $x < 6; $x++) {
+            for ($y = 0; $y < 4; $y++) {
+                $color = imagecolorallocate($gd, ($x * 40) % 256, ($y * 77 + $x * 13) % 256, 255 - $x * 20);
+                imagesetpixel($gd, $x, $y, $color);
+                $seen[$x][$y] = imagecolorat($gd, $x, $y) & 0xFFFFFF;
+            }
+        }
+
+        $source = ImageSource::fromGd($gd, 'image/png');
+        $back   = imagecreatefromstring($source->bytes);
+        $this->assertInstanceOf(\GdImage::class, $back);
+
+        foreach ($seen as $x => $row) {
+            foreach ($row as $y => $rgb) {
+                $this->assertSame($rgb, imagecolorat($back, $x, $y) & 0xFFFFFF, "pixel $x,$y");
+            }
+        }
+
+        imagedestroy($gd);
+        imagedestroy($back);
+    }
+
+    public function testTheInternalHandoffLevelIsANamedConstant(): void
+    {
+        // The magic 9 that max-deflated every animation frame becomes one
+        // readable decision; the pin keeps it a decision (a defensible
+        // zlib-default band) rather than a number drifting back blind.
+        $ref = new \ReflectionClass(ImageSource::class);
+        $this->assertTrue($ref->hasConstant('INTERNAL_PNG_LEVEL'));
+        $level = $ref->getConstant('INTERNAL_PNG_LEVEL');
+        $this->assertIsInt($level);
+        $this->assertGreaterThanOrEqual(0, $level);
+        $this->assertLessThanOrEqual(9, $level);
+
+        // The constant must actually BE the call: a defined-but-unused
+        // level is how magic numbers come back.
+        $fromGd = new \ReflectionMethod(ImageSource::class, 'fromGd');
+        $body   = implode("\n", array_slice(
+            file($fromGd->getFileName()),
+            $fromGd->getStartLine() - 1,
+            $fromGd->getEndLine() - $fromGd->getStartLine() + 1
+        ));
+        $this->assertStringContainsString('imagepng($resource, $tmp, self::INTERNAL_PNG_LEVEL)', $body);
+        $this->assertStringNotContainsString('imagepng($resource, $tmp, 9)', $body);
+    }
 }

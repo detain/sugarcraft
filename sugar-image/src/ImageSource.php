@@ -38,6 +38,17 @@ final class ImageSource
     public const MAX_BYTES = 67_108_864;
 
     /**
+     * PNG deflate level for the internal handoff re-encode in
+     * {@see self::fromGd()} (finding 041). These bytes are a container
+     * switch — a GD resource becoming an ImageSource — not an artifact:
+     * max-deflate (9) made every animation frame pay a full CPU
+     * compression pass for size the handoff never consumes. 6 is zlib's
+     * own default trade; the value is a named constant so the choice is
+     * one line, not a magic number embedded in the match arm.
+     */
+    private const INTERNAL_PNG_LEVEL = 6;
+
+    /**
      * sugar-animation's internal cell-grid ceiling (its `Decoder::MAX_CELLS`). Exposed
      * here so {@see self::fromAnimatedFile()} can refuse an over-large GIF with a
      * clear mosaic-owned message rather than surfacing flip's exception mid-decode.
@@ -524,7 +535,7 @@ final class ImageSource
 
         try {
             $ok = match ($format) {
-                'image/png'  => imagepng($resource, $tmp, 9),
+                'image/png'  => imagepng($resource, $tmp, self::INTERNAL_PNG_LEVEL),
                 'image/jpeg' => imagejpeg($resource, $tmp, 100),
                 'image/gif'  => imagegif($resource, $tmp),
                 default      => throw new \InvalidArgumentException(
