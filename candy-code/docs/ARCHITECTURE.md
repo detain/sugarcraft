@@ -1054,6 +1054,37 @@ completion can legitimately run for tens of minutes.
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
 | `<tmp>/candy_code_bg_<uid>_index/` | `Background\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
 
+**The session schema has no version number; it is an idempotent sweep.**
+`SessionStore::initSchema()` runs on every open: `CREATE TABLE IF NOT EXISTS`,
+then a `PRAGMA table_info(sessions)` read, then one `ALTER TABLE sessions ADD
+COLUMN` for each entry of `MIGRATED_COLUMNS` the table lacks, then
+`CREATE INDEX IF NOT EXISTS`. There is no `PRAGMA user_version` and no
+migration ledger. The contract this gives, and the limits to keep in mind:
+
+- *Additive only.* A column is added, never renamed, retyped or dropped; a new
+  column must be nullable or carry a `DEFAULT`, and goes into both the
+  `CREATE TABLE` and `MIGRATED_COLUMNS`. Anything non-additive (a foreign key,
+  a type change) needs a table rebuild and is not covered by the sweep.
+- *Concurrent openers.* Two processes opening an old database at once can both
+  see a column missing; the loser's `ALTER` fails with "duplicate column name".
+  The sweep is safe to re-run, so the failure is a lost race, not corruption,
+  but it is not serialised by a version check. Opening is otherwise safe beside
+  other openers because the database is in WAL mode (below).
+- *Old binary, new database.* An older candy-code opening a database a newer one
+  has already extended works: it ignores columns it does not know. The reverse
+  (a newer binary on an old file) is what the sweep repairs.
+- Adopting `user_version` is a deliberate non-decision until a non-additive
+  migration needs it.
+
+**The store runs in WAL mode.** `SessionStore.php` issues
+`PRAGMA journal_mode=WAL` right after connecting (the constructor, ~line 145).
+Readers do not block the writer and the writer does not block readers, and a
+save costs one commit (one WAL fsync). The consequence is that the database is
+a *triplet*: `session.db`, `session.db-wal` and `session.db-shm`. Committed
+data can live only in the `-wal` file until a checkpoint; the constructor's
+umask makes all three 0600. See TROUBLESHOOTING.md "Session store problems" for
+how to back it up safely.
+
 **Transcript rows have an identity.** `EnhancedSessionStore::saveTranscript()`
 writes transcript schema version 2: every row has an id, `m_<session>_<ref>`, and a
 ref, a short number that is monotonic per session and never reused, from

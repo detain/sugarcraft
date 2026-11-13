@@ -689,6 +689,27 @@ row count, and turns `WARN` past 2 GiB — that line is where unbounded growth
 becomes visible before it becomes a surprise. The retention knob above is the
 lever; `serve` sets no size cap of its own.
 
+### Backing up or moving `session.db` (WAL mode)
+
+`SessionStore` sets `PRAGMA journal_mode=WAL` when it opens the database
+(`SessionStore.php`, constructor, ~line 145), so the store is three files:
+`session.db`, `session.db-wal` and `session.db-shm`. Recent committed
+transcripts can exist only in `-wal`, so **copying `session.db` alone while
+candy-code runs can lose them or yield a stale file**. Pick one:
+
+```sh
+# 1. Stop first: quit every candy-code (and `serve`), then copy the whole triplet
+cp ~/.candy-code/session.db* /backup/
+
+# 2. Online, consistent snapshot (safe while candy-code runs)
+sqlite3 ~/.candy-code/session.db ".backup /backup/session.db"
+sqlite3 ~/.candy-code/session.db "VACUUM INTO '/backup/session.db'"   # also compacts
+```
+
+Never copy `-wal` or `-shm` without their `session.db`, and never delete them
+by hand while a process is running; a restored file needs no sidecars. All
+three are created 0600; keep the backup owner-only, it holds full transcripts.
+
 ## See also
 
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — every variable and its unset behaviour.
