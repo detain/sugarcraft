@@ -463,6 +463,104 @@ final class AccessorDeprecationTest extends TestCase
         }
         $this->assertSame([], $violations, 'public get*() accessors escaped the deprecation sweep');
     }
+
+    /**
+     * The deprecation era must not be lived in at home: no file under
+     * src/ may CALL a rostered deprecated accessor (D-156, finding 218).
+     * A call is exempt only when the calling file defines that name
+     * itself — the receiver is then the file's own private helper, not
+     * the deprecated public surface (the lib carries ~30 honest private
+     * width/height calculators that share the rostered spellings).
+     */
+    public function testNoInternalCallerUsesADeprecatedSpelling(): void
+    {
+        $roster = [];
+        foreach (self::deprecatedAccessors() as [$class, $legacy]) {
+            $roster[$legacy] = true;
+        }
+        $srcDir = \dirname(__DIR__) . '/src';
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($srcDir));
+        // Pass 1: per-file definitions, and trait short-name => members so
+        // adopting classes resolve their inherited private helpers.
+        $fileDefinitions = [];
+        $traitMembers = [];
+        $fileTokens = [];
+        foreach ($iterator as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+            $tokens = \PhpToken::tokenize(file_get_contents($file->getPathname()));
+            $fileTokens[$file->getPathname()] = $tokens;
+            $defs = [];
+            $count = \count($tokens);
+            for ($i = 0; $i < $count; $i++) {
+                if ($tokens[$i]->id !== \T_FUNCTION) {
+                    continue;
+                }
+                for ($j = $i + 1; $j < $count; $j++) {
+                    if ($tokens[$j]->id === \T_STRING) {
+                        $defs[] = $tokens[$j]->text;
+                        break;
+                    }
+                }
+            }
+            $fileDefinitions[$file->getPathname()] = $defs;
+            if (\preg_match('/^\s*trait\s+(\w+)/m', file_get_contents($file->getPathname()), $m) === 1) {
+                $traitMembers[$m[1]] = $defs;
+            }
+        }
+        $violations = [];
+        foreach ($fileTokens as $path => $tokens) {
+            $ownDefinitions = array_flip($fileDefinitions[$path]);
+            $count = \count($tokens);
+            for ($i = 0; $i < $count; $i++) {
+                // `use SomeTrait...;` adoption: exempt the members it brings.
+                if ($tokens[$i]->id === \T_USE) {
+                    $segments = [];
+                    for ($j = $i + 1; $j < $count; $j++) {
+                        $t = $tokens[$j];
+                        if ($t->id === \T_WHITESPACE) {
+                            continue;
+                        }
+                        if ($t->id === \T_STRING || $t->id === \T_NAME_QUALIFIED) {
+                            $segments = array_merge($segments, \explode('\\', $t->text));
+                        } elseif ($t->id === \T_COMMENT || $t->id === \T_DOC_COMMENT) {
+                            continue;
+                        } elseif ($t->text === ';') {
+                            break;
+                        } else {
+                            $segments = [];
+                            break;
+                        }
+                    }
+                    $tail = $segments === [] ? '' : \end($segments);
+                    if (isset($traitMembers[$tail])) {
+                        foreach ($traitMembers[$tail] as $member) {
+                            $ownDefinitions[$member] = true;
+                        }
+                    }
+                }
+                if ($tokens[$i]->id !== \T_OBJECT_OPERATOR && $tokens[$i]->id !== \T_NULLSAFE_OBJECT_OPERATOR) {
+                    continue;
+                }
+                $name = null;
+                for ($j = $i + 1; $j < $count; $j++) {
+                    if ($tokens[$j] instanceof \PhpToken && $tokens[$j]->id === \T_WHITESPACE) {
+                        continue;
+                    }
+                    if ($tokens[$j]->id === \T_STRING && isset($roster[$tokens[$j]->text])) {
+                        $name = $tokens[$j]->text;
+                    }
+                    break;
+                }
+                if ($name === null || isset($ownDefinitions[$name])) {
+                    continue;
+                }
+                $violations[] = $path . ':' . $tokens[$i]->line . ' ->' . $name . '()';
+            }
+        }
+        $this->assertSame([], $violations, 'internal callers still use the deprecated get*() spellings');
+    }
 }
 
 /**

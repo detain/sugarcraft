@@ -91,8 +91,8 @@ final class Spacer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function render(): string
     {
-        $w = $this->getEffectiveWidth();
-        $h = $this->getEffectiveHeight();
+        $w = $this->effectiveWidth();
+        $h = $this->effectiveHeight();
 
         if ($w <= 0 || $h <= 0) {
             return '';
@@ -109,7 +109,7 @@ final class Spacer implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the effective width (allocated or default).
      */
-    private function getEffectiveWidth(): int
+    private function effectiveWidth(): int
     {
         return $this->allocatedWidth ?? $this->width;
     }
@@ -117,7 +117,7 @@ final class Spacer implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the effective height (allocated or default).
      */
-    private function getEffectiveHeight(): int
+    private function effectiveHeight(): int
     {
         return $this->allocatedHeight ?? $this->height;
     }
@@ -129,7 +129,7 @@ final class Spacer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function innerSize(): array
     {
-        return [$this->getEffectiveWidth(), $this->getEffectiveHeight()];
+        return [$this->effectiveWidth(), $this->effectiveHeight()];
     }
 
     // ─── Withers ──────────────────────────────────────────────────

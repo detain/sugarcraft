@@ -79,7 +79,7 @@ final class Screen implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Render content
         $content = $this->content;
         if ($content instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
-            $content = $content->setSize($this->getWidth(), $this->getHeight());
+            $content = $content->setSize($this->resolvedWidth(), $this->resolvedHeight());
         }
         $result .= $content->render();
 
@@ -140,20 +140,20 @@ final class Screen implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Get the width of the screen: explicit setSize() wins; otherwise the
+     * Resolve the width of the screen: explicit setSize() wins; otherwise the
      * host's COLUMNS handoff (the same env channel the unattended
      * dashboard-live demo uses — the lib still never ioctls the terminal
      * itself, finding sugar-dashboard-136); else the 80×24 terminal default.
      */
-    private function getWidth(): int
+    private function resolvedWidth(): int
     {
         return $this->width ?? self::negotiatedSize('COLUMNS', self::DEFAULT_WIDTH);
     }
 
     /**
-     * Get the height of the screen (see getWidth() for the negotiation law).
+     * Resolve the height (see resolvedWidth() for the negotiation law).
      */
-    private function getHeight(): int
+    private function resolvedHeight(): int
     {
         return $this->height ?? self::negotiatedSize('LINES', self::DEFAULT_HEIGHT);
     }
@@ -172,7 +172,7 @@ final class Screen implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function innerSize(): array
     {
-        return [$this->getWidth(), $this->getHeight()];
+        return [$this->resolvedWidth(), $this->resolvedHeight()];
     }
 
     // ─── Static helpers ────────────────────────────────────────────

@@ -95,7 +95,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             return '';
         }
 
-        if ($this->getWidth() <= 0 || $this->getHeight() <= 0) {
+        if ($this->allocatedWidth() <= 0 || $this->allocatedHeight() <= 0) {
             return '';
         }
 
@@ -110,8 +110,8 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function renderHorizontal(): string
     {
-        $width = $this->getWidth();
-        $height = $this->getHeight();
+        $width = $this->allocatedWidth();
+        $height = $this->allocatedHeight();
 
         if ($width <= 0 || $height <= 0) {
             return '';
@@ -181,8 +181,8 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function renderVertical(): string
     {
-        $width = $this->getWidth();
-        $height = $this->getHeight();
+        $width = $this->allocatedWidth();
+        $height = $this->allocatedHeight();
 
         if ($width <= 0 || $height <= 0) {
             return '';
@@ -468,9 +468,9 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Get the width for this layout.
+     * The allocated width for this layout (0 = unsized).
      */
-    private function getWidth(): int
+    private function allocatedWidth(): int
     {
         return $this->width ?? 0;
     }
@@ -478,7 +478,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Get the height for this layout.
      */
-    private function getHeight(): int
+    private function allocatedHeight(): int
     {
         return $this->height ?? 0;
     }
@@ -490,7 +490,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function innerSize(): array
     {
-        return [$this->getWidth(), $this->getHeight()];
+        return [$this->allocatedWidth(), $this->allocatedHeight()];
     }
 
     // ─── Withers ──────────────────────────────────────────────────
