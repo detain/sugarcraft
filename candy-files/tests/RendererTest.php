@@ -397,6 +397,9 @@ final class RendererTest extends TestCase
                 continue;
             }
             $label = trim($cell, '[]');
+            // CF-29: each cell now leads with its direct-switch digit
+            // ("1[", "2 ") — measure the LABEL budget, not the chrome.
+            $label = preg_replace('/^\d+\[?/', '', $label);
             $this->assertLessThanOrEqual(20, \SugarCraft\Core\Util\Width::of($label), 'clipped tab label must fit 20 cells');
             // Byte-level substr(-N) lands mid-codepoint on CJK paths and
             // yields invalid UTF-8; cell-accurate clipping cannot.

@@ -118,8 +118,8 @@ final class BidiTest extends TestCase
         // forms stack up; three or more means the tiers were pinned too.
         $this->assertGreaterThanOrEqual(3, substr_count($out, "\u{200E}·\u{200E}"), 'key-help interior joins pinned');
         // ...and every tab cell is a fenced island.
-        $this->assertStringContainsString("\u{200E}[/alpha]\u{200E}", $out, 'active tab label must be isolated');
-        $this->assertStringContainsString("\u{200E} /beta \u{200E}", $out, 'inactive tab label must be isolated');
+        $this->assertStringContainsString("\u{200E}1[/alpha]\u{200E}", $out, 'active tab label must be isolated (CF-29 digit prefix rides inside the island)');
+        $this->assertStringContainsString("\u{200E}2 /beta \u{200E}", $out, 'inactive tab label must be isolated');
     }
 
     public function testTheEnglishFrameGainsNoIsolationBytes(): void
