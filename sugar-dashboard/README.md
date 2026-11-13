@@ -18,7 +18,7 @@ composer require sugarcraft/sugar-dashboard
 | `Foundation\` | Pure interfaces + low-level primitives (Item, Sizer, Style, Theme, Color, Rect, Drawable, Buffer, Cell) |
 | `Layout\` | Layout primitives (Stack, VStack, HStack, ZStack, FlexLayout, GridLayout, Frame, Panel, Split, Spacer, Window, etc.) |
 | `Components\` | UI components (Modal, Select, Toast, Tabs, StatusBar, Form, Feedback, Nav, Card, Calendar, Tree, Table, etc.) |
-| `Plot\` | Charts and plotting (Chart, Sparkline, Gauge, Donut, Heatmap, RadarChart, TreeViz, Graph, etc.) |
+| `Plot\` | Charts and plotting (Chart, Sparkline, Gauge, Donut, Heatmap, RadarChart, Graph, etc. — the tree/diagram family TreeViz, Sankey, Sunburst, Treemap, Network, MindMap, OrgChart, ClassDiagram, Flowchart, StateMachine, Dendrogram lives in `Components\Tree\`, not here) |
 | `Module\` | Module interface + base implementations |
 | `Registry\` | Registry pattern for modules |
 | `Plugin\` | Plugin system with JSON protocol |
