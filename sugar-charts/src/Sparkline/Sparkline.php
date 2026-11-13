@@ -24,7 +24,9 @@ use SugarCraft\Style\Style;
  * ```
  *
  * (Measured output: the minimum value maps to `GLYPHS[0]`, a blank
- * cell, so `[1, 4, 2, 7, 5]` starts with a space, not `▁`.)
+ * cell, so `[1, 4, 2, 7, 5]` starts with a space, not `▁` — except with
+ * a {@see withStyle()} engaged, where the floor promotes to `▁` so the
+ * lowest point never drops out of the wave.)
  *
  * If the configured {@see $width} exceeds `count($data)` the line is
  * left-padded with the empty glyph; if it's smaller, only the *last*
@@ -60,14 +62,17 @@ final class Sparkline
     /**
      * Construct a sparkline. `$width = -1` (the default) auto-fits the
      * width to the number of data points; pass an explicit `0` to render
-     * nothing.
+     * nothing. Any other negative throws — one sentinel rule shared with
+     * {@see withWidth()} (sugar-charts-104).
      *
      * @param list<int|float> $data
      */
     public static function new(array $data = [], int $width = -1): self
     {
-        if ($width < 0) {
+        if ($width === -1) {
             $width = count($data);
+        } elseif ($width < 0) {
+            throw new \InvalidArgumentException(Lang::t('sparkline.width_nonneg'));
         }
         return new self(array_values($data), $width, null, null);
     }
@@ -115,12 +120,36 @@ final class Sparkline
         return new self($this->data, $this->width, $this->min, $this->max, $this->style, !$disable);
     }
 
-    // Short-form aliases.
-    /** @param list<float|int> $data */
-    public function data(array $data): self     { return $this->withData($data); }
-    public function width(int $w): self         { return $this->withWidth($w); }
-    public function min(?float $m): self        { return $this->withMin($m); }
-    public function max(?float $m): self        { return $this->withMax($m); }
+    // Short-form aliases. sugar-charts-104: zero-arg calls used to be
+    // ArgumentCountError traps — each is now dual-form: with no argument
+    // it READS (the accessor the naming invited), with one it returns a
+    // new instance (the old setter, now deprecated in favor of the
+    // withX() doors). The public readonly properties stay the canonical
+    // read surface; clearing a pinned end needs withMin(null)/withMax(null).
+    /** @return list<int|float>|self */
+    public function data(?array $data = null): array|self
+    {
+        return $data === null ? $this->data : $this->withData($data);
+    }
+
+    /** @return int|self */
+    public function width(?int $w = null): int|self
+    {
+        return $w === null ? $this->width : $this->withWidth($w);
+    }
+
+    /** @return float|self|null */
+    public function min(?float $m = null): float|self|null
+    {
+        return $m === null ? $this->min : $this->withMin($m);
+    }
+
+    /** @return float|self|null */
+    public function max(?float $m = null): float|self|null
+    {
+        return $m === null ? $this->max : $this->withMax($m);
+    }
+
     /** Short-form alias for {@see withStyle()}. */
     public function style(?Style $style): self   { return $this->withStyle($style); }
     /** Short-form alias for {@see withNoAutoMaxValue()}. */
@@ -241,7 +270,15 @@ final class Sparkline
         // Data glyphs
         $col = $missing;
         foreach ($points as $v) {
-            $g  = self::glyph((float) $v, $min, $range);
+            $g = self::glyph((float) $v, $min, $range);
+            if ($g === self::GLYPHS[0] && $bufferStyle !== null) {
+                // sugar-charts-106: a min-floor value rendered invisible
+                // blank; with a style engaged the floor promotes to '▁'
+                // so the wave's lowest point stays on screen. Unstyled
+                // hosts keep the documented blank-ramp shape, and the
+                // leading MISSING cells are unaffected either way.
+                $g = self::GLYPHS[1];
+            }
             $gw = BufferHelper::graphemeWidth($g);
             $cells[$col] = new Cell($g, $bufferStyle, null, $gw);
             // Wide-char continuation arm: the block glyphs are
