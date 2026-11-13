@@ -75,6 +75,19 @@ final class TerminalProbeTest extends TestCase
                 ['CLICOLOR_FORCE' => '1', 'TERM' => 'dumb', 'NO_COLOR' => '1'],
                 [Capability::TrueColor, Capability::BasicAscii],
             ],
+            // CP-08 (XPLAT-02): the termenv/chafa force grammar — any set,
+            // non-empty, non-'0' spelling. These used to have their color
+            // stripped by this lib's private '1'-only reading.
+            'clicolor_force_true returns TrueColor' => [
+                ['CLICOLOR_FORCE' => 'true', 'TERM' => 'dumb', 'NO_COLOR' => '1'],
+                [Capability::TrueColor, Capability::BasicAscii],
+            ],
+            // CP-08 (PAR-07): the deleted early return dropped the kitty
+            // detail arm — force AND KittyKeyboard must stand together.
+            'clicolor_force_with_kitty keeps KittyKeyboard' => [
+                ['CLICOLOR_FORCE' => '1', 'TERM' => 'xterm-kitty'],
+                [Capability::TrueColor, Capability::KittyKeyboard],
+            ],
 
             // 2. NO_COLOR set (any value) → NoColor
             'no_color set returns NoColor' => [

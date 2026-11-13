@@ -235,6 +235,23 @@ final class ProbeTest extends TestCase
 
         $this->env('CLICOLOR_FORCE', '0');
         $this->assertFalse(Probe::isForceColor());
+
+        // CP-08 (XPLAT-02): the termenv/chafa grammar — the old literal
+        // '1'-only reading silently stripped color for the spellings real
+        // dotfiles and CI images export.
+        $this->env('CLICOLOR_FORCE', 'true');
+        $this->assertTrue(Probe::isForceColor());
+
+        $this->env('CLICOLOR_FORCE', 'yes');
+        $this->assertTrue(Probe::isForceColor());
+
+        $this->env('CLICOLOR_FORCE', 'on');
+        $this->assertTrue(Probe::isForceColor());
+
+        // The empty export is the unset spelling (no-color.org semantics
+        // shared with NO_COLOR); '0' stays the only falsy word.
+        $this->env('CLICOLOR_FORCE', '');
+        $this->assertFalse(Probe::isForceColor());
     }
 
     /**

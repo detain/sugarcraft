@@ -170,12 +170,12 @@ class TerminalProbe
         $caps = [];
         $this->asciiAnswered = false;
 
-        // CLICOLOR_FORCE=1 → TrueColor (overrides everything, including NO_COLOR)
-        if ($this->getEnv('CLICOLOR_FORCE') === '1') {
-            $caps[Capability::key(Capability::TrueColor)] = 'env:CLICOLOR_FORCE';
-            return $caps;
-        }
-
+        // CLICOLOR_FORCE parity (XPLAT-02/PAR-07): the deleted early return
+        // that duplicated chain step 1 with a literal '1'-only reading — its
+        // only observable effect was skipping the KittyKeyboard detail arm
+        // (TERM=xterm-kitty + CLICOLOR_FORCE lost the capability the chain
+        // path grants). The shared chain answer below already maps a force
+        // value onto TrueColor with source env:CLICOLOR_FORCE.
         $chain = DetectionChain::detect($this->env);
 
         // Suppressions (NO_COLOR, CLICOLOR=0, TERM=dumb) terminate the ladder.

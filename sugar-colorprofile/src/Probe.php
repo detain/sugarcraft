@@ -79,11 +79,14 @@ final class Probe
     }
 
     /**
-     * CLICOLOR_FORCE=1 is set — forces TrueColor regardless of other settings.
+     * CLICOLOR_FORCE carries a force value — set, non-empty, and not exactly
+     * '0' (the termenv/chafa grammar owned by {@see Env::isForceValue()},
+     * shared with DetectionChain step 1 and TerminalProbe) — forcing
+     * TrueColor regardless of other settings.
      */
     public static function isForceColor(): bool
     {
-        return self::getEnv('CLICOLOR_FORCE') === '1';
+        return Env::isForceValue(self::getEnv('CLICOLOR_FORCE'));
     }
 
     /**

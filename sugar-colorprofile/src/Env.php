@@ -75,6 +75,23 @@ final class Env
     }
 
     /**
+     * The force-value grammar shared by every CLICOLOR_FORCE reader: a value
+     * forces when it is SET and is neither the empty string nor the exact
+     * falsy spelling '0' — the termenv/chafa rule ("any non-empty != 0"),
+     * which the README's chalk-escape-hatch justification invokes while the
+     * old literal '1'-only reading silently stripped color for the
+     * `CLICOLOR_FORCE=true|yes|on|2` spellings real dotfiles and CI images
+     * export. Only '0' and unset/empty are falsy; every other non-empty
+     * string forces. Env owns this single rule so the three readers —
+     * DetectionChain step 1, TerminalProbe's capability mapping and
+     * Probe::isForceColor — cannot drift apart (XPLAT-02).
+     */
+    public static function isForceValue(?string $value): bool
+    {
+        return $value !== null && $value !== '' && $value !== '0';
+    }
+
+    /**
      * Make an untrusted environment value safe to interpolate into a source
      * string: strip C0/C1/DEL control bytes (which could forge escape
      * sequences downstream consumers print) and cap the length.

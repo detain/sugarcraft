@@ -310,4 +310,54 @@ final class DetectionChainTest extends TestCase
 
         $this->assertSame('xterm-256color', $chain->term(), 'the clamp must not touch ordinary values');
     }
+
+    /**
+     * CP-08 (XPLAT-02) roster: CLICOLOR_FORCE honors the termenv/chafa
+     * grammar — set, non-empty, not exactly '0'. TERM=dumb is planted as the
+     * visible next rung so a non-forcing spelling provably falls through the
+     * force arm instead of resting on it.
+     *
+     * @dataProvider forceSpellingProvider
+     */
+    public function testEveryForceSpellingMintsTheChainAnswer(string $spelling): void
+    {
+        $chain = DetectionChain::detect(['CLICOLOR_FORCE' => $spelling, 'TERM' => 'dumb']);
+
+        $this->assertSame(DetectionChain::LEVEL_TRUECOLOR, $chain->level(), $spelling);
+        $this->assertSame('env:CLICOLOR_FORCE', $chain->source(), $spelling);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function forceSpellingProvider(): array
+    {
+        $cases = [];
+        foreach (['1', 'true', 'TRUE', 'yes', 'on', '2', '3'] as $spelling) {
+            $cases[$spelling] = [$spelling];
+        }
+
+        return $cases;
+    }
+
+    /**
+     * @dataProvider falsyForceSpellingProvider
+     */
+    public function testTheFalsySpellingsFallThroughTheForceArm(string $spelling): void
+    {
+        $chain = DetectionChain::detect(['CLICOLOR_FORCE' => $spelling, 'TERM' => 'dumb']);
+
+        $this->assertSame(DetectionChain::LEVEL_NONE, $chain->level(), "[$spelling]");
+        $this->assertSame('env:TERM=dumb', $chain->source(), "[$spelling]");
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function falsyForceSpellingProvider(): array
+    {
+        // The exact pair: unset is falsy through Env::value's null and rides
+        // the same helper branch; '' is the exported-empty spelling.
+        return ['empty' => [''], 'zero' => ['0']];
+    }
 }
