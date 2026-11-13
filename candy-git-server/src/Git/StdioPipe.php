@@ -315,10 +315,36 @@ final class StdioPipe
                 }
             }
         } finally {
+            // E721 reap ladder: TERM, bounded poll, KILL, bounded poll,
+            // then close the handle. proc_close never waits on a child
+            // we did not already bound.
+            //
+            // S15 (finding 023): the ladder runs FIRST, the stderr drain
+            // SECOND. The old order drained up to 64 guarded ticks BEFORE
+            // the TERM that could actually end a wedged child — every
+            // teardown against a live child burned a full drain window
+            // first, and a child blocked on a full stderr pipe (the very
+            // case that wedge produces) got no relief from a parent that
+            // is only nominally draining it while the child never
+            // schedules. After the ladder the child is gone, its write
+            // ends are closed by the OS, buffered bytes remain readable
+            // until our fclose — so the drain below cannot stall.
+            //
+            // Kill-tree boundary: the escalation reaches THIS direct child
+            // only. A git process that spawned its own helpers is not
+            // signalled transitively; the contract that makes this safe is
+            // that these services exec git binaries without a shell and
+            // without hook-side daemons inheriting the pipes.
+            if (self::childRunning($proc, $observedCode)) {
+                @\proc_terminate($proc);
+                if (!self::waitForExit($proc, self::TERM_GRACE_SECONDS, $observedCode)) {
+                    @\proc_terminate($proc, 9);
+                    self::waitForExit($proc, self::KILL_WAIT_SECONDS, $observedCode);
+                }
+            }
             // Honest failure reporting: a fast-dying child can still have
             // stderr bytes in the pipe when the loop breaks (the exit
-            // condition does not wait for STDERR EOF). Drain them before
-            // the reap ladder and proc_close erase the evidence.
+            // condition above does not wait for STDERR EOF).
             if (isset($pipes[2]) && \is_resource($pipes[2])) {
                 // Read until the pipe reports EOF: a drained-but-open
                 // non-blocking stream returns '' repeatedly, so the loop
@@ -341,16 +367,6 @@ final class StdioPipe
                 }
                 if (\strlen($errTail) > self::STDERR_TAIL_BYTES) {
                     $errTail = \substr($errTail, -self::STDERR_TAIL_BYTES);
-                }
-            }
-            // E721 reap ladder: TERM, bounded poll, KILL, bounded poll,
-            // then close the handle. proc_close never waits on a child
-            // we did not already bound.
-            if (self::childRunning($proc, $observedCode)) {
-                @\proc_terminate($proc);
-                if (!self::waitForExit($proc, self::TERM_GRACE_SECONDS, $observedCode)) {
-                    @\proc_terminate($proc, 9);
-                    self::waitForExit($proc, self::KILL_WAIT_SECONDS, $observedCode);
                 }
             }
             foreach ($pipes as $pipe) {

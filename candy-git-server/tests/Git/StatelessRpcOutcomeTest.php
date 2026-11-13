@@ -63,6 +63,56 @@ final class StatelessRpcOutcomeTest extends TestCase
         self::assertGreaterThan(64, \strlen($result['bytes']), 'the cap trips only after bytes were actually collected');
     }
 
+    /**
+     * S15 (finding 111): advertise() used to pass PHP_INT_MAX to its
+     * drain — a pathological advertisement child streamed forever into the
+     * parent's memory. The cap now exists and the refusal is NAMED,
+     * mirroring negotiate()'s typed overflow arm (there a 413 by the
+     * caller; here the info/refs route turns it into a 500 — an oversized
+     * advertisement is the server's condition, not the client's payload).
+     */
+    public function testAdvertiseOverflowIsANamedRefusalNotAnUnboundedString(): void
+    {
+        $this->fakeGit('head -c 4096 /dev/zero');
+
+        try {
+            StatelessRpc::advertise('git-upload-pack', $this->tmpDir, 30.0, 64);
+            self::fail('an over-cap advertisement must refuse, not accumulate');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('exceeded', $e->getMessage());
+            self::assertStringContainsString('64', $e->getMessage());
+        }
+    }
+
+    public function testAdvertiseStopsAtTheProductionCapConstant(): void
+    {
+        // The constant is a real ceiling, not PHP_INT_MAX dressed up.
+        self::assertLessThan(1 << 30, StatelessRpc::ADVERTISE_MAX_RESPONSE_BYTES);
+    }
+
+    /**
+     * S15 (finding 025): the reap ladder is service-weighted — a
+     * receive-pack child mid-hook gets the longer TERM window before the
+     * unconditional KILL. Structural pin (timing out a hook honestly in CI
+     * would be a flake generator): negotiate()'s reapBounded call must
+     * branch on the binary.
+     */
+    public function testTheReapLadderIsWeightedByService(): void
+    {
+        $src = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Git/StatelessRpc.php');
+        self::assertMatchesRegularExpression(
+            '/self::reapBounded\(\$proc, \$pipes, \$binary === \'receive-pack\'/',
+            $src,
+            'negotiate() must hand receive-pack the weighted grace'
+        );
+        $rc = new \ReflectionClass(StatelessRpc::class);
+        self::assertGreaterThan(
+            (float) $rc->getConstant('TERM_GRACE_SECONDS'),
+            (float) $rc->getConstant('RECEIVE_PACK_TERM_GRACE_SECONDS'),
+            'the push grace must be the LONGER one'
+        );
+    }
+
     public function testADeadChildReportsExitWithItsStderrTail(): void
     {
         $this->fakeGit('echo boom from git >&2; exit 3');

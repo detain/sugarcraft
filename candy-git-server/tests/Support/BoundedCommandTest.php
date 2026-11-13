@@ -58,6 +58,44 @@ final class BoundedCommandTest extends TestCase
         self::assertStringContainsString('command timed out', \implode(' ', $result['output']));
     }
 
+    /**
+     * S15 (finding 024): the blocking proc_close() on the unreaped path is
+     * gone — a child that survives the KILL window is PARKED in a static
+     * WNOHANG registry and collected by the next call, so the runner's
+     * deadline contract can never be defeated by a stuck git. The
+     * observable invariant: after a full timed-out escalation the registry
+     * holds nothing (the KILL landed inside the window, so the handle was
+     * closed normally — and if any park path ever misfires in CI this pin
+     * goes red on the residue).
+     */
+    public function testReapRegistryIsDrainedAfterAnEscalatedRun(): void
+    {
+        self::assertSame(0, BoundedCommand::reapPending(), 'nothing to sweep on a clean slate');
+        BoundedCommand::run(['/bin/sh', '-c', 'trap "" TERM; exec sleep 30'], 0.2);
+        self::assertSame(0, BoundedCommand::pendingCount(), 'escalated child must not linger parked');
+        self::assertSame(0, BoundedCommand::run(['printf', 'x\n'])['code']);
+        self::assertSame(0, BoundedCommand::pendingCount(), 'the in-call sweep must run and find nothing');
+    }
+
+    public function testUnreapedPathParksInsteadOfBlockingClosed(): void
+    {
+        // Structural pin (the park path needs an unkillable child, which
+        // SIGKILL correctly makes undemonstrable): the finally must choose
+        // between parking and closing on the reaped-or-not branch — a bare
+        // unconditional proc_close there is the finding this step cured.
+        $src = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Support/BoundedCommand.php');
+        self::assertMatchesRegularExpression(
+            '/if \(\s*\$code === null\s*\)\s*\{[^}]*self::\$unreaped\[\] = \$proc;/s',
+            $src,
+            'the park branch must register instead of proc_close'
+        );
+        self::assertMatchesRegularExpression(
+            '/\} else \{\s*\$closeCode\s*=\s*\\\\proc_close\(\$proc\);/s',
+            $src,
+            'only a reaped child may hit proc_close'
+        );
+    }
+
     public function testExtraEnvReachesTheChildAlongsideTheInheritedPath(): void
     {
         $result = BoundedCommand::run(['printenv', 'CANDY_TEST_FLAG'], 5.0, ['CANDY_TEST_FLAG' => 'on']);

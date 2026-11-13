@@ -153,6 +153,61 @@ final class StdioPipeBacklogCapTest extends TestCase
         return $this->filePointer($name, 'rb');
     }
 
+    /**
+     * S15 (finding 023): a live, wedged child that never writes stderr used
+     * to be starved behind the pre-reap stderr drain — 64 guarded ticks of
+     * usleep before the TERM that could actually end it. The reap ladder
+     * now runs FIRST, so escalation to KILL is bounded by the ladder alone,
+     * not by a full drain window stacked on top.
+     */
+    public function testWedgedLiveChildIsReapedByTheLadderNotBehindADrainWindow(): void
+    {
+        $in = $this->readPointer('in.txt');
+        $out = $this->filePointer('out.txt', 'wb');
+
+        $started = \microtime(true);
+        // A TERM-ignoring child: forces TERM -> KILL, exercising the ladder.
+        // (The SIG_IGN disposition survives exec, so `exec sleep` keeps it.)
+        // The pump's own idle budget is squeezed to 0.3 s so the pin
+        // measures the TEARDOWN window, not the legitimate long-run window.
+        $code = StdioPipe::run(
+            $in,
+            $out,
+            ['/bin/sh', '-c', 'trap "" TERM; exec sleep 30'],
+            \sys_get_temp_dir(),
+            '',
+            0.3,
+        );
+        $elapsed = \microtime(true) - $started;
+
+        $this->assertNotSame(0, $code, 'a killed child is a failed stream');
+        // teardown: TERM grace (1s) + a KILL tick. The old drain-before-reap
+        // ordering stacked a 64-tick (6.4 s) stderr stall in front of the
+        // first signal — the breach this step cured.
+        $this->assertLessThan(3.5, $elapsed, 'the ladder must escalate immediately, not after a drain stall');
+
+        \fclose($in);
+        \fclose($out);
+    }
+
+    /**
+     * S15 structural: the reap ladder (proc_terminate) must appear before
+     * the honest-failure stderr drain in run()'s finally — the ORDER is the
+     * fix, so pin it against a future reshuffle that silently reverts to
+     * drain-first.
+     */
+    public function testTheLadderPrecedesTheStderrDrainInSource(): void
+    {
+        $src = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Git/StdioPipe.php');
+        $termPos = \strpos($src, 'self::childRunning($proc, $observedCode)');
+        $drainPos = \strpos($src, 'if (isset($pipes[2])');
+
+        $this->assertIsInt($termPos, 'the reap ladder guard must exist');
+        $this->assertIsInt($drainPos, 'the stderr drain must exist');
+        $this->assertLessThan($drainPos, $termPos, 'ladder must precede the drain (S15 finding 023)');
+    }
+
+
     /** @return resource */
     private function filePointer(string $name, string $mode)
     {

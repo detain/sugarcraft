@@ -267,6 +267,25 @@ final class CheckChildLifetimes
                 . 'TERM→SIGKILL ladder, bounded polls, proc_close on every path. Pinned by the '
                 . 'same census test; one spawn site, derived once by the single-prefix walk.',
         ],
+        'candy-git-server/src/Support/BoundedCommand.php::run' => [
+            'count' => 1,
+            'kind' => 'fd-open',
+            'reason' => 'S15 (finding 024) replaced the runner\'s unconditional '
+                . 'blocking proc_close on the one path where it could stall: a child that '
+                . 'survived the full TERM→SIGKILL ladder window. Reaching the park branch '
+                . 'means SIGKILL is ALREADY delivered — the child is dying and only an '
+                . 'uninterruptible-sleep stint defers the reap; its pipes are closed before '
+                . 'parking, so the runner\'s own stdio is severed at once. What remains of '
+                . 'the finding is the fd≥3 inheritance during that finite dying interval '
+                . '(PHP opens streams close-on-exec; git binaries spawned argv-only face no '
+                . 'shell, and the surviving window is bounded by the kernel ending a '
+                . 'SIGKILLed process), the same judgement the candy-top AsyncCommand park '
+                . 'row carries. The handle is not abandoned: every subsequent run() sweeps '
+                . 'the registry WNOHANG-style and closes what has exited, and '
+                . 'candy-git-server/tests/ChildProcessLifetimeCensusTest pins the site at '
+                . 'one spawn while BoundedCommandTest pins the registry invariant '
+                . '(parked-then-swept, never left behind after an escalation).',
+        ],
     ];
 
     /**

@@ -93,7 +93,14 @@ final class ChildLifetimesToolTest extends TestCase
         // RealProcess::spawn, minting one proc_open site — one more exposed
         // finding, met by its own honest ACCOUNTED row (fd-open, the same
         // descriptor judgement as sugar-pty's PosixProcess::spawn sibling).
-        $this->assertStringContainsString('12 findings', $out);
+        // 12 -> 13 re-derived live with the tool on 2026-11-12: S15 of the
+        // candy-git-server reap-ladder wave parked BoundedCommand::run's
+        // KILL-expiry survivors in a WNOHANG registry — the call can now
+        // end with a dying child still registered, so the scanner reads
+        // the site as long-lived/exposed; its own honest fd-open row went
+        // into ACCOUNTED with this change (the candy-top AsyncCommand
+        // precedent shape), and the site count stayed 30 (no new spawn).
+        $this->assertStringContainsString('13 findings', $out);
         // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
         // 33 -> 30 re-derived live with the tool on 2026-11-04: net -3 of tree
         // drift since 0bcc4346b (the pin predates later spawn consolidation,
@@ -319,8 +326,13 @@ final class ChildLifetimesToolTest extends TestCase
         // 6 -> 7 fd-open on 2026-11-12: scriptui-01 rostered
         // candy-scriptui/src/Process/RealProcess.php::spawn beside its
         // sugar-pty PosixProcess::spawn twin (same descriptor judgement).
+        // 7 -> 8 fd-open on 2026-11-12: the S15 reap-ladder wave parked
+        // BoundedCommand::run's KILL-expiry survivors in a static WNOHANG
+        // registry (the candy-top AsyncCommand shape), making the runner
+        // long-lived by construction — its fd-open row vouches for the
+        // bounded dying interval, not for a reaped exit path.
         // Re-derive with the tool if a row changes dimension.
-        $this->assertSame(['reap-bounded' => 5, 'fd-open' => 7], $counts);
+        $this->assertSame(['reap-bounded' => 5, 'fd-open' => 8], $counts);
     }
 
     /**

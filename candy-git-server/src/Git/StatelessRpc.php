@@ -45,11 +45,30 @@ final class StatelessRpc
     /** How much of the child's stderr is kept for failure reporting. */
     public const STDERR_TAIL_BYTES = 8192;
 
+    /**
+     * S15 (finding 111): an advertisement is refs and capabilities only —
+     * a pathological (or hostile-repo) child that streams forever used to
+     * grow the parent's string unbounded because advertise() passed
+     * PHP_INT_MAX as the drain cap. 32 MiB is orders of magnitude above
+     * any real ref advertisement (a million refs at ~90 B/line ≈ 90 MiB
+     * would be a broken repo, and git caps advertisement itself); the
+     * point is a cap exists and overflow is a named verdict, mirroring
+     * negotiate()'s REASON_OVERFLOW → 413 arm.
+     */
+    public const ADVERTISE_MAX_RESPONSE_BYTES = 32 * 1048576;
+
     /** Bytes handed to one fwrite feed by writeBounded() (the lib's write quantum). */
     private const WRITE_CHUNK_BYTES = 65536;
 
     /** Grace between SIGTERM and SIGKILL for an undrained child. */
     private const TERM_GRACE_SECONDS = 1.0;
+    /**
+     * S15 (finding 025): receive-pack mid-hook or mid-gc honours TERM far
+     * slower than an upload-pack read — a 1 s grace killed healthy
+     * housekeeping outright. Give the push child a longer, still bounded
+     * TERM window before the unconditional KILL.
+     */
+    private const RECEIVE_PACK_TERM_GRACE_SECONDS = 3.0;
 
     /** Ceiling for a SIGKILLed child to actually disappear. */
     private const KILL_WAIT_SECONDS = 2.0;
@@ -77,8 +96,12 @@ final class StatelessRpc
      *
      * @return array{exitCode: int, signal: int}
      */
-    private static function reapBounded($proc, array $pipes): array
+    private static function reapBounded($proc, array $pipes, float $termGrace = self::TERM_GRACE_SECONDS): array
     {
+        // Kill-tree boundary (S15): the escalation signals THIS direct
+        // child only; stateless-rpc children are git binaries spawned
+        // argv-only, with no shell in between to end orphaned.
+        //
         // PHP reports a dead child's exit code exactly once — the call
         // that first observes running=false reaps it and every later call
         // reads -1. Latch the code at that first observation so the
@@ -89,7 +112,7 @@ final class StatelessRpc
             $observedCode = $status['exitcode'];
         } else {
             @\proc_terminate($proc);
-            if (!self::waitForExit($proc, self::TERM_GRACE_SECONDS, $observedCode)) {
+            if (!self::waitForExit($proc, $termGrace, $observedCode)) {
                 // 9 = SIGKILL: a child that ignored TERM gets the hard end.
                 @\proc_terminate($proc, 9);
                 self::waitForExit($proc, self::KILL_WAIT_SECONDS, $observedCode);
@@ -156,10 +179,13 @@ final class StatelessRpc
      * @param float|null $deadlineSeconds override for tests/ops; the
      *                                    production default stays
      *                                    {@see ADVERTISE_DEADLINE_SECONDS}
+     * @param int $maxBytes cap on the child's answer; overflow is a named
+     *                      refusal (S15, finding 111) — never an unbounded
+     *                      accumulation
      *
      * @throws \RuntimeException when the child cannot start or fails
      */
-    public static function advertise(string $service, string $repoPath, ?float $deadlineSeconds = null): string
+    public static function advertise(string $service, string $repoPath, ?float $deadlineSeconds = null, int $maxBytes = self::ADVERTISE_MAX_RESPONSE_BYTES): string
     {
         $binary = self::binaryFor($service);
         if ($binary === null) {
@@ -181,17 +207,19 @@ final class StatelessRpc
         // EVERY path — success included — never an unbounded proc_close.
         $stderrTail = '';
         $timedOut   = false;
+        $overflowed = false;
         try {
             \fclose($pipes[0]);
             $drained = self::drainBounded(
                 $pipes[1],
                 $pipes[2],
                 \hrtime(true) + (int) (($deadlineSeconds ?? self::ADVERTISE_DEADLINE_SECONDS) * 1e9),
-                \PHP_INT_MAX,
+                $maxBytes,
                 $stderrTail
             );
-            $bytes    = $drained['bytes'];
-            $timedOut = $drained['reason'] === self::REASON_TIMEOUT;
+            $bytes      = $drained['bytes'];
+            $timedOut   = $drained['reason'] === self::REASON_TIMEOUT;
+            $overflowed = $drained['reason'] === self::REASON_OVERFLOW;
         } finally {
             $reap = self::reapBounded($proc, $pipes);
         }
@@ -201,6 +229,14 @@ final class StatelessRpc
         if ($timedOut) {
             self::reportFailure($binary, '--advertise-refs', 'timeout', $reap, $stderrTail);
             throw new \RuntimeException('git ' . $binary . ' --advertise-refs timed out');
+        }
+        // S15 (finding 111): the cap fired instead. The child is already
+        // reaped by the ladder; report the named reason and refuse — the
+        // advertisement is truncated either way, and the old unbounded
+        // shape let a pathological child balloon the parent's memory.
+        if ($overflowed) {
+            self::reportFailure($binary, '--advertise-refs', self::REASON_OVERFLOW, $reap, $stderrTail);
+            throw new \RuntimeException('git ' . $binary . ' --advertise-refs exceeded ' . $maxBytes . ' bytes');
         }
         if ($bytes === '' && $reap['exitCode'] !== 0) {
             self::reportFailure($binary, '--advertise-refs', 'exit', $reap, $stderrTail);
@@ -291,7 +327,13 @@ final class StatelessRpc
             $bytes   = $drained['bytes'];
             $reason  = $drained['reason'];
         } finally {
-            $reap = self::reapBounded($proc, $pipes);
+            // S15 (finding 025): TERM window is service-weighted — a push
+            // child mid-hook/mid-gc needs the longer grace to end politely;
+            // the fetch child keeps the short one. Either way the ladder is
+            // bounded (3.0+2.0 s worst case < the census teardown ceiling).
+            $reap = self::reapBounded($proc, $pipes, $binary === 'receive-pack'
+                ? self::RECEIVE_PACK_TERM_GRACE_SECONDS
+                : self::TERM_GRACE_SECONDS);
         }
 
         // Reported once the child is actually dead, so the line carries
