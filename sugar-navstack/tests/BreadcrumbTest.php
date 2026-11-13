@@ -522,4 +522,47 @@ final class BreadcrumbTest extends TestCase
         // No throw, cap honored; the lone survivor ellipsizes into the budget.
         $this->assertSame('gammag…', $out);
     }
+
+    // ─── NS-01: cell-exact width doctrine (kills the false SGR-byte claim) ───
+
+    public function testStyledAndPlainTrailsElideIdentically(): void
+    {
+        // The flipped doctrine, executably: width math strips SGR bytes
+        // first, so a themed trail keeps the SAME surviving crumbs at the
+        // same cap as the unstyled one — it does NOT "elide earlier".
+        $stack = (new NavStack())->push('Home')->push('Settings')->push('Display');
+
+        $plain  = (new Breadcrumb())->setMaxWidth(20)->render($stack);
+        $styled = (new Breadcrumb())
+            ->setMaxWidth(20)
+            ->setItemRenderer(static fn ($item, int $i): string => "\x1b[31m" . $item->title . "\x1b[0m")
+            ->render($stack);
+
+        // Both elide to the same visible set: strip the styling and the
+        // plain render is recovered byte-for-byte (survivor parity).
+        $this->assertSame($plain, \preg_replace('/\x1b\[[0-9;]*m/', '', $styled));
+        // And at a cap that genuinely forces elision the SAME holds.
+        $plainTight  = (new Breadcrumb())->setMaxWidth(17)->render($stack);
+        $styledTight = (new Breadcrumb())
+            ->setMaxWidth(17)
+            ->setItemRenderer(static fn ($item, int $i): string => "\x1b[31m" . $item->title . "\x1b[0m")
+            ->render($stack);
+        $this->assertSame($plainTight, \preg_replace('/\x1b\[[0-9;]*m/', '', $styledTight));
+        $this->assertStringStartsWith('… ', $plainTight, 'the tight cap must really elide');
+    }
+
+    public function testCutCrumbLosesInteriorStylingByteHonesty(): void
+    {
+        // Documented caveat (trust-split exception): when the cap forces a
+        // CUT, the survivor is a plain byte-prefix — interior SGR bytes do
+        // not survive truncate(). Pin so the docblock cannot drift.
+        $bc = (new Breadcrumb())
+            ->setMaxWidth(4)
+            ->setItemRenderer(static fn ($item, int $i): string => "\x1b[31mabcdef\x1b[0m");
+        $out = $bc->render((new NavStack())->push('Home'));
+
+        $this->assertStringNotContainsString("\x1b", $out, 'a cut crumb must not carry escape bytes');
+        $this->assertSame(4, Width::string($out));
+        $this->assertSame('abc…', $out);
+    }
 }

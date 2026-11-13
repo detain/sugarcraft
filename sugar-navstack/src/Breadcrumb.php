@@ -36,7 +36,11 @@ use SugarCraft\Mouse\Zone;
  * instead treated as host-theme territory: it passes through UNTOUCHED
  * (sanitizing it would strip the very ANSI styling a theme exists to add).
  * A renderer returning user data verbatim is responsible for sanitizing it
- * itself first.
+ * itself first. One honest exception to "untouched": a crumb the width cap
+ * CUTS loses its interior SGR bytes — the cut keeps a plain byte-prefix —
+ * so "styling survives" is exact only for un-cut crumbs (see
+ * {@see truncateSegment()}). Width math itself counts VISIBLE CELLS: SGR
+ * bytes are stripped before measuring and never consume the budget.
  *
  * Design antecedent: KevM/bubbleo Breadcrumb (Go); implemented as a
  * native PHP component.
@@ -187,9 +191,13 @@ final class Breadcrumb
      * docblock; theme styling is preserved, sanitizing host data is the
      * closure's own responsibility.
      *
-     * Width math counts the returned string AS-IS — SGR escape bytes inside
-     * styled output consume the `setMaxWidth()` budget, so a themed trail
-     * elides earlier than it visually fills the row.
+     * Width math counts VISIBLE CELLS — SGR bytes are stripped before
+     * measuring (sugar-core Width), so a themed trail elides exactly where
+     * the unstyled one does. Caveat: a crumb that must be CUT to fit the
+     * cap loses its interior SGR bytes (the cut returns a plain
+     * byte-prefix via Width::truncate); uncut output passes through
+     * untouched. A code-side SGR re-open after the cut would be a
+     * sugar-core-shaped design change — follow-up candidate, not shipped.
      *
      * @throws \InvalidArgumentException Raised at RENDER time (view()/
      *                                   render()) when the closure returns
@@ -452,6 +460,11 @@ final class Breadcrumb
      * Ellipsis-truncate a single crumb so its visible width fits $budget.
      * Grapheme-aware via sugar-core Width. Used only for the lone surviving
      * (most-recent) crumb when even it alone overflows maxWidth.
+     *
+     * Byte honesty: the kept prefix is a PLAIN byte-prefix — any interior
+     * SGR styling of the crumb is lost by the cut (Width::truncate strips
+     * escape bytes rather than re-opening styles). The lone-ellipsis marker
+     * below is a byte-budget cut marker, not an elision announcement.
      */
     private function truncateSegment(string $segment, int $budget): string
     {

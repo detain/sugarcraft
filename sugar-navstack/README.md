@@ -152,9 +152,12 @@ crumb alone fills the width, the marker itself is dropped. Above zero,
 handed to it skip the stack's size and emptiness guards, so bound hostile lists
 yourself (the trust notes under `Url` spell out why).
 `setItemRenderer(fn(NavigationItem, int): ?string)` customizes each crumb
-(`null` falls back to the SANITIZED title, not the raw one) — its output is
-measured for width INCLUDING SGR escape bytes, so a styled trail elides earlier
-than it looks; strip styling before doing visual-width math. All `set*` methods
+(`null` falls back to the SANITIZED title, not the raw one) — width math runs
+on VISIBLE CELLS, so SGR escape bytes are excluded and a styled trail elides
+exactly where the plain one does. The honest exception is the cut: when the cap
+forces a crumb to be truncated, the cut returns a plain byte-prefix (sugar-core
+`Width::truncate`), so the styling of a TRUNCATED crumb does not survive the
+cut — uncut crumbs pass through byte-for-byte untouched. All `set*` methods
 mutate and return `$this`; `withScanner()` is the one clone-returning method.
 `scan()`'s `row:` is 1-based — a `row: 0` is silently coerced to the first row.
 
