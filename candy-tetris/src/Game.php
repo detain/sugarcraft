@@ -1377,11 +1377,18 @@ final class Game implements Model
 
     private static function spawn(Tetromino $kind): Piece
     {
-        // Spawn so the bounding box is centred horizontally and
-        // sits in the hidden buffer rows so the player gets a
-        // tick or two before pieces appear in the visible area.
+        // candy-tetris-093: the spawn lives ON SCREEN. The box used to
+        // sit at the ceiling of the hidden buffer, so every piece spent
+        // its first seconds invisible while the dropPiece ghost already
+        // painted ahead of it — a piece summoned from nothing. At the
+        // visible top the player sees the piece the tick it arrives, and
+        // the death line becomes the honest one: OVER_SPAWN_BLOCKED now
+        // means literally "no room for next piece" on the field the
+        // player can see. The hidden rows keep their jobs as the
+        // garbage-lift buffer (an airborne lift can still retire a piece
+        // out of sight for a tick) and the Computer's probe space.
         $x = (int) ((Board::COLS - 4) / 2);
-        return new Piece($kind, 0, $x, Board::HIDDEN_ROWS - 4);
+        return new Piece($kind, 0, $x, Board::HIDDEN_ROWS);
     }
 
     /**

@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\TickRequest;
 use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
+use SugarCraft\Tetris\Computer;
 use SugarCraft\Tetris\ComputerTickMsg;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\GravityMsg;
@@ -930,5 +931,89 @@ final class VsGameTest extends TestCase
             $this->simulateVsChain([3.0, 6.0]),
             'after two restarts exactly one tick chain per clock may still be in flight',
         );
+    }
+
+    /**
+     * A seat frozen by an unexecutable plan: the I rests on the floor
+     * row (cols 3-6 clear, cols 2 and 7 blocked), its rotation exits the
+     * board, and the recorded plan keeps replaying identically. This is
+     * the deadlock candy-tetris-093's visible-top spawn exposed — the
+     * replan leg counts stalls, and past the ceiling the piece locks
+     * where it rests instead of spending the match.
+     *
+     * @param array<array-key,mixed> $args
+     *
+     * @return array{0:Game,1:bool,2:int,3:int,4:int}
+     */
+    private function step(array $args): array
+    {
+        $method = new \ReflectionMethod(VsGame::class, 'stepComputer');
+        $method->setAccessible(true);
+
+        /** @var array{0:Game,1:bool,2:int,3:int,4:int} $tuple */
+        $tuple = $method->invoke(null, ...$args);
+
+        return $tuple;
+    }
+
+    private function deadlockedSeat(): Game
+    {
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $rows[Board::ROWS - 1][2] = Tetromino::Z;
+        $rows[Board::ROWS - 1][7] = Tetromino::J;
+
+        return Game::start(new Bag(static fn(int $max): int => 0))->mutate([
+            'board' => new Board($rows),
+            'piece' => new Piece(Tetromino::I, 0, 3, 22),
+        ]);
+    }
+
+    public function testABlockedPlanCountsItsStallBeforeItActs(): void
+    {
+        $seat = $this->deadlockedSeat();
+        [$next, $hasPlan, , , $stall] = $this->step([$seat, true, 1, 0, new Computer(), 0]);
+
+        self::assertFalse($hasPlan, 'the dead plan is dropped for a re-evaluation');
+        self::assertSame(1, $stall, 'the re-evaluation is one tick of counted stall');
+        self::assertSame($seat->piece, $next->piece, 'below the ceiling nothing is forced');
+    }
+
+    public function testAPastCeilingStallLocksThePieceWhereItRests(): void
+    {
+        $seat = $this->deadlockedSeat();
+        [$locked, $hasPlan, $rotationsLeft, $shiftLeft, $stall] = $this->step(
+            [$seat, true, 1, 0, new Computer(), 7],
+        );
+
+        self::assertSame(0, $stall, 'the forced lock clears the counter');
+        self::assertFalse($hasPlan);
+        self::assertSame(0, $rotationsLeft);
+        self::assertSame(0, $shiftLeft);
+        self::assertSame(Board::HIDDEN_ROWS, $locked->piece->y, 'a fresh piece entered at the visible top');
+        $bottom = $locked->board->rows()[Board::ROWS - 1];
+        foreach ([3, 4, 5, 6] as $col) {
+            self::assertSame(Tetromino::I, $bottom[$col], 'the resting I was placed, not abandoned');
+        }
+    }
+
+    public function testTheShiftLegSharesTheStallCeiling(): void
+    {
+        $seat = $this->deadlockedSeat();
+        [$locked, $hasPlan, , , $stall] = $this->step([$seat, true, 0, 1, new Computer(), 7]);
+
+        self::assertFalse($hasPlan);
+        self::assertSame(0, $stall);
+        self::assertSame(Board::HIDDEN_ROWS, $locked->piece->y, 'a blocked shift past the ceiling locks too');
+    }
+
+    public function testTheStallCounterStartsAtZeroAndSurvivesMutate(): void
+    {
+        self::assertSame(0, VsGame::start()->computerStall);
+
+        $mutate = new \ReflectionMethod(VsGame::class, 'mutate');
+        $mutate->setAccessible(true);
+        $carried = $mutate->invoke(VsGame::start(), ['computerStall' => 5]);
+
+        self::assertSame(5, $carried->computerStall, 'the counter rides the epoch-carry mutate');
     }
 }

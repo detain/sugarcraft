@@ -397,11 +397,12 @@ final class GameTest extends TestCase
     public function testFirstHoldTopsOutWhenReplacementSpawnIsBlocked(): void
     {
         // MED(5): the empty-hold branch used to spawn with no fits() check.
-        // Fill the spawn zone (cols 3-5, rows 0-1) so the replacement O cannot
-        // fit — the hold must top out instead of silently spawning inside junk.
+        // Fill the spawn zone (cols 3-6, rows 4-5 — the VISIBLE top since
+        // candy-tetris-093) so the replacement cannot fit — the hold must
+        // top out instead of silently spawning inside junk.
         $rows = $this->emptyGrid();
-        for ($row = 0; $row < 2; $row++) {
-            foreach ([3, 4, 5] as $col) {
+        for ($row = Board::HIDDEN_ROWS; $row < Board::HIDDEN_ROWS + 2; $row++) {
+            foreach ([3, 4, 5, 6] as $col) {
                 $rows[$row][$col] = Tetromino::I;
             }
         }
@@ -547,7 +548,7 @@ final class GameTest extends TestCase
         // Moving off a surface cancels the armed window; the still-queued
         // stale LockDelayMsg is then inert (next test) and gravity resumes.
         $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
-            ->mutate(['lockWindowGeneration' => 7, 'lockGeneration' => 7]); // spawn O is airborne at y=0
+            ->mutate(['lockWindowGeneration' => 7, 'lockGeneration' => 7]); // spawn O is airborne at the visible top (-093)
         [$moved, $cmd] = $g->update($this->key('left'));
         $this->assertNull($moved->lockWindowGeneration, 'floating off the surface closes the window');
         $this->assertNull($cmd, 'gravity is still pending from start — no duplicate arm');
@@ -623,10 +624,22 @@ final class GameTest extends TestCase
         $lifted = $g->addGarbageRows(1, static fn(int $_max): int => 3);
         $this->assertSame(9, $lifted->piece->y, 'an airborne piece rides the garbage lift up one row');
 
+        // The ceiling resident is hand-built at y=0 now that spawn sits at
+        // the visible top (candy-tetris-093): a piece that cannot be lifted
+        // keeps its row instead of teleporting off the board.
+        $ceiling = $this->deterministicGame()->mutate([
+            'board' => new Board($g->board->rows()),
+            'piece' => new Piece(Tetromino::O, 0, 3, 0),
+        ])->addGarbageRows(1, static fn(int $_max): int => 3);
+        $this->assertSame(0, $ceiling->piece->y, 'a piece already at the ceiling keeps its row');
+        $this->assertFalse($ceiling->over);
+
+        // And the new spawn posture proves the -093 cure: a freshly
+        // spawned piece rides the lift INTO view, it never had to be
+        // rescued from invisibility.
         $spawned = $this->deterministicGame()->mutate(['board' => new Board($g->board->rows())])
             ->addGarbageRows(1, static fn(int $_max): int => 3);
-        $this->assertSame(0, $spawned->piece->y, 'a piece already at the ceiling keeps its row');
-        $this->assertFalse($spawned->over);
+        $this->assertSame(Board::HIDDEN_ROWS - 1, $spawned->piece->y, 'the visible-top spawn lifts one row');
     }
 
     public function testAddGarbageNeverDestroysBottomRows(): void
@@ -756,11 +769,11 @@ final class GameTest extends TestCase
         // Regression: the game-over branch of lockAndSpawn() was only ever
         // reached by hand-building over=true. Drive it for real: block the
         // spawn zone so the *next* piece cannot fit after the current one
-        // locks. Fill cols 1-9 of rows 0-1 (col 0 left empty → neither row is
-        // full, so nothing clears on lock).
+        // locks. Fill cols 1-9 of the visible-top spawn rows (col 0 left
+        // empty → neither row is full, so nothing clears on lock).
         $g = $this->deterministicGame(); // bag: O, T, ...
         $rows = $g->board->rows();
-        for ($r = 0; $r < 2; $r++) {
+        for ($r = Board::HIDDEN_ROWS; $r < Board::HIDDEN_ROWS + 2; $r++) {
             for ($col = 1; $col < Board::COLS; $col++) {
                 $rows[$r][$col] = Tetromino::I;
             }
@@ -772,8 +785,8 @@ final class GameTest extends TestCase
         $game = $g->mutate(['board' => $board, 'piece' => $current]);
         $this->assertFalse($game->over);
 
-        // Hard drop → lockAndSpawn → next piece (T) spawns into cols 3-5 of
-        // rows 0-1 (all filled) → real top-out.
+        // Hard drop → lockAndSpawn → next piece spawns into the blocked
+        // visible-top rows (all of cols 1-9 filled) → real top-out.
         [$afterDrop, $cmd] = $game->update($this->key(' '));
         $this->assertTrue($afterDrop->over, 'spawning into a blocked zone must top-out via lockAndSpawn');
         $this->assertNull($cmd, 'a topped-out game schedules no further gravity tick');
@@ -876,11 +889,13 @@ final class GameTest extends TestCase
         // Now hard drop and spawn new piece, then fill the board so held piece won't fit
         [$dropped] = $withHold->update($this->key(' '));
 
-        // Fill the spawn zone (top rows) except one column
+        // Fill the VISIBLE-TOP spawn zone (rows 4-5, col 0 kept open) —
+        // since candy-tetris-093 the spawn box sits there, so the old
+        // hidden-rows fill would guard nothing.
         $rows = $dropped->board->rows();
-        for ($r = 0; $r < 4; $r++) {  // HIDDEN_ROWS = 4
+        for ($r = Board::HIDDEN_ROWS; $r < Board::HIDDEN_ROWS + 2; $r++) {
             for ($col = 0; $col < Board::COLS; $col++) {
-                if ($col !== 0) {  // Leave column 0 empty for spawn
+                if ($col !== 0) {  // Leave column 0 empty
                     $rows[$r][$col] = Tetromino::I;
                 }
             }
@@ -891,8 +906,9 @@ final class GameTest extends TestCase
         // After hard drop, canHold is re-enabled (true)
         $this->assertTrue($game->canHold);
 
-        // Now hold should swap with held piece, but held piece (O) won't fit in column 0
-        // because O needs 2 columns. So the hold swap should fail (return same game).
+        // Now hold should swap with held piece, but the held O's spawn
+        // cells (cols 4-5 of rows 4-5) sit inside the filled visible-top
+        // zone. So the hold swap must fail (return the same game).
         [$result] = $game->update($this->key('c'));
         $this->assertSame($game->piece, $result->piece, 'Hold swap should fail when held piece cannot fit');
         $this->assertTrue($result->canHold, 'canHold should remain true after failed swap (unchanged state)');
@@ -1270,9 +1286,9 @@ final class GameTest extends TestCase
         [$after] = $game->update($this->gravity());
 
         $this->assertSame(
-            0,
+            Board::HIDDEN_ROWS,
             $after->piece->y,
-            'cap-exhausted grounded piece must lock and respawn, not open a fresh window',
+            'cap-exhausted grounded piece must lock and respawn at the visible top (candy-tetris-093), not open a fresh window',
         );
     }
 
@@ -1289,9 +1305,9 @@ final class GameTest extends TestCase
         [$after] = $game->update($this->key('left'));
 
         $this->assertSame(
-            0,
+            Board::HIDDEN_ROWS,
             $after->piece->y,
-            'a successful grounded move past the cap must lock, not reopen the window',
+            'a successful grounded move past the cap must lock at the visible top (candy-tetris-093), not reopen the window',
         );
     }
 
@@ -1335,14 +1351,14 @@ final class GameTest extends TestCase
 
         [$stale] = $fresh->update(new GravityMsg(0)); // tick armed pre-restart
         $this->assertSame(
-            0,
+            Board::HIDDEN_ROWS,
             $stale->piece->y,
             'the stale tick must not step the fresh board',
         );
         $this->assertTrue($stale->gravityPending, 'nor consume the fresh slot');
 
         [$stepped] = $fresh->update(new GravityMsg(1)); // the restart's own arm
-        $this->assertSame(1, $stepped->piece->y, 'the fresh chain steps normally');
+        $this->assertSame(Board::HIDDEN_ROWS + 1, $stepped->piece->y, 'the fresh chain steps normally');
     }
 
     /**

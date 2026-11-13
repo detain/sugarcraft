@@ -197,16 +197,16 @@ final class ScoresRecordingTest extends TestCase
     }
 
     /**
-     * Deterministic solo top-out (GameTest's shape): cols 1-9 of rows 0-1
-     * blocked, the live O parked on the floor, one hard drop to lock and
-     * spawn into the wall.
+     * Deterministic solo top-out (GameTest's shape): cols 1-9 of the
+     * VISIBLE-TOP spawn rows (candy-tetris-093) blocked, the live O parked
+     * on the floor, one hard drop to lock and spawn into the wall.
      *
      * @return array{0:Game,1:?\Closure}
      */
     private function topOut(Game $game, int $points): array
     {
         $rows = $game->board->rows();
-        for ($r = 0; $r < 2; $r++) {
+        for ($r = Board::HIDDEN_ROWS; $r < Board::HIDDEN_ROWS + 2; $r++) {
             for ($col = 1; $col < Board::COLS; $col++) {
                 $rows[$r][$col] = Tetromino::I;
             }

@@ -106,7 +106,9 @@ final class FrameDisciplineTest extends TestCase
 
         $game = Game::start($this->bag(), scoresPath: $path);
         $rows = $game->board->rows();
-        for ($r = 0; $r < 2; $r++) {
+        // candy-tetris-093: the spawn zone is now the visible top — rows
+        // HIDDEN_ROWS..+1 are what a replacement I collides with.
+        for ($r = Board::HIDDEN_ROWS; $r < Board::HIDDEN_ROWS + 2; $r++) {
             for ($col = 1; $col < Board::COLS; $col++) {
                 $rows[$r][$col] = Tetromino::I;
             }
@@ -144,7 +146,9 @@ final class FrameDisciplineTest extends TestCase
         mkdir($path);
         $game = Game::start($this->bag(), scoresPath: $path);
         $rows = $game->board->rows();
-        for ($r = 0; $r < 2; $r++) {
+        // candy-tetris-093: the spawn zone is now the visible top — rows
+        // HIDDEN_ROWS..+1 are what a replacement I collides with.
+        for ($r = Board::HIDDEN_ROWS; $r < Board::HIDDEN_ROWS + 2; $r++) {
             for ($col = 1; $col < Board::COLS; $col++) {
                 $rows[$r][$col] = Tetromino::I;
             }

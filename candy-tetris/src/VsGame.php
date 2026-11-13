@@ -45,6 +45,14 @@ final class VsGame implements Model
         /** Horizontal cells still owed by the current plan (signed). */
         public readonly int       $computerShiftLeft = 0,
         /**
+         * Consecutive re-evaluations of an unexecutable plan (candy-
+         * tetris-093 follow-up): bestMove scores the IDEAL placement, the
+         * step machine can only walk reachable ones — when the two
+         * disagree on a board the computer cannot move on, the counter
+         * forces a lock in place instead of planning forever.
+         */
+        public readonly int       $computerStall = 0,
+        /**
          * Live terminal size (C-2), owned by the top model — the inner
          * Games keep their seeds; the VS frame is what the arms reflow.
          */
@@ -392,13 +400,23 @@ final class VsGame implements Model
         $hasPlan = $this->hasComputerPlan;
         $rotationsLeft = $this->computerRotationsLeft;
         $shiftLeft = $this->computerShiftLeft;
+        // candy-tetris-093 follow-up: a plan the step machine cannot
+        // execute (rotation intermediates blocked while bestMove scores
+        // the ideal placement, not the reachable one) re-evaluated
+        // forever at the new visible-top spawn — an unplotted deadlock
+        // the old hidden spawn had never walked into. The stall counter
+        // forces a lock in place once enough re-evaluations land on an
+        // unchanged board (the resting piece always fits at that point,
+        // so the lock is a legal, honest placement).
+        $computerStall = $this->computerStall;
         if ($isComputerTick) {
-            [$newComputer, $hasPlan, $rotationsLeft, $shiftLeft] = self::stepComputer(
+            [$newComputer, $hasPlan, $rotationsLeft, $shiftLeft, $computerStall] = self::stepComputer(
                 $this->computer,
                 $this->hasComputerPlan,
                 $this->computerRotationsLeft,
                 $this->computerShiftLeft,
                 $this->computerAI,
+                $this->computerStall,
             );
         }
 
@@ -454,6 +472,7 @@ final class VsGame implements Model
                 'hasComputerPlan' => $hasPlan,
                 'computerRotationsLeft' => $rotationsLeft,
                 'computerShiftLeft' => $shiftLeft,
+                'computerStall' => $computerStall,
             ]),
             // The tick chain stays singleton: on a gravity tick the PLAYER's
             // own answer is the truth — either its re-arm or the lock-delay
@@ -484,16 +503,31 @@ final class VsGame implements Model
      *
      * @return array{0:Game,1:bool,2:int,3:int} [computer state, hasPlan, rotationsLeft, shiftLeft]
      */
+    /**
+     * Consecutive blocked re-evaluations tolerated before the computer
+     * locks where it rests (candy-tetris-093 follow-up): bestMove scores
+     * the ideal placement, the step machine can only walk reachable
+     * ones; when the two disagree in a way that never lets a leg execute,
+     * planning forever is not "thinking", it is a frozen match. Eight
+     * ticks is two full replan cycles of a four-rotation piece — a
+     * healthy board changes under the first moving leg and resets this.
+     */
+    private const PLAN_STALL_LIMIT = 8;
+
+    /**
+     * @return array{0:Game,1:bool,2:int,3:int,4:int}
+     */
     private static function stepComputer(
         Game $computer,
         bool $hasPlan,
         int $rotationsLeft,
         int $shiftLeft,
         Computer $ai,
+        int $stall,
     ): array {
         if ($hasPlan === false) {
             [$dx, $rotDelta] = $ai->bestMove($computer->board, $computer->piece);
-            return [$computer, true, $rotDelta, $dx];
+            return [$computer, true, $rotDelta, $dx, $stall];
         }
 
         if ($rotationsLeft > 0) {
@@ -504,13 +538,20 @@ final class VsGame implements Model
                 // the next tick records a fresh bestMove for the real board
                 // (candy-tetris-085; forcing the old legs through would be
                 // the wasted-drop the old abandon-then-continue produced).
-                return [$computer, false, 0, 0];
+                // An UNCHANGED board under repeated re-evaluations is a
+                // plan-vocabulary deadlock — past the limit the piece locks
+                // where it rests (it always fits at that point: the step
+                // machine only ever moved it through checked legs).
+                if ($stall + 1 >= self::PLAN_STALL_LIMIT) {
+                    return [$computer->applyAiMove(0, 0), false, 0, 0, 0];
+                }
+                return [$computer, false, 0, 0, $stall + 1];
             }
             $stepped = $computer->mutate([
                 'piece' => $rotated,
                 'lastActionWasRotation' => true,
             ]);
-            return [$stepped, true, $rotationsLeft - 1, $shiftLeft];
+            return [$stepped, true, $rotationsLeft - 1, $shiftLeft, 0];
         }
 
         if ($shiftLeft !== 0) {
@@ -521,10 +562,14 @@ final class VsGame implements Model
                     'piece' => $candidate,
                     'lastActionWasRotation' => false,
                 ]);
-                return [$stepped, true, 0, $shiftLeft - $direction];
+                return [$stepped, true, 0, $shiftLeft - $direction, 0];
             }
-            // Blocked sideways — same law: re-evaluate from the next tick.
-            return [$computer, false, 0, 0];
+            // Blocked sideways — same law: re-evaluate from the next tick,
+            // and the same deadlock ceiling underneath it.
+            if ($stall + 1 >= self::PLAN_STALL_LIMIT) {
+                return [$computer->applyAiMove(0, 0), false, 0, 0, 0];
+            }
+            return [$computer, false, 0, 0, $stall + 1];
         }
 
         if ($computer->board->fits($computer->piece->moved(0, 1))) {
@@ -532,13 +577,13 @@ final class VsGame implements Model
                 'piece' => $computer->piece->moved(0, 1),
                 'lastActionWasRotation' => false,
             ]);
-            return [$stepped, true, 0, 0];
+            return [$stepped, true, 0, 0, 0];
         }
 
         // Plan spent and resting: lock the piece and take delivery of the
         // next one; the following tick will record a fresh plan.
         $locked = $computer->applyAiMove(0, 0);
-        return [$locked, false, 0, 0];
+        return [$locked, false, 0, 0, 0];
     }
 
     /**
@@ -623,6 +668,7 @@ final class VsGame implements Model
             $changes['hasComputerPlan'] ?? $this->hasComputerPlan,
             $changes['computerRotationsLeft'] ?? $this->computerRotationsLeft,
             $changes['computerShiftLeft'] ?? $this->computerShiftLeft,
+            $changes['computerStall'] ?? $this->computerStall,
             $changes['frameCols'] ?? $this->frameCols,
             $changes['frameRows'] ?? $this->frameRows,
             // Nullable: presence, not truthiness, decides (same law as
