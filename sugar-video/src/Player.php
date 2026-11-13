@@ -203,6 +203,12 @@ final class Player implements Model
             throw new \InvalidArgumentException('fps must be greater than zero');
         }
 
+        // SV-H7/007: the documented cols [10,200] x rows [5,80] window binds
+        // at EVERY entry, not just the resize path — an unclamped open() is a
+        // multi-megabyte view() per frame (QA measured 100,000,056 bytes at
+        // 9999x9999) and a memory DoS one constructor call deep.
+        [$cellsW, $cellsH] = self::clampCells($cellsW, $cellsH);
+
         // Null mode = auto-detect, resolved once here at the boundary so every
         // downstream consumer (decoder geometry, renderer, mode cycling) trusts
         // a concrete Mode. The chooser is the hermetic test seam; production
@@ -352,6 +358,11 @@ final class Player implements Model
         if ($fps <= 0.0) {
             throw new \InvalidArgumentException('fps must be greater than zero');
         }
+
+        // SV-H7/007: the pane window binds here too — fromDecoder is the
+        // entry every Reel build and the test seams walk through, so the
+        // 9999x9999 DoS constructor is refused at the same door as open().
+        [$cellsW, $cellsH] = self::clampCells($cellsW, $cellsH);
 
         // The header map is validated HERE, at this public boundary: every other entry point — Reel::open/openUrl, the ffmpeg
         // decoder's open() — parses before trusting, and the deferred
@@ -641,6 +652,25 @@ final class Player implements Model
      *
      * @return array{0:Player, 1:?Closure}
      */
+    /**
+     * SV-H7/007: clamp a cell geometry into the documented pane window —
+     * cols in [MIN_COLS, MAX_COLS], rows in [MIN_ROWS, MAX_ROWS]. Every entry
+     * that accepts a host-supplied size (open, fromDecoder, updateResize,
+     * Reel::withSize) routes through here so the window is single-sourced:
+     * the frame block view() builds is cellsH lines x cellsW columns, and an
+     * unclamped pane is a multi-megabyte string per frame — a memory DoS at
+     * one constructor call, not a rendering curiosity.
+     *
+     * @return array{0: int, 1: int} the clamped [cols, rows] pair
+     */
+    public static function clampCells(int $cols, int $rows): array
+    {
+        return [
+            max(self::MIN_COLS, min($cols, self::MAX_COLS)),
+            max(self::MIN_ROWS, min($rows, self::MAX_ROWS)),
+        ];
+    }
+
     private function updateResize(int $cols, int $rows): array
     {
         if ($this->stopped) {
@@ -650,8 +680,7 @@ final class Player implements Model
             return [$this, null];
         }
 
-        $cols = max(self::MIN_COLS, min($cols, self::MAX_COLS));
-        $rows = max(self::MIN_ROWS, min($rows, self::MAX_ROWS));
+        [$cols, $rows] = self::clampCells($cols, $rows);
 
         // Compare against the *pending* geometry, not just the applied one: during a
         // burst each event re-states the size, and only a genuinely new target needs

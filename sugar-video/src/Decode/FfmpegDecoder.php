@@ -491,6 +491,16 @@ final class FfmpegDecoder implements Decoder
             return $this->nextPng();
         }
 
+        // SV-H7/007: a zero-byte text-mode frame (cellsW/cellsH 0 through a
+        // directly-minted decoder, bypassing the Player pane window) would
+        // "complete" on an empty buffer forever — the fill loop reads nothing,
+        // every call returns a 0-byte frame, and the stream never ends while
+        // the pipe backs up. Treat it as immediate end-of-stream. The
+        // graphics leg self-terminates on PNG markers and cannot hit this.
+        if ($this->frameBytes < 1) {
+            return null;
+        }
+
         // Fill the frame from the persistent partial buffer, then top it up from
         // the pipe with BOUNDED reads (a bare fread() blocks
         // forever on a stalled stream and freezes the whole UI loop). The bound

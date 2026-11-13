@@ -980,7 +980,7 @@ final class PlayerTest extends TestCase
 
         $gifPath = $this->createTempGif();
         $spy = new SpyDecoder(array_fill(0, 20, $this->makeFrame("\x10\x20\x30")));
-        $player = Player::openForTest($spy, 30.0, 0, 8, 6, $gifPath);
+        $player = Player::openForTest($spy, 30.0, 0, 12, 6, $gifPath);
 
         [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(16, 12));
         $this->assertNotNull($cmd, 'the resize arms the debounce timer');
@@ -993,7 +993,7 @@ final class PlayerTest extends TestCase
         $this->assertNull($cmd2, 'a stopped player must not schedule further work');
         $this->assertSame($spy, $this->getPlayerProperty($player2, 'decoder'), 'no replacement decoder may be built after stop()');
         $this->assertSame(1, $spy->closeCount, 'the refused rebuild must close nothing further');
-        $this->assertSame(8, $this->getPlayerProperty($player2, 'cellsW'), 'geometry stays as it was at teardown');
+        $this->assertSame(12, $this->getPlayerProperty($player2, 'cellsW'), 'geometry stays as it was at teardown');
 
         // A late WindowSizeMsg on the stopped instance must arm nothing either.
         [$player3, $cmd3] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(20, 14));
@@ -2431,8 +2431,8 @@ final class PlayerTest extends TestCase
      */
     public function testPlaceholderViewIsBlankGridPlusStatusLine(): void
     {
-        $cellsW = 4;
-        $cellsH = 3;
+        $cellsW = 12;
+        $cellsH = 7;
         $decoder = $this->makeFakeDecoder(10);
         $player = Player::openForTest($decoder, 1.0, 0, $cellsW, $cellsH, '/fake', false, 'standard');
 
@@ -2498,6 +2498,31 @@ final class PlayerTest extends TestCase
         $this->assertSame(24, count($rowsOf($ended->view())), 'the pane never grows past cellsH');
         $endedRows = $rowsOf($ended->view());
         $this->assertStringContainsString('[ended]', end($endedRows));
+    }
+
+    /**
+     * @testdox SV-H7: the documented pane window (10-200 x 5-80) binds at
+     *           every size entry — a 9999x9999 pane is a memory DoS
+     *
+     * QA measured a 100,000,056-byte view() from Player::open('x',9999,9999)
+     * because the documented cols/rows window was enforced only on the
+     * resize path. clampCells is now the single law behind open,
+     * fromDecoder (every Reel build and test seam) and updateResize.
+     */
+    public function testThePaneWindowBindsAtEverySizeEntry(): void
+    {
+        $frame = new RgbFrame(str_repeat("\x10\x20\x30", 12), 4, 1);
+
+        $huge = Player::fromDecoder(decoder: new FakeDecoder([$frame]), cellsW: 9999, cellsH: 9999, fps: 30.0, mode: Mode::Ascii);
+        $this->assertSame(200, $huge->cellsW);
+        $this->assertSame(80, $huge->cellsH);
+
+        $tiny = Player::fromDecoder(decoder: new FakeDecoder([$frame]), cellsW: 0, cellsH: 0, fps: 30.0, mode: Mode::Ascii);
+        $this->assertSame(10, $tiny->cellsW);
+        $this->assertSame(5, $tiny->cellsH);
+
+        [$cols, $rows] = Player::clampCells(80, 24);
+        $this->assertSame([80, 24], [$cols, $rows], 'in-window geometry passes through untouched');
     }
     /**
      * @testdox M11: a budgeted forward seek yields to the frame budget and records the landed playhead

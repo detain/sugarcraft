@@ -356,6 +356,11 @@ final class Reel
      */
     public function withSize(int $cols, int $rows): self
     {
+        // SV-H7/007: clamp at the entry — the stored geometry seeds the
+        // synthetic pattern generator as well as the Player pane, so a
+        // 9999x9999 request must never round-trip through either.
+        [$cols, $rows] = Player::clampCells($cols, $rows);
+
         return $this->with(cols: $cols, rows: $rows, sizeSet: true);
     }
 

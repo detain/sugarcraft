@@ -1384,6 +1384,35 @@ PHP;
     }
 
     /**
+     * @testdox SV-H7: a zero-byte text pump ends the stream within one call
+     *
+     * A text-mode frameBytes of 0 (a decoder minted with cellsW/cellsH 0
+     * through the direct factory, bypassing the Player pane window) would
+     * "complete" on an empty buffer forever: the fill loop reads nothing,
+     * every call returns a 0-byte RgbFrame, and the stream never ends while
+     * the pipe backs up. The guard treats it as immediate end-of-stream.
+     */
+    public function testAZeroByteTextStreamEndsWithinOnePump(): void
+    {
+        $decoder = new FfmpegDecoder();
+        $stream = fopen('php://temp', 'r+b');
+        self::assertIsResource($stream);
+        fwrite($stream, str_repeat("\x00", 64));
+        rewind($stream);
+
+        foreach (['stdout' => $stream, 'graphics' => false, 'frameBytes' => 0] as $key => $value) {
+            (new \ReflectionProperty(FfmpegDecoder::class, (string) $key))->setValue($decoder, $value);
+        }
+
+        self::assertNull($decoder->next(), 'a 0-byte frame is end-of-stream, not an endless empty frame');
+        self::assertNull($decoder->next(), 'the verdict is stable across calls');
+
+        $buffer = (new \ReflectionProperty(FfmpegDecoder::class, 'rawBuffer'))->getValue($decoder);
+        self::assertSame('', $buffer, 'the guard short-circuits before the fill loop — nothing consumed');
+        fclose($stream);
+    }
+
+    /**
      * @testdox the failure copy sweeps escape bytes, keeps the tail text, and never leaks URL credentials
      */
     public function testTheFailureMessageIsSweptAndRedacted(): void

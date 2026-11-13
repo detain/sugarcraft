@@ -300,6 +300,40 @@ final class ReelTest extends TestCase
     }
 
     /**
+     * @testdox SV-H7: withSize clamps to the documented pane window, and so
+     *           does Player::open (the window binds at every size entry)
+     */
+    public function testSizeEntriesClampToThePaneWindow(): void
+    {
+        $huge = Reel::new()->withSize(9999, 9999);
+        $this->assertSame(200, $huge->cols(), 'the request clamps to MAX_COLS');
+        $this->assertSame(80, $huge->rows(), 'the request clamps to MAX_ROWS');
+
+        $tiny = Reel::new()->withSize(0, 0);
+        $this->assertSame(10, $tiny->cols(), 'the floor side matters too: cells-0 decodes zero-byte frames');
+        $this->assertSame(5, $tiny->rows());
+
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+        $gif = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-h7-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.gif',
+            16,
+            8,
+            2,
+            4,
+        );
+        try {
+            $player = Player::open($gif, 9999, 9999, mode: Mode::Ascii);
+            $this->assertSame(200, $player->cellsW, 'open() clamps before the decoder is minted');
+            $this->assertSame(80, $player->cellsH);
+            $player->stop();
+        } finally {
+            @unlink($gif);
+        }
+    }
+
+    /**
      * @testdox builders chain and each returns a distinct Reel
      */
     public function testBuildersChain(): void

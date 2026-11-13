@@ -256,8 +256,10 @@ final class DecoderSeamTest extends TestCase
      *
      * The point of the seam is that a graphics mode decodes at cells·cellPx, so a
      * caller that measured its terminal gets real detail instead of a 10×20 guess.
-     * Asserting the pixel size of the first decoded frame (4×3 cells at 7×14 →
-     * 28×42) proves the value reaches the decoder, not merely the Player field.
+     * Asserting the pixel size of the first decoded frame (12×8 cells at 7×14 →
+     * 84×112) proves the value reaches the decoder, not merely the Player field.
+     * (SV-H7: the pane window floors at 10×5, so the historical 4×3 test box
+     * clamps — the geometry here is in-window to keep the seam proof direct.)
      */
     public function testToPlayerThreadsMeasuredCellPx(): void
     {
@@ -270,7 +272,7 @@ final class DecoderSeamTest extends TestCase
         $gif = $this->tempGif();
 
         $player = Reel::open($gif)
-            ->withSize(4, 3)
+            ->withSize(12, 8)
             ->withMode(Mode::Kitty)
             ->withCellPx(7, 14)
             ->toPlayer();
@@ -279,17 +281,17 @@ final class DecoderSeamTest extends TestCase
         $this->assertSame(14, $player->cellPxH);
 
         $frame = $player->decoder->next();
-        $this->assertNotNull($frame, 'the 4x3 clip must yield a frame');
-        $this->assertSame(28, $frame->w, '4 cells x 7px per cell');
-        $this->assertSame(42, $frame->h, '3 cells x 14px per cell');
+        $this->assertNotNull($frame, 'the 12x8 clip must yield a frame');
+        $this->assertSame(84, $frame->w, '12 cells x 7px per cell');
+        $this->assertSame(112, $frame->h, '8 cells x 14px per cell');
     }
 
     /**
      * @testdox toPlayer() WITHOUT withCellPx() still yields the historical 10×20 (BC)
      *
      * Every caller written before this plumbing exists passed no cell size and got
-     * 10×20. That must stay exactly true — the same 4×3 Kitty geometry decodes at
-     * 40×60 px, byte for byte as before.
+     * 10×20. That must stay exactly true — the same Kitty geometry decodes at
+     * cells×10 by cells×20, byte for byte as before.
      */
     public function testToPlayerFallsBackToLegacyCellPx(): void
     {
@@ -299,15 +301,15 @@ final class DecoderSeamTest extends TestCase
         }
         $gif = $this->tempGif();
 
-        $player = Reel::open($gif)->withSize(4, 3)->withMode(Mode::Kitty)->toPlayer();
+        $player = Reel::open($gif)->withSize(12, 8)->withMode(Mode::Kitty)->toPlayer();
 
         $this->assertSame(10, $player->cellPxW);
         $this->assertSame(20, $player->cellPxH);
 
         $frame = $player->decoder->next();
-        $this->assertNotNull($frame, 'the 4x3 clip must yield a frame');
-        $this->assertSame(40, $frame->w);
-        $this->assertSame(60, $frame->h);
+        $this->assertNotNull($frame, 'the 12x8 clip must yield a frame');
+        $this->assertSame(120, $frame->w);
+        $this->assertSame(160, $frame->h);
     }
 
     // -------------------------------------------------------------------------
