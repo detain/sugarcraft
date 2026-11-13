@@ -293,23 +293,64 @@ final class DatePickerTest extends TestCase
 
     public function testHandleKeyHome(): void
     {
-        // D21: Home jumps to the first valid day (May 1 = index 5), never a raw
-        // leading cell that may be blank.
+        // D21 + dp-11: Home jumps to the first SELECTABLE day. With no bounds
+        // configured that is May 1 (index 5) — the unclamped contract survives
+        // only as the bounds-free special case of the scan.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->MoveCursorDown()
-            ->MoveCursorRight();
+            ->moveCursorDown()
+            ->moveCursorRight();
 
         $dp = $dp->handleKey('home');
-        $this->assertSame(5, $dp->CursorIndex());
+        $this->assertSame(5, $dp->cursorIndex());
     }
 
     public function testHandleKeyEnd(): void
     {
-        // D21: End lands on the last day of the month (May 31 = index 35), not
-        // the raw grid floor of 41.
+        // D21 + dp-11: End lands on the last selectable day — May 31 (index 35)
+        // unbounded, not the raw grid floor of 41.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         $dp = $dp->handleKey('end');
-        $this->assertSame(35, $dp->CursorIndex());
+        $this->assertSame(35, $dp->cursorIndex());
+    }
+
+    public function testHomeClampsToFirstSelectableDayPastMin(): void
+    {
+        // dp-11: min 2026-05-10 — Home in May must park on May 10 (index 14),
+        // never the dimmed May 1. This rewrites the disclosed old pin that
+        // taught the grid-valid landing (the constraints.php trap).
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-06-15'))
+            ->withMinDate(new \DateTimeImmutable('2026-05-10'))
+            ->goToPreviousMonth()
+            ->goToPreviousMonth()
+            ->handleKey(DatePicker::KEY_HOME);
+
+        $this->assertSame(14, $dp->cursorIndex());
+        $this->assertSame('2026-05-10', $dp->dateAtCursor()?->format('Y-m-d'));
+    }
+
+    public function testEndClampsToLastSelectableDayBeforeMax(): void
+    {
+        // dp-11 mirror leg: max 2026-05-20 — End parks on May 20 (index 24).
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withMaxDate(new \DateTimeImmutable('2026-05-20'))
+            ->handleKey(DatePicker::KEY_END);
+
+        $this->assertSame(24, $dp->cursorIndex());
+        $this->assertSame('2026-05-20', $dp->dateAtCursor()?->format('Y-m-d'));
+    }
+
+    public function testTightenedBoundFollowsViewIntoBoundMonth(): void
+    {
+        // dp-11 context pin: withBounds pins the view to the bound month
+        // (boundedView), so a fully out-of-window month never reaches Home/End
+        // through the public API — the scan fallback is defensive. Seed May 1,
+        // min 2026-06-15: the view jumps to June and Home parks on the bound.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withMinDate(new \DateTimeImmutable('2026-06-15'));
+
+        $this->assertSame(6, $dp->viewMonth());
+        $home = $dp->handleKey(DatePicker::KEY_HOME);
+        $this->assertSame('2026-06-15', $home->dateAtCursor()?->format('Y-m-d'));
     }
 
     public function testHandleKeyEnterSetsRangeStart(): void

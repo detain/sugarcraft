@@ -443,11 +443,12 @@ final class DatePicker
     //
     // NOTE: Cursor navigation is GRID-INDEX based (0-41), not date-based like
     // upstream bubbles/calendar (which uses DateTimeImmutable cursor). When at
-    // the first valid day and pressing Left, the cursor steps into the empty
-    // lead-in cell and stays there (no month-boundary wrap); the same on the
-    // trailing edge. Arrow keys therefore CAN rest on empty cells — Enter
-    // falls back to the first of the month from a lead-in blank — while Home
-    // and End always land on a real day.
+    // the first selectable day and pressing Left, the cursor steps into the
+    // lead-in (empty or dimmed) and stays there (no month-boundary wrap); the
+    // same on the trailing edge. Arrow keys therefore CAN rest on empty or
+    // dimmed cells — Enter falls back to the first of the month from a lead-in
+    // blank (and is refused when that date is out of bounds) — while Home and
+    // End always land on a SELECTABLE day (dp-11: min/max consulted).
     // This is an architectural difference from upstream.
     // -------------------------------------------------------------------------
 
@@ -570,9 +571,9 @@ final class DatePicker
      * Escape / esc: range mode — clear the range; single mode — clear the
      *             selection (same as ClearDate()); both spellings act (dp-18
      *             accepts the core spelling alongside the BC 'esc' wire value)
-     * Home/End:   jump to the first / last valid day of the viewed month
-     *             (the month's day-cell window — min/max bounds are not
-     *             consulted, so a jump can land on a dimmed out-of-bounds day)
+     * Home/End:   jump to the first / last SELECTABLE day of the viewed month
+     *             (min/max are consulted: the jump scans past dimmed days;
+     *             a whole month outside the window leaves the cursor in place)
      *
      * An unrecognized key returns the receiver unchanged AND logs
      * `datepicker: unknown key …` — the wire vocabulary IS the API of a
@@ -744,42 +745,59 @@ final class DatePicker
         return $this->clampedCursor($firstDow + (int) $date->format('j') - 1);
     }
 
-    /** Cursor index for a seed date: its cell if in-month, else the first valid day. */
+    /** Cursor index for a seed date: its cell if in-month, else the first selectable day. */
     private function cursorForDate(?\DateTimeImmutable $date): int
     {
         return $this->gridIndexOf($date) ?? $this->firstValidIndex();
     }
 
     /**
-     * Grid index of the viewed month's first day (its weekday column).
-     * "Valid" here means grid-valid, not in-bounds: this window ignores
-     * min/max, so a jump can land on a dimmed out-of-bounds day (the trap
-     * the constraints example documents).
+     * Grid index of the viewed month's first SELECTABLE day — day 1 scanned
+     * forward through inBounds() until min/max accept it. A jump therefore
+     * never parks the cursor on a dimmed out-of-bounds day. When the entire
+     * viewed month lies outside the window the cursor stays where it is (the
+     * old grid-valid landing place is unreachable then anyway: navigation
+     * clamps month stepping to the bound months).
      */
     private function firstValidIndex(): int
     {
-        $firstOfMonth = $this->firstOfViewMonth();
-        if ($firstOfMonth === null) {
-            return 0;
-        }
-
-        return $this->clampedCursor((int) $firstOfMonth->format('w'));
+        return $this->edgeIndex(true);
     }
 
     /**
-     * Grid index of the viewed month's last day — grid-valid as above,
-     * not consulted against min/max bounds.
+     * Grid index of the viewed month's last SELECTABLE day — day N scanned
+     * backward through inBounds(). Same whole-month-out fallback as
+     * {@see firstValidIndex()}: current cursor.
      */
     private function lastValidIndex(): int
     {
+        return $this->edgeIndex(false);
+    }
+
+    /** Shared scan for the first/last selectable day-cell of the viewed month. */
+    private function edgeIndex(bool $fromStart): int
+    {
         $firstOfMonth = $this->firstOfViewMonth();
         if ($firstOfMonth === null) {
-            return self::DAY_INDEX_MAX;
+            // Defensive: flooredView keeps year>=1/month 1-12, so this is
+            // unreachable in practice. Leaving the cursor in place beats
+            // aiming it at a cell this helper knows nothing about.
+            return $this->cursorIndex;
         }
-        $firstDow     = (int) $firstOfMonth->format('w');
-        $daysInMonth  = (int) $firstOfMonth->format('t');
+        $firstDow    = (int) $firstOfMonth->format('w');
+        $daysInMonth = (int) $firstOfMonth->format('t');
 
-        return \min(self::DAY_INDEX_MAX, $firstDow + $daysInMonth - 1);
+        for ($i = 0; $i < $daysInMonth; $i++) {
+            $day = $fromStart ? $i + 1 : $daysInMonth - $i;
+            $date = \DateTimeImmutable::createFromFormat(
+                '!Y-m-d', \sprintf('%04d-%02d-%02d', $this->viewYear, $this->viewMonth, $day)
+            );
+            if ($date !== false && $this->inBounds($date)) {
+                return $this->clampedCursor($firstDow + $day - 1);
+            }
+        }
+
+        return $this->cursorIndex;
     }
 
     // -------------------------------------------------------------------------

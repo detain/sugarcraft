@@ -462,8 +462,8 @@ final class ModelTest extends TestCase
     {
         $store = new EventStore();
         $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
-        $model = $model->update(new KeyMsg(KeyType::End))[0];  // index 41
-        $model = $model->update(new KeyMsg(KeyType::Home))[0]; // index 0 (empty cell → May 1 fallback)
+        $model = $model->update(new KeyMsg(KeyType::End))[0];  // May 31 (index 35)
+        $model = $model->update(new KeyMsg(KeyType::Home))[0]; // May 1 (index 5 — first selectable day unbounded)
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
         $this->assertTrue($model->picker()->IsSelecting());
 
@@ -496,8 +496,14 @@ final class ModelTest extends TestCase
         $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
         $picker = $model->picker()->withMinDate(new \DateTimeImmutable('2026-05-10'));
         $model = new Model($picker, $store);
+        // dp-11: Home now clamps to May 10 (the bound), so the refusal leg
+        // reaches the dimmed May 9 the way arrows allow it — one left.
         $model = $model->update(new KeyMsg(KeyType::Home))[0];
-        $model = $model->update(new KeyMsg(KeyType::Enter))[0]; // May 1 fallback < min
+        $model = $model->update(new KeyMsg(KeyType::Left))[0];
+        // The clamp itself legitimately records cursor_moved transitions; drain
+        // them so the assertion below tests exactly the refused Enter.
+        $store->release();
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0]; // May 9 < min
 
         $this->assertFalse($model->picker()->IsSelecting());
         $this->assertFalse($store->hasEvents(),

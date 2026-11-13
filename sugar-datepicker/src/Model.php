@@ -62,7 +62,8 @@ final class Model implements \SugarCraft\Core\Model
      * month, Enter to selectDate (non-range mode) or range-start/end (range
      * mode), Escape to clearDate in single mode — in range mode Escape clears
      * the pending range and never the selection — and Home/End to the
-     * first/last valid day.
+     * first/last selectable day (the jump scans past dimmed bound-violating
+     * days — see handleKey() dp-11 contract).
      * Records events to the EventStore when one is injected — and this is the
      * ONLY recording channel: {@see DatePicker::handleKey()} is the non-TEA
      * imperative surface and records nothing by design (see {@see PickerEvent}).

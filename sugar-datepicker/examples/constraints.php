@@ -29,13 +29,18 @@ $still = $may->goToPreviousMonth();
 echo "One more step back stays put: "
     . \sprintf('%04d-%02d', $still->viewYear(), $still->viewMonth()) . "\n\n";
 
-// Selection outside the window is refused; the picker comes back unchanged.
-$beforeBound = $may
-    ->handleKey(DatePicker::KEY_HOME)          // HOME lands on the month-first day-cell (May 1); min/max are not consulted
-    ->handleKey(DatePicker::KEY_LEFT);         // clamps into the empty lead-in
-$refused = $beforeBound->handleKey(DatePicker::KEY_ENTER);
-echo "Enter on the empty lead-in cell (fallback = May 1, before the bound): "
-    . ($refused->isSelecting() ? 'SELECTED?!' : 'refused') . "\n";
+// Home/End clamp to selectable days: with min 2026-05-10, Home in May lands on
+// May 10 itself — never a dimmed out-of-bounds day (the pre-clamp trap).
+$atFirstSelectable = $may->handleKey(DatePicker::KEY_HOME);
+echo "Home clamps to the first selectable day: "
+    . ($atFirstSelectable->dateAtCursor()?->format('Y-m-d') ?? 'none') . "\n";
+
+// The arrows still rest on dimmed cells by design; selection there is refused
+// and the picker comes back unchanged.
+$onDimmed = $atFirstSelectable->handleKey(DatePicker::KEY_LEFT);  // May 9, before the bound
+$refused = $onDimmed->handleKey(DatePicker::KEY_ENTER);
+echo "Enter on the dimmed out-of-bounds cell: "
+    . ($refused->selectedDate() === null ? 'refused' : 'SELECTED?!') . "\n";
 
 // The acceptance leg must land exactly on the bound. MoveToDate positions the
 // cursor on a chosen day — a short walk would not: the seed cursor was already

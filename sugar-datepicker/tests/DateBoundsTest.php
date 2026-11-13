@@ -67,19 +67,19 @@ final class DateBoundsTest extends TestCase
             ->GoToPreviousMonth();  // April → March 2026
         $this->assertSame(3, $dp->ViewMonth());
 
-        // Home lands on the first VALID day of the viewed month (Mar 1).
-        // Mar 1 is BEFORE the bound → selection refusal, receiver unchanged.
+        // dp-11: Home now CLAMPS to the first selectable day — Mar 10, never
+        // the dimmed Mar 1 (grid index 9; Mar 2026 starts Sunday, firstDow=0).
         $dp = $dp->handleKey('home');
-        $refused = $dp->handleKey('enter');
+        $this->assertSame(9, $dp->CursorIndex());
+        $this->assertSame('2026-03-10', $dp->dateAtCursor()?->format('Y-m-d'));
+
+        // The arrows deliberately may rest on dimmed cells: one left parks on
+        // Mar 9, before the bound → selection refusal, receiver unchanged.
+        $refused = $dp->handleKey('left')->handleKey('enter');
         $this->assertFalse($refused->IsSelecting());
         $this->assertNull($refused->SelectedDate());
 
-        // Mar 10 sits at grid index 9 (Mar 2026 starts Sunday, firstDow=0).
-        for ($i = 0; $i < 9; $i++) {
-            $dp = $dp->MoveCursorRight();
-        }
-        $this->assertSame('2026-03-10', $dp->dateAtCursor()?->format('Y-m-d'));
-
+        // And acceptance still lands exactly on the bound (Home parked us there).
         $ok = $dp->handleKey('enter');
         $this->assertTrue($ok->IsSelecting());
         $this->assertSame('2026-03-10', $ok->SelectedDate()?->format('Y-m-d'));
@@ -192,20 +192,17 @@ final class DateBoundsTest extends TestCase
             ->withMinDate(new \DateTimeImmutable('2026-05-10'))
             ->withMaxDate(new \DateTimeImmutable('2026-05-20'))
             ->withRangeMode(true)
-            ->handleKey('home'); // May 1 — a real day, but BEFORE the bound
+            ->handleKey('home'); // dp-11: clamps to May 10 — the bound itself
+
+        // Parked ON the bound, Enter would arm the range. The refusal leg
+        // reaches an out-of-bound day the way arrows allow it: one left onto
+        // the dimmed May 9 (grid index 13, May 2026 starts Friday firstDow=5).
+        $dp = $dp->handleKey('left');
+        $this->assertSame('2026-05-09', $dp->dateAtCursor()?->format('Y-m-d'));
 
         $dp = $dp->handleKey('enter');
         $this->assertNull($dp->rangeStart(),
             'Out-of-bound day cannot anchor a range even in range mode');
-
-        // May 2026 starts Friday (firstDow=5): home lands on May 1 (index 5),
-        // May 9 is grid index 13 — 8 rights past it.
-        for ($i = 0; $i < 8; $i++) {
-            $dp = $dp->MoveCursorRight();
-        }
-        $this->assertSame('2026-05-09', $dp->dateAtCursor()?->format('Y-m-d'));
-        $this->assertNull($dp->handleKey('enter')->rangeStart(),
-            'Out-of-bound date cannot anchor a range');
 
         $dp = $dp->MoveCursorRight();
         $this->assertSame('2026-05-10', $dp->dateAtCursor()?->format('Y-m-d'));
