@@ -233,6 +233,8 @@ final class CmdMediaLangCatalogueTest extends TestCase
         'cmd.status.description',
         'cmd.sweep.description',
         'cmd.sweep.hint',
+        'cmd.tasks.description',
+        'cmd.tasks.hint',
         'cmd.theme.description',
         'cmd.theme.label',
         'cmd.undo.description',

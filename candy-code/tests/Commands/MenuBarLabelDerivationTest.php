@@ -89,6 +89,7 @@ final class MenuBarLabelDerivationTest extends TestCase
         'pr' => 'Push the current',
         'bg' => 'Run a task',
         'shells' => 'List, read output',
+        'tasks' => 'List background',
         'schedules' => 'List, add, enable',
         'loop' => 'Re-run a prompt',
         'fork' => 'Clone',
