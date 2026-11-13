@@ -162,14 +162,20 @@ final class Palette
         // APC/PM/SOS strings: \x1b[_^X]...(\x07|\x1b\\)
         // Fe escapes: the C0 escape-code pairs — DECSC `ESC 7`, DECRC `ESC 8`,
         // RIS `ESC c`, NEL `ESC E`, keypad `ESC >` / `ESC =`, LS2 `ESC n`,
-        // plus the historic cursor/mode letters below.
+        // plus the historic cursor/mode letters below. CP-32 closes the
+        // named residue classes: `ESC Z` (DECID) joins the Fe set, `ESC %…`
+        // (charset designation) and `ESC #…` (line drawing) consume their
+        // trailing byte, and the reserved `ESC |`/`}`/`~` pairs go with an
+        // immediately following ST.
         // Charset selectors: \x1b(B, \x1b(U, etc.
         return \preg_replace(
             '/(?:\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)|'
             . '\x1b\[[0-?]*[ -\/]*[@-~]|'
             . '\x1b[PX^_][^\x07\x1b]*(?:\x07|\x1b\\\\)|'
             . '\x1bO[@-~]|'
-            . '\x1b[OopeHMJKhCBDsunE78>=c]|'
+            . '\x1b[OopeHMJKhCBDsunE78>=cZ]|'
+            . '\x1b[%#][ -~]?|'
+            . '\x1b[|}~](?:\x1b\\\\)?|'
             . '\x1b[()*+][ -~])/',
             '',
             $s,

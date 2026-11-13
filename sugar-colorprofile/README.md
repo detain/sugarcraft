@@ -262,10 +262,23 @@ SGR (30-37, 40-47, 90-97, 100-107 and the 38/48/58 specs) while
 The `NoTTY` palette (what the step-0 stream gate forces when the stream is not
 a TTY — hardware absence, not an opt-out variable) instead runs every write
 through `Palette::stripAnsi()`: SGR, full ECMA-48 CSI, OSC, DCS/APC/PM/SOS
-strings, SS3, the enumerated Fe pairs and charset selectors all disappear —
-color and decoration together. Two accepted gaps in the strip regex family:
-exotic final bytes outside the enumerated classes (`ESC Z`, `ESC %…`, `ESC #8`,
-`ESC |`/`}`/`~`) pass through as literal text. To keep bold/underline while
+strings, SS3, the enumerated Fe pairs (since CP-32 including `ESC Z`, `ESC %…`,
+`ESC #…` and the reserved `ESC |`/`}`/`~` pairs), and charset selectors all
+disappear — color and decoration together. **Consumer-facing caveat:
+assistive-tech exposure.** The full-strip rung is what a genuine pipe hands
+downstream, and a raw escape initiator that reaches a screen reader or braille
+display is an accessibility hazard, not an aesthetics one. `stripAnsi()` consumes
+well-formed sequences; a truncated introducer at end of input has no operand to
+match and stays. Consumers that pipe results onward to assistive tech may run a
+residual scrub over untrusted byte streams:
+
+```php
+// CP-32 residual scrub: swallow any remaining introducer, then drop orphans.
+$out = preg_replace('/\x1b[@-~][\x20-\x2f]*[0-7]?[\x20-\x7e]|\x1b/", '', $in);
+$out = str_replace("\x1b", '', $out);
+```
+
+To keep bold/underline while
 dropping color regardless of environment, pin the same floor the suppressions
 already answer: `(new Palette())->withProfile(ColorProfile::Ascii)`.
 

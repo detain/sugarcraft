@@ -114,6 +114,23 @@ final class CoverageBoostTest extends TestCase
         $this->assertStringContainsString('bar', $out);
     }
 
+    /**
+     * CP-32 (finding -034): the named residue classes are consumed instead of
+     * leaking as literal ESC + trailing letters — the full-strip rung is what
+     * genuine pipes deliver, and raw initiators reaching assistive tech are a
+     * hazard, not a polish issue. A truncated bare ESC stays (no operand to
+     * consume; the README documents the consumer scrub for malformed input).
+     */
+    public function testStaticStripAnsiConsumesTheCp32ResidueClasses(): void
+    {
+        $in  = "a\x1bZb\x1b%Gc\x1b#8d\x1b|e\x1b}f\x1b~g";
+        $this->assertSame('abcdefg', Palette::stripAnsi($in));
+        // The pair-class arms take an immediately following ST with them:
+        $this->assertSame('x', Palette::stripAnsi("x\x1b|\x1b\\"));
+        // Truncation edge: an ESC with no operand survives, documented.
+        $this->assertSame("keep\x1b", Palette::stripAnsi("keep\x1b"));
+    }
+
     // --- Color ----------------------------------------------------------
 
     public function testColorEquals(): void
