@@ -594,6 +594,66 @@ final class ProgramTerminalRecoveryTest extends TestCase
         }
     }
 
+    /**
+     * A SIGTERM that lands while the FIRST frame is being rendered (before
+     * loop->run()) used to be lost: stop() ahead of run() is a no-op, so the
+     * program hung in the loop. The guard returns without entering it.
+     */
+    public function testSignalDuringTheInitialFrameStopsWithoutEnteringTheLoop(): void
+    {
+        if (!function_exists('pcntl_signal') || !function_exists('pcntl_async_signals')
+            || !function_exists('posix_kill') || !defined('SIGTERM')
+        ) {
+            $this->markTestSkipped('self-signalling requires pcntl and posix');
+        }
+
+        $prevAsync = pcntl_async_signals(false);
+        pcntl_signal(SIGTERM, SIG_DFL);
+
+        try {
+            [$in, $out, $writer] = $this->pipes();
+            $loop = new StreamSelectLoop();
+            $model = new class implements Model {
+                use SubscriptionCapable;
+
+                public function init(): ?\Closure
+                {
+                    return null;
+                }
+
+                public function update(Msg $msg): array
+                {
+                    return [$this, null];
+                }
+
+                public function view(): string
+                {
+                    posix_kill(getmypid(), SIGTERM);
+                    pcntl_signal_dispatch();
+                    return 'x';
+                }
+            };
+            $program = new Program($model, $this->options($in, $out, $loop, catchInterrupts: true));
+            $watchdogFired = false;
+            $loop->addTimer(2.0, static function () use ($loop, &$watchdogFired): void {
+                $watchdogFired = true;
+                $loop->stop();
+            });
+
+            $program->run();
+
+            $this->assertFalse($watchdogFired, 'run() returned on the signal, not on the 2 s watchdog');
+            $this->assertSame(SIGTERM, $program->stopSignal());
+
+            fclose($writer);
+            fclose($in);
+            fclose($out);
+        } finally {
+            pcntl_signal(SIGTERM, SIG_DFL);
+            pcntl_async_signals($prevAsync);
+        }
+    }
+
     /** v2:MINOR-6: every stop the program asked for itself keeps stopSignal() null. */
     public function testCooperativeExitsLeaveStopSignalNull(): void
     {

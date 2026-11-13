@@ -586,7 +586,14 @@ final class Program
             // clock refreshes libuv does per iteration, and every timer armed in
             // one of those gaps fires early by the gap. See the timer-accuracy
             // notes on this method.
-            $this->loop->run();
+            //
+            // A stop requested DURING the initial frame above (a signal arm
+            // fired while the first view() ran) is already recorded in
+            // $running; loop->stop() before loop->run() is lost, so without
+            // this guard the run would block until something else stopped it.
+            if ($this->running) {
+                $this->loop->run();
+            }
 
             $normalReturn = true;
             return $this->model;
