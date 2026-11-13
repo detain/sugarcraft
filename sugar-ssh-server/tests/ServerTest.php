@@ -223,49 +223,103 @@ final class ServerTest extends TestCase
         $this->assertSame($ctx, $captured);
     }
 
-    public function testWithKeepaliveAppendsKeepaliveMiddleware(): void
+    /**
+     * ssrv-11 (audit 079): `withKeepalive()` no longer appends to the
+     * stack — it stores the interval on the server, and `serve()` hands
+     * it to a transport that implements the KeepaliveArming seam. The
+     * registration census runs through a recording transport: armed
+     * server → one arm with the armed interval; unarmed receiver → zero.
+     */
+    public function testWithKeepaliveArmsTheTransportSeamAtServeOnlyOnTheClone(): void
     {
-        $server = Server::new()->withKeepalive();
+        $arms = [];
+        $transport = new class ($arms) implements \SugarCraft\SshServer\Transport, \SugarCraft\SshServer\Transport\KeepaliveArming {
+            /** @param list<int> $arms */
+            public function __construct(private array &$arms) {}
 
+            public function run(Context $ctx, Session $session, array $stack): int
+            {
+                return 0;
+            }
+
+            public function armKeepalive(int $intervalSeconds): void
+            {
+                $this->arms[] = $intervalSeconds;
+            }
+        };
+
+        $base = Server::new()->withTransport($transport);
+        $armed = $base->withKeepalive(30);
+
+        // The stack never sees it: withKeepalive stores a value, not a middleware.
         $stack = (function (): array {
             return $this->stack;
-        })->call($server);
+        })->call($armed);
+        $this->assertCount(0, $stack, 'withKeepalive() must not append to the middleware stack');
 
-        $this->assertCount(1, $stack);
-        $this->assertInstanceOf(Keepalive::class, $stack[0]);
+        // The receiver stays un-armed, exactly like every other with*.
+        $base->serve($this->fakeSession());
+        $this->assertSame([], $arms, 'an un-armed server must not register a beat');
+
+        $armed->serve($this->fakeSession());
+        $this->assertSame([30], $arms, 'the armed clone registers its interval once per serve()');
+
+        $armed->serve($this->fakeSession());
+        $this->assertSame([30, 30], $arms, 'each armed serve() entry re-arms the transport it runs on');
     }
 
     public function testWithKeepaliveDefaultIntervalIs60(): void
     {
-        $server = Server::new()->withKeepalive();
+        $arms = [];
+        $transport = new class ($arms) implements \SugarCraft\SshServer\Transport, \SugarCraft\SshServer\Transport\KeepaliveArming {
+            /** @param list<int> $arms */
+            public function __construct(private array &$arms) {}
 
-        $stack = (function (): array {
-            return $this->stack;
-        })->call($server);
+            public function run(Context $ctx, Session $session, array $stack): int
+            {
+                return 0;
+            }
 
-        $this->assertSame(60, $stack[0]->interval());
+            public function armKeepalive(int $intervalSeconds): void
+            {
+                $this->arms[] = $intervalSeconds;
+            }
+        };
+
+        Server::new()->withTransport($transport)->withKeepalive()->serve($this->fakeSession());
+
+        $this->assertSame([60], $arms);
     }
 
-    public function testWithKeepaliveCustomInterval(): void
+    public function testAKeepaliveArmedServerOnAPlainTransportRunsSilently(): void
     {
-        $server = Server::new()->withKeepalive(30);
+        // HostSshdTransport does not implement KeepaliveArming; the arm
+        // is the documented silent no-op, and serve() must not notice.
+        $transport = new class implements \SugarCraft\SshServer\Transport {
+            public function run(Context $ctx, Session $session, array $stack): int
+            {
+                return 7;
+            }
+        };
 
-        $stack = (function (): array {
-            return $this->stack;
-        })->call($server);
+        $status = Server::new()->withTransport($transport)->withKeepalive(15)->serve($this->fakeSession());
 
-        $this->assertSame(30, $stack[0]->interval());
+        $this->assertSame(7, $status, 'a transport without the seam ignores the arm instead of erroring');
     }
 
     /**
-     * `use()` is the documented mutating call on this class (audit MINOR 7),
-     * and the consequence is what the docblock teaches: an alias and its
-     * receiver share one stack. Pinned rather than merely described, because
-     * every README example chains off one receiver and a silent switch to
-     * clone-on-append would leave those examples working while breaking the
-     * assumption behind them.
+     * ssrv-11 (audit 008, gate G1): `use()` is clone-and-return — the
+     * whole builder surface shares one polarity. Branching a base
+     * server is now safe: each branch carries only its own appends,
+     * the receiver never adopts a branch's middleware, and sibling
+     * branches cannot leak into each other. This rewrite is the
+     * disclosed behaviour change of the G1 arm: it inverts the pin
+     * that used to defend the shared-stack mutation, and a call site
+     * that discards use()'s return value now registers nothing — the
+     * chained examples all take the returned server, so they are
+     * unaffected.
      */
-    public function testAppendingThroughAnAliasReachesTheOriginalStack(): void
+    public function testAppendingThroughABranchLeavesTheReceiverAndSiblingsAlone(): void
     {
         $log = [];
         $marker = static function () use (&$log): Middleware {
@@ -281,18 +335,70 @@ final class ServerTest extends TestCase
             };
         };
 
-        $original = Server::new()->use($marker());
-        $alias = $original->use($marker());
+        $base = Server::new()->withTransport(new class implements \SugarCraft\SshServer\Transport {
+            public function run(Context $ctx, Session $session, array $stack): int
+            {
+                foreach ($stack as $mw) {
+                    $mw->handle($ctx, $session, static function (): void {});
+                }
 
-        $this->assertSame(
-            $original,
-            $alias,
-            'use() returns the receiver: that mutation is the documented contract',
-        );
+                return 0;
+            }
+        });
+        $branchA = $base->use($marker());
+        $branchB = $base->use($marker());
 
-        $original->serve($this->fakeSession());
+        $this->assertNotSame($base, $branchA, 'use() returns a new server, not the receiver');
 
-        $this->assertCount(2, $log, 'both middlewares run for a server reached through the original receiver');
+        $base->serve($this->fakeSession());
+        $this->assertSame([], $log, 'the receiver never adopted a branch append');
+
+        $branchA->serve($this->fakeSession());
+        $this->assertCount(1, $log, 'a branch carries its own append');
+
+        $branchB->serve($this->fakeSession());
+        $this->assertCount(2, $log, 'sibling branches stay isolated: each carries exactly one');
+    }
+
+    /**
+     * ssrv-11: withMiddleware(...$ms) is the varargs sibling of use(),
+     * same clone-and-return polarity, appends in call order.
+     */
+    public function testWithMiddlewareAppendsEveryArgumentInOrderOnTheClone(): void
+    {
+        $log = [];
+        $marker = static function (string $tag) use (&$log): Middleware {
+            return new class($log, $tag) implements Middleware {
+                /** @param list<string> $log */
+                public function __construct(private array &$log, private string $tag) {}
+
+                public function handle(Context $ctx, Session $session, callable $next): void
+                {
+                    $this->log[] = $this->tag;
+                    $next($ctx, $session);
+                }
+            };
+        };
+
+        $base = Server::new()->withTransport(new class implements \SugarCraft\SshServer\Transport {
+            public function run(Context $ctx, Session $session, array $stack): int
+            {
+                foreach ($stack as $mw) {
+                    $mw->handle($ctx, $session, static function (): void {});
+                }
+
+                return 0;
+            }
+        })->use($marker('pre'));
+        $wide = $base->withMiddleware($marker('x'), $marker('y'));
+        $this->assertNotSame($base, $wide);
+
+        $base->serve($this->fakeSession());
+        $this->assertSame(['pre'], $log, 'the receiver carries only its own stack');
+
+        $log = [];
+        $wide->serve($this->fakeSession());
+        $this->assertSame(['pre', 'x', 'y'], $log, 'varargs append in order after existing entries');
     }
 
     /**

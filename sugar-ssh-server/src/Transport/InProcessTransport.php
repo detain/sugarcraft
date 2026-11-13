@@ -35,7 +35,7 @@ use SugarCraft\SshServer\TransportAware;
  * {@see DefaultChannelHandler} — which calls back into
  * {@see runChild()} with the cmd produced from the Session.
  */
-final class InProcessTransport implements Transport, ChildSpawner
+final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArming
 {
     use DispatchesMiddlewareStack;
 
@@ -65,9 +65,10 @@ final class InProcessTransport implements Transport, ChildSpawner
 
     /**
      * Optional callback invoked in the pump loop whenever
-     * `stream_select` times out (no I/O ready). Middleware such as
-     * Keepalive use this hook to send periodic heartbeat bytes
-     * through the PTY master without busy-polling.
+     * `stream_select` times out (no I/O ready). The keepalive beat
+     * armed through {@see armKeepalive()} rides this hook to send
+     * periodic heartbeat bytes through the PTY master without
+     * busy-polling.
      *
      * Normalised to a plain Closure by setKeepaliveCallback(), the
      * only writer.
@@ -82,9 +83,9 @@ final class InProcessTransport implements Transport, ChildSpawner
     /**
     /**
      * The active master for the current session. Stored here so the
-     * keepalive callback (registered by middleware via
-     * {@see setKeepaliveCallback} at stack-walk time) can write
-     * heartbeat bytes when it fires inside the pump loop.
+     * keepalive callback (armed via {@see armKeepalive()} at serve
+     * time by {@see \SugarCraft\SshServer\Server::withKeepalive()})
+     * can write heartbeat bytes when it fires inside the pump loop.
      */
     private ?MasterPty $master = null;
 
@@ -121,10 +122,53 @@ final class InProcessTransport implements Transport, ChildSpawner
     }
 
     /**
+     * {@inheritdoc}
+     *
+     * The beat: every `$intervalSeconds` of pump-loop idle a `\0` byte
+     * travels through the PTY master into the child's input side. The
+     * byte reaches the remote wire only where the tty echoes input —
+     * line-oriented shells echo it back, while raw-mode TUIs suppress
+     * echo and those sessions stay silent. It is NOT an SSH_MSG_IGNORE
+     * packet; where the echo path exists, the periodic traffic keeps
+     * NAT gateways and firewalls from timing out idle connections
+     * (audit sugar-ssh-server-079 moved this wiring out of the
+     * middleware that used to smuggle it in via `setTransport()`).
+     */
+    public function armKeepalive(int $intervalSeconds): void
+    {
+        if ($intervalSeconds < 1) {
+            throw new \InvalidArgumentException(Lang::t('keepalive.invalid_interval'));
+        }
+
+        // Defer the actual keepalive byte to the pump loop timeout
+        // path. Each time the loop times out (no I/O ready) the
+        // transport invokes our callback; we track elapsed time and
+        // only write a null byte when the interval has elapsed.
+        $lastSent = \microtime(true);
+        $this->setKeepaliveCallback(function () use ($intervalSeconds, &$lastSent): void {
+            $now = \microtime(true);
+            if ($now - $lastSent >= $intervalSeconds) {
+                // Writing a null byte through the PTY master is safe
+                // for shells and most line-oriented programs — it is
+                // ignored at the application layer, and wherever the
+                // tty echoes it back the periodic traffic keeps NAT
+                // warm. Raw-mode TUIs never echo: silent by design.
+                $this->pty()->write("\0");
+                $lastSent = $now;
+            }
+        });
+    }
+
+    /**
      * Register a callback to be invoked in the pump loop whenever
      * `stream_select` reports no ready streams (idle timeout).
-     * Keepalive middleware uses this to send periodic heartbeat
-     * bytes through the PTY master.
+     *
+     * Low-level seat beneath {@see armKeepalive()} — its single
+     * legitimate caller in this library is that method. Embedders
+     * wanting the shipped keepalive story go through
+     * {@see \SugarCraft\SshServer\Server::withKeepalive()}, not this
+     * setter; anything else registered here rides the pump loop with
+     * no further guarantees.
      *
      * The callback receives no arguments; it is responsible for
      * writing keepalive bytes to the PTY when appropriate.
@@ -162,7 +206,11 @@ final class InProcessTransport implements Transport, ChildSpawner
     /**
      * Returns the active master PTY for the current session. Valid
      * only while a session is actively being pumped — callers must
-     * not store the reference across pump-loop boundaries.
+     * not store the reference across pump-loop boundaries. Its single
+     * legitimate caller in this library is the armed keepalive beat
+     * ({@see armKeepalive()}); the accessor stays public so custom
+     * pump callbacks registered via {@see setKeepaliveCallback()} can
+     * reach the master too.
      *
      * @throws \RuntimeException if called outside of pump loop
      */

@@ -6,23 +6,20 @@ namespace SugarCraft\SshServer\Tests\Middleware;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\SshServer\Context;
+use SugarCraft\SshServer\Middleware;
 use SugarCraft\SshServer\Middleware\Keepalive;
-use SugarCraft\SshServer\Server;
 use SugarCraft\SshServer\Session;
-use SugarCraft\SshServer\Transport\ChildSpawner;
-use SugarCraft\SshServer\Transport\InProcessTransport;
+use SugarCraft\SshServer\Transport\KeepaliveArming;
 
+/**
+ * ssrv-11 (audit 079) rewrote Keepalive from a middleware with a
+ * transport side effect into a pure value holder armed through
+ * `Server::withKeepalive()`. The request-path tests retired with the
+ * shape; the registration story now lives in ServerTest (arm census
+ * through a recording transport) and in the transport-level arms below.
+ */
 final class KeepaliveTest extends TestCase
 {
-    private function session(): Session
-    {
-        return new Session(
-            user: 'alice', clientHost: '127.0.0.1', clientPort: 1, serverHost: '127.0.0.1',
-            serverPort: 22, term: 'xterm', cols: 80, rows: 24, tty: null,
-            command: null, lang: 'C.UTF-8',
-        );
-    }
-
     public function testConstructedWithDefaultInterval(): void
     {
         $mw = new Keepalive();
@@ -47,86 +44,107 @@ final class KeepaliveTest extends TestCase
         new Keepalive(-1);
     }
 
-    public function testCanBeAddedToServer(): void
+    /**
+     * Structural pin of the shape change: a value holder, not a
+     * middleware. `->use(new Keepalive(30))` fails loudly (TypeError at
+     * the parameter type) instead of silently registering nothing.
+     */
+    public function testKeepaliveIsAPureValueHolderNotMiddleware(): void
     {
-        $mw = new Keepalive(30);
-        $server = Server::new()->use($mw);
-        $this->assertNotNull($server);
+        $this->assertFalse(
+            (new Keepalive(30)) instanceof Middleware,
+            'keepalive behaviour never rode the request path; it must not dress as middleware',
+        );
+        $methods = \array_map(
+            static fn (\ReflectionMethod $m): string => $m->getName(),
+            (new \ReflectionClass(Keepalive::class))->getMethods(\ReflectionMethod::IS_PUBLIC),
+        );
+        $this->assertSame(['__construct', 'interval'], $methods, 'no handle()/setTransport() smuggle may return');
     }
 
-    public function testSetTransportWithInProcessTransportRegistersCallback(): void
+    public function testHostSshdTransportDoesNotImplementTheArmingSeam(): void
     {
-        $mw = new Keepalive(1);
-        $transport = new InProcessTransport();
-
-        // Capture the registered callback.
-        $registeredCallback = null;
-        $transportReflection = new \ReflectionClass($transport);
-        $prop = $transportReflection->getProperty('keepaliveCallback');
-        $prop->setAccessible(true);
-
-        $mw->setTransport($transport);
-
-        // After setTransport, a callback should be registered.
-        $this->assertNotNull($prop->getValue($transport));
+        // HostSshdTransport has no pump idle path; the Server door
+        // degrades to its documented silent no-op, which the seam
+        // census here pins from the other side.
+        $this->assertFalse(
+            (new \SugarCraft\SshServer\Transport\HostSshdTransport()) instanceof KeepaliveArming,
+        );
     }
 
-    public function testSetTransportWithNonInProcessTransportDoesNotThrow(): void
+    public function testArmKeepaliveRegistersThePumpCallback(): void
     {
-        $mw = new Keepalive(30);
-        $fakeTransport = new class implements ChildSpawner {
-            public function runChild(Session $s, array $cmd, ?array $env = null): int
-            {
-                return 0;
-            }
+        $transport = new \SugarCraft\SshServer\Transport\InProcessTransport();
+        $this->assertTrue($transport instanceof KeepaliveArming);
 
-            public function signalChild(int $signal): void {}
-        };
+        $transport->armKeepalive(1);
 
-        // Should not throw — HostSshdTransport or fake transports
-        // are gracefully ignored.
-        $mw->setTransport($fakeTransport);
-        $this->assertSame(30, $mw->interval());
+        $prop = (new \ReflectionClass($transport))->getProperty('keepaliveCallback');
+        $this->assertNotNull($prop->getValue($transport), 'arming must replace the idle callback');
     }
 
-    public function testMiddlewarePassesNextThrough(): void
+    public function testArmedCallbackWritesThroughThePtyWhenFired(): void
     {
-        $nextCalled = false;
-        $mw = new Keepalive(60);
-        $mw->handle(Context::background(), $this->session(), function () use (&$nextCalled): void {
-            $nextCalled = true;
-        });
-        $this->assertTrue($nextCalled, 'Keepalive must call $next');
-    }
+        // The beat writes through pty(); outside a live pump loop that
+        // accessor must throw (its own guard), which is what invoking
+        // the captured callback here proves — the closure really points
+        // at the master write, not at a no-op.
+        $transport = new \SugarCraft\SshServer\Transport\InProcessTransport();
+        $transport->armKeepalive(1);
 
-    public function testPtyThrowsOutsidePumpLoop(): void
-    {
-        $transport = new InProcessTransport();
+        $prop = (new \ReflectionClass($transport))->getProperty('keepaliveCallback');
+        $callback = $prop->getValue($transport);
+        $this->assertIsCallable($callback);
+
+        // Fired before the interval has elapsed the guard holds: no
+        // write, so pty() is never touched and nothing throws.
+        $callback();
+
+        // Past the interval the write path runs — and outside a live
+        // pump loop pty() refuses, which is the proof the closure
+        // points at the master.
+        \usleep(1_050_000);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('pty() called outside of active pump loop');
-        $transport->pty();
+        $this->expectExceptionMessage('pty() called outside');
+        $callback();
+    }
+
+    public function testArmKeepaliveRejectsSubSecondIntervals(): void
+    {
+        $transport = new \SugarCraft\SshServer\Transport\InProcessTransport();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $transport->armKeepalive(0);
     }
 
     public function testInProcessTransportInjectsItselfIntoSetTransportAwareMiddleware(): void
     {
-        // Verify that InProcessTransport's run() walks the stack and
-        // calls setTransport on middleware implementing TransportAware.
+        // The TransportAware seam stays for the middlewares whose
+        // behaviour really is request-path (Spawn, BubbleTea): this
+        // pins the REAL transport's run() injection walk, now that
+        // Keepalive was the odd one out and left.
         $observed = null;
-        $probe = new class($observed) implements \SugarCraft\SshServer\Middleware, \SugarCraft\SshServer\TransportAware {
+        $probe = new class ($observed) implements Middleware, \SugarCraft\SshServer\TransportAware {
             public function __construct(private mixed &$captured) {}
-            public function setTransport(ChildSpawner $t): void
+
+            public function setTransport(\SugarCraft\SshServer\Transport\ChildSpawner $t): void
             {
                 $this->captured = $t;
             }
+
             public function handle(Context $ctx, Session $s, callable $next): void
             {
                 // Don't invoke $next.
             }
         };
 
-        $transport = new InProcessTransport();
-        $transport->run(Context::background(), $this->session(), [$probe]);
+        $transport = new \SugarCraft\SshServer\Transport\InProcessTransport();
+        $transport->run(Context::background(), new Session(
+            user: 'alice', clientHost: '127.0.0.1', clientPort: 1, serverHost: '127.0.0.1',
+            serverPort: 22, term: 'xterm', cols: 80, rows: 24, tty: null,
+            command: null, lang: 'C.UTF-8',
+        ), [$probe]);
 
-        $this->assertSame($transport, $observed, 'InProcessTransport must inject itself via setTransport');
+        $this->assertSame($transport, $observed, 'the stack-walk seam must keep injecting the transport');
     }
 }

@@ -464,7 +464,7 @@ final class DocSurfaceTruthTest extends TestCase
         $readme = (string) \preg_replace('/\s+/', ' ', $readme);
         $flat = (string) \preg_replace('/\s+/', ' ', (string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware/Keepalive.php'));
 
-        self::assertStringContainsString('Installed by `Server::withKeepalive($seconds)`', $readme);
+        self::assertStringContainsString('installed by `Server::withKeepalive($seconds)`', $readme);
         self::assertStringContainsString("child's stdin", $readme);
         self::assertStringContainsString('is *not* an SSH-level keepalive', $readme);
         self::assertStringNotContainsString('reaches the wire only where the tty echoes', $readme);

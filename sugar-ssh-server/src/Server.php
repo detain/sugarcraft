@@ -7,6 +7,7 @@ namespace SugarCraft\SshServer;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\SshServer\Middleware\Keepalive;
 use SugarCraft\SshServer\Transport\InProcessTransport;
+use SugarCraft\SshServer\Transport\KeepaliveArming;
 
 /**
  * SSH session entry point.
@@ -37,8 +38,11 @@ use SugarCraft\SshServer\Transport\InProcessTransport;
  *   3. `->withLocale($code)` arms a message language for the run
  *      (optional; nothing selects a locale implicitly, and the peer
  *      never does).
- *   4. `->use($middleware)` appends middleware in registration order.
- *   5. `->serve()` builds a {@see Session} from the SSH env vars
+ *   4. `->withKeepalive($seconds)` arms an idle keepalive beat
+ *      (optional; a value on the server, handed to the transport's
+ *      arming seam at `serve()` entry — not a stack middleware).
+ *   5. `->use($middleware)` appends middleware in registration order.
+ *   6. `->serve()` builds a {@see Session} from the SSH env vars
  *      (or accepts an injected Session for tests), then asks the
  *      transport to run the stack.
  *
@@ -99,6 +103,9 @@ final class Server
     /** Locale armed by {@see withLocale()}; null means "never touch the global". */
     private ?string $locale = null;
 
+    /** Keepalive value armed by {@see withKeepalive()}; applied at `serve()` entry. */
+    private ?Keepalive $keepalive = null;
+
     public function __construct()
     {
         $this->transport = new InProcessTransport();
@@ -110,22 +117,41 @@ final class Server
     }
 
     /**
-     * Append a middleware to the stack, in place.
+     * Append a middleware to the stack.
      *
-     * This is the one mutating call on the class, and it is deliberate:
-     * the upstream Go library this is a port of builds its option list by
-     * mutation, and every README example chains `->use(...)` off a single
-     * receiver. It does NOT clone, so the receiver and every alias of it
-     * share one stack - `$b = $a->use(X)` gives `$a` an X too. Build one
-     * server per process and add to it once, at boot; if you need two
-     * different stacks, construct two servers rather than branching off a
-     * shared one. {@see withTransport()} and {@see withKeepalive()} are the
-     * immutable half of the API (audit MINOR 7).
+     * Immutable (audit sugar-ssh-server-008, gate G1): the clone
+     * carries the appended stack, the receiver stays exactly as it
+     * was — one polarity (`use()`, {@see withMiddleware()}, the
+     * `with*` builders) for every door on this class. Chaining reads
+     * the same as before (`Server::new()->use($a)->use($b)->serve()`),
+     * and branching is now safe: `$b = $a->use(X)` arms `$b` alone, so
+     * a shared base server can be branched per route. The one call
+     * shape that changes: `$server->use($m);` on its own (return
+     * value discarded) now registers nothing — take the returned
+     * server, as every example and doc here does.
+     *
+     * `use()` keeps the upstream Go library's option-list name;
+     * {@see withMiddleware()} is the varargs sibling of the same door.
      */
     public function use(Middleware $m): self
     {
-        $this->stack[] = $m;
-        return $this;
+        $new = clone $this;
+        $new->stack[] = $m;
+        return $new;
+    }
+
+    /**
+     * Append several middlewares at once, in order, clone-and-return
+     * — the varargs spelling of {@see use()}, mirroring the Go
+     * option-list form.
+     */
+    public function withMiddleware(Middleware ...$ms): self
+    {
+        $new = clone $this;
+        foreach ($ms as $m) {
+            $new->stack[] = $m;
+        }
+        return $new;
     }
 
     /**
@@ -133,8 +159,8 @@ final class Server
      * {@see InProcessTransport} when not called.
      *
      * Immutable: returns a new Server, leaving this one untouched
-     * (house with*-law; `use()` keeps upstream Go-wish mutation
-     * semantics deliberately).
+     * (house with*-law — since audit sugar-ssh-server-008 the whole
+     * builder surface shares this polarity, `use()` included).
      */
     public function withTransport(Transport $t): self
     {
@@ -180,23 +206,36 @@ final class Server
     }
 
     /**
-     * Add keepalive middleware to the stack.
+     * Arm an idle keepalive beat for sessions this server serves.
      *
-     * Under {@see \SugarCraft\SshServer\Transport\InProcessTransport} the
-     * middleware writes a `\0` byte through the PTY master whenever the
-     * pump loop idles past the interval — the byte travels the wire
-     * only where the tty echoes it (raw-mode TUIs suppress echo, so
-     * those sessions stay silent). It is NOT an SSH_MSG_IGNORE packet:
-     * the ForceCommand process never touches the SSH binary protocol.
-     * Under HostSshdTransport it is a deliberate no-op — configure
-     * sshd's ClientAliveInterval/ServerAliveInterval instead.
+     * Immutable and stack-free (audit sugar-ssh-server-079): the
+     * interval is stored on the server as a {@see Keepalive} value,
+     * not appended to the middleware stack. At `serve()` entry the
+     * beat is handed to the transport through its
+     * {@see \SugarCraft\SshServer\Transport\KeepaliveArming} seam —
+     * the door that registers lives where the transport does.
+     *
+     * Under {@see \SugarCraft\SshServer\Transport\InProcessTransport}
+     * the transport writes a `\0` byte through the PTY master whenever
+     * the pump loop idles past the interval — the byte travels the
+     * wire only where the tty echoes it (raw-mode TUIs suppress echo,
+     * so those sessions stay silent). It is NOT an SSH_MSG_IGNORE
+     * packet: the ForceCommand process never touches the SSH binary
+     * protocol. Under HostSshdTransport — which does not implement the
+     * seam — the arm is a silent no-op: configure sshd's
+     * ClientAliveInterval/ServerAliveInterval instead.
+     *
+     * Pin: calling this on a server leaves the receiver untouched;
+     * only the returned clone is armed. Branch a shared base with
+     * `$s2 = $s->withKeepalive(30)` and `$s` still serves without a
+     * beat.
      *
      * @param int $intervalSeconds Seconds of pump idle between keepalive bytes (default 60)
      */
     public function withKeepalive(int $intervalSeconds = 60): self
     {
         $new = clone $this;
-        $new->stack[] = new Keepalive($intervalSeconds);
+        $new->keepalive = new Keepalive($intervalSeconds);
         return $new;
     }
 
@@ -243,6 +282,9 @@ final class Server
     {
         if ($this->locale !== null) {
             T::setLocale($this->locale);
+        }
+        if ($this->keepalive !== null && $this->transport instanceof KeepaliveArming) {
+            $this->transport->armKeepalive($this->keepalive->interval());
         }
         $session ??= Session::fromEnvironment();
         return $this->transport->run($ctx ?? Context::background(), $session, $this->stack);

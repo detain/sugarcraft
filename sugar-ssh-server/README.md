@@ -348,11 +348,30 @@ ssh wishuser@your-host
 | `KeyboardInteractive`| both            | Prompts on STDOUT, answers read from STDIN. *Shaped* like RFC 4256, but it is not: no SSH messages exist here. `echo` is a label, not terminal state -- input stays visible (the exchange says so when any prompt asks for silence), each answer is capped at `MAX_RESPONSE_BYTES`, and there is no deadline but the stream you inject. |
 | `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialise on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; `penalize()` exists so a failed credential can drain a bucket faster than connection attempts alone, but **no gate calls it directly** -- wrap the gate in `AuthRateLimitBridge` (or wire it into your own auth path). See `docs/admin/sugar-ssh-server.md`. |
 | `AuthRateLimitBridge`| both            | Composition wrapper: takes any synchronous auth `Middleware` plus the `RateLimit` instance, and charges the session's buckets `penalty` tokens (default 3.0) whenever the wrapped gate refuses (never invokes `$next`). Admits pass through untouched — same `Context`, same `Session`, one call. An async (promise-returning) gate is refused at `handle()` time with a `LogicException`: its verdict does not exist yet, and charging on non-continuation would penalise in-flight auth. |
-| `Keepalive`          | InProcess only  | Installed by `Server::withKeepalive($seconds)`. When the pump has idled past the interval it writes a `\0` byte to the **child's stdin** through the PTY master. It is *not* an SSH-level keepalive — no wire messages exist here — a raw-mode TUI never echoes it, so nothing reaches the client, and under HostSshd it is a no-op: rely on sshd `ClientAliveInterval`. |
 | `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a sugar-pty controlled by the supervisor.                          |
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
 | `Subsystem`          | both            | Terminal — parses `subsystem <name>` from `Session::command`, dispatches to a registered `SubsystemHandler`. Non-subsystem requests pass through to `$next`. |
 | `AsyncMiddleware`    | both            | Abstract base for middleware that needs async I/O (LDAP, OAuth, database auth) — return a `PromiseInterface` from `handleAsync()`. The transport waits for the promise to settle before continuing the chain. |
+
+### Server doors (not middleware)
+
+A few behaviours are configured on the `Server` rather than appended to the
+stack — they act on the transport, not the request path, so dressing them as
+middleware would hide when they actually run.
+
+- **Keepalive** — installed by `Server::withKeepalive($seconds)`. When the
+  pump has idled past the interval it writes a `\0` byte to the **child's
+  stdin** through the PTY master. It is *not* an SSH-level keepalive — no wire
+  messages exist here — a raw-mode TUI never echoes it, so nothing reaches the
+  client, and under HostSshd it is a no-op: rely on sshd `ClientAliveInterval`.
+  The `Keepalive` value object is stored on the server and handed to the
+  transport's `KeepaliveArming` seam at `serve()` entry; it is no longer a
+  `Middleware`, so `->use(new Keepalive(30))` now raises a `TypeError` (pass
+  the interval through the door instead).
+- **Locale** — installed by `Server::withLocale($code)`; see
+  [Language](#language-nothing-selects-it-for-you).
+- **Transport** — installed by `Server::withTransport($t)`; see
+  [Architecture](#architecture).
 
 All middleware receives a {@see Context} as the first argument, along with
 the {@see Session} and a `$next` continuation. Implement `SugarCraft\SshServer\Middleware`:
@@ -389,7 +408,6 @@ when left alone.
 | `KeyboardInteractive` | `new KeyboardInteractive($challenges, $validate, $name, $instruction, $stdout, $stdin, $stderr)` | **No `$validate` means any answer passes.** Answers capped at `KeyboardInteractive::MAX_RESPONSE_BYTES` (4096); `echo` is a label, not terminal state, and says so when a prompt asks for silence. No deadline but the stream you inject. |
 | `RateLimit` | `new RateLimit($statePath, $burst = 5, $ratePerSec = 0.5, $stderr, $failClosed = false, $userBurst = null, $userRatePerSec = null)` | **`$failClosed = false`**: a lock or decode problem lets the connection through with a notice. State serialises on a `<state>.lock` sidecar; idle refilled buckets are pruned; `$userBurst` adds a per-username bucket. |
 | `AuthRateLimitBridge` | `new AuthRateLimitBridge($gate, $rateLimit, $penalty = 3.0)` | Refusals by `$gate` charge `$rateLimit` `$penalty` extra tokens (detection: the gate did not continue the chain). Synchronous gates only — an async gate draws a `LogicException` at `handle()`; `$penalty <= 0` at construction. |
-| `Keepalive` | `new Keepalive($intervalSeconds = 60)` | Idle `\0` into the child's stdin, not an SSH keepalive; no-op under `HostSshdTransport`. Installed for you by `Server::withKeepalive($seconds)`. |
 | `Spawn` | `new Spawn($factory)` where `fn (Session): array{cmd: list<string>, env?: array}` returns the child command | Terminal. The factory's `cmd` is argv -- no shell is involved, and nothing here vetoes it. |
 | `BubbleTea` | `new BubbleTea($factory)` where `fn (Session): object` builds the `Program` | The returned object must expose a `run()` method — anything else raises `RuntimeException` with the Lang key `bubbletea.bad_factory` when the middleware handles the session. Mounts a `Program` on the supervisor's own stdio, which is only sound under `HostSshdTransport`. Under the default `InProcessTransport` it throws `bubbletea.requires_host_sshd` -- there is no override flag; the alternatives are `Spawn` plus a wrapper script (`examples/run-program.php`) or the legacy transport. |
 | `Subsystem` | `new Subsystem()` then `->register($name, $handler)` | Terminal for registered names. An **unregistered** name falls through on purpose, so `subsystem sftp` reaches `Spawn` and lands in a shell unless you register the name (or a rejecting handler). |
