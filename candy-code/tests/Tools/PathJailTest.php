@@ -180,6 +180,24 @@ final class PathJailTest extends TestCase
         $this->assertNull(PathJail::resolveForCreate($this->jail, 'dangling/x.txt'));
     }
 
+    /** confine() (the AskDiffPreview gate) must refuse a dangling link-to-outside leaf. */
+    public function testConfineRefusesDanglingLinkToOutside(): void
+    {
+        symlink($this->outside . '/never-created', $this->jail . '/dangling');
+
+        $this->assertNull(PathJail::confine($this->jail, 'dangling'));
+        $this->assertNull(PathJail::confine($this->jail, $this->jail . '/dangling'));
+    }
+
+    public function testConfineStillAcceptsPlainNewFileAndLiveInJailLink(): void
+    {
+        file_put_contents($this->jail . '/real.txt', 'x');
+        symlink($this->jail . '/real.txt', $this->jail . '/alive');
+
+        $this->assertNotNull(PathJail::confine($this->jail, 'brand-new.txt'));
+        $this->assertSame(realpath($this->jail . '/real.txt'), PathJail::confine($this->jail, 'alive'));
+    }
+
     /** The same hazard when the broken link is the leaf being written to. */
     public function testResolveForCreateRejectsDanglingSymlinkAsTheTarget(): void
     {

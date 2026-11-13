@@ -277,6 +277,17 @@ final class PathJail
         $inside = static fn (string $candidate): bool =>
             $candidate === $rootReal || str_starts_with($candidate, $rootReal . '/');
 
+        // A DANGLING leaf link is invisible to realpath(), so resolve() below
+        // would vouch for `<root>/link` merely because its parent is in the
+        // jail — while a write through it lands wherever the link points once
+        // the target appears. Refuse it first, as resolveForCreate()'s walk
+        // does (fail-closed even for a link whose raw target is in-jail).
+        $full = str_starts_with($path, '/') ? $path : $rootReal . '/' . ltrim($path, '/');
+        $leaf = self::normalizeLexically($full);
+        if (is_link($leaf) && realpath($leaf) === false) {
+            return null;
+        }
+
         $existing = self::resolve($root, $path);
         if ($existing !== null && $inside($existing)) {
             return $existing;
