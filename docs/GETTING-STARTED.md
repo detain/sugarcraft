@@ -84,7 +84,7 @@ README](../sugar-core/README.md) walk each one.
 ## Route C — taste one library
 
 Charts are the smallest full dependency: add sugar-charts to any project and
-one class gives you a braille-cell sparkline on stdout.
+one class gives you a block-element sparkline on stdout.
 
 ```bash
 composer require sugarcraft/sugar-charts
@@ -97,7 +97,7 @@ require __DIR__ . '/vendor/autoload.php';
 use SugarCraft\Charts\Sparkline\Sparkline;
 
 echo Sparkline::new([1, 3, 2, 8, 5, 4, 7, 6], 8)->view();
-// ▂▁█▅▃▇▆
+//  ▂▁█▅▃▇▆
 ```
 
 ## I want to … → which package?
