@@ -91,6 +91,14 @@ final class Split implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Calculate the natural dimensions of this split.
      *
+     * The result honors the split direction: horizontal panes sit
+     * side-by-side so their widths SUM (plus the divider columns between
+     * them, which the renderer pays for out of the same box), while their
+     * heights take the max. Vertical is the mirror. Taking the max of both
+     * axes here (the historical shape) under-reported a horizontal Split
+     * to its Layout parent by (N-1) panes' widths, and the parent clipped
+     * everything past the widest pane (finding sugar-dashboard-024).
+     *
      * @return array{0:int,1:int} [width, height]
      */
     public function innerSize(): array
@@ -105,22 +113,41 @@ final class Split implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Propagate size to panes
         $paneSizes = $this->computePaneSizes($useWidth, $useHeight);
 
-        $maxWidth = 0;
-        $maxHeight = 0;
-
+        $natural = [];
         foreach ($this->panes as $index => $pane) {
             [$pW, $pH] = $paneSizes[$index] ?? [$useWidth, $useHeight];
             $pane = $pane->setSize($pW, $pH);
             // A plain Sizer without an intrinsic-size contract keeps the
             // exact box it was just allocated (third-party-safe, E-audit #2).
-            [$pW2, $pH2] = $pane instanceof \SugarCraft\Dashboard\Foundation\SizedItem
+            $natural[] = $pane instanceof \SugarCraft\Dashboard\Foundation\SizedItem
                 ? $pane->innerSize()
                 : [$pW, $pH];
-            $maxWidth = max($maxWidth, $pW2);
-            $maxHeight = max($maxHeight, $pH2);
         }
 
-        return [$maxWidth, $maxHeight];
+        // computePaneSizes subtracts the divider gutter from the pane
+        // allocation, so the natural box must add it back or the rendered
+        // frame never fits into what we promised our parent.
+        $spacing = $this->showDividers
+            ? (count($this->panes) - 1) * $this->dividerSize
+            : 0;
+
+        $width = 0;
+        $height = 0;
+        if ($this->direction === SplitDirection::Horizontal) {
+            $width = $spacing;
+            foreach ($natural as [$w, $h]) {
+                $width += $w;
+                $height = max($height, $h);
+            }
+        } else {
+            $height = $spacing;
+            foreach ($natural as [$w, $h]) {
+                $width = max($width, $w);
+                $height += $h;
+            }
+        }
+
+        return [$width, $height];
     }
 
     /**

@@ -116,4 +116,105 @@ final class SplitTest extends TestCase
         $this->assertStringContainsString('│', $rendered);
         $this->assertStringNotContainsString("\x1b[", $rendered);
     }
+
+    /**
+     * An intrinsic-size double: reports its own natural box no matter
+     * what allocation setSize hands it (what real content widgets do).
+     */
+    private static function naturalPane(int $w, int $h, string $fill): \SugarCraft\Dashboard\Foundation\SizedItem
+    {
+        return new class ($w, $h, $fill) implements \SugarCraft\Dashboard\Foundation\SizedItem {
+            public function __construct(
+                private readonly int $nw,
+                private readonly int $nh,
+                private readonly string $fill,
+            ) {}
+
+            public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
+            {
+                return $this;
+            }
+
+            public function innerSize(): array
+            {
+                return [$this->nw, $this->nh];
+            }
+
+            public function render(): string
+            {
+                return implode("\n", array_fill(0, $this->nh, str_repeat($this->fill, $this->nw)));
+            }
+        };
+    }
+
+    public function testHorizontalInnerSizeSumsWidthsPlusDivider(): void
+    {
+        $split = Split::horizontal([
+            self::naturalPane(40, 5, 'A'),
+            self::naturalPane(40, 3, 'B'),
+        ]);
+
+        $this->assertSame([81, 5], $split->innerSize());
+    }
+
+    public function testVerticalInnerSizeSumsHeightsPlusDivider(): void
+    {
+        $split = Split::vertical([
+            self::naturalPane(60, 3, 'A'),
+            self::naturalPane(40, 7, 'B'),
+        ]);
+
+        $this->assertSame([60, 11], $split->innerSize());
+    }
+
+    public function testHiddenDividersLeaveTheGutterOutOfTheBox(): void
+    {
+        $split = Split::horizontal([
+            self::naturalPane(40, 5, 'A'),
+            self::naturalPane(40, 5, 'B'),
+        ])->withShowDividers(false);
+
+        $this->assertSame([80, 5], $split->innerSize());
+    }
+
+    public function testRenderedFrameFitsTheBoxItReports(): void
+    {
+        // The contract a Layout parent relies on: allocate a Split its own
+        // reported innerSize and nothing spills past the promised box.
+        // Over-allocation legitimately stretches panes (that is what a
+        // container does); UNDER-allocation is exactly the clipping bug.
+        foreach ([$this->horizontalFitSplit(), $this->verticalFitSplit()] as [$split, $label]) {
+            [$w, $h] = $split->innerSize();
+            $split = $split->setSize($w, $h);
+            $lines = explode("\n", $split->render());
+            $this->assertLessThanOrEqual($h, count($lines), "$label: more rendered rows than promised");
+            foreach ($lines as $line) {
+                $this->assertLessThanOrEqual(
+                    $w,
+                    \SugarCraft\Core\Util\Width::string($line),
+                    "$label: line wider than promised box"
+                );
+            }
+        }
+    }
+
+    private function horizontalFitSplit(): array
+    {
+        $split = Split::horizontal([
+            self::naturalPane(20, 4, 'A'),
+            self::naturalPane(30, 6, 'B'),
+        ]);
+
+        return [$split, 'horizontal'];
+    }
+
+    private function verticalFitSplit(): array
+    {
+        $split = Split::vertical([
+            self::naturalPane(20, 4, 'A'),
+            self::naturalPane(30, 6, 'B'),
+        ]);
+
+        return [$split, 'vertical'];
+    }
 }
