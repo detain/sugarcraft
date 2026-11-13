@@ -242,7 +242,10 @@ final class Config
         $pendingList = null;
         /** Indent (in spaces) at which the active list key was opened. */
         $listKeyIndent = 0;
-        foreach (explode("\n", $raw) as $rawLine) {
+        // -026: the reader counts physical lines so every diagnostic can
+        // point at a real number instead of pasting the offending content
+        // into a slot the message calls "line".
+        foreach (explode("\n", $raw) as $lineNo => $rawLine) {
             // Normalize tab indentation to spaces so tab-indented
             // continuation keys parse instead of aborting.
             $line = self::stripComment(str_replace("\t", '    ', $rawLine));
@@ -304,10 +307,12 @@ final class Config
                     // A `Key: value` indented under a list field (options:,
                     // identityFiles:) is a block mapping; this flat reader
                     // would otherwise drop it silently and leave the list
-                    // empty. Refuse naming the field and the offending line.
+                    // empty. Refuse naming the field, the line number, and
+                    // the sanitized content (-011/-026).
                     throw new \RuntimeException(Lang::t('config.yaml_block_mapping', [
                         'field' => $pendingList,
-                        'line'  => trim($rawLine),
+                        'line'  => (string) ($lineNo + 1),
+                        'found' => self::diagnostic($rawLine),
                     ]));
                 }
                 if ($m[2] === '') {
@@ -319,13 +324,43 @@ final class Config
                 }
                 continue;
             }
-            // Genuinely unparseable line — this is a config error.
-            throw new \RuntimeException(Lang::t('config.yaml_unparseable', ['line' => $rawLine]));
+            // Genuinely unparseable line — this is a config error. The
+            // message carries the physical line number and the sanitized
+            // content (-011/-026), never raw bytes into a number slot.
+            throw new \RuntimeException(Lang::t('config.yaml_unparseable', [
+                'line'  => (string) ($lineNo + 1),
+                'found' => self::diagnostic($rawLine),
+            ]));
         }
         if ($current !== null) {
             $rows[] = $current;
         }
         return $rows;
+    }
+
+    /**
+     * Make one physical config line safe to embed in a single-line
+     * exception message (-026). The fuzz corpus produced payloads with
+     * NUL, C1, and invalid UTF-8; the CLI happens to fence its stderr
+     * today, but Config::parse() is the advertised programmatic API and
+     * must sanitize at the throw site so every caller inherits the
+     * guarantee.
+     *
+     * Sanitize::untrusted() drops escape sequences, C0 (except TAB),
+     * DEL and C1, but it deliberately preserves CR — fine for a frame,
+     * wrong for a one-line message, so CR becomes a space here rather
+     * than being deleted (deletion splices the surrounding text into a
+     * fake word; the config line never contains a real LF because the
+     * reader already split on it). Finally invalid UTF-8 byte sequences
+     * are stripped so a consumer validating the message as UTF-8 is
+     * never handed a broken string (sugar-core requires ext-mbstring).
+     */
+    private static function diagnostic(string $rawLine): string
+    {
+        $safe = Sanitize::untrusted(trim($rawLine));
+        $safe = str_replace("\r", ' ', $safe);
+
+        return mb_convert_encoding($safe, 'UTF-8', 'UTF-8');
     }
 
     /**

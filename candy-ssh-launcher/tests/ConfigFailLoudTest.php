@@ -181,6 +181,70 @@ final class ConfigFailLoudTest extends TestCase
         } catch (\RuntimeException $e) {
             self::assertStringContainsString('options', $e->getMessage());
             self::assertStringContainsString('Command: "echo hi"', $e->getMessage());
+            // -011: the number slot carries the physical line number now,
+            // not a copy of the content — a neutered slot-swap goes red here.
+            self::assertStringContainsString('line 4: ', $e->getMessage());
+        }
+    }
+
+    public function testUnparseableYamlReportsLineNumberAndContentSeparately(): void
+    {
+        // -011: `{line}` is the number, `{found}` the offending content —
+        // de/ja/it locales read "alla riga 7: <content>", never a word in
+        // the number slot. The expected message is built from the en file
+        // so a wording edit re-gates this pin deliberately.
+        /** @var array<string,string> $en */
+        $en = require \dirname(__DIR__) . '/lang/en.php';
+        $raw = implode("\n", [
+            '- name: prod',
+            '!!!garbage!!!',
+        ]) . "\n";
+
+        try {
+            Config::parse($raw, 'wishlist.yml');
+            self::fail('expected the garbage line to be refused');
+        } catch (\RuntimeException $e) {
+            $expected = str_replace(['{line}', '{found}'], ['2', '!!!garbage!!!'], $en['config.yaml_unparseable']);
+            self::assertSame($expected, $e->getMessage());
+        }
+    }
+
+    public function testHostileYamlBytesNeverReachTheExceptionMessage(): void
+    {
+        // -026: the fuzz corpus produced messages with NUL, C1, and
+        // invalid UTF-8. Config::parse() is the advertised programmatic
+        // API — it must hand every caller a printable string, no matter
+        // what bin/cli does downstream.
+        $path = $this->writeTemp("- name: prod\n\x00\x01\x1b[31mbe-\xC2\x80st\xFF\xFE\r\n");
+        $hostile = "\x00\x01\x1b[31mbe-\xC2\x80st\xFF\xFE\r";
+
+        try {
+            Config::load($path);
+            self::fail('expected the hostile line to be refused');
+        } catch (\RuntimeException $e) {
+            self::assertStringNotContainsString("\x00", $e->getMessage());
+            self::assertStringNotContainsString("\x1b", $e->getMessage());
+            self::assertStringNotContainsString($hostile, $e->getMessage());
+            // /u makes this fail-closed: a broken UTF-8 message cannot match.
+            self::assertSame(1, preg_match('/^[\x09\P{C}]*$/u', $e->getMessage()), 'message: ' . addcslashes($e->getMessage(), "\x00-\x1f\x7f-\x9f"));
+            self::assertStringContainsString('be-', $e->getMessage());
+        }
+    }
+
+    public function testMidLineCarriageReturnIsNeutralisedInDiagnostics(): void
+    {
+        // -026: CR is a cursor motion, not a character — a mid-line CR in
+        // the echoed content could overwrite the earlier part of the same
+        // log line. It is mapped to a space, never spliced away.
+        $path = $this->writeTemp("- name: prod\nbad\rfoo bar\r\n");
+
+        try {
+            Config::load($path);
+            self::fail('expected the mid-line CR to be refused');
+        } catch (\RuntimeException $e) {
+            self::assertStringNotContainsString("\r", $e->getMessage());
+            self::assertStringContainsString('foo bar', $e->getMessage());
+            self::assertSame(1, preg_match('/^[\x09\P{C}]*$/u', $e->getMessage()));
         }
     }
 
