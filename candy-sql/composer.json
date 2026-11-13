@@ -49,7 +49,7 @@
         "ext-sqlite3": "*"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.0",
+        "phpunit/phpunit": "^10.5",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-phpunit": "^2.0",
         "sugarcraft/sugar-testing": "dev-master"
@@ -68,6 +68,7 @@
     "prefer-stable": true,
     "suggest": {
         "ext-pdo_mysql": "Required to connect to MySQL servers (--driver=mysql).",
-        "ext-pdo_pgsql": "Required to connect to PostgreSQL servers (--driver=pgsql)."
+        "ext-pdo_pgsql": "Required to connect to PostgreSQL servers (--driver=pgsql).",
+        "ext-pcntl": "Arms the SIGALRM-based query timeout (StatementTimeout). Without it the timeout degrades to the driver's network timeout instead of the configured deadline — common on Windows and slim Docker php-cli images."
     }
 }

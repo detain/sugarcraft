@@ -72,6 +72,12 @@ installed in the runtime first (`pdo_mysql` for `--driver=mysql` / `mysql://` DS
 `--driver=pgsql` / `pgsql://` DSNs); when it is missing, the connect fails with PDO's `could not find driver` before
 any of the app's own gates run.
 
+**Timeouts.** `ext-pcntl` arms the SIGALRM-based query timeout (`StatementTimeout`); without it the timeout degrades
+to the driver's network timeout instead of the configured deadline (Windows and slim Docker php-cli images are the
+usual pcntl-less hosts). **Async transport.** `react/mysql` is pinned to an untagged `0.7.x-dev` by documented
+law (see `ReactMysqlConnection`; revisit rule there) — the launcher boots with a `class_exists` guard so a
+branch-HEAD break answers as one named refusal at launch instead of failing mid-pane.
+
 `App::start($db, Flavor $flavor = Flavor::Sqlite, ?HistoryRecorder $historyRecorder = null, ?string $sslMode = null)` accepts an
 optional `$flavor` override, an optional history recorder (the launcher builds one itself — see Status-Snapshot History), and an optional
 `$sslMode` override: unset, the MySQL ssl-mode is derived from a real `MysqlDatabase` handle to feed the TLS gate (see MySQL SSL
@@ -106,6 +112,20 @@ environment variable via `pass-env`, read at dial time; a `pass` field in
 the file is a hard refusal that says so. Without `pass-env`, the global
 `CANDY_SQL_PASS` fallback behaves exactly as with individual flags.
 `--connect` cannot be combined with explicit connection arguments.
+
+## Terminals and non-tty use
+
+The launcher is an interactive terminal program. With stdout not a
+terminal — a pipe, a redirect, CI capture — it dials the connection, then
+refuses with exit 2 and one honest line instead of streaming alt-screen
+and colour bytes forever. `--help`, `--version` and the input-refusal
+messages are plain text and unaffected. To drive candy-sql from a script,
+run it under a pty (`script -qec 'candy-sql app.sqlite' /dev/null`), or
+render headless from library code — `ResultTable::renderPlain()` and the
+embeddable renderer exist for exactly that. Colour inside a real terminal
+follows sugar-core's detection authority (`NO_COLOR`, `TERM=dumb`,
+`COLORTERM`), so styling collapses gracefully on limited terminals rather
+than spraying unreadable bytes.
 
 ## Keys
 

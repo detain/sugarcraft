@@ -272,4 +272,76 @@ final class BinWiringTest extends TestCase
             $this->cleanIsolatedHome($home);
         }
     }
+
+    // ── SQL-O17 / SQL-O18: non-tty contract + packaging trio ─────────────────
+
+    public function testPipedLaunchWithADialableDsnRefusesZeroBytesOnStdout(): void
+    {
+        // once-021's probe: `--dsn=sqlite://:memory: </dev/null | cat` used
+        // to stream alt-screen forever. Now: exit 2, empty stdout (not just
+        // escape-free — the TUI never opens), and the line names both
+        // escape hatches (pty and renderPlain).
+        [$exit, $stdout, $stderr] = $this->runBin(['--dsn=sqlite://:memory:']);
+        $this->assertSame(2, $exit);
+        $this->assertSame('', $stdout, 'a piped launch must not emit a single byte from the TUI');
+        $this->assertStringContainsString('interactive terminal', $stderr);
+        $this->assertStringContainsString("renderPlain()", $stderr);
+    }
+
+    public function testInputRefusalsStillAnswerBeforeTheTerminalGate(): void
+    {
+        // Ordering contract (hermetic): the ghost-name refusal happens inside
+        // buildDatabase, ahead of the gate, so a piped run still gets ITS
+        // sentence — if the gate moved first, this flips.
+        [$home, $env] = $this->isolatedHome(
+            '{"connections": {"dev": {"driver": "mysql", "host": "h", "db": "d"}}}'
+        );
+        try {
+            [$exit, , $stderr] = $this->runBin(['--connect=ghost'], $env);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString("Unknown connection 'ghost'", $stderr);
+            $this->assertStringNotContainsString('interactive terminal', $stderr);
+        } finally {
+            $this->cleanIsolatedHome($home);
+        }
+    }
+
+    public function testMysqlBootGuardGrammarIsWiredInTheLauncher(): void
+    {
+        // SQL-O18 (once-042): the react/mysql float needs a loud answer at
+        // launch. The fired leg cannot be exercised hermetically (the class
+        // is installed here), so the wiring is byte-pinned and the guard is
+        // proven by mutation.
+        $src = self::binSource();
+        $this->assertStringContainsString("class_exists('React\\Mysql\\MysqlClient')", $src);
+        $this->assertStringContainsString('$database instanceof MysqlDatabase &&', $src);
+    }
+
+    public function testManifestCarriesThePackagingTrio(): void
+    {
+        // once-041 (house phpunit floor), once-023 (pcntl consequence made
+        // declarable), and the deliberate untagged float staying on record.
+        $manifest = \json_decode(
+            (string) \file_get_contents(\dirname(self::BIN_PATH) . '/../composer.json'),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        $this->assertIsArray($manifest);
+
+        $this->assertSame('^10.5', $manifest['require-dev']['phpunit/phpunit']);
+        $this->assertArrayHasKey('ext-pcntl', $manifest['suggest']);
+        $this->assertStringContainsString('StatementTimeout', $manifest['suggest']['ext-pcntl']);
+        $this->assertSame('0.7.x-dev', $manifest['require']['react/mysql']);
+    }
+
+    public function testReadmeDocumentsTheTerminalAndTimeoutContracts(): void
+    {
+        $readme = (string) \file_get_contents(\dirname(self::BIN_PATH) . '/../README.md');
+
+        $this->assertStringContainsString('## Terminals and non-tty use', $readme);
+        $this->assertStringContainsString('script -qec', $readme);
+        $this->assertStringContainsString('NO_COLOR', $readme);
+        $this->assertStringContainsString('ext-pcntl', $readme);
+        $this->assertStringContainsString('class_exists', $readme);
+    }
 }

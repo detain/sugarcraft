@@ -93,6 +93,28 @@ try {
         default => Flavor::Sqlite,
     };
 
+    // SQL-O17 (candy-sql-once-021): the TUI is a terminal program; piped
+    // here it streamed alt-screen and TrueColor bytes forever. The fleet
+    // contract is a named exit-2 refusal that says what to do instead —
+    // checked after the dial so every input-refusal leg above still answers
+    // with ITS own sentence first.
+    if (!stream_isatty(STDOUT)) {
+        fwrite(STDERR, "candy-sql: this launcher drives an interactive terminal and refuses to stream ANSI onto a pipe (exit 2) — run it under a pty (e.g. script -qec 'candy-sql app.sqlite' /dev/null), or render headless from library code (ResultTable::renderPlain()).\n");
+        exit(2);
+    }
+
+    // SQL-O18 (candy-sql-once-042): react/mysql is pinned to an untagged
+    // 0.7.x-dev float by documented law (PB-SQL-13 — the tagless supply
+    // choice lives in ReactMysqlConnection's docblock). A branch-HEAD break
+    // must answer loudly at launch, not mid-pane the first time the Admin
+    // dashboard reaches for the async transport.
+    if ($database instanceof MysqlDatabase && !class_exists('React\Mysql\MysqlClient')) {
+        throw new \RuntimeException(
+            'the react/mysql MysqlClient class is missing from vendor — reinstall dependencies'
+            . ' (candy-sql requires react/mysql 0.7.x-dev for the async admin transport)',
+        );
+    }
+
     $historyRecorder = null;
     if ($historyPath !== null) {
         // D-M11: the history store is an offline audit trail, not a boot
