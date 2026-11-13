@@ -77,6 +77,38 @@ final class ClockAudioPlayer extends AudioPlayer
 }
 
 /**
+ * A ClockAudioPlayer-shaped fixture for SV-L87/087: a real inert `sleep 30`
+ * child, a scripted clock, and a counter of REAL spawn attempts (buildCommand
+ * is consulted exactly once per spawn, and its null-command path never
+ * reaches it), so respawn budgets are pure arithmetic without any audio.
+ *
+ * @internal
+ */
+final class CoalesceAudioPlayer extends AudioPlayer
+{
+    /** Fake clock, in seconds — public so a test advances it between calls. */
+    public float $now = 1000.0;
+
+    /** Number of actual spawn attempts (one buildCommand call each). */
+    public int $builds = 0;
+
+    public function __construct()
+    {
+        parent::__construct('/tmp/video.mp4', null, fn (): float => $this->now);
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    protected function buildCommand(): ?array
+    {
+        $this->builds++;
+
+        return ['sleep', '30'];
+    }
+}
+
+/**
  * Unit tests for AudioPlayer subprocess wrapper.
  *
  * Tests spawn/terminate behavior using test doubles (FakeAudioPlayer, FakeProbe)
@@ -1035,5 +1067,126 @@ final class AudioPlayerTest extends TestCase
         $a->mute();
         $this->assertFalse($a->isPlaying(), 'mute kills the running child');
         $this->assertTrue($a->isMuted());
+    }
+
+    // -------------------------------------------------------------------------
+    // SV-L87/087 — restart-floor coalescing of rapid pause toggles
+    // -------------------------------------------------------------------------
+
+    protected function tearDown(): void
+    {
+        AudioPlayer::setRestartIntervalForTesting(null);
+        parent::tearDown();
+    }
+
+    /**
+     * @testdox L87: 100 Space toggles across one second cost at most one respawn per restart floor
+     */
+    public function testRapidSpaceTogglesCoalesceIntoRestartFlooredRespawns(): void
+    {
+        $player = new CoalesceAudioPlayer();
+        $player->start();
+        $this->assertSame(1, $player->builds, 'the first play spawns once');
+
+        for ($i = 0; $i < 100; $i++) {
+            $player->now += 0.01;
+            $player->pause();
+            $player->resume();
+        }
+
+        // The acceptance formula: at most ceil(t/interval) respawns across
+        // t = 1.0 s of scripted toggling (250 ms floor), on top of the first.
+        $this->assertLessThanOrEqual(1 + (int) ceil(1.0 / 0.25), $player->builds, 'rapid toggles must not run the respawn ladder per keystroke');
+        $this->assertGreaterThan(1, $player->builds, 'a sustained resume intent still respawns — coalescing must not swallow playback');
+
+        $player->stop();
+    }
+
+    /**
+     * @testdox L87: a resume inside the floor defers, and the next due heartbeat promotes it
+     */
+    public function testDeferredResumePromotesOnTheNextHeartbeat(): void
+    {
+        $player = new CoalesceAudioPlayer();
+        $player->start();
+
+        $player->now += 0.1;
+        $player->pause();
+        $player->now += 0.1;
+        $player->resume(); // 0.2 s from the last spawn: inside the floor
+        $this->assertSame(1, $player->builds, 'a resume inside the restart floor must not churn the ladder');
+        $this->assertFalse($player->isPlaying(), 'a heartbeat before the floor stays silent');
+        $this->assertSame(1, $player->builds, 'and promotes nothing either');
+
+        $player->now += 0.2; // now past the floor: due
+        $this->assertTrue($player->isPlaying(), 'the due heartbeat promotes the deferred resume');
+        $this->assertSame(2, $player->builds, 'promotion is exactly one spawn, not a replay storm');
+
+        $player->stop();
+    }
+
+    /**
+     * @testdox L87: pausing again cancels a deferred resume before it can promote
+     */
+    public function testPauseCancelsADeferredResumeBeforeItPromotes(): void
+    {
+        $player = new CoalesceAudioPlayer();
+        $player->start();
+
+        $player->now += 0.1;
+        $player->pause();
+        $player->now += 0.1;
+        $player->resume(); // deferred
+        $player->now += 0.05;
+        $player->pause();  // the viewer changed their mind — intent cancelled
+        $player->now += 1.0;
+
+        $this->assertFalse($player->isPlaying(), 'the viewer is paused; silence is the honest answer');
+        $this->assertSame(1, $player->builds, 'a cancelled deferred resume must never promote');
+
+        $player->stop();
+    }
+
+    /**
+     * @testdox L87: an unhurried resume still spawns on the spot
+     */
+    public function testUnhurriedResumeStillSpawnsOnTheSpot(): void
+    {
+        $player = new CoalesceAudioPlayer();
+        $player->start();
+        $player->pause();
+
+        $player->now += 60.0;
+        $player->resume();
+        $this->assertSame(2, $player->builds, 'the common case pays no coalescing latency');
+        $this->assertTrue($player->isPlaying(), 'and is immediately audible');
+
+        $player->stop();
+    }
+
+    /**
+     * @testdox L87: the heartbeat rides the video pump, and explicit start() cancels the intent before its guard
+     */
+    public function testTheCoalescingWiringIsCarriedByThePumpAndTheGuardOrder(): void
+    {
+        $audio = (string) file_get_contents(__DIR__ . '/../src/AudioPlayer.php');
+        $playerSrc = (string) file_get_contents(__DIR__ . '/../src/Player.php');
+
+        $this->assertSame(0.25, (new \ReflectionClass(AudioPlayer::class))->getConstant('MIN_RESTART_INTERVAL_SEC'), 'the documented floor is the armed floor');
+        $this->assertSame(1, substr_count($playerSrc, '$this->audioPlayer?->tick();'), 'the companion gets exactly one heartbeat site');
+        $this->assertLessThan(
+            (int) strpos($playerSrc, '$delta = min(max(0.0,'),
+            (int) strpos($playerSrc, '$this->audioPlayer?->tick();'),
+            'the heartbeat must run before the pacing delta is computed',
+        );
+
+        // Re-entrancy law: start() clears the deferred-resume intent BEFORE
+        // its m3 guard asks isPlaying() — otherwise a due heartbeat inside
+        // the guard would promote a second spawn behind the guard's back.
+        $clearAt = strpos($audio, '$this->resumePending = false;');
+        $guardAt = strpos($audio, 'if ($this->isPlaying()) {');
+        $this->assertIsInt($clearAt);
+        $this->assertIsInt($guardAt);
+        $this->assertLessThan($guardAt, $clearAt, 'explicit start() cancels the intent before the guard asks');
     }
 }

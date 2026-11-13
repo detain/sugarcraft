@@ -726,6 +726,13 @@ final class Player implements Model
             return [$this, null];
         }
 
+        // SV-L87/087: the video pump doubles as the audio companion's
+        // heartbeat — tick() promotes a resume deferred by the restart floor
+        // and records the alive-observations that bound position billing.
+        // Stopped and failed sessions returned above, so the heartbeat can
+        // never respawn audio behind a teardown or a terminal error row.
+        $this->audioPlayer?->tick();
+
         $now = $this->now();
         // SV-M20/045: [0, ceiling] by construction. The monotonic base makes a
         // negative skew impossible on the default clock; the clamp still binds

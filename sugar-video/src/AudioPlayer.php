@@ -113,6 +113,29 @@ class AudioPlayer
         . '|aws[-_]?token|google[-_]?access[-_]?token|sig(?:nature)?v[24]|sig'
         . '|se|sk|sp|sv|sr|st|skt|sas|spr)$/';
 
+    /**
+     * Floor between audio respawns (SV-L87/087). Every Space toggle used to
+     * run the full terminate-and-respawn ladder synchronously — hundreds of
+     * milliseconds of real work per keystroke. The design is forced, not
+     * careless: SIGSTOP/SIGCONT are unreliable under a PTY (that is why
+     * pause is a kill), and the honest mute check disproved a cheaper path —
+     * ffplay exposes no control channel to a stdin-less child and the mpv
+     * route spawns without an IPC socket, so mute-by-argument would itself
+     * respawn. A resume() landing inside this floor of the last spawn is
+     * therefore deferred to the next heartbeat that finds the floor elapsed:
+     * rapid toggles collapse into at most one respawn per interval, and the
+     * README carries the latency contract.
+     */
+    private const MIN_RESTART_INTERVAL_SEC = 0.25;
+
+    /** Testing seam for {@see MIN_RESTART_INTERVAL_SEC}; null restores the real floor. */
+    private static ?float $restartIntervalOverride = null;
+
+    public static function setRestartIntervalForTesting(?float $seconds): void
+    {
+        self::$restartIntervalOverride = $seconds;
+    }
+
     /** @var resource|null */
     private $processHandle = null;
 
@@ -129,6 +152,17 @@ class AudioPlayer
 
     /** Monotonic time the running subprocess started, or null when not playing. */
     private ?float $runningSince = null;
+
+    /**
+     * Monotonic instant of the last REAL spawn — survives pause(), whose
+     * kill clears runningSince, because the coalescing gate (SV-L87/087)
+     * needs the memory of when the ladder last ran, not whether audio is
+     * currently up.
+     */
+    private ?float $lastSpawnAt = null;
+
+    /** True while a resume() defers its respawn to the next due heartbeat (SV-L87/087). */
+    private bool $resumePending = false;
 
     /**
      * Highest monotonic instant at which the running subprocess was OBSERVED
@@ -226,6 +260,12 @@ class AudioPlayer
         // re-spawning on resume.
         $this->started = true;
 
+        // SV-L87/087: an explicit start() is itself the answer to a deferred
+        // resume — clear the intent BEFORE the re-entrancy guard below asks
+        // isPlaying(), whose heartbeat would otherwise promote (call start()
+        // again) and double-spawn behind the guard's back.
+        $this->resumePending = false;
+
         // m3: resume/retoggle paths call start() again on a still-live
         // companion — a second spawn would play over the first and orphan a
         // child until the next stop(). Already playing means already playing.
@@ -276,6 +316,10 @@ class AudioPlayer
         // sees the child running (SV-L89/089).
         $this->runningSince = ($this->clock ?? self::monotonic())();
         $this->lastAliveAt = $this->runningSince;
+        // SV-L87/087: this spawn IS the deferred resume's answer, when there
+        // was one — and the gate's memory starts here for the next toggle.
+        $this->lastSpawnAt = $this->runningSince;
+        $this->resumePending = false;
         // SV-L49/049: this child has not terminated yet — the status belongs
         // to the last one. Clearing here is what lets exitCode() answer
         // null-then-final-code across a resume, never a replayed stale.
@@ -297,6 +341,8 @@ class AudioPlayer
      */
     public function stop(): void
     {
+        $this->resumePending = false; // SV-L87/087: teardown outranks a deferred resume
+
         if (!is_resource($this->processHandle)) {
             return;
         }
@@ -335,6 +381,10 @@ class AudioPlayer
      */
     public function pause(): void
     {
+        // SV-L87/087: pausing again cancels an unspawned deferred resume —
+        // the viewer changed their mind inside the floor, nothing to silence.
+        $this->resumePending = false;
+
         if (!is_resource($this->processHandle)) {
             return;
         }
@@ -424,6 +474,16 @@ class AudioPlayer
             $this->exitCode = proc_close($this->processHandle); // SV-L49/049: capture, like pause()
             $this->processHandle = null;
         }
+        // SV-L87/087: a resume landing inside the restart floor of the last
+        // spawn does not churn the ladder now — the next heartbeat promotes
+        // it once the floor has elapsed (and a pause() cancels it outright).
+        // An unhurried resume still spawns on the spot, zero added latency.
+        if (!$this->restartDue()) {
+            $this->resumePending = true;
+
+            return;
+        }
+        $this->resumePending = false;
         $this->start(); // start() honours the advanced $seekMs via buildCommand()
     }
 
@@ -452,14 +512,6 @@ class AudioPlayer
     }
 
     /**
-     * True when the audio subprocess is still running.
-     *
-     * Returns false when:
-     * - The process has not been started (start() was never called).
-     * - The process exited immediately (no audio track).
-     * - The process was stopped via stop().
-     */
-    /**
      * M24: silence the companion — kills a live child and refuses future
      * start()/resume() until unmute(). The video clock is unaffected.
      */
@@ -482,8 +534,25 @@ class AudioPlayer
         return $this->muted;
     }
 
+    /**
+     * True when the audio subprocess is still running.
+     *
+     * Returns false when:
+     * - The process has not been started (start() was never called).
+     * - The process exited immediately (no audio track).
+     * - The process was stopped via stop().
+     * - A resume is deferred by the restart floor and not yet due (SV-L87/087).
+     */
     public function isPlaying(): bool
     {
+        // SV-L87/087: every poll is a heartbeat — a deferred resume whose
+        // floor has elapsed spawns before the answer is computed, so the
+        // deferral lasts at most until the next tick, never silently longer.
+        if ($this->resumePending && $this->restartDue()) {
+            $this->resumePending = false;
+            $this->start();
+        }
+
         if (!is_resource($this->processHandle)) {
             return false;
         }
@@ -520,6 +589,36 @@ class AudioPlayer
         $this->exitCode = (int) ($status['exitcode'] ?? -1);
 
         return false;
+    }
+
+    /**
+     * The Player's per-frame heartbeat for the companion (SV-L87/087): the
+     * poll below promotes a restart deferred by the floor and records the
+     * alive-observation that bounds position billing (SV-L89/089). Cheap and
+     * idempotent — it spawns nothing outside a due promotion.
+     */
+    public function tick(): void
+    {
+        $this->isPlaying();
+    }
+
+    /**
+     * Whether the restart floor (SV-L87/087) has elapsed since the last real
+     * spawn. Never-spawned is trivially due: there is no ladder to protect.
+     */
+    private function restartDue(): bool
+    {
+        if ($this->lastSpawnAt === null) {
+            return true;
+        }
+
+        return (($this->clock ?? self::monotonic())() - $this->lastSpawnAt) >= self::minRestartInterval();
+    }
+
+    /** The live floor value — the test seam may bend it, never remove it. */
+    private static function minRestartInterval(): float
+    {
+        return self::$restartIntervalOverride ?? self::MIN_RESTART_INTERVAL_SEC;
     }
 
     /**

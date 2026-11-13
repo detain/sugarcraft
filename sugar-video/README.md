@@ -513,7 +513,13 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
   pause terminates the subprocess and resume re-spawns `ffplay`/`mpv` from the
   banked playback position (`-ss`/`--start`). The trade-off is a short
   re-open latency on resume, and the audio clock is quantised to the last
-  pause boundary rather than frame-exact.
+  pause boundary rather than frame-exact. Rapid toggles are coalesced
+  (SV-L87/087): a resume landing within 250 ms of the previous spawn defers to
+  the next tick once the floor elapses, so keyboard-mashing costs at most one
+  respawn per interval (a legitimate resume waits at most that floor). Nothing
+  cheaper exists to use instead — the mute path was checked, not assumed:
+  ffplay exposes no control channel to a stdin-less child and mpv spawns
+  without an IPC socket, so mute-by-argument would itself respawn.
 
 - **Video decode via ffmpeg is refused on Windows.** The frame pump drains
   ffmpeg's stdout with `stream_select()`, which is documented-unsupported on
