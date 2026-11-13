@@ -191,6 +191,24 @@ final class LangLaunchLocaleTest extends TestCase
         self::assertStringNotContainsString('Skill s ', $render('cli.deferral.skill_other', 2));
     }
 
+    /**
+     * S-H09 (candy-code-host-013): the bundle refusal said a row "is refused
+     * shell forms"; no locale may carry that broken passive, and the unlock
+     * path ("trustedBundleCommands") survives every rewording.
+     */
+    public function testTheBundleRefusalKeepsItsGrammarAndItsWideningPath(): void
+    {
+        foreach (\glob(\dirname(__DIR__) . '/lang/*.php') ?: [] as $file) {
+            $text = (string) (require $file)['host.command_shell.bundle_refused'];
+            self::assertStringNotContainsString('is refused shell forms', $text, $file);
+            self::assertStringContainsString('trustedBundleCommands', $text, $file);
+        }
+        self::assertStringContainsString(
+            'A bundle command is not allowed shell forms unless',
+            Lang::inLocale('en', static fn (): string => Lang::t('host.command_shell.bundle_refused', ['command' => 'x', 'name' => 'y'])),
+        );
+    }
+
     /** Remove the launch's sandboxed home however deep the child wrote. */
     private function sweepChildHome(string $dir): void
     {
