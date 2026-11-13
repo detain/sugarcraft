@@ -212,17 +212,28 @@ final class McpMessage
      */
     public function withWireId(string|int|null $id): self
     {
-        return new self(
-            id: $id === null || $this->isNotification ? $this->id : (string) $id,
-            method: $this->method,
-            params: $this->params,
-            result: $this->result,
-            error: $this->error,
-            isNotification: $this->isNotification,
-            resultSet: $this->resultSet,
-            wireId: $id,
-            wireIdSet: true,
-        );
+        return $this->mutate([
+            'id' => $id === null || $this->isNotification ? $this->id : (string) $id,
+            'wireId' => $id,
+            'wireIdSet' => true,
+        ]);
+    }
+
+    /**
+     * The canonical immutable-copy seam: current members (the promoted
+     * readonly properties share the constructor's parameter names) with
+     * $changes overlaid. Each new member added to the constructor used to
+     * mean re-spelling every hand-listed copy — this fold makes that
+     * impossible to forget.
+     *
+     * @param array<string,mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        /** @var array<string,mixed> $members */
+        $members = get_object_vars($this);
+
+        return new self(...array_merge($members, $changes));
     }
 
     /**
