@@ -318,7 +318,11 @@ HISTORY
 
 KEYBOARD SHORTCUTS (TUI)
   Tab          Cycle focus through panes (Tables → Rows → Query → Admin)
-  ↑ / ↓        Navigate list rows (or j/k)
+  ↑ / ↓        Navigate list rows (or j/k) — in the Tables pane a move is
+               local only; it never fetches a preview
+  /            (Tables pane) open a live filter line over table names;
+               letters extend it, ↑/↓ move the cursor, Enter commits and
+               loads, Backspace edits, Esc abandons and clears
   Enter        Load selected table's rows
   Space        Load selected table's rows (alias for Enter)
   Ctrl+Enter   Execute the current query

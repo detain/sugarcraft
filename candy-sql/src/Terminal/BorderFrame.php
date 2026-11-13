@@ -67,7 +67,9 @@ final class BorderFrame
         $parts[] = $titleStyle->render('candy-sql');
 
         // Table count.
-        $parts[] = 'Tables: ' . count($a->browse->tables);
+        // SQL-O10: while filtering, the badge is honest — visible/total.
+        $visible = $a->browse->filterText === '' ? null : count($a->browse->visibleTables());
+        $parts[] = 'Tables: ' . ($visible === null ? (string) count($a->browse->tables) : $visible . '/' . count($a->browse->tables));
 
         // Connection info (dsn) — only if non-empty. Sanitized: the title bar
         // is terminal output and every other server-derived string on it is

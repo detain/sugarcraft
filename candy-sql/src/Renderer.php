@@ -206,6 +206,16 @@ final class Renderer
             return self::frame($a, Pane::Tables, ' tables ', $body, $width);
         }
 
+        // SQL-O10: the open `/` line is echoed in the pane title; a filter
+        // that excludes everything says so instead of rendering an empty box.
+        $title = $a->browse->filterMode
+            ? ' /' . CellValue::sanitize($a->browse->filterText) . ' '
+            : ' tables ';
+        if ($a->browse->visibleTables() === []) {
+            $body = Style::new()->foreground(Color::hex('#7d6e98'))->render('(no match)');
+            return self::frame($a, Pane::Tables, $title, $body, $width);
+        }
+
         // Layout: title(1) + gap(1) + [tablesPane | rowsPane joined horizontally] +
         // query(3) + help(1) + status(1) + finalNL(1) = 8 lines overhead.
         // tablesPane frame: 1 title + 1 top + content + 1 bottom = content + 3.
@@ -220,8 +230,11 @@ final class Renderer
         // window — no more hand-rolled centering/slice/`↑ N–M of T ↑` indicators.
         // Pre-style each name (gold+bold for the loaded table, muted otherwise);
         // the cursor row is rendered reverse-video by the widget.
+        // SQL-O10: names come from the filtered view; width and the
+        // no-tables guard still key off the full list so the pane never
+        // resizes under keystrokes.
         $items = [];
-        foreach ($a->browse->tables as $name) {
+        foreach ($a->browse->visibleTables() as $name) {
             // Table names are server-controlled (SHOW TABLES output) — neutralize
             // control bytes before they enter the frame.
             $safe = CellValue::sanitize((string) $name);
@@ -240,7 +253,7 @@ final class Renderer
             ->withUnselectedPrefix('')
             ->select($a->browse->tableCursor);
 
-        return self::frame($a, Pane::Tables, ' tables ', $list->view(), $width);
+        return self::frame($a, Pane::Tables, $title, $list->view(), $width);
     }
 
     /**

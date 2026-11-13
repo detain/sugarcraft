@@ -71,8 +71,10 @@ use SugarCraft\Sql\Core\Msg\TableRowsLoadedMsg;
  * PostgreSQL through the PDO drivers, with Workbench-style admin panels.
  * Four focus panes:
  *
- *   - Tables: a list of tables. Enter loads its rows into the
- *             rows pane; the rows pane's title updates accordingly.
+ *   - Tables: a list of tables. `/` opens a live name filter; Enter loads
+ *             the selected table's rows into the rows pane (movement is
+ *             local — SQL-O10 retired the per-cursor preview fetch); the
+ *             rows pane's title updates accordingly.
  *   - Rows:   a paginated peek at the selected table's contents.
  *   - Query:  an editor — type SQL, Ctrl+Enter to run. Errors land
  *             on a status line; the rowset replaces the rows pane.
@@ -308,7 +310,10 @@ final class App implements Model
         }
         if (($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q'))
-            && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows)) {
+            && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows)
+            // SQL-O10: while the `/` line is open it owns the keyboard —
+            // Escape abandons the line, and 'q' is just a filter letter.
+            && !($this->ui->pane === Pane::Tables && $this->browse->filterMode)) {
             return [$this, Cmd::quit()];
         }
         if ($msg->type === KeyType::Tab) {
@@ -352,34 +357,93 @@ final class App implements Model
     }
 
     /**
-     * Tables-pane navigation. Moving the cursor (or Enter/Space) loads the
-     * highlighted table's row preview. The load returns an optional Cmd: for
-     * MySQL/Postgres the fetch runs on the React loop (so a large/remote table
-     * never freezes the UI), so this handler returns a tuple rather than a bare
-     * model.
+     * Tables-pane navigation. SQL-O10: cursor movement is LOCAL-only — the
+     * old arm round-tripped a row-preview fetch for every hovered table,
+     * which auto-floated every table on ERP-sized schemas (one server trip
+     * per arrow press). Only Enter/Space loads the highlighted table.
+     * `/` opens a live type-to-filter line over the names (jorgerojas26/lazysql parity).
      *
      * @return array{self, ?Cmd}
      */
     private function handleTablesKey(KeyMsg $msg): array
     {
+        if ($this->browse->filterMode) {
+            return $this->handleTablesFilterKey($msg);
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === '/') {
+            return [$this->mutate(['browse' => $this->browse->withFilterMode(true)]), null];
+        }
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            $newApp = $this->withTableCursor($this->browse->tableCursor - 1);
-            $name = $newApp->browse->tables[$newApp->browse->tableCursor] ?? null;
-            return $name === null ? [$newApp, null] : $newApp->beginLoadTable($name);
+            return [$this->withTableCursor($this->browse->tableCursor - 1), null];
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            $newApp = $this->withTableCursor($this->browse->tableCursor + 1);
-            $name = $newApp->browse->tables[$newApp->browse->tableCursor] ?? null;
-            return $name === null ? [$newApp, null] : $newApp->beginLoadTable($name);
+            return [$this->withTableCursor($this->browse->tableCursor + 1), null];
         }
         if ($msg->type === KeyType::Enter
             || $msg->type === KeyType::Space) {
-            $name = $this->browse->tables[$this->browse->tableCursor] ?? null;
+            $name = $this->browse->visibleTables()[$this->browse->tableCursor] ?? null;
             return $name === null ? [$this, null] : $this->beginLoadTable($name);
         }
         return [$this, null];
+    }
+
+    /**
+     * Key handling while the `/` filter line is open. Printable runes extend
+     * the filter (the line owns k/j too — it is a text field), Backspace
+     * deletes one codepoint, arrows move the cursor through the filtered
+     * view, Enter commits and loads the highlighted table (the pane's
+     * load-on-Enter law holding through the filter), Escape abandons the
+     * line and clears the filter without quitting the app.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function handleTablesFilterKey(KeyMsg $msg): array
+    {
+        $browse = $this->browse;
+        if ($msg->type === KeyType::Escape) {
+            return [$this->mutate([
+                'browse' => $browse->withFilterMode(false)->withFilterText(''),
+            ]), null];
+        }
+        if ($msg->type === KeyType::Backspace) {
+            if ($browse->filterText === '') {
+                return [$this, null];
+            }
+            return [$this->filteredTo(
+                mb_substr($browse->filterText, 0, mb_strlen($browse->filterText) - 1),
+            ), null];
+        }
+        if ($msg->type === KeyType::Enter || $msg->type === KeyType::Space) {
+            $closed = $this->mutate(['browse' => $browse->withFilterMode(false)]);
+            $name = $closed->browse->visibleTables()[$closed->browse->tableCursor] ?? null;
+            return $name === null ? [$closed, null] : $closed->beginLoadTable($name);
+        }
+        if ($msg->type === KeyType::Up) {
+            return [$this->withTableCursor($browse->tableCursor - 1), null];
+        }
+        if ($msg->type === KeyType::Down) {
+            return [$this->withTableCursor($browse->tableCursor + 1), null];
+        }
+        if ($msg->type === KeyType::Char && !$msg->ctrl && $msg->rune !== '') {
+            return [$this->filteredTo($browse->filterText . $msg->rune), null];
+        }
+        return [$this, null];
+    }
+
+    /**
+     * Replace the filter text and pin the cursor to the top of the newly
+     * narrowed list — keeping a stale index would point at a different row
+     * than the user just typed toward.
+     */
+    private function filteredTo(string $filterText): self
+    {
+        return $this->mutate([
+            'browse' => $this->browse
+                ->withFilterText($filterText)
+                ->withTableCursor(0),
+        ]);
     }
 
     private function handleRowsKey(KeyMsg $msg): self
@@ -874,7 +938,7 @@ final class App implements Model
         // SAME table leaves selectedTable unchanged, so the name guard in the
         // fold cannot see the older leg is now superseded — the gen can.
         $browse = $this->browse
-            ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
+            ->withTableCursor(array_search($name, $this->browse->visibleTables(), true) ?: 0)
             ->withSelectedTable($name)
             ->withRows([])
             ->withRowCursor(0)
@@ -1080,7 +1144,9 @@ final class App implements Model
 
     private function withTableCursor(int $i): self
     {
-        $size = count($this->browse->tables);
+        // SQL-O10: the cursor indexes the FILTERED view — a stale raw-list
+        // size would let it point past the end the moment a filter narrows.
+        $size = count($this->browse->visibleTables());
         if ($size === 0) {
             return $this;
         }

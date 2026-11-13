@@ -6,6 +6,7 @@ namespace SugarCraft\Sql\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\BrowseState;
@@ -254,7 +255,11 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
 
         $this->assertSame(1, $a->browse->tableCursor, 'up at the top wraps to the last table');
-        $this->assertSame('users', $a->browse->selectedTable);
+        // SQL-O10: wrapping moved the cursor only — the start-loaded preview
+        // stands until Enter explicitly loads the highlighted table.
+        $this->assertSame('posts', $a->browse->selectedTable, 'cursor move never fetches');
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame('users', $a->browse->selectedTable, 'Enter loads the wrapped-to table');
     }
 
     public function testDownAtBottomWrapsToTop(): void
@@ -266,7 +271,11 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Down, '')); // wraps back to the first
 
         $this->assertSame(0, $a->browse->tableCursor, 'down at the bottom wraps to the first table');
+        // SQL-O10: the move is local; Enter is the only load trigger.
         $this->assertSame('posts', $a->browse->selectedTable);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame('posts', $a->browse->selectedTable);
+        $this->assertCount(2, $a->browse->rows, 'Enter loaded the wrapped-to table');
     }
 
     public function testEnterLoadsSelectedTable(): void
@@ -279,32 +288,149 @@ final class AppTest extends TestCase
     }
 
     /**
-     * Moving the cursor through the tables list loads the highlighted table's
-     * rows immediately, giving the user a live preview as they navigate.
-     * Enter/Space still works as before for explicit selection.
+     * SQL-O10: `/` opens a live filter line over the table names; the cursor
+     * then indexes the narrowed view, and Enter (the pane's only load key)
+     * fetches the filtered selection.
      */
-    public function testNavigationLoadsRows(): void
+    private function filterApp(): App
+    {
+        return new App(
+            ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
+            BrowseState::new()->withTables(['audit', 'orders', 'users']),
+        );
+    }
+
+    public function testSlashOpensTheFilterLine(): void
+    {
+        [$a, $cmd] = $this->filterApp()->update(new KeyMsg(KeyType::Char, '/'));
+
+        $this->assertNull($cmd, 'opening the line is local');
+        $this->assertTrue($a->browse->filterMode);
+        $this->assertSame('', $a->browse->filterText);
+        $this->assertCount(3, $a->browse->visibleTables(), 'an open line with no text still shows everything');
+    }
+
+    public function testFilterNarrowsTheListAndEnterLoadsTheFilteredRow(): void
+    {
+        $a = $this->filterApp();
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (['o', 'r'] as $rune) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        $this->assertSame('or', $a->browse->filterText);
+        $this->assertSame(['orders'], $a->browse->visibleTables());
+
+        [$a, $cmd] = $a->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($a->browse->filterMode, 'Enter commits the line');
+        $this->assertSame('orders', $a->browse->selectedTable, 'Enter loads the table under the filtered cursor');
+        $this->assertNotNull($cmd, 'the load still rides the MySQL async Cmd');
+    }
+
+    public function testFilterIsCaseInsensitiveAndTypingPinsCursorToTop(): void
+    {
+        $a = $this->filterApp();
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'O'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertSame(['orders'], $a->browse->visibleTables(), 'OR');
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(0, $a->browse->tableCursor, 'arrows stay in range of the narrowed list');
+
+        // Widen again with a second cursor row, then narrow under it: the
+        // cursor must re-pin to the top, never point past the end.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u')); // audit + users? 'u' rides both
+        [$a, ] = $a->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertGreaterThanOrEqual(1, $a->browse->tableCursor);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 's')); // 'us' → users only
+        $this->assertSame(['users'], $a->browse->visibleTables());
+        $this->assertSame(0, $a->browse->tableCursor, 'typing re-pins the cursor to the top of the narrowed view');
+    }
+
+    public function testBackspaceEditsAndEscapeAbandonsWithoutQuitting(): void
+    {
+        $a = $this->filterApp();
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '/'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'z'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'i'));
+        $this->assertSame([], $a->browse->visibleTables(), 'nothing carries "zi"');
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertSame('z', $a->browse->filterText);
+        $this->assertSame([], $a->browse->visibleTables(), 'still nothing under "z"');
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertSame('', $a->browse->filterText, 'backspacing the last rune leaves the line open and unfiltered');
+        $this->assertCount(3, $a->browse->visibleTables());
+
+        [$a, $cmd] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($cmd, 'Escape while the line is open abandons the line, it never quits');
+        $this->assertFalse($a->browse->filterMode);
+        $this->assertSame('', $a->browse->filterText, 'abandoning clears the filter too');
+    }
+
+    public function testQIsAFilterLetterWhileTheLineIsOpen(): void
+    {
+        [$a, ] = $this->filterApp()->update(new KeyMsg(KeyType::Char, '/'));
+        [$a, $cmd] = $a->update(new KeyMsg(KeyType::Char, 'q'));
+
+        $this->assertNull($cmd, 'q inside the filter line is text, not the quit key');
+        $this->assertSame('q', $a->browse->filterText);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        [, $cmd] = $a->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotNull($cmd, 'once the line closes, q quits again');
+        $this->assertInstanceOf(QuitMsg::class, $cmd());
+    }
+
+    public function testFilterRendersNoMatchAndHonestBadge(): void
+    {
+        $a = $this->filterApp();
+        foreach (['/', 'z', 'z'] as $rune) {
+            [$a, ] = $a->update(new KeyMsg(KeyType::Char, $rune));
+        }
+
+        $view = $a->view();
+
+        $this->assertStringContainsString('(no match)', $view, 'a filter excluding everything says so');
+        $this->assertStringContainsString('/zz', $view, 'the open line is echoed in the pane title');
+        $this->assertStringContainsString('Tables: 0/3', $view, 'the badge reads visible/total while filtering');
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertStringContainsString('Tables: 3', $a->view(), 'and returns to the plain total after abandon');
+    }
+
+    /**
+     * SQL-O10: cursor movement through the tables list is a pure local edit —
+     * the highlighted table's rows load ONLY on Enter/Space. The old arm
+     * fetched a preview per hovered row (one round trip per arrow press).
+     */
+    public function testNavigationMovesLocallyAndEnterLoads(): void
     {
         $a = App::start($this->db());
         // App::start loads the first table ('posts', 2 rows).
         $this->assertSame('posts', $a->browse->selectedTable);
         $this->assertCount(2, $a->browse->rows);
 
-        // Move the cursor down to 'users' — rows should update to 'users' table.
+        // Move the cursor down to 'users' — the cursor moves, nothing fetches.
         [$a, ] = $a->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(1, $a->browse->tableCursor);
-        $this->assertSame('users', $a->browse->selectedTable, 'cursor move must load the highlighted table');
-        $this->assertCount(3, $a->browse->rows, 'cursor move must load rows for highlighted table');
+        $this->assertSame('posts', $a->browse->selectedTable, 'cursor move must not change the selection');
+        $this->assertCount(2, $a->browse->rows, 'cursor move must not fetch rows');
 
-        // Move back up to 'posts' — rows should update back.
+        // Up past the top wraps — still zero fetches.
         [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
-        $this->assertSame(0, $a->browse->tableCursor);
-        $this->assertSame('posts', $a->browse->selectedTable);
-        $this->assertCount(2, $a->browse->rows);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(1, $a->browse->tableCursor);
+        $this->assertCount(2, $a->browse->rows, 'wrapping stays local too');
 
-        // Enter also loads (confirming it still works).
+        // Enter loads the highlighted table.
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertSame('posts', $a->browse->selectedTable);
+        $this->assertSame('users', $a->browse->selectedTable);
+        $this->assertCount(3, $a->browse->rows, 'Enter must fetch exactly the highlighted table');
     }
 
     /**
@@ -567,22 +693,30 @@ final class AppTest extends TestCase
     }
 
     /**
-     * On MySQL/Postgres, cursoring onto a table must NOT block on a synchronous
-     * fetch (the asset_media freeze). Instead the model is marked loading, the
-     * title follows the cursor immediately, and an async Cmd is returned to run
-     * the blob-safe fetch on the React loop. The rows arrive later via
-     * {@see TableRowsLoadedMsg}.
+     * On MySQL/Postgres, Enter on a table must NOT block on a synchronous
+     * fetch (the asset_media freeze). Instead the model is marked loading,
+     * the title follows the selection immediately, and an async Cmd is
+     * returned to run the blob-safe fetch on the React loop. The rows arrive
+     * later via {@see TableRowsLoadedMsg}. SQL-O10: the cursor move that
+     * precedes Enter is local — it returns no Cmd at all.
      */
-    public function testMysqlCursorDownLoadsRowsAsynchronously(): void
+    public function testMysqlEnterLoadsRowsAsynchronously(): void
     {
         $app = new App(
             ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
             BrowseState::new()->withTables(['posts', 'users'])->withSelectedTable('posts'),
         );
-        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Down, ''));
+        [$moved, $moveCmd] = $app->update(new KeyMsg(KeyType::Down, ''));
+
+        $this->assertSame(1, $moved->browse->tableCursor);
+        $this->assertNull($moveCmd, 'cursor movement is a local edit — no fetch dispatched');
+        $this->assertSame('posts', $moved->browse->selectedTable, 'selection follows Enter, not the cursor');
+        $this->assertFalse($moved->browse->rowsLoading);
+
+        [$next, $cmd] = $moved->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertSame(1, $next->browse->tableCursor);
-        $this->assertSame('users', $next->browse->selectedTable, 'title follows the cursor immediately');
+        $this->assertSame('users', $next->browse->selectedTable, 'title follows the selection immediately');
         $this->assertTrue($next->browse->rowsLoading, 'rows marked loading while the fetch is in flight');
         $this->assertSame([], $next->browse->rows, 'no stale rows shown during load');
         $this->assertNotNull($cmd, 'MySQL browse returns an async Cmd, not a blocking fetch');

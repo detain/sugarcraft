@@ -29,6 +29,8 @@ final class BrowseState
         public readonly ?ResultTable $resultTable = null,
         public readonly bool $rowsLoading = false,
         public readonly int $loadGen = 0,
+        public readonly string $filterText = '',
+        public readonly bool $filterMode = false,
     ) {}
 
     public static function new(): self
@@ -45,6 +47,39 @@ final class BrowseState
     public function withTableCursor(int $tableCursor): self
     {
         return $this->mutate(['tableCursor' => $tableCursor]);
+    }
+
+    /** The live `/`-filter string typed over the Tables pane (jorgerojas26/lazysql parity). */
+    public function withFilterText(string $filterText): self
+    {
+        return $this->mutate(['filterText' => $filterText]);
+    }
+
+    /** Whether the `/` filter line is currently open and eating key input. */
+    public function withFilterMode(bool $filterMode): self
+    {
+        return $this->mutate(['filterMode' => $filterMode]);
+    }
+
+    /**
+     * Table names the cursor can reach right now: the filter is a lowercase
+     * substring match, so `/ord` leaves `orders`, `OrdLog`, `xORDy` — and the
+     * cursor indexes THIS list, never the raw one.
+     *
+     * @return list<string>
+     */
+    public function visibleTables(): array
+    {
+        if ($this->filterText === '') {
+            return $this->tables;
+        }
+
+        $needle = mb_strtolower($this->filterText);
+
+        return array_values(array_filter(
+            $this->tables,
+            static fn (string $name): bool => str_contains(mb_strtolower($name), $needle),
+        ));
     }
 
     public function withSelectedTable(?string $selectedTable): self
