@@ -1127,6 +1127,36 @@ final class QuickPickTest extends TestCase
         $this->assertSame(13, \substr_count(\explode("\n", $frame)[1], '─'));
     }
 
+    public function testViewKeepsTheBackgroundsTrailingNewlineByte(): void
+    {
+        // -052: the composite used to pop the background's final empty line
+        // and re-join without a terminator — view("bg\n") answered "bg",
+        // rewriting a byte-shape the overlay never consumed. The terminator
+        // is now remembered and restored, and it is the ONLY difference
+        // between the two arms.
+        $pick = QuickPick::new(['alpha'])
+            ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 24])
+            ->setWindowHeight(3)
+            ->show();
+
+        $with    = $pick->view("bg\n");
+        $without = $pick->view('bg');
+
+        $this->assertStringEndsWith("\n", $with, 'a terminated background keeps its terminator');
+        $this->assertStringEndsNotWith("\n\n", $with, 'the terminator must not double');
+        $this->assertStringEndsNotWith("\n", $without, 'a bare background gains none');
+        $this->assertSame($without, \substr($with, 0, -1), 'the newline byte is the only difference');
+    }
+
+    public function testHiddenViewIsByteVerbatim(): void
+    {
+        // The hidden arm already answered verbatim by returning the input
+        // whole; pin it so the S-30 contract reads as one rule: view()
+        // never edits bytes it did not composite.
+        $pick = QuickPick::new(['alpha']);
+        $this->assertSame("bg\n", $pick->view("bg\n"));
+    }
+
     public function testUnsupportedBatchFallsBackPerItemAndIsProbedOnce(): void
     {
         // -037: matchAll THROWING marks that ranker identity batch-

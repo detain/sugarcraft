@@ -859,6 +859,9 @@ final class QuickPick
      *
      * @param string $backgroundView  The underlying view (e.g. current app output)
      * @return string  The composited output with QuickPick overlay chars replacing background
+     *                 — and the background's byte shape respected: a trailing
+     *                 "\n" the overlay did not consume comes back (-052), and
+     *                 when hidden the input is returned verbatim.
      */
     public function view(string $backgroundView): string
     {
@@ -889,7 +892,14 @@ final class QuickPick
         }
 
         $bgLines = \explode("\n", $backgroundView);
-        if (\end($bgLines) === '') {
+        // -052: a background that ends with "\n" surfaces that terminator as
+        // a trailing empty explode() element. The pop lets the composite
+        // write over the last line (and pad a tall overlay against a short
+        // background), but re-joining used to drop the byte: composing over
+        // "bg\n" answered "bg", silently rewriting a byte-shape the overlay
+        // never touched. Remember the pop and restore it on the way out.
+        $trailingNewline = \end($bgLines) === '';
+        if ($trailingNewline) {
             \array_pop($bgLines);
         }
 
@@ -911,7 +921,8 @@ final class QuickPick
             $bgLines = \array_merge($bgLines, $padding);
         }
 
-        return $this->compositeOver($lines, $outerWidth, $bgLines);
+        $composited = $this->compositeOver($lines, $outerWidth, $bgLines);
+        return $trailingNewline ? $composited . "\n" : $composited;
     }
 
     /**
