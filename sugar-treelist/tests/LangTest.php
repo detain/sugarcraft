@@ -46,4 +46,28 @@ final class LangTest extends TestCase
         $result2 = Lang::t('list.no_items');
         $this->assertSame($result1, $result2);
     }
+
+    /**
+     * sugar-treelist-047: Lang's fallback chain ends in the RAW key, so a
+     * dropped or renamed key in any locale ships untranslated text to users
+     * with zero red. Every shipped locale must carry exactly en's key set.
+     */
+    public function testEveryLocaleCarriesExactlyTheEnglishKeys(): void
+    {
+        $dir = \dirname(__DIR__) . '/lang';
+        $en = require $dir . '/en.php';
+        $files = \glob($dir . '/*.php');
+        $this->assertNotEmpty($files, 'no locale files found next to en.php');
+
+        foreach ($files as $file) {
+            if (\basename($file) === 'en.php') {
+                continue;
+            }
+            $this->assertEqualsCanonicalizing(
+                \array_keys($en),
+                \array_keys(require $file),
+                \basename($file) . ' key set diverges from en.php'
+            );
+        }
+    }
 }

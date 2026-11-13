@@ -377,15 +377,20 @@ final class IntegrationTest extends TestCase
      * Security (sugar-cellbuffer #1362 defense-in-depth): a raw item value carrying
      * bare C0 control bytes (BEL 0x07, NUL 0x00) and DEL 0x7F must be scrubbed
      * before it reaches the terminal wire, while the legitimate SGR ESC injected
-     * by the current/line style must survive. Covers BOTH View() sinks — the
-     * first-frame full output and the diff-delta buffer produced by
-     * bufferFromOutput() on the second render.
+     * by the current/line style must survive. Covers BOTH view() sinks — the
+     * first-frame full output and the row-granular delta (sugar-treelist-018:
+     * the old docblock promised a bufferFromOutput()/DiffEncoder second frame,
+     * dead API from the abandoned cell-projection era; an identical-state
+     * second view() returns '' and the delta legs passed vacuously). The
+     * delta sink is now exercised the way the renderer actually emits it: a
+     * cursor move re-emits the scrubbed row inside a NON-empty delta.
      */
     public function testControlBytesStrippedButStyleSgrPreserved(): void
     {
         $m = Model::new()
             ->withViewport(40, 5)
             ->withItem(new StringItem("safe\x07value\x00mid\x7fend"))
+            ->withItem(new StringItem('second item'))
             ->withCurrentStyle("\x1b[1m"); // bold — injects a legit SGR ESC
 
         // First frame: full output path (`return $fullOutput`).
@@ -400,15 +405,16 @@ final class IntegrationTest extends TestCase
         // The legitimate SGR ESC from withCurrentStyle() must be preserved.
         $this->assertStringContainsString("\x1b[1m", $first, 'style SGR was stripped');
 
-        // Second frame: diff-delta path (bufferFromOutput → DiffEncoder). The
-        // delta encodes only changed cells, so re-render an identical model to
-        // force a full-content frame through bufferFromOutput and inspect its
-        // buffer directly for any surviving control byte.
-        $delta = $m->view();
-        $this->assertIsString($delta);
-        $this->assertStringNotContainsString("\x07", $delta, 'BEL leaked (delta)');
-        $this->assertStringNotContainsString("\x00", $delta, 'NUL leaked (delta)');
-        $this->assertStringNotContainsString("\x7f", $delta, 'DEL leaked (delta)');
+        // Delta sink: move the cursor so the scrubbed row is RE-EMITTED in the
+        // second frame's change set (sugar-cellbuffer #1362 rode the delta just
+        // as happily as the full frame). Anti-vacuity: an empty delta here
+        // would mean the pin never exercised the changed-row path.
+        $second = $m->withCursor(1)->view();
+        $this->assertNotSame('', $second, 'cursor move must re-emit the restyled rows through the delta sink');
+        $this->assertStringNotContainsString("\x07", $second, 'BEL leaked (delta)');
+        $this->assertStringNotContainsString("\x00", $second, 'NUL leaked (delta)');
+        $this->assertStringNotContainsString("\x7f", $second, 'DEL leaked (delta)');
+        $this->assertStringContainsString("\x1b[1m", $second, 'style SGR was stripped (delta)');
     }
 
     /**

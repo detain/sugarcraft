@@ -73,10 +73,14 @@ final class ModelTest extends TestCase
     public function testCursorClampAtBounds(): void
     {
         $m = $this->model->withItem(new StringItem('only'));
-        $m->withCursorUp();  // should not go below 0
-        $this->assertSame(0, $m->cursorIndex());
-        $m->withCursorDown(100);  // should not exceed length-1
-        $this->assertSame(0, $m->cursorIndex());
+        // sugar-treelist-041: the old legs discarded the returned clones and
+        // asserted the receiver — that pinned immutability, never clamping.
+        $this->assertSame(0, $m->withCursorUp()->cursorIndex(), 'cursorUp at the head clamps at 0');
+        $this->assertSame(0, $m->withCursorDown(100)->cursorIndex(), 'cursorDown past the tail saturates at the last item');
+        $three = $m->withItem(new StringItem('b'))->withItem(new StringItem('c'));
+        $this->assertSame(2, $three->withCursorDown(100)->cursorIndex(), 'down beyond the end lands on the last item');
+        $this->assertSame(0, $three->withCursor(2)->withCursorUp(100)->cursorIndex(), 'up beyond the start lands on the first item');
+        $this->assertSame(0, $m->cursorIndex(), 'the receiver is never bent');
     }
 
     public function testRemoveItem(): void
@@ -579,14 +583,24 @@ final class ModelTest extends TestCase
     {
         $m = $this->model
             ->withItem(new StringItem('styled'))
+            ->withItem(new StringItem('plain'))
             ->withLineStyle("\x1b[2m")
             ->withCurrentStyle("\x1b[1m")
             ->withPrefixer(new DefaultPrefixer())
             ->withSuffixer(new DefaultSuffixer())
             ->withViewport(80, 24);
 
+        // sugar-treelist-042: the name promised style application but the body
+        // only asserted non-emptiness. Pin the real bytes: the cursor row
+        // carries currentStyle, the non-cursor row carries lineStyle, and both
+        // close with the SGR reset.
         $lines = $m->lines();
-        $this->assertNotEmpty($lines);
+        $this->assertCount(2, $lines);
+        $this->assertStringStartsWith("\x1b[1m", $lines[0], 'cursor row opens with currentStyle');
+        $this->assertStringStartsWith("\x1b[2m", $lines[1], 'non-cursor row opens with lineStyle');
+        $this->assertStringEndsWith("\x1b[0m", $lines[0], 'cursor row closes with reset');
+        $this->assertStringEndsWith("\x1b[0m", $lines[1], 'non-cursor row closes with reset');
+        $this->assertStringNotContainsString("\x1b[2m", $lines[0], 'currentStyle replaces lineStyle on the cursor row');
     }
 
     public function testFilterWithNoMatchingItems(): void
@@ -1666,6 +1680,18 @@ final class ModelTest extends TestCase
         $m = $this->model->withViewport(20, 10)->withItem(new StringItem("x\ty"));
 
         $this->assertSame(['x y'], $m->lines());
+    }
+
+    /**
+     * sugar-treelist-044: hardWrap() expands HTAB one-for-one (strtr), so a
+     * tab RUN survives as a space run — run length is the documented promise
+     * the single-tab pin could not see.
+     */
+    public function testTabRunLengthSurvivesExpansion(): void
+    {
+        $m = $this->model->withViewport(20, 10)->withItem(new StringItem("a\t\tb"));
+
+        $this->assertSame(['a  b'], $m->lines());
     }
 
     public function testCarriageReturnsNeverReachRenderedRows(): void

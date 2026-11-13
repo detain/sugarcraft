@@ -14,7 +14,9 @@ final class DefaultSuffixerTest extends TestCase
     {
         $s = new DefaultSuffixer();
         $width = $s->initSuffixer(new StringItem('item'), 0, 0, 5, 80, 24);
-        $this->assertGreaterThan(0, $width);
+        // sugar-treelist-044: the prefixer twin pins its exact declared width;
+        // '>' was only assertGreaterThan(0) — the marker is one cell, pin it.
+        $this->assertSame(1, $width);
     }
 
     /** sugar-treelist-027: the house factory yields the stock marker. */

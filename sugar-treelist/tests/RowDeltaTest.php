@@ -9,6 +9,7 @@ use SugarCraft\TreeList\DefaultPrefixer;
 use SugarCraft\TreeList\DefaultSuffixer;
 use SugarCraft\TreeList\Model;
 use SugarCraft\TreeList\StringItem;
+use SugarCraft\TreeList\Tests\Support\RowDeltaAssertions;
 
 /**
  * Pins for the row-granular delta renderer in Model::view().
@@ -25,6 +26,8 @@ use SugarCraft\TreeList\StringItem;
  */
 final class RowDeltaTest extends TestCase
 {
+    use RowDeltaAssertions;
+
     /**
      * The memo is the exact list of styled rows of the last full or delta
      * frame — not a cell projection. Reads the private field directly.
@@ -146,7 +149,7 @@ final class RowDeltaTest extends TestCase
         $m2 = $m->withCursor(1);
         $delta = $m2->view();
 
-        $this->assertSame($build(1)->view(), $this->applyDelta($frame1, $delta),
+        $this->assertSame($build(1)->view(), $this->applyRowDelta($frame1, $delta),
             'delta applied over the previous frame must equal the fresh full frame');
     }
 
@@ -238,6 +241,7 @@ final class RowDeltaTest extends TestCase
      * the full frame plus a styled delta must lay out and encode quickly — the
      * old quadratic projection regression class, now guarded at renderer level.
      */
+    /** @group performance — the 5.0s legs are shared-CI budgets, not correctness claims. */
     public function testLargeViewportFullAndDeltaStayLinearTime(): void
     {
         $m = Model::new()
@@ -259,7 +263,11 @@ final class RowDeltaTest extends TestCase
             'large-viewport full frame plus delta regressed toward quadratic behaviour');
     }
 
-    /** The exact small-frame bytes at a 2000×1 viewport, with timing guard. */
+    /**
+     * The exact small-frame bytes at a 2000×1 viewport, with timing guard.
+     *
+     * @group performance — the 5.0s leg is a shared-CI budget, not a correctness claim.
+     */
     public function testSingleRowWideFrameDeltaIsExactBytes(): void
     {
         $m = Model::new()->withViewport(2000, 1)
@@ -280,25 +288,5 @@ final class RowDeltaTest extends TestCase
         $property = new \ReflectionProperty(Model::class, 'previousRows');
         $property->setAccessible(true);
         return $property->getValue($m);
-    }
-
-    /**
-     * Replay a delta produced by view() over the text of the previous full
-     * frame: each write is CUP <row>;1H content EL newline, replacing row
-     * $row-1 of the frame.
-     */
-    private function applyDelta(string $frame, string $delta): string
-    {
-        $rows = \explode("\n", \rtrim($frame, "\n"));
-        $matched = \preg_match_all('/\x1b\[(\d+);1H(.*?)\x1b\[K\n/s', $delta, $writes, PREG_SET_ORDER);
-        $this->assertGreaterThan(0, $matched, 'delta carried no row writes');
-        $consumed = 0;
-        foreach ($writes as $write) {
-            $rows[(int) $write[1] - 1] = $write[2];
-            $consumed += \strlen($write[0]);
-        }
-        $stripped = \preg_replace('/\x1b\[(\d+);1H(.*?)\x1b\[K\n/s', '', $delta);
-        $this->assertSame('', $stripped, 'delta carried bytes outside row writes');
-        return \implode("\n", $rows) . "\n";
     }
 }
