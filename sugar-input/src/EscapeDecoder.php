@@ -206,6 +206,14 @@ final class EscapeDecoder
      * Incomplete sequences are buffered and decoded on the next call
      * when more bytes arrive. Use remainder() to get unconsumed bytes.
      *
+     * Per-call work is linear in the chunk length: no leg re-slices the
+     * remaining stream per escape (see decodeClean's grammar-bounded
+     * views), and hostile never-terminating strings are bounded by the
+     * drain cap plus a one-shot counted abandon. Drivers are still the
+     * recommended ceiling — they read ≤ 8192 bytes at a time — but a
+     * caller feeding a giant blob pays proportional, not quadratic,
+     * cost (SI-10).
+     *
      * @param string $bytes Raw bytes from the terminal
      * @return list<Event>
      */
@@ -308,24 +316,59 @@ final class EscapeDecoder
             $byte = $stream[$i];
             $ord = ord($byte);
 
-            // Escape character — hand the tail to the (unchanged) string-based
-            // escape handlers. This is the ONE substr we allow per escape.
+            // Escape character — hand a GRAMMAR-BOUNDED VIEW of the tail to the
+            // (unchanged) string-based escape handlers, so one decode() call
+            // costs O(bytes the sequence actually spans) — never O(the whole
+            // in-hand chunk) per escape (SI-10: a 500 KB escape-dense chunk
+            // used to reslice the whole remaining tail at every ESC). The view
+            // ends at the first plausible sequence final, one lookahead byte
+            // past an embedded ESC (the handlers' own ambiguity arms), or a
+            // hard string-introducer budget; an incomplete sequence runs the
+            // view to the stream end, where the view IS the tail and the old
+            // stream-context rules (deferTrailingEscape, capped buffer) apply
+            // unchanged. The advance is suffix-normalised: handleEscape's
+            // `remaining` is always a suffix of the string it was handed, so
+            // strlen(view) - strlen(remaining) is the exact consumed count for
+            // either argument shape.
             if ($ord === 0x1b) {
-                $tail = substr($stream, $i);
-                $result = $this->handleEscape($tail);
-                // Events produced OR partial progress made (remaining is a proper
-                // suffix of the tail): advance past the consumed bytes and keep
-                // walking the same fixed $stream. handleEscape's `remaining` is
-                // always a suffix of `tail`, so (len-i) - strlen(remaining) is the
-                // exact byte count consumed.
-                if ($result['events'] !== [] || $result['remaining'] !== $tail) {
-                    $events = array_merge($events, $result['events']);
-                    $i += ($len - $i) - strlen($result['remaining']);
+                $viewLen = $this->escapeViewLength($stream, $i, $len);
+                $view = substr($stream, $i, $viewLen);
+                $result = $this->handleEscape($view);
+                $progress = $result['events'] !== [] || $result['remaining'] !== $view;
+                if (!$progress && $viewLen < $len - $i) {
+                    // A bounded view refused to make progress while more bytes
+                    // sit in hand: the handlers' "incomplete" decisions depend
+                    // on stream end. Re-ask once with the full tail (rare — a
+                    // real incomplete sequence); consumed positions agree for
+                    // both views either way.
+                    $view = substr($stream, $i);
+                    $result = $this->handleEscape($view);
+                }
+                if ($result['events'] !== [] || $result['remaining'] !== $view) {
+                    // Append per-event, not array_merge: merging into the
+                    // growing list would re-copy it at every escape — the
+                    // same amortization law decode()'s pass loop follows.
+                    foreach ($result['events'] as $event) {
+                        $events[] = $event;
+                    }
+                    $i += strlen($view) - strlen($result['remaining']);
+                    if ($this->inString && $i < $len) {
+                        // An OSC/DCS/SOS/PM/APC stayed open past the view:
+                        // hand the LIVE remainder to decode()'s string state
+                        // machine on the next call (its own chunked legs
+                        // bound it) rather than slicing a fresh tail per
+                        // call. This bypasses bufferRemainder's sequence cap
+                        // deliberately — the string legs measure their own
+                        // budget against it.
+                        $this->remainder = substr($stream, $i);
+                        return $events;
+                    }
                     continue;
                 }
                 // Incomplete escape (no events, no progress): buffer the tail
-                // (capped) for the next decode() call and stop.
-                $this->bufferRemainder($tail);
+                // (capped) for the next decode() call and stop. The view run
+                // to the stream end here, so it IS the tail.
+                $this->bufferRemainder($view);
                 return $events;
             }
 
@@ -439,6 +482,67 @@ final class EscapeDecoder
         }
 
         return $seqLen;
+    }
+
+    /**
+     * Bound how far an escape at $i may reach into $stream, so the handler is
+     * handed a view whose length is O(the sequence it actually contains) —
+     * never the whole remaining chunk (SI-10: the per-escape full-tail slice
+     * made one decode() call quadratic in the chunk length).
+     *
+     * The view is grammar-bounded, deliberately generous, and conservative:
+     * a CSI/SS3 runs to its final byte (0x40-0x7e), stopping one lookahead
+     * byte past any embedded ESC so the handlers' own ambiguity arms still
+     * see what they need; a string introducer (] P _ ^) runs to its BEL or
+     * ST terminator, or to the drain+abandon budget (the payload legs
+     * measure against exactly that much); anything else (Alt+x, UTF-8) runs
+     * a flat few bytes. If the scan runs off the END of the in-hand stream,
+     * the returned length reaches the stream end — the view then IS the old
+     * tail, so the handlers' incomplete-sequence decisions (defer the lone
+     * trailing ESC, cap the buffered remainder) are made with the same
+     * information as before this bound existed.
+     */
+    private function escapeViewLength(string $stream, int $i, int $len): int
+    {
+        if ($i + 1 >= $len) {
+            return 1; // lone trailing ESC — the deferral rule wants exactly this
+        }
+        $introducer = $stream[$i + 1];
+
+        if ($introducer === '[' || $introducer === 'O') {
+            for ($k = $i + 2; $k < $len; $k++) {
+                $ord = ord($stream[$k]);
+                if ($ord === 0x1b) {
+                    // embedded ESC: include it plus one lookahead byte, the
+                    // most the handlers ever consult past the ambiguity point
+                    return min($k + 2, $len) - $i;
+                }
+                if ($ord >= 0x40 && $ord <= 0x7e) {
+                    return $k + 1 - $i; // final byte: the sequence can end here
+                }
+            }
+
+            return $len - $i; // ran off the stream end: incomplete — full tail
+        }
+
+        if ($introducer === ']' || $introducer === 'P' || $introducer === '_' || $introducer === '^') {
+            // String sequence: the payload legs bound themselves at
+            // MAX_STRING_LENGTH + MAX_STRING_ABANDON; never hand them more.
+            $cap = self::MAX_STRING_LENGTH + self::MAX_STRING_ABANDON + 1;
+            $stop = min($len, $i + 2 + $cap);
+            for ($k = $i + 2; $k < $stop; $k++) {
+                if ($stream[$k] === "\x07") {
+                    return $k + 1 - $i; // BEL terminator
+                }
+                if ($stream[$k] === "\x1b" && $k + 1 < $stop && $stream[$k + 1] === '\\') {
+                    return $k + 2 - $i; // ST terminator
+                }
+            }
+
+            return $stop - $i; // no terminator in reach: budget or stream end
+        }
+
+        return min(8, $len - $i); // Alt / ESC ESC / UTF-8 lead: a few bytes is all
     }
 
     /**
@@ -1578,19 +1682,19 @@ final class EscapeDecoder
                 $carry = $haystack !== '' && $haystack[strlen($haystack) - 1] === "\x1b" ? 1 : 0;
                 if ($this->stringDiscarded + strlen($haystack) > self::MAX_STRING_ABANDON) {
                     // A stream that never terminates the string must not silence
-                    // keystrokes forever — abandon and resync. Replay only the
-                    // bytes past the boundary so chunk sizes cannot change the
-                    // event stream.
-                    $replay = $this->stringDiscarded + strlen($haystack) - self::MAX_STRING_ABANDON;
+                    // keystrokes forever — abandon and resync. The in-hand body
+                    // past the boundary is REFUSED as one counted drop rather
+                    // than replayed as tens of thousands of printable keys
+                    // (SI-10 / FUZZ-05: the replay made a single hostile read
+                    // cost unbounded events; bytes arriving in later reads are
+                    // ordinary post-resync keystrokes).
                     $this->inString = false;
                     $this->stringOverflow = false;
                     $this->stringBuffer = '';
                     $this->stringDiscarded = 0;
+                    $this->droppedUnknownCount++;
 
-                    return [
-                        'events' => [],
-                        'remaining' => substr($haystack, strlen($haystack) - $replay),
-                    ];
+                    return ['events' => [], 'remaining' => ''];
                 }
                 $this->stringDiscarded += strlen($haystack) - $carry;
                 $this->stringBuffer = $carry === 1 ? "\x1b" : '';
@@ -1629,16 +1733,15 @@ final class EscapeDecoder
 
                 if (strlen($tail) > self::MAX_STRING_ABANDON) {
                     // A single chunk already blew past the abandon budget — give
-                    // up exactly as the incremental path would, so the byte
-                    // size of a read cannot change the event stream.
+                    // up exactly as the incremental path would: the in-hand
+                    // excess is refused as one counted drop, never replayed as
+                    // a key flood (SI-10 / FUZZ-05).
                     $this->inString = false;
                     $this->stringOverflow = false;
                     $this->stringDiscarded = 0;
+                    $this->droppedUnknownCount++;
 
-                    return [
-                        'events' => [$event],
-                        'remaining' => substr($overflowed, self::MAX_STRING_LENGTH + self::MAX_STRING_ABANDON),
-                    ];
+                    return ['events' => [$event], 'remaining' => ''];
                 }
 
                 // Same trailing-ESC carry as the incremental drain branch, so a

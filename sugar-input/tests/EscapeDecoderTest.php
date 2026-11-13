@@ -1950,6 +1950,39 @@ final class EscapeDecoderTest extends TestCase
         $this->assertLessThan(10.0, $elapsedLarge, "decode of {$n} ASCII bytes ran away at {$elapsedLarge}s");
     }
 
+    public function testEscapeDenseDecodeIsLinear(): void
+    {
+        // The SI-10 signature: a chunk of back-to-back complete CSI frames.
+        // The pre-fix decodeClean() resliced the whole remaining tail at every
+        // ESC, so cost grew quadratically in chunk length (measured: 195 KB of
+        // "\x1b[C" cost 1.15 s; 500 KB extrapolated to ~8 s against a ~2 ms
+        // 8 KiB baseline). With the grammar-bounded views the same input is a
+        // linear walk: three bytes and one small substr per frame. Same ratio
+        // discipline as the paste pin — 150x absorbs noise, a re-slicing
+        // regression blows it by orders of magnitude; the 10 s backstop only
+        // catches runaways.
+        $smallInput = str_repeat("\x1b[C", 2730); // 8,190 bytes
+        $start = microtime(true);
+        $smallEvents = $this->decoder->decode($smallInput);
+        $elapsedSmall = microtime(true) - $start;
+        $this->assertCount(2730, $smallEvents);
+
+        $frames = 166666;
+        $input = str_repeat("\x1b[C", $frames); // 499,998 bytes
+
+        $start = microtime(true);
+        $events = $this->decoder->decode($input);
+        $elapsedLarge = microtime(true) - $start;
+
+        $this->assertCount($frames, $events);
+        $this->assertLessThan(
+            150 * $elapsedSmall,
+            $elapsedLarge,
+            "decode of {$frames} CSI frames took {$elapsedLarge}s against a {$elapsedSmall}s 8 KiB baseline (expected O(n))"
+        );
+        $this->assertLessThan(10.0, $elapsedLarge, "decode of {$frames} CSI frames ran away at {$elapsedLarge}s");
+    }
+
     // ─── CSI trailing-byte regression (handleCsiKey suffix isolation) ─────────
 
     /**

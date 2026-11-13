@@ -489,13 +489,22 @@ final class TerminalReplyDrainTest extends TestCase
         // A truly hostile never-terminated string is bounded: once MAX_STRING_ABANDON
         // (64 KiB) past the cap is swallowed, the decoder gives up waiting for the
         // terminator and resumes normal decoding instead of eating the session.
-        // The replay tail past the abandon boundary decodes as keys IN THE SAME
-        // call — chunk size cannot shift the boundary (see the invariance test).
+        // The in-hand flood body past the abandon boundary is refused as ONE
+        // counted drop — never replayed as tens of thousands of printable keys
+        // (SI-10 / FUZZ-05). Bytes that arrive after the resync are ordinary
+        // keystrokes: the view left 15 of this flood's payload still past the
+        // abandon window, and they decode as 'q' keys in this same call.
+        $before = $this->decoder->droppedUnknownCount();
         $events = $this->decoder->decode("\x1bP" . str_repeat('q', 1024 + 65536 + 16));
-        $this->assertCount(17, $events, 'one truncated drain plus the 16 bytes past the abandon boundary');
+        $this->assertCount(16, $events, 'one truncated drain plus the bytes past the view budget, as keys');
         $this->assertTrue($events[0]->truncated);
         $this->assertSame('q', $events[1]->key);
         $this->assertSame(1, $this->decoder->drainedReplyCount());
+        $this->assertSame(
+            1,
+            $this->decoder->droppedUnknownCount() - $before,
+            'the swallowed flood body folds to exactly one counted drop',
+        );
         // After abandoning, keystrokes decode again.
         $events = $this->decoder->decode("\x1b[A");
         $this->assertCount(1, $events);
@@ -522,9 +531,15 @@ final class TerminalReplyDrainTest extends TestCase
 
     public function testStringFloodDecodingIsChunkingInvariant(): void
     {
-        // The reviewer's unterminated-DCS flood must yield the IDENTICAL event
-        // stream whether delivered in one chunk or in 7-byte reads: one truncated
-        // drain, the same bytes replayed after the abandon boundary, no more.
+        // The reviewer's unterminated-DCS flood must drain exactly once, fold
+        // the in-hand body past the abandon boundary into exactly ONE counted
+        // drop, and leave a live resynchronised stream — no matter how the
+        // bytes are chunked (SI-10: the replay that used to keep the attacker's
+        // own noise byte-identical across chunkings became the unbounded-event
+        // yield this fold refuses; how many noise bytes were still in-hand at
+        // the boundary is deliberately chunk-dependent). The invariants that
+        // must NOT shift with chunk size are the control behaviour: one drain,
+        // one counted abandon, identical post-resync stream, empty remainder.
         $flood = "\x1bP" . str_repeat('zx', 40000);
         $oneShot = new EscapeDecoder();
         $chunked = new EscapeDecoder();
@@ -532,12 +547,16 @@ final class TerminalReplyDrainTest extends TestCase
         for ($off = 0; $off < strlen($flood); $off += 7) {
             $chunkEvents = array_merge($chunkEvents, $chunked->decode(substr($flood, $off, 7)));
         }
-        $this->assertSame(
-            self::signatures($oneShot->decode($flood)),
-            self::signatures($chunkEvents),
-            'chunk size must not alter the event stream',
-        );
+        $oneShotEvents = $oneShot->decode($flood);
+        $this->assertSame(1, $oneShot->drainedReplyCount());
         $this->assertSame($oneShot->drainedReplyCount(), $chunked->drainedReplyCount());
+        $this->assertSame(1, $oneShot->droppedUnknownCount(), 'the swallowed body is ONE drop');
+        $this->assertSame($oneShot->droppedUnknownCount(), $chunked->droppedUnknownCount());
+        $drainOne = array_values(array_filter($oneShotEvents, static fn(Event $e): bool => $e instanceof TerminalReplyEvent));
+        $drainTwo = array_values(array_filter($chunkEvents, static fn(Event $e): bool => $e instanceof TerminalReplyEvent));
+        $this->assertSame(self::signatures($drainOne), self::signatures($drainTwo));
+        $this->assertCount(1, $drainOne);
+        $this->assertTrue($drainOne[0]->truncated);
         // Both decoders abandoned the phantom string; the stream is live and identical.
         $this->assertSame(
             self::signatures($oneShot->decode("\x1b[A")),

@@ -148,7 +148,10 @@ policy. A byte-at-a-time stream makes every bare `ESC` resolve eagerly to the
 `Escape` key under the default options (the deferred mode just holds it
 forever until flushed). Real reads deliver whole frames; if your reader can
 legitimately return 1 byte at a time, enable `deferTrailingEscape` and bound
-it with an idle timer.
+it with an idle timer. `decode()`'s per-call work is linear in the chunk it
+is handed — no leg re-slices the remaining stream per escape — so a giant
+blob costs proportional time, never quadratic; the drivers' 8192-byte reads
+are the recommended ceiling for latency, not for safety.
 
 Feature groups toggle through `EscapeDecoderOptions` — five `public readonly`
 bools (`enableKitty`, `enableFocus`, `enablePaste`, `enableMouse`,
@@ -332,9 +335,12 @@ in one read or across many — is surfaced exactly once with `truncated` set and
 open OSC/DCS until its terminator (even a terminator split across the chunk
 boundary) rather than resuming key decoding mid-string, which would leak the
 tail as keystrokes. A stream that never terminates the string is abandoned
-after 64 KiB of swallowed payload so keystrokes resume; that abandon boundary
-is byte-exact, so for never-terminated streams chunk size cannot change the
-decoded event stream. Between the announce and the real terminator up to 64
+after 64 KiB of swallowed payload so keystrokes resume; the abandon folds the
+still-in-hand body past the boundary into ONE counted drop rather than
+replaying it as a flood of printable keys. Which noise bytes that drop covers
+depends on where the reads fell; what cannot shift with chunk size is the
+control behaviour: one drain, one counted abandon, keystrokes resuming
+afterwards. Between the announce and the real terminator up to 64
 KiB of further traffic — including genuine keystrokes — is silently absorbed;
 that is the deliberate safety direction (a stuck prober swallows keys rather
 than a forged string forging them). A pathological reply that terminates only
