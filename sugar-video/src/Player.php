@@ -1726,6 +1726,11 @@ final class Player implements Model
      * before the latch existed; a host has no reason to keep feeding input to a
      * torn-down player. To play again, construct a FRESH Player (or `open()` a
      * new one) — reusing the stopped instance will not resurrect its decoder.
+     *
+     * SV-X95: the exit-code tolerance that classifies the video child's
+     * teardown is measured on Linux only; the Windows disposition (refused at
+     * spawn by SV-M44, unmeasured-by-design otherwise) is documented at
+     * {@see \SugarCraft\Video\Decode\FfmpegDecoder::isTeardownExit()}.
      */
     public function stop(): void
     {

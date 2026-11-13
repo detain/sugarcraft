@@ -721,6 +721,19 @@ final class FfmpegDecoder implements Decoder
      * logged. A genuine failure (unreadable input, missing codec, a filtergraph
      * ffmpeg rejects) still exits with its own status and still gets its line.
      *
+     * SV-X95 disposition: this tolerance table is MEASURED on Linux only. On
+     * Windows `signaled` never reports true and the shutdown ladder's own
+     * terminate stamps platform-specific codes, so a teardown there could be
+     * classified as an abnormal exit — the risk direction is FALSE-ABNORMAL
+     * LOG CHURN, never a missed crash (an unrecognised exit still prints its
+     * line, which is the safe side). No behaviour is widened on guess: the
+     * tolerance may only gain Windows arms when a Windows CI leg exists to
+     * measure them (owed-conditional — same named-survivor class as the rest
+     * of the program's Windows backlog). SV-M44's default-leg refusal makes
+     * the whole question unreachable at runtime on Windows anyway: the ffmpeg
+     * pump cannot open there, so only the stub-harness legs can reach this
+     * code on that platform.
+     *
      * @param bool $signalled `proc_get_status()['signaled']`, sampled before
      *                        the reap that would have erased it
      */
