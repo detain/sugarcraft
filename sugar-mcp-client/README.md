@@ -65,7 +65,7 @@ $server = new StdioMcpServer(
 
 $server->start();                    // initialize → notifications/initialized → tools/list
 foreach ($server->listTools() as $tool) {
-    // description is server-authored prose: sanitize before it reaches a terminal
+    // description is server-authored prose: sanitise before it reaches a terminal
     echo $tool->name, ': ', Sanitize::untrusted($tool->description), PHP_EOL;
 }
 
@@ -423,7 +423,7 @@ policy to write, not a behaviour to inherit.
   produced — nothing exposes them as counters — so code that must branch on
   failure should key on the signals above rather than parse prose (and the
   text `stderrTail()` and the `serverInfo()` / `serverCapabilities()` maps
-  return is server-authored and UNTRUSTED, render it through a sanitizer).
+  return is server-authored and UNTRUSTED, render it through a sanitiser).
 
 ## Wire shape
 

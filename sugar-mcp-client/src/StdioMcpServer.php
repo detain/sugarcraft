@@ -444,7 +444,7 @@ final class StdioMcpServer implements McpServer
      *        piecewise with {@see $clientName}/{@see $clientVersion} instead;
      *        the two doors are mutually exclusive
      * @param string|null $cwd directory the child process starts in; null (the
-     *        default) keeps the historic inherit-the-parent-cwd behavior
+     *        default) keeps the historic inherit-the-parent-cwd behaviour
      *        byte-identical. An embedder that must not let a server see where
      *        it happened to be launched passes an absolute directory and the
      *        child opens there — the move is proc_open's own cwd argument, so
@@ -913,7 +913,7 @@ final class StdioMcpServer implements McpServer
             }
 
             // Keep what the server advertised: server-authored data handed
-            // out verbatim by the accessors, for the consumer to sanitize.
+            // out verbatim by the accessors, for the consumer to sanitise.
             // Judging-and-discarding used to leave the identity unrecoverable.
             $this->initializeResult = is_array($response->result) ? $response->result : null;
 
@@ -1029,7 +1029,7 @@ final class StdioMcpServer implements McpServer
      * The captured stderr tail, control characters swept. Survives stop() on
      * purpose: a server that died is the one whose logs you want. The TEXT
      * is server-authored and remains UNTRUSTED — render it through a
-     * sanitizer before terminal-facing display.
+     * sanitiser before terminal-facing display.
      */
     public function stderrTail(): string
     {
@@ -2822,7 +2822,7 @@ final class StdioMcpServer implements McpServer
                 // definitions" is diagnosable; a shorter tool list than the
                 // server promised is not. The name that failed the gate is
                 // EXACTLY the text the -004 control-gate exists to refuse,
-                // so the ledger never gets to announce it raw: sanitize to
+                // so the ledger never gets to announce it raw: sanitise to
                 // printable bytes and cap the row, same posture the stderr
                 // tail keeps. The get_debug_type rows are already ours.
                 $dropped[] = is_array($def) && isset($def['name']) && is_string($def['name'])
