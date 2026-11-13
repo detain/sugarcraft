@@ -31,6 +31,20 @@ use SugarCraft\Forms\Util\ViewportPan;
  *   hidden.
  * - `allowedExtensions` — when non-empty, files whose extension isn't in
  *   the list are hidden. Always includes directories regardless.
+ *
+ * TRUST MODEL (sugar-forms-080): this is a whole-filesystem browser BY
+ * DESIGN, and the filters above are a DISPLAY FILTER — not a sandbox.
+ * `withAllowedExtensions(['png'])` hides non-matching files from the list;
+ * it does not refuse them: `evil.sh.png` sails through a `['png']` allow-list
+ * untouched (the final extension is what the filter reads), and directory entries are exempt from the
+ * extension filter entirely, so the user can walk anywhere the process can
+ * read — through symlinked directories on descent and up to the filesystem
+ * root with Backspace. Nothing here confines the CHOSEN path. Applications
+ * that need a bounded picker must enforce their own containment on
+ * `selected()` (realpath, prefix-check the resolved directory, re-verify
+ * the extension on the basename with a trailing-dot-safe matcher) before
+ * acting on the value — the display filter is user assistance, never a
+ * security boundary.
 
  * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class FilePicker implements Model
@@ -269,7 +283,15 @@ final class FilePicker implements Model
         return $this->mutate(showHidden: $on)->refresh();
     }
 
-    /** @param list<string> $exts */
+    /**
+     * Display filter only — hides files whose FINAL extension is not listed;
+     * never a sandbox (see the TRUST MODEL block in the class doc:
+     * `evil.sh.png` passes ['png'], directories are exempt, the walk reaches
+     * anywhere the process can read). Enforce/contain the selected path in
+     * your own code.
+     *
+     * @param list<string> $exts
+     */
     public function withAllowedExtensions(array $exts): self
     {
         $clean = array_values(array_map(static fn(string $e) => ltrim(strtolower($e), '.'), $exts));

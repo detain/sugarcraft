@@ -136,12 +136,26 @@ $form = Form::new(
 | `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withWidth(int)`, `withVisibleLines(int)` (page by LINES, not items — `withHeight` counts items, so described entries can double the painted rows), `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, …)`, `withEnum(\BackedEnum::class)` | list keys Up/Down or k/j, PageUp/PageDown, Home/g, End/G; the / key opens the filter (typing + Backspace narrow, Enter/Escape end it — claimed); click to position when focused |
 | `MultiSelect` | Multi-choice list (k/j vim keys + space to toggle)          | `withOptions(...)`, `withWidth(int)`, `withLimit(int)` | Up/Down or k/j, Home/g, End/G, Space toggles the cursor, digits 1-9 toggle the option in that slot (first option = 1; a digit past the list end is inert, modified digits stay free) |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) | none (inert) |
-| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Forms\FilePicker\FilePicker`) | `withDirAllowed`, `withFileAllowed`, `withAllowedExtensions`, `withShowHidden` (starting directory via `FilePicker::new($key, $cwd)`) | Up/Down or k/j, Home/End, Enter selects or enters a directory, Backspace/Left ascend, Right enters; no filter typing, no mouse |
+| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Forms\FilePicker\FilePicker`) | `withDirAllowed`, `withFileAllowed`, `withAllowedExtensions` (a display filter only — see FilePicker trust model below, never a sandbox), `withShowHidden` (starting directory via `FilePicker::new($key, $cwd)`) | Up/Down or k/j, Home/End, Enter selects or enters a directory, Backspace/Left ascend, Right enters; no filter typing, no mouse |
 | `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withValidator(Validator\|\Closure\|null)` (replaces; null clears) | Left/Right or h/l day, Up/Down or k/j week (claimed arrows); Shift+Left/Right and PageUp/PageDown month, Home/End month edges, Space commits; movement auto-commits |
 | `Slider`      | Numeric range slider (keyboard drag, snapping step)         | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withValidator(Validator\|\Closure\|null)` (replaces; null clears) | Left/Right or h/l step, Home/End clamp; mouse only when the host routes MouseMsg or calls the zone-drag API — the widget never negotiates drag itself |
 | `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)` | Left/Right or h/l green, Up/Down or k/j blue (claimed arrows); PageUp/PageDown red, Home/End clamp green |
 | `NumberField` | Bounded numeric input — draft text + committed value aligned to `withStep()` multiples | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withoutValue()` (never-set ≠ 0), `withPlaceholder`, `withWidth` | Up/Down plus or minus 1 (claimed arrows), PageUp/PageDown by tens, Home/End clamp; typing and editing ride the inner Input; Enter commits only when a custom map frees it (default: Enter submits or advances) |
 | `RadioPills`  | Horizontal pill row, single choice by arrows or mouse; windows the roster around the selection when a width is set | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc`, `withWidth` | Left/Right or h/l, Home/End; pill-zone clicks when the host routes MouseMsg (press, drag and release equivalent) |
+
+#### FilePicker trust model
+
+FilePicker is a whole-filesystem browser **by design**. `withAllowedExtensions`
+(and `withShowHidden`) are a **display filter — not a sandbox**: they hide
+entries from the list, they never refuse them. A spoof like `evil.sh.png`
+passes a `['png']` allow-list (the filter reads the final extension),
+directories are exempt from the extension filter entirely, and the user can
+walk anywhere the process can read — descending symlinked directories with
+Enter, ascending to the filesystem root with Backspace. Nothing in the
+picker confines the chosen path: applications that need a bounded picker
+must enforce their own containment on the selected value (realpath,
+prefix-check the resolved directory, re-verify the extension with a
+trailing-dot-safe matcher) before acting on it.
 
 All fields share a common navigation contract: `Tab` / `↓` advances,
 `Shift+Tab` / `↑` retreats (Shift+Tab arrives on the wire as CSI `Z`,
