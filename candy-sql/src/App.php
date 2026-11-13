@@ -1559,7 +1559,7 @@ final class App implements Model
         $loading = $this->mutate([
             'browse' => $browse,
             'query' => $this->query->withPlan(null),
-            'ui' => $this->ui->withError(null)->withStatus('loading…'),
+            'ui' => $this->ui->withError(null)->withStatus(Lang::t('ui.loading')),
         ]);
         return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name, $browse->loadGen, $pageOffset))];
     }

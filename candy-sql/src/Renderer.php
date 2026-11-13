@@ -143,7 +143,7 @@ final class Renderer
             $query = self::queryPane($a, $cols);
             $paneCount = count(AdminPane::orderedCases());
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render("1-{$paneCount}  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  back  ·  esc  cancel dialog");
+                ->render(Lang::t('ui.help.admin', ['count' => $paneCount]));
             $status = '';
             $ioPrompt = self::ioPrompt($a) ?? self::editPrompt($a);
             if ($ioPrompt !== null) {
@@ -153,7 +153,7 @@ final class Renderer
                 // Driver/server error text is untrusted for the terminal —
                 // a hostile server can embed ESC sequences in its message.
                 $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                    ->render('error: ' . CellValue::sanitize((string) $a->ui->error));
+                    ->render(Lang::t('ui.error', ['message' => CellValue::sanitize((string) $a->ui->error)]));
             } elseif ($a->ui->status !== null) {
                 $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
                     ->render(CellValue::sanitize((string) $a->ui->status));
@@ -173,14 +173,14 @@ final class Renderer
         // Help text differs per pane
         if ($a->ui->pane === Pane::Query) {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('tab  switch pane  ·  ctrl+r / ctrl+e  run  ·  enter  newline  ·  ↑/↓  recall history  ·  ctrl+c  quit');
+                ->render(Lang::t('ui.help.query'));
         } elseif ($a->ui->pane === Pane::Rows && $a->browse->selectedTable !== null && $a->browse->selectedTable !== '(query)') {
             // SQL-O03: the edit chords are advertised where they act.
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('tab  switch pane  ·  h/l  cell  ·  e  edit  ·  o  new row  ·  D  delete  ·  x  export  ·  q / esc  quit');
+                ->render(Lang::t('ui.help.rows'));
         } else {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('tab  switch pane  ·  enter  load table  ·  x  export  ·  i  import  ·  q / esc  quit');
+                ->render(Lang::t('ui.help.browse'));
         }
 
         $status = '';
@@ -192,7 +192,7 @@ final class Renderer
                 ->render($ioPrompt);
         } elseif ($a->ui->error !== null) {
             $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                ->render('error: ' . CellValue::sanitize((string) $a->ui->error));
+                ->render(Lang::t('ui.error', ['message' => CellValue::sanitize((string) $a->ui->error)]));
         } elseif ($a->ui->status !== null) {
             $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
                 ->render(CellValue::sanitize((string) $a->ui->status));
@@ -219,17 +219,17 @@ final class Renderer
         $width = $budget >= 24 ? max(24, min($maxTableLen, $budget)) : max(12, $budget);
 
         if ($a->browse->tables === []) {
-            $body = Style::new()->foreground(Color::hex('#7d6e98'))->render('(no tables)');
-            return self::frame($a, Pane::Tables, ' tables ', $body, $width);
+            $body = Style::new()->foreground(Color::hex('#7d6e98'))->render(Lang::t('ui.no_tables'));
+            return self::frame($a, Pane::Tables, Lang::t('ui.title.tables'), $body, $width);
         }
 
         // SQL-O10: the open `/` line is echoed in the pane title; a filter
         // that excludes everything says so instead of rendering an empty box.
         $title = $a->browse->filterMode
             ? ' /' . CellValue::sanitize($a->browse->filterText) . ' '
-            : ' tables ';
+            : Lang::t('ui.title.tables');
         if ($a->browse->visibleTables() === []) {
-            $body = Style::new()->foreground(Color::hex('#7d6e98'))->render('(no match)');
+            $body = Style::new()->foreground(Color::hex('#7d6e98'))->render(Lang::t('ui.no_match'));
             return self::frame($a, Pane::Tables, $title, $body, $width);
         }
 
@@ -280,7 +280,7 @@ final class Renderer
      */
     private static function rowsPane(App $a, int $available = 12, int $terminalCols = 80): string
     {
-        $title = ' rows ' . ($a->browse->selectedTable ? '[' . CellValue::sanitize($a->browse->selectedTable) . '] ' : '');
+        $title = Lang::t('ui.title.rows') . ($a->browse->selectedTable ? '[' . CellValue::sanitize($a->browse->selectedTable) . '] ' : '');
 
         $cols = array_keys($a->browse->rows[0] ?? []);
         $numFields = count($cols);
@@ -308,15 +308,15 @@ final class Renderer
             if (count($lines) > $available) {
                 $lines = array_slice($lines, 0, $available);
             }
-            return self::frame($a, Pane::Rows, ' explain ', implode("\n", $lines), $width);
+            return self::frame($a, Pane::Rows, Lang::t('ui.title.explain'), implode("\n", $lines), $width);
         }
 
         if ($a->browse->rows === []) {
             // Distinguish "no rows here" from "the async browse fetch is still
             // in flight" so a remote table doesn't look empty while it loads.
             $body = $a->browse->rowsLoading
-                ? Style::new()->foreground(Color::hex('#fbbf24'))->render('loading…')
-                : Style::new()->foreground(Color::hex('#7d6e98'))->render('(empty)');
+                ? Style::new()->foreground(Color::hex('#fbbf24'))->render(Lang::t('ui.loading'))
+                : Style::new()->foreground(Color::hex('#7d6e98'))->render(Lang::t('ui.empty'));
             return self::frame($a, Pane::Rows, $title, $body, $width);
         }
 
@@ -393,7 +393,7 @@ final class Renderer
         // cursor only while focused (Query pane). Size it to the pane at render
         // time without mutating App state.
         $body = $a->editor()->withWidth($width)->view();
-        return self::frame($a, Pane::Query, ' query ', $body, $width);
+        return self::frame($a, Pane::Query, Lang::t('ui.title.query'), $body, $width);
     }
 
     private static function adminPane(App $a, int $terminalCols): string
@@ -438,7 +438,7 @@ final class Renderer
         } catch (\Throwable $e) {
             // SQL-C01 fold seam (view leg): a page that cannot paint answers
             // an honest error line instead of exiting the TUI.
-            $pageContent = 'admin page unavailable: ' . $e->getMessage();
+            $pageContent = Lang::t('ui.admin_unavailable', ['reason' => $e->getMessage()]);
         }
 
         // This pane spans the full width. The outer BorderFrame content area is
@@ -455,7 +455,7 @@ final class Renderer
 
         // Wrap the combined output in a single frame; the title rides in the border.
         $focused = $a->ui->pane === Pane::Admin;
-        $st = Style::new()->border(Border::rounded()->withTitle($focused ? self::focusedTitle(' admin ') : ' admin '))->padding(0, 1)->width($innerWidth);
+        $st = Style::new()->border(Border::rounded()->withTitle($focused ? self::focusedTitle(Lang::t('ui.title.admin')) : Lang::t('ui.title.admin')))->padding(0, 1)->width($innerWidth);
         $st = $focused
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
@@ -533,10 +533,10 @@ final class Renderer
     {
         $line = CellValue::sanitize($a->io->buffer);
         return match ($a->io->stage) {
-            ExportState::STAGE_EXPORT_PATH => 'to CSV → ' . $line . '  (enter writes · esc cancels)',
-            ExportState::STAGE_EXPORT_OVERWRITE => 'REPLACE ' . $line . '?  (enter confirms · esc cancels)',
-            ExportState::STAGE_IMPORT_PATH => 'import CSV ← ' . $line . '  (enter · esc cancels)',
-            ExportState::STAGE_IMPORT_TABLE => 'importing ' . CellValue::sanitize($a->io->path) . ' → table ' . $line . '  (enter · esc cancels)',
+            ExportState::STAGE_EXPORT_PATH => Lang::t('io.prompt_export', ['path' => $line]),
+            ExportState::STAGE_EXPORT_OVERWRITE => Lang::t('io.prompt_replace', ['path' => $line]),
+            ExportState::STAGE_IMPORT_PATH => Lang::t('io.prompt_import_path', ['path' => $line]),
+            ExportState::STAGE_IMPORT_TABLE => Lang::t('io.prompt_import_table', ['source' => CellValue::sanitize($a->io->path), 'table' => $line]),
             default => null,
         };
     }

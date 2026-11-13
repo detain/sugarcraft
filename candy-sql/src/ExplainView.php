@@ -81,7 +81,7 @@ final class ExplainView
     {
         if ($this->rows === []) {
             return Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('(no query plan — query returned no rows)');
+                ->render(Lang::t('explain.no_plan'));
         }
 
         $lines = [];
@@ -90,7 +90,7 @@ final class ExplainView
         }
 
         $header = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-            ->render(' QUERY PLAN ');
+            ->render(Lang::t('explain.title'));
         $body   = implode("\n", $lines);
 
         return $header . "\n" . $body;

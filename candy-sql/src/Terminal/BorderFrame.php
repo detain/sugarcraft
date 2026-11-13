@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Terminal;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Cli\Frame;
 use SugarCraft\Sql\Admin\AdminPane;
@@ -69,7 +70,7 @@ final class BorderFrame
         // Table count.
         // SQL-O10: while filtering, the badge is honest — visible/total.
         $visible = $a->browse->filterText === '' ? null : count($a->browse->visibleTables());
-        $parts[] = 'Tables: ' . ($visible === null ? (string) count($a->browse->tables) : $visible . '/' . count($a->browse->tables));
+        $parts[] = Lang::t('bar.tables', ['count' => $visible === null ? (string) count($a->browse->tables) : $visible . '/' . count($a->browse->tables)]);
 
         // Connection info (dsn) — only if non-empty. Sanitized: the title bar
         // is terminal output and every other server-derived string on it is
@@ -93,29 +94,29 @@ final class BorderFrame
      */
     private static function buildStatusBar(App $a): string
     {
-        $segments = ['Tab:cycle', '↑↓:navigate'];
+        $segments = [Lang::t('bar.cycle'), Lang::t('bar.navigate')];
 
         if ($a->ui->pane === Pane::Tables || $a->ui->pane === Pane::Rows) {
-            $segments[] = 'Enter:load';
+            $segments[] = Lang::t('bar.load');
         }
         if ($a->ui->pane === Pane::Query) {
-            $segments[] = 'Ctrl+R:run';
+            $segments[] = Lang::t('bar.run');
         }
         if ($a->ui->pane === Pane::Admin) {
             // Derive the digit range from the pane list so it never drifts when
             // panes are added/removed (the audit caught a stale hardcoded "1-6"
             // after the pane count grew to 8 — orderedCases() is the source of truth).
-            $segments[] = '1-' . count(AdminPane::orderedCases()) . ':select';
-            $segments[] = 'j/k:nav';
+            $segments[] = Lang::t('bar.select', ['count' => count(AdminPane::orderedCases())]);
+            $segments[] = Lang::t('bar.nav');
             $segments[] = '[' . $a->admin->pane->label() . ']';
         }
-        $segments[] = 'q:quit';
+        $segments[] = Lang::t('bar.quit');
 
         $status = implode('  ', $segments);
 
         // Show PAUSED indicator when the admin dashboard is paused.
         if ($a->ui->pane === Pane::Admin && $a->admin->paused) {
-            $status .= '  ' . Style::new()->bold()->foreground(Color::ansi(6))->render('[PAUSED]');
+            $status .= '  ' . Style::new()->bold()->foreground(Color::ansi(6))->render(Lang::t('bar.paused'));
         }
 
         return $status;

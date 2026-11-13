@@ -409,7 +409,7 @@ final class ResultTable
     {
         if ($this->rows === []) {
             return Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('(empty result set)');
+                ->render(Lang::t('result.empty'));
         }
 
         $budget = $this->rowBudget();
@@ -473,7 +473,7 @@ final class ResultTable
     public function renderPlain(): string
     {
         if ($this->rows === []) {
-            return '(empty result set)';
+            return Lang::t('result.empty');
         }
 
         $lines = [];

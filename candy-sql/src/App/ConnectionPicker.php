@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\App;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -93,7 +94,7 @@ final class ConnectionPicker implements Model
     {
         $lines = [
             Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('candy-sql')
-            . ' — ' . Style::new()->bold()->render('saved connections'),
+            . ' — ' . Style::new()->bold()->render(Lang::t('picker.title')),
             '',
         ];
 
@@ -109,7 +110,7 @@ final class ConnectionPicker implements Model
 
         $lines[] = '';
         $lines[] = Style::new()->foreground(Color::hex('#6b7280'))->render(
-            '[↑↓/j/k] choose   [Enter] connect   [q] cancel',
+            Lang::t('picker.help'),
         );
 
         return implode("\n", $lines);
