@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'clave no permitida: {fingerprint}',
     'auth.reject_unpaired' => 'la clave no está asociada al usuario solicitado: {fingerprint} como {name}',
     'auth.reject_validation' => 'falló la validación de la clave: {fingerprint}',
+    'auth.allowlist_unsupported' => 'La lista permitida contiene una entrada de un tipo no admitido: {type} — omitida, nunca podrá coincidir',
     'middleware.async_auth_failed' => 'autenticación fallida: {why}',
 ];

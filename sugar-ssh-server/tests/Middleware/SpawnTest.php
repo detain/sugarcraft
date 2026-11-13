@@ -120,6 +120,24 @@ final class SpawnTest extends TestCase
         $spawn->handle(Context::background(), $this->fakeSession(), fn() => null);
     }
 
+    public function testThrowsOnNonStringArgvElement(): void
+    {
+        // Audit 043: the docblock promises list<string>; the element type
+        // is enforced where the promise is made, not where proc_open
+        // discovers the lie.
+        foreach ([42, 3.14, null, [], true] as $poison) {
+            $spawn = new Spawn(fn () => ['cmd' => ['/bin/ls', $poison]]);
+            $spawn->setTransport($this->nullSpawner());
+
+            try {
+                $spawn->handle(Context::background(), $this->fakeSession(), fn () => null);
+                $this->fail('a non-string argv element must die at validation, got type ' . \gettype($poison));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('argv strings', $e->getMessage());
+            }
+        }
+    }
+
     public function testDoesNotInvokeNext(): void
     {
         $nextCalled = false;

@@ -34,7 +34,7 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * same peer-asserted value: it is input to log, not a setting to obey.
  *
  * Coverage is uneven and pinned so it can only improve: eleven of the
- * thirty-four keys are still English placeholders in all fifteen translated
+ * thirty-five keys are still English placeholders in all fifteen translated
  * locales (roster in `tests/LangRosterTest.php`).
  *
  * @extends BaseLang

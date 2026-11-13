@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'Schlüssel nicht erlaubt: {fingerprint}',
     'auth.reject_unpaired' => 'Schlüssel nicht dem angeforderten Benutzer zugeordnet: {fingerprint} als {name}',
     'auth.reject_validation' => 'Schlüsselüberprüfung fehlgeschlagen: {fingerprint}',
+    'auth.allowlist_unsupported' => 'Die Allowlist enthält einen Eintrag eines nicht unterstützten Typs: {type} — übersprungen, kann nie übereinstimmen',
     'middleware.async_auth_failed' => 'Authentifizierung fehlgeschlagen: {why}',
 ];

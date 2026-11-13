@@ -128,7 +128,7 @@ final class RateLimit implements Middleware
             return;
         }
         $specs = $this->bucketsFor($session);
-        $this->withState(function (array &$data) use ($specs, $tokens): bool {
+        $this->underLock(function (array &$data) use ($specs, $tokens): bool {
             $now = \microtime(true);
             foreach ($specs as [$key, $burst, $rate]) {
                 $current = self::refill($data, $key, $burst, $rate, $now);
@@ -175,7 +175,7 @@ final class RateLimit implements Middleware
     private function take(Session $session): bool
     {
         $specs = $this->bucketsFor($session);
-        return $this->withState(function (array &$data) use ($specs): bool {
+        return $this->underLock(function (array &$data) use ($specs): bool {
             $now      = \microtime(true);
             $refilled = [];
             foreach ($specs as [$key, $burst, $rate]) {
@@ -305,9 +305,13 @@ final class RateLimit implements Middleware
      * a stable sidecar inode — see the class docblock for why the payload
      * inode cannot.
      *
+     * Audit 047 rename (was `withState`): this is not a `with*()` value-
+     * object setter — it runs a decision UNDER the lock. The name now says
+     * what the grep-for-name reader needs to know.
+     *
      * @param callable(array<string,array{tokens:float,last:float,burst?:int,rate?:float}> &): bool $fn
      */
-    private function withState(callable $fn): bool
+    private function underLock(callable $fn): bool
     {
         $lock = $this->acquireLock();
         if ($lock === false) {

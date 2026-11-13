@@ -9,8 +9,8 @@ use SugarCraft\SshServer\Channel\ChannelMsg;
 /**
  * PTY request channel message.
  *
- * Emitted when the SSH client requests a pseudo-terminal (want Pty = true)
- * or releases it (want Pty = false).
+ * Emitted when the SSH client requests a pseudo-terminal (`wantPty` = true)
+ * or releases it (`wantPty` = false).
  */
 final class PtyReqMsg extends ChannelMsg
 {

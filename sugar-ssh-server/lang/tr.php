@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'anahtara izin yok: {fingerprint}',
     'auth.reject_unpaired' => 'anahtar istenen kullanıcıyla eşleşmiyor: {fingerprint} / {name}',
     'auth.reject_validation' => 'anahtar doğrulaması başarısız: {fingerprint}',
+    'auth.allowlist_unsupported' => 'İzin listesi desteklenmeyen bir türe sahip bir giriş içeriyor: {type} — atlandı, asla eşleşemez',
     'middleware.async_auth_failed' => 'kimlik doğrulama başarısız: {why}',
 ];

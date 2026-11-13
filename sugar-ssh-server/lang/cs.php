@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'klíč není povolen: {fingerprint}',
     'auth.reject_unpaired' => 'klíč nenále¹í požadovanému uživateli: {fingerprint} jako {name}',
     'auth.reject_validation' => 'ověření klíče selhalo: {fingerprint}',
+    'auth.allowlist_unsupported' => 'Seznam povolených obsahuje položku nepodporovaného typu: {type} — přeskočeno, nikdy se nemůže shodovat',
     'middleware.async_auth_failed' => 'ověřené selhalo: {why}',
 ];

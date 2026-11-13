@@ -115,6 +115,9 @@ final class Auth implements Middleware
     private array $userKeys;
     /** @var resource */
     private $stderr;
+
+    /** Audit 044: a malformed allowlist entry announces itself once, never per walk. */
+    private bool $allowlistNoticeSent = false;
     /** @var (callable(string, Session): bool)|null */
     private $fingerprintValidator;
 
@@ -276,6 +279,15 @@ final class Auth implements Middleware
         $found = false;
         foreach ($allowed as $candidate) {
             if (!is_string($candidate)) {
+                // Audit 044: the skip is the direction-safe half (a malformed
+                // entry can never match); this is the honest half — the
+                // operator learns the allowlist is broken instead of the
+                // gate quietly ignoring an entry forever. Once per instance:
+                // the shape of the mistake does not change between walks.
+                if (!$this->allowlistNoticeSent) {
+                    $this->allowlistNoticeSent = true;
+                    fwrite($this->stderr, Lang::t('auth.allowlist_unsupported', ['type' => \gettype($candidate)]) . "\n");
+                }
                 continue;
             }
             if (hash_equals($candidate, $presented)) {

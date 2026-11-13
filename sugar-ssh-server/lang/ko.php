@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => '키가 허용되지 않았습니다: {fingerprint}',
     'auth.reject_unpaired' => '키가 요청된 사용자와 항상이 아닙니다: {fingerprint} / {name}',
     'auth.reject_validation' => '키 검증 실패: {fingerprint}',
+    'auth.allowlist_unsupported' => '인증 허용 목록에 지원되지 않는 형식({type})의 항목이 있습니다 — 건너뛰며 절대 일치하지 않습니다',
     'middleware.async_auth_failed' => '인증 실패: {why}',
 ];

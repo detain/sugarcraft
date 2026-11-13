@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'chiave non consentita: {fingerprint}',
     'auth.reject_unpaired' => 'chiave non abbinata all’utente richiesto: {fingerprint} come {name}',
     'auth.reject_validation' => 'convalida della chiave fallita: {fingerprint}',
+    'auth.allowlist_unsupported' => 'L’allowlist contiene una voce di un tipo non supportato: {type} — saltata, non potrà mai corrispondere',
     'middleware.async_auth_failed' => 'autenticazione fallita: {why}',
 ];

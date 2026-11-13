@@ -860,6 +860,34 @@ final class DocSurfaceTruthTest extends TestCase
         return null;
     }
 
+    public function testTheRateLimitLockHelperIsNamedForWhatItDoes(): void
+    {
+        // Audit 047: `withState` read like a value-object setter; the method
+        // runs a decision under the file lock. Rename, pinned structurally
+        // so a future hand cannot re-introduce the misleading alias.
+        $src = (string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware/RateLimit.php');
+        self::assertStringContainsString('private function underLock(', $src);
+        self::assertStringNotContainsString('function withState(', $src, 'the old definition must not survive');
+        self::assertStringNotContainsString('$this->withState(', $src, 'nor may any call site');
+        self::assertSame(2, \substr_count($src, '$this->underLock('), 'both call sites ride the new name');
+    }
+
+    public function testThePtyReqDocblockNamesTheRealProperty(): void
+    {
+        // Audit 080: the docblock said "want Pty" — a grep-for-name reader
+        // hunting `want Pty` finds nothing while `wantPty` exists; the
+        // FALLBACK_SHELL sentence had lost its separator and ran together.
+        $msg = (string) \file_get_contents(\dirname(__DIR__) . '/src/Channel/Msg/PtyReqMsg.php');
+        self::assertStringNotContainsString('want Pty', $msg);
+        self::assertStringContainsString('(`wantPty` = true)', $msg);
+        $dch = (string) \file_get_contents(\dirname(__DIR__) . '/src/Channel/DefaultChannelHandler.php');
+        self::assertStringContainsString(
+            "environment variable is available:\n     * `/bin/sh` is the POSIX-guaranteed path",
+            $dch,
+            'the fallback docblock must read as two clauses, not one run-on',
+        );
+    }
+
     private function readme(): ?string
     {
         $path = \dirname(__DIR__) . '/README.md';

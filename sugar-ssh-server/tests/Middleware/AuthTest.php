@@ -98,6 +98,34 @@ final class AuthTest extends TestCase
         $this->assertStringContainsString('Unauthorized', $read());
     }
 
+    public function testMalformedAllowlistEntryIsSkippedWithOneTimeNotice(): void
+    {
+        // Audit 044: a non-string entry can never match (direction-safe —
+        // that half was already true) but must not be silently ignored
+        // forever. It announces its type once, on the gate's own stream.
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:needle';
+        [$err, $read] = $this->stderr();
+        $a = new Auth([], [42, 'SHA256:needle'], $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $out = $read();
+        $this->assertTrue($reached, 'a poisoned entry must not blind the gate to the good ones');
+        $this->assertSame(1, substr_count($out, 'unsupported type: integer'), $out);
+
+        // Two bad entries, still one notice: it is the SHAPE of the mistake
+        // the operator needs, not a count of its instances.
+        [$err2, $read2] = $this->stderr();
+        $b = new Auth([], [42, 43], $err2);
+        $reachedB = false;
+        $b->handle(Context::background(), $this->session('alice'), function () use (&$reachedB): void {
+            $reachedB = true;
+        });
+        $this->assertFalse($reachedB, 'poison alone must not admit');
+        $this->assertSame(1, substr_count($read2(), 'unsupported type: integer'));
+    }
+
     public function testAllowsKnownFingerprint(): void
     {
         $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:goodfinger';

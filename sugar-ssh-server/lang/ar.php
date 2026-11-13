@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'المفتاح غير مسموح به: {fingerprint}',
     'auth.reject_unpaired' => 'المفتاح غير مرتبط بالمستخدم المطلوب: {fingerprint} باسم {name}',
     'auth.reject_validation' => 'فشل التحقق من المفتاح: {fingerprint}',
+    'auth.allowlist_unsupported' => 'قائمة السماح للمصادقة تحتوي على مدخل من نوع غير مدعوم: {type} — تم تجاهله، لا يمكن أن يطابق أبدًا',
     'middleware.async_auth_failed' => 'فشلت المصادقة: {why}',
 ];

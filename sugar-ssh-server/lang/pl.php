@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'klucz niedozwolony: {fingerprint}',
     'auth.reject_unpaired' => 'klucz nie jest sparowany żadanym użytkownikiem: {fingerprint} jako {name}',
     'auth.reject_validation' => 'walidacja klucza nie powiodła się: {fingerprint}',
+    'auth.allowlist_unsupported' => 'Lista dozwolona zawiera wpis nieobsługiwanego typu: {type} — pominięty, nigdy nie będzie pasować',
     'middleware.async_auth_failed' => 'uwierzytelnianie nie powiodło się: {why}',
 ];

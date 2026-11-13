@@ -42,5 +42,6 @@ return [
     'auth.reject_key'                 => 'key not allowed: {fingerprint}',
     'auth.reject_unpaired'            => 'key not paired with the requested user: {fingerprint} as {name}',
     'auth.reject_validation'          => 'key validation failed: {fingerprint}',
+    'auth.allowlist_unsupported'      => 'Auth allowlist contains an entry of an unsupported type: {type} — skipped, it can never match',
     'middleware.async_auth_failed'    => 'auth failed: {why}',
 ];

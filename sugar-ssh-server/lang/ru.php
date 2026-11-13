@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'ключ не разрешён: {fingerprint}',
     'auth.reject_unpaired' => 'ключ не связан с запрошенным пользователем: {fingerprint} как {name}',
     'auth.reject_validation' => 'проверка ключа не удалась: {fingerprint}',
+    'auth.allowlist_unsupported' => 'Список разрешённых содержит запись неподдерживаемого типа: {type} — пропущена, никогда не сможет совпасть',
     'middleware.async_auth_failed' => 'ошибка аутентификации: {why}',
 ];

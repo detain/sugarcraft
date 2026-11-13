@@ -97,6 +97,16 @@ final class Spawn implements Middleware, TransportAware
         if (!isset($cfg['cmd']) || !\is_array($cfg['cmd']) || $cfg['cmd'] === []) {
             throw new \InvalidArgumentException(Lang::t('spawn.bad_cmd'));
         }
+        // Audit 043: the list shape is trusted no further than the engine
+        // types it. A non-string argv element would ride the docblock claim
+        // (`list<string>`) straight into proc_open, where a nested array
+        // surface-coerces or dies depending on SAPI luck. Refuse it here,
+        // under the same key whose wording already promises argv strings.
+        foreach ($cfg['cmd'] as $arg) {
+            if (!\is_string($arg)) {
+                throw new \InvalidArgumentException(Lang::t('spawn.bad_cmd'));
+            }
+        }
 
         /** @var list<string> $cmd */
         $cmd = $cfg['cmd'];

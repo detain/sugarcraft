@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => '不允许的密钥：{fingerprint}',
     'auth.reject_unpaired' => '密钥与请求的用户不匹配：{fingerprint} 作为 {name}',
     'auth.reject_validation' => '密钥验证失败：{fingerprint}',
+    'auth.allowlist_unsupported' => '认证允许列表包含不受支持的类型条目：{type} — 已跳过，永远不会匹配',
     'middleware.async_auth_failed' => '认证失败：{why}',
 ];

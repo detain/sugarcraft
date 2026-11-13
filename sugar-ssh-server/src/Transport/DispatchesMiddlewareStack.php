@@ -54,7 +54,18 @@ trait DispatchesMiddlewareStack
             $session->markRefused();
             return Server::EXIT_DENIED;
         }
-        $next = function (Context $c, Session $s) use ($stack, $idx): void {
+        // Audit 045: the walk is one-shot per level. A middleware that
+        // calls $next twice (the forgot-return-around-a-loop slip) would
+        // run the rest of the stack — and Spawn's terminal child — twice.
+        $nextCalled = false;
+        $next = function (Context $c, Session $s) use ($stack, $idx, &$nextCalled): void {
+            if ($nextCalled) {
+                throw new \LogicException(\sprintf(
+                    'Middleware %s dispatched $next more than once; the stack walks down at most one level per call',
+                    $stack[$idx]::class,
+                ));
+            }
+            $nextCalled = true;
             $this->dispatch($c, $s, $stack, $idx + 1);
         };
         $result = $stack[$idx]->handle($ctx, $session, $next);

@@ -167,7 +167,7 @@ final class DefaultChannelHandler implements ChannelHandler
 
     /**
      * Last-resort interpreter for shell requests when neither an explicit
-     * configured shell nor a `SHELL` environment variable is available
+     * configured shell nor a `SHELL` environment variable is available:
      * `/bin/sh` is the POSIX-guaranteed path — unlike
      * the historical hard-coded `/bin/bash` it exists on every host this
      * library claims to run on; systems whose login shell is bash reach

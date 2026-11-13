@@ -91,6 +91,36 @@ final class PromiseDispatchTest extends TestCase
         (new HostSshdTransport())->run(Context::background(), $this->fakeSession(), [$rogue]);
     }
 
+    public function testDoubleDispatchOfNextDiesInsideTheWalk(): void
+    {
+        // Audit 045: $next is a one-shot. A middleware that calls it twice
+        // (the forgot-return-around-a-loop slip) would run the remainder of
+        // the stack — including a terminal Spawn — twice. The walk names
+        // the culprit instead of doubling the side effects.
+        $rogue = new class implements Middleware {
+            public function handle(Context $ctx, Session $s, callable $next): void
+            {
+                $next($ctx, $s);
+                $next($ctx, $s);
+            }
+        };
+        $counter = new class implements Middleware {
+            public int $calls = 0;
+            public function handle(Context $ctx, Session $s, callable $next): void
+            {
+                $this->calls++;
+            }
+        };
+
+        try {
+            (new HostSshdTransport())->run(Context::background(), $this->fakeSession(), [$rogue, $counter]);
+            $this->fail('a middleware that dispatches $next twice must die inside the walk');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('dispatched $next more than once', $e->getMessage());
+        }
+        $this->assertSame(1, $counter->calls, 'the walk below the rogue must have run exactly once');
+    }
+
     public function testAsyncMiddlewareRejectShortCircuitsChain(): void
     {
         $log = [];

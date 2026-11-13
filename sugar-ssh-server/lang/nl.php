@@ -42,5 +42,6 @@ return [
     'auth.reject_key' => 'sleutel niet toegestaan: {fingerprint}',
     'auth.reject_unpaired' => 'sleutel niet gekoppeld aan de gevraagde gebruiker: {fingerprint} als {name}',
     'auth.reject_validation' => 'validatie van sleutel mislukt: {fingerprint}',
+    'auth.allowlist_unsupported' => 'De toegestane lijst bevat een item van een niet-ondersteund type: {type} — overgeslagen, kan nooit overeenkomen',
     'middleware.async_auth_failed' => 'authenticatie mislukt: {why}',
 ];
