@@ -650,7 +650,9 @@ final class Store
             }
         }
         if ($at === false) {
-            return [$defaultDb, \str_replace('\\@', '@', $key)];
+            $decoded = \str_replace('\\@', '@', $key);
+            self::refuseUnroundTrippableKey($decoded);
+            return [$defaultDb, $decoded];
         }
 
         $dbName = \substr($key, $at + 1);
@@ -672,7 +674,35 @@ final class Store
         }
 
         // "default@foo" means db=foo, key=default
-        return [$dbName, \str_replace('\\@', '@', $entryKey)];
+        $decoded = \str_replace('\\@', '@', $entryKey);
+        self::refuseUnroundTrippableKey($decoded);
+        return [$dbName, $decoded];
+    }
+
+    /**
+     * G3 minimum law (kv-007): a decoded entry key still carrying a backslash
+     * — terminating the key, or glued to an '@' produced by a doubled
+     * backslash — cannot round-trip through the qualified "key@db" spelling,
+     * because the grammar has no self-escape for the backslash itself. The
+     * old silent rewrite: key "bs\" in db "x" exported as "bs\@x", the scan
+     * read the separator as escaped, and the value reimported renamed into
+     * the DEFAULT database at exit 0. Rather than guess, every routing door
+     * (set/get/delete/import) refuses these spellings loudly; closing the
+     * grammar with a real "\\" escape is the declined alternative (smaller
+     * blast radius wins — the README states the law).
+     *
+     * @throws \InvalidArgumentException usage-class, exit 2 at the CLI.
+     */
+    private static function refuseUnroundTrippableKey(string $entryKey): void
+    {
+        if ($entryKey === '') {
+            return;
+        }
+        if (\str_ends_with($entryKey, '\\') || \str_contains($entryKey, '\\@')) {
+            throw new \InvalidArgumentException(
+                "Entry key '{$entryKey}' cannot round-trip: the key-grammar has no backslash escape, so keys may not end with a backslash or carry a doubled-backslash @ spelling (kv-007)."
+            );
+        }
     }
 
     /**

@@ -148,8 +148,15 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString('-debug', $run['stderr']);
     }
 
-    public function testDiagnosticsNeverCarryRawEscapeBytes(): void
+    public function testBackslashTerminatedKeyIsRefusedAtTheCliDoor(): void
     {
+        // G3 minimum (kv-007): usage-class refusal, exit 2, informative line.
+        $run = $this->runKv(['set', 'bs\\', 'v']);
+        $this->assertSame(2, $run['exit'], $run['stderr']);
+        $this->assertStringContainsString('round-trip', $run['stderr']);
+    }
+
+    public function testDiagnosticsNeverCarryRawEscapeBytes(): void    {
         // kv-004 egress law: every diagnostic that interpolates argv or store
         // bytes passes through Store::sanitizeForTty before reaching stderr —
         // parser refusals at their message source, everything else at the bin

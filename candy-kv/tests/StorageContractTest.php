@@ -225,6 +225,41 @@ final class StorageContractTest extends TestCase
         Store::splitKey('a@b@c', 'default');
     }
 
+    public function testSplitKeyRefusesABackslashTerminatedKey(): void
+    {
+        // G3 minimum (kv-007): `bs\` in db `x` used to export as "bs\@x",
+        // reimport renamed into the DEFAULT database, exit 0. The routing
+        // doors refuse such keys now instead of rewriting identities.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('cannot round-trip');
+        Store::splitKey('bs\\', 'default');
+    }
+
+    public function testSplitKeyRefusesADoubledBackslashGluedToAtSign(): void
+    {
+        // "a\\@b" looks like literal-backslash + separator, but the grammar
+        // has no self-escape for `\`; the decoded `a\@b` could never be read
+        // back as written. Refuse rather than guess.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('cannot round-trip');
+        Store::splitKey('a\\\\@b', 'default');
+    }
+
+    public function testTheDocumentedLiteralAtSpellingStoresAndStaysPut(): void
+    {
+        // Accept side of the law: `a\@b` decodes to key `a@b` in the DEFAULT
+        // database and round-trips under that spelling. A raw `a@b` read
+        // re-routes to database `b` (a miss) — which is exactly why the
+        // escaped spelling is the canonical one.
+        $store = $this->store();
+        $store->set('a\\@b', 'v');
+        $this->assertSame('v', $store->get('a\\@b'));
+        $entry = $store->entry('a\\@b');
+        $this->assertNotNull($entry);
+        $this->assertSame('a@b', $entry->key);
+        $this->assertSame('', $store->get('a@b'), 'raw spelling re-routes to database b — a miss, not a hit');
+    }
+
     public function testEscapedAtRoutesThroughTheSuffixEndToEnd(): void
     {
         $store = $this->store();

@@ -104,6 +104,16 @@ final class ExportCommand
             // exit. Only the ENTRY part is escaped — the suffix separator
             // stays raw, because the rightmost unescaped @ is the one the
             // importer must split on.
+            // Stored keys carrying a backslash cannot survive the qualified
+            // spelling: `bs\` + separator reads back as an escaped `\@` and
+            // the entry reimports renamed into the default database (kv-007).
+            // New stores cannot even hold such keys (Store::splitKey refuses
+            // them at every routing door); this is the legacy-store door.
+            if ($dbName !== null && (\str_ends_with($entry->key, '\\') || \str_contains($entry->key, '\\@'))) {
+                throw new \RuntimeException(
+                    "Key \"{$entry->key}\" in database \"{$dbName}\" cannot round-trip through the qualified export spelling (backslash grammar, kv-007)."
+                );
+            }
             $entryKey = \str_replace('@', '\\@', $entry->key);
             $key = $dbName !== null ? "{$entryKey}@{$dbName}" : $entryKey;
 

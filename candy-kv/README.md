@@ -247,7 +247,12 @@ entry part (`a@b@c`) is refused rather than guessed. The same law is public
 in the library: `Store::splitKey('a\@b@db', 'default')` returns
 `['db', 'a@b']`. Export writes a stored key's literal `@` back in that
 escaped spelling (the `@database` suffix stays raw), so a dump reimports
-into the same key and database it came from.
+into the same key and database it came from. The grammar has no escape for
+the backslash itself, so key spellings whose decoded form ends in a
+backslash or carries a doubled-backslash `@` (`bs\`, `a\\@b`) are refused
+loudly at every door — `set`, `get`, `delete`, import, and qualified export
+— instead of being silently rewritten and re-routed; keep such bytes out of
+keys (store them base64 or in the value).
 
 ### Import / Export
 

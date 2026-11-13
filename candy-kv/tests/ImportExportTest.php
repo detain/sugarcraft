@@ -468,8 +468,23 @@ final class ImportExportTest extends TestCase
 
     // ─── ExportCommand error paths ─────────────────────────────────────────────
 
-    public function testExportToStringThrowsOnUnknownFormat(): void
+    public function testQualifiedExportRefusesALegacyBackslashTerminatedKey(): void
     {
+        // kv-007 G3 door: a pre-fix store may already hold the key `bs\` in
+        // database `x`. Qualified export must refuse it loudly instead of
+        // emitting "bs\@x" — which reimports renamed into the default db.
+        $this->store->set('ok@x', 'v');
+        $db = new \SugarCraft\Kv\Database($this->store->dataDir() . '/x.db', 'x', true);
+        $db->set('bs\\', 'legacy');
+        $db->close();
+
+        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot round-trip through the qualified export spelling');
+        $cli->exportToString('json', 'x');
+    }
+
+    public function testExportToStringThrowsOnUnknownFormat(): void    {
         $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
 
         $this->expectException(\RuntimeException::class);
