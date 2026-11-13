@@ -655,6 +655,34 @@ final class EscapeDecoder
     }
 
     /**
+     * Digit hygiene for every numeric escape-sequence field this decoder
+     * casts: each element is one digit run (colon sub-parameters are split
+     * by the caller — SGR 1016 carries pixel coordinates as "640:10"), and
+     * every run must be 1..$maxRun digits (or, when $allowEmpty, the empty
+     * string — an omitted parameter is a legal zero per the Kitty grammar).
+     *
+     * A run longer than $maxRun digits saturates an (int) cast toward
+     * PHP_INT_MAX — synthetic extremes the wire never means — so it is
+     * refused, never coerced. One helper gates the Kitty u-frame fields,
+     * the SGR 1006/1016 runs and the urxvt 1015 runs: three callers, one
+     * law, cannot drift.
+     *
+     * @param list<string> $runs Digit runs of the frame's numeric fields
+     */
+    private function validateDigits(array $runs, int $maxRun = 9, bool $allowEmpty = true): bool
+    {
+        $quantifier = $allowEmpty ? '0' : '1';
+        $pattern = '/^\d{' . $quantifier . ',' . $maxRun . '}$/';
+        foreach ($runs as $run) {
+            if (preg_match($pattern, $run) !== 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Handle SGR 1006 mouse sequence: CSI < Pb ; Px ; Py M|m.
      *
      * @param string $afterLt Bytes after the "<"
@@ -699,11 +727,9 @@ final class EscapeDecoder
         // lands a MouseEvent at row/column zero. SGR 1016 legitimately carries
         // colon sub-parameters ("640:10" pixel x), so digit groups separated by
         // ':' are numeric too — the first group is the value, as before.
-        foreach ($parts as $part) {
-            if (preg_match('/^\d+(?::\d+)*$/', $part) !== 1) {
-                $this->droppedUnknownCount++;
-                return ['events' => [], 'remaining' => $remaining];
-            }
+        if (!$this->validateDigits(array_merge(...array_map(fn(string $part): array => explode(':', $part), $parts)), 9, false)) {
+            $this->droppedUnknownCount++;
+            return ['events' => [], 'remaining' => $remaining];
         }
         $btnRaw = explode(':', $btnRaw)[0];
         $x = explode(':', $x)[0];
@@ -841,17 +867,28 @@ final class EscapeDecoder
      */
     private function handleKittyEvent(string $seq, string $rest): array
     {
-        // Isolate params (drop the final "u"), then the two ';' fields with
-        // their ':' sub-parameters.
+        // Isolate params (drop the final "u"), then the ';' fields with their
+        // ':' sub-parameters. The grammar is `code[:alts] ; mods[:event-type]`
+        // — a THIRD ';' field (e.g. "97;5;9u") is a malformed frame, counted
+        // as a drop, never silently truncated into the modifier.
         $body = substr($seq, 0, -1);
-        $fields = explode(';', $body, 2);
+        $fields = explode(';', $body);
         $codePart = explode(':', $fields[0]);
+        $modPart = isset($fields[1]) ? explode(':', $fields[1]) : [];
+
+        // Same digit law as the SGR/urxvt gates: every run of every field,
+        // one helper, cannot drift. Empty runs are legal here (an omitted
+        // parameter is zero); oversized or non-digit runs are refused.
+        if (count($fields) > 2 || !$this->validateDigits(array_merge($codePart, $modPart))) {
+            $this->droppedUnknownCount++;
+            return ['events' => [], 'remaining' => $rest];
+        }
+
         $codeRaw = $codePart[0] === '' ? 0 : (int) $codePart[0];
 
         $modRaw = 0;
         $eventType = 0;
-        if (isset($fields[1])) {
-            $modPart = explode(':', $fields[1]);
+        if ($modPart !== []) {
             $modRaw = $modPart[0] === '' ? 0 : (int) $modPart[0];
             if (isset($modPart[1]) && $modPart[1] !== '') {
                 $eventType = (int) $modPart[1];
@@ -1213,12 +1250,7 @@ final class EscapeDecoder
     private function handleUrxvtMouse(string $seq, string $rest): array
     {
         $parts = explode(';', substr($seq, 0, -1));
-        if (
-            count($parts) !== 3
-            || preg_match('/^\d+$/', $parts[0]) !== 1
-            || preg_match('/^\d+$/', $parts[1]) !== 1
-            || preg_match('/^\d+$/', $parts[2]) !== 1
-        ) {
+        if (count($parts) !== 3 || !$this->validateDigits($parts, 9, false)) {
             return $this->dropUnknown($rest);
         }
 

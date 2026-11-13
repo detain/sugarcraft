@@ -617,6 +617,47 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame(MouseEvent::ACTION_PRESS, $m->action);
     }
 
+    public function testDigitRunsOverNineAreRefusedNotSaturated(): void
+    {
+        // Shared digit-hygiene law (SI-02): a run longer than 9 digits would
+        // (int)-saturate toward PHP_INT_MAX — a synthetic extreme the wire
+        // never means. Refused and counted, on every numeric family.
+        $before = $this->decoder->droppedUnknownCount();
+
+        $this->assertSame([], $this->decoder->decode("\x1b[<0;" . str_repeat('9', 50000) . ";10M"));
+        $this->assertSame([], $this->decoder->decode("\x1b[" . str_repeat('9', 20) . ";1u"));
+        $this->assertSame([], $this->decoder->decode("\x1b[" . str_repeat('9', 20) . ";10;5M"));
+        $this->assertSame($before + 3, $this->decoder->droppedUnknownCount());
+
+        // The decoder re-syncs: the next real frame decodes.
+        $events = $this->decoder->decode("\x1b[<0;10;5M");
+        $this->assertCount(1, $events);
+    }
+
+    public function testKittyHostileFieldsAreRefusedAndCounted(): void
+    {
+        // SI-02: non-digit and oversized-parameter Kitty frames are counted
+        // drops, never coercions. '=' is a legal CSI parameter byte, so a
+        // "9=7" code field reaches the digit gate and must be refused.
+        $before = $this->decoder->droppedUnknownCount();
+
+        $this->assertSame([], $this->decoder->decode("\x1b[9=7;1u"));
+        // '97=3' stays inside the parameter byte range ('=' is 0x3D) and
+        // reaches the u-frame code field as a non-digit run — digit gate.
+        $this->assertSame([], $this->decoder->decode("\x1b[97=3;1u"));
+        // A stranded THIRD ';' field is a malformed frame: the old
+        // explode(body, 2) silently truncation-fed "5;9" to the modifier cast.
+        $refused = $this->decoder->decode("\x1b[97;5;9u");
+        $this->assertSame([], $refused);
+        $this->assertSame($before + 3, $this->decoder->droppedUnknownCount());
+
+        // Well-formed frames still decode (regression guard on the rewrite).
+        $events = $this->decoder->decode("\x1b[97;5u");
+        $this->assertSame('a', $events[0]->key);
+        $withAlts = $this->decoder->decode("\x1b[97:65;2u");
+        $this->assertSame('a', $withAlts[0]->key);
+    }
+
     // ─── Focus events ───────────────────────────────────────────────────────
 
     public function testFocusGained(): void
