@@ -106,12 +106,39 @@ final class VStack implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
                 $item = $item->setSize($useWidth, 0);
             }
-            $results[] = $item->render();
+            $results[] = $this->alignLines($item->render(), $useWidth);
         }
 
         $spacer = $this->spacing > 0 ? str_repeat("\n", $this->spacing) : "\n";
 
         return implode($spacer, $results);
+    }
+
+    /**
+     * Re-anchor each rendered line of an item inside the stack width per
+     * the configured alignment (finding sugar-dashboard-022: the knob used
+     * to be stored, documented and never consulted).
+     *
+     * Left — the default — returns the bytes untouched so sequential
+     * layouts keep their exact shape; unsized stacks (width 0) likewise
+     * pass through. Lines already as wide as the stack are never padded.
+     */
+    private function alignLines(string $block, int $stackWidth): string
+    {
+        if ($stackWidth <= 0 || $this->alignment === HAlign::Left) {
+            return $block;
+        }
+
+        $lines = explode("\n", $block);
+        foreach ($lines as $index => $line) {
+            $lines[$index] = match ($this->alignment) {
+                HAlign::Center => Width::padCenter($line, $stackWidth),
+                HAlign::Right => Width::padLeft($line, $stackWidth),
+                HAlign::Left => $line,
+            };
+        }
+
+        return implode("\n", $lines);
     }
 
     /**

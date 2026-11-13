@@ -225,4 +225,75 @@ final class VStackTest extends TestCase
         $this->assertStringContainsString('Line 0', $rendered);
         $this->assertStringContainsString('Line 4', $rendered);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Horizontal alignment of narrower children (finding sugar-dashboard-022)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * A raw Item (no Sizer) that renders exactly the given bytes — the
+     * narrow child alignment is meant to re-anchor.
+     */
+    private function raw(string $bytes): \SugarCraft\Dashboard\Foundation\Item
+    {
+        return new class($bytes) implements \SugarCraft\Dashboard\Foundation\Item {
+            public function __construct(private readonly string $bytes)
+            {
+            }
+
+            public function render(): string
+            {
+                return $this->bytes;
+            }
+        };
+    }
+
+    private function stackWith(string $text, HAlign $alignment, int $width): string
+    {
+        $stack = new VStack(items: [$this->raw($text)], spacing: 0, alignment: $alignment);
+        if ($width > 0) {
+            $stack = $stack->setSize($width, 0);
+        }
+
+        return $stack->render();
+    }
+
+    public function testAlignmentsProduceDistinctBytesPerSetting(): void
+    {
+        $this->assertSame('ab', $this->stackWith('ab', HAlign::Left, 10), 'Left keeps sequential bytes, no padding');
+        $this->assertSame('    ab    ', $this->stackWith('ab', HAlign::Center, 10));
+        $this->assertSame('        ab', $this->stackWith('ab', HAlign::Right, 10));
+    }
+
+    public function testChildrenAtOrOverStackWidthAreNeverPadded(): void
+    {
+        $this->assertSame('abcdefghij', $this->stackWith('abcdefghij', HAlign::Center, 10));
+        $this->assertSame('abcdefghijklmno', $this->stackWith('abcdefghijklmno', HAlign::Right, 10));
+    }
+
+    public function testUnsizedStackPassesThroughUnderAnyAlignment(): void
+    {
+        $this->assertSame('ab', $this->stackWith('ab', HAlign::Center, 0), 'width 0 = no re-anchoring');
+        $this->assertSame('ab', $this->stackWith('ab', HAlign::Right, 0));
+    }
+
+    public function testAlignmentAppliesToEveryLineOfAMultiLineChild(): void
+    {
+        $this->assertSame("        ab\n       cde", $this->stackWith("ab\ncde", HAlign::Right, 10));
+    }
+
+    public function testSizerChildrenThatFillTheWidthAreNotDisturbed(): void
+    {
+        // Text claims the whole allotted width itself; alignment only
+        // re-anchors genuinely narrower lines, so the bytes stay identical
+        // between Left and Right for such children.
+        $render = static function (HAlign $alignment): string {
+            $stack = new VStack(items: [new Text('ab')], spacing: 0, alignment: $alignment);
+            $stack = $stack->setSize(10, 0);
+
+            return (string) preg_replace("/\e\[[0-9;]*m/", '', $stack->render());
+        };
+
+        $this->assertSame($render(HAlign::Left), $render(HAlign::Right));
+    }
 }
