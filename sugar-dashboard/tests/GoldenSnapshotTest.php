@@ -183,8 +183,10 @@ final class GoldenSnapshotTest extends TestCase
         $content = file_get_contents($file);
         $patchedContent = self::patchExample($content, $width, $height);
 
-        // Write patched content to temp file and run it
-        $tmpFile = sys_get_temp_dir() . '/golden_test_' . $slug . '_' . $width . 'x' . $height . '.php';
+        // Write patched content to temp file and run it. The pid suffix keeps
+        // concurrent runs (finding sugar-dashboard-154) from clobbering each
+        // other's temp fixture; the compare normalizer below tolerates it.
+        $tmpFile = sys_get_temp_dir() . '/golden_test_' . $slug . '_' . $width . 'x' . $height . '_' . getmypid() . '.php';
 
         try {
             file_put_contents($tmpFile, $patchedContent);
@@ -328,6 +330,50 @@ final class GoldenSnapshotTest extends TestCase
     }
 
     /**
+     * Orphan guard (finding sugar-dashboard-057): the golden inventory on
+     * disk must match the harness inventory EXACTLY, both directions.
+     * A golden no example leg writes-or-reads is fake coverage that rots —
+     * the 14 pruned dashboard-* pairs were unreachable both ways (skipped
+     * here, refused by tools/generate-goldens.php), and a missing pair must
+     * fail loudly here rather than as an unrelated provider error.
+     */
+    public function testGoldenInventoryMatchesHarness(): void
+    {
+        $expected = [];
+        foreach (self::provideExamples() as [$slug, $dimLabel]) {
+            $expected["{$dimLabel}/{$slug}.golden"] = true;
+        }
+
+        $orphans = [];
+        foreach (array_keys(self::DIMENSIONS) as $dimLabel) {
+            $found = glob(self::GOLDEN_ROOT . "/{$dimLabel}/*.golden") ?: [];
+            foreach ($found as $path) {
+                $rel = "{$dimLabel}/" . basename($path);
+                if (!isset($expected[$rel])) {
+                    $orphans[] = $rel;
+                }
+            }
+        }
+        $this->assertSame(
+            [],
+            $orphans,
+            'Golden files unreachable by the harness (un-skip the example or delete the file): ' . implode(', ', $orphans)
+        );
+
+        $missing = [];
+        foreach (array_keys($expected) as $rel) {
+            if (!file_exists(self::GOLDEN_ROOT . '/' . $rel)) {
+                $missing[] = $rel;
+            }
+        }
+        $this->assertSame(
+            [],
+            $missing,
+            'Harness inventory has no golden on disk — run: php tools/generate-goldens.php. Missing: ' . implode(', ', $missing)
+        );
+    }
+
+    /**
      * Smoke test: verify a few examples render without crashing.
      *
      * This runs outside the golden comparison to catch obvious regressions.
@@ -352,7 +398,7 @@ final class GoldenSnapshotTest extends TestCase
             $content = file_get_contents($file);
             $patchedContent = self::patchExample($content, $width, $height);
 
-            $tmpFile = sys_get_temp_dir() . '/golden_smoke_' . $slug . '.php';
+            $tmpFile = sys_get_temp_dir() . '/golden_smoke_' . $slug . '_' . getmypid() . '.php';
 
             try {
                 file_put_contents($tmpFile, $patchedContent);

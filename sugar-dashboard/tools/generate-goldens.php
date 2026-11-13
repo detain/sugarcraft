@@ -252,8 +252,9 @@ foreach ($files as $file) {
     foreach ($targetDimensions as $dimLabel => [$targetWidth, $targetHeight]) {
         $patchedContent = patchExample($content, $targetWidth, $targetHeight, $examplesDir);
 
-        // Write patched content to a temp file and run it
-        $tmpFile = sys_get_temp_dir() . '/golden_' . $slug . '_' . $dimLabel . '.php';
+        // Write patched content to a temp file and run it (pid suffix:
+        // concurrent generator runs must not clobber each other's fixture)
+        $tmpFile = sys_get_temp_dir() . '/golden_' . $slug . '_' . $dimLabel . '_' . getmypid() . '.php';
         $restored = false;
 
         try {
