@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Sparkline;
 use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\FrameSize;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
@@ -178,6 +179,16 @@ final class Sparkline
      * here than in the column charts (baseline handling); unifying the
      * look was DECLINED as a behavior-breaking change (lib-reviews-1103).
      */
+    /**
+     * Honest rendered-frame size [w, h] of view() (sugar-charts-010).
+     *
+     * @return array{0: int, 1: int}
+     */
+    public function intrinsicSize(): array
+    {
+        return FrameSize::of($this->view());
+    }
+
     public function view(): string
     {
         $w = $this->width;

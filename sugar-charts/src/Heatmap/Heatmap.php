@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Heatmap;
 
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\FrameSize;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Support\UntrustedText;
@@ -299,6 +300,16 @@ final class Heatmap
      * is empty or the dimensions collapse — see BarChart::view() for the
      * family of per-class empty shapes (pinned by EmptyRenderContractTest).
      */
+    /**
+     * Honest rendered-frame size [w, h] of view() (sugar-charts-010).
+     *
+     * @return array{0: int, 1: int}
+     */
+    public function intrinsicSize(): array
+    {
+        return FrameSize::of($this->view());
+    }
+
     public function view(): string
     {
         if ($this->grid === [] || $this->width === 0 || $this->height === 0) {

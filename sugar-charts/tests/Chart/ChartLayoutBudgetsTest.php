@@ -57,11 +57,20 @@ final class ChartLayoutBudgetsTest extends TestCase
             ->withYLabel(str_repeat('y', 100))
             ->view();
 
+        // CH-03 (sugar-charts-030): the label rides ONE centered row; the
+        // other rows carry the same-width blank gutter. Budget cap holds.
         $budget = intdiv(self::WIDTH, 4);
-        foreach (self::rows($view) as $row) {
-            self::assertStringStartsWith(str_repeat('y', $budget) . ' ', $row);
+        $rows   = self::rows($view);
+        $labelled = 0;
+        foreach ($rows as $row) {
             self::assertStringNotContainsString(str_repeat('y', $budget + 1), $row);
+            if (str_starts_with($row, str_repeat('y', $budget) . ' ')) {
+                $labelled++;
+                continue;
+            }
+            self::assertStringStartsWith(str_repeat(' ', $budget) . ' ', $row);
         }
+        self::assertSame(1, $labelled);
     }
 
     public function testXLabelIsClippedToCanvasWidth(): void

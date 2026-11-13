@@ -42,7 +42,7 @@ final class LegendReviewPinsTest extends TestCase
     /** @param list<array{label:string,color?:string}> $items */
     private function side(array $items, Position $position): string
     {
-        return Legend::new($items)->withPosition($position)->view();
+        return Legend::new($items)->withPosition($position)->withShowBorder(true)->view();
     }
 
     public function testBorderedSideBoxesAreClosedRectanglesOfUniformWidth(): void

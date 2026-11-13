@@ -8,6 +8,7 @@ use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\FrameSize;
 use SugarCraft\Charts\Support\Range;
 
 /**
@@ -147,6 +148,16 @@ final class Waveline
     public function yRange(?float $min, ?float $max): self { return $this->withYRange($min, $max); }
     /** Short-form alias for {@see withPoint()}. */
     public function point(string $r): self        { return $this->withPoint($r); }
+
+    /**
+     * Honest rendered-frame size [w, h] of view() (sugar-charts-010).
+     *
+     * @return array{0: int, 1: int}
+     */
+    public function intrinsicSize(): array
+    {
+        return FrameSize::of($this->view());
+    }
 
     public function view(): string
     {

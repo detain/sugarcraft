@@ -84,18 +84,25 @@ final class ChromeParityTest extends TestCase
     }
 
     /**
-     * y-label composition is one prepend rule for every family — the fork
-     * used to carry two copies of it.
+     * y-label composition is one rule for every family — the fork used to
+     * carry two copies. CH-03 (sugar-charts-030) made it a single
+     * centered emission with an aligned gutter on the other rows.
      *
      * @param object $renderer
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('rendererProvider')]
-    public function testYLabelPrefixIdenticalAcrossFamilies(object $renderer): void
+    public function testYLabelEmitsOnceWithAlignedGutterInEveryFamily(object $renderer): void
     {
         $rows = explode("\n", $renderer->withYLabel('YY')->view());
+        $labelled = 0;
         foreach ($rows as $row) {
-            $this->assertStringStartsWith('YY ', $row);
+            if (str_starts_with($row, 'YY ')) {
+                $labelled++;
+                continue;
+            }
+            $this->assertStringStartsWith('   ', $row, 'gutter rows must stay column-aligned');
         }
+        $this->assertSame(1, $labelled, 'the axis name is a label, not wallpaper');
     }
 
     /**

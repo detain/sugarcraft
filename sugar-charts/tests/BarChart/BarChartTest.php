@@ -230,16 +230,24 @@ final class BarChartTest extends TestCase
         $this->assertStringEndsWith("\nTime", $out);
     }
 
-    public function testWithYLabelPrependsToEachLine(): void
+    public function testWithYLabelEmitsOnceOnCenteredRow(): void
     {
+        // CH-03: the y-label is a gutter title, printed once at the vertical
+        // centre (was stamped on every row).
         $out = BarChart::new([['a', 0.5], ['b', 1.0]], 24, 3) // lib-reviews-1103 M5: widened so the y-label fits its quarter-width budget
             ->withShowLabels(false)
             ->withYLabel('Usage')
             ->view();
         $lines = explode("\n", $out);
+        $labelled = 0;
         foreach ($lines as $line) {
-            $this->assertStringStartsWith('Usage ', $line);
+            if (str_starts_with($line, 'Usage ')) {
+                $labelled++;
+            } elseif ($line !== '') {
+                $this->assertStringStartsWith(str_repeat(' ', 6), $line);
+            }
         }
+        $this->assertSame(1, $labelled);
     }
 
     public function testXLabelAndYLabelCanBeCombined(): void

@@ -51,7 +51,10 @@ final class Legend
      */
     public static function new(array $items = []): self
     {
-        return new self(UntrustedText::guardItems($items), Position::Right, '█', true);
+        // sugar-charts-097: default Bottom + no border keeps a bare
+        // Legend inside the fixed-width pane; the sidecar overshoot is
+        // opt-in via withPosition(Position::Left|Right) / withShowBorder(true).
+        return new self(UntrustedText::guardItems($items), Position::Bottom, '█', false);
     }
 
     /**

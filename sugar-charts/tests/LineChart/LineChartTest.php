@@ -317,7 +317,9 @@ final class LineChartTest extends TestCase
 
     public function testFluentChainingWithLegend(): void
     {
-        $chart = LineChart::new([1, 2, 3], 20, 5)
+        // CH-03: composed extras clip to the declared width; the two-series
+        // top legend needs a 26-cell canvas to show both labels.
+        $chart = LineChart::new([1, 2, 3], 26, 5)
             ->withDataset('Series A', [3, 2, 1])
             ->withDataset('Series B', [1, 2, 3])
             ->legend(true)

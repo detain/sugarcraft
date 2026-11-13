@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\LineChart;
 
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\FrameSize;
 
 /**
  * Time-series LineChart variant. Wraps {@see LineChart} but accepts
@@ -52,6 +53,16 @@ final class TimeSeries
     }
 
     /** @param list<array{0:\DateTimeImmutable,1:int|float}> $points */
+    /**
+     * Honest rendered-frame size [w, h] of view() (sugar-charts-010).
+     *
+     * @return array{0: int, 1: int}
+     */
+    public function intrinsicSize(): array
+    {
+        return FrameSize::of($this->view());
+    }
+
     public static function new(array $points = [], int $width = 40, int $height = 8): self
     {
         return new self(array_values($points), $width, $height, 'H:i', 5);

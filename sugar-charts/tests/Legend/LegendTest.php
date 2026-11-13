@@ -15,17 +15,21 @@ final class LegendTest extends TestCase
         $this->assertSame('', Legend::new([])->view());
     }
 
-    public function testDefaultPositionIsRight(): void
+    public function testDefaultIsBottomWithoutBorder(): void
     {
+        // sugar-charts-097: the DEFAULT legend must fit fixed panes — the
+        // sidecar overshoot is opt-in.
         $legend = Legend::new([['label' => 'Series A', 'color' => 'red']]);
-        $out = $legend->view();
-        $this->assertStringContainsString('Series A', $out);
+        $this->assertSame(Position::Bottom, $legend->position);
+        $this->assertFalse($legend->showBorder);
+        $this->assertStringContainsString('Series A', $legend->view());
     }
 
     public function testTopPositionRendersAboveChart(): void
     {
         $legend = Legend::new([['label' => 'A', 'color' => 'red']])
-            ->withPosition(Position::Top);
+            ->withPosition(Position::Top)
+            ->withShowBorder(true);
         $out = $legend->view();
         $this->assertStringContainsString('A', $out);
         $this->assertStringContainsString('┌', $out);
@@ -73,10 +77,12 @@ final class LegendTest extends TestCase
 
     public function testShowBorderToggle(): void
     {
-        $withBorder = Legend::new([['label' => 'A', 'color' => 'red']])->withShowBorder(true)->view();
-        $withoutBorder = Legend::new([['label' => 'A', 'color' => 'red']])->withShowBorder(false)->view();
-        $this->assertStringContainsString('│', $withBorder);
-        $this->assertStringNotContainsString('│', $withoutBorder);
+        $right = static fn (bool $border): string => Legend::new([['label' => 'A', 'color' => 'red']])
+            ->withPosition(\SugarCraft\Charts\Chart\Position::Right)
+            ->withShowBorder($border)
+            ->view();
+        $this->assertStringContainsString('│', $right(true));
+        $this->assertStringNotContainsString('│', $right(false));
     }
 
     public function testMultipleItemsWithDifferentColors(): void
@@ -124,6 +130,7 @@ final class LegendTest extends TestCase
     public function testBorderWidthIgnoresAnsiEscapes(): void
     {
         $out = Legend::new([['label' => 'Alpha', 'color' => 'red']])
+            ->withPosition(\SugarCraft\Charts\Chart\Position::Right)
             ->withShowBorder(true)
             ->view();
         $rows = explode("\n", $out);

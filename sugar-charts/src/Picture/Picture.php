@@ -115,6 +115,34 @@ final class Picture
         return null;
     }
 
+    /**
+     * Honest image frame size [w, h] in PIXELS (sugar-charts-010).
+     *
+     * Picture emits a protocol stream, not a cell grid, so its frame is
+     * the pixel matrix — from the grid directly, or read out of the PNG
+     * IHDR header. An instance with neither reports [0, 0] (its view()
+     * is placeholder text whose size the terminal invents). Fit modes
+     * (contain/stretch to a cell box) are not implemented — the image
+     * renders at its pixel size.
+     *
+     * @return array{0: int, 1: int}
+     */
+    public function intrinsicSize(): array
+    {
+        if ($this->pixels !== null) {
+            $rows = count($this->pixels);
+            return [$rows === 0 ? 0 : count($this->pixels[0]), $rows];
+        }
+        if (strlen($this->png) >= 24 && str_starts_with($this->png, "\x89PNG\r\n\x1a\n")) {
+            $dims = unpack('Nw/Nh', substr($this->png, 16, 8));
+            if ($dims !== false) {
+                return [(int) $dims['w'], (int) $dims['h']];
+            }
+        }
+
+        return [0, 0];
+    }
+
     public function view(): string
     {
         $protocol = $this->protocol ?? self::detect();
