@@ -73,4 +73,68 @@ final class TableZebraTest extends TestCase
 
         $this->assertStringNotContainsString('48;2;229;229;229', $view);
     }
+
+    /** Data rows r0..r5, windowed or paged per the call. */
+    private function sixRows(): array
+    {
+        return \array_map(
+            static fn (int $i): Row => Row::new(RowData::from(['a' => "r{$i}"])),
+            \range(0, 5)
+        );
+    }
+
+    /** @return array<string,string> row label => its rendered line (ANSI kept) */
+    private function linesByLabel(string $view): array
+    {
+        $out = [];
+        foreach (\explode("\n", $view) as $line) {
+            foreach (['r0', 'r1', 'r2', 'r3', 'r4', 'r5'] as $label) {
+                if (\str_contains($line, $label)) {
+                    $out[$label] = $line;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Audit ST-18: the stripe must belong to the DATA row, not the frame
+     * slot. Pre-fix, scrolling one step inverted every visible row's parity
+     * (candy-sql's browse pane rode the flicker): r1 gained a stripe by
+     * moving into slot 0 and r2 lost one.
+     */
+    public function testScrollStepKeepsStripesWithTheirDataRows(): void
+    {
+        // Selected row 2 makes the one-step scroll cursor-legal (audit ST-15
+        // keeps the highlight on screen), so the window actually moves.
+        $t = $this->table(...$this->sixRows())->withViewportHeight(3)->withSelectedIndex(2);
+        $striped = '48;2;229;229;229';
+
+        $at0 = $this->linesByLabel($t->View());
+        $at1 = $this->linesByLabel($t->withScrollY(1)->View());
+        $this->assertSame(['r0', 'r1', 'r2'], \array_keys($at0), 'window at home must show the first three rows');
+        $this->assertSame(['r1', 'r2', 'r3'], \array_keys($at1), 'the scroll step must move the window');
+
+        // r1 (abs 1, odd) sits in slot 1 scrolled to 0, slot 0 scrolled to
+        // 1; it must be unstriped in BOTH. r2 (abs 2, even) sits in slot 2,
+        // then slot 1; it must carry the stripe in BOTH.
+        $this->assertStringNotContainsString($striped, $at0['r1']);
+        $this->assertStringNotContainsString($striped, $at1['r1'], 'stripe flipped onto an odd row by scrolling');
+        $this->assertStringContainsString($striped, $at0['r2']);
+        $this->assertStringContainsString($striped, $at1['r2'], 'stripe fell off an even row by scrolling');
+    }
+
+    /** Page turns ride the same absolute domain as scrolling. */
+    public function testPageTurnKeepsStripesWithTheirDataRows(): void
+    {
+        $t = $this->table(...$this->sixRows())->withPageSize(3);
+        $striped = '48;2;229;229;229';
+
+        $page1 = $this->linesByLabel($t->withPage(1)->View());
+
+        // r3 is page slot 0 but data index 3 (odd): no stripe, ever.
+        $this->assertStringNotContainsString($striped, $page1['r3'], 'slot parity striped an odd data row after a page turn');
+        // r4 is slot 1 (odd under slot parity) but data index 4 (even).
+        $this->assertStringContainsString($striped, $page1['r4'], 'even data row lost its stripe after a page turn');
+    }
 }

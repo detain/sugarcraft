@@ -1851,15 +1851,23 @@ final class Table
             $bufferRow++;
         } else {
             foreach ($rows as $ri => $row) {
-                $isSelected = (($pageOffset + $ri + $scroll) === $this->selectedIndex) && $this->selectable;
+                // One index domain for every per-row identity decision:
+                // pageOffset + slot + scroll. Selection already compared in
+                // it (audit #5); the zebra stripe now rides the SAME number
+                // so stripes stay with their data row across scroll and
+                // page turns (audit ST-18 — slot-parity inverted the frame
+                // on every keypress). styleFunc keeps the legacy page-slot
+                // contract untouched.
+                $absoluteIndex = $pageOffset + $ri + $scroll;
+                $isSelected = ($absoluteIndex === $this->selectedIndex) && $this->selectable;
                 if ($this->isExpandedByRow($row)) {
-                    $canvas = $this->fillExpandedRow($canvas, $bufferRow, $row, $ri, $isSelected, $visibleWidth, $visibleColumnIndices);
+                    $canvas = $this->fillExpandedRow($canvas, $bufferRow, $row, $ri, $isSelected, $visibleWidth, $visibleColumnIndices, $absoluteIndex);
                     $bufferRow++;
                 } elseif ($this->multilineMode) {
-                    $canvas = $this->fillDataRowLines($canvas, $bufferRow, $row, $ri, $visibleWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices);
+                    $canvas = $this->fillDataRowLines($canvas, $bufferRow, $row, $ri, $visibleWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices, $absoluteIndex);
                     $bufferRow += $rowHeights[$ri];
                 } else {
-                    $canvas = $this->fillDataRow($canvas, $bufferRow, $row, $ri, $isSelected, $this->computedColumnWidths, $visibleColumnIndices);
+                    $canvas = $this->fillDataRow($canvas, $bufferRow, $row, $ri, $isSelected, $this->computedColumnWidths, $visibleColumnIndices, $absoluteIndex);
                     $bufferRow++;
                 }
             }
@@ -2076,7 +2084,7 @@ final class Table
         return $this->writeRightEdge($canvas, $row, $col, $style);
     }
 
-    private function fillDataRow(RenderCanvas $canvas, int $row, Row $rowData, int $rowIndex, bool $isSelected, array $computedWidths, array $visibleColumnIndices): RenderCanvas
+    private function fillDataRow(RenderCanvas $canvas, int $row, Row $rowData, int $rowIndex, bool $isSelected, array $computedWidths, array $visibleColumnIndices, int $absoluteRowIndex): RenderCanvas
     {
         // Determine row-level style: the row's own style with the zebra
         // stripe COMPOSED underneath it (audit M5: zebra used to clobber the
@@ -2085,7 +2093,7 @@ final class Table
         if ($rowData->style !== '') {
             $rowStyle = $rowData->style;
         }
-        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $rowIndex));
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $absoluteRowIndex));
 
         // Selection is the TOP tier (audit M3: it used to replace rowStyle
         // before the cell chain ran, so the winning cell style threw the
@@ -2176,13 +2184,13 @@ final class Table
      * (row style, zebra, selection reverse) applies to the whole line; cell
      * styles do not, because the line is no longer cell-structured.
      */
-    private function fillExpandedRow(RenderCanvas $canvas, int $row, Row $rowData, int $rowIndex, bool $isSelected, int $contentWidth, array $visibleColumnIndices): RenderCanvas
+    private function fillExpandedRow(RenderCanvas $canvas, int $row, Row $rowData, int $rowIndex, bool $isSelected, int $contentWidth, array $visibleColumnIndices, int $absoluteRowIndex): RenderCanvas
     {
         $rowStyle = '';
         if ($rowData->style !== '') {
             $rowStyle = $rowData->style;
         }
-        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $rowIndex));
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $absoluteRowIndex));
         if ($isSelected) {
             $rowStyle = self::mergeStyle($rowStyle, '7');
         } // reverse composes on top (audit M3)
@@ -2247,7 +2255,7 @@ final class Table
      * all cells). Cells with fewer lines are padded vertically with empty space.
      * Row borders span the full row height.
      */
-    private function fillDataRowLines(RenderCanvas $canvas, int $startRow, Row $row, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices): RenderCanvas
+    private function fillDataRowLines(RenderCanvas $canvas, int $startRow, Row $row, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices, int $absoluteRowIndex): RenderCanvas
     {
         // Determine row-level style: compose row + zebra stripe, with the
         // selection reverse video on top of the band (audit M3/M5 — both
@@ -2256,7 +2264,7 @@ final class Table
         if ($row->style !== '') {
             $rowStyle = $row->style;
         }
-        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($row, $rowIndex));
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($row, $absoluteRowIndex));
 
         $bandStyle = $isSelected ? self::mergeStyle($rowStyle, '7') : $rowStyle;
 
@@ -2563,6 +2571,11 @@ final class Table
      * Resolve the zebra stripe for one row (audit M5: {@see Row::withZebra()}
      * used to be stored and never read — rows that opted in with an explicit
      * stripe index now win over positional parity).
+     *
+     * $rowIndex is the ABSOLUTE data index (page offset + window slot), the
+     * same domain the selection highlight compares in (audit ST-18): a
+     * scroll step shifts the stripe window by one row instead of flipping
+     * every visible row's parity through the frame slot.
      */
     private function zebraStyleForRow(Row $rowData, int $rowIndex): string
     {
