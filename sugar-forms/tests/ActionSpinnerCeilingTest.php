@@ -6,6 +6,7 @@ namespace SugarCraft\Forms\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Forms\ActionSpinner;
+use SugarCraft\Forms\Lang;
 
 /**
  * E711 (round 82): the forked spinner action is lifetime-bounded.
@@ -66,7 +67,7 @@ final class ActionSpinnerCeilingTest extends TestCase
         $elapsed = \microtime(true) - $started;
 
         self::assertNotNull($thrown, 'a child ignoring SIGTERM past its bound must not return silently');
-        self::assertStringContainsString('lifetime bound and was terminated', $thrown->getMessage());
+        self::assertSame(Lang::t('spinner.timeout_terminated', ['seconds' => 0.3]), $thrown->getMessage());
         self::assertLessThan(6.0, $elapsed, 'ceiling + TERM budget + KILL budget is well under ~2.5s; anything longer means the deadline did not fire early');
 
         // The spinner must have REAPED the child it killed: a later
@@ -103,7 +104,7 @@ final class ActionSpinnerCeilingTest extends TestCase
         }
 
         self::assertNotNull($thrown, 'the child stalls past the bound even though it exits gracefully on TERM');
-        self::assertStringContainsString('lifetime bound and was terminated', $thrown->getMessage());
+        self::assertSame(Lang::t('spinner.timeout_terminated', ['seconds' => 0.3]), $thrown->getMessage());
         self::assertSame('seen', \file_get_contents($marker), 'the TERM rung must reach a cooperative child before KILL is considered');
     }
 

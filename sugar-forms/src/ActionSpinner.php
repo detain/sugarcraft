@@ -189,7 +189,11 @@ final class ActionSpinner
                 $action();
                 exit(0);
             } catch (\Throwable $e) {
-                fwrite(STDERR, $e->getMessage() . "\n");
+                // Labeled once at the source (sugar-forms-087): the bare
+                // message used to arrive as an unattributed line on the
+                // host's stderr — provoking tests pin the label and its
+                // exactly-once count.
+                fwrite(STDERR, 'ActionSpinner: ' . $e->getMessage() . "\n");
                 exit(1);
             }
         }
@@ -287,16 +291,23 @@ final class ActionSpinner
             // (no ext-POSIX) or could not land (uninterruptible wait) —
             // the honest report is "abandoned", never a silent success.
             if ($ceilingGone === FALSE) {
-                throw new \RuntimeException('Spinner action exceeded its ' . $this->maxRuntimeSeconds . 's lifetime bound and could not be terminated (child abandoned, pid ' . $pid . ')');
+                throw new \RuntimeException(Lang::t('spinner.timeout_unrecoverable', [
+                    'seconds' => $this->maxRuntimeSeconds,
+                    'pid'     => $pid,
+                ]));
             }
-            throw new \RuntimeException('Spinner action exceeded its ' . $this->maxRuntimeSeconds . 's lifetime bound and was terminated');
+            throw new \RuntimeException(Lang::t('spinner.timeout_terminated', [
+                'seconds' => $this->maxRuntimeSeconds,
+            ]));
         }
         // Reap and check exit status — throw if the child action failed.
         // Note: the original exception type/message cannot cross the fork
         // boundary; only the exit code is available to the parent.
         // $waitStatus was captured in the loop when the child was reaped.
         if (pcntl_wifexited($waitStatus) === TRUE && pcntl_wexitstatus($waitStatus) !== 0) {
-            throw new \RuntimeException('Spinner action failed (exit code ' . pcntl_wexitstatus($waitStatus) . ')');
+            throw new \RuntimeException(Lang::t('spinner.action_failed', [
+                'code' => pcntl_wexitstatus($waitStatus),
+            ]));
         }
     }
 }

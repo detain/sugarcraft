@@ -70,4 +70,7 @@ return [
     'keys.override_unknown_key' => 'Unknown key override spelling "{key}"',
     'keys.override_unknown_action' => 'Unknown key override action "{action}"',
     'keys.override_duplicate' => 'Duplicate key override "{key}" — two spellings collapse to the same binding',
+    'spinner.timeout_unrecoverable' => 'Spinner action exceeded its {seconds}s lifetime bound and could not be terminated (child abandoned, pid {pid})',
+    'spinner.timeout_terminated' => 'Spinner action exceeded its {seconds}s lifetime bound and was terminated',
+    'spinner.action_failed' => 'Spinner action failed (exit code {code})',
 ];
