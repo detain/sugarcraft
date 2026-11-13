@@ -62,7 +62,7 @@ final class IpmiPsu
     /** The rated output: the out sensor's upper threshold (critical first), when the BMC defines it. */
     public function capacity(): ?float
     {
-        $cap = $this->out?->ucr ?? $this->out?->unc ?? $this->in?->ucr ?? $this->in?->unc;
+        $cap = $this->out->ucr ?? $this->out->unc ?? $this->in->ucr ?? $this->in->unc;
 
         return $cap !== null && $cap > 0 ? $cap : null;
     }

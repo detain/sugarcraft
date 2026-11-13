@@ -108,7 +108,7 @@ final class IpmiData
             }
         }
         $watts = $this->watts;
-        $now = $s->power?->watts ?? ($s->sensors !== null ? self::fallbackWatts($readings) : null);
+        $now = $s->power->watts ?? ($s->sensors !== null ? self::fallbackWatts($readings) : null);
         if ($now !== null && $s->round !== $this->round) {
             $watts[] = $now;
             if (\count($watts) > max(1, $cap)) {
@@ -147,7 +147,7 @@ final class IpmiData
      */
     public function watts(): ?float
     {
-        return $this->power?->watts ?? self::fallbackWatts($this->readings);
+        return $this->power->watts ?? self::fallbackWatts($this->readings);
     }
 
     /** [min, avg, max] over the BMC's window, else over the box's own history; null without data. */
@@ -174,7 +174,7 @@ final class IpmiData
         if ($cap !== null) {
             return $cap;
         }
-        $seen = max([0.0, ...$this->watts, $this->power?->max ?? 0.0, $this->watts() ?? 0.0]);
+        $seen = max([0.0, ...$this->watts, $this->power->max ?? 0.0, $this->watts() ?? 0.0]);
 
         return self::nice(max(100.0, $seen * 1.15));
     }

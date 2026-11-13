@@ -66,7 +66,7 @@ final class CpuView
 
         // btop `check_temp and got_sensors` (HostInfo::hasSensors ports get_sensors).
         $showTemps = $config->bool('check_temp') && $f->host->hasSensors;
-        $coreSensors = $p->temp()?->cores ?? [];
+        $coreSensors = $p->temp()->cores ?? [];
         $hideCores = $showTemps && ($coreSensors === [] || !$config->bool('show_coretemp'));
         $bcs = $layout->coreColumnSize;
         $bcols = max(1, $layout->coreColumns);
@@ -241,7 +241,7 @@ final class CpuView
     /** `─────┐3.4 GHz┌` on the cores sub-box top edge (btop_draw.cpp:874-877). */
     private static function freqLabel(Region $box, PanelFrame $f, CpuPanel $p, Rect $cores): void
     {
-        $label = $p->freq()?->label ?? '';
+        $label = $p->freq()->label ?? '';
         if (!$f->config->bool('show_cpu_freq') || $label === '') {
             return;
         }
@@ -314,7 +314,7 @@ final class CpuView
         $graphFull = ($bcs > 0 || $extra > 0) ? 5 * $bcs + $extra : 0;
         [$freqMode, $freqFoot] = self::freqFootprint($config->showCoreFreq(), $graphFull);
         $usageW = $graphFull - $freqFoot;
-        $sensors = count($p->temp()?->cores ?? []);
+        $sensors = count($p->temp()->cores ?? []);
         $coreMap = self::coreMap($config->string('cpu_core_map'));
         $freq = $p->freq();
         $tempScale = $config->tempScale();

@@ -365,7 +365,7 @@ final class ProcTree
      * btop _collect_prefixes.
      *
      * @param array<string, mixed> $st
-     * @param array<int, string> $prefix
+     * @param array<int|string, string> $prefix
      * @param array<string, mixed> $node
      */
     private static function prefixes(array &$st, array &$prefix, array $node, bool $isLast, string $header): void
@@ -390,13 +390,14 @@ final class ProcTree
      * @param array<string, mixed> $st
      * @param array<int, string> $prefix
      * @param list<array<string, mixed>> $nodes
-     * @param list<ProcEntry> $out
+     * @param array<int, ProcEntry> $out
      */
     private static function flatten(array $st, array $prefix, array $nodes, array &$out): void
     {
         foreach ($nodes as $node) {
             $i = $node['i'];
             if (!($st['filtered'][$i] ?? false)) {
+                /** @var ProcEntry $e */
                 $e = $st['e'][$i];
                 $v = $st['v'][$i];
                 $out[] = $e->with([

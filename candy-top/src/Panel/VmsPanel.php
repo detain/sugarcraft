@@ -181,7 +181,7 @@ final class VmsPanel implements Panel, ClickCapture
      */
     public function ordered(Config $config): array
     {
-        return VmsSort::sorted($this->snapshot?->guests ?? [], $config->string('vms_sorting'));
+        return VmsSort::sorted($this->snapshot->guests ?? [], $config->string('vms_sorting'));
     }
 
     /**
@@ -275,7 +275,7 @@ final class VmsPanel implements Panel, ClickCapture
             if ($this->selected !== '') {
                 return $this->key($name === 'mouse_scroll_up' ? 'up' : 'down', $context);
             }
-            $count = \count($this->snapshot?->guests ?? []);
+            $count = \count($this->snapshot->guests ?? []);
             $box = $context->box;
             $grid = VmsGrid::for($box->width, $box->height, $count);
             $start = $grid->scroll($this->start + ($name === 'mouse_scroll_up' ? -1 : 1), -1, $count);
@@ -321,7 +321,7 @@ final class VmsPanel implements Panel, ClickCapture
         \assert($snapshot instanceof VmFleetSnapshot);
         // A sample after a long gap (box hidden, host suspended) restarts the histories.
         $history = $snapshot->baseline ? History::new() : $this->history;
-        $cap = max(64, ($context->layout?->width ?? 0));
+        $cap = max(64, ($context->layout->width ?? 0));
         $keys = [];
         foreach ($snapshot->guests as $g) {
             foreach (['cpu' => $g->cpu, 'dr' => $g->diskRead, 'dw' => $g->diskWrite, 'nd' => $g->netRx, 'nu' => $g->netTx] as $series => $value) {

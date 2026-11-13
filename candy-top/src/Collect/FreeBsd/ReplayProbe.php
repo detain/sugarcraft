@@ -67,6 +67,7 @@ final class ReplayProbe implements Probe
         if ($this->answers === null) {
             return $this->inner->sysctl($names);
         }
+        $found = false;
         $text = $this->answer(LiveProbe::sysctlArgv($names), $found);
 
         return $found && $text !== null ? Sysctl::parse($text) : [];
@@ -77,6 +78,8 @@ final class ReplayProbe implements Probe
         if ($this->answers === null) {
             return $this->inner->run($argv);
         }
+
+        $found = false;
 
         return $this->answer($argv, $found);
     }
@@ -107,7 +110,7 @@ final class ReplayProbe implements Probe
     }
 
     /** @param list<string> $argv */
-    private function answer(array $argv, ?bool &$found): ?string
+    private function answer(array $argv, bool &$found = false): ?string
     {
         $key = implode("\0", $argv);
         $found = array_key_exists($key, $this->answers ?? []);

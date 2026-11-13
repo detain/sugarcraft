@@ -52,7 +52,7 @@ final class PlaceholderPanel implements Panel
         return $this->snapshot;
     }
 
-    public function collect(PanelContext $context): ?\Closure
+    public function collect(PanelContext $context): \Closure
     {
         $box = $this->box;
         $source = $this->source;

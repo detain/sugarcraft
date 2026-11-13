@@ -22,7 +22,6 @@ use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Core\View as CoreView;
 use SugarCraft\Animation\AnsiArt;
 use SugarCraft\Animation\ArtLoop;
 use SugarCraft\Top\Config\Config;
@@ -405,7 +404,7 @@ final class App implements Model
         };
     }
 
-    public function init(): ?\Closure
+    public function init(): \Closure
     {
         return Cmd::batch($this->clock, $this->collectAll(), $this->dataTick());
     }
@@ -642,7 +641,7 @@ final class App implements Model
         return $this->broadcast($msg);
     }
 
-    public function view(): string|CoreView
+    public function view(): string
     {
         return $this->surface()?->render() ?? '';
     }
@@ -1029,10 +1028,7 @@ final class App implements Model
     /**
      * A {@see SampleTap} panel that was just shown gets its first data from
      * the box it taps: sample that box now (btop's Runner::run("all") after
-     * a toggle re-collects proc together with ctr) unless it is hidden or
-     * already being sampled in `$sampled` (panel box => true, updated).
-     *
-     * @param array<string, bool> $sampled
+     * a toggle re-collects proc together with ctr) unless it is hidden.
      */
     private function opened(Panel $panel): self
     {

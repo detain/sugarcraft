@@ -143,7 +143,7 @@ final class FakeProcList implements Source
 
         foreach (self::DEMO_CAST as $j => [$pid, $ppid, $name, $cmd, $user, $argv0, $state]) {
             $i = count(self::CAST) + $j;
-            if ($this->filterKernel && ($pid === 2 || $ppid === 2)) {
+            if ($this->filterKernel && $pid === 2) {
                 continue;
             }
             $cpu = $pid === 2 ? 0.0 : round(Wave::percent($this->step, $i * 0.91) / (1 + $j), 1);

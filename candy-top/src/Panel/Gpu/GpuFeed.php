@@ -224,7 +224,7 @@ final class GpuFeed implements Source
         $round = self::sampleOf(GpuSampling::tuneFor($this->source, $demand))->then(
             function (array $result) use (&$done): GpuSnapshot {
                 [$snapshot, $next] = $result;
-                $this->source = $next instanceof Source ? $next : $this->source;
+                $this->source = $next;
                 $this->latest = $snapshot instanceof GpuSnapshot ? $snapshot : new GpuSnapshot([]);
                 $this->error = null;
                 $this->seq++;

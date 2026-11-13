@@ -13,8 +13,6 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * namespace baked in. Translated strings live in {@see ../lang/en.php}; the
  * config-file option descriptions are looked up here too, so a localized
  * build writes its `config.conf` comments in the user's language.
- *
- * @extends BaseLang
  */
 final class Lang extends BaseLang
 {

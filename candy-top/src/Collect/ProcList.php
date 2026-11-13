@@ -566,6 +566,6 @@ final class ProcList implements TunableProcList
         }
         $entry = @posix_getpwuid($uid);
 
-        return is_array($entry) && ($entry['name'] ?? '') !== '' ? $entry['name'] : null;
+        return is_array($entry) && $entry['name'] !== '' ? $entry['name'] : null;
     }
 }

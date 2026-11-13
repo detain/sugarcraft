@@ -189,15 +189,15 @@ final class NetPanel implements Panel, ClickCapture
         return max(1, intdiv($mbit << 20, 8));
     }
 
-    public function collect(PanelContext $context): ?\Closure
+    public function collect(PanelContext $context): \Closure
     {
         $source = $this->source;
-        $async = $source instanceof AsyncSource && $source->isAsync();
+        $async = $source instanceof AsyncSource && $source->isAsync() ? $source : null;
 
         return static function () use ($source, $async): Msg {
-            if ($async) {
+            if ($async !== null) {
                 // S-P02: netstat/ifconfig run on the loop, never on the update path.
-                return Cmd::promise(static fn () => $source->sampleAsync()->then(
+                return Cmd::promise(static fn () => $async->sampleAsync()->then(
                     static fn (array $r): Msg => new SampledMsg('net', $r[0], $r[1]),
                 ))();
             }

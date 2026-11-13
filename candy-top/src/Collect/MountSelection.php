@@ -47,7 +47,7 @@ final class MountSelection
             $filter[0] = substr($filter[0], 8);
         }
 
-        return new self($physicalOnly, $useFstab, array_values($filter), $exclude, $zfsHideDatasets);
+        return new self($physicalOnly, $useFstab, $filter, $exclude, $zfsHideDatasets);
     }
 
     /**

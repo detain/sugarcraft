@@ -793,9 +793,6 @@ final class ProcView
         $lx = $dx + 1;
         $statusColor = !$alive ? $inactive : ($p->state === 'R' ? $ink->fg('proc_misc') : $main);
         for ($i = 0; $i < min($fit, 8) || $i < 2; $i++) {
-            if ($i >= 8) {
-                break;
-            }
             $r->put($lx + $i * $iw, 1, self::cjust(Lang::t('proc.detail.' . $labels[$i]), $iw, true), $title . self::BOLD);
             $r->put($lx + $i * $iw, 2, self::cjust($values[$i], $iw, $i >= 4), $i === 0 ? $statusColor : $main);
         }

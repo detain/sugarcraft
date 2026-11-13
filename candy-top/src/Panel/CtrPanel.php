@@ -225,7 +225,7 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
      */
     public static function stepped(?ContainerSnapshot $snapshot, string $selected, int $step): string
     {
-        $containers = $snapshot?->containers ?? [];
+        $containers = $snapshot->containers ?? [];
         $size = \count($containers);
         $index = $selected === '' ? null : $snapshot?->indexOf($selected);
         $pos = $index === null ? 0 : $index + 1;
@@ -258,7 +258,7 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
     /** btop Ctr::select_row: toggle the container on list row `$row`. */
     private function selectRow(int $row, PanelContext $context): PanelResult
     {
-        $containers = $this->snapshot?->containers ?? [];
+        $containers = $this->snapshot->containers ?? [];
         if ($row < 0 || $this->start + $row >= \count($containers)) {
             return new PanelResult($this);
         }
@@ -403,7 +403,7 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
 
     private static function historyCap(PanelContext $context): int
     {
-        $width = $context->layout?->width ?? 0;
+        $width = $context->layout->width ?? 0;
 
         return $width > 0 ? $width : self::DEFAULT_HISTORY;
     }

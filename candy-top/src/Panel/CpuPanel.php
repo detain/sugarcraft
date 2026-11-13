@@ -180,7 +180,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         return $this->battery?->present($context->config) ?? false;
     }
 
-    public function collect(PanelContext $context): ?\Closure
+    public function collect(PanelContext $context): \Closure
     {
         $config = $context->config;
         $perCore = $config->showCoreFreq() !== 'off';
@@ -256,7 +256,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         $samples = $msg->snapshot;
         $next = $msg->next instanceof NamedSources ? $msg->next : NamedSources::of([]);
         // btop trims to `width * 2` with Cpu::width (the cpu box, which spans the terminal).
-        $cap = 2 * max(1, $context->box?->width ?? $context->layout?->width ?? intdiv(self::DEFAULT_HISTORY, 2));
+        $cap = 2 * max(1, $context->box->width ?? $context->layout->width ?? intdiv(self::DEFAULT_HISTORY, 2));
 
         $self = $this->mutate(sources: $this->sources->merge($next->only(self::MEMBERS)), sampled: true);
         $cpu = $samples->get('cpu');
@@ -371,8 +371,8 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
     public function optionChoices(): array
     {
         $fields = ['Auto', ...$this->graphFields()];
-        $sensors = ['Auto', ...array_map('strval', array_keys($this->temp?->sensors ?? []))];
-        $name = $this->battery instanceof BorderBattery ? ($this->battery->last()?->name ?? '') : '';
+        $sensors = ['Auto', ...array_map('strval', array_keys($this->temp->sensors ?? []))];
+        $name = $this->battery instanceof BorderBattery ? ($this->battery->last()->name ?? '') : '';
 
         return [
             'cpu_graph_upper' => $fields,

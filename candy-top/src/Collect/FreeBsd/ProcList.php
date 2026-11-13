@@ -332,6 +332,6 @@ final class ProcList implements TunableProcList, AsyncSampling
         }
         $pw = @posix_getpwuid($uid);
 
-        return is_array($pw) && is_string($pw['name'] ?? null) ? $pw['name'] : null;
+        return is_array($pw) && $pw['name'] !== '' ? $pw['name'] : null;
     }
 }

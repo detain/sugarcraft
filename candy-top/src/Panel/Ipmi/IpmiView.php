@@ -714,7 +714,7 @@ final class IpmiView
         if ($d->sel !== null) {
             $lines += 1 + \count(self::wrap($d->sel->latest, $width - mb_strwidth(Lang::t('ipmi.sel_last')) - 1, 2));
         }
-        if (IpmiPanel::showSerials($frame->config) && ($d->info?->serials ?? []) !== []) {
+        if (IpmiPanel::showSerials($frame->config) && ($d->info->serials ?? []) !== []) {
             $lines += \count($d->info->serials);
         }
 
@@ -838,7 +838,7 @@ final class IpmiView
             }
         }
         if (IpmiPanel::showSerials($frame->config)) {
-            foreach ($d->info?->serials ?? [] as $label => $serial) {
+            foreach ($d->info->serials ?? [] as $label => $serial) {
                 if ($y >= $in->bottom()) {
                     break;
                 }

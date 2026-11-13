@@ -87,7 +87,7 @@ final class MemPanel implements Panel, ClickCapture
         return 'mem';
     }
 
-    public function collect(PanelContext $context): ?\Closure
+    public function collect(PanelContext $context): \Closure
     {
         $sampling = $this->sources->with('disks', $this->disks?->source($context));
 
@@ -185,7 +185,7 @@ final class MemPanel implements Panel, ClickCapture
     private function withSamples(Samples $samples, Source $next, PanelContext $context): self
     {
         // btop trims mem.percent to `width * 2` with Mem::width — the mem box.
-        $cap = 2 * max(1, $context->box?->width ?? $context->layout?->width ?? intdiv(self::DEFAULT_HISTORY, 2));
+        $cap = 2 * max(1, $context->box->width ?? $context->layout->width ?? intdiv(self::DEFAULT_HISTORY, 2));
         $nextSet = $next instanceof NamedSources ? $next : NamedSources::of([]);
         $sources = $this->sources->merge($nextSet->only(['mem']));
         $history = $this->history;

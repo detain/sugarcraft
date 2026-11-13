@@ -294,10 +294,10 @@ final class Help
         if ($timedOut) {
             \proc_terminate($process, 15);
             $grace = \microtime(true) + 0.5;
-            while (\microtime(true) < $grace && (\proc_get_status($process)['running'] ?? false)) {
+            while (\microtime(true) < $grace && \proc_get_status($process)['running']) {
                 \usleep(10_000);
             }
-            if (\proc_get_status($process)['running'] ?? false) {
+            if (\proc_get_status($process)['running']) {
                 \proc_terminate($process, 9);
             }
         }

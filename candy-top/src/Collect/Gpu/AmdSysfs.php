@@ -47,7 +47,7 @@ use SugarCraft\Top\Collect\Sentinel;
 final class AmdSysfs implements Backend
 {
     /**
-     * @param list<array{card: PciCard, name: string, hwmon: ?string, temp: ?string, tempMem: ?string, power: ?string, peak: float}> $cards
+     * @param list<array{card: PciCard, name: string, hwmon: ?string, temp: ?string, tempMem: ?string, power: ?string, powerCap: ?string, freq1: ?string, freq2: ?string, pwm: ?string, pwmMax: ?string, peak: float}> $cards
      */
     private function __construct(
         private readonly array $cards,

@@ -354,7 +354,7 @@ final class OptionsMenu implements Overlay
      *
      * @throws InvalidOptionValue
      */
-    private static function parsed(string $option, string $text, Config $config): bool|int|string
+    private static function parsed(string $option, string $text, Config $config): int|string
     {
         if ($option === 'proc_box_width_percent' && $text !== '' && ctype_digit($text) && strlen(ltrim($text, '0')) <= 10 && (int) $text <= Option::INT_MAX) {
             $text = (string) min(100, (int) $text);

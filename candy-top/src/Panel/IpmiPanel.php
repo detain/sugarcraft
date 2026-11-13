@@ -114,7 +114,7 @@ final class IpmiPanel implements Panel
     public function update(Msg $msg, PanelContext $context): PanelResult
     {
         if ($msg instanceof SampledMsg && $msg->box === 'ipmi' && $msg->snapshot instanceof IpmiSnapshot) {
-            $width = $context->box?->width ?? 0;
+            $width = $context->box->width ?? 0;
             $cap = $width > 0 ? max(IpmiData::HISTORY, 2 * $width) : IpmiData::HISTORY;
             $reader = $msg->next instanceof IpmiReader ? $msg->next : $this->reader;
 

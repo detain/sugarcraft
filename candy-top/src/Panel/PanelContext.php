@@ -42,7 +42,7 @@ final class PanelContext
     /** btop `Proc::select_max`: process rows the proc box shows; 0 when unknown. */
     public function procSelectMax(): int
     {
-        return $this->layout?->procSelectMax ?? 0;
+        return $this->layout->procSelectMax ?? 0;
     }
 
     /**

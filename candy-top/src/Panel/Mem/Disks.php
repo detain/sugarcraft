@@ -100,7 +100,7 @@ final class Disks implements DisksSection
             return new self($next, $this->history, $this->mounts, $this->io, $memory ?? $this->memory);
         }
         // btop trims io deques to `width * 2` with Mem::width — the mem box.
-        $cap = 2 * max(1, $context->box?->width ?? $context->layout?->width ?? intdiv(self::DEFAULT_HISTORY, 2));
+        $cap = 2 * max(1, $context->box->width ?? $context->layout->width ?? intdiv(self::DEFAULT_HISTORY, 2));
         $history = $this->history;
         $keep = [];
         $io = [];

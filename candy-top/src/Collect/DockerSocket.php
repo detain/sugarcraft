@@ -74,7 +74,7 @@ final class DockerSocket
             }
             while (!feof($socket) && \strlen($response) < self::MAX_BYTES && self::armed($socket, $deadline)) {
                 $chunk = @fread($socket, 8192);
-                if ($chunk === false || ($chunk === '' && (stream_get_meta_data($socket)['timed_out'] ?? false))) {
+                if ($chunk === false || ($chunk === '' && stream_get_meta_data($socket)['timed_out'])) {
                     break;
                 }
                 $response .= $chunk;

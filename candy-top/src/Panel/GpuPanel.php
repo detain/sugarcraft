@@ -187,7 +187,7 @@ final class GpuPanel implements Panel, ClickCapture, OptionChoices, GpuRosterSou
     public function clickedSelector(MouseMsg $msg, PanelContext $context): ?array
     {
         $map = [];
-        foreach ($context->layout?->gpuBoxes ?? [] as $gpu) {
+        foreach ($context->layout->gpuBoxes ?? [] as $gpu) {
             if ($gpu->selector !== null) {
                 $map['gpu_prev_' . $gpu->panel] = [$gpu->selector[0], $gpu->rect->y, 1, 1];
                 $map['gpu_next_' . $gpu->panel] = [$gpu->selector[1], $gpu->rect->y, 1, 1];
@@ -204,7 +204,7 @@ final class GpuPanel implements Panel, ClickCapture, OptionChoices, GpuRosterSou
     public function update(Msg $msg, PanelContext $context): PanelResult
     {
         if ($msg instanceof SampledMsg && $msg->box === 'gpu' && $msg->snapshot instanceof GpuSnapshot) {
-            return new PanelResult($this->sampledFrom($msg->snapshot, $msg->next instanceof Source ? $msg->next : $this->source, $context));
+            return new PanelResult($this->sampledFrom($msg->snapshot, $msg->next, $context));
         }
         if ($msg instanceof MouseMsg && ($hit = $this->clickedSelector($msg, $context)) !== null) {
             return new PanelResult($this, null, $this->retarget($hit[0], $hit[1], $context));
@@ -293,7 +293,7 @@ final class GpuPanel implements Panel, ClickCapture, OptionChoices, GpuRosterSou
             $history = $history->withoutPrefixes(...array_map(static fn (int $i): string => 'a' . $i . ':', $expired));
         }
         $width = 0;
-        foreach ($context->layout?->gpuBoxes ?? [] as $box) {
+        foreach ($context->layout->gpuBoxes ?? [] as $box) {
             $width = max($width, $box->rect->width);
         }
         $cap = $width > 0 ? 2 * $width : self::DEFAULT_HISTORY;

@@ -231,9 +231,6 @@ final class SelfUpdate
 
     private const READ_TIMEOUT_SECONDS = 60.0;
 
-    /** The three flags this verb knows; anything else is a usage error. */
-    private const KNOWN_FLAGS = ['--check', '--rollback', '--allow-unsigned'];
-
     /**
      * Test-only stand-in for STDERR so the suite can read the report lines;
      * null means the real stream. Swapped via {@see useErrorStreamForTesting}.

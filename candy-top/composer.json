@@ -39,6 +39,7 @@
         "sugarcraft/sugar-dashboard": "@dev"
     },
     "require-dev": {
+        "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^10.5",
         "sugarcraft/sugar-pty": "@dev",
         "sugarcraft/sugar-testing": "@dev"

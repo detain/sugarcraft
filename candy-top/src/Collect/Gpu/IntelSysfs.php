@@ -48,7 +48,7 @@ final class IntelSysfs implements Backend
 
     /**
      * @param \Closure(): float $clock
-     * @param list<array{card: PciCard, name: string, cardDir: string, hwmon: ?string, temp: ?string, energy: ?array{0: float, 1: float}, peak: float}> $cards
+     * @param list<array{card: PciCard, name: string, cardDir: string, hwmon: ?string, temp: ?string, energyPath: ?string, powerIn: ?string, powerCap: ?string, energy: ?array{0: float, 1: float}, peak: float}> $cards
      */
     private function __construct(
         private readonly \Closure $clock,

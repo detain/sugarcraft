@@ -151,7 +151,7 @@ final class CtrView
         [$open, $close] = $f->border->embedJunctions(false);
         [$openDown, $closeDown] = $f->border->embedJunctions(true);
 
-        $containers = $snapshot?->containers ?? [];
+        $containers = $snapshot->containers ?? [];
         $count = \count($containers);
         $selectedPath = $config->string(Schema::CTR_SELECTED);
         $selected = $selectedPath === '' ? -1 : ($snapshot?->indexOf($selectedPath) ?? -1);
@@ -186,7 +186,7 @@ final class CtrView
                 $r->put($dx, $i, $f->border->left, $ink->fg('div_line'));
             }
             $limit = $c->memLimit > 0 ? $c->memLimit : $memTotal;
-            $r->ansi($dx + 1, 1, $title . Symbols::BOLD . self::detailTitle($c, $dw, $config->bool('proc_per_core'), $snapshot?->coreCount ?? 1) . Symbols::UNBOLD);
+            $r->ansi($dx + 1, 1, $title . Symbols::BOLD . self::detailTitle($c, $dw, $config->bool('proc_per_core'), $snapshot->coreCount ?? 1) . Symbols::UNBOLD);
             if ($c->history !== []) {
                 $graph = DualSampleGraph::new(max(1, $dw - 1), max(1, $H - 4), $family, false, true)->withData(...$c->history);
                 foreach (TintedGraph::lines($graph, $ink, 'cpu') as $i => $gl) {

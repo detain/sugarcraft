@@ -80,7 +80,7 @@ final class FakeIpmi implements IpmiReader
         return new self($state, null, null, [], null, null, false, $device);
     }
 
-    public function poll(int $slowMs): ?PromiseInterface
+    public function poll(int $slowMs): PromiseInterface
     {
         return resolve($this->next());
     }

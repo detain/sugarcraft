@@ -349,7 +349,7 @@ final class ProcPanel implements Panel, ClickCapture
         return $this->graphs ?? ProcGraphTracker::new();
     }
 
-    public function collect(PanelContext $context): ?\Closure
+    public function collect(PanelContext $context): \Closure
     {
         return $this->collectWith($context, false);
     }
@@ -360,7 +360,7 @@ final class ProcPanel implements Panel, ClickCapture
      */
     private function collectWith(PanelContext $context, bool $freshGpu): \Closure
     {
-        $source = $this->configured($context->config, $context->box?->width ?? 0);
+        $source = $this->configured($context->config, $context->box->width ?? 0);
         $feed = $this->gpu instanceof GpuFeed && ProcGpuColumns::wanted($context->config, $context->box?->width)
             ? $this->gpu
             : null;
@@ -369,10 +369,10 @@ final class ProcPanel implements Panel, ClickCapture
         $wrap = static fn (object $snapshot, Source $next, ?GpuSnapshot $gpu): Msg
             => new SampledMsg('proc', $gpu !== null && $feed !== null && $snapshot instanceof ProcSnapshot ? new ProcGpuSample($snapshot, $gpu, $feed) : $snapshot, $next);
         // S-P02: ps/procstat run on the loop on a live FreeBSD host, never on the update path.
-        $async = $source instanceof AsyncSource && $source->isAsync();
+        $async = $source instanceof AsyncSource && $source->isAsync() ? $source : null;
         $joined = static function (GpuSnapshot|null $gpu) use ($source, $wrap, $async): Msg {
-            if ($async) {
-                return Cmd::promise(static fn () => $source->sampleAsync()->then(static fn (array $r): Msg => $wrap($r[0], $r[1], $gpu)))();
+            if ($async !== null) {
+                return Cmd::promise(static fn () => $async->sampleAsync()->then(static fn (array $r): Msg => $wrap($r[0], $r[1], $gpu)))();
             }
             [$snapshot, $next] = $source->sample();
 
@@ -505,7 +505,7 @@ final class ProcPanel implements Panel, ClickCapture
             $this->graphs(),
             $detail,
             $this->memTotal,
-            $this->snapshot?->coreCount ?? 1,
+            $this->snapshot->coreCount ?? 1,
             $this->followedPid,
             $this->followRow,
             $this->returnToFollowed,
@@ -633,7 +633,7 @@ final class ProcPanel implements Panel, ClickCapture
         }
         // #1552 GPU mini-graphs: the same law, only while their slot is drawn.
         $gpuGraphs = $next->gpuGraphs();
-        $width = $context->box?->width ?? 0;
+        $width = $context->box->width ?? 0;
         if (ProcView::sizes($width, $config->bool('proc_cpu_graphs'), $next->gpuAvailable(), $config->bool('proc_gpu_graphs'))['ggraph'] > 0) {
             $family = ProcView::family($config);
             if ($gpuGraphs->family() !== $family) {
@@ -1310,7 +1310,7 @@ final class ProcPanel implements Panel, ClickCapture
 
             return new PanelResult($this);
         }
-        if ($m->action !== MouseAction::Press || $m->button !== MouseButton::Left || $m->shift || $m->alt || $m->ctrl) {
+        if ($m->button !== MouseButton::Left || $m->shift || $m->alt || $m->ctrl) {
             return new PanelResult($this);
         }
 
@@ -1338,7 +1338,7 @@ final class ProcPanel implements Panel, ClickCapture
         if ($lx < $box->width - 2) {
             if ($sel->selected === $row - 1) {
                 if ($config->bool('proc_tree') && $sel->index() !== null) {
-                    $depth = ($rows[$sel->index()] ?? null)?->depth ?? 0;
+                    $depth = ($rows[$sel->index()] ?? null)->depth ?? 0;
                     $offset = $depth * 3;
                     if ($lx > $offset && $lx < 4 + $offset) {
                         return $this->treeKey('space', $context);

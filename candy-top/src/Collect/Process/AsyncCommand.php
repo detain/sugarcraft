@@ -6,7 +6,6 @@ namespace SugarCraft\Top\Collect\Process;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
-use React\EventLoop\TimerInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
@@ -68,7 +67,7 @@ final class AsyncCommand
 
     private static bool $hooked = false;
 
-    /** @var (callable(list<string>, array<string,string>): (array{0: \Traversable<mixed>, 1: array<int|string, mixed>}|null))|null */
+    /** @var (\Closure(list<string>, array<string,string>): (array{0: \Traversable<mixed>, 1: array<int|string, mixed>}|null))|null */
     private static ?\Closure $spawnFactory = null;
 
     private string $output = '';
@@ -213,9 +212,7 @@ final class AsyncCommand
                 return;
             }
             $loop->removeReadStream($stdout);
-            if ($timer instanceof TimerInterface) {
-                $loop->cancelTimer($timer);
-            }
+            $loop->cancelTimer($timer);
             $child->closeStdout();
             if ($child->overflow) {
                 $settled = true;
@@ -453,9 +450,9 @@ final class AsyncCommand
         if ($this->closed || $this->exit !== null) {
             return true;
         }
-        $status = @proc_get_status($this->process);
-        if ($status === false || !$status['running']) {
-            $this->exit = \is_array($status) && !$status['signaled'] ? (int) $status['exitcode'] : -1;
+        $status = proc_get_status($this->process);
+        if (!$status['running']) {
+            $this->exit = !$status['signaled'] ? (int) $status['exitcode'] : -1;
 
             return true;
         }
