@@ -145,7 +145,7 @@ final class SaveLoadTest extends TestCase
             }
             $rows[] = $row;
         }
-        $dead = new Game(new Board(4, 4, 1, $rows, true, true, 0, 0), 0, 0, static fn(int $_max): int => 0);
+        $dead = new Game(Board::fromRows(4, 4, 1, $rows, true, true, 0, 0), 0, 0, static fn(int $_max): int => 0);
         $this->assertTrue($dead->board->exploded, 'sanity: dead board fixture');
 
         [$loaded, ] = $dead->update(self::press(KeyType::Char, 'L'));
@@ -168,7 +168,7 @@ final class SaveLoadTest extends TestCase
             }
             $rows[] = $row;
         }
-        $g = new Game(new Board(3, 3, 1, $rows, true, false, $revealed, 0), 0, 0, static fn(int $_max): int => 0);
+        $g = new Game(Board::fromRows(3, 3, 1, $rows, true, false, $revealed, 0), 0, 0, static fn(int $_max): int => 0);
         $this->assertTrue($g->board->isWon(), 'sanity: won board fixture');
 
         [$g, ] = $g->update(self::press(KeyType::Char, 'S'));

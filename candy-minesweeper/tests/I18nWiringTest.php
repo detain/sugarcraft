@@ -77,7 +77,7 @@ final class I18nWiringTest extends TestCase
             }
             $rows[] = $row;
         }
-        $board = new Board(3, 3, 1, $rows, true, true, 8, 0);
+        $board = Board::fromRows(3, 3, 1, $rows, true, true, 8, 0);
         $g = new Game($board, 0, 0, static fn(int $_max): int => 0);
         $this->assertTrue($g->board->exploded, 'sanity: exploded fixture');
 
@@ -99,7 +99,7 @@ final class I18nWiringTest extends TestCase
             }
             $wonRows[] = $row;
         }
-        $won = new Game(new Board(3, 3, 1, $wonRows, true, false, $revealed, 0), 0, 0, static fn(int $_max): int => 0);
+        $won = new Game(Board::fromRows(3, 3, 1, $wonRows, true, false, $revealed, 0), 0, 0, static fn(int $_max): int => 0);
         $this->assertTrue($won->board->isWon(), 'sanity: won fixture');
         $this->assertStringContainsString('neue Partie', Renderer::render($won), 'cleared line translates');
     }

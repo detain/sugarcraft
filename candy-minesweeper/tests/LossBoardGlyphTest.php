@@ -65,7 +65,7 @@ final class LossBoardGlyphTest extends TestCase
             $rows[] = $row;
         }
 
-        return new Board(
+        return Board::fromRows(
             width: 3,
             height: 3,
             mineCount: 2,
@@ -115,7 +115,7 @@ final class LossBoardGlyphTest extends TestCase
             }
             $rows[] = $row;
         }
-        $wonBoard = new Board(3, 3, 2, $rows, true, false, 7, 0);
+        $wonBoard = Board::fromRows(3, 3, 2, $rows, true, false, 7, 0);
         self::assertTrue((new Game(board: $wonBoard))->board->isWon(), 'sanity: seven of seven safe cells revealed');
 
         $wonView = (new Game(board: $wonBoard, cursorX: 2, cursorY: 2))->view();

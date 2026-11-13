@@ -140,7 +140,6 @@ final class Renderer
     private static function interior(Game $g, bool $mark): string
     {
         $b = $g->board;
-        $boardBuf = Buffer::new($b->width, $b->height);
 
         // The board's colours ride CellBuffer styles, which know nothing
         // about capability — gate them here on the fleet authority's answer
@@ -150,13 +149,19 @@ final class Renderer
         // pre-fix frames.
         $canColor = self::colourBoards();
 
+        // Bulk construction (msw-10/-014): the grid is built once as a flat
+        // row-major list and wrapped with Buffer::fromGrid(). Chaining
+        // withCellAt() shallow-copied the whole grid per cell — O(n²), about
+        // 43 ms per repaint at the legal-max 50×50, paid on every 1 Hz clock
+        // tick as well.
+        $cells = [];
         for ($y = 0; $y < $b->height; $y++) {
             for ($x = 0; $x < $b->width; $x++) {
-                $boardBuf = $boardBuf->withCellAt($x, $y, self::cellBufferCell($b, $x, $y, $g->cursorX, $g->cursorY, $mark, $canColor));
+                $cells[] = self::cellBufferCell($b, $x, $y, $g->cursorX, $g->cursorY, $mark, $canColor);
             }
         }
 
-        return $boardBuf->toAnsi();
+        return Buffer::fromGrid($b->width, $b->height, $cells)->toAnsi();
     }
 
     /**
@@ -395,9 +400,29 @@ final class Renderer
      * renderWithScanner()}, {@see resolveClick()}) so the zone layout the
      * hit-tests run on is always the one the renderer actually emitted.
      */
+    /**
+     * One Scanner per board (msw-10/-014): hit-testing only needs the zone
+     * layout, and the zone map depends on nothing but the Board object the
+     * marks were painted from — cursor highlight and palette changes alter
+     * attributes, never glyph widths or zone positions. The cache keys on
+     * board IDENTITY (a strong reference, so the id can never be recycled
+     * under it): a click on an unchanged board reuses the scan, the first
+     * click on a new board pays it once.
+     *
+     * @var array{0:Board,1:Scanner}|null
+     */
+    private static ?array $scannerCache = null;
+
     private static function scanner(Game $g): Scanner
     {
-        return Scanner::new()->scan(self::interior($g, mark: true));
+        $cached = self::$scannerCache;
+        if ($cached !== null && $cached[0] === $g->board) {
+            return $cached[1];
+        }
+        $scanner = Scanner::new()->scan(self::interior($g, mark: true));
+        self::$scannerCache = [$g->board, $scanner];
+
+        return $scanner;
     }
 
     /**

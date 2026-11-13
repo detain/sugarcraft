@@ -189,7 +189,7 @@ final class BoardTest extends TestCase
         // (2,1) right neighbor is unrevealed safe cell (should be revealed by chord)
         $rows[1][2] = new \SugarCraft\Minesweeper\Cell(false, false, false, 0);
 
-        $board = new Board(3, 3, 1, $rows, true, false);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false);
 
         // Chord on center (1,1) — it has adjacent=1 and exactly 1 neighbor flagged
         // → should reveal (2,1) but not (0,1) since it's already flagged.
@@ -216,7 +216,7 @@ final class BoardTest extends TestCase
         // Only 1 of 2 adjacent mines is flagged — not satisfied.
         $rows[1][0] = new \SugarCraft\Minesweeper\Cell(false, false, true, 0);
 
-        $board = new Board(3, 3, 1, $rows, true, false);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false);
 
         $next = $board->chord(1, 1);
 
@@ -242,7 +242,7 @@ final class BoardTest extends TestCase
         }
         $rows[1][1] = new \SugarCraft\Minesweeper\Cell(false, true, false, 0);
 
-        $board = new Board(3, 3, 1, $rows, true, false);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false);
 
         $this->assertSame($board, $board->chord(1, 1));
     }
@@ -297,7 +297,7 @@ final class BoardTest extends TestCase
         $rows[1][1] = new \SugarCraft\Minesweeper\Cell(false, true, false, 1);
         $rows[1][0] = new \SugarCraft\Minesweeper\Cell(false, false, true, 0);
 
-        $board = new Board(3, 3, 1, $rows, true, false, 1);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false, 1);
         $this->assertSame(1, $board->revealedCount);
 
         // Chord reveals all 7 unflagged neighbors → 1 + 7 = 8.
@@ -396,7 +396,7 @@ final class BoardTest extends TestCase
         ];
 
         // minesPlaced=true, exploded=false, revealedCount=1 (only (1,1) revealed).
-        $board = new Board(5, 3, 2, $rows, true, false, 1);
+        $board = Board::fromRows(5, 3, 2, $rows, true, false, 1);
 
         // Chord at (1,1): adj=1, one flagged neighbour → satisfied.
         $next = $board->chord(1, 1);
@@ -491,7 +491,7 @@ final class BoardTest extends TestCase
         // the win threshold unreachable (silently un-winnable) and revealing
         // outside the real data a no-op.
         $this->expectException(\InvalidArgumentException::class);
-        new Board(5, 5, 3, self::grid(2, 2));
+        Board::fromRows(5, 5, 3, self::grid(2, 2));
     }
 
     public function testConstructorRejectsShortRow(): void
@@ -499,7 +499,7 @@ final class BoardTest extends TestCase
         $rows = self::grid(5, 5);
         $rows[3] = [new \SugarCraft\Minesweeper\Cell(false)];
         $this->expectException(\InvalidArgumentException::class);
-        new Board(5, 5, 3, $rows);
+        Board::fromRows(5, 5, 3, $rows);
     }
 
     public function testConstructorRejectsNonCellEntry(): void
@@ -507,12 +507,12 @@ final class BoardTest extends TestCase
         $rows = self::grid(4, 4);
         $rows[2][1] = 'not a cell';
         $this->expectException(\InvalidArgumentException::class);
-        new Board(4, 4, 3, $rows); // intentional wrong-type probe
+        Board::fromRows(4, 4, 3, $rows); // intentional wrong-type probe
     }
 
     public function testConstructorAcceptsExactShape(): void
     {
-        $b = new Board(4, 3, 2, self::grid(4, 3), true, false, 0, 0);
+        $b = Board::fromRows(4, 3, 2, self::grid(4, 3), true, false, 0, 0);
         $this->assertSame(4, $b->width);
         $this->assertSame(3, $b->height);
     }

@@ -58,7 +58,7 @@ final class TickSubscriptionTest extends TestCase
             $rows[] = $row;
         }
         // Every safe cell revealed → board won → timer frozen → clock stands down.
-        $board = new Board(3, 3, 1, $rows, true, false, $revealed, 0);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false, $revealed, 0);
         $g = new Game(
             board: $board,
             cursorX: 1,
@@ -106,7 +106,7 @@ final class TickSubscriptionTest extends TestCase
             }
             $rows[] = $row;
         }
-        $board = new Board(9, 9, 10, $rows, true, false, 0, 0);
+        $board = Board::fromRows(9, 9, 10, $rows, true, false, 0, 0);
         $g = new Game(
             board: $board,
             cursorX: 4,

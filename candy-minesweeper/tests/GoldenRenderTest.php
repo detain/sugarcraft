@@ -189,13 +189,19 @@ final class GoldenRenderTest extends TestCase
         $this->assertArrayHasKey('cell:0:0', $zones, 'sanity: scanner carries cell zones');
         $real = $zones['cell:0:0'];
 
-        $positive = Renderer::resolveClick($g, $real->startCol, $real->startRow);
-        $this->assertSame([0, 0], $positive, 'sanity: the click coordinates hit cell (0,0) on a fresh scan');
+        $positive = Renderer::resolveClick($g, $real->startCol, $real->startRow, $scanner);
+        $this->assertSame([0, 0], $positive, 'sanity: the click coordinates hit cell (0,0) on the injected scan');
 
         // Replace the zone covering that coordinate with one whose id
-        // matches no "cell:r:c" pattern. Without the regex guard the hit
-        // would resolve to a guessed [0, 0] from uninitialized matches —
-        // the null below can only come from the guard.
+        // matches no "cell:r:c" pattern on a FRESH scan of the same layout
+        // (Scanner::hit() memoises its lookup grid at first touch — the
+        // positive leg above has already warmed this object's, and the
+        // Renderer reuses one Scanner per board). Without the regex guard
+        // the hit would resolve to a guessed [0, 0] from uninitialized
+        // matches — the null below can only come from the guard.
+        $g2 = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        [, $tampered] = Renderer::renderWithScanner($g2);
+        $zones = $zonesProp->getValue($tampered);
         unset($zones['cell:0:0']);
         $zones['malformed-zone-id'] = new \SugarCraft\Mouse\Zone(
             'malformed-zone-id',
@@ -204,10 +210,28 @@ final class GoldenRenderTest extends TestCase
             $real->endCol,
             $real->endRow,
         );
-        $zonesProp->setValue($scanner, $zones);
+        $zonesProp->setValue($tampered, $zones);
 
-        $result = Renderer::resolveClick($g, $real->startCol, $real->startRow, $scanner);
+        $result = Renderer::resolveClick($g, $real->startCol, $real->startRow, $tampered);
         $this->assertNull($result, 'a malformed zone id must resolve to nothing, not a guess');
+    }
+
+    public function testOneScannerIsReusedPerBoardAndNotAcrossBoards(): void
+    {
+        // msw-10/-014 pin: the click path holds one scan per board object.
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        [, $first] = Renderer::renderWithScanner($g);
+        [, $again] = Renderer::renderWithScanner($g);
+        $this->assertSame($first, $again, 'the same board must not pay a second full scan');
+
+        $g2 = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        [, $other] = Renderer::renderWithScanner($g2);
+        $this->assertNotSame($first, $other, 'a different board object re-scans');
+
+        // A board mutation invalidates through identity: revealing re-scans.
+        [$moved, ] = $g->update(new KeyMsg(KeyType::Space, ''));
+        [, $afterMove] = Renderer::renderWithScanner($moved);
+        $this->assertNotSame($first, $afterMove, 'the new board instance must not ride the stale scan');
     }
 
     public function testRenderWithScannerReturnsScanner(): void

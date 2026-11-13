@@ -396,7 +396,7 @@ final class GameTest extends TestCase
             $rows[] = $row;
         }
         // 81 cells − 10 mines − 1 unrevealed target = 70 revealed safe cells.
-        $board = new Board(9, 9, 10, $rows, true, false, $revealedCount, 0);
+        $board = Board::fromRows(9, 9, 10, $rows, true, false, $revealedCount, 0);
 
         return new Game(
             board: $board,
@@ -435,7 +435,7 @@ final class GameTest extends TestCase
             }
             $rows[] = $row;
         }
-        $board = new Board(9, 9, 10, $rows, true, false, 0, 0);
+        $board = Board::fromRows(9, 9, 10, $rows, true, false, 0, 0);
         $g = new Game($board, 0, 0, static fn(int $_max): int => 0, microtime(true));
 
         // Revealing the mine explodes — update() must record the loss.
@@ -509,7 +509,7 @@ final class GameTest extends TestCase
             [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
         ];
 
-        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, false, 1);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false, 1);
         // Cursor starts at (1,1) — on the satisfied revealed number.
         $game = new Game($board, 1, 1, static fn(int $_max): int => 0);
 
@@ -583,7 +583,7 @@ final class GameTest extends TestCase
             [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
         ];
 
-        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, false, 1);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false, 1);
         $g = new Game($board, 2, 2, static fn(int $_max): int => 0);  // cursor at (2,2) — safe, unrevealed
 
         $this->assertFalse($g->board->cell(2, 2)->revealed);
@@ -607,7 +607,7 @@ final class GameTest extends TestCase
             [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
         ];
 
-        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, false, 1);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false, 1);
         $g = new Game($board, 1, 1, static fn(int $_max): int => 0);  // cursor on (1,1) — satisfied
 
         // Terminal coords for interior (1,1): x=4, y=3
@@ -645,7 +645,7 @@ final class GameTest extends TestCase
             [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
         ];
 
-        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, true, 1);  // exploded=true
+        $board = Board::fromRows(3, 3, 1, $rows, true, true, 1);  // exploded=true
         $g = new Game($board, 2, 2, static fn(int $_max): int => 0);
 
         $this->assertTrue($g->board->exploded);
@@ -683,7 +683,7 @@ final class GameTest extends TestCase
             $rows[] = $row;
         }
         // 100 cells − 12 mines − 1 unrevealed target = 87 revealed safe cells.
-        $board = new Board(10, 10, 12, $rows, true, false, $revealedCount, 0);
+        $board = Board::fromRows(10, 10, 12, $rows, true, false, $revealedCount, 0);
 
         return new Game(
             board: $board,
@@ -733,7 +733,7 @@ final class GameTest extends TestCase
             }
             $rows[] = $row;
         }
-        $board = new Board(10, 10, 12, $rows, true, false, $revealedCount, 0);
+        $board = Board::fromRows(10, 10, 12, $rows, true, false, $revealedCount, 0);
         $g = new Game(
             board: $board,
             cursorX: 9,
@@ -816,7 +816,7 @@ final class GameTest extends TestCase
             [new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, false, 2), new \SugarCraft\Minesweeper\Cell(false, false, false, 1)],
             [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 1), new \SugarCraft\Minesweeper\Cell(false, false, true, 0)],
         ];
-        $board = new \SugarCraft\Minesweeper\Board(3, 3, 1, $rows, true, false, 0, 1);
+        $board = Board::fromRows(3, 3, 1, $rows, true, false, 0, 1);
         $g     = new Game($board, 0, 0, static fn(int $_max): int => 0);  // cursor at (0,0)
 
         $this->assertTrue($g->board->cell(2, 2)->flagged, 'sanity: click target is a flagged dud');

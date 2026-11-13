@@ -19,9 +19,15 @@ final class Board
     private array $rows;
 
     /**
+     * Thin construction (msw-10/-015): the shape census lives at the public
+     * boundary ({@see fromRows()}, {@see blank()}); internal one-cell and
+     * flood clones take this path unchecked. The class is final and $rows is
+     * private, so no misshapen grid can reach a clone without first passing
+     * a boundary — parse-don't-validate on the hot path.
+     *
      * @param list<list<Cell>> $rows
      */
-    public function __construct(
+    private function __construct(
         public readonly int $width,
         public readonly int $height,
         public readonly int $mineCount,
@@ -37,10 +43,29 @@ final class Board
         if ($mineCount < 1 || $mineCount > $width * $height - 1) {
             throw new \InvalidArgumentException(Lang::t('board.minecount_out_of_range'));
         }
-        // Fail fast on a misshapen grid: a 5×5-claim over 2×2 data would
-        // silently produce an un-winnable board (win threshold unreachable,
-        // reveals outside the real data no-op). unserialize() already checks
-        // the wire shape — the direct-ctor path gets the same guarantee.
+        $this->rows = $rows;
+    }
+
+    /**
+     * Public direct-construction boundary: the grid census for callers that
+     * hand us a full $rows map. Fail fast on a misshapen grid: a 5×5-claim
+     * over 2×2 data would silently produce an un-winnable board (win
+     * threshold unreachable, reveals outside the real data no-op).
+     * unserialize() runs its own stricter wire pass and constructs directly;
+     * both honour the same promise.
+     *
+     * @param list<list<Cell>> $rows
+     */
+    public static function fromRows(
+        int $width,
+        int $height,
+        int $mineCount,
+        array $rows,
+        bool $minesPlaced = false,
+        bool $exploded = false,
+        int $revealedCount = 0,
+        int $flaggedCount = 0,
+    ): self {
         if (count($rows) !== $height) {
             throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch', ['width' => $width, 'height' => $height]));
         }
@@ -54,7 +79,8 @@ final class Board
                 }
             }
         }
-        $this->rows = $rows;
+
+        return new self($width, $height, $mineCount, $rows, $minesPlaced, $exploded, $revealedCount, $flaggedCount);
     }
 
     /**

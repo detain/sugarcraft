@@ -54,7 +54,7 @@ final class FooterWidthGuardTest extends TestCase
             $rows[] = $row;
         }
         $exploded = new Game(
-            board: new Board(3, 3, 2, $rows, minesPlaced: true, exploded: true, revealedCount: 1, flaggedCount: 0),
+            board: Board::fromRows(3, 3, 2, $rows, minesPlaced: true, exploded: true, revealedCount: 1, flaggedCount: 0),
             cursorX: 0,
             cursorY: 0,
         );
@@ -81,7 +81,7 @@ final class FooterWidthGuardTest extends TestCase
             $safe[] = $row;
         }
         $won = new Game(
-            board: new Board(3, 3, 1, $safe, minesPlaced: true, exploded: false, revealedCount: 8, flaggedCount: 0),
+            board: Board::fromRows(3, 3, 1, $safe, minesPlaced: true, exploded: false, revealedCount: 8, flaggedCount: 0),
             cursorX: 2,
             cursorY: 2,
             elapsedSeconds: 3625,
