@@ -19,7 +19,7 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   absolute-index window; it does NOT fetch. The screen reads the window after
   each move and calls its store. Returning `[0, -1]` for an empty grid lets the
   owner treat `start > end` as "nothing to fetch".
-- **Uniform cells = `posterHeight + 2`.** Every cell is normalized to
+- **Uniform cells = `posterHeight + 2`.** Every cell is normalised to
   `cardWidth × (posterHeight + 2)` (poster + title + a reserved progress row) via
   `box()`, so a card with a progress bar and one without occupy the same height
   and the grid stays aligned. `box()` pads short cards and (defensively) clips
@@ -41,7 +41,7 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
 - **The recipe is `Mosaic::render() → PosterCard::withPoster() → PosterGrid::withItem()`.**
   Ask the renderer for the cell box the card already reserves
   (`render($image, $cardWidth, $posterHeight)`), so no resizing arithmetic lives
-  here. `Scale::Fill` is what the media grids use (poster art should fill its box,
+  here. `Scale::Fill` is what the media grids use (poster art should fill its box;
   letterboxing looks broken in a grid). `box()` still normalises the result, so a
   renderer that returns more rows than asked for cannot inflate the row.
 - **Inline vs overlay is the only renderer fork that reaches the widget.** Half/

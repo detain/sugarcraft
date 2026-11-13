@@ -150,7 +150,7 @@ final readonly class PosterCard
      * moves, erases, and every OSC/DCS/APC payload (forged OSC-8 hyperlinks
      * and stray `ESC` bytes alike); a poster rendered by e.g.
      * `Mosaic::halfBlock()` from clean art is returned byte-identical,
-     * because half-block glyphs and true-color SGR are exactly what the
+     * because half-block glyphs and truecolour SGR are exactly what the
      * guard admits.
      *
      * The sweep runs PER LINE: LF is a C0 control the guard drops with

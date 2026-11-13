@@ -227,7 +227,7 @@ downloading card is distinguished from a not-yet-started one by its `▓` leg on
 host that needs a guaranteed readout — anything that cannot see the bar at all —
 surfaces the percentage itself.
 
-Every card row is exactly `width` cells wide and the grid normalizes each cell
+Every card row is exactly `width` cells wide and the grid normalises each cell
 to `cardWidth × (posterHeight + 2)`, so columns and rows always line up whether
 or not a card carries a progress bar. The one exception: a verbatim
 `withPoster()`/`withStyledTitle()` frame carrying an UNTERMINATED escape sequence
