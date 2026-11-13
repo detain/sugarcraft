@@ -484,6 +484,12 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
   else fails the load with an explicit `InvalidArgumentException` naming the
   returned type; a loader that throws synchronously counts as a failed load.
   Either way the flight slot is freed, so the next call retries.
+- Cancelling what `fetch()` returns is a **silent no-op**: the wrapper has no
+  canceller, so the in-flight load is not interrupted, runs to completion, and
+  its value is adopted (and served to later callers) exactly as if nobody had
+  cancelled. Treat the returned promise as read-only; cancellation of the
+  underlying work belongs to the loader's own promise, and even then the
+  shared flight settles for every caller that joined it.
 - `withTtl()` / `withServeStaleOnError()` / `withMaxEntries()` — return new handles
   viewing the SAME store (configuration is immutable; the data is shared).
 - `peek()` / `has()` / `isFresh()` / `invalidate()` / `clear()` — last-known-value

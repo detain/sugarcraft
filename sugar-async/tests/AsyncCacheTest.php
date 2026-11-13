@@ -331,4 +331,39 @@ final class AsyncCacheTest extends TestCase
         $this->assertTrue($called, 'fresh null hit must short-circuit the loader');
         $this->assertNull($cache->peek('k'));
     }
+
+    public function testCancellingTheFetchPromiseIsASilentNoOpAndTheLoadIsAdoptedAnyway(): void
+    {
+        // PIN AS CURRENT BEHAVIOUR (finding-038): fetch()'s wrapper Deferred
+        // is constructed without a canceller, so cancel() on the returned
+        // flight does nothing — the load continues, the flight still
+        // settles, and the value is adopted as though nobody cancelled.
+        // Documented in the README's fetch caveats; the source ruling
+        // (add a canceller vs accept-and-document) is an owner decision.
+        $cache = AsyncCache::new();
+        $loader = new Deferred();
+
+        $flight = $cache->fetch('k', static fn (): PromiseInterface => $loader->promise());
+        $flight->cancel();
+
+        $resolved = null;
+        $flight->then(static function ($value) use (&$resolved): void {
+            $resolved = $value;
+        });
+        $loader->resolve('late-value');
+
+        $this->assertSame('late-value', $resolved, 'the cancelled flight still settles with the load result');
+
+        $reloaded = false;
+        $cached = null;
+        $cache->fetch('k', static function () use (&$reloaded): PromiseInterface {
+            $reloaded = true;
+            return reject('loader must not run again');
+        })->then(static function ($value) use (&$cached): void {
+            $cached = $value;
+        });
+
+        $this->assertFalse($reloaded, 'the superseded-looking load was adopted anyway');
+        $this->assertSame('late-value', $cached, 'later callers get the value the cancelled caller walked away from');
+    }
 }
