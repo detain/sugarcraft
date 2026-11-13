@@ -5,6 +5,21 @@
 **Upstream:** charmbracelet/harmonica (Go)
 **Goal:** Identify improvements from cross-language analysis
 
+> **SUPERSEDED STATUS (2026-11-13):** several ❌ rows in this document have since
+> shipped and are no longer gaps — **Spring presets** (`SpringPreset`:
+> Gentle/Wobbly/Stiff/Slow/Molasses), **Tension/Friction API** (`SpringConfig`
+> with tension/friction/mass + ω/ζ conversion), **Cubic-bezier easing**
+> (`Easing\CubicBezier`, Newton-Raphson + bisection, CSS-compatible 26-preset
+> family), **Animation chaining** (`SpringChain`), **per-spring config**
+> (`SpringCollection` named members), and **reduced-motion support** (env
+> probe via sugar-colorprofile `Probe` + per-spring override). The gap table
+> (§1.2), the §3.2 easing row for **CubicBezier**, and the §3.3 **Chaining** /
+> **Per-spring config** rows are kept verbatim as the research record of when
+> each was found missing; the review→execution trail is
+> `reviews/findings/sugar-spring.md` (SPRING-PERF/FEATURE/DW eras, lanes
+> 2026-11-13). Gesture-driven springs remain not-applicable in a pure-math
+> PHP port (host UI libraries own gestures).
+
 ---
 
 ## Executive Summary
