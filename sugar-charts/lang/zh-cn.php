@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => '折线图宽/高必须 >= 0',
     'linechart.color_return'  => '折线图系列颜色解析器必须返回 {expected} 或 null，实际为 {given}',
     'waveline.dim_nonneg'      => '波形线宽/高必须 >= 0',
+    'waveline.point_shape'    => '索引 {index} 处的 waveline 点必须为 [数值 x, 数值 y]，收到 {given}',
+    'waveline.point_finite'   => '索引 {index} 处的 waveline 点必须具有有限坐标',
     'ohlc.dim_nonneg'          => 'OHLC 图宽/高必须 >= 0',
     'scatter.dim_nonneg'       => '散点图宽/高必须 >= 0',
     'scatter.point_numeric'    => '散点必须为 [数值 x, 数值 y]，收到 {given}',

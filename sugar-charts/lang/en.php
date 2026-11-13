@@ -35,6 +35,8 @@ return [
 
     // LineChart/Waveline.php
     'waveline.dim_nonneg'      => 'waveline width/height must be >= 0',
+    'waveline.point_shape'    => 'waveline point at index {index} must be [numeric x, numeric y], {given} given',
+    'waveline.point_finite'   => 'waveline point at index {index} must have finite coordinates',
 
     // OHLC/OHLCChart.php
     'ohlc.dim_nonneg'          => 'OHLC chart width/height must be >= 0',

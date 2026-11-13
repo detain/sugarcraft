@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => 'lijndiagram breedte/hoogte moet >= 0 zijn',
     'linechart.color_return'  => 'reekskleurresolver van lijndiagram moet {expected} of null teruggeven, {given} gekregen',
     'waveline.dim_nonneg'      => 'golfijn breedte/hoogte moet >= 0 zijn',
+    'waveline.point_shape'    => 'waveline-punt op index {index} moet [numeriek x, numeriek y] zijn, {given} opgegeven',
+    'waveline.point_finite'   => 'waveline-punt op index {index} moet eindige coördinaten hebben',
     'ohlc.dim_nonneg'          => 'OHLC-diagram breedte/hoogte moet >= 0 zijn',
     'scatter.dim_nonneg'       => 'spreidingsdiagram breedte/hoogte moet >= 0 zijn',
     'scatter.point_numeric'    => 'spreidingsdiagram-punt moet [numeriek x, numeriek y] zijn, {given} opgegeven',

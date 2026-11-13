@@ -45,32 +45,76 @@ final class Waveline
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('waveline.dim_nonneg'));
         }
-        // every door (new / withPoints / push / pushAll) rebuilds
-        // through here — one sweep rejects NaN/INF coordinates, which would
-        // otherwise index (int) casts into off-canvas positions silently.
-        foreach ($points as $p) {
-            Finite::assert($p[0]);
-            Finite::assert($p[1]);
-        }
+        // sugar-charts-042: the whole-list Finite sweep moved to the
+        // ingestion doors (new / withPoints / push / pushAll) — re-sweeping
+        // every EXISTING point on each rebuild made push() O(N). Every
+        // list reaching this constructor has passed a door that validated
+        // what it added; callers never touch the property directly.
         // explicit ranges must be ordered; null ends are "auto".
         Range::pin($xMin, $xMax, 'X');
         Range::pin($yMin, $yMax, 'Y');
     }
 
+    /**
+     * Validate one incoming point and return it (raw when already typed,
+     * floats when numeric strings — no downstream strict call ever sees
+     * string contamination). Throws the ingestion family naming the index
+     * for a bad shape or a non-finite coordinate.
+     *
+     * @param array<array-key, mixed> $p
+     * @return array{0:int|float,1:int|float}
+     */
+    private static function ingested(mixed $p, int $index): array
+    {
+        if (!is_array($p) || !isset($p[0], $p[1]) || !is_numeric($p[0]) || !is_numeric($p[1])) {
+            throw new \InvalidArgumentException(Lang::t('waveline.point_shape', [
+                'index' => (string) $index,
+                'given' => get_debug_type($p),
+            ]));
+        }
+        if (!is_finite((float) $p[0]) || !is_finite((float) $p[1])) {
+            throw new \InvalidArgumentException(Lang::t('waveline.point_finite', [
+                'index' => (string) $index,
+            ]));
+        }
+        if ((is_int($p[0]) || is_float($p[0])) && (is_int($p[1]) || is_float($p[1]))) {
+            return $p;
+        }
+        return [(float) $p[0], (float) $p[1]];
+    }
+
+    /**
+     * @param iterable<mixed> $points
+     * @return list<array{0:int|float,1:int|float}>
+     */
+    private static function ingestAll(iterable $points): array
+    {
+        $out   = [];
+        $index = 0;
+        foreach ($points as $p) {
+            $out[] = self::ingested($p, $index++);
+        }
+        return $out;
+    }
+
     /** @param list<array{0:int|float,1:int|float}> $points */
     public static function new(array $points = [], int $width = 40, int $height = 8): self
     {
-        return new self(array_values($points), $width, $height, null, null, null, null, '*');
+        return new self(self::ingestAll($points), $width, $height, null, null, null, null, '*');
     }
 
     /** @param list<array{0:int|float,1:int|float}> $points */
     public function withPoints(array $points): self
     {
-        return new self(array_values($points), $this->width, $this->height, $this->xMin, $this->xMax, $this->yMin, $this->yMax, $this->point);
+        return new self(self::ingestAll($points), $this->width, $this->height, $this->xMin, $this->xMax, $this->yMin, $this->yMax, $this->point);
     }
 
     public function push(int|float $x, int|float $y): self
     {
+        // The door validates what it adds — the ctor sweep it used to
+        // ride is gone (sugar-charts-042), so this stays O(1) per call.
+        Finite::assert($x);
+        Finite::assert($y);
         return new self([...$this->points, [$x, $y]], $this->width, $this->height, $this->xMin, $this->xMax, $this->yMin, $this->yMax, $this->point);
     }
 
@@ -81,11 +125,15 @@ final class Waveline
      */
     public function pushAll(iterable $points): self
     {
-        $next = $this;
-        foreach ($points as $p) {
-            $next = $next->push($p[0], $p[1]);
+        // sugar-charts-042: one accumulation, one validation sweep, one
+        // construction — the old foreach-over-push was O(P × (N+P)) with
+        // full re-validation per element. A bad batch element throws the
+        // ingestion family naming its index.
+        $added = self::ingestAll($points);
+        if ($added === []) {
+            return $this;
         }
-        return $next;
+        return new self([...$this->points, ...$added], $this->width, $this->height, $this->xMin, $this->xMax, $this->yMin, $this->yMax, $this->point);
     }
 
     /** Reset the point buffer while keeping size / range / glyph. */

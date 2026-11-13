@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => '折れ線グラフの幅/高さは >= 0 である必要があります',
     'linechart.color_return'  => '折れ線グラフの系列色リゾルバーは {expected} または null を返す必要があります（{given} が渡されました）',
     'waveline.dim_nonneg'      => '波線の高さ/幅は >= 0 である必要があります',
+    'waveline.point_shape'    => 'インデックス {index} の waveline 点は [数値 x, 数値 y] である必要があります。指定された型: {given}',
+    'waveline.point_finite'   => 'インデックス {index} の waveline 点は有限の座標である必要があります',
     'ohlc.dim_nonneg'          => 'OHLC チャートの幅/高さは >= 0 である必要があります',
     'scatter.dim_nonneg'       => '散布図の幅/高さは >= 0 である必要があります',
     'scatter.point_numeric'    => '散布図の点は [数値 x, 数値 y] である必要があります。指定された型: {given}',

@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => 'ширина/высота линейного графика должна быть >= 0',
     'linechart.color_return'  => 'функция цвета рядов линейного графика должна возвращать {expected} или null, получено {given}',
     'waveline.dim_nonneg'      => 'ширина/высота волновой линии должна быть >= 0',
+    'waveline.point_shape'    => 'точка waveline с индексом {index} должна быть [числовые x, числовые y], передано {given}',
+    'waveline.point_finite'   => 'точка waveline с индексом {index} должна иметь конечные координаты',
     'ohlc.dim_nonneg'          => 'ширина/высота OHLC-графика должна быть >= 0',
     'scatter.dim_nonneg'       => 'ширина/высота точечной диаграммы должна быть >= 0',
     'scatter.point_numeric'    => 'точка диаграммы должна быть [числовые x, числовые y], передано {given}',

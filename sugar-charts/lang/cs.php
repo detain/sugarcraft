@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => 'šířka/výška čárového grafu musí být >= 0',
     'linechart.color_return'  => 'funkce barev řad čárového grafu musí vracet {expected} nebo null, předáno {given}',
     'waveline.dim_nonneg'      => 'šířka/výška waveline musí být >= 0',
+    'waveline.point_shape'    => 'bod waveline na indexu {index} musí být [číselné x, číselné y], zadáno {given}',
+    'waveline.point_finite'   => 'bod waveline na indexu {index} musí mít konečné souřadnice',
     'ohlc.dim_nonneg'          => 'šířka/výška OHLC grafu musí být >= 0',
     'scatter.dim_nonneg'       => 'šířka/výška bodového grafu musí být >= 0',
     'scatter.point_numeric'    => 'bod grafu musí být [číselné x, číselné y], zadáno {given}',

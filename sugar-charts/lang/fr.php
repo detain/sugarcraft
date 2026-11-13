@@ -35,6 +35,8 @@ return [
 
     // LineChart/Waveline.php
     'waveline.dim_nonneg'      => 'la largeur/hauteur de la waveline doit être >= 0',
+    'waveline.point_shape'    => 'le point waveline à l\'index {index} doit être [x numérique, y numérique], {given} fourni',
+    'waveline.point_finite'   => 'le point waveline à l\'index {index} doit avoir des coordonnées finies',
 
     // OHLC/OHLCChart.php
     'ohlc.dim_nonneg'          => 'la largeur/hauteur du graphique OHLC doit être >= 0',

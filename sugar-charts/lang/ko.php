@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => '선 그래프 너비/높이는 >= 0이어야 합니다',
     'linechart.color_return'  => '꺾은선 차트 계열 색상 리졸버는 {expected} 또는 null을 반환해야 합니다. {given}이(가) 전달됨',
     'waveline.dim_nonneg'      => '파동선 너비/높이는 >= 0이어야 합니다',
+    'waveline.point_shape'    => '인덱스 {index}의 waveline 점은 [숫자 x, 숫자 y]여야 합니다. 입력: {given}',
+    'waveline.point_finite'   => '인덱스 {index}의 waveline 점은 유한 좌표여야 합니다',
     'ohlc.dim_nonneg'          => 'OHLC 차트 너비/높이는 >= 0이어야 합니다',
     'scatter.dim_nonneg'       => '산점도 너비/높이는 >= 0이어야 합니다',
     'scatter.point_numeric'    => '산점도 점은 [숫자 x, 숫자 y]여야 합니다. 입력: {given}',

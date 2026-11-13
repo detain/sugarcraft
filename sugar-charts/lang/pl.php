@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => 'szerokość/wysokość wykresu liniowego musi być >= 0',
     'linechart.color_return'  => 'funkcja kolorów serii wykresu liniowego musi zwracać {expected} lub null, otrzymano {given}',
     'waveline.dim_nonneg'      => 'szerokość/wysokość linii falowej musi być >= 0',
+    'waveline.point_shape'    => 'punkt waveline o indeksie {index} musi być [numeryczne x, numeryczne y], podano {given}',
+    'waveline.point_finite'   => 'punkt waveline o indeksie {index} musi mieć skończone współrzędne',
     'ohlc.dim_nonneg'          => 'szerokość/wysokość wykresu OHLC musi być >= 0',
     'scatter.dim_nonneg'       => 'szerokość/wysokość wykresu punktowego musi być >= 0',
     'scatter.point_numeric'    => 'punkt wykresu musi być [numeryczne x, numeryczne y], podano {given}',

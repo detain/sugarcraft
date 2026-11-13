@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => 'عرض/ارتفاع الرسم البياني الخطي يجب أن يكون >= 0',
     'linechart.color_return'  => 'يجب أن تُرجع دالة ألوان سلاسل الرسم البياني الخطي {expected} أو null، تم تمرير {given}',
     'waveline.dim_nonneg'      => 'عرض/ارتفاع خط الموجة يجب أن يكون >= 0',
+    'waveline.point_shape'    => 'يجب أن تكون نقطة waveline عند الفهرس {index} على الشكل [س رقميًا، ص رقميًا]، تم تقديم {given}',
+    'waveline.point_finite'   => 'يجب أن تحتوي نقطة waveline عند الفهرس {index} على إحداثيات منتهية',
     'ohlc.dim_nonneg'          => 'عرض/ارتفاع مخطط OHLC يجب أن يكون >= 0',
     'scatter.dim_nonneg'       => 'عرض/ارتفاع الرسم البياني المبعثر يجب أن يكون >= 0',
     'scatter.point_numeric'    => 'يجب أن تكون النقطة [س رقميًا، ص رقميًا]، تم تقديم {given}',

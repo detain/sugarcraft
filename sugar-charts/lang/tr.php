@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => 'çizgi grafik genişlik/yüksekliği >= 0 olmalıdır',
     'linechart.color_return'  => 'çizgi grafik seri renk çözücüsü {expected} veya null döndürmelidir, {given} verildi',
     'waveline.dim_nonneg'      => 'dalga çizgisi genişlik/yüksekliği >= 0 olmalıdır',
+    'waveline.point_shape'    => 'waveline noktası {index} indeksinde [sayısal x, sayısal y] olmalıdır, {given} verildi',
+    'waveline.point_finite'   => 'waveline noktası {index} indeksinde sonlu koordinatlara sahip olmalıdır',
     'ohlc.dim_nonneg'          => 'OHLC grafiği genişlik/yüksekliği >= 0 olmalıdır',
     'scatter.dim_nonneg'       => 'dağılım grafiği genişlik/yüksekliği >= 0 olmalıdır',
     'scatter.point_numeric'    => 'dağılım noktası [sayısal x, sayısal y] olmalıdır, {given} verildi',

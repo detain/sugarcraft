@@ -22,6 +22,8 @@ return [
     'linechart.dim_nonneg'     => 'la larghezza/altezza del grafico lineare deve essere >= 0',
     'linechart.color_return'  => 'il resolver dei colori delle serie del grafico a linee deve restituire {expected} o null, ricevuto {given}',
     'waveline.dim_nonneg'      => 'la larghezza/altezza della waveline deve essere >= 0',
+    'waveline.point_shape'    => 'il punto waveline all\'indice {index} deve essere [x numerico, y numerico], {given} fornito',
+    'waveline.point_finite'   => 'il punto waveline all\'indice {index} deve avere coordinate finite',
     'ohlc.dim_nonneg'          => 'la larghezza/altezza del grafico OHLC deve essere >= 0',
     'scatter.dim_nonneg'       => 'la larghezza/altezza del grafico a dispersione deve essere >= 0',
     'scatter.point_numeric'    => 'il punto del grafico a dispersione deve essere [x numerico, y numerico], {given} fornito',

@@ -35,6 +35,8 @@ return [
 
     // LineChart/Waveline.php
     'waveline.dim_nonneg'      => 'el ancho/alto de la waveline debe ser >= 0',
+    'waveline.point_shape'    => 'el punto de waveline en el índice {index} debe ser [x numérico, y numérico], {given} recibido',
+    'waveline.point_finite'   => 'el punto de waveline en el índice {index} debe tener coordenadas finitas',
 
     // OHLC/OHLCChart.php
     'ohlc.dim_nonneg'          => 'el ancho/alto del gráfico OHLC debe ser >= 0',
