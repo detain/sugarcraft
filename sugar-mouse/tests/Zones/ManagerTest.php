@@ -669,6 +669,38 @@ final class ManagerTest extends TestCase
         $this->assertSame('a', $viaAlias->get('a')?->id, 'alias-built manager carries no id prefix');
         $this->assertNotSame($viaAlias, \SugarCraft\Mouse\Zones\Zones::defaultManager(), 'alias is NOT the shared default');
     }
+
+    /**
+     * SM-S26: an explicit numeric prefix that collides with the auto
+     * generator's `<n>-` shape RESERVES its number — the next auto
+     * prefix skips past it, so a component choosing a fixed namespace
+     * can never silently merge registries with a later auto manager.
+     */
+    public function testExplicitNumericPrefixReservesItsNumberFromTheAutoCounter(): void
+    {
+        $first = Manager::newPrefix();
+        $reserved = (int) rtrim($first->prefix(), '-') + 1;
+
+        $explicit = Manager::newPrefix($reserved . '-');
+        $this->assertSame($reserved . '-', $explicit->prefix());
+
+        $next = Manager::newPrefix();
+        $this->assertNotSame($explicit->prefix(), $next->prefix(), 'auto must never reuse the reserved number');
+        $this->assertSame(($reserved + 1) . '-', $next->prefix());
+    }
+
+    public function testNonNumericExplicitPrefixLeavesTheAutoCounterAlone(): void
+    {
+        $before = Manager::newPrefix();
+        Manager::newPrefix('acme-');
+        $after = Manager::newPrefix();
+
+        $this->assertSame(
+            (int) rtrim($before->prefix(), '-') + 1,
+            (int) rtrim($after->prefix(), '-'),
+            'a prefix outside the auto charset must not disturb the sequence',
+        );
+    }
 }
 
 final class ZoneRoutingModel implements \SugarCraft\Core\Model

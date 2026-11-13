@@ -91,13 +91,23 @@ final class Manager
      * fix the namespace; omit (or pass empty) to auto-generate one
      * from a monotonic counter. The generated prefix uses the
      * primitive's charset (`<n>-`), so `prefix() . $id` stays valid.
+     * An explicit numeric prefix that collides with the auto shape is
+     * RESERVED: the counter jumps past it, so a later auto-generated
+     * manager never silently merges the two registries.
      */
     public static function newPrefix(string $prefix = ''): self
     {
         $m = new self();
-        $m->idPrefix = $prefix !== ''
-            ? $prefix
-            : (string) (++self::$prefixCounter) . '-';
+        if ($prefix === '') {
+            $m->idPrefix = (string) (++self::$prefixCounter) . '-';
+            return $m;
+        }
+
+        $m->idPrefix = $prefix;
+        if (preg_match('/^(\d+)-$/', $prefix, $reserved) === 1) {
+            self::$prefixCounter = max(self::$prefixCounter, (int) $reserved[1]);
+        }
+
         return $m;
     }
 
