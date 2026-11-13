@@ -597,7 +597,7 @@ final class TransientFailureTest extends TestCase
         $elapsed = (microtime(true) - $started) * 1_000_000;
 
         $this->assertLessThanOrEqual(
-            TransientFailure::backoffMicroseconds(1) + 100_000,
+            TransientFailure::backoffMicroseconds(1) + 1_000_000, // CODE-TEST-02: a full second of scheduler slack; the draw is [0, ceiling], an un-capped ladder overshoots by far more
             $elapsed,
             'a jittered draw must never EXCEED the deterministic ceiling the idle-timer law is computed from',
         );

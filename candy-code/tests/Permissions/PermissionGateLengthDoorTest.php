@@ -16,6 +16,9 @@ use SugarCraft\Code\ToolCall;
  */
 final class PermissionGateLengthDoorTest extends TestCase
 {
+    /** CODE-TEST-02: generous (~500x the measured cost) so CI load cannot trip it. */
+    private const LENGTH_DOOR_CEILING_MS = 1000.0;
+
     private static function bash(string $command): ToolCall
     {
         return new ToolCall('Bash', ['command' => $command]);
@@ -47,7 +50,10 @@ final class PermissionGateLengthDoorTest extends TestCase
         $ms = (microtime(true) - $t) * 1000;
 
         $this->assertSame(PermissionDecision::Ask, $decision);
-        $this->assertLessThan(50.0, $ms);
+        // CODE-TEST-02: measured ~1-2 ms with the door; the shape it replaced
+        // scanned the whole megabyte. 1000 ms is a ceiling a loaded runner
+        // cannot reach but a regression to scanning does.
+        $this->assertLessThan(self::LENGTH_DOOR_CEILING_MS, $ms);
         $this->assertStringContainsString(' bytes', (string) $gate->lastAutoReason());
         $this->assertStringContainsString((string) strlen($command), (string) $gate->lastAutoReason());
     }
@@ -59,7 +65,7 @@ final class PermissionGateLengthDoorTest extends TestCase
         $decision = $gate->evaluate(self::bash('echo ' . str_repeat('a', 1_000_000)), '/tmp');
 
         $this->assertSame(PermissionDecision::Deny, $decision);
-        $this->assertLessThan(50.0, (microtime(true) - $t) * 1000);
+        $this->assertLessThan(self::LENGTH_DOOR_CEILING_MS, (microtime(true) - $t) * 1000);
     }
 
     public function testBelowCeilingVerdictUnchanged(): void

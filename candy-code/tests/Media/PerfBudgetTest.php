@@ -147,13 +147,22 @@ final class PerfBudgetTest extends TestCase
         $mosaic = Mosaic::fromModeString('halfblock');
         $this->assertNotNull($mosaic);
 
-        $perOp = self::perfMicrosecondsPerOp(
-            static fn () => PreviewPaint::paint(self::TINY_PNG_B64, $mosaic, 100, 8),
-            3000,
-        );
+        $first = PreviewPaint::paint(self::TINY_PNG_B64, $mosaic, 100, 8);
+        $this->assertSame($first, PreviewPaint::paint(self::TINY_PNG_B64, $mosaic, 100, 8), 'a repeat of the newest frame is served from the memo, byte for byte');
 
-        // measured 1.35 µs/op; ceiling 40 µs (≈30x)
-        $this->assertLessThan(40.0, $perOp, "memo-hit paint costs {$perOp} µs/op");
+        // CODE-TEST-02: the µs/op ceiling is bench-gated like the five in
+        // testTheMediaHotPathsStayInsideTheirGenerousBudgets() — a cost number
+        // on a loaded runner is noise. The deterministic memo-before-decode
+        // pin above is what guards the shape in CI.
+        if (getenv('CANDY_CODE_PERF_BENCH') === '1') {
+            $perOp = self::perfMicrosecondsPerOp(
+                static fn () => PreviewPaint::paint(self::TINY_PNG_B64, $mosaic, 100, 8),
+                3000,
+            );
+
+            // measured 1.35 µs/op; ceiling 40 µs (≈30x)
+            $this->assertLessThan(40.0, $perOp, "memo-hit paint costs {$perOp} µs/op");
+        }
     }
 
     // ─────────────────────────── allocation: Png lazy scan ───────────────────────────

@@ -5,9 +5,24 @@
          colors="true"
          failOnWarning="true"
          failOnRisky="true"
+         failOnDeprecation="true"
+         failOnNotice="true"
+         failOnPhpunitDeprecation="true"
          enforceTimeLimit="true"
          defaultTimeLimit="60"
          cacheDirectory=".phpunit.cache">
+    <!--
+        S-O50 (2026-11-13): failOnDeprecation / failOnNotice / failOnPhpunitDeprecation
+        are ON. MEASURED on the full sharded run that day: zero PHP deprecations,
+        zero notices and, after AccessorDeprecationTest's two private data
+        providers were made public (PHPUnit's own deprecation: providers must be
+        public static from PHPUnit 11), zero PHPUnit deprecations — so the flags
+        cost nothing today and turn the next E_DEPRECATED/E_NOTICE a PHP upgrade
+        or a dependency bump introduces into a red run, instead of a footnote
+        under a green banner (the "OK, but there were issues!" shape, which
+        exits 0). If one is ever licensed, roster the test and date it here
+        first; do not drop the flag.
+    -->
     <!--
         defaultTimeLimit is a hang-catcher, not a performance budget. It exists
         because a one-conjunct mutation in Vhs tape tokenize() can spin FOREVER on

@@ -48,7 +48,7 @@ final class AccessorDeprecationTest extends TestCase
      * This is the bidirectional census source of truth: adding a marked
      * forwarder without a row (or dropping a row's method) reddens the suite.
      */
-    private static function eraPairs(): array
+    public static function eraPairs(): array
     {
         return [
             'BackgroundSupervisor::getActiveSessions' => ['SugarCraft\Code\Background\BackgroundSupervisor', 'Background/BackgroundSupervisor.php', 'getActiveSessions', 'activeSessions', false],
@@ -91,7 +91,7 @@ final class AccessorDeprecationTest extends TestCase
      *
      * @return array<string, array{0: class-string, 1: string, 2: string, 3: list<mixed>, 4: ?callable(string): object, 5: bool}>
      */
-    private static function runtimeEraPairs(): array
+    public static function runtimeEraPairs(): array
     {
         return [
             'HookRegistry::getForEvent' => [HookRegistry::class, 'getForEvent', 'forEvent', ['nope.event'], static fn (string $d): object => new HookRegistry(), false],
