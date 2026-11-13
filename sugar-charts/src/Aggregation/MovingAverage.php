@@ -22,10 +22,34 @@ final class MovingAverage
         public readonly int $windowSize,
         public readonly bool $centered = false,
     ) {
+        self::assertWindow($windowSize);
+    }
+
+    /**
+     * Shared validator (sugar-charts-029): every window-bearing entry
+     * point — ctor, simple(), centered(), new(), ema() — routes through
+     * this door. ema() previously skipped it entirely, so windowSize 0 or
+     * negative produced a default alpha of 2/(w+1) outside (0,1] and the
+     * recurrence silently diverged.
+     */
+    private static function assertWindow(int $windowSize): void
+    {
         if ($windowSize <= 0) {
             throw new \InvalidArgumentException('Window size must be > 0, got ' . $windowSize);
         }
     }
+
+    /**
+     * Smoothing-factor door (sugar-charts-029): an EMA weight must lie in
+     * (0, 1]; 0 freezes the seed, negatives flip sign every step.
+     */
+    private static function assertAlpha(float $alpha): void
+    {
+        if ($alpha <= 0.0 || $alpha > 1.0) {
+            throw new \InvalidArgumentException('EMA alpha must be in (0, 1], got ' . $alpha);
+        }
+    }
+
 
     /**
      * @param list<int|float> $values
@@ -53,7 +77,7 @@ final class MovingAverage
         return new self($windowSize, $centered);
     }
 
-        /**
+    /**
      * Append a single value.
      *
      * @throws \InvalidArgumentException when $value is NaN or ±INF
@@ -98,25 +122,44 @@ final class MovingAverage
         }
 
         $result = [];
-        for ($i = 0; $i < $n; $i++) {
-            if ($this->centered) {
-                $half = intdiv($this->windowSize, 2);
-                $start = $i - $half;
-                $end = $i + $half;
-                // Pad edges where the window extends past array bounds
-                if ($start < 0 || $end >= $n) {
+        $w = $this->windowSize;
+
+        if ($this->centered) {
+            // sugar-charts-041: one running sum instead of a fresh slice
+            // per position (O(n) rather than O(n*w)); the 0.0 pad rule at
+            // the un-windowed edges is preserved exactly.
+            $half = intdiv($w, 2);
+            $first = $half;
+            $last = $n - 1 - $half;
+            $sum = 0.0;
+            for ($i = 0; $i < $n; $i++) {
+                if ($i < $first || $i > $last) {
                     $result[] = 0.0;
                     continue;
                 }
-                $window = array_slice($this->values, $start, $this->windowSize);
-            } else {
-                if ($i < $this->windowSize - 1) {
-                    $result[] = 0.0;
-                    continue;
+                if ($i === $first) {
+                    $sum = (float) array_sum(array_slice($this->values, 0, $w));
+                } else {
+                    $sum += $this->values[$i + $half];
+                    $sum -= $this->values[$i - $half - 1];
                 }
-                $window = array_slice($this->values, $i - $this->windowSize + 1, $this->windowSize);
+                $result[] = $sum / $w;
             }
-            $result[] = array_sum($window) / count($window);
+            return $result;
+        }
+
+        // trailing window: seed once, then add-entering/subtract-leaving.
+        $sum = 0.0;
+        for ($i = 0; $i < $n; $i++) {
+            $sum += $this->values[$i];
+            if ($i < $w - 1) {
+                $result[] = 0.0;
+                continue;
+            }
+            if ($i >= $w) {
+                $sum -= $this->values[$i - $w];
+            }
+            $result[] = $sum / $w;
         }
 
         return $result;
@@ -133,12 +176,15 @@ final class MovingAverage
      */
     public static function ema(int $windowSize, array $values = [], ?float $alpha = null): array
     {
+        self::assertWindow($windowSize);
+
         if ($values === []) {
             return [];
         }
 
         Finite::assertAll($values);
         $alpha ??= 2.0 / ($windowSize + 1);
+        self::assertAlpha($alpha);
         $ema = (float) $values[0];
         $result = [$ema];
         $valuesCount = count($values);
