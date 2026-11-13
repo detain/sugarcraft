@@ -245,6 +245,53 @@ final class DocSurfaceTruthTest extends TestCase
     }
 
     /**
+     * Audit sugar-ssh-server-052: the src imported React\Promise* while
+     * the manifest declared only react/event-loop and react/promise-timer
+     * — the code compiled against Packagist's transitive goodwill, so a
+     * sibling bump that dropped the transitive edge would break installs
+     * silently. The rule is local and derivable, so it is guarded rather
+     * than promised: every `use React\…` import in src must map to a
+     * declared require entry.
+     */
+    public function testTheManifestDeclaresEveryReactNamespaceTheSourceImports(): void
+    {
+        // Longest-prefix-wins map from PHP namespace root to package.
+        $packages = [
+            'React\\Promise\\Timer' => 'react/promise-timer',
+            'React\\Promise' => 'react/promise',
+            'React\\EventLoop' => 'react/event-loop',
+        ];
+
+        $manifest = \json_decode((string) \file_get_contents(\dirname(__DIR__) . '/composer.json'), true, 512, \JSON_THROW_ON_ERROR);
+        $require = (array) ($manifest['require'] ?? []);
+
+        $Iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__) . '/src'));
+        $checked = 0;
+        foreach ($Iterator as $file) {
+            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+            if (\preg_match_all('/^use (React\\\\[A-Za-z\\\\]+)/m', (string) \file_get_contents($file->getPathname()), $m) === false) {
+                continue;
+            }
+            foreach ($m[1] as $import) {
+                $package = null;
+                foreach ($packages as $prefix => $candidate) {
+                    if ($import === $prefix || \str_starts_with($import, $prefix . '\\')) {
+                        $package = $candidate;
+                        break;
+                    }
+                }
+                $this->assertNotNull($package, "unmapped React import {$import} in {$file->getFilename()}: extend the map AND declare the package");
+                $this->assertArrayHasKey($package, $require, "src imports {$import} but the manifest never declares {$package}");
+                $checked++;
+            }
+        }
+
+        $this->assertGreaterThan(0, $checked, 'the census must actually see the import sites');
+    }
+
+    /**
      * The public runChild() docblock used to promise that "closing the master
      * signals SIGHUP to the child via lost-ctty" — a mechanism Linux does not
      * implement, and the very claim the same file's finally-block comment and
