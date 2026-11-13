@@ -84,4 +84,50 @@ final class PlayerEndCloseTest extends TestCase
         self::assertSame(0, $decoder->closeCount(), 'the loop path must not close what it is about to reopen');
         self::assertGreaterThan($reopensBefore, $decoder->reopenCount(), 'the loop walks the reopen path');
     }
+
+    /**
+     * SV-L92/092 — the stopped latch covers play()/pause() too. stop()
+     * declares the instance dead and the tick/resize paths refuse it, but
+     * play() used to resume() the audio companion into a fresh respawned
+     * child: music without video, on a stream whose decoder is closed.
+     */
+    public function testPlayAndPauseCannotResurrectATornDownStream(): void
+    {
+        $audio = new class('/fake.mp4') extends \SugarCraft\Video\AudioPlayer {
+            public int $resumeCount = 0;
+            public int $pauseCount = 0;
+
+            public function resume(): void
+            {
+                $this->resumeCount++;
+            }
+
+            public function pause(): void
+            {
+                $this->pauseCount++;
+            }
+
+            public function start(): void
+            {
+            }
+
+            public function stop(): void
+            {
+            }
+        };
+        $decoder = new FakeDecoder([new RgbFrame(str_repeat(chr(9), 10 * 12 * 3), 10, 12)]);
+        $player = Player::openForTest($decoder, 24.0, totalFrames: 1, cellsW: 10, cellsH: 6, audioPlayer: $audio);
+
+        $live = $player->play();
+        self::assertNotSame($player, $live, 'a live player still resumes through play()');
+        self::assertSame(1, $audio->resumeCount);
+
+        $live->stop();
+
+        self::assertSame($live, $live->play(), 'the stopped latch answers with the stopped instance');
+        self::assertSame($live, $live->pause());
+        self::assertSame(1, $audio->resumeCount, 'a torn-down stream respawns no audio child');
+        self::assertSame(0, $audio->pauseCount, 'and pauses nothing further');
+        self::assertTrue($live->play()->isStopped());
+    }
 }

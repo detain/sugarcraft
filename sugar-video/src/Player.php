@@ -2270,9 +2270,18 @@ final class Player implements Model
 
     /**
      * Pause playback. Returns a new Player with paused=true.
+     *
+     * SV-L92/092: on a stopped Player this is a no-op returning the same
+     * instance — the teardown latch refuses play/pause (and the tick/resize
+     * paths) exactly as the class docblock on stop() declares; one-shot
+     * APIs like an explicit seek still act.
      */
     public function pause(): self
     {
+        if ($this->stopped) {
+            return $this;
+        }
+
         $this->audioPlayer?->pause();
         return $this->mutate(['paused' => true]);
     }
@@ -2280,9 +2289,22 @@ final class Player implements Model
     /**
      * Resume playback. Returns a new Player with paused=false and re-anchored
      * clock so play-time accumulates correctly.
+     *
+     * SV-L92/092: stop() declared this instance dead, and updateTick(),
+     * updateResize() and applyPendingResize() all refuse post-stop work —
+     * play() carried no matching guard, so a host that kept the object
+     * reachable could resume() the audio companion into a FRESH child
+     * respawned from banked seekMs (music-without-video on a torn-down
+     * stream) and hand back a paused=false model whose decoder was already
+     * closed. The latch answers with the stopped instance itself: no
+     * respawn, no derived resurrection. To play again, build a FRESH Player.
      */
     public function play(): self
     {
+        if ($this->stopped) {
+            return $this;
+        }
+
         $this->audioPlayer?->resume();
         return $this->mutate([
             'paused' => false,
