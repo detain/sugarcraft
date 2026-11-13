@@ -317,7 +317,26 @@ final class TableRenderer
                 continue;
             }
 
+            if ($code === 58) {
+                // Underline color: sugar-core SgrState CONSUMES the whole
+                // extended tail; leaking '5' to the blink arm (and the
+                // palette index nowhere) would materialize a phantom Style
+                // and churn every diff. Swallow it here the same way —
+                // bare 59 stays a no-op like any code without cell meaning.
+                $kind = $codes[$i + 1] ?? null;
+                if ($kind === 5 && isset($codes[$i + 2])) {
+                    $i += 2;
+                    continue;
+                }
+                if ($kind === 2 && isset($codes[$i + 4])) {
+                    $i += 4;
+                    continue;
+                }
+                continue;
+            }
+
             switch ($code) {
+                case 0:  $state = self::freshSgrState(); break;
                 case 1:  $state['attrs'] |= Style::ATTR_BOLD;       break;
                 case 2:  $state['attrs'] |= Style::ATTR_FAINT;      break;
                 case 3:  $state['attrs'] |= Style::ATTR_ITALIC;     break;
