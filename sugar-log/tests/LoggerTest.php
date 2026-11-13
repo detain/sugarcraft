@@ -26,6 +26,14 @@ final class LoggerTest extends TestCase
 
     protected function tearDown(): void
     {
+        // Contract, not file-order luck: this class hands the process-global
+        // facade a logger in testStaticInfoLogsToGlobalLogger, and that
+        // logger's stream is closed at test end. Without the reset, the
+        // facade keeps a dead handle until some other file happens to touch
+        // it — whichever test runs next pays a write failure against a
+        // resource it never opened.
+        Log::reset();
+
         if (\is_resource($this->tempFile)) {
             \fclose($this->tempFile);
         }
@@ -241,6 +249,13 @@ final class LoggerTest extends TestCase
         Log::setLogger($log);
 
         Log::info('global hello', ['key' => 'val']);
+
+        // [SL-11] reset the facade BEFORE closing the stream it points at —
+        // the handle must not outlive the resource, not even for the run of
+        // the next test file.
+        Log::reset();
+        $this->assertNotSame($log, Log::default(), 'reset returns a fresh default');
+
         \fclose($stream);
 
         $content = \file_get_contents($this->tempPath);
