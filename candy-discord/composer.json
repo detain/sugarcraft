@@ -1,0 +1,45 @@
+{
+    "name": "sugarcraft/candy-discord",
+    "description": "Discord channel bundle for candy-code serve: dialogs from Discord into a served session over the ordinary WebSocket protocol - pairing gates, guild allowlists, threaded sessions, queue modes, chunked redacted replies, approval buttons, native slash commands. Policy in the user-tier channels.discord settings; credentials only in the 0600 channels store.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "candy-code",
+        "bundle",
+        "channel",
+        "discord"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-discord",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-discord/issues",
+        "source": "https://github.com/sugarcraft/candy-discord",
+        "docs": "https://github.com/sugarcraft/candy-discord#readme"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-code": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "CandyCode\\Bundles\\Discord\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CandyCode\\Bundles\\Discord\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
