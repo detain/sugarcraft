@@ -31,8 +31,17 @@ use SugarCraft\Code\Support\WindowsTaskKill;
  */
 final class WindowsTaskKillTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        // The MSYS step is the host's call (Windows + a located Git bash);
+        // pinned off here so every routing pin below means the same thing on
+        // a Linux box and a Windows one. The MSYS legs opt in explicitly.
+        WindowsTaskKill::setMsysBashForTesting('');
+    }
+
     protected function tearDown(): void
     {
+        WindowsTaskKill::setMsysBashForTesting(null);
         WindowsTaskKill::setRunnerForTesting(null);
         WindowsTaskKill::setChildBoundForTesting(null);
         WindowsShell::setOsFamilyForTesting(null);
@@ -50,6 +59,65 @@ final class WindowsTaskKillTest extends TestCase
         self::assertSame('taskkill', $argv[0], 'the killer binary itself, never a shell string');
         self::assertContains('/T', $argv);
         self::assertContains('/F', $argv);
+    }
+
+    /**
+     * Git-for-Windows bash backgrounds through fork emulation, and the fork
+     * stub exits, so `sleep 40 &` ends up with no living Windows parent and
+     * taskkill's walk never reaches it (measured, Windows 11: both sleeps of
+     * `sleep 40 & sleep 40 & wait` survived a 2 s Bash timeout). The MSYS
+     * group kill goes first, and once it confirms, nothing else runs.
+     */
+    public function testTheMsysGroupKillRunsFirstAndAConfirmedOneEndsTheKill(): void
+    {
+        $calls = [];
+        WindowsTaskKill::setMsysBashForTesting('C:\\Git\\usr\\bin\\bash.exe');
+        WindowsTaskKill::setRunnerForTesting(static function (array $argv) use (&$calls): bool {
+            $calls[] = $argv;
+
+            return true;
+        });
+
+        self::assertTrue(WindowsTaskKill::tree(4040));
+        self::assertSame(
+            [WindowsTaskKill::msysGroupKillArgv(4040, 'C:\\Git\\usr\\bin\\bash.exe')],
+            $calls,
+            'a confirmed MSYS kill already ran the taskkill walk itself; no second kill goes out',
+        );
+    }
+
+    public function testAPidThatIsNoMsysProcessFallsThroughToTheTaskkillWalk(): void
+    {
+        $calls = [];
+        WindowsTaskKill::setMsysBashForTesting('C:\\Git\\usr\\bin\\bash.exe');
+        WindowsTaskKill::setRunnerForTesting(static function (array $argv) use (&$calls): bool {
+            $calls[] = $argv;
+
+            // The MSYS script exits 1 when no /proc entry carries the pid.
+            return $argv[0] === 'taskkill';
+        });
+
+        self::assertTrue(WindowsTaskKill::tree(5050));
+        self::assertSame(
+            [WindowsTaskKill::msysGroupKillArgv(5050, 'C:\\Git\\usr\\bin\\bash.exe'), WindowsTaskKill::treeArgv(5050)],
+            $calls,
+        );
+    }
+
+    public function testTheMsysArgvCarriesThePidAsAPositionalNeverInTheScript(): void
+    {
+        $argv = WindowsTaskKill::msysGroupKillArgv(6060, '/usr/bin/bash');
+
+        self::assertSame('/usr/bin/bash', $argv[0]);
+        self::assertSame('-c', $argv[1]);
+        self::assertSame(['msys-group-kill', '6060'], \array_slice($argv, 3));
+        self::assertStringNotContainsString('6060', $argv[2], 'the script is constant; the pid rides $1');
+        // Group recorded BEFORE anything dies, taskkill walk before the group
+        // SIGKILL: the /proc entry vanishes with bash, natives hang off it.
+        $script = $argv[2];
+        self::assertLessThan(\strpos($script, 'taskkill'), \strpos($script, '/pgid'));
+        self::assertLessThan(\strpos($script, 'kill -9'), \strpos($script, 'taskkill'));
+        self::assertStringContainsString('kill -9 -- "-$g"', $script);
     }
 
     public function testANonPositivePidIsRefusedBeforeTheRunnerIsEvenTouched(): void

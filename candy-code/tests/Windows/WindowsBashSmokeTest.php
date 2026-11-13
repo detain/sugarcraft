@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Windows;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Tests\Support\SuiteSkipRoster;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
@@ -131,7 +132,42 @@ final class WindowsBashSmokeTest extends TestCase
         self::assertStringNotContainsString(
             'sleep.exe',
             $census,
-            'the timeout tree-kill left a grandchild alive — taskkill /T /F did not collect it',
+            'the timeout tree-kill left a grandchild alive — neither the MSYS group kill nor taskkill /T /F collected it',
         );
+    }
+
+    /**
+     * The capture engine's read primitive on a REAL Windows proc_open pipe.
+     *
+     * On this host stream_set_blocking() cannot unblock such a pipe and the
+     * fread() after stream_select() blocked until the child exited, which is
+     * why the timeout leg above used to return after the full 40 s with no
+     * timeout marker. readAvailable() must answer at once on a pipe whose
+     * child is alive and silent.
+     */
+    public function testCaptureReadsDoNotBlockOnASilentLivePipe(): void
+    {
+        if (!SuiteSkipRoster::windowsSmokeRuns()) {
+            self::markTestSkipped('a blocking proc_open pipe is the Windows-only shape this guards');
+        }
+
+        $process = proc_open(
+            [\PHP_BINARY, '-r', 'sleep(5);'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($process);
+
+        try {
+            $started = microtime(true);
+            self::assertSame('', WindowsPipes::readAvailable($pipes[1]));
+            self::assertLessThan(1.0, microtime(true) - $started, 'readAvailable() blocked on a silent pipe');
+        } finally {
+            proc_terminate($process);
+            foreach ($pipes as $pipe) {
+                fclose($pipe);
+            }
+            proc_close($process);
+        }
     }
 }

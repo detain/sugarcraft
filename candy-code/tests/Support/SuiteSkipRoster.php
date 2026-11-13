@@ -253,6 +253,15 @@ final class SuiteSkipRoster
         'SugarCraft\Code\Tests\Windows\WindowsPtyRunSmokeTest::testPtyRunDrivesAReadPromptOverConPty';
 
     /**
+     * The Windows capture-pipe key: a proc_open pipe that blocks despite
+     * stream_set_blocking(false) exists only on Windows, so the
+     * WindowsPipes::readAvailable() live leg needs a Windows runner. Same
+     * predicate and lift as {@see WINDOWS_BASH_VERBATIM}.
+     */
+    private const WINDOWS_CAPTURE_PIPE =
+        'SugarCraft\Code\Tests\Windows\WindowsBashSmokeTest::testCaptureReadsDoNotBlockOnASilentLivePipe';
+
+    /**
      * The LANE-CC macOS keys: the native-setsid preference pin can only
      * prefer a wrapper that exists, and stock macOS ships no setsid(1) — the
      * body calls {@see ProcessContainment::locateOnPath()} itself and skips
@@ -373,6 +382,11 @@ final class SuiteSkipRoster
                 . 'windows-smoke CI job (PHP 8.4 + ext-ffi on windows-latest) runs the same body '
                 . 'under the same predicate, and expectedForLayout() lifts all three C-TUI-6.d '
                 . 'entries together wherever windowsSmokeRuns() is true',
+        self::WINDOWS_CAPTURE_PIPE
+            => 'conditional platform gate: a proc_open pipe that blocks despite '
+                . 'stream_set_blocking(false) exists only on Windows, and the leg proves '
+                . 'WindowsPipes::readAvailable() answers at once on one. Same windowsSmokeRuns() '
+                . 'body gate and same lift as WINDOWS_BASH_VERBATIM',
         self::SETSID_PREFERENCE
             => 'conditional platform gate (LANE-CC macOS): rostered while no native setsid(1) is '
                 . 'located on PATH — stock macOS ships none, so the preference pin skips itself '
@@ -695,6 +709,7 @@ final class SuiteSkipRoster
             unset($effective[self::WINDOWS_BASH_VERBATIM]);
             unset($effective[self::WINDOWS_BASH_TREE_KILL]);
             unset($effective[self::WINDOWS_PTYRUN_CONPTY]);
+            unset($effective[self::WINDOWS_CAPTURE_PIPE]);
         }
 
         if (ProcessContainment::locateOnPath('setsid') !== '') {

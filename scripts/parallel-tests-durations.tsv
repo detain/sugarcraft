@@ -730,7 +730,8 @@ candy-code/tests/Tui/Settings/SettingsEditorPolishTest.php	0.431	12
 candy-code/tests/Support/KeychainTest.php	0.429	22
 candy-code/tests/Agents/TaskListHooksTest.php	0.424	10
 candy-code/tests/Agents/SystemPromptMemoTest.php	0.423	5
-candy-code/tests/Support/WindowsTaskKillTest.php	0.422	13
+candy-code/tests/Support/WindowsTaskKillTest.php	0.430	16
+candy-code/tests/Support/WindowsPipesTest.php	0.010	5
 candy-code/tests/Chat/ChatPostToolUseBlockTest.php	0.420	7
 candy-code/tests/Skills/LearnedSkillsTest.php	0.419	18
 candy-code/tests/Tui/DirectoryPickerTest.php	0.417	12
@@ -2117,7 +2118,7 @@ candy-code/tests/Palette/PaletteStateQueryCapTest.php	0.000	2
 candy-code/tests/Server/OperatorDiagnosticRulingTest.php	0.000	1
 candy-code/tests/Support/SharedLoopResidueGuardTest.php	0.000	1
 candy-code/tests/AssistantMsgTest.php	0.000	2
-candy-code/tests/Windows/WindowsBashSmokeTest.php	0.000	2
+candy-code/tests/Windows/WindowsBashSmokeTest.php	0.000	3
 candy-code/tests/Chat/PermissionMatchedRuleTest.php	0.000	1
 candy-code/tests/Windows/WindowsPtyRunSmokeTest.php	0.000	1
 candy-code/tests/Protocol/Methods/TodoMethodsTest.php	0.000	2

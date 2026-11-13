@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tools\Concerns;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\PtyBackend;
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Support\WindowsTaskKill;
 
@@ -255,7 +256,79 @@ trait CapturesProcessOutput
         $stderrDropped = 0;
         $deadline = $timeoutSeconds === null ? null : microtime(true) + max(0.0, $timeoutSeconds);
         $timedOut = false;
-        while (!feof($pipes[1]) || !feof($pipes[2])) {
+        $keep = static function ($pipe, string $chunk) use ($pipes, $maxBytes, $onChunk, &$stdout, &$stderr, &$stdoutDropped, &$stderrDropped): void {
+            if ($pipe === $pipes[1]) {
+                $stdout = self::appendBounded($stdout, $chunk, $maxBytes, $stdoutDropped);
+            } else {
+                $stderr = self::appendBounded($stderr, $chunk, $maxBytes, $stderrDropped);
+            }
+            // WEB-4: every byte the capture keeps is offered to the live
+            // tail feed, stdout and stderr alike — the ring shows what
+            // the watcher sees, in the order the pipes answered.
+            if ($onChunk !== null) {
+                $onChunk($chunk);
+            }
+        };
+
+        // Windows: stream_set_blocking() cannot unblock a proc_open pipe,
+        // stream_select() reports both pipes ready with nothing in them, and
+        // the fread() after it blocks until the child exits, so the select loop
+        // below would never reach its deadline check (see WindowsPipes). This
+        // arm reads only the bytes fstat says are waiting, polls the child
+        // between passes, and ends on its EXIT rather than on EOF, which
+        // Windows cannot report without a read that might block. Output that a
+        // backgrounded grandchild writes after the shell has exited is not
+        // waited for here. The POSIX loop waits for it until EOF.
+        //
+        // Keyed on the REAL runtime, not WindowsShell::isWindows(): blocking
+        // pipes are a property of PHP's Windows stream layer, while the
+        // injectable family only picks the command dialect. On Linux, fstat()
+        // of a pipe always answers size 0, so this arm would read nothing
+        // there (BashWindowsSpecTest drives the Windows dialect over real
+        // Linux pipes and caught exactly that).
+        $windowsExit = null;
+        if (WindowsPipes::runtimeNeedsIt()) {
+            while (true) {
+                if ($onWait !== null) {
+                    $onWait();
+                }
+                $got = false;
+                foreach ([$pipes[1], $pipes[2]] as $pipe) {
+                    $chunk = WindowsPipes::readAvailable($pipe);
+                    if ($chunk !== '') {
+                        $keep($pipe, $chunk);
+                        $got = true;
+                    }
+                }
+                if ($got) {
+                    continue;
+                }
+                $status = proc_get_status($process);
+                if (($status['running'] ?? false) !== true) {
+                    $windowsExit = (int) ($status['exitcode'] ?? -1);
+                    // Bytes written between the last pass and the exit are
+                    // still in the pipe; take them before reporting.
+                    foreach ([$pipes[1], $pipes[2]] as $pipe) {
+                        while (($chunk = WindowsPipes::readAvailable($pipe)) !== '') {
+                            $keep($pipe, $chunk);
+                        }
+                    }
+                    break;
+                }
+                $sleep = WindowsPipes::POLL_MICROSECONDS;
+                if ($deadline !== null) {
+                    $remaining = $deadline - microtime(true);
+                    if ($remaining <= 0.0) {
+                        $timedOut = true;
+                        break;
+                    }
+                    $sleep = max(1, min($sleep, (int) ceil($remaining * 1_000_000)));
+                }
+                usleep($sleep);
+            }
+        }
+
+        while ($windowsExit === null && !$timedOut && (!feof($pipes[1]) || !feof($pipes[2]))) {
             if ($onWait !== null) {
                 $onWait();
             }
@@ -283,17 +356,7 @@ trait CapturesProcessOutput
                 if ($chunk === false || $chunk === '') {
                     continue;
                 }
-                if ($pipe === $pipes[1]) {
-                    $stdout = self::appendBounded($stdout, $chunk, $maxBytes, $stdoutDropped);
-                } else {
-                    $stderr = self::appendBounded($stderr, $chunk, $maxBytes, $stderrDropped);
-                }
-                // WEB-4: every byte the capture keeps is offered to the live
-                // tail feed, stdout and stderr alike — the ring shows what
-                // the watcher sees, in the order the pipes answered.
-                if ($onChunk !== null) {
-                    $onChunk($chunk);
-                }
+                $keep($pipe, $chunk);
             }
         }
 
@@ -301,9 +364,10 @@ trait CapturesProcessOutput
         // exited (`cmd >/dev/null 2>&1` closes them at once), and proc_close()
         // would then wait for as long as it runs. The status observed here is
         // kept because it, not proc_close(), is the one known to carry the
-        // exit code once proc_get_status() has seen the exit.
-        $observedExit = null;
-        if ($deadline !== null && !$timedOut) {
+        // exit code once proc_get_status() has seen the exit. The Windows arm
+        // above already observed the exit and carries its own.
+        $observedExit = $windowsExit;
+        if ($deadline !== null && !$timedOut && $observedExit === null) {
             $observedExit = self::awaitExitUntil($process, $deadline, $onWait);
             $timedOut = $observedExit === null;
         }

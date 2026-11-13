@@ -128,12 +128,69 @@ final class WindowsTaskKill
             return false;
         }
 
-        $runner = self::$runner;
-        if ($runner !== null) {
-            return (bool) $runner(self::treeArgv($pid));
+        $run = self::$runner ?? static fn (array $argv): bool => self::runTreeKill($argv);
+
+        // Git-for-Windows bash first, when the host has one. Its fork
+        // emulation leaves backgrounded commands with no living Windows
+        // parent, so taskkill's walk cannot reach them. Measured on Windows
+        // 11: `sleep 40 & sleep 40 & wait` under a 2 s Bash timeout left both
+        // sleep.exe running, their parents being fork stubs that had already
+        // exited. The MSYS group kill reaches them; it also runs the taskkill
+        // walk itself, first and while bash is still alive, for native
+        // descendants. A pid that is no MSYS process falls through to the
+        // plain walk below.
+        // The real runtime, not the injectable family: MSYS and its /proc
+        // winpid map exist only on an actual Windows host.
+        $bash = self::$msysBashOverride ?? (\PHP_OS_FAMILY === 'Windows' ? WindowsShell::bash() : '');
+        if ($bash !== '' && (bool) $run(self::msysGroupKillArgv($pid, $bash))) {
+            return true;
         }
 
-        return self::runTreeKill(self::treeArgv($pid));
+        return (bool) $run(self::treeArgv($pid));
+    }
+
+    /**
+     * Run under Git-for-Windows bash with $1 = the Windows pid. Finds the MSYS
+     * process carrying that winpid and records its process group BEFORE
+     * anything dies, because the /proc entry goes with the process. It then
+     * runs taskkill's tree walk (natives still linked to a living parent) and
+     * SIGKILLs the MSYS group (members whose Windows parent is a dead fork
+     * stub). Exit 0 means the group was found and signalled; exit 1 means no
+     * MSYS process has that pid. Only shell builtins sit on the lookup path,
+     * so scanning /proc spawns nothing per entry.
+     */
+    private const MSYS_GROUP_KILL_SCRIPT = 'w=$1; for d in /proc/[0-9]*; do '
+        . 'read -r x < "$d/winpid" 2>/dev/null || continue; '
+        . '[ "$x" = "$w" ] || continue; '
+        . 'read -r g < "$d/pgid" 2>/dev/null || exit 1; '
+        . 'MSYS_NO_PATHCONV=1 taskkill /T /F /PID "$w" >/dev/null 2>&1; '
+        . 'kill -9 -- "-$g" 2>/dev/null; '
+        . 'exit 0; done; exit 1';
+
+    /**
+     * Test-only: the bash the MSYS step runs under, '' to skip the step, or
+     * null for the host's own answer (Windows + a located Git bash).
+     */
+    private static ?string $msysBashOverride = null;
+
+    /**
+     * Pin the MSYS step's bash ('' disables it) or restore the host answer
+     * with null, so routing pins mean the same thing on every host.
+     */
+    public static function setMsysBashForTesting(?string $bash): void
+    {
+        self::$msysBashOverride = $bash;
+    }
+
+    /**
+     * The argv for the MSYS group kill, run under $bash with the pid as $1.
+     * See {@see MSYS_GROUP_KILL_SCRIPT}.
+     *
+     * @return non-empty-list<string>
+     */
+    public static function msysGroupKillArgv(int $pid, string $bash): array
+    {
+        return [$bash, '-c', self::MSYS_GROUP_KILL_SCRIPT, 'msys-group-kill', (string) $pid];
     }
 
     /**
