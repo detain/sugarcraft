@@ -113,7 +113,8 @@ final class AnimatedWebpDecoder implements Decoder
     /** @var list<int> per-frame display durations in ms, container order. */
     private array $delaysMs = [];
 
-    private int $loopCount = 0;
+    /** @var int the raw container field (0 = forever, N = N extra passes after the first) */
+    private int $rawLoop = 0;
     private int $cursor = 0;
 
     /** Output box every frame is rescaled into (set by open()). */
@@ -275,7 +276,7 @@ final class AnimatedWebpDecoder implements Decoder
             ));
         }
 
-        $frames = self::parseContainer($bytes, $canvasW, $canvasH, $this->loopCount, AudioPlayer::redactCredentials($source));
+        $frames = self::parseContainer($bytes, $canvasW, $canvasH, $this->rawLoop, AudioPlayer::redactCredentials($source));
         if ($frames === []) {
             throw new \RuntimeException('not an animated WebP (no ANMF frames): ' . AudioPlayer::redactCredentials($source));
         }
@@ -366,9 +367,22 @@ final class AnimatedWebpDecoder implements Decoder
      * plays N+1 times (libwebp semantics). Exposed for hosts that honor it;
      * this decoder itself plays the sequence once per open().
      */
-    public function loopCount(): int
+    /**
+     * Total playthroughs the author requested — the SAME contract
+     * GifDecoder ships (review 015): null when the file says "forever",
+     * N + 1 when the container carries raw repeats N (one initial pass
+     * plus N repeats). The unmapped container field stays available via
+     * rawLoopField() for diagnostics.
+     */
+    public function loopCount(): ?int
     {
-        return $this->loopCount;
+        return $this->rawLoop === 0 ? null : $this->rawLoop + 1;
+    }
+
+    /** The raw libwebp loop field, verbatim: 0 = forever, N = N repeats. */
+    public function rawLoopField(): int
+    {
+        return $this->rawLoop;
     }
 
     /**
@@ -390,7 +404,7 @@ final class AnimatedWebpDecoder implements Decoder
     {
         $this->canvases = [];
         $this->delaysMs = [];
-        $this->loopCount = 0;
+        $this->rawLoop = 0;
         $this->cursor = 0;
     }
 

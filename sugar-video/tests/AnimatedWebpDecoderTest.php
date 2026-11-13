@@ -94,19 +94,21 @@ final class AnimatedWebpDecoderTest extends TestCase
         $d->open($this->file($this->storyContainer(), 'meta.webp'), 8, 4, 10.0);
 
         self::assertSame([100, 100, 100], $d->frameDelaysMs());
-        self::assertSame(3, $d->loopCount());
-        self::assertSame(3, iterator_count($d->getIterator()));
+        self::assertSame(4, $d->loopCount(), 'raw repeats 3 = 4 total playthroughs (the gif-normalized contract)');
+        self::assertSame(3, iterator_count($d->getIterator()), 'the sequence itself stays single-pass — the Player loop re-opens via the factory');
+        self::assertSame(3, $d->rawLoopField(), 'the container field stays visible verbatim');
         self::assertNull($d->next(), 'the sequence is terminal — the Player loop re-opens via the factory');
     }
 
-    public function testLoopCountZeroIsForeverAndIsExposedVerbatim(): void
+    public function testLoopCountZeroIsForeverAndTheRawFieldStaysVisible(): void
     {
         $bytes = AnimatedWebpBytes::animContainer(32, 32, [
             ['still' => hex2bin(AnimatedWebpBytes::RED_32), 'duration' => 42, 'blend' => true],
         ], loop: 0);
         $d = new AnimatedWebpDecoder();
         $d->open($this->file($bytes, 'loop0.webp'), 8, 4, 10.0);
-        self::assertSame(0, $d->loopCount());
+        self::assertNull($d->loopCount());
+        self::assertSame(0, $d->rawLoopField());
         self::assertSame([42], $d->frameDelaysMs());
     }
 
