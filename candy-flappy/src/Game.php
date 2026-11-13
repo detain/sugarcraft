@@ -14,7 +14,6 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Flappy\PipeGenerator;
 
 /**
  * Flappy-Bird as a SugarCraft Model. The world is `width × height`
