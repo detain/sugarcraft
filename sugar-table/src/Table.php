@@ -1380,18 +1380,29 @@ final class Table
             );
         }
 
-        // Sort
+        // Sort (audit ST-30: Schwartzian decoration — the old comparator ran
+        // plainText() on both sides of every comparison, i.e. O(rows · log
+        // rows · keys) value renders per keystroke on search-sorted hosts
+        // like candy-sql; each row's key strings are now derived exactly once
+        // per sort key).
         if ($this->sortColumns !== []) {
-            \usort($rows, function (Row $a, Row $b): int {
+            $decorated = [];
+            foreach ($rows as $row) {
+                $sortKeys = [];
                 foreach ($this->sortColumns as $sort) {
-                    $key = $sort['key'];
-                    $asc = $sort['asc'];
+                    $sortKeys[] = self::plainText($row->data->get($sort['key']));
+                }
+                $decorated[] = [$sortKeys, $row];
+            }
 
-                    $va = $a->data->get($key);
-                    $vb = $b->data->get($key);
-
-                    $sa = self::plainText($va);
-                    $sb = self::plainText($vb);
+            // PHP's usort is stable: comparing equal decorated pairs keeps
+            // insertion order — the documented tie behaviour (multi-key
+            // comparators resolve on their own; a full tie is row order).
+            $keys = $this->sortColumns;
+            \usort($decorated, static function (array $a, array $b) use ($keys): int {
+                foreach ($keys as $i => $sort) {
+                    $sa = $a[0][$i];
+                    $sb = $b[0][$i];
 
                     // Numeric sort
                     if (\is_numeric($sa) && \is_numeric($sb)) {
@@ -1401,11 +1412,16 @@ final class Table
                     }
 
                     if ($cmp !== 0) {
-                        return $asc ? $cmp : -$cmp;
+                        return $sort['asc'] ? $cmp : -$cmp;
                     }
                 }
                 return 0;
             });
+
+            $rows = [];
+            foreach ($decorated as [, $row]) {
+                $rows[] = $row;
+            }
         }
 
         return $rows;
