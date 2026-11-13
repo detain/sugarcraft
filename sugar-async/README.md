@@ -188,19 +188,19 @@ echo $msg, "\n";
 a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
 `null` binds the shared `Loop::get()`.
 
-Abandonment triage — what each wrapper does to the inner, and whether the
-caller can walk away:
+Abandonment triage — what each wrapper does to the inner operation when the
+wait ends, and what happens when the caller cancels the wrapper:
 
-| Wrapper | Inner on settle / on abandon | Abandonable? |
+| Wrapper | When the wait ends on its own | When the caller cancels the wrapper |
 |---|---|---|
-| `withTimeout` | Runs on untouched — the timeout ends only the wait | Yes: wrapper cancel releases the timer and rejects `OperationCancelledException` |
-| `withDeadline` | Cancelled at expiry; the `onTimeout` hook runs best-effort | Yes: wrapper cancel runs the same full teardown (inner cancelled, hook fired) |
-| `cancellable` | Late inner result is dropped when the token fires | Yes — that is the seam: `onCancel` hook plus best-effort inner `cancel()` |
-| `retry` | Token checked before every attempt, mid-backoff honoured (the backoff timer is cancelled) | Yes: abandoning stops the cycle; the last dispatched attempt is cancelled best-effort |
-| `singleFlight` | One flight per key settles for every joined caller | No, by design — wrap the join in `cancellable()` |
-| `debounce` / `throttle` | Superseded/suppressed calls resolve `null`; `trailing: true` queues the last one | Yes: `unsubscribe()` drops the pending burst / queued trailing as `null` |
-| `all` / `race` | Members untouched — pure fan-in | No wrapper seam — cancel the members directly |
-| `onPending` | Never cancelled; hook form is advisory only (the wait continues); hook-less form rejects `(still pending)` after N seconds while the inner keeps running | Yes: wrapper cancel releases the notice timer |
+| `withTimeout` | The inner runs on untouched — the timeout rejects the wait and ends nothing else. | The wrapper releases the timer and rejects with `OperationCancelledException`; the inner keeps running. |
+| `withDeadline` | At expiry the wrapper cancels the inner and fires the `onTimeout` hook best-effort, then rejects with `TimeoutException`. | The wrapper runs the same full teardown: the inner is cancelled, the hook fires best-effort, and the wait rejects with `OperationCancelledException`. |
+| `cancellable` | Whichever side settles first wins; a late inner result after the token fires is dropped. | The wrapper fires the `onCancel` hook and the inner's `cancel()` best-effort, unsubscribes its token registration, and rejects with `OperationCancelledException`. |
+| `retry` | A token fired between attempts stops the cycle with `OperationCancelledException`; a token fired during an attempt cancels the in-flight attempt and — when the driver ignores that abort — rejects immediately instead of waiting for it. | The wrapper stops the cycle, cancels the last dispatched attempt best-effort, releases every backoff timer, and drops its registration on the caller's token. |
+| `singleFlight` | One flight per key settles for every joined caller. | The join is not abandonable by design — wrap the join in `cancellable()` when the wait itself must be abandonable. |
+| `debounce` / `throttle` | A superseded or suppressed call resolves `null` — nothing failed; with `trailing: true` the last suppressed call still fires. | `unsubscribe()` drops the pending burst and any queued trailing call, each resolving `null`. |
+| `all` / `race` | The fan-in mirrors its members: `all()` waits for every one, `race()` settles with the first to finish; members are never cancelled. | The fan-in has no cancel path of its own — cancel the member promises directly. |
+| `onPending` | With a hook, the notice fires after N seconds and the wait continues. Without a hook, the wrapper rejects with a `TimeoutException` whose message names `(still pending)` while the inner keeps running. | The wrapper releases the notice timer and rejects with `OperationCancelledException`. |
 
 - `withTimeout(?loop, promise, seconds, label:)` — rejects with `TimeoutException`
   after N seconds. The inner operation is NOT cancelled and keeps running to
@@ -209,8 +209,8 @@ caller can walk away:
   left holding the loop. Cancelling the *wrapper* abandons the wait: the timer is
   released and the wrapper rejects with `OperationCancelledException` (the inner
   keeps running — this is a wait-abandonment, not an operation cancel).
-- `withDeadline(?loop, promise, seconds, onTimeout:, label:)` — the cancelling
-  sibling: rejects after N seconds AND `cancel()`s the inner, with an optional
+- `withDeadline(?loop, promise, seconds, onTimeout:, label:)` — the variant that
+  stops the work: rejects after N seconds AND `cancel()`s the inner, with an optional
   `onTimeout` abort hook (fired once, errors swallowed) for server-side kills the
   driver's own cancellation cannot perform. Best-effort in the literal sense: a
   throwing hook and a throwing inner `cancel()` are both caught silently, so a

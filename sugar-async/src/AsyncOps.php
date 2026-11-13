@@ -32,9 +32,9 @@ final class AsyncOps
      * The wait itself is abandonable: cancel() on the returned promise
      * releases the timer and rejects with OperationCancelledException —
      * abandon, not abort (stopping the work is withDeadline()'s contract).
-     * When the abandoned work itself must stop — a hung I/O holding its
-     * consumer's in-flight gate open forever — use the cancelling sibling
-     * {@see withDeadline()} instead.
+     * When the work itself must stop as the wait ends — a hung I/O holding its
+     * consumer's in-flight gate open forever — use {@see withDeadline()},
+     * which cancels the inner operation on both expiry and abandonment.
      *
      * @param null|LoopInterface $loop  Event loop; pass null to use the shared Loop::get().
      * @param PromiseInterface $promise
@@ -113,8 +113,7 @@ final class AsyncOps
 
     /**
      * Wrap a promise with a deadline that CANCELS the inner promise when it
-     * fires — the cancelling sibling of {@see withTimeout()}, which lets the
-     * inner run on.
+     * fires; {@see withTimeout()} by contrast lets the inner run on.
      *
      * WHY both exist: withTimeout answers "how long will the CALLER wait" and
      * stays out of the operation's way; withDeadline answers "how long may the
