@@ -4454,6 +4454,13 @@ TXT,
     // outside --bare (probe: claude --help, 2.1.312).
     'provider.claude_code.isolation_notice' => 'claude-code `bare: false`：CLI 子进程隔离至项目/本地设置源、其自身的 MCP 配置，且无斜杠命令或技能——但 CLAUDE.md 自动发现和自动记忆仍会加载；仅 `bare: true` 跳过它们，`isolate: false` 恢复完整用户状态。',
     // --- end provider.claude_code ---
+    // --- provider.factory --- launch refusals (S-P02); operator names/keys/env vars stay literal tokens.
+    'provider.factory.requires_key' => '提供商类型 \'{type}\' 需要设置 \'{key}\'',
+    'provider.factory.requires_key_env' => '提供商类型 \'{type}\' 需要设置 \'{key}\' — 请设置环境变量 {env}，或在 ~/.candy-code/config.json 的 providers.<name> 下添加 "{key}" 条目',
+    'provider.factory.unknown_type' => '未知的提供商类型：{type}（有效类型：{types}）{closest} — 运行 `candy-code models` 查看可选的提供商',
+    'provider.factory.closest_match' => ' — 最接近的匹配：{best}',
+    'provider.factory.unsupported_type' => '不支持的提供商类型：{type}',
+    // --- end provider.factory ---
     // --- web.chrome (C-TUI-6.f: server.strings chrome migration) ---
     // Fixed labels of the web UI's chrome, the ONLY strings the owner
     // ruling lets onto the wire ('chrome/UI strings only; server, tool and

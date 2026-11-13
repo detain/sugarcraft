@@ -4456,6 +4456,13 @@ TXT,
     // outside --bare (probe: claude --help, 2.1.312).
     'provider.claude_code.isolation_notice' => 'claude-code `bare: false`: CLI 자식이 프로젝트/로컬 설정 소스, 자체 MCP 구성, 슬래시 명령·스킬 없음으로 격리 — 단 CLAUDE.md 자동 발견과 자동 메모리는 여전히 로드; `bare: true`만 이를 건너뛰며, `isolate: false`는 전체 사용자 상태를 복원.',
     // --- end provider.claude_code ---
+    // --- provider.factory --- launch refusals (S-P02); operator names/keys/env vars stay literal tokens.
+    'provider.factory.requires_key' => '공급자 유형 \'{type}\'에는 \'{key}\' 설정이 필요합니다',
+    'provider.factory.requires_key_env' => '공급자 유형 \'{type}\'에는 \'{key}\' 설정이 필요합니다 — 환경 변수 {env}를 설정하거나 ~/.candy-code/config.json의 providers.<name> 아래에 "{key}" 항목을 추가하세요',
+    'provider.factory.unknown_type' => '알 수 없는 공급자 유형: {type} (유효한 유형: {types}){closest} — 선택 가능한 공급자는 `candy-code models`로 확인하세요',
+    'provider.factory.closest_match' => ' — 가장 가까운 항목: {best}',
+    'provider.factory.unsupported_type' => '지원하지 않는 공급자 유형: {type}',
+    // --- end provider.factory ---
     // --- web.chrome (C-TUI-6.f: server.strings chrome migration) ---
     // Fixed labels of the web UI's chrome, the ONLY strings the owner
     // ruling lets onto the wire ('chrome/UI strings only; server, tool and

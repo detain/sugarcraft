@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Code\Providers\ToolCallParser\DsmlToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
@@ -862,11 +863,12 @@ final readonly class ProviderFactory
             if (!isset($config[$key]) || (is_string($config[$key]) && trim($config[$key]) === '')) {
                 $hint = self::REQUIRED_KEY_ENVS[$type][$key] ?? null;
 
+                // User-visible launch refusal: framing keyed (G-13), the type,
+                // key and env-var names stay literal tokens.
                 throw new \RuntimeException(
-                    "Provider type '{$type}' requires '{$key}' to be set"
-                    . ($hint === null
-                        ? ''
-                        : " — set the {$hint} environment variable, or a \"{$key}\" entry under providers.<name> in ~/.candy-code/config.json"),
+                    $hint === null
+                        ? Lang::t('provider.factory.requires_key', ['type' => $type, 'key' => $key])
+                        : Lang::t('provider.factory.requires_key_env', ['type' => $type, 'key' => $key, 'env' => $hint]),
                 );
             }
         }
@@ -900,10 +902,11 @@ final readonly class ProviderFactory
         }
 
         return new \InvalidArgumentException(
-            "Unknown provider type: {$type}"
-            . ' (valid types: ' . \implode(', ', $types) . ')'
-            . ($best === null ? '' : " — closest match: {$best}")
-            . ' — run `candy-code models` to see selectable providers',
+            Lang::t('provider.factory.unknown_type', [
+                'type' => $type,
+                'types' => \implode(', ', $types),
+                'closest' => $best === null ? '' : Lang::t('provider.factory.closest_match', ['best' => $best]),
+            ]),
         );
     }
 
@@ -926,7 +929,7 @@ final readonly class ProviderFactory
             'gemini' => $this->createGemini($config),
             'openrouter' => $this->createOpenRouter($config),
             'custom' => $this->createCustom($config),
-            default => throw new \RuntimeException("Unsupported provider type: {$type}"),
+            default => throw new \RuntimeException(Lang::t('provider.factory.unsupported_type', ['type' => $type])),
         };
     }
 

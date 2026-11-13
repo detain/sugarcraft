@@ -4456,6 +4456,13 @@ TXT,
     // outside --bare (probe: claude --help, 2.1.312).
     'provider.claude_code.isolation_notice' => 'claude-code `bare: false`: CLI 子プロセスはプロジェクト/ローカル設定ソース・独自 MCP 設定に隔離しスラッシュコマンドやスキルなし — ただし CLAUDE.md 自動検出と自動メモリは読み込み; `bare: true` のみスキップ、`isolate: false` でフルユーザー状態に復元。',
     // --- end provider.claude_code ---
+    // --- provider.factory --- launch refusals (S-P02); operator names/keys/env vars stay literal tokens.
+    'provider.factory.requires_key' => 'プロバイダータイプ \'{type}\' には \'{key}\' の設定が必要です',
+    'provider.factory.requires_key_env' => 'プロバイダータイプ \'{type}\' には \'{key}\' の設定が必要です — 環境変数 {env} を設定するか、~/.candy-code/config.json の providers.<name> 配下に "{key}" を追加してください',
+    'provider.factory.unknown_type' => '不明なプロバイダータイプ: {type}（有効なタイプ: {types}）{closest} — 選択可能なプロバイダーは `candy-code models` で確認できます',
+    'provider.factory.closest_match' => ' — 最も近い候補: {best}',
+    'provider.factory.unsupported_type' => '未対応のプロバイダータイプ: {type}',
+    // --- end provider.factory ---
     // --- web.chrome (C-TUI-6.f: server.strings chrome migration) ---
     // Fixed labels of the web UI's chrome, the ONLY strings the owner
     // ruling lets onto the wire ('chrome/UI strings only; server, tool and

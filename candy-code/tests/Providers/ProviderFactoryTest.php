@@ -1832,4 +1832,36 @@ final class ProviderFactoryTest extends TestCase
             'TOOL_CALL_PARSER_NAMES must list every declared name and no others',
         );
     }
+
+    /**
+     * S-P02: the three launch refusals are keyed, so a German launch reads a
+     * German sentence with the technical tokens (type, key, env var) literal,
+     * and the NonInteractive frame no longer wraps a raw English payload.
+     */
+    public function testLaunchRefusalsLocalizeWhileTokensStayLiteral(): void
+    {
+        $before = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('de');
+        try {
+            $factory = new ProviderFactory();
+            try {
+                $factory->create(['type' => 'opnenai']);
+                self::fail('unknown type must throw');
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringStartsWith('Unbekannter Anbietertyp: opnenai (gültige Typen: ', $e->getMessage());
+                self::assertStringContainsString('openai', $e->getMessage());
+                self::assertStringContainsString('`candy-code models`', $e->getMessage());
+                self::assertStringNotContainsString('Unknown provider type', $e->getMessage());
+            }
+            try {
+                $factory->create(['type' => 'custom']);
+                self::fail('missing key must throw');
+            } catch (\RuntimeException $e) {
+                self::assertStringContainsString("'custom'", $e->getMessage());
+                self::assertStringNotContainsString('requires', $e->getMessage());
+            }
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($before);
+        }
+    }
 }

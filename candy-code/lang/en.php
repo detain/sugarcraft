@@ -4533,6 +4533,13 @@ TXT,
     // outside --bare (probe: claude --help, 2.1.312).
     'provider.claude_code.isolation_notice' => 'claude-code `bare: false`: the CLI child is isolated to project/local settings sources, its own MCP config and no slash-commands or skills — but CLAUDE.md auto-discovery and auto-memory still load; only `bare: true` skips them, and `isolate: false` restores the full user state.',
     // --- end provider.claude_code ---
+    // --- provider.factory --- launch refusals (S-P02); operator names/keys/env vars stay literal tokens.
+    'provider.factory.requires_key' => 'Provider type \'{type}\' requires \'{key}\' to be set',
+    'provider.factory.requires_key_env' => 'Provider type \'{type}\' requires \'{key}\' to be set — set the {env} environment variable, or a "{key}" entry under providers.<name> in ~/.candy-code/config.json',
+    'provider.factory.unknown_type' => 'Unknown provider type: {type} (valid types: {types}){closest} — run `candy-code models` to see selectable providers',
+    'provider.factory.closest_match' => ' — closest match: {best}',
+    'provider.factory.unsupported_type' => 'Unsupported provider type: {type}',
+    // --- end provider.factory ---
     // --- web.chrome (C-TUI-6.f: server.strings chrome migration) ---
     // Fixed labels of the web UI's chrome, the ONLY strings the owner
     // ruling lets onto the wire ('chrome/UI strings only; server, tool and

@@ -4458,6 +4458,13 @@ TXT,
     // outside --bare (probe: claude --help, 2.1.312).
     'provider.claude_code.isolation_notice' => 'claude-code `bare: false`: дочерний CLI изолирован до источников настроек проекта/локальных, собственного MCP-конфига и без слэш-команд или скиллов — но автообнаружение CLAUDE.md и автопамять всё ещё загружаются; только `bare: true` пропускает их, а `isolate: false` восстанавливает полное пользовательское состояние.',
     // --- end provider.claude_code ---
+    // --- provider.factory --- launch refusals (S-P02); operator names/keys/env vars stay literal tokens.
+    'provider.factory.requires_key' => 'Тип провайдера \'{type}\' требует, чтобы \'{key}\' был задан',
+    'provider.factory.requires_key_env' => 'Тип провайдера \'{type}\' требует, чтобы \'{key}\' был задан — задайте переменную окружения {env} или запись "{key}" в providers.<name> файла ~/.candy-code/config.json',
+    'provider.factory.unknown_type' => 'Неизвестный тип провайдера: {type} (допустимые типы: {types}){closest} — выполните `candy-code models`, чтобы увидеть доступных провайдеров',
+    'provider.factory.closest_match' => ' — ближайшее совпадение: {best}',
+    'provider.factory.unsupported_type' => 'Неподдерживаемый тип провайдера: {type}',
+    // --- end provider.factory ---
     // --- web.chrome (C-TUI-6.f: server.strings chrome migration) ---
     // Fixed labels of the web UI's chrome, the ONLY strings the owner
     // ruling lets onto the wire ('chrome/UI strings only; server, tool and
