@@ -53,6 +53,7 @@ final class PostgresAdminProviderTest extends TestCase
                 'temp_bytes' => '1024',
                 'deadlocks' => '0',
                 'stats_reset' => '2024-01-01 00:00:00',
+                'uptime' => '3600.5',
             ],
         ]);
 
@@ -61,6 +62,19 @@ final class PostgresAdminProviderTest extends TestCase
         $this->assertSame('3', $result['pg_stat_database.numbackends']);
         $this->assertSame('1000', $result['pg_stat_database.xact_commit']);
         $this->assertSame('5000', $result['pg_stat_database.blks_hit']);
+        // SQL-P19: postmaster lifetime rides the same round trip (no lie-N/A).
+        $this->assertSame('3600.5', $result['uptime']);
+    }
+
+    public function testUptimeIsEmptyWhenServerRowLacksIt(): void
+    {
+        $this->db->setQueryResult('pg_stat_database', [[
+            'numbackends' => '1',
+        ]]);
+
+        $result = $this->provider->fetchStatusVariables();
+
+        $this->assertSame('', $result['uptime']); // omission, never an asserted lifetime
     }
 
     public function testFetchStatusVariablesReturnsEmptyOnError(): void

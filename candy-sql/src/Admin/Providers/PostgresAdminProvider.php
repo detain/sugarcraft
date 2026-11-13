@@ -100,7 +100,8 @@ final class PostgresAdminProvider implements AdminProviderInterface
                     temp_files,
                     temp_bytes,
                     deadlocks,
-                    stats_reset
+                    stats_reset,
+                    EXTRACT(EPOCH FROM (now() - pg_postmaster_start_time())) AS uptime
                 FROM pg_stat_database
                 WHERE datname = :datname
             SQL;
@@ -142,6 +143,10 @@ final class PostgresAdminProvider implements AdminProviderInterface
                 'pg_stat_database.deadlocks' => (string) ($row['deadlocks'] ?? 0),
                 // Derived: shared_buffers in bytes (mirrors InnoDB buffer pool config)
                 'pg_settings.shared_buffers' => (string) $sharedBuffersBytes,
+                // SQL-P19 (adminpages-038): postmaster lifetime from the same
+                // round trip; empty when the server did not answer so the
+                // header omits the segment instead of lying "N/A".
+                'uptime' => (string) ($row['uptime'] ?? ''),
             ];
 
             return $this->statusVariablesCache;

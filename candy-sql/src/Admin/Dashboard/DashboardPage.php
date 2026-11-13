@@ -719,10 +719,20 @@ final class DashboardPage extends PageBase
         $status = $this->paused ? ' [PAUSED]' : '';
 
         if ($this->isPostgres) {
+            // SQL-P19 (adminpages-038): 'Uptime: N/A' was a permanent lie —
+            // pg_postmaster_start_time rides the status snapshot (same round
+            // trip). When the answer is missing we omit the segment rather
+            // than assert anything about lifetime.
+            $pgUptime = $this->context->statusVariables()['uptime'] ?? '';
+            $uptimeSegment = $pgUptime === ''
+                ? ''
+                : ' | Uptime: ' . Format::duration((float) $pgUptime);
+
             return sprintf(
-                "Performance Dashboard%s | PostgreSQL %s | Uptime: N/A\n",
+                "Performance Dashboard%s | PostgreSQL %s%s\n",
                 $status,
                 $version,
+                $uptimeSegment,
             );
         }
 

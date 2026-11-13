@@ -183,4 +183,34 @@ final class DashboardPageBlocksTest extends TestCase
         $this->assertStringNotContainsString('SQL Statements', $view);
         $this->assertStringNotContainsString('receiving', $view);
     }
+
+    // ─── SQL-P19 (adminpages-038): pg uptime truth ───────────────────────────
+
+    public function testPostgresHeaderShowsRealUptimeFromSnapshot(): void
+    {
+        $page = new DashboardPage($this->context(
+            ['pg_stat_database.tup_fetched' => '1', 'uptime' => '86400'],
+            [],
+            Flavor::Postgres,
+        ));
+
+        $view = $page->view();
+
+        $this->assertStringContainsString('Uptime: 24h', $view);
+        $this->assertStringNotContainsString('N/A', $view); // the permanent lie is gone
+    }
+
+    public function testPostgresHeaderOmitsUptimeWhenServerIsSilent(): void
+    {
+        $page = new DashboardPage($this->context(
+            ['pg_stat_database.tup_fetched' => '1'], // no 'uptime' key — provider answered nothing
+            [],
+            Flavor::Postgres,
+        ));
+
+        $view = $page->view();
+
+        $this->assertStringNotContainsString('Uptime:', $view); // omit, never assert
+        $this->assertStringNotContainsString('N/A', $view);
+    }
 }
