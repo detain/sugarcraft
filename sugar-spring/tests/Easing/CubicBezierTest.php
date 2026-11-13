@@ -64,7 +64,12 @@ final class CubicBezierTest extends TestCase
 
         foreach ($methods as $method) {
             $cb = CubicBezier::$method();
-            for ($t = 0.0; $t <= 1.0; $t += 0.1) {
+            // Exact grid: accumulating 0.1 in float ends the loop at
+            // 1.0000000000000002 — off-domain by construction, where the
+            // unclamped solve legitimately answers a hair past 1. Sample
+            // the closed interval it pins.
+            for ($i = 0; $i <= 10; $i++) {
+                $t = $i / 10.0;
                 $result = $cb->evaluate($t);
                 $this->assertGreaterThanOrEqual(0.0, $result, "$method at t=$t must not be negative");
                 $this->assertLessThanOrEqual(1.0, $result, "$method at t=$t must not exceed 1");
@@ -171,8 +176,10 @@ final class CubicBezierTest extends TestCase
 
     /**
      * easeInOutCirc shipped byte-identical to easeInOutQuint (copy-paste
-     * corruption). Repaired to the pre-2022 easings.net table's Circ row;
-     * the Quint row was already the genuine table value and stays.
+     * corruption). Repaired to the pre-2022 easings.net table's Circ row; the
+     * InOutQuint tuple pinned here was already the genuine table value. The
+     * same audit corrupted easeInQuint (an InOutQuint x-triple with y2
+     * zeroed) — restored in the same pass; see SPR-01.
      */
     public function testInOutQuintAndInOutCircAreDistinctCitedRows(): void
     {

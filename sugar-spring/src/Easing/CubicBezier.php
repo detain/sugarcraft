@@ -18,9 +18,10 @@ use SugarCraft\Spring\Lang;
  * whole point of back/elastic-style curves.
  *
  * The named family beyond the four CSS keywords ships the ORIGINAL (pre-2022)
- * easings.net cubic-bezier approximation table; the site's 2022 redesign
- * revised several rows. Do not mix generations — the easeInOutCirc repair
- * restored the original-table Circ value precisely so the family stays
+ * easings.net cubic-bezier approximation table, rendered in this file's 2-dp
+ * control-point convention (0.445 → 0.45, 0.685 → 0.69); the site's 2022
+ * redesign revised several rows. Do not mix generations — the easeInOutCirc
+ * repair restored the original-table Circ value precisely so the family stays
  * internally consistent with its Quint/Expo neighbours.
  *
  * @see https://www.w3.org/TR/css-easing-3/#cubic-bezier-algo
@@ -89,30 +90,30 @@ final readonly class CubicBezier
 
     // ─── CSS named easings ────────────────────────────────────────────────
 
-    public static function ease(): self        { return new self(0.25, 0.10, 0.25, 1.00); }
-    public static function easeIn(): self      { return new self(0.42, 0.00, 1.00, 1.00); }
-    public static function easeOut(): self     { return new self(0.00, 0.00, 0.58, 1.00); }
-    public static function easeInOut(): self   { return new self(0.42, 0.00, 0.58, 1.00); }
-    public static function linear(): self      { return new self(0.00, 0.00, 1.00, 1.00); }
+    public static function ease(): self           { return new self(0.25, 0.10, 0.25, 1.00); }
+    public static function easeIn(): self         { return new self(0.42, 0.00, 1.00, 1.00); }
+    public static function easeOut(): self        { return new self(0.00, 0.00, 0.58, 1.00); }
+    public static function easeInOut(): self      { return new self(0.42, 0.00, 0.58, 1.00); }
+    public static function linear(): self         { return new self(0.00, 0.00, 1.00, 1.00); }
 
     public static function easeInSine(): self     { return new self(0.47, 0.00, 0.75, 0.72); }
-    public static function easeOutSine(): self      { return new self(0.39, 0.58, 0.57, 1.00); }
-    public static function easeInOutSine(): self    { return new self(0.37, 0.00, 0.63, 1.00); }
+    public static function easeOutSine(): self    { return new self(0.39, 0.58, 0.57, 1.00); }
+    public static function easeInOutSine(): self  { return new self(0.45, 0.05, 0.55, 0.95); }
 
-    public static function easeInQuad(): self       { return new self(0.55, 0.09, 0.68, 0.53); }
-    public static function easeOutQuad(): self      { return new self(0.25, 0.46, 0.45, 0.94); }
-    public static function easeInOutQuad(): self     { return new self(0.46, 0.03, 0.52, 0.64); }
+    public static function easeInQuad(): self     { return new self(0.55, 0.09, 0.68, 0.53); }
+    public static function easeOutQuad(): self    { return new self(0.25, 0.46, 0.45, 0.94); }
+    public static function easeInOutQuad(): self  { return new self(0.46, 0.03, 0.52, 0.96); }
 
-    public static function easeInCubic(): self      { return new self(0.55, 0.06, 0.68, 0.19); }
-    public static function easeOutCubic(): self     { return new self(0.22, 0.61, 0.36, 1.00); }
-    public static function easeInOutCubic(): self   { return new self(0.65, 0.05, 0.35, 1.00); }
+    public static function easeInCubic(): self    { return new self(0.55, 0.06, 0.68, 0.19); }
+    public static function easeOutCubic(): self   { return new self(0.22, 0.61, 0.36, 1.00); }
+    public static function easeInOutCubic(): self { return new self(0.65, 0.05, 0.35, 1.00); }
 
-    public static function easeInQuart(): self      { return new self(0.70, 0.00, 0.84, 0.00); }
-    public static function easeOutQuart(): self     { return new self(0.17, 0.89, 0.32, 1.00); }
-    public static function easeInOutQuart(): self    { return new self(0.76, 0.00, 0.24, 1.00); }
+    public static function easeInQuart(): self    { return new self(0.90, 0.03, 0.69, 0.22); }
+    public static function easeOutQuart(): self   { return new self(0.17, 0.84, 0.44, 1.00); }
+    public static function easeInOutQuart(): self { return new self(0.77, 0.00, 0.18, 1.00); }
 
-    public static function easeInQuint(): self      { return new self(0.86, 0.00, 0.07, 0.00); }
-    public static function easeOutQuint(): self     { return new self(0.23, 1.00, 0.32, 1.00); }
+    public static function easeInQuint(): self    { return new self(0.76, 0.05, 0.86, 0.06); }
+    public static function easeOutQuint(): self   { return new self(0.23, 1.00, 0.32, 1.00); }
 
     /**
      * Pre-2022 easings.net approximation: cubic-bezier(0.86, 0, 0.07, 1).
@@ -120,27 +121,27 @@ final readonly class CubicBezier
      * preset family consistently ships the original table, see the class
      * docblock.)
      */
-    public static function easeInOutQuint(): self    { return new self(0.86, 0.00, 0.07, 1.00); }
+    public static function easeInOutQuint(): self { return new self(0.86, 0.00, 0.07, 1.00); }
 
-    public static function easeInExpo(): self        { return new self(0.95, 0.05, 0.80, 0.00); }
-    public static function easeOutExpo(): self       { return new self(0.19, 1.00, 0.22, 1.00); }
-    public static function easeInOutExpo(): self     { return new self(1.00, 0.00, 0.00, 1.00); }
+    public static function easeInExpo(): self     { return new self(0.95, 0.05, 0.80, 0.00); }
+    public static function easeOutExpo(): self    { return new self(0.19, 1.00, 0.22, 1.00); }
+    public static function easeInOutExpo(): self  { return new self(1.00, 0.00, 0.00, 1.00); }
 
-    public static function easeInCirc(): self        { return new self(0.60, 0.04, 0.98, 0.34); }
-    public static function easeOutCirc(): self      { return new self(0.16, 1.00, 0.30, 1.00); }
+    public static function easeInCirc(): self     { return new self(0.60, 0.04, 0.98, 0.34); }
+    public static function easeOutCirc(): self    { return new self(0.08, 0.82, 0.17, 1.00); }
 
     /**
      * Pre-2022 easings.net approximation: cubic-bezier(0.785, 0.135, 0.15, 0.86).
      *
      * Repair: this row once shipped byte-identical to {@see easeInOutQuint()}
-     * (0.86, 0, 0.07, 1) — a copy-paste error; the Quint row is the genuine
-     * table value, the Circ row was the corrupted one. Restored from the
-     * original easings.net approximation table (mirrored at
+     * (0.86, 0, 0.07, 1) — a copy-paste error; the InOutQuint row cited there
+     * is the genuine table value, the Circ row was the corrupted one.
+     * Restored from the original easings.net approximation table (mirrored at
      * https://30secondsofcode.org/css/s/easing-variables/ and
-     * https://github.com/NG-ZORRO/ng-zorro-antd default.less), of which every
-     * neighbouring preset here is a member.
+     * https://github.com/NG-ZORRO/ng-zorro-antd default.less), rounded to the
+     * 2-dp convention stated in the class docblock.
      */
-    public static function easeInOutCirc(): self      { return new self(0.785, 0.135, 0.150, 0.860); }
+    public static function easeInOutCirc(): self  { return new self(0.785, 0.135, 0.150, 0.860); }
 
     // ─── Evaluation ───────────────────────────────────────────────────────
 
@@ -233,8 +234,8 @@ final readonly class CubicBezier
         return ($lower + $upper) / 2.0;
     }
 
-    // Bézier polynomial: (1-3B+3C-D)t³ + (3B-6C+3D)t² + (-3B+3C)t + D
-    // with B=x1, C=x2, D=0 → simplifies to (3x1-3x2)t³ + (-6x1+3x2)t² + (3x1)t
+    // Bézier polynomial with endpoints P0=0, P3=1 and B=x1, C=x2:
+    // x(t) = (1+3B-3C)t³ + (3C-6B)t² + 3Bt  (the ax/bx/cx below are its terms)
 
     private function sampleCurveX(float $t): float
     {
