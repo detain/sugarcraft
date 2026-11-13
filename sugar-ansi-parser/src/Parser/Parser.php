@@ -148,6 +148,16 @@ final class Parser
     private readonly ?SubparamsAwareHandler $subparamsSink;
 
     /**
+     * The handler viewed through the optional {@see BulkPrintHandler}
+     * capability, resolved once here for the same reason as
+     * {@see $subparamsSink}: when present, the Ground printable sweep hands
+     * over each contiguous run in one `printRun()` call instead of one
+     * `printChar()` per byte. Null keeps the classic per-char contract —
+     * byte-for-byte what every pre-capability consumer already sees.
+     */
+    private readonly ?BulkPrintHandler $bulkSink;
+
+    /**
      * @param int $maxStringBuffer Cap (in bytes) on the DCS/OSC/SOS/PM/APC
      *                             payload accumulator. Defaults to 64 KiB;
      *                             emulator front-ends (e.g. sugar-vterm) may raise
@@ -182,6 +192,7 @@ final class Parser
             );
         }
         $this->subparamsSink = $handler instanceof SubparamsAwareHandler ? $handler : null;
+        $this->bulkSink = $handler instanceof BulkPrintHandler ? $handler : null;
     }
 
     /**
@@ -210,6 +221,19 @@ final class Parser
                 // the normal state machine, preserving every boundary behaviour.
                 if ($b >= 0x20 && $b <= 0x7E) {
                     $this->fastPathRuns++;
+                    if ($this->bulkSink !== null) {
+                        // Bulk dispatch (finding sugar-ansi-parser-002): one
+                        // printRun() for the whole run. It still counts as
+                        // one fast-path run — the diagnostic counts runs, not
+                        // bytes, and its meaning is unchanged for bulk and
+                        // classic consumers alike.
+                        $runStart = $i;
+                        do {
+                            $i++;
+                        } while ($i < $len && ($b = ord($bytes[$i])) >= 0x20 && $b <= 0x7E);
+                        $this->bulkSink->printRun(substr($bytes, $runStart, $i - $runStart));
+                        continue;
+                    }
                     do {
                         $this->handler->printChar($bytes[$i]);
                         $i++;

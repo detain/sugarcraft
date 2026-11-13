@@ -23,6 +23,8 @@ final class HandlerAdapterPrintCharTest extends TestCase
     private DebugHandler $osc;
     private HandlerAdapter $adapter;
     private Parser $parser;
+    private CsiHandler $csiImpl;
+    private OscHandler $oscImpl;
 
     protected function setUp(): void
     {
@@ -62,13 +64,48 @@ final class HandlerAdapterPrintCharTest extends TestCase
             public function gridRows(): int { return 24; }
             public function gridCols(): int { return 80; }
         };
+        $this->csiImpl = $csiImpl;
         $oscImpl = new class ($this->osc) implements OscHandler {
             public function __construct(private DebugHandler $log) {}
             public function title(string $title): void { $this->log->oscDispatch("2;$title"); }
             public function hyperlink(string $uri, string $id): void { $this->log->oscDispatch("8;id=$id;$uri"); }
         };
+        $this->oscImpl = $oscImpl;
         $this->adapter = new HandlerAdapter($csiImpl, $oscImpl);
         $this->parser = new Parser($this->adapter);
+    }
+
+    public function testAdapterPrintRunMatchesPerCharPrintCharLeg(): void
+    {
+        // sap-03: the parser now dispatches Ground printable runs through the
+        // adapter's printRun() (the adapter is bulk-capable). A second,
+        // independent stack fed through a hand-rolled classic-Handler wrapper
+        // around the SAME adapter implementation must produce a byte-for-byte
+        // identical CsiHandler/OscHandler-side log: proof that the run-loop
+        // in HandlerAdapter::printRun() is equivalent to per-char printChar().
+        $csiB = new DebugHandler();
+        $oscB = new DebugHandler();
+        $csiClass = get_class($this->csiImpl);
+        $oscClass = get_class($this->oscImpl);
+        $adapterB = new HandlerAdapter(new $csiClass($csiB), new $oscClass($oscB));
+        $classicWrapper = new class ($adapterB) implements Handler {
+            public function __construct(private Handler $inner) {}
+            public function printChar(string $rune): void { $this->inner->printChar($rune); }
+            public function execute(int $byte): void { $this->inner->execute($byte); }
+            public function escDispatch(int $final, int $intermediate): void { $this->inner->escDispatch($final, $intermediate); }
+            public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void { $this->inner->csiDispatch($final, $params, $prefix, $intermediate); }
+            public function oscDispatch(string $data): void { $this->inner->oscDispatch($data); }
+            public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void { $this->inner->dcsDispatch($final, $params, $prefix, $intermediate, $data); }
+            public function sosPmApcDispatch(string $kind, string $data): void { $this->inner->sosPmApcDispatch($kind, $data); }
+        };
+
+        $stream = "mixed \x1b[31mred\xc3\xa9 text\x07more!";
+        (new Parser($this->adapter))->parseComplete($stream);    // bulk route (printRun)
+        (new Parser($classicWrapper))->parseComplete($stream);  // classic route (printChar per byte)
+
+        $this->assertSame($this->csi->log, $csiB->log, 'printable() legs must match byte for byte');
+        $this->assertSame($this->osc->log, $oscB->log, 'OSC legs must match byte for byte');
+        $this->assertNotEmpty($this->csi->filter('print'), 'the stream must actually carry prints');
     }
 
     public function testPrintableAsciiForwardedToPrintable(): void

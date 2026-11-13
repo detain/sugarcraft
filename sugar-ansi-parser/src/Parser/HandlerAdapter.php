@@ -8,6 +8,10 @@ namespace SugarCraft\AnsiParser\Parser;
  * Adapter bridging the Parser's {@see Handler} interface to
  * {@see CsiHandler} + {@see OscHandler}.
  *
+ * Implements the {@see BulkPrintHandler} capability: the adapter's own
+ * printRun() loops its per-char leg, so parser-level run collapsing never
+ * changes what the CsiHandler side observes (one printable() per rune).
+ *
  * Translates parse events into handler method calls. The adapter is a
  * DELIBERATE SIEVE: `CsiHandler` covers the renderer's working CSI set and
  * the OSC subset for titles/hyperlinks, so ESC sequences, DCS, SOS/PM/APC
@@ -24,7 +28,7 @@ namespace SugarCraft\AnsiParser\Parser;
  *
  * Mirrors charmbracelet/x/ansi.HandlerAdapter
  */
-final class HandlerAdapter implements Handler
+final class HandlerAdapter implements BulkPrintHandler
 {
     public function __construct(
         private readonly CsiHandler $csi,
@@ -42,6 +46,20 @@ final class HandlerAdapter implements Handler
         // execute or introduce sequences upstream (Parser's UTF-8 policy).
         if ($rune !== '' && ord($rune[0]) >= 0x20) {
             $this->csi->printable($rune);
+        }
+    }
+
+    public function printRun(string $run): void
+    {
+        // The {@see BulkPrintHandler} leg: byte-identical to per-char
+        // printChar() over the same run, because the parser only ever
+        // collects 0x20-0x7E bytes into a run and printChar()'s sieve guard
+        // is vacuously true for those. A substr loop rather than str_split:
+        // zero per-run array allocation, and the rune-per-call contract
+        // toward the CsiHandler side is unchanged (one printable() per byte).
+        $length = strlen($run);
+        for ($k = 0; $k < $length; $k++) {
+            $this->csi->printable($run[$k]);
         }
     }
 
