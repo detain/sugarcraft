@@ -6,6 +6,9 @@ namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Runtime\IntakeTimedOut;
+use SugarCraft\ScriptUi\Runtime\IntakeReader;
 use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\Style\Align;
 use SugarCraft\Style\Border;
@@ -54,11 +57,18 @@ final class TableCommand extends Command
             ->addOption('print',      'p',  InputOption::VALUE_NONE, 'Alias for the default print-and-exit behaviour (gum-compat).')
             ->addOption('raw',        null, InputOption::VALUE_NONE, 'Emit data bytes verbatim, skipping the control-byte display policy (trusted pipelines only).')
             ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (gum-compat).')
-            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Seconds to wait before auto-exiting (no-op for table — gum-compat).', 0);
+            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Abort with exit 124 if piped input has not finished arriving after N seconds (0 = none).', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // Refuse a typo'd deadline BEFORE consuming stdin — and never
+            // let it silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
         try {
             $height = PositiveInt::parse('height', $input->getOption('height'));
         } catch (\InvalidArgumentException $e) {
@@ -75,7 +85,11 @@ final class TableCommand extends Command
                 return Command::FAILURE;
             }
         } else {
-            $raw = self::readStdin();
+            try {
+                $raw = self::readStdin($timeoutSeconds);
+            } catch (IntakeTimedOut) {
+                return TimeoutGuard::EXIT_TIMEOUT;
+            }
         }
         if ($raw === '') {
             // Opposite polarity to `filter`, same cause: an empty table
@@ -323,11 +337,11 @@ final class TableCommand extends Command
         };
     }
 
-    private static function readStdin(): string
+    private static function readStdin(float $timeoutSeconds = 0.0): string
     {
         if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
             return '';
         }
-        return (string) stream_get_contents(STDIN);
+        return IntakeReader::read(STDIN, $timeoutSeconds);
     }
 }

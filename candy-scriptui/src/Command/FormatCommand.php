@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\IntakeTimedOut;
+use SugarCraft\ScriptUi\Runtime\IntakeReader;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Style\StyleBuilder;
 use SugarCraft\Markdown\Renderer;
@@ -47,7 +49,7 @@ final class FormatCommand extends Command
             ->addOption('allow-env', null, InputOption::VALUE_REQUIRED, 'Comma-separated allowlist of env var names permitted for {{VAR}} expansion in --type template. Empty = expand none; "*" = expand all (opt-in, unsafe with untrusted input).', '')
             ->addOption('strip-ansi', null, InputOption::VALUE_NONE, 'Strip ANSI escapes from the rendered output.')
             ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (candy extension).')
-            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Accepted for flag parity; a non-zero value is refused loudly because format is non-interactive.', 0);
+            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Abort with exit 124 if piped input has not finished arriving after N seconds (0 = none).', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -94,22 +96,12 @@ final class FormatCommand extends Command
             ]) . "\n");
             return Command::FAILURE;
         }
-        // `format` is a pure pipe command: --timeout is structurally inert
-        // here, so a caller asking for a deadline is told so loudly instead
-        // of being silently ignored. The probe runs through the SAME strict
-        // parser as every sibling (-76): a malformed value is refused like
-        // it is everywhere else, never laundered into 0.0 by a (float) cast.
-        $timeoutRaw = $input->getOption('timeout');
         $timeoutSeconds = 0.0;
-        if ($timeoutRaw !== null && $timeoutRaw !== '') {
-            if (!TimeoutGuard::tryParseSeconds($timeoutRaw, $timeoutSeconds)) {
-                fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $timeoutRaw]) . "\n");
-                return Command::FAILURE;
-            }
-            if ($timeoutSeconds > 0.0) {
-                fwrite(STDERR, "candy-scriptui: --timeout has no effect on 'format' (non-interactive).\n");
-                return Command::FAILURE;
-            }
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // Refuse a typo'd deadline BEFORE consuming stdin — and never
+            // let it silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
         }
 
         $file = $input->getArgument('file');
@@ -124,7 +116,11 @@ final class FormatCommand extends Command
             // Anything that is not an existing file renders as content.
             $raw = $file;
         } else {
-            $raw = self::readStdin();
+            try {
+                $raw = self::readStdin($timeoutSeconds);
+            } catch (IntakeTimedOut) {
+                return TimeoutGuard::EXIT_TIMEOUT;
+            }
         }
 
         $allowEnv = array_values(array_filter(
@@ -299,11 +295,11 @@ final class FormatCommand extends Command
         );
     }
 
-    private static function readStdin(): string
+    private static function readStdin(float $timeoutSeconds = 0.0): string
     {
         if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
             return '';
         }
-        return (string) stream_get_contents(STDIN);
+        return IntakeReader::read(STDIN, $timeoutSeconds);
     }
 }

@@ -47,18 +47,19 @@ final class FormatCommandTest extends TestCase
         self::assertSame('', trim($out->fetch()));
     }
 
-    public function testPositiveTimeoutStillRefusesAsInert(): void
+    public function testPositiveTimeoutIsLiveNotRefused(): void
     {
-        // The pre-existing "no effect" leg keeps its verdict — and now a
-        // real duration spelling ('5s', -27 grammar) reaches it too.
+        // scriptui-32: a deadline bounds the wait for piped input instead of
+        // being refused as inert; text given as an argument never waits, so
+        // the run succeeds well inside it ('5s' is the -27 duration grammar).
         $app = new \SugarCraft\ScriptUi\Application();
         $app->setAutoExit(false);
         $out = new \Symfony\Component\Console\Output\BufferedOutput();
 
-        $status = $app->run(new \Symfony\Component\Console\Input\StringInput('format --timeout 5s'), $out);
+        $status = $app->run(new \Symfony\Component\Console\Input\StringInput('format --type emoji --timeout 5s ":tada:"'), $out);
 
-        self::assertSame(1, $status);
-        self::assertSame('', trim($out->fetch()));
+        self::assertSame(0, $status);
+        self::assertStringContainsString('🎉', $out->fetch());
     }
 
     public function testPickThemeAcceptsExtendedNames(): void

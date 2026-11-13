@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Runtime\IntakeTimedOut;
+use SugarCraft\ScriptUi\Runtime\IntakeReader;
 use SugarCraft\ScriptUi\Log\LogLevel;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -39,7 +42,7 @@ final class LogCommand extends Command
             ->addOption('formatter', null,  InputOption::VALUE_REQUIRED, 'Output formatter: text (default) | json | logfmt.', 'text')
             ->addOption('structured', 's',  InputOption::VALUE_NONE,    'Alias for --formatter logfmt.')
             ->addOption('show-help',  null, InputOption::VALUE_NONE,    'Alias for --help (candy extension).')
-            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive log).', 0);
+            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Abort with exit 124 if piped input has not finished arriving after N seconds (0 = none).', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -62,7 +65,16 @@ final class LogCommand extends Command
             return Command::SUCCESS;
         }
         $message = $input->getArgument('message') ?: [];
-        $text    = $message === [] ? self::readStdin() : implode(' ', $message);
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+        try {
+            $text = $message === [] ? self::readStdin($timeoutSeconds) : implode(' ', $message);
+        } catch (IntakeTimedOut) {
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
 
         $fmt = (string) $input->getOption('format');
         if ($fmt !== '') {
@@ -226,11 +238,11 @@ final class LogCommand extends Command
         return implode(' ', $out);
     }
 
-    private static function readStdin(): string
+    private static function readStdin(float $timeoutSeconds = 0.0): string
     {
         if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
             return '';
         }
-        return rtrim((string) stream_get_contents(STDIN), "\n");
+        return rtrim(IntakeReader::read(STDIN, $timeoutSeconds), "\n");
     }
 }

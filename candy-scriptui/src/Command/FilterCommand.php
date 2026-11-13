@@ -6,6 +6,8 @@ namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\IntakeTimedOut;
+use SugarCraft\ScriptUi\Runtime\IntakeReader;
 use SugarCraft\ScriptUi\Model\FilterModel;
 use SugarCraft\ScriptUi\Runtime\OptionList;
 use SugarCraft\ScriptUi\Runtime\ItemSource;
@@ -86,7 +88,12 @@ final class FilterCommand extends Command
         $positionalOptions = (array) $input->getArgument('options');
         /** @var list<string> $itemFlags */
         $itemFlags = (array) $input->getOption('item');
-        $lines = ItemSource::collect($positionalOptions, $itemFlags, self::stdinLines(...));
+        try {
+            $lines = ItemSource::collect($positionalOptions, $itemFlags, static fn (): array => self::stdinLines($timeoutSeconds));
+        } catch (IntakeTimedOut) {
+            // scriptui-32: a stalled pipe is bounded by the same deadline.
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
         if ($lines === []) {
             // Silence on empty stdin read as a crash to shell scripts;
             // the FAILURE polarity stays (gum parity), the reason is said.
@@ -223,12 +230,12 @@ final class FilterCommand extends Command
     }
 
     /** @return list<string> */
-    private static function stdinLines(): array
+    private static function stdinLines(float $timeoutSeconds = 0.0): array
     {
         if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
             return [];
         }
-        $raw = stream_get_contents(STDIN) ?: '';
+        $raw = IntakeReader::read(STDIN, $timeoutSeconds);
         // Split on any newline shape (\R): a CRLF stream (Windows console pipes)
         // otherwise carries a stray "\r" into every line and corrupts the raw
         // output channel. rtrim covers both trailer shapes.

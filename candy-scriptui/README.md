@@ -253,9 +253,8 @@ reasons, in `CommandScanner::skipped()`.
 ## Flag reference (selected highlights)
 
 Some `gum` flags exist here under different spellings and a few niche knobs
-were dropped rather than shipped as silent no-ops. Of the flags `--help`
-lists, the only no-op is `--timeout` on `join`, `log`, `style`, and `table`
-(see Compatibility below); every other listed flag is live. The shipped
+were dropped rather than shipped as silent no-ops: every flag `--help`
+lists is live (see Compatibility below). The shipped
 surface covers the 80 % case for shell scripts. Selected flags, by
 command:
 
@@ -650,10 +649,14 @@ behavioural differences:
   announced on STDERR instead of vanishing silently.
 - `--timeout` arms a real deadline (exit `124`) on every interactive
   command including `file` (on `file` it is capped at 86400 seconds — one
-  day). On the four non-interactive commands that still list it
-  (`join`, `log`, `style`, `table`) it is an accepted no-op: they run no
-  interaction to bound. On `format` it is **refused** loudly instead (exit `1`
-  on STDERR), since a deadline there would be silently ignored.
+  day). It also bounds the wait for **piped input**: `filter`, `pager`,
+  `table`, `join`, `log`, `style` and `format` read stdin under the same
+  deadline, so `sleep 999 | candy-scriptui filter --timeout 5` exits `124`
+  after 5 seconds instead of hanging before any prompt exists. The prompt's
+  own deadline still counts from prompt open (gum's semantics); the two
+  bounds are independent, so a slow producer followed by a slow human can
+  take up to twice the value. On the render-only commands the render itself
+  is instant, so there is nothing else to bound.
 - `--show-help` is honoured as an alias for `--help` on every command that
   defines it.
 - `--strip-ansi` is a live flag on `input`, `format`, and `style` (it
@@ -665,9 +668,8 @@ behavioural differences:
   DECSCUSR cursor style — blinking vs steady block — and the style is
   restored to the terminal's default on exit) and refuses any other value.
 - The rule behind all of this: every flag a command's `--help` lists is
-  live — with one named exception, `--timeout` on `join`, `log`, `style`,
-  and `table`, which is listed for gum flag-parity and documented above
-  as a no-op. Flags a command never defines are never silently accepted.
+  live, with no exceptions. Flags a command never defines are never
+  silently accepted.
 - `confirm --default=yes|no` is the form to use; the older `--default-yes`
   alias is preserved.
 

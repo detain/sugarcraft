@@ -6,6 +6,8 @@ namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\IntakeTimedOut;
+use SugarCraft\ScriptUi\Runtime\IntakeReader;
 use SugarCraft\ScriptUi\Model\PagerModel;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\StyledFrame;
@@ -77,7 +79,11 @@ final class PagerCommand extends Command
                 return Command::FAILURE;
             }
         } else {
-            $raw = self::readStdin();
+            try {
+                $raw = self::readStdin($timeoutSeconds);
+            } catch (IntakeTimedOut) {
+                return TimeoutGuard::EXIT_TIMEOUT;
+            }
         }
 
         // --soft-wrap pre-wraps lines at the pager width before
@@ -170,11 +176,11 @@ final class PagerCommand extends Command
         return \SugarCraft\Core\Util\Width::wrapAnsi($raw, max(1, $width));
     }
 
-    private static function readStdin(): string
+    private static function readStdin(float $timeoutSeconds = 0.0): string
     {
         if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
             return '';
         }
-        return (string) stream_get_contents(STDIN);
+        return IntakeReader::read(STDIN, $timeoutSeconds);
     }
 }

@@ -7,6 +7,9 @@ namespace SugarCraft\ScriptUi\Command;
 use SugarCraft\ScriptUi\Style\StyleBuilder;
 use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Runtime\IntakeTimedOut;
+use SugarCraft\ScriptUi\Runtime\IntakeReader;
 use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -49,13 +52,22 @@ final class StyleCommand extends Command
             ->addOption('strip-ansi',         null, InputOption::VALUE_NONE,     'Strip ANSI escapes from input before styling.')
             ->addOption('raw',                null, InputOption::VALUE_NONE,     'Emit data bytes verbatim, skipping the control-byte display policy (trusted pipelines only).')
             ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
-            ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive style).', 0);
+            ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Abort with exit 124 if piped input has not finished arriving after N seconds (0 = none).', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $argv = $input->getArgument('text') ?: [];
-        $text = $argv === [] ? self::readStdin() : implode(' ', $argv);
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+        try {
+            $text = $argv === [] ? self::readStdin($timeoutSeconds) : implode(' ', $argv);
+        } catch (IntakeTimedOut) {
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
 
         // scriptui-24 (finding 019): styled text is the rendered data channel
         // — third-party bytes get the house untrusted-display policy (same
@@ -126,21 +138,13 @@ final class StyleCommand extends Command
         return Command::SUCCESS;
     }
 
-    private static function readStdin(): string
+    private static function readStdin(float $timeoutSeconds = 0.0): string
     {
         // From a real terminal with no piped data this would block forever;
         // an empty stdin is the honest answer (same guard as pager/log/table).
         if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
             return '';
         }
-        $data = '';
-        while (!feof(STDIN)) {
-            $chunk = fread(STDIN, 4096);
-            if ($chunk === false) {
-                break;
-            }
-            $data .= $chunk;
-        }
-        return rtrim($data, "\n");
+        return rtrim(IntakeReader::read(STDIN, $timeoutSeconds), "\n");
     }
 }

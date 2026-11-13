@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\IntakeReader;
+use SugarCraft\ScriptUi\Runtime\IntakeTimedOut;
+use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -37,12 +41,21 @@ final class JoinCommand extends Command
                 'top'
             )
             ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (candy extension).')
-            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive join).', 0);
+            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Abort with exit 124 if piped input has not finished arriving after N seconds (0 = none).', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $parts = $input->getArgument('parts') ?: self::stdinLines();
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+        try {
+            $parts = $input->getArgument('parts') ?: self::stdinLines($timeoutSeconds);
+        } catch (IntakeTimedOut) {
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
         if ($parts === []) {
             return Command::SUCCESS;
         }
@@ -186,10 +199,10 @@ final class JoinCommand extends Command
     }
 
     /** @return list<string> */
-    private static function stdinLines(): array
+    private static function stdinLines(float $timeoutSeconds = 0.0): array
     {
         if (defined('STDIN') && is_resource(STDIN) && !@stream_isatty(STDIN)) {
-            $raw = stream_get_contents(STDIN) ?: '';
+            $raw = IntakeReader::read(STDIN, $timeoutSeconds);
             $raw = rtrim($raw, "\n");
             return $raw === '' ? [] : explode("\n", $raw);
         }
