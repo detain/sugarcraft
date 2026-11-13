@@ -375,6 +375,31 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('red', $stdout);
     }
 
+    public function testSecondNamedSourceRefusesInsteadOfInspectingOnlyTheFirst(): void
+    {
+        // Finding 021 / contract "exactly one source": two operands used to
+        // silently ignore the second — a half-done report. Now: usage on
+        // stderr, exit 1. Flags around a single operand stay legal.
+        $dir = sys_get_temp_dir() . '/aip41-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0o777, true);
+        file_put_contents($dir . '/a.txt', "\x1b[31ma\x1b[0m");
+        file_put_contents($dir . '/b.txt', "\x1b[32mb\x1b[0m");
+
+        [$code, $stdout, $stderr] = self::runCliWithStdin('', [$dir . '/a.txt', $dir . '/b.txt']);
+        $this->assertSame(1, $code, $stderr);
+        $this->assertStringContainsString('candy-ansi-inspect', $stderr);
+        $this->assertSame('', $stdout);
+
+        // Polarity: one source plus a trailing flag still reports.
+        [$code, $out] = self::runCliWithStdin('', [$dir . '/a.txt', '--json']);
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('SGR foreground red', $out);
+
+        unlink($dir . '/a.txt');
+        unlink($dir . '/b.txt');
+        rmdir($dir);
+    }
+
     public function testMissingAutoloadRefusesByNameInsteadOfFatalling(): void
     {
         // Finding 042's acceptance: a standalone copy of the bin with no

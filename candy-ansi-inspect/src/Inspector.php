@@ -387,9 +387,11 @@ final class Inspector
             $code === 3  => 'italic',
             $code === 4  => 'underline',
             $code === 5  => 'blink',
+            $code === 6  => 'proportional',
             $code === 7  => 'reverse',
             $code === 8  => 'conceal',
             $code === 9  => 'strikethrough',
+            $code === 21 => 'accented off',
             $code === 22 => 'no bold/faint',
             $code === 23 => 'no italic',
             $code === 24 => 'no underline',
@@ -420,7 +422,10 @@ final class Inspector
                          => 'foreground bright ' . self::ansiName($code - 90),
             $code >= 100 && $code <= 107
                          => 'background bright ' . self::ansiName($code - 100),
-            default      => "SGR $code",
+            // An unmapped code must not read back as "SGR SGR 99" — the
+            // caller already prefixes 'SGR ', so the fallback names the
+            // number without repeating the acronym (finding 044).
+            default      => "code $code",
         };
     }
 

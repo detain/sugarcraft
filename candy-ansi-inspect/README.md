@@ -106,11 +106,15 @@ scripters:
 | `--version` (archive stamp, or `dev-master` in source) | version line | stdout | **0**               |
 | Exec mode (`-- cmd [args…]`)                         | report   | stdout | the child's exit status |
 | No source named: no operand *and* stdin is a terminal | usage   | stderr | **1**                   |
+| More than one source named (contract: exactly one)   | usage    | stderr | **1**                   |
 | Operand is not a readable regular file               | refusal  | stderr | **1**                   |
 
 "`-h`/`--help` prints on stdout" is checked before any path is considered, so
 the flag can never be swallowed by the file gate. Only a terminal stdin counts
-as "no source" — a pipe is always a source, empty or not. The file gate asks
+as "no source" — a pipe is always a source, empty or not. Exactly one source is
+the contract: naming two files is refused with usage rather than reporting the
+first and silently dropping the rest (flags may appear on either side of the
+one operand). The file gate asks
 "is this a readable regular file", not "can we fake an empty report": bad paths
 exit **1** with the refusal on stderr, never a PHP warning followed by a
 misleading zero. The refusal
@@ -199,7 +203,10 @@ ESC[31  truncated CSI (unterminated)
   truecolor, 58/59) +
   bold / italic / underline (all `4:N` styles) / blink / reverse / conceal /
   strikethrough / faint / framed / encircled / overlined / super- and
-  subscript, plus the matching off codes.
+  subscript, plus the matching off codes. Label vocabulary is spelled one
+  way throughout: prose labels take British `colour`, while `256-color` and
+  `truecolor` stay in their X11/xterm term-of-art spelling (they are the
+  names of the modes, not prose).
 - **CSI** — cursor moves, erase, scroll region (DECSTBM), scroll up/down,
   insert/delete line/char, tab forward/backward, HVP/VPR/HPR absolute
   position, ECH, window manipulation (XTWINOPS), DECSCUSR cursor shape,

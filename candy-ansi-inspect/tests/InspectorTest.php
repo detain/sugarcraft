@@ -568,6 +568,19 @@ final class InspectorTest extends TestCase
         );
     }
 
+    public function testSgrSixAndTwentyOneAreNamedAndUnknownCodesNeverDoubleTheAcronym(): void
+    {
+        // Finding 044: the sgrName gaps made `ESC[6m` print "SGR SGR 6"
+        // (fallback carried its own "SGR " while the caller added another)
+        // and code 21 shared the silence. ECMA-48 names: 6 proportional,
+        // 21 doubly-underlined/accented off. An unmapped code now reads
+        // "SGR code N" — the number, never a doubled acronym.
+        $this->assertStringContainsString('SGR proportional', Inspector::describeCsi('6', 'm'));
+        $this->assertStringContainsString('SGR accented off', Inspector::describeCsi('21', 'm'));
+        $this->assertSame('SGR code 99', Inspector::describeCsi('99', 'm'));
+        $this->assertStringNotContainsString('SGR SGR', Inspector::describeCsi('6', 'm'));
+    }
+
     public function testDcsSixel(): void
     {
         $seg = Inspector::parse("\x1bPq...sixeldata...\x1b\\")[0];

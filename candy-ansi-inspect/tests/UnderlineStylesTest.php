@@ -87,14 +87,14 @@ final class UnderlineStylesTest extends TestCase
     /**
      * The semicolon form 4;NN is two separate SGR params, not a combined
      * underline style.  After removing the heuristic, 4;99 decodes as
-     * underline + SGR 99 (no special style label).
+     * underline + code 99 (no special style label).
      */
     public function testSemicolonFormUnderlineThenSgrCodeIsNotMisdecoded(): void
     {
         $desc = Inspector::describeCsi('4;99', 'm');
-        // Must be separate underline + SGR 99, NOT "underline style 99".
+        // Must be separate underline + code 99, NOT "underline style 99".
         $this->assertStringContainsString('underline', $desc);
-        $this->assertStringContainsString('SGR 99', $desc);
+        $this->assertStringContainsString('code 99', $desc);
         $this->assertStringNotContainsString('underline style', $desc);
     }
 

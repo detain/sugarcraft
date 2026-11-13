@@ -122,7 +122,14 @@ for ($i = 1; $i < $argc; $i++) {
     if (!$operandSeen) {
         $operand = $argv[$i];
         $operandSeen = true;
+        continue;
     }
+    // Exactly one source: a second positional is not quietly ignored — a
+    // tool that inspects only the first of two named files is a half-done
+    // report, the exact bug class 021 calls out. (Sequential multi-file
+    // reports were considered and deferred: single-source is the honest v1.)
+    fwrite(STDERR, Lang::t('cli.usage') . "\n");
+    exit(1);
 }
 
 // The stream differs by intent — asked-for usage rides stdout with exit 0,
