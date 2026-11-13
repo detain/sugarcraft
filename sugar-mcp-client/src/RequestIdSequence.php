@@ -7,7 +7,7 @@ namespace SugarCraft\McpClient;
 /**
  * JSON-RPC request ids that stay unique across pcntl_fork().
  *
- * WHY THIS EXISTS (the fork-corruption audit): an embedder like candy-code starts its
+ * WHY THIS EXISTS: an embedder like candy-code starts its
  * MCP servers once, in the long-lived parent, and then runs every turn — and
  * every parallel sub-agent — in a forked child. A plain `$nextId++` counter is
  * COPIED into each child, so every child sends the same next id. Two children
@@ -94,7 +94,7 @@ final class RequestIdSequence
                 return false;
             }
 
-            // Succession from a DEAD owner (review N9): the dead process's
+            // Succession from a DEAD owner: the dead process's
             // last plain ids may still have replies sitting in the shared
             // pipe (its call was SIGKILLed mid-flight). Resuming the plain
             // counter FAR ahead makes aliasing a stale reply impossible.

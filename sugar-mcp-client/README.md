@@ -277,7 +277,7 @@ means hardcoding the number on the caller side.
 | `tools/list` pages | 32 (`MAX_TOOL_PAGES`) | ~3,000 entries at a typical hundred per page, far past any real server; the repeated-cursor refusal catches a lying pager, this catches the fast-lying one before it eats the whole handshake budget |
 | Unattributable frames per exchange | 8 (`UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL`) | Bounds a deadline-less call against a server whose every frame is junk to us; one genuine reply ends the read and clears the count |
 | Blank frames per exchange | 1024 (`MAX_BLANK_FRAMES_BEFORE_REFUSAL`) | Newlines are the documented keep-alive shape; 1024 sits far above any honest heartbeat — one burst of frame-sized keep-alive passes, a permanent flood refuses |
-| Consecutive `stream_select` failures | 10,000 (`MAX_CONSECUTIVE_SELECT_FAILURES`) | A signal storm makes select fail thousands of times a second (product-measured); the ceiling keeps genuine EINTR retries from becoming a livelock |
+| Consecutive `stream_select` failures | 10,000 (`MAX_CONSECUTIVE_SELECT_FAILURES`) | A signal storm makes select fail thousands of times a second (measured in the product); the ceiling keeps genuine EINTR retries from becoming a livelock |
 | `notifications/cancelled` delivery grace | 2 s (`CANCEL_NOTICE_SECONDS`) | The post-timeout cancellation notice gets this budget, no more |
 | Default handshake deadline | 60 s (`DEFAULT_START_TIMEOUT_SECONDS`, public — `startTimeoutSeconds:` overrides it per server) | One monotonic deadline shared by all three `start()` legs, sized for cold `npx` fetches |
 | Poll slice with nothing pending | 1 s (`READ_POLL_SECONDS`) | The select timeout that paces the liveness probe and `onWait:` beats |

@@ -8,7 +8,7 @@ namespace SugarCraft\McpClient;
  * Restores the JSON object/array distinction a `tools/call` argument map lost
  * on its way into PHP, guided by the tool's own `inputSchema`.
  *
- * WHY THIS EXISTS (the nested-object wire audit). A model's tool-call arguments reach PHP via
+ * WHY THIS EXISTS. A model's tool-call arguments reach PHP via
  * `json_decode($raw, true)` in every provider parser, so `{"filter":{}}` and
  * `{"filter":[]}` both arrive as `['filter' => []]`, and `json_encode()` sends
  * that back out as `"filter":[]`. The official TypeScript/Python SDK servers
@@ -93,7 +93,7 @@ final class ArgumentShape
 
     /**
      * Patterns already attempted in this walk that PCRE rejected (a
-     * compile error or an execution overflow). Review m8/m9: a hostile
+     * compile error or an execution overflow). A hostile
      * pattern like `(a+)+$` measured ~25 ms PER KEY before any frame was
      * written; every pattern now gets ONE attempt per conform(), after
      * which its positions read as schema-untyped (NO-GUESS — empty values

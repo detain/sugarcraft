@@ -53,7 +53,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * bound nor fire it early), and ONE rather than per-read:
  * a server that streams notifications forever starves a per-read timeout —
  * every individual read arrives in time, so the budget never expires, and the
- * process hangs (product-measured, rc=124). One deadline checked at the top of
+ * process hangs (measured in the product: rc=124). One deadline checked at the top of
  * each leg bounds the exchange as a unit instead — and the thread is BY
  * REFERENCE across the handshake legs, so the handler-credit law holds for
  * the whole budget: wall clock spent answering the server mid-handshake is
@@ -80,7 +80,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * that signal 0 calls alive, so the probe reads its /proc state (see
  * serverIsRunning()).
  *
- * FORK SAFETY (the fork-corruption audit). An embedder may start a server in one process
+ * FORK SAFETY. An embedder may start a server in one process
  * and use the object from pcntl_fork()ed children — candy-code runs every turn
  * in a fork and parallel sub-agents in further forks. Every child inherits the
  * same pipes, so ONE server is shared by the whole process tree, and sharing
@@ -201,7 +201,7 @@ final class StdioMcpServer implements McpServer
     /**
      * Escape hatch for a stream_select() that keeps failing while the child
      * lives. Signal storms make select return false at thousands of calls per
-     * second (product-measured ~2800/s under a 300µs SIGUSR1 storm); without a
+     * second (measured in the product: ~2800/s under a 300µs SIGUSR1 storm); without a
      * ceiling the 1 ms sleep per pass becomes a livelock. 10000 keeps genuine
      * EINTR tolerance (the loop retries) while bounding worst-case spinning.
      */
@@ -1378,7 +1378,7 @@ final class StdioMcpServer implements McpServer
                 // JSON array; `arguments` is a JSON object in the schema and the SDK
                 // servers reject the array form ("expected record, received array").
                 // The same loss one level down (`{"filter":{}}` decoded assoc to
-                // `['filter' => []]`, the nested-object wire audit) is undone
+                // `['filter' => []]`) is undone
                 // against the tool's own inputSchema — see ArgumentShape.
                 'arguments' => $arguments === [] ? new \stdClass() : ArgumentShape::conform($arguments, $this->inputSchemaOf($name)),
             ])->toJson();
@@ -1410,7 +1410,7 @@ final class StdioMcpServer implements McpServer
             // honour.
             return ['error' => 'Tool call failed: ' . $frameRefusal->getMessage()];
         } catch (\Throwable $handlerFault) {
-            // The last rail (review M10): everything else the wait can throw
+            // The last rail: everything else the wait can throw
             // — a server-request handler's TypeError, its LogicException, a
             // malformed-answer InvalidArgumentException — belongs in an
             // error payload, not in the caller's tool loop: the McpServer
@@ -2286,7 +2286,7 @@ final class StdioMcpServer implements McpServer
             }
 
             if (!$this->writeLine($response->toJson(), $deadline)) {
-                // m3: under back-pressure or a dead stdin the server's
+                // Under back-pressure or a dead stdin the server's
                 // request goes silently unanswered. The awaited response
                 // may still arrive; if the wait then ends empty, this is
                 // the reason the payload names.

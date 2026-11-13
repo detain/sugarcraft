@@ -8,7 +8,7 @@ namespace SugarCraft\McpClient;
  * Cross-process mutual exclusion for one stdio connection, plus the state that
  * must outlive whichever process held it last.
  *
- * WHY (the fork-corruption audit): after pcntl_fork() every child holds a
+ * WHY: after pcntl_fork() every child holds a
  * copy of the same
  * stdin/stdout pipes. Two children exchanging at once interleave their request
  * lines and race to read one stdout — each takes whatever line arrives first.
