@@ -42,7 +42,7 @@ final class DockLayoutTest extends TestCase
     {
         $layout = DockLayout::new();
 
-        $this->assertSame('chat', $layout->centerPaneId);
+        $this->assertSame('center', $layout->centerPaneId);
         $this->assertSame([], $layout->slots(Side::Left));
         $this->assertSame([], $layout->slots(Side::Right));
         $this->assertSame(['num' => 1, 'denom' => 3], $layout->columnShare(Side::Left));
@@ -55,6 +55,43 @@ final class DockLayoutTest extends TestCase
     public function testNewAcceptsACustomCenterPaneId(): void
     {
         $this->assertSame('main', DockLayout::new('main')->centerPaneId);
+    }
+
+    public function testConstructorRefusesAnyDividerWidthButOne(): void
+    {
+        // The persisted shape has exactly one divider column (fromArray forces
+        // it, no mutator ships); the ctor guard used to allow 0 and 2 through
+        // the private surface, where they could only ever arrive and then lie
+        // about the shape. Both polarities pinned via the scope-bound
+        // construction idiom this file already uses for ctor invariants.
+        foreach ([0, 2, -1] as $width) {
+            $build = \Closure::bind(
+                static fn(): DockLayout => new DockLayout(
+                    centerPaneId: 'center',
+                    leftSlots: [],
+                    rightSlots: [],
+                    leftShareNum: 1,
+                    leftShareDenom: 3,
+                    rightShareNum: 1,
+                    rightShareDenom: 3,
+                    centerMinCols: 24,
+                    sideMinCols: 20,
+                    dividerCols: $width,
+                ),
+                null,
+                DockLayout::class,
+            );
+
+            try {
+                $build();
+                $this->fail("dividerCols={$width} must be refused until a mutator ships");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertSame(
+                    "DockLayout dividerCols is fixed at 1 until a mutator ships; got {$width}",
+                    $e->getMessage()
+                );
+            }
+        }
     }
 
     public function testEmptyCenterPaneIdIsRejected(): void
@@ -466,7 +503,7 @@ final class DockLayoutTest extends TestCase
         $geometry = $layout->resolve(Region::fromSize(100, 30));
 
         $this->assertEquals(new Region(0, 0, 33, 30), $geometry->regionFor('files'));
-        $this->assertEquals(new Region(34, 0, 66, 30), $geometry->regionFor('chat'));
+        $this->assertEquals(new Region(34, 0, 66, 30), $geometry->regionFor('center'));
         $this->assertNull($geometry->regionFor('term'));
         $this->assertSame([['x' => 33, 'side' => Side::Left]], $geometry->dividerColumns());
     }
@@ -476,7 +513,7 @@ final class DockLayoutTest extends TestCase
         $layout = DockLayout::new()->withSlotAdded(Side::Right, 'term');
         $geometry = $layout->resolve(Region::fromSize(100, 30));
 
-        $this->assertEquals(new Region(0, 0, 66, 30), $geometry->regionFor('chat'));
+        $this->assertEquals(new Region(0, 0, 66, 30), $geometry->regionFor('center'));
         $this->assertEquals(new Region(67, 0, 33, 30), $geometry->regionFor('term'));
         $this->assertSame([['x' => 66, 'side' => Side::Right]], $geometry->dividerColumns());
     }
@@ -485,7 +522,7 @@ final class DockLayoutTest extends TestCase
     {
         $geometry = DockLayout::new()->resolve(Region::fromSize(80, 12));
 
-        $this->assertEquals(new Region(0, 0, 80, 12), $geometry->regionFor('chat'));
+        $this->assertEquals(new Region(0, 0, 80, 12), $geometry->regionFor('center'));
         $this->assertCount(1, $geometry->regions);
         $this->assertSame([], $geometry->dividerColumns());
     }
@@ -536,7 +573,7 @@ final class DockLayoutTest extends TestCase
         $geometry = $layout->resolve(Region::fromSize(100, 30));
 
         $this->assertEquals(new Region(0, 0, 0, 30), $geometry->regionFor('files'));
-        $this->assertEquals(new Region(1, 0, 99, 30), $geometry->regionFor('chat'));
+        $this->assertEquals(new Region(1, 0, 99, 30), $geometry->regionFor('center'));
         $this->assertSame([['x' => 0, 'side' => Side::Left]], $geometry->dividerColumns());
         $this->assertFalse($geometry->isEmpty());
     }
@@ -579,7 +616,7 @@ final class DockLayoutTest extends TestCase
 
         $this->assertNull($geometry->regionFor('term'));
         $this->assertEquals(new Region(0, 0, 21, 9), $geometry->regionFor('a'));
-        $this->assertEquals(new Region(22, 0, 43, 30), $geometry->regionFor('chat'));
+        $this->assertEquals(new Region(22, 0, 43, 30), $geometry->regionFor('center'));
         $this->assertSame([['x' => 21, 'side' => Side::Left]], $geometry->dividerColumns());
         $this->assertCount(4, $geometry->regions);
     }
@@ -714,7 +751,7 @@ final class DockLayoutTest extends TestCase
         $geometry = DockLayout::fromArray($manifest)->resolve(Region::fromSize(100, 30));
 
         $this->assertNull($geometry->regionFor('files'));
-        $this->assertEquals(new Region(0, 0, 100, 30), $geometry->regionFor('chat'));
+        $this->assertEquals(new Region(0, 0, 100, 30), $geometry->regionFor('center'));
     }
 
     public function testThreeEqualSlotsSplitResidualToLastToo(): void
@@ -809,7 +846,7 @@ final class DockLayoutTest extends TestCase
 
         $this->assertSame([
             'version' => 1,
-            'center' => 'chat',
+            'center' => 'center',
             'sides' => [
                 'left' => [
                     ['id' => 'git', 'weight' => [1, 1]],
@@ -995,10 +1032,10 @@ final class DockLayoutTest extends TestCase
     public function testFromRejectsSlotIdCollidingWithCenter(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("sides.left.0.id' collides with the center pane 'chat'");
+        $this->expectExceptionMessage("sides.left.0.id' collides with the center pane 'center'");
         DockLayout::fromArray([
             'sides' => [
-                'left' => [['id' => 'chat', 'weight' => [1, 1]]],
+                'left' => [['id' => 'center', 'weight' => [1, 1]]],
                 'right' => [],
             ],
         ] + $this->validManifest());
@@ -1008,13 +1045,13 @@ final class DockLayoutTest extends TestCase
     {
         // The check lives inside the row loop, not just at position 0.
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("sides.right.1.id' collides with the center pane 'chat'");
+        $this->expectExceptionMessage("sides.right.1.id' collides with the center pane 'center'");
         DockLayout::fromArray([
             'sides' => [
                 'left' => [],
                 'right' => [
                     ['id' => 'term', 'weight' => [1, 1]],
-                    ['id' => 'chat', 'weight' => [1, 1]],
+                    ['id' => 'center', 'weight' => [1, 1]],
                 ],
             ],
         ] + $this->validManifest());

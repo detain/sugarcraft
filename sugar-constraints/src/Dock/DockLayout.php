@@ -89,8 +89,8 @@ final class DockLayout
                 "DockLayout minimums must be >= 1; got centerMinCols={$centerMinCols}, sideMinCols={$sideMinCols}"
             );
         }
-        if ($dividerCols < 0) {
-            throw new \InvalidArgumentException("DockLayout dividerCols must be >= 0; got {$dividerCols}");
+        if ($dividerCols !== 1) {
+            throw new \InvalidArgumentException("DockLayout dividerCols is fixed at 1 until a mutator ships; got {$dividerCols}");
         }
         // resolve() splits each stack in exact integer arithmetic over the
         // stack's common denominator; a weight set whose scaled sum cannot be
@@ -107,10 +107,13 @@ final class DockLayout
     }
 
     /**
-     * Empty dock: no side slots, both column shares at the 1/3 design default,
-     * center minimum 24 cols, side minimum 20 cols, 1-col dividers.
+     * Empty dock: center pane id defaults to the neutral 'center' (2026-11:
+     * was 'chat', but the factory should not bake one app's vocabulary —
+     * candy-code passes its 'chat' explicitly at every call site), no side
+     * slots, both column shares at the 1/3 design default, center minimum
+     * 24 cols, side minimum 20 cols, 1-col dividers.
      */
-    public static function new(string $centerPaneId = 'chat'): self
+    public static function new(string $centerPaneId = 'center'): self
     {
         return new self(
             centerPaneId: $centerPaneId,

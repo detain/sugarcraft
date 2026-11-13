@@ -363,8 +363,11 @@ stack weight set whose scaled sum would exceed `PHP_INT_MAX` is refused with
 **Gutters.** The stack gap is one fixed row (internal constant). The divider
 width is fixed at 1 column with no public configuration:
 `DockLayout::__construct` is private, `new()` takes only the centre pane id
-and hardcodes the divider, every `with*()` preserves it, and `fromArray()`
-forces 1 — it is not part of the persisted shape.
+(default: the neutral `'center'` — one app's vocabulary is not a library
+fact; pass your own id explicitly) and hardcodes the divider, every `with*()`
+preserves it, and `fromArray()` forces 1 — it is not part of the persisted
+shape. The constructor guard refuses any other value, so no host can drift
+from the persisted shape even through the private surface.
 
 **Persistence.** `toArray()`/`fromArray()` ship an exact versioned shape:
 `['version' => 1, 'center' => 'chat', 'sides' => ['left' => [['id' => …, 'weight' => [n, d]], …], 'right' => […]], 'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]`.
