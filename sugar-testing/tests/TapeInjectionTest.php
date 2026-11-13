@@ -46,6 +46,33 @@ final class TapeInjectionTest extends TestCase
         self::assertNotContains('Set FontSize 4242', \explode("\n", $content), 'a forged standalone Set directive escaped the quotes');
     }
 
+    public function testTypedSubstitutionTokenIsRefusedNotSanitized(): void
+    {
+        // The dialect rewrites double-brace key tokens inside quoted Type
+        // content; silently stripping them would corrupt legitimate text,
+        // so the builder refuses the whole value loudly.
+        try {
+            TapeRecorder::to($this->tapePath)->type('safe {{ctrl+c}} text');
+            self::fail('typed content carrying the substitution markers must throw');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('must never carry', $e->getMessage());
+        }
+
+        // A single brace is ordinary text and still records fine.
+        TapeRecorder::to($this->tapePath)->type('x {y} z')->save();
+        self::assertStringContainsString('Type "x {y} z"', (string) \file_get_contents($this->tapePath));
+    }
+
+    public function testHeaderThemeCannotCarrySubstitutionMarkers(): void
+    {
+        try {
+            TapeRecorder::to($this->tapePath)->header(theme: 'Tokyo{{enter}}Night');
+            self::fail('theme carrying the substitution markers must throw');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('must never carry', $e->getMessage());
+        }
+    }
+
     public function testControlBytesNeverSurviveRawInsideTypedText(): void
     {
         TapeRecorder::to($this->tapePath)

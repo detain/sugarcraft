@@ -345,4 +345,25 @@ final class TapeRecorderTest extends TestCase
 
         $this->assertNull($result);
     }
+
+    public function testKeyMsgToVhsRefusesChordsInsteadOfDroppingTheModifier(): void
+    {
+        // Ctrl+C must not silently record as a plain "c" — with no
+        // verifiable tape spelling for chords (the double-brace key-token
+        // form cannot be confirmed against the pinned vhs here), the
+        // documented unsupported-answer is null, visibly.
+        $this->assertNull(TapeRecorder::keyMsgToVhs(new KeyMsg(type: KeyType::Char, rune: 'c', ctrl: true)));
+        $this->assertNull(TapeRecorder::keyMsgToVhs(new KeyMsg(type: KeyType::Char, rune: 'x', alt: true)));
+        $this->assertNull(TapeRecorder::keyMsgToVhs(new KeyMsg(type: KeyType::Up, ctrl: true)));
+        $this->assertNull(TapeRecorder::keyMsgToVhs(new KeyMsg(type: KeyType::Enter, alt: true)));
+    }
+
+    public function testKeyMsgToVhsKeepsShiftFoldedRunesAndMapsSpace(): void
+    {
+        // Terminals report shift+letter as the shifted rune itself, so the
+        // chord guard must leave shifted characters alone (regression pin);
+        // the Space key joins the named roster.
+        $this->assertSame('"A"', TapeRecorder::keyMsgToVhs(new KeyMsg(type: KeyType::Char, rune: 'A', shift: true)));
+        $this->assertSame('Space', TapeRecorder::keyMsgToVhs(new KeyMsg(type: KeyType::Space)));
+    }
 }

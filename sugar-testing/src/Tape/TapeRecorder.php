@@ -87,9 +87,15 @@ final class TapeRecorder
     }
 
     /**
-     * Record a keypress as Type command.
+     * Record literal typed text as a quoted Type directive.
      *
-     * @param string $keys Space-separated key names or chars
+     * Quoted Type content is typed verbatim except for the dialect's
+     * double-brace key-substitution tokens — and caller text carrying
+     * those markers is refused by the escape, so this method is literal
+     * characters only: key names go through {@see keyMsgToVhs()} or the
+     * verbatim line() escape hatch, never through here.
+     *
+     * @param string $keys literal characters to type
      * @return $this
      */
     public function type(string $keys): self
@@ -206,11 +212,22 @@ final class TapeRecorder
     /**
      * Convert a KeyMsg to VHS Type syntax.
      *
+     * Returns null for unsupported shapes: key chords (ctrl/alt modifiers)
+     * have no verifiable tape spelling — the dialect's double-brace key
+     * token channel cannot be confirmed against the pinned vhs here, and
+     * silently dropping the modifier would mis-record Ctrl+C as a plain
+     * "c". Shift folds into the rune the same way a terminal reports it,
+     * so shifted characters convert normally.
+     *
      * @param KeyMsg $msg
      * @return string|null VHS-compatible key string, or null if unsupported
      */
     public static function keyMsgToVhs(KeyMsg $msg): ?string
     {
+        if ($msg->ctrl === true || $msg->alt === true) {
+            return null;
+        }
+
         $rune = $msg->rune;
 
         if ($rune !== '') {
@@ -224,6 +241,7 @@ final class TapeRecorder
             \SugarCraft\Core\KeyType::Escape => 'Escape',
             \SugarCraft\Core\KeyType::Backspace => 'Backspace',
             \SugarCraft\Core\KeyType::Tab => 'Tab',
+            \SugarCraft\Core\KeyType::Space => 'Space',
             \SugarCraft\Core\KeyType::Up => 'Up',
             \SugarCraft\Core\KeyType::Down => 'Down',
             \SugarCraft\Core\KeyType::Left => 'Left',
@@ -259,13 +277,22 @@ final class TapeRecorder
      * would otherwise emit a STANDALONE directive line — "\nSet FontSize 4242"
      * or "\nShell \"...\"" becomes arbitrary CI action (vhs.yml renders
      * committed tapes), so the one-line-per-directive guarantee is a
-     * security boundary, not cosmetics.
+     * security boundary, not cosmetics. The same reasoning refuses caller
+     * content carrying the dialect's double-brace key-substitution token
+     * markers: a quoted string holding them could steer keys the demo
+     * never pressed.
      *
      * @param string $rune
      * @return string
      */
     private static function escapeVhsRune(string $rune): string
     {
+        if (\preg_match('/\{\{|\}\}/', $rune) === 1) {
+            throw new \InvalidArgumentException(Lang::t('tape.forbidden_substitution', [
+                'value' => $rune,
+            ]));
+        }
+
         $escaped = addcslashes($rune, '"\\');
 
         $neutralized = preg_replace_callback('/[\x00-\x1f\x7f]/', static function (array $m): string {

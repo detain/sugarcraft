@@ -17,6 +17,7 @@ return [
 
     // Tape recorder operations
     'tape.write_failed' => 'Failed to write tape file {path}: {reason}',
+    'tape.forbidden_substitution' => 'VHS rewrites double-brace key tokens inside quoted Type content, so caller text must never carry a double-open-brace or double-close-brace sequence — a tape could otherwise steer keys the demo never pressed (refused value: {value})',
 
     // ProgramSimulator errors
     'simulator.cmd_loop_overflow' => 'Cmd message loop exceeded {max} cycles',
