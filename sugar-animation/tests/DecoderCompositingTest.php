@@ -277,6 +277,61 @@ final class DecoderCompositingTest extends TestCase
      * @param array{0:int,1:int,2:int}      $expected
      * @param array{0:int,1:int,2:int}|null $actual
      */
+    /**
+     * SA-D2 (-026): a frame whose decode FAILS must contribute nothing —
+     * not pixels, and not a disposal contract. The middle frame here
+     * declares DISPOSAL_BACKGROUND over the full rect while its LZW payload
+     * is unparseable. The old walk bound it as prevInfo, so the next
+     * iteration cleared a rect that was never painted — erasing the good
+     * red underneath. The cured walk skips failed frames wholesale: the
+     * final frame must still show red under (0,0).
+     */
+    public function testFailedFrameBindsNoDisposalAndKeepsGoodPixels(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+
+        // Frame 0: solid red, opaque — the good pixels the bug would erase.
+        $f0 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f0, 0, 0, 3, 3, imagecolorexact($f0, 255, 0, 0));
+
+        // Frame 1: full-screen extent, DISPOSAL_BACKGROUND declared, payload
+        // poisoned — LZW minimum code size 0xFF (the spec caps it at 8) is a
+        // value GD refuses outright, while the walk stays in sync because
+        // skipSubBlocks starts after the min-code byte and finds its 0x00
+        // terminator immediately.
+        $f1 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f1, 0, 0, 3, 3, imagecolorexact($f1, 0, 255, 0));
+        [$id10] = $this->extractDescriptorAndLzw($this->gdGifBytes($f1));
+        $id = substr($id10, 0, 9) . "\x00";
+        $gce = "\x21\xF9\x04" . chr((Frame::DISPOSAL_BACKGROUND & 0x07) << 2 | 0x01)
+            . "\x01\x00" . "\x00" . "\x00";
+
+        // Frame 2: blue 2x2 bottom-right, rest transparent.
+        $f2 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f2, 0, 0, 3, 3, imagecolorexact($f2, 0, 0, 0));
+        imagefilledrectangle($f2, 2, 2, 3, 3, imagecolorexact($f2, 0, 0, 255));
+
+        $bytes = $this->sharedPaletteHeader()
+            . $this->composeFrameBlock($this->gdGifBytes($f0), Frame::DISPOSAL_NONE, false, 0)
+            . $gce . $id . "\xFF\x00"
+            . $this->composeFrameBlock($this->gdGifBytes($f2), Frame::DISPOSAL_NONE, true, 0)
+            . "\x3B";
+
+        $this->tmpPath = sys_get_temp_dir() . '/corrupt-frame-leg-' . uniqid() . '.gif';
+        file_put_contents($this->tmpPath, $bytes);
+
+        $frames = Decoder::decode($this->tmpPath, 4, 4);
+        $this->assertCount(2, $frames, 'the failed frame must yield nothing');
+        $this->assertSame(
+            [255, 0, 0],
+            $frames[1]->cells[0][0] ?? null,
+            'a corrupt frame must not erase the good pixels under its never-painted rect',
+        );
+        $this->assertSame([0, 0, 255], $frames[1]->cells[3][3] ?? null, 'the trailing blue paint must land');
+    }
+
     private function assertColorApprox(array $expected, ?array $actual, string $msg): void
     {
         $this->assertNotNull($actual, $msg . ' (cell must not be transparent)');

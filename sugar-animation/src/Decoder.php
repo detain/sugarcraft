@@ -51,6 +51,18 @@ final class Decoder
     public const MAX_TOTAL_PIXELS = 2_000_000;
 
     /**
+     * Joint budget (SA-D2, -003b/-017): the caps above bound each dimension
+     * separately, but residency is their PRODUCT — a 100k-cell grid ×
+     * MAX_FRAMES frames is 25.6M cell arrays (~150 B each) materialised by
+     * decode()'s eager collect. The walk refuses when
+     * cellsW × cellsH × frameCount crosses this line, so the footprint of a
+     * file the other caps call valid is a disclosed number, not a surprise.
+     * 2,000,000 mirrors the screen-pixel cap and still plays a 256-frame
+     * animation full-screen on a 120×60 cell grid.
+     */
+    public const MAX_TOTAL_CELLS = 2_000_000;
+
+    /**
      * Maximum frames per animation so a pathological file cannot OOM the
      * walk or the composited list. The README documents this line as 256.
      */
@@ -348,6 +360,14 @@ final class Decoder
             throw new \RuntimeException(Lang::t('decoder.screen_too_small'));
         }
 
+        // -003b/-017: joint budget on the PRODUCT the individual caps multiply
+        // into — checked here, at the eager phase, where it still costs
+        // nothing and the consumer never learns what an abandoned generator
+        // would have allocated.
+        if ($cellsW * $cellsH * count($header['frameInfos']) > self::MAX_TOTAL_CELLS) {
+            throw new \RuntimeException(Lang::t('decoder.total_cells_too_large', ['max' => (string) self::MAX_TOTAL_CELLS]));
+        }
+
         // Every gate above runs EAGERLY — at call time, not at first
         // iteration: a generator body would otherwise defer fail-loud input
         // rejection to whichever consumer happens to pull the first frame,
@@ -397,8 +417,15 @@ final class Decoder
         $transparentBg = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
         imagefill($canvas, 0, 0, $transparentBg);
 
-        // Snapshot for DISPOSAL_PREVIOUS.
-        $snapshot = null;
+        // Snapshot for DISPOSAL_PREVIOUS. -002: the old walk minted a fresh
+        // screen-sized GD buffer for EVERY frame, whether or not any frame in
+        // the stream ever asked for a restore. A stream that names no
+        // disposal 3 pays nothing at all; one that does allocates the buffer
+        // ONCE and re-copies it per frame (a full-screen imagecopy overwrites
+        // every pixel, so the per-frame re-fill was dead work).
+        $snapshot = self::streamNeedsSnapshot($header['frameInfos'])
+            ? self::makeSnapshot($screenW, $screenH, $transparentBg)
+            : null;
 
         $prevInfo = null;
 
@@ -420,17 +447,23 @@ final class Decoder
                     }
                 }
 
-                // Snapshot before painting this frame (for DISPOSAL_PREVIOUS of next frame).
-                $snapshot = imagecreatetruecolor($screenW, $screenH);
-                imagesavealpha($snapshot, true);
-                imagefill($snapshot, 0, 0, $transparentBg);
-                imagecopy($snapshot, $canvas, 0, 0, 0, 0, $screenW, $screenH);
-
                 // Decode this frame's LZW data to a GD image.
                 $frameImg = self::decodeFrameImage($bytes, $info, $header);
                 if ($frameImg === null) {
-                    $prevInfo = $info;
+                    // -026: a failed frame contributes nothing, so it binds
+                    // nothing. The old leg assigned it as prevInfo — the next
+                    // iteration then applied a disposal (e.g. a BACKGROUND
+                    // rect-clear) for a rect that was never painted, letting
+                    // a corrupt frame erase good pixels under it. The canvas
+                    // still holds the last successful paint; skip cleanly.
                     continue;
+                }
+
+                // Snapshot before painting this frame (for DISPOSAL_PREVIOUS
+                // of the next frame) — only when some frame names the restore
+                // (-002) and only after a successful decode (-026).
+                if ($snapshot !== null) {
+                    imagecopy($snapshot, $canvas, 0, 0, 0, 0, $screenW, $screenH);
                 }
 
                 // Composite the frame onto the canvas at (left, top), honoring transparency.
@@ -440,15 +473,26 @@ final class Decoder
                 $frameImgH = imagesy($frameImg);
 
                 // Copy non-transparent pixels from frame to canvas.
+                // -003: this used to be four GD calls per SOURCE pixel per
+                // frame (colorat + colorsforindex + allocate + setpixel). The
+                // palette is stable inside a frame, so a lazily-filled
+                // index→packed-truecolor map reduces the inner loop to one
+                // lookup + imagesetpixel. Output is byte-identical:
+                // imagecolorallocate() on a truecolor canvas returns exactly
+                // ($r<<16)|($g<<8)|$b, which is what the map stores.
                 $srcTransparentIndex = imagecolortransparent($frameImg);
+                $packedMap = [];
                 for ($y = 0; $y < $frameImgH; $y++) {
                     for ($x = 0; $x < $frameImgW; $x++) {
                         $pixelIndex = imagecolorat($frameImg, $x, $y);
                         if ($srcTransparentIndex >= 0 && $pixelIndex === $srcTransparentIndex) {
                             continue; // Transparent pixel — leave canvas unchanged.
                         }
-                        $rgb = imagecolorsforindex($frameImg, $pixelIndex);
-                        imagesetpixel($canvas, $left + $x, $top + $y, imagecolorallocate($canvas, $rgb['red'], $rgb['green'], $rgb['blue']));
+                        if (!isset($packedMap[$pixelIndex])) {
+                            $rgb = imagecolorsforindex($frameImg, $pixelIndex);
+                            $packedMap[$pixelIndex] = ($rgb['red'] << 16) | ($rgb['green'] << 8) | $rgb['blue'];
+                        }
+                        imagesetpixel($canvas, $left + $x, $top + $y, $packedMap[$pixelIndex]);
                     }
                 }
                 imagedestroy($frameImg);
@@ -472,6 +516,36 @@ final class Decoder
                 imagedestroy($snapshot);
             }
         }
+    }
+
+    /**
+     * Does this frame stream ever restore via DISPOSAL_PREVIOUS? (SA-D2
+     * -002.) The walk allocates its snapshot buffer only when this says
+     * true — a stream that never names the restore never pays for one.
+     *
+     * @param list<array<string, int|bool>> $frameInfos
+     *
+     * @internal Test/budget seam for the walk's snapshot pre-scan.
+     */
+    public static function streamNeedsSnapshot(array $frameInfos): bool
+    {
+        foreach ($frameInfos as $info) {
+            if (($info['disposal'] ?? -1) === Frame::DISPOSAL_PREVIOUS) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Allocate the persistent DISPOSAL_PREVIOUS snapshot buffer (SA-D2 -002). */
+    private static function makeSnapshot(int $screenW, int $screenH, int $transparentBg): \GdImage
+    {
+        $snapshot = imagecreatetruecolor($screenW, $screenH);
+        imagesavealpha($snapshot, true);
+        imagefill($snapshot, 0, 0, $transparentBg);
+
+        return $snapshot;
     }
 
     /**
