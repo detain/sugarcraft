@@ -91,6 +91,23 @@ final class LocaleParityTest extends TestCase
     }
 
     /**
+     * gifview-010 rider: the usage line names the binary exactly once —
+     * `用法：candy-gifview candy-gifview <gif> …` in ja/zh-cn duplicated the
+     * command after the colon where every other locale says it once. A
+     * duplicated literal here is transcription noise, not copy.
+     */
+    #[DataProvider('localeFiles')]
+    public function testEveryUsageLineNamesTheBinaryExactlyOnce(string $code, string $path): void
+    {
+        $locale = require $path;
+        $this->assertSame(
+            1,
+            substr_count($locale['cli.usage'], 'candy-gifview'),
+            "locale '$code' cli.usage must name the binary once, not mirror it",
+        );
+    }
+
+    /**
      * Every refusal key the code actually speaks must exist in en.php, and
      * en.php may not carry undisclosed silent keys either (bidirectional
      * census — the fleet REVERSE/PARITY genre). The sole tolerated

@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'cli.usage'       => '用法：candy-gifview candy-gifview <gif> [solid|density] [--fps=N] [--speed=N|Nfps|max] [--duration=SECONDS] [--watch] [--paused] [--help|-h] [--version|-v]',
+    'cli.usage'       => '用法：candy-gifview <gif> [solid|density] [--fps=N] [--speed=N|Nfps|max] [--duration=SECONDS] [--watch] [--paused] [--help|-h] [--version|-v]',
     'cli.no_autoload' => 'candy-gifview：无法找到 composer autoload.php',
     'cli.bad_flag'    => 'candy-gifview: 未知选项 --{flag}',
     'cli.bad_value'   => 'candy-gifview: {flag} 的值 \'{value}\' 无效（需要正数；--speed 也接受 Nfps 或 max）',
