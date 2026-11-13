@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\ScriptUi\Tests\Style;
 
+use SugarCraft\ScriptUi\Runtime\ColourGate;
 use SugarCraft\ScriptUi\Style\StyleBuilder;
 use PHPUnit\Framework\TestCase;
 
@@ -187,5 +188,87 @@ final class StyleBuilderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         StyleBuilder::parseHexColor('#zzz');
+    }
+
+    /**
+     * scriptui-25 (candy-scriptui-018): the border colour legs used to apply
+     * OUTSIDE the single ColourGate clamp; every colour leg now feeds one
+     * profile computation that is clamped once, after collection.
+     */
+    public function testBorderColoursNeverReWidenPastTheGate(): void
+    {
+        putenv('NO_COLOR=1');
+        try {
+            ColourGate::install();
+            $s = StyleBuilder::fromFlags([
+                'foreground'        => '#ff0000',
+                'border'            => 'normal',
+                'border-foreground' => '#0000ff',
+                'border-background' => '4',
+            ]);
+            $out = $s->render('hi');
+            $this->assertStringNotContainsString('38;2', $out, 'NO_COLOR must not leak truecolour');
+            $this->assertStringNotContainsString('38;5', $out);
+            $this->assertStringNotContainsString("\x1b[34m", $out);
+            $this->assertStringNotContainsString("\x1b[31m", $out);
+        } finally {
+            ColourGate::resetAmbient();
+            putenv('NO_COLOR');
+        }
+    }
+
+    public function testBorderColourStillRendersWhenAllowed(): void
+    {
+        $s = StyleBuilder::fromFlags([
+            'border'            => 'normal',
+            'border-foreground' => '4',
+        ]);
+        // Palette index advertises its own SGR: ANSI 4 = 34.
+        $this->assertStringContainsString("\x1b[34m", $s->render('hi'));
+    }
+
+    /** scriptui-25 (candy-scriptui-043): advertised props must reach the Style. */
+    public function testBlinkAndReverseReachTheRender(): void
+    {
+        $this->assertSame("\x1b[5mx\x1b[0m", StyleBuilder::fromFlags(['blink' => true])->render('x'));
+        $this->assertSame("\x1b[7mx\x1b[0m", StyleBuilder::fromFlags(['reverse' => true])->render('x'));
+    }
+
+    /** scriptui-25 (candy-scriptui-044): bad enums refuse with the allowed list. */
+    public function testUnknownAlignThrowsNamingAllowedValues(): void
+    {
+        try {
+            StyleBuilder::fromFlags(['align' => 'middle']);
+            $this->fail('align=middle must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('middle', $e->getMessage());
+            $this->assertStringContainsString('left|center|right', $e->getMessage());
+        }
+    }
+
+    public function testUnknownBorderThrowsNamingAllowedValues(): void
+    {
+        try {
+            StyleBuilder::fromFlags(['border' => 'round']);
+            $this->fail('border=round must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('round', $e->getMessage());
+            $this->assertStringContainsString('none|normal|rounded|thick|double|block|ascii|hidden', $e->getMessage());
+        }
+    }
+
+    public function testHiddenAndNoneBorderStaySilentNoOps(): void
+    {
+        foreach (['hidden', 'none', '0'] as $spelling) {
+            $out = StyleBuilder::fromFlags(['border' => $spelling])->render('hi');
+            $this->assertStringNotContainsString('│', $out);
+        }
+    }
+
+    public function testAsciiBorderPresetApplies(): void
+    {
+        $out = StyleBuilder::fromFlags(['border' => 'ascii'])->render('hi');
+        $this->assertStringContainsString('+', $out);
+        $this->assertStringContainsString('-', $out);
     }
 }

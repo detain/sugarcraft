@@ -19,9 +19,12 @@ final class StyleBuilder
 {
     /**
      * @param array<string, string|bool|int|null> $flags
-     *   Recognised keys: `foreground`, `background`, `bold`, `italic`,
-     *   `underline`, `strikethrough`, `faint`, `padding`, `margin`,
-     *   `width`, `align`. Unknown keys are ignored.
+     *   Recognised keys: `foreground`, `background`, `border-foreground`,
+     *   `border-background`, `bold`, `italic`, `underline`, `strikethrough`,
+     *   `faint`, `blink`, `reverse`, `padding`, `margin`, `width`, `height`,
+     *   `align`, `border`. Unknown keys are ignored. Non-empty but
+     *   unrecognised `align`/`border` values throw — a typo'd enum must
+     *   not fail-silent (scriptui-25, candy-scriptui-044).
      */
     public static function fromFlags(array $flags): Style
     {
@@ -32,7 +35,17 @@ final class StyleBuilder
         // emits CSI 34m, not the RGB equivalent).
         $minProfile = ColorProfile::TrueColor;
 
-        foreach (['foreground', 'background'] as $f) {
+        // scriptui-25 (candy-scriptui-018): all four colour legs — content
+        // AND border — feed one profile computation. The border legs used to
+        // run after the single clamp and re-widen the applied profile from
+        // outside the gate, so NO_COLOR leaked border colour.
+        $colourLegs = [
+            'foreground'        => static fn (Style $x, Color $c): Style => $x->foreground($c),
+            'background'        => static fn (Style $x, Color $c): Style => $x->background($c),
+            'border-foreground' => static fn (Style $x, Color $c): Style => $x->borderForeground($c),
+            'border-background' => static fn (Style $x, Color $c): Style => $x->borderBackground($c),
+        ];
+        foreach ($colourLegs as $f => $apply) {
             $v = $flags[$f] ?? null;
             if ($v === null || $v === '') {
                 continue;
@@ -41,17 +54,22 @@ final class StyleBuilder
             if ($profile->value < $minProfile->value) {
                 $minProfile = $profile;
             }
-            $s = $f === 'foreground' ? $s->foreground($color) : $s->background($color);
+            $s = $apply($s, $color);
         }
         // Never re-widen past the ambient capability pinned by
         // ColourGate (a parsed palette index claiming Ansi must not
-        // leak colour back under NO_COLOR's Ascii).
+        // leak colour back under NO_COLOR's Ascii). One clamp, one
+        // application — AFTER every colour leg.
         $minProfile = ColourGate::clamp($minProfile);
         if ($minProfile !== ColorProfile::TrueColor) {
             $s = $s->colorProfile($minProfile);
         }
 
-        foreach (['bold', 'italic', 'underline', 'strikethrough', 'faint'] as $attr) {
+        // scriptui-25 (candy-scriptui-043): blink and reverse are advertised
+        // props — SubStyleParser normalises them and sugar-style renders
+        // them — yet fromFlags used to drop them silently (the worst
+        // contract combination: fail-loud on unknown, fail-silent on known).
+        foreach (['bold', 'italic', 'underline', 'strikethrough', 'faint', 'blink', 'reverse'] as $attr) {
             if (!empty($flags[$attr])) {
                 $s = match ($attr) {
                     'bold'          => $s->bold(),
@@ -59,6 +77,8 @@ final class StyleBuilder
                     'underline'     => $s->underline(),
                     'strikethrough' => $s->strikethrough(),
                     'faint'         => $s->faint(),
+                    'blink'         => $s->blink(),
+                    'reverse'       => $s->reverse(),
                 };
             }
         }
@@ -90,45 +110,41 @@ final class StyleBuilder
                 'center' => \SugarCraft\Style\Align::Center,
                 default  => null,
             };
-            if ($aligned !== null) {
-                $s = $s->align($aligned);
+            if ($aligned === null) {
+                // scriptui-25 (candy-scriptui-044): `align=middle` used to
+                // no-op silently. Refuse with the allowed list instead.
+                throw new \InvalidArgumentException(Lang::t('runtime.unknown_choice', [
+                    'option'  => 'align',
+                    'value'   => $align,
+                    'allowed' => 'left|center|right',
+                ]));
             }
+            $s = $s->align($aligned);
         }
 
-        // Border. `--border <preset>` picks one of normal/rounded/thick/
-        // double/block/hidden. `--border-foreground` / `-background`
-        // accept the same colour syntax as the content colours.
+        // Border. `border <preset>` picks one of normal/rounded/thick/
+        // double/block/ascii/hidden (plus the numeric spellings 0/1).
         $border = $flags['border'] ?? null;
         if (is_string($border) && $border !== '') {
             $b = match (strtolower($border)) {
-                'normal',  '1' => \SugarCraft\Style\Border::normal(),
-                'rounded'      => \SugarCraft\Style\Border::rounded(),
-                'thick'        => \SugarCraft\Style\Border::thick(),
-                'double'       => \SugarCraft\Style\Border::double(),
-                'block'        => \SugarCraft\Style\Border::block(),
+                'normal',  '1'        => \SugarCraft\Style\Border::normal(),
+                'rounded'             => \SugarCraft\Style\Border::rounded(),
+                'thick'               => \SugarCraft\Style\Border::thick(),
+                'double'              => \SugarCraft\Style\Border::double(),
+                'block'               => \SugarCraft\Style\Border::block(),
+                'ascii'               => \SugarCraft\Style\Border::ascii(),
                 'hidden', '0', 'none' => null,
-                default        => null,
+                default               => null,
             };
+            if ($b === null && !in_array(strtolower($border), ['hidden', '0', 'none'], true)) {
+                throw new \InvalidArgumentException(Lang::t('runtime.unknown_choice', [
+                    'option'  => 'border',
+                    'value'   => $border,
+                    'allowed' => 'none|normal|rounded|thick|double|block|ascii|hidden',
+                ]));
+            }
             if ($b !== null) {
                 $s = $s->border($b);
-            }
-        }
-        $bf = $flags['border-foreground'] ?? null;
-        if (is_string($bf) && $bf !== '') {
-            [$color, $bp] = self::parseColorWithProfile($bf);
-            $s = $s->borderForeground($color);
-            if ($bp->value < $minProfile->value) {
-                $minProfile = $bp;
-                $s = $s->colorProfile($bp);
-            }
-        }
-        $bb = $flags['border-background'] ?? null;
-        if (is_string($bb) && $bb !== '') {
-            [$color, $bp] = self::parseColorWithProfile($bb);
-            $s = $s->borderBackground($color);
-            if ($bp->value < $minProfile->value) {
-                $minProfile = $bp;
-                $s = $s->colorProfile($bp);
             }
         }
 
