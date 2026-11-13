@@ -133,6 +133,84 @@ final class VsGameTest extends TestCase
         $this->assertSame(Board::COLS - 1, $filled, 'the rest of the garbage row is filled');
     }
 
+    /**
+     * candy-tetris-047 (matrix leg 2 of 4): the mirror transfer. The old
+     * suite only ever showed player→computer garbage; here the COMPUTER
+     * clears a real line inside the VS loop and the PLAYER's board must
+     * visibly receive the garbage row.
+     */
+    public function testGarbageRowPassingWhenComputerClearsLines(): void
+    {
+        $vs = VsGame::start();
+        $computer = $this->createComputerPoisedToClear($vs->computer);
+        $vs = new VsGame($vs->player, $computer, hasComputerPlan: true);
+
+        $playerBoardBefore = $vs->player->board;
+        [$updated] = $vs->update($this->gravity());
+
+        $this->assertSame($computer->score->lines + 1, $updated->computer->score->lines,
+            'the computer must really have cleared the line');
+        $this->assertNotSame($playerBoardBefore, $updated->player->board,
+            'the player board must change when garbage arrives');
+
+        $bottomRow = $updated->player->board->rows()[Board::ROWS - 1];
+        $nulls = count(array_filter($bottomRow, static fn($c) => $c === null));
+        $this->assertSame(1, $nulls, 'garbage row carries exactly one hole');
+
+        $this->assertNull($updated->winner, 'a surviving arrival must not decide the match');
+    }
+
+    /**
+     * candy-tetris-047 (matrix leg 3 of 4): death by arrival, player kills.
+     * The defender's stack already touches the ceiling, so the arriving
+     * garbage row itself is the kill — the match must end with the winner
+     * recorded and the banner naming the reason.
+     */
+    public function testGarbageArrivalTopOutEndsTheComputer(): void
+    {
+        $vs = VsGame::start();
+        $player = $this->createGameWithOneLine($vs->player);
+        $computer = $this->seedCeilingCell($vs->computer);
+        $vs = new VsGame($player, $computer);
+
+        [$updated] = $vs->update($this->key(' ')); // hard drop → clear → lethal arrival
+
+        $this->assertTrue($updated->over, 'a lethal garbage arrival must end the match');
+        $this->assertSame('PLAYER', $updated->winner);
+        $this->assertSame(Game::OVER_TOP_OUT, $updated->computer->overReason,
+            'the computer must die by the arriving garbage, not by its own lock');
+
+        $view = $updated->view();
+        $this->assertStringContainsString('YOU WIN!', $view);
+        $this->assertStringContainsString('stack reached the ceiling', $view,
+            'the death banner must name why the loser died');
+    }
+
+    /**
+     * candy-tetris-047 (matrix leg 4 of 4): death by arrival, computer kills
+     * — the mirror direction with a lethal arrival, which the old suite
+     * never exercised at all (its win asserts were gravity-driven only).
+     */
+    public function testGarbageArrivalTopOutEndsThePlayer(): void
+    {
+        $vs = VsGame::start();
+        $computer = $this->createComputerPoisedToClear($vs->computer);
+        $player = $this->seedCeilingCell($vs->player);
+        $vs = new VsGame($player, $computer, hasComputerPlan: true);
+
+        [$updated] = $vs->update($this->gravity());
+
+        $this->assertTrue($updated->over, 'a lethal garbage arrival must end the match');
+        $this->assertSame('COMPUTER', $updated->winner);
+        $this->assertSame(Game::OVER_TOP_OUT, $updated->player->overReason,
+            'the player must die by the arriving garbage, not by their own lock');
+
+        $view = $updated->view();
+        $this->assertStringContainsString('COMPUTER WINS!', $view);
+        $this->assertStringContainsString('stack reached the ceiling', $view,
+            'the death banner must name why the loser died');
+    }
+
     public function testOverStateWhenPlayerGameOver(): void
     {
         $vs = VsGame::start();
@@ -373,6 +451,41 @@ final class VsGameTest extends TestCase
         for ($col = 0; $col < Board::COLS; $col++) {
             $rows[$bottomRow][$col] = Tetromino::I;
         }
+
+        return $game->mutate(['board' => new Board($rows)]);
+    }
+
+    /**
+     * candy-tetris-047 helper: a computer mid-set that clears a line the
+     * moment its plan's lock leg runs — the bottom row filled except one
+     * column, and a vertical I resting in that gap (rot1 puts its cells in
+     * column x+2, so x=0 fills column 2 down to the floor).
+     */
+    private function createComputerPoisedToClear(Game $game): Game
+    {
+        $rows = $game->board->rows();
+        $bottomRow = Board::ROWS - 1;
+        for ($col = 0; $col < Board::COLS; $col++) {
+            if ($col !== 2) {
+                $rows[$bottomRow][$col] = Tetromino::I;
+            }
+        }
+
+        return $game->mutate([
+            'board' => new Board($rows),
+            'piece' => new Piece(Tetromino::I, 1, 0, Board::ROWS - 4),
+        ]);
+    }
+
+    /**
+     * candy-tetris-047 helper: one locked cell in the very top row, so the
+     * next garbage arrival has nowhere to push the stack and the arrival
+     * itself becomes the kill (Game::OVER_TOP_OUT).
+     */
+    private function seedCeilingCell(Game $game): Game
+    {
+        $rows = $game->board->rows();
+        $rows[0][0] = Tetromino::I;
 
         return $game->mutate(['board' => new Board($rows)]);
     }
