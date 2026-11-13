@@ -209,7 +209,10 @@ final class Attachment
         // never passes readFileOrThrow's gate, so the cap is enforced here
         // too — every constructed attachment obeys MAX_BYTES.
         if ($content !== null && \strlen($content) > self::MAX_BYTES) {
-            throw new \RuntimeException(Lang::t('attachment.too_large', ['limit' => (string) self::MAX_BYTES]));
+            // The Transport taxonomy (CM-45): a payload that is simply too
+            // big is a caller-supplied input defect, not transport I/O —
+            // InvalidArgumentException, like every other ctor refusal.
+            throw new \InvalidArgumentException(Lang::t('attachment.too_large', ['limit' => (string) self::MAX_BYTES]));
         }
 
         $this->filename  = $filename;
@@ -304,7 +307,9 @@ final class Attachment
             throw new \RuntimeException(Lang::t('attachment.unreadable', ['path' => $path]));
         }
         if ($size > self::MAX_BYTES) {
-            throw new \RuntimeException(Lang::t('attachment.too_large', ['limit' => (string) self::MAX_BYTES]));
+            // Same CM-45 taxonomy as the ctor arm: the caller supplied an
+            // oversized input; the read was never attempted.
+            throw new \InvalidArgumentException(Lang::t('attachment.too_large', ['limit' => (string) self::MAX_BYTES]));
         }
 
         $prev = \error_reporting(E_ALL & ~\E_WARNING);

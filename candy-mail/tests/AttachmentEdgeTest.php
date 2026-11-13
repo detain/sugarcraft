@@ -56,7 +56,7 @@ final class AttachmentEdgeTest extends TestCase
         \fclose($handle);
 
         try {
-            $this->expectException(\RuntimeException::class);
+            $this->expectException(\InvalidArgumentException::class);
             $this->expectExceptionMessage('exceeds');
             Attachment::fromPath($path);
         } finally {
@@ -66,8 +66,9 @@ final class AttachmentEdgeTest extends TestCase
 
     public function testFromContentObeysTheSameCeiling(): void
     {
-        // The constructor choke covers the memory path, not just disk reads.
-        $this->expectException(\RuntimeException::class);
+        // The constructor choke covers the memory path, not just disk reads
+        // (CM-45 taxonomy: oversized caller input is InvalidArgumentException).
+        $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('exceeds');
         Attachment::fromContent(\str_repeat('A', Attachment::MAX_BYTES + 1), 'huge.bin');
     }
