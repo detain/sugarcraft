@@ -41,7 +41,7 @@ final class TableMultilineCjkTest extends TestCase
 
     public function testOverWideClustersNeverEscapeTheBorderedFrame(): void
     {
-        $view = self::stripAnsi(self::cjkTable(1)->View());
+        $view = self::stripAnsi(self::cjkTable(1)->view());
         $widths = self::lineWidths($view);
 
         $this->assertGreaterThan(1, \count($widths));
@@ -55,8 +55,8 @@ final class TableMultilineCjkTest extends TestCase
 
     public function testBorderlessPathAgreesWithBorderedWidths(): void
     {
-        $bordered = self::lineWidths(self::stripAnsi(self::cjkTable(1)->View()));
-        $borderless = self::lineWidths(self::stripAnsi(self::cjkTable(1, true)->View()));
+        $bordered = self::lineWidths(self::stripAnsi(self::cjkTable(1)->view()));
+        $borderless = self::lineWidths(self::stripAnsi(self::cjkTable(1, true)->view()));
 
         // Same cells, same wrapping — the box adds two edge lines and two
         // border characters per line.
@@ -74,7 +74,7 @@ final class TableMultilineCjkTest extends TestCase
             ->withRows([Row::new(RowData::from(['cjk' => '日本語です', 'id' => '1']))])
             ->withMultilineMode(true);
 
-        $view = self::stripAnsi($table->View());
+        $view = self::stripAnsi($table->view());
         $widths = self::lineWidths($view);
         foreach ($widths as $i => $w) {
             $this->assertSame($widths[0], $w, "line $i desynced");
@@ -92,7 +92,7 @@ final class TableMultilineCjkTest extends TestCase
             ->withRows([Row::new(RowData::from(['w' => 'extraordinarilylong']))])
             ->withMultilineMode(true);
 
-        $view = self::stripAnsi($table->View());
+        $view = self::stripAnsi($table->view());
         $widths = self::lineWidths($view);
         foreach ($widths as $i => $w) {
             $this->assertSame($widths[0], $w, "line $i desynced");
@@ -118,7 +118,7 @@ final class TableMultilineCjkTest extends TestCase
             ->withRows([Row::new(RowData::from(['w' => '日本語', 'id' => 'x']))])
             ->withMultilineMode(true);
 
-        $view = self::stripAnsi($table->View());
+        $view = self::stripAnsi($table->view());
         $widths = self::lineWidths($view);
         foreach ($widths as $i => $w) {
             $this->assertSame($widths[0], $w, "line $i desynced from the frame");
@@ -133,7 +133,7 @@ final class TableMultilineCjkTest extends TestCase
         $table = Table::fromColumns([Column::new('c', '日本', 1), Column::new('id', 'ID', 2)])
             ->withRows([Row::new(RowData::from(['c' => 'x', 'id' => '1']))]);
 
-        $view = self::stripAnsi($table->View());
+        $view = self::stripAnsi($table->view());
         $widths = self::lineWidths($view);
         foreach ($widths as $i => $w) {
             $this->assertSame($widths[0], $w, "line $i desynced from the frame");

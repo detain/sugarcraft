@@ -26,27 +26,27 @@ $t = Table::fromColumns([
 ])->withZebra()
   ->withHeaderStyle('1;37');
 
-echo $t->View() . "\n\n";
+echo $t->view() . "\n\n";
 
 // Sort by score descending
 echo "=== Sorted by Score (desc) ===\n";
-$t2 = $t->SortBy('score', ascending: false);
-echo $t2->View() . "\n\n";
+$t2 = $t->sortBy('score', ascending: false);
+echo $t2->view() . "\n\n";
 
 // Filter
 echo "=== Filter: name contains 'a' ===\n";
-$t3 = $t->Filter('name', 'a');
-echo $t3->View() . "\n\n";
+$t3 = $t->filter('name', 'a');
+echo $t3->view() . "\n\n";
 
 // Select row
 echo "=== With cursor (select next twice) ===\n";
-$t4 = $t->SelectNext()->SelectNext();
-echo $t4->View() . "\n\n";
+$t4 = $t->selectNext()->selectNext();
+echo $t4->view() . "\n\n";
 
 // Pagination
 echo "=== Paginated (3 per page, page 2) ===\n";
 $t5 = $t->withPageSize(3)->withPage(1);
-echo $t5->View() . "\n";
+echo $t5->view() . "\n";
 
 // Missing data
 echo "\n=== Missing Data Indicator ===\n";
@@ -59,4 +59,4 @@ $t6 = Table::fromColumns([
     Row::new(RowData::from(['id' => '2', 'name' => 'Bob', 'note' => 'VIP'])),
 ])->withMissingIndicator('<N/A>');
 
-echo $t6->View() . "\n";
+echo $t6->view() . "\n";

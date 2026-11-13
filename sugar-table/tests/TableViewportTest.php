@@ -25,7 +25,7 @@ final class TableViewportTest extends TestCase
     public function testViewportHeightZeroRendersAllRows(): void
     {
         $t = $this->makeLargeTable()->withViewportHeight(0);
-        $view = $t->View();
+        $view = $t->view();
 
         // All 100 rows should be visible when viewportHeight is 0
         $this->assertStringContainsString('User0', $view);
@@ -35,7 +35,7 @@ final class TableViewportTest extends TestCase
     public function testViewportHeightRestrictsVisibleRows(): void
     {
         $t = $this->makeLargeTable()->withViewportHeight(10);
-        $view = $t->View();
+        $view = $t->view();
 
         // Only 10 rows should be visible
         $this->assertStringContainsString('User0', $view);
@@ -46,7 +46,7 @@ final class TableViewportTest extends TestCase
     {
         $t = $this->makeLargeTable()->withViewportHeight(5)
             ->withSelectedIndex(12)->withScrollY(10);
-        $view = $t->View();
+        $view = $t->view();
 
         // Rows 10-14 should be visible (User10, User11, User12, User13, User14)
         $this->assertStringContainsString('User10', $view);
@@ -68,7 +68,7 @@ final class TableViewportTest extends TestCase
             ->withSelectedIndex(99)->withScrollY(200);
 
         $this->assertSame(95, $t->scrollY(), 'window parks with the cursor at its top edge');
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('User95', $view);
         $this->assertStringNotContainsString('User0', $view);
     }
@@ -82,7 +82,7 @@ final class TableViewportTest extends TestCase
         $this->assertSame(0, $a->scrollY());
         $this->assertSame(0, $b->scrollY());
         // Check the view shows limited rows (viewportHeight 10 on 100 rows)
-        $view = $b->View();
+        $view = $b->view();
         $this->assertStringContainsString('User0', $view);
         $this->assertStringNotContainsString('User99', $view);
     }
@@ -103,7 +103,7 @@ final class TableViewportTest extends TestCase
             ->withViewportHeight(5)
             ->withScrollY(0);
 
-        $view = $t->View();
+        $view = $t->view();
         // Page size is 20, viewport shows 5 rows
         $this->assertStringContainsString('User0', $view);
         $this->assertStringNotContainsString('User5', $view);
@@ -289,7 +289,7 @@ final class TableViewportTest extends TestCase
         $t = $this->makeLargeTable()
             ->withViewportHeight(5)
             ->withScrollY(0)
-            ->Filter('name', 'User9'); // Only User9* rows match
+            ->filter('name', 'User9'); // Only User9* rows match
 
         // maxScrollY should be max(0, 11 - 5) = 6
         $this->assertSame(6, $t->scrollYForKey(Table::KEY_END));

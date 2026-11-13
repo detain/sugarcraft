@@ -34,7 +34,7 @@ final class GoldenRenderTest extends TestCase
                 Row::new(RowData::from(['id' => '2', 'name' => 'Bob'])),
             ]);
 
-        $output = $table->View();
+        $output = $table->view();
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -56,7 +56,7 @@ final class GoldenRenderTest extends TestCase
             ])
             ->withZebra(true);
 
-        $output = $table->View();
+        $output = $table->view();
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(

@@ -44,7 +44,7 @@ final class TableStyledCellInternalsTest extends TestCase
         $t = self::nameTable([
             Row::new(RowData::from(['name' => StyledCell::new('zebra', '31')])),
             Row::new(RowData::from(['name' => 'apple'])),
-        ])->SortBy('name', true);
+        ])->sortBy('name', true);
 
         $names = array_map(
             static function (Row $r): string {
@@ -65,9 +65,9 @@ final class TableStyledCellInternalsTest extends TestCase
 
         // The wrapper SGR contains no 'lo' substring, so a positive hit can
         // only come from the visible value; 'hel' proves it is the value.
-        $this->assertSame(1, $t->search('hel')->TotalRows());
-        $this->assertSame(1, $t->search('llo')->TotalRows());
-        $this->assertSame(0, $t->search('zebra')->TotalRows());
+        $this->assertSame(1, $t->search('hel')->totalRows());
+        $this->assertSame(1, $t->search('llo')->totalRows());
+        $this->assertSame(0, $t->search('zebra')->totalRows());
     }
 
     public function testFilterMatchesStyledCellValue(): void
@@ -77,7 +77,7 @@ final class TableStyledCellInternalsTest extends TestCase
             Row::new(RowData::from(['name' => 'world'])),
         ]);
 
-        $this->assertSame(1, $t->Filter('name', 'ell')->TotalRows());
+        $this->assertSame(1, $t->filter('name', 'ell')->totalRows());
     }
 
     public function testNonScalarCellCostsItsOwnMatchabilityNotThePane(): void
@@ -89,10 +89,10 @@ final class TableStyledCellInternalsTest extends TestCase
 
         // Every path that reads values must survive the junk cell: the old
         // unguarded (string) casts threw Error here and killed the pane.
-        $this->assertStringContainsString('apple', self::plain($t->View()));
-        $this->assertSame(2, $t->SortBy('name', true)->TotalRows());
-        $this->assertSame(1, $t->search('apple')->TotalRows());
-        $this->assertSame(1, $t->Filter('name', 'ple')->TotalRows());
+        $this->assertStringContainsString('apple', self::plain($t->view()));
+        $this->assertSame(2, $t->sortBy('name', true)->totalRows());
+        $this->assertSame(1, $t->search('apple')->totalRows());
+        $this->assertSame(1, $t->filter('name', 'ple')->totalRows());
     }
 
     public function testComputeColumnWidthsMeasuresStyledValueNotWrapper(): void

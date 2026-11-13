@@ -47,7 +47,7 @@ final class TableScrollStrandingTest extends TestCase
     private function dataLineCount(Table $t): int
     {
         $n = 0;
-        foreach (\explode("\n", self::plain($t->View())) as $line) {
+        foreach (\explode("\n", self::plain($t->view())) as $line) {
             if (\str_contains($line, 'row')) {
                 $n++;
             }
@@ -69,8 +69,8 @@ final class TableScrollStrandingTest extends TestCase
 
         $this->assertSame(5, $t->maxScrollY());
         $this->assertSame(5, $this->dataLineCount($t), 'viewport stays full of data rows');
-        $this->assertStringContainsString('row9', $t->View(), 'End shows the tail of the page, not a blank box');
-        $this->assertStringNotContainsString('row4', $t->View());
+        $this->assertStringContainsString('row9', $t->view(), 'End shows the tail of the page, not a blank box');
+        $this->assertStringNotContainsString('row4', $t->view());
     }
 
     /**
@@ -92,15 +92,15 @@ final class TableScrollStrandingTest extends TestCase
     {
         $t = $this->table(pageSize: 10, viewport: 5);
         for ($i = 0; $i < 6; $i++) {
-            $t = $t->SelectNext();
+            $t = $t->selectNext();
         }
 
-        $this->assertSame(6, $t->SelectedIndex());
+        $this->assertSame(6, $t->selectedIndex());
         $reflection = new \ReflectionProperty(Table::class, 'scrollY');
         $scrollY = $reflection->getValue($t);
         $this->assertLessThanOrEqual(6, $scrollY);
         $this->assertGreaterThanOrEqual(2, $scrollY, 'window followed the cursor down');
-        $this->assertStringContainsString('row6', $t->View(), 'the selected row is rendered');
+        $this->assertStringContainsString('row6', $t->view(), 'the selected row is rendered');
     }
 
     /**
@@ -111,7 +111,7 @@ final class TableScrollStrandingTest extends TestCase
     public function testReplacedRowsPruneStaleExpansionIdentities(): void
     {
         $t = $this->table();
-        $rows = $t->Rows();
+        $rows = $t->rows();
         $t = $t->toggleExpanded(0);
         $this->assertTrue($t->isExpanded(0));
 
@@ -123,7 +123,7 @@ final class TableScrollStrandingTest extends TestCase
         // Same-value re-wrap un-expands (identity contract) but leaves NO leak.
         $repeated = \array_map(
             static fn (Row $r): Row => Row::new(RowData::from(['n' => $r->data->get('n')])),
-            $t->Rows(),
+            $t->rows(),
         );
         $rewrapped = $t->withRows($repeated);
         $this->assertFalse($rewrapped->isExpanded(0));
@@ -136,11 +136,11 @@ final class TableScrollStrandingTest extends TestCase
      */
     public function testFilterAfterDeepScrollShowsMatches(): void
     {
-        $t = $this->table(viewport: 5)->withSelectedIndex(15)->withScrollY(12)->Filter('n', 'row1');
+        $t = $this->table(viewport: 5)->withSelectedIndex(15)->withScrollY(12)->filter('n', 'row1');
 
         $this->assertSame(0, (new \ReflectionProperty(Table::class, 'scrollY'))->getValue($t));
         $this->assertGreaterThanOrEqual(5, $this->dataLineCount($t));
-        $this->assertStringContainsString('row10', $t->View());
+        $this->assertStringContainsString('row10', $t->view());
     }
 
     /**
@@ -153,7 +153,7 @@ final class TableScrollStrandingTest extends TestCase
 
         $this->assertSame(15, $t->maxScrollY());
         $this->assertSame(5, $this->dataLineCount($t));
-        $this->assertStringContainsString('row19', $t->View());
+        $this->assertStringContainsString('row19', $t->view());
     }
 
     /**
@@ -171,8 +171,8 @@ final class TableScrollStrandingTest extends TestCase
         $back = $t->withPage(0);
 
         $this->assertSame(0, $scroll->getValue($back), 'page turn re-anchors scroll on the snapped cursor');
-        $this->assertSame(0, $back->SelectedIndex());
-        $this->assertStringContainsString('row0', $back->View(), 'the highlight is inside the turned frame');
+        $this->assertSame(0, $back->selectedIndex());
+        $this->assertStringContainsString('row0', $back->view(), 'the highlight is inside the turned frame');
     }
 
     /**
@@ -188,7 +188,7 @@ final class TableScrollStrandingTest extends TestCase
             'END cannot jump the window past the cursor — it parks on it');
 
         $cursorLine = null;
-        foreach (\explode("\n", $t->View()) as $line) {
+        foreach (\explode("\n", $t->view()) as $line) {
             if (\str_contains(self::plain($line), 'row1')) {
                 $cursorLine = $line;
                 break;

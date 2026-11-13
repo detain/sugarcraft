@@ -92,7 +92,7 @@ final class TableWrappingTest extends TestCase
             Row::new(RowData::from(['desc' => 'This is a long description'])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // ST-17: header truncation to the 10-cell column is announced
         $this->assertStringContainsString('Descripti…', $view);
@@ -222,7 +222,7 @@ final class TableWrappingTest extends TestCase
             Row::new(RowData::from(['name' => 'English'])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // Both should be visible with correct alignment
         $this->assertStringContainsString('日本語', $view);
@@ -237,7 +237,7 @@ final class TableWrappingTest extends TestCase
             Row::new(RowData::from(['name' => '日本語学習'])), // 10 cells, truncated to 6
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // 10 display cells truncated to the 6-cell budget: '日本' (4 cells)
         // + '…' (1) is the widest honest clip, right-aligned inside the cell.

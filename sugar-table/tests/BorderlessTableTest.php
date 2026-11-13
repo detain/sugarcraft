@@ -57,7 +57,7 @@ final class BorderlessTableTest extends TestCase
     public function testBorderlessHasNoBoxBorderCharacters(): void
     {
         $out = $this->table($this->albumColumns(), $this->albumRows())
-            ->withBorderless()->withWidth(40)->View();
+            ->withBorderless()->withWidth(40)->view();
 
         $stripped = Ansi::strip($out);
         // No vertical rules and no box corners (the header rule "─" is allowed).
@@ -70,7 +70,7 @@ final class BorderlessTableTest extends TestCase
     public function testBorderlessFirstLineIsHeaderNotTopBorder(): void
     {
         $out = $this->table($this->albumColumns(), $this->albumRows())
-            ->withBorderless()->withWidth(40)->View();
+            ->withBorderless()->withWidth(40)->view();
 
         $first = Ansi::strip(self::lines($out)[0]);
         $this->assertStringContainsString('Album', $first);   // header, not a ╭───╮ rule
@@ -80,7 +80,7 @@ final class BorderlessTableTest extends TestCase
     public function testBorderlessHeaderSeparatorRuleIsPresent(): void
     {
         $out = $this->table($this->albumColumns(), $this->albumRows())
-            ->withBorderless()->withWidth(40)->View();
+            ->withBorderless()->withWidth(40)->view();
 
         // Second line is the "────" rule spanning the full width.
         $rule = Ansi::strip(self::lines($out)[1]);
@@ -93,7 +93,7 @@ final class BorderlessTableTest extends TestCase
     {
         foreach ([20, 33, 40, 80] as $w) {
             $out = $this->table($this->albumColumns(), $this->albumRows())
-                ->withBorderless()->withWidth($w)->View();
+                ->withBorderless()->withWidth($w)->view();
             foreach (self::lines($out) as $i => $line) {
                 $this->assertSame($w, Width::string($line), "line {$i} at width {$w}");
             }
@@ -103,7 +103,7 @@ final class BorderlessTableTest extends TestCase
     public function testFlexColumnFillsAndTruncatesLongContent(): void
     {
         $out = $this->table($this->albumColumns(), $this->albumRows())
-            ->withBorderless()->withWidth(40)->View();
+            ->withBorderless()->withWidth(40)->view();
 
         $stripped = Ansi::strip($out);
         // The long album title is truncated to its (filled) column, not overflowing.
@@ -119,7 +119,7 @@ final class BorderlessTableTest extends TestCase
             Column::new('c', 'C', 4),
         ];
         $out = $this->table($cols, [['a' => 'x', 'b' => 'y', 'c' => 'z']])
-            ->withBorderless()->withWidth(31)->View();
+            ->withBorderless()->withWidth(31)->view();
 
         foreach (self::lines($out) as $line) {
             $this->assertSame(31, Width::string($line)); // remainder absorbed → exact
@@ -131,7 +131,7 @@ final class BorderlessTableTest extends TestCase
         // cellPadding defaults to 0; the table width equals exactly the request.
         $t = $this->table($this->albumColumns(), $this->albumRows())->withBorderless()->withWidth(50);
         $this->assertSame(0, $this->readCellPadding($t));
-        foreach (self::lines($t->View()) as $line) {
+        foreach (self::lines($t->view()) as $line) {
             $this->assertSame(50, Width::string($line));
         }
     }
@@ -149,7 +149,7 @@ final class BorderlessTableTest extends TestCase
     public function testSelectedRowRendersReverseVideoAcrossFullWidth(): void
     {
         $out = $this->table($this->albumColumns(), $this->albumRows())
-            ->withBorderless()->withWidth(40)->withSelectable()->withSelectedIndex(1)->View();
+            ->withBorderless()->withWidth(40)->withSelectable()->withSelectedIndex(1)->view();
 
         $lines = self::lines($out);
         // header(0), rule(1), data row 0 (2), data row 1 == selected (3)
@@ -167,7 +167,7 @@ final class BorderlessTableTest extends TestCase
     public function testUnselectedRowsHaveNoReverse(): void
     {
         $out = $this->table($this->albumColumns(), $this->albumRows())
-            ->withBorderless()->withWidth(40)->withSelectable()->withSelectedIndex(1)->View();
+            ->withBorderless()->withWidth(40)->withSelectable()->withSelectedIndex(1)->view();
 
         $lines = self::lines($out);
         $this->assertFalse(self::hasReverse($lines[2]), 'data row 0 not selected');
@@ -177,7 +177,7 @@ final class BorderlessTableTest extends TestCase
     public function testSelectionDisabledRendersNoReverse(): void
     {
         $out = $this->table($this->albumColumns(), $this->albumRows())
-            ->withBorderless()->withWidth(40)->withSelectable(false)->View();
+            ->withBorderless()->withWidth(40)->withSelectable(false)->view();
 
         foreach (self::lines($out) as $line) {
             $this->assertFalse(self::hasReverse($line));
@@ -194,7 +194,7 @@ final class BorderlessTableTest extends TestCase
             Column::new('c', 'C', 12)->withAlignLeft(),
         ];
         $out = $this->table($cols, [['a' => 'x', 'b' => str_repeat('b', 12), 'c' => str_repeat('c', 12)]])
-            ->withBorderless()->withWidth(8)->withSelectable()->withSelectedIndex(0)->View();
+            ->withBorderless()->withWidth(8)->withSelectable()->withSelectedIndex(0)->view();
 
         $this->assertIsString($out);
         foreach (self::lines($out) as $i => $line) {
@@ -213,7 +213,7 @@ final class BorderlessTableTest extends TestCase
         $out = $this->table($cols, [
             ['name' => 'café', 'lang' => '日本語'],          // accented + CJK (wide)
             ['name' => 'naïve', 'lang' => 'ascii'],
-        ])->withBorderless()->withWidth(30)->View();
+        ])->withBorderless()->withWidth(30)->view();
 
         foreach (self::lines($out) as $i => $line) {
             $this->assertSame(30, Width::string($line), "multibyte line {$i} width");
@@ -232,7 +232,7 @@ final class BorderlessTableTest extends TestCase
         $out = $this->table($cols, [['a' => 'green', 'b' => '99']])
             ->withBorderless()->withWidth(24)
             ->withStyleFunc(static fn (int $r, int $c, string $v): string => $c === 0 ? '1;32' : '')
-            ->View();
+            ->view();
 
         $line = self::lines($out)[2]; // the data row
         $this->assertStringContainsString("\e[", $line);              // it IS styled
@@ -244,7 +244,7 @@ final class BorderlessTableTest extends TestCase
 
     public function testBorderedModeStillDrawsABox(): void
     {
-        $out = $this->table($this->albumColumns(), $this->albumRows())->View(); // default = bordered
+        $out = $this->table($this->albumColumns(), $this->albumRows())->view(); // default = bordered
         $stripped = Ansi::strip($out);
         $this->assertStringContainsString('│', $stripped);
         $this->assertStringContainsString('┌', $stripped);

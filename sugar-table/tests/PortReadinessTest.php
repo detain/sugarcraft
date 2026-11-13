@@ -68,13 +68,13 @@ final class PortReadinessTest extends TestCase
     public function testAddRowAfterRenderBecomesVisible(): void
     {
         $t = self::plainTable(2);
-        $before = $t->View();
+        $before = $t->view();
         $this->assertStringNotContainsString('n3', $before);
 
         $grown = $t->addRow(Row::new(RowData::from(['id' => '3', 'name' => 'n3'])));
-        $after = $grown->View();
+        $after = $grown->view();
 
-        $this->assertSame(3, $grown->TotalRows());
+        $this->assertSame(3, $grown->totalRows());
         $this->assertStringContainsString('n3', $after);
     }
 
@@ -84,8 +84,8 @@ final class PortReadinessTest extends TestCase
             Column::new('c', 'Content', 0)->withColumnWidth(ColumnWidth::Content)->withAlignLeft(),
         ])->withRows([Row::new(RowData::from(['c' => 'hi']))]);
 
-        $short = self::viewLines($t->View());
-        $wide = $t->addRows([Row::new(RowData::from(['c' => 'a much longer value']))])->View();
+        $short = self::viewLines($t->view());
+        $wide = $t->addRows([Row::new(RowData::from(['c' => 'a much longer value']))])->view();
 
         $longLine = self::viewLines($wide)[0];
         $this->assertGreaterThan(
@@ -109,7 +109,7 @@ final class PortReadinessTest extends TestCase
             ->withMultilineMode(true)
             ->withSelectable(false);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Every ESC byte must be the head of a complete SGR sequence: the
         // count of ESCs equals the count of SGR openers, so no ESC was ever
@@ -145,7 +145,7 @@ final class PortReadinessTest extends TestCase
             ->withMultilineMode(true)
             ->withSelectable(false);
 
-        $lines = self::viewLines($t->View());
+        $lines = self::viewLines($t->view());
         $this->assertCount(6, $lines, 'hard break must occupy its own buffer line');
         $this->assertStringContainsString('alpha', $lines[3]);
         $this->assertStringContainsString('beta', $lines[4]);
@@ -166,7 +166,7 @@ final class PortReadinessTest extends TestCase
     public function testFrozenColsNormalizesUnsortedPrefixAndRenders(): void
     {
         $t = self::plainTable(2)->withFrozenCols([1, 0]);
-        $view = $t->View();
+        $view = $t->view();
 
         $this->assertStringContainsString('ID', $view);
         $this->assertStringContainsString('Name', $view);
@@ -185,7 +185,7 @@ final class PortReadinessTest extends TestCase
             ->withRows([Row::new(RowData::from(['a' => 'aa', 'b' => 'bb', 'c' => 'cc', 'd' => 'dd']))])
             ->withScrollX(2);
 
-        $lines = \array_values(\array_filter(self::viewLines($t->View()), static fn (string $l): bool => $l !== ''));
+        $lines = \array_values(\array_filter(self::viewLines($t->view()), static fn (string $l): bool => $l !== ''));
 
         $width = Width::of($lines[0]);
         foreach ($lines as $i => $line) {
@@ -204,10 +204,10 @@ final class PortReadinessTest extends TestCase
     {
         $t = self::plainTable(4)->withPageSize(2)->withSelectable()->withSelectedIndex(3);
 
-        $this->assertSame(1, $t->CurrentPage());
-        $this->assertSame('n4', $t->CurrentRow()?->data->get('name'));
+        $this->assertSame(1, $t->currentPage());
+        $this->assertSame('n4', $t->currentRow()?->data->get('name'));
 
-        foreach (\explode("\n", $t->View()) as $line) {
+        foreach (\explode("\n", $t->view()) as $line) {
             if (\str_contains($line, 'n4')) {
                 $this->assertTrue(self::hasReverse($line), 'selected row must render reverse');
             } elseif (\trim($line) !== '') {
@@ -219,15 +219,15 @@ final class PortReadinessTest extends TestCase
     public function testSelectNextAndPreviousAutoPageAcrossBoundaries(): void
     {
         $t = self::plainTable(4)->withPageSize(2)->withSelectable()->withSelectedIndex(1);
-        $this->assertSame(0, $t->CurrentPage());
+        $this->assertSame(0, $t->currentPage());
 
-        $down = $t->SelectNext();
-        $this->assertSame(2, $down->SelectedIndex());
-        $this->assertSame(1, $down->CurrentPage(), 'forward step must page onto the row it selects');
+        $down = $t->selectNext();
+        $this->assertSame(2, $down->selectedIndex());
+        $this->assertSame(1, $down->currentPage(), 'forward step must page onto the row it selects');
 
-        $up = $down->SelectPrevious();
-        $this->assertSame(1, $up->SelectedIndex());
-        $this->assertSame(0, $up->CurrentPage(), 'backward step must page back onto the row it selects');
+        $up = $down->selectPrevious();
+        $this->assertSame(1, $up->selectedIndex());
+        $this->assertSame(0, $up->currentPage(), 'backward step must page back onto the row it selects');
     }
 
     // ---- finding #6: maxWidth is a hard ceiling with marked clipping --------
@@ -245,7 +245,7 @@ final class PortReadinessTest extends TestCase
         $total->setAccessible(true);
         $this->assertSame([5], $solve->invoke($t, $total->invoke($t)));
 
-        $this->assertStringContainsString('a ve…', $t->View());
+        $this->assertStringContainsString('a ve…', $t->view());
     }
 
     // ---- finding #7: single-line rows clip with an ellipsis ------------------
@@ -256,7 +256,7 @@ final class PortReadinessTest extends TestCase
             Column::new('v', 'V', 5)->withAlignLeft(),
         ])->withRows([Row::new(RowData::from(['v' => 'averylongvalue']))]);
 
-        $this->assertStringContainsString('aver…', \implode('', self::viewLines($t->View())));
+        $this->assertStringContainsString('aver…', \implode('', self::viewLines($t->view())));
     }
 
     // ---- finding #8: expanded row is one full-width detail line --------------
@@ -268,8 +268,8 @@ final class PortReadinessTest extends TestCase
             Column::new('b', 'B', 6)->withAlignLeft(),
         ])->withRows([Row::new(RowData::from(['a' => 'a1', 'b' => 'expand me wider than six']))]);
 
-        $plain = $t->View();
-        $expanded = $t->toggleExpanded(0)->View();
+        $plain = $t->view();
+        $expanded = $t->toggleExpanded(0)->view();
 
         $plainLines = self::viewLines($plain);
         $expandedLines = self::viewLines($expanded);
@@ -293,25 +293,25 @@ final class PortReadinessTest extends TestCase
     {
         $t = self::plainTable(5)->withPageSize(2)->withPage(-1);
 
-        $this->assertSame(0, $t->CurrentPage());
-        $this->assertStringContainsString('n1', $t->View());
+        $this->assertSame(0, $t->currentPage());
+        $this->assertStringContainsString('n1', $t->view());
     }
 
     public function testBeyondRangePageClampsToLastPage(): void
     {
         $t = self::plainTable(5)->withPageSize(2)->withPage(999);
 
-        $this->assertSame(2, $t->CurrentPage());
-        $this->assertStringContainsString('n5', $t->View());
+        $this->assertSame(2, $t->currentPage());
+        $this->assertStringContainsString('n5', $t->view());
     }
 
     public function testFilterShrinkKeepsViewportInsideResult(): void
     {
-        $t = self::plainTable(6)->withPageSize(2)->SelectPage(2);
-        $shrunk = $t->Filter('name', 'n1'); // keeps only 'n1'
+        $t = self::plainTable(6)->withPageSize(2)->selectPage(2);
+        $shrunk = $t->filter('name', 'n1'); // keeps only 'n1'
 
-        $this->assertSame(0, $shrunk->CurrentPage());
-        $this->assertStringContainsString('n1', $shrunk->View());
+        $this->assertSame(0, $shrunk->currentPage());
+        $this->assertStringContainsString('n1', $shrunk->view());
     }
 
     // ---- finding #10: sugar-core Width is the only measurement oracle --------

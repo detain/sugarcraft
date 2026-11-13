@@ -114,7 +114,7 @@ final class Table
     private string $zebraStyleOdd  = '';
 
     // Per-cell style callback: (int $row, int $col, string $value): Style|string
-    // $col is the 0-based column INDEX into Columns() — not the column key
+    // $col is the 0-based column INDEX into columns() — not the column key
     // string. Hidden columns keep their index (they are skipped, not renumbered).
     // Stored as a Closure (audit ST-48, finding 057): `callable` is not a
     // legal property type, and the fromCallable wrap at the single ingress
@@ -495,7 +495,7 @@ final class Table
 
     /**
      * Single implementation of page navigation shared by withPage() and
-     * SelectPage(). One page means one semantic: the page clamps to
+     * selectPage(). One page means one semantic: the page clamps to
      * [0, TotalPages-1] and the selection snaps to the page's first row in
      * the filtered/sorted view (page-global index = page * pageSize, itself
      * clamped when the last page is short). The viewport follows the snapped
@@ -503,7 +503,7 @@ final class Table
      */
     private function gotoPage(int $page): self
     {
-        $clamped = \max(0, \min($page, $this->TotalPages() - 1));
+        $clamped = \max(0, \min($page, $this->totalPages() - 1));
         $snapTo  = $this->pageSize > 0 ? $clamped * $this->pageSize : 0;
 
         $view = $this->filteredSortedRows();
@@ -706,13 +706,13 @@ final class Table
      * - A Style object (new API)
      * - An ANSI SGR string like "1;31" for back-compat
      *
-     * $col is the 0-based column INDEX into Columns(), not the column key
-     * string — match against a key via Columns()[$col]->key. Hidden columns
+     * $col is the 0-based column INDEX into columns(), not the column key
+     * string — match against a key via columns()[$col]->key. Hidden columns
      * keep their index; the callback simply never fires for them.
      *
      * $row is the 0-based slot within the rows rendered in the current
      * frame — page- and scroll-relative, not the absolute index into
-     * Rows(). $value arrives post-Sanitize (control and private-use
+     * rows(). $value arrives post-Sanitize (control and private-use
      * characters already stripped), so match on display-safe text.
      *
      * When not set, existing baseStyle/column style/row style/cell style
@@ -1000,7 +1000,7 @@ final class Table
     // Navigation
     // -------------------------------------------------------------------------
 
-    public function SelectNext(): self
+    public function selectNext(): self
     {
         $view = $this->filteredSortedRows();
         if ($view === []) {
@@ -1021,7 +1021,7 @@ final class Table
         return $clone;
     }
 
-    public function SelectPrevious(): self
+    public function selectPrevious(): self
     {
         // Already at the top: skip the clone AND the filtered/sorted view —
         // no state can change, so the expensive computation is pure waste.
@@ -1047,7 +1047,7 @@ final class Table
         if ($this->pageSize <= 0) {
             return 0;
         }
-        return \max(0, \min(\intdiv($index, $this->pageSize), $this->TotalPages() - 1));
+        return \max(0, \min(\intdiv($index, $this->pageSize), $this->totalPages() - 1));
     }
 
     /**
@@ -1098,20 +1098,20 @@ final class Table
      * Jump to a page and park the cursor on its first row. Same semantics as
      * {@see withPage()} — both route through the single page-navigation path.
      */
-    public function SelectPage(int $page): self
+    public function selectPage(int $page): self
     {
         return $this->gotoPage($page);
     }
 
-    public function NextPage(): self
+    public function nextPage(): self
     {
-        $total = $this->TotalPages();
-        return $this->SelectPage(\min($total - 1, $this->page + 1));
+        $total = $this->totalPages();
+        return $this->selectPage(\min($total - 1, $this->page + 1));
     }
 
-    public function PreviousPage(): self
+    public function previousPage(): self
     {
-        return $this->SelectPage(\max(0, $this->page - 1));
+        return $this->selectPage(\max(0, $this->page - 1));
     }
 
     // -------------------------------------------------------------------------
@@ -1177,7 +1177,7 @@ final class Table
      *   $table = $table->handleKey($key);
      *
      * The applied window is cursor-preserving (ST-15): keys move the viewport
-     * toward the highlight, never past it. Use withSelectedIndex()/SelectNext()
+     * toward the highlight, never past it. Use withSelectedIndex()/selectNext()
      * to travel — cursor travel scrolls the window to reveal itself.
      *
      * @param string $key One of the KEY_* constants
@@ -1204,7 +1204,7 @@ final class Table
         if ($this->viewportHeight <= 0) {
             return 0;
         }
-        $visible = $this->pageSize > 0 ? \count($this->pagedRows()) : $this->TotalRows();
+        $visible = $this->pageSize > 0 ? \count($this->pagedRows()) : $this->totalRows();
 
         return \max(0, $visible - $this->viewportHeight);
     }
@@ -1217,7 +1217,7 @@ final class Table
      * Sort by $colKey. If already sorting by it, toggle asc/desc.
      * If $primary is true, replace existing sort list; otherwise append.
      */
-    public function SortBy(string $colKey, bool $ascending = true, bool $primary = true): self
+    public function sortBy(string $colKey, bool $ascending = true, bool $primary = true): self
     {
         if (!$this->columnExists($colKey)) {
             throw new \InvalidArgumentException("SortBy column key '{$colKey}' does not exist");
@@ -1255,7 +1255,7 @@ final class Table
         return $clone;
     }
 
-    public function ClearSort(): self
+    public function clearSort(): self
     {
         $clone = clone $this;
         $clone->sortColumns = [];
@@ -1267,7 +1267,7 @@ final class Table
     // Filtering
     // -------------------------------------------------------------------------
 
-    public function Filter(string $colKey, string $text): self
+    public function filter(string $colKey, string $text): self
     {
         if (!$this->columnExists($colKey)) {
             throw new \InvalidArgumentException("Filter column key '{$colKey}' does not exist");
@@ -1296,12 +1296,12 @@ final class Table
         return $clone;
     }
 
-    public function ClearFilter(string $colKey): self
+    public function clearFilter(string $colKey): self
     {
-        return $this->Filter($colKey, '');
+        return $this->filter($colKey, '');
     }
 
-    public function ClearAllFilters(): self
+    public function clearAllFilters(): self
     {
         $clone = clone $this;
         $clone->filterText = [];
@@ -1320,14 +1320,14 @@ final class Table
      * uses OR logic: a row is included if ANY scanned column's value
      * contains the search text.
      *
-     * Combines with column filters (Filter()) via AND logic — a row must
+     * Combines with column filters (filter()) via AND logic — a row must
      * satisfy both the global search and all active column filters.
      *
      * @param string $text The search string. Empty string clears the search.
      * @return self A new Table instance with the search applied.
      *
-     * @see Filter()   For per-column filtering with AND logic
-     * @see ClearSearch()  For explicitly clearing the global search
+     * @see filter()   For per-column filtering with AND logic
+     * @see clearSearch()  For explicitly clearing the global search
      */
     public function search(string $text): self
     {
@@ -1342,14 +1342,14 @@ final class Table
      * Clear the global search.
      *
      * Removes the active global search filter, showing all rows (subject to
-     * any remaining column filters from Filter()).
+     * any remaining column filters from filter()).
      *
      * @return self A new Table instance with global search cleared.
      *
      * @see search()  For setting a global search
-     * @see Filter()  For per-column filtering
+     * @see filter()  For per-column filtering
      */
-    public function ClearSearch(): self
+    public function clearSearch(): self
     {
         return $this->search('');
     }
@@ -1442,7 +1442,7 @@ final class Table
     // -------------------------------------------------------------------------
 
     /** @return list<Column> */
-    public function Columns(): array
+    public function columns(): array
     {
         return $this->columns;
     }
@@ -1463,7 +1463,7 @@ final class Table
     }
 
     /** @return list<Row> */
-    public function Rows(): array
+    public function rows(): array
     {
         return $this->rows;
     }
@@ -1592,56 +1592,56 @@ final class Table
      * globally — a cursor past page 0 read null). The page follows the
      * cursor via withSelectedIndex()/gotoPage().
      */
-    public function CurrentRow(): ?Row
+    public function currentRow(): ?Row
     {
         return $this->filteredSortedRows()[$this->selectedIndex] ?? null;
     }
 
-    public function CurrentRowData(): ?RowData
+    public function currentRowData(): ?RowData
     {
-        return $this->CurrentRow()?->data;
+        return $this->currentRow()?->data;
     }
 
     /**
      * The currently selected Row from the filtered/sorted view, or null when
-     * the view is empty. Naming alias of CurrentRow() that pairs with
-     * SelectedIndex(). Mirrors Evertras/bubble-table.Model.HighlightedRow.
+     * the view is empty. Naming alias of currentRow() that pairs with
+     * selectedIndex(). Mirrors Evertras/bubble-table.Model.HighlightedRow.
      */
-    public function SelectedRow(): ?Row
+    public function selectedRow(): ?Row
     {
-        return $this->CurrentRow();
+        return $this->currentRow();
     }
 
-    public function TotalRows(): int
+    public function totalRows(): int
     {
         return \count($this->filteredSortedRows());
     }
 
-    public function TotalPages(): int
+    public function totalPages(): int
     {
         if ($this->pageSize <= 0) {
             return 1;
         }
-        return \max(1, (int) \ceil($this->TotalRows() / $this->pageSize));
+        return \max(1, (int) \ceil($this->totalRows() / $this->pageSize));
     }
 
-    public function SelectedIndex(): int
+    public function selectedIndex(): int
     {
         return $this->selectedIndex;
     }
-    public function CurrentPage(): int
+    public function currentPage(): int
     {
         return $this->page;
     }
-    public function PageSize(): int
+    public function pageSize(): int
     {
         return $this->pageSize;
     }
 
     /**
      * Active sort stack in priority order: the first entry is the primary
-     * key, later entries tie-break it (audit ST-03 — the state SortBy() and
-     * ClearSort() mutate was write-only; hosts re-tracked it blind).
+     * key, later entries tie-break it (audit ST-03 — the state sortBy() and
+     * clearSort() mutate was write-only; hosts re-tracked it blind).
      *
      * @return list<array{key: string, asc: bool}>
      */
@@ -1652,7 +1652,7 @@ final class Table
 
     /**
      * Active per-column filter texts, keyed by column key (the state
-     * Filter()/ClearFilter() mutate; an empty map means unfiltered).
+     * filter()/clearFilter() mutate; an empty map means unfiltered).
      *
      * @return array<string, string>
      */
@@ -1678,9 +1678,9 @@ final class Table
         return $this->computeTotalWidth();
     }
 
-    public function PageFooter(): string
+    public function pageFooter(): string
     {
-        return Lang::t('page_of', ['page' => $this->page + 1, 'total' => $this->TotalPages()]);
+        return Lang::t('page_of', ['page' => $this->page + 1, 'total' => $this->totalPages()]);
     }
 
     /**
@@ -1689,15 +1689,15 @@ final class Table
      * Uses the 'showing_rows' i18n key. Row range is computed from the
      * current page, page size, and total filtered row count.
      *
-     * The count reflects filtered+sorted rows (via TotalRows()), not raw row count.
+     * The count reflects filtered+sorted rows (via totalRows()), not raw row count.
      * When no rows match the filter/search, returns "Showing 0 to 0 of 0 rows".
      *
      * @return string The localized footer string, e.g. "Showing 1 to 25 of 100 rows"
      * @see FooterType::Rows  For displaying this footer in the table
      */
-    public function RowsFooter(): string
+    public function rowsFooter(): string
     {
-        $total = $this->TotalRows();
+        $total = $this->totalRows();
         if ($total === 0) {
             return Lang::t('showing_rows', ['from' => 0, 'to' => 0, 'total' => 0]);
         }
@@ -1964,7 +1964,7 @@ final class Table
     // Rendering
     // -------------------------------------------------------------------------
 
-    public function View(): string
+    public function view(): string
     {
         if ($this->columns === [] || $this->getVisibleColumnIndices() === []) {
             // Nothing to render: no columns defined, or every column is
@@ -2634,9 +2634,9 @@ final class Table
         $style = $this->styleFor($this->footerStyle);
 
         $label = match ($this->footerType) {
-            FooterType::Page => $this->PageFooter(),
-            FooterType::Rows => $this->RowsFooter(),
-            FooterType::Both => $this->PageFooter() . '  |  ' . $this->RowsFooter(),
+            FooterType::Page => $this->pageFooter(),
+            FooterType::Rows => $this->rowsFooter(),
+            FooterType::Both => $this->pageFooter() . '  |  ' . $this->rowsFooter(),
         };
 
         $content = $this->centeredLabel($label, $contentWidth);

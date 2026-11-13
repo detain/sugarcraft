@@ -114,7 +114,7 @@ final class TableSanitizeTest extends TestCase
             Row::new(RowData::from(['data' => "\x1b[2J\x1b[0mINJECTED"])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // The dangerous CSI Erase Screen \x1b[2J must not appear intact.
         // We check for the specific injection pattern, not bare \x1b
@@ -135,7 +135,7 @@ final class TableSanitizeTest extends TestCase
             Row::new(RowData::from(['title' => "\x1b]0;pwned\x07HOOKED"])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // The OSC start sequence must not appear intact
         $this->assertStringNotContainsString("\x1b]0", $view);
@@ -155,7 +155,7 @@ final class TableSanitizeTest extends TestCase
             Row::new(RowData::from(['raw' => "\x00\x07\x7fINJECT"])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Raw control bytes must be neutralized (replaced with ·)
         $this->assertStringNotContainsString("\x00", $view);
@@ -178,7 +178,7 @@ final class TableSanitizeTest extends TestCase
             Row::new(RowData::from(['h' => 'ok'])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Raw ESC byte must be gone
         $this->assertStringNotContainsString("\x1b[2J", $view);
@@ -199,7 +199,7 @@ final class TableSanitizeTest extends TestCase
             Row::new(RowData::from(['multi' => "line1\nline2\x1b[2J"])),
         ])->withMultilineMode(true);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // \n must survive sanitization (preserveNewlines=true)
         $this->assertStringContainsString("line1", $view);
@@ -240,7 +240,7 @@ final class TableSanitizeTest extends TestCase
                 Row::new(RowData::from(['k' => "multi{$open}line\nnext{$close}"])),
             ]);
 
-        $view = $t->View();
+        $view = $t->view();
 
         $this->assertStringNotContainsString($open, $view);
         $this->assertStringNotContainsString($close, $view);
@@ -293,10 +293,10 @@ final class TableSanitizeTest extends TestCase
         $t = Table::fromColumns([Column::new('a', 'A', 12)])
             ->withRows([Row::new(RowData::from(['a' => "x\u{E002}\u{E0FF}y"]))]);
 
-        $this->assertStringContainsString("\u{E002}", $t->View(), 'by default image markers pass by design');
+        $this->assertStringContainsString("\u{E002}", $t->view(), 'by default image markers pass by design');
 
         $strict = $t->withMarkedFrameSanitization();
-        $view = $strict->View();
+        $view = $strict->view();
         $this->assertStringNotContainsString("\u{E002}", $view);
         $this->assertStringNotContainsString("\u{E0FF}", $view);
         $this->assertStringContainsString('x', $view);
@@ -309,7 +309,7 @@ final class TableSanitizeTest extends TestCase
             ->withRows([Row::new(RowData::from(['a' => "l1\u{E001}\nl2"]))])
             ->withMultilineMode(true);
 
-        $view = $t->withMarkedFrameSanitization()->View();
+        $view = $t->withMarkedFrameSanitization()->view();
         $this->assertStringNotContainsString("\u{E002}", $view);
         $this->assertStringNotContainsString("\u{E001}", $view);
         // The sweep is orthogonal to newline policy: multiline still explodes.

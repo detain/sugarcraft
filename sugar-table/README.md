@@ -24,7 +24,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
   placeholder (see Missing Data Indicator)
 - **Styled cells**: `StyledCell` wraps value + ANSI style, overrides row/column/base styles (never string-cast one directly — see Rows)
 - **Row styles**: zebra striping, bold rows, per-row ANSI styling
-- **Selection**: single-row cursor via `SelectNext()`/`SelectPrevious()`/`withSelectedIndex()`; row 0 carries the highlight on first render (use `withSelectable(false)` for a cursorless table); `handleKey()` scrolls
+- **Selection**: single-row cursor via `selectNext()`/`selectPrevious()`/`withSelectedIndex()`; row 0 carries the highlight on first render (use `withSelectable(false)` for a cursorless table); `handleKey()` scrolls
 - **Pagination**: page size, page navigation, auto footer
 - **Sorting**: asc/desc, multi-column sort, numeric + string sort
 - **Filtering**: filter by column text
@@ -70,7 +70,7 @@ $t = Table::fromColumns([
     Row::new(RowData::from(['id' => '3', 'name' => 'Carol',   'city' => 'CHI'])),
 ]);
 
-echo $t->View();
+echo $t->view();
 ```
 
 ## Columns
@@ -144,7 +144,7 @@ $t = Table::fromColumns([
         ->withWidthMode(ColumnWidth::Percent, 25.0),  // always 25% of table
 ])->withRows([...]);
 
-echo $t->View();  // pct takes 25% of the table width, id stays 5, the three
+echo $t->view();  // pct takes 25% of the table width, id stays 5, the three
                   // interior gaps (4 columns -> 3 gaps) come off first — name
                   // (Dynamic) and note (Content) share what remains
 ```
@@ -200,18 +200,18 @@ Pre-1.0 hard switch; no caller in the census passed a non-default index.)
 **String-cast warning**: `(string)` on a `StyledCell` (and every implicit
 `Stringable` coercion — `echo`, `print`, `sprintf('%s')`, concatenation) emits
 its raw value wrapped in the cell's SGR codes with **no sanitization**. Never
-cast cells that hold untrusted input; render through `Table::View()`, which
+cast cells that hold untrusted input; render through `Table::view()`, which
 sanitizes every cell's text.
 
 ## Navigation & Sorting
 
 ```php
-$t = $t->SortBy('name', ascending: true);
-$t = $t->Filter('name', 'alice');       // filter column by text
-$t = $t->SelectNext();                  // move cursor down
-$t = $t->SelectPrevious();              // move cursor up
-$t->CurrentRow();                   // selected Row or null (not RowData!)
-$t->CurrentRowData();                // selected RowData or null
+$t = $t->sortBy('name', ascending: true);
+$t = $t->filter('name', 'alice');       // filter column by text
+$t = $t->selectNext();                  // move cursor down
+$t = $t->selectPrevious();              // move cursor up
+$t->currentRow();                   // selected Row or null (not RowData!)
+$t->currentRowData();                // selected RowData or null
 ```
 
 The rendered table carries no sort-direction or filter marker in its output —
@@ -223,27 +223,27 @@ they passed in. `totalWidth()` exposes the solved render budget in columns —
 the number the frame lays out against — so a host composes panes around the
 table without pre-computing it by hand.
 
-`SortBy()` has the full signature `SortBy(string $colKey, bool $ascending = true, bool $primary = true)`:
+`sortBy()` has the full signature `sortBy(string $colKey, bool $ascending = true, bool $primary = true)`:
 
 ```php
 // Multi-column: city ascending, then age descending within each city.
 // Secondary sorts require primary: false.
-$t = $t->SortBy('city')
-        ->SortBy('age', ascending: false, primary: false);
+$t = $t->sortBy('city')
+        ->sortBy('age', ascending: false, primary: false);
 ```
 
-- Repeating `SortBy()` on the sole active sort key with the SAME direction
+- Repeating `sortBy()` on the sole active sort key with the SAME direction
   silently flips that column's direction (the header-toggle behavior)
 - An unknown column key throws `InvalidArgumentException`
-- `ClearSort()` removes all sorting
+- `clearSort()` removes all sorting
 
 ## Keyboard Navigation
 
 Scroll the table vertically using keyboard input via `scrollYForKey()` and `handleKey()`:
 
 `handleKey()` drives vertical scrolling ONLY. Moving the row cursor
-(`SelectNext()`/`SelectPrevious()`), turning pages (`withPage()`/`NextPage()`/
-`PreviousPage()`) and horizontal panning (`withScrollX()`) are separate API
+(`selectNext()`/`selectPrevious()`), turning pages (`withPage()`/`nextPage()`/
+`previousPage()`) and horizontal panning (`withScrollX()`) are separate API
 calls — no key constant performs them, so the host must map its own keys to them.
 
 ```php
@@ -337,14 +337,14 @@ Combine scrolling with cursor selection in one frame:
 ```php
 // Combined: keyboard scroll + cursor selection
 $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
-       ->SelectNext();                         // move selection
+       ->selectNext();                         // move selection
 ```
 
 ## Global Search
 
 Call `search()` to run one needle across the scanned columns at once: a row
 survives when ANY scanned column contains the text, case-insensitively, and
-it must also pass every active `Filter()`. Which columns are scanned is the
+it must also pass every active `filter()`. Which columns are scanned is the
 shared filterable gate — described once, under "How It Works" below.
 
 ```php
@@ -361,21 +361,21 @@ $t = Table::fromColumns([
 $t = $t->search('alice');    // finds row with "Alice" (case-insensitive)
 $t = $t->search('ny');       // finds row with "NYC"
 $t = $t->search('');         // clears search (shows all rows)
-$t = $t->ClearSearch();     // alias for search('')
+$t = $t->clearSearch();     // alias for search('')
 ```
 
 ### How It Works
 
 - **Case-insensitive**: `search('ALICE')` matches `"alice"`, `"Alice"`, `"ALICE"`
 - **OR logic**: A row matches if **any** column contains the search text
-- **Filterable gate**: once **any** column opts in with `withFilterable()`, `search()` and `Filter()` scan **only** the marked columns; with none marked, every column is scanned
+- **Filterable gate**: once **any** column opts in with `withFilterable()`, `search()` and `filter()` scan **only** the marked columns; with none marked, every column is scanned
 - **Combines with filters**: Global search is ANDed with column filters — a row must match both
-- **Resets view state**: `search()` — like `Filter()`, `SortBy()` and `withRows()` —
+- **Resets view state**: `search()` — like `filter()`, `sortBy()` and `withRows()` —
   re-anchors cursor, page and scroll offset to the start
 
 ```php
 // Combined: Filter by name column AND search the scanned columns for "ny"
-$t = $t->Filter('name', 'alice')  // name must contain "alice"
+$t = $t->filter('name', 'alice')  // name must contain "alice"
         ->search('ny');           // some column must contain "ny"
 
 // Row 1 (Alice, NYC): passes Filter, passes search ✅
@@ -383,20 +383,20 @@ $t = $t->Filter('name', 'alice')  // name must contain "alice"
 // Row 3 (Carol, CHI): fails both ❌
 ```
 
-### Interaction with Filter()
+### Interaction with filter()
 
 | Method     | Scope        | Logic   |
 |------------|--------------|---------|
-| `Filter()` | Single column | AND (row must match ALL column filters) |
+| `filter()` | Single column | AND (row must match ALL column filters) |
 | `search()` | Filterable columns (the gate above) | OR (row matches if ANY scanned column contains text) |
 
-- **Unknown column key**: `Filter()` and `SortBy()` throw `InvalidArgumentException`
+- **Unknown column key**: `filter()` and `sortBy()` throw `InvalidArgumentException`
 - **Entry-point types**: `fromColumns()` requires every index to hold a `Column`;
   row setters require `Row` (or a data array, coerced). An offender is named with
   its index and actual type (`withRows()[2] must be Row or array, got string`)
   instead of surfacing as a deep `TypeError`; `Column::new()` likewise rejects a
   negative width at construction (`width must be >= 0`)
-- **Unmarked column**: once any column carries `withFilterable()`, `Filter()` on a
+- **Unmarked column**: once any column carries `withFilterable()`, `filter()` on a
   column that lacks the mark throws `InvalidArgumentException` — mark the column
   first. (Filter text stranded by a later column swap stays inert at render time
   rather than filtering silently against new data.)
@@ -404,7 +404,7 @@ $t = $t->Filter('name', 'alice')  // name must contain "alice"
 Both can be active simultaneously:
 
 ```php
-$t = $t->Filter('city', 'ny')     // city must contain "ny"
+$t = $t->filter('city', 'ny')     // city must contain "ny"
         ->search('li');           // some column must contain "li"
 
 // Row 1 (Alice, NYC): city contains "ny", search finds "li" in "Alice" ✅
@@ -445,7 +445,7 @@ These edge cases render predictable output instead of crashing:
   `No data` line (`no_data`, see Internationalization) centered in the content
   area. It shows whether or not the header row is visible, and in borderless
   and footer-armed tables alike.
-- **Filtered to nothing** — when `Filter()` or `search()` narrows every row
+- **Filtered to nothing** — when `filter()` or `search()` narrows every row
   away, the line reads `No rows match your filter` (`no_matches`) instead:
   the rows exist and the needle excludes them, so an empty store and an
   over-strict filter never look identical.
@@ -460,7 +460,7 @@ Pinned by `tests/TableEmptyStateTest.php`.
 ```php
 $t = $t->withPageSize(25)               // 25 rows per page
     ->withPage(2);                      // 0-based: jumps to the THIRD page
-echo $t->PageFooter();                  // 'Page 3 of 4' with 100 rows (i18n-aware)
+echo $t->pageFooter();                  // 'Page 3 of 4' with 100 rows (i18n-aware)
 ```
 
 ### Footer Types
@@ -478,19 +478,19 @@ $t = Table::fromColumns([...])
 
 | Case   | Footer Display                          | Method                   |
 |--------|----------------------------------------|--------------------------|
-| `Page` | `Page N of M`                          | `PageFooter()`           |
-| `Rows` | `Showing X to Y of Z rows`             | `RowsFooter()`           |
-| `Both` | `Page N of M  \|  Showing X to Y of Z rows` | `PageFooter()` + `RowsFooter()` |
+| `Page` | `Page N of M`                          | `pageFooter()`           |
+| `Rows` | `Showing X to Y of Z rows`             | `rowsFooter()`           |
+| `Both` | `Page N of M  \|  Showing X to Y of Z rows` | `pageFooter()` + `rowsFooter()` |
 
 ```php
 // Show only row count footer
 $t = $t->withFooterType(FooterType::Rows);
-echo $t->View();  // Footer: "Showing 1 to 25 of 100 rows"
+echo $t->view();  // Footer: "Showing 1 to 25 of 100 rows"
 
 // Show both page and row count
 $t = $t->withFooterType(FooterType::Both)
     ->withPage(1);   // page index 1 (0-based)
-echo $t->View();  // Footer: "Page 2 of 4  |  Showing 26 to 50 of 100 rows"
+echo $t->view();  // Footer: "Page 2 of 4  |  Showing 26 to 50 of 100 rows"
 ```
 
 Regardless of type, the footer row renders when `showFooter` is on — it is
@@ -507,7 +507,7 @@ The row count footer uses the `showing_rows` i18n key and updates automatically 
   virtualization off, same as `0`)
 - `withPageSize(n)` with `n <= 0` disables pagination entirely: all rows render
   and the footer disappears
-- `withPage()` and `SelectPage()` clamp out-of-range pages to the nearest valid
+- `withPage()` and `selectPage()` clamp out-of-range pages to the nearest valid
   one and move the cursor onto the page's first row
 - `ColumnWidth::Percent` outside `0.0`–`100.0` throws `InvalidArgumentException`
 
@@ -521,7 +521,7 @@ $t = Table::fromColumns([...])
     ->withViewportHeight(15)           // show 15 rows at a time
     ->withScrollY(30);                 // start at row 30
 
-echo $t->View();                        // renders rows 30-44
+echo $t->view();                        // renders rows 30-44
 
 $currentScroll = $t->scrollY();        // get current scroll offset
 ```
@@ -542,7 +542,7 @@ $t = Table::fromColumns([
 ])->withRows([...])
   ->withFrozenCols([0, 1]);           // freeze ID and Name columns
 
-echo $t->View();                       // ID and Name always visible
+echo $t->view();                       // ID and Name always visible
 ```
 
 ### How It Works
@@ -567,7 +567,7 @@ $t = Table::fromColumns([
   ->withFrozenCols([0, 1])            // freeze ID and Name
   ->withScrollX(2);                   // skip 2 non-frozen columns (City, Note)
 
-echo $t->View();
+echo $t->view();
 // Visible columns: ID, Name, Tags
 // City and Note columns are hidden (scrolled out of view)
 ```
@@ -608,7 +608,7 @@ $t = Table::fromColumns([
 ])->withRows([...])
   ->withScrollX(2);                 // skip first 2 non-frozen columns
 
-echo $t->View();
+echo $t->view();
 // Columns 0 and 1 are hidden from view
 ```
 
@@ -637,7 +637,7 @@ $t = Table::fromColumns([
   ->withFrozenCols([0])             // freeze ID column
   ->withScrollX(2);                 // skip 2 non-frozen columns
 
-echo $t->View();
+echo $t->view();
 // Column 0 (ID, frozen):  visible
 // Column 1 (Name):        skipped (index 1 < 1 + 2 = 3)
 // Column 2 (City):        skipped (index 2 < 3)
@@ -662,7 +662,7 @@ $t = Table::fromColumns([
 ])->withRows([...])
   ->withHiddenCols([3]);                 // hide the Note column (index 3)
 
-echo $t->View();
+echo $t->view();
 // Only ID, Name, City columns are rendered; Note column is hidden
 ```
 
@@ -715,7 +715,7 @@ Compute actual column widths from `ColumnWidth` enum values:
 $widths = $t->computeColumnWidths(80);
 // Returns: [5, 20, 15, 40]  (colIndex => character width)
 
-foreach ($t->Columns() as $i => $col) {
+foreach ($t->columns() as $i => $col) {
     printf("%s => %d chars\n", $col->title, $widths[$i]);
 }
 ```
@@ -738,7 +738,7 @@ scan, the width calculation, the filter/sort rebuild — inside the `Table` valu
 itself, and every wither that does not change the data carries those caches
 into the new value. The immutable builder is therefore a *persistent* object,
 not a disposable one: hold **one** `Table` in your application state and
-update it per frame with `withRows()`, `SelectNext()`, `Filter()`,
+update it per frame with `withRows()`, `selectNext()`, `filter()`,
 `withWidth()` and friends. Only the setters that change what is measured or
 in which frame — rows, columns, width, cell padding, hidden columns —
 discard the cached work; a cursor move or a style change carries it through.
@@ -813,7 +813,7 @@ data cannot emit escape sequences:
 This is terminal-injection defense, not HTML escaping — the output is ANSI for
 a terminal. One bypass is deliberate: casting a `StyledCell` to string emits
 its raw value wrapped in its SGR codes **unsanitized** (see the string-cast
-warning under Rows); render untrusted content only through `View()`. Pinned by
+warning under Rows); render untrusted content only through `view()`. Pinned by
 `tests/TableSanitizeTest.php`; see also the fleet-wide
 [`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
 
@@ -899,7 +899,7 @@ Available border factories: `Border::normal()`, `Border::rounded()`, `Border::th
 
 Note: `Border::markdownBorder()` is a visual style only — rendered tables are NOT
 parseable as GitHub-flavoured markdown (the rules are full-width single-cell
-separators, not pipe rows). Do not route `View()` output into markdown renderers.
+separators, not pipe rows). Do not route `view()` output into markdown renderers.
 
 ## Cell Padding Control
 
@@ -920,7 +920,7 @@ $t = Table::fromColumns([
     // ->withCellPadding(2);            // 2 spaces for more breathing room
     // ->withCellPadding(0);            // no padding (flush with borders)
 
-echo $t->View();
+echo $t->view();
 // With padding 1 (right-aligned default):
 //   "│  1  │             Alice  │          NYC  │"
 // Without padding:
@@ -968,7 +968,7 @@ $t = Table::fromColumns([
     ->withMultilineMode(true);          // rows expand to max cell height
     // ->withMultilineMode(false);     // default, clamps to single line
 
-echo $t->View();
+echo $t->view();
 ```
 
 ### How It Works
@@ -1025,7 +1025,7 @@ $t = Table::fromColumns([
     ])
     ->withExpandedRows([0]);              // expand row 0 (Alice)
 
-echo $t->View();
+echo $t->view();
 // Row 0 (Alice): one joined detail line across the table width —
 //                not squeezed into the 15-char Desc column
 // Row 1 (Bob):   normal per-column truncation applies
@@ -1075,7 +1075,7 @@ is the classic off-by-one-page bug. Pick by call site:
 
 | Domain | Used by | Meaning |
 |--------|---------|---------|
-| **Page-global** | `withSelectedIndex()`, `SelectedIndex()`, cursor keys | Absolute index into the full row list; stays valid across page turns and scrolling (the highlight follows the data row). |
+| **Page-global** | `withSelectedIndex()`, `selectedIndex()`, cursor keys | Absolute index into the full row list; stays valid across page turns and scrolling (the highlight follows the data row). |
 | **Page-relative** | `withExpandedRows()`, `toggleExpanded()`, `isExpanded()` | 0-based index into `pagedRows()` — the current page only. Validated against the live page; out-of-page indices throw `OutOfBoundsException`. Expansion itself is stored by `Row` object identity. |
 | **Render slot** | `withStyleFunc()` callback `$row` | Index within the rows rendered in this frame (window slot after paging and scrolling). Stable contract of the callback signature; do not confuse it with the cursor domain. |
 
@@ -1112,7 +1112,7 @@ Every public member of the five surface classes, mechanically re-derived from
 the source's reflection data — signature plus its docblock lead line. Members
 the render pipeline owns (`@internal`: `Column::renderHeader()` /
 `renderCell()`, and the `RenderCanvas` / `CellLineMemo` layout plumbing) are
-excluded on rule, not by omission: they are machinery for `View()`, not API
+excluded on rule, not by omission: they are machinery for `view()`, not API
 surface. A public member that appears here without a prose section elsewhere
 in this README is still documented — this table is the completeness floor.
 
@@ -1154,43 +1154,43 @@ in this README is still documented — this table is the completeness floor.
 | `isExpanded(int $rowIndex): bool` | Check if a row on the current page is currently expanded. |
 | `addRow(Row $row): self` | Append ONE row (audit ST-65, finding 081): each call is an immutable |
 | `addRows(array $rows): self` | Append rows in ONE bulk copy (the counterpart to the single-add |
-| `SelectNext(): self` | — |
-| `SelectPrevious(): self` | — |
+| `selectNext(): self` | — |
+| `selectPrevious(): self` | — |
 | `withSelectedIndex(int $index): self` | Move the selection directly to a 0-based index in the PAGE-GLOBAL |
-| `SelectPage(int $page): self` | Jump to a page and park the cursor on its first row. Same semantics as |
-| `NextPage(): self` | — |
-| `PreviousPage(): self` | — |
+| `selectPage(int $page): self` | Jump to a page and park the cursor on its first row. Same semantics as |
+| `nextPage(): self` | — |
+| `previousPage(): self` | — |
 | `scrollYForKey(string $key): int` | Return the new scrollY value for a given keyboard key. |
 | `handleKey(string $key): self` | Return a new Table with scrollY adjusted for the given keyboard key. |
 | `maxScrollY(): int` | The largest scrollY the current view can show. |
-| `SortBy(string $colKey, bool $ascending = true, bool $primary = true): self` | Sort by $colKey. If already sorting by it, toggle asc/desc. |
-| `ClearSort(): self` | — |
-| `Filter(string $colKey, string $text): self` | — |
-| `ClearFilter(string $colKey): self` | — |
-| `ClearAllFilters(): self` | — |
+| `sortBy(string $colKey, bool $ascending = true, bool $primary = true): self` | Sort by $colKey. If already sorting by it, toggle asc/desc. |
+| `clearSort(): self` | — |
+| `filter(string $colKey, string $text): self` | — |
+| `clearFilter(string $colKey): self` | — |
+| `clearAllFilters(): self` | — |
 | `search(string $text): self` | Global full-text search (case-insensitive). |
-| `ClearSearch(): self` | Clear the global search. |
-| `Columns(): array` | — |
+| `clearSearch(): self` | Clear the global search. |
+| `columns(): array` | — |
 | `column(string $key): ?Column` | Return the column with the given key, or null if not found. |
-| `Rows(): array` | — |
+| `rows(): array` | — |
 | `filteredSortedRows(): array` | — |
 | `pagedRows(): array` | — |
-| `CurrentRow(): ?Row` | The selected row in the PAGE-GLOBAL filtered/sorted view (audit #5: |
-| `CurrentRowData(): ?RowData` | — |
-| `SelectedRow(): ?Row` | The currently selected Row from the filtered/sorted view, or null when |
-| `TotalRows(): int` | — |
-| `TotalPages(): int` | — |
-| `SelectedIndex(): int` | — |
-| `CurrentPage(): int` | — |
-| `PageSize(): int` | — |
+| `currentRow(): ?Row` | The selected row in the PAGE-GLOBAL filtered/sorted view (audit #5: |
+| `currentRowData(): ?RowData` | — |
+| `selectedRow(): ?Row` | The currently selected Row from the filtered/sorted view, or null when |
+| `totalRows(): int` | — |
+| `totalPages(): int` | — |
+| `selectedIndex(): int` | — |
+| `currentPage(): int` | — |
+| `pageSize(): int` | — |
 | `sortColumns(): array` | Active sort stack in priority order: the first entry is the primary |
 | `activeFilters(): array` | Active per-column filter texts, keyed by column key (the state |
 | `searchText(): string` | — |
 | `totalWidth(): int` | Total rendered width of the table in columns (pinned width when |
-| `PageFooter(): string` | — |
-| `RowsFooter(): string` | Return a "Showing X to Y of Z rows" footer string. |
+| `pageFooter(): string` | — |
+| `rowsFooter(): string` | Return a "Showing X to Y of Z rows" footer string. |
 | `computeColumnWidths(int $tableWidth): array` | Compute actual column widths based on ColumnWidth enum values. |
-| `View(): string` | — |
+| `view(): string` | — |
 
 ### Column
 
@@ -1255,8 +1255,8 @@ in this README is still documented — this table is the completeness floor.
 
 sugar-table exposes **zero** `getFoo()`-form property accessors: property reads
 ride public `readonly` state (`$column->style`, `$column->width`,
-`$row->data`, `$cell->value`) or bare methods (`Table::Columns()`,
-`Table::CurrentRow()`, `Table::scrollY()`, plus the query-state readouts
+`$row->data`, `$cell->value`) or bare methods (`Table::columns()`,
+`Table::currentRow()`, `Table::scrollY()`, plus the query-state readouts
 `Table::sortColumns()`, `Table::activeFilters()`, `Table::searchText()`,
 `Table::totalWidth()` — audit ST-03, value copies, never live storage). The only public names carrying
 get/has/is vocabulary are ruled lookups, not property accessors:
@@ -1274,7 +1274,7 @@ and the roster in that test drift apart. Rename-era history lives in
 
 sugar-table adopts `sugar-cellbuffer` for all buffer-based rendering. Layout fills a flat mutable
 `RenderCanvas` grid in a single pass; it is materialized into an immutable `Buffer` exactly once per
-`View()` call. `View()` writes only internal render memos (width calculation, filter/sort cache, style
+`view()` call. `view()` writes only internal render memos (width calculation, filter/sort cache, style
 parse) — never visible state.
 
 ### styleFunc Signature
@@ -1344,3 +1344,17 @@ MIT
 ## Credits & inspiration
 
 Design antecedent: [Evertras/bubble-table](https://github.com/Evertras/bubble-table); SugarCraft is developed as a native PHP project.
+
+## Naming (camelCase house API)
+
+`Table`'s verbs and readouts (`selectNext()`, `selectPrevious()`, `selectPage()`,
+`nextPage()`, `previousPage()`, `sortBy()`, `clearSort()`, `filter()`,
+`clearFilter()`, `clearAllFilters()`, `clearSearch()`, `columns()`, `rows()`,
+`currentRow()`, `currentRowData()`, `selectedRow()`, `totalRows()`,
+`totalPages()`, `selectedIndex()`, `currentPage()`, `pageSize()`,
+`pageFooter()`, `rowsFooter()`, `view()`) are declared camelCase. They were
+originally PascalCase mirroring upstream bubble-table; because PHP method
+resolution is case-insensitive the old spellings (`SelectNext()`, `View()`, …)
+keep resolving to the same methods, deprecated in guidance, never in dispatch.
+`tests/ApiAliasTest.php` pins the zero-PascalCase-declaration law and the
+per-spelling parity.

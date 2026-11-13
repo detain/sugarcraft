@@ -23,7 +23,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   and `sugar-datepicker/src/Lang.php` for the same pattern.
 
 - **[pattern:viewport-virtualization]** slicing visible row range + scrollY offset.
-  In `Table::View()`, when `$viewportHeight > 0`, rows are sliced via
+  In `Table::view()`, when `$viewportHeight > 0`, rows are sliced via
   `array_slice($rows, $this->scrollY, $this->viewportHeight)` so only the visible
   window is rendered. Callers drive `withScrollY()` to scroll; `renderToBuffer()` clamps the render
   window to `maxScrollY()` so a stale scroll can never strand the viewport.
@@ -148,7 +148,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   render. Row count calculation uses `TotalRows()` (filtered+sorted count) and
   respects pagination via `page * pageSize` offset. The `showing_rows` i18n key
   is used via `Lang::t()`. See `FooterType` and `Table::$footerType`,
-  `Table::withFooterType()`, `Table::RowsFooter()`, and
+  `Table::withFooterType()`, `Table::rowsFooter()`, and
   `Table::fillFooterRow()`.
 
 - **[pattern:cell-padding]** `withCellPadding(int $padding)` adds inner
@@ -190,3 +190,4 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   positional parity — pre-1.0 with a consumer census showing zero callers
   passing a non-default index. When an "enum-ish" int parameter has exactly
   one distinguishable non-default value, it is a bool wearing a costume.
+- **`Table` verbs are declared camelCase** (OG-1/ST-02, 2026-11-13; mechanism of sugar-datepicker dp-02). The 24 formerly PascalCase methods (`selectNext`, `view`, `rows`, ...) keep their PascalCase call spellings only through PHP's case-insensitive dispatch — no delegate twins (a redeclare is impossible). `tests/ApiAliasTest.php` pins zero PascalCase declarations + per-spelling parity. Write new code camelCase.

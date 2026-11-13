@@ -18,7 +18,7 @@ final class TableMultilineModeTest extends TestCase
             Row::new(RowData::from(['id' => '1', 'name' => 'Alice', 'city' => 'NYC'])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // When multilineMode is false, only first line is shown
         $this->assertStringContainsString('Alice', $view);
@@ -45,7 +45,7 @@ final class TableMultilineModeTest extends TestCase
             Row::new(RowData::from(['desc' => 'ABCDEFGHIJK'])),
         ])->withMultilineMode(true);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // Should contain all wrapped lines
         $this->assertStringContainsString('ABCDEFGHIJ', $view);
@@ -59,7 +59,7 @@ final class TableMultilineModeTest extends TestCase
             Row::new(RowData::from(['desc' => 'ABCDEFGHI'])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // multilineMode off clamps the value to the cell on ONE line, and the
         // clip is announced with an ellipsis (audit #7: the single-line path
@@ -79,7 +79,7 @@ final class TableMultilineModeTest extends TestCase
             ])),
         ])->withMultilineMode(true);
 
-        $view = $t->View();
+        $view = $t->view();
         $lines = \explode("\n", $view);
 
         // Count data lines (excluding borders and header)
@@ -96,7 +96,7 @@ final class TableMultilineModeTest extends TestCase
             Row::new(RowData::from(['text' => 'one two three four'])),
         ])->withMultilineMode(true);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // Word wrap should break at word boundaries within 8 chars
         $this->assertStringContainsString('one', $view);
@@ -114,7 +114,7 @@ final class TableMultilineModeTest extends TestCase
             ])),
         ])->withMultilineMode(true);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('Alice', $view);
         $this->assertStringContainsString('1', $view);
@@ -130,7 +130,7 @@ final class TableMultilineModeTest extends TestCase
             Row::new(RowData::from(['id' => '2', 'desc' => 'IJKLMNOP'])),
         ])->withMultilineMode(true);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('1', $view);
         $this->assertStringContainsString('2', $view);

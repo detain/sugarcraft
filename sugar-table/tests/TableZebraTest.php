@@ -35,7 +35,7 @@ final class TableZebraTest extends TestCase
         $view = $this->table(
             Row::new(RowData::from(['a' => 'zero'])),
             Row::new(RowData::from(['a' => 'one'])),
-        )->View();
+        )->view();
 
         $this->assertStringContainsString(self::EVEN_STRIKE, $view);
         // Exactly one striped row (parity), the odd row stays bare.
@@ -47,7 +47,7 @@ final class TableZebraTest extends TestCase
         // Pre-fix the stripe REPLACED the row style: bold vanished.
         $view = $this->table(
             Row::new(RowData::from(['a' => 'zero']))->withStyle('1'),
-        )->View();
+        )->view();
 
         $this->assertStringContainsString(self::EVEN_STRIKE . ';1m', $view);
     }
@@ -61,7 +61,7 @@ final class TableZebraTest extends TestCase
         $view = $this->table(
             Row::new(RowData::from(['a' => 'zero']))->withZebra(),
             Row::new(RowData::from(['a' => 'one'])),
-        )->View();
+        )->view();
 
         $this->assertStringNotContainsString('48;2;229;229;229', $view);
     }
@@ -72,7 +72,7 @@ final class TableZebraTest extends TestCase
         // the even position stripes exactly as parity dictates.
         $view = $this->table(
             Row::new(RowData::from(['a' => 'zero']))->withZebra(false),
-        )->View();
+        )->view();
 
         $this->assertStringContainsString(self::EVEN_STRIKE, $view);
     }
@@ -82,7 +82,7 @@ final class TableZebraTest extends TestCase
         $view = Table::fromColumns([Column::new('a', 'A', 8)])
             ->withRows([Row::new(RowData::from(['a' => 'zero']))])
             ->withSelectable(false)
-            ->View();
+            ->view();
 
         $this->assertStringNotContainsString('48;2;229;229;229', $view);
     }
@@ -123,8 +123,8 @@ final class TableZebraTest extends TestCase
         $t = $this->table(...$this->sixRows())->withViewportHeight(3)->withSelectedIndex(2);
         $striped = '48;2;229;229;229';
 
-        $at0 = $this->linesByLabel($t->View());
-        $at1 = $this->linesByLabel($t->withScrollY(1)->View());
+        $at0 = $this->linesByLabel($t->view());
+        $at1 = $this->linesByLabel($t->withScrollY(1)->view());
         $this->assertSame(['r0', 'r1', 'r2'], \array_keys($at0), 'window at home must show the first three rows');
         $this->assertSame(['r1', 'r2', 'r3'], \array_keys($at1), 'the scroll step must move the window');
 
@@ -143,7 +143,7 @@ final class TableZebraTest extends TestCase
         $t = $this->table(...$this->sixRows())->withPageSize(3);
         $striped = '48;2;229;229;229';
 
-        $page1 = $this->linesByLabel($t->withPage(1)->View());
+        $page1 = $this->linesByLabel($t->withPage(1)->view());
 
         // r3 is page slot 0 but data index 3 (odd): no stripe, ever.
         $this->assertStringNotContainsString($striped, $page1['r3'], 'slot parity striped an odd data row after a page turn');

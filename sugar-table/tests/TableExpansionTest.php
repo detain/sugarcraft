@@ -174,7 +174,7 @@ final class TableExpansionTest extends TestCase
             ->withPage(1);
 
         // Verify we're on page 2
-        $this->assertSame(1, $t->CurrentPage());
+        $this->assertSame(1, $t->currentPage());
         $paged = $t->pagedRows();
         $this->assertSame('11', $paged[0]->data->get('id')); // First row on page 2
 
@@ -334,13 +334,13 @@ final class TableExpansionTest extends TestCase
     {
         // Expand row 5 (which is 'User6' after name sorting)
         $t = $this->makeTableWith20Rows()
-            ->SortBy('name', ascending: true)
+            ->sortBy('name', ascending: true)
             ->toggleExpanded(5);
 
         $this->assertTrue($t->isExpanded(5));
 
         // Apply filter - should still track the correct row object
-        $t = $t->Filter('name', 'User1'); // Should match User1, User10, User11
+        $t = $t->filter('name', 'User1'); // Should match User1, User10, User11
 
         // Row 0 (User1) should not be expanded
         $this->assertFalse($t->isExpanded(0));

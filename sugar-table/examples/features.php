@@ -44,13 +44,13 @@ $table = Table::fromColumns([
     ->withZebra()
     ->withHeaderStyle('1;37');
 
-echo $table->View() . "\n\n";
+echo $table->view() . "\n\n";
 
 echo "Navigate: use NextPage() / PreviousPage() in code.\n";
-echo "Total pages: " . $table->TotalPages() . "\n";
-echo "Current page: " . ($table->CurrentPage() + 1) . " (zero-indexed underneath)\n";
+echo "Total pages: " . $table->totalPages() . "\n";
+echo "Current page: " . ($table->currentPage() + 1) . " (zero-indexed underneath)\n";
 
 // Jump straight to page 3 (zero-indexed → 2).
 $table = $table->withPage(2);
 echo "\n=== Page 3 (frozen # column stays on the left) ===\n";
-echo $table->View() . "\n";
+echo $table->view() . "\n";

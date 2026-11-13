@@ -144,7 +144,7 @@ final class TableColumnWidthTest extends TestCase
         $this->assertGreaterThanOrEqual(4, $widths[0]);
 
         // Render and verify it contains the content properly
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('tiny', $view);
     }
 
@@ -167,7 +167,7 @@ final class TableColumnWidthTest extends TestCase
         $this->assertSame(5, $widths[0]);
 
         // Render and verify it contains the content properly
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('short', $view);
     }
 
@@ -214,7 +214,7 @@ final class TableColumnWidthTest extends TestCase
         $this->assertGreaterThan(0, $widths[2]);
 
         // Render should work
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('ID', $view);
         $this->assertStringContainsString('Alice', $view);
         $this->assertStringContainsString('NYC', $view);
@@ -238,7 +238,7 @@ final class TableColumnWidthTest extends TestCase
         $this->assertSame(12, $widths[0]);
 
         // Render should succeed without truncation issues
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('ThisIsLonger', $view);
     }
@@ -264,7 +264,7 @@ final class TableColumnWidthTest extends TestCase
         $this->assertGreaterThanOrEqual(19, $widths[0]);
 
         // Rendering should succeed (may be wider than requested, but shouldn't crash)
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('ThisContentIsVeryLong', $view);
     }
@@ -287,7 +287,7 @@ final class TableColumnWidthTest extends TestCase
         $widths = $t->computeColumnWidths(10);
         $this->assertGreaterThanOrEqual(1, $widths[0]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('X', $view);
     }
@@ -312,7 +312,7 @@ final class TableColumnWidthTest extends TestCase
         // 50% of 10 = 5, but flex allocation may adjust
         $this->assertGreaterThanOrEqual(1, $widths[0]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -352,7 +352,7 @@ final class TableColumnWidthTest extends TestCase
 
         // Converged, self-consistent fixed point: resolving the columns at the
         // reported total sums back to that same total (+ inter-column borders).
-        $borders = \count($t->Columns()) - 1;
+        $borders = \count($t->columns()) - 1;
         $resolved = \array_sum($t->computeColumnWidths($total)) + $borders;
         $this->assertSame($total, $resolved, 'reported total must be a fixed point of the width solve');
 
@@ -383,7 +383,7 @@ final class TableColumnWidthTest extends TestCase
         $this->assertLessThan(100000, $total, 'clamp bound must keep the width finite');
 
         // And it still renders without error.
-        $this->assertIsString($t->View());
+        $this->assertIsString($t->view());
     }
 
     /** @return array<int, int> the live content-width memo */
@@ -485,7 +485,7 @@ final class TableColumnWidthTest extends TestCase
         $this->assertGreaterThanOrEqual(5, $widths[0]);
         $this->assertGreaterThanOrEqual(5, $widths[1]);
 
-        $view = \preg_replace('/\x1b\[[0-9;]*m/', '', $t->View());
+        $view = \preg_replace('/\x1b\[[0-9;]*m/', '', $t->view());
         $this->assertStringContainsString('hello…', $view, 'clipped content must announce with an ellipsis');
         $this->assertStringContainsString('good…', $view);
     }
@@ -506,7 +506,7 @@ final class TableColumnWidthTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('cannot be honoured');
-        $t->View();
+        $t->view();
     }
 
     /** The over-pin arm leaves the established last-Flex slack law untouched. */
@@ -561,7 +561,7 @@ final class TableColumnWidthTest extends TestCase
         ]);
 
         $before = $t->computeColumnWidths(60);
-        $filtered = $t->Filter('k', $needle);   // view keeps only the short row
+        $filtered = $t->filter('k', $needle);   // view keeps only the short row
         $searched = $t->search($needle);         // same, via global search
 
         $this->assertSame($before, $filtered->computeColumnWidths(60), 'Filter() must not move widths');

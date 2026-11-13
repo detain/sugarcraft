@@ -166,7 +166,7 @@ final class Column
      * Build the header cell content, padded to $totalWidth.
      *
      * Part of the Table render pipeline — the canvas walk calls it per
-     * header cell; host code should drive output through Table::View(),
+     * header cell; host code should drive output through Table::view(),
      * not compose header strings by hand (audit ST-29).
      *
      * @internal

@@ -89,7 +89,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0])
           ->withScrollX(1);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Frozen column ID must still appear
         $this->assertTrue(
@@ -117,7 +117,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0, 1])
           ->withScrollX(1);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Both frozen columns must still appear
         $this->assertTrue(
@@ -147,7 +147,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0, 1])
           ->withScrollX(100); // Excessive scroll - should be ignored since all frozen
 
-        $view = $t->View();
+        $view = $t->view();
 
         // All columns should still be visible
         $this->assertTrue(
@@ -172,7 +172,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([])  // No frozen columns
           ->withScrollX(1);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // First column should be hidden (scrollX=1 shifts all)
         $this->assertFalse(
@@ -199,7 +199,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0])
           ->withScrollX(2);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Frozen column always visible
         $this->assertTrue(
@@ -239,7 +239,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0])
           ->withScrollX(0);
 
-        $view = $t->View();
+        $view = $t->view();
         $lines = \explode("\n", $view);
 
         // Header line should have 3 separators: left border, between cols, right border
@@ -264,7 +264,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([])
           ->withScrollX(1);
 
-        $view = $t->View();
+        $view = $t->view();
         $lines = \explode("\n", $view);
 
         // Header line should have 2 separators: left border + right border
@@ -290,7 +290,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0])
           ->withScrollX(1);
 
-        $view = $t->View();
+        $view = $t->view();
         $lines = \explode("\n", $view);
 
         // Header line: ID visible, Name hidden, City visible
@@ -317,7 +317,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0])
           ->withScrollX(1);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Frozen column data should appear
         $this->assertTrue(
@@ -343,7 +343,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0, 1, 2])  // All columns frozen
           ->withScrollX(100); // Excessive scroll - all should still show
 
-        $view = $t->View();
+        $view = $t->view();
 
         // All data values should appear
         $this->assertTrue(\str_contains($view, '1'), 'ID should appear');
@@ -364,7 +364,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0])
           ->withScrollX(-5); // Negative value should be clamped to 0
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertTrue(
             $this->headerContains($view, 'ID'),
             'Column should be visible with negative scrollX (clamped to 0)'
@@ -382,7 +382,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([0])
           ->withScrollX(999); // Excessive scroll
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Only frozen column should be visible
         $this->assertTrue(
@@ -417,8 +417,8 @@ final class TableFrozenColsTest extends TestCase
             Row::new(RowData::from(['id' => '1', 'name' => 'Alice'])),
         ])->withScrollX(1);
 
-        $view1 = $t1->View();
-        $view2 = $t2->View();
+        $view1 = $t1->view();
+        $view2 = $t2->view();
 
         // Both should behave identically (first column hidden)
         $this->assertFalse(
@@ -441,7 +441,7 @@ final class TableFrozenColsTest extends TestCase
 
         $this->assertNotSame($a, $b);
         // Original should not have frozen cols
-        $viewA = $a->View();
+        $viewA = $a->view();
         $this->assertFalse(
             $this->headerContains($viewA, 'withFrozenCols') // shouldn't contain method name
         );
@@ -462,7 +462,7 @@ final class TableFrozenColsTest extends TestCase
           ->withScrollX(1)
           ->withZebra();
 
-        $view = $t->View();
+        $view = $t->view();
 
         $this->assertIsString($view);
         $this->assertNotEmpty($view);
@@ -652,8 +652,8 @@ final class TableFrozenColsTest extends TestCase
         $t = $this->albumTable();
 
         $this->assertSame(
-            $t->withFrozenCols([0, 1])->View(),
-            $t->withFrozenKeys(['album', 'artist'])->View(),
+            $t->withFrozenCols([0, 1])->view(),
+            $t->withFrozenKeys(['album', 'artist'])->view(),
             'key addresses resolve to the identical index law'
         );
     }
@@ -663,8 +663,8 @@ final class TableFrozenColsTest extends TestCase
         $t = $this->albumTable();
 
         $this->assertSame(
-            $t->withHiddenCols([2])->View(),
-            $t->withHiddenKeys(['year'])->View()
+            $t->withHiddenCols([2])->view(),
+            $t->withHiddenKeys(['year'])->view()
         );
     }
 
@@ -691,7 +691,7 @@ final class TableFrozenColsTest extends TestCase
             Column::new('k', 'Second', 6),
         ])->withRows([Row::new(RowData::from(['k' => 'x']))]);
 
-        $this->assertSame($dupes->withHiddenCols([0])->View(), $dupes->withHiddenKeys(['k', 'k'])->View());
+        $this->assertSame($dupes->withHiddenCols([0])->view(), $dupes->withHiddenKeys(['k', 'k'])->view());
     }
 
     public function testFrozenKeySetStillHonoursThePrefixLaw(): void

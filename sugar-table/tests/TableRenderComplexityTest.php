@@ -93,8 +93,8 @@ final class TableRenderComplexityTest extends TestCase
         ])->withRows([\SugarCraft\Table\Row::new(\SugarCraft\Table\RowData::from(['a' => 'x']))])
             ->withBaseStyle('31');
 
-        self::assertStringContainsString('x', $t->View());
+        self::assertStringContainsString('x', $t->view());
         $red = $t->withBaseStyle('91');
-        $this->assertNotSame($t->View(), $red->View(), 'a stale style memo must not leak across passes');
+        $this->assertNotSame($t->view(), $red->view(), 'a stale style memo must not leak across passes');
     }
 }

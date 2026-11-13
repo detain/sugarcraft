@@ -29,7 +29,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1', 'name' => 'Alice'])),
         ])->withBorder(Border::normal());
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Normal border uses standard box-drawing characters
         $this->assertStringContainsString('┌', $view);  // topLeft
@@ -48,7 +48,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1'])),
         ])->withBorder(Border::rounded());
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Rounded border uses rounded corners
         $this->assertStringContainsString('╭', $view);  // topLeft
@@ -67,7 +67,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1'])),
         ])->withBorder(Border::thick());
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Thick border uses heavy box-drawing characters
         $this->assertStringContainsString('┏', $view);  // topLeft
@@ -86,7 +86,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1'])),
         ])->withBorder(Border::double());
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Double border uses double-line box-drawing characters
         $this->assertStringContainsString('╔', $view);  // topLeft
@@ -105,7 +105,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1'])),
         ])->withBorder(Border::block());
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Block border uses solid block characters
         $this->assertStringContainsString('█', $view);
@@ -119,7 +119,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1'])),
         ])->withBorder(Border::ascii());
 
-        $view = $t->View();
+        $view = $t->view();
 
         // ASCII border uses +, -, |
         $this->assertStringContainsString('+', $view);
@@ -135,7 +135,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1'])),
         ])->withBorder(Border::hidden());
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Hidden border uses spaces for all border chars
         $this->assertStringContainsString('1', $view);
@@ -154,7 +154,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1', 'name' => 'Alice'])),
         ])->withBorder(Border::markdownBorder());
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Markdown border uses | and - for table-style rendering
         $this->assertStringContainsString('|', $view);
@@ -172,7 +172,7 @@ final class TableBorderStyleTest extends TestCase
             Row::new(RowData::from(['id' => '1'])),
         ])->withBorder(Border::normal());
 
-        $view = $t->View();
+        $view = $t->view();
         $lines = \explode("\n", $view);
 
         // Header separator should use ├ ┤ with ─ between
@@ -190,7 +190,7 @@ final class TableBorderStyleTest extends TestCase
             ->withBorder(Border::double())
             ->withBorderStyle('1;34');  // bold blue
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('╔', $view);
         $this->assertStringContainsString('═', $view);
@@ -205,7 +205,7 @@ final class TableBorderStyleTest extends TestCase
         ]);
         // No Border set - should use default chars
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('┌', $view);
         $this->assertStringContainsString('─', $view);
         $this->assertStringContainsString('│', $view);

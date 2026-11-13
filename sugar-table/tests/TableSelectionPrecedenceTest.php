@@ -32,7 +32,7 @@ final class TableSelectionPrecedenceTest extends TestCase
         ])->withRows([Row::new(RowData::from(['a' => 'hit']))]);
         // Row 0 selected by default (selectable defaults true, cursor at 0).
 
-        $view = $t->View();
+        $view = $t->view();
 
         // Pre-fix, the row-level '7' replacement clobbered the column red
         // and the cell emitted only "\x1b[0;7m"; post-fix the cell carries
@@ -49,7 +49,7 @@ final class TableSelectionPrecedenceTest extends TestCase
             ])
             ->withStyleFunc(fn(int $r, int $c, string $v): string => '35');
 
-        $view = $t->View();
+        $view = $t->view();
 
         // styleFunc wins the chain (ANSI16 35 magenta canon), selection
         // rides on top: one run carrying colour + reverse.
@@ -65,7 +65,7 @@ final class TableSelectionPrecedenceTest extends TestCase
             ->withRows([Row::new(RowData::from(['a' => 'one', 'b' => 'two']))])
             ->withBorderless(true);
 
-        $view = $t->View();
+        $view = $t->view();
 
         // One reverse run spans cell text AND the gap between cells; the
         // pre-fix split-highlight shape (a bare run break in the middle of
@@ -82,7 +82,7 @@ final class TableSelectionPrecedenceTest extends TestCase
             ]);
 
         $reverseLines = 0;
-        foreach (\explode("\n", $t->View()) as $line) {
+        foreach (\explode("\n", $t->view()) as $line) {
             if (\str_contains($line, ';7m')) {
                 $reverseLines++;
             }
@@ -100,10 +100,10 @@ final class TableSelectionPrecedenceTest extends TestCase
         $t = Table::fromColumns([Column::new('a', 'A', 10)])
             ->withRows([Row::new(RowData::from(['a' => 'x']))]);
 
-        $this->assertStringContainsString(';7m', $t->View());
+        $this->assertStringContainsString(';7m', $t->view());
         $this->assertStringNotContainsString(
             ';7m',
-            $t->withSelectable(false)->View(),
+            $t->withSelectable(false)->view(),
         );
     }
 }

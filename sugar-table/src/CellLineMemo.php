@@ -13,7 +13,7 @@ namespace SugarCraft\Table;
  * twice per frame. This store lets the first pass record its output and the
  * second pass reuse it byte-identically.
  *
- * The lifetime is strictly ONE {@see Table::View()} call — the memo is created
+ * The lifetime is strictly ONE {@see Table::view()} call — the memo is created
  * at the top of the render pass and goes out of scope when the pass returns.
  * Nothing is cached across frames, so a cell value, a column width or a
  * marked-frame sanitization change takes effect on the very next render; there
@@ -26,7 +26,7 @@ namespace SugarCraft\Table;
  * mispaired, and storing the column by id with a strong anchor rules out an
  * id recycled mid-pass.
  *
- * @internal Layout plumbing for {@see Table::View()}; not public API.
+ * @internal Layout plumbing for {@see Table::view()}; not public API.
  */
 final class CellLineMemo
 {

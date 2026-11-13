@@ -162,8 +162,8 @@ final class StyledCellTest extends TestCase
         $raw = Table::fromColumns($columns)
             ->withRows([Row::new(RowData::from(['v' => null]))]);
 
-        $this->assertSame($raw->View(), $styled->View(), 'wrapper-independent no-value shape');
-        $this->assertStringContainsString('-', $raw->View());
+        $this->assertSame($raw->view(), $styled->view(), 'wrapper-independent no-value shape');
+        $this->assertStringContainsString('-', $raw->view());
     }
 
     public function testStyledNullHonoursACustomIndicator(): void
@@ -171,7 +171,7 @@ final class StyledCellTest extends TestCase
         $view = Table::fromColumns([Column::new('v', 'Value', 8)])
             ->withRows([Row::new(RowData::from(['v' => StyledCell::new(null)]))])
             ->withMissingIndicator('(empty)')
-            ->View();
+            ->view();
 
         $this->assertStringContainsString('(empty)', $view);
     }
@@ -180,7 +180,7 @@ final class StyledCellTest extends TestCase
     {
         $view = Table::fromColumns([Column::new('v', 'Value', 8)])
             ->withRows([Row::new(RowData::from(['v' => StyledCell::new(false)]))])
-            ->View();
+            ->view();
 
         $this->assertStringNotContainsString('-', $view, 'false is a value, not a missing cell');
     }
@@ -197,9 +197,9 @@ final class StyledCellTest extends TestCase
             ->withMissingIndicator('(empty)');
         $raw = $styled->withRows([Row::new(RowData::from(['v' => null]))]);
 
-        $lines = explode("\n", $styled->View());
-        $this->assertSame($raw->View(), $styled->View());
-        $this->assertCount(count(explode("\n", $raw->View())), $lines);
+        $lines = explode("\n", $styled->view());
+        $this->assertSame($raw->view(), $styled->view());
+        $this->assertCount(count(explode("\n", $raw->view())), $lines);
         // Header(1) + separator(1) + indicator wrapped to (e / mpty / ) rows:
         // width 4 forces three content lines for a 7-char indicator.
         $body = array_slice($lines, 2);

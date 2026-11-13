@@ -31,14 +31,14 @@ final class TableAnnouncedLabelTest extends TestCase
         $view = Table::fromColumns([Column::new('v', 'V', 8)])
             ->withRows([])
             ->withShowHeader(false)
-            ->View();
+            ->view();
 
         $this->assertStringContainsString('No data', $view, '8 columns fit the whole label');
 
         $narrow = Table::fromColumns([Column::new('v', 'V', 3)])
             ->withRows([])
             ->withShowHeader(false)
-            ->View();
+            ->view();
 
         $this->assertStringContainsString('No…', $narrow);
         $this->assertStringNotContainsString('No data', $narrow);
@@ -60,7 +60,7 @@ final class TableAnnouncedLabelTest extends TestCase
             ->withRows($rows)
             ->withPageSize(3)
             ->withPage(1)
-            ->View();
+            ->view();
 
         $this->assertStringContainsString('…', $view);
         $this->assertStringNotContainsString('Page 2 of 3', $view);
@@ -69,7 +69,7 @@ final class TableAnnouncedLabelTest extends TestCase
             ->withRows($rows)
             ->withPageSize(3)
             ->withPage(1)
-            ->View();
+            ->view();
         $this->assertStringContainsString('Page 2 of 3', $wide);
     }
 }

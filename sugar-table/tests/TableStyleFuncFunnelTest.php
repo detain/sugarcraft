@@ -34,7 +34,7 @@ final class TableStyleFuncFunnelTest extends TestCase
                 static fn (int $row, int $col, string $value): \SugarCraft\Style\Style =>
                     \SugarCraft\Style\Style::new()->bold()->fg('#ff0000')
             )
-            ->View();
+            ->view();
 
         // Canonicalised 24-bit output (the cheat-table parse path): bold
         // plus truecolour red must survive the flattening + re-parse, and
@@ -47,8 +47,8 @@ final class TableStyleFuncFunnelTest extends TestCase
     {
         $blank = $this->table()
             ->withStyleFunc(static fn (): \SugarCraft\Style\Style => \SugarCraft\Style\Style::new())
-            ->View();
-        $plain = $this->table()->View();
+            ->view();
+        $plain = $this->table()->view();
 
         $this->assertSame($plain, $blank);
     }
@@ -59,7 +59,7 @@ final class TableStyleFuncFunnelTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('styleFunc(0, 0) must return an ANSI SGR string or a Style object, got int');
-        $t->View();
+        $t->view();
     }
 
     public function testForgottenReturnThrowsAsNull(): void
@@ -69,7 +69,7 @@ final class TableStyleFuncFunnelTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('got null');
-        $t->View();
+        $t->view();
     }
 
     public function testThrowCarriesCoordinatesOnLaterCells(): void
@@ -79,7 +79,7 @@ final class TableStyleFuncFunnelTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('styleFunc(1, 0) must return an ANSI SGR string or a Style object, got array');
-        $t->View();
+        $t->view();
     }
 
     public function testMultilinePathUsesTheSameFunnel(): void
@@ -90,14 +90,14 @@ final class TableStyleFuncFunnelTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('got bool');
-        $t->View();
+        $t->view();
     }
 
     public function testStringArmStillPassesThrough(): void
     {
         $styled = $this->table()
             ->withStyleFunc(static fn (): string => '31')
-            ->View();
+            ->view();
 
         // '31' is canonicalised through the ANSI16->24-bit oracle, not
         // echoed — the string arm passing through means PARSED, honoured.

@@ -36,7 +36,7 @@ final class TableEmptyStateTest extends TestCase
 
     public function testEmptyTableWithoutHeaderRendersNoDataMessage(): void
     {
-        $view = self::wideTable()->withRows([])->withShowHeader(false)->View();
+        $view = self::wideTable()->withRows([])->withShowHeader(false)->view();
         self::assertStringContainsString('No data', self::plain($view));
     }
 
@@ -44,7 +44,7 @@ final class TableEmptyStateTest extends TestCase
     {
         // MAJOR 10: the empty state used to be UNREACHABLE with a header —
         // the box went silently blank.
-        $view = self::plain(self::wideTable()->withRows([])->View());
+        $view = self::plain(self::wideTable()->withRows([])->view());
         self::assertStringContainsString('Name', $view);
         self::assertStringContainsString('No data', $view);
     }
@@ -53,7 +53,7 @@ final class TableEmptyStateTest extends TestCase
     {
         // Buffer dimensions must be positive: the un-budgeted message row
         // produced height 0 here and threw.
-        $view = self::wideTable()->withRows([])->withBorderless(true)->View();
+        $view = self::wideTable()->withRows([])->withBorderless(true)->view();
         self::assertStringContainsString('No data', self::plain($view));
     }
 
@@ -64,7 +64,7 @@ final class TableEmptyStateTest extends TestCase
             ->withShowHeader(false)
             ->withPageSize(5)
             ->withShowFooter(true)
-            ->View();
+            ->view();
         self::assertStringContainsString('No data', self::plain($view));
     }
 
@@ -75,7 +75,7 @@ final class TableEmptyStateTest extends TestCase
             Row::new(RowData::from(["name" => "bob"])),
         ];
         $view = self::plain(
-            self::wideTable()->withRows($rows)->Filter('name', 'zzz-miss')->View()
+            self::wideTable()->withRows($rows)->filter('name', 'zzz-miss')->view()
         );
         // ST-21: the narrowed-to-zero state names itself — finding 021's
         // pixel-identical empty store is exactly what this separates.
@@ -91,14 +91,14 @@ final class TableEmptyStateTest extends TestCase
             Row::new(RowData::from(['name' => 'bob'])),
         ];
         $view = self::plain(
-            self::wideTable()->withRows($rows)->search('zzz-miss')->View()
+            self::wideTable()->withRows($rows)->search('zzz-miss')->view()
         );
         self::assertStringContainsString('No rows match your filter', $view);
     }
 
     public function testEmptyStoreKeepsSayingNoData(): void
     {
-        $view = self::plain(self::wideTable()->withRows([])->View());
+        $view = self::plain(self::wideTable()->withRows([])->view());
         self::assertStringContainsString('No data', $view);
         self::assertStringNotContainsString('match', $view);
     }
@@ -110,7 +110,7 @@ final class TableEmptyStateTest extends TestCase
         $view = Table::fromColumns([Column::new('v', 'Value', 8)])
             ->withRows([Row::new(RowData::from([]))])
             ->withMissingIndicator(StyledCell::new('?', '1;31'))
-            ->View();
+            ->view();
 
         $this->assertStringContainsString('?', self::plain($view));
         // '31' canonicalises to truecolour red, and bold composes with it.
@@ -126,12 +126,12 @@ final class TableEmptyStateTest extends TestCase
             ->withRows([Row::new(RowData::from([]))])
             ->withMissingIndicator(StyledCell::new('(x)', '31'))
             ->withExpandedRows([0])
-            ->View();
+            ->view();
         $plain = Table::fromColumns([Column::new('v', 'V', 8)])
             ->withRows([Row::new(RowData::from([]))])
             ->withMissingIndicator('(x)')
             ->withExpandedRows([0])
-            ->View();
+            ->view();
 
         $this->assertStringContainsString('(x)', self::plain($styled));
         $this->assertStringNotContainsString('38;2;205;0;0', $styled);
@@ -146,7 +146,7 @@ final class TableEmptyStateTest extends TestCase
             Column::new('b', 'B', 5),
         ])->withRows([Row::new(RowData::from(["a" => "1", "b" => "2"]))])->withHiddenCols([0, 1]);
 
-        self::assertSame('', $table->View());
-        self::assertSame('', $table->withBorderless(true)->View());
+        self::assertSame('', $table->view());
+        self::assertSame('', $table->withBorderless(true)->view());
     }
 }

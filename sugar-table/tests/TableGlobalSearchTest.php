@@ -46,8 +46,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('1');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -57,8 +57,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('Bob');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Bob', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Bob', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -68,8 +68,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('Chicago');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Charlie', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Charlie', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -81,8 +81,8 @@ final class TableGlobalSearchTest extends TestCase
         // Search for "Den" should find only Bob
         $t = $this->makeSearchTable()->search('Den');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Bob', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Bob', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -93,8 +93,8 @@ final class TableGlobalSearchTest extends TestCase
         // "ali" should match "Alice" (case-insensitive partial match)
         $t = $this->makeSearchTable()->search('ali');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     // =========================================================================
@@ -108,8 +108,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('ALICE');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -119,8 +119,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('AlIcE');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -130,8 +130,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('bob');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Bob', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Bob', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -141,8 +141,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('NEW YORK');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     // =========================================================================
@@ -156,7 +156,7 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('');
 
-        $this->assertSame(3, $t->TotalRows());
+        $this->assertSame(3, $t->totalRows());
     }
 
     /**
@@ -181,9 +181,9 @@ final class TableGlobalSearchTest extends TestCase
      */
     public function testClearSearchReturnsAllRows(): void
     {
-        $t = $this->makeSearchTable()->search('Alice')->ClearSearch();
+        $t = $this->makeSearchTable()->search('Alice')->clearSearch();
 
-        $this->assertSame(3, $t->TotalRows());
+        $this->assertSame(3, $t->totalRows());
     }
 
     /**
@@ -194,9 +194,9 @@ final class TableGlobalSearchTest extends TestCase
         $t = $this->makeSearchTable()
             ->search('Alice')
             ->search('Bob')
-            ->ClearSearch();
+            ->clearSearch();
 
-        $this->assertSame(3, $t->TotalRows());
+        $this->assertSame(3, $t->totalRows());
     }
 
     /**
@@ -206,10 +206,10 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()
             ->search('Alice')
-            ->SelectNext()  // selectedIndex = 1
-            ->ClearSearch();
+            ->selectNext()  // selectedIndex = 1
+            ->clearSearch();
 
-        $this->assertSame(0, $t->SelectedIndex());
+        $this->assertSame(0, $t->selectedIndex());
     }
 
     // =========================================================================
@@ -223,12 +223,12 @@ final class TableGlobalSearchTest extends TestCase
     public function testSearchCombinedWithFilter(): void
     {
         $t = $this->makeSearchTable()
-            ->Filter('city', 'New')  // Filter to rows where city contains "New"
+            ->filter('city', 'New')  // Filter to rows where city contains "New"
             ->search('1');           // Then search across all columns for "1"
 
         // Only Alice (id=1, city=New York) should match both
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -237,10 +237,10 @@ final class TableGlobalSearchTest extends TestCase
     public function testSearchCombinedWithFilterNoMatch(): void
     {
         $t = $this->makeSearchTable()
-            ->Filter('city', 'Los')  // Only Bob (Los Angeles)
+            ->filter('city', 'Los')  // Only Bob (Los Angeles)
             ->search('1');           // But search for "1" (Alice only)
 
-        $this->assertSame(0, $t->TotalRows());
+        $this->assertSame(0, $t->totalRows());
     }
 
     /**
@@ -250,10 +250,10 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()
             ->search('a')            // Matches Alice and Charlie (both have 'a' in name)
-            ->Filter('name', 'ali'); // Further filter to names containing 'ali'
+            ->filter('name', 'ali'); // Further filter to names containing 'ali'
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -262,12 +262,12 @@ final class TableGlobalSearchTest extends TestCase
     public function testSearchCombinedWithMultipleFilters(): void
     {
         $t = $this->makeSearchTable()
-            ->Filter('city', 'New')  // Alice only (New York)
-            ->Filter('city', 'York') // Still Alice (New York contains York)
+            ->filter('city', 'New')  // Alice only (New York)
+            ->filter('city', 'York') // Still Alice (New York contains York)
             ->search('1');           // Search for "1" - still Alice
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     // =========================================================================
@@ -281,7 +281,7 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()
             ->search('a')             // Matches Alice (name) and Charlie (name)
-            ->SortBy('name', ascending: false);
+            ->sortBy('name', ascending: false);
 
         $rows = $t->filteredSortedRows();
         $this->assertSame('Charlie', $rows[0]->data->get('name')); // Descending: Charlie before Alice
@@ -301,8 +301,8 @@ final class TableGlobalSearchTest extends TestCase
         $searched = $original->search('Alice');
 
         $this->assertNotSame($original, $searched);
-        $this->assertSame(3, $original->TotalRows());  // original unchanged
-        $this->assertSame(1, $searched->TotalRows()); // new instance filtered
+        $this->assertSame(3, $original->totalRows());  // original unchanged
+        $this->assertSame(1, $searched->totalRows()); // new instance filtered
     }
 
     /**
@@ -311,7 +311,7 @@ final class TableGlobalSearchTest extends TestCase
     public function testClearSearchIsImmutable(): void
     {
         $original = $this->makeSearchTable();
-        $cleared = $original->ClearSearch();
+        $cleared = $original->clearSearch();
 
         $this->assertNotSame($original, $cleared);
     }
@@ -329,7 +329,7 @@ final class TableGlobalSearchTest extends TestCase
             ->withSelectedIndex(2)  // Start at Charlie
             ->search('Alice');
 
-        $this->assertSame(0, $t->SelectedIndex());
+        $this->assertSame(0, $t->selectedIndex());
     }
 
     /**
@@ -338,11 +338,11 @@ final class TableGlobalSearchTest extends TestCase
     public function testSearchAfterSelectNextResetsSelectedIndex(): void
     {
         $t = $this->makeSearchTable()
-            ->SelectNext()  // selectedIndex = 1 (Bob)
+            ->selectNext()  // selectedIndex = 1 (Bob)
             ->search('Charlie');
 
-        $this->assertSame(0, $t->SelectedIndex());
-        $this->assertSame('Charlie', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(0, $t->selectedIndex());
+        $this->assertSame('Charlie', $t->currentRowData()?->get('name'));
     }
 
     // =========================================================================
@@ -356,7 +356,7 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('xyz');
 
-        $this->assertSame(0, $t->TotalRows());
+        $this->assertSame(0, $t->totalRows());
     }
 
     /**
@@ -366,7 +366,7 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('!!!');
 
-        $this->assertSame(0, $t->TotalRows());
+        $this->assertSame(0, $t->totalRows());
     }
 
     // =========================================================================
@@ -380,8 +380,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('2');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Bob', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Bob', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -393,7 +393,7 @@ final class TableGlobalSearchTest extends TestCase
         // If search used AND logic, it would also need to match in name AND city
         $t = $this->makeSearchTable()->search('1');
 
-        $this->assertSame(1, $t->TotalRows());
+        $this->assertSame(1, $t->totalRows());
     }
 
     // =========================================================================
@@ -409,7 +409,7 @@ final class TableGlobalSearchTest extends TestCase
             Column::new('id', 'ID', 5),
         ])->withRows([]);
 
-        $this->assertSame(0, $t->search('test')->TotalRows());
+        $this->assertSame(0, $t->search('test')->totalRows());
     }
 
     /**
@@ -423,8 +423,8 @@ final class TableGlobalSearchTest extends TestCase
             Row::new(RowData::from(['name' => 'Solo'])),
         ]);
 
-        $this->assertSame(1, $t->search('solo')->TotalRows());
-        $this->assertSame('Solo', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(1, $t->search('solo')->totalRows());
+        $this->assertSame('Solo', $t->currentRowData()?->get('name'));
     }
 
     /**
@@ -434,8 +434,8 @@ final class TableGlobalSearchTest extends TestCase
     {
         $t = $this->makeSearchTable()->search('New');
 
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
-        $this->assertSame('New York', $t->CurrentRowData()?->get('city'));
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
+        $this->assertSame('New York', $t->currentRowData()?->get('city'));
     }
 }

@@ -30,49 +30,49 @@ final class TableTest extends TestCase
     public function testNew(): void
     {
         $t = $this->makeTable();
-        $this->assertSame(3, \count($t->Columns()));
-        $this->assertSame(3, $t->TotalRows());
+        $this->assertSame(3, \count($t->columns()));
+        $this->assertSame(3, $t->totalRows());
     }
 
     public function testAddRow(): void
     {
         $t = $this->makeTable();
         $t = $t->addRow(Row::new(RowData::from(['id' => '4', 'name' => 'Dave', 'city' => 'HOU'])));
-        $this->assertSame(4, $t->TotalRows());
+        $this->assertSame(4, $t->totalRows());
     }
 
     public function testSortByAscending(): void
     {
-        $t = $this->makeTable()->SortBy('name', ascending: true);
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $t = $this->makeTable()->sortBy('name', ascending: true);
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
         $this->assertSame('Bob', $t->pagedRows()[1]->data->get('name'));
     }
 
     public function testSortByDescending(): void
     {
-        $t = $this->makeTable()->SortBy('name', ascending: false);
+        $t = $this->makeTable()->sortBy('name', ascending: false);
         $this->assertSame('Carol', $t->pagedRows()[0]->data->get('name'));
     }
 
     public function testSortToggle(): void
     {
-        $t = $this->makeTable()->SortBy('name', true);
-        $t = $t->SortBy('name', true);  // same key, should toggle
+        $t = $this->makeTable()->sortBy('name', true);
+        $t = $t->sortBy('name', true);  // same key, should toggle
         $this->assertSame('Carol', $t->filteredSortedRows()[0]->data->get('name'));
     }
 
     public function testFilter(): void
     {
-        $t = $this->makeTable()->Filter('name', 'ali');
-        $this->assertSame(1, $t->TotalRows());
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $t = $this->makeTable()->filter('name', 'ali');
+        $this->assertSame(1, $t->totalRows());
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     public function testFilterClear(): void
     {
-        $t = $this->makeTable()->Filter('name', 'ali');
-        $t = $t->ClearFilter('name');
-        $this->assertSame(3, $t->TotalRows());
+        $t = $this->makeTable()->filter('name', 'ali');
+        $t = $t->clearFilter('name');
+        $this->assertSame(3, $t->totalRows());
     }
 
     public function testFilterMultipleColumns(): void
@@ -84,58 +84,58 @@ final class TableTest extends TestCase
             Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
             Row::new(RowData::from(['name' => 'Bob',   'city' => 'NYC'])),
             Row::new(RowData::from(['name' => 'Carol', 'city' => 'LA'])),
-        ])->Filter('name', 'a')
-          ->Filter('city', 'NYC');
+        ])->filter('name', 'a')
+          ->filter('city', 'NYC');
 
-        $this->assertSame(1, $t->TotalRows());
+        $this->assertSame(1, $t->totalRows());
     }
 
     public function testSelectNext(): void
     {
-        $t = $this->makeTable()->SelectNext();
-        $this->assertSame('Bob', $t->CurrentRowData()?->get('name'));
+        $t = $this->makeTable()->selectNext();
+        $this->assertSame('Bob', $t->currentRowData()?->get('name'));
     }
 
     public function testSelectPrevious(): void
     {
-        $t = $this->makeTable()->SelectNext()->SelectNext()->SelectPrevious();
-        $this->assertSame('Bob', $t->CurrentRowData()?->get('name'));
+        $t = $this->makeTable()->selectNext()->selectNext()->selectPrevious();
+        $this->assertSame('Bob', $t->currentRowData()?->get('name'));
     }
 
     public function testSelectNextClampsAtEnd(): void
     {
         $t = $this->makeTable();
         for ($i = 0; $i < 20; $i++) {
-            $t = $t->SelectNext();
+            $t = $t->selectNext();
         }
-        $this->assertSame('Carol', $t->CurrentRowData()?->get('name'));
+        $this->assertSame('Carol', $t->currentRowData()?->get('name'));
     }
 
     public function testWithSelectedIndexMovesCursor(): void
     {
         $t = $this->makeTable()->withSelectedIndex(2);
-        $this->assertSame(2, $t->SelectedIndex());
-        $this->assertSame('Carol', $t->CurrentRowData()?->get('name'));
+        $this->assertSame(2, $t->selectedIndex());
+        $this->assertSame('Carol', $t->currentRowData()?->get('name'));
     }
 
     public function testWithSelectedIndexClamps(): void
     {
         $t = $this->makeTable();
-        $this->assertSame(2, $t->withSelectedIndex(99)->SelectedIndex());
-        $this->assertSame(0, $t->withSelectedIndex(-5)->SelectedIndex());
+        $this->assertSame(2, $t->withSelectedIndex(99)->selectedIndex());
+        $this->assertSame(0, $t->withSelectedIndex(-5)->selectedIndex());
     }
 
     public function testWithSelectedIndexNoOpOnEmpty(): void
     {
         $t = Table::fromColumns([Column::new('id', 'ID', 5)])->withSelectedIndex(3);
-        $this->assertSame(0, $t->SelectedIndex());
+        $this->assertSame(0, $t->selectedIndex());
     }
 
     public function testWithSelectedIndexImmutable(): void
     {
         $t = $this->makeTable();
         $this->assertNotSame($t, $t->withSelectedIndex(1));
-        $this->assertSame(0, $t->SelectedIndex());
+        $this->assertSame(0, $t->selectedIndex());
     }
 
     public function testPagination(): void
@@ -150,8 +150,8 @@ final class TableTest extends TestCase
             ->withPageSize(10)
             ->withPage(2);  // 0-indexed page 2 = rows 20-29
 
-        $this->assertSame(5, $t->TotalPages());
-        $this->assertSame('20', $t->CurrentRowData()?->get('n'));
+        $this->assertSame(5, $t->totalPages());
+        $this->assertSame('20', $t->currentRowData()?->get('n'));
     }
 
     /**
@@ -166,11 +166,11 @@ final class TableTest extends TestCase
     public function testPageSizeGetterRoundTrips(): void
     {
         $t = $this->makeTable();
-        $this->assertSame(0, $t->PageSize(), 'pagination is opt-in: the default page size is 0');
+        $this->assertSame(0, $t->pageSize(), 'pagination is opt-in: the default page size is 0');
 
         $paged = $t->withPageSize(5);
-        $this->assertSame(5, $paged->PageSize());
-        $this->assertSame(0, $t->PageSize(), 'the setter left the original untouched');
+        $this->assertSame(5, $paged->pageSize());
+        $this->assertSame(0, $t->pageSize(), 'the setter left the original untouched');
     }
 
     public function testWithPageSizeShrinkClampsPage(): void
@@ -184,15 +184,15 @@ final class TableTest extends TestCase
             )
             ->withPageSize(10)
             ->withPage(2);
-        $this->assertSame(3, $t->TotalPages());
+        $this->assertSame(3, $t->totalPages());
 
         $shrunk = $t->withPageSize(30);
 
-        $this->assertSame(1, $shrunk->TotalPages());
-        $this->assertSame(0, $shrunk->CurrentPage());
-        $this->assertSame('0', $shrunk->CurrentRowData()?->get('n'));
-        $this->assertSame('Page 1 of 1', $shrunk->PageFooter());
-        $this->assertNotEmpty($shrunk->Rows(), 'shrink must never strand the frame as an empty body');
+        $this->assertSame(1, $shrunk->totalPages());
+        $this->assertSame(0, $shrunk->currentPage());
+        $this->assertSame('0', $shrunk->currentRowData()?->get('n'));
+        $this->assertSame('Page 1 of 1', $shrunk->pageFooter());
+        $this->assertNotEmpty($shrunk->rows(), 'shrink must never strand the frame as an empty body');
     }
 
     /**
@@ -214,9 +214,9 @@ final class TableTest extends TestCase
 
         $grown = $t->withPageSize(5);
 
-        $this->assertSame(5, $grown->TotalPages());
-        $this->assertSame(1, $grown->CurrentPage());
-        $this->assertSame('5', $grown->CurrentRowData()?->get('n'));
+        $this->assertSame(5, $grown->totalPages());
+        $this->assertSame(1, $grown->currentPage());
+        $this->assertSame('5', $grown->currentRowData()?->get('n'));
     }
 
     public function testNextPage(): void
@@ -229,9 +229,9 @@ final class TableTest extends TestCase
                 )
             )
             ->withPageSize(10)
-            ->NextPage();
+            ->nextPage();
 
-        $this->assertSame('11', $t->CurrentRowData()?->get('n'));
+        $this->assertSame('11', $t->currentRowData()?->get('n'));
     }
 
     public function testPageFooter(): void
@@ -240,7 +240,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['n' => '1']))])
             ->withPageSize(10);
 
-        $this->assertSame('Page 1 of 1', $t->PageFooter());
+        $this->assertSame('Page 1 of 1', $t->pageFooter());
     }
 
     public function testMissingDataIndicator(): void
@@ -251,7 +251,7 @@ final class TableTest extends TestCase
             ])
             ->withMissingIndicator('<missing>');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('<missing>', $view);
     }
 
@@ -262,7 +262,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['id' => StyledCell::new('X', '1;31')])),
             ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('X', $view);
     }
@@ -270,7 +270,7 @@ final class TableTest extends TestCase
     public function testZebraStriping(): void
     {
         $t = $this->makeTable()->withZebra();
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('Alice', $view);
     }
@@ -278,7 +278,7 @@ final class TableTest extends TestCase
     public function testFrozenCols(): void
     {
         $t = $this->makeTable()->withFrozenCols([0]);
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('ID', $view);
     }
@@ -286,7 +286,7 @@ final class TableTest extends TestCase
     public function testHorizontalScroll(): void
     {
         $t = $this->makeTable()->withScrollX(5);
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -297,7 +297,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['id' => '1', 'name' => 'X', 'city' => 'Y']))->withStyle('1'),
             ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -308,7 +308,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['id' => '1', 'name' => 'X', 'city' => 'Y']))->withZebra(),
             ]);
 
-        $this->assertTrue($t->Rows()[0]->zebra);
+        $this->assertTrue($t->rows()[0]->zebra);
     }
 
     /**
@@ -328,23 +328,23 @@ final class TableTest extends TestCase
 
     public function testClearSort(): void
     {
-        $t = $this->makeTable()->SortBy('name', false)->ClearSort();
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $t = $this->makeTable()->sortBy('name', false)->clearSort();
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     public function testClearAllFilters(): void
     {
         $t = $this->makeTable()
-            ->Filter('name', 'ali')
-            ->ClearAllFilters();
+            ->filter('name', 'ali')
+            ->clearAllFilters();
 
-        $this->assertSame(3, $t->TotalRows());
+        $this->assertSame(3, $t->totalRows());
     }
 
     public function testViewRendersTopAndBottomBorders(): void
     {
         $t = $this->makeTable();
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('┌', $view);
         $this->assertStringContainsString('└', $view);
         $this->assertStringContainsString('─', $view);
@@ -353,7 +353,7 @@ final class TableTest extends TestCase
     public function testViewRendersHeader(): void
     {
         $t = $this->makeTable();
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('ID', $view);
         $this->assertStringContainsString('Name', $view);
         $this->assertStringContainsString('City', $view);
@@ -362,9 +362,9 @@ final class TableTest extends TestCase
     public function testImmutability(): void
     {
         $a = $this->makeTable();
-        $b = $a->SortBy('name', false);
+        $b = $a->sortBy('name', false);
         $this->assertNotSame($a, $b);
-        $this->assertSame(3, $a->TotalRows());
+        $this->assertSame(3, $a->totalRows());
     }
 
     public function testStyleFuncWithStringReturn(): void
@@ -376,7 +376,7 @@ final class TableTest extends TestCase
             ])
             ->withStyleFunc(fn (int $row) => $row === 0 ? '1;31' : '');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('1', $view);
         $this->assertStringContainsString("\x1b[", $view);
@@ -391,7 +391,7 @@ final class TableTest extends TestCase
             ])
             ->withStyleFunc(fn (int $row) => $redStyle);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString("\x1b[", $view);
     }
@@ -409,7 +409,7 @@ final class TableTest extends TestCase
         $this->assertCount(1, $widths);
         $this->assertGreaterThanOrEqual(4, $widths[0]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString('short', $view);
         $this->assertStringContainsString('longer label', $view);
@@ -421,7 +421,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => '1']))])
             ->withShowHeader(false);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringNotContainsString('ID', $view);
     }
@@ -433,7 +433,7 @@ final class TableTest extends TestCase
             ->withPageSize(10)
             ->withShowFooter(false);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -444,7 +444,7 @@ final class TableTest extends TestCase
             ->withViewportHeight(5)
             ->withScrollY(10);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -459,14 +459,14 @@ final class TableTest extends TestCase
             ->withViewportHeight(2)
             ->withScrollY(1);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
     public function testEmptyTableReturnsEmptyString(): void
     {
         $t = Table::fromColumns([]);
-        $this->assertSame('', $t->View());
+        $this->assertSame('', $t->view());
     }
 
     public function testColor256Foreground(): void
@@ -475,7 +475,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('38;5;196');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -485,7 +485,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('48;5;21');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -499,7 +499,7 @@ final class TableTest extends TestCase
             ])
             ->withStyleFunc(fn (int $row) => $row === 0 ? $redStyle : Style::new());
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString("\x1b[", $view);
     }
@@ -511,7 +511,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withStyleFunc(fn () => $styled);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString("\x1b[", $view);
     }
@@ -522,7 +522,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => "line1\nline2"]))])
             ->withMultilineMode(true);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -532,7 +532,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('38;2;255;128;0');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString("\x1b[", $view);
     }
@@ -543,7 +543,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('1;91');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString("\x1b[", $view);
     }
@@ -554,7 +554,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBaseStyle('1;32');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -564,7 +564,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withSelectable(false);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -578,9 +578,9 @@ final class TableTest extends TestCase
                 )
             )
             ->withPageSize(10)
-            ->SelectPage(2);
+            ->selectPage(2);
 
-        $this->assertSame(2, $t->CurrentPage());
+        $this->assertSame(2, $t->currentPage());
     }
 
     public function testPreviousPage(): void
@@ -593,10 +593,10 @@ final class TableTest extends TestCase
                 )
             )
             ->withPageSize(10)
-            ->SelectPage(2)
-            ->PreviousPage();
+            ->selectPage(2)
+            ->previousPage();
 
-        $this->assertSame(1, $t->CurrentPage());
+        $this->assertSame(1, $t->currentPage());
     }
 
     public function testColumnWidthDynamicWithContent(): void
@@ -611,7 +611,7 @@ final class TableTest extends TestCase
         $this->assertCount(1, $widths);
         $this->assertGreaterThanOrEqual(5, $widths[0]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -625,7 +625,7 @@ final class TableTest extends TestCase
         $widths = $t->computeColumnWidths(80);
         $this->assertCount(1, $widths);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -638,7 +638,7 @@ final class TableTest extends TestCase
         $this->assertCount(1, $widths);
         $this->assertGreaterThan(0, $widths[0]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -648,7 +648,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withHeaderStyle('1;4;34');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -659,9 +659,9 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['name' => 'Alice'])),
                 Row::new(RowData::from(['name' => 'Bob'])),
             ])
-            ->Filter('name', 'xyz');
+            ->filter('name', 'xyz');
 
-        $this->assertSame(0, $t->TotalRows());
+        $this->assertSame(0, $t->totalRows());
     }
 
     public function testSortByNumeric(): void
@@ -672,7 +672,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['n' => '2'])),
                 Row::new(RowData::from(['n' => '100'])),
             ])
-            ->SortBy('n', true);
+            ->sortBy('n', true);
 
         $rows = $t->filteredSortedRows();
         $this->assertSame('2', $rows[0]->data->get('n'));
@@ -686,7 +686,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['n' => '2'])),
                 Row::new(RowData::from(['n' => '100'])),
             ])
-            ->SortBy('n', false);
+            ->sortBy('n', false);
 
         $rows = $t->filteredSortedRows();
         $this->assertSame('100', $rows[0]->data->get('n'));
@@ -701,7 +701,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['id' => '3'])),
             ]);
 
-        $this->assertSame(3, $t->TotalRows());
+        $this->assertSame(3, $t->totalRows());
     }
 
     public function testBorderStyleWithBg256Grayscale(): void
@@ -710,7 +710,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('48;5;244');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -720,7 +720,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('48;5;105');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -732,7 +732,7 @@ final class TableTest extends TestCase
             Row::new(RowData::from(['id' => 'X'])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -744,7 +744,7 @@ final class TableTest extends TestCase
             Row::new(RowData::from(['id' => 'X'])),
         ]);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -755,9 +755,9 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['name' => 'Alice'])),
                 Row::new(RowData::from(['name' => 'Bob'])),
             ])
-            ->Filter('name', 'ALI');
+            ->filter('name', 'ALI');
 
-        $this->assertSame(1, $t->TotalRows());
+        $this->assertSame(1, $t->totalRows());
     }
 
     public function testZeroPageSizeMeansNoPagination(): void
@@ -771,7 +771,7 @@ final class TableTest extends TestCase
             )
             ->withPageSize(0);
 
-        $this->assertSame(1, $t->TotalPages());
+        $this->assertSame(1, $t->totalPages());
     }
 
     public function testTotalRowsWithNoRows(): void
@@ -779,7 +779,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([]);
 
-        $this->assertSame(0, $t->TotalRows());
+        $this->assertSame(0, $t->totalRows());
     }
 
     public function testRowsFooterFirstPage(): void
@@ -794,7 +794,7 @@ final class TableTest extends TestCase
             ->withPageSize(25)
             ->withFooterType(\SugarCraft\Table\FooterType::Rows);
 
-        $this->assertSame('Showing 1 to 25 of 100 rows', $t->RowsFooter());
+        $this->assertSame('Showing 1 to 25 of 100 rows', $t->rowsFooter());
     }
 
     public function testRowsFooterSecondPage(): void
@@ -810,7 +810,7 @@ final class TableTest extends TestCase
             ->withPage(1)
             ->withFooterType(\SugarCraft\Table\FooterType::Rows);
 
-        $this->assertSame('Showing 26 to 50 of 100 rows', $t->RowsFooter());
+        $this->assertSame('Showing 26 to 50 of 100 rows', $t->rowsFooter());
     }
 
     public function testRowsFooterLastPagePartial(): void
@@ -827,7 +827,7 @@ final class TableTest extends TestCase
             ->withFooterType(\SugarCraft\Table\FooterType::Rows);
 
         // Page 3: rows 76-100
-        $this->assertSame('Showing 76 to 100 of 100 rows', $t->RowsFooter());
+        $this->assertSame('Showing 76 to 100 of 100 rows', $t->rowsFooter());
     }
 
     public function testRowsFooterEmptyTable(): void
@@ -837,7 +837,7 @@ final class TableTest extends TestCase
             ->withPageSize(25)
             ->withFooterType(\SugarCraft\Table\FooterType::Rows);
 
-        $this->assertSame('Showing 0 to 0 of 0 rows', $t->RowsFooter());
+        $this->assertSame('Showing 0 to 0 of 0 rows', $t->rowsFooter());
     }
 
     public function testRowsFooterSinglePage(): void
@@ -852,7 +852,7 @@ final class TableTest extends TestCase
             ->withPageSize(25)
             ->withFooterType(\SugarCraft\Table\FooterType::Rows);
 
-        $this->assertSame('Showing 1 to 10 of 10 rows', $t->RowsFooter());
+        $this->assertSame('Showing 1 to 10 of 10 rows', $t->rowsFooter());
     }
 
     public function testFooterTypePageMode(): void
@@ -862,8 +862,8 @@ final class TableTest extends TestCase
             ->withPageSize(10)
             ->withFooterType(\SugarCraft\Table\FooterType::Page);
 
-        $this->assertSame('Page 1 of 1', $t->PageFooter());
-        $this->assertSame('Showing 1 to 1 of 1 rows', $t->RowsFooter());
+        $this->assertSame('Page 1 of 1', $t->pageFooter());
+        $this->assertSame('Showing 1 to 1 of 1 rows', $t->rowsFooter());
     }
 
     public function testFooterTypeImmutability(): void
@@ -875,7 +875,7 @@ final class TableTest extends TestCase
         $t2 = $t->withFooterType(\SugarCraft\Table\FooterType::Rows);
         $this->assertNotSame($t, $t2);
         // Original should still have default Page footer type
-        $this->assertStringContainsString('Page', $t->View());
+        $this->assertStringContainsString('Page', $t->view());
     }
 
     public function testFooterTypeBothRendersCombined(): void
@@ -891,7 +891,7 @@ final class TableTest extends TestCase
             ->withPage(1)
             ->withFooterType(\SugarCraft\Table\FooterType::Both);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('Page 2 of 4', $view);
         $this->assertStringContainsString('Showing 26 to 50 of 100 rows', $view);
     }
@@ -908,7 +908,7 @@ final class TableTest extends TestCase
             ->withPageSize(25)
             ->withFooterType(\SugarCraft\Table\FooterType::Rows);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('Showing 1 to 25 of 25 rows', $view);
         // Should not contain "Page" style footer
         $this->assertStringNotContainsString('Page 1 of 1', $view);
@@ -942,7 +942,7 @@ final class TableTest extends TestCase
     public function testWithFrozenColsNonOverlappingIsAllowed(): void
     {
         $t = $this->makeTable()->withFrozenCols([0])->withHiddenCols([1]);
-        $this->assertSame(3, $t->TotalRows()); // no exception
+        $this->assertSame(3, $t->totalRows()); // no exception
     }
 
     public function testWithHiddenColsNonOverlappingIsAllowed(): void
@@ -950,7 +950,7 @@ final class TableTest extends TestCase
         // Frozen must stay a contiguous prefix (audit #3); hiding a column
         // that is not frozen still composes: frozen [0], hidden [2].
         $t = $this->makeTable()->withHiddenCols([2])->withFrozenCols([0]);
-        $this->assertSame(3, $t->TotalRows()); // no exception
+        $this->assertSame(3, $t->totalRows()); // no exception
     }
 
     // -------------------------------------------------------------------------
@@ -961,26 +961,26 @@ final class TableTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/does not exist/i');
-        $this->makeTable()->SortBy('nonexistent_key');
+        $this->makeTable()->sortBy('nonexistent_key');
     }
 
     public function testFilterThrowsOnInvalidColumnKey(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/does not exist/i');
-        $this->makeTable()->Filter('invalid_key', 'text');
+        $this->makeTable()->filter('invalid_key', 'text');
     }
 
     public function testSortByWithValidKeyDoesNotThrow(): void
     {
-        $t = $this->makeTable()->SortBy('name');
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $t = $this->makeTable()->sortBy('name');
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
     }
 
     public function testFilterWithValidKeyDoesNotThrow(): void
     {
-        $t = $this->makeTable()->Filter('name', 'ali');
-        $this->assertSame(1, $t->TotalRows());
+        $t = $this->makeTable()->filter('name', 'ali');
+        $this->assertSame(1, $t->totalRows());
     }
 
     // -------------------------------------------------------------------------
@@ -989,37 +989,37 @@ final class TableTest extends TestCase
 
     public function testSelectNextAtLastRowReturnsSameInstance(): void
     {
-        $t = $this->makeTable()->SelectNext()->SelectNext(); // on 'Carol' (last)
-        $this->assertSame($t, $t->SelectNext());
+        $t = $this->makeTable()->selectNext()->selectNext(); // on 'Carol' (last)
+        $this->assertSame($t, $t->selectNext());
     }
 
     public function testSelectPreviousAtFirstRowReturnsSameInstance(): void
     {
         $t = $this->makeTable(); // selectedIndex 0
-        $this->assertSame($t, $t->SelectPrevious());
+        $this->assertSame($t, $t->selectPrevious());
     }
 
     public function testSelectNextOnEmptyTableReturnsSameInstance(): void
     {
         $t = Table::fromColumns([Column::new('id', 'ID', 5)]);
-        $this->assertSame($t, $t->SelectNext());
+        $this->assertSame($t, $t->selectNext());
     }
 
     public function testSelectNextMidTableReturnsNewInstance(): void
     {
         $t = $this->makeTable();
-        $next = $t->SelectNext();
+        $next = $t->selectNext();
         $this->assertNotSame($t, $next);
-        $this->assertSame(0, $t->SelectedIndex());
-        $this->assertSame(1, $next->SelectedIndex());
+        $this->assertSame(0, $t->selectedIndex());
+        $this->assertSame(1, $next->selectedIndex());
     }
 
     public function testSelectPreviousMidTableReturnsNewInstance(): void
     {
-        $t = $this->makeTable()->SelectNext();
-        $prev = $t->SelectPrevious();
+        $t = $this->makeTable()->selectNext();
+        $prev = $t->selectPrevious();
         $this->assertNotSame($t, $prev);
-        $this->assertSame(0, $prev->SelectedIndex());
+        $this->assertSame(0, $prev->selectedIndex());
     }
 
     // -------------------------------------------------------------------------
@@ -1079,15 +1079,15 @@ final class TableTest extends TestCase
 
     public function testSelectedRowReturnsCurrentRow(): void
     {
-        $t = $this->makeTable()->SelectNext();
-        $this->assertSame('Bob', $t->SelectedRow()?->data->get('name'));
-        $this->assertSame($t->CurrentRow(), $t->SelectedRow());
+        $t = $this->makeTable()->selectNext();
+        $this->assertSame('Bob', $t->selectedRow()?->data->get('name'));
+        $this->assertSame($t->currentRow(), $t->selectedRow());
     }
 
     public function testSelectedRowOnEmptyTableReturnsNull(): void
     {
         $t = Table::fromColumns([Column::new('id', 'ID', 5)]);
-        $this->assertNull($t->SelectedRow());
+        $this->assertNull($t->selectedRow());
     }
 
     public function testSelectedRowRespectsFilterAndPaging(): void
@@ -1099,19 +1099,19 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([
             Column::new('id', 'ID', 4),
             Column::new('name', 'Name', 10)->withFilterable(),
-        ])->withRows($rows)->Filter('name', 'o')->withPageSize(2);
+        ])->withRows($rows)->filter('name', 'o')->withPageSize(2);
 
         // Filter 'o' keeps cow, dog, doe; page size 2 → page 1 holds only 'doe'
-        $t = $t->SelectPage(1);
-        $this->assertSame('doe', $t->SelectedRow()?->data->get('name'));
+        $t = $t->selectPage(1);
+        $this->assertSame('doe', $t->selectedRow()?->data->get('name'));
 
         // withSelectedIndex is page-global and auto-pages (audit #5, mirroring
         // Bubbles table.SetCursor): index 1 lands on 'dog' on page 0 — the
         // page follows the cursor instead of the selection falling off a
         // short page into null.
         $moved = $t->withSelectedIndex(1);
-        $this->assertSame('dog', $moved->SelectedRow()?->data->get('name'));
-        $this->assertSame(0, $moved->CurrentPage());
+        $this->assertSame('dog', $moved->selectedRow()?->data->get('name'));
+        $this->assertSame(0, $moved->currentPage());
     }
 
     // -------------------------------------------------------------------------
@@ -1126,17 +1126,17 @@ final class TableTest extends TestCase
             Column::new('y', 'Y', 10),
         ]);
 
-        $this->assertSame(2, \count($t2->Columns()));
-        $this->assertSame('x', $t2->Columns()[0]->key);
-        $this->assertSame('y', $t2->Columns()[1]->key);
+        $this->assertSame(2, \count($t2->columns()));
+        $this->assertSame('x', $t2->columns()[0]->key);
+        $this->assertSame('y', $t2->columns()[1]->key);
         // Original unchanged
-        $this->assertSame(3, \count($t->Columns()));
+        $this->assertSame(3, \count($t->columns()));
     }
 
     public function testWithColumnsInvalidatesCache(): void
     {
-        $t = $this->makeTable()->SortBy('name');
-        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+        $t = $this->makeTable()->sortBy('name');
+        $this->assertSame('Alice', $t->currentRowData()?->get('name'));
 
         // Replace columns - should clear sort cache
         $t2 = $t->withColumns([
@@ -1152,7 +1152,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBaseStyle('1;31');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString("\x1b[", $view);
     }
@@ -1166,7 +1166,7 @@ final class TableTest extends TestCase
             Row::new(RowData::from(['id' => '1'])), // no 'name' key
         ])->withMissingIndicator('???');
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('???', $view);
     }
 
@@ -1177,7 +1177,7 @@ final class TableTest extends TestCase
             ->withSelectable(false);
 
         // Navigation should work but selection highlight should not appear
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // No reverse-video highlight (style '7') should appear
         $this->assertStringNotContainsString("\x1b[7m", $view);
@@ -1188,9 +1188,9 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => '1']))])
             ->withSelectable(true)
-            ->SelectNext(); // Select a row to trigger highlight
+            ->selectNext(); // Select a row to trigger highlight
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // Should have selection highlight (reverse video). The format is ESC[7m or ESC[0;7m
         $this->assertMatchesRegularExpression('/\x1b\[(?:0;)?7m/', $view);
@@ -1205,14 +1205,14 @@ final class TableTest extends TestCase
             ->withPageSize(10)
             ->withPage(2);
 
-        $this->assertSame(2, $t->CurrentPage());
-        $this->assertSame('21', $t->CurrentRowData()?->get('n'));
+        $this->assertSame(2, $t->currentPage());
+        $this->assertSame('21', $t->currentRowData()?->get('n'));
     }
 
     public function testWithScrollX(): void
     {
         $t = $this->makeTable()->withScrollX(1);
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -1220,7 +1220,7 @@ final class TableTest extends TestCase
     {
         $t = $this->makeTable()->withZebra();
         // Zebra should apply even row styling
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -1230,7 +1230,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withHeaderStyle('1;4;33'); // bold underline yellow
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringContainsString("\x1b[", $view);
     }
@@ -1241,7 +1241,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withShowHeader(false);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringNotContainsString('ID', $view);
     }
 
@@ -1251,7 +1251,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withShowHeader(true);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertStringContainsString('ID', $view);
     }
 
@@ -1261,7 +1261,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withShowFooter(false);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -1272,7 +1272,7 @@ final class TableTest extends TestCase
             ->withPageSize(10)
             ->withShowFooter(true);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -1283,7 +1283,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorder($border);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         // Rounded border uses different characters
         $this->assertStringContainsString('╭', $view);
@@ -1296,7 +1296,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withCellPadding(1);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -1306,7 +1306,7 @@ final class TableTest extends TestCase
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withCellPadding(0);
 
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
     }
 
@@ -1335,7 +1335,7 @@ final class TableTest extends TestCase
     public function testWithHiddenCols(): void
     {
         $t = $this->makeTable()->withHiddenCols([1]); // hide 'name' column
-        $view = $t->View();
+        $view = $t->view();
         $this->assertIsString($view);
         $this->assertStringNotContainsString('Name', $view);
         $this->assertStringContainsString('ID', $view);
@@ -1363,7 +1363,7 @@ final class TableTest extends TestCase
             ->withPageSize(0) // no pagination
             ->withFooterType(\SugarCraft\Table\FooterType::Rows);
 
-        $this->assertSame('Showing 1 to 10 of 10 rows', $t->RowsFooter());
+        $this->assertSame('Showing 1 to 10 of 10 rows', $t->rowsFooter());
     }
 
     public function testComputeTotalWidthWithoutTargetWidth(): void
@@ -1388,14 +1388,14 @@ final class TableTest extends TestCase
         ]);
 
         // Filter on filterable column should work
-        $t2 = $t->Filter('name', 'Ali');
-        $this->assertSame(1, $t2->TotalRows());
+        $t2 = $t->filter('name', 'Ali');
+        $this->assertSame(1, $t2->totalRows());
 
         // Filter on a non-filterable column is now a loud guarantee, not a
         // silent no-op (audit ST-26):
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("'city' is not filterable");
-        $t->Filter('city', 'NYC');
+        $t->filter('city', 'NYC');
     }
 
     public function testClearFilterOnUnmarkedColumnAlsoThrows(): void
@@ -1406,7 +1406,7 @@ final class TableTest extends TestCase
         ])->withRows([Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC']))]);
 
         $this->expectException(\InvalidArgumentException::class);
-        $t->ClearFilter('city');
+        $t->clearFilter('city');
     }
 
     public function testStrandedFilterTextStaysInertAfterColumnSwap(): void
@@ -1420,14 +1420,14 @@ final class TableTest extends TestCase
         ])->withRows([
             Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
             Row::new(RowData::from(['name' => 'Bob', 'city' => 'Denver'])),
-        ])->Filter('city', 'NYC');
-        $this->assertSame(1, $t->TotalRows());
+        ])->filter('city', 'NYC');
+        $this->assertSame(1, $t->totalRows());
 
         $swapped = $t->withColumns([
             Column::new('name', 'Name', 10)->withFilterable(),
             Column::new('city', 'City', 10),
         ]);
-        $this->assertSame(2, $swapped->TotalRows(), 'stranded text must not filter, not throw at render');
+        $this->assertSame(2, $swapped->totalRows(), 'stranded text must not filter, not throw at render');
     }
 
     public function testGlobalSearchOnlySearchesFilterableColumns(): void
@@ -1444,7 +1444,7 @@ final class TableTest extends TestCase
         // Search for term only in non-filterable column
         $t2 = $t->search('NYC');
         // Should NOT find it because city is not filterable
-        $this->assertSame(0, $t2->TotalRows());
+        $this->assertSame(0, $t2->totalRows());
     }
 
     public function testGlobalSearchSearchesAllColumnsWhenNoneFilterable(): void
@@ -1460,7 +1460,7 @@ final class TableTest extends TestCase
 
         // Search should find 'NYC' even though no columns are explicitly filterable
         $t2 = $t->search('NYC');
-        $this->assertSame(1, $t2->TotalRows());
+        $this->assertSame(1, $t2->totalRows());
     }
 
     /**
@@ -1482,7 +1482,7 @@ final class TableTest extends TestCase
         ]);
 
         // Primary city asc (CHI < NYC), secondary name asc breaks the NYC tie.
-        $t2 = $t->SortBy('city', true, true)->SortBy('name', true, false);
+        $t2 = $t->sortBy('city', true, true)->sortBy('name', true, false);
         $names = \array_map(fn (Row $r): string => $r->data->get('name'), $t2->filteredSortedRows());
 
         $this->assertSame(['Carol', 'Alice', 'Bob'], $names);
@@ -1504,7 +1504,7 @@ final class TableTest extends TestCase
             Row::new(RowData::from(['name' => 'Bob', 'city' => 'NYC'])),
         ]);
 
-        $t2 = $t->SortBy('name', false, true)->SortBy('city', true, false);
+        $t2 = $t->sortBy('name', false, true)->sortBy('city', true, false);
         $names = \array_map(fn (Row $r): string => $r->data->get('name'), $t2->filteredSortedRows());
 
         $this->assertSame(['Bob', 'Alice'], $names);
@@ -1513,11 +1513,11 @@ final class TableTest extends TestCase
     public function testClearSortClearsAllSorts(): void
     {
         $t = $this->makeTable()
-            ->SortBy('name', true)
-            ->SortBy('city', true, false);
+            ->sortBy('name', true)
+            ->sortBy('city', true, false);
 
-        $t2 = $t->ClearSort();
-        $this->assertSame('Alice', $t2->CurrentRowData()?->get('name')); // original order
+        $t2 = $t->clearSort();
+        $this->assertSame('Alice', $t2->currentRowData()?->get('name')); // original order
     }
 
     public function testAddRowsMultiple(): void
@@ -1529,7 +1529,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['id' => '3'])),
             ]);
 
-        $this->assertSame(3, $t->TotalRows());
+        $this->assertSame(3, $t->totalRows());
     }
 
     public function testTableImmutability(): void
@@ -1560,7 +1560,7 @@ final class TableTest extends TestCase
 
         $this->assertNotSame($a, $t);
         // Verify original unchanged
-        $this->assertSame(1, $a->TotalRows());
+        $this->assertSame(1, $a->totalRows());
     }
 
     /**
@@ -1575,8 +1575,8 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['id' => '2', 'name' => 'Bob'])),
             ]);
 
-        $this->assertSame(2, $t->TotalRows());
-        $rows = $t->Rows();
+        $this->assertSame(2, $t->totalRows());
+        $rows = $t->rows();
         $this->assertInstanceOf(Row::class, $rows[0]);
         $this->assertSame('Alice', $rows[0]->data->get('name'));
         $this->assertSame('Bob', $rows[1]->data->get('name'));
@@ -1588,7 +1588,7 @@ final class TableTest extends TestCase
             ->withRows([['id' => '1']])
             ->addRows([['id' => '2']]);
 
-        $this->assertSame(2, $t->TotalRows());
+        $this->assertSame(2, $t->totalRows());
     }
 
     /**
@@ -1629,13 +1629,13 @@ final class TableTest extends TestCase
         $this->assertSame([], $t->activeFilters());
         $this->assertSame('', $t->searchText());
 
-        $sorted = $t->SortBy('city')->SortBy('name', ascending: false, primary: false);
+        $sorted = $t->sortBy('city')->sortBy('name', ascending: false, primary: false);
         $this->assertSame(
             [['key' => 'city', 'asc' => true], ['key' => 'name', 'asc' => false]],
             $sorted->sortColumns()
         );
 
-        $filtered = $sorted->Filter('city', 'Oslo');
+        $filtered = $sorted->filter('city', 'Oslo');
         $this->assertSame(['city' => 'Oslo'], $filtered->activeFilters());
 
         $searched = $filtered->search('ann');

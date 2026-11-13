@@ -183,7 +183,7 @@ $table = Table::fromColumns([
     ])
     -&gt;withPageSize(25);
 
-echo $table-&gt;View();</code></pre>
+echo $table-&gt;view();</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -233,18 +233,18 @@ echo $table-&gt;View();</code></pre>
 <tr><td>Table</td><td>withMissingIndicator(text)</td><td>Placeholder for cells whose row has no entry (default '-')</td></tr>
 <tr><td>Table</td><td>withPageSize(size)</td><td>Set rows per page for pagination</td></tr>
 <tr><td>Table</td><td>withPage(n)</td><td>Jump to page n (0-based; PageFooter shows n+1)</td></tr>
-<tr><td>Table</td><td>SelectPage(n) / NextPage() / PreviousPage()</td><td>Page navigation (clamped to valid pages; cursor snaps to the page)</td></tr>
-<tr><td>Table</td><td>withFooterType(FooterType) / RowsFooter()</td><td>Choose footer content (Page|Rows|Both) / read the rows-count footer string</td></tr>
+<tr><td>Table</td><td>SelectPage(n) / nextPage() / previousPage()</td><td>Page navigation (clamped to valid pages; cursor snaps to the page)</td></tr>
+<tr><td>Table</td><td>withFooterType(FooterType) / rowsFooter()</td><td>Choose footer content (Page|Rows|Both) / read the rows-count footer string</td></tr>
 <tr><td>Table</td><td>withViewportHeight(n)</td><td>Render only n visible rows (viewport virtualization)</td></tr>
 <tr><td>Table</td><td>withScrollY(n)</td><td>Set vertical scroll offset (row number)</td></tr>
 <tr><td>Table</td><td>scrollY()</td><td>Get current scroll offset</td></tr>
 <tr><td>Table</td><td>View()</td><td>Render the table to string — every value passes the <code>Sanitize::value()</code> ingress (see Security &amp; untrusted content)</td></tr>
 <tr><td>Table</td><td>SortBy(colKey, ascending, primary)</td><td>Sort rows by a column — numeric-aware when both values are numeric, case-insensitive otherwise; repeating the sole active sort key with the same direction toggles it</td></tr>
 <tr><td>Table</td><td>ClearSort()</td><td>Remove all sorting</td></tr>
-<tr><td>Table</td><td>Filter(key, text) / ClearFilter(key) / ClearAllFilters()</td><td>Per-column substring filter (filterable-marked columns only once any is marked)</td></tr>
-<tr><td>Table</td><td>search(text) / ClearSearch()</td><td>OR search across the scanned columns</td></tr>
+<tr><td>Table</td><td>Filter(key, text) / clearFilter(key) / clearAllFilters()</td><td>Per-column substring filter (filterable-marked columns only once any is marked)</td></tr>
+<tr><td>Table</td><td>search(text) / clearSearch()</td><td>OR search across the scanned columns</td></tr>
 <tr><td>Table</td><td>handleKey(KEY_*)</td><td>Keyboard scrolling - KEY_ARROW_UP/DOWN, PAGE_UP/DOWN, HOME, END; clamps to maxScrollY()</td></tr>
-<tr><td>Table</td><td>SelectNext() / SelectPrevious()</td><td>Move the row cursor (follows the viewport)</td></tr>
+<tr><td>Table</td><td>SelectNext() / selectPrevious()</td><td>Move the row cursor (follows the viewport)</td></tr>
 <tr><td>Table</td><td>maxScrollY()</td><td>Highest valid scrollY for the current page + viewport (public, page-aware)</td></tr>
 <tr><td>Table</td><td>withFrozenCols(indices)</td><td>Pin a contiguous prefix [0..k]; anything else throws</td></tr>
 <tr><td>Table</td><td>withHiddenCols(indices) / withScrollX(cols)</td><td>Hide columns (must stay disjoint from the frozen prefix) / pan the scrollable region</td></tr>

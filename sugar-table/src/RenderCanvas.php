@@ -23,7 +23,7 @@ use SugarCraft\CellBuffer\Cell;
  * output is therefore identical to the per-write chain — the goldens are the
  * harness that proves it.
  *
- * @internal Layout plumbing for {@see Table::View()}; not public API.
+ * @internal Layout plumbing for {@see Table::view()}; not public API.
  */
 final class RenderCanvas
 {
