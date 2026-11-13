@@ -3,6 +3,16 @@
 **Date:** 2026-05-13
 **Upstream:** [charmbracelet/log](https://github.com/charmbracelet/log) (v2.0.0)
 **Context:** PHP 8.3+ TUI logging library, part of SugarCraft monorepo
+**Status:** 2026-11-13 re-check against live source (EXEC lane SL-44). Of the
+`Current Limitations` list in the 2026-05 snapshot below: items 1 and 2 have
+shipped (sugar-colorprofile integration — `Probe::colorProfile()` at construction
+and a per-write ColorGate); item 4 has shipped (`Level` carries upstream v2’s
+-4/0/4/8/12 values); item 5 has shipped in its PHP idiom (`PsrBridge`, the
+PSR-3 handler analog); item 6 has shipped (`Styles::$values` per-key styling);
+item 3 is half-shipped (styles compose through
+`Style::new()->foreground(Color::ansi(N))` while the palette stays base-16 slot
+numbers). The body below — was not rewritten; it is the 2026-05 snapshot it was.
+
 
 ---
 
