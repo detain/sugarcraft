@@ -324,7 +324,17 @@ final class RenameLib
         // Phase 2 — moves. Order is the plan's: directory, then per-path
         // longest-first, then the bins map.
         if ($dirMove) {
-            self::gitMv($root, $d['old'], $d['new']);
+            // RT-41: a failed mv lands here with half the plan applied. The
+            // tool's documented contract is exit 1 + leave-for-inspection —
+            // a bare RuntimeException exited 255 with a stack trace, the one
+            // shape an operator mid-rename must not get.
+            try {
+                self::gitMv($root, $d['old'], $d['new']);
+            } catch (\RuntimeException $e) {
+                fwrite(STDERR, "rename-lib: phase 2 directory move failed ({$d['old']} -> {$d['new']}), tree left as-is for inspection: {$e->getMessage()}\n");
+
+                return 1;
+            }
             fwrite(STDOUT, "  moved   {$d['old']}/ -> {$d['new']}/\n");
         }
         $moves = $pathPlan + $innerPlan;
@@ -344,7 +354,13 @@ final class RenameLib
 
                 return 1;
             }
-            self::gitMv($root, $from, $to);
+            try {
+                self::gitMv($root, $from, $to);
+            } catch (\RuntimeException $e) {
+                fwrite(STDERR, "rename-lib: phase 2 path move failed ($from -> $to), tree left as-is for inspection: {$e->getMessage()}\n");
+
+                return 1;
+            }
             fwrite(STDOUT, "  renamed $from -> $to\n");
         }
         foreach ($binsPlan as [$binsOld, $binsNew]) {
@@ -358,7 +374,13 @@ final class RenameLib
 
                 return 1;
             }
-            self::gitMv($root, $src, $dst);
+            try {
+                self::gitMv($root, $src, $dst);
+            } catch (\RuntimeException $e) {
+                fwrite(STDERR, "rename-lib: phase 2 bin move failed ($src -> $dst), tree left as-is for inspection: {$e->getMessage()}\n");
+
+                return 1;
+            }
             fwrite(STDOUT, "  renamed $src -> $dst\n");
         }
 

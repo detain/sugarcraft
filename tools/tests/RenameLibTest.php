@@ -476,6 +476,35 @@ final class RenameLibTest extends TestCase
         $this->assertMatchesRegularExpression('/codecov\.yml:\d+ \[R3\]/', $run['out']);
     }
 
+    /**
+     * RT-41: when a phase 2 `git mv` fails mid-plan, the tool must exit 1
+     * naming the pair (its documented leave-for-inspection contract) — not
+     * a 255 with an uncaught RuntimeException stack trace. Hostile target
+     * shape: the planned new lib dir is a DANGLING symlink, which is_dir()
+     * reports as absent (so the plan still books the move) while rename(2)
+     * refuses underneath — exactly the "pre-flight lied" failure class the
+     * wrap must catch.
+     */
+    public function testFailedGitMvExitsOneNamingThePairNotATrace(): void
+    {
+        $root = $this->shineRepo();
+        // Hostile: the working root becomes non-writable after the
+        // read-only pre-flights pass (porcelain answers from the fresh
+        // complete stat cache, no writes needed). The first thing that then
+        // fails is the phase 2 `git mv` — rename(2) EACCES creating the new
+        // lib dir — exactly where RT-41's contract lives. (.git stays under
+        // root, but git aborts the mv before touching the index.)
+        $this->assertNotFalse(chmod($root, 0o500));
+        $run = $this->runTool($root, 'candy-shine');
+        chmod($root, 0o700);
+        $this->assertSame(1, $run['rc'], $run['out']);
+        $this->assertStringContainsString('rename-lib: phase 2 directory move failed', $run['out']);
+        $this->assertStringContainsString('candy-shine -> sugar-markdown', $run['out']);
+        $this->assertStringContainsString('tree left as-is for inspection', $run['out']);
+        $this->assertStringNotContainsString('RuntimeException', $run['out']);
+        $this->assertDirectoryExists($root . '/candy-shine');
+    }
+
     // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------
