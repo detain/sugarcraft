@@ -62,6 +62,18 @@ use SugarCraft\Code\Support\Directories\DirectoryBrowserException;
  * {@see IDLE_RECYCLE_SECONDS} — the bound on a long-running PHP process's
  * memory growth Appendix O §9.4 asks for.
  *
+ * `sessionRoots` IS BOUNDED, NOT PRUNED ON CRASH. A session id with no `root`
+ * param is routed only through that map, and crash recovery depends on it:
+ * after {@see lost()} the client gets `server.overflow {action:"resubscribe"}`
+ * and resubscribes naming just the sessionId, so the surviving row is what
+ * lets the gateway start a fresh host for the right root. Dropping rows in
+ * lost() would break that, so they stay; growth is capped instead at
+ * {@see MAX_SESSION_ROOTS} with least-recently-used eviction (PHP arrays keep
+ * insertion order; every use re-inserts the row at the young end). A row is
+ * NEVER evicted while its session has a live subscriber or its root has a
+ * running host, so the cap can only forget idle sessions of dead hosts - the
+ * client of such a session must name its `root` again, as any fresh client does.
+ *
  * MUTABLE ON PURPOSE: the live routing state of one server.
  */
 final class Gateway implements MessageHandler
@@ -78,6 +90,9 @@ final class Gateway implements MessageHandler
     /** How often idle hosts are looked for. */
     public const RECYCLE_CHECK_SECONDS = 60.0;
 
+    /** Most session-to-root routing rows kept; idle least-recently-used rows go first. */
+    public const MAX_SESSION_ROOTS = 4096;
+
     /** The methods whose answer names sessions the gateway should route. */
     private const LEARNS_SESSIONS = ['session.create', 'session.fork', 'session.list'];
 
@@ -89,6 +104,8 @@ final class Gateway implements MessageHandler
 
     /** @var array<string, string> sessionId => the root whose host has it */
     private array $sessionRoots = [];
+
+    private int $maxSessionRoots = self::MAX_SESSION_ROOTS;
 
     /** @var array<string, array<string, Connection>> sessionId => connection id => subscriber */
     private array $subscribers = [];
@@ -199,7 +216,7 @@ final class Gateway implements MessageHandler
     /** The root whose host has $sessionId, when it is not the server's own. */
     public function rootOf(string $sessionId): ?string
     {
-        return $this->sessionRoots[$sessionId] ?? null;
+        return $this->touchSession($sessionId);
     }
 
     // ── MessageHandler ─────────────────────────────────────────────────
@@ -358,7 +375,7 @@ final class Gateway implements MessageHandler
         }
         $sessionId = $params->sessionId ?? null;
 
-        return \is_string($sessionId) ? ($this->sessionRoots[$sessionId] ?? null) : null;
+        return \is_string($sessionId) ? $this->touchSession($sessionId) : null;
     }
 
     /** @throws RpcError */
@@ -459,6 +476,37 @@ final class Gateway implements MessageHandler
         });
     }
 
+    /** The root of $sessionId, marking the row most recently used. */
+    private function touchSession(string $sessionId): ?string
+    {
+        $root = $this->sessionRoots[$sessionId] ?? null;
+        if ($root !== null) {
+            unset($this->sessionRoots[$sessionId]);
+            $this->sessionRoots[$sessionId] = $root;
+        }
+
+        return $root;
+    }
+
+    /** Record $sessionId as $root's (most recently used), then enforce the cap. */
+    private function bindSession(string $sessionId, string $root): void
+    {
+        unset($this->sessionRoots[$sessionId]);
+        $this->sessionRoots[$sessionId] = $root;
+        if (\count($this->sessionRoots) <= $this->maxSessionRoots) {
+            return;
+        }
+        foreach ($this->sessionRoots as $id => $rowRoot) {
+            if (\count($this->sessionRoots) <= $this->maxSessionRoots) {
+                break;
+            }
+            if ((string) $id === $sessionId || ($this->subscribers[$id] ?? []) !== [] || isset($this->hosts[$rowRoot])) {
+                continue;
+            }
+            unset($this->sessionRoots[$id]);
+        }
+    }
+
     /** Note the sessions an answer names as $root's. */
     private function learn(string $root, string $method, mixed $result): void
     {
@@ -466,11 +514,11 @@ final class Gateway implements MessageHandler
             return;
         }
         if (\is_string($result->id ?? null)) {
-            $this->sessionRoots[$result->id] = $root;
+            $this->bindSession($result->id, $root);
         }
         foreach (\is_array($result->items ?? null) ? $result->items : [] as $item) {
             if ($item instanceof \stdClass && \is_string($item->id ?? null)) {
-                $this->sessionRoots[$item->id] = $root;
+                $this->bindSession($item->id, $root);
                 $item->root = $root;
             }
         }
@@ -607,10 +655,10 @@ final class Gateway implements MessageHandler
     {
         $sessionId = \is_string($envelope['sessionId'] ?? null) ? $envelope['sessionId'] : null;
         if ($sessionId !== null) {
-            $this->sessionRoots[$sessionId] = $root;
+            $this->bindSession($sessionId, $root);
         } elseif (\in_array($envelope['type'] ?? null, [EventType::SESSION_CREATED, EventType::SESSION_UPDATED], true)
             && \is_string($envelope['data']['id'] ?? null)) {
-            $this->sessionRoots[$envelope['data']['id']] = $root;
+            $this->bindSession($envelope['data']['id'], $root);
         }
 
         $notification = \json_decode($payload, false, JsonRpc::MAX_DEPTH);

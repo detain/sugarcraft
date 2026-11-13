@@ -193,6 +193,57 @@ final class WorkspaceHostTest extends TestCase
         );
     }
 
+    public function testASessionRootRowSurvivesAHostLossSoAByIdRequestStillRoutes(): void
+    {
+        $client = $this->client();
+        $sessionId = (string) $this->call($client, 'session.create', ['root' => $this->other])['id'];
+        $this->call($client, 'session.subscribe', ['sessionId' => $sessionId]);
+        \posix_kill((int) $this->gateway->host($this->other)?->pid(), 9);
+        self::assertTrue($this->runUntil(fn (): bool => $this->gateway->host($this->other) === null, 10.0));
+
+        self::assertSame($this->other, $this->gateway->rootOf($sessionId));
+    }
+
+    public function testTheSessionRootCapEvictsOnlyTheOldestIdleRow(): void
+    {
+        $this->capSessionRoots(3);
+        foreach (['a', 'b', 'c'] as $id) {
+            $this->bind($id, '/idle');
+        }
+        $this->gateway->rootOf('a'); // touch: now b is the oldest
+        $this->bind('d', '/idle');
+
+        self::assertNull($this->gateway->rootOf('b'));
+        self::assertSame('/idle', $this->gateway->rootOf('a'));
+        self::assertSame('/idle', $this->gateway->rootOf('c'));
+        self::assertSame('/idle', $this->gateway->rootOf('d'));
+    }
+
+    public function testARowWithALiveSubscriberIsNeverEvicted(): void
+    {
+        $client = $this->client();
+        $this->capSessionRoots(2);
+        $subs = new \ReflectionProperty(Gateway::class, 'subscribers');
+        $subs->setValue($this->gateway, ['old' => [$client->connection->id() => $client->connection]]);
+        $this->bind('old', '/idle');
+        $this->bind('x', '/idle');
+        $this->bind('y', '/idle');
+
+        self::assertSame('/idle', $this->gateway->rootOf('old'));
+        self::assertNull($this->gateway->rootOf('x'));
+        self::assertSame('/idle', $this->gateway->rootOf('y'));
+    }
+
+    private function capSessionRoots(int $max): void
+    {
+        (new \ReflectionProperty(Gateway::class, 'maxSessionRoots'))->setValue($this->gateway, $max);
+    }
+
+    private function bind(string $sessionId, string $root): void
+    {
+        (new \ReflectionMethod(Gateway::class, 'bindSession'))->invoke($this->gateway, $sessionId, $root);
+    }
+
     public function testClosingAWorkspaceStopsItsHost(): void
     {
         $client = $this->client();
