@@ -75,6 +75,56 @@ final class PosterGrid
         return new self(max(4, $cardWidth), max(1, $posterHeight), max(0, $hSpacing), max(0, $vSpacing));
     }
 
+    // ---- geometry ------------------------------------------------------
+
+    /**
+     * Effective card width — the CLAMPED value construction promised
+     * (≥ 4). The clamp was invisible before these accessors existed
+     * (sugar-gallery-006): hosts had to re-derive it by hand to size a
+     * surrounding frame.
+     */
+    public function cardWidth(): int
+    {
+        return $this->cardWidth;
+    }
+
+    /** Effective poster rows per card (clamped ≥ 1). */
+    public function posterHeight(): int
+    {
+        return $this->posterHeight;
+    }
+
+    /** Effective horizontal gutter (clamped ≥ 0). */
+    public function hSpacing(): int
+    {
+        return $this->hSpacing;
+    }
+
+    /** Effective vertical gutter (clamped ≥ 0). */
+    public function vSpacing(): int
+    {
+        return $this->vSpacing;
+    }
+
+    /**
+     * Re-lay the card geometry mid-session (a resizable pane): the loaded
+     * items ride unchanged and the cursor re-enters range through the same
+     * {@see synced()} law the viewport verbs use (sugar-gallery-011: geometry
+     * was frozen at construction, forcing hosts to rebuild the grid and
+     * re-splice every cached card to resize it). Null spacing arguments
+     * keep the grid's current gutters.
+     */
+    public function withCardSize(int $cardWidth, int $posterHeight, ?int $hSpacing = null, ?int $vSpacing = null): self
+    {
+        $clone = clone $this;
+        $clone->cardWidth = max(4, $cardWidth);
+        $clone->posterHeight = max(1, $posterHeight);
+        $clone->hSpacing = max(0, $hSpacing ?? $this->hSpacing);
+        $clone->vSpacing = max(0, $vSpacing ?? $this->vSpacing);
+
+        return $clone->synced($clone->cursor);
+    }
+
     // ---- result set ----------------------------------------------------
 
     /**

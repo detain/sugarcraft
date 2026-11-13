@@ -45,6 +45,48 @@ final class PosterGridTest extends TestCase
         );
     }
 
+    public function testAccessorsReportTheClampedGeometry(): void
+    {
+        // sugar-gallery-006: new() clamps cardWidth to 4 and posterHeight to 1
+        // but the effective values were undiscoverable — hosts re-derived the
+        // construction law by hand to size a surrounding frame.
+        $g = PosterGrid::new(2, 0, -5, -7);
+
+        self::assertSame(4, $g->cardWidth(), 'the floor is what the grid actually paints with');
+        self::assertSame(1, $g->posterHeight());
+        self::assertSame(0, $g->hSpacing());
+        self::assertSame(0, $g->vSpacing());
+        self::assertSame(3, $g->cellHeight(), 'poster 1 + title + reserved progress row');
+    }
+
+    public function testWithCardSizeRidesItemsAndReEntersCursorThroughSynced(): void
+    {
+        // sugar-gallery-011: resizing meant rebuilding the grid and
+        // re-splicing every cached card. Now it is one carrier.
+        $g = $this->grid(50)->withItems($this->cardsAt([0, 1, 2]))->moveTo(7);
+        $r = $g->withCardSize(12, 5, 3, 2);
+
+        self::assertSame([12, 5, 3, 2], [$r->cardWidth(), $r->posterHeight(), $r->hSpacing(), $r->vSpacing()]);
+        self::assertSame(50, $r->total());
+        self::assertSame('Item 1', $r->item(1)?->title, 'loaded cards ride unchanged');
+        self::assertSame(7, $r->cursorIndex(), 'a still-valid cursor does not move');
+        self::assertSame(10, $g->cardWidth(), 'the original keeps its geometry (immutable)');
+
+        // Clamps apply here too — withCardSize is a second ingress, not a
+        // back door around the construction floors.
+        $clamped = $g->withCardSize(1, -3);
+        self::assertSame([4, 1, 2, 1], [$clamped->cardWidth(), $clamped->posterHeight(), $clamped->hSpacing(), $clamped->vSpacing()], 'null spacings keep the current gutters');
+    }
+
+    public function testWithCardSizeRendersByteIdenticalToEquivalentConstruction(): void
+    {
+        // Acceptance law: resize is not a second layout path.
+        $direct = PosterGrid::new(12, 5, 3, 2)->withViewport(64, 30)->withItems($this->cardsAt([0, 1, 2, 3]))->withTotal(4);
+        $resized = PosterGrid::new(7, 2, 1, 0)->withViewport(64, 30)->withItems($this->cardsAt([0, 1, 2, 3]))->withTotal(4)->withCardSize(12, 5, 3, 2);
+
+        self::assertSame($direct->render(), $resized->render());
+    }
+
     public function testGeometry(): void
     {
         $g = $this->grid(50);
