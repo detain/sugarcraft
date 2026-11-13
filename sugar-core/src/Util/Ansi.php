@@ -339,7 +339,7 @@ final class Ansi
      * is preferred over BEL because some terminals mis-render BEL
      * inside an OSC.
      *
-     * Mirrors charmbracelet/x/ansi. LinkFormatter.
+     * Mirrors charmbracelet/x/ansi.LinkFormatter.
      *
      * @param string      $uri  Target URL
      * @param string|null $id   Optional link ID for shared destinations
@@ -354,7 +354,7 @@ final class Ansi
      * Emit the OSC 8 hyperlink terminator (no-op close, used after
      * the linked text to restore normal underline state).
      *
-     * Mirrors charmbracelet/x/ansi. LinkFormatter.
+     * Mirrors charmbracelet/x/ansi.LinkFormatter.
      */
     public static function hyperlinkClose(): string
     {
@@ -487,7 +487,7 @@ final class Ansi
      * would desynchronise the receiver's parser, which is precisely the class
      * of bug this emitter exists to prevent.
      *
-     * Mirrors charmbracelet/x/ansi. SelectCharacterSet — the same
+     * Mirrors charmbracelet/x/ansi.SelectCharacterSet — the same
      * `ESC <intermediate> <final>` helper that sugar-vterm's `Charsets` docblock
      * records as its own upstream source (same wire shape; this port keys the
      * designation on a 0-3 slot index).
@@ -1197,7 +1197,7 @@ final class Ansi
     /**
      * Emit an iTerm2 / WezTerm inline image via OSC 1337.
      *
-     * Mirrors charmbracelet/x/ansi. Iterm2Renderer.
+     * Mirrors charmbracelet/x/ansi.Iterm2Renderer.
      *
      * The payload format is signalled by the `type` argument —
      * absent means PNG (the protocol default), `type=tiff` selects the
@@ -1240,7 +1240,7 @@ final class Ansi
      * Remove the most recently displayed iTerm2 / WezTerm inline image
      * via the "Pop" action (OSC 1337).
      *
-     * Mirrors charmbracelet/x/ansi. Iterm2Renderer.
+     * Mirrors charmbracelet/x/ansi.Iterm2Renderer.
      */
     public static function iterm2Delete(): string
     {
@@ -1255,7 +1255,7 @@ final class Ansi
      * and the `m` flag carries the more-chunks semantics: `m=1` keeps the
      * transaction open, `m=0` transmits the final chunk and closes it.
      *
-     * Mirrors charmbracelet/x/ansi. GraphicsData.
+     * Mirrors charmbracelet/x/ansi.GraphicsData.
      *
      * @param string $base64  Base64-encoded data chunk
      * @param bool   $more    True if more chunks follow (sets m=1)
@@ -1295,7 +1295,7 @@ final class Ansi
      * For a one-shot control frame that must NOT open a chunked
      * transaction (place/delete by id), use {@see kittyGraphicsControl()}.
      *
-     * Mirrors charmbracelet/x/ansi. GraphicsBegin.
+     * Mirrors charmbracelet/x/ansi.GraphicsBegin.
      *
      * @param array<string, mixed> $opts  Key-value pairs for the begin sequence
      */
@@ -1315,7 +1315,7 @@ final class Ansi
      * (`a=p` place, `a=d` delete, transformation-only ops) — attributes
      * only, no data, no open transaction.
      *
-     * Mirrors charmbracelet/x/ansi. GraphicsEnd-without-chunks.
+     * Mirrors charmbracelet/x/ansi.GraphicsEnd for the no-chunks variant.
      *
      * @param array<string, mixed> $opts  Key-value control pairs
      */
@@ -1330,7 +1330,7 @@ final class Ansi
      * {@see kittyGraphicsBegin()} (redundant but harmless after a final
      * chunk already sent `m=0`).
      *
-     * Mirrors charmbracelet/x/ansi. GraphicsEnd.
+     * Mirrors charmbracelet/x/ansi.GraphicsEnd.
      */
     public static function kittyGraphicsEnd(): string
     {
@@ -1340,7 +1340,7 @@ final class Ansi
     /**
      * Clear a Kitty graphics protocol image by id (or all if id=0).
      *
-     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     * Mirrors charmbracelet/x/ansi.KittyRenderer.
      */
     public static function kittyGraphicsClear(int $imageId = 0): string
     {
@@ -1372,7 +1372,7 @@ final class Ansi
      * P1=1 (graphics, not rulers), followed by zero params (uses
      * Sixel Defaults are fine: aspect ratio 2:1, no background extended).
      *
-     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     * Mirrors charmbracelet/x/ansi.SixelRenderer.
      *
      * @param int $width  Pixel width of the full image
      * @param int $height Pixel height of the full image
@@ -1395,7 +1395,7 @@ final class Ansi
      * Format: DCS Pn; Pr; Pg; Pb $ ST
      * Each component is 0-100 (percentage of 0-255 range).
      *
-     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     * Mirrors charmbracelet/x/ansi.SixelRenderer.
      *
      * @param int $index  Palette index 0-255
      * @param int $r      Red   0-255
@@ -1421,7 +1421,7 @@ final class Ansi
      *
      * Format: DCS Pn $ ST
      *
-     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     * Mirrors charmbracelet/x/ansi.SixelRenderer.
      *
      * @param int $index  Palette index 0-255 to select
      */
@@ -1493,7 +1493,7 @@ final class Ansi
      * Repeat runs go through {@see sixelRle()} (the shared home), so the
      * `!255` chunking rule has exactly one implementation tree-wide.
      *
-     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     * Mirrors charmbracelet/x/ansi.SixelRenderer.
      *
      * @param list<int> $column  Palette indices for each row in this band column
      * @param int|null $repeat   Run-length repeat count (null = single pixel)
@@ -1510,7 +1510,7 @@ final class Ansi
     /**
      * Emit the Sixel terminator sequence.
      *
-     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     * Mirrors charmbracelet/x/ansi.SixelRenderer.
      */
     public static function sixelTerminator(): string
     {

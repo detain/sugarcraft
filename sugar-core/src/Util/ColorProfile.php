@@ -18,7 +18,7 @@ enum ColorProfile: int
     /**
      * Detect the active terminal's color profile.
      *
-     * Mirrors charmbracelet/colorprofile.Detect / colorProfile. Decision order:
+     * Mirrors the detection decision order of charmbracelet/colorprofile.Detect.
      *   1. Output is not a TTY → `NoTty` — checked FIRST, so `NO_COLOR` on a
      *      pipe is `NoTty` (no escape bytes at all), not `Ascii`. A truthy
      *      `CLICOLOR_FORCE`/`FORCE_COLOR` says "emit escapes anyway" and so

@@ -9,7 +9,7 @@ use SugarCraft\Pty\PtyException;
 
 /**
  * Cross-platform helper for opening URLs and files in the user's
- * default application. Mirrors charmbracelet/x/exp/open.
+ * default application. Mirrors charmbracelet/x/exp/open.Open.
  *
  * Always uses {@see proc_open()}'s argv form so user-supplied URLs
  * cannot reach a shell — `javascript:` / `data:` / `vbscript:` URIs

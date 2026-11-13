@@ -15,7 +15,7 @@ use SugarCraft\Pty\TermiosFactory;
  * Uses TermiosFactory (FFI primary, stty fallback) for raw mode and
  * SizeIoctl for terminal dimensions.
  *
- * Mirrors charmbracelet/bubbletea TtyBackend
+ * Mirrors charmbracelet/bubbletea.TtyBackend
  */
 final class PosixBackend implements Backend
 {

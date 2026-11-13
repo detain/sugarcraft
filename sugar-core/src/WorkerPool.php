@@ -26,7 +26,7 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
  * RuntimeException naming the serialization failure, rather than
  * throwing or hanging.
  *
- * Mirrors charmbracelet/bubbletea's worker pool for offloading heavy
+ * Mirrors the worker-pool pattern of charmbracelet/bubbletea, the machinery for offloading heavy
  * computation off the UI thread.
  *
  * Child lifetime is owned by the pool: {@see stop()} — which the destructor

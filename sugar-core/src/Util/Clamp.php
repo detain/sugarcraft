@@ -6,7 +6,9 @@ namespace SugarCraft\Core\Util;
 
 /**
  * Shared value clamping utilities for the SugarCraft monorepo.
- * Mirrors charmbracelet/<repo>.clamp helpers.
+ * Original: clamping is a banal idiom repeated across the upstream; no
+ * single mirrorable symbol exists, so the citation is deliberately
+ * absent rather than invented (sugar-core-073).
  */
 final class Clamp
 {

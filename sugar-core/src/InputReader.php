@@ -371,7 +371,8 @@ final class InputReader
                 continue;
             }
 
-            // Mirrors charmbracelet/bubbletea rune assembly.
+            // Follows charmbracelet/bubbletea rune assembly (no single
+            // upstream symbol carries the name, so this stays narrative).
             // Detect UTF-8 lead bytes and assemble the full codepoint
             // before emitting — C0-0x7f bytes are single-byte ASCII.
             //
