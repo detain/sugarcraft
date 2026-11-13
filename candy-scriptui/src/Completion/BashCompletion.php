@@ -80,7 +80,11 @@ final class BashCompletion
 
         $script = <<<BASH
 {$fnName}() {
-    local cur="\${1:-}"
+    # Under the `complete -F` contract bash calls the handler as
+    # _fn NAME CUR WORDS INDEX - \$1 is the command NAME, \$2 is the
+    # word being completed (scriptui-23; reading \$1 made every compgen
+    # filter by the literal app name and COMPREPLY was always empty).
+    local cur="\${2:-}"
     local word="\${COMP_WORDS[1]:-}"
 
     case "\$word" in
