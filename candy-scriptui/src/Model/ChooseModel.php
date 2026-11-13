@@ -14,6 +14,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
@@ -183,7 +184,7 @@ final class ChooseModel implements Model
 
     public function view(): string
     {
-        $body = $this->multi ? $this->markedBody() : $this->list->view();
+        $body = $this->multi ? $this->markedBody() : Emphasis::stripDecor($this->list->view());
         if ($this->multi) {
             // Append a status line: '(N selected)'.
             $count = $this->selectedCount();
@@ -241,7 +242,7 @@ final class ChooseModel implements Model
             $idx       = $top + $i;
             $itemTitle = RenderSafe::clean($item->title());
             if ($idx === $cursor) {
-                $lines[] = $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $itemTitle . Ansi::reset();
+                $lines[] = $this->list->cursorPrefix . Emphasis::sgr(Ansi::REVERSE) . $itemTitle . Emphasis::reset();
             } else {
                 $orig    = array_search($item, $this->list->items, true);
                 $lines[] = $orig !== false && !empty($this->checked[$orig])

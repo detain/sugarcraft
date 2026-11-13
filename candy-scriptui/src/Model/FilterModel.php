@@ -18,6 +18,7 @@ use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
@@ -315,7 +316,7 @@ final class FilterModel implements Model
         $fuzzyActive = $this->fuzzy && $this->list->filterValue() !== '' && $this->fuzzyResults !== [];
         $body = $fuzzyActive
             ? $this->fuzzyView()
-            : ($this->multi ? $this->markedBody() : $this->list->view());
+            : ($this->multi ? $this->markedBody() : Emphasis::stripDecor($this->list->view()));
         if ($this->multi) {
             $count = count(array_filter($this->checked));
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
@@ -364,7 +365,7 @@ final class FilterModel implements Model
             $idx       = $top + $i;
             $itemTitle = RenderSafe::clean($item->title());
             if ($idx === $cursor) {
-                $lines[] = $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $itemTitle . Ansi::reset();
+                $lines[] = $this->list->cursorPrefix . Emphasis::sgr(Ansi::REVERSE) . $itemTitle . Emphasis::reset();
             } else {
                 $orig    = array_search($item, $this->allItems, true);
                 $lines[] = $orig !== false && !empty($this->checked[$orig])
@@ -416,7 +417,7 @@ final class FilterModel implements Model
                 $this->fuzzyResults[$originalIndices[$idx]]->indices(),
             );
             if ($idx === $cursor) {
-                $lines[] = $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $highlighted . Ansi::reset();
+                $lines[] = $this->list->cursorPrefix . Emphasis::sgr(Ansi::REVERSE) . $highlighted . Emphasis::reset();
             } elseif ($this->multi && !empty($this->checked[$originalIndices[$idx]])) {
                 // A11y (M11): per-row tick mark in fuzzy multi mode too.
                 $lines[] = "\u{2713} " . $highlighted;
@@ -445,14 +446,14 @@ final class FilterModel implements Model
         foreach (mb_str_split($title) as $i => $ch) {
             $match = isset($set[$i]);
             if ($match && !$bold) {
-                $out .= Ansi::sgr(Ansi::BOLD);
+                $out .= Emphasis::sgr(Ansi::BOLD);
             } elseif (!$match && $bold) {
-                $out .= Ansi::sgr(22);
+                $out .= Emphasis::sgr(22);
             }
             $bold = $match;
             $out .= $ch;
         }
-        return $bold ? $out . Ansi::sgr(22) : $out;
+        return $bold ? $out . Emphasis::sgr(22) : $out;
     }
 
     public function selected(): ?string

@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
@@ -97,8 +98,8 @@ final class PagerModel implements Model
         if ($needle === '') {
             return $content;
         }
-        $sgr = Ansi::sgr(Ansi::REVERSE);
-        $rst = Ansi::reset();
+        $sgr = Emphasis::sgr(Ansi::REVERSE);
+        $rst = Emphasis::reset();
         // Case-insensitive substring replace using preg_replace; quote
         // the needle so regex metachars aren't treated as syntax.
         $pattern = '/' . preg_quote($needle, '/') . '/i';

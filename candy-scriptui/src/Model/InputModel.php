@@ -6,6 +6,7 @@ namespace SugarCraft\ScriptUi\Model;
 
 use SugarCraft\Forms\TextInput\EchoMode;
 use SugarCraft\Forms\TextInput\TextInput;
+use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -87,7 +88,7 @@ final class InputModel implements Model
 
     public function view(): string
     {
-        $body = $this->input->view();
+        $body = Emphasis::stripDecor($this->input->view());
         return $this->header === ''
             ? $body
             : $this->header . "\n" . $body;

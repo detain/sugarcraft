@@ -230,6 +230,9 @@ re-quantise colours to that depth.
 
 - **`--no-ansi`** (global flag) is FINAL — it outranks every other rule,
   including `--ansi`: every SGR escape is dropped, decoration included.
+  The interactive frames' hand-composed emphasis — cursor-row reverse
+  video, fuzzy-match bold, pager highlight — rides the same gate, so a
+  `NoTty` frame is entirely escape-free.
   `--ansi` overrides the ENV tiers only.
 - **`NO_COLOR`** (any truthy value) disables colour; decoration (bold,
   underline, …) and layout survive.

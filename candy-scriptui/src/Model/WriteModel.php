@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Model;
 
 use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -93,7 +94,7 @@ final class WriteModel implements Model
 
     public function view(): string
     {
-        $body = $this->area->view();
+        $body = Emphasis::stripDecor($this->area->view());
         return $this->header === '' ? $body : $this->header . "\n" . $body;
     }
     public function value(): string { return $this->area->value(); }

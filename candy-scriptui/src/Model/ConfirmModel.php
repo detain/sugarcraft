@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Field\Confirm;
+use SugarCraft\ScriptUi\Runtime\Emphasis;
 
 /**
  * Yes/no prompt used by {@see \SugarCraft\ScriptUi\Command\ConfirmCommand}.
@@ -92,7 +93,7 @@ final class ConfirmModel implements Model
 
     public function view(): string
     {
-        return $this->field->view();
+        return Emphasis::stripDecor($this->field->view());
     }
 
     public function answer(): bool       { return (bool) $this->field->value(); }
