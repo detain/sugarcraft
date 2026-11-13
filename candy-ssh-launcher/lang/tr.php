@@ -47,6 +47,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filtre: ',
     'picker.no_matches'  => '  (eşleşme yok — Backspace veya Esc)',
-    'picker.help'        => '  ↑/↓ veya j/k seç · Enter bağlan · Esc çık · filtrelemek için yaz',
+    'picker.help'        => '↑/↓ seç · Enter bağlan · Esc çık · filtrelemek için yaz',
+    'picker.help_keys'   => '⌫ sil · Ctrl+U/W temizle · PgUp/PgDn sayfa · Home/End atla',
     'picker.count'       => '  ({total} içinden {shown})',
 ];

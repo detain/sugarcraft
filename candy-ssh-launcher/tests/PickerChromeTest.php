@@ -90,8 +90,39 @@ final class PickerChromeTest extends TestCase
         }
     }
 
-    public function testAbortClearsTheTransientFrameAndPickDoesNot(): void
+    public function testSecondaryKeyRowShowsOnlyWhileFilterIsEmpty(): void
     {
+        // -07: the chord map is a first-frame citizen. Opening frame
+        // carries it; every redraw under a live query hands the row back
+        // to results.
+        [, $empty] = $this->drive("\x1b", $this->threeHosts());
+        self::assertStringContainsString(
+            '⌫ delete · Ctrl+U/W clear · PgUp/PgDn page · Home/End jump',
+            $empty,
+        );
+
+        [, $typing] = $this->drive('pr' . "\x1b", $this->threeHosts());
+        self::assertSame(
+            1,
+            substr_count($typing, '⌫ delete'),
+            'the key row yields to the funnel once the query is live',
+        );
+    }
+
+    public function testReadmeMockCarriesTheShippedHelpBytes(): void
+    {
+        // -07 drift guard: the README frame and the shipped en strings are
+        // one byte-string each. A help-row edit that skips the README (or
+        // resurrects the j/k claim) goes red here, not in the wild.
+        $readme = (string) file_get_contents(\dirname(__DIR__) . '/README.md');
+        /** @var array<string,string> $en */
+        $en = require \dirname(__DIR__) . '/lang/en.php';
+        self::assertStringContainsString($en['picker.help'], $readme);
+        self::assertStringContainsString($en['picker.help_keys'], $readme);
+        self::assertStringNotContainsString('or j/k', $readme);
+    }
+
+    public function testAbortClearsTheTransientFrameAndPickDoesNot(): void    {
         // T1 superseded by -08: a cancelled session leaves nothing behind
         // because the frame lived in the alternate buffer the whole time.
         // Both exits now share the same visible truth: the main screen was
@@ -236,17 +267,18 @@ final class PickerChromeTest extends TestCase
 
     public function testShortTerminalCutsTheWindowToRowsMinusChrome(): void
     {
-        // -002: rows is read now. A 200×8 pane carries title+filter+blank+
-        // help (4 chrome rows), so the window is 4 — not the old fixed 10
-        // that scrolled the picker's own title and filter off-screen and
-        // made type-to-search blind.
+        // -002: rows is read now. A 200×8 pane carries title+filter+blank
+        // +help+key-row (5 chrome rows since -07's empty-filter secondary
+        // line), so the window is 3 — not the old fixed 10 that scrolled
+        // the picker's own title and filter off-screen and made
+        // type-to-search blind.
         [, $output] = $this->drive("\x1b", $this->twelveHosts(), rows: 8);
 
         $dataRows = array_filter(
             explode("\r\n", $output),
             static fn(string $r): bool => str_contains($r, '.test')
         );
-        self::assertCount(4, $dataRows, 'a 200x8 pane shows exactly rows minus chrome, never the full 10');
+        self::assertCount(3, $dataRows, 'a 200x8 pane shows exactly rows minus chrome, never the full 10');
         self::assertStringNotContainsString('host5', $output);
     }
 

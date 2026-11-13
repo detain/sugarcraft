@@ -47,6 +47,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => '筛选: ',
     'picker.no_matches'  => '  （无匹配 — 退格或 Esc）',
-    'picker.help'        => '  ↑/↓ 或 j/k 选择 · Enter 连接 · Esc 退出 · 输入过滤',
+    'picker.help'        => '↑/↓ 选择 · Enter 连接 · Esc 退出 · 输入过滤',
+    'picker.help_keys'   => '⌫ 删除 · Ctrl+U/W 清除 · PgUp/PgDn 翻页 · Home/End 跳转',
     'picker.count'       => '  （{shown}/{total}）',
 ];

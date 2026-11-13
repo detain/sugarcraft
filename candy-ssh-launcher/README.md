@@ -26,8 +26,11 @@ filter:
   staging     ─  stage.example.com:22
   dev         ─  dev.example.com:22
 
-  ↑/↓ select · Enter connect · Esc quit · type to filter
+↑/↓ select · Enter connect · Esc quit · type to filter
+⌫ delete · Ctrl+U/W clear · PgUp/PgDn page · Home/End jump
 ```
+
+While you type, the frame swaps its second help row for the funnel: a `(shown of total)` count once a filter is live, plus a `(no matches — backspace or Esc)` line when the query has killed every row.
 
 ## Requirements
 

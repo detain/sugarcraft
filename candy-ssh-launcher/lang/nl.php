@@ -47,6 +47,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filter: ',
     'picker.no_matches'  => '  (geen treffers — Backspace of Esc)',
-    'picker.help'        => '  ↑/↓ of j/k kiezen · Enter verbinden · Esc afsluiten · typ om te filteren',
+    'picker.help'        => '↑/↓ kiezen · Enter verbinden · Esc afsluiten · typ om te filteren',
+    'picker.help_keys'   => '⌫ verwijderen · Ctrl+U/W wissen · PgUp/PgDn pagina · Home/End springen',
     'picker.count'       => '  ({shown} van {total})',
 ];

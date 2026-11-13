@@ -47,6 +47,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'фильтр: ',
     'picker.no_matches'  => '  (нет совпадений — Backspace или Esc)',
-    'picker.help'        => '  ↑/↓ или j/k выбрать · Enter подключить · Esc выйти · печатайте для фильтра',
+    'picker.help'        => '↑/↓ выбрать · Enter подключить · Esc выйти · печатайте для фильтра',
+    'picker.help_keys'   => '⌫ стереть · Ctrl+U/W очистить · PgUp/PgDn страница · Home/End переход',
     'picker.count'       => '  ({shown} из {total})',
 ];

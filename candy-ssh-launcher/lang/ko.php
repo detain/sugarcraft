@@ -47,6 +47,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => '필터: ',
     'picker.no_matches'  => '  (일치 없음 — Backspace 또는 Esc)',
-    'picker.help'        => '  ↑/↓ 또는 j/k 선택 · Enter 연결 · Esc 종료 · 입력으로 필터',
+    'picker.help'        => '↑/↓ 선택 · Enter 연결 · Esc 종료 · 입력으로 필터',
+    'picker.help_keys'   => '⌫ 삭제 · Ctrl+U/W 지우기 · PgUp/PgDn 페이지 · Home/End 이동',
     'picker.count'       => '  ({total} 중 {shown})',
 ];

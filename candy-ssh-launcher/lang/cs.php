@@ -47,6 +47,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filtr: ',
     'picker.no_matches'  => '  (žádné shody — Backspace nebo Esc)',
-    'picker.help'        => '  ↑/↓ nebo j/k vybrat · Enter připojit · Esc ukončit · psát pro filtr',
+    'picker.help'        => '↑/↓ vybrat · Enter připojit · Esc ukončit · psát pro filtr',
+    'picker.help_keys'   => '⌫ smazat · Ctrl+U/W vyčistit · PgUp/PgDn stránka · Home/End skok',
     'picker.count'       => '  ({shown} z {total})',
 ];

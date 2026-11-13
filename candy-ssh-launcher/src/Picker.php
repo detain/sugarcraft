@@ -536,7 +536,11 @@ class Picker
         $showNone = $matches === [];
         // title + filter + blank + help, plus the conditional count and
         // no-matches rows — the rows the budget below must leave for data.
-        $chromeRows = 4 + ($showCount ? 1 : 0) + ($showNone ? 1 : 0);
+        // -07: with an EMPTY filter the frame carries the secondary key
+        // row in place of the count/no-matches pair, so 6 stays the
+        // worst-case chrome total (count + no-matches with a live filter).
+        $showKeys = $this->filter === '';
+        $chromeRows = 4 + ($showCount ? 1 : 0) + ($showNone ? 1 : 0) + ($showKeys ? 1 : 0);
 
         if ($this->addressable) {
             fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseToEnd());
@@ -590,6 +594,13 @@ class Picker
             fwrite($this->out, $this->clampRow("{$marker}{$line}") . "\r\n");
         }
         fwrite($this->out, "\r\n" . $this->clampRow(Lang::t('picker.help')) . "\r\n");
+        if ($showKeys) {
+            // -07: the full chord map earns its row only while nothing is
+            // typed — the primary line is the memory-safe half, this is
+            // the discoverability half, and a live query yields the
+            // vertical budget back to results.
+            fwrite($this->out, $this->clampRow(Lang::t('picker.help_keys')) . "\r\n");
+        }
     }
 
     /**

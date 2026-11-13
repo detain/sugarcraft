@@ -48,6 +48,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filter: ',
     'picker.no_matches'  => '  (no matches — backspace or Esc)',
-    'picker.help'        => '  ↑/↓ or j/k select · Enter connect · Esc quit · type to filter',
+    'picker.help'        => '↑/↓ select · Enter connect · Esc quit · type to filter',
+    'picker.help_keys'   => '⌫ delete · Ctrl+U/W clear · PgUp/PgDn page · Home/End jump',
     'picker.count'       => '  ({shown} of {total})',
 ];

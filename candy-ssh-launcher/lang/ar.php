@@ -47,6 +47,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'تصفية: ',
     'picker.no_matches'  => '  (لا تطابقات — Backspace أو Esc)',
-    'picker.help'        => '  ↑/↓ أو j/k تحديد · Enter اتصال · Esc خروج · اكتب للتصفية',
+    'picker.help'        => '↑/↓ تحديد · Enter اتصال · Esc خروج · اكتب للتصفية',
+    'picker.help_keys'   => '⌫ حذف · Ctrl+U/W مسح · PgUp/PgDn صفحة · Home/End انتقال',
     'picker.count'       => '  ({shown} من {total})',
 ];

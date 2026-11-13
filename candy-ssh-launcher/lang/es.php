@@ -49,6 +49,7 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filtro: ',
     'picker.no_matches'  => '  (sin coincidencias — Retroceso o Esc)',
-    'picker.help'        => '  ↑/↓ o j/k seleccionar · Enter conectar · Esc salir · escribe para filtrar',
+    'picker.help'        => '↑/↓ seleccionar · Enter conectar · Esc salir · escribe para filtrar',
+    'picker.help_keys'   => '⌫ borrar · Ctrl+U/W limpiar · RePag/AvPag página · Inicio/Fin saltar',
     'picker.count'       => '  ({shown} de {total})',
 ];
