@@ -1594,6 +1594,50 @@ PHP;
     }
 
     /**
+     * @testdox SV-L83 (house law): the stderr sink lives in a process-owned 0700 dir, not shared /tmp root
+     */
+    public function testTheStderrSinkRidesAnOwnedPrivateDirectory(): void
+    {
+        $sinkDir = new \ReflectionMethod(FfmpegDecoder::class, 'sinkDir');
+        $dir = $sinkDir->invoke(null);
+        $this->assertIsString($dir, 'the host must be able to secure the owned dir (the arms below would else fail the law)');
+        $this->assertDirectoryExists($dir);
+        $this->assertSame('0700', substr(sprintf('%o', fileperms($dir)), -4), 'owned-private mode or nothing');
+        $this->assertSame(sys_get_temp_dir(), dirname($dir));
+        $this->assertSame($dir, $sinkDir->invoke(null), 'one dir per process, not one per open()');
+
+        // And the sink FILE lands under it: run a real open() against a stub
+        // ffmpeg, then read the stderrPath the decoder recorded.
+        $bin = sys_get_temp_dir() . '/reel-l83-' . bin2hex(random_bytes(5));
+        mkdir($bin);
+        file_put_contents($bin . '/ffmpeg', "#!/bin/sh\nexit 0\n");
+        chmod($bin . '/ffmpeg', 0755);
+        $source = $bin . '/ffmpeg'; // any existing file passes the pre-spawn source check
+        $savedPath = getenv('PATH');
+        putenv('PATH=' . $bin);
+        Probe::clearBinaryCacheForTesting();
+        $decoder = new FfmpegDecoder();
+
+        try {
+            try {
+                $decoder->open($source, 8, 6, 10.0);
+            } catch (\Throwable) {
+                // A stub that yields no frames may fail loudly later — the sink
+                // is recorded BEFORE the spawn, so the pin below holds either way.
+            }
+            $sink = (new \ReflectionProperty(FfmpegDecoder::class, 'stderrPath'))->getValue($decoder);
+            $this->assertIsString($sink, 'with the owned dir secured, the diagnostic sink must not fall back to the null device');
+            $this->assertSame($dir, dirname($sink), 'SV-L83: no symlink-swap surface in world-visible /tmp root');
+        } finally {
+            $decoder->close();
+            putenv($savedPath === false ? 'PATH' : 'PATH=' . $savedPath);
+            Probe::clearBinaryCacheForTesting();
+            @unlink($bin . '/ffmpeg');
+            @rmdir($bin);
+        }
+    }
+
+    /**
      * @testdox SV-M44 (gate default-leg, route a): a Windows host loudly refuses the ffmpeg video path before any spawn
      */
     public function testTheWindowsHostRefusesFfmpegVideoWithGuidance(): void

@@ -316,8 +316,21 @@ final class FfmpegDecoder implements Decoder
         // once its ~64KB buffer fills). The temp file buys diagnostics: an
         // abnormal exit is quoted back from it (refuseAbnormalExit), which is
         // exactly what the old /dev/null sink threw away. close() unlinks.
+        //
+        // SV-L83 (house law, sugar-image/sugar-mosaic precedent): the sink
+        // lives in a process-OWNED 0700 directory, not in shared /tmp root —
+        // a same-uid attacker could symlink-swap a root-level name between
+        // the spawn and the tail-read and surface 400 bytes of an arbitrary
+        // file (sanitized) into the exception. Residual window accepted and
+        // documented: a same-uid attacker who can ptrace or signal this
+        // process can read any path anyway; what this closes out is the
+        // passive /tmp-sweeper class, which is the realistic attack. If no
+        // owned dir can be secured, we lose diagnostics — we do NOT fall
+        // back to a world-visible location. close() unlinks the file; the
+        // (then-empty, 0700) dir rides the host's tmp reaper.
         $devNull = DIRECTORY_SEPARATOR === '\\' ? '\\\\.\\NUL' : '/dev/null';
-        $stderrSink = tempnam(sys_get_temp_dir(), 'sugar-video-ffmpeg-');
+        $sinkDir = self::sinkDir();
+        $stderrSink = $sinkDir !== null ? @tempnam($sinkDir, 'ffmpeg-stderr-') : false;
         $this->stderrPath = is_string($stderrSink) ? $stderrSink : null;
 
         $descriptorSpec = [
@@ -800,6 +813,38 @@ final class FfmpegDecoder implements Decoder
     private static function runningOnWindows(): bool
     {
         return self::$windowsForTesting ?? (\PHP_OS_FAMILY === 'Windows');
+    }
+
+    /**
+     * Per-process owned sink directory (SV-L83): a 0700 dir created exactly
+     * once under the system temp root and owned by this process alone. The
+     * random suffix means a would-be pre-creator cannot guess the name; if
+     * creation fails OR the path already existed (someone else's — never
+     * trust it), the answer is null and callers lose the diagnostic sink
+     * rather than handing stderr to a shared location.
+     */
+    private static function sinkDir(): ?string
+    {
+        /** @var ?string null = not tried yet, '' = tried and failed (sticky) */
+        static $dir = null;
+
+        if ($dir === '') {
+            return null;
+        }
+        if ($dir !== null) {
+            return is_dir($dir) ? $dir : null;
+        }
+
+        $candidate = sys_get_temp_dir() . '/sugar-video-' . getmypid() . '-' . bin2hex(random_bytes(6));
+        if (!@mkdir($candidate, 0700) || !is_dir($candidate)) {
+            // Either we failed, or the name pre-existed and is NOT ours.
+            $dir = '';
+
+            return null;
+        }
+        @chmod($candidate, 0700); // defeat an exotic umask that ate the owner bits
+
+        return $dir = $candidate;
     }
 
     /**
