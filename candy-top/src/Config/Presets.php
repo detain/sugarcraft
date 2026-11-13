@@ -28,7 +28,10 @@ final class Presets
 
     /**
      * btop PR #1730 max_preset_boxes: the four fixed boxes plus up to
-     * {@see GpuPanels::MAX} gpu boxes (btop 1.4.7 capped a preset at 4).
+     * {@see GpuPanels::MAX} gpu boxes. #1730 is not an open PR — the
+     * feature is in stock btop since 1.3.0 (verified against a host
+     * binary during the 2026-11 docs re-audit), so multi-gpu presets are
+     * stock behaviour there as well.
      */
     public const MAX_BOXES = 10;
 

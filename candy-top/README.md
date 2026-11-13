@@ -660,12 +660,12 @@ A device that stops answering keeps its last values (btop #1008), but only for a
 
 ## Adopted upstream btop PRs
 
-candy-top includes these open btop pull requests (evaluated 2026-10-08). New keys are additive, so a btop.conf loads in candy-top and a candy-top config.conf loads in stock btop. The exceptions are new values (`block2`, the `io *` sorts and the `gpu` / `gpu memory` sorts), which stock btop rejects with a warning before falling back to its default, and the presets W field described above.
+candy-top includes these upstream btop pull requests (evaluated 2026-10-08); several have since shipped in stock releases, and the rows say where that has been verified. New keys are additive, so a btop.conf loads in candy-top and a candy-top config.conf loads in stock btop. The exceptions are new values (`block2`, the `io *` sorts and the `gpu` / `gpu memory` sorts), which stock btop rejects with a warning before falling back to its default, and the presets W field described above.
 
 | PR | Feature |
 |---|---|
 | #1869 | Try every `nvidia-smi` candidate (WSL2 path included) before memoising "no GPU". |
-| #1730 | GPU boxes for any GPU index: up to 6 `gpuN` boxes, slot keys `5`-`0`, `← gpuN →` title selectors, and the cpu box listing only GPUs without a box under `show_gpu_info = Auto`. |
+| #1730 | GPU boxes for any GPU index: up to 6 `gpuN` boxes, slot keys `5`-`0`, `← gpuN →` title selectors, and the cpu box listing only GPUs without a box under `show_gpu_info = Auto`. (Released in btop 1.3.0.) |
 | #1881 | GPU box grid (`gpu_box_columns`) with Full, Compact and Minimal detail levels. |
 | #985 / #1839 | Intel and AMD NPUs, numbered after the GPUs in boxes titled `npu`. The AMD NPU is detected only, without readings. |
 | #1854 / #1888 | AMD GPUs from amdgpu sysfs (with `amdgpu.ids` names) and multiple Intel i915/xe GPUs. |
@@ -679,7 +679,7 @@ candy-top includes these open btop pull requests (evaluated 2026-10-08). New key
 | #1873 | Container tags, `proc_filter_containers` (`O`), and the containers box (`ctr`: `x`, `[`/`]`, row clicks, cgroup v2 figures, docker names). |
 | #1783 | `block2` sextant graph symbols (`graph_symbol*`). |
 | #1858 | Hidden boxes are never sampled or drawn, and graph sizes are clamped to at least 1. |
-| #1614 | GPU sub-graph widths in the cpu box. |
+| #1614 | GPU sub-graph widths in the cpu box. (Released in btop 1.3.0.) |
 | #1008 | Keep the last value when a collector briefly fails (bounded for GPUs, see [GPU](#gpu)). |
 | #1747 | `mem_selected`: a single focused mem graph. |
 | #1700 | `disks_order`. |
