@@ -200,8 +200,7 @@ call it on and marks it sent; the `with*()` configuration setters return a
 **clone**. Configure first, then queue — calling a `with*()` setter on a handle
 that has already queued messages throws `RuntimeException` rather than silently
 running without its queue. (`send()` remains as a deprecated alias of
-`addMsgs()`.) `run()` resets all drain state and replays from the
-initial model, so repeated runs are identical.
+`addMsgs()`.) `run()` replay semantics: see [Simulation subset](#simulation-subset).
 
 ### Simulation subset
 
@@ -242,10 +241,86 @@ but it is a simulator, not the real runtime, and the boundary is explicit:
   `ColorProfileMsg` *before* `init()`. The simulator replays that order only
   when armed, so a default run stays byte-identical to pre-parity suites:
   `->withWindowSize(80, 24)->withEnvironment($vars)->withColorProfile($profile)`.
-- Subscriptions are fired after `init()` and after each sent message, as
-  `Program` does. A runaway cmd↔message loop is refused at 10,000 update
-  cycles within a single drain chain — a fixed bound, not a growable one,
-  re-armed fresh by each `run()`.
+- Subscriptions fire once after `init()` and once after every sent message —
+  not every delivered one: subscription-produced messages do not re-fire the
+  roster (the runtime spaces those fires by interval; the simulator has no
+  clock to space them with), and what a subscription produces is delivered
+  before the next sent message.
+- Each sent message drains its cmd chain through the same pump, bounded at
+  `MAX_CYCLES` = 10,000 update cycles per chain — a runaway cmd↔message loop
+  (a model that produces a cmd on every update) trips a named throw, not a
+  hang. The bound is fixed, not growable, and is re-armed fresh by each
+  `run()`, which resets all drain state and replays from the initial model —
+  repeated runs are identical.
+
+### ScriptedInput
+
+```php
+use SugarCraft\Testing\Input\ScriptedInput;
+
+$input = ScriptedInput::new()
+    ->key('h', ctrl: true)  // Ctrl+h
+    ->arrow('down')         // lowercase direction vocabulary
+    ->enter()
+    ->ticks(5, factory: static fn (int $i, float $s) => new \SugarCraft\Testing\Input\TickMsg($s))  // factory required — see the tick note below
+    ->resize(120, 40)
+    ->key('q')
+    ->build();              // list<Msg>, feed with $sim->send(...$input)
+```
+
+Builders: `new()`, `key(char, shift:, ctrl:, alt:)`, `namedKey(KeyType, rune,
+shift:, ctrl:, alt:)`, `enter()`, `escape()`, `backspace()`, `tab()`,
+`arrow(dir, shift:, ctrl:, alt:)`, `ticks(count, seconds:, factory:)`,
+`resize(cols, rows)`, `quit()` (a real `QuitMsg` — it halts the simulator
+drain, production-style), `mouse(...)`, `wheel(...)`, `paste(content)`,
+`withSanitizePaste(bool)` (runtime parity with `ProgramOptions::$sanitizePaste`;
+starts a fresh parser, so place it before `paste()`/`bytes()` — payloads
+already built keep the mode they were read in), `bytes(...$reads)`, `clipboard(content, selection:)`,
+`keyboardEnhancements(flags)`, `push(msg)` for anything bespoke, plus
+`build()`, `count()`, and constants `READ_SIZE`, `PASTE_START`, `PASTE_END`.
+
+**Ticks.** Every fleet lib ships its *own* tick message class (minesweeper,
+widgets and forms each match their own class), so the factory is required: a
+bare `ticks(5)` throws `InvalidArgumentException` instead of quietly enqueuing
+the harness's `SugarCraft\Testing\Input\TickMsg` — which would match **nothing**
+in your model and pass vacuously. Script your lib's real tick:
+
+```php
+->ticks(3, factory: fn (int $i, float $s) => new \My\Lib\Msg\TickMsg($s))
+```
+
+Symbolic builders (`key()`, `arrow()`, `enter()`, …) produce the DECODED message
+a keyboard press becomes — `arrow('down')` is a `KeyType::Down` message, not bytes.
+`bytes()` carries the real WIRE form instead: arrows are `ESC [` plus a CSI final
+byte — `ESC [ A` Up, `ESC [ B` Down, `ESC [ C` Right, `ESC [ D` Left. Never script
+an arrow as the literal `→` glyph: a UTF-8 arrow is plain text — it takes the
+paste/IME path and decodes as character input, never as `KeyType::Down`. (A PTY
+harness driving a program from outside must send the same wire bytes — `ESC [ B`
+for down.)
+
+Terminal-shaped input is decoded by sugar-core's real `InputReader` — the parser
+`Program` reads stdin with — so a script sees the same messages the live runtime
+delivers:
+
+```php
+ScriptedInput::new()
+    ->paste("line 1\nline 2")         // PasteStartMsg, PasteEndMsg, PasteMsg (sanitized)
+    ->bytes("\x1b[200~ab\x1b[20", "1~") // raw reads: an end marker split across two reads
+    ->bytes("\x1b")                    // a lone ESC becomes Escape after the silence
+    ->build();
+
+$raw = "\x1b[200~pasted\x1b[201~";                       // your unfiltered payload
+$paste = ScriptedInput::new()->withSanitizePaste(false)->paste($raw)->build(); // mirrors ProgramOptions::$sanitizePaste
+```
+
+`paste()` follows the runtime: payloads are sanitized by default, a paste past
+`InputReader::MAX_PASTE_BYTES` arrives as several `PasteMsg`s (concatenate every one
+between `PasteStartMsg` and the one after `PasteEndMsg`), and a paste whose end marker
+never arrives is closed out eagerly. For a bare `PasteMsg` with no envelope,
+`push(new PasteMsg($text))`.
+
+Subscription firing, the `MAX_CYCLES` pump bound, and `run()` replay
+semantics for these messages: see [Simulation subset](#simulation-subset).
 
 ### Assertions
 
@@ -275,9 +350,9 @@ silently green-ing itself; the failure message points at the create flag.
 `SUGAR_TESTING_UPDATE_GOLDENS=1` (legacy alias `UPDATE_GOLDENS=1` — a
 deprecated spelling accepted through v1 and scheduled for removal in v2;
 prefer the namespaced variable) is
-CREATE-ONLY: the first run creates the file — and counts a read-back assertion
-proving what it wrote — but an existing golden that differs still **fails and
-is never rewritten**. To re-baseline deliberately, delete the file and rerun
+CREATE-ONLY: the first run creates the file and records a counted read-back
+check proving what it wrote, but an existing golden that differs still
+**fails and is never rewritten**. To re-baseline deliberately, delete the file and rerun
 with the flag set (that is also the CI workflow: no flag is ever set in CI, so
 CI only ever compares).
 
@@ -320,8 +395,9 @@ is never skipped into a pass):
 - A cell is `null` (a deliberate wildcard for that one position), a string
   holding a **single narrow** grapheme cluster, or an array with keys from
   `rune` and `width` (`0` continuation / `1` / `2`). Unknown keys throw with a
-  teaching message — a typo'd `'run'` would once have unchecked the position
-  forever. A string cell claiming more than one cluster throws: spread it
+  teaching message — a mistyped `'run'` key would previously have left the
+  position unchecked forever. A string cell claiming more than one cluster
+  throws: spread it
   across cells or use the array form.
 - A grid whose every cell is a wildcard **fails** ("compared zero cells") —
   a vacuous pass is the exact failure mode this library exists to prevent.
@@ -337,7 +413,7 @@ use SugarCraft\Testing\Snapshot\GoldenFile;
 $actual = 'frame';                                   // the bytes you want pinned
 
 $path = GoldenFile::resolve(__DIR__, 'view.golden'); // anchors at <this file's dir>/fixtures/view.golden;
-                                                    // escapes ('../', backslash smuggles, symlinked
+                                                    // escapes ('../', backslash smuggling, symlinked
                                                     // sub-directories) throw
 
 $expected = GoldenFile::load($path);                 // null ONLY when absent; unreadable or
@@ -355,9 +431,29 @@ if ($expected === null) {
 
 Every write goes through a uniquely named temp file and a single publish step
 — `rename()` for `save()`/`update()`, `link()` for the no-clobber `create()`
-path — so a crash mid-write cannot leave a half-baseline; empty content (0 bytes) is a
+path — so a crash mid-write cannot leave a half-written golden; empty content (0 bytes) is a
 legal golden for a silent renderer. Reading or writing **through** a symlinked
 golden is refused outright — a fixture path must be a fixture.
+
+### TestResult
+
+`run()` returns a `SugarCraft\Testing\TestResult`:
+
+- `->model` — final model object
+- `->view` — last `view()` string
+- `->cmds` — every captured command closure, in dispatch order
+- `->output` — concatenated `view()` output across the run plus `RawMsg`/`PrintMsg`
+  side-channel writes
+- `->frames` — every frame the run produced, in order: the `view()` after the init-trio
+  updates, after each delivered message's update leg, and the final render — for
+  animation/progression assertions
+- `->droppedAfterStop` — messages left in the queue when a `QuitMsg`/`InterruptMsg`
+  halted the drain (0 in a healthy run; a surprise non-zero means your script
+  over-sent)
+
+Verbs: `assertCmdCount(int)`, `assertCmdContains(callable $filter, ?string $message)`
+(failure names the captured-cmd count, since "matched none of 0" is the usual story),
+`assertNoCmds()`.
 
 ### Graphics stream assertions
 
@@ -403,162 +499,18 @@ Per-class member roster (each class has exactly these public shapes):
 constructed via `fromRgbGrid()` or `transparent()`; `Mode` — `detect()`.
 
 These decoders eat captured output, which may be hostile-sized, so
-`DecodeLimits` budgets every allocation before it happens: declared rasters
-beyond 4M cells, numeric literals beyond 9 digits, `o=z` payloads inflating
-past 64 MiB (capped **while** streaming, so a bomb cannot pre-materialize),
-and images declaring more than 16,777,216 pixels (2^24) all raise a catchable
-`MalformedGraphicsException` with a precise reason — never an OOM-killed
-runner. Malformed streams likewise raise `MalformedGraphicsException` (bad
-parameter, missing introducer, unterminated payload…).
+`DecodeLimits` budgets every allocation before it happens:
 
-### ScriptedInput
+- declared rasters beyond 4M cells
+- numeric literals beyond 9 digits
+- `o=z` payloads inflating past 64 MiB (capped **while** streaming, so a bomb
+  cannot pre-materialize)
+- images declaring more than 16,777,216 pixels (2^24)
 
-```php
-use SugarCraft\Testing\Input\ScriptedInput;
-
-$input = ScriptedInput::new()
-    ->key('h', ctrl: true)  // Ctrl+h
-    ->arrow('down')         // lowercase direction vocabulary
-    ->enter()
-    ->ticks(5, factory: static fn (int $i, float $s) => new \SugarCraft\Testing\Input\TickMsg($s))  // factory required — see the tick note below
-    ->resize(120, 40)
-    ->key('q')
-    ->build();              // list<Msg>, feed with $sim->send(...$input)
-```
-
-Builders: `new()`, `key(char, shift:, ctrl:, alt:)`, `namedKey(KeyType, rune,
-shift:, ctrl:, alt:)`, `enter()`, `escape()`, `backspace()`, `tab()`,
-`arrow(dir, shift:, ctrl:, alt:)`, `ticks(count, seconds:, factory:)`,
-`resize(cols, rows)`, `quit()` (a real `QuitMsg` — it halts the simulator
-drain, production-style), `mouse(...)`, `wheel(...)`, `paste(content)`,
-`withSanitizePaste(bool)` (runtime parity with `ProgramOptions::$sanitizePaste`;
-starts a fresh parser, so place it before `paste()`/`bytes()` — payloads
-already built keep the mode they were read in), `bytes(...$reads)`, `clipboard(content, selection:)`,
-`keyboardEnhancements(flags)`, `push(msg)` for anything bespoke, plus
-`build()`, `count()`, and constants `READ_SIZE`, `PASTE_START`, `PASTE_END`.
-
-**Ticks.** Every fleet lib ships its *own* tick message class (`minesweeper`,
-`widgets`, `forms`, … each match their own), so the factory is required: a
-bare `ticks(5)` throws `InvalidArgumentException` instead of quietly enqueuing
-the harness's `SugarCraft\Testing\Input\TickMsg` — which would match **nothing**
-in your model and pass vacuously. Script your lib's real tick:
-
-```php
-->ticks(3, factory: fn (int $i, float $s) => new \My\Lib\Msg\TickMsg($s))
-```
-
-Symbolic builders (`key()`, `arrow()`, `enter()`, …) produce the DECODED message
-a keyboard press becomes — `arrow('down')` is a `KeyType::Down` message, not bytes.
-`bytes()` carries the real WIRE form instead: arrows are `ESC [` plus a CSI final
-byte — `ESC [ A` Up, `ESC [ B` Down, `ESC [ C` Right, `ESC [ D` Left. Never script
-an arrow as the literal `→` glyph: a UTF-8 arrow is plain text — it takes the
-paste/IME path and decodes as character input, never as `KeyType::Down`. (A PTY
-harness driving a program from outside must send the same wire bytes — `ESC [ B`
-for down.)
-
-Terminal-shaped input is decoded by sugar-core's real `InputReader` — the parser
-`Program` reads stdin with — so a script sees the same messages the live runtime
-delivers:
-
-```php
-ScriptedInput::new()
-    ->paste("line 1\nline 2")         // PasteStartMsg, PasteEndMsg, PasteMsg (sanitized)
-    ->bytes("\x1b[200~ab\x1b[20", "1~") // raw reads: an end marker split across two reads
-    ->bytes("\x1b")                    // a lone ESC becomes Escape after the silence
-    ->build();
-
-$raw = "\x1b[200~pasted\x1b[201~";                       // your unfiltered payload
-$paste = ScriptedInput::new()->withSanitizePaste(false)->paste($raw)->build(); // mirrors ProgramOptions::$sanitizePaste
-```
-
-`paste()` follows the runtime: payloads are sanitized by default, a paste past
-`InputReader::MAX_PASTE_BYTES` arrives as several `PasteMsg`s (concatenate every one
-between `PasteStartMsg` and the one after `PasteEndMsg`), and a paste whose end marker
-never arrives is closed out eagerly. For a bare `PasteMsg` with no envelope,
-`push(new PasteMsg($text))`.
-
-`ProgramSimulator` fires each subscription once after `init()` and once after every sent
-message (not every delivered one — subscription-produced messages do not re-fire the
-roster; the runtime spaces those fires by interval, the simulator has no clock to space
-them with), delivering what it produces before the next sent message. Each sent message
-drains its cmd chain through the same pump, bounded at `MAX_CYCLES` = 10,000 cycles per
-chain — a model that produces a cmd on every update trips a named throw, not a hang.
-`run()` replays from the Program's model each time, so repeated runs give the same result.
-
-### TestResult
-
-`run()` returns a `SugarCraft\Testing\TestResult`:
-
-- `->model` — final model object
-- `->view` — last `view()` string
-- `->cmds` — every captured command closure, in dispatch order
-- `->output` — concatenated `view()` output across the run plus `RawMsg`/`PrintMsg`
-  side-channel writes
-- `->frames` — every frame the run produced, in order: the `view()` after the init-trio
-  updates, after each delivered message's update leg, and the final render — for
-  animation/progression assertions
-- `->droppedAfterStop` — messages left in the queue when a `QuitMsg`/`InterruptMsg`
-  halted the drain (0 in a healthy run; a surprise non-zero means your script
-  over-sent)
-
-Verbs: `assertCmdCount(int)`, `assertCmdContains(callable $filter, ?string $message)`
-(failure names the captured-cmd count, since "matched none of 0" is the usual story),
-`assertNoCmds()`.
-
-### TapeRecorder
-
-`SugarCraft\Testing\Tape\TapeRecorder` **builds** `.tape` scripts for the VHS
-GIF renderer (it records nothing from a running program — you compose the
-choreography):
-
-```php
-use SugarCraft\Testing\Tape\TapeRecorder;
-
-TapeRecorder::new(__DIR__ . '/.vhs/demo.tape')
-    ->header(theme: 'TokyoNight')          // Set Theme/FontSize/Width/Height
-                                          // (+ Set TypingSpeed when the optional
-                                          //  $typingSpeed float is passed)
-    ->type('php examples/demo.php')
-    ->enter()
-    ->sleep(1.0)
-    ->resize(100, 30)                      // '# Resize 100x30' comment line only
-    ->type("q")
-    ->comment('rendered by .github/workflows/vhs.yml')
-    ->save();
-```
-
-Everything interpolated is escaped so it cannot forge a standalone directive
-line — `type()` neutralizes newlines and control bytes inside the quotes,
-`comment()` prefixes every physical line, and even the theme string is escaped.
-`line()` is the deliberate verbatim escape hatch: CI executes the tapes these
-files describe, so only feed it trusted, generated directives. Beyond the fence
-above, the builder roster is `new()` (deprecated alias `to()`), `header()`,
-`type()`, `enter()`, `sleep()`,
-`resize()`, `comment()`, `line()`, `save()` — and `resize()` is disclosure-only:
-the harness supports initial dimensions only (fixed by `header()`), so it records
-a `# Resize CxR` comment line and changes nothing; whether upstream VHS grew a
-mid-tape resize directive is unverified (2026-11 probe), and emission is
-deliberately out of scope — not asserted impossible. The tape-side
-companion to the key builders is the static `keyMsgToVhs(KeyMsg): ?string` — it
-renders a decoded key message back into VHS `Type` syntax (a quoted rune for
-character keys, `Enter`/`PageUp`/`F12` and friends for named keys, `null` for
-anything unmappable). `save()` refuses a
-symlinked target and publishes atomically (temp file + rename, with a counted
-byte-for-byte write), so a crashed or short write can never leave a half-tape;
-the full path jail — confining writes under a fixtures subtree — remains
-`GoldenFile`'s guarantee, not this class's. See
-`examples/tape-recorder.php` for a runnable demo.
-
-### TemporaryDirectoryTrait
-
-`SugarCraft\Testing\Concerns\TemporaryDirectoryTrait` gives a test class a
-scratch directory that is per-test unique, mode-`0700`, and removed without
-ever following a planted symlink into someone else's tree. The trait **owns**
-the `$tmpDir` property — do not re-declare it in your class (that is a
-fatal). Call `$this->setUpTemporaryDirectory()` from `setUp()` and
-`$this->tearDownTemporaryDirectory()` from `tearDown()`; override
-`tempDirPrefix()` to label the directory with your suite's name (it is a
-mid-name label — uniqueness comes from the pid and random parts regardless).
+All four raise a catchable `MalformedGraphicsException` with a precise
+reason — never an OOM-killed runner. Malformed streams likewise raise
+`MalformedGraphicsException` (bad parameter, missing introducer,
+unterminated payload…).
 
 ### LoopPin
 
@@ -634,6 +586,61 @@ arms).
 
 `LoopPin::hasStaleClockRisk($loop)` reports whether a given loop is affected, for a suite
 that wants to assert or diagnose rather than pin.
+
+### TapeRecorder
+
+`SugarCraft\Testing\Tape\TapeRecorder` **builds** `.tape` scripts for the VHS
+GIF renderer (it records nothing from a running program — you compose the
+choreography):
+
+```php
+use SugarCraft\Testing\Tape\TapeRecorder;
+
+TapeRecorder::new(__DIR__ . '/.vhs/demo.tape')
+    ->header(theme: 'TokyoNight')          // Set Theme/FontSize/Width/Height
+                                          // (+ Set TypingSpeed when the optional
+                                          //  $typingSpeed float is passed)
+    ->type('php examples/demo.php')
+    ->enter()
+    ->sleep(1.0)
+    ->resize(100, 30)                      // '# Resize 100x30' comment line only
+    ->type("q")
+    ->comment('rendered by .github/workflows/vhs.yml')
+    ->save();
+```
+
+Everything interpolated is escaped so it cannot forge a standalone directive
+line — `type()` neutralizes newlines and control bytes inside the quotes,
+`comment()` prefixes every physical line, and even the theme string is escaped.
+`line()` is the deliberate verbatim escape hatch: CI executes the tapes these
+files describe, so only feed it trusted, generated directives. Beyond the
+example above, the builder roster is `new()` (deprecated alias `to()`), `header()`,
+`type()`, `enter()`, `sleep()`,
+`resize()`, `comment()`, `line()`, `save()` — and `resize()` is disclosure-only:
+the harness supports initial dimensions only (fixed by `header()`), so it records
+a `# Resize CxR` comment line and changes nothing; whether upstream VHS grew a
+mid-tape resize directive is unverified (2026-11 probe), and emission is
+deliberately out of scope — not asserted impossible. The tape-side
+companion to the key builders is the static `keyMsgToVhs(KeyMsg): ?string` — it
+renders a decoded key message back into VHS `Type` syntax (a quoted rune for
+character keys, `Enter`/`PageUp`/`F12` and friends for named keys, `null` for
+anything unmappable). `save()` refuses a
+symlinked target and publishes atomically (temp file + rename, with a counted
+byte-for-byte write), so a crashed or short write can never leave a half-tape;
+the full path jail — confining writes under a fixtures subtree — remains
+`GoldenFile`'s guarantee, not this class's. See
+`examples/tape-recorder.php` for a runnable demo.
+
+### TemporaryDirectoryTrait
+
+`SugarCraft\Testing\Concerns\TemporaryDirectoryTrait` gives a test class a
+scratch directory that is per-test unique, mode-`0700`, and removed without
+ever following a planted symlink into someone else's tree. The trait **owns**
+the `$tmpDir` property — do not re-declare it in your class (that is a
+fatal). Call `$this->setUpTemporaryDirectory()` from `setUp()` and
+`$this->tearDownTemporaryDirectory()` from `tearDown()`; override
+`tempDirPrefix()` to label the directory with your suite's name (it is a
+mid-name label — uniqueness comes from the pid and random parts regardless).
 
 ## License
 

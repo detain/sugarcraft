@@ -72,7 +72,7 @@ final class ReadmeSnippetsTest extends TestCase
 
     public function testTheGoldenFileBlockExecutesAgainstAScratchBase(): void
     {
-        $fences = self::phpFencesBetween('### GoldenFile', '### Graphics');
+        $fences = self::phpFencesBetween('### GoldenFile', '### TestResult');
         self::assertGreaterThan(0, \count($fences), 'README lost its GoldenFile php fence');
 
         foreach ($fences as $php) {
@@ -94,17 +94,17 @@ final class ReadmeSnippetsTest extends TestCase
     public function testEveryApiSectionFenceExecutesAsWritten(): void
     {
         // Triwire for the dedicated GoldenFile test's anchor.
-        $goldenFences = self::phpFencesBetween('### GoldenFile', '### Graphics');
+        $goldenFences = self::phpFencesBetween('### GoldenFile', '### TestResult');
         self::assertCount(1, $goldenFences, '### GoldenFile gained a second fence — extend the dedicated test');
 
         $sections = [
             '### ProgramSimulator' => ['end' => '### Simulation subset', 'mode' => 'sim'],
+            '### ScriptedInput' => ['end' => '### Assertions', 'mode' => 'scripted'],
             '### Assertions' => ['end' => '### The cell-grid schema', 'mode' => 'assertions'],
             '### The cell-grid schema (`assertCellGrid`)' => ['end' => '### GoldenFile', 'mode' => 'grid'],
-            '### Graphics stream assertions' => ['end' => '### ScriptedInput', 'mode' => 'graphics'],
-            '### ScriptedInput' => ['end' => '### TestResult', 'mode' => 'scripted'],
+            '### Graphics stream assertions' => ['end' => '### LoopPin', 'mode' => 'graphics'],
+            '### LoopPin' => ['end' => '### TapeRecorder', 'mode' => 'loop'],
             '### TapeRecorder' => ['end' => '### TemporaryDirectoryTrait', 'mode' => 'tape'],
-            '### LoopPin' => ['end' => '## License', 'mode' => 'loop'],
         ];
 
         $executed = 0;
