@@ -722,6 +722,72 @@ final class TableTest extends TestCase
         $this->assertSame('100', $t->withCursor(0)->currentCell(0), 'the settled view still heads with 100');
     }
 
+    public function testNumericSortKeepsEveryDigitBeyondFloatPrecision(): void
+    {
+        // A float cast collapses 10^18 and 10^18+1 onto the SAME double,
+        // and the stable sort then answers in insertion order — silent
+        // wrongness. Digit-only cells compare exactly at any magnitude.
+        $t = Table::new()
+            ->addColumn(Column::new('N', 22))
+            ->addRow(['1000000000000000001']) // deliberately FIRST
+            ->addRow(['1000000000000000000'])
+            ->addRow(['999999999999999999'])
+            ->withSort(0, true);
+
+        $this->assertSame(
+            ['999999999999999999', '1000000000000000000', '1000000000000000001'],
+            $this->dataColumn($t),
+            'ascending must order by VALUE, not by float coincidence'
+        );
+    }
+
+    public function testLeadingZerosAreTheSameNumberAndTieByStability(): void
+    {
+        // '007' == '7' numerically: exact decimal compare calls them
+        // equal, and the settle's stable sort keeps insertion order
+        // (007 before 7 here — a raw strlen compare would instead park
+        // the longer spelling last).
+        $t = Table::new()
+            ->addColumn(Column::new('N', 6))
+            ->addRow(['007'])
+            ->addRow(['7'])
+            ->addRow(['6'])
+            ->withSort(0, true);
+
+        $this->assertSame(['6', '007', '7'], $this->dataColumn($t));
+    }
+
+    public function testNumericFirstLaneSurvivesMixedColumns(): void
+    {
+        // The documented lane rule: two numeric cells compare as numbers
+        // (9 before 10), and the whole numeric block precedes text.
+        $t = Table::new()
+            ->addColumn(Column::new('N', 8))
+            ->addRow(['apple'])
+            ->addRow(['10'])
+            ->addRow(['9'])
+            ->withSort(0, true);
+
+        $this->assertSame(['9', '10', 'apple'], $this->dataColumn($t));
+    }
+
+    public function testFoldCacheServesFiveKeystrokesAndStaysHonestOnAppends(): void
+    {
+        // The cache is index-addressed over append-only allRows, so it
+        // cannot answer stale for existing rows; an append adds a NEW
+        // index the cache folds fresh on first touch.
+        $t = Table::new()
+            ->addColumn(Column::new('N', 12))
+            ->addRow(['Straße'])
+            ->addRow(['Berlin']);
+        $f = $t->withFilter('strasse');
+        $this->assertSame(1, $f->rowCount());
+        $g = $f->withFilter('stra'); // cached keys, second settle
+        $this->assertSame(1, $g->rowCount());
+        $h = $g->addRow(['STRASSE']); // new index, folded on demand
+        $this->assertSame(2, $h->withFilter('stra')->rowCount());
+    }
+
     public function testStringSortIsCaseInsensitiveAcrossTheBinaryOrderBoundary(): void
     {
         // Binary strcmp would put uppercase 'B' (0x42) before lowercase

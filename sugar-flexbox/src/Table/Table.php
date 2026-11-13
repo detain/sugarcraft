@@ -58,6 +58,12 @@ final class Table
      */
     private ?array $cursorAnchor = null;
 
+    /**
+     * @var array<int, list<string>>|null UTF-8 fold of every cell, keyed
+     *      by allRows index; see foldedRow() for the invalidation law.
+     */
+    private ?array $foldedCells = null;
+
     /** Style for cursor row (ANSI string). */
     private string $cursorStyle = '';
 
@@ -164,7 +170,7 @@ final class Table
         }
 
         // A value with no column to wear it is a phantom: it never renders,
-        // yet applyFilter/compare scan every cell of the row, so it can make
+        // yet the sort/filter settle scans every cell of the row, so it can make
         // a row match a filter the user cannot explain from the screen.
         // Refuse the shape at the door instead of shipping the illusion.
         $columnCount = \count($this->columns);
@@ -187,6 +193,10 @@ final class Table
         $clone = clone $this;
         $clone->allRows[] = \array_map(\strval(...), $values);
         $clone->viewDirty = true;
+        // The fold cache is index-addressed over allRows; appends cannot
+        // invalidate an existing index, but the dependency is stated
+        // here so a future row REWRITE busts it too.
+        $clone->foldedCells = null;
         return $clone;
     }
 
@@ -653,36 +663,124 @@ final class Table
         // New settled content: the line memo keys on this version, so
         // every cached row becomes stale the moment rows change identity.
         $this->rowsVersion++;
-        $rows = $this->allRows;
 
-        if ($this->sortColIndex >= 0 && $this->sortColIndex < \count($this->columns)) {
+        // Decorate-sort-undecorate, paired by allRows index: the sort
+        // compares ONE precomputed key per row instead of re-folding
+        // inside every comparison (finding-055: ~250 ms/20k of pure
+        // re-normalisation churn), and the index travels through the
+        // permutation into the filter, which reads the persistent fold
+        // cache instead of lowercasing the world per keystroke
+        // (finding-056).
+        $items = [];
+        $keys  = [];
+        $sorting = $this->sortColIndex >= 0 && $this->sortColIndex < \count($this->columns);
+        if ($sorting) {
             $colIdx = $this->sortColIndex;
-            $asc    = $this->sortAscending;
-
-            \usort($rows, function (array $a, array $b) use ($colIdx, $asc): int {
-                $va = $a[$colIdx] ?? '';
-                $vb = $b[$colIdx] ?? '';
-
-                $na = \is_numeric($va) ? (float) $va : null;
-                $nb = \is_numeric($vb) ? (float) $vb : null;
-
-                if ($na !== null && $nb !== null) {
-                    $cmp = $na <=> $nb;
-                } else {
-                    $cmp = \strcmp(self::fold((string) $va), self::fold((string) $vb));
-                }
-
+            foreach ($this->allRows as $i => $row) {
+                $items[] = [$i, $row];
+                $keys[$i] = $this->sortKey($row[$colIdx] ?? '', $i);
+            }
+            $asc = $this->sortAscending;
+            \usort($items, static function (array $a, array $b) use ($keys, $asc): int {
+                $cmp = self::compareSortKeys($keys[$a[0]], $keys[$b[0]]);
                 return $asc ? $cmp : -$cmp;
             });
+        } else {
+            foreach ($this->allRows as $i => $row) {
+                $items[] = [$i, $row];
+            }
         }
 
-        $this->rows = $this->applyFilter($rows);
+        if ($this->filterText !== '') {
+            $needle = self::fold($this->filterText);
+            $items = \array_values(\array_filter(
+                $items,
+                function (array $pair) use ($needle): bool {
+                    foreach ($this->foldedRow($pair[0]) as $folded) {
+                        if ($folded !== '' && \str_contains($folded, $needle)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            ));
+        }
+
+        $rowsOut = [];
+        foreach ($items as [, $row]) {
+            $rowsOut[] = $row;
+        }
+        $this->rows = $rowsOut;
 
         if ($this->cursorAnchor !== null) {
             $anchor = $this->cursorAnchor;
             $this->cursorAnchor = null;
             $this->cursorRow = $this->resolveCursorAnchor($anchor);
         }
+    }
+
+    /**
+     * One comparable key for a sort cell, built ONCE per settle per row.
+     * The fold is read through the persistent cell cache (shared with
+     * the filter); the numeric classification decides the comparison
+     * lane in compareSortKeys().
+     *
+     * @return array{digit: ?string, num: ?float, fold: string}
+     */
+    private function sortKey(string $value, int $rowIndex): array
+    {
+        return [
+            // Digit-only strings keep their EXACT value as a zero-stripped
+            // decimal string: a float cast would silently collapse every
+            // pair beyond 2^53 (10^18 and 10^18+1 tie at double
+            // precision, and the sort order becomes insertion order).
+            'digit' => ($value !== '' && \ctype_digit($value)) ? (ltrim($value, '0') ?: '0') : null,
+            'num'   => \is_numeric($value) ? (float) $value : null,
+            'fold'  => $this->foldedRow($rowIndex)[$this->sortColIndex] ?? '',
+        ];
+    }
+
+    /**
+     * Lane order: two digit-only cells compare EXACTLY at any magnitude
+     * (length first — the values carry no leading zeros — then
+     * lexicographic, which for equal-length digits is the numeric
+     * order); otherwise two numeric-looking cells compare as floats
+     * (2 before 100); everything else compares as folded text.
+     *
+     * @param array{digit: ?string, num: ?float, fold: string} $ka
+     * @param array{digit: ?string, num: ?float, fold: string} $kb
+     */
+    private static function compareSortKeys(array $ka, array $kb): int
+    {
+        if ($ka['digit'] !== null && $kb['digit'] !== null) {
+            $la = \strlen($ka['digit']);
+            $lb = \strlen($kb['digit']);
+            return $la !== $lb ? $la <=> $lb : \strcmp($ka['digit'], $kb['digit']);
+        }
+        if ($ka['num'] !== null && $kb['num'] !== null) {
+            return $ka['num'] <=> $kb['num'];
+        }
+        return \strcmp($ka['fold'], $kb['fold']);
+    }
+
+    /**
+     * The UTF-8 fold of every cell of canonical row $index, built on
+     * first need and kept for the life of this row set. allRows is
+     * append-only — no stored cell ever changes once written — so an
+     * index-keyed cache cannot go stale by construction; withRow()
+     * still drops it as the belt-and-braces statement of the
+     * dependency. A filter chain therefore pays the fold cost ONCE
+     * (first settle), then every keystroke is a predicate sweep over
+     * cached keys instead of ~2×20k renormalisations at 20k rows.
+     *
+     * @return list<string>
+     */
+    private function foldedRow(int $index): array
+    {
+        if ($this->foldedCells === null) {
+            $this->foldedCells = [];
+        }
+        return $this->foldedCells[$index] ??= \array_map(self::fold(...), $this->allRows[$index]);
     }
 
     /**
@@ -733,24 +831,6 @@ final class Table
      * @param list<list<string>> $rows
      * @return list<list<string>>
      */
-    private function applyFilter(array $rows): array
-    {
-        if ($this->filterText === '') {
-            return $rows;
-        }
-        $needle = self::fold($this->filterText);
-        return \array_values(
-            \array_filter($rows, function (array $row) use ($needle): bool {
-                foreach ($row as $cell) {
-                    if (\str_contains(self::fold($cell), $needle)) {
-                        return true;
-                    }
-                }
-                return false;
-            })
-        );
-    }
-
     /**
      * The Unicode fold shared by BOTH matching paths: the filter
      * substring test and the string-sort leg (FBX-27).
@@ -764,6 +844,12 @@ final class Table
      */
     private static function fold(string $value): string
     {
+        // Short-circuit: with no uppercase byte and no high byte the
+        // fold is provably the identity — skip normalizer, preg and the
+        // mb conversion over whole numeric/ASCII columns.
+        if (\preg_match('/[A-Z\x80-\xFF]/', $value) !== 1) {
+            return $value;
+        }
         if (\function_exists('normalizer_normalize')) {
             $decomposed = \normalizer_normalize($value, \Normalizer::FORM_KD);
             if (\is_string($decomposed)) {
