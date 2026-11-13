@@ -885,7 +885,13 @@ final class Manager implements Model
         }
         $basename = basename($originalPath);
         // Use cryptographically secure random bytes for an unpredictable trash entry name.
-        $trashName = sprintf('%s_%s', bin2hex(random_bytes(16)), $basename);
+        // CF-25 (closes 037): a filesystem component caps at NAME_MAX
+        // (~255 bytes); the 32-hex prefix already guarantees uniqueness, so
+        // the basename leg is cut instead of letting rename(2) hit
+        // ENAMETOOLONG on a long-but-legal name — that failure fell through
+        // to the permanent removePath path and silently un-undid the delete.
+        // The full name lives on in the undo record's path field.
+        $trashName = sprintf('%s_%s', bin2hex(random_bytes(16)), substr($basename, 0, 222));
         return $trashDir . '/' . $trashName;
     }
 

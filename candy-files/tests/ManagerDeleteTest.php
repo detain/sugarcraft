@@ -386,4 +386,47 @@ final class ManagerDeleteTest extends TestCase
         [$twice] = $once->update(new KeyMsg(KeyType::Char, 'u'));
         $this->assertStringContainsString('error', $twice->status, 'the retry hits the same honest leg');
     }
+
+    /**
+     * CF-25 (closes 037): a long-but-legal 240-char basename must not defeat
+     * the reversible-delete story. Before the NAME_MAX cap, the trash rename
+     * hit ENAMETOOLONG, fell through to the permanent removePath path with
+     * trash='', and `u` only errored later. The hex prefix carries uniqueness;
+     * the recorded trash leg must exist and undo must restore the FULL name.
+     */
+    public function testLongButLegalNameStaysReversibleThroughTrash(): void
+    {
+        $longName = str_repeat('x', 240) . '.txt';
+        $file = $this->tmpDir . '/' . $longName;
+        file_put_contents($file, 'long-name payload');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        // Walk to the LAST entry (the long-named file sorts after short ones):
+        for ($i = 0; $i < 64; $i++) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+            if ($m->activePane()->entries[$m->activePane()->cursor]->name === $longName) {
+                break;
+            }
+        }
+        $this->assertSame(
+            $longName,
+            $m->activePane()->entries[$m->activePane()->cursor]->name,
+            'fixture cursor must land on the long-named file',
+        );
+
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'd'));
+        [$deleted] = $m->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $this->assertFileDoesNotExist($file);
+        $item = $deleted->undoStack[array_key_last($deleted->undoStack)]->items[0];
+        $this->assertNotSame('', $item['trash'], 'NAME_MAX overflow must not force permanent removal');
+        $this->assertFileExists($item['trash']);
+        $this->assertLessThanOrEqual(255, strlen(basename($item['trash'])), 'trash component fits NAME_MAX');
+
+        [$restored] = $deleted->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertFileExists($file, 'undo must restore the full-length original name');
+        $this->assertSame('long-name payload', file_get_contents($file));
+        $this->assertStringNotContainsString('error', $restored->status, 'status: ' . $restored->status);
+    }
 }
