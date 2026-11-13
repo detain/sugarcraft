@@ -15,8 +15,9 @@ final class TimeoutException extends \RuntimeException
 {
     /**
      * The constructor is exempt from signature-compatibility rules in PHP, so
-     * the extra structured fields ride after the inherited trio; every
-     * existing single-argument construction keeps working unchanged.
+     * the extra structured fields ride after the inherited three (message,
+     * code, previous); every existing single-argument construction keeps
+     * working unchanged.
      */
     public function __construct(
         string $message = '',

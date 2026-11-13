@@ -8,7 +8,7 @@ namespace SugarCraft\Async;
  * Formatting primitives for user-facing duration messages.
  *
  * Raw floats interpolate badly ('0.05' vs '0.05000000000000000279'), and the
- * old 'second(s)' compromise reads wrong for every value it prints. This is
+ * old 'second(s)' compromise reads incorrectly for every value it prints. This is
  * the single home for both fixes so exception messages stay consistent.
  *
  * @internal  Library plumbing — not part of the public API.

@@ -31,7 +31,7 @@ use function React\Promise\resolve;
  * and every timer is armed on a supplied or shared event loop.
  *
  * Parameter order is uniform: the wrapped promise leads, and the event loop
- * is always a trailing optional parameter (house law: no static here takes
+ * is always a trailing optional parameter (house rule: no static here takes
  * the loop first). withTimeout() and withDeadline() still accept the
  * historical loop-first positional call for one more release — transposed
  * with an E_USER_DEPRECATED notice, support ends in 2.0.0.
@@ -210,7 +210,7 @@ final class AsyncOps
      * hop.
      *
      * The timer is armed before the inner's settle handlers attach (the
-     * withTimeout arming law): react/promise v3 settles an already-settled
+     * withTimeout arming rule): react/promise v3 settles an already-settled
      * inner synchronously inside then(), so the handlers must find the timer
      * in hand to cancel it.
      *
@@ -483,7 +483,7 @@ final class AsyncOps
             // Drive a Deferred so the in-flight gate is occupied BEFORE the
             // worker can settle (react/promise v3 settles an already-resolved
             // promise synchronously inside then()) and freed exactly once
-            // when it does — the in-flight ordering law InFlightMap pins.
+            // when it does — the in-flight ordering rule InFlightMap pins.
             $deferred = new Deferred();
             $flight = $deferred->promise();
             $flights->begin($key, $flight);
@@ -1035,7 +1035,7 @@ final class AsyncOps
      * Announce slowness without interrupting the wait. If $promise is still
      * pending after $seconds, $onPending runs ONCE (a "taking longer than
      * expected" spinner hint). The returned promise tracks the inner one —
-     * the notice neither cancels nor abandons the work, and the E646 law
+     * the notice neither cancels nor abandons the work, and the E646 rule
      * holds: this is an advisory tick, never a wall-clock killer of
      * user-paced operations. A hook that throws is logged, never propagated.
      *

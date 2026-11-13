@@ -41,9 +41,9 @@ final class CallbackSubscription implements Subscription
     }
 
     /**
-     * A spent handle: what you get when the subscription never lived here
-     * (the callback already fired immediately). Idempotent unsubscribe is a
-     * no-op and isActive() is false from birth.
+     * A spent handle: what the caller gets when the callback has already
+     * fired immediately, so the subscription never lived here. Unsubscribing
+     * is a no-op, and isActive() reports false from birth.
      */
     public static function settled(): self
     {

@@ -21,7 +21,7 @@ use function React\Promise\resolve;
  * peek()/isFresh() (never blocking, stale served while a refresh runs) and
  * the loading path is fetch().
  *
- * Ordering law carried over from candy-sql's hard-won live refresh (the
+ * Ordering rule carried over from candy-sql's hard-won live refresh (the
  * stale-wins family): a load that was superseded by invalidate()/clear() while
  * in flight still resolves its own callers — the data it fetched was true at
  * request time — but is never adopted into the store, because the
@@ -33,7 +33,7 @@ use function React\Promise\resolve;
  * {@see AsyncOps::withDeadline()} — bounded I/O ceiling semantics: pass
  * the remaining budget, never a blanket per-request wall-clock killer.
  *
- * Space-bound law: with maxEntries set, an adopt past the cap evicts the
+ * Space-bound rule: with maxEntries set, an adopt past the cap evicts the
  * LEAST-recently-stored entry; expired entries are NOT eagerly reaped, so an
  * uncapped cache releases memory only via invalidate()/clear() — the cap
  * bounds values, in-flight loads never count against it.
@@ -56,7 +56,7 @@ final class AsyncCache
      * @param float $ttlSeconds        Seconds an entry stays fresh (must be > 0)
      * @param bool $serveStaleOnError  Resolve failed loads with the last known value when one exists
      * @param null|callable():float $clock  Monotonic-seconds clock seam (defaults to hrtime()/1e9); tests may drive freshness boundaries without sleeping
-     * @param int|null $maxEntries  Optional cap on stored keys (>= 1); an adopt past it evicts the least-recently-stored entry. null (default) keeps the bounded-caller-side law: memory follows caller key discipline.
+     * @param int|null $maxEntries  Optional cap on stored keys (>= 1); an adopt past it evicts the least-recently-stored entry. null (default) keeps the bounded-caller-side rule: memory follows caller key discipline.
      */
     public static function new(float $ttlSeconds = 60.0, bool $serveStaleOnError = false, ?callable $clock = null, ?int $maxEntries = null): self
     {
@@ -179,7 +179,7 @@ final class AsyncCache
 
         // The slot is occupied before the loader runs so a synchronously
         // settling loader (react/promise settles an already-resolved inner
-        // inside then()) still coalesces — the in-flight ordering law InFlightMap pins.
+        // inside then()) still coalesces — the in-flight ordering rule InFlightMap pins.
         $deferred = new Deferred();
         $flight = $deferred->promise();
         $this->store->flights->begin($key, $flight);

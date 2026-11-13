@@ -18,12 +18,12 @@ use function React\Promise\resolve;
  * calls landing inside the window are suppressed — each answers NULL (the
  * drop is a quiet hand-off, not an error) — until the window ends. With
  * `trailing: true` the LAST suppressed call is instead kept and fired the
- * moment the window closes (earlier suppressed calls answer null); that
+ * moment the window closes (earlier suppressed calls answer NULL); that
  * trailing fire consumes a fresh window, so the handle fires at most once
  * every $seconds on every edge, not once per second-and-a-half.
  *
  * Implements {@see Subscription}: unsubscribe() cancels the cooldown and
- * drops any queued trailing call as null. flush() runs that queued call
+ * drops any queued trailing call as NULL. flush() runs that queued call
  * immediately and ends the cooldown — the paired shutdown affordance of
  * {@see Debounced::flush()}.
  */

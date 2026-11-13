@@ -17,10 +17,10 @@ use function React\Promise\resolve;
  * Only the last call inside the window fires, and only after the full window
  * has elapsed since it. Each call answers a promise: the winning call's
  * promise resolves with the scheduled work's return value, every superseded
- * call's promise resolves with NULL (you were replaced, nothing failed), and
+ * call's promise resolves with NULL (superseded, not failed), and
  * a drop via {@see unsubscribe()} likewise resolves NULL — cancellation here
- * is a quiet hand-off, not an error (see Subscription's cancel-is-not-an-error
- * idiom).
+ * is a quiet hand-off, not an error (see the cancel-is-not-an-error rule in
+ * {@see Subscription}).
  *
  * Implements {@see Subscription}: unsubscribe() releases the armed timer and
  * the pending burst, and a CancellationSource passed at construction disposes
