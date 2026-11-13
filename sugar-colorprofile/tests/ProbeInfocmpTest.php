@@ -34,7 +34,7 @@ final class ProbeInfocmpTest extends TestCase
 
         // Fresh statics per test: before this seam was wired the phase-2
         // memo crossed method and file boundaries.
-        Probe::_reset();
+        Probe::resetForTesting();
 
         // Preserve original env values. FORCE_COLOR joins the list (CP-26):
         // a developer/CI shell exporting it outranks every TERM rung the
@@ -61,7 +61,7 @@ final class ProbeInfocmpTest extends TestCase
             }
         }
 
-        Probe::_reset();
+        Probe::resetForTesting();
     }
 
     private function env(string $key, ?string $value): void
@@ -135,7 +135,7 @@ final class ProbeInfocmpTest extends TestCase
             $this->assertSame(ColorProfile::TrueColor, Probe::colorProfile());
         } finally {
             @\unlink($printer);
-            Probe::_reset();
+            Probe::resetForTesting();
         }
     }
 
@@ -161,7 +161,7 @@ final class ProbeInfocmpTest extends TestCase
             $this->assertSame(ColorProfile::Ascii, Probe::colorProfile());
         } finally {
             @\unlink($printer);
-            Probe::_reset();
+            Probe::resetForTesting();
         }
     }
 
@@ -188,7 +188,7 @@ final class ProbeInfocmpTest extends TestCase
             $elapsed = \microtime(true) - $started;
         } finally {
             @\unlink($printer);
-            Probe::_reset();
+            Probe::resetForTesting();
         }
 
         $this->assertNull($answer, 'a wedged child must fail open, never a partial verdict');
@@ -218,7 +218,7 @@ final class ProbeInfocmpTest extends TestCase
             $dump = InfocmpBinary::runBounded('xterm');
         } finally {
             @\unlink($printer);
-            Probe::_reset();
+            Probe::resetForTesting();
         }
 
         $this->assertIsString($dump, 'a fast-exiting chatty child still answers');
@@ -253,16 +253,16 @@ final class ProbeInfocmpTest extends TestCase
             $this->assertSame("\tTc,\n", $first);
             $this->assertCount(1, \file($counter), 'the child ran exactly once for two calls');
 
-            // _reset() drains the table AND the stuffed path (both statics),
+            // resetForTesting() drains the table AND the stuffed path (both statics),
             // so the re-arm leg restuffs the same fake before asking again.
-            Probe::_reset();
+            Probe::resetForTesting();
             (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
             InfocmpBinary::runBounded('xterm');
             $this->assertCount(2, \file($counter), 'the reset seam re-arms the door');
         } finally {
             @\unlink($printer);
             @\unlink($counter);
-            Probe::_reset();
+            Probe::resetForTesting();
         }
     }
 
@@ -303,7 +303,7 @@ final class ProbeInfocmpTest extends TestCase
         } finally {
             @\unlink($printer);
             @\unlink($counter);
-            Probe::_reset();
+            Probe::resetForTesting();
         }
     }
 }

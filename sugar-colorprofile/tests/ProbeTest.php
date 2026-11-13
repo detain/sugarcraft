@@ -40,7 +40,7 @@ final class ProbeTest extends TestCase
         // TrueColor here. Genuine terminfo-promotion coverage stays
         // fixture-driven where it already lives (InfocmpEnvPurityTest's
         // stuffed Tc-printer) — it is not duplicated here.
-        Probe::_reset();
+        Probe::resetForTesting();
         (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, '');
     }
 
@@ -61,7 +61,7 @@ final class ProbeTest extends TestCase
 
         // Drain the stuffed sentinel + any recorded miss so the next suite
         // inherits a clean door (the in-suite hermetic idiom, CP-26 wave).
-        Probe::_reset();
+        Probe::resetForTesting();
     }
 
     /**
@@ -312,9 +312,25 @@ final class ProbeTest extends TestCase
         $path = new \ReflectionProperty(InfocmpBinary::class, 'path');
         $path->setValue(null, '/usr/bin/infocmp');
 
-        Probe::_reset();
+        Probe::resetForTesting();
 
         $this->assertSame([], $memo->getValue(), 'the shared dump memo must drain');
         $this->assertNull($path->getValue(), 'the binary-path memo must drain');
+    }
+
+    public function testDeprecatedUnderscoreAliasStillDrainsTheSeam(): void
+    {
+        // CP-42: `_reset()` survives only as a deprecated delegate. The smoke
+        // pins the DELEGATE WIRING, not grandparent behavior — seed the exec
+        // door's statics, drain through the alias, observe both empties.
+        $memo = new \ReflectionProperty(InfocmpBinary::class, 'dumpMemo');
+        $memo->setValue(null, ['alias-term' => null]);
+        $path = new \ReflectionProperty(InfocmpBinary::class, 'path');
+        $path->setValue(null, '/usr/bin/infocmp');
+
+        Probe::_reset();
+
+        $this->assertSame([], $memo->getValue(), 'the deprecated alias must reach the same drain');
+        $this->assertNull($path->getValue(), 'the deprecated alias must clear the path too');
     }
 }

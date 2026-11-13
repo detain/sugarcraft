@@ -203,7 +203,7 @@ final class EnvUnificationTest extends TestCase
         // injected map: that is the one surface the resolution reads ambient).
         $this->arm('FORCE_COLOR', '3');
         $this->arm('TERM', 'xterm');
-        Probe::_reset();
+        Probe::resetForTesting();
 
         $this->assertSame(ColorProfile::TrueColor, Probe::colorProfile());
     }

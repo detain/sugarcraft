@@ -23,7 +23,7 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * ({@see InfocmpBinary::runBounded()}): repeated calls never re-spawn (the
  * old code ran a fresh unbounded shell per call, and each class kept its
  * own memo — now the per-TERM dump table lives beside the binary it caches
- * answers about), and {@see self::_reset()} drains it for tests.
+ * answers about), and {@see self::resetForTesting()} drains it for tests.
  *
  * The bound is a contract, not a hint: 5 s wall-clock deadline (SIGTERM →
  * 1 s grace → SIGKILL), 8 KiB keep-a-prefix stdout, array-form argv with no
@@ -166,8 +166,20 @@ final class Probe
      *
      * @internal
      */
-    public static function _reset(): void
+    public static function resetForTesting(): void
     {
         InfocmpBinary::reset();
+    }
+
+    /**
+     * @deprecated Renamed to {@see self::resetForTesting()} by CP-42 — the
+     *             underscore spelling violates PSR-12 camelCase and the
+     *             sibling `InfocmpBinary::reset()` shape the rules doc itself
+     *             names. Pure one-line delegate, zero behavior difference;
+     *             kept for consumer safety, removal target 2.0.
+     */
+    public static function _reset(): void
+    {
+        self::resetForTesting();
     }
 }

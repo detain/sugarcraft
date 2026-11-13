@@ -47,7 +47,7 @@ final class AsyncProbeTest extends TestCase
 
         // CP-13: the settled-answer memo must never ride across cases — a
         // planted child binary in one test would otherwise seed another.
-        AsyncProbe::_reset();
+        AsyncProbe::resetForTesting();
 
         foreach ($this->savedEnv as $key => $value) {
             if ($value === null) {
@@ -303,7 +303,7 @@ final class AsyncProbeTest extends TestCase
         // (parity with the sync Probe). On a forced Ascii floor the chain
         // answer is final: before the gate this resolved TrueColor straight
         // from the child's Tc-declaring stdout.
-        Probe::_reset();
+        Probe::resetForTesting();
         $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
         $slots->setValue(null, []);
 
@@ -330,7 +330,7 @@ final class AsyncProbeTest extends TestCase
             unset($_ENV['TERM'], $_ENV['FORCE_COLOR']);
             putenv('TERM');
             putenv('FORCE_COLOR');
-            Probe::_reset();
+            Probe::resetForTesting();
             $slots->setValue(null, []);
             @\unlink($printer);
         }
@@ -346,7 +346,7 @@ final class AsyncProbeTest extends TestCase
         // The filler is ~128 KiB so the Tc bytes can never ride the first
         // pipe read (the OS pipe holds 64 KiB); once the accumulator has
         // reached the ceiling every later chunk is dropped whole.
-        Probe::_reset();
+        Probe::resetForTesting();
         $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
         $slots->setValue(null, []);
 
@@ -403,7 +403,7 @@ final class AsyncProbeTest extends TestCase
                 $_ENV['FORCE_COLOR'] = $hadForceColor;
                 putenv('FORCE_COLOR=' . $hadForceColor);
             }
-            Probe::_reset();
+            Probe::resetForTesting();
             $slots->setValue(null, []);
             @\unlink($printer);
         }
@@ -418,7 +418,7 @@ final class AsyncProbeTest extends TestCase
         // deadline-capped door exec). The old code silently took the
         // react/event-loop singleton, so this exact call returned a PENDING
         // promise parked on a loop the plain-CLI caller never runs.
-        Probe::_reset();
+        Probe::resetForTesting();
         $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
         $slots->setValue(null, []);
 
@@ -452,7 +452,7 @@ final class AsyncProbeTest extends TestCase
         } finally {
             unset($_ENV['TERM']);
             putenv('TERM');
-            Probe::_reset();
+            Probe::resetForTesting();
             @\unlink($printer);
             @\unlink($counter);
         }
@@ -465,7 +465,7 @@ final class AsyncProbeTest extends TestCase
         // refuses the child's stream watchers makes start() throw — the
         // exception must not escape the method, the booked cap slot must be
         // released, and the promise must settle with the chain answer.
-        Probe::_reset();
+        Probe::resetForTesting();
         $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
         $slots->setValue(null, []);
 
@@ -492,7 +492,7 @@ final class AsyncProbeTest extends TestCase
         } finally {
             unset($_ENV['TERM']);
             putenv('TERM');
-            Probe::_reset();
+            Probe::resetForTesting();
             @\unlink($printer);
         }
     }
@@ -515,7 +515,7 @@ final class AsyncProbeTest extends TestCase
             $this->markTestSkipped('zombie-fd accounting requires /proc');
         }
 
-        Probe::_reset();
+        Probe::resetForTesting();
         $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
         $slots->setValue(null, []);
 
@@ -594,7 +594,7 @@ final class AsyncProbeTest extends TestCase
                 $entry['process']->close();
             }
             $slots->setValue(null, []);
-            Probe::_reset();
+            Probe::resetForTesting();
             @\unlink($printer);
             if (isset($previousPid) && $previousPid > 0) {
                 @\posix_kill($previousPid, \SIGKILL);
@@ -606,7 +606,7 @@ final class AsyncProbeTest extends TestCase
 
     public function testCompletedChildSettlesTheNextCallWithoutASpawn(): void
     {
-        AsyncProbe::_reset();
+        AsyncProbe::resetForTesting();
         $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
         $slots->setValue(null, []);
 
@@ -642,7 +642,7 @@ final class AsyncProbeTest extends TestCase
         } finally {
             $this->disarmTerm();
             $slots->setValue(null, []);
-            AsyncProbe::_reset();
+            AsyncProbe::resetForTesting();
             @\unlink($script);
         }
     }
@@ -653,7 +653,7 @@ final class AsyncProbeTest extends TestCase
         // a later call still comes from the CURRENT chain — env drift must
         // never be served stale (that is why negatives store the sentinel,
         // not a frozen profile).
-        AsyncProbe::_reset();
+        AsyncProbe::resetForTesting();
         $script = $this->plantProbe("#!/bin/sh\nprintf '\\tFx,\\n'\n");
         $_ENV['TERM'] = 'VT100';
         putenv('TERM=VT100');
@@ -687,14 +687,14 @@ final class AsyncProbeTest extends TestCase
             unset($_ENV['COLORTERM']);
             putenv('COLORTERM');
             $this->disarmTerm();
-            AsyncProbe::_reset();
+            AsyncProbe::resetForTesting();
             @\unlink($script);
         }
     }
 
     public function testMemoKeysAreCaseFoldedAcrossTermSpellings(): void
     {
-        AsyncProbe::_reset();
+        AsyncProbe::resetForTesting();
         $script = $this->plantProbe("#!/bin/sh\nprintf '\\tTc,\\n'\n");
         $_ENV['TERM'] = 'XTTERM-256COLOR';
         putenv('TERM=XTTERM-256COLOR');
@@ -723,7 +723,7 @@ final class AsyncProbeTest extends TestCase
             );
         } finally {
             $this->disarmTerm();
-            AsyncProbe::_reset();
+            AsyncProbe::resetForTesting();
             @\unlink($script);
         }
     }
@@ -780,6 +780,20 @@ final class AsyncProbeTest extends TestCase
         }
 
         return $slots;
+    }
+
+    public function testDeprecatedUnderscoreAliasStillDrainsBothStatics(): void
+    {
+        // CP-42: `_reset()` survives only as a deprecated delegate — pin the
+        // wiring on this side too: seed the CP-13 memo, drain through the
+        // alias, observe it empty (reflection is legitimate HERE precisely
+        // because the seam contract is the subject).
+        $memo = new \ReflectionProperty(AsyncProbe::class, 'settledMemo');
+        $memo->setValue(null, ['alias-term' => null]);
+
+        AsyncProbe::_reset();
+
+        $this->assertSame([], $memo->getValue(), 'the deprecated alias must reach the memo drain');
     }
 
     private static function clearSlots(\ReflectionProperty $counter): void

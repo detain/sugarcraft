@@ -352,11 +352,21 @@ final class AsyncProbe
      *           drains here too so a planted child binary in one case can
      *           never seed another case's answer.
      */
-    public static function _reset(): void
+    public static function resetForTesting(): void
     {
         self::$inFlight = [];
         self::$nextToken = 1;
         self::$settledMemo = [];
+    }
+
+    /**
+     * @deprecated Renamed to {@see self::resetForTesting()} by CP-42 — see the
+     *             Probe alias for the full rationale. Pure delegate, zero
+     *             behavior difference; removal target 2.0.
+     */
+    public static function _reset(): void
+    {
+        self::resetForTesting();
     }
 
     /**

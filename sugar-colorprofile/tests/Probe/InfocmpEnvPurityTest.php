@@ -53,17 +53,17 @@ final class InfocmpEnvPurityTest extends TestCase
             putenv($key);
         }
 
-        Probe::_reset();
+        Probe::resetForTesting();
         $this->releaseAsyncSlots();
     }
 
     protected function tearDown(): void
     {
-        Probe::_reset();
+        Probe::resetForTesting();
         // CP-13: these fixtures swap the planted child binary between cases
         // while reusing a TERM — the async settled-answer memo must drain
         // with the sync dump memo or a case inherits a foreign verdict.
-        AsyncProbe::_reset();
+        AsyncProbe::resetForTesting();
         $this->releaseAsyncSlots();
         foreach ($this->cleanup as $file) {
             @unlink($file);

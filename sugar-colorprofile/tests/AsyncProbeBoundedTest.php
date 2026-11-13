@@ -133,7 +133,7 @@ final class AsyncProbeBoundedTest extends TestCase
         $slots->setValue(null, [1 => ['process' => new \React\ChildProcess\Process('true'), 'deadline' => 0.0]]);
         $token->setValue(null, 42);
 
-        AsyncProbe::_reset();
+        AsyncProbe::resetForTesting();
 
         self::assertSame([], $slots->getValue());
         self::assertSame(1, $token->getValue());
