@@ -234,6 +234,32 @@ still vanish further upstream, inside the parser's state table — the
 byte-fidelity notes below enumerate exactly that territory, deviation by
 deviation.
 
+## Divergences from sequin
+
+This tool ports charmbracelet/sequin's core behaviour, not its flag surface.
+A sequin user reading this README should know exactly what differs:
+
+- **`-- cmd` replaces `-cmd`.** Exec mode runs the child on a fresh
+  pseudo-terminal and reports the raw bytes it prints (see CLI).
+- **No `--raw` inline-highlight mode.** The report's first column always
+  shows the sent bytes — tokenised into `ESC`/`BEL`-style names, never
+  replayed — so sequin's "print the input unhighlighted" toggle has nothing
+  here to switch off. Colouring of the report itself is deliberately absent:
+  an ANSI-coloured inspector would have to escape its own output, and the
+  point of this tool is a byte-trustworthy transcript.
+- **No theming.** sequin reads `SEQUIN_THEME` (and Lipgloss palettes) for its
+  highlight colours. There are no colours to theme — vocabulary lives in the
+  labels themselves.
+- **No `--list`.** The cheat-sheet surface sequin prints is this README's
+  "What it decodes" section plus the locale files; a second in-binary roster
+  would drift from the docs it exists to mirror.
+- **No `listen` mode.** Accepting connections on a port turns a forensic
+  tool into a network-facing daemon — port binding and ACLs on a machine
+  that is about to *render untrusted byte streams* — and sequin's own
+  listener ships no authentication. That is a security-review-sized feature
+  the fleet has no precedent for, so it stays out of scope (recorded 2026-11
+  with finding 023's deferral; revisit only behind an explicit owner ruling).
+
 ## Localization
 
 Seventeen locale files ship in `lang/`, and every message the tool prints
