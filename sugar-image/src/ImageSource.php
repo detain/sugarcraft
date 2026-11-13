@@ -1504,8 +1504,11 @@ final class ImageSource
      * Combines explicit range checks (so the security-critical ranges are
      * covered regardless of PHP-version quirks in FILTER_FLAG_NO_RES_RANGE,
      * and CGNAT `100.64.0.0/10` which that flag misses) with a final
-     * filter_var() catch-all. IPv4-mapped IPv6 (`::ffff:a.b.c.d`) is unwrapped
-     * and re-checked so it cannot smuggle a private IPv4 past the guard.
+     * filter_var() catch-all. Embedded-IPv4 families — IPv4-mapped
+     * `::ffff:a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` and Teredo
+     * `2001::/32` — are unwrapped and re-checked (finding 102; see
+     * {@see self::embeddedV4Candidates()}) so none can smuggle a private
+     * IPv4 past the guard behind a public-looking v6 shell.
      */
     private static function isPrivateOrReservedIp(string $ip): bool
     {
@@ -1550,10 +1553,13 @@ final class ImageSource
                 return true;
             }
 
-            // IPv4-mapped IPv6 (::ffff:a.b.c.d): unwrap and re-check.
-            if (str_starts_with($packed, "\0\0\0\0\0\0\0\0\0\0\xFF\xFF")) {
-                $v4 = inet_ntop(substr($packed, 12));
-                if (is_string($v4) && self::isPrivateOrReservedIp($v4)) {
+            // Embedded-IPv4 families: an address that a translator or
+            // 6to4 router resolves down to a v4 is refused when THAT v4
+            // is private — the loopback spelled ::ffff:7f00:1 is just
+            // one of the spellings (finding 102). Each candidate below
+            // re-runs the full battery.
+            foreach (self::embeddedV4Candidates($packed) as $inner) {
+                if (self::isPrivateOrReservedIp($inner)) {
                     return true;
                 }
             }
@@ -1564,6 +1570,58 @@ final class ImageSource
             FILTER_VALIDATE_IP,
             FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
         ) === false;
+    }
+
+    /**
+     * Dotted-IPv4 candidates smuggled inside a packed IPv6 address, per
+     * the four families whose translators route on them (finding 102):
+     * IPv4-mapped `::ffff:a.b.c.d` (bytes 12-15), NAT64 well-known
+     * `64:ff9b::/96` (bytes 12-15), 6to4 `2002::/16` (bytes 2-5 — the
+     * embedded address is part of the prefix itself) and Teredo
+     * `2001::/32` (bytes 12-15, checked BOTH raw and RFC 4364-decoded:
+     * the RFC obfuscates the client field as `server ^ ~client`, a real
+     * attacker spells it that way, while the raw leg models the naive
+     * `2001::7f00:1` text). No other /prefix is unwrapped: a v6 address
+     * from an unrelated range carries no routing promise this guard has
+     * to honour, and `::`/`::1`/ULA/link-local keep their existing
+     * verdicts untouched.
+     *
+     * @return list<string> dotted quads to re-check
+     */
+    private static function embeddedV4Candidates(string $packed): array
+    {
+        $out = [];
+
+        // ::ffff:a.b.c.d — leading zeros + the ffff marker.
+        if (str_starts_with($packed, "\0\0\0\0\0\0\0\0\0\0\xFF\xFF")) {
+            $out[] = substr($packed, 12, 4);
+        }
+
+        // 64:ff9b::/96 — well-known NAT64 prefix (its first hextet is
+        // 0x0064 on the wire), full v4 in the tail.
+        if (str_starts_with($packed, "\x00\x64\xFF\x9B") && substr($packed, 4, 8) === str_repeat("\0", 8)) {
+            $out[] = substr($packed, 12, 4);
+        }
+
+        // 2002::/16 — 6to4, embedded v4 immediately after the 2002.
+        if (str_starts_with($packed, "\x20\x02")) {
+            $out[] = substr($packed, 2, 4);
+        }
+
+        // 2001::/32 — Teredo: raw tail AND the one's-complement decode.
+        if (str_starts_with($packed, "\x20\x01\x00\x00")) {
+            $raw = substr($packed, 12, 4);
+            $out[] = $raw;
+            $decoded = substr($packed, 0, 4) ^ ~$raw;
+            if ($decoded !== $raw) {
+                $out[] = $decoded;
+            }
+        }
+
+        return array_values(array_unique(array_map(
+            static fn (string $b): string => inet_ntop($b) ?? '0.0.0.0',
+            $out,
+        )));
     }
 
     /**

@@ -70,6 +70,119 @@ final class ImageSourceSsrfIpTest extends TestCase
         ImageSource::fromUrl('http://[::1]:9/x');
     }
 
+    // ---- embedded-address translators (finding 102) -----------------------
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function embeddedAddressMatrix(): array
+    {
+        return [
+            // NAT64 well-known 64:ff9b::/96 — a private v4 is refused.
+            'nat64 loopback' => ['64:ff9b::7f00:1', true],
+            'nat64 rfc1918' => ['64:ff9b::10.0.0.1', true],
+            'nat64 metadata' => ['64:ff9b::169.254.169.254', true],
+            'nat64 public' => ['64:ff9b::8.8.8.8', false],
+            // 6to4 2002::/16 — the embedded v4 lives right after 2002.
+            '6to4 loopback' => ['2002:7f00:1::', true],
+            '6to4 rfc1918' => ['2002:0a00:0001::', true],
+            '6to4 link-local' => ['2002:a9fe:a9fe::', true],
+            '6to4 public' => ['2002:0808:0808::', false],
+            // Teredo 2001::/32 — BOTH spellings of the tail, and a REAL
+            // server/customer mid-word (all-zero middles are the naive
+            // text form only).
+            'teredo naive loopback' => ['2001::7f00:1', true],
+            'teredo rfc4364 loopback' => ['2001:0:1111:2222::a0fe:fffe', true],
+            'teredo rfc4364 public' => ['2001::d7f6:f7f7', false],
+            'teredo naive public' => ['2001::808:808', false],
+            // The family the guard already knew about.
+            'mapped loopback' => ['::ffff:127.0.0.1', true],
+            'mapped public' => ['::ffff:8.8.8.8', false],
+            // Semantics the finding must NOT disturb.
+            'unspecified' => ['::', true],
+            'v6 loopback' => ['::1', true],
+            'v6 link-local' => ['fe80::1', true],
+            'v6 ula' => ['fc00::1', true],
+            'v6 public google dns' => ['2001:4860:4860::8888', false],
+            'v4 this-network' => ['0.0.0.0', true],
+            'v4 metadata' => ['169.254.169.254', true],
+            'v4 cgnat' => ['100.64.0.1', true],
+            'v4 public' => ['93.184.216.34', false],
+            '6to4 all-zero embed' => ['2002::', true],
+            'nat64 all-zero embed' => ['64:ff9b::', true],
+            'teredo all-zero embed' => ['2001::', true],
+        ];
+    }
+
+    /**
+     * @param array<string, array{string, bool}> $matrix
+     */
+    public static function assertEmbeddedAddressMatrix(array $matrix): void
+    {
+        $gate = new \ReflectionMethod(ImageSource::class, 'isPrivateOrReservedIp');
+        $gate->setAccessible(true);
+
+        foreach ($matrix as $label => [$ip, $blocked]) {
+            self::assertSame(
+                $blocked,
+                (bool) $gate->invoke(null, $ip),
+                "{$ip} ({$label}) verdict drifted",
+            );
+        }
+    }
+
+    public function testTheEmbeddedAddressBatteryIsOrderFreeAcrossEveryFamily(): void
+    {
+        // One gate call must reach the same verdict whether the private v4
+        // arrives as a bare quad or smuggled through ::ffff:, NAT64, 6to4
+        // or either Teredo spelling — and the unrelated v6 ranges keep
+        // their pre-finding semantics untouched.
+        self::assertEmbeddedAddressMatrix(self::embeddedAddressMatrix());
+    }
+
+    public function testEmbeddedPrivateAddressesAreRefusedEndToEnd(): void
+    {
+        foreach (self::embeddedAddressMatrix() as [$ip, $blocked]) {
+            if (!$blocked) {
+                continue;
+            }
+
+            try {
+                ImageSource::fromUrl("http://[{$ip}]:9/x");
+                $this->fail("{$ip} must be refused by the guard");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('blocked private/reserved address', $e->getMessage());
+            }
+        }
+    }
+
+    public function testEmbeddedPublicAddressesStillReachTransport(): void
+    {
+        foreach (self::embeddedAddressMatrix() as [$ip, $blocked]) {
+            if ($blocked) {
+                continue;
+            }
+
+            if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                continue; // v4 accepts are the pre-existing battery's job
+            }
+
+            try {
+                ImageSource::fromUrl("http://[{$ip}]:9/x");
+                $this->fail("{$ip} should not have completed");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringNotContainsString(
+                    'blocked private/reserved address',
+                    $e->getMessage(),
+                    "{$ip} over-blocked",
+                );
+            } catch (\Throwable) {
+                // Transport failure — the guard let it through, as intended.
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
     // ---- allow-list bypass ----------------------------------------------
 
     public function testAllowListBypassesGuardForLoopback(): void
