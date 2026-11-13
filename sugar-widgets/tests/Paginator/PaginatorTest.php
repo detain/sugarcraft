@@ -86,14 +86,14 @@ final class PaginatorTest extends TestCase
 
     public function testKeyRightAdvances(): void
     {
-        $p = Paginator::new()->withPerPage(10)->withTotalItems(20);
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(20)->focus();
         [$next, ] = $p->update(new KeyMsg(KeyType::Right));
         $this->assertSame(1, $next->page);
     }
 
     public function testKeyHViaVim(): void
     {
-        $p = Paginator::new()->withPerPage(10)->withTotalItems(20)->withPage(1);
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(20)->withPage(1)->focus();
         [$next, ] = $p->update(new KeyMsg(KeyType::Char, 'h'));
         $this->assertSame(0, $next->page);
     }
@@ -166,14 +166,14 @@ final class PaginatorTest extends TestCase
 
     public function testKeyHomeGoesToFirstPage(): void
     {
-        $p = Paginator::new()->withPerPage(10)->withTotalItems(30)->withPage(2);
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(30)->withPage(2)->focus();
         [$next, ] = $p->update(new KeyMsg(KeyType::Home));
         $this->assertSame(0, $next->page);
     }
 
     public function testKeyEndGoesToLastPage(): void
     {
-        $p = Paginator::new()->withPerPage(10)->withTotalItems(30);
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(30)->focus();
         [$next, ] = $p->update(new KeyMsg(KeyType::End));
         $this->assertSame(2, $next->page);
     }
@@ -220,28 +220,30 @@ final class PaginatorTest extends TestCase
         }
     }
 
-    public function testFocusRestoresNavigationAndDefaultIsFocused(): void
+    public function testDefaultIsBlurredAndFocusRoutesKeys(): void
     {
         $p = Paginator::new()->withPerPage(10)->withTotalItems(250);
-        // BC pin: today's hosts see always-consume behaviour by default.
-        [$moved, ] = $p->update(new KeyMsg(KeyType::Right));
-        $this->assertSame(1, $moved->page);
-        $blurred = $p->blur();
-        [$same, ] = $blurred->update(new KeyMsg(KeyType::Right));
-        $this->assertSame($blurred, $same);
-        [$moved, ] = $blurred->focus()->update(new KeyMsg(KeyType::Right));
+        // W-42: family parity — blurred by default, keys flow back untouched.
+        $this->assertFalse($p->focused);
+        [$same, $cmd] = $p->update(new KeyMsg(KeyType::Right));
+        $this->assertSame($p, $same);
+        $this->assertNull($cmd);
+        [$moved, ] = $p->focus()->update(new KeyMsg(KeyType::Right));
         $this->assertSame(1, $moved->page, 'focus() restores routing');
+        $blurred = $moved->blur();
+        [$still, ] = $blurred->update(new KeyMsg(KeyType::Right));
+        $this->assertSame($blurred, $still);
     }
 
     public function testFocusBlurArePureIdempotentValueVerbs(): void
     {
-        $p = Paginator::new();
-        $this->assertTrue($p->focused);
-        $b = $p->blur();
-        $this->assertNotSame($p, $b);
+        $b = Paginator::new();
         $this->assertFalse($b->focused);
         $this->assertSame($b, $b->blur(), 'already blurred: identity');
+        $p = $b->focus();
+        $this->assertNotSame($b, $p);
+        $this->assertTrue($p->focused);
         $this->assertSame($p, $p->focus(), 'already focused: identity');
-        $this->assertTrue($b->focus()->focused);
+        $this->assertFalse($p->blur()->focused);
     }
 }

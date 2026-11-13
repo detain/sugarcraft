@@ -44,7 +44,7 @@ final class Paginator implements Model
         public readonly string $activeDot,
         public readonly string $inactiveDot,
         public readonly string $arabicFormat = '%d/%d',
-        public readonly bool $focused = true,
+        public readonly bool $focused = false,
     ) {}
 
     public static function new(): self
@@ -74,10 +74,8 @@ final class Paginator implements Model
         }
         // W-42: navigation belongs to the focused widget — while blurred
         // every key flows back untouched so a multi-model host router
-        // stops double-consuming. The flag DEFAULTS true: today's
-        // always-consume behaviour is the BC default and the flip to
-        // family-parity default-blurred is a recorded owner ruling
-        // (single-pane hosts would regress), not a silent change.
+        // stops double-consuming. Like Table/Tabs/Tree the widget is
+        // BLURRED by default: the host calls focus() to route keys.
         if (!$this->focused) {
             return [$this, null];
         }
