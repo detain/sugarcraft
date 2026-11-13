@@ -92,6 +92,12 @@ Użycie: candy-tetris [opcje]
     'help.floor' => 'ramka wymaga terminala o rozmiarze co najmniej {cols}x{rows}',
     // candy-tetris-006/-095 (pl): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'klawisze: {keys}',
+    // candy-tetris-054/-083 (pl): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'naciśnij ponownie {keys}, aby wyjść',
+    // candy-tetris-054/-083 (pl): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'naciśnij ponownie {keys}, aby zacząć od nowa',
     // candy-tetris-092/-025 (pl): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1 linia!',
     'moment.lines.many' => '{count} linie!',

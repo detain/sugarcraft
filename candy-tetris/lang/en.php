@@ -101,6 +101,12 @@ return [
     'help.floor' => 'the frame needs a terminal of at least {cols}x{rows}',
     // candy-tetris-006/-095 (en): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'press {keys} for keys',
+    // candy-tetris-054/-083 (en): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'press {keys} again to quit',
+    // candy-tetris-054/-083 (en): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'press {keys} again to restart',
     // candy-tetris-092/-025 (en): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1 line!',
     'moment.lines.many' => '{count} lines!',

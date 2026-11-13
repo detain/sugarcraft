@@ -79,8 +79,14 @@ final class KeyActuationTest extends TestCase
         self::assertNull($cmd);
 
         $playing = self::fresh();
-        [, $quitCmd] = $playing->update(new KeyMsg(KeyType::Char, 'Q'));
-        self::assertNotNull($quitCmd, 'Caps Lock must not strand quit');
+        [$armedQ, $quitCmd] = $playing->update(new KeyMsg(KeyType::Char, 'Q'));
+        // candy-tetris-054 moved live play to the confirm dance — which
+        // makes the fold proof even stricter here: 'Q' must ARM (an
+        // unfolded Q would leave armed null), and the second 'Q' leaves.
+        self::assertSame('quit', $armedQ->armed, 'Caps Lock must not strand quit');
+        self::assertNull($quitCmd);
+        [, $secondQ] = $armedQ->update(new KeyMsg(KeyType::Char, 'Q'));
+        self::assertNotNull($secondQ, 'the confirmed uppercase press leaves');
     }
 
     public function testUppercaseRestartRevivesAGameOverSession(): void

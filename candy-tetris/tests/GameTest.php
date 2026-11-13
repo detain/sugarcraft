@@ -151,9 +151,16 @@ final class GameTest extends TestCase
 
     public function testQuitKeyDispatchesQuit(): void
     {
+        // candy-tetris-054: live q is a two-step dance now — the first
+        // press arms, the second leaves. (The menu postures — pause, the
+        // help card, the over screen — and the ctrl+c chord still leave
+        // on the first press; pinned in DestructiveInputTest.)
         $g = $this->deterministicGame();
-        [, $cmd] = $g->update($this->key('q'));
-        $this->assertInstanceOf(\Closure::class, $cmd, 'q must dispatch a quit Cmd');
+        [$armed, $cmd] = $g->update($this->key('q'));
+        $this->assertNull($cmd, 'a single stray q must not end the run');
+        $this->assertSame('quit', $armed->armed);
+        [, $cmd] = $armed->update($this->key('q'));
+        $this->assertInstanceOf(\Closure::class, $cmd, 'the confirmed q must dispatch a quit Cmd');
     }
 
     public function testLeftKeyMovesPieceLeft(): void

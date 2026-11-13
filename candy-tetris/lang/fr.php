@@ -85,6 +85,12 @@ quitter',
     'help.floor' => 'l\'affichage exige un terminal d\'au moins {cols}x{rows}',
     // candy-tetris-006/-095 (fr): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'touches : {keys}',
+    // candy-tetris-054/-083 (fr): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'appuyez encore sur {keys} pour quitter',
+    // candy-tetris-054/-083 (fr): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'appuyez encore sur {keys} pour recommencer',
     // candy-tetris-092/-025 (fr): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1 ligne !',
     'moment.lines.many' => '{count} lignes !',

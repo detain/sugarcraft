@@ -127,6 +127,16 @@ final class Renderer
             // game no longer answers.
             return Support\Paint::banner($body, self::withNotices([Lang::t('paused', ['keys' => $game->keyLabel('pause')])], $game->notices));
         }
+        if ($game->armed !== null) {
+            // candy-tetris-054/-083: the confirm question. Reached only in
+            // bare live play — the intro, help, over and pause banners all
+            // answer first, and behind those postures q is a menu choice,
+            // never a misreach that needs guarding. The live binding name
+            // rides the sentence (the -005 derivation law, applied to the
+            // destructive family: a remapped q must not ask for a key the
+            // game no longer answers).
+            return Support\Paint::banner($body, self::withNotices([self::confirmLine($game)], $game->notices));
+        }
         if ($game->notices !== []) {
             // candy-tetris-025/-092: a plain-play notice (a clear moment,
             // an incoming row, a save refusal) paints through the SAME
@@ -193,6 +203,19 @@ final class Renderer
         $lines[] = Lang::t('help.close', ['keys' => $game->keyLabel('help')]);
 
         return $lines;
+    }
+
+    /**
+     * The confirm question for the armed destructive act (candy-tetris-
+     * 054/-083): name the live key that carries it out, name the act.
+     */
+    private static function confirmLine(Game $game): string
+    {
+        return match ($game->armed) {
+            'quit'    => Lang::t('confirm.quit', ['keys' => $game->keyLabel('quit')]),
+            'restart' => Lang::t('confirm.restart', ['keys' => $game->keyLabel('restart')]),
+            default   => throw new \LogicException('unknown armed act: ' . var_export($game->armed, true)),
+        };
     }
 
     /**

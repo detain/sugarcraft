@@ -92,6 +92,12 @@ return [
     'help.floor' => '프레임에는 최소 {cols}x{rows} 터미널이 필요',
     // candy-tetris-006/-095 (ko): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => '{keys} 키 목록',
+    // candy-tetris-054/-083 (ko): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => '한 번 더 {keys}로 종료',
+    // candy-tetris-054/-083 (ko): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => '한 번 더 {keys}로 재시작',
     // candy-tetris-092/-025 (ko): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1열!',
     'moment.lines.many' => '{count}열!',

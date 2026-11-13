@@ -92,6 +92,12 @@ Kullanım: candy-tetris [seçenekler]
     'help.floor' => 'çerçeve en az {cols}x{rows} boyutunda bir terminal ister',
     // candy-tetris-006/-095 (tr): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'tuşlar: {keys}',
+    // candy-tetris-054/-083 (tr): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'çıkmak için tekrar {keys} tuşuna basın',
+    // candy-tetris-054/-083 (tr): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'yeniden başlatmak için tekrar {keys} tuşuna basın',
     // candy-tetris-092/-025 (tr): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1 satır!',
     'moment.lines.many' => '{count} satır!',

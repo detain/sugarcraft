@@ -92,6 +92,12 @@ Gebruik: candy-tetris [opties]
     'help.floor' => 'het kader heeft een terminal van minimaal {cols}x{rows} nodig',
     // candy-tetris-006/-095 (nl): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'toetsen: {keys}',
+    // candy-tetris-054/-083 (nl): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'druk opnieuw op {keys} om te stoppen',
+    // candy-tetris-054/-083 (nl): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'druk opnieuw op {keys} om opnieuw te starten',
     // candy-tetris-092/-025 (nl): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1 rij!',
     'moment.lines.many' => '{count} rijen!',

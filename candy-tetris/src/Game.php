@@ -213,6 +213,17 @@ final class Game implements Model
          * @var list<string>
          */
         public readonly array $notices = [],
+        /**
+         * candy-tetris-054/-083: the destructive-press confirm slot. While
+         * the run is LIVE, a single q no longer ends it (a misreach next
+         * to the pause family used to vaporise the board silently) and r
+         * surrenders the run — both arm this slot instead, and the same
+         * key a second time carries the act out; any other press retires
+         * it. Pause, the help card and the over screen stay menu
+         * postures: q quits from them immediately, exactly as before.
+         * null = nothing armed.
+         */
+        public readonly ?string $armed = null,
     ) {
         // One stateful stream feeds this game's garbage holes. Built from
         // the seed so the sequence is run-determined; Game::mutate()
@@ -293,6 +304,12 @@ final class Game implements Model
             $changes['clockUs']       ?? $this->clockUs,
             $changes['helpOpen']      ?? $this->helpOpen,
             $changes['notices']       ?? $this->notices,
+            // The armed slot is CLEARED with an explicit null — the ??
+            // inherit idiom would make disarm() a no-op (the nullable-
+            // field pattern already used for colorProfile/overReason).
+            array_key_exists('armed', $changes)
+                ? $changes['armed']
+                : $this->armed,
         );
         // The live garbage stream rides the update (see ctor note): a
         // re-derived stream would restart the hole sequence on every
@@ -671,33 +688,13 @@ final class Game implements Model
                 return [$this, Cmd::quit()];
             }
             if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'restart')) {
-                // 'r' starts a completely fresh game. The score does NOT
-                // carry over: Score embeds the level, so keeping it would
-                // spawn the new board under the old gravity. The fresh state
-                // arrives with gravityPending already true and its gravity
-                // chain is armed right here — init() ran once at boot and
-                // will not re-run.
-                $fresh = $this->lockDelayMs > 0
-                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible, clockUs: $this->clockUs)
-                    : self::start(bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible, clockUs: $this->clockUs);
-                // Bump the chain tag so any tick still in flight from the
-                // dead chain lands inert on the fresh board.
-                $fresh = $fresh->mutate([
-                    'gravityChain' => $this->gravityChain + 1,
-                    // The lock generation space carries across restart
-                    // (monotonic, never reset): a superseded window's
-                    // in-flight LockDelayMsg can never collide with the
-                    // tag a window on the fresh board later arms
-                    // (candy-tetris-065 — gravity got this defence in
-                    // -003's lineage, the lock chain never did).
-                    'lockGeneration' => $this->lockGeneration,
-                    // The live terminal size survives the restart: the
-                    // Program only re-reports on the next SIGWINCH, and a
-                    // fresh natural-size seed would re-clip a squeezed one.
-                    'frameCols' => $this->frameCols,
-                    'frameRows' => $this->frameRows,
-                    'colorProfile' => $this->colorProfile,
-                ]);
+                // 'r' starts a completely fresh game — immediately, the
+                // way every over-screen press reads as a menu choice
+                // (candy-tetris-054 confines the confirm dance to live
+                // play). The fresh state arms its gravity chain here:
+                // init() ran once at boot and will not re-run.
+                $fresh = $this->freshRun();
+
                 return [$fresh, $this->scheduleGravity($fresh->score, $fresh->gravityChain)];
             }
             return [$this, null];
@@ -763,15 +760,63 @@ final class Game implements Model
     }
 
     /**
+     * A completely fresh run that honours the live session's invariants
+     * (candy-tetris-054/-083: shared by the over-screen restart and the
+     * confirmed mid-run surrender, so the epoch guards can never be
+     * carried by one path and forgotten by the other). The score does
+     * NOT carry over: Score embeds the level, so keeping it would spawn
+     * the new board under the old gravity.
+     */
+    private function freshRun(): self
+    {
+        $fresh = $this->lockDelayMs > 0
+            ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible, clockUs: $this->clockUs)
+            : self::start(bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible, clockUs: $this->clockUs);
+
+        return $fresh->mutate([
+            // Bump the chain tag so any tick still in flight from the
+            // dead chain lands inert on the fresh board.
+            'gravityChain' => $this->gravityChain + 1,
+            // The lock generation space carries across restart
+            // (monotonic, never reset): a superseded window's
+            // in-flight LockDelayMsg can never collide with the
+            // tag a window on the fresh board later arms
+            // (candy-tetris-065 — gravity got this defence in
+            // -003's lineage, the lock chain never did).
+            'lockGeneration' => $this->lockGeneration,
+            // The live terminal size survives the restart: the
+            // Program only re-reports on the next SIGWINCH, and a
+            // fresh natural-size seed would re-clip a squeezed one.
+            'frameCols' => $this->frameCols,
+            'frameRows' => $this->frameRows,
+            'colorProfile' => $this->colorProfile,
+        ]);
+    }
+
+    /**
      * @return array{0:Game,1:?\Closure}
      */
     private function handleKey(KeyMsg $msg): array
     {
-        if (Support\Bindings::actuates($this->keys(), $msg, 'quit')) {
-            return [$this, Cmd::quit()];
+        $keys = $this->keys();
+
+        // candy-tetris-054: a single stray q during LIVE play no longer ends
+        // the run — the press arms and the same key must land again. Pause
+        // and behind the help card are menu contexts, where q is the
+        // immediate leave it always was (as it is on the intro, too-small
+        // and death screens, which never reach this method).
+        if (Support\Bindings::actuates($keys, $msg, 'quit') === true) {
+            // The ctrl+c CHORD stays the instant exit it always was — a
+            // two-finger deliberate interrupt is not a misreach, and its
+            // escape promise (candy-tetris-034) must not grow a step.
+            if ($this->paused === true || $this->helpOpen === true || $this->armed === 'quit' || $msg->ctrl === true) {
+                return [$this, Cmd::quit()];
+            }
+
+            return [$this->mutate(['armed' => 'quit']), null];
         }
-        if (Support\Bindings::actuates($this->keys(), $msg, 'pause')) {
-            return [$this->withPaused(!$this->paused), null];
+        if (Support\Bindings::actuates($keys, $msg, 'pause')) {
+            return [$this->disarm()->withPaused(!$this->paused), null];
         }
         if ($this->paused) {
             // Nothing mutates game state while paused — hold included —
@@ -794,37 +839,66 @@ final class Game implements Model
             return [$this, null];
         }
 
+        // candy-tetris-083: mid-run surrender. The over-screen restart is a
+        // menu choice and stays immediate; live play gets the same confirm
+        // discipline as q — r sits as close to a misreach as q does. An
+        // unfinished run settles nothing: no partial score ever entered
+        // the record through the over crossing, and a surrender does not
+        // invent that path.
+        if (Support\Bindings::actuates($keys, $msg, 'restart') === true) {
+            if ($this->armed === 'restart') {
+                $fresh = $this->freshRun();
+
+                return [$fresh, $this->scheduleGravity($fresh->score, $fresh->gravityChain)];
+            }
+
+            return [$this->mutate(['armed' => 'restart']), null];
+        }
+
+        // Any other press means attention moved on: retire whatever
+        // destructive act was armed — the press itself still plays.
+        $state = $this->disarm();
         $played = match (true) {
-            Support\Bindings::actuates($this->keys(), $msg, 'hold')
-                => $this->tryHold(),
-            Support\Bindings::actuates($this->keys(), $msg, 'move-left')
-                => $this->tryMove(-1, 0),
-            Support\Bindings::actuates($this->keys(), $msg, 'move-right')
-                => $this->tryMove(1, 0),
-            Support\Bindings::actuates($this->keys(), $msg, 'soft-drop')
-                => $this->softDrop(),
-            Support\Bindings::actuates($this->keys(), $msg, 'rotate-cw')
-                => $this->tryRotate(1),
-            Support\Bindings::actuates($this->keys(), $msg, 'rotate-ccw')
-                => $this->tryRotate(-1),
+            Support\Bindings::actuates($keys, $msg, 'hold')
+                => $state->tryHold(),
+            Support\Bindings::actuates($keys, $msg, 'move-left')
+                => $state->tryMove(-1, 0),
+            Support\Bindings::actuates($keys, $msg, 'move-right')
+                => $state->tryMove(1, 0),
+            Support\Bindings::actuates($keys, $msg, 'soft-drop')
+                => $state->softDrop(),
+            Support\Bindings::actuates($keys, $msg, 'rotate-cw')
+                => $state->tryRotate(1),
+            Support\Bindings::actuates($keys, $msg, 'rotate-ccw')
+                => $state->tryRotate(-1),
             // candy-tetris-016: the flip rides the same kick path — delta
             // 2 walks the 0↔2 transitions the SRS table already carries.
-            Support\Bindings::actuates($this->keys(), $msg, 'rotate-180')
-                => $this->tryRotate(2),
-            Support\Bindings::actuates($this->keys(), $msg, 'hard-drop')
-                => $this->hardDrop(),
+            Support\Bindings::actuates($keys, $msg, 'rotate-180')
+                => $state->tryRotate(2),
+            Support\Bindings::actuates($keys, $msg, 'hard-drop')
+                => $state->hardDrop(),
             // candy-tetris-006: the meta press sits BEHIND the gameplay
             // arms — an override that hands 'h' to hard-drop keeps the
             // piece's lock (a remap wins over a shipped default, exactly
             // as 'begin'/'hard-drop' already share space by screen), and
             // with an untouched table no gameplay id claims a plain 'h',
             // so the key reference still answers.
-            Support\Bindings::actuates($this->keys(), $msg, 'help')
-                => [$this->mutate(['helpOpen' => true]), null],
-            default => [$this, null],
+            Support\Bindings::actuates($keys, $msg, 'help')
+                => [$state->mutate(['helpOpen' => true]), null],
+            default => [$state, null],
         };
 
         return $played;
+    }
+
+    /**
+     * Retire a pending destructive act (candy-tetris-054/-083). Armed is
+     * a question on screen, not a mode: the moment the player's fingers
+     * choose anything else, the question is answered "no".
+     */
+    private function disarm(): self
+    {
+        return $this->armed === null ? $this : $this->mutate(['armed' => null]);
     }
 
     /**

@@ -92,6 +92,12 @@ return [
     'help.floor' => 'рамке нужен терминал не меньше {cols}x{rows}',
     // candy-tetris-006/-095 (ru): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'клавиши: {keys}',
+    // candy-tetris-054/-083 (ru): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'нажмите {keys} ещё раз для выхода',
+    // candy-tetris-054/-083 (ru): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'нажмите {keys} ещё раз для перезапуска',
     // candy-tetris-092/-025 (ru): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1 линия!',
     'moment.lines.many' => '{count} линии!',

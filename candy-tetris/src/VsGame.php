@@ -350,6 +350,16 @@ final class VsGame implements Model
             return [$this, null];
         }
 
+        // candy-tetris-083/-054 law: the LIVE restart is solo-only. Mid-match
+        // the forwarded r would hit the player game's confirm door and arm
+        // a silent surrender under the VS banners (VsRenderer never paints
+        // the question); the post-over parity restart above is the VS
+        // restart — a menu posture — and mid-match leaving is what quit
+        // is for (help's solo-only swallow is the precedent, -006).
+        if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'restart')) {
+            return [$this, null];
+        }
+
         // Process player game (KeyMsg only reaches here when not paused/quit).
         // A tick that passed the VS-level epoch gate is re-stamped into the
         // INNER game's own chain domain: the VS epoch guards the outer loop,

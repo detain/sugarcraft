@@ -92,6 +92,12 @@ return [
     'help.floor' => '枠には最低 {cols}x{rows} の端末が必要',
     // candy-tetris-006/-095 (ja): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => '{keys} でキー',
+    // candy-tetris-054/-083 (ja): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'もう一度 {keys} で終了',
+    // candy-tetris-054/-083 (ja): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'もう一度 {keys} でやり直し',
     // candy-tetris-092/-025 (ja): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1列消去!',
     'moment.lines.many' => '{count}列消去!',

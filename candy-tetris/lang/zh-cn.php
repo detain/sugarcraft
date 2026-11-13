@@ -92,6 +92,12 @@ return [
     'help.floor' => '画面至少需要 {cols}x{rows} 的终端',
     // candy-tetris-006/-095 (zh-cn): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => '按 {keys} 查看按键',
+    // candy-tetris-054/-083 (zh-cn): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => '再按一次 {keys} 退出',
+    // candy-tetris-054/-083 (zh-cn): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => '再按一次 {keys} 重新开始',
     // candy-tetris-092/-025 (zh-cn): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '消去 1 行!',
     'moment.lines.many' => '消去 {count} 行!',

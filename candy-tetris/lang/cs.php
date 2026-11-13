@@ -92,6 +92,12 @@ Použití: candy-tetris [volby]
     'help.floor' => 'rám potřebuje terminál alespoň {cols}x{rows}',
     // candy-tetris-006/-095 (cs): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'klávesy: {keys}',
+    // candy-tetris-054/-083 (cs): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'stiskněte znovu {keys} pro odchod',
+    // candy-tetris-054/-083 (cs): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'stiskněte znovu {keys} pro restart',
     // candy-tetris-092/-025 (cs): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1 řada!',
     'moment.lines.many' => '{count} řady!',

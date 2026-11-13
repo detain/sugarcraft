@@ -26,5 +26,7 @@ Sleep 800ms
 Space Sleep 800ms
 
 Sleep 2000ms
-Type "q"
+# Leaving is a two-step dance in live play (candy-tetris-054): the first
+# q arms the confirm, the second one leaves — one Type, two keydowns.
+Type "qq"
 Sleep 500ms

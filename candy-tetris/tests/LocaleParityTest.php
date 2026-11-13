@@ -215,6 +215,8 @@ final class LocaleParityTest extends TestCase
             // level-ups, incoming garbage and the save refusal ride the
             // banner machinery instead of raw stderr.
             'moment.lines.one', 'moment.lines.many', 'moment.level', 'moment.garbage',
+            // The destructive-press confirm questions (candy-tetris-054/-083).
+            'confirm.quit', 'confirm.restart',
             // Launch/CLI diagnostic frame (candy-tetris-028): the first
             // text a user reads is catalogue-owned, not inline English.
             'launch.extras', 'score.save.failed', 'keys.ignored', 'scores.ignored',

@@ -92,6 +92,12 @@ return [
     'help.floor' => 'يحتاج الإطار إلى طرفية {cols}x{rows} على الأقل',
     // candy-tetris-006/-095 (ar): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'المفاتيح: {keys}',
+    // candy-tetris-054/-083 (ar): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'اضغط {keys} مرة أخرى للخروج',
+    // candy-tetris-054/-083 (ar): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'اضغط {keys} مرة أخرى لإعادة البدء',
     // candy-tetris-092/-025 (ar): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => 'سطر واحد!',
     'moment.lines.many' => '{count} أسطر!',

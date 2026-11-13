@@ -92,6 +92,12 @@ Uso: candy-tetris [opciones]
     'help.floor' => 'el marco necesita una terminal de al menos {cols}x{rows}',
     // candy-tetris-006/-095 (es): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'teclas: {keys} pulsa',
+    // candy-tetris-054/-083 (es): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.quit' => 'pulsa {keys} otra vez para salir',
+    // candy-tetris-054/-083 (es): the confirm question for an armed
+    // destructive press, naming the live binding.
+    'confirm.restart' => 'pulsa {keys} otra vez para reiniciar',
     // candy-tetris-092/-025 (es): game-feel moments and the on-frame slot copy.
     'moment.lines.one' => '1 línea!',
     'moment.lines.many' => '{count} líneas!',
