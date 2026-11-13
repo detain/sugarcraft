@@ -20,7 +20,10 @@ namespace SugarCraft\CellBuffer;
  * family spells as 3x/9x/38;5/n). Slot identity lets theme-following
  * colours round-trip through diff frames without baking in a hex
  * value; {@see SgrEmitter} prefers the slot when one is set. The
- * with*() builders keep the two representations mutually exclusive.
+ * with*() builders keep the two representations mutually exclusive;
+ * they may coexist only as the slot plus its canonical hex belt — the
+ * constructor refuses any other pairing, and clamps RGB saturating
+ * (never masking) exactly like the SGR parser.
  *
  * The attribute bit layout below is this package's own. It
  * deliberately does NOT line up with sugar-vterm's independent
@@ -44,28 +47,93 @@ final class Style implements \JsonSerializable
     public const ATTR_INVISIBLE= 1 << 8;
 
     /**
-     * @param int|null $fg     Foreground RGB 0xRRGGBB (mutually exclusive with $fgSlot by with*() law)
-     * @param int|null $bg     Background RGB 0xRRGGBB
+     * @param int|null $fg     Foreground RGB 0xRRGGBB (saturating clamp)
+     * @param int|null $bg     Background RGB 0xRRGGBB (saturating clamp)
      * @param int      $attrs  Bitmask of ATTR_* constants
      * @param int|null $fgSlot Foreground palette slot 0-255
      * @param int|null $bgSlot Background palette slot 0-255
-     * @param int|null $ul     Underline RGB 0xRRGGBB
+     * @param int|null $ul     Underline RGB 0xRRGGBB (saturating clamp)
      * @param int|null $ulSlot Underline palette slot 0-255
      *
-     * @throws \InvalidArgumentException if any palette slot is outside 0-255
+     * Channel law: a colour is an RGB value, a palette slot, or the slot
+     * PAIRED with its canonical hex belt (what {@see fromSgr()'s} palette
+     * arms record). An RGB that is not the slot's canonical value alongside
+     * that slot is a contradiction and is refused — emission prefers the
+     * slot, so a hand-forged mismatched pair silently loses the hex half.
+     *
+     * @throws \InvalidArgumentException when a palette slot is outside 0-255
+     *                                   or an RGB contradicts its co-set slot.
      */
+    public readonly ?int $fg;      // 0xRRGGBB or null = default
+    public readonly ?int $bg;      // 0xRRGGBB or null = default
+    public readonly int $attrs;    // bitmask of ATTR_* constants
+    public readonly ?int $fgSlot;  // 0-255 palette identity, or null
+    public readonly ?int $bgSlot;  // 0-255 palette identity, or null
+    public readonly ?int $ul;      // underline 0xRRGGBB or null
+    public readonly ?int $ulSlot;  // 0-255 palette identity, or null
+
     public function __construct(
-        public readonly ?int $fg = null,       // 0xRRGGBB or null = default
-        public readonly ?int $bg = null,       // 0xRRGGBB or null = default
-        public readonly int $attrs = 0,       // bitmask of ATTR_* constants
-        public readonly ?int $fgSlot = null,  // 0-255 palette identity, or null
-        public readonly ?int $bgSlot = null,  // 0-255 palette identity, or null
-        public readonly ?int $ul = null,       // underline 0xRRGGBB or null
-        public readonly ?int $ulSlot = null,  // 0-255 palette identity, or null
+        ?int $fg = null,
+        ?int $bg = null,
+        int $attrs = 0,
+        ?int $fgSlot = null,
+        ?int $bgSlot = null,
+        ?int $ul = null,
+        ?int $ulSlot = null,
     ) {
         self::checkSlot($fgSlot, 'foreground');
         self::checkSlot($bgSlot, 'background');
         self::checkSlot($ulSlot, 'underline-slot');
+
+        // Clamp, never mask (CALIBER 2026-10-03 law): the parser saturates
+        // out-of-range channels through channel(); the type carries the same
+        // law so a hand-built Style can never ride bytes the parser would
+        // never emit (a `& 0xFFFFFF` wrap would repaint an unrelated colour).
+        $this->fg = self::clampRgb($fg);
+        $this->bg = self::clampRgb($bg);
+        $this->ul = self::clampRgb($ul);
+        $this->attrs = $attrs;
+        $this->fgSlot = $fgSlot;
+        $this->bgSlot = $bgSlot;
+        $this->ulSlot = $ulSlot;
+
+        self::checkBelt($this->fg, $this->fgSlot, 'foreground');
+        self::checkBelt($this->bg, $this->bgSlot, 'background');
+        self::checkBelt($this->ul, $this->ulSlot, 'underline');
+    }
+
+    /**
+     * Saturate one RGB channel into 0x000000-0xFFFFFF, mirroring the
+     * component-wise clamp the SGR parser applies.
+     */
+    private static function clampRgb(?int $rgb): ?int
+    {
+        if ($rgb === null) {
+            return null;
+        }
+
+        return max(0x000000, min(0xFFFFFF, $rgb));
+    }
+
+    /**
+     * Belt law: when an RGB and a palette slot share a channel, the RGB must
+     * be exactly the slot's canonical hex — the fallback belt fromSgr()
+     * records — or absent. Any other pairing is a contradiction the emitter
+     * would resolve by silently dropping the hex.
+     */
+    private static function checkBelt(?int $rgb, ?int $slot, string $name): void
+    {
+        if ($rgb === null || $slot === null || $rgb === self::xterm256ToHex($slot)) {
+            return;
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            'Style %s pairs palette slot %d with RGB 0x%06X; a co-set channel may carry only the slot\'s canonical belt hex (0x%06X) or null',
+            $name,
+            $slot,
+            $rgb,
+            self::xterm256ToHex($slot),
+        ));
     }
 
     /**
@@ -563,13 +631,20 @@ final class Style implements \JsonSerializable
         self::checkSlot($bgSlot, 'background');
         self::checkSlot($ulSlot, 'underline-slot');
 
-        $this->fg = $data['fg'];
-        $this->bg = $data['bg'];
+        // The constructor's full channel law (RGB saturation + belt pairing)
+        // re-runs here, not just the slot bounds: a forged payload cannot
+        // mint a style the constructor itself would refuse.
+        $this->fg = self::clampRgb($data['fg']);
+        $this->bg = self::clampRgb($data['bg']);
         $this->attrs = $data['attrs'];
         $this->fgSlot = $fgSlot;
         $this->bgSlot = $bgSlot;
-        $this->ul = $data['ul'] ?? null;
+        $this->ul = self::clampRgb($data['ul'] ?? null);
         $this->ulSlot = $ulSlot;
+
+        self::checkBelt($this->fg, $fgSlot, 'foreground');
+        self::checkBelt($this->bg, $bgSlot, 'background');
+        self::checkBelt($this->ul, $ulSlot, 'underline');
     }
 
     /**

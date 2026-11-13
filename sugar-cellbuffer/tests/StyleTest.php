@@ -514,11 +514,82 @@ final class StyleTest extends TestCase
 
     public function testSerializationRoundTripCarriesSlotsAndUnderline(): void
     {
-        $style = new Style(null, null, Style::ATTR_UNDERLINE, 7, 12, 0x010203, 58);
-        $restored = unserialize(serialize($style));
+        // Three pens cover all seven fields under the belt law: slot+belt
+        // pairs (the canonical co-set shape the parser records), a plain
+        // underline RGB, and a slot-only underline. The old single-pen
+        // shape paired underline RGB 0x010203 with slot 58 — a contradiction
+        // the constructor now refuses (sugar-cellbuffer-006).
+        $pens = [
+            new Style(0x00ff00, 0xff0000, Style::ATTR_UNDERLINE, 2, 1),
+            new Style(null, null, Style::ATTR_UNDERLINE, null, null, 0x010203),
+            new Style(null, null, Style::ATTR_UNDERLINE, null, null, null, 58),
+        ];
 
-        $this->assertSame($style->__serialize(), $restored->__serialize());
-        $this->assertTrue($style->equals($restored));
+        foreach ($pens as $style) {
+            $restored = unserialize(serialize($style));
+
+            $this->assertSame($style->__serialize(), $restored->__serialize());
+            $this->assertTrue($style->equals($restored));
+        }
+    }
+
+    public function testOutOfRangeRgbChannelsSaturateInsteadOfWrapping(): void
+    {
+        // Clamp, never mask (CALIBER 2026-10-03 law) — the parser's law now
+        // lives in the type: -5 goes to 0x000000, 0x1FFFFFF to 0xFFFFFF,
+        // never to the wrapped colour a mask would paint.
+        $style = new Style(-5, 0x1FFFFFF, 0, null, null, -1);
+
+        $this->assertSame(0x000000, $style->fg());
+        $this->assertSame(0xFFFFFF, $style->bg());
+        $this->assertSame(0x000000, $style->ul());
+    }
+
+    public function testARgbContradictingItsCoSetSlotIsRefused(): void
+    {
+        // Emission prefers the slot, so a mismatched pair silently loses the
+        // hex half — exactly the forgery the with*() law was supposed to
+        // prevent but only the constructor can guarantee.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Style foreground pairs palette slot 4 with RGB 0xFF0000");
+        new Style(0xFF0000, null, 0, 4);
+    }
+
+    public function testABackgroundContradictingItsCoSetSlotIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Style background pairs palette slot');
+        new Style(null, 0x123456, 0, null, 3);
+    }
+
+    public function testTheCanonicalHexBeltOfASlotIsAccepted(): void
+    {
+        // 0xFF0000 is the standard palette's slot 1 — the exact pairing
+        // fromSgr() records for `31` and `38;5;1`, so the parser's own
+        // output must keep constructing.
+        $style = new Style(0xFF0000, null, 0, 1);
+
+        $this->assertSame(0xFF0000, $style->fg());
+        $this->assertSame(1, $style->fgSlot());
+        $this->assertEquals(Style::fromSgr('31'), $style);
+    }
+
+    public function testUnserializationRefusesAConflictingBelt(): void
+    {
+        $style = (new \ReflectionClass(Style::class))->newInstanceWithoutConstructor();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Style foreground pairs palette slot 4 with RGB 0xFF0000");
+        $style->__unserialize(['fg' => 0xFF0000, 'bg' => null, 'attrs' => 0, 'fgSlot' => 4]);
+    }
+
+    public function testUnserializationSaturatesForgedRgbChannels(): void
+    {
+        $style = (new \ReflectionClass(Style::class))->newInstanceWithoutConstructor();
+        $style->__unserialize(['fg' => -5, 'bg' => 0x1FFFFFF, 'attrs' => 0]);
+
+        $this->assertSame(0x000000, $style->fg());
+        $this->assertSame(0xFFFFFF, $style->bg());
     }
 
     public function testAnOldThreeKeyPayloadRestoresWithNullSlots(): void

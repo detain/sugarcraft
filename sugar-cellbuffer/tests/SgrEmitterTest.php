@@ -89,7 +89,11 @@ final class SgrEmitterTest extends TestCase
 
     public function testTheSlotFormWinsWhenBothRepresentationsAreSet(): void
     {
-        $both = new Style(0x00ff00, null, 0, 1);
+        // The belt pairing fromSgr() records: slot 1 plus its canonical
+        // hex 0xFF0000. Emission must carry the palette code, never the
+        // 38;2 belt — a contradictory pairing cannot even be constructed
+        // (Style ctor belt law, sugar-cellbuffer-006).
+        $both = Style::fromSgr('31');
 
         $this->assertSame("\x1b[0;31m", SgrEmitter::emit($both));
     }
