@@ -47,8 +47,13 @@ trait HasAsyncValidation
 
     /**
      * Synchronous gate first, async leg second (see the interface docblock
-     * for why). With no async validator attached this is exactly
-     * `resolve(revalidate()->getError())` — the async view of a purely
+     * for why). VERDICT AUTHORITY (sugar-forms-055): the resolved string is
+     * the authoritative verdict for the value judged HERE; the field copy a
+     * host still holds keeps its pre-call error() until a revalidating path
+     * (the submit gate's re-apply) lands it — immutability gives this method
+     * no instance-return channel, and binding the verdict to an instance is
+     * the queued tuple upgrade (sugar-forms-49), not an accident to paper. With no async validator attached this is exactly
+     * `resolve(revalidate()->error())` — the async view of a purely
      * synchronous field.
      *
      * Mirrors no upstream symbol: huh has no async surface (SugarCraft

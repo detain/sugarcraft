@@ -38,6 +38,17 @@ use SugarCraft\Core\Msg\KeyMsg;
  */
 trait HasKeyOverrides
 {
+    /**
+     * Single definition of the unreachable-override-action fault (sugar-forms-091):
+     * every widget's match arm covers its whole advertised constant set, so this
+     * throws only when a new OVERRIDE_* constant ships without its arm — one
+     * message string to grep for, shared by TextInput and TextArea.
+     */
+    protected static function unreachableOverrideAction(string $action): \InvalidArgumentException
+    {
+        return new \InvalidArgumentException("unreachable override action: {$action}");
+    }
+
     /** Move the caret to the start (TextInput: buffer start; TextArea: column 0 of the caret row). */
     public const OVERRIDE_MOVE_START = 'move_start';
 

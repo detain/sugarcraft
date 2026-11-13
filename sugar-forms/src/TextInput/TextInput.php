@@ -266,7 +266,7 @@ final class TextInput implements Model
             self::OVERRIDE_HISTORY_UP      => $this->historyNavigateUp(),
             self::OVERRIDE_HISTORY_DOWN    => $this->historyNavigateDown(),
             self::OVERRIDE_NOOP            => [$this, null],
-            default                        => throw new \InvalidArgumentException("unreachable override action: {$action}"),
+            default                        => throw self::unreachableOverrideAction($action),
         };
     }
 
@@ -615,9 +615,9 @@ final class TextInput implements Model
         if ($v === $this->value) {
             return $this;
         }
-        $clone = clone $this;
-        $clone = $clone->mutate(value: $v, cursorPos: mb_strlen($v, 'UTF-8'));
-        return $clone;
+        // sugar-forms-056(d): mutate() already copies — the explicit
+        // `clone $this` in front of it was a misleading-idiom artifact.
+        return $this->mutate(value: $v, cursorPos: mb_strlen($v, 'UTF-8'));
     }
 
     public function reset(): self

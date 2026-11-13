@@ -303,7 +303,7 @@ final class TextArea implements Model
             self::OVERRIDE_DELETE_TO_START => [$this->deleteToLineStart(), null],
             self::OVERRIDE_DELETE_TO_END   => [$this->deleteToLineEnd(), null],
             self::OVERRIDE_NOOP            => [$this, null],
-            default                        => throw new \InvalidArgumentException("unreachable override action: {$action}"),
+            default                        => throw self::unreachableOverrideAction($action),
         };
     }
 

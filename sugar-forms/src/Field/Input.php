@@ -425,9 +425,12 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     public function withValidator(Validator|\Closure $validator): self
     {
         if ($validator instanceof Validator) {
-            $fn = static fn (string $v): ?string => match (true) {
-                $validator->validate($v) === true => null,
-                default => (string) $validator->validate($v),
+            // sugar-forms-018: the match(true) shape ran validate() a
+            // second time for the (string) arm — every failing keystroke
+            // doubled the validators' cost (and any stateful validator).
+            $fn = static function (string $v) use ($validator): ?string {
+                $result = $validator->validate($v);
+                return $result === true ? null : (string) $result;
             };
         } else {
             $fn = $validator;
@@ -599,9 +602,11 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      * promises / ExceptionMsg storms (E736-F2/6.6).
      *
      * @param self $field  The field instance to use for getting current input value
-     * @return \Closure|null Returns a Cmd closure, or null if no async suggestions
+     * @return \Closure Always builds the debounced fetch Cmd — the only caller
+     *                  guards on the fetcher being attached (sugar-forms-056(c):
+     *                  the null arm the signature advertised was unreachable).
      */
-    private function scheduleAsyncSuggestions(self $field): ?\Closure
+    private function scheduleAsyncSuggestions(self $field): \Closure
     {
         // Use the cancellation source already stored on $field (passed from update()).
         // This is the CancellationSource that gets cancelled on subsequent keystrokes,
@@ -703,7 +708,15 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     public function getError(): ?string { return $this->error(); }
     public function revalidate(): Field      { return $this->validate(); }
     public function skippable(): bool        { return false; }
-    public function consumes(Msg $msg): bool { return false; }
+    /**
+     * Claims the async-resolution envelope addressed to this field — the
+     * message {@see update()} special-handles (sugar-forms-056(a): the
+     * unconditional false lied to the router at Form.php:378).
+     */
+    public function consumes(Msg $msg): bool
+    {
+        return $msg instanceof SuggestionsReadyMsg && $msg->fieldKey === $this->key;
+    }
 
     private function validate(): self
     {

@@ -515,6 +515,11 @@ final class Select implements \SugarCraft\Forms\Field
      */
     public function consumes(Msg $msg): bool
     {
+        // sugar-forms-056(a) family: the async-resolution envelope is
+        // special-handled by update(), so the claim must be honest here.
+        if ($msg instanceof SuggestionsReadyMsg) {
+            return $msg->fieldKey === $this->key;
+        }
         if (!$this->list->focused || !$msg instanceof KeyMsg) {
             return false;
         }
