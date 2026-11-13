@@ -30,6 +30,12 @@ final class MosaicBuilder
         return new self($renderer, $this->width, $this->height, $this->dither, $this->scale, $this->sixelIntensity, $this->sixelMaxColors);
     }
 
+    /**
+     * Resize target for the built Mosaic: width in cells, and height in
+     * cells with null meaning "no explicit height" — the same terminal
+     * meaning as Renderer::render()'s null leg (the renderer maps the
+     * image at its cell aspect), never a hidden per-builder default.
+     */
     public function withResize(int $width, ?int $height = null): self
     {
         return new self($this->renderer, $width, $height, $this->dither, $this->scale, $this->sixelIntensity, $this->sixelMaxColors);

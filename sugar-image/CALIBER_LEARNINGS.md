@@ -415,3 +415,30 @@ kept as design rationale for what shipped._
   resident grid IS the 1:1 composited frame, and spend the one lossy
   resample at use time in true-colour space — two lossy resamples with an
   invented aspect in the middle is the double-loss this law closes.
+
+- **[Immutability mechanism — the local variant is law]** (SI-45,
+  stamping findings sugar-image-052/053): this lib implements the
+  AGENTS.md immutable+fluent law with the CLONE-PAIR — `new self(...)` /
+  `new static(...)` carrying the explicit promoted-readonly argument
+  list — not `sugar-core`'s `Mutable` trait or a private `mutate()`.
+  The clone-PAIR preserves the invariant (no wither ever mutates
+  `$this`), and the argument list is deliberate: it makes every field's
+  fate in every wither visible at the call, which the trait's
+  property-swap hides. `return $this` no-op guards inside withers are
+  doc-ADJUDICATED idempotence guards (same value → same object is
+  observably identical to a copy for these value objects), not
+  contract breaks. Do not "converge" this onto the trait in passing
+  work; if a future refactor moves a carrier to `Mutable` (the >=7
+  positional rule), it moves WHOLE with its tests, never halfway.
+  The null-handling audit the same row owes: every nullable-parameter
+  wither here (`SixelRenderer::withIntensity/withFlatten/withQuirks`,
+  `MosaicBuilder::withResize/withSixelIntensity/withSixelMaxColors`,
+  `KittyOptions::withChunkBytes`, `AdaptiveImage::withAsync`,
+  `Capability::withCellSize/withDefaultColors/withTerminalFacts`)
+  documents its null as a TERMINAL meaning — release-to-default,
+  inherit, unknown, or never-polled — and in each case unset and null
+  resolve to the same state at use time, so AGENTS.md's own clause
+  ("no sentinel where null is itself the meaning") applies exactly:
+  this lib carries ZERO `$XSet` sentinels BY DESIGN, and one belongs
+  nowhere unless a new wither gains a state where "never passed" and
+  "passed null" observably differ.

@@ -54,7 +54,9 @@ final class AdaptiveImage
      * a whole-encode-on-one-tick backend does. Pass a renderer explicitly
      * to opt into a different strategy — {@see SyncAsyncRenderer} remains
      * for tests and single-shot scripts, where "schedule, then block the
-     * loop once" is exactly what you want.
+     * loop once" is exactly what you want. Passing null (or omitting the
+     * argument) means "no explicit strategy: take the default", never
+     * "disable async" — there is no async-less state to enter.
      */
     public function withAsync(?AsyncRenderer $renderer = null): self
     {

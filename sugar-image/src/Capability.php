@@ -96,7 +96,10 @@ final class Capability
     /**
      * Return a copy of this capability with the given cell size attached.
      * Used by {@see Detect::probeFontSize()} to attach font-size data
-     * to whatever protocol was detected via env vars or DA1.
+     * to whatever protocol was detected via env vars or DA1. A null
+     * $cellSize means "size unknown" — the probe never measured one —
+     * which is also the never-set state: renderers fall back to their
+     * own cell assumptions for it, so no sentinel distinction exists.
      */
     public function withCellSize(?CellSize $cellSize): self
     {
