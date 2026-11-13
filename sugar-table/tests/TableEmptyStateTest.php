@@ -149,4 +149,14 @@ final class TableEmptyStateTest extends TestCase
         self::assertSame('', $table->view());
         self::assertSame('', $table->withBorderless(true)->view());
     }
+
+    /** OG-6 / ST-60: the default placeholder is '--', not a lone hyphen. */
+    public function testDefaultMissingIndicatorIsDoubleHyphen(): void
+    {
+        $t = Table::fromColumns([Column::new('a', 'A', 6)])
+            ->withRows([Row::new(RowData::from(['a' => null]))])
+            ->withSelectable(false);
+        $this->assertStringContainsString('│    --│', $t->view());
+        $this->assertStringContainsString('│     ·│', $t->withMissingIndicator('·')->view());
+    }
 }

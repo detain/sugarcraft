@@ -60,8 +60,8 @@ final class Table
     /** Base style applied to every cell before column/row/cell overrides. */
     private string $baseStyle = '';
 
-    /** Missing data placeholder. */
-    private string|StyledCell $missingIndicator = '-';
+    /** Missing data placeholder: '--' (OG-6) — a lone '-' read as a minus sign or hyphen. */
+    private string|StyledCell $missingIndicator = '--';
 
     /** Border style. */
     private string $borderStyle = '';

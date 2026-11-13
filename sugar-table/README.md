@@ -30,7 +30,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 - **Filtering**: filter by column text
 - **Frozen columns**: pin a contiguous prefix of columns from the left; an index set outside that rule raises `InvalidArgumentException`
 - **Horizontal scroll**: max width with overflow, frozen columns stay visible
-- **Missing data indicator**: configurable placeholder for absent cells — the default `-` is a lone hyphen that reads ambiguously beside dashes inside your data, so `withMissingIndicator('(empty)')` gives an unmistakable absent-cell signal
+- **Missing data indicator**: configurable placeholder for absent cells — the default `--` (a double hyphen, chosen over a lone `-` that collides with minus signs and host names) can still be replaced with `withMissingIndicator('(empty)')` for an unmistakable absent-cell signal
 - **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Style\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
 - **Borderless mode**: `withBorderless()` — render NO outer box (no top/bottom border rows, no left/right border columns; a single space separates columns) so the table composes inside another bordered shell (e.g. a sugar-panels content box) without a double border. A selected row's reverse-video highlight stays continuous across the column gaps
 - **Width control**: `withWidth(int $cols)` pins the total render width;
@@ -437,7 +437,7 @@ placeholder instead of blank space (an empty string is a value and does NOT
 trigger it):
 
 ```php
-$t = $t->withMissingIndicator('(empty)');                    // default is a lone '-'
+$t = $t->withMissingIndicator('(empty)');                    // default is '--'
 $t = $t->withMissingIndicator(StyledCell::new('?', '1;31')); // bold red placeholder
 ```
 
@@ -448,9 +448,11 @@ paints its SGR style in ordinary cells like any other cell value, while the
 expanded-detail join is plain text by construction, so there it contributes
 only its text.
 
-The default `-` is a single hyphen — it reads ambiguously beside real hyphens
-inside data (host names, minus signs), so pick a placeholder that cannot collide
-with your content.
+The default is `--` (OG-6): a lone `-` collided with minus signs and
+hyphenated data. It is two cells wide, so a one-cell column shows `…` instead;
+pass `withMissingIndicator('·')` for a one-cell marker (note `·` is also the
+control-character marker `Sanitize` paints, so it carries two meanings) or any
+placeholder that cannot collide with your content.
 
 ## Empty States
 
