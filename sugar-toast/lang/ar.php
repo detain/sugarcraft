@@ -21,6 +21,7 @@ return [
     // Default dismiss prompt
     'dismiss' => 'اضغط أي مفتاح للإغلاق',
 
-    // Notification counter
-    'count' => '{count} إشعار',
+    // Notification counter - count-neutral phrasing (ar 3-10 needs the
+    // plural إشعارات, never carried by a singular stem); {count} is a contract.
+    'count' => 'عدد الإشعارات: {count}',
 ];

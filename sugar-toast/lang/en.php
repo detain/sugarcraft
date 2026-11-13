@@ -18,6 +18,7 @@ return [
     // Default dismiss prompt
     'dismiss' => 'Press any key to dismiss',
 
-    // Notification counter
-    'count' => '{count} notification(s)',
+    // Notification counter - count-neutral phrasing; the {count}
+    // placeholder is a contract, only values translate.
+    'count' => 'Notifications: {count}',
 ];

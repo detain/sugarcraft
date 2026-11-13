@@ -270,7 +270,7 @@ across every locale, which is what lets the cap tests pin them exactly.
 | `type.error`      | `Error`                           | —            |
 | `type.success`    | `Success`                         | —            |
 | `dismiss`         | `Press any key to dismiss`        | —            |
-| `count`           | `{count} notification(s)`         | `{count}`    |
+| `count`           | `Notifications: {count}`          | `{count}`    |
 
 > **Note:** The `dismiss` and `count` keys are provided as convenience strings
 > for host-rendered dismiss-hint and counter UI. They are **not** emitted or
@@ -294,7 +294,7 @@ use SugarCraft\Toast\ToastType;
 
 $label = ToastType::Error->label();        // 'Error' (i18n-aware)
 $prompt = Lang::t('dismiss');            // 'Press any key to dismiss'
-$counter = Lang::t('count', ['count' => 3]); // '3 notification(s)'
+$counter = Lang::t('count', ['count' => 3]); // 'Notifications: 3'
 ```
 
 **Adding new translatable strings:**

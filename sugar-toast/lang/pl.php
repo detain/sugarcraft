@@ -21,6 +21,7 @@ return [
     // Default dismiss prompt
     'dismiss' => 'Naciśnij dowolny klawisz, aby zamknąć',
 
-    // Notification counter
-    'count' => '{count} powiadomienia(-ń)',
+    // Notification counter - count-neutral phrasing (pl cannot carry three
+    // plural forms in a parenthetical); {count} is a contract.
+    'count' => 'Powiadomienia: {count}',
 ];
