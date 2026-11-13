@@ -80,4 +80,5 @@ return [
     'cli.render_8bit_divergence' => 'Nota: o --render pré-visualiza o corpo de 8 bits como um relay com 8BITMIME o veria; um relay sem a extensão recebe estas partes recodificadas em quoted-printable no cabo (RFC 6152). Os bytes abaixo podem diferir do que for enviado.',
     'email.too_many_bytes' => 'Os anexos totalizam {bytes} bytes, excedendo o teto de {limit} bytes do documento completo - divida o envio ou anexe menos bytes',
     'smtp.size_exceeded' => 'A mensagem composta tem {bytes} bytes; o relay anunciou um teto SIZE de {limit} bytes - recusado antes de DATA',
+    'attachment.wrapper_refused' => 'Leitura de {path} recusada: protocolos de contêiner de fluxo (phar://, data://, ...) não são fontes de anexo - um arquivo phar tem seus metadados desserializados assim que é tocado. Informe um caminho de arquivo nativo, opcionalmente com prefixo file://.',
 ];

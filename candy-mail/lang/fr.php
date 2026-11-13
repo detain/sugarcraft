@@ -87,4 +87,5 @@ return [
     'cli.render_8bit_divergence' => 'Note : --render prévisualise le corps 8 bits tel que le verrait un relais compatible 8BITMIME ; un relais sans l\'extension recevra ces parties réencodées en quoted-printable sur le fil (RFC 6152). Les octets ci-dessous peuvent différer de ce qui est expédié.',
     'email.too_many_bytes' => 'Les pièces jointes totalisent {bytes} octets, dépassant le plafond de {limit} octets du document complet - divisez l\'envoi ou joignez moins d\'octets',
     'smtp.size_exceeded' => 'Le message composé pèse {bytes} octets ; le relais annonce un plafond SIZE de {limit} octets - refusé avant DATA',
+    'attachment.wrapper_refused' => 'Lecture de {path} refusée : les protocoles conteneur de flux (phar://, data://, ...) ne sont pas des sources de pièce jointe — une archive phar est désérialisée en métadonnées dès qu\'on la touche. Indiquez un chemin de fichier natif, éventuellement préfixé file://.',
 ];

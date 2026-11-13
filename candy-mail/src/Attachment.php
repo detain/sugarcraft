@@ -25,8 +25,9 @@ final class Attachment
     /**
      * Hard local ceiling for attachment bytes (25 MiB), enforced before the
      * eager read and again in the constructor for fromContent(). Submission
-     * servers cap messages around 25-50 MiB (RFC 1870 SIZE is advisory and
-     * this client does not read it), and the base64 MIME transfer encoding
+     * servers cap messages around 25-50 MiB (RFC 1870 SIZE is advisory, and
+     * where a server states one the pre-DATA ceiling enforces it), and the
+     * base64 MIME transfer encoding
      * amplifies the wire by ~4/3 — an unbounded read here is memory
      * exhaustion at the sender before the server ever says no.
      */
@@ -43,6 +44,7 @@ final class Attachment
      */
     public static function fromPath(string $path, ?string $filename = null): self
     {
+        $path  = self::nativePathOrRefuse($path);
         $name = $filename ?? \basename($path);
         $mime = self::detectMimeType($path);
         $content = self::readFileOrThrow($path);
@@ -80,6 +82,7 @@ final class Attachment
      */
     public static function inline(string $path, string $cid, ?string $filename = null): self
     {
+        $path  = self::nativePathOrRefuse($path);
         $name = $filename ?? \basename($path);
 
         // The ctor gate below is the choke for every path, but inline()
@@ -278,6 +281,32 @@ final class Attachment
     }
 
     /**
+     * Normalise a path to native filesystem form or refuse it (CM-50).
+     *
+     * A wrapper URL is not a file: phar:// triggers UNSERIALIZATION OF THE
+     * ARCHIVE'S METADATA the moment any reader touches it (mime_content_type,
+     * file_exists, filesize all do) — a gadget surface no mail send needs,
+     * and data:// would silently feed attacker-chosen bytes through the
+     * attachment pipeline with no file behind them. The check therefore runs
+     * BEFORE the first stat/mime call in every factory, not just before the
+     * read. An explicit file:// prefix is the same intent stated verbosely,
+     * so it is stripped and allowed. Windows drive letters (C:\...) do not
+     * match: the grammar needs '://' . Residual TOCTOU (the file changing
+     * between the size gate and the read) is inherent to eager reads and is
+     * acknowledged, not solved, here.
+     */
+    private static function nativePathOrRefuse(string $path): string
+    {
+        if (\preg_match('#^([a-zA-Z][a-zA-Z0-9+.\-]*)://#', $path) !== 1) {
+            return $path;
+        }
+        if (\strcasecmp(\substr($path, 0, \strpos($path, '://')), 'file') === 0) {
+            return \substr($path, (int) \strpos($path, '://') + 3);
+        }
+        throw new \InvalidArgumentException(Lang::t('attachment.wrapper_refused', ['path' => $path]));
+    }
+
+    /**
      * Read a file eagerly, throwing on failure.
      *
      * A swallowed read failure would let a missing or unreadable path become
@@ -290,6 +319,10 @@ final class Attachment
      */
     private static function readFileOrThrow(string $path): string
     {
+        // Defence in depth (CM-50): the factories refuse wrappers before
+        // the first stat; a future caller cannot re-open the gadget path.
+        $path = self::nativePathOrRefuse($path);
+
         // is_file() is true only for REGULAR files, which rejects in one
         // gate the three probes that hurt: /dev/zero and friends (character
         // devices whose read never yields a short count — the old code

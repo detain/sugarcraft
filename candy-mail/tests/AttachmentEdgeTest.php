@@ -46,6 +46,41 @@ final class AttachmentEdgeTest extends TestCase
         Attachment::fromPath('/dev/null');
     }
 
+    /**
+     * CM-50: wrapper URLs are refused BEFORE the first stat/mime touch. The
+     * pre-fix bytes reached the reader chain and threw attachment.unreadable
+     * (a RuntimeException about a missing file); the refusal now names the
+     * wrapper and its class - InvalidArgumentException, caller-input taxonomy.
+     */
+    public function testStreamWrapperPathsAreRefusedNotStatTouched(): void
+    {
+        foreach (['phar:///tmp/evil.phar/x.txt', 'data://text/plain;base64,AAAA', 'glob://nope'] as $wrapper) {
+            $thrown = null;
+            try {
+                Attachment::fromPath($wrapper);
+            } catch (\InvalidArgumentException $e) {
+                $thrown = $e;
+            }
+            $this->assertNotNull($thrown, "wrapper path {$wrapper} must be refused outright");
+            $this->assertStringContainsString('stream wrapper', $thrown->getMessage());
+        }
+
+        $file = (string) \tempnam(\sys_get_temp_dir(), 'cm50');
+        \file_put_contents($file, 'content');
+        try {
+            // The explicit file:// form is the same intent stated verbosely:
+            // it loads, and the stored path is normalised to native.
+            $attachment = Attachment::fromPath('file://' . $file);
+            $this->assertSame('content', $attachment->content());
+            $this->assertSame($file, $attachment->__debugInfo()['path'], 'the file:// prefix is stripped on store');
+            // Inline shares the gate (the CM-08 cid check stands after it).
+            $this->expectException(\InvalidArgumentException::class);
+            Attachment::inline('phar:///tmp/evil.phar/secret', 'legit@x');
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testOversizedFileIsRefusedBeforeTheRead(): void
     {
         $path = \tempnam(\sys_get_temp_dir(), 'att-cap-');

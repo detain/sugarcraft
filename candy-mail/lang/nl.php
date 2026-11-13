@@ -80,4 +80,5 @@ return [
     'cli.render_8bit_divergence' => 'Let op: --render toont een voorbeeld van de 8-bit body zoals een 8BITMIME-compatibele relay die zou zien; een relay zonder de extensie krijgt deze onderdelen als quoted-printable opnieuw gecodeerd op de draad (RFC 6152). De onderstaande bytes kunnen afwijken van wat verzonden wordt.',
     'email.too_many_bytes' => 'Bijlagen totaliseren {bytes} bytes, boven het documentplafond van {limit} bytes - split het verzenden of voeg minder bytes bij',
     'smtp.size_exceeded' => 'Het samengestelde bericht is {bytes} bytes; de relay adverteert een SIZE-plafond van {limit} bytes - geweigerd vóór DATA',
+    'attachment.wrapper_refused' => 'Lezen van {path} geweigerd: streamwrapper-protocollen (phar://, data://, ...) zijn geen bijlagebronnen - een phar-archief wordt metadata-gedeserialiseerd zodra het aangeraakt wordt. Geef een natief pad op, optioneel met file://-voorvoegsel.',
 ];

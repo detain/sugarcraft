@@ -80,4 +80,5 @@ return [
     'cli.render_8bit_divergence' => 'Uwaga: --render podgląda treść 8-bitową tak, jak zobaczyłby ją relay obsługujący 8BITMIME; relay bez tego rozszerzenia otrzyma te części ponownie zakodowane jako quoted-printable na drucie (RFC 6152). Poniższe bajty mogą różnić się od faktycznie wysyłanych.',
     'email.too_many_bytes' => 'Załączniki łącznie zajmują {bytes} bajtów, przekraczając limit {limit} bajtów dla całego dokumentu — podziel wysyłkę lub dołącz mniej bajtów',
     'smtp.size_exceeded' => 'Skomponowana wiadomość ma {bytes} bajtów; relay zgłosił limit SIZE {limit} bajtów — odmówiono przed DATA',
+    'attachment.wrapper_refused' => 'Odmowa odczytu {path}: protokoły strumieni (phar://, data://, ...) nie są źródłami załączników - archiwum phar jest deserializowane z metadanych w chwili dotknięcia. Podaj natywną ścieżkę pliku, opcjonalnie z prefiksem file://.',
 ];

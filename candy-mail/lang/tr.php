@@ -80,4 +80,5 @@ return [
     'cli.render_8bit_divergence' => 'Not: --render, 8 bit gövdeyi 8BITMIME destekleyen bir aktaricinin gördügü sekliyle önizler; söz konusu uzantisi olmayan bir aktarici bu kisimlari hat üzerinde quoted-printable olarak yeniden kodlanmis sekilde alir (RFC 6152). Asagidaki baytlar gercek gonderimden farkli olabilir.',
     'email.too_many_bytes' => 'Ekler toplamasi {bytes} bayt, tum belge tavani olan {limit} bayti asiyor — gonderimi bolun veya daha az bayt ekleyin',
     'smtp.size_exceeded' => 'Olusturulan mesaj {bytes} bayt; aktarici {limit} baytluk SIZE tavani ilan etti — DATA oncesinde reddedildi',
+    'attachment.wrapper_refused' => '{path} okunamadı: akış sarmalayıcı protokolleri (phar://, data://, ...) ek kaynağı değildir - bir phar arşivi dokunulduğu anda üstverisi geri ayrıştırılır. Yerel bir dosya yolu verin, isteğe bağlı olarak file:// önekiyle.',
 ];

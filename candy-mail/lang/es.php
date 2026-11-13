@@ -87,4 +87,5 @@ return [
     'cli.render_8bit_divergence' => 'Nota: --render previsualiza el cuerpo de 8 bits tal como lo vería un relé con 8BITMIME; un relé sin la extensión recibe estas partes recodificadas a quoted-printable en el cable (RFC 6152). Los bytes siguientes pueden diferir de lo que se envíe.',
     'email.too_many_bytes' => 'Los adjuntos suman {bytes} bytes, superando el límite de {limit} bytes del documento completo - divida el envío o adjunte menos bytes',
     'smtp.size_exceeded' => 'El mensaje compuesto tiene {bytes} bytes; el relé anunció un límite SIZE de {limit} bytes - rechazado antes de DATA',
+    'attachment.wrapper_refused' => 'Se rechaza leer {path}: los protocolos de contenedor de flujo (phar://, data://, ...) no son fuentes de adjuntos: un archivo phar deserializa sus metadatos en cuanto se toca. Proporcione una ruta de archivo nativa, opcionalmente con prefijo file://.',
 ];

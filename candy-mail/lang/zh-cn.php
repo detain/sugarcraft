@@ -80,4 +80,5 @@ return [
     'cli.render_8bit_divergence' => '注：--render 按支持 8BITMIME 的中继所见预览 8 位正文；没有该扩展的中继会在线路上把这些部分重新编码为 quoted-printable（RFC 6152）。以下内容可能与实际发送的字节不同。',
     'email.too_many_bytes' => '附件总计 {bytes} 字节，超过整个文档 {limit} 字节的上限 — 请拆分发送或减少附件字节',
     'smtp.size_exceeded' => '组装后的消息为 {bytes} 字节；中继通告的 SIZE 上限为 {limit} 字节 — 在 DATA 前拒绝',
+    'attachment.wrapper_refused' => '拒绝读取 {path}：流包装器协议（phar://、data:// 等）不是附件来源 - phar 归档一被触碰就会反序列化其元数据。请提供本地文件路径，可带 file:// 前缀。',
 ];

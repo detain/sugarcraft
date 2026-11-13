@@ -87,4 +87,5 @@ return [
     'cli.render_8bit_divergence' => 'Note: --render previews the 8-bit body as an 8BITMIME-capable relay would see it; a relay without the extension gets these parts re-encoded to quoted-printable on the wire (RFC 6152). The bytes below may differ from what ships.',
     'email.too_many_bytes' => 'Attachments total {bytes} bytes, exceeding the {limit}-byte whole-document ceiling - split the send or attach fewer bytes',
     'smtp.size_exceeded' => 'The composed message is {bytes} bytes; the relay advertised a SIZE ceiling of {limit} bytes - refused before DATA',
+    'attachment.wrapper_refused' => 'Refusing to read {path}: stream wrapper protocols (phar://, data://, ...) are not attachment sources - a phar archive is metadata-unserialized the moment it is touched. Pass a native file path, optionally with a file:// prefix.',
 ];
