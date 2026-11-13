@@ -29,7 +29,8 @@ use SugarCraft\Minesweeper\Ui\CustomForm;
  *                            $XDG_CONFIG_HOME/candy-minesweeper/ when that
  *                            env is set, else $HOME/.config/candy-minesweeper/)
  *   - L                    → load that save — works even after game over,
- *                            so a lost board can step back to the saved one
+ *                            so the player can step a lost board back to
+ *                            the saved one
  *   - r                    → restart
  *   - n                    → new-game picker: 1-4 start a preset, c opens
  *                            the custom-board digit form, q/Esc walk back
