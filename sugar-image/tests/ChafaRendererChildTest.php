@@ -60,6 +60,7 @@ final class ChafaRendererChildTest extends TestCase
             putenv(ChafaBinary::ENV_OVERRIDE);
         }
         putenv('FAKE_CHAFA_MODE');
+        putenv('FAKE_CHAFA_LOG');
         if ($this->fakePidFile !== null && is_file($this->fakePidFile)) {
             // Last-resort hermetic teardown: a leaked fake child (mutation
             // shape) must not outlive the test process.
@@ -128,6 +129,70 @@ final class ChafaRendererChildTest extends TestCase
 
         ChafaRenderer::reset();
         $this->assertTrue(ChafaRenderer::available(), 'an armed chafa must probe available');
+        $this->assertChildReaped();
+    }
+
+    /**
+     * @testdox a --version probe whose child never exits answers false within its budget — and does NOT re-probe while the memo is set
+     */
+    public function testAWedgedVersionProbeMemoisesFalse(): void
+    {
+        $this->plantFakeChafa();
+        putenv('FAKE_CHAFA_MODE=wedge-version');
+
+        $log = $this->touch('chafa-wedge-probes');
+        putenv('FAKE_CHAFA_LOG=' . $log);
+
+        ChafaRenderer::reset();
+        ChafaRenderer::setReapBudgetsForTesting(200, 150);
+
+        $start = microtime(true);
+        $this->assertFalse(ChafaRenderer::available(), 'a child that will not finish its own version string is not a usable backend');
+        $this->assertLessThan(3.0, microtime(true) - $start, 'the ladder must bound the probe, not proc_close forever');
+        $this->assertChildReaped();
+
+        // Memoised honestly: the second call must cost zero spawns.
+        $this->assertFalse(ChafaRenderer::available());
+        $this->assertSame(1, substr_count((string) file_get_contents($log), 'started'), 'an unsettled memo re-probed (and re-wedged) on every call — the finding-005 story');
+    }
+
+    /**
+     * @testdox a child that holds stdout open with zero bytes is broken out of the drain and reaped (not parked in fread forever)
+     */
+    public function testASilentWedgeIsBrokenOutOfTheDrainAndReaped(): void
+    {
+        $this->plantFakeChafa();
+        putenv('FAKE_CHAFA_MODE=wedge-stdout');
+
+        ChafaRenderer::reset();
+        ChafaRenderer::setDrainNoProgressBudgetMsForTesting(300);
+        ChafaRenderer::setReapBudgetsForTesting(200, 150);
+
+        $start = microtime(true);
+        try {
+            (new ChafaRenderer())->render($this->source(), 10, 10);
+            $this->fail('a wedged silent child must surface as RuntimeException, never a parked thread');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('exit code', $e->getMessage());
+        }
+        $this->assertLessThan(3.0, microtime(true) - $start);
+        $this->assertChildReaped();
+    }
+
+    /**
+     * @testdox slow-but-progressing output is never punished — bytes arriving inside the budget of each other survive a total runtime past it
+     */
+    public function testProgressingOutputResetsTheWatchdogClock(): void
+    {
+        $this->plantFakeChafa();
+        putenv('FAKE_CHAFA_MODE=drip');
+
+        ChafaRenderer::reset();
+        ChafaRenderer::setDrainNoProgressBudgetMsForTesting(300); // total drip ≈ 0.6s > 300ms, gaps ≈ 150ms < 300ms
+
+        $out = (new ChafaRenderer())->render($this->source(), 10, 10);
+
+        $this->assertSame('AAAA', $out, 'the no-progress clock resets on every byte');
         $this->assertChildReaped();
     }
 
@@ -245,11 +310,37 @@ final class ChafaRendererChildTest extends TestCase
         $script = <<<'SH'
 #!/bin/sh
 echo "$$" > "$FAKE_CHAFA_PIDFILE"
+if [ -n "${FAKE_CHAFA_LOG:-}" ]; then echo started >> "$FAKE_CHAFA_LOG"; fi
 if [ "$1" = "--version" ]; then
+    if [ "$FAKE_CHAFA_MODE" = "wedge-version" ]; then
+        # The finding-005 shape: a binary that answers --version by
+        # NEVER EXITING. TERM-ignored, so only the KILL leg of the ladder
+        # ends it — both legs get exercised.
+        trap '' TERM
+        exec sleep 30
+    fi
     echo "chafa 99.9 (sugar-mosaic E722 test fake)"
     exit 0
 fi
 case "$FAKE_CHAFA_MODE" in
+    wedge-stdout)
+        # The finding-007 shape: stdout held OPEN with zero bytes ever
+        # written — the old blocking fread parked the render here forever.
+        trap '' TERM
+        exec sleep 30
+        ;;
+    drip)
+        # Slow-but-PROGRESSING control (external writers, so every byte
+        # flushes at its own exit): total runtime exceeds the no-progress
+        # budget while each inter-byte gap stays inside it. A watchdog
+        # that resets on progress lets this through; an absolute
+        # total-time cap would cut it off.
+        for n in 1 2 3 4; do
+            dd if=/dev/zero bs=1 count=1 2>/dev/null | tr '\0' 'A'
+            sleep 0.15
+        done
+        exit 0
+        ;;
     fail)
         printf 'MOCK-ANSI-BYTES'
         exit 3

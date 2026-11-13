@@ -58,6 +58,27 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     private const TERM_GRACE_MS = 1000;
 
     /**
+     * No-progress budget for {@see drainStdout()}: milliseconds the child
+     * may hold stdout open without writing a single byte before the drain
+     * gives up and hands the process to the reap ladder. The clock RESETS
+     * on every byte, so a slow-but-progressing encode — the poster whose
+     * legitimate work may run minutes — is never punished; only silence
+     * is (finding 007). Ten seconds of dead air on an open pipe is a
+     * wedge, not art.
+     */
+    private const DRAIN_NO_PROGRESS_MS = 10_000;
+
+    /** @internal Test seams — bound the ladder/drain so wedge arms run in
+     *              milliseconds; null restores each default. Cleared by reset(). */
+    private static ?int $reapWaitMs = null;
+
+    /** @internal */
+    private static ?int $termGraceMs = null;
+
+    /** @internal */
+    private static ?int $drainBudgetMs = null;
+
+    /**
      * Memoised result of {@see available()} — null means not yet probed,
      * true/false are cached for the lifetime of the process.
      *
@@ -138,7 +159,15 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             }
         }
 
-        return self::$available = (proc_close($proc) === 0);
+        // Settle through the reap ladder, not proc_close's unbounded wait
+        // (finding 005): a binary that answers `--version` by wedging —
+        // never exiting — used to park HERE forever, and because the memo
+        // was only written after the wait, every later call re-probed and
+        // re-parked. reap() bounds the leave (TERM -> KILL) and the memo
+        // lands either way: a process that cannot finish its own version
+        // string inside the budget has honestly told us it is not a usable
+        // backend, and this process will not ask it twice.
+        return self::$available = (self::reap($proc) === 0);
     }
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
@@ -222,19 +251,37 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
      * drain the remainder to null. Returning early without draining would
      * hand the child an EPIPE mid-write — a truncated encode reported as a
      * render we asked for. A blocking pipe never returns an empty success,
-     * so "" (EOF or dead-pipe) ends the loop.
+     * so "" (EOF or dead-pipe) ends the loop, and the no-progress watchdog
+     * (finding 007) ends it too once {@see DRAIN_NO_PROGRESS_MS} passes
+     * without a single byte — the wedged child is then the reap ladder's
+     * problem, not the caller's parked thread.
      *
      * @param resource $pipe
      */
     private static function drainStdout($pipe): string
     {
-        $stdout = '';
+        $stdout   = '';
+        $deadline = self::drainDeadline();
         while (true) {
+            $read  = [$pipe];
+            $write = $except = null;
+            $micro = max(0, (int) (($deadline - microtime(true)) * 1_000_000));
+            $ready = @stream_select($read, $write, $except, intdiv($micro, 1_000_000), $micro % 1_000_000);
+            if ($ready === false || $ready === 0) {
+                // Error, or silence past the budget: break into the reap
+                // ladder. A healthy child reaching EOF answers select with
+                // readable + a false/'' read below, so the only thing this
+                // door closes on its own is a non-answerer.
+                break;
+            }
+
             $chunk = fread($pipe, self::STDOUT_CHUNK_BYTES);
             if ($chunk === false || $chunk === '') {
                 break;
             }
-            $room = self::MAX_STDOUT_BYTES - strlen($stdout);
+
+            $deadline = self::drainDeadline();
+            $room     = self::MAX_STDOUT_BYTES - strlen($stdout);
             if ($room > 0) {
                 $stdout .= strlen($chunk) <= $room ? $chunk : substr($chunk, 0, $room);
             }
@@ -244,6 +291,12 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         }
 
         return $stdout;
+    }
+
+    /** Progress-reset clock for the drain watchdog (seam-aware). */
+    private static function drainDeadline(): float
+    {
+        return microtime(true) + (self::$drainBudgetMs ?? self::DRAIN_NO_PROGRESS_MS) / 1000;
     }
 
     /**
@@ -264,14 +317,14 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
      */
     private static function reap($process): int
     {
-        $deadline = microtime(true) + self::REAP_WAIT_MS / 1000;
+        $deadline = microtime(true) + (self::$reapWaitMs ?? self::REAP_WAIT_MS) / 1000;
         while (self::childRunning($process) && microtime(true) < $deadline) {
             usleep(10_000);
         }
 
         if (self::childRunning($process)) {
             proc_terminate($process, 15);
-            $grace = microtime(true) + self::TERM_GRACE_MS / 1000;
+            $grace = microtime(true) + (self::$termGraceMs ?? self::TERM_GRACE_MS) / 1000;
             while (self::childRunning($process) && microtime(true) < $grace) {
                 usleep(10_000);
             }
@@ -415,8 +468,33 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
      */
     public static function reset(): void
     {
-        self::$available = null;
+        self::$available   = null;
+        self::$reapWaitMs  = null;
+        self::$termGraceMs = null;
+        self::$drainBudgetMs = null;
         ChafaBinary::reset();
+    }
+
+    /**
+     * @internal Test seam — bound the reap ladder (natural-exit wait, then
+     *           TERM grace) so wedge arms finish in milliseconds instead of
+     *           the production seconds. Null restores each default; reset()
+     *           clears both.
+     */
+    public static function setReapBudgetsForTesting(?int $waitMs, ?int $termGraceMs): void
+    {
+        self::$reapWaitMs  = $waitMs;
+        self::$termGraceMs = $termGraceMs;
+    }
+
+    /**
+     * @internal Test seam — bound drainStdout()'s no-progress budget so the
+     *           silent-child arm runs fast; null restores {@see
+     *           self::DRAIN_NO_PROGRESS_MS}. reset() clears it.
+     */
+    public static function setDrainNoProgressBudgetMsForTesting(?int $ms): void
+    {
+        self::$drainBudgetMs = $ms;
     }
 
     public function supportsAlpha(): bool
