@@ -100,10 +100,24 @@ is `SugarCraft\Charts\Canvas\Canvas`); prose and snippets always spell the full 
 | `Charts\Heatmap\Heatmap` | 2D grid colored by value with optional palette / legend. | `withSize` / `withMin` / `withMax` / `withPalette` / `withLegend` / `withColors(cold, hot)` / `withRune` / `withColorProfile` / `withCellStyle(?Style)` / `withAutoValueRange(bool)` / `pushPoint(HeatPoint)` / `pushAll` |
 | `Charts\OHLC\OHLCChart` | Candlestick chart for `(open, high, low, close)` rows. | `withBars` / `push` / `withSize` / `withBodyRunes(bull,bear)` / `withWickRune(rune)` / `withMin` / `withMax` / `withColors` / `withTitle` / `withLegend` / `withLegendPosition` |
 | `Charts\Scatter\Scatter` | XY scatter plot. | `withPoints` / `withSize` / `withXRange` / `withYRange` / `withRune` / `withTitle` / `withLegend` / `withLegendPosition` / `withLegendItems` |
-| `Charts\Aggregation\BucketByTime` | Groups timestamped values into time buckets with configurable aggregation. | `sum` / `mean` / `min` / `max` / `first` / `last` factory methods + `add` / `addMany` / `compute` |
-| `Charts\Aggregation\MovingAverage` | Sliding-window aggregator — SMA and EMA. | `simple` / `centered` / `ema` static factories + `add` / `addMany` / `computeSimple` / `values` / `clear` |
-| `Charts\Aggregation\Resample` | Upsample or downsample timestamped series to a target cadence. | `last` / `mean` / `linear` / `nearest` factories + `resample` auto-detection |
+| `Charts\Aggregation\BucketByTime` | Groups timestamped values into time buckets with configurable aggregation. | Static helpers `BucketByTime::sum($intervalSecs, $rows)` / `mean` / `min` / `max` / `first` / `last` — each returns a **plain array** of `['ts' => …, 'value' => …]` buckets, not a builder. The instance path is separate: `::new($intervalSecs, ?$aggregator, $offsetSeconds)` then `add()` / `addMany()` / `compute()` / `bucket()` / `toTimeSeries()`. |
+| `Charts\Aggregation\MovingAverage` | Sliding-window aggregator — SMA and EMA. | Static helpers `MovingAverage::simple($window, $values)` / `centered($window, $values)` / `ema($window, $values, ?$alpha)` — each returns a **plain array** of floats. The instance path: `::new($window, $centered = false)` then `add()` / `addMany()` / `computeSimple()` / `values()` / `clear()` — note `ema()` is static-only, there is no EMA builder. |
+| `Charts\Aggregation\Resample` | Upsample or downsample timestamped series to a target cadence. | Static helpers `Resample::last($intervalSecs, $rows)` / `mean` / `linear` / `nearest` — each returns a **plain array** of resampled rows. The instance path: `::new($intervalSecs, $startTimestamp, ?$maxPoints)` then `add()` / `addMany()` / `resample()` (auto-detects up- vs down-sampling; output capped at `MAX_RESAMPLE_POINTS`). |
 | `Charts\Picture\Picture` | Inline image renderer — Sixel, Kitty (chunked APC) and iTerm2 (OSC 1337) protocols. `detect()` is multiplexer-first: under tmux or Zellij it returns `null` (their surfaces swallow image escapes) unless you opt in via `CHARTS_PICTURE_PASSTHROUGH=1`; then it routes iTerm2/WezTerm/kitty/Foot/mlterm/Windows Terminal (Sixel since 1.18) by env. | `fromGrid` / `fromPng` / `withProtocol` / `withPaletteSize` / `detect` / `view` |
+
+### Which line chart?
+
+Four renderers draw line-ish series; pick by input shape and update model:
+
+| You have… | Use | Why |
+|---|---|---|
+| a full value list, static or rebuilt per render | `LineChart` | the general multi-series plot: axes, datasets, theming, fill, marks |
+| a stream, keep only the newest `width` samples | `Streamline` | fixed-capacity ring buffer, append-only `push` — drops old samples automatically |
+| `(x, y)` pairs on an XY plane, wave/oscilloscope shapes | `Waveline` | points map through an explicit x-range instead of sample index |
+| `[DateTimeImmutable, value]` tuples with time-formatted axis | `TimeSeries` | owns the timestamp formatting; chrome follows LineChart via its forwarded knobs |
+
+If two rows fit, prefer the one whose data shape you already hold — the
+others coerce it.
 
 ### Aggregation
 
@@ -270,7 +284,10 @@ Both have short-form aliases (`seriesColorFn()` / `barColor()`), passing
 `null` restores the default path byte-identically, and a resolver returning
 anything other than `Color|null` throws `\UnexpectedValueException` at
 render time. Equal colors share one memoized `Style`, so a resolver may
-return a fresh `Color` per call.
+return a fresh `Color` per call. The two signatures deliberately differ —
+`fn(string $dataset, int $x, float $value)` keys off series identity while
+`fn(Bar $bar, int $i)` keys off the bar object; there is no shared adapter,
+and normalizing the shapes is tracked as future API work (sugar-charts-090).
 
 ```php
 use SugarCraft\Charts\BarChart\{Bar, BarChart};
@@ -560,7 +577,7 @@ BarChart, Heatmap, OHLCChart, Scatter, Picture, TimeSeries and Streamline
 | Canvas, BrailleGrid, Graph primitives | 🟢 v1 — shipped, nothing pending. |
 | Sparkline | 🟢 v1 — shipped, nothing pending. |
 | BarChart | 🟢 v1 (data labels + horizontal mode ship; multi-bar grouped datasets pending) |
-| LineChart | 🟢 v1 (multi-dataset + per-point colors + theming ship; zoom/pan pending) |
+| LineChart | 🟢 v1 (multi-dataset + per-point colors + theming ship; **Mouse interaction** — the ntcharts BubbleZone equivalent — is a real gap: no hit-testing, zones, or legend-clicks exist; see sugar-mouse for the raw event primitives. Zoom/pan stay pending on top of that.) |
 | TimeSeries | 🟢 v1 (multi-dataset + update-handler variants pending) |
 | Streamline, Waveline | 🟢 v1 — shipped, nothing pending. |
 | Heatmap | 🟢 v1 (auto value-range toggle ships: `withAutoValueRange()` / `getAutoValueRange()`) |
