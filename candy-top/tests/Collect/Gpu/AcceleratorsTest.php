@@ -15,9 +15,12 @@ use SugarCraft\Top\Collect\Gpu\DrmFdinfo;
 use SugarCraft\Top\Collect\Gpu\IntelNpu;
 use SugarCraft\Top\Collect\Gpu\IntelSysfs;
 use SugarCraft\Top\Collect\GpuOutcome;
+use SugarCraft\Top\Collect\GpuProcess;
+use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\GpuVendor;
 use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Collect\Sentinel;
+use SugarCraft\Top\Panel\Proc\GpuUsage;
 use SugarCraft\Top\Source\CollectorSource;
 
 final class AcceleratorsTest extends TestCase
@@ -275,6 +278,70 @@ final class AcceleratorsTest extends TestCase
         $this->assertSame([Gpu::class], array_map(static fn (object $b): string => $b::class, $acc->backends()));
         $this->assertCount(4, $snap->devices);
         $this->assertSame(GpuVendor::Nvidia, $snap->devices[3]->vendor);
+    }
+
+    /**
+     * The #1008 hold scenario for per-process rows: the device query drops
+     * a GPU while compute-apps still lists the process cached on it. The
+     * row keeps its numbers and lands in the pid roll-ups - the proc list
+     * still shows its Gpu%/GMem - but it claims no card: a stand-in slot
+     * never lends its merged index to a stranger (gpuIndex -1 reads as
+     * "attribution unknown", not "GPU 0").
+     */
+    public function testAProcessOnADroppedDeviceSurvivesAsAnUnattributedRow(): void
+    {
+        $this->tree = GpuTree::of('amd');
+        $dir = dirname(__DIR__, 2) . '/fixtures';
+        $csv = (string) file_get_contents("$dir/linux/nvidia-smi/skynet2-query-extended.csv");
+        $apps = (string) file_get_contents("$dir/linux/nvidia-smi/skynet2-compute-apps.csv");
+        $lines = array_values(array_filter(explode("\n", $csv)));
+        $drop = false;
+        $nvidia = Gpu::new(function (array $argv) use ($dir, $lines, $apps, &$drop): array {
+            if (str_starts_with($argv[1], '--query-gpu=')) {
+                if (!$drop) {
+                    return [GpuOutcome::Ok, implode("\n", $lines) . "\n"];
+                }
+                // GPU 1 vanishes; nvidia-smi renumbers the survivors.
+                return [GpuOutcome::Ok, implode("\n", [
+                    $lines[0],
+                    (string) preg_replace('/^2,/', '1,', $lines[2]),
+                    (string) preg_replace('/^3,/', '2,', $lines[3]),
+                ]) . "\n"];
+            }
+            if (str_starts_with($argv[1], '--query-compute-apps=')) {
+                return [GpuOutcome::Ok, $apps];
+            }
+
+            return [GpuOutcome::Absent, '']; // pmon unsupported: memory rows are kept
+        }, fn (): float => $this->now, candidates: ['nvidia-smi']);
+        $acc = Accelerators::detect($this->tree->paths(), $nvidia, fn (): float => $this->now)->withProcesses();
+
+        [$before, $acc] = $acc->sample();
+        $row = static fn (GpuSnapshot $s, int $pid): GpuProcess => array_values(array_filter(
+            $s->processes ?? [],
+            static fn (GpuProcess $p): bool => $p->pid === $pid,
+        ))[0] ?? throw new RuntimeException("no row for $pid");
+        $held = $row($before, 2094383);
+        $this->assertSame(1, $held->gpuIndex, 'while GPU 1 answers, its app is attributed to it');
+
+        $drop = true;
+        $this->now += 5.0;
+        [$after, $acc] = $acc->sample();
+
+        $this->assertSame(Sentinel::UNMEASURED, $after->devices[1]->utilization, 'its slot holds as a stand-in');
+        $orphan = $row($after, 2094383);
+        $this->assertSame(-1, $orphan->gpuIndex, 'the stand-in slot lends its index to nobody');
+        $this->assertSame('GPU-45007176-8a28-3db0-cea5-27903b16107b', $orphan->gpuUuid, 'the row still says where it really ran');
+        $this->assertSame($held->usedMemory, $orphan->usedMemory, 'its numbers survive the drop');
+        $this->assertSame(90478 * 1048576, $after->memoryByPid()[2094383], 'the proc panel still shows its GMem');
+        $usage = GpuUsage::none()->withSnapshot($after);
+        $this->assertTrue($usage->measured());
+        $this->assertSame(90478 * 1048576, $usage->memory(2094383));
+
+        $drop = false;
+        $this->now += 5.0;
+        [$back] = $acc->sample();
+        $this->assertSame(1, $row($back, 2094383)->gpuIndex, 'on recovery the app is attributed to its card again');
     }
 
     public function testPlatformHook(): void
