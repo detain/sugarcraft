@@ -565,7 +565,7 @@ final class DocSurfaceTruthTest extends TestCase
             'One session per process.',
             'would authenticate against the first one\'s environment',
             'withSizeProvider(callable $provider): self',
-            'withPumpDeadline()',
+            'withPumpDeadlineUs()',
             'is a value you carry, not an',
             '`ChildSpawner` is narrower than the class behind it',
             '`TransportAware` is the other half',

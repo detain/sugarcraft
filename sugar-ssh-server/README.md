@@ -766,7 +766,7 @@ tick, not cached, so a stale closure is a live bug rather than a frozen one.
 
 **The pump's knobs are not reachable from here.** `runChild()` builds
 `PumpOptions::sshDefault()->withOnIdle($onIdle)` internally. sugar-pty's
-options carry the real recorder, chunk size and `withPumpDeadline()` -- the
+options carry the real recorder, chunk size and `withPumpDeadlineUs()` -- the
 only true bound a pump can honour -- and this transport never exposes them,
 so a session that needs one has to fork the pump loop itself. That is why the
 admin guide's failure table says a hanging child hangs here, and why the
