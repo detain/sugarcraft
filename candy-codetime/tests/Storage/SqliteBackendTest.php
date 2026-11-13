@@ -38,6 +38,73 @@ final class SqliteBackendTest extends TestCase
         }
     }
 
+    public function testANonDatabaseFileAnswersWithOneOwnedLineAndNoPhpWarnings(): void
+    {
+        // CT-S20 probe: a foreign .db used to print the uncatchable PHP
+        // warning stack (exec() is not a receipt) and only die on the first
+        // query. Construction itself now fails on ONE owned line, warning-
+        // free — verified in a child because phpunit's own error handler is
+        // not the surface users run against.
+        // A fresh path: setUp's real db left WAL sidecars beside its file,
+        // and a wal replay would heal planted garbage into a usable db.
+        $bad = $this->dbPath . '-foreign';
+        file_put_contents($bad, 'this is not sqlite at all');
+        $script = sys_get_temp_dir() . '/candy-codetime-notdb-' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export(__DIR__ . '/../../vendor/autoload.php', true) . ";\n"
+            . 'try {'
+            . 'new \\SugarCraft\\CodeTime\\Storage\\SqliteBackend(' . var_export($bad, true) . ');'
+            . 'fwrite(STDOUT, \'constructed\');'
+            . '} catch (\\Throwable $e) {'
+            . 'fwrite(STDOUT, $e->getMessage());'
+            . '}' . "\n");
+        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $out = stream_get_contents($pipes[1]);
+        $err = stream_get_contents($pipes[2]);
+        proc_close($proc);
+        unlink($script);
+        $this->assertStringContainsString('is not a usable candy-codetime database', $out);
+        $this->assertSame('', $err, 'zero PHP Warning bytes on stderr: ' . $err);
+        foreach (['', '-wal', '-shm'] as $suffix) {
+            @unlink($bad . $suffix);
+        }
+    }
+
+    public function testAWriteProtectedDestinationCopiesToOneOwnedLine(): void
+    {
+        // CT-S20 probe (third leg): AutoBackup's copy() failure is a checked
+        // throw; the raw copy() warning beside it was the leak.
+        $dataDir = $this->dbPath . '-seed-dir';
+        $backupDir = $this->dbPath . '-locked-backups';
+        mkdir($dataDir);
+        mkdir($backupDir, 0o500); // readable, not writable
+        file_put_contents($dataDir . '/2024-01-01.jsonl', "x\n");
+        touch($dataDir . '/2024-01-01.jsonl', time() - 90 * 86400);
+        $script = sys_get_temp_dir() . '/candy-codetime-lockeddest-' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export(__DIR__ . '/../../vendor/autoload.php', true) . ";\n"
+            . '$backup = new \\SugarCraft\\CodeTime\\Backup\\AutoBackup(' . var_export($backupDir, true) . ', [' . var_export($dataDir, true) . "]);\n"
+            . 'try { $backup->rotate(30); fwrite(STDOUT, \'rotated\'); }'
+            . ' catch (\\Throwable $e) { fwrite(STDOUT, $e->getMessage()); }' . "\n");
+        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $out = stream_get_contents($pipes[1]);
+        $err = stream_get_contents($pipes[2]);
+        proc_close($proc);
+        chmod($backupDir, 0o700); // let tearDown sweep
+        unlink($script);
+        if ($out === 'rotated') {
+            $this->markTestSkipped('this user (root?) cannot be denied a write into a 0500 directory');
+        }
+        $this->assertStringContainsString('failed to copy', $out);
+        $this->assertSame('', $err, 'zero PHP Warning bytes on stderr: ' . $err);
+        foreach (glob($backupDir . '/*') ?: [] as $stray) {
+            unlink($stray);
+        }
+        rmdir($backupDir);
+        unlink($dataDir . '/2024-01-01.jsonl');
+        rmdir($dataDir);
+    }
+
     public function testInsertRefusesInvalidUtf8BeforeItCanPoisonTheStore(): void
     {
         $overrides = [

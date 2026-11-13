@@ -37,7 +37,7 @@ final class SqliteBackend implements HeartbeatReader
         // model is several appenders (editor plugin + CLI + cron) sharing it
         // while a dashboard reads it, and under the rollback journal every
         // commit locked all readers out until it finished.
-        $this->db->exec('PRAGMA journal_mode = WAL');
+        @$this->db->exec('PRAGMA journal_mode = WAL');
         // WAL's companion, armed ONLY on a confirmed migration. exec() is not
         // a receipt: a refused migration (read-only filesystem, locking-
         // protocol clash) answers with the OLD mode, and synchronous=NORMAL
@@ -45,21 +45,21 @@ final class SqliteBackend implements HeartbeatReader
         // acknowledge before the journal lands. Read the mode back; when it
         // is not 'wal', synchronous stays at SQLite's safe FULL default,
         // which is exactly what is correct for the journal in use.
-        if (strtolower((string) $this->db->querySingle('PRAGMA journal_mode')) === 'wal') {
+        if (strtolower((string) @$this->db->querySingle('PRAGMA journal_mode')) === 'wal') {
             // FULL buys nothing under WAL: heartbeat telemetry that loses its
             // last transaction to a power cut costs one minute of history,
             // and every bin call-site already fail-softs a Throwable.
-            $this->db->exec('PRAGMA synchronous = NORMAL');
+            @$this->db->exec('PRAGMA synchronous = NORMAL');
         }
         // A negative cache_size is kibibytes: a 64,000 KiB (62.5 MiB) page
         // cache keeps the range scans over idx_heartbeats_time in memory even
         // at full history. The database itself stays far below that, so this
         // is headroom, not pressure.
-        $this->db->exec('PRAGMA cache_size = -64000');
+        @$this->db->exec('PRAGMA cache_size = -64000');
         // No PRAGMA foreign_keys: heartbeats and milestones are standalone
         // tables, so enabling it would be dead configuration implying
         // relations the schema declares nowhere.
-        $this->db->exec('CREATE TABLE IF NOT EXISTS heartbeats (
+        @$this->db->exec('CREATE TABLE IF NOT EXISTS heartbeats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             time INTEGER NOT NULL,
             project TEXT NOT NULL,
@@ -68,13 +68,26 @@ final class SqliteBackend implements HeartbeatReader
             duration INTEGER NOT NULL DEFAULT 60,
             tags TEXT NOT NULL DEFAULT \'[]\'
         )');
-        $this->db->exec('CREATE TABLE IF NOT EXISTS milestones (
+        @$this->db->exec('CREATE TABLE IF NOT EXISTS milestones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             time INTEGER NOT NULL,
             description TEXT NOT NULL DEFAULT \'\'
         )');
-        $this->db->exec('CREATE INDEX IF NOT EXISTS idx_heartbeats_time ON heartbeats(time)');
+        @$this->db->exec('CREATE INDEX IF NOT EXISTS idx_heartbeats_time ON heartbeats(time)');
+
+        // CT-S20: the execs above answered a corrupt or foreign .db with a
+        // 7-line `PHP Warning: SQLite3::exec(): ... on line NN` stack and no
+        // verdict. @ keeps PHP's diagnostic out of the user's terminal —
+        // every return is still a checked shape — and this probe turns the
+        // aftermath into ONE owned line at open time, where the alternative
+        // was a "successful" backend whose first real query died later.
+        if (@$this->db->querySingle('SELECT count(*) FROM heartbeats') === false) {
+            throw new \RuntimeException(
+                "candy-codetime: {$dbPath} is not a usable candy-codetime database: "
+                . $this->db->lastErrorMsg(),
+            );
+        }
 
         // privacy-first: the db holds paths as supplied and project names just like
         // the JSONL files, so it gets the same owner-private treatment Store
@@ -124,7 +137,7 @@ final class SqliteBackend implements HeartbeatReader
             );
         }
 
-        $stmt = $this->db->prepare('INSERT INTO heartbeats (time, project, language, file, duration, tags) VALUES (:time, :project, :language, :file, :duration, :tags)');
+        $stmt = @$this->db->prepare('INSERT INTO heartbeats (time, project, language, file, duration, tags) VALUES (:time, :project, :language, :file, :duration, :tags)');
         if ($stmt === false) {
             throw new \RuntimeException('candy-codetime: sqlite prepare failed: ' . $this->db->lastErrorMsg());
         }
@@ -134,7 +147,7 @@ final class SqliteBackend implements HeartbeatReader
         $stmt->bindValue(':file', $hb->file);
         $stmt->bindValue(':duration', $hb->duration);
         $stmt->bindValue(':tags', $tags);
-        $result = $stmt->execute();
+        $result = @$stmt->execute();
         if ($result === false) {
             $stmt->close();
             throw new \RuntimeException('candy-codetime: sqlite heartbeat insert failed: ' . $this->db->lastErrorMsg());
@@ -150,13 +163,13 @@ final class SqliteBackend implements HeartbeatReader
      */
     public function query(int $fromTime, int $toTime): array
     {
-        $stmt = $this->db->prepare('SELECT * FROM heartbeats WHERE time >= :from AND time <= :to ORDER BY time ASC');
+        $stmt = @$this->db->prepare('SELECT * FROM heartbeats WHERE time >= :from AND time <= :to ORDER BY time ASC');
         if ($stmt === false) {
             throw new \RuntimeException('candy-codetime: sqlite prepare failed: ' . $this->db->lastErrorMsg());
         }
         $stmt->bindValue(':from', $fromTime);
         $stmt->bindValue(':to', $toTime);
-        $result = $stmt->execute();
+        $result = @$stmt->execute();
         if ($result === false) {
             $stmt->close();
             throw new \RuntimeException('candy-codetime: sqlite heartbeat query failed: ' . $this->db->lastErrorMsg());
@@ -202,14 +215,14 @@ final class SqliteBackend implements HeartbeatReader
 
     public function insertMilestone(string $name, int $time, string $description = ''): void
     {
-        $stmt = $this->db->prepare('INSERT INTO milestones (name, time, description) VALUES (:name, :time, :desc)');
+        $stmt = @$this->db->prepare('INSERT INTO milestones (name, time, description) VALUES (:name, :time, :desc)');
         if ($stmt === false) {
             throw new \RuntimeException('candy-codetime: sqlite prepare failed: ' . $this->db->lastErrorMsg());
         }
         $stmt->bindValue(':name', $name);
         $stmt->bindValue(':time', $time);
         $stmt->bindValue(':desc', $description);
-        $result = $stmt->execute();
+        $result = @$stmt->execute();
         if ($result === false) {
             $stmt->close();
             throw new \RuntimeException('candy-codetime: sqlite milestone insert failed: ' . $this->db->lastErrorMsg());
@@ -223,7 +236,7 @@ final class SqliteBackend implements HeartbeatReader
      */
     public function milestones(): array
     {
-        $result = $this->db->query('SELECT name, time, description FROM milestones ORDER BY time ASC');
+        $result = @$this->db->query('SELECT name, time, description FROM milestones ORDER BY time ASC');
         if ($result === false) {
             throw new \RuntimeException('candy-codetime: sqlite milestone query failed: ' . $this->db->lastErrorMsg());
         }

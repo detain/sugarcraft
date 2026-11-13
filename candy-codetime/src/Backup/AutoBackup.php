@@ -87,7 +87,9 @@ final class AutoBackup
             // Throw on a failed copy rather than silently skipping it:
             // a swallowed copy failure means an aged data file is being
             // rotated out with no archived copy — data loss.
-            if (!copy($file, $dest)) {
+            // CT-S20: a write-protected destination already throws below;
+            // @ keeps copy()'s raw PHP Warning from doubling the owned line.
+            if (!@copy($file, $dest)) {
                 throw new \RuntimeException("candy-codetime: failed to copy {$file} to {$dest}");
             }
             // copy() creates the destination from the process umask, NOT from
