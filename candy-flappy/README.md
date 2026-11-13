@@ -263,6 +263,11 @@ whole positive scores below `Game::SCORE_CEILING` are dropped.
 - Save file: `~/.config/.candy-flappy/scores.json` (0600, atomic; a corrupt
   file is quarantined to `scores.json.corrupt-<timestamp>` instead of
   bricking launch).
+- Lock sidecar: `.scores.json.lock` sits beside the save file and is
+  **expected to persist** — it is `AtomicJsonFile`'s flock anchor, not litter.
+  Deleting it after a successful write would race a concurrent instance that
+  is already waiting on it, so it stays; the directory (0700) and both files
+  (0600) are already mode-correct.
 - Config base resolution: `XDG_CONFIG_HOME` if set, else `HOME/.config`. With
   neither set the game refuses to launch rather than guess.
 - To reset the leaderboard: `rm ~/.config/.candy-flappy/scores.json`.
