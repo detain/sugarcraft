@@ -45,7 +45,7 @@ file_put_contents(' . var_export($dir . '/out', true) . ', $r);
             escapeshellarg($script),
             escapeshellarg($dir . '/ready'),
         );
-        exec('sh -c ' . escapeshellarg($sh));
+        exec('sh -c ' . escapeshellarg($sh) . ' 2>&1');
 
         $deadline = microtime(true) + 12;
         while (!is_file($dir . '/out') && microtime(true) < $deadline) {

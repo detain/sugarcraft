@@ -31,7 +31,7 @@ final class SweepHostCommandTest extends TestCase
     protected function tearDown(): void
     {
         $this->restoreHomeSandbox();
-        exec('rm -rf ' . escapeshellarg($this->home));
+        exec('rm -rf ' . escapeshellarg($this->home) . ' 2>&1');
     }
 
     /** @return list<Message> */
@@ -43,7 +43,7 @@ final class SweepHostCommandTest extends TestCase
             Message::user('read it'),
             Message::assistant('')->withToolCalls([new ToolCall('Read', ['file_path' => 'a.php'], 'c1')])->withStepId('s_a_1')->withUserVisible(false),
             Message::assistant($output)->withToolResults([new ToolResult('Read', $output, null, 'c1')])->withStepId('s_a_1'),
-            Message::assistant('done')->withStepId('s_a_2'),
+            Message::assistant('read it')->withStepId('s_a_2'),
         ];
     }
 

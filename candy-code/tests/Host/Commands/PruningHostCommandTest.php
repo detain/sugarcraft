@@ -28,7 +28,7 @@ final class PruningHostCommandTest extends TestCase
     protected function tearDown(): void
     {
         $this->restoreHomeSandbox();
-        exec('rm -rf ' . escapeshellarg($this->home));
+        exec('rm -rf ' . escapeshellarg($this->home) . ' 2>&1');
     }
 
     public function testItIsAHostCommand(): void

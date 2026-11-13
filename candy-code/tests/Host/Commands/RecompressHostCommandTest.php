@@ -33,7 +33,7 @@ final class RecompressHostCommandTest extends TestCase
     protected function tearDown(): void
     {
         $this->restoreHomeSandbox();
-        exec('rm -rf ' . escapeshellarg($this->home));
+        exec('rm -rf ' . escapeshellarg($this->home) . ' 2>&1');
     }
 
     private static function block(int $id = 1, array $consumed = []): CompressionBlock

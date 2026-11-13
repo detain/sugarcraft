@@ -106,6 +106,7 @@ return [
     'Sessions/ScheduleRegistryTest.php' => 1,
     'Sessions/StoppableDaemonFixtureTrait.php' => 2,
     'Support/ForkedChildTest.php' => 1,
+    'Support/ParentProcessGuardTest.php' => 1,
     'Support/ReapsForkedChildrenTrait.php' => 1,
     'Support/ReapsForkedChildrenTraitTest.php' => 2,
     'Tools/BashBackgroundTest.php' => 1,

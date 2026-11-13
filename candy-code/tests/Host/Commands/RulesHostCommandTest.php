@@ -25,7 +25,7 @@ final class RulesHostCommandTest extends TestCase
     protected function tearDown(): void
     {
         $this->restoreHomeSandbox();
-        exec('rm -rf ' . escapeshellarg($this->dir));
+        exec('rm -rf ' . escapeshellarg($this->dir) . ' 2>&1');
     }
 
     public function testListingAnEmptyProjectIsACleanReplyAndLeavesNoBufferOpen(): void
