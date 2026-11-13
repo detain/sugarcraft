@@ -229,4 +229,25 @@ final class BootstrapUserConfigTest extends TestCase
 
         $this->assertSame([], Bootstrap::instructionLoader($this->tempDir . '/repo')->loadForced());
     }
+
+    public function testPersistSweepsAgedOrphanTempsButKeepsFreshAndForeignNames(): void
+    {
+        $dir = $this->tempDir . '/home/.candy-code';
+        @mkdir($dir, 0700, true);
+        $old = $dir . '/.config.json.aB3xYz';
+        $fresh = $dir . '/.config.json.Qw9rTy';
+        $foreign = $dir . '/.config.json.bak';
+        foreach ([$old, $fresh, $foreign] as $f) {
+            file_put_contents($f, 'x');
+        }
+        touch($old, time() - 7200);
+        touch($foreign, time() - 7200);
+
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+
+        $this->assertFileDoesNotExist($old);
+        $this->assertFileExists($fresh);
+        $this->assertFileExists($foreign);
+        $this->assertSame('dracula', Bootstrap::readUserConfig()['theme'] ?? null);
+    }
 }

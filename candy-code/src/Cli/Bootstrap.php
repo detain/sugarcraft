@@ -73,6 +73,7 @@ use SugarCraft\Code\Skills\SkillLoader;
 use SugarCraft\Code\Skills\SkillManager;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\HomeDirectory;
@@ -5355,6 +5356,7 @@ public static function useMaxCost(?string $maxCost): void
             // refusing the one directory it was pointed at. `realpath()` cannot
             // fail here: ensureDir() has just guaranteed $dir (or the link
             // resolved into it), and tempnam() returns a file it created.
+            self::sweepOrphanConfigTemps($dir);
             $temp = @tempnam($dir, '.config.json.');
             if ($temp === false || realpath(\dirname($temp)) !== realpath($dir)) {
                 if (is_string($temp)) {
@@ -5400,6 +5402,41 @@ public static function useMaxCost(?string $maxCost): void
         } finally {
             TimedFileLock::release($lock);
             fclose($lock);
+        }
+    }
+
+    /**
+     * Remove `.config.json.XXXXXX` temps a killed persist left behind.
+     *
+     * A kill between tempnam() and rename() strands the temp for good, and
+     * every such kill adds another. Runs under the config lock (so no sibling
+     * writer's live temp is in play), and is still conservative like
+     * {@see AtomicFileWriter}'s sweep: exactly six alphanumerics after the
+     * prefix (tempnam's shape, so a user's `.config.json.bak` survives), a
+     * regular non-link file we own, and older than the shared orphan age.
+     */
+    private static function sweepOrphanConfigTemps(string $dir): void
+    {
+        $pattern = addcslashes($dir, '\\*?[') . '/.config.json.' . str_repeat('[0-9A-Za-z]', 6);
+        $found = @glob($pattern, GLOB_NOSORT);
+        if ($found === false) {
+            return;
+        }
+
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        $now = time();
+        foreach ($found as $orphan) {
+            $stat = @lstat($orphan);
+            if ($stat === false || ($stat['mode'] & 0o170000) !== 0o100000) {
+                continue;
+            }
+            if ($uid !== null && $stat['uid'] !== $uid) {
+                continue;
+            }
+            if ($now - (int) $stat['mtime'] < AtomicFileWriter::ORPHAN_TEMP_MIN_AGE_SECONDS) {
+                continue;
+            }
+            @unlink($orphan);
         }
     }
 
