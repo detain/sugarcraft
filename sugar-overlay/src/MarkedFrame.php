@@ -409,6 +409,16 @@ final class MarkedFrame
      * line, marker envelope wrapping a styled tail). Returns the default
      * fg/bg restoration only when the walk actually ends on a non-default
      * pen — the plain path stays byte-identical.
+     *
+     * The walk IS the pen: it folds through {@see SgrWalker} exactly like
+     * the compositor's own pen merge, so the neutralizer can never arm a
+     * reset for a colour the diff model never holds (sugar-overlay-071: a
+     * line ending `\e[38m` — an incomplete extended-colour leg is a no-op
+     * for BOTH sides now, no phantom 39/49). Colour only: attributes
+     * (bold/underline/reverse…) deliberately RIDE ACROSS segment
+     * boundaries — widening the neutralizer to `0` would clobber link pens
+     * and chrome alike (sugar-overlay-063, pinned byte-exact in
+     * SgrWalkerTest and LinkDegradationTest).
      */
     public static function isolation(string $line): string
     {
@@ -422,55 +432,17 @@ final class MarkedFrame
      */
     public static function isolationSegments(array $segments): string
     {
-        $fg = false;
-        $bg = false;
+        $pen = ['fg' => null, 'bg' => null, 'attrs' => 0];
 
         foreach ($segments as $seg) {
-            if ($seg['kind'] !== 'sgr') {
-                continue;
-            }
-            $codes = \array_map('intval', \explode(';', $seg['id']));
-            $count = \count($codes);
-            for ($i = 0; $i < $count; $i++) {
-                $p = $codes[$i];
-                if ($p === 0) {
-                    $fg = false;
-                    $bg = false;
-                    continue;
-                }
-                if ($p === 39) {
-                    $fg = false;
-                    continue;
-                }
-                if ($p === 49) {
-                    $bg = false;
-                    continue;
-                }
-                if (($p >= 30 && $p <= 37) || ($p >= 90 && $p <= 97)) {
-                    $fg = true;
-                    continue;
-                }
-                if (($p >= 40 && $p <= 47) || ($p >= 100 && $p <= 107)) {
-                    $bg = true;
-                    continue;
-                }
-                if ($p === 38 || $p === 48) {
-                    if ($p === 38) {
-                        $fg = true;
-                    } else {
-                        $bg = true;
-                    }
-                    // 38;5;n / 38;2;r;g;b — consume the extended color leg.
-                    $i += (($codes[$i + 1] ?? null) === 2) ? 4 : 2;
-                }
+            if ($seg['kind'] === 'sgr') {
+                $pen = SgrWalker::fold($seg['id'], $pen);
             }
         }
 
-        if ($fg === false && $bg === false) {
-            return '';
-        }
-
-        return "\e[39m\e[49m";
+        return $pen['fg'] === null && $pen['bg'] === null
+            ? ''
+            : "\e[39m\e[49m";
     }
 
     /**

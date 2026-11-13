@@ -300,6 +300,14 @@ final class Veil
      * withUntrustedContent(), which sweeps on arrival and lets zones be
      * composed afterwards).
      *
+     * Replayed TERMINAL output is in scope on the SGR side: the pen parser
+     * is a full ECMA-48 fold — colon sub-parameter colours (`38:2:1:2:3`
+     * and the colour-space form `38:2::1:2:3`) arm a pen exactly like the
+     * semicolon spelling — so attacker-SGR reaches the grid on purpose (a
+     * painted cell must match what the emitting emulator showed). The
+     * defense for a line left mid-style is the splice isolation and the dim
+     * wrap at the compositor seam, not a stripped pen.
+     *
      * @see withUntrustedContent()
      * @see mark()
      */
@@ -802,7 +810,12 @@ final class Veil
             // Splice with pen isolation: a segment that ends on a non-default
             // color pen (crop mid-style, no trailing reset) must not bleed
             // that pen into the next segment — the dim wrap and the reset
-            // order below make each of the three segments self-contained.
+            // order below make each of the three segments COLOUR-self-contained
+            // (SGR 39/49 at the boundaries). Attributes are the documented
+            // exception: bold/underline/reverse intentionally RIDE ACROSS the
+            // segment seams (sugar-overlay-063 — the old claim of full
+            // self-containment overclaimed; the byte truth is pinned in
+            // SgrWalkerTest::testAttributesDeliberatelyBleedAcrossSeams).
             // The neutralizers fold from the carried segment lists: the pad
             // spaces appended after the take contribute no SGR, so they are
             // invisible to the fold exactly as re-walking the bytes would see.
@@ -1179,153 +1192,38 @@ final class Veil
     /**
      * Merge one CSI SGR parameter string into the live pen.
      *
-     * Mirrors Buffer::styleFromSgr() (private in sugar-cellbuffer) — reset,
-     * 16-color + bright ranges, 38;5/38;2 and 48;5/48;2 color keys,
-     * 39/49 default colors, and the attribute on-codes — so veil's diff
-     * pen and sugar-cellbuffer's own parse agree on what a style means.
+     * A thin shell over {@see SgrWalker::fold()} — the ONE parser this lib
+     * shares with the splice neutralizer (sugar-overlay-004: two hand-rolled
+     * `explode(';')` walks drifted on exactly the rules the walker now holds
+     * once: colon sub-parameters, and the no-op shape of a malformed or
+     * last-parameter 38/48). The fold mirrors sugar-cellbuffer's private
+     * `Buffer::styleFromSgr()` — reset, 16-color + bright ranges, 38;5/38;2
+     * and 48;5/48;2 color keys (colon and semicolon forms), 39/49 default
+     * colors, and the attribute on-codes — so veil's diff pen and
+     * sugar-cellbuffer's own parse agree on what a style means. Promoting
+     * THAT copy into the shared API is the owner-gated leg of SO-06: a
+     * report row, not minted here.
      * SGR reset deliberately does NOT clear the link pen (xterm scopes
      * links to the OSC 8 protocol).
      *
-     * Out-of-range color operands are CLAMPED into 0–255 (see channel()),
-     * never bit-masked — truecolor components and 38;5/48;5 palette indices
-     * alike, the same rule sugar-cellbuffer's styleFromSgr() applies. The pen is
-     * re-encoded into every delta, so a wrapped component or an index past
-     * the palette would repaint a cell in a color the full frame never
-     * showed.
+     * Out-of-range color operands are CLAMPED into 0–255 (see
+     * SgrWalker::channel()), never bit-masked — truecolor components and
+     * 38;5/48;5 palette indices alike, the same rule sugar-cellbuffer's
+     * styleFromSgr() applies. The pen is re-encoded into every delta, so a
+     * wrapped component or an index past the palette would repaint a cell
+     * in a color the full frame never showed.
      */
     private static function penFromSgr(string $params, ?BufferStyle $carry): ?BufferStyle
     {
-        $codes = \array_map('intval', \explode(';', $params));
+        $pen = SgrWalker::fold($params, [
+            'fg'    => $carry?->fg(),
+            'bg'    => $carry?->bg(),
+            'attrs' => $carry?->attrs() ?? 0,
+        ]);
 
-        $fg    = $carry?->fg();
-        $bg    = $carry?->bg();
-        $attrs = $carry?->attrs() ?? 0;
-
-        $count = \count($codes);
-        for ($i = 0; $i < $count; $i++) {
-            $p = $codes[$i];
-            if ($p === 0) {
-                $fg = null;
-                $bg = null;
-                $attrs = 0;
-            } elseif ($p >= 30 && $p <= 37) {
-                $fg = self::ansiColorToHex($p - 30);
-            } elseif ($p >= 40 && $p <= 47) {
-                $bg = self::ansiColorToHex($p - 40);
-            } elseif ($p >= 90 && $p <= 97) {
-                $fg = self::ansiColorToHex($p - 90, bright: true);
-            } elseif ($p >= 100 && $p <= 107) {
-                $bg = self::ansiColorToHex($p - 100, bright: true);
-            } elseif ($p === 39) {
-                $fg = null;
-            } elseif ($p === 49) {
-                $bg = null;
-            } elseif (($p === 38 || $p === 48) && $i + 1 < $count) {
-                if ($codes[$i + 1] === 2 && $i + 4 < $count) {
-                    $rgb = (self::channel($codes[$i + 2]) << 16)
-                        | (self::channel($codes[$i + 3]) << 8)
-                        | self::channel($codes[$i + 4]);
-                    if ($p === 38) {
-                        $fg = $rgb;
-                    } else {
-                        $bg = $rgb;
-                    }
-                    $i += 4; // consumed 2;r;g;b
-                } elseif ($codes[$i + 1] === 5 && $i + 2 < $count) {
-                    $rgb = self::xterm256ToHex($codes[$i + 2]);
-                    if ($p === 38) {
-                        $fg = $rgb;
-                    } else {
-                        $bg = $rgb;
-                    }
-                    $i += 2; // consumed 5;n
-                } else {
-                    $i = $count; // malformed extended color: stop, keep prior pen
-                }
-            } elseif ($p === 1) {
-                $attrs |= BufferStyle::ATTR_BOLD;
-            } elseif ($p === 2) {
-                $attrs |= BufferStyle::ATTR_FAINT;
-            } elseif ($p === 3) {
-                $attrs |= BufferStyle::ATTR_ITALIC;
-            } elseif ($p === 4) {
-                $attrs |= BufferStyle::ATTR_UNDERLINE;
-            } elseif ($p === 5) {
-                $attrs |= BufferStyle::ATTR_BLINK;
-            } elseif ($p === 7) {
-                $attrs |= BufferStyle::ATTR_REVERSE;
-            } elseif ($p === 8) {
-                $attrs |= BufferStyle::ATTR_INVISIBLE;
-            } elseif ($p === 9) {
-                $attrs |= BufferStyle::ATTR_STRIKE;
-            }
-        }
-
-        return $fg !== null || $bg !== null || $attrs !== 0
-            ? new BufferStyle($fg, $bg, $attrs)
+        return $pen['fg'] !== null || $pen['bg'] !== null || $pen['attrs'] !== 0
+            ? new BufferStyle($pen['fg'], $pen['bg'], $pen['attrs'])
             : null;
-    }
-
-    /**
-     * Clamp one 38;2 / 48;2 color component into 0–255, the way terminals
-     * saturate an out-of-range value — `300` paints as 255, never as the
-     * `300 & 0xFF = 44` a bit-mask would produce.
-     */
-    private static function channel(int $component): int
-    {
-        return \max(0, \min(255, $component));
-    }
-
-    /** Base-16 palette hexes, matching Style::ansiColorToHex() — including
-     *  the bright-black special case: an SGR 90 (or 38;5;8) cell must carry
-     *  the exact 0x7f7f7f the diff model records, or a style-only change
-     *  diffs as a false no-op (xterm bright black is a fixed gray, not a
-     *  40% lift of black — which would stay 0x000000). */
-    private static function ansiColorToHex(int $idx, bool $bright = false): int
-    {
-        $palette = [
-            0x000000, 0xff0000, 0x00ff00, 0xffff00,
-            0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
-        ];
-        $base = $palette[$idx] ?? 0xffffff;
-        if ($bright === false) {
-            return $base;
-        }
-        if ($idx === 0) {
-            // Bright black is the fixed gray (xterm 'color8' when bold,
-            // sugar-colorprofile StandardColors::$brightBlack) — matching
-            // Style::ansiColorToHex's identical case (sugar-cellbuffer).
-            return 0x7f7f7f;
-        }
-        $lift = static fn(int $c): int => min(255, (int) ($c + ($c * 0.4)));
-        return ($lift(($base >> 16) & 0xFF) << 16) | ($lift(($base >> 8) & 0xFF) << 8) | $lift($base & 0xFF);
-    }
-
-    /**
-     * Standard xterm 256-color palette index → 0xRRGGBB: 0-7 and 8-15 map
-     * through ansiColorToHex(), 16-231 the 6×6×6 cube, 232-255 the grayscale
-     * ramp. The index is clamped into 0-255 first (channel(), as sugar-cellbuffer
-     * does): unclamped, `38;5;300` ran the gray-ramp formula to 688 per
-     * channel and returned 0x2b2b2b0, a value outside 0xRRGGBB.
-     */
-    private static function xterm256ToHex(int $n): int
-    {
-        $n = self::channel($n);
-        if ($n < 8) {
-            return self::ansiColorToHex($n);
-        }
-        if ($n < 16) {
-            return self::ansiColorToHex($n - 8, bright: true);
-        }
-        if ($n >= 232) {
-            $gray = 8 + ($n - 232) * 10;
-            return ($gray << 16) | ($gray << 8) | $gray;
-        }
-        $cube = $n - 16;
-        $step = static fn(int $v): int => $v === 0 ? 0 : 55 + $v * 40;
-        return ($step(intdiv($cube, 36)) << 16)
-            | ($step(intdiv($cube % 36, 6)) << 8)
-            | $step($cube % 6);
     }
 
     /**

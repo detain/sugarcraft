@@ -164,4 +164,22 @@ final class UntrustedContentSweepTest extends TestCase
         $this->assertStringNotContainsString(self::OPEN, $veil->content());
         $this->assertStringNotContainsString(self::CLOSE, $veil->content());
     }
+
+    public function testColonFormSgrFromReplayedTerminalOutputArmsTheRealPen(): void
+    {
+        // SO-06 trust-boundary clause, made observable: an agent echo is
+        // EMULATOR output, and emulators honour ECMA-48 colon colours.
+        // The compositor honours them the same way — the diff model must
+        // carry the colon-painted cell as a coloured cell, so a later
+        // delta re-encodes it in canonical semicolon form. Before the
+        // shared walker the malformed-looking leg was dropped and the cell
+        // reached the grid on the DEFAULT pen.
+        $veil = Veil::new()->withPosition(Position::TOP, Position::LEFT);
+        $veil->composite("\e[38:2:255:0:0;1mRED", self::BG, Position::TOP, Position::LEFT);
+        $delta = $veil->composite("\e[38:2:255:0:0;1mREX", self::BG, Position::TOP, Position::LEFT);
+
+        $this->assertStringContainsString('X', $delta);
+        $this->assertStringContainsString('38;2;255;0;0', $delta, 'the colon colour reached the diff pen');
+        $this->assertStringContainsString('1m', $delta, 'the bold riding after the colour is kept too (sugar-overlay-005)');
+    }
 }

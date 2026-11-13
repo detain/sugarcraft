@@ -59,4 +59,26 @@ final class LinkDegradationTest extends TestCase
 
         $this->assertStringContainsString("\x1b]8;;http://example.com\x07LINK", $frame, 'valid links must round-trip verbatim');
     }
+
+    public function testColourIsNeutralizedAtTheSpliceSeamButBoldDeliberatelyRidesAcross(): void
+    {
+        // sugar-overlay-063 pinned at the real seam: a background row whose
+        // prefix ends mid-style gets the COLOUR neutralizer (39/49) at the
+        // splice boundary — and ONLY that. The bold stays armed across the
+        // seam into the overlay: resetting attributes there would clobber
+        // link pens and chrome alike, so the documented rule is that attrs
+        // ride. The geometry must survive the splice untouched.
+        $bg = "\e[1;31mAAAAABBBBB\n......................";
+        $frame = Veil::new()->composite('FG', $bg, Position::TOP, Position::LEFT, 5, 0);
+
+        $this->assertStringContainsString(
+            "\e[1;31mAAAAA\e[39m\e[49mFG",
+            $frame,
+            'the seam emits 39/49 — no 22/23/24/27 and no SGR 0: bold rides across'
+        );
+        $this->assertStringNotContainsString("\e[0m", $frame);
+        $this->assertStringNotContainsString("\e[22m", $frame);
+        $rows = \explode("\n", $frame);
+        $this->assertSame(10, MarkedFrame::measure($rows[0]), 'the neutralizer costs zero cells');
+    }
 }

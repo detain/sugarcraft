@@ -15,11 +15,12 @@ declare(strict_types=1);
  * cell model and the emitted frame disagreed, so every later frame
  * re-Emitted the row.
  *
- * The conversion lives in {@see Style::ansiColorToHex()} (private, reached
- * through Style::fromSgr) — these pins invoke BOTH
- * private implementations by reflection and require identical results
- * across the whole 16-color table, so a silent fork in either lib's
- * table now reddens here.
+ * The conversion lives in {@see Style::ansiColorToHex()} on the cellbuffer
+ * side (private, reached by reflection as the oracle) and in
+ * {@see SgrWalker::ansiColorToHex()} on this side (public since SO-06 moved
+ * the pen math into the ONE shared walker) — these pins run BOTH tables
+ * across the whole 16-color range and require identical results, so a
+ * silent fork in either lib's table now reddens here.
  */
 
 namespace SugarCraft\Overlay\Tests;
@@ -27,6 +28,7 @@ namespace SugarCraft\Overlay\Tests;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use SugarCraft\CellBuffer\Style;
+use SugarCraft\Overlay\SgrWalker;
 use SugarCraft\Overlay\Veil;
 
 final class GrayPenParityTest extends TestCase
@@ -80,10 +82,8 @@ final class GrayPenParityTest extends TestCase
 
     private function veilHex(int $idx, bool $bright): int
     {
-        static $method = null;
-        $method ??= new ReflectionMethod(Veil::class, 'ansiColorToHex');
-
-        return $method->invoke(null, $idx, $bright);
+        // Public API of the shared walker since SO-06 — no reflection needed.
+        return SgrWalker::ansiColorToHex($idx, $bright);
     }
 
     private function styleHex(int $idx, bool $bright): int
