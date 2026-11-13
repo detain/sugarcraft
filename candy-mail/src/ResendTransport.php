@@ -16,17 +16,30 @@ use SugarCraft\Async\CancellationToken;
  */
 final class ResendTransport implements Transport
 {
+    public const API_URL = 'https://api.resend.com/emails';
+
     private string $apiKey;
+    private string $apiUrl;
 
     /**
      * @param string $apiKey Resend API key. If empty, reads from RESEND_API_KEY env var.
+     * @param string $apiUrl  TEST-ONLY endpoint seam (CM-08): empty keeps the
+     *                        production API_URL. There is deliberately no
+     *                        operator-facing base-URL story today — when proxy
+     *                        or staging demand appears it becomes a documented
+     *                        option, not a silent second constructor door.
+     *                        The seam exists so the response arms (success,
+     *                        api_error + truncation, network error) are
+     *                        behavioural pins over a forked fake API instead
+     *                        of reflection-only tautologies.
      */
-    public function __construct(#[\SensitiveParameter] string $apiKey = '')
+    public function __construct(#[\SensitiveParameter] string $apiKey = '', string $apiUrl = '')
     {
         if ($apiKey === '') {
             $apiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true) ?: '';
         }
         $this->apiKey = $apiKey;
+        $this->apiUrl = $apiUrl !== '' ? $apiUrl : self::API_URL;
     }
 
     public function send(Email $email, ?CancellationToken $token = null): void
@@ -62,7 +75,7 @@ final class ResendTransport implements Transport
         $payload = $this->buildPayload($email);
         $json = \json_encode($payload, \JSON_THROW_ON_ERROR);
 
-        $ch = \curl_init('https://api.resend.com/emails');
+        $ch = \curl_init($this->apiUrl);
         \curl_setopt_array($ch, $this->curlOptions($json));
 
         $body  = \curl_exec($ch);
