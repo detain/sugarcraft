@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Gallery;
 
+use InvalidArgumentException;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Layout;
 
@@ -68,7 +69,7 @@ final readonly class Rail
 
         foreach ($overrides as $name => $value) {
             if (!array_key_exists($name, $fields)) {
-                throw new \InvalidArgumentException("{$name} is not a constructor field of " . self::class);
+                throw new InvalidArgumentException("{$name} is not a constructor field of " . self::class);
             }
             $fields[$name] = $value;
         }

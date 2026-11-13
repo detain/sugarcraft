@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Gallery;
 
+use InvalidArgumentException;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Layout;
 use SugarCraft\Mouse\Zones\Manager as ZoneManager;
@@ -121,7 +122,7 @@ final class PosterGrid
         $clone = clone $this;
         foreach ($items as $index => $card) {
             if (!is_int($index) || !($card instanceof PosterCard)) {
-                throw new \InvalidArgumentException(sprintf(
+                throw new InvalidArgumentException(sprintf(
                     'withItems() expects int keys and %s values, got key %s and value %s',
                     PosterCard::class,
                     get_debug_type($index),
@@ -161,7 +162,7 @@ final class PosterGrid
      *
      * @param array{0:int, 1:int} $range inclusive [startIndex, endIndex]; an
      *                                    empty window ([a,b] with b < a) drops all
-     * @throws \InvalidArgumentException if the pair is not exactly two ints
+     * @throws InvalidArgumentException if the pair is not exactly two ints
      */
     public function withoutItemsOutside(array $range): self
     {
@@ -169,7 +170,7 @@ final class PosterGrid
         // fatal with "Cannot access offset of type string".
         if (count($range) !== 2 || !array_key_exists(0, $range) || !array_key_exists(1, $range)
             || !is_int($range[0]) || !is_int($range[1])) {
-            throw new \InvalidArgumentException(
+            throw new InvalidArgumentException(
                 'withoutItemsOutside() expects an inclusive [int $start, int $end] pair',
             );
         }
