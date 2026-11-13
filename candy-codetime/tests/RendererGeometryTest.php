@@ -330,6 +330,40 @@ final class RendererGeometryTest extends TestCase
         }
     }
 
+    /**
+     * CT-S01 (finding candy-codetime-001): the C1-sweep bypass and the
+     * fail-open-by-erasure fallback. A U+009B name used to sail through the
+     * `/u` C0-only class and run on the terminal as a CSI; one invalid byte
+     * anywhere used to blank the ENTIRE name via `?? ''`. Both doors now ride
+     * Sanitize::untrusted(): the C1 codepoint is gone and the invalid name
+     * keeps its clean bytes.
+     */
+    public function testC1NamesAreSweptAndInvalidUtf8NamesAreNotBlanked(): void
+    {
+        $end = new \DateTimeImmutable(self::END);
+
+        $c1 = self::frame(80, [
+            new Heartbeat($end->getTimestamp(), "pr\u{9B}oj", 'php', 'a.php', 600),
+        ]);
+        $this->assertStringNotContainsString("\u{9B}", $c1, 'a stored CSI must not reach the terminal');
+        $this->assertStringNotContainsString("\xC2\x9B", $c1, 'the UTF-8 encoding of U+009B must not survive');
+        $this->assertStringContainsString('proj', $c1, 'the clean bytes around the C1 are kept');
+
+        $invalid = self::frame(80, [
+            new Heartbeat($end->getTimestamp(), "bad\xffname", 'php', 'b.php', 700),
+        ]);
+        $this->assertStringContainsString('bad', $invalid, 'one invalid byte must not blank the name');
+        $this->assertStringContainsString('name', $invalid);
+        $cleanTwin = self::frame(80, [
+            new Heartbeat($end->getTimestamp(), 'badname', 'php', 'b.php', 700),
+        ]);
+        $this->assertCount(
+            count(self::plain($cleanTwin)),
+            self::plain($invalid),
+            'an invalid byte must not grow or shrink the frame against its clean twin',
+        );
+    }
+
     private static function timelineRows(string $frame): array
     {
         $rows = self::plain($frame);

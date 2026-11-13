@@ -8,6 +8,7 @@ use SugarCraft\Charts\Sparkline\Sparkline;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
@@ -212,7 +213,9 @@ final class Renderer
             if (count($shown) >= $entries) {
                 break;
             }
-            $clean = self::clean(Ansi::strip((string) $name));
+            // clean() owns the whole sweep (untrusted() starts from its own
+            // Ansi::strip pass), so the name is handed over raw.
+            $clean = self::clean((string) $name);
             $shown[] = [$clean, Stats::formatHours($secs)];
         }
 
@@ -255,15 +258,22 @@ final class Renderer
 
     /**
      * Control bytes that survive Ansi::strip (it removes escapes, not C0) would
-     * reach the terminal raw from store data the user never typed. The sweep
-     * covers every C0 byte except TAB, plus DEL — CR and LF included — so a
-     * stored name paints exactly one line and cannot forge or shift a border.
-     * Malformed UTF-8 fails closed: the `/u` pass returns false and the `?? ''`
-     * discards the text rather than emitting partial bytes.
+     * reach the terminal raw from store data the user never typed. The sweep is
+     * sugar-core's {@see Sanitize::untrusted()}: escape sequences, C0 controls,
+     * DEL and the UTF-8-encoded C1 class (U+0080–U+009F — CSI included, which
+     * the old C0-only `/u` class let through to run on the terminal). TAB, LF
+     * and CR, which untrusted() deliberately preserves, are stripped on top:
+     * the frame rule is one row per name, so a stored newline must not forge a
+     * row and a stored CR must not rewind the cursor over the border.
+     *
+     * The sweep is byte-oriented, so malformed UTF-8 keeps its clean bytes
+     * rather than the whole name: the old `/u` pass returned false on any
+     * single invalid byte and the `?? ''` fallback blanked the entry in
+     * silence — fail-open-by-erasure is not a defense.
      */
     private static function clean(string $text): string
     {
-        return preg_replace('/[\x00-\x08\x0a-\x1f\x7f]/u', '', $text) ?? '';
+        return str_replace(["\t", "\n", "\r"], '', Sanitize::untrusted($text));
     }
 
     private static function timeline(Dashboard $d): string
