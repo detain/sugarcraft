@@ -140,20 +140,23 @@ final class GameTest extends TestCase
         $this->assertTrue($g2->newRecord);
     }
 
-    public function testWithHighScoreOnlyMergesWhenHigher(): void
+    public function testWithHighScoreFillsTheOpenSlots(): void
     {
+        // flappy-38 (finding -012) law pin, flipped from the old
+        // only-beats-best merge (DISCLOSED): ten slots are filled, not just
+        // best-progression logged.
         $g = new Game(
             bird: Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())->bird,
             pipes: [],
             highScores: [5, 10],
         );
-        // Score of 3 is NOT higher than current best (10) — returns same instance.
+        // Score of 3 earns an open slot — merged, but no shout (10 stands).
         $g2 = $g->withHighScore(3);
-        $this->assertSame($g, $g2);
-        $this->assertSame([5, 10], $g->highScores());
-        $this->assertFalse($g->newRecord);
+        $this->assertNotSame($g, $g2);
+        $this->assertSame([3, 5, 10], $g2->highScores());
+        $this->assertFalse($g2->newRecord, 'beating the bottom is not beating the best');
 
-        // Score of 15 IS a new record — returns new instance.
+        // Score of 15 IS a new record — merged with the shout.
         $g3 = $g->withHighScore(15);
         $this->assertNotSame($g, $g3);
         $this->assertSame([5, 10, 15], $g3->highScores());
@@ -173,13 +176,66 @@ final class GameTest extends TestCase
             pipes: [],
             highScores: [5, 15],
         );
-        $g2 = $g->withHighScore(10);  // 10 is NOT a new high (15 > 10)
-        $this->assertSame($g, $g2);   // no change
+        $g2 = $g->withHighScore(10);  // 10 is NOT a new high (15 > 10)...
+        $this->assertNotSame($g, $g2);   // ...but it earns an open slot.
+        $this->assertSame([5, 10, 15], $g2->highScores());
+        $this->assertFalse($g2->newRecord);
 
         $g3 = $g->withHighScore(20);  // 20 IS a new high
         $this->assertNotSame($g, $g3);
         $this->assertSame([5, 15, 20], $g3->highScores());
         $this->assertTrue($g3->newRecord);
+    }
+
+    public function testAFullLadderRefusesRunsAtOrBelowItsBottom(): void
+    {
+        // flappy-38, the other arm of the top-N law: with no room left the
+        // bar is the BOTTOM entry — at-or-below it changes nothing and the
+        // caller's identity gate stays silent.
+        $g = new Game(
+            bird: Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())->bird,
+            pipes: [],
+            highScores: [91, 92, 93, 94, 95, 96, 97, 98, 99, 100],
+        );
+        $this->assertSame($g, $g->withHighScore(85));
+        $this->assertSame($g, $g->withHighScore(91), 'a tie with the bottom cannot evict it');
+
+        $merged = $g->withHighScore(95);
+        $this->assertNotSame($g, $merged);
+        $this->assertSame([92, 93, 94, 95, 95, 96, 97, 98, 99, 100], $merged->highScores());
+        $this->assertFalse($merged->newRecord, 'the shout still means best-beating');
+    }
+
+    public function testAForgedBestCannotWriteLockTheLadder(): void
+    {
+        // flappy-38 rider (GAME-EXPLOIT-02): pre-top-N, one inherited or
+        // forged 99 999 — legal under SCORE_CEILING — rejected every future
+        // merge, write-locking the save file (recovery: delete it). The
+        // ten-slot ladder now accepts the smaller run into an open slot.
+        $tmp = sys_get_temp_dir() . '/candy-flappy-forged-' . getmypid() . '-' . spl_object_id($this);
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0),
+            pipes: [],
+            score: 12,
+            started: true,
+            highScores: [99999],
+            configDir: $tmp,
+        );
+        [, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotNull($cmd, 'a run that earns a slot must trigger the settle-write');
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        foreach ($batch->cmds as $child) {
+            $child();
+        }
+        $target = $tmp . '/.candy-flappy/scores.json';
+        try {
+            $this->assertSame([12, 99999], json_decode((string) file_get_contents($target), true, 512, JSON_THROW_ON_ERROR));
+        } finally {
+            @unlink($target);
+            @rmdir($tmp . '/.candy-flappy');
+            @rmdir($tmp);
+        }
     }
 
     public function testConfigDirWithTrailingSlashMintsNoDoubleSlashSegments(): void
@@ -968,16 +1024,20 @@ final class GameTest extends TestCase
         $this->assertSame(Game::WIDTH - 2, $next->pipes[0]->x);
     }
 
-    public function testHighScoreWithPositiveScoreEqualToCurrentHighDoesNotSetNewRecord(): void
+    public function testHighScoreEqualToCurrentHighMergesQuietlyUnderTopN(): void
     {
+        // flappy-38 DISCLOSED FLIP: this was the old law pin (equal-to-best
+        // returned the same instance). Under true top-N an open slot takes
+        // it — merged into the list, but newRecord stays false because the
+        // 🏆 means best-beating, which an equal run is not.
         $g = new Game(
             bird: Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())->bird,
             pipes: [],
             highScores: [10],
         );
-        // Score equal to current high should not set newRecord
         $g2 = $g->withHighScore(10);
-        $this->assertSame($g, $g2);
+        $this->assertNotSame($g, $g2);
+        $this->assertSame([10, 10], $g2->highScores());
         $this->assertFalse($g2->newRecord);
     }
 
@@ -1264,6 +1324,38 @@ final class GameTest extends TestCase
         @unlink($target);
         @rmdir($tmp . '/.candy-flappy');
         @rmdir($tmp);
+    }
+
+    public function testSettleAfterASettlingQuitDoesNotDoubleTheRun(): void
+    {
+        // flappy-38 companion pin: the q arm banks the run, and the bin
+        // tail still calls settleOnExit() on the returned model — under the
+        // new top-N law the score HOLDS an open slot a second time, so the
+        // settledScore stamp (not the old best-only accident) is what keeps
+        // [12] from becoming [12, 12] on disk.
+        $tmp = sys_get_temp_dir() . '/candy-flappy-dblsettle-' . getmypid() . '-' . spl_object_id($this);
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0),
+            pipes: [],
+            score: 12,
+            started: true,
+            highScores: [],
+            configDir: $tmp,
+        );
+        [$merged, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'q'));
+        $batch = $cmd();
+        foreach ($batch->cmds as $child) {
+            $child();
+        }
+        $target = $tmp . '/.candy-flappy/scores.json';
+        try {
+            $merged->settleOnExit();
+            $this->assertSame([12], json_decode((string) file_get_contents($target), true, 512, JSON_THROW_ON_ERROR));
+        } finally {
+            @unlink($target);
+            @rmdir($tmp . '/.candy-flappy');
+            @rmdir($tmp);
+        }
     }
 
     public function testQuitDoesNotDoublePersistAfterACrash(): void

@@ -150,6 +150,14 @@ final class Game implements Model
          * to every board after it.
          */
         public readonly ?string $quarantinedSave = null,
+        /**
+         * flappy-38: the run this model already settled into the list (a q
+         * or r merge), so the process-boundary settle cannot merge the same
+         * score a second time. True top-N made the old best-only gate's
+         * accidental double-settle protection vanish — this replaces it on
+         * purpose.
+         */
+        public readonly ?int $settledScore = null,
     ) {
         $this->rand = $rand ?? static fn(int $maxInclusive): int => random_int(0, $maxInclusive);
         $this->configDir = $configDir;
@@ -350,6 +358,7 @@ final class Game implements Model
             // announcement (flappy-18); the flap that clears the ready
             // phase ends its shift in the renderer, not here.
             quarantinedSave: $changes['quarantinedSave'] ?? $this->quarantinedSave,
+            settledScore: $changes['settledScore'] ?? $this->settledScore,
         );
     }
 
@@ -369,12 +378,34 @@ final class Game implements Model
      * Return a NEW Game with $score merged into the high-scores list
      * IF it qualifies as a new record. Does NOT write to disk.
      */
+    /**
+     * Merge a finished run into the leaderboard.
+     *
+     * flappy-38 (finding -012): the true top-N law — a run earns a slot
+     * when the ladder still has room OR it beats the bottom entry. The old
+     * best-only gate (score must beat the MAX) kept the list a pure
+     * best-progression log: one inherited or forged 99 999 (a legal value
+     * under SCORE_CEILING) permanently write-locked every future score out
+     * of the file, and the player's only recovery was deleting it. The
+     * ladder now holds ten slots and fills them, self-healing upward
+     * around inflated entries.
+     *
+     * `newRecord` keeps its narrow, loud meaning: the 🏆 shout is for a run
+     * that beats the BEST, not merely the bottom. The persist trigger is
+     * IDENTITY — a returned `$this` means the list did not change and there
+     * is nothing to write; a new instance means it did, shout or no shout.
+     */
     public function withHighScore(int $score): self
     {
-        if ($score <= $this->highScore() || $score <= 0) {
+        if ($score <= 0) {
             return $this;
         }
         $scores = $this->highScores;
+        // count >= MAX implies a non-empty list, so min() is guard-safe by
+        // short-circuit order.
+        if (count($scores) >= self::MAX_HIGH_SCORES && $score <= min($scores)) {
+            return $this;
+        }
         $scores[] = $score;
         sort($scores, SORT_NUMERIC);
         // Cap the leaderboard: the save file is re-read and re-appended
@@ -383,7 +414,7 @@ final class Game implements Model
         if (count($scores) > self::MAX_HIGH_SCORES) {
             $scores = array_values(array_slice($scores, -self::MAX_HIGH_SCORES));
         }
-        return $this->mutate(['highScores' => $scores, 'newRecord' => true]);
+        return $this->mutate(['highScores' => $scores, 'newRecord' => $score > $this->highScore()]);
     }
 
     /**
@@ -481,8 +512,13 @@ final class Game implements Model
                 // then quit, in one batched Cmd.
                 if ($this->crashed === false && $this->started === true && $this->score > 0) {
                     $merged = $this->withHighScore($this->score);
-                    if ($merged->newRecord === true) {
-                        return [$merged, Cmd::batch($merged->persistCmd(), Cmd::quit())];
+                    // flappy-38: identity is the persist trigger — any
+                    // top-N slot earned writes, not just best-beating runs.
+                    // The settledScore stamp marks this run as banked so
+                    // the bin-level settle will not merge it a second time.
+                    if ($merged !== $this) {
+                        $settled = $merged->mutate(['settledScore' => $this->score]);
+                        return [$settled, Cmd::batch($settled->persistCmd(), Cmd::quit())];
                     }
                 }
                 return [$this, Cmd::quit()];
@@ -501,7 +537,7 @@ final class Game implements Model
                 // off the update path — but no quit, the game continues.
                 if ($this->crashed === false && $this->started === true && $this->score > 0) {
                     $merged = $this->withHighScore($this->score);
-                    if ($merged->newRecord === true) {
+                    if ($merged !== $this) {  // flappy-38: identity trigger
                         return [new self(
                             bird: Bird::spawn(self::BIRD_COL, self::HEIGHT / 2.0),
                             pipes: [],
@@ -573,7 +609,7 @@ final class Game implements Model
             // loop and swallows I/O errors so a full disk can't crash the game.
             if ($next->crashed === true) {
                 $updated = $next->withHighScore($next->score);
-                if ($updated->newRecord === true) {
+                if ($updated !== $next) {  // flappy-38: identity trigger
                     $persistCmd = $updated->persistCmd();
                     // C1: persist only — the crashed model's subscriptions()
                     // is empty, so Program's reconcile cancels the tick chain
@@ -675,8 +711,15 @@ final class Game implements Model
         if ($this->crashed === true || $this->started === false || $this->score <= 0) {
             return;
         }
+        // flappy-38: the run was already banked inside update() (settling
+        // q/r) — merging the same score again would double-list it.
+        if ($this->settledScore === $this->score) {
+            return;
+        }
         $merged = $this->withHighScore($this->score);
-        if ($merged->newRecord === false) {
+        if ($merged === $this) {
+            // flappy-38: identity is the trigger — the list unchanged means
+            // nothing earned a slot this run.
             return;
         }
         try {

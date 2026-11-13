@@ -207,7 +207,7 @@ The game ends on any of three contacts, all handled identically:
 
 ## High-score persistence
 
-On a game-over that beats the current best, the new score is merged into a leaderboard and written to `scores.json` under the config dir (`$XDG_CONFIG_HOME` or `$HOME/.config`, in `.candy-flappy/`). The list is bounded to the top `Game::MAX_HIGH_SCORES` (10) entries. The write runs off the synchronous `update()` path via a `Cmd` and swallows I/O errors, so a full or unwritable disk can never crash the render loop. The file itself is published through sugar-core's `AtomicJsonFile` (flock + temp-and-rename, `0600` mode) — never a bare truncate-write. Saved scores are loaded on the next `Game::start()`, which **fails soft**: a corrupt, unreadable, or oversized (over `Game::MAX_SCORE_FILE_BYTES`) save is quarantined aside as `scores.json.corrupt-<timestamp>` and play starts with an empty board, so a bad file can never brick launch. Entries are legality-clamped on read: non-integers, zero, negatives, and scores of `Game::SCORE_CEILING` or above are dropped.
+On any finish (crash, `q` quit, or `r` restart) a score that earns a slot on the leaderboard — the ten slots are still open, or it beats the lowest entry — is merged and written to `scores.json` under the config dir (`$XDG_CONFIG_HOME` or `$HOME/.config`, in `.candy-flappy/`). The list is bounded to the top `Game::MAX_HIGH_SCORES` (10) entries; the 🏆 shout belongs only to a run that beats the current best. The write runs off the synchronous `update()` path via a `Cmd` and swallows I/O errors, so a full or unwritable disk can never crash the render loop. The file itself is published through sugar-core's `AtomicJsonFile` (flock + temp-and-rename, `0600` mode) — never a bare truncate-write. Saved scores are loaded on the next `Game::start()`, which **fails soft**: a corrupt, unreadable, or oversized (over `Game::MAX_SCORE_FILE_BYTES`) save is quarantined aside as `scores.json.corrupt-<timestamp>` and play starts with an empty board, so a bad file can never brick launch. Entries are legality-clamped on read: non-integers, zero, negatives, and scores of `Game::SCORE_CEILING` or above are dropped.
 
 ## Test
 
@@ -233,9 +233,9 @@ vendor/bin/phpunit --filter GoldenRenderTest                    # must pass with
 ## Scoring
 
 The score increments by one for each pipe pair whose column passes the bird's
-column (per tick), so surviving is scored, not flapping. Every game that beats
-the current best is merged into the machine's leaderboard, and the list keeps
-its top ten entries (`Game::MAX_HIGH_SCORES`).
+column (per tick), so surviving is scored, not flapping. Every run that earns
+one of the ten leaderboard slots is merged into the machine's top-ten ladder,
+and the 🏆 belongs to a run that beats the best.
 
 Tuning is compiled in, deliberately: physics constants, tick rate, gap bands
 and key bindings are NOT configurable. The leaderboard and the difficulty
