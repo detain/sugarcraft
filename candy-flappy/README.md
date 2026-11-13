@@ -170,6 +170,8 @@ DECSET 1049), so your normal scrollback is restored untouched on exit.
 | `Game.php` (Model)  | Pure-state world: bird + pipes + score + crashed flag. Injects PRNG closure for deterministic gap placements in tests. |
 | `Renderer.php`      | Pure view — single playfield walk, ANSI-styled glyphs, rounded border.         |
 | `PipeGenerator.php` | Generates pipes with variable gap height — gap shrinks as score increases, raising difficulty. Gap starts at 6 cells, shrinks by 1 every 5 points, floors at 3. |
+| `Support/Version.php` | Version single source: reads the build-phar stamp from the running phar's metadata — or reports the baked-in `CURRENT` outside a stamped archive — and so answers `--version` in the bin and the example; the only reader of the stamp. |
+| `Lang.php`          | i18n wrapper over the sugar-core base — every user-visible board string rides `Lang::t` through the 16-locale `lang/` catalogue (exact → base → `en` → raw). |
 
 The PRNG is injected as a `Closure(int $maxInclusive): int` so unit tests can pin the pipe layout to a specific sequence — the standard SugarCraft pattern.
 
