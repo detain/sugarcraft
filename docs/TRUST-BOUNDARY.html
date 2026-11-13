@@ -182,6 +182,15 @@ PUA is our marker arena (§2), not foreign traffic. Cell-level shaping
 (<code>cellValue()</code> :171, <code>controlChars()</code> :148, <code>visibleControls()</code> :554)
 are separate documented tools; do not confuse them with the untrusted
 gate.</p>
+<p>Dated accepted residual (2026-11, sugar-markdown-068): OSC-8 link
+clickability in <code>sugar-markdown</code> is a DENY-list — <code>Renderer::REFUSED_URL_SCHEMES</code>
+refuses <code>javascript:</code> / <code>data:</code> / <code>vbscript:</code>; private or
+application-owned schemes (<code>event-handler://…</code>) still receive live
+targets, inert until some terminal or desktop opener turns them into
+click vectors. The allow-list form behind a hypothetical
+<code>withAllowedUrlSchemes()</code> was weighed and deferred by owner gate — it
+would silently discard links hosts are built on. Per-lib posture: the
+<code>sugar-markdown</code> README, &quot;Link safety&quot;.</p>
 <h2><a id="2-the-ue000uf8ff-arena" href="#2-the-ue000uf8ff-arena" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>2. The U+E000–U+F8FF arena</h2>
 <p>SugarCraft reserves the entire BMP Private Use Area
 (<code>PUA_BMP_FIRST</code> U+E000 … <code>PUA_BMP_LAST</code> U+F8FF, Sanitize.php :74/:77)
