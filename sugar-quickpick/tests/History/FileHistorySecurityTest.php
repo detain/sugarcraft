@@ -208,6 +208,32 @@ final class FileHistorySecurityTest extends TestCase
         self::assertSame('after-clear', $items[0]->value());
     }
 
+    /**
+     * S-17/-016: an EXISTING history file that cannot be opened must throw
+     * like append()/clear() do — the silent `[]` laundered "unreadable data"
+     * as "empty history". (The genuinely-absent arm keeps answering []: no
+     * history is a legitimate state, pinned by FileHistoryTest::
+     * testAllReturnsEmptyArrayWhenNoFile.)
+     */
+    public function testAllThrowsOnExistingUnreadableFile(): void
+    {
+        if (\function_exists('posix_geteuid') === false || \posix_geteuid() === 0) {
+            self::markTestSkipped('mode-0000 refusal requires a non-root POSIX runner');
+        }
+
+        $path = $this->tempPath();
+        (new FileHistory($path))->append(new FilteredItem(1, 'visible-then-blocked'));
+        chmod($path, 0000);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Cannot open QuickPick history file for read');
+            (new FileHistory($path))->all();
+        } finally {
+            chmod($path, 0600);
+        }
+    }
+
     /** Round-trip sanity after the hardened writes: values that ARE safe still land. */
     public function testSafeValuesStillRoundTrip(): void
     {

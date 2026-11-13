@@ -35,6 +35,10 @@ use SugarCraft\QuickPick\Item;
  *  - append() fails LOUD ({@see \RuntimeException}) instead of silently
  *    dropping data; a PHP fopen warning printed into a live TUI frame is
  *    worse than useless.
+ *  - all() distinguishes ABSENT from UNREADABLE: no file answers `[]` (no
+ *    history yet), while an existing file that cannot be opened throws like
+ *    append()/clear() do — laundering "the data is there but I could not
+ *    read it" into a silent empty corpus was the old failure mode (-016).
  *  - {@see self::clear()} truncates in place under an exclusive lock rather
  *    than unlinking, so a concurrent writer's new file cannot be swapped
  *    underneath the clear.
@@ -289,12 +293,18 @@ final class FileHistory
      * file handle is always closed, even if an exception escapes during
      * decoding.
      *
+     * A MISSING file answers `[]` — no history is a legitimate state. An
+     * EXISTING file that cannot be opened throws instead: six reviewers read
+     * the silent `[]` as "empty history", which is exactly how corruption on
+     * a shared box goes unnoticed (-016).
+     *
      * @return list<Item>
      *
      * @throws \RuntimeException when the path is a symlink (reading through
      *                           a planted link is how forged control strings
-     *                           get delivered into the terminal) or the
-     *                           opened handle fails {@see self::verifyHandle()}
+     *                           get delivered into the terminal), the file
+     *                           exists but cannot be opened, or the opened
+     *                           handle fails {@see self::verifyHandle()}
      */
     public function all(): array
     {
@@ -306,7 +316,12 @@ final class FileHistory
 
         $handle = @\fopen($this->path, 'r');
         if ($handle === false) {
-            return [];
+            if (\is_file($this->path) === false) {
+                return []; // vanished inside the race window: genuinely absent
+            }
+            throw new \RuntimeException(
+                \sprintf('Cannot open QuickPick history file for read: %s', $this->path),
+            );
         }
 
         $items = [];
