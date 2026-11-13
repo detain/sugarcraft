@@ -19,6 +19,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Util\RenderSafe;
+use SugarCraft\Forms\Validator\Pattern;
 use SugarCraft\Style\Style;
 
 /**
@@ -48,6 +49,10 @@ use SugarCraft\Style\Style;
  */
 final class TextInput implements Model
 {
+
+    /** Sentinel: the host redirected echoChar while Mask mode was armed. */
+    private const HOST_ECHO = '__sc-forms-host-retargeted__';
+
     use HasKeyOverrides;
 
     /**
@@ -113,6 +118,15 @@ final class TextInput implements Model
          * time and never reaches displayValue().
          */
         public readonly string $maskPattern = '',
+        /**
+         * Pre-mask echo character remembered by withMask() (sugar-forms-053):
+         * clearMask() restores it so a Password mode entered AFTER a mask
+         * round-trip still renders the host's own echo char, not the mask's.
+         * The sentinel '__sc-forms-host-retargeted__' records that the host
+         * redirected echoChar deliberately while masked — clearMask() then
+         * leaves the host choice alone. Unset (null) = nothing to restore.
+         */
+        public readonly ?string $maskPreviousEchoChar = null,
     ) {
         $this->length = mb_strlen($value, 'UTF-8');
     }
@@ -760,7 +774,15 @@ final class TextInput implements Model
     public function withCharLimit(int $n): self      { return $this->mutate(charLimit: max(0, $n)); }
     public function withWidth(int $w): self          { return $this->mutate(width: max(0, $w)); }
     public function withEchoMode(EchoMode $m): self  { return $this->mutate(echoMode: $m); }
-    public function withEchoChar(string $c): self    { return $this->mutate(echoChar: $c); }
+    public function withEchoChar(string $c): self
+    {
+        // A host retargeting the echo char WHILE masked owns the char from
+        // now on (sugar-forms-053): clearMask() must not resurrect a choice
+        // the host has since replaced.
+        return $this->echoMode === EchoMode::Mask
+            ? $this->mutate(echoChar: $c, maskPreviousEchoChar: self::HOST_ECHO)
+            : $this->mutate(echoChar: $c);
+    }
 
     /**
      * Enable or disable vim keybindings mode.
@@ -936,6 +958,14 @@ final class TextInput implements Model
      * mode instead (fail-loud, never a silently-degenerate mask).
      *
      * @param string $pattern PCRE character class, no delimiters (e.g. `'[0-9]'`)
+     *
+     * Runtime (sugar-forms-077): the renderer runs this pattern against the
+     * live user buffer EVERY frame under the same scoped PCRE backtrack/
+     * recursion budget as {@see \SugarCraft\Forms\Validator\Pattern} — an
+     * explosive pattern degrades to full-mask rendering in milliseconds
+     * instead of wedging the UI, and a very long paste costs linear-ish
+     * time only up to that budget. A field `charLimit` still bounds the
+     * subject directly and remains the cheaper guard.
      */
     public function withMask(string $pattern, string $echoChar = '*'): self
     {
@@ -946,6 +976,7 @@ final class TextInput implements Model
             echoMode: EchoMode::Mask,
             echoChar: $echoChar === '' ? '*' : $echoChar,
             maskPattern: $pattern,
+            maskPreviousEchoChar: $this->echoChar,
         );
     }
 
@@ -959,7 +990,21 @@ final class TextInput implements Model
             return $this;
         }
 
-        return $this->mutate(echoMode: EchoMode::Normal, maskPattern: '');
+        $hostRetargeted = $this->maskPreviousEchoChar === self::HOST_ECHO;
+
+        return $this->mutate(
+            echoMode: EchoMode::Normal,
+            maskPattern: '',
+            // sugar-forms-053: the mask's echo char was borrowed for the
+            // Mask arm only; hand the host's pre-mask choice back. A host
+            // that re-targeted the char WHILE masked keeps its choice.
+            echoChar: $hostRetargeted || $this->maskPreviousEchoChar === null || $this->maskPreviousEchoChar === ''
+                ? $this->echoChar
+                : $this->maskPreviousEchoChar,
+            // '' is the CLEARED marker (mutate threads null as "unchanged",
+            // so null cannot express the reset itself).
+            maskPreviousEchoChar: '',
+        );
     }
 
     // Short-form aliases.
@@ -1343,13 +1388,44 @@ final class TextInput implements Model
      */
     private function maskedValue(): string
     {
-        $masked = preg_replace_callback(
-            '/' . $this->maskPattern . '/u',
-            fn (array $m): string => str_repeat($this->echoChar, mb_strlen($m[0], 'UTF-8')),
-            $this->value,
-        );
+        $everything = str_repeat($this->echoChar, $this->length());
 
-        return $masked ?? str_repeat($this->echoChar, $this->length());
+        // Empty pattern = mask-everything (sugar-forms-027 follow-up rider):
+        // preg('//u') matches the EMPTY string at every position, so an
+        // unpatterned Mask mode (reachable via withEchoMode(EchoMode::Mask)
+        // directly — withMask() refuses '') used to pass the value through
+        // RAW. A secret field fails closed instead.
+        if ($this->maskPattern === '') {
+            return $everything;
+        }
+
+        // sugar-forms-077: the pattern is developer-supplied but the SUBJECT
+        // is user-typed/pasted, and this runs every frame — a catastrophic
+        // backtracker would wedge the UI on an adversarial paste. Same scoped
+        // PCRE budget the Validator\Pattern door applies (shared constants,
+        // finally-restore); budget exhaustion makes preg_replace_callback()
+        // return null, and the pre-existing null fallback already answers
+        // full-mask, so the hostile subject can never be read off the screen.
+        $origBacktrack = ini_get('pcre.backtrack_limit');
+        $origRecursion = ini_get('pcre.recursion_limit');
+        ini_set('pcre.backtrack_limit', (string) Pattern::DEFAULT_BACKTRACK_LIMIT);
+        ini_set('pcre.recursion_limit', (string) Pattern::DEFAULT_RECURSION_LIMIT);
+        try {
+            $masked = preg_replace_callback(
+                '/' . $this->maskPattern . '/u',
+                fn (array $m): string => str_repeat($this->echoChar, mb_strlen($m[0], 'UTF-8')),
+                $this->value,
+            );
+        } finally {
+            if ($origBacktrack !== false) {
+                ini_set('pcre.backtrack_limit', $origBacktrack);
+            }
+            if ($origRecursion !== false) {
+                ini_set('pcre.recursion_limit', $origRecursion);
+            }
+        }
+
+        return $masked ?? $everything;
     }
 
     private function withCursor(Cursor $c): self    { return $this->mutate(cursor: $c); }
@@ -1385,6 +1461,7 @@ final class TextInput implements Model
         ?string $restrict = null,
         ?array $keyOverrides = null,
         ?string $maskPattern = null,
+        ?string $maskPreviousEchoChar = null,
     ): self {
         $newValue = $value ?? $this->value;
         // Auto-revalidate when the value changes and a validator is set,
@@ -1430,6 +1507,7 @@ final class TextInput implements Model
             restrict:               $restrict               ?? $this->restrict,
             keyOverrides:           $keyOverrides           ?? $this->keyOverrides,
             maskPattern:            $maskPattern            ?? $this->maskPattern,
+            maskPreviousEchoChar:   $maskPreviousEchoChar   ?? $this->maskPreviousEchoChar,
         );
     }
 
