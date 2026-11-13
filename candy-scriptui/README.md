@@ -70,9 +70,10 @@ your commands (attach them to the command class — method placement
 registers nothing):
 
 - **`#[Alias('name')]`** — registers an alternative name for the command
-  (e.g. `choose` → `cho`) when the command is discovered through
-  `Application::scan()`. Multiple aliases are supported via repeated
-  attributes.
+  (e.g. a custom `treasure` command gaining the name `t`) when the command
+  is discovered through `Application::scan()`. Multiple aliases are
+  supported via repeated attributes. No shipped command currently
+  registers one — the built-in roster answers under its real name only.
 - **`#[Example('usage', 'description')]`** — adds an example line to the
   command's help block. The `description` parameter is optional. Multiple
   examples are supported via repeated attributes.
