@@ -14,6 +14,16 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\CodeTime\Dashboard;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Store;
+use SugarCraft\Core\Util\TtyDetect;
+
+// The same headless refusal the dashboard command answers with (finding
+// 022): without a terminal on both descriptors the alt-screen dump hangs
+// waiting for keys that can never arrive, so the example refuses like the
+// binary does instead of painting escape codes into a pipe.
+if (!TtyDetect::isAtty(STDIN) || !TtyDetect::isAtty(STDOUT)) {
+    fwrite(STDERR, \SugarCraft\CodeTime\Lang::t('cli.dashboard_needs_tty') . "\n");
+    exit(1);
+}
 
 $dir = sys_get_temp_dir() . '/candy-codetime-demo';
 // The same privacy law the CLI stores under: owner-private 0700 created

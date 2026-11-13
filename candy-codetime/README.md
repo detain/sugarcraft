@@ -45,7 +45,9 @@ candy-codetime export csv 30                      # headless dump of 30 days
 
 `php examples/dashboard.php` seeds a throwaway data directory with a pretend
 week and opens the dashboard, so you can see the TUI before recording
-anything real.
+anything real. Like the `dashboard` command, it refuses (exit 1) when
+standard input or output is not a terminal, so piping it into a capture
+cannot dump an alt-screen into the log.
 
 ## Automating collection
 
