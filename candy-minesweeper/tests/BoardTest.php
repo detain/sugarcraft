@@ -74,13 +74,24 @@ final class BoardTest extends TestCase
         $this->assertGreaterThan(15, $revealedCount);
     }
 
-    public function testFlagToggle(): void
+    public function testMarkerCyclesFlagQuestionThenClear(): void
     {
+        // msw-28: `f` walks the three states in order; only the FLAG step
+        // consumes a slot from the mine-count budget.
         $b = Board::blank(3, 3, 1);
-        $b = $b->toggleFlag(1, 1);
+        $b = $b->cycleMarker(1, 1);
         $this->assertTrue($b->cell(1, 1)->flagged);
-        $b = $b->toggleFlag(1, 1);
-        $this->assertFalse($b->cell(1, 1)->flagged);
+        $this->assertFalse($b->cell(1, 1)->questioned);
+        $this->assertSame(1, $b->flagCount());
+
+        $b = $b->cycleMarker(1, 1);
+        $this->assertFalse($b->cell(1, 1)->flagged, 'F hands off to ?');
+        $this->assertTrue($b->cell(1, 1)->questioned);
+        $this->assertSame(0, $b->flagCount(), 'the question mark is not a flag');
+
+        $b = $b->cycleMarker(1, 1);
+        $this->assertFalse($b->cell(1, 1)->questioned);
+        $this->assertSame(0, $b->flagCount());
     }
 
     public function testFlagCountTrackedIncrementally(): void
@@ -91,11 +102,11 @@ final class BoardTest extends TestCase
         // directly fails if flagCount() reverts to a per-call grid scan.
         $this->assertSame(0, $b->flaggedCount);
 
-        $b = $b->toggleFlag(1, 1)->toggleFlag(2, 2);
+        $b = $b->cycleMarker(1, 1)->cycleMarker(2, 2);
         $this->assertSame(2, $b->flagCount());
         $this->assertSame(2, $b->flaggedCount);
 
-        $b = $b->toggleFlag(1, 1);   // unflag
+        $b = $b->cycleMarker(1, 1);   // unflag
         $this->assertSame(1, $b->flagCount());
         $this->assertSame(1, $b->flaggedCount);
     }
@@ -106,19 +117,58 @@ final class BoardTest extends TestCase
         // flag is refused with the board identity (Game's changed-guard then
         // treats it as the dud press it is); un-flagging stays free, and the
         // room it opens is immediately usable again.
-        $b = Board::blank(3, 3, 2)->toggleFlag(0, 0)->toggleFlag(1, 1);
+        $b = Board::blank(3, 3, 2)->cycleMarker(0, 0)->cycleMarker(1, 1);
         $this->assertSame(2, $b->flagCount(), 'sanity: at the cap');
 
-        $capped = $b->toggleFlag(2, 2);
+        $capped = $b->cycleMarker(2, 2);
         $this->assertSame($b, $capped, 'placement past the cap must return the same board, untouched');
         $this->assertFalse($capped->cell(2, 2)->flagged, 'no ghost flag on the identity board');
 
-        $freed = $b->toggleFlag(0, 0);
+        $freed = $b->cycleMarker(0, 0);
         $this->assertSame(1, $freed->flagCount(), 'un-flagging below the cap stays free');
 
-        $again = $freed->toggleFlag(2, 2);
+        $again = $freed->cycleMarker(2, 2);
         $this->assertNotSame($freed, $again, 'the opened room accepts a new flag');
         $this->assertTrue($again->cell(2, 2)->flagged);
+    }
+
+    public function testQuestionMarkStepsStayFreeAtTheFlagCap(): void
+    {
+        // msw-28: the cap guards FLAGS, not the memo walk. At the cap a
+        // flagged cell still converts to '?' (freeing its slot on arrival)
+        // and a '?' still clears; only the plain→F step stays refused.
+        $b = Board::blank(3, 3, 2)->cycleMarker(0, 0)->cycleMarker(1, 1);
+        $this->assertSame(2, $b->flagCount(), 'sanity: at the cap');
+
+        $questioned = $b->cycleMarker(0, 0);
+        $this->assertNotSame($b, $questioned, 'F→? at the cap is not a dud');
+        $this->assertTrue($questioned->cell(0, 0)->questioned);
+        $this->assertSame(1, $questioned->flagCount(), 'the ? frees its slot on arrival');
+
+        $room = $questioned->cycleMarker(2, 2);
+        $this->assertTrue($room->cell(2, 2)->flagged, 'the freed slot is immediately usable');
+        $this->assertSame(2, $room->flagCount(), 'back at the cap');
+
+        $cleared = $room->cycleMarker(0, 0);
+        $this->assertNotSame($room, $cleared, '?→plain at the cap is free too');
+        $this->assertFalse($cleared->cell(0, 0)->questioned);
+        $this->assertSame(2, $cleared->flagCount(), 'clearing a memo never touches the flag census');
+
+        // And the cap still means cap: (0,0) is plain again, count is full.
+        $this->assertSame($cleared, $cleared->cycleMarker(0, 0), 'plain→F re-refuses while at the cap');
+    }
+
+    public function testRevealClearsTheQuestionMark(): void
+    {
+        // A '?' is a memo about a HIDDEN cell; opening the cell retires the
+        // memo (and the adjacency census never sees a revealed+questioned
+        // pair — the loader refuses that state, so only reveal() may create
+        // the transition and it must clear the flag).
+        $b = Board::blank(3, 3, 1)->cycleMarker(1, 1)->cycleMarker(1, 1);
+        $this->assertTrue($b->cell(1, 1)->questioned);
+        $open = $b->reveal(1, 1, static fn (int $max): int => 0);
+        $this->assertTrue($open->cell(1, 1)->revealed);
+        $this->assertFalse($open->cell(1, 1)->questioned, 'the memo expires when the cell opens');
     }
 
     public function testOverFlaggedBoardReadsSignedRemainder(): void
@@ -156,7 +206,7 @@ final class BoardTest extends TestCase
 
     public function testFlagCountSurvivesSerializeRoundTrip(): void
     {
-        $b = Board::blank(5, 5, 3)->toggleFlag(0, 0)->toggleFlag(4, 4);
+        $b = Board::blank(5, 5, 3)->cycleMarker(0, 0)->cycleMarker(4, 4);
         $restored = Board::unserialize($b->serialize());
         $this->assertSame(2, $restored->flagCount());
         $this->assertSame(2, $restored->flaggedCount);
@@ -186,7 +236,7 @@ final class BoardTest extends TestCase
     public function testFlaggedCellCannotReveal(): void
     {
         $rand = static fn(int $max): int => 0;
-        $b = Board::blank(3, 3, 1)->toggleFlag(1, 1)->reveal(1, 1, $rand);
+        $b = Board::blank(3, 3, 1)->cycleMarker(1, 1)->reveal(1, 1, $rand);
         $this->assertFalse($b->cell(1, 1)->revealed);
     }
 
@@ -414,7 +464,7 @@ final class BoardTest extends TestCase
 
     public function testSerializeAfterFlagUnaffected(): void
     {
-        $b = Board::blank(5, 5, 3)->toggleFlag(1, 1)->toggleFlag(2, 2);
+        $b = Board::blank(5, 5, 3)->cycleMarker(1, 1)->cycleMarker(2, 2);
         $s = $b->serialize();
         $r = Board::unserialize($s);
         $this->assertTrue($r->cell(1, 1)->flagged);
@@ -632,7 +682,7 @@ final class BoardTest extends TestCase
         // A well-formed JSON envelope padded past the budget: without the
         // pre-parse door this would be json_decode'd whole and only die at
         // the shape census after it. The exact message proves the ORDER.
-        $huge = (string) json_encode(['v' => 1, 'pad' => str_repeat('a', 70 * 1024)], JSON_THROW_ON_ERROR);
+        $huge = (string) json_encode(['v' => 1, 'pad' => str_repeat('a', 100 * 1024)], JSON_THROW_ON_ERROR);
         $this->assertGreaterThan(Board::MAX_SERIALIZED_BYTES, strlen($huge), 'sanity: the fixture is over budget');
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('exceeds the byte budget');
@@ -641,13 +691,57 @@ final class BoardTest extends TestCase
 
     public function testDensestHonestSaveRoundTripsInsideTheBudget(): void
     {
-        // The budget comment claims ~50.4 KB for the most verbose honest
-        // 50×50 wire form; verify the claim on a REAL board (every mine the
-        // ladder allows planted) and pin that the door never clips a save
-        // the game itself produced.
+        // The budget comment re-derives BOTH honest worst cases every run;
+        // this is the marker-free transcript's ceiling (msw-34's original
+        // shape — every mine the ladder allows planted and hidden).
         $board = Board::blank(50, 50, 2499)->reveal(0, 0, static fn(int $max): int => 0);
         $wire = $board->serialize();
         $this->assertLessThanOrEqual(Board::MAX_SERIALIZED_BYTES, strlen($wire), 'the honest worst case must fit the budget');
         $this->assertSame($wire, Board::unserialize($wire)->serialize());
+    }
+
+    public function testQuestionMarkRoundTripsOnAConditionalFifthSlot(): void
+    {
+        // msw-28 wire law: the memo rides a 5th slot ONLY where set, so a
+        // board without memos serializes byte-identically to the pre-'?'
+        // transcript and the dense flood board keeps its 22% headroom.
+        $b = Board::blank(3, 3, 1)->cycleMarker(1, 1)->cycleMarker(1, 1);
+        $this->assertTrue($b->cell(1, 1)->questioned);
+        $wire = $b->serialize();
+        $decoded = json_decode($wire, true);
+        $this->assertCount(5, $decoded['c'][1][1], 'the memo cell pays a 5-tuple');
+        $this->assertCount(4, $decoded['c'][0][0], 'plain cells stay 4-tuples');
+        $back = Board::unserialize($wire);
+        $this->assertTrue($back->cell(1, 1)->questioned);
+        $this->assertFalse($back->cell(1, 1)->flagged);
+        $this->assertSame($wire, $back->serialize(), 'the wire is a fixed point');
+    }
+
+    public function testDensestAllQuestionedBoardFitsTheReDerivedDoor(): void
+    {
+        // msw-28 re-derived the pre-parse ceiling (64 KiB → 80 KiB): the
+        // '?' is uncapped BY DESIGN — the F→? step frees its flag slot, so
+        // a player can walk every hidden cell of a 50×50 board into a memo.
+        // This fixture IS that reachable worst case (mine (0,0) flagged,
+        // its three neighbours counting it, 2,496 memos at 25 bytes per
+        // tuple = 67,651 B measured): the honest save must walk in the
+        // front door, and the -34 defense still stands against bigger
+        // crawls (100 KiB fixtures refuse in SaveTamper/BoardTest).
+        $rows = [];
+        for ($y = 0; $y < 50; $y++) {
+            $row = [];
+            for ($x = 0; $x < 50; $x++) {
+                $row[] = match (true) {
+                    $x === 0 && $y === 0 => new Cell(mine: true, flagged: true),
+                    $x <= 1 && $y <= 1   => new Cell(mine: false, adjacent: 1, questioned: true),
+                    default              => new Cell(mine: false, questioned: true),
+                };
+            }
+            $rows[] = $row;
+        }
+        $board = Board::fromRows(50, 50, 1, $rows, minesPlaced: true, flaggedCount: 1);
+        $wire = $board->serialize();
+        $this->assertLessThanOrEqual(Board::MAX_SERIALIZED_BYTES, strlen($wire), 'every questioned board the game can produce must fit the door');
+        $this->assertSame($wire, Board::unserialize($wire)->serialize(), 'and round-trip through it');
     }
 }

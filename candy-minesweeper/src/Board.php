@@ -21,13 +21,18 @@ final class Board
 {
     /**
      * Byte budget a serialized payload may occupy BEFORE the parse (msw-34,
-     * finding -067). The largest HONEST save is a 50×50 board: 2,500 cells
-     * at their most verbose wire form ('[true,true,true,8],') plus the
-     * envelope ≈ 50.4 KB, so 64 KiB carries every board the game itself can
-     * produce with comfortable margin — while a crafted multi-megabyte
-     * crawl is refused at the door instead of being json_decode'd first.
+     * finding -067; ceiling re-derived by msw-28 when the question marker
+     * widened the wire). The largest HONEST save is a 50×50 board at its
+     * most verbose legal form: every hidden safe cell wearing '?' (the
+     * marker frees its flag slot on the F→? step, so questioning is
+     * uncapped) measures 67,651 bytes on disk — 2,500 twenty-five-byte
+     * 5-tuples plus the envelope. 80 KiB carries that worst case with
+     * margin while a crafted multi-megabyte crawl is still refused at the
+     * door instead of being json_decode'd first. The pre-'?' transcript
+     * said the densest honest board was ≈ 50.4 KB at 64 KiB; the tripwire
+     * test re-derives BOTH shapes every run.
      */
-    public const MAX_SERIALIZED_BYTES = 65536;
+    public const MAX_SERIALIZED_BYTES = 81920;
 
     /** @var list<list<Cell>> $rows[y][x] */
     private array $rows;
@@ -154,34 +159,39 @@ final class Board
         return $b->floodReveal($x, $y);
     }
 
-    public function toggleFlag(int $x, int $y): self
+    public function cycleMarker(int $x, int $y): self
     {
         $cell = $this->cell($x, $y);
         if ($cell === null) {
             return $this;
         }
-        // Rule-fidelity gate (msw-17/-030): the classic rulebook refuses the
-        // next flag once the flags already equal the mines — placement stops
-        // at the count, un-flagging stays free. Returning the board identity
-        // makes Game's changed-guard treat the refused press exactly like a
-        // dud: no state move, notice untouched.
-        if ($this->flaggedCount >= $this->mineCount && !$cell->flagged) {
+        // Rule-fidelity gate (msw-17/-030, shaped for the third marker by
+        // msw-28): the classic rulebook refuses the next FLAG once the flags
+        // already equal the mines — placement stops at the count, un-flagging
+        // stays free. The cycle makes that "placement stops" specifically
+        // about the F arm: a plain cell at the cap is refused, but a flagged
+        // cell may always step to '?' (it frees a slot) and a '?' cell may
+        // always step back to plain (it never held one). Returning the board
+        // identity makes Game's changed-guard treat the refused press
+        // exactly like a dud: no state move, notice untouched.
+        if ($this->flaggedCount >= $this->mineCount && !$cell->flagged && !$cell->questioned) {
             return $this;
         }
         $rows = $this->rows;
-        $rows[$y][$x] = $cell->toggleFlag();
-        // Cell::toggleFlag no-ops on a revealed cell (and returns the same
+        $rows[$y][$x] = $cell->cycleMarker();
+        // Cell::cycleMarker no-ops on a revealed cell (and returns the same
         // object when it does); answer the same identity back so callers can
-        // tell a real flag change from a dud press — Game's notice rule and
+        // tell a real marker change from a dud press — Game's notice rule and
         // the over-flag gate both key on it.
         if ($rows[$y][$x] === $cell) {
             return $this;
         }
         // Track the flag count incrementally so flagCount() stays O(1) and the
-        // renderer never scans the grid per frame. A revealed cell can't flag
-        // (Cell::toggleFlag() no-ops), so the delta is derived from the cell's
-        // prior flagged state.
-        $flaggedDelta = $cell->revealed ? 0 : ($cell->flagged ? -1 : 1);
+        // renderer never scans the grid per frame. A revealed cell can't hold
+        // a marker (Cell::cycleMarker() no-ops), so the delta is derived from
+        // the cell's prior marker: F→? frees a slot, ?→plain moves none,
+        // plain→F spends one.
+        $flaggedDelta = $cell->flagged ? -1 : ($cell->questioned ? 0 : 1);
         return new self(
             $this->width, $this->height, $this->mineCount,
             $rows, $this->minesPlaced, $this->exploded, $this->revealedCount,
@@ -333,7 +343,13 @@ final class Board
      * Format: JSON with a version tag (`v`) that {@see unserialize()}
      * enforces — payloads tagged with any other version are rejected with a
      * clear error rather than half-parsed. Each cell is stored as
-     * [mine, revealed, flagged, adjacent].
+     * [mine, revealed, flagged, adjacent], plus a fifth slot carrying the
+     * msw-28 question marker ONLY when set: a save with no memos is
+     * byte-identical to the pre-'?' transcript, and the sparse slot keeps
+     * the common case 22% smaller than a uniform 5-tuple wire (measured on
+     * the dense flood board: 52,661 B sparse vs 67,661 B uniform — the
+     * re-derived door carries both, so this is economy and transcript
+     * stability, not survival).
      */
     public function serialize(): string
     {
@@ -342,7 +358,11 @@ final class Board
             $row = [];
             for ($x = 0; $x < $this->width; $x++) {
                 $c = $this->rows[$y][$x];
-                $row[] = [$c->mine, $c->revealed, $c->flagged, $c->adjacent];
+                $wire = [$c->mine, $c->revealed, $c->flagged, $c->adjacent];
+                if ($c->questioned) {
+                    $wire[] = true;
+                }
+                $row[] = $wire;
             }
             $cells[] = $row;
         }
@@ -379,8 +399,10 @@ final class Board
      *    cannot lie about the layout;
      *  - exploded ⇔ a revealed mine exists (explosions reveal their mine;
      *    a revealed mine sets exploded), and exploded implies placement;
-     *  - a cell is never simultaneously revealed and flagged (Cell::reveal
-     *    no-ops on flagged; toggleFlag no-ops on revealed).
+     *  - a cell is never simultaneously revealed and marked, and never
+     *    carries both markers at once (Cell::reveal no-ops on flagged;
+     *    cycleMarker no-ops on revealed and flag/question are exclusive
+     *    states of one cycle — msw-28).
      *
      * revealed/flagged counts are recomputed from cells, never trusted
      * from disk. Coherence is the guarantee: a hand-crafted but fully
@@ -458,9 +480,10 @@ final class Board
             for ($x = 0; $x < $w; $x++) {
                 $cellData = $cells[$y][$x] ?? null;
                 if (
-                    !is_array($cellData) || count($cellData) !== 4
+                    !is_array($cellData) || (count($cellData) !== 4 && count($cellData) !== 5)
                     || !is_bool($cellData[0]) || !is_bool($cellData[1])
                     || !is_bool($cellData[2]) || !is_int($cellData[3])
+                    || (count($cellData) === 5 && !is_bool($cellData[4]))
                 ) {
                     throw new \InvalidArgumentException('Invalid board serialization');
                 }
@@ -468,9 +491,17 @@ final class Board
                 $revealed = $cellData[1];
                 $flagged  = $cellData[2];
                 $adjacent = $cellData[3];
-                // Cell-level state machine: reveal clears flags, flagging a
-                // revealed cell no-ops — both-true is unreachable.
-                if ($revealed && $flagged) {
+                // msw-28: the optional fifth slot; a 4-tuple from a pre-?
+                // save is a plain cell, not a malformation.
+                $questioned = count($cellData) === 5 ? $cellData[4] : false;
+                // Cell-level state machine: reveal clears markers, marking a
+                // revealed cell no-ops — revealed-plus-any-marker is
+                // unreachable, and the two markers are exclusive states of
+                // one cycle (Cell::cycleMarker), never a pair.
+                if ($revealed && ($flagged || $questioned)) {
+                    throw new \InvalidArgumentException('Invalid board serialization');
+                }
+                if ($flagged && $questioned) {
                     throw new \InvalidArgumentException('Invalid board serialization');
                 }
                 if ($revealed) {
@@ -487,7 +518,7 @@ final class Board
                 }
                 $adjRow[] = $cellData[3];
                 $mineRow[] = $mine;
-                $row[] = new Cell(mine: $mine, revealed: $revealed, flagged: $flagged, adjacent: 0);
+                $row[] = new Cell(mine: $mine, revealed: $revealed, flagged: $flagged, adjacent: 0, questioned: $questioned);
             }
             $rows[] = $row;
             $adjGiven[] = $adjRow;

@@ -230,7 +230,7 @@ final class NoticeToastTest extends TestCase
     public function testFlagOnRevealedCellIsAnIdentityNoOp(): void
     {
         $board = self::boardWithUnsatisfiedNumber();
-        $this->assertSame($board, $board->toggleFlag(3, 3), 'a revealed cell cannot hold a flag');
+        $this->assertSame($board, $board->cycleMarker(3, 3), 'a revealed cell cannot hold a flag');
 
         $g = self::gameOnNumber('hold me');
         [$next, ] = $g->update(self::press(KeyType::Char, 'f'));

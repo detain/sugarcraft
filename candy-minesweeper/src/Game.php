@@ -805,7 +805,7 @@ final class Game implements Model
     private function flag(): self
     {
         return $this->mutate([
-            'board' => $this->board->toggleFlag($this->cursorX, $this->cursorY),
+            'board' => $this->board->cycleMarker($this->cursorX, $this->cursorY),
         ]);
     }
 
@@ -908,7 +908,7 @@ final class Game implements Model
     private function flagAt(int $x, int $y): self
     {
         return $this->mutate([
-            'board'   => $this->board->toggleFlag($x, $y),
+            'board'   => $this->board->cycleMarker($x, $y),
             'cursorX' => $x,
             'cursorY' => $y,
         ]);

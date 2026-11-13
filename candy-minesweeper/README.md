@@ -54,7 +54,7 @@ The board renders in full — there is no scrolling viewport — and the help fo
 | `Home` / `End`   | Jump to the start / end of the row |
 | `PgUp` / `PgDn`  | Jump half a board height up / down |
 | `Space` / `Enter`  | Reveal cell                      |
-| `f`                | Toggle flag                      |
+| `f`                | Cycle marker: flag → question (`?`) → clear |
 | Left-click         | Reveal cell (mouse)              |
 | Right-click        | Toggle flag (mouse)              |
 | `c` / middle-click | Chord — open a number's ring once its flags match exactly |
@@ -73,6 +73,17 @@ terminal, while every other shape — presets and a custom digit form — is one
 **Win**: reveal every cell that is not a mine. Flags are survival notes — the
 win check counts revealed safe cells only, so a board can be won with zero
 flags and flagging every mine is neither required nor sufficient on its own.
+
+**Question marks** (the third marker): `f` walks a cycle — flag → `?` → clear —
+and the right-click walks it with the keyboard. `?` is your own memo that "I
+suspect a mine here but I don't want to commit a flag". Memos are free and
+uncapped: they never count as flags for the mine-count cap, and the `F → ?`
+step hands its flag slot back the moment it lands (only the plain→flag step
+is ever refused). A `?` never participates in chording — flags are what the
+number reads — and opening a questioned cell retires the memo with the reveal.
+On a lost board a questioned *safe* cell keeps its `?` (it spoiled nothing),
+while a questioned *mine* is overpainted by the red `*` disclosure: the board's
+final grade outranks your notes.
 
 Ctrl- and Alt-modified letters are inert (only Ctrl+C quits), so editor
 muscle-memory cannot restart or save the game by accident.

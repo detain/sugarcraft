@@ -139,7 +139,7 @@ $usage = "usage: candy-minesweeper --easy | --standard | --medium | --expert\n"
       . "       board sizes are columns (width) then rows (height) —\n"
       . "       e.g. candy-minesweeper 16 10 starts 16 wide by 10 tall\n"
       . "       keys: hjkl/arrows move · Home/End row · PgUp/PgDn half-page\n"
-      . "       space reveal · f flag · c chord · S save · L load ·\n"
+      . "       space reveal · f flag/question · c chord · S save · L load ·\n"
       . "       r restart · n new game · q quit\n"
       . "       save slot: " . (Game::savePath() ?? '$HOME/.config/candy-minesweeper/savegame.json') . "\n"
       . "       stats: set CANDY_MINESWEEPER_STATS=/path/stats.json to tally across sessions\n";

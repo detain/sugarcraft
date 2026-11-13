@@ -57,19 +57,38 @@ final class CellTest extends TestCase
         $this->assertFalse($next->revealed);
     }
 
-    public function testToggleFlagOnHiddenCell(): void
+    public function testMarkerCyclesFlagQuestionThenClear(): void
     {
+        // msw-28: the hidden-cell marker walks a strict 3-cycle.
         $c = new Cell(mine: false);
-        $on = $c->toggleFlag();
-        $this->assertTrue($on->flagged);
-        $off = $on->toggleFlag();
-        $this->assertFalse($off->flagged);
+        $flagged = $c->cycleMarker();
+        $this->assertTrue($flagged->flagged);
+        $this->assertFalse($flagged->questioned);
+        $questioned = $flagged->cycleMarker();
+        $this->assertFalse($questioned->flagged, 'F hands off to ?');
+        $this->assertTrue($questioned->questioned);
+        $this->assertSame($c->adjacent, $questioned->adjacent, 'the cycle never touches the census');
+        $cleared = $questioned->cycleMarker();
+        $this->assertFalse($cleared->questioned);
+        $this->assertFalse($cleared->flagged);
+    }
+
+    public function testQuestionMarkClearsOnReveal(): void
+    {
+        // A memo is a note about a HIDDEN cell — opening it retires the
+        // note, and the revealed+questioned pair must never exist anywhere
+        // (the save loader refuses it, so reveal() is the only creator).
+        $c = new Cell(mine: false, adjacent: 3, questioned: true);
+        $open = $c->reveal();
+        $this->assertTrue($open->revealed);
+        $this->assertFalse($open->questioned);
+        $this->assertSame(3, $open->adjacent);
     }
 
     public function testToggleFlagOnRevealedReturnsSameInstance(): void
     {
         $c = new Cell(mine: false, revealed: true);
-        $this->assertSame($c, $c->toggleFlag());
+        $this->assertSame($c, $c->cycleMarker());
     }
 
     public function testCellPreservesAdjacentThroughTransitions(): void

@@ -90,6 +90,11 @@ final class GlyphEawCensusTest extends TestCase
             [1, 1] => new Cell(mine: true),
             [2, 0] => new Cell(mine: false, flagged: true),
             [3, 1] => new Cell(mine: true, flagged: true),
+            // msw-28 third-marker states the census must clear too:
+            // questioned safe (paints '?') and questioned mine mid-play
+            // (still hidden ':'-family? no — '?' until the boom).
+            [1, 0] => new Cell(mine: false, questioned: true),
+            [2, 1] => new Cell(mine: true, questioned: true),
             [0, 2] => new Cell(mine: false, revealed: true, adjacent: 0),
             [1, 2] => new Cell(mine: false, revealed: true, adjacent: 1),
             [2, 2] => new Cell(mine: false, revealed: true, adjacent: 2),
@@ -108,6 +113,11 @@ final class GlyphEawCensusTest extends TestCase
             [1, 1] => new Cell(mine: true),
             [2, 0] => new Cell(mine: false, flagged: true),
             [3, 1] => new Cell(mine: true, flagged: true),
+            // msw-28 on a lost board: a questioned safe cell keeps its '?',
+            // a questioned mine is DISCLOSED as '*' (the memo never outranks
+            // the post-mortem), so both arms of the match are walked.
+            [1, 0] => new Cell(mine: false, questioned: true),
+            [2, 1] => new Cell(mine: true, questioned: true),
             [0, 2] => new Cell(mine: false, revealed: true, adjacent: 0),
             [1, 2] => new Cell(mine: false, revealed: true, adjacent: 7),
             [2, 2] => new Cell(mine: false, revealed: true, adjacent: 3),

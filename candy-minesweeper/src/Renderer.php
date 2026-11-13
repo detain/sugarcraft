@@ -517,6 +517,12 @@ final class Renderer
             // east-asian-ambiguous glyph — on ambw=2 terminals every single
             // unrevealed cell doubled and the whole grid shattered from the
             // first frame. The colon is width-safe in every terminal class.
+            // The msw-28 question memo paints '?' (ASCII, same census-safe
+            // family) between the post-mortem disclosure arms and the plain
+            // hidden mark — a '?'ed mine on a lost board still surfaces as
+            // '*' above, because disclosure outranks a memo the player was
+            // unsure about.
+            !$cell->revealed && $cell->questioned => '?',
             !$cell->revealed => ':',
             $cell->mine     => '*',
             $cell->adjacent === 0 => ' ',
@@ -676,7 +682,8 @@ final class Renderer
         // msw-17/-029: the SIGNED remainder — classic counters go negative on
         // an over-flagged board so the impossibility is visible before the
         // wrong-chord detonation. Interactive play cannot drive it below zero
-        // (Board::toggleFlag caps placement at the mine count); a restored
+        // (Board::cycleMarker caps FLAG placement at the mine count — the
+        // msw-28 third-marker cycle keeps ?→plain free there); a restored
         // hand-crafted board can, and the counter tells the truth about it.
         $remaining = $b->mineCount - $b->flagCount();
         $elapsed = $g->elapsed();

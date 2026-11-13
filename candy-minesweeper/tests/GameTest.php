@@ -66,13 +66,43 @@ final class GameTest extends TestCase
         $this->assertSame(1, $g->cursorY);
     }
 
-    public function testFlagToggle(): void
+    public function testFlagKeyWalksTheThreeStateMarkerCycle(): void
     {
+        // msw-28: f is no longer a toggle — it walks flag → question →
+        // clear, and the third state must be reachable from the keyboard.
         $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
         $this->assertTrue($g->board->cell(0, 0)->flagged);
+        $this->assertSame(1, $g->board->flagCount());
         [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
+        $this->assertTrue($g->board->cell(0, 0)->questioned);
         $this->assertFalse($g->board->cell(0, 0)->flagged);
+        $this->assertSame(0, $g->board->flagCount(), 'the memo frees the slot the flag held');
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
+        $this->assertFalse($g->board->cell(0, 0)->questioned);
+
+        // The ?→F wrap (clear→flag) rides the same key; after a full cycle
+        // plus one the cell is flagged again.
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
+        $this->assertTrue($g->board->cell(0, 0)->flagged);
+
+        // At the one-mine cap the ? step is NOT a dud (the -17 cap guards
+        // plain→F only): this exact board state (flagCount 1 == mineCount 1)
+        // must still accept the conversion.
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
+        $this->assertTrue($g->board->cell(0, 0)->questioned, 'F→? stays free at the cap');
+    }
+
+    public function testSpaceOpensAQuestionedCellAndRetiresTheMemo(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f')); // F
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f')); // ?
+        $this->assertNull($g->startedAt, 'memos are not actions — no clock yet');
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        $this->assertTrue($g->board->cell(0, 0)->revealed, 'a questioned cell opens like any hidden one');
+        $this->assertFalse($g->board->cell(0, 0)->questioned, 'the memo retires with the reveal');
+        $this->assertNotNull($g->startedAt, 'the open arms the clock');
     }
 
     public function testRevealOnFirstClickPlacesMines(): void
@@ -729,6 +759,13 @@ final class GameTest extends TestCase
 
         $this->assertTrue($next->board->cell(2, 2)->flagged,
             'Right-click must flag the resolved safe cell');
+
+        // msw-28: the mouse walks the SAME cycle as the keyboard f.
+        [$twice, ] = $next->update(self::mouseClick(5, 4, MouseButton::Right));
+        $this->assertTrue($twice->board->cell(2, 2)->questioned, 'right-click continues flag → question');
+        $this->assertFalse($twice->board->cell(2, 2)->flagged);
+        [$thrice, ] = $twice->update(self::mouseClick(5, 4, MouseButton::Right));
+        $this->assertFalse($thrice->board->cell(2, 2)->questioned, 'and question → clear');
     }
 
     // ─── Middle-click chords ───────────────────────────────────────────────

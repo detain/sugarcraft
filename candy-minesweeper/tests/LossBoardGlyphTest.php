@@ -31,6 +31,8 @@ final class LossBoardGlyphTest extends TestCase
     private const RED_BOLD      = "38;2;255;95;135;1m*";
     private const DIM_DOT       = "38;2;90;74;120m:";
     private const DIM_STAR      = "38;2;90;74;120m*";
+    private const DIM_QMARK     = "38;2;90;74;120m?";
+    private const QMARK_REVERSED = "38;2;90;74;120;7m?";
     private const WRONG_FLAG    = "38;2;125;110;152m✗";
     private const GOLD_FLAG     = "38;2;253;230;138;1mF";
 
@@ -44,7 +46,7 @@ final class LossBoardGlyphTest extends TestCase
      *
      * @param bool $exploded  the board state to construct
      */
-    private static function board(bool $exploded): Board
+    private static function board(bool $exploded, array $questionedSafe = [], array $questionedMines = []): Board
     {
         $mineAt = static fn (int $x, int $y): bool => ($x === 1 && $y === 1) || ($x === 2 && $y === 0);
 
@@ -59,13 +61,15 @@ final class LossBoardGlyphTest extends TestCase
         // (2,0): mine the player missed — hidden until the boom.
                 $revealed = $mine && $x === 1 && $y === 1; // only the detonated mine is open
                 $flagged  = $x === 0 && $y === 0;
+                $questioned = in_array([$x, $y], $questionedSafe, true)
+                    || in_array([$x, $y], $questionedMines, true); // msw-28 memo states
                 if ($revealed) {
                     $revealedCount++;
                 }
                 if ($flagged) {
                     $flaggedCount++;
                 }
-                $row[] = new Cell(mine: $mine, revealed: $revealed, flagged: $flagged);
+                $row[] = new Cell(mine: $mine, revealed: $revealed, flagged: $flagged, questioned: $questioned);
             }
             $rows[] = $row;
         }
@@ -127,5 +131,32 @@ final class LossBoardGlyphTest extends TestCase
         self::assertStringContainsString(self::DIM_STAR, $wonView, 'the win overlay keeps missed mines dim, as shipped');
         self::assertStringNotContainsString(self::RED_PLAIN, $wonView, 'the lost-board grade must not leak onto wins');
         self::assertStringNotContainsString('✗', $wonView, 'no wrong-flag marks on a won board');
+    }
+
+    public function testQuestionMarkPaintsItsOwnGlyphMidPlayAndAfterTheLoss(): void
+    {
+        // msw-28: '?' is a player memo, not a board spoiler — it rides the
+        // hidden-cell ink in every phase, distinct from F and the mark.
+        // The memo cell is parked under the cursor on purpose: the writer
+        // merges same-style neighbours into one run, so the cursor's
+        // reverse attribute is what forces this cell's own escape and makes
+        // the ink pin byte-exact.
+        $mid = (new Game(board: self::board(exploded: false, questionedSafe: [[0, 2]]), cursorX: 0, cursorY: 2))->view();
+        self::assertStringContainsString(self::QMARK_REVERSED, $mid, 'a memo paints ? with the hidden ink');
+        self::assertStringContainsString(self::DIM_DOT, $mid, 'sanity: unmemorised cells keep the mark');
+
+        $lost = (new Game(board: self::board(exploded: true, questionedSafe: [[0, 2]]), cursorX: 0, cursorY: 2))->view();
+        self::assertStringContainsString(self::QMARK_REVERSED, $lost, 'a questioned SAFE cell keeps its memo after the boom — it was never a spoiler');
+    }
+
+    public function testQuestionMarkNeverSpoilsAMissedMine(): void
+    {
+        // Disclosure outranks memo: the player wore a '?' on (2,0), a mine.
+        // The boom lights the red '*' — the '?' yields its glyph there, and
+        // no cell on this fixture renders the memo ink once only the mine
+        // carried it.
+        $lost = (new Game(board: self::board(exploded: true, questionedMines: [[2, 0]]), cursorX: 2, cursorY: 2))->view();
+        self::assertStringContainsString(self::RED_PLAIN, $lost, 'the missed mine still lights red through its memo');
+        self::assertStringNotContainsString(self::DIM_QMARK, $lost, 'no memo ink survives where disclosure paints');
     }
 }

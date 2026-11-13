@@ -222,6 +222,57 @@ final class SaveTamperTest extends TestCase
         );
     }
 
+    public function testQuestionedRidingARevealedCellIsRefused(): void
+    {
+        // msw-28: the memo only ever exists on hidden cells — reveal()
+        // clears it — so a save carrying the pair is hand-edited junk.
+        $cells = self::blankCells(3, 3);
+        $cells[1][1] = [false, true, false, 0, true];
+        $this->expectRefusal(
+            self::payload(3, 3, 2, false, false, $cells),
+            'cell both questioned and revealed (unreachable state)',
+        );
+    }
+
+    public function testFlaggedAndQuestionedTogetherIsRefused(): void
+    {
+        $cells = self::blankCells(3, 3);
+        $cells[1][1] = [false, false, true, 0, true];
+        $this->expectRefusal(
+            self::payload(3, 3, 2, false, false, $cells),
+            'cell both flagged and questioned (the cycle never paints both)',
+        );
+    }
+
+    public function testNonBoolQuestionedSlotIsRefused(): void
+    {
+        // The 5th slot is a strict bool, same law as every other field:
+        // 'yes' must not cast its way into a memo.
+        $cells = self::blankCells(3, 3);
+        $cells[1][1] = [false, false, false, 0, 'yes'];
+        $this->expectRefusal(
+            self::payload(3, 3, 2, false, false, $cells),
+            'questioned slot must be a bool, not a string',
+        );
+    }
+
+    public function testHonestQuestionMarkLoads(): void
+    {
+        // Positive control for the conditional 5-tuple: a placed board with
+        // one flagged mine and a questioned neighbour loads with the memo
+        // intact and the census recomputed from cells.
+        $cells = self::blankCells(3, 3);
+        $cells[0][0] = [true, false, true, 0];
+        $cells[1][0][3] = 1;
+        $cells[0][1][3] = 1;
+        $cells[1][1] = [false, false, false, 1, true];
+        $board = Board::unserialize(self::payload(3, 3, 1, true, false, $cells));
+        $this->assertTrue($board->cell(1, 1)->questioned);
+        $this->assertFalse($board->cell(1, 1)->flagged);
+        $this->assertTrue($board->cell(0, 0)->flagged);
+        $this->assertSame(1, $board->flagCount());
+    }
+
     public function testExplodedWithoutPlacementIsRefused(): void
     {
         $cells = self::blankCells(3, 3);
@@ -311,7 +362,7 @@ final class SaveTamperTest extends TestCase
         [$g, ] = $g->update(new KeyMsg(KeyType::Char, 'l')); // cursorX → 1
         $this->writeSlot([
             'v'       => 1,
-            'board'   => (string) json_encode(['v' => 1, 'pad' => str_repeat('a', 70 * 1024)], JSON_THROW_ON_ERROR),
+            'board'   => (string) json_encode(['v' => 1, 'pad' => str_repeat('a', 100 * 1024)], JSON_THROW_ON_ERROR),
             'cursorX' => 0,
             'cursorY' => 0,
             'elapsed' => null,
