@@ -728,6 +728,140 @@ one shot: no dim-pen sweep, no travel. Without it — ordinary animation —
 the scrim ramps with the animation instead of snapping to full opacity
 at frame one.
 
+## API reference
+
+The tables below cover **all public methods** of each class — a roster
+transcribed from the shipped `src/` surface, not a hand-typed count.
+`VeilStack`'s table lives with its section in
+[Z-Index and Stacking Order](#veilstack).
+
+### Veil
+
+The immutable overlay model. Every `with*()` setter returns a new
+instance; the instance also carries a private render session (see
+[Buffer Diffing and RenderSession](#buffer-diffing-and-rendersession)).
+
+| Method | Description |
+|---|---|
+| `Veil::new(): self` | default veil (upstream-mirrored factory) |
+| `Veil::centered(string $content, string $backdrop, int $dimmingPercent = 50, int $xOffset = 0, int $yOffset = 0): string` | one-shot CENTER/CENTER composite — the library in one static call |
+| `withBackdrop(int $opacity): self` | backdrop dim percentage (clamped 0–100; a truecolor grey pen — never the faint attribute) |
+| `withAnimation(AnimationKind\|Fade\|Scale\|Slide\|null $animation): self` | attach a transition for `animate()` |
+| `animation(): AnimationKind\|Fade\|Scale\|Slide\|null` | current animation |
+| `withZIndex(int $zIndex): self` | stack rank for `VeilStack` (higher paints later, on top) |
+| `zIndex(): int` | current rank (default 0) |
+| `withClickOutsideDismiss(bool $enabled = true): self` | arm click-outside dismissal for `isClickOutside()` |
+| `clickOutsideDismiss(): bool` | whether dismissal is armed |
+| `withAutoSize(bool $enabled = true): self` | derive dimensions from bordered content (deprecated) |
+| `autoSize(): bool` | whether auto-size is on |
+| `withBorder(?Border $border): self` | wrap content in sugar-style border chrome |
+| `border(): ?Border` | current border |
+| `withPosition(?Position $vertical, ?Position $horizontal, int $x = 0, int $y = 0): self` | per-veil anchor for `VeilStack::compositeAll()` (null = follow the stack anchor) |
+| `vPosition(): ?Position` / `hPosition(): ?Position` | the stored vertical / horizontal anchors |
+| `positionX(): int` / `positionY(): int` | the stored x / y nudges |
+| `withContent(string $content): self` | set the payload — **verbatim**, a documented trust boundary (see Security) |
+| `withUntrustedContent(string $content): self` | set the payload through the display sweep (forged sentinels and SGR/OSC bytes neutralised) |
+| `content(): string` | the payload as stored |
+| `withoutZoneMarkers(): self` | disable zone marker injection; `mark()`/`scan()` then degrade compatibly (no new zones emitted) |
+| `withReducedMotion(bool $reduced = true): self` | accessibility flag: `animate()` treats every progress as the settled end |
+| `composite(string $foreground, string $background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): string` | paint the overlay over the background (first call emits a full frame, later calls the cell diff) |
+| `animate(string $foreground, string $background, Position $vertical, Position $horizontal, float $progress, int $xOffset = 0, int $yOffset = 0): string` | paint one transition step — progress clamped to 0..1; `NAN` and `+INF` settle to the finished frame, `-INF` to the start |
+| `coveredCells(string $foreground, string $background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): ?array` | the clipped rect the next `composite()` will paint, as `array{x, y, w, h}` — `null` when nothing lands on the canvas |
+| `overflowFor(string $foreground, string $background, Position $vertical, Position $horizontal, int $xOffset = 0, int $yOffset = 0): ?array` | the overhang the canvas will clip away, as `array{clippedLeft, clippedRight, clippedTop, clippedBottom}` — measure before rendering (empty background = `null`, no clipping) |
+| `applyBorderChrome(string $content): string` | wrap content in the border (unchanged when no border is set) |
+| `mark(string $id, string $content): string` | wrap content in zone sentinels for hit-testing |
+| `scan(string $rendered): self` | record the zone geometry of a rendered frame (returns the scanned clone) |
+| `hit(int $col, int $row): ?Zone` | which marked zone covers a terminal cell (after `scan()`) |
+| `lastZoneRect(string $id): ?array` | the clipped rect zone `$id` actually painted |
+| `zoneRects(): array` | every scanned zone's rect, keyed by id |
+| `isClickOutside(\SugarCraft\Core\Msg\MouseMsg $mouse): bool` | click-outside dismissal verdict; throws if the veil was never scanned |
+| `splitLines(string $text): array` | line split with the trailing-newline rule shared by `Lines::split()` |
+| `maxLineWidth(array $lines): int` | widest display width across lines |
+| `lineWidth(string $line): int` | display width of one line (ANSI-aware) |
+| `lastFullFrame(): ?string` | the remembered full frame (`null` on a pristine session) |
+| `resetPreviousFrame(): void` | forget the remembered frame (next `composite()` re-emits full) |
+| `withoutSession(): self` | copy with a fresh render session — resets the remembered frame, preserves everything else |
+
+### Position
+
+Enum of anchors: `TOP`, `RIGHT`, `BOTTOM`, `LEFT`, `CENTER`,
+`TOP_RIGHT`, `BOTTOM_RIGHT`, `BOTTOM_LEFT`, `TOP_LEFT`.
+
+| Method | Description |
+|---|---|
+| `yOffset(int $fgHeight, int $bgHeight): int` | vertical base offset of an overlay of `$fgHeight` rows inside `$bgHeight` rows (corner cases centre on the other axis) |
+| `xOffset(int $fgWidth, int $bgWidth): int` | horizontal base offset (negative when the overlay is wider — ragged blocks fold at the clipped extent) |
+
+### RenderSession
+
+The remembered-frame bookkeeping behind `composite()`'s diff emission.
+Owns no terminal: it answers *what to emit*, `sugar-cellbuffer` encodes it.
+
+| Method | Description |
+|---|---|
+| `new RenderSession()` | pristine session (first frame is always full) |
+| `shouldEmitFull(int $width, int $height): bool` | whether the next frame must be emitted whole (geometry changed or nothing remembered) |
+| `rememberFull(string $output, int $width, int $height): void` | store a full frame as the diff baseline |
+| `lastFullFrame(): ?string` | the stored frame (`null` until first remember) |
+| `diff(string $output, int $width, int $height, callable $bufferFactory): string` | diff bytes from the remembered frame to `$output` (a no-change diff still carries the frame-open anchor) |
+| `reset(): void` | forget everything (next emit is full) |
+
+### MarkedFrame
+
+ANSI/zone-aware width algebra for a single line — the shared knife behind
+clipping and the security sweep. Static; every method treats SGR/OSC runs
+as zero-width and wide glyphs as one column plus a straddle blank.
+
+| Method | Description |
+|---|---|
+| `measure(string $line): int` | display width (a bare CR counts four columns, like a TAB) |
+| `measureSegments(array $segments): int` | width of a pre-tokenised segment list |
+| `take(string $line, int $max): string` | first `$max` columns, never cutting a wide glyph in half (the straddled cell is blanked, never emitted as `?`) |
+| `takeSegments(array $segments, int $max): array` | segment-level take (used by the clip path) |
+| `drop(string $line, int $skip): string` | everything past `$skip` columns |
+| `dropSegments(array $segments, int $skip): array` | segment-level drop (zone replay rides the same rules) |
+| `isolation(string $line): string` | line re-sequenced so its own SGRs cannot leak past its end |
+| `isolationSegments(array $segments): string` | segment-level isolation |
+| `segments(string $line): array` | tokenise a line into text / sgr / osc / zone segments |
+
+### Lines
+
+| Method | Description |
+|---|---|
+| `Lines::split(string $text): list<string>` | split on `\n` with the trailing-newline rule (a closing `\n` does not open an empty line) |
+
+### Cluster
+
+| Method | Description |
+|---|---|
+| `Cluster::next(string $s, int $pos): string` | the grapheme/escape cluster starting at `$pos` (byte-safe forward step used by the walkers) |
+
+### AnimationFrame
+
+Typed render of one animation step: `public readonly string $foreground`
+plus `int $verticalOffset` / `int $horizontalOffset` (constructor
+promoted, defaults 0).
+
+| Method | Description |
+|---|---|
+| `new AnimationFrame(string $foreground, int $verticalOffset = 0, int $horizontalOffset = 0)` | build one typed frame |
+| `AnimationFrame::fromArray(array $frame): self` | adapt the legacy array shape returned by `Slide::apply()` (until the 2.0 flip) |
+
+### Animations
+
+`AnimationKind` is the enum `FADE` / `SLIDE` / `SCALE`. The classes accept
+an optional `SugarCraft\Spring\Easing\CubicBezier` easing; `null` selects
+each class's documented default curve (Fade eases in-out, Slide out,
+Scale out).
+
+| Method | Description |
+|---|---|
+| `Fade::new(?CubicBezier $easing = null)` / `Scale::new(...)` / `Slide::new(...)` | upstream-mirrored factories (`__construct` takes the same optional curve) |
+| `easedProgress(float $progress): float` | the curve applied to raw progress |
+| `apply(string $foreground, float $progress): string` | the rendered payload for one step — Fade returns `''` at progress 0 and the verbatim text at 1, Scale reveals centred line windows, Slide returns its travelled text |
+| `Slide::applyFrame(string $foreground, float $progress, Position $vertical, Position $horizontal): AnimationFrame` | the typed travel door: text plus the vertical/horizontal cell offsets for one step |
+| `Fade::opacity(float $progress): int` | the scrim percentage (0–100) at one step |
+
 ## Shared foundations
 
 Built on the monorepo's cell model: sugar-cellbuffer `Buffer` powers the
