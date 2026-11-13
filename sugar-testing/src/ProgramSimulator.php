@@ -26,7 +26,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Drives a {@see Program} (or bare Model) with scripted input, deterministically.
  *
  * ProgramSimulator wraps a Program and allows enqueuing messages via
- * {@see send()}, then drains the queue via {@see run()} which invokes
+ * {@see addMsgs()}, then drains the queue via {@see run()} which invokes
  * init(), update(), and view() in sequence — without touching real
  * stdin/stdout or installing signal handlers.
  *
@@ -74,11 +74,13 @@ use SugarCraft\Core\Util\ColorProfile;
  * command; to skip the commands' side effects entirely, also opt out of
  * execution with {@see withRealCmdRunner(false)}.
  *
- * Clone discipline: send() MUTATES this instance; with*() methods CLONE.
- * Configure (with*) FIRST, then send() on the returned handle — or send
- * everything first and configure the final handle. Mixing the two loses
- * whichever messages were sent to the pre-clone handle (see
- * tests/ControlParitySimulatorTest.php for the pinned semantics).
+ * Clone discipline (enforced): the with*() configuration setters CLONE and
+ * must be called BEFORE any message is queued. addMsgs() MUTATES the handle
+ * and marks it sent; a with*() call on a handle that has already sent throws
+ * RuntimeException instead of silently cloning away the queued messages.
+ * Configure first, then addMsgs — or addMsgs on a throwaway handle only if
+ * you never reconfigure it (see tests/ControlParitySimulatorTest.php for
+ * the pinned contract).
  *
  * @see Assertions::assertGoldenAnsi() for snapshot assertions
  */
@@ -103,6 +105,9 @@ final class ProgramSimulator
 
     /** Messages skipped because the drain had already stopped. */
     private int $dropped = 0;
+
+    /** Set by addMsgs()/send(): with*() configuration must happen before it. */
+    private bool $hasSent = false;
 
     /**
      * When true, executes cmds and threads their returned messages through
@@ -150,24 +155,47 @@ final class ProgramSimulator
     }
 
     /**
-     * Enqueue a message for the {@see run()} cycle.
+     * Enqueue messages for the {@see run()} cycle, mutating this handle.
      *
-     * Mutates this instance (the queue is array state on $this) and returns
-     * $this for chaining. Because the with*() configuration methods CLONE,
-     * the queue a run() sees is the queue of the handle you call run() on:
-     * configure first, then send; or send first, then configure and use the
-     * returned handle for run(). Sends against a pre-clone handle after the
-     * clone are invisible to the clone.
+     * The primary spelling (renamed from send(), which remains as a
+     * deprecated alias). Mutates and returns $this: the queue lives on this
+     * instance, so the handle you configured is the handle you run. The
+     * with*() configuration setters CLONE — call them BEFORE the first
+     * addMsgs(), or reconfigure a fresh handle (the class docblock states
+     * the enforced discipline).
+     *
+     * @return $this
+     */
+    public function addMsgs(Msg ...$msgs): self
+    {
+        foreach ($msgs as $msg) {
+            $this->queue[] = $msg;
+        }
+        $this->hasSent = true;
+
+        return $this;
+    }
+
+    /**
+     * @deprecated since 2026-11 — use {@see addMsgs()}; identical behaviour,
+     *             kept as an alias so consumers migrate deliberately.
      *
      * @return $this
      */
     public function send(Msg ...$msgs): self
     {
-        foreach ($msgs as $msg) {
-            $this->queue[] = $msg;
-        }
+        return $this->addMsgs(...$msgs);
+    }
 
-        return $this;
+    /**
+     * Guard for every with*() setter: configuration after sending is a named
+     * throw, not a silent queue loss (see class docblock clone discipline).
+     */
+    private function assertConfigureBeforeSend(): void
+    {
+        if ($this->hasSent) {
+            throw new \RuntimeException(Lang::t('simulator.configure_after_send'));
+        }
     }
 
     /**
@@ -180,14 +208,16 @@ final class ProgramSimulator
      * {@see withRealCmdRunner(false)} for capture-without-executing
      * determinism.
      *
-     * Clones: configure BEFORE sending (or run on the returned handle) —
-     * see the class docblock's clone discipline.
+     * Clones — throws RuntimeException if this handle has already sent
+     * (addMsgs): configure first, then queue.
      *
      * @param \Closure(\Closure): ?Msg $runner
      * @return $this
      */
     public function withFakeCmdRunner(\Closure $runner): self
     {
+        $this->assertConfigureBeforeSend();
+
         $sim = clone $this;
         $sim->fakeCmdRunner = $runner;
         return $sim;
@@ -201,13 +231,15 @@ final class ProgramSimulator
      * false, cmds are captured but NOT executed — this is the safe,
      * deterministic mode that avoids side effects from sync cmds.
      *
-     * Clones: configure BEFORE sending — see the class docblock.
+     * Clones — throws RuntimeException on an already-sent handle; configure first.
      *
      * @param bool $execute Pass false to capture without executing
      * @return $this
      */
     public function withRealCmdRunner(bool $execute): self
     {
+        $this->assertConfigureBeforeSend();
+
         $sim = clone $this;
         $sim->executeCmds = $execute;
         return $sim;
@@ -216,10 +248,12 @@ final class ProgramSimulator
     /**
      * Arm the startup WindowSizeMsg (dispatched before init(), like Program).
      *
-     * Clones — configure before sending, or use the returned handle.
+     * Clones — throws RuntimeException on an already-sent handle; configure first.
      */
     public function withWindowSize(int $cols, int $rows): self
     {
+        $this->assertConfigureBeforeSend();
+
         $sim = clone $this;
         $sim->startupSize = new WindowSizeMsg($cols, $rows);
         return $sim;
@@ -228,10 +262,12 @@ final class ProgramSimulator
     /**
      * Arm the startup EnvMsg (dispatched before init(), like Program).
      *
-     * Clones — configure before sending, or use the returned handle.
+     * Clones — throws RuntimeException on an already-sent handle; configure first.
      */
     public function withEnvironment(array $vars): self
     {
+        $this->assertConfigureBeforeSend();
+
         $sim = clone $this;
         $sim->startupEnv = new EnvMsg($vars);
         return $sim;
@@ -241,10 +277,12 @@ final class ProgramSimulator
      * Arm the startup ColorProfileMsg (dispatched before init(), like
      * Program) — the message candy-top's color veto keys off.
      *
-     * Clones — configure before sending, or use the returned handle.
+     * Clones — throws RuntimeException on an already-sent handle; configure first.
      */
     public function withColorProfile(ColorProfile $profile): self
     {
+        $this->assertConfigureBeforeSend();
+
         $sim = clone $this;
         $sim->startupProfile = new ColorProfileMsg($profile);
         return $sim;
@@ -261,7 +299,7 @@ final class ProgramSimulator
      * ExecRequest throws (see class docblock).
      *
      * Subscriptions stand in for the runtime's timers on a virtual clock:
-     * each one fires once after init() and once after every {@see send()}
+     * each one fires once after init() and once after every {@see addMsgs()}
      * message, and what it produces is delivered right then, before the next
      * sent message — the runtime delivers every subscription message it
      * produces, so none may be dropped here either. Messages a subscription

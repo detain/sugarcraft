@@ -20,6 +20,7 @@ return [
 
     // ProgramSimulator errors
     'simulator.cmd_loop_overflow' => 'Cmd message loop exceeded {max} cycles',
+    'simulator.configure_after_send' => 'configure (with*) must happen before the first addMsgs(): this handle already carries sent messages, and a with*() clone would silently lose them — configure a fresh handle, or send() on the configured one',
     'simulator.exec_unsupported' => 'The simulator cannot dispatch an ExecRequest: exec suspends the process onto a real terminal, and the simulator has none',
     'simulator.batch_member_not_closure' => '{class} carries a non-closure member ({type}); batch members must be Closures here, exactly as production scheduleCmd() types them',
 

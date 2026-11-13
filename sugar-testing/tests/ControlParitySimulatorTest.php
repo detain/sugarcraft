@@ -51,7 +51,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testBatchMsgRunsMembersWithoutReachingModel(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send(new BatchMsg([
+            ->addMsgs(new BatchMsg([
                 fn (): Msg => $this->key('B'),
                 fn (): Msg => $this->key('C'),
             ]))
@@ -64,7 +64,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testSequenceMsgDispatchesMembersInOrder(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send(new SequenceMsg([
+            ->addMsgs(new SequenceMsg([
                 fn (): Msg => $this->key('1'),
                 fn (): Msg => $this->key('2'),
             ]))
@@ -76,7 +76,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testNonClosureBatchMemberRefusesLoudly(): void
     {
         $sim = ProgramSimulator::for(new ControlRecorderModel())
-            ->send(new BatchMsg(['not-a-cmd']));
+            ->addMsgs(new BatchMsg(['not-a-cmd']));
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('must be Closures here');
@@ -87,7 +87,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testQuitMsgInQueueHaltsDrainAndDropsTheRest(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send($this->key('a'), new QuitMsg(), $this->key('z'))
+            ->addMsgs($this->key('a'), new QuitMsg(), $this->key('z'))
             ->run();
 
         self::assertSame('Ia', $result->model->trace);
@@ -98,7 +98,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testInterruptMsgAlsoHalts(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send($this->key('a'), new InterruptMsg(), $this->key('z'))
+            ->addMsgs($this->key('a'), new InterruptMsg(), $this->key('z'))
             ->run();
 
         self::assertSame('Ia', $result->model->trace);
@@ -110,7 +110,7 @@ final class ControlParitySimulatorTest extends TestCase
         // The 'q' key IS shown to the model (it decides to quit); the QuitMsg
         // the resulting cmd produces halts the drain like production's.
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send($this->key('q'), $this->key('z'))
+            ->addMsgs($this->key('q'), $this->key('z'))
             ->run();
 
         self::assertSame('Iq', $result->model->trace);
@@ -120,7 +120,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testSuspendMsgIsDroppedWithoutAModelTurn(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send(new SuspendMsg(), $this->key('s'))
+            ->addMsgs(new SuspendMsg(), $this->key('s'))
             ->run();
 
         self::assertSame('Is', $result->model->trace);
@@ -130,7 +130,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testRawMsgWritesBytesWithoutAModelTurn(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send(new RawMsg("\x1b[9mX"))
+            ->addMsgs(new RawMsg("\x1b[9mX"))
             ->run();
 
         self::assertSame('I', $result->model->trace);
@@ -140,7 +140,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testPrintMsgAppendsATerminatedLineToOutput(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send(new PrintMsg('hello'))
+            ->addMsgs(new PrintMsg('hello'))
             ->run();
 
         self::assertSame('I', $result->model->trace);
@@ -152,7 +152,7 @@ final class ControlParitySimulatorTest extends TestCase
         // No virtual clock: the produce() result dispatches on the spot,
         // matching how Program::dispatch recurses from its one-shot timer.
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send(new TickRequest(5.0, fn (): Msg => $this->key('T')))
+            ->addMsgs(new TickRequest(5.0, fn (): Msg => $this->key('T')))
             ->run();
 
         self::assertSame('IT', $result->model->trace);
@@ -161,7 +161,7 @@ final class ControlParitySimulatorTest extends TestCase
     public function testExecRequestRefusesLoudly(): void
     {
         $sim = ProgramSimulator::for(new ControlRecorderModel())
-            ->send(new ExecRequest('ls'));
+            ->addMsgs(new ExecRequest('ls'));
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('cannot dispatch');
@@ -191,7 +191,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testRunIsRepeatable(): void
     {
-        $sim = ProgramSimulator::for(new ControlRecorderModel())->send($this->key('a'));
+        $sim = ProgramSimulator::for(new ControlRecorderModel())->addMsgs($this->key('a'));
 
         $first  = $sim->run();
         $second = $sim->run();
@@ -203,29 +203,55 @@ final class ControlParitySimulatorTest extends TestCase
     public function testFramesAccumulateOnePerUpdatePlusFinal(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
-            ->send($this->key('a'), $this->key('b'))
+            ->addMsgs($this->key('a'), $this->key('b'))
             ->run();
 
         self::assertSame(['I', 'Ia', 'Iab', 'Iab'], $result->frames);
         self::assertSame('Iab', $result->view);
     }
 
-    public function testQueueIsCopiedAtCloneTimeSoSendBeforeConfiguringIsInvisibleToTheClone(): void
+    public function testConfigureAfterSendThrowsInsteadOfSilentlyDroppingTheQueue(): void
     {
-        // The documented clone discipline: with*() returns a configured
-        // CLONE carrying the queue as it stood at clone time. Sends that
-        // land on the PRE-clone handle afterwards are invisible to the
-        // configured handle — this pin freezes that asymmetry so the
-        // silent-message-loss trap can never silently flip.
+        // The mix-that-loses-messages trap is now a named throw: a with*()
+        // setter clones, so configuring a handle that already queued messages
+        // would silently run WITHOUT them. addMsgs() marks the handle sent;
+        // any with*() after that refuses.
         $handle = ProgramSimulator::for(new ControlRecorderModel());
-        $configured = $handle->withRealCmdRunner(true);
-        $handle->send($this->key('x'));
+        $handle->addMsgs($this->key('x'));
+
+        try {
+            $handle->withRealCmdRunner(true);
+            self::fail('with*() after addMsgs() must throw');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('before the first addMsgs()', $e->getMessage());
+        }
+
+        // Configure-first arm: the configured handle carries later sends and
+        // runs them — the disciplined order behaves exactly as before.
+        $configured = ProgramSimulator::for(new ControlRecorderModel())->withRealCmdRunner(true);
+        $configured->addMsgs($this->key('x'));
 
         $cloneRun = $configured->run();
-        self::assertSame('I', $cloneRun->model->trace, 'a send() on the pre-clone handle reached the clone');
+        self::assertSame('Ix', $cloneRun->model->trace);
+    }
 
-        $originalRun = $handle->run();
-        self::assertSame('Ix', $originalRun->model->trace);
+    public function testDeprecatedSendAliasKeepsBehaviourAndDiscipline(): void
+    {
+        // send() survives as a thin alias so external consumers migrate on
+        // their own schedule: same handle back, same queueing, and the
+        // configure-after-send guard trips through it too.
+        $sim = ProgramSimulator::for(new ControlRecorderModel());
+        $returned = $sim->send($this->key('x'));
+        self::assertSame($sim, $returned, 'send() alias must mutate and return the same handle');
+
+        try {
+            $sim->withRealCmdRunner(true);
+            self::fail('send() must mark the handle sent just like addMsgs()');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('before the first addMsgs()', $e->getMessage());
+        }
+
+        self::assertSame('Ix', $sim->run()->model->trace);
     }
 
     public function testTestResultCarriesTheModelAndOutputShapes(): void

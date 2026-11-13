@@ -110,7 +110,7 @@ $counter = new class implements \SugarCraft\Core\Model {
 };
 
 $result = ProgramSimulator::for($counter)
-    ->send(...ScriptedInput::new()->key('a')->key('q')->build())
+    ->addMsgs(...ScriptedInput::new()->key('a')->key('q')->build())
     ->run();
 
 // Real suites COMMIT the golden file; a missing golden then fails loudly (see
@@ -123,9 +123,9 @@ if (GoldenFile::load($golden) === null) {
 Assertions::assertGoldenAnsi($golden, $result->view);
 ```
 
-`send()` takes one message or many — pairing `ScriptedInput` with the simulator
-is a single spread: `$sim->send(...$input->build());` (equivalently, a
-`foreach` of `send()` calls over `$input->build()`).
+`addMsgs()` takes one message or many — pairing `ScriptedInput` with the
+simulator is a single spread: `$sim->addMsgs(...$input->build());`
+(equivalently, a `foreach` of `addMsgs()` calls over `$input->build()`).
 
 ## API
 
@@ -136,9 +136,9 @@ use SugarCraft\Testing\ProgramSimulator;
 
 $sim = ProgramSimulator::for($program);           // Model or Program
 
-$sim->send($msgA, $msgB);                          // enqueue (fluent, variadic — queues in place)
 $sim = $sim->withRealCmdRunner(false);             // capture-only: cmds collected, never executed
 $sim = $sim->withFakeCmdRunner(fn ($cmd) => $nextMsg); // substitute the Cmd result (new sim — keep it)
+$sim->addMsgs($msgA, $msgB);                       // enqueue (variadic — queues on this handle)
 $result = $sim->run();                             // replayable from the initial state
 
 echo $result->view;                                // last view() string
@@ -152,11 +152,12 @@ execute mode, so the real Cmd still runs for its side effects before the fake
 message is injected. Pair it with `withRealCmdRunner(false)` (one line above)
 when the original execution must not happen.
 
-**Queue and clone discipline.** `send()` mutates the handle you call it on; the
-`with*()` configuration setters return a **clone** that copies the queue by
-value at clone time. Configure first, then send — sending on the original
-handle after cloning leaves the clone's queue (and therefore its `run()`)
-without those messages. `run()` resets all drain state and replays from the
+**Queue and clone discipline (enforced).** `addMsgs()` mutates the handle you
+call it on and marks it sent; the `with*()` configuration setters return a
+**clone**. Configure first, then queue — calling a `with*()` setter on a handle
+that has already queued messages throws `RuntimeException` rather than silently
+running without its queue. (`send()` remains as a deprecated alias of
+`addMsgs()`.) `run()` resets all drain state and replays from the
 initial model, so repeated runs are identical.
 
 ### Simulation subset

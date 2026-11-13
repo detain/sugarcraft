@@ -44,7 +44,7 @@ final class ProgramSimulatorTest extends TestCase
     public function testForBareModelProcessesQueuedMessages(): void
     {
         $sim = ProgramSimulator::for(new CounterModel(0));
-        $sim->send(new KeyMsg(
+        $sim->addMsgs(new KeyMsg(
             type: KeyType::Char,
             rune: '+',
             alt: false,
@@ -65,7 +65,7 @@ final class ProgramSimulatorTest extends TestCase
         $program = new Program($model);
         $sim = ProgramSimulator::for($program);
 
-        $result = $sim->send(new KeyMsg(
+        $result = $sim->addMsgs(new KeyMsg(
             type: KeyType::Char,
             rune: '+',
             alt: false,
@@ -94,19 +94,19 @@ final class ProgramSimulatorTest extends TestCase
         $program = new Program($model);
         $sim = ProgramSimulator::for($program);
 
-        $sim->send(new KeyMsg(
+        $sim->addMsgs(new KeyMsg(
             type: KeyType::Char,
             rune: '+',
             alt: false,
             ctrl: false,
             shift: false,
-        ))->send(new KeyMsg(
+        ))->addMsgs(new KeyMsg(
             type: KeyType::Char,
             rune: '+',
             alt: false,
             ctrl: false,
             shift: false,
-        ))->send(new KeyMsg(
+        ))->addMsgs(new KeyMsg(
             type: KeyType::Char,
             rune: '+',
             alt: false,
@@ -138,7 +138,7 @@ final class ProgramSimulatorTest extends TestCase
         $program = new Program($model);
         $sim = ProgramSimulator::for($program);
 
-        $sim->send(new KeyMsg(
+        $sim->addMsgs(new KeyMsg(
             type: KeyType::Char,
             rune: '-',
             alt: false,
@@ -313,7 +313,7 @@ final class ProgramSimulatorTest extends TestCase
                     shift: false,
                 )
             )
-            ->send(new KeyMsg(
+            ->addMsgs(new KeyMsg(
                 type: KeyType::Char,
                 rune: 'x', // Any initial message
                 alt: false,
