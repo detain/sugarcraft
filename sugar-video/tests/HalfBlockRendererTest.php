@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Render\HalfBlockRenderer;
 use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Render\QuarterBlockRenderer;
+use SugarCraft\Video\Render\RendererFactory;
 
 /**
  * Unit tests for HalfBlockRenderer — delegates to sugar-image.
@@ -153,5 +155,47 @@ final class HalfBlockRendererTest extends TestCase
         $output = $this->getRenderer()->render($frame, Mode::HalfBlock);
 
         $this->assertGreaterThan(0, strlen($output));
+    }
+
+    // -------------------------------------------------------------------------
+    // SV-L72/072: gd-less seat answers the bridge with a typed refusal
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox SV-L72: on a gd-less build the half-block bridge refuses TYPED at render entry (it used to fatal on an undefined GD function mid-paint), while construction — the Player's own door — stays gd-free
+     */
+    public function testGdLessSeatRefusesTypedAtRenderEntryNotAtConstruction(): void
+    {
+        RendererFactory::setGraphicsGateForTesting(static fn (): bool => false);
+        try {
+            // The Player runtime paints blocks inline and never calls through
+            // here, so refusing CONSTRUCTION would lie about its block rung.
+            $renderer = RendererFactory::new(Mode::HalfBlock);
+            $this->assertInstanceOf(HalfBlockRenderer::class, $renderer, 'the construction door must stay gd-free');
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('ext-gd');
+            $renderer->render(self::makeFrame(), Mode::HalfBlock);
+        } finally {
+            RendererFactory::setGraphicsGateForTesting(null);
+        }
+    }
+
+    /**
+     * @testdox SV-L72: the quarter-block twin crosses the same GD bridge and answers the same typed refusal at entry
+     */
+    public function testGdLessSeatRefusesTypedAtQuarterBlockRenderEntry(): void
+    {
+        RendererFactory::setGraphicsGateForTesting(static fn (): bool => false);
+        try {
+            $renderer = RendererFactory::new(Mode::QuarterBlock);
+            $this->assertInstanceOf(QuarterBlockRenderer::class, $renderer, 'the construction door must stay gd-free');
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('ext-gd');
+            $renderer->render(self::makeFrame(), Mode::QuarterBlock);
+        } finally {
+            RendererFactory::setGraphicsGateForTesting(null);
+        }
     }
 }

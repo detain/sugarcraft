@@ -7,6 +7,7 @@ namespace SugarCraft\Video\Render;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer as MosaicQuarterBlockRenderer;
 use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Lang;
 
 /**
  * Quarter-block Unicode renderer — delegates to sugar-image's
@@ -25,6 +26,14 @@ final class QuarterBlockRenderer implements FrameRenderer
 {
     public function render(RgbFrame $frame, Mode $mode): string
     {
+        // SV-L72/072: quarter-block rides the same GD bridge as its half-block
+        // twin — refuse typed at entry instead of fataling on an undefined
+        // function. Construction stays gd-free for the same reason (the Player
+        // paints this rung inline, never through here).
+        if (!RendererFactory::graphicsRenderable()) {
+            throw new \RuntimeException(Lang::t('decoder.gd_missing'));
+        }
+
         if ($frame->w <= 0 || $frame->h <= 0) {
             return '';
         }

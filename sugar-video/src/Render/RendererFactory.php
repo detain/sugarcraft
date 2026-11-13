@@ -80,7 +80,11 @@ final class RendererFactory
     }
 
     /**
-     * Whether this PHP build can encode graphics-rung payloads (GD-backed).
+     * Whether this PHP build can paint the GD-backed rungs. The single door
+     * is consulted by the graphics construction gate in new() (encode paths)
+     * and — since SV-L72/072 — by the block-bridge entry guards in
+     * HalfBlock/QuarterBlockRenderer, which cross RgbFrame through GD at
+     * render time while their construction leg stays gd-free for the Player.
      */
     public static function graphicsRenderable(): bool
     {

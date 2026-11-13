@@ -8,6 +8,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\HalfBlockRenderer as ImageHalfBlockRenderer;
 use SugarCraft\Video\Decode\RgbFrame;
+use SugarCraft\Video\Lang;
 
 /**
  * Half-block Unicode renderer — delegates to sugar-image's HalfBlockRenderer.
@@ -27,6 +28,18 @@ final class HalfBlockRenderer implements FrameRenderer
      */
     public function render(RgbFrame $frame, Mode $mode): string
     {
+        // SV-L72/072: this rung paints THROUGH GD (the bridge below calls
+        // RgbFrame::toGd), yet the construction door only vets the graphics
+        // protocols — a direct factory consumer on a gd-less build used to
+        // fatal mid-render on an undefined function. Refuse typed, the same
+        // way the graphics door does. Construction stays gd-free on purpose:
+        // the Player runtime never reaches this class (it paints blocks inline
+        // through frameToBuffer), so the Player's block rung must remain
+        // available exactly as the support() surface reports it.
+        if (!RendererFactory::graphicsRenderable()) {
+            throw new \RuntimeException(Lang::t('decoder.gd_missing'));
+        }
+
         if ($frame->w <= 0 || $frame->h <= 0) {
             return '';
         }
@@ -47,7 +60,8 @@ final class HalfBlockRenderer implements FrameRenderer
         // `tests/HalfBlockParityTest` and PlayerTest::testHalfBlockInlineMatchesMosaicRenderer.
         // Byte equality is NOT achievable here: Buffer::toAnsi() coalesces the SGR
         // runs while mosaic terminates each cell with a reset, and this path resamples
-        // through GD (so it needs ext-gd, which sugar-video does not require). Do not
+        // through GD (so it needs ext-gd, which sugar-video does not require — the
+        // entry guard above turns that need into a typed refusal, SV-L72/072). Do not
         // "simplify" view() onto this path without regenerating every HalfBlock golden.
         $renderer = new ImageHalfBlockRenderer();
 
