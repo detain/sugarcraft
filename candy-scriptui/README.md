@@ -363,7 +363,9 @@ a fallback of `zh-cn` — the naming rulebook lists the pair as divergent.
 - `1`   — generic failure: an unknown command name, `confirm` declined,
   an abort (Esc) from `choose` / `filter` / `input` / `write` / `file`,
   a refused flag value (`--default`, `--formatter`, `--shell`,
-  `--cursor-mode`), a `log --level fatal` line, or exit code `1`
+  `--cursor-mode`, and the allowed-set refusals for `--type` and
+  `--level`, which report `Invalid value for --…: '<x>'. Allowed: …`
+  on STDERR), a `log --level fatal` line, or exit code `1`
   forwarded from the external command run by `spin`. Run without a
   usable controlling terminal, every interactive command (`choose`,
   `confirm`, `filter`, `input`, `write`, `file`, `pager`) also refuses
@@ -372,7 +374,10 @@ a fallback of `zh-cn` — the naming rulebook lists the pair as divergent.
 - `2`   — `confirm` aborted (Esc) — distinct from a "no" answer — and a
   bad value for a scanned option that carries a `#[Flag(enum: …)]`
   constraint, which the pre-flight validator refuses before the command
-  runs (the allowed set is named on STDERR).
+  runs (the allowed set is named on STDERR). This lane guards embedded
+  and extension-discovered commands; no shipped subcommand's flags ride
+  it today (the built-in `--type`/`--level` refusals above are the
+  command's own check and exit `1`).
 - `124` — a `--timeout` deadline elapsed before the interaction finished
   (gum-compatible, matches GNU `timeout(1)`). A malformed `--timeout` value
   is refused up front (exit `1` on STDERR) — it is never coerced to "no
@@ -504,22 +509,25 @@ behavioural differences:
   the environment (`"*"` expands every variable — opt-in, and only safe
   for trusted input), and a placeholder that resolves to nothing is
   announced on STDERR instead of vanishing silently.
-- `--timeout`, `--show-help`, and `--strip-ansi` work on the commands that
-  accept them: `--timeout` arms a real deadline (exit `124`) on every
-  interactive command including `file` (on `file` it is capped at 86400
-  seconds — one day), `--show-help` is honoured as an alias for `--help`
-  on every command that defines it, and `--strip-ansi`
-  is read by `input`, `format`, and `style`. The `--cursor-mode` flag is
-  honoured by `input` and `write` (`hidden` hides the cursor; `blink`
-  and `static` leave the terminal default) and refuses any other value.
-  `--timeout` is a documented no-op on `join`, `log`, `style`, and `table`
-  (they run no interaction to bound); on `format` it is instead REFUSED
-  loudly (exit `1` on STDERR), since a deadline there would be silently
-  ignored. Flags a command never defines — `--cursor-mode` and
-  `--strip-ansi` on the non-interactive five (`format`, `join`, `log`,
-  `style`, `table`) — are NOT accepted: they fail with Symfony's
-  unknown-option error (exit `1`), consistent with the rule above that
-  every flag listed by a command's `--help` is live.
+- `--timeout` arms a real deadline (exit `124`) on every interactive
+  command including `file` (on `file` it is capped at 86400 seconds — one
+  day). On the four non-interactive commands that still list it
+  (`join`, `log`, `style`, `table`) it is an accepted no-op: they run no
+  interaction to bound. On `format` it is REFUSED loudly instead (exit `1`
+  on STDERR), since a deadline there would be silently ignored.
+- `--show-help` is honoured as an alias for `--help` on every command that
+  defines it.
+- `--strip-ansi` is a live flag on `input`, `format`, and `style` (it
+  strips ANSI escapes from the printed result). On `join`, `log`, and
+  `table` it is not defined and fails with Symfony's unknown-option error
+  (exit `1`) — as does `--cursor-mode` on all five non-interactive
+  commands. The `--cursor-mode` flag itself is honoured by `input` and
+  `write` (`hidden` hides the cursor; `blink` and `static` leave the
+  terminal default) and refuses any other value.
+- The rule behind all of this: every flag a command's `--help` lists is
+  live — with one named exception, `--timeout` on `join`, `log`, `style`,
+  and `table`, which is listed for gum flag-parity and documented above
+  as a no-op. Flags a command never defines are never silently accepted.
 - `confirm --default=yes|no` is the form to use; the older `--default-yes`
   alias is preserved.
 
@@ -605,6 +613,19 @@ The `SubStyleParser` utility parses gum-style `element.prop=value` entries
 into per-element `Style` maps for **extension** commands; no built-in
 command consumes it today, and `choose`'s `--cursor`/`--header` flags are
 plain strings, not sub-style entries.
+
+The sugar-forms seam note (referenced from the keyboard map): the
+`choose` and `filter` lists are painted by sugar-forms' `ItemList` —
+the same canonical list widget the sugar-widgets form fields use;
+`filter` runs it in its dedicated filter mode, where a typed query
+narrows the rows as you type (`file` renders through its own
+`FileModel` list view, sized by the same launch-time rules).
+`ItemList` exposes a resize
+notification, but its `--width` is a launch-time cap rather than a
+live re-flow hook, so candy-scriptui does not wire SIGWINCH into the
+lists (a re-flow would silently widen lists the scripter sized on
+purpose). Only `pager` re-fits live. If sugar-forms ever grows a resize
+path that honours explicit widths, the sizing bullet flips to match.
 
 ## Internals
 
