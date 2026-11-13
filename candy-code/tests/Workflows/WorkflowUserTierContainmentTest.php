@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Workflows;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Workflows\WorkflowNotFoundException;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
@@ -47,6 +48,7 @@ use SugarCraft\Code\Workflows\WorkflowRegistry;
  */
 final class WorkflowUserTierContainmentTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
     use HomeSandboxTrait;
 
     private string $tempDir;

@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Protocol;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 
 /**
  * C-WEB-4.f (GAP-GIT-01) — the session summary carries the branch the
@@ -23,6 +24,8 @@ use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
  */
 final class SessionSummaryBranchTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
+
     private ?ProtocolFixture $fixture = null;
 
     protected function tearDown(): void

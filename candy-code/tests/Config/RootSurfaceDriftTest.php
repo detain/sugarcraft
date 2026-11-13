@@ -135,28 +135,20 @@ final class RootSurfaceDriftTest extends TestCase
         );
         $line = $row[0];
 
+        // SD-S20 shortened the intro-table gist cell: the row now spells the
+        // engine and tool counts only ("nine provider engines, thirty-eight
+        // built-in tools"); the type-key count and the parenthesised engine
+        // roster live on MATCHUPS.md and the site page, pinned below.
         self::assertSame(
             1,
-            preg_match('/([a-z-]+) provider type keys over ([a-z-]+) engines/', $line, $m),
-            'the CandyCode row no longer spells its provider figures — re-pin this arm with the page'
+            preg_match('/([a-z-]+) provider engines/', $line, $m),
+            'the CandyCode row no longer spells its engine figure — re-pin this arm with the page'
         );
-        self::spelledFigure($m[1], $figures['typeKeys'], 'the provider type-key count');
-        self::spelledFigure($m[2], $figures['engines'], 'the engine count');
+        self::spelledFigure($m[1], $figures['engines'], 'the engine count');
 
         self::assertSame(
             1,
-            preg_match('/\((OpenAI [^)]+)\)/', $line, $paren),
-            'the CandyCode row no longer names the engines in parentheses'
-        );
-        self::assertSame(
-            $figures['engines'],
-            \substr_count($paren[1], ' / ') + 1,
-            'the parenthesised engine list on the CandyCode row no longer names as many engines as the factory runs'
-        );
-
-        self::assertSame(
-            1,
-            preg_match('/([a-z-]+) built-in tools on every launch/', $line, $tools),
+            preg_match('/([a-z-]+) built-in tools/', $line, $tools),
             'the CandyCode row no longer spells its tool count — re-pin this arm with the page'
         );
         self::spelledFigure($tools[1], $figures['tools'], 'the per-launch tool count');
