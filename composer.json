@@ -1,9 +1,8 @@
 {
     "name": "sugarcraft/sugarcraft",
-    "description": "PHP ports of the Charmbracelet TUI ecosystem (umbrella monorepo) \u2014 install all 46 libraries at once.",
+    "description": "PHP ports of the Charmbracelet TUI ecosystem (umbrella monorepo) \u2014 install the SugarCraft libraries at once.",
     "type": "metapackage",
     "license": "MIT",
-    "version": "1.0.0",
     "keywords": [
         "tui",
         "terminal",
@@ -37,7 +36,7 @@
     "support": {
         "issues": "https://github.com/detain/sugarcraft/issues",
         "source": "https://github.com/detain/sugarcraft",
-        "docs": "https://github.com/detain/sugarcraft/blob/master/CONVERSION.md"
+        "docs": "https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md"
     },
     "require": {
         "php": "^8.3",
