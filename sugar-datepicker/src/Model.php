@@ -65,8 +65,13 @@ final class Model implements \SugarCraft\Core\Model
      * first/last valid day.
      * Records events to the EventStore when one is injected.
      *
-     * Chorded Enter/Escape/PageUp/PageDown (Ctrl or Alt held) are ignored so a
-     * host's reserved chords are not hijacked; bare arrow keys always act.
+     * Chord policy (single source of truth, pinned in full by
+     * {@see ModelTest::testChordMatrix()}): the four ACTION keys
+     * Enter/Escape/PageUp/PageDown are reserved to the host under ANY chord —
+     * Ctrl, Alt or Shift held means the key is ignored, so a chat host's
+     * Shift+Enter newline is never hijacked. The six NAVIGATION keys
+     * Left/Right/Up/Down/Home/End keep the deliberate terminal-compatibility
+     * exception and act bare AND chorded.
      *
      * The command is permanently null: this widget never drives side effects of
      * its own. A host that wants "picked, now quit" must inspect
@@ -92,11 +97,14 @@ final class Model implements \SugarCraft\Core\Model
     /**
      * The single keyboard dispatch table. Both cursor movement and month
      * stepping resolve here, so there is exactly one source of truth for the
-     * key → action mapping (no second hand-restated table).
+     * key → action mapping (no second hand-restated table). The one chord
+     * policy: `$chorded` names all three modifier legs (Ctrl|Alt|Shift), and
+     * it gates exactly the four ACTION arms; the navigation arms stay
+     * reachable under every chord by design.
      */
     private function applyKey(DatePicker $picker, KeyMsg $msg): DatePicker
     {
-        $chorded = $msg->ctrl || $msg->alt;
+        $chorded = $msg->ctrl || $msg->alt || $msg->shift;
 
         return match (true) {
             $msg->type === KeyType::Left   => $picker->moveCursorLeft(),

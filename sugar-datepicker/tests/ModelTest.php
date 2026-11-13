@@ -202,24 +202,89 @@ final class ModelTest extends TestCase
         $this->assertSame(4, $prev->picker()->ViewMonth());
     }
 
-    public function testChordedEnterIsIgnored(): void
+    /**
+     * dp-07 successor to the two-case testChordedEnterIsIgnored: pins the
+     * WHOLE settled chord matrix — every mapped arm under every modifier —
+     * as contract. Navigation arms (arrows, Home, End) act bare AND chorded
+     * (terminal-compatibility exception); action arms (PageUp, PageDown,
+     * Enter, Escape) act ONLY bare and are host-reserved under Ctrl, Alt or
+     * Shift. Flipping the polarity of any single arm in applyKey reddens a
+     * row here.
+     */
+    public static function chordMatrixProvider(): array
     {
-        // MT2: the wrapper matched only the key type, so Ctrl+Enter / Alt+Enter
-        // — chords a host may reserve — silently triggered selection. They are
-        // now dropped; the unmodified Enter still selects.
-        $store = new EventStore();
-        $ctrl = Model::new(new \DateTimeImmutable('2026-05-01'), $store)
-            ->update(new KeyMsg(KeyType::Enter, ctrl: true))[0];
-        $this->assertFalse($ctrl->picker()->IsSelecting(), 'Ctrl+Enter must not select');
-        $this->assertNull($ctrl->picker()->SelectedDate());
+        $cases = [];
+        $modifiers = ['none', 'ctrl', 'alt', 'shift'];
+        $navigation = ['Left', 'Right', 'Up', 'Down', 'Home', 'End'];
+        $actions = ['PageUp', 'PageDown', 'Enter', 'Escape'];
+        foreach ([...$navigation, ...$actions] as $arm) {
+            foreach ($modifiers as $chord) {
+                $acts = in_array($arm, $navigation, true) || $chord === 'none';
+                $cases["{$arm}+{$chord}"] = [$arm, $chord, $acts];
+            }
+        }
 
-        $alt = Model::new(new \DateTimeImmutable('2026-05-01'), $store)
-            ->update(new KeyMsg(KeyType::Enter, alt: true))[0];
-        $this->assertFalse($alt->picker()->IsSelecting(), 'Alt+Enter must not select');
+        return $cases;
+    }
 
-        $plain = Model::new(new \DateTimeImmutable('2026-05-01'), $store)
-            ->update(new KeyMsg(KeyType::Enter))[0];
-        $this->assertTrue($plain->picker()->IsSelecting(), 'plain Enter still selects');
+    #[\PHPUnit\Framework\Attributes\DataProvider('chordMatrixProvider')]
+    public function testChordMatrix(string $arm, string $chord, bool $acts): void
+    {
+        $types = [
+            'Left' => KeyType::Left,
+            'Right' => KeyType::Right,
+            'Up' => KeyType::Up,
+            'Down' => KeyType::Down,
+            'Home' => KeyType::Home,
+            'End' => KeyType::End,
+            'PageUp' => KeyType::PageUp,
+            'PageDown' => KeyType::PageDown,
+            'Enter' => KeyType::Enter,
+            'Escape' => KeyType::Escape,
+        ];
+
+        $model = Model::new(new \DateTimeImmutable('2026-05-15'));
+        if ($arm === 'Escape') {
+            // Seed a selection so Escape has an observable effect to pin.
+            $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+            $this->assertNotNull($model->picker()->selectedDate());
+        }
+
+        $before = self::stateFingerprint($model->picker());
+        [$next, $cmd] = $model->update(new KeyMsg(
+            $types[$arm],
+            alt: $chord === 'alt',
+            ctrl: $chord === 'ctrl',
+            shift: $chord === 'shift',
+        ));
+        $after = self::stateFingerprint($next->picker());
+        $this->assertNull($cmd, 'the command is permanently null');
+
+        if ($acts) {
+            $this->assertNotSame(
+                $before,
+                $after,
+                "the {$arm} arm must act under '{$chord}' (terminal-compat exception or bare key)",
+            );
+        } else {
+            $this->assertSame(
+                $before,
+                $after,
+                "{$arm} held with '{$chord}' belongs to the host and must be ignored",
+            );
+        }
+    }
+
+    /** @return array{0: ?string, 1: bool, 2: int, 3: int, 4: int} */
+    private static function stateFingerprint(DatePicker $picker): array
+    {
+        return [
+            $picker->selectedDate()?->format('Y-m-d'),
+            $picker->isSelecting(),
+            $picker->cursorIndex(),
+            $picker->viewMonth(),
+            $picker->viewYear(),
+        ];
     }
 
     public function testEscapeInSingleModeRecordsDateCleared(): void

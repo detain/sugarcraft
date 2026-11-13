@@ -242,10 +242,11 @@ so a TEA application never needs to call `handleKey()` directly.
 Honest limitations: there is no month-wrap on arrow keys (they clamp at the grid
 edge and can rest on empty lead-in/trailing cells, where single-mode Enter falls
 back to the first of the month but range-mode Enter does nothing), and no
-typeahead year entry. Chord policy: through the `Model`, chorded Enter, Escape,
-PageUp and PageDown (Ctrl or Alt held) are ignored so a host's reserved chords
-are not hijacked, but the bare arrow keys and Home/End still act under any
-chord. `PageUp`/`PageDown` step one
+typeahead year entry. Chord policy: through the `Model`, the four action keys
+Enter, Escape, PageUp and PageDown are host-reserved under ANY chord — Ctrl,
+Alt or Shift held — so a chat host's Shift+Enter newline is never hijacked.
+The arrows and Home/End are the deliberate terminal-compatibility exception:
+they act bare and chorded alike. `PageUp`/`PageDown` step one
 month through the `Model`; larger jumps between months and years go through the
 `GoTo*` methods.
 
