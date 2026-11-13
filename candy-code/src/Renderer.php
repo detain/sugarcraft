@@ -7553,18 +7553,6 @@ final class Renderer
     }
 
     /**
-     * The Ctrl+P command palette's content, composited over the whole frame
-     * by {@see render()} via {@see Veil}. Returns '' (nothing composited)
-     * when the palette is closed - see {@see Chat::palette()}.
-     *
-     * Rows come from {@see Chat::paletteMatchResults()} rather than the bare
-     * label list so the matched characters can be highlighted through
-     * {@see Highlighter} (§4 E3). With no query typed, the root
-     * list arrives category-grouped and MRU-biased and gets a faint header
-     * per category (§4 E6/E7); a typed query stays a flat relevance-ranked
-     * list, headers omitted, so the best match is always the first row.
-     */
-    /**
      * Visible half-open slice [start, end) of the palette result list that
      * fits `$budget` content lines and always contains `$selected`.
      *
@@ -7616,6 +7604,18 @@ final class Renderer
         return [$start, $end];
     }
 
+    /**
+     * The Ctrl+P command palette's content, composited over the whole frame
+     * by {@see render()} via {@see Veil}. Returns '' (nothing composited)
+     * when the palette is closed - see {@see Chat::palette()}.
+     *
+     * Rows come from {@see Chat::paletteMatchResults()} rather than the bare
+     * label list so the matched characters can be highlighted through
+     * {@see Highlighter} (§4 E3). With no query typed, the root
+     * list arrives category-grouped and MRU-biased and gets a faint header
+     * per category (§4 E6/E7); a typed query stays a flat relevance-ranked
+     * list, headers omitted, so the best match is always the first row.
+     */
     private static function renderPalette(Chat $chat, Theme $theme, RenderFrame $frame): string
     {
         $palette = $chat->palette();

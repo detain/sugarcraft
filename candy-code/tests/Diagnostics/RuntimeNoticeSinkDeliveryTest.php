@@ -1333,12 +1333,6 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // prose is dropped by reflection. Retire by merging the two blocks
         // over the helper.
         'tests/Chat/McpLoginForkTest.php:309',
-        // W27 / C-TUI-4.c (867ec581f; the block itself 7e2d404310): the review
-        // fix inserted the new tick-delivery test's block between the
-        // pre-existing configured-directory prose and the test it describes,
-        // so that test now carries no doc-comment of its own. Costly variant.
-        // Retire by moving the prose block back down onto its test.
-        'tests/Config/StatusLineCommandTest.php:922',
         // W24 / C-CTX-5.b (50800af96): the prose naming the session's own
         // backend slot sits above setHeld()'s `@param` block while
         // setSessionBackend() below carries none. Costly variant. Retire by

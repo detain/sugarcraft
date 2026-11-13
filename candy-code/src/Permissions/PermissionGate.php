@@ -1782,6 +1782,22 @@ final class PermissionGate
     }
 
     /**
+     * The length door ({@see evaluateMode()}): commands longer than this are
+     * not parsed or classified by the gate.
+     */
+    public const MAX_REASONED_COMMAND_BYTES = 65536;
+
+    /** Byte length of a `Bash` command past the length door, else null. */
+    private static function oversizedCommand(ToolCall $call): ?int
+    {
+        $command = $call->arguments['command'] ?? null;
+
+        return $call->name === 'Bash' && is_string($command) && strlen($command) > self::MAX_REASONED_COMMAND_BYTES
+            ? strlen($command)
+            : null;
+    }
+
+    /**
      * Detect the `rm -rf /` or `rm -rf ~` circuit-breaker pattern (R3).
      *
      * JUDGED ON THE WORDS BASH WILL PRODUCE, NOT ON THE RAW TEXT. Until audit
@@ -1841,22 +1857,6 @@ final class PermissionGate
      * rm -rf "$HOME"/, rm -r -- -f /, sudo rm -rf /, SUDO RM -RF ~,
      * sudo -u root rm -rf /, /bin/rm -rf /, \rm -rf /, (rm -rf /)
      */
-    /**
-     * The length door ({@see evaluateMode()}): commands longer than this are
-     * not parsed or classified by the gate.
-     */
-    public const MAX_REASONED_COMMAND_BYTES = 65536;
-
-    /** Byte length of a `Bash` command past the length door, else null. */
-    private static function oversizedCommand(ToolCall $call): ?int
-    {
-        $command = $call->arguments['command'] ?? null;
-
-        return $call->name === 'Bash' && is_string($command) && strlen($command) > self::MAX_REASONED_COMMAND_BYTES
-            ? strlen($command)
-            : null;
-    }
-
     private function isRmRfRootOrHome(ToolCall $call): bool
     {
         // C-TOOL-6.k: typed input reaches the same floor. A ShellSend carries

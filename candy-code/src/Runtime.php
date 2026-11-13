@@ -4357,13 +4357,6 @@ final class Runtime
     }
 
     /**
-     * {@see Tool::execute()} with the throwing-tool guarantee applied — the
-     * one place that turns a \Throwable into this call's own error result, so
-     * the in-process and forked paths cannot word it differently.
-     *
-     * @param array<string, mixed> $args
-     */
-    /**
      * {@see executeGuarded()} for a child that reports progress: the tool's
      * wait loop touches $beat (throttled to a second, and only from this
      * process) so the parent can tell a slow call from a hung one.
@@ -4410,6 +4403,13 @@ final class Runtime
         return $mtime !== false && $now - $mtime <= self::PARALLEL_BEAT_FRESH_SECONDS;
     }
 
+    /**
+     * {@see Tool::execute()} with the throwing-tool guarantee applied — the
+     * one place that turns a \Throwable into this call's own error result, so
+     * the in-process and forked paths cannot word it differently.
+     *
+     * @param array<string, mixed> $args
+     */
     private function executeGuarded(Tool $tool, ToolCall $toolCall, array $args): ToolResult
     {
         try {

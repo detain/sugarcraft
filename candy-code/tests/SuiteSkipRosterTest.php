@@ -58,8 +58,9 @@ final class SuiteSkipRosterTest extends TestCase
      * The real roster keys, written out in full so a rename inside
      * `SuiteSkipRoster::EXPECTED` reddens the layout tests below (via an
      * undefined index) rather than quietly aiming them at a stale key.
+     *
+     * The layout-conditional key -- the private `SuiteSkipRoster::CONDITIONAL`, by literal.
      */
-    /** The layout-conditional key -- the private `SuiteSkipRoster::CONDITIONAL`, by literal. */
     private const GITIGNORE_ENTRY =
         'SugarCraft\\Code\\Tests\\Tools\\BuiltIn\\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed';
 

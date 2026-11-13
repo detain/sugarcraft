@@ -942,12 +942,6 @@ final class StatusLineCommandTest extends TestCase
     }
 
     /**
-     * The command runs in the directory it was configured with — `--root <lib>`
-     * in a monorepo is exactly the case where that differs from `getcwd()`, and
-     * a `git`-shaped status command that ignored it would report the wrong
-     * repository.
-     */
-    /**
      * THE PRODUCTION WIRING, end to end (GAP-UI-23). Everything else in this
      * file drives {@see StatusLineCommand::run()} with a hand-written
      * payload; that shape stays green if the tick caller forgets to pass one,
@@ -1076,6 +1070,12 @@ final class StatusLineCommandTest extends TestCase
         return $settled;
     }
 
+    /**
+     * The command runs in the directory it was configured with — `--root <lib>`
+     * in a monorepo is exactly the case where that differs from `getcwd()`, and
+     * a `git`-shaped status command that ignored it would report the wrong
+     * repository.
+     */
     public function testTheConfiguredWorkingDirectoryIsWhereTheCommandRuns(): void
     {
         $dir = sys_get_temp_dir() . '/candy_code_sl_cwd_' . bin2hex(random_bytes(8));

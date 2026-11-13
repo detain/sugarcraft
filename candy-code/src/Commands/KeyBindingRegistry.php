@@ -434,16 +434,6 @@ final class KeyBindingRegistry
     }
 
     /**
-     * The chord a binding answers to — the consult order the `keybindings`
-     * setting exists for: a registered override WINS over the shipped row,
-     * and a suppression replaces it with the reference's own "unbound" word
-     * (plan_comparison TUI-4b — the /keys column reads this method, so an
-     * unbound row shows what it IS there without the reference editing).
-     *
-     * Null answers for an id the registry does not declare, overridden or
-     * not; validation rejects unknown ids before they could be registered.
-     */
-    /**
      * The chord a live row bound to slash command $name shows, as the table
      * currently answers it (a `keybindings` override wins, an unbound row
      * answers null). Read by `/help` and the `/` popup, so the shortcut column
@@ -465,6 +455,16 @@ final class KeyBindingRegistry
         return null;
     }
 
+    /**
+     * The chord a binding answers to — the consult order the `keybindings`
+     * setting exists for: a registered override WINS over the shipped row,
+     * and a suppression replaces it with the reference's own "unbound" word
+     * (plan_comparison TUI-4b — the /keys column reads this method, so an
+     * unbound row shows what it IS there without the reference editing).
+     *
+     * Null answers for an id the registry does not declare, overridden or
+     * not; validation rejects unknown ids before they could be registered.
+     */
     public static function chordFor(string $id): ?string
     {
         $override = self::$overrides[$id] ?? null;

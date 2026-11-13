@@ -13820,11 +13820,6 @@ final class Chat implements Model
     }
 
     /**
-     * Hard-clip one already-laid-out line to $cols columns, ellipsis included.
-     * Used by the `/help` listing, whose rows are built from registry data
-     * that can be arbitrarily long.
-     */
-    /**
      * $line with $chord right-aligned to $budget, the `/help` shortcut column.
      * The description gives up its tail first; without room for the chord and
      * a gap of at least two, the row is just clipped as it always was.
@@ -13844,6 +13839,11 @@ final class Chat implements Model
         return $body . str_repeat(' ', $budget - $chordWidth - Width::string($body)) . $chord;
     }
 
+    /**
+     * Hard-clip one already-laid-out line to $cols columns, ellipsis included.
+     * Used by the `/help` listing, whose rows are built from registry data
+     * that can be arbitrarily long.
+     */
     private static function clip(string $line, int $cols): string
     {
         if (Width::string($line) <= $cols) {

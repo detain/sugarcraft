@@ -580,6 +580,25 @@ final class DoctorChecks
     }
 
     /**
+     * The permission bits of $path when any group or other bit is set, else
+     * null. POSIX only: Windows reports synthetic modes that say nothing
+     * about who else can read the file, so the check answers null there.
+     */
+    private static function looseConfigMode(string $path, string $osFamily = \PHP_OS_FAMILY): ?int
+    {
+        if ($osFamily === 'Windows') {
+            return null;
+        }
+        $mode = @\fileperms($path);
+        if ($mode === false) {
+            return null;
+        }
+        $bits = $mode & 0777;
+
+        return ($bits & 0077) !== 0 ? $bits : null;
+    }
+
+    /**
      * The `sandbox` doctor row: the three facts someone typing
      * "sandboxing is not working" needs, each answered through the SAME code
      * the Bash tool uses, never a second opinion —
@@ -612,25 +631,6 @@ final class DoctorChecks
      *
      * @param ?\Closure(): ?string $jail
      */
-    /**
-     * The permission bits of $path when any group or other bit is set, else
-     * null. POSIX only: Windows reports synthetic modes that say nothing
-     * about who else can read the file, so the check answers null there.
-     */
-    private static function looseConfigMode(string $path, string $osFamily = \PHP_OS_FAMILY): ?int
-    {
-        if ($osFamily === 'Windows') {
-            return null;
-        }
-        $mode = @\fileperms($path);
-        if ($mode === false) {
-            return null;
-        }
-        $bits = $mode & 0777;
-
-        return ($bits & 0077) !== 0 ? $bits : null;
-    }
-
     private static function sandboxProbe(?\Closure $jail = null, ?string $sysctlPath = null, string $osFamily = \PHP_OS_FAMILY): array
     {
         $configured = SandboxFactory::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null, $osFamily);
