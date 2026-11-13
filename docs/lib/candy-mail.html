@@ -171,11 +171,22 @@ $email = Email::new('noreply@example.com', 'user@example.com', 'Deployment compl
     -&gt;withCc('ops@example.com')
     -&gt;withAttachment('build.zip', '/tmp/build.zip');   // display name, then the file on disk
 
-$transport = new SmtpTransport('smtp.example.com', 587, 'user', 'secret');
+// Credentials come from the environment — never from committed source.
+$transport = new SmtpTransport(
+    host:     'smtp.example.com',
+    port:     587,
+    username: (string) getenv('CANDY_MAIL_SMTP_USERNAME'),
+    password: (string) getenv('CANDY_MAIL_SMTP_PASSWORD'),
+);
 $transport-&gt;send($email);
 
 // Or over the Resend HTTP API (key from the argument or RESEND_API_KEY)
 (new ResendTransport())-&gt;send($email);</code></pre>
+
+    <p>TLS is required by default on the SMTP transport — credentials never travel over a plaintext
+    channel. Keep real passwords and API keys in the environment (the <code>candy-mail</code> CLI reads
+    the same <code>CANDY_MAIL_SMTP_*</code> names); see the TLS &amp; security section of the
+    <a href="https://github.com/detain/sugarcraft/blob/master/candy-mail/README.md">README</a>.</p>
 
     <p>Attachment paths are read eagerly at build time — the file on disk must exist when <code>withAttachment()</code> is called, or the builder throws a <code>RuntimeException</code>.</p>
 
