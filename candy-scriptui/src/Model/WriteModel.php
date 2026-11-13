@@ -94,8 +94,27 @@ final class WriteModel implements Model
 
     public function view(): string
     {
-        $body = Emphasis::stripDecor($this->area->view());
+        $body = $this->ghostText();
         return $this->header === '' ? $body : $this->header . "\n" . $body;
+    }
+
+    /**
+     * scriptui-17: same unfocused-only placeholder gate as InputModel —
+     * TextArea paints its hint only while BLURRED, and this editor keeps
+     * focus for the whole session. While the buffer is empty the frame is
+     * rendered through the widget's own unfocused path (a pure copy — the
+     * model's focus state never changes), so the dim hint appears; the
+     * first keystroke takes the buffer off empty and the real editor
+     * surface returns.
+     */
+    private function ghostText(): string
+    {
+        $area = $this->area;
+        if ($area->value() !== '' || !$area->focused() || $area->placeholder === '') {
+            return Emphasis::stripDecor($area->view());
+        }
+
+        return Emphasis::stripDecor($area->blur()->view());
     }
     public function value(): string { return $this->area->value(); }
     public function isSubmitted(): bool { return $this->submitted; }

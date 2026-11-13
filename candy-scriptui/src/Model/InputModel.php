@@ -6,6 +6,7 @@ namespace SugarCraft\ScriptUi\Model;
 
 use SugarCraft\Forms\TextInput\EchoMode;
 use SugarCraft\Forms\TextInput\TextInput;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
@@ -88,10 +89,39 @@ final class InputModel implements Model
 
     public function view(): string
     {
-        $body = Emphasis::stripDecor($this->input->view());
+        $body = $this->ghostText();
         return $this->header === ''
             ? $body
             : $this->header . "\n" . $body;
+    }
+
+    /**
+     * scriptui-17: the widget paints its placeholder only while UNFOCUSED
+     * (TextInput empty+!focused gate) — and this prompt holds focus for the
+     * whole session, so `input --placeholder 'Your name?'` rendered nothing.
+     * While the value is empty the candy side owns the ghost: the block
+     * cursor carries the first character (reverse video keeps it legible),
+     * the remainder rides the widget's faint placeholder style. The first
+     * keystroke moves the value off '' and the ghost is gone.
+     */
+    private function ghostText(): string
+    {
+        $ti = $this->input;
+        if ($ti->value !== '' || !$ti->focused || $ti->placeholder === '') {
+            return Emphasis::stripDecor($ti->view());
+        }
+
+        $ghost = $ti->placeholder;
+        $first = mb_substr($ghost, 0, 1, 'UTF-8');
+        $rest  = mb_substr($ghost, 1, null, 'UTF-8');
+
+        return Emphasis::stripDecor(
+            $ti->prefix
+            . $ti->prompt
+            . $ti->cursor->setChar($first)->view()
+            . ($rest === '' ? '' : Emphasis::sgr(Ansi::FAINT) . $rest . Emphasis::reset())
+            . $ti->suffix,
+        );
     }
 
     public function value(): string { return $this->input->value; }
