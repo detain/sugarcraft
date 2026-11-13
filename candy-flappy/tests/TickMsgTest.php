@@ -27,11 +27,4 @@ final class TickMsgTest extends TestCase
         $reflection = new \ReflectionClass(TickMsg::class);
         $this->assertTrue($reflection->isFinal());
     }
-
-    public function testTwoInstancesAreDistinctObjects(): void
-    {
-        $a = new TickMsg();
-        $b = new TickMsg();
-        $this->assertNotSame($a, $b);
-    }
 }

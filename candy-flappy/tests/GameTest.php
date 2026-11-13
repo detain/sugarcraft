@@ -78,12 +78,15 @@ final class GameTest extends TestCase
     {
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())->tickN(80);
         $this->assertTrue($g->crashed);
-        $_rowAtCrash = $g->bird->row();
-        $_g2 = $g->tickN(10);
         // tickN bypasses the crashed gate (it's a test helper that drives
-        // advance() directly), so the bird keeps falling past the floor —
-        // but the runtime gate in update(TickMsg) will not advance the model.
-        // Verify that update() returns the same model with no further work.
+        // advance() directly), so the bird keeps falling past the floor.
+        // The old code COMPUTED that fall and pinned nothing (flappy-49):
+        // assert the claim now — ten further ticks of gravity move the row.
+        $rowAtCrash = $g->bird->row();
+        $fallen = $g->tickN(10);
+        $this->assertGreaterThan($rowAtCrash, $fallen->bird->row(), 'tickN keeps integrating past the floor by design');
+        // Verify that update() returns the same model with no further work —
+        // the runtime gate in update(TickMsg) will not advance the model.
         [$next, $cmd] = $g->update(new TickMsg());
         $this->assertSame($g, $next);
         $this->assertNull($cmd);
