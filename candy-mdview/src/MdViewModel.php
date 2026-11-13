@@ -59,6 +59,9 @@ final class MdViewModel implements Model
 
     /** One-row key strip: every binding from the README's table, condensed. */
     private const HELP_ROW       = '↑↓ j/k · PgUp b space f · Ctrl+U/D · Home g End G · h/l scroll · r reload · q quit · ? toggle';
+    private const HELP_ROW_COMPACT = 'j/k PgUp Ctrl+U/D Home g End G h/l r reload q quit ? toggle';
+    private const HELP_ROW_MINIMAL = 'j/k PgUp r reload q quit ? toggle';
+    private const HELP_ROW_TOGGLE  = '? toggle';
     private const HELP_ROW_ASCII = 'up/down j/k | PgUp b space f | Ctrl+U/D | Home g End G | h/l scroll | r reload | q quit | ? toggle';
 
     public static function fromContent(string $content, int $width = 80, int $height = 24): self
@@ -461,11 +464,29 @@ final class MdViewModel implements Model
         return implode("\n", $rows);
     }
 
-    /** The one-row key strip, clipped and padded to the viewport width. */
+    /**
+     * The one-row key strip, padded to the viewport width. Clipping the full
+     * table would amputate `? toggle` — the one chord that dismisses the
+     * strip — first on any narrow box, so the row degrades through ever
+     * shorter tiers (all ASCII, the last two always carrying the toggle) and
+     * only clips when even `? toggle` cannot fit.
+     */
     private function helpRow(): string
     {
-        $text  = self::headerIsAsciiOnly() ? self::HELP_ROW_ASCII : self::HELP_ROW;
         $width = $this->viewport->width;
+        $tiers = [
+            self::headerIsAsciiOnly() ? self::HELP_ROW_ASCII : self::HELP_ROW,
+            self::HELP_ROW_COMPACT,
+            self::HELP_ROW_MINIMAL,
+            self::HELP_ROW_TOGGLE,
+        ];
+        $text = self::HELP_ROW_TOGGLE;
+        foreach ($tiers as $tier) {
+            if (Width::of($tier) <= $width) {
+                $text = $tier;
+                break;
+            }
+        }
         return Width::padRight(Width::truncate($text, max(0, $width)), $width);
     }
 

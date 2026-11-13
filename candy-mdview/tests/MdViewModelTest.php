@@ -136,9 +136,21 @@ final class MdViewModelTest extends TestCase
         $lines = explode("\n", $helped);
         $this->assertStringContainsString('? toggle', $lines[1], 'the strip rides directly under the header');
         $this->assertSame(40, \SugarCraft\Core\Util\Width::of($lines[1]), 'the strip is padded to the exact viewport width');
-        foreach (['j/k', 'PgUp', 'Ctrl+U/D', 'Home g', 'End G', 'h/l', 'r reload', 'q quit'] as $binding) {
-            $this->assertStringContainsString($binding, $lines[1], 'strip must carry table binding: ' . $binding);
+        // A 40-col box cannot carry the whole table; it degrades but keeps the
+        // dismissing chord and the core bindings (the full table needs room).
+        foreach (['j/k', 'PgUp', 'r reload', 'q quit'] as $binding) {
+            $this->assertStringContainsString($binding, $lines[1], 'narrow strip keeps: ' . $binding);
         }
+        [$wide, ] = MdViewModel::fromContent($this->content(9), 100, 6)->withDocument('doc.md')
+            ->update(new KeyMsg(KeyType::Char, '?'));
+        $wideStrip = explode("\n", $wide->view())[1];
+        foreach (['j/k', 'PgUp', 'Ctrl+U/D', 'Home g', 'End G', 'h/l', 'r reload', 'q quit', '? toggle'] as $binding) {
+            $this->assertStringContainsString($binding, $wideStrip, 'strip must carry table binding: ' . $binding);
+        }
+        // Even a 10-col box keeps the dismissing chord.
+        [$tiny, ] = MdViewModel::fromContent($this->content(9), 10, 6)->withDocument('doc.md')
+            ->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertStringContainsString('? toggle', explode("\n", $tiny->view())[1]);
 
         [$off, ] = $on->update(new KeyMsg(KeyType::Char, '?'));
         $this->assertFalse($off->helpShown);
