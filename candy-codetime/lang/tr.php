@@ -29,6 +29,7 @@ return [
     'cli.invalid_theme' => 'candy-codetime: tema {names} değerlerinden biri olmalı - alınan "{value}"',
     'cli.backend_invalid' => "candy-codetime: geçersiz arka uç (file veya sqlite kullanın)",
     'cli.backend_unavailable' => "candy-codetime: sqlite arka ucu kullanılamıyor: PHP sqlite3 uzantısı yüklü değil",
+    'cli.no_home_dir' => 'candy-codetime: yazılacak bir ana dizin yok - CANDY_CODETIME_DIR değerini ayarlayın (ya da HOME veya XDG_DATA_HOME ayarlı kalsın)',
     'cli.backend_other_hint' => 'not: {other} arka ucu da kayıtlar içeriyor - --backend={other} ile seçin',
     'cli.storage_error' => 'candy-codetime: depolama hatası: {message}',
     'cli.ignore_too_large' => 'candy-codetime: {message}',

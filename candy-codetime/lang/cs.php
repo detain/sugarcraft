@@ -29,6 +29,7 @@ return [
     'cli.invalid_theme' => 'candy-codetime: motiv musí být jedním z {names} - obdrženo "{value}"',
     'cli.backend_invalid' => "candy-codetime: neplatný backend (použijte file nebo sqlite)",
     'cli.backend_unavailable' => "candy-codetime: backend sqlite není dostupný: rozšíření PHP sqlite3 není načteno",
+    'cli.no_home_dir' => 'candy-codetime: žádný domovský adresář pro zápis - nastavte CANDY_CODETIME_DIR (nebo zachovejte HOME či XDG_DATA_HOME)',
     'cli.backend_other_hint' => 'poznámka: backend {other} obsahuje také záznamy - vyber ho pomocí --backend={other}',
     'cli.storage_error' => 'candy-codetime: chyba úložiště: {message}',
     'cli.ignore_too_large' => 'candy-codetime: {message}',

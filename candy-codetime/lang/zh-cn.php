@@ -29,6 +29,7 @@ return [
     'cli.invalid_theme' => 'candy-codetime: 主题必须是 {names} 之一 - 收到 "{value}"',
     'cli.backend_invalid' => "candy-codetime: 无效的后端 (请使用 file 或 sqlite)",
     'cli.backend_unavailable' => "candy-codetime: sqlite 后端不可用: 未加载 PHP 扩展 sqlite3",
+    'cli.no_home_dir' => 'candy-codetime: 没有可写入的主目录 - 请设置 CANDY_CODETIME_DIR（或保留 HOME 或 XDG_DATA_HOME 的设置）',
     'cli.backend_other_hint' => '注意：{other} 后端也存有记录 - 请使用 --backend={other} 选择它',
     'cli.storage_error' => 'candy-codetime: 存储错误：{message}',
     'cli.ignore_too_large' => 'candy-codetime: {message}',

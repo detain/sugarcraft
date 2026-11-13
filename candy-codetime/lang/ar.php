@@ -29,6 +29,7 @@ return [
     'cli.invalid_theme' => 'candy-codetime: يجب أن تكون السمة أحد {names} - تم استلام "{value}"',
     'cli.backend_invalid' => "candy-codetime: واجهة تخزين غير صالحة (استخدم file أو sqlite)",
     'cli.backend_unavailable' => "candy-codetime: واجهة تخزين sqlite غير متاحة: امتداد sqlite3 لـ PHP غير محمّل",
+    'cli.no_home_dir' => 'candy-codetime: لا دليل منزلي للكتابة إليه - عيّن CANDY_CODETIME_DIR (أو أبقِ HOME أو XDG_DATA_HOME معيّنًا)',
     'cli.backend_other_hint' => 'ملاحظة: واجهة تخزين {other} تحتوي أيضًا على سجلات - اخترها باستخدام --backend={other}',
     'cli.storage_error' => 'candy-codetime: خطأ التخزين: {message}',
     'cli.ignore_too_large' => 'candy-codetime: {message}',

@@ -29,6 +29,7 @@ return [
     'cli.invalid_theme' => 'candy-codetime: el tema debe ser uno de {names} - se recibió "{value}"',
     'cli.backend_invalid' => "candy-codetime: backend no válido (use file o sqlite)",
     'cli.backend_unavailable' => "candy-codetime: backend sqlite no disponible: la extensión sqlite3 de PHP no está cargada",
+    'cli.no_home_dir' => 'candy-codetime: no hay directorio home donde escribir - define CANDY_CODETIME_DIR (o mantén definida HOME o XDG_DATA_HOME)',
     'cli.backend_other_hint' => 'nota: el backend {other} también tiene registros - selecciónelo con --backend={other}',
     'cli.storage_error' => 'candy-codetime: error de almacenamiento: {message}',
     'cli.ignore_too_large' => 'candy-codetime: {message}',

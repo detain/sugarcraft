@@ -29,6 +29,7 @@ return [
     'cli.invalid_theme' => 'candy-codetime: 테마는 {names} 중 하나여야 합니다 - 입력값: "{value}"',
     'cli.backend_invalid' => "candy-codetime: 잘못된 백엔드 (file 또는 sqlite 사용)",
     'cli.backend_unavailable' => "candy-codetime: sqlite 백엔드를 사용할 수 없습니다: PHP 확장 sqlite3 이 로드되지 않았습니다",
+    'cli.no_home_dir' => 'candy-codetime: 쓸 홈 디렉터리가 없습니다 - CANDY_CODETIME_DIR를 설정하세요 (또는 HOME 또는 XDG_DATA_HOME을 유지하세요)',
     'cli.backend_other_hint' => '참고: {other} 백엔드에도 기록이 있습니다. --backend={other}(으)로 선택하세요',
     'cli.storage_error' => 'candy-codetime: 저장소 오류: {message}',
     'cli.ignore_too_large' => 'candy-codetime: {message}',

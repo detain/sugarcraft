@@ -1682,4 +1682,51 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString('may-proj', $res['stdout']);
         $this->assertStringNotContainsString('july-proj', $res['stdout']);
     }
+    public function testAHomelessEnvironmentIsRefusedInsteadOfWritingNextToTheCwd(): void
+    {
+        $res = $this->runCli(['push', 'proj', 'php', '/x/a.php', '60'], $this->workDir, [
+            'CANDY_CODETIME_DIR' => null,
+            'HOME' => null,
+            'XDG_DATA_HOME' => null,
+        ]);
+
+        self::assertSame(1, $res['exit']);
+        self::assertStringContainsString('CANDY_CODETIME_DIR', $res['stderr']);
+        self::assertSame('', $res['stdout']);
+        self::assertDirectoryDoesNotExist($this->workDir . '/.local');
+    }
+
+    public function testHelpStillAnswersWithoutAHome(): void
+    {
+        $res = $this->runCli(['help'], null, [
+            'CANDY_CODETIME_DIR' => null,
+            'HOME' => null,
+            'XDG_DATA_HOME' => null,
+        ]);
+
+        self::assertSame(0, $res['exit']);
+        self::assertStringContainsString('push', $res['stdout']);
+    }
+
+    public function testASetHomeStillResolvesTheDefaultDirectory(): void
+    {
+        $home = $this->dataDir . '-home';
+
+        try {
+            $res = $this->runCli(['push', 'proj', 'php', '/x/a.php', '60'], null, [
+                'CANDY_CODETIME_DIR' => null,
+                'HOME' => $home,
+                'XDG_DATA_HOME' => null,
+            ]);
+
+            self::assertSame(0, $res['exit']);
+            $dir = $home . '/.local/share/candy-codetime';
+            self::assertFileExists($dir . '/' . date('Y-m-d') . '.jsonl');
+            self::assertSame('700', substr(sprintf('%o', (int) fileperms($dir)), -3));
+        } finally {
+            if (is_dir($home)) {
+                self::removeTree($home);
+            }
+        }
+    }
 }

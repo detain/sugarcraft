@@ -29,6 +29,7 @@ return [
     'cli.invalid_theme' => 'candy-codetime: テーマは {names} のいずれかである必要があります - 指定された値: "{value}"',
     'cli.backend_invalid' => "candy-codetime: 無効なバックエンド (file または sqlite を使用)",
     'cli.backend_unavailable' => "candy-codetime: sqlite バックエンドは利用できません: PHP 拡張機能 sqlite3 が読み込まれていません",
+    'cli.no_home_dir' => 'candy-codetime: 書き込み先のホームディレクトリがありません - CANDY_CODETIME_DIR を設定するか、HOME または XDG_DATA_HOME を設定してください',
     'cli.backend_other_hint' => '注意: {other} バックエンドにも記録があります。--backend={other} で選択してください',
     'cli.storage_error' => 'candy-codetime: ストレージエラー: {message}',
     'cli.ignore_too_large' => 'candy-codetime: {message}',

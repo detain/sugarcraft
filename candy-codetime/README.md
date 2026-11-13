@@ -135,7 +135,7 @@ Options (accepted before or after the command):
 | `--min=<secs>` | `gaps`: report only untracked stretches of at least this many seconds (default 300; the library ships the same 300 s as its constructor default). |
 | `CANDY_CODETIME_THEME=<name>` | The same palette choice as an environment variable; `--theme` outranks it. |
 | `--sqlite` (with `backup`) | Archive the SQLite database itself: `VACUUM INTO` writes a consistent standalone snapshot named `candy-codetime-<timestamp>.db` under `<dir>-backups/`, owner-private like every other archived payload. The live database is untouched — this is archive-only, no prune, no in-place vacuum. |
-| `CANDY_CODETIME_DIR=<path>` | Data directory (default `$XDG_DATA_HOME/candy-codetime`, falling back to `~/.local/share/candy-codetime` — note that an unset `HOME` resolves to `./.local/share/…`). |
+| `CANDY_CODETIME_DIR=<path>` | Data directory (default `$XDG_DATA_HOME/candy-codetime`, falling back to `~/.local/share/candy-codetime`). With `CANDY_CODETIME_DIR`, `XDG_DATA_HOME` and `HOME` all unset the CLI refuses rather than resolving next to the working directory — set `CANDY_CODETIME_DIR` for such runs. |
 
 A storage failure ends any command with a one-line message on stderr and exit
 status 1 — never a bare PHP fatal.

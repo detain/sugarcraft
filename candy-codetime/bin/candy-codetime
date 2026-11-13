@@ -317,6 +317,21 @@ $writeStdout = static function (string $payload) use ($storageError): void {
     }
 };
 
+// No home, no deal (finding 083): with CANDY_CODETIME_DIR, XDG_DATA_HOME
+// and HOME all unset, Store::defaultDir() resolves the privacy payload
+// RELATIVE TO THE WORKING DIRECTORY (./.local/share/...): a stripped cron,
+// CI step or container run from a world-writable dir would silently read
+// planted day files and write real telemetry next to the planter. Refuse
+// with one line instead. Pure-text commands (help) answer normally, and
+// --version exited above before any storage exists.
+if ($cmd !== 'help' && $cmd !== '--help' && $cmd !== '-h') {
+    $envSet = static fn(string $name): bool => (($v = getenv($name)) !== false && $v !== '');
+    if (!$envSet('CANDY_CODETIME_DIR') && !$envSet('XDG_DATA_HOME') && !$envSet('HOME')) {
+        fwrite(STDERR, Lang::t('cli.no_home_dir') . "\n");
+        exit(1);
+    }
+}
+
 $store = new Store(getenv('CANDY_CODETIME_DIR') ?: Store::defaultDir());
 $dbPath = $store->dir . '/candy-codetime.db';
 
