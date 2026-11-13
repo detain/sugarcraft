@@ -126,6 +126,11 @@ $argv = $argv ?? [];
 // run the file backend.
 $backend = 'file';
 $backendNext = false;
+// `--time=<unix>` (equals or space form) rides the same global scanner as
+// --backend; CT-S02's backfill seam. Only the push arm consumes it — a real
+// timestamp supplied once instead of the wall clock inventing one at read time.
+$timeOpt = null;
+$timeNext = false;
 $positional = [];
 foreach (array_slice($argv, 1) as $arg) {
     if ($backendNext) {
@@ -133,12 +138,25 @@ foreach (array_slice($argv, 1) as $arg) {
         $backendNext = false;
         continue;
     }
+    if ($timeNext) {
+        $timeOpt = $arg;
+        $timeNext = false;
+        continue;
+    }
     if ($arg === '--backend') {
         $backendNext = true;
         continue;
     }
+    if ($arg === '--time') {
+        $timeNext = true;
+        continue;
+    }
     if (str_starts_with($arg, '--backend=')) {
         $backend = substr($arg, strlen('--backend='));
+        continue;
+    }
+    if (str_starts_with($arg, '--time=')) {
+        $timeOpt = substr($arg, strlen('--time='));
         continue;
     }
     $positional[] = $arg;
@@ -146,6 +164,10 @@ foreach (array_slice($argv, 1) as $arg) {
 if ($backendNext) {
     // `--backend` as the final argument: the value never arrived.
     fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
+    exit(1);
+}
+if ($timeNext) {
+    fwrite(STDERR, Lang::t('cli.push_invalid_time', ['value' => '']) . "\n");
     exit(1);
 }
 if (!in_array($backend, ['file', 'sqlite'], true)) {
@@ -192,88 +214,167 @@ if ($cmd === 'help' || $cmd === '--help' || $cmd === '-h') {
 }
 
 if ($cmd === 'push') {
-    // candy-codetime push <project> <language> <file> [duration]
-    $project  = $positional[1] ?? null;
-    $language = $positional[2] ?? null;
-    $file     = $positional[3] ?? null;
-    if ($project === null || $language === null || $file === null) {
-        fwrite(STDERR, Lang::t('cli.push_missing_args') . "\n");
-        fwrite(STDERR, Lang::t('cli.push_usage') . "\n");
-        exit(1);
+    // candy-codetime push <project> <language> <file> [duration] [--time=<unix>]
+    // candy-codetime push --            batch: one heartbeat JSON per stdin line
+    $stdinBatch = ($positional[1] ?? null) === '--';
+
+    // CT-S02: the backfill seam. A plugin (or a re-run after an outage) says
+    // WHEN the work happened instead of letting the wall clock invent it at
+    // ingest time. Same door law as the duration counter: refuse at the
+    // boundary, clamp inside the honest range, never coerce.
+    $hbTime = time();
+    if ($timeOpt !== null) {
+        if (!ctype_digit($timeOpt)) {
+            fwrite(STDERR, Lang::t('cli.push_invalid_time', ['value' => Sanitize::untrusted($timeOpt)]) . "\n");
+            exit(1);
+        }
+        if ($stdinBatch) {
+            // stdin rows carry their own time; a batch-wide --time would
+            // silently rewrite exactly the lines that omitted one.
+            fwrite(STDERR, Lang::t('cli.push_time_stdin_conflict') . "\n");
+            exit(1);
+        }
+        $hbTime = max(0, min((int) $timeOpt, Heartbeat::MAX_TIME_SECONDS));
     }
 
     // Honour a `.sugartrackignore` (from the current dir or the tracked file's
-    // dir) so opted-out paths never make it into the activity log.
-    $ignore = new SugarTrackIgnore([]);
-    $ignorePath = '';
-    $cwd = getcwd();
-    $candidates = [];
-    if ($cwd !== false) {
-        $candidates[] = $cwd . '/.sugartrackignore';
-    }
-    $candidates[] = dirname($file) . '/.sugartrackignore';
-    foreach ($candidates as $candidate) {
-        if (is_file($candidate)) {
-            // load() refuses an oversized file with a RuntimeException; an
-            // untrusted plant must cost a one-line error and exit 1, never a
-            // 255 fatal mid-push.
-            try {
-                $ignore = SugarTrackIgnore::load($candidate);
-            } catch (\Throwable $e) {
-                $storageError($e);
+    // dir) so opted-out paths never make it into the activity log. load()
+    // refuses an oversized file with a RuntimeException; an untrusted plant
+    // must cost a one-line error and exit 1, never a 255 fatal mid-push.
+    $ignoreFor = static function (string $file, string|false|null $cwd): array {
+        $candidates = [];
+        if ($cwd !== false && $cwd !== null) {
+            $candidates[] = $cwd . '/.sugartrackignore';
+        }
+        $candidates[] = dirname($file) . '/.sugartrackignore';
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return [SugarTrackIgnore::load($candidate), $candidate];
             }
-            $ignorePath = $candidate;
-            break;
         }
-    }
-    if ($ignore->isIgnored($file)) {
-        // A repo can ship its own ".sugartrackignore", so its patterns are
-        // untrusted input to the tracking tool. When the loaded file carries
-        // a wildcard-only pattern it zeroes the project's ENTIRE recorded
-        // time, and a skip that erases a whole repo must not hide in the
-        // success stream — shout it on STDERR with the path, pattern count
-        // and project. The opt-out itself still works (exit 0, nothing
-        // stored): this is disclosure, not refusal.
-        if ($ignore->hasWholesalePattern()) {
-            fwrite(STDERR, Lang::t('cli.push_ignored_wholesale', [
-                'file'        => Sanitize::untrusted($file),
-                'ignore_file' => Sanitize::untrusted($ignorePath),
-                'patterns'    => $ignore->patternCount(),
-                'project'     => Sanitize::untrusted($project),
-            ]) . "\n");
-        } else {
-            fwrite(STDOUT, Lang::t('cli.push_ignored', ['file' => Sanitize::untrusted($file)]) . "\n");
+        return [new SugarTrackIgnore([]), ''];
+    };
+    $cwd = getcwd();
+
+    if (!$stdinBatch) {
+        $project  = $positional[1] ?? null;
+        $language = $positional[2] ?? null;
+        $file     = $positional[3] ?? null;
+        if ($project === null || $language === null || $file === null) {
+            fwrite(STDERR, Lang::t('cli.push_missing_args') . "\n");
+            fwrite(STDERR, Lang::t('cli.push_usage') . "\n");
+            exit(1);
         }
+        try {
+            [$ignore, $ignorePath] = $ignoreFor($file, $cwd);
+        } catch (\Throwable $e) {
+            $storageError($e);
+        }
+        if ($ignore->isIgnored($file)) {
+            // A repo can ship its own ".sugartrackignore", so its patterns are
+            // untrusted input to the tracking tool. When the loaded file carries
+            // a wildcard-only pattern it zeroes the project's ENTIRE recorded
+            // time, and a skip that erases a whole repo must not hide in the
+            // success stream — shout it on STDERR with the path, pattern count
+            // and project. The opt-out itself still works (exit 0, nothing
+            // stored): this is disclosure, not refusal.
+            if ($ignore->hasWholesalePattern()) {
+                fwrite(STDERR, Lang::t('cli.push_ignored_wholesale', [
+                    'file'        => Sanitize::untrusted($file),
+                    'ignore_file' => Sanitize::untrusted($ignorePath),
+                    'patterns'    => $ignore->patternCount(),
+                    'project'     => Sanitize::untrusted($project),
+                ]) . "\n");
+            } else {
+                fwrite(STDOUT, Lang::t('cli.push_ignored', ['file' => Sanitize::untrusted($file)]) . "\n");
+            }
+            exit(0);
+        }
+
+        // A non-numeric duration used to silently cast to 0 — a heartbeat that
+        // records nothing but claims success. Refuse it at the boundary instead.
+        $durationRaw = $positional[4] ?? null;
+        if ($durationRaw !== null && !ctype_digit($durationRaw)) {
+            fwrite(STDERR, Lang::t('cli.push_invalid_duration', ['value' => Sanitize::untrusted($durationRaw)]) . "\n");
+            exit(1);
+        }
+        $duration = (int)($durationRaw ?? 60);
+        $duration = max(0, min($duration, Heartbeat::MAX_DURATION_SECONDS));  // clamp to [0, 1 year]
+        $hb = new Heartbeat($hbTime, $project, $language, $file, $duration);
+        try {
+            if ($backend === 'sqlite') {
+                $sqlite()->insert($hb);
+            } else {
+                $store->append($hb);
+            }
+        } catch (\Throwable $e) {
+            // Storage threw rather than losing the row silently (Store::append /
+            // SqliteBackend::insert fail loud) — surface it and exit non-zero.
+            $storageError($e);
+        }
+        fwrite(STDOUT, Lang::t('cli.entry_pushed', [
+            'project'  => Sanitize::untrusted($project),
+            'language' => Sanitize::untrusted($language),
+            'duration' => $duration,
+        ]) . "\n");
         exit(0);
     }
 
-    // A non-numeric duration used to silently cast to 0 — a heartbeat that
-    // records nothing but claims success. Refuse it at the boundary instead.
-    $durationRaw = $positional[4] ?? null;
-    if ($durationRaw !== null && !ctype_digit($durationRaw)) {
-        fwrite(STDERR, Lang::t('cli.push_invalid_duration', ['value' => Sanitize::untrusted($durationRaw)]) . "\n");
-        exit(1);
+    // --- stdin batch mode (CT-S02) --------------------------------------------
+    // One heartbeat per line. A malformed line never costs the batch: it is
+    // named (with its line number) on STDERR and the run ends non-zero, while
+    // the well-formed rows still land.
+    $raw = stream_get_contents(STDIN);
+    if ($raw === false) {
+        $storageError(new RuntimeException('candy-codetime: cannot read stdin'));
     }
-    $duration = (int)($durationRaw ?? 60);
-    $duration = max(0, min($duration, Heartbeat::MAX_DURATION_SECONDS));  // clamp to [0, 1 year]
-    $hb = new Heartbeat(time(), $project, $language, $file, $duration);
-    try {
-        if ($backend === 'sqlite') {
-            $sqlite()->insert($hb);
-        } else {
-            $store->append($hb);
+    $count = 0;
+    $malformed = 0;
+    foreach (explode("\n", $raw) as $index => $line) {
+        $line = trim($line);
+        if ($line === '') {
+            continue;
         }
-    } catch (\Throwable $e) {
-        // Storage threw rather than losing the row silently (Store::append /
-        // SqliteBackend::insert fail loud) — surface it and exit non-zero.
-        $storageError($e);
+        $row = json_decode($line, true);
+        if (!is_array($row) || !isset($row['project'], $row['language'], $row['file'])
+            || !is_string($row['project']) || !is_string($row['language']) || !is_string($row['file'])
+            || $row['project'] === '' || $row['language'] === '') {
+            fwrite(STDERR, Lang::t('cli.push_stdin_malformed', ['line' => $index + 1]) . "\n");
+            $malformed++;
+            continue;
+        }
+        try {
+            [$ignore, $ignorePath] = $ignoreFor($row['file'], $cwd);
+        } catch (\Throwable $e) {
+            $storageError($e);
+        }
+        if ($ignore->isIgnored($row['file'])) {
+            if ($ignore->hasWholesalePattern()) {
+                fwrite(STDERR, Lang::t('cli.push_ignored_wholesale', [
+                    'file'        => Sanitize::untrusted($row['file']),
+                    'ignore_file' => Sanitize::untrusted($ignorePath),
+                    'patterns'    => $ignore->patternCount(),
+                    'project'     => Sanitize::untrusted($row['project']),
+                ]) . "\n");
+            }
+            continue;
+        }
+        try {
+            $hb = Heartbeat::fromArray($row);
+            if ($backend === 'sqlite') {
+                $sqlite()->insert($hb);
+            } else {
+                $store->append($hb);
+            }
+        } catch (\Throwable $e) {
+            $storageError($e);
+        }
+        $count++;
     }
-    fwrite(STDOUT, Lang::t('cli.entry_pushed', [
-        'project'  => Sanitize::untrusted($project),
-        'language' => Sanitize::untrusted($language),
-        'duration' => $duration,
-    ]) . "\n");
-    exit(0);
+    if ($count > 0) {
+        fwrite(STDOUT, Lang::t($count === 1 ? 'cli.push_stdin_done_one' : 'cli.push_stdin_done', ['count' => $count]) . "\n");
+    }
+    exit($malformed > 0 ? 1 : 0);
 }
 
 if ($cmd === 'milestone') {

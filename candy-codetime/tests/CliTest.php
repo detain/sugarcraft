@@ -62,7 +62,7 @@ final class CliTest extends TestCase
      * @param array<string, string> $env  extra env vars (merged over the parent env)
      * @return array{stdout: string, stderr: string, exit: int}
      */
-    private function runCli(array $args, ?string $cwd = null, array $env = []): array
+    private function runCli(array $args, ?string $cwd = null, array $env = [], ?string $stdin = null): array
     {
         $bin = dirname(__DIR__) . '/bin/candy-codetime';
         $cmd = array_merge([PHP_BINARY, $bin], $args);
@@ -76,8 +76,15 @@ final class CliTest extends TestCase
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
+        if ($stdin !== null) {
+            $descriptors[0] = ['pipe', 'r'];
+        }
         $proc = proc_open($cmd, $descriptors, $pipes, $cwd ?? $this->workDir, $fullEnv);
         $this->assertIsResource($proc);
+        if ($stdin !== null) {
+            fwrite($pipes[0], $stdin);
+            fclose($pipes[0]);
+        }
 
         $stdout = stream_get_contents($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);
@@ -279,6 +286,73 @@ final class CliTest extends TestCase
         // The numeric path still succeeds.
         $ok = $this->runCli(['push', 'proj', 'php', 'a.php', '120']);
         $this->assertSame(0, $ok['exit'], $ok['stderr']);
+    }
+
+    // --- CT-S02 capture seams: --time backfill + stdin batch -------------------
+
+    public function testPushWithBackfillTimeLandsInTheNamedDayFileAndIsExportable(): void
+    {
+        $ts = 1714536000; // a fixed point in the past: the day it belongs to
+        $res = $this->runCli(['push', '--time=' . $ts, 'proj', 'php', '/x/a.php', '90']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('recorded 90s of proj', $res['stdout']);
+
+        $day = $this->dataDir . '/' . date('Y-m-d', $ts) . '.jsonl';
+        $this->assertFileExists($day, 'a backfilled push must land in its OWN day file, not today\'s');
+        $row = json_decode(trim((string) file_get_contents($day)), true);
+        $this->assertSame($ts, $row['time'], 'the stored row keeps the supplied timestamp');
+
+        $days = (string) (intdiv(time() - $ts, 86400) + 2);
+        $exp = $this->runCli(['export', 'json', $days]);
+        $this->assertSame(0, $exp['exit'], $exp['stderr']);
+        $beats = json_decode($exp['stdout'], true);
+        $this->assertContains($ts, array_column((array) $beats, 'time'), 'the backfilled beat is reachable through export');
+    }
+
+    public function testPushTimeDoorRefusesNonNumericWithoutCoercion(): void
+    {
+        $res = $this->runCli(['push', '--time=banana', 'proj', 'php', '/x/a.php']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('whole number of unix seconds', $res['stderr']);
+        $this->assertStringNotContainsString('recorded', $res['stdout']);
+    }
+
+    public function testStdinBatchIngestsRowsWithTheirOwnTimestampsAndFailsLoudlyOnGarbage(): void
+    {
+        $t1 = 1714536000;
+        $t2 = 1714622400;
+        $batch = json_encode(['time' => $t1, 'project' => 'alpha', 'language' => 'php', 'file' => '/x/one.php', 'duration' => 60]) . "\n"
+            . "not-json\n"
+            . json_encode(['time' => $t2, 'project' => 'beta', 'language' => 'go', 'file' => '/x/two.go', 'duration' => 30]) . "\n";
+
+        $res = $this->runCli(['push', '--'], null, [], $batch);
+        $this->assertSame(1, $res['exit'], 'the malformed line must fail the batch loudly');
+        $this->assertStringContainsString('stdin line 2', $res['stderr'], 'the bad line is named with its number');
+        $this->assertStringContainsString('recorded 2 heartbeats', $res['stdout'], 'the good rows still landed');
+        $this->assertFileExists($this->dataDir . '/' . date('Y-m-d', $t1) . '.jsonl');
+        $this->assertFileExists($this->dataDir . '/' . date('Y-m-d', $t2) . '.jsonl');
+    }
+
+    public function testStdinSingleRowTakesTheSingularSummary(): void
+    {
+        $res = $this->runCli(['push', '--'], null, [], json_encode(['time' => 1714536000, 'project' => 'solo', 'language' => 'php', 'file' => '/x/s.php', 'duration' => 15]) . "\n");
+        $this->assertSame(0, $res['exit'], $res['stdout'] . $res['stderr']);
+        $this->assertStringContainsString('recorded 1 heartbeat', $res['stdout']);
+        $this->assertStringNotContainsString('1 heartbeats', $res['stdout']);
+    }
+
+    public function testStdinBatchStillHonoursTheIgnoreDoorPerRow(): void
+    {
+        file_put_contents($this->workDir . '/.sugartrackignore', "*.log\n");
+        $res = $this->runCli(['push', '--'], null, [],
+            json_encode(['time' => 1714536000, 'project' => 'p', 'language' => 'php', 'file' => 'secret.log', 'duration' => 60]) . "\n"
+            . json_encode(['time' => 1714536000, 'project' => 'p', 'language' => 'php', 'file' => 'ok.php', 'duration' => 60]) . "\n");
+        $this->assertSame(0, $res['exit'], $res['stdout'] . $res['stderr']);
+        $this->assertStringContainsString('recorded 1 heartbeat', $res['stdout']);
+
+        $contents = (string) file_get_contents($this->dataDir . '/' . date('Y-m-d', 1714536000) . '.jsonl');
+        $this->assertStringNotContainsString('secret.log', $contents, 'the ignore door guards the batch too');
+        $this->assertStringContainsString('ok.php', $contents);
     }
 
     // --- Translated diagnostics -----------------------------------------------
