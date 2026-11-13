@@ -209,13 +209,13 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same shape and same reason as PosixTermios.',
         ],
-        'sugar-pty/src/SizeIoctl.php::posix_isatty($fd)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. The `int $fd` parameter of query(). This is the guard every other member '
-            . 'of the family ultimately trips over when handed a resource id, which is why the '
-            . 'wrong number surfaces as "Cannot query size of non-tty fd" rather than as a '
-            . 'wrong size.',
-        ],
+        // The sugar-pty/src/SizeIoctl.php::posix_isatty($fd) row retired here:
+        // PTY-40 (61e336754) deleted SizeIoctl::query() — the only member that
+        // carried that guard — from the public surface. (That same deletion
+        // left sugar-core/src/Util/Tty/PosixBackend.php still calling
+        // SizeIoctl::query(); that cross-lib hazard is a REPORT row, not this
+        // roster's to pretend away.)
+
 
         // ---- the METHOD spelling ------------------------------------------
         //
