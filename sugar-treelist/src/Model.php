@@ -1087,6 +1087,12 @@ final class Model
 
     /**
      * Move cursor up by one viewport height (page up).
+     *
+     * CONCRETE SHAPE (sugar-treelist-031): a page spans `height` ITEMS, not
+     * displayed rows — the upstream semantic. On a height-10 viewport whose
+     * items each wrap to two rows, one PageUp moves the cursor ten items:
+     * twenty visible rows, a landing place arbitrary in row terms. Hosts
+     * that page by displayed rows must map rows back to items themselves.
      */
     public function withCursorPageUp(int $pages = 1): self
     {
@@ -1102,6 +1108,10 @@ final class Model
 
     /**
      * Move cursor down by one viewport height (page down).
+     *
+     * Item-not-row semantics exactly as {@see self::withCursorPageUp()}
+     * (sugar-treelist-031): a PgDn over wrapped multi-line items jumps a
+     * visually arbitrary number of rows.
      */
     public function withCursorPageDown(int $pages = 1): self
     {
