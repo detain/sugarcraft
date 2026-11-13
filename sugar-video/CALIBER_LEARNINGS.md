@@ -15,7 +15,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[pattern:proc-open-array-form]** Passing `$cmdArray` directly to `proc_open` (not `implode(' ', $cmdArray)`) avoids the shell entirely — no element needs `escapeshellarg()`. Raw strings go directly as argv; the shell is bypassed. Use `implode(' ', $cmdArray)` + `escapeshellarg()` only when a shell string is required.
 
-- **[pattern:gif-frame-size]** `AnimationDecoder::decode()` already does area-average downsampling internally; `GifDecoder` receives frames at `cellsW × cellsH` (not `cellsH * 2` — that scaling is specific to the half-block ffmpeg path where ffmpeg scales to `cellsH * 2` rows so each terminal cell maps to 2 source rows).
+- **[pattern:gif-frame-size]** SUPERSEDED 2026-11-13 by the [pattern:rowspercell-contract] entry below — kept for timeline, do not treat as law. The claim was FALSE to disk: `GifDecoder` does NOT receive frames at plain `cellsW × cellsH`; the text-path decode grid is `cellsW * colsPerCell() × cellsH * rowsPerCell()` (GifDecoder.php:194) — HalfBlock asks the GIF path for `cellsH * 2` rows exactly like the ffmpeg path. Original (stale) text: `AnimationDecoder::decode()` already does area-average downsampling internally; `GifDecoder` receives frames at `cellsW × cellsH` (not `cellsH * 2` — that scaling is specific to the half-block ffmpeg path where ffmpeg scales to `cellsH * 2` rows so each terminal cell maps to 2 source rows).
 
 - **[pattern:undersized-byte-buffer-warning-suppression]** `toGd()` clamps missing bytes to black rather than emitting `Uninitialized string offset` warnings when the byte buffer is shorter than `w*h*3`. This documents that `RgbFrame` is a trust-but-verify value object.
 
@@ -55,7 +55,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[pattern:synthetic-gif-for-example-without-binary-deps]** `examples/play.php` generates a rainbow-gradient GIF using ext-gd and saves it to `/tmp` when run without a video argument. This allows the full player to be demonstrated without any video files or external binaries in the example. The player shelled out to ffprobe during open() — if ffprobe is absent, `VideoSource::probe()` gracefully returns defaults and playback still works (audio just won't be detected).
 
-- **[pattern:vhs-tape-shows-help-or-static-output]** For a TUI player with keyboard interaction, the VHS demo (`play.tape`) shows the `--help` output rather than a video playback — it produces clean static terminal output that's perfect for GIF encoding. The player is demonstrated to work via the examples/play.php, not necessarily via the VHS tape.
+- **[pattern:vhs-tape-shows-help-or-static-output]** STRUCK 2026-11-13 — false to disk, corrected: `.vhs/play.tape` types `php examples/play.php synthetic` and then DRIVES the live player (Enter, 2.5 s, Space to start playback, 2 s, `q` to quit) — it is a playthrough capture, NOT `--help` output and not static. Kept for timeline; do not treat as law. (Original claim: the tape shows the `--help` output rather than a video playback.)
 
 - **[pattern:player-open-vs-open-for-test]** `Player::open()` wraps `VideoSource::probe()` + `DecoderFactory::new()`, requiring an actual file path and optionally ffprobe. `Player::openForTest()` takes a Decoder directly and bypasses VideoSource::probe(), used in unit tests with FakeDecoder. The example (not tests) uses `Player::open()` with the generated synthetic GIF path — ffprobe is optional for the GIF path since `VideoSource::probe()` degrades gracefully.
 
