@@ -203,7 +203,7 @@ final class GoldenSnapshotTest extends TestCase
                 2 => ['pipe', 'w'],
             ];
 
-            $proc = proc_open('php ' . escapeshellarg($tmpFile), $spec, $pipes, null, $fullEnv);
+            $proc = proc_open([PHP_BINARY, $tmpFile], $spec, $pipes, null, $fullEnv);
 
             if ($proc === false) {
                 return '';
@@ -300,12 +300,12 @@ final class GoldenSnapshotTest extends TestCase
         // Normalize temp file paths since generator uses /tmp/golden_*.php
         // and test uses /tmp/golden_test_*.php (same content, different filename)
         $normalizedGolden = preg_replace(
-            '/\/tmp\/golden_(test_)?[a-zA-Z0-9_]+\.php/',
+            '~(?:/tmp|[A-Za-z]:[^\s\'"]*?)[/\\\\]golden_(?:test_)?[a-zA-Z0-9_]+\.php~',
             '/tmp/golden.example.php',
             $goldenOutput
         );
         $normalizedCurrent = preg_replace(
-            '/\/tmp\/golden_(test_)?[a-zA-Z0-9_]+\.php/',
+            '~(?:/tmp|[A-Za-z]:[^\s\'"]*?)[/\\\\]golden_(?:test_)?[a-zA-Z0-9_]+\.php~',
             '/tmp/golden.example.php',
             $currentOutput
         );
@@ -409,7 +409,7 @@ final class GoldenSnapshotTest extends TestCase
                     2 => ['pipe', 'w'],
                 ];
 
-                $proc = proc_open('php ' . escapeshellarg($tmpFile), $spec, $pipes);
+                $proc = proc_open([PHP_BINARY, $tmpFile], $spec, $pipes);
                 if ($proc === false) {
                     continue;
                 }

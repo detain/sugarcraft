@@ -96,7 +96,7 @@ function runExample(string $file, array $env = []): string
         2 => ['pipe', 'w'],  // stderr (merged into stdout)
     ];
 
-    $proc = proc_open('php ' . escapeshellarg($file), $spec, $pipes, null, $fullEnv);
+    $proc = proc_open([PHP_BINARY, $file], $spec, $pipes, null, $fullEnv);
 
     if ($proc === false) {
         return '';
