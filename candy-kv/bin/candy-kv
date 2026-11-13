@@ -191,6 +191,14 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         // newline added). --sanitize opts INTO the single-line scrub.
         $raw = $entry->rawValue();
         echo $opts['sanitize'] ? Store::sanitizeForTty($raw) : $raw;
+        // G10 default leg (candy-kv-069): an interactive TTY gets told a
+        // scrub exists, but only when a scrub WOULD change bytes — the
+        // predicate is sanitizeForTty itself, so it cannot drift from what
+        // the scrub actually strips. stdout stays byte-exact either way;
+        // the hint rides stderr so pipes of stdout keep their pure payload.
+        if (!$opts['sanitize'] && \stream_isatty(STDOUT) && Store::sanitizeForTty($raw) !== $raw) {
+            fwrite(STDERR, "\n(value contains control bytes — use --sanitize)\n");
+        }
         break;
 
     case 'list':

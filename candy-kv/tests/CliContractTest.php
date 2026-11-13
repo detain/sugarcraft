@@ -381,6 +381,64 @@ final class CliContractTest extends TestCase
     }
 
     /**
+     * candy-kv-069 (G10 default, KV-S35): the piped contract is the payload
+     * itself — a poisoned value on a non-tty stdout must print byte-exact
+     * with NO hint noise, stderr fully silent.
+     */
+    public function testGetOfAPoisonedValueOnAPipeIsByteExactWithSilentStderr(): void
+    {
+        $poison = "a\x1b[31mRED";
+        $set = $this->runKv(['set', 'kv-s35', $poison]);
+        $this->assertSame(0, $set['exit'], $set['stderr']);
+
+        $get = $this->runKv(['get', 'kv-s35']);
+        $this->assertSame(0, $get['exit'], $get['stderr']);
+        $this->assertSame($poison, $get['stdout'], 'piped get stays byte-exact, ESC and all');
+        $this->assertSame('', $get['stderr'], 'the hint belongs to a TTY only; pipes must stay pure');
+    }
+
+    /**
+     * The interactive half of candy-kv-069: under a real pty the same get
+     * STILL prints raw bytes (byte-exactness law) and adds the --sanitize
+     * hint; a clean value gets no hint even interactively (the predicate is
+     * "a scrub would change something").
+     */
+    public function testTheInteractiveHintFiresOnATtyOnlyForScrubbableValues(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('util-linux script(1) pty probe is modelled on Linux runners only.');
+        }
+        $probe = $this->spawnBounded(['script', '-q', '-e', '-c', 'true', '/dev/null']);
+        if ($probe['exit'] !== 0) {
+            $this->markTestSkipped('script(1) with -e/-c is unavailable on this box.');
+        }
+
+        $set = $this->runKv(['set', 'kv-s35', "a\x1b[31mRED"]);
+        $this->assertSame(0, $set['exit'], $set['stderr']);
+        $clean = $this->runKv(['set', 'kv-s35-clean', 'plain']);
+        $this->assertSame(0, $clean['exit'], $clean['stderr']);
+
+        $bin = \dirname(__DIR__) . '/bin/candy-kv';
+        $env = \getenv();
+        $env['XDG_CONFIG_HOME'] = $this->configHome;
+
+        // script(1) hands -c to its own child shell, so the inner quotes the
+        // shell must SEE belong to the string itself (a second escapeshellarg
+        // would arrive literal and the word-splitting would break).
+        $ttyCmd = \sprintf('%s %s get kv-s35', \escapeshellarg(\PHP_BINARY), \escapeshellarg($bin));
+        $tty = $this->spawnBounded(['script', '-q', '-e', '-c', $ttyCmd, '/dev/null'], $env);
+        $this->assertSame(0, $tty['exit'], $tty['stderr'] . $tty['stdout']);
+        $this->assertStringContainsString("a\x1b[31mRED", $tty['stdout'], 'raw bytes stay on the terminal (byte-exactness law)');
+        $this->assertStringContainsString('(value contains control bytes', $tty['stdout'], 'a TTY must be told a scrub exists');
+
+        $ttyCleanCmd = \sprintf('%s %s get kv-s35-clean', \escapeshellarg(\PHP_BINARY), \escapeshellarg($bin));
+        $ttyClean = $this->spawnBounded(['script', '-q', '-e', '-c', $ttyCleanCmd, '/dev/null'], $env);
+        $this->assertSame(0, $ttyClean['exit'], $ttyClean['stderr'] . $ttyClean['stdout']);
+        $this->assertStringContainsString('plain', $ttyClean['stdout']);
+        $this->assertStringNotContainsString('(value contains control bytes', $ttyClean['stdout'], 'a clean value must never nag');
+    }
+
+    /**
      * @param list<string> $args
      * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
