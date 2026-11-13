@@ -438,6 +438,10 @@ final class Palette
     private function emitColor(int $intro, int $kind, array $values, ColorProfile $target): string
     {
         $slot = $kind === 5 ? $values[0] : null;
+        // Wire slots arrive hostile (e.g. a stream saying 38;5;300) and the
+        // decoder is fail-loud since CP-16 — degrade never crashes, so the
+        // quantise-to-the-ramp-end leg lives right here, once per emit.
+        $wireSlot = $slot === null ? 0 : min(255, max(0, $slot));
 
         if ($target === ColorProfile::Ansi256) {
             if ($slot !== null && $slot >= 0 && $slot <= 255) {
@@ -445,7 +449,7 @@ final class Palette
             }
             $color = $kind === 2
                 ? new Color($values[0], $values[1], $values[2])
-                : Color::fromAnsi256Index($slot ?? 0);
+                : Color::fromAnsi256Index($wireSlot);
             return "{$intro};5;{$color->toAnsi256Index()}";
         }
 
@@ -458,14 +462,14 @@ final class Palette
             // lands exclusively on the fixed 16-255 range.
             $color = $kind === 2
                 ? new Color($values[0], $values[1], $values[2])
-                : Color::fromAnsi256Index($slot ?? 0);
+                : Color::fromAnsi256Index($wireSlot);
             return "{$intro};5;{$color->toAnsi256Index()}";
         }
 
         // ANSI / ANSI 8 / FGBG / Ascii (58 keeps an indexed introducer).
         $color = $kind === 2
             ? new Color($values[0], $values[1], $values[2])
-            : Color::fromAnsi256Index($slot ?? 0);
+            : Color::fromAnsi256Index($wireSlot);
         $idx = $color->convert($target)->toAnsi16Index();
 
         if ($intro === 58) {

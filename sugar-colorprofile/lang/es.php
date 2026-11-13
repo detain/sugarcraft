@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'standard.ansi16_out_of_range' => 'El índice de color ANSI 16 debe ser 0–15, obtenido: {index}',
+    'standard.ansi256_out_of_range' => 'El índice de color ANSI 256 debe ser 0–255, obtenido: {index}',
     'color.invalid_hex' => 'color hexadecimal no válido: {hex}',
     'colormath.invalid_xyz' => 'El componente XYZ {key} falta o no es un número finito',
     'deltae.invalid_lab' => 'La matriz Lab {label} carece del componente numérico "{key}"',

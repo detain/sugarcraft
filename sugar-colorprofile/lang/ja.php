@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'standard.ansi16_out_of_range' => 'ANSI 16色インデックスは 0–15 である必要があります：{index}',
+    'standard.ansi256_out_of_range' => 'ANSI 256色インデックスは 0–255 である必要があります：{index}',
     'color.invalid_hex' => '無効な16進色: {hex}',
     'colormath.invalid_xyz' => 'XYZ成分 {key} が存在しないか、有限の数値ではありません',
     'deltae.invalid_lab' => 'Lab配列 {label} に数値成分 "{key}" がありません',

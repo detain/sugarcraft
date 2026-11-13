@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'standard.ansi16_out_of_range' => 'ANSI 16 renk dizini 0–15 olmalıdır, alınan: {index}',
+    'standard.ansi256_out_of_range' => 'ANSI 256 renk dizini 0–255 olmalıdır, alınan: {index}',
     'color.invalid_hex' => 'geçersiz onaltılık renk: {hex}',
     'colormath.invalid_xyz' => 'XYZ bileşeni {key} eksik veya sonlu bir sayı değil',
     'deltae.invalid_lab' => 'Lab dizisi {label}, sayısal bir "{key}" bileşeni içermiyor',

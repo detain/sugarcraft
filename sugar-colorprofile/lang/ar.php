@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'standard.ansi16_out_of_range' => 'فهرس لون ANSI 16 يجب أن يكون 0–15، تم الحصول على: {index}',
+    'standard.ansi256_out_of_range' => 'فهرس لون ANSI 256 يجب أن يكون 0–255، تم الحصول على: {index}',
     'color.invalid_hex' => 'لون سداسي غير صالح: {hex}',
     'colormath.invalid_xyz' => 'مكون XYZ {key} مفقود أو ليس عددًا منتهيًا',
     'deltae.invalid_lab' => 'مصفوفة Lab {label} تفتقر إلى المكون الرقمي "{key}"',

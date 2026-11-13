@@ -21,6 +21,13 @@ final class Color
     public readonly int $b;
     public readonly int $a;
 
+    /**
+     * The constructor is the ONE documented deliberate clamp in this class:
+     * quantisers and blend pipelines feed raw RGB runs and must not explode
+     * mid-frame (the one out-of-range policy otherwise is fail-loud on
+     * DECODER-shaped inputs — see {@see self::ansi16Sgr()} and
+     * {@see self::fromAnsi256Index()}, which throw).
+     */
     public function __construct(
         int $r,
         int $g,
@@ -53,12 +60,15 @@ final class Color
      */
     public static function parse(string $hex, int $a = 255): self
     {
+        // The throw names what the USER typed, not the stripped fragment:
+        // a rejection of "#zz" must read "invalid hex color: #zz".
+        $typed = $hex;
         $hex = \ltrim($hex, '#');
         if (\strlen($hex) !== 3 && \strlen($hex) !== 6) {
-            throw new \InvalidArgumentException(Lang::t('color.invalid_hex', ['hex' => $hex]));
+            throw new \InvalidArgumentException(Lang::t('color.invalid_hex', ['hex' => $typed]));
         }
         if (!\ctype_xdigit($hex)) {
-            throw new \InvalidArgumentException(Lang::t('color.invalid_hex', ['hex' => $hex]));
+            throw new \InvalidArgumentException(Lang::t('color.invalid_hex', ['hex' => $typed]));
         }
         if (\strlen($hex) === 3) {
             $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
@@ -356,17 +366,21 @@ final class Color
      * Slots 0-15 resolve to the terminal's palette entries (xterm defaults
      * here — the 16 basic/bright slots are themeable, so any RGB this library
      * produces for them is a reference value, never what the user sees).
-     * 16-231 is the fixed 6×6×6 cube, 232-255 the gray ramp; indices below 0
-     * or above 255 clamp.
+     * 16-231 is the fixed 6×6×6 cube, 232-255 the gray ramp.
+     * Fail loud like every other decoder-shaped door (one out-of-range
+     * policy, the same Lang-key style as {@see self::ansi16Sgr()}): an
+     * index outside 0-255 is not a slot — it used to silently clamp,
+     * handing callers the black or white end of the ramp for a typo. The
+     * constructor clamp is the documented deliberate exception.
      *
      * @see https://github.com/charmbracelet/colorprofile — Color.FromANSI256Index
+     *
+     * @throws \OutOfBoundsException when $idx is not an ANSI 256 slot
      */
     public static function fromAnsi256Index(int $idx): self
     {
-        if ($idx < 0) {
-            $idx = 0;
-        } elseif ($idx > 255) {
-            $idx = 255;
+        if ($idx < 0 || $idx > 255) {
+            throw new \OutOfBoundsException(Lang::t('standard.ansi256_out_of_range', ['index' => $idx]));
         }
         if ($idx < 16) {
             [$r, $g, $b] = self::ANSI16_RGB[$idx];

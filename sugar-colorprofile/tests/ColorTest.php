@@ -7,6 +7,7 @@ namespace SugarCraft\ColorProfile\Tests;
 use SugarCraft\ColorProfile\Color;
 use SugarCraft\ColorProfile\Profile;
 use SugarCraft\ColorProfile\StandardColors;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class ColorTest extends TestCase
@@ -174,6 +175,18 @@ final class ColorTest extends TestCase
         Color::parse('ab');
     }
 
+    public function testParseErrorMessageQuotesWhatTheUserTyped(): void
+    {
+        // CP-16: the rejection names the ORIGINAL input — "#zz", not the
+        // stripped fragment "zz" the old message echoed.
+        try {
+            Color::parse('#zz');
+            $this->fail('expected InvalidArgumentException for "#zz"');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('#zz', $e->getMessage());
+        }
+    }
+
     public function testParseValidHex3StillWorks(): void
     {
         $c = Color::parse('abc');
@@ -276,6 +289,31 @@ final class ColorTest extends TestCase
         $this->assertSame($c->g, $c->b);
         // Last grey is 238,238,238
         $this->assertSame(238, $c->r);
+    }
+
+    /**
+     * CP-16: the decoder is fail-loud like every other decoder-shaped door,
+     * not a silent clamp to the ramp ends.
+     *
+     * @return array<string, array{int}>
+     */
+    public static function outOfRange256Indices(): array
+    {
+        return ['below' => [-1], 'one past' => [256], 'far past' => [300]];
+    }
+
+    #[DataProvider('outOfRange256Indices')]
+    public function testFromAnsi256IndexRejectsIndicesOutsideTheTable(int $idx): void
+    {
+        $this->expectException(\OutOfBoundsException::class);
+        Color::fromAnsi256Index($idx);
+    }
+
+    #[DataProvider('outOfRange256Indices')]
+    public function testFromAnsi256IndexThrowNamesTheOffendingIndex(int $idx): void
+    {
+        $this->expectExceptionMessage('0–255, got ' . $idx);
+        Color::fromAnsi256Index($idx);
     }
 
     // -------------------------------------------------------------------------
