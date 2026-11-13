@@ -25,10 +25,38 @@ final class WidthMemo
     public ?int $width = null;
 
     /**
-     * Discard the memoised width so the next render re-measures.
+     * Measured display width per item object, taken with $measuredWith. Keyed
+     * per item — not per list — so a keystroke that only swaps the survivor
+     * SET re-uses every measurement and formats nothing for width again.
+     *
+     * @var \WeakMap<object, int>|null
+     */
+    public ?\WeakMap $itemWidths = null;
+
+    /**
+     * The formatter identity $itemWidths belongs to. Weak, so a swapped-out
+     * closure is collectable and the mismatch is detected with ===.
+     */
+    public ?\WeakReference $measuredWith = null;
+
+    /**
+     * Discard the composed width so the next render re-derives it. Cheap:
+     * every ingredient (prompt, filter, cached per-item widths) is still warm.
      */
     public function invalidate(): void
     {
         $this->width = null;
+    }
+
+    /**
+     * Discard the per-item measurements too — required when the corpus or the
+     * formatter closure itself changes, the only two events that make a
+     * stored item width wrong rather than merely unused.
+     */
+    public function invalidateItems(): void
+    {
+        $this->invalidate();
+        $this->itemWidths = null;
+        $this->measuredWith = null;
     }
 }

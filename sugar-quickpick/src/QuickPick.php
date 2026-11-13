@@ -210,7 +210,7 @@ final class QuickPick
     public function withItems(array $items): self
     {
         $clone = clone $this;
-        $clone->widthMemo->invalidate();
+        $clone->widthMemo->invalidateItems();
         $clone->allItems = $clone->coerceItems($items);
         $clone->installCorpusMemos();
         // Early exit when no filter active — avoid applyFilter() overhead for the common empty-text case.
@@ -322,9 +322,10 @@ final class QuickPick
     public function setItemFormatter(\Closure $fn): self
     {
         $clone = clone $this;
-        // Item widths feed computeWidth() through the formatter; the cache
-        // must not survive a formatter swap (M10).
-        $clone->widthMemo->invalidate();
+        // Item widths feed computeWidth() through the formatter; the per-item
+        // measurement table belongs to the old closure and must not survive
+        // the swap (M10).
+        $clone->widthMemo->invalidateItems();
         $clone->itemFormatter = $fn;
         return $clone;
     }
@@ -1150,19 +1151,64 @@ final class QuickPick
 
     private function computeWidth(): int
     {
-        // Measure in visible cells (ANSI-stripped, wide-rune aware) so the auto
-        // width matches what view() actually renders — which is true only
-        // because the formatter receives the SAME guarded value here as on the
-        // render path below: guard() first, so a host that echoes or caches
-        // the closure argument never sees the unguarded string (review M8).
-        $promptLen = Width::of($this->prompt);
-        $filterLen = Width::of($this->filterText);
-        $itemMax   = 0;
-        foreach ($this->filteredItems as $item) {
-            $itemLen = Width::of(($this->itemFormatter)(UntrustedText::guard($item->value()), false, $item->number()));
-            if ($itemLen > $itemMax) $itemMax = $itemLen;
+        // Split the cost: the header term (prompt + filter) is two short
+        // Width::of calls and recomputes honestly every frame; the item term
+        // walks per-item measurements cached in the shared memo, so a filter
+        // keystroke — which only swaps the survivor SET — formats nothing
+        // again (-010).
+        //
+        // Measurement happens in visible cells (ANSI-stripped, wide-rune
+        // aware) so the auto width matches what view() actually renders —
+        // which is true only because the formatter receives the SAME guarded
+        // value here as on the render path below: guard() first, so a host
+        // that echoes or caches the closure argument never sees the unguarded
+        // string (review M8).
+        $headerTerm = Width::of($this->prompt) + Width::of($this->filterText) + self::WIDTH_PAD_HEADER;
+
+        return \max($headerTerm, $this->measuredItemMaxWidth() + self::WIDTH_PAD_ITEM);
+    }
+
+    /**
+     * Widest formatted survivor, max of the selected and unselected
+     * decorations (-061: a formatter whose selected flag is WIDER must not
+     * have the focused row clipped by a frame sized for the plain variant).
+     * Measurements live in the shared memo keyed by item object and belong to
+     * one formatter identity; swapping either replaces the table.
+     */
+    private function measuredItemMaxWidth(): int
+    {
+        $memo      = $this->widthMemo;
+        $formatter = $this->itemFormatter;
+        if ($memo->measuredWith?->get() !== $formatter) {
+            $memo->measuredWith = \WeakReference::create($formatter);
+            $memo->itemWidths   = new \WeakMap();
         }
-        return \max($promptLen + $filterLen + self::WIDTH_PAD_HEADER, $itemMax + self::WIDTH_PAD_ITEM);
+        $widths = $memo->itemWidths;
+
+        $max = 0;
+        foreach ($this->filteredItems as $item) {
+            $width = $widths[$item] ?? $this->measureItem($item, $widths);
+            if ($width > $max) {
+                $max = $width;
+            }
+        }
+        return $max;
+    }
+
+    /**
+     * Measure one item under both selection flags and remember the wider
+     * answer. The formatter is pure with respect to these two calls: the
+     * render path formats each visible row once with its actual flag.
+     */
+    private function measureItem(Item $item, \WeakMap $widths): int
+    {
+        $guarded = UntrustedText::guard($item->value());
+        $number  = $item->number();
+
+        $plain    = Width::of(($this->itemFormatter)($guarded, false, $number));
+        $selected = Width::of(($this->itemFormatter)($guarded, true, $number));
+
+        return $widths[$item] = \max($plain, $selected);
     }
 
     /**

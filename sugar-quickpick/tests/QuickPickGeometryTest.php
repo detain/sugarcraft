@@ -401,4 +401,91 @@ final class QuickPickGeometryTest extends TestCase
             'the guarded string itself must be exactly what the formatter receives (M8, non-vacuity)'
         );
     }
+
+    public function testFrameSizedForTheWiderSelectedDecoration(): void
+    {
+        // -061: the old width pass measured every item with isSelected hard-
+        // coded false, so a formatter whose selected decoration is WIDER
+        // truncated exactly the focused row.
+        $items   = [new FilteredItem(1, 'abcdefghij')];
+        $h       = QuickPick::new($items)
+            ->setItemFormatter(static fn(string $v, bool $sel): string => $sel ? $v . '::' : $v)
+            ->show();
+        $rows    = $this->frame($h, $items);
+        $focused = null;
+        foreach ($rows as $row) {
+            if (str_contains($row, 'abcdefghij')) {
+                $focused = $row;
+                break;
+            }
+        }
+
+        $this->assertNotNull($focused, 'the item row must render');
+        $this->assertStringContainsString(
+            'abcdefghij::',
+            $focused,
+            'the selected row keeps both decoration cells — the frame must size for it',
+        );
+    }
+
+    public function testFilterKeystrokeNeverFormatsAgainForWidth(): void
+    {
+        // -010: per-item width measurements are cached by item object, so a
+        // keystroke that only swaps the survivor set must not consult the
+        // formatter for measurement again — only the render path runs.
+        $calls     = 0;
+        $formatter = static function (string $v) use (&$calls): string {
+            ++$calls;
+            return $v;
+        };
+
+        $h  = QuickPick::new(['alpha', 'bravo', 'charlie'], $formatter)->show();
+        $bg = \implode("\n", \array_fill(0, 30, ''));
+
+        $h->view($bg); // warm: 3 render calls + per-item measurement
+        $warm  = $calls;
+        $typed = $h->type('a');
+        $typed->view($bg);
+
+        // Exactly the three visible rows re-rendered; zero width-measurement
+        // calls on top (old code added one false-flag pass per survivor).
+        $this->assertSame(3, $calls - $warm, 'a re-filtered frame must format once per visible row, no width re-measurements');
+
+        // The composed width still follows the CHEAP header term even though
+        // no item is re-measured: a 60-rune prompt must widen the frame.
+        $promptLong = str_repeat('p', 60) . ': ';
+        $long       = $typed->setPrompt($promptLong);
+        $longRows   = \explode("\n", $long->view($bg));
+        $this->assertSame(
+            Width::of($promptLong) + 1 + 5,
+            Width::of($longRows[0]),
+            'a longer prompt must widen the auto frame from cached item widths',
+        );
+        $this->assertSame(
+            $warm + 6,
+            $calls,
+            'the widened frame re-ran the render path only — zero width re-measurements',
+        );
+    }
+
+    public function testFormatterSwapReplacesTheMeasurementTable(): void
+    {
+        $items = [new FilteredItem(1, 'ab')];
+        $a     = QuickPick::new($items)
+            ->setItemFormatter(static fn(string $v): string => $v)
+            ->show();
+        $bg = \implode("\n", \array_fill(0, 30, ''));
+        $a->view($bg); // warm measurements with the plain formatter
+
+        $b      = $a->setItemFormatter(static fn(string $v, bool $sel): string => $sel ? $v . \str_repeat('w', 30) : $v);
+        $rows   = $this->frame($b, $items);
+        $found  = false;
+        foreach ($rows as $row) {
+            if (str_contains($row, 'ab' . \str_repeat('w', 30))) {
+                $found = true;
+                break;
+            }
+        }
+        $this->assertTrue($found, 'a wider replacement formatter must re-derive widths, not reuse the swapped-out table');
+    }
 }
