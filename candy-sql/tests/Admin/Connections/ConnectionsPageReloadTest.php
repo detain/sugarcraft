@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Sql\Admin\AsyncCachingServerContext;
 use SugarCraft\Sql\Admin\AdminQueryCache;
 use SugarCraft\Sql\Admin\Connections\ConnectionsPage;
+use SugarCraft\Sql\Admin\Connections\ProcesslistProvider;
 use SugarCraft\Sql\Admin\ServerContext;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
@@ -24,28 +25,10 @@ final class ConnectionsPageReloadTest extends TestCase
     private const PROBE_SQL = 'SELECT @@performance_schema AS ps';
 
     /**
-     * Verbatim fetchViaPS() query from ProcesslistProvider (out of ownership —
-     * mirrored here as the cache key it stores under, not reimplemented).
+     * Verbatim fetchViaPS() query — read from the provider's own single-source
+     * statement (out of ownership: mirrored here as the cache key it stores
+     * under, not reimplemented).
      */
-    private const PS_SQL = <<<'SQL'
-SELECT
-    t.PROCESSLIST_ID,
-    t.THREAD_ID,
-    t.PROCESSLIST_USER,
-    t.PROCESSLIST_HOST,
-    t.PROCESSLIST_DB,
-    t.PROCESSLIST_COMMAND,
-    t.PROCESSLIST_TIME,
-    t.PROCESSLIST_STATE,
-    t.PROCESSLIST_INFO,
-    t.TYPE,
-    COALESCE(a.ATTR_VALUE, '') AS PROCESSLIST_ATTRS
-FROM performance_schema.threads t
-LEFT JOIN performance_schema.session_connect_attrs a
-    ON t.THREAD_ID = a.THREAD_ID
-    AND a.ATTR_NAME = 'program_name'
-ORDER BY t.PROCESSLIST_TIME DESC
-SQL;
 
     protected function setUp(): void
     {
@@ -136,7 +119,7 @@ SQL;
         // PROCESSLIST_ID and THREAD_ID differ on purpose: a row carrying
         // threadId 7 could only have come from the PS query, proving the stuck
         // false was re-evaluated (threadId would equal processId via SHOW).
-        $cache->store(self::PS_SQL, [$this->psRow('42', '7', 'psuser')]);
+        $cache->store(ProcesslistProvider::processlistSql(), [$this->psRow('42', '7', 'psuser')]);
 
         [$reloaded,] = $page->update(new ReloadReportMsg());
         $this->assertInstanceOf(ConnectionsPage::class, $reloaded);

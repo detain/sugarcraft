@@ -81,6 +81,9 @@ SQL;
     /**
      * Tab: session connect attributes for a processlist ID.
      *
+     * `session_connect_attrs` is keyed by PROCESSLIST_ID (not THREAD_ID —
+     * joining on a.THREAD_ID raises ERROR 1054, adminpages-004).
+     *
      * @return array{id: int|string, attributes: array<string, string>}|null
      *     Attribute frame for the process, or null when not accessible
      */
@@ -94,7 +97,7 @@ SELECT
     a.ORDINAL_POSITION AS ordinal
 FROM performance_schema.threads t
 JOIN performance_schema.session_connect_attrs a
-    ON t.THREAD_ID = a.THREAD_ID
+    ON t.PROCESSLIST_ID = a.PROCESSLIST_ID
 WHERE t.PROCESSLIST_ID = ?
 ORDER BY a.ORDINAL_POSITION
 SQL;

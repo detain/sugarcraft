@@ -142,6 +142,43 @@ final class ProcesslistProviderTest extends TestCase
 
         $this->assertTrue($result[0]->isBackground());
     }
+
+    /**
+     * SQL-P03 golden pin: the connect-attrs join must key on PROCESSLIST_ID.
+     * session_connect_attrs has no THREAD_ID column — joining on a.THREAD_ID
+     * raises ERROR 1054 and the flagship pane renders as permanent "No data"
+     * (live-verified MySQL 8.0.46).
+     */
+    public function testProcesslistSqlJoinsAttrsOnProcesslistId(): void
+    {
+        $sql = ProcesslistProvider::processlistSql();
+
+        $this->assertStringContainsString('ON t.PROCESSLIST_ID = a.PROCESSLIST_ID', $sql);
+        $this->assertStringNotContainsString('a.THREAD_ID', $sql);
+    }
+
+    public function testProcesslistSqlExcludesBackgroundAndSelectsBothIds(): void
+    {
+        $sql = ProcesslistProvider::processlistSql();
+
+        $this->assertStringContainsString("WHERE t.TYPE <> 'BACKGROUND'", $sql);
+        $this->assertStringContainsString('t.PROCESSLIST_ID,', $sql);
+        $this->assertStringContainsString('t.THREAD_ID,', $sql);
+        $this->assertStringContainsString('LIMIT ' . ProcesslistProvider::PS_ROW_LIMIT, $sql);
+    }
+
+    public function testFetchAllEmitsProcesslistSqlOnceWhenPSAvailable(): void
+    {
+        // FakeDatabase replays the same rows for every query; the PS check
+        // sees ps=1, the flagship fetch runs, and its (non-processlist-shaped)
+        // rows are skipped as malformed by mapRows — we pin the emission.
+        $this->db->setQueryResult([['ps' => 1]]);
+
+        $provider = ProcesslistProvider::new($this->context);
+        $provider->fetchAll();
+
+        $this->assertSame(1, $this->db->queryCount(ProcesslistProvider::processlistSql()));
+    }
 }
 
 /**

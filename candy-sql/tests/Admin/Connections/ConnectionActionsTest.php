@@ -117,6 +117,38 @@ final class ConnectionActionsTest extends TestCase
         $this->assertStringNotContainsString("HOST = '%'", $this->db->lastQuery);
         $this->assertStringNotContainsString("USER = '%'", $this->db->lastQuery);
     }
+
+    /**
+     * SQL-P03 golden pin: session_connect_attrs is keyed by PROCESSLIST_ID;
+     * joining a.THREAD_ID raises ERROR 1054 (live-verified MySQL 8.0.46) and
+     * the Attributes tab renders as permanently empty.
+     */
+    public function testAttributesTabJoinsOnProcesslistIdNotThreadId(): void
+    {
+        $this->db->setQueryResult([]);
+        $tabs = ConnectionDetailTabs::new($this->ctx);
+        $tabs->attributes(5);
+
+        $this->assertStringContainsString('ON t.PROCESSLIST_ID = a.PROCESSLIST_ID', $this->db->lastPrepareSql);
+        $this->assertStringNotContainsString('a.THREAD_ID', $this->db->lastPrepareSql);
+    }
+
+    /**
+     * Counter-pin: metadata_locks legitimately joins on OWNER_THREAD_ID =
+     * threads.THREAD_ID — the PROCESSLIST_ID re-key above must not bleed
+     * into the MDL tab (adminpages-004 was specific to session_connect_attrs).
+     */
+    public function testMdlLocksTabKeepsLegitOwnerThreadJoin(): void
+    {
+        $this->db->setQueryResult([
+            ['lock_id' => '123:0', 'lock_type' => 'SHARED', 'lock_status' => 'GRANTED', 'lock_mode' => 'SHARED_READ', 'thread_id' => '7', 'processlist_id' => '123'],
+        ]);
+        $tabs = ConnectionDetailTabs::new($this->ctx);
+        $result = $tabs->mdlLocks(123);
+
+        $this->assertIsArray($result);
+        $this->assertStringContainsString('ml.OWNER_THREAD_ID = t.THREAD_ID', $this->db->lastPrepareSql);
+    }
 }
 
 final class ConnectionDetailTabsTest extends TestCase
@@ -180,6 +212,7 @@ final class FakeDb implements DatabaseInterface
     /** @var list<array<string, mixed>> */
     public array $queryResult = [];
     public string $lastQuery = '';
+    public string $lastPrepareSql = '';
     private ?\PDOException $queryException = null;
 
     /** @param \PDOException|null */
@@ -241,6 +274,8 @@ final class FakeDb implements DatabaseInterface
     public function databases(): array { return []; }
     public function prepare(string $sql): ?PreparedStatementInterface
     {
+        $this->lastPrepareSql = $sql;
+
         return new FakeStmt($this);
     }
 

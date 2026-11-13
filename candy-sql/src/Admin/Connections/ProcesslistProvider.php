@@ -15,10 +15,57 @@ use SugarCraft\Sql\Db\DatabaseInterface;
  * SHOW FULL PROCESSLIST when PS is disabled or inaccessible due to permission
  * errors (1142/1146) or connection errors (2002/2003/2013).
  *
- * @see Mirrors charmbracelet/lazysql processlist
+ * @see Mirrors jorgerojas26/lazysql processlist
  */
 final class ProcesslistProvider
 {
+    /**
+     * Row ceiling for the performance_schema thread scan (adminpages-031):
+     * this query re-runs on every ~3 s refresh window, so an unbounded full
+     * thread-table ship (incl. PROCESSLIST_INFO blobs) filesorts busy servers
+     * for a grid that displays a windowed slice anyway.
+     */
+    public const PS_ROW_LIMIT = 500;
+
+    /**
+     * The exact PS-path statement, exposed so consumers that key on it (the
+     * async-cache mirror in tests) share one source instead of re-typing.
+     *
+     * `session_connect_attrs` is keyed by PROCESSLIST_ID, not THREAD_ID —
+     * joining on a.THREAD_ID raises ERROR 1054 (live-verified on MySQL
+     * 8.0.46) and the drain arm renders the flagship pane as a permanent
+     * "No data". BACKGROUND internal threads are server plumbing, never
+     * client connections worth listing.
+     *
+     * @return string
+     */
+    public static function processlistSql(): string
+    {
+        $limit = self::PS_ROW_LIMIT;
+
+        return <<<SQL
+            SELECT
+                t.PROCESSLIST_ID,
+                t.THREAD_ID,
+                t.PROCESSLIST_USER,
+                t.PROCESSLIST_HOST,
+                t.PROCESSLIST_DB,
+                t.PROCESSLIST_COMMAND,
+                t.PROCESSLIST_TIME,
+                t.PROCESSLIST_STATE,
+                t.PROCESSLIST_INFO,
+                t.TYPE,
+                COALESCE(a.ATTR_VALUE, '') AS PROCESSLIST_ATTRS
+            FROM performance_schema.threads t
+            LEFT JOIN performance_schema.session_connect_attrs a
+                ON t.PROCESSLIST_ID = a.PROCESSLIST_ID
+                AND a.ATTR_NAME = 'program_name'
+            WHERE t.TYPE <> 'BACKGROUND'
+            ORDER BY t.PROCESSLIST_TIME DESC
+            LIMIT {$limit}
+            SQL;
+    }
+
     private ?bool $psAvailable = null;
 
     public function __construct(
@@ -79,7 +126,8 @@ final class ProcesslistProvider
     }
 
     /**
-     * Fetch via performance_schema.threads with session_connect_attrs join.
+     * Fetch via performance_schema.threads with session_connect_attrs join
+     * (keyed on PROCESSLIST_ID — see {@see self::processlistSql()}).
      *
      * SELECTs both PROCESSLIST_ID (connection id for KILL) and THREAD_ID
      * (internal id for instrumentation/MDL queries).  Background detection
@@ -89,25 +137,7 @@ final class ProcesslistProvider
      */
     private function fetchViaPS(): ?array
     {
-        $sql = <<<'SQL'
-SELECT
-    t.PROCESSLIST_ID,
-    t.THREAD_ID,
-    t.PROCESSLIST_USER,
-    t.PROCESSLIST_HOST,
-    t.PROCESSLIST_DB,
-    t.PROCESSLIST_COMMAND,
-    t.PROCESSLIST_TIME,
-    t.PROCESSLIST_STATE,
-    t.PROCESSLIST_INFO,
-    t.TYPE,
-    COALESCE(a.ATTR_VALUE, '') AS PROCESSLIST_ATTRS
-FROM performance_schema.threads t
-LEFT JOIN performance_schema.session_connect_attrs a
-    ON t.THREAD_ID = a.THREAD_ID
-    AND a.ATTR_NAME = 'program_name'
-ORDER BY t.PROCESSLIST_TIME DESC
-SQL;
+        $sql = self::processlistSql();
 
         try {
             $connection = $this->context->connection();
