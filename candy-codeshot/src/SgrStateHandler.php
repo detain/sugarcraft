@@ -28,6 +28,28 @@ final class SgrStateHandler implements SubparamsAwareHandler
     private array $segments;
 
     /**
+     * Running cell-count of the current line, decomposed so a tab needs no
+     * re-measure (cs-05: the historic per-HT `Width::of($this->textBuf)` plus
+     * a walk over EVERY flushed segment made a line of T tabs cost O(T·W) —
+     * measured 16.4 s at 10k tabs, >230 s at 40k):
+     *  - `$flushedCells` — width of every segment the flush callback has
+     *    already passed over,
+     *  - `$committedCells` — whole grapheme clusters closed in the pending
+     *    buffer, plus folded tab padding (a space never continues a cluster),
+     *  - `$lastCluster` — the still-open cluster at the buffer's end.
+     *
+     * The sum equals `Width::of()` over the line's plain text because both
+     * sides walk the same splitter (`Width::nextCluster()`): the merge
+     * decision is made once per incoming codepoint, at the same boundary the
+     * whole-buffer scan makes it, so paint-side pads stay byte-identical to
+     * the historic re-measure on every input — including combining marks,
+     * regional-indicator pairs, emoji modifiers and ZWJ sequences.
+     */
+    private int $flushedCells = 0;
+    private int $committedCells = 0;
+    private string $lastCluster = '';
+
+    /**
      * ECMA-48 colon continuation flags the parser PUSHED for the sequence
      * currently being dispatched ({@see SubparamsAwareHandler::setSubparams()}),
      * or the empty list when nothing has been pushed — in which case every
@@ -58,18 +80,38 @@ final class SgrStateHandler implements SubparamsAwareHandler
     public function printChar(string $rune): void
     {
         $this->textBuf .= $rune;
+        $this->advanceColumn($rune);
     }
 
     /**
-     * Tab-stop size used to expand HT (0x09) into spaces, in cells. The
-     * upstream parser routes every Ground-state control byte here (its
-     * transition table sends 0x00-0x17 to Execute); only HT has a visual
-     * meaning in a static render, so CR, BS, DEL and friends stay dropped.
-     * 8 cells mirrors xterm's default stops (sugar-core's Width::TAB_WIDTH
-     * is 4 and deliberately not used here).
+     * Fold one printed codepoint into the running cell-count.
+     *
+     * The parser delivers single codepoints; a codepoint continues the open
+     * cluster exactly when `Width::nextCluster()` over the joined tail spans
+     * the whole tail. Continuations grow `$lastCluster` without charging (the
+     * cluster's width is its first codepoint's, charged once on close); a new
+     * cluster closes — and pays for — the previous one.
      */
-    private const TAB_STOP_CELLS = 8;
+    private function advanceColumn(string $rune): void
+    {
+        if ($this->lastCluster !== '') {
+            $merged = $this->lastCluster . $rune;
+            if (Width::nextCluster($merged, 0) === $merged) {
+                $this->lastCluster = $merged;
+                return;
+            }
+            $this->committedCells += Width::of($this->lastCluster);
+        }
+        $this->lastCluster = $rune;
+    }
 
+    /**
+     * Expand HT (0x09) to the next tab stop. The upstream parser routes every
+     * Ground-state control byte here (its transition table sends 0x00-0x17 to
+     * Execute); only HT has a visual meaning in a static render, so CR, BS,
+     * DEL and friends stay dropped. The stop rule itself lives in
+     * {@see TabStops} — shared with the budget-side walker.
+     */
     public function execute(int $_byte): void
     {
         if ($_byte !== 0x09) {
@@ -80,14 +122,17 @@ final class SgrStateHandler implements SubparamsAwareHandler
 
         // Count cells without flushing: the pad joins the pending text so
         // the run keeps one segment and the current SGR attributes (xterm
-        // paints tabs in the colour in force).
-        $column = Width::of($this->textBuf);
-        foreach ($this->segments as $segment) {
-            $column += Width::of($segment->text);
-        }
-
-        $pad = self::TAB_STOP_CELLS - ($column % self::TAB_STOP_CELLS);
+        // paints tabs in the colour in force). The count itself is O(1) —
+        // printChar has already advanced it rune by rune.
+        $pad = TabStops::pad($this->currentColumn());
+        $this->committedCells += $pad;
         $this->textBuf .= str_repeat(' ', $pad);
+    }
+
+    /** Whole cells painted or pending on the current line. */
+    private function currentColumn(): int
+    {
+        return $this->flushedCells + $this->committedCells + Width::of($this->lastCluster);
     }
 
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
@@ -95,6 +140,13 @@ final class SgrStateHandler implements SubparamsAwareHandler
         if (chr($final) !== 'm') {
             return;
         }
+
+        // The flush closes the pending run into one segment: pay its still
+        // open cells into the flushed counter before the callback empties
+        // the buffer (cs-05 running count).
+        $this->flushedCells += $this->committedCells + Width::of($this->lastCluster);
+        $this->committedCells = 0;
+        $this->lastCluster = '';
 
         ($this->flush)();
         // ECMA-48 default-parameter rule: an omitted parameter takes its
