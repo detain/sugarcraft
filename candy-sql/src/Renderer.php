@@ -14,6 +14,7 @@ use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\AdminSection;
 use SugarCraft\Sql\App\EditState;
 use SugarCraft\Sql\App\ExportState;
+use SugarCraft\Sql\Db\DmlStatement;
 use SugarCraft\Sql\Terminal\BorderFrame;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
@@ -516,7 +517,7 @@ final class Renderer
                 'value' => $value,
             ]),
             EditState::STAGE_CONFIRM => Lang::t('edit.prompt_confirm', [
-                'sql' => CellValue::sanitize(preg_replace('/\s+/', ' ', $e->statement?->display ?? '') ?? ''),
+                'sql' => CellValue::sanitize(preg_replace('/\s+/', ' ', $e->statement instanceof DmlStatement ? $e->statement->display : '') ?? ''),
             ]),
             default => null,
         };

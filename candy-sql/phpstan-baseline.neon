@@ -23,6 +23,11 @@
 # line (handleIoKey/openIoLine arms) adds four MORE returns of the identical
 # house-shaped array{App, ?Cmd}; same documented Cmd-vs-Closure contract
 # mismatch, no new class of silence.
+# gosql rider (2026-11-13): the owner-era O03/O10 edit-line and filter-line
+# arms grew the same family 7→9 without a re-pin — discovered as a silent
+# ignore.count red at HEAD while this lane gated SQL-O08. Re-censused at 9;
+# the SQL-O08 cancel arms add nothing (their slot-1 literal is null, which
+# Closure|null accepts), so the pin now matches the live count.
 parameters:
 	ignoreErrors:
 		-
@@ -124,7 +129,7 @@ parameters:
 		-
 			message: '#^Method SugarCraft\\Sql\\App\:\:update\(\) should return array\{SugarCraft\\Core\\Model, Closure\|null\} but returns array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\}\.$#'
 			identifier: return.type
-			count: 7
+			count: 9
 			path: src/App.php
 
 		-
