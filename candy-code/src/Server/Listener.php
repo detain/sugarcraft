@@ -34,6 +34,11 @@ final class Listener extends EventEmitter implements ServerInterface
 
     private bool $listening = false;
 
+    /** Pause after a failed accept; see {@see backOff()}. */
+    private const ACCEPT_RETRY_SECONDS = 1.0;
+
+    private ?\React\EventLoop\TimerInterface $retryTimer = null;
+
     private function __construct(private readonly LoopInterface $loop)
     {
     }
@@ -117,6 +122,7 @@ final class Listener extends EventEmitter implements ServerInterface
                 $socket = SocketServer::accept($master);
             } catch (\RuntimeException $e) {
                 $this->emit('error', [$e]);
+                $this->backOff();
 
                 return;
             }
@@ -130,12 +136,31 @@ final class Listener extends EventEmitter implements ServerInterface
         $this->listening = true;
     }
 
+    /**
+     * A failed accept is usually EMFILE/ENFILE: the pending connection stays
+     * in the backlog, the master stays readable, and the loop would re-fire
+     * (one error line, one core) forever. Stop reading it and retry after a
+     * beat, as react/socket's accept loop is meant to.
+     */
+    private function backOff(): void
+    {
+        $this->pause();
+        $this->retryTimer = $this->loop->addTimer(self::ACCEPT_RETRY_SECONDS, function (): void {
+            $this->retryTimer = null;
+            $this->resume();
+        });
+    }
+
     public function close(): void
     {
         if (!\is_resource($this->master)) {
             return;
         }
 
+        if ($this->retryTimer !== null) {
+            $this->loop->cancelTimer($this->retryTimer);
+            $this->retryTimer = null;
+        }
         $this->pause();
         ForkedChild::forgetServerStream($this->master);
         \fclose($this->master);
