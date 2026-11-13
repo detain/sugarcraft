@@ -417,12 +417,15 @@ final class Game implements Model
     /**
      * 'L' — replace the running game with the savegame slot's state, keeping
      * this session's stats tally (a load is a time machine, not a memory
-     * wipe). Missing/unreadable/unversioned files are refused quietly and
-     * the current game continues. The board itself goes through
-     * {@see Board::unserialize()}, whose coherence hardening (strict wire
-     * types, mine-count census, adjacency recompute, impossible-state
-     * refusal) is what makes trusting a file on disk safe at all; the
-     * envelope fields are type-checked here with the same discipline.
+     * wipe). Every refusal is announced, never silent: no usable slot
+     * (missing file or no config path) toasts {@see Lang} key ui.no_save;
+     * a present-but-untrustworthy file (unreadable, unversioned, a junk
+     * envelope, or a board whose wire fails {@see Board::unserialize()}'s
+     * coherence census — strict types, mine-count, adjacency recompute,
+     * impossible-state refusal) toasts ui.load_refused. Either way the
+     * current game continues untouched: loadSaved() never dies and never
+     * coerces. Envelope fields are type-checked here with the same
+     * discipline the board loader applies.
      */
     private function loadSaved(): self
     {
