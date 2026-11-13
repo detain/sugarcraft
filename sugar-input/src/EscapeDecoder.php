@@ -1316,8 +1316,12 @@ final class EscapeDecoder
         }
 
         // Home / End: CSI H or CSI F
-        if ($seq === 'H') return ['events' => [new KeyEvent('Home', KeyModifier::none(), "\x1b[H")], 'remaining' => $rest];
-        if ($seq === 'F') return ['events' => [new KeyEvent('End', KeyModifier::none(), "\x1b[F")], 'remaining' => $rest];
+        if ($seq === 'H') {
+            return ['events' => [new KeyEvent('Home', KeyModifier::none(), "\x1b[H")], 'remaining' => $rest];
+        }
+        if ($seq === 'F') {
+            return ['events' => [new KeyEvent('End', KeyModifier::none(), "\x1b[F")], 'remaining' => $rest];
+        }
 
         // Backtab: CSI Z (shift-TAB, sent by xterm & friends)
         if ($seq === 'Z') {
@@ -1887,8 +1891,12 @@ final class EscapeDecoder
     {
         $ord = ord($byte);
 
-        if ($ord === 0x09) return new KeyEvent('Tab', KeyModifier::none(), "\t");
-        if ($ord === 0x0a || $ord === 0x0d) return new KeyEvent('Enter', KeyModifier::none(), $byte);
+        if ($ord === 0x09) {
+            return new KeyEvent('Tab', KeyModifier::none(), "\t");
+        }
+        if ($ord === 0x0a || $ord === 0x0d) {
+            return new KeyEvent('Enter', KeyModifier::none(), $byte);
+        }
 
         // NUL (0x00): keyboards that produce it produce it as Ctrl+Space (the
         // layout's Ctrl+@ twin reaches the same byte). The wire byte has no
@@ -2070,17 +2078,31 @@ final class EscapeDecoder
     private function kittyKeyCodeToName(int $code): string|null
     {
         // Tab, Enter, Escape, Backspace travel as their ASCII values.
-        if ($code === 9)  return 'Tab';
-        if ($code === 13) return 'Enter';
-        if ($code === 27) return 'Escape';
-        if ($code === 127) return 'Backspace';
+        if ($code === 9) {
+            return 'Tab';
+        }
+        if ($code === 13) {
+            return 'Enter';
+        }
+        if ($code === 27) {
+            return 'Escape';
+        }
+        if ($code === 127) {
+            return 'Backspace';
+        }
 
         // Space
-        if ($code === 32) return 'Space';
+        if ($code === 32) {
+            return 'Space';
+        }
 
         // Letters (Kitty reports the shifted codepoint; we name the letter)
-        if ($code >= 97 && $code <= 122) return chr($code);
-        if ($code >= 65 && $code <= 90)  return chr($code + 32);
+        if ($code >= 97 && $code <= 122) {
+            return chr($code);
+        }
+        if ($code >= 65 && $code <= 90) {
+            return chr($code + 32);
+        }
 
         // Remaining TEXT codepoints arrive as the character itself — digits,
         // punctuation and Unicode runes below the spec's functional space.
@@ -2088,7 +2110,9 @@ final class EscapeDecoder
         // and the surrogate block (0xD800–0xDFFF) is not a scalar value, so the
         // leg ends at 0xD7FF and those codes keep counting as drops — exactly
         // the contract the modifyOtherKeys leg honors for printable keysyms.
-        if ($code >= 32 && $code <= 0xD7FF) return mb_chr($code);
+        if ($code >= 32 && $code <= 0xD7FF) {
+            return mb_chr($code);
+        }
 
         return self::KITTY_FUNCTIONAL_KEYS[$code] ?? null;
     }
