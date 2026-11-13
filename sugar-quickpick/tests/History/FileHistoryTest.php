@@ -207,11 +207,12 @@ final class FileHistoryTest extends TestCase
     }
 
     /**
-     * S-21/-040: the old (int)-coercion invented ordinals out of garbage —
-     * "7px" became 7, an array became 1. An "n" that is not a real int must
-     * read as ordinal 0.
+     * S-21/-040 kept honest by S-23/-075: the archived "n" is not read on
+     * load at all, so the old garbage-coercion ("7px" → 7) cannot even
+     * reach "ordinal 0" — it is irrelevant. Rows carry their load position.
+     * (The values still survive: a garbage "n" never made a row unloadable.)
      */
-    public function testNonIntegerOrdinalReadsAsZero(): void
+    public function testNonIntegerOrdinalNeverReachesDisplay(): void
     {
         \file_put_contents($this->tmpPath, "{\"n\":[9],\"v\":\"array-ordinal\"}\n{\"n\":\"7px\",\"v\":\"string-ordinal\"}\n");
         \chmod($this->tmpPath, 0600);
@@ -219,7 +220,7 @@ final class FileHistoryTest extends TestCase
         $items = (new FileHistory($this->tmpPath))->all();
 
         $this->assertCount(2, $items);
-        $this->assertSame([0, 0], array_map(static fn($i) => $i->number(), $items));
+        $this->assertSame([1, 2], array_map(static fn($i) => $i->number(), $items));
     }
 
     /** S-21/-067: every write stamps the format version on the row. */
@@ -248,7 +249,7 @@ final class FileHistoryTest extends TestCase
         $items = (new FileHistory($this->tmpPath))->all();
 
         $this->assertCount(1, $items);
-        $this->assertSame(2, $items[0]->number());
+        $this->assertSame(1, $items[0]->number()); // S-23: load position, not the archived "n":2
         $this->assertSame('legacy-row', $items[0]->value());
     }
 
@@ -271,10 +272,10 @@ final class FileHistoryTest extends TestCase
     }
 
     /**
-     * S-22/-030: upstream theHermit dedupes history; here 20 identical
-     * selections through appendDistinct() must leave ONE row carrying the
-     * newest ordinal at the newest position — not 20 rows feeding the
-     * per-keystroke scan.
+     * S-22/-030 kept honest by S-23/-075: 20 identical selections through
+     * appendDistinct() leave ONE row — and its DISPLAY ordinal is the load
+     * position (1). The newest write-time ordinal survives only as archived
+     * bytes in the row, which the raw-byte pin already covers.
      */
     public function testAppendDistinctCollapsesRepeatsToTheNewestRow(): void
     {
@@ -287,7 +288,9 @@ final class FileHistoryTest extends TestCase
 
         $this->assertCount(1, $items);
         $this->assertSame('dup', $items[0]->value());
-        $this->assertSame(20, $items[0]->number());
+        $this->assertSame(1, $items[0]->number());
+        // The archived bytes still carry the newest write-time ordinal:
+        $this->assertStringContainsString('"n":20', (string) \file_get_contents($this->tmpPath));
     }
 
     /**
@@ -304,7 +307,7 @@ final class FileHistoryTest extends TestCase
         $items = $history->all();
 
         $this->assertSame(['b', 'a'], array_map(static fn($i) => $i->value(), $items));
-        $this->assertSame([2, 3], array_map(static fn($i) => $i->number(), $items));
+        $this->assertSame([1, 2], array_map(static fn($i) => $i->number(), $items)); // S-23: display ordinals are load positions
     }
 
     /** S-22/-030: the constructor cap trims the rewrite to the newest N rows. */
@@ -396,7 +399,7 @@ final class FileHistoryTest extends TestCase
         $this->assertStringContainsString($legacy, $raw);
         $items = $history->all();
         $this->assertSame(['legacy', 'fresh'], array_map(static fn($i) => $i->value(), $items));
-        $this->assertSame(5, $items[0]->number());
+        $this->assertSame(1, $items[0]->number()); // S-23: display is load position; the archived "n":5 rides on untouched
     }
 
     /** S-22/-030: a cap below 1 would keep nothing on every rewrite: a mis-set setting, refused at the door. */

@@ -142,9 +142,52 @@ final class StringItemsTest extends TestCase
         $bg = str_repeat(str_repeat(' ', 80) . "
 ", 20);
         $result = $h->view($bg);
-
         // The default formatter shows "  3. cherry" (2-space indent + ordinal + dot + space + value).
         $this->assertStringContainsString('3. cherry', $result);
     }
 
+    /**
+     * S-23/-024: coerced strings take their INPUT POSITION across the whole
+     * list — a pass-through Item occupies a row too, so 'two' lands on 3.
+     */
+    public function testCoercedStringsNumberByInputPositionAcrossAllRows(): void
+    {
+        $h = QuickPick::new(['one', new FilteredItem(42, 'forty-two'), 'two'])->show();
+
+        $items = $h->items();
+
+        $this->assertSame([1, 42, 3], array_map(static fn(Item $i): int => $i->number(), $items));
+    }
+
+    /** S-23/-073: withNumbered(false) renders the cursor dot alone. */
+    public function testWithNumberedFalseRendersDotOnly(): void
+    {
+        $h = QuickPick::new(['apple', 'banana'])
+            ->show()
+            ->withNumbered(false);
+
+        $bg = str_repeat(str_repeat(' ', 80) . "\n", 20);
+        $result = $h->view($bg);
+
+        $this->assertStringContainsString('● apple', $result); // selected row keeps the dot
+        $this->assertStringNotContainsString('1. ', $result);
+        $this->assertStringNotContainsString('2. ', $result);
+    }
+
+    /** S-23/-073: numbering is ON by default and the builder is pure. */
+    public function testWithNumberedIsOnByDefaultAndLeavesTheOriginalAlone(): void
+    {
+        $h = QuickPick::new(['apple'])->show();
+        $this->assertTrue($h->numbered());
+
+        $off = $h->withNumbered(false);
+
+        $this->assertNotSame($h, $off);
+        $this->assertFalse($off->numbered());
+        $this->assertTrue($h->numbered()); // the source instance is untouched
+
+        $bg = str_repeat(str_repeat(' ', 80) . "\n", 20);
+        $this->assertStringContainsString('1. apple', $h->view($bg));
+        $this->assertStringNotContainsString('1. ', $off->view($bg));
+    }
 }

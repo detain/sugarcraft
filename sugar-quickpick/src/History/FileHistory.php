@@ -72,7 +72,8 @@ class FileHistory
     private const READ_CHUNK_BYTES = 65536;
 
     /**
-     * On-disk row schema: {"n": ordinal, "v": value, "f": FORMAT_VERSION}.
+     * On-disk row schema: {"n": archived write-time ordinal, "v": value,
+     * "f": FORMAT_VERSION}.
      *
      * Every write stamps "f"; a read row WITHOUT "f" predates the field and
      * is the original (n,v) shape, so it loads. A row whose "f" carries any
@@ -513,11 +514,13 @@ class FileHistory
      *
      * Lines that are not decodable JSON OBJECTS carrying a usable "v" value
      * are skipped — a bare scalar, array, or object without "v" is not an
-     * entry that was ever written here, and minting FilteredItem(0, '')
-     * ghosts out of it hides corpus corruption behind phantom rows. Rows
-     * stamped with an unknown format ("f" not this build's) are skipped
-     * whole, and an "n" that is not a real int reads as ordinal 0 rather
-     * than being coerced out of garbage (-040/-067). The
+     * entry that was ever written here, and minting ghost rows out of it
+     * hides corpus corruption behind phantoms. Rows stamped with an unknown
+     * format ("f" not this build's) are skipped whole (-067). The archived
+     * "n" is never interpreted: every returned row carries its CURRENT load
+     * position as its ordinal, so replays number 1..N like the fresh lists
+     * they feed (-075; the old read-time "n", garbage-coerced or stale, is
+     * retired here — see {@see self::parseRow()}). The
      * file handle is always closed, even if an exception escapes during
      * decoding.
      *
@@ -558,13 +561,17 @@ class FileHistory
         }
 
         $items = [];
+        $position = 0;
         try {
             $this->verifyHandle($handle, 'read');
             $this->lockHandle($handle, \LOCK_SH); // advisory: failure tolerated by policy (class docblock, -033)
             foreach ($this->readableLines($handle) as $line) {
-                $item = self::parseRow($line);
-                if ($item !== null) {
-                    $items[] = $item;
+                $value = self::parseRow($line);
+                if ($value !== null) {
+                    // -075: the printed ordinal is the CURRENT position,
+                    // never the archived write-time number — replayed
+                    // history reads like the list it is now.
+                    $items[] = new FilteredItem(++$position, $value);
                 }
             }
             \flock($handle, \LOCK_UN);
@@ -607,14 +614,21 @@ class FileHistory
     }
 
     /**
-     * Parse one trimmed line into an item, or null when it is not a row.
+     * Parse one trimmed line into its row VALUE, or null when it is not a
+     * row.
      *
-     * The shape/format/ordinal gate — "visible to all()" and "survives an
+     * The shape/format gate — "visible to all()" and "survives an
      * appendDistinct() rewrite" are deliberately the SAME test, so a row the
      * reader already ignores is never laundered back onto disk by a managed
      * rewrite.
+     *
+     * The archived "n" is never read here (-075): display ordinals are the
+     * loader's current positions, and a stale write-time number — or the
+     * garbage that masqueraded as one, the -040 family — cannot reach the
+     * screen through a field the reader has stopped trusting. The key is
+     * archived telemetry, nothing more.
      */
-    private static function parseRow(string $line): ?FilteredItem
+    private static function parseRow(string $line): ?string
     {
         try {
             $decoded = \json_decode($line, true, 512, \JSON_THROW_ON_ERROR);
@@ -632,14 +646,8 @@ class FileHistory
         if ($format !== self::FORMAT_VERSION) {
             return null; // a format this build does not know: not interpreted, not guessed (-067)
         }
-        // (int)-coercion invented ordinals out of garbage: a string
-        // "7px" or float 7.9 became a plausible-looking number. The
-        // ordinal is honest int or nothing (-040).
-        $ordinal = \array_key_exists('n', $decoded) && \is_int($decoded['n'])
-            ? $decoded['n']
-            : 0;
 
-        return new FilteredItem($ordinal, (string) $value);
+        return (string) $value;
     }
 
     /**
@@ -660,11 +668,11 @@ class FileHistory
         \rewind($handle);
         $rows = [];
         foreach ($this->readableLines($handle) as $line) {
-            $item = self::parseRow($line);
-            if ($item === null) {
+            $value = self::parseRow($line);
+            if ($value === null) {
                 continue;
             }
-            $rows[] = ['key' => $item->value(), 'row' => $line . "\n"];
+            $rows[] = ['key' => $value, 'row' => $line . "\n"];
         }
 
         return $rows;

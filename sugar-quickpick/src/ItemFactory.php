@@ -7,8 +7,15 @@ namespace SugarCraft\QuickPick;
 /**
  * Factory for converting raw input into Item instances.
  *
- * Strings are wrapped as FilteredItem with a 1-based ordinal.
- * Items already implementing Item are passed through unchanged.
+ * Strings are wrapped as FilteredItem with the row's INPUT POSITION as its
+ * ordinal (1-based, counting every row of the input) — not the count of
+ * strings seen so far (-024). Mixed input `[$item42, 'one', 'two']` yields
+ * `$item42` (untouched), 2, 3: a printed ordinal answers "which row is
+ * this?", which is what a numbered list claims.
+ *
+ * Items already implementing Item are passed through unchanged: their own
+ * number() is whatever the host gave them (0 = "I have no number"), and
+ * coerce() never rewrites it.
  *
  * Fail-fast ingress (-012): anything else is refused with an
  * `InvalidArgumentException` naming the offending index and type. The
@@ -25,15 +32,16 @@ final class ItemFactory
      */
     public function coerce(array $items): array
     {
-        $result      = [];
-        $stringIndex = 0;
+        $result   = [];
+        $position = 0;
         foreach ($items as $key => $item) {
+            ++$position; // every input row holds a position, Item or not (-024)
             if ($item instanceof Item) {
                 $result[] = $item;
                 continue;
             }
             if (\is_string($item)) {
-                $result[] = new FilteredItem(++$stringIndex, $item);
+                $result[] = new FilteredItem($position, $item);
                 continue;
             }
             throw new \InvalidArgumentException(\sprintf(

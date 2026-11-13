@@ -80,7 +80,7 @@ $h = $h->cursorDown();
 $h = $h->cursorUp();
 
 // Select
-$selected = $h->selected();  // ?Item — null when nothing is selected; string inputs are coerced to FilteredItem
+$selected = $h->selected();  // ?Item — null when nothing is selected; string inputs are coerced to FilteredItem, each taking its INPUT POSITION as ordinal (rows counted whole: a mixed [Item, 'a'] list numbers 'a' 2, not 1)
 
 // Hide
 $h = $h->hide();
@@ -117,7 +117,7 @@ $history = new FileHistory($historyPath);
 if ($choice = $h->selected()) {   // selected() is ?Item — null when nothing is selected
     $history->append($choice);    // save selected item
 }
-$allItems = $history->all();      // load previous items
+$allItems = $history->all();      // load previous items — renumbered 1..N by current position
 ```
 
 ## Fuzzy ranking (sugar-fuzzy)
@@ -190,7 +190,7 @@ SugarCraft\QuickPick
 ├── StatusBar           — Status message line with optional segments
 ├── QuickPickHost       — update()/view() composition contract, state in the return tuple
 ├── Model               — @deprecated alias of QuickPickHost (soft landing)
-├── ItemFactory         — string[]/Item[] coercion (used by new()/withItems())
+├── ItemFactory         — string[]/Item[] coercion (used by new()/withItems(); coerced strings take their input position as ordinal)
 ├── Concerns
 │   └── Visible         — show()/hide()/isVisible() shared by HelpBar/StatusBar
 ├── Support
@@ -286,6 +286,13 @@ public function withOffset(int $x, int $y): self
 // guarded (control bytes, escape sequences and forged zone sentinels are
 // stripped before you see them); SGR you add survives highlighting.
 public function withItemFormatter(\Closure $fn): self
+
+// Printed ordinals on/off (-073). Off means the formatter is handed number
+// 0 for every row — the built-in default then renders the cursor dot alone,
+// so opting out of numbering no longer requires replacing the formatter
+// (and re-deriving the dot yourself). A custom formatter that honors the
+// documented "0 = no number" contract opts out the same way.
+public function withNumbered(bool $numbered = true): self
 
 // Custom filter predicate: Closure(Item $item): bool
 // Applied in addition to the built-in filter (contiguous substring match by
@@ -472,7 +479,10 @@ $history->append(new FilteredItem(1, 'apple'));
 
 // Read all items back; lines that are not encoded entries (bad JSON,
 // scalars, arrays without a value field) are skipped.
-$items = $history->all();  // returns list<Item>
+$items = $history->all();  // returns list<Item>, renumbered 1..N by current load
+                          // position (-075): the archived write-time ordinal in
+                          // each row is display-ignored, so a replay numbers
+                          // like the fresh list it feeds
 
 // Clear the history: the file is truncated in place under an exclusive
 // lock (permissions and inode are preserved; no unlink-and-recreate).
@@ -520,6 +530,11 @@ have been written here, so `all()` **drops it whole** — drained to the next
 newline so following rows still read — and counts the drop in
 `droppedOversizedLines()`. The next `appendDistinct()` rewrite drops such
 rows from the file permanently.
+
+Numbering is positional: `all()` renumbers its rows 1..N at load (-075), so
+dedupe and trims never leave stale ordinals on screen; the archived `n`
+inside each row records what the number was AT WRITE TIME and is otherwise
+display-ignored.
 
 ## API — HelpBar
 

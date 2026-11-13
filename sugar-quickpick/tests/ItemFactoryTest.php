@@ -66,10 +66,11 @@ final class ItemFactoryTest extends TestCase
         $this->assertSame($existingItem, $result[0]);
         $this->assertSame(99, $result[0]->number());
         $this->assertSame('pre-existing', $result[0]->value());
-        // Strings get sequential numbers starting at 1
-        $this->assertSame(1, $result[1]->number());
+        // S-23/-024: strings take their INPUT POSITION across all rows —
+        // the pass-through Item holds position 1, so 'apple' is 2.
+        $this->assertSame(2, $result[1]->number());
         $this->assertSame('apple', $result[1]->value());
-        $this->assertSame(2, $result[2]->number());
+        $this->assertSame(3, $result[2]->number());
         $this->assertSame('banana', $result[2]->value());
     }
 

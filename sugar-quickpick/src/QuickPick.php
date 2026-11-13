@@ -129,6 +129,16 @@ final class QuickPick
     /** @var \Closure(string $item, bool $isSelected, int $number = 0): string */
     private \Closure $itemFormatter;
 
+    /**
+     * Whether the item's ordinal reaches the formatter (-073). The house
+     * default renders "$number. " for number > 0; with a false flag both
+     * this property's readers pass number 0, so the default formatter
+     * renders the cursor dot alone and a custom formatter sees "no number"
+     * through the same documented channel — no formatter rewrite needed to
+     * opt out of numbering.
+     */
+    private bool $numbered = true;
+
     /** @var \Closure(Item $item): bool Filter function applied to items. */
     private \Closure $filterFn;
 
@@ -373,6 +383,8 @@ final class QuickPick
      * The closure receives the item's value (string), a bool indicating
      * whether it is currently selected, and optionally the item's number
      * (int, default 0) — it always returns the formatted display string.
+     * A list switched off numbering with withNumbered(false) hands every
+     * row number 0 through that same channel.
      */
     public function withItemFormatter(\Closure $fn): self
     {
@@ -382,6 +394,28 @@ final class QuickPick
         // the swap (M10).
         $clone->widthMemo->invalidateItems();
         $clone->itemFormatter = $fn;
+        return $clone;
+    }
+
+    /**
+     * Turn the printed ordinals on or off (-073).
+     *
+     * Upstream's numbering is opt-in; before this builder the only opt-out
+     * was installing a custom item formatter — which also threw away the
+     * house cursor dot and forced the host to re-derive it. The flag rides
+     * the documented number channel instead: off means the formatter is
+     * handed 0 for every row, which the house default renders as dot-only
+     * and a custom formatter can honor the same way.
+     *
+     * Flipping the flag changes every row's width, so the per-item
+     * measurement table goes with it (same discipline as
+     * withItemFormatter(), M10).
+     */
+    public function withNumbered(bool $numbered = true): self
+    {
+        $clone = clone $this;
+        $clone->widthMemo->invalidateItems();
+        $clone->numbered = $numbered;
         return $clone;
     }
 
@@ -876,6 +910,12 @@ final class QuickPick
         return $this->filterText;
     }
 
+    /** Whether rows carry printed ordinals (see withNumbered()). */
+    public function numbered(): bool
+    {
+        return $this->numbered;
+    }
+
     /**
      * True once the filter holds MAX_FILTER_LENGTH codepoints: appended
      * input is then refused and the header edge shows the overflow
@@ -1159,7 +1199,7 @@ final class QuickPick
             // the caller does not vet, while the formatter's own SGR is
             // host styling applied after — it must survive.
             $guarded     = UntrustedText::guard($rawValue);
-            $itemStr     = ($this->itemFormatter)($guarded, $isSelected, $items[$actualIndex]->number());
+            $itemStr     = ($this->itemFormatter)($guarded, $isSelected, $this->displayNumber($items[$actualIndex]));
 
             // Emphasis is a two-key switch (-050): a filter must exist AND
             // the host must have asked for a style — a ranker alone only
@@ -1532,6 +1572,17 @@ final class QuickPick
     }
 
     /**
+     * The ordinal a row is SHOWN with: the item's own number, or zero for
+     * every row while withNumbered(false) holds. Zero means "no number" in
+     * the formatter contract (the house default prints nothing extra for
+     * it), which is exactly what un-numbering promises.
+     */
+    private function displayNumber(Item $item): int
+    {
+        return $this->numbered ? $item->number() : 0;
+    }
+
+    /**
      * Measure one item under both selection flags and remember the wider
      * answer. The formatter is pure with respect to these two calls: the
      * render path formats each visible row once with its actual flag.
@@ -1539,7 +1590,7 @@ final class QuickPick
     private function measureItem(Item $item, \WeakMap $widths): int
     {
         $guarded = UntrustedText::guard($item->value());
-        $number  = $item->number();
+        $number  = $this->displayNumber($item);
 
         $plain    = Width::of(($this->itemFormatter)($guarded, false, $number));
         $selected = Width::of(($this->itemFormatter)($guarded, true, $number));
