@@ -44,6 +44,7 @@ return [
     'status.renamed'          => 'renamed {old} to {new}',
     'status.renamed_overwrote'  => 'renamed {old} to {new} ({overwrote} overwrote)',
     'status.rename_failed'    => 'rename failed: {name}',
+    'status.rename_invalid'    => 'rename refused: invalid name {name}',
     'status.nothing_to_undo'    => 'nothing to undo',
     'status.undone'            => 'undone: {description}',
     'status.undo_with_errors'  => 'undo {description} with {errors} error(s)',
