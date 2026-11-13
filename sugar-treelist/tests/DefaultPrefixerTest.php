@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\TreeList\Tests;
 
-use SugarCraft\TreeList\{DefaultPrefixer, Model, StringItem};
+use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, Model, StringItem};
 use PHPUnit\Framework\TestCase;
 
 /**

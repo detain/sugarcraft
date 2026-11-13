@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\TreeList;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\TreeList\Support\AssertGlyph;
 
 /**
  * Default suffixer — shows a < marker on the first line of the cursor item.
@@ -31,14 +32,7 @@ final class DefaultSuffixer implements Suffixer
         int $width,
         int $height,
     ): int {
-        if (\preg_match('/[\x00-\x1F\x7F]/', $this->currentMarker) === 1
-            || !\mb_check_encoding($this->currentMarker, 'UTF-8')
-            || \preg_match('/[\x{80}-\x{9F}]/u', $this->currentMarker) === 1
-        ) {
-            throw new \InvalidArgumentException(
-                'DefaultSuffixer:$currentMarker must be a printable glyph string without control characters (C0/DEL/C1).'
-            );
-        }
+        AssertGlyph::field(self::class, 'currentMarker', $this->currentMarker);
 
         $this->itemIndex   = $currentIndex;
         $this->cursorIndex = $cursorIndex;

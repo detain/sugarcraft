@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\TreeList;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\TreeList\Support\AssertGlyph;
 
 /**
  * Default box-drawing prefixer with line numbers and tree-style borders.
@@ -59,12 +60,14 @@ final class DefaultPrefixer implements Prefixer
     ): int {
         // Fail fast BEFORE emitting anything: a glyph field carrying control
         // bytes would reach the terminal verbatim (the old path never checked).
-        $this->assertGlyphField('firstSep', $this->firstSep);
-        $this->assertGlyphField('separator', $this->separator);
-        $this->assertGlyphField('lastSep', $this->lastSep);
-        $this->assertGlyphField('separatorWrap', $this->separatorWrap);
-        $this->assertGlyphField('currentMarker', $this->currentMarker);
-        $this->assertGlyphField('emptyMarker', $this->emptyMarker);
+        // Validation lives in the shared Support\AssertGlyph owner so the
+        // Default prefixer/suffixer can never drift apart.
+        AssertGlyph::field(self::class, 'firstSep', $this->firstSep);
+        AssertGlyph::field(self::class, 'separator', $this->separator);
+        AssertGlyph::field(self::class, 'lastSep', $this->lastSep);
+        AssertGlyph::field(self::class, 'separatorWrap', $this->separatorWrap);
+        AssertGlyph::field(self::class, 'currentMarker', $this->currentMarker);
+        AssertGlyph::field(self::class, 'emptyMarker', $this->emptyMarker);
 
         $this->currentIndex = $currentIndex;
         $this->cursorIndex  = $cursorIndex;
@@ -131,28 +134,5 @@ final class DefaultPrefixer implements Prefixer
         $mark = ($isCurrent && $currentLine === 0) ? $this->currentMarker : $this->emptyMarker;
 
         return "{$sep} {$numStr}{$mark} ";
-    }
-
-    /**
-     * Refuse glyph fields that smuggle terminal control codes.
-     *
-     * The C0/DEL byte test is exact for well-formed UTF-8 (no continuation or
-     * lead byte of a multi-byte sequence is < 0x20 or 0x7F); the C1 test runs
-     * in codepoint mode and is preceded by an encoding check so malformed
-     * input fails closed instead of making the /u pattern return false.
-     */
-    private static function assertGlyphField(string $field, string $glyph): void
-    {
-        if ($glyph === '') {
-            return; // empty drops the decoration — legal
-        }
-        if (\preg_match('/[\x00-\x1F\x7F]/', $glyph) === 1
-            || !\mb_check_encoding($glyph, 'UTF-8')
-            || \preg_match('/[\x{80}-\x{9F}]/u', $glyph) === 1
-        ) {
-            throw new \InvalidArgumentException(
-                "DefaultPrefixer:\${$field} must be a printable glyph string without control characters (C0/DEL/C1)."
-            );
-        }
     }
 }

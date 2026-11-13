@@ -89,9 +89,30 @@ final class DefaultSuffixerTest extends TestCase
         $s->currentMarker = "\x1b[1m";
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('currentMarker');
+        $this->expectExceptionMessage('DefaultSuffixer:$currentMarker must be a printable glyph string without control characters (C0/DEL/C1).');
 
         $s->initSuffixer(new StringItem('item'), 0, 0, 5, 80, 24);
+    }
+
+    /**
+     * treelist-027: the refusal now routes through the shared
+     * Support\AssertGlyph::field() helper — pin the exact reduced message so a
+     * future change to the helper reddens here (the old inline copy emitted the
+     * identical string; the contract is byte-preserved).
+     */
+    public function testSuffixerRefusalMessageIsTheSharedHelperShape(): void
+    {
+        $s = new DefaultSuffixer();
+        $s->currentMarker = "\x07";
+        try {
+            $s->initSuffixer(new StringItem('i'), 0, 0, 5, 80, 24);
+            $this->fail('expected control-byte refusal');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertSame(
+                'DefaultSuffixer:$currentMarker must be a printable glyph string without control characters (C0/DEL/C1).',
+                $e->getMessage(),
+            );
+        }
     }
 
     public function testSuffixerIsStatefulAcrossMultipleInits(): void
