@@ -232,7 +232,15 @@ final class TransitionsTest extends TestCase
         $this->assertSame(State::Utf8->value, Transitions::nextState($entry));
     }
 
-    public function testUtf8ContinuationByte(): void
+    /**
+     * Pins the BUILT Utf8 row, not machine behavior: Parser::advance()
+     * intercepts the Utf8 state before any table read (see the honesty note
+     * at Transitions.php's anywhere-section header), so this row is padding
+     * completeness of the table, never a consulted transition. Behavioral
+     * UTF-8 coverage lives in tests/Utf8PolicyTest.php. A future row cleanup
+     * may move this test; it must not go red for no behavioral reason.
+     */
+    public function testUtf8RowIsTablePaddingForContinuationBytes(): void
     {
         $entry = Transitions::get(State::Utf8->value, 0xA9);
 
@@ -240,7 +248,12 @@ final class TransitionsTest extends TestCase
         $this->assertSame(State::Ground->value, Transitions::nextState($entry));
     }
 
-    public function testUtf8NonContinuationInUtf8State(): void
+    /**
+     * Table-padding pin only — see {@see self::testUtf8RowIsTablePaddingForContinuationBytes()}
+     * for why no byte is ever consulted through the Utf8 row, and
+     * tests/Utf8PolicyTest.php for the real behavioral home.
+     */
+    public function testUtf8RowIsTablePaddingForNonContinuationBytes(): void
     {
         $entry = Transitions::get(State::Utf8->value, ord('A'));
 
