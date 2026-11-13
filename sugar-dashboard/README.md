@@ -831,12 +831,16 @@ in the same namespace are its value parts.
 >
 > **Motion & reduced motion.** The library owns no clock and no event loop:
 > every render is a synchronous, pure snapshot, and all apparent motion is
-> frame-driven by the host. The moving surfaces are exactly two —
+> frame-driven by the host. The moving surfaces are exactly three —
 > `Components\Feedback\Spinner`, whose `render()` picks its animation frame
-> from wall time against the `withInterval()` speed it was given, and
+> from wall time against the `withInterval()` speed it was given,
 > `Components\Media\Marquee`, whose `render($frame)` scrolls text by a frame
 > offset the host advances (`nextFrame()`, `withSpeed()` characters per frame,
-> `withDirection()`, optional `withFadeEdges()`). Everything else that looks
+> `withDirection()`, optional `withFadeEdges()`), and
+> `Components\StatusBar\StatusIndicator`, whose `render($now)` alternates the
+> dot between the configured color and its 50%-toward-black blend on a 500 ms
+> half-cycle from the timestamp the host supplies (a bare `render()` is the
+> still, bright frame). Everything else that looks
 > alive is presentation only: `Components\System\Timer` displays whatever
 > `withElapsed()` the host feeds it, the tree's `StateTransition` carries an
 > expanded/collapsed state rather than an animation, and the plot canvases

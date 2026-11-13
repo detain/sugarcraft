@@ -169,19 +169,64 @@ final class StatusIndicatorTest extends TestCase
         $this->assertNotSame('', $rendered);
     }
 
-    public function testPulseModeToggles(): void
+    public function testPulsePhasesAreByteDifferent(): void
     {
+        // The live-pulse assertion the old byte-identical dim branch could
+        // never pass: bright half-cycle vs dim half-cycle must DIFFER.
         $indicator = StatusIndicator::new()->withPulse(true);
 
-        // Render multiple times to check animation state changes
-        $results = [];
-        for ($i = 0; $i < 5; $i++) {
-            $results[] = $indicator->render();
-        }
+        $bright = $indicator->render(0.0);   // phase 0.0 -> bright
+        $dim = $indicator->render(0.75);     // phase 1.5 -> dim
 
-        // At least some renders should differ (pulse effect)
-        // Note: In deterministic test, this relies on timing
-        $this->assertNotEmpty($results[0]);
+        $this->assertNotSame($bright, $dim);
+    }
+
+    public function testPulseRenderIsDeterministicForAGivenNow(): void
+    {
+        $base = Color::hex('#22C55E');
+        $indicator = new StatusIndicator(StatusIndicator::Online, $base, true, 1);
+
+        // Pins on the parameterized (host-supplied clock) renders: bright
+        // half-cycle emits the configured color verbatim, dark half-cycle
+        // emits the documented 50%-toward-black blend. Expressions are
+        // built through the same toFg/profile channel the render uses, so
+        // the pins stay true under any detected color profile.
+        $profile = \SugarCraft\Dashboard\Foundation\ColorMode::profile();
+        $this->assertSame(
+            $base->toFg($profile) . '●' . Ansi::reset(),
+            $indicator->render(0.0),
+        );
+        $this->assertSame(
+            $base->blend(Color::rgb(0, 0, 0), 0.5)->toFg($profile) . '●' . Ansi::reset(),
+            $indicator->render(0.75),
+        );
+        // Same $now twice renders byte-identical.
+        $this->assertSame($indicator->render(1.25), $indicator->render(1.25));
+    }
+
+    public function testPulseBareRenderIsTheStillBrightFrame(): void
+    {
+        // No clock inside the library: a bare render() never reads wall
+        // time — it is the bright frame (reduced-motion reachable).
+        $indicator = StatusIndicator::new()->withPulse(true);
+
+        $this->assertSame($indicator->render(), $indicator->render());
+        $this->assertSame($indicator->render(0.0), $indicator->render());
+    }
+
+    public function testSizeKnobIsClampedToAllocation(): void
+    {
+        // 176: withSize grew the segment past the row the host allocated.
+        $indicator = StatusIndicator::new()->withSize(3);
+
+        $clamped = $indicator->setSize(2, 1)->render();
+        $natural = $indicator->render();
+
+        $this->assertSame(2, substr_count($clamped, '●'));
+        $this->assertSame(3, substr_count($natural, '●'));
+
+        // A zero-width allocation paints nothing instead of spilling.
+        $this->assertSame('', $indicator->setSize(0, 1)->render());
     }
 
     // ═══════════════════════════════════════════════════════════════

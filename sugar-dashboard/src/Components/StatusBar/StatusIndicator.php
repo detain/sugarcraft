@@ -117,40 +117,83 @@ final class StatusIndicator implements \SugarCraft\Dashboard\Foundation\SizedIte
     }
 
     /**
-     * Render the status indicator.
+     * Half-period of the pulse animation: 500 ms bright, 500 ms dim.
      */
-    public function render(): string
+    private const PULSE_HALF_PERIOD_MS = 500.0;
+
+    /**
+     * Blend ratio toward black used during the dark half-cycle.
+     */
+    private const PULSE_DIM_RATIO = 0.5;
+
+    /**
+     * Render the status indicator.
+     *
+     * The pulse phase is HOST-supplied, never read from a clock inside the
+     * library: pass `render($now)` a timestamp in seconds (e.g. the host's
+     * `microtime(true)`) and the dot alternates bright/dim on a 500 ms
+     * half-period; a bare `render()` is the still, bright frame (a
+     * reduced-motion presentation reachable from the outside, per the
+     * frame-driven contract `Marquee` follows).
+     */
+    public function render(?float $now = null): string
     {
-        $symbol = $this->symbol();
+        $cells = $this->cellCount();
+        if ($cells === 0) {
+            // Allocation is zero-width: emit nothing rather than spill a
+            // row past the panel that sized us (176: the size knob was
+            // repeat-by-knob with no regard for allocation).
+            return '';
+        }
+
+        $symbol = str_repeat($this->symbolChar(), $cells);
         $color = $this->color;
 
         if ($color === null) {
             return $symbol;
         }
 
-        $output = $color->toFg(ColorMode::profile());
-
-        if ($this->pulse) {
-            $tickMs = (int) (microtime(true) * 1000);
-            // Use fmod for float modulo to avoid int/float deprecation in PHP 8.4
-            $phase = fmod($tickMs / 500.0, 2.0);
-            if ($phase < 1.0) {
-                $output .= $symbol;
-            } else {
-                $dimColor = $color->toFg(ColorMode::profile());
-                $output = $dimColor . $symbol;
+        if ($this->pulse && $now !== null) {
+            // fmod over ms/period in float space: intdiv would harden the
+            // PHP 8.4 int/float boundary, and 0.0 keeps the bright phase.
+            $phase = fmod($now * 1000.0 / self::PULSE_HALF_PERIOD_MS, 2.0);
+            if ($phase >= 1.0) {
+                // Real dim: the dark half-cycle blends 50% toward black
+                // (the pre-fix branch re-emitted the SAME toFg expression,
+                // so both phases were byte-identical and the "pulse"
+                // never moved).
+                $color = $color->blend(Color::rgb(0, 0, 0), self::PULSE_DIM_RATIO);
             }
-        } else {
-            $output .= $symbol;
         }
 
-        return $output . Ansi::reset();
+        return $color->toFg(ColorMode::profile()) . $symbol . Ansi::reset();
+    }
+
+    /**
+     * Number of symbol cells to paint: the size knob clamped to the
+     * allocated width when one was set via {@see self::setSize()}.
+     */
+    private function cellCount(): int
+    {
+        $cells = max(1, $this->size);
+
+        return $this->width === null ? $cells : min($cells, max(0, $this->width));
     }
 
     /**
      * Get the symbol character for the indicator.
      */
     public function symbol(): string
+    {
+        $symbol = $this->symbolChar();
+
+        return $this->size > 1 ? str_repeat($symbol, $this->size) : $symbol;
+    }
+
+    /**
+     * Single glyph for the configured status.
+     */
+    private function symbolChar(): string
     {
         $symbols = [
             self::Online => '●',
@@ -160,13 +203,7 @@ final class StatusIndicator implements \SugarCraft\Dashboard\Foundation\SizedIte
             self::Info => '●',
         ];
 
-        $symbol = $symbols[$this->status] ?? '●';
-
-        if ($this->size > 1) {
-            return str_repeat($symbol, $this->size);
-        }
-
-        return $symbol;
+        return $symbols[$this->status] ?? '●';
     }
 
     /**
