@@ -17,7 +17,7 @@ declare(strict_types=1);
  * It also OWNS the homepage's library/app counts: on every default run it patches
  * docs/index.html so the ~8 count tokens (meta/og/JSON-LD descriptions, hero prose,
  * the two .stat numerals, the two section headings) always equal the authoritative
- * MATCHUPS split (39 libraries / 19 apps), the same numbers the lib-page breadcrumbs
+ * MATCHUPS split (libraries / apps as the tables enumerate), the same numbers the lib-page breadcrumbs
  * carry — killing the drift class where the homepage and the detail pages disagreed.
  *
  * Modes:
@@ -658,7 +658,8 @@ function extract_one(string $slug, string $html): array
         'emoji'          => $emoji,
         'displayName'    => $name,
         'tagline'        => $tagln,
-        'phpVersion'     => $php !== '' ? $php : '8.1+',
+        // Ecosystem floor: every package requires PHP ^8.3 (root + all lib manifests).
+        'phpVersion'     => $php !== '' ? $php : '8.3+',
         'detailMeta'     => $detailMeta,
     ];
 
@@ -699,8 +700,8 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         ? (string) $meta['prefixOverride']
         : build_prefix($slug, (string) $meta['title'], (string) $meta['description'], (string) $meta['ogTitle'], (string) $meta['ogDescription']);
 
-    // Breadcrumb carries the authoritative MATCHUPS split (39 libraries / 19
-    // apps). The count is DERIVED from $nLib/$nApp (never hardcoded), and the
+    // Breadcrumb carries the authoritative MATCHUPS split (library / app counts
+    // as enumerated). The count is DERIVED from $nLib/$nApp (never hardcoded), and the
     // same generator run patches the catalogue pages' counts to match (see
     // patch_index_counts below), so the lib pages and the catalogue pages can
     // no longer drift apart on the number. Since L2b the target is the full
@@ -1274,7 +1275,7 @@ function patch_index_counts(string $html, int $nLib, int $nApp, array $required 
  * Spell out an integer 0-999 in lowercase English (hyphenated, e.g. 39 →
  * "thirty-nine"). Used for the homepage's prose/heading count tokens; ucfirst()
  * capitalizes where a heading needs it. Falls back to the decimal string outside
- * the covered range (the counts are ~58, well inside it).
+ * the covered range (site counts stay far below 1,000).
  */
 function number_to_words(int $n): string
 {
