@@ -125,6 +125,10 @@ final class Table
      * naming the column index — a silent 'Array' string used to poison
      * cells and trip failOnWarning through strval()'s notice path.
      *
+     * More values than columns throws, naming both counts — surplus
+     * cells never render but still feed sorting and filtering. Fewer
+     * values than columns is legal: the trailing cells stay empty.
+     *
      * Appending does NOT reset the cursor (the view rebuild did): a
      * streaming feed keeps its selection. Sort and filter changes still
      * reset it.
@@ -146,6 +150,27 @@ final class Table
                     "Row value for column {$i} must be a string or scalar; {$type} without __toString given."
                 );
             }
+        }
+
+        // A value with no column to wear it is a phantom: it never renders,
+        // yet applyFilter/compare scan every cell of the row, so it can make
+        // a row match a filter the user cannot explain from the screen.
+        // Refuse the shape at the door instead of shipping the illusion.
+        $columnCount = \count($this->columns);
+        if (\count($values) > $columnCount) {
+            $valueCount = \count($values);
+            if ($columnCount === 0) {
+                throw new \InvalidArgumentException(
+                    "withRow() got {$valueCount} value(s) but the table has no columns yet — add the columns before the rows."
+                );
+            }
+            $titles = \implode(', ', \array_map(
+                static fn(Column $col): string => $col->title,
+                $this->columns
+            ));
+            throw new \InvalidArgumentException(
+                "withRow() got {$valueCount} value(s) but the table has {$columnCount} column(s) ({$titles}): surplus cells never render yet still feed sorting and filtering — trim the row or add the columns first."
+            );
         }
 
         $clone = clone $this;

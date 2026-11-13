@@ -238,6 +238,56 @@ final class TableTest extends TestCase
         $this->assertSame(0, $this->getCursorRow($t));
     }
 
+    // ---- withRow arity ---------------------------------------------------
+
+    public function testWithRowRejectsSurplusValues(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addColumn(Column::make('City', 10));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('got 3 value(s) but the table has 2 column(s) (Name, City)');
+        $t->withRow(['Alice', 'NYC', 'ghost']);
+    }
+
+    public function testSurplusValueNeverFeedsTheFilter(): void
+    {
+        // The hazard FBX-19 closes: an invisible third cell used to make
+        // the row match 'secret' although nothing on screen said so.
+        $this->expectException(\InvalidArgumentException::class);
+        (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->withRow(['Alice', 'secret'])
+            ->filter('secret');
+    }
+
+    public function testWithRowRejectsValuesBeforeAnyColumn(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('no columns yet');
+        (new Table())->withRow(['Alice']);
+    }
+
+    public function testWithRowAllowsShortRows(): void
+    {
+        // Fewer values than columns stays legal: the stored row is exactly
+        // what was given, and the RENDER pads the missing cell blank.
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addColumn(Column::make('City', 10))
+            ->withRow(['Alice']);
+
+        $this->assertSame(['Alice'], $t->currentRow());
+
+        $lines = $t->buildLines();
+        $this->assertSame(
+            'Alice     ' . ' │ ' . '          ', // 10 cells + joint + 10 blank cells
+            $lines[2],
+            'the missing City cell must render as an empty 10-cell column'
+        );
+    }
+
     // ---- currentRow / currentCell ----------------------------------------
 
     public function testCurrentRowReturnsNullWhenOutOfBounds(): void
