@@ -184,6 +184,70 @@ final class ServeBridgeTest extends TestCase
     }
 
     /** Settle until the bridge reports its hello admitted (bounded, loopback only). */
+    public function testAStrayCloseFrameFromTheServerSchedulesExactlyOneLadder(): void
+    {
+        // A protocol violation on the wire (here: an invalid opcode, which
+        // the frame decoder converts into a close) must arm EXACTLY one
+        // reconnect ladder and deliver EXACTLY one down notice. Before the
+        // epoch-on-end fix the inline ending and the stream's own close
+        // event each armed a ladder: attempts double-counted, the first
+        // timer went untracked, and onDown fired twice.
+        $lines = [];
+        $downs = [];
+        $bridge = new ServeBridge($this->url, 'tok-123456', 'subprotocol', new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }), $this->loop);
+        $bridge->start(static function (string $reason) use (&$downs): void {
+            $downs[] = $reason;
+        })->then(null, static function (): void {
+        });
+        self::runFor($this->loop, 150);
+        self::assertTrue($bridge->connected(), 'pre-flight: the bridge is up');
+        $this->serve->sendGarbage();
+        self::runFor($this->loop, 150);
+        self::assertSame(1, \count(array_filter($lines, static fn (string $l): bool => str_contains($l, 'serve_redial'))), 'one ending, one ladder');
+        self::assertSame(1, \count($downs), 'the operator hears about the drop exactly once');
+        self::assertFalse($bridge->connected());
+        $bridge->stop();
+    }
+
+    public function testARefusedHelloEndsTheBoundSocket(): void
+    {
+        // The rejection that follows a SUCCESSFUL dial carries a live bound
+        // stream; the chain never routed it to the dial-rejection arm, so
+        // the socket stranded open, no ladder armed, and the bridge fell
+        // silent. The hello leg must reclaim the fd and re-dial.
+        $this->serve->refuseHello = true;
+        $lines = [];
+        $bridge = new ServeBridge($this->url, 'tok-123456', 'subprotocol', new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }), $this->loop);
+        $bridge->start()->then(null, static function (): void {
+        });
+        self::runFor($this->loop, 250);
+        self::assertSame(1, $this->serve->helloSeen, 'the refusal was answered, so the socket WAS bound');
+        self::assertSame(1, $this->serve->clientCloseSeen, 'the bridge must close a socket it will not keep');
+        self::assertSame(1, \count(array_filter($lines, static fn (string $l): bool => str_contains($l, 'serve_redial'))), 'the refusal arms exactly one ladder');
+        self::assertFalse($bridge->connected());
+        $bridge->stop();
+    }
+
+    public function testStopDuringAnInFlightDialPreventsTheBind(): void
+    {
+        // The revival shape: dial accepted, handshake completing after the
+        // operator stopped the bridge. Without the dial-arm guard the late
+        // 101 would bind, hello and start the follow loop on a dead bridge.
+        $this->serve->handshakeDelayMs = 200;
+        $bridge = new ServeBridge($this->url, 'tok-123456', 'subprotocol', Log::silent(), $this->loop);
+        $bridge->start()->then(null, static function (): void {
+        });
+        self::runFor($this->loop, 60);
+        $bridge->stop();
+        self::runFor($this->loop, 400);
+        self::assertSame(0, $this->serve->helloSeen, 'a stopped bridge must never complete its handshake into a session');
+        self::assertFalse($bridge->connected());
+    }
+
     private static function bridgeConnected(ServeBridge $bridge): void
     {
         $GLOBALS['p2_loop'] = $bridge;

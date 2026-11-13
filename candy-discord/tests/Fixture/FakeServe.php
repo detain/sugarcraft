@@ -83,6 +83,14 @@ final class FakeServe
     public string $seenText = '';
 
     public int $connectionCount = 0;
+    /** Delay the 101 response this many ms: the mid-dial stop() shape. */
+    public int $handshakeDelayMs = 0;
+    /** Never answer the WebSocket handshake: the client's dial hangs open. */
+    public bool $silenceUpgrade = false;
+    /** Refuse server.hello with an RPC error after the socket is bound. */
+    public bool $refuseHello = false;
+    /** Counts closes observed on upgraded client connections. */
+    public int $clientCloseSeen = 0;
 
     public string $lastDelivery = '';
 
@@ -138,6 +146,16 @@ final class FakeServe
         $this->helloed = [];
     }
 
+    /** Write a well-framed but unanswerable frame (invalid opcode) at every upgraded client. */
+    public function sendGarbage(): void
+    {
+        foreach ($this->clients as $connection) {
+            // FIN + opcode 31 (reserved), unmasked, zero length: the frame
+            // is complete on the wire and the frame checker must reject it.
+            $connection->write("\x9F\x00");
+        }
+    }
+
     public function stop(): void
     {
         $this->dropClients();
@@ -162,6 +180,12 @@ final class FakeServe
             }
             $connection->removeListener('data', $onData);
             $rest = \substr($buffer, $end + 4);
+            if ($this->silenceUpgrade) {
+                // Accept the TCP connection, swallow the upgrade request:
+                // the bridge's dial promise stays pending forever, which is
+                // the mid-dial stop() shape.
+                return;
+            }
 
             $request = \GuzzleHttp\Psr7\Message::parseRequest(\substr($buffer, 0, $end + 4));
             $offered = \array_map('trim', \explode(',', $request->getHeaderLine('Sec-WebSocket-Protocol')));
@@ -203,36 +227,47 @@ final class FakeServe
                 }
                 $lines[] = $name . ': ' . \implode(', ', $values);
             }
-            $connection->write(\implode("\r\n", $lines) . "\r\n\r\n");
+            $respond = function () use ($lines, $connection, $id, $rest): void {
+                $connection->write(\implode("\r\n", $lines) . "\r\n\r\n");
 
-            $this->framing[$id] = new MessageBuffer(
-                new CloseFrameChecker(),
-                function ($message) use ($connection): void {
-                    $this->onMessage($connection, $message->getPayload());
-                },
-                function ($frame) use ($connection): void {
-                    if ($frame->getOpcode() === Frame::OP_CLOSE) {
-                        $connection->close();
-                    }
-                },
-                true,
-                null,
-                Dispatcher::MAX_SERVER_FRAME_BYTES,
-                Dispatcher::MAX_SERVER_FRAME_BYTES,
-                function (string $bytes) use ($connection): void {
-                    $connection->write($bytes);
-                },
-            );
-            $this->clients[$id] = $connection;
-            $connection->on('data', function (string $data) use ($id): void {
-                $this->framing[$id]?->onData($data);
-            });
+                $this->framing[$id] = new MessageBuffer(
+                    new CloseFrameChecker(),
+                    function ($message) use ($connection): void {
+                        $this->onMessage($connection, $message->getPayload());
+                    },
+                    function ($frame) use ($connection): void {
+                        if ($frame->getOpcode() === Frame::OP_CLOSE) {
+                            $connection->close();
+                        }
+                    },
+                    true,
+                    null,
+                    Dispatcher::MAX_SERVER_FRAME_BYTES,
+                    Dispatcher::MAX_SERVER_FRAME_BYTES,
+                    function (string $bytes) use ($connection): void {
+                        $connection->write($bytes);
+                    },
+                );
+                $this->clients[$id] = $connection;
+                $connection->on('data', function (string $data) use ($id): void {
+                    $this->framing[$id]?->onData($data);
+                });
+                if ($rest !== '') {
+                    $this->framing[$id]->onData($rest);
+                }
+            };
             $connection->on('close', function () use ($id): void {
+                if (isset($this->clients[$id])) {
+                    $this->clientCloseSeen++;
+                }
                 unset($this->clients[$id], $this->framing[$id], $this->helloed[$id]);
             });
-            if ($rest !== '') {
-                $this->framing[$id]->onData($rest);
+            if ($this->handshakeDelayMs > 0) {
+                $this->loop->addTimer($this->handshakeDelayMs / 1000.0, $respond);
+
+                return;
             }
+            $respond();
         };
         $connection->on('data', $onData);
     }
@@ -262,6 +297,15 @@ final class FakeServe
 
         switch ($method) {
             case 'server.hello':
+                if ($this->refuseHello) {
+                    $this->helloSeen++;
+                    $this->emit($id, [
+                        'jsonrpc' => '2.0', 'id' => $rpcId,
+                        'error' => ['code' => -32003, 'message' => 'fixture refuses hello', 'data' => (object) ['kind' => 'fixture_refused']],
+                    ]);
+
+                    return;
+                }
                 $this->helloed[$id] = true;
                 $this->helloSeen++;
                 $this->emit($id, [

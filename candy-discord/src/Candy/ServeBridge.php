@@ -411,8 +411,22 @@ final class ServeBridge
     /** @return PromiseInterface<true> */
     private function dialAndBind(): PromiseInterface
     {
+        $epoch = $this->epoch;
+
         return $this->dial()->then(
-            function (array $socket): PromiseInterface {
+            function (array $socket) use ($epoch): PromiseInterface {
+                if ($this->stopping || $epoch !== $this->epoch) {
+                    // (032) stop() or a restart landed mid-dial: the socket
+                    // we just won is an orphan the moment we drop it, and a
+                    // bind would revive a bridge the operator stopped —
+                    // hello, follow loop and all. Close it, refuse the bind,
+                    // and let the GiveUp ride the caller (Gateway precedent:
+                    // the dial arm checks stopping/epoch).
+                    $socket[0]->close();
+                    $this->log->debug('serve_dial_stale', ['stopping' => $this->stopping ? 1 : 0]);
+
+                    return reject(new GiveUp('bridge stopped during dial'));
+                }
                 $this->attempts = 0;
                 $this->bind($socket[0], $socket[1]);
 
@@ -458,11 +472,27 @@ final class ServeBridge
                     }
 
                     return true;
+                }, function (\Throwable $e): PromiseInterface {
+                    // (007) A REJECTED hello arrives while the socket is
+                    // ALREADY bound — the outer dial-rejection arm cannot
+                    // see it (different link of the chain), so without this
+                    // leg the bound socket strands open, no ladder arms,
+                    // and the bridge silently stops speaking. endSocket
+                    // reclaims the fd and kills the old listeners via the
+                    // epoch bump; scheduleReconnect owns exactly one ladder.
+                    $this->endSocket('hello failed');
+                    $this->helloDone = false;
+
+                    return $this->scheduleReconnect($e->getMessage());
                 });
             },
             function (\Throwable $e): PromiseInterface {
-                // The ladder lives HERE: a failed dial and a dropped socket
-                // take the same path back.
+                // The ladder lives HERE for the DIAL failure: no socket was
+                // bound, so endSocket is epoch discipline only (straggler
+                // listeners die; the close event can never arm a second
+                // ladder). The hello-failure leg owns the bound-socket case
+                // — a chain rejection never reaches this arm.
+                $this->endSocket('dial failed');
                 $this->helloDone = false;
 
                 return $this->scheduleReconnect($e->getMessage());
@@ -473,6 +503,15 @@ final class ServeBridge
     private function bind(DuplexStreamInterface $stream, string $initial): void
     {
         $epoch = ++$this->epoch;
+        if ($this->stream !== null) {
+            // Belt (007): every endSocket path already nulls the slot, so
+            // reaching bind with a live previous stream would be a new
+            // leak shape — take the fd off the loop instead of orphaning
+            // it (its listeners are already epoch-dead).
+            $stale = $this->stream;
+            $this->stream = null;
+            $stale->close();
+        }
         $this->stream = $stream;
         $this->buffer = new MessageBuffer(
             self::closeFrameChecker(),
@@ -584,6 +623,11 @@ final class ServeBridge
                 break;
             case Frame::OP_CLOSE:
                 $this->endSocket('server closed');
+                // The bump made endSocket self-aware: a server-initiated
+                // close no longer reaches the ladder THROUGH the close
+                // event, so the pair spells it out like bad-frame and idle.
+                $this->scheduleReconnect('server closed')->then(null, static function (): void {
+                });
                 break;
         }
     }
@@ -607,6 +651,13 @@ final class ServeBridge
 
     private function endSocket(string $reason): void
     {
+        // Kill the CURRENT socket's listeners first (the Gateway precedent):
+        // without the bump, the close event of a socket we ended on purpose
+        // walked in and armed a SECOND reconnect ladder behind our back,
+        // double-counting `attempts` and orphaning the first timer. Every
+        // inline `endSocket(); scheduleReconnect();` pair now owns exactly
+        // one ladder, and the close listener ignores an already-ended socket.
+        ++$this->epoch;
         if ($this->idleTimer !== null) {
             $this->loop->cancelTimer($this->idleTimer);
             $this->idleTimer = null;
@@ -625,6 +676,12 @@ final class ServeBridge
         }
         $stream?->close();
         $this->rejectPending($reason);
+        if ($stream !== null && !$this->stopping) {
+            // The close listener used to deliver onDown on our behalf even
+            // for deliberate endings; its epoch guard now ignores those, so
+            // the down notice lives HERE — once, with the ending's reason.
+            ($this->onDown ?? static function (): void {})($reason);
+        }
     }
 
     private function rejectPending(string $reason): void
