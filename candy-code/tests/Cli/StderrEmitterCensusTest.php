@@ -144,14 +144,12 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     answer. Step 3.D-2: `NonInteractive::fireSessionEnd()`'s one line when
  *     a SessionEnd hook refuses, stderr-only because the session is over.)
  *  2. `STDERR` captured into a variable or property and written through later —
- *     FOUR sites: {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, whose
+ *     THREE sites: {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `candy-code: ` shapes through it, plan_rename.md 8A's
  *     `bin/candy-code`, which hands the constant to `LegacyMigration::run()`
- *     as the launch's notice channel before any sink exists, DST-3's
- *     {@see \SugarCraft\Code\Cli\SelfUpdate}, whose `$errorStream` test seam
- *     defaults to `\STDERR` for the headless verb's report and refusal lines,
- *     and x1102's `NonInteractive::fireSessionEndDetached()`, which flushes the
+ *     as the launch's notice channel before any sink exists (DST-3's SelfUpdate
+ *     held a fourth until S-L01 moved its report into sugar-releases), and x1102's `NonInteractive::fireSessionEndDetached()`, which flushes the
  *     handle from inside a detached daemon ahead of its self-SIGKILL exit —
  *     `Daemonize` has pointed fd 2 at the TUI log by then, so nothing here can
  *     reach a terminal a person has already gone back to using.
@@ -196,8 +194,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FIFTY
- *     of them, in TWENTY-ONE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FIFTY-FIVE
+ *     of them, in TWENTY-THREE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -275,7 +273,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — FIFTY-ONE call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * it — FIFTY-THREE call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row; PLG-1 added three more: the
  * bundles() warning drain and the two declined-surface notices, and C-SEC-7.d
@@ -284,7 +282,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * the headless-default banner that now names `-p`'s new asking default; and C-SEC-7.b two more still: useRestricted()'s and useSafeMode()'s
  * one-launch notices each, and C-SEC-7.e one more: the once-per-session
  * implicit-autoReview launch notice that rides the seam when the default engages, and C-TOOL-6.e one more: the per-file skip announcements for user script tools, and C-SEC-3.b two more: trustedOriginNames()'s not-a-list and not-a-name-entry warnings), each producing a
- * distinct `candy-code: ` line, against a channel-4 credit of eight for that
+ * distinct `candy-code: ` line, against a channel-4 credit of seven for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven; D1
  * RS-DRIVER.a's two --session-id collision legs joined the nine and ten
@@ -599,12 +597,12 @@ final class StderrEmitterCensusTest extends TestCase
         // C-AGT-7.b took it to thirty-six: the --json-schema-without-a-prompt
         // hint carries its own `candy-code: ` envelope, the same pre-launch
         // exit-2 usage decision as the family above it.
-        'src/Cli/ArgvParser.php' => 62, // +1 C-SES-7.c --incognito combination refusal (stderr-only: the usage error exits 2 before any session exists, so there is no transcript to name it in) | +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family | +9 D1 RS-DRIVER.a --session-id refusal family (empty/missing/flag value arms, shape, continue-resume clash, incognito clash, requires-prompt, subcommand clash) — all the same pre-launch exit-2 usage decision, stderr alone | +4 D2 RS-DRIVER.b --input-format refusal family (value arms share one message, membership, subcommand clash, requires-prompt) — same pre-launch exit-2 usage decision, subcommand clash) — same pre-launch exit-2 usage decision, stderr alone | +1 BM-1 --batch needs-stream-json clash door — same pre-launch exit-2 usage decision, stderr alone
+        'src/Cli/ArgvParser.php' => 64, // +1 C-SES-7.c --incognito combination refusal (stderr-only: the usage error exits 2 before any session exists, so there is no transcript to name it in) | +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family | +9 D1 RS-DRIVER.a --session-id refusal family (empty/missing/flag value arms, shape, continue-resume clash, incognito clash, requires-prompt, subcommand clash) — all the same pre-launch exit-2 usage decision, stderr alone | +4 D2 RS-DRIVER.b --input-format refusal family (value arms share one message, membership, subcommand clash, requires-prompt) — same pre-launch exit-2 usage decision, subcommand clash) — same pre-launch exit-2 usage decision, stderr alone | +1 BM-1 --batch needs-stream-json clash door — same pre-launch exit-2 usage decision, stderr alone
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
         // envelope too.
-        'src/Cli/Bootstrap.php' => 8, // the +2 D1 RS-DRIVER.a collision legs moved to CarriesSessionLaunchPreset.php with the M6 ratchet extraction — decision unchanged (stderr-alone), the credit follows the bytes
+        'src/Cli/Bootstrap.php' => 7, // the +2 D1 RS-DRIVER.a collision legs moved to CarriesSessionLaunchPreset.php with the M6 ratchet extraction — decision unchanged (stderr-alone), the credit follows the bytes
         // +2 D1 RS-DRIVER.a (re-keyed 2026-11-06 by the wf-driverfix M6 extraction from
         // Bootstrap::sessionLaunchError()): the --session-id collision legs (already-stored,
         // store-unreadable) carry their own `candy-code: ` envelope. The strings are RETURNED
@@ -701,7 +699,7 @@ final class StderrEmitterCensusTest extends TestCase
         // prefix into the message {@see NonInteractive::failUsage()} carries;
         // the verb's own prose never touches stderr — preview, refusals and
         // the settle lines are all stdout echoes on the login arm's model.
-        'src/Cli/Subcommands.php' => 87, // W-1 (cc-eval-1106 wf/w1) 2026-11-09: +10 the workflow verb family's prefixed literals (no-action/unknown-action/flag-does-not-apply/bad-format/need-name/need-id/bad-param usage refusals, the refusal funnel, the signal-pause line) — one-shot CLI-verb output on the stderr channel | CC-QA-1: the funnel notice literal | +21 gc-cli-1106 (2026-11-06): the gc verb family's prefixed literals across its usage refusals (the action-arg match arm's + 640KiB/128MiB/512MiB vacuum headroom + two live-seat lock-refusal + purge/vacuum decline and lock-refusal doors + the corrupt-store funnel + per-action corrupt/usage lines), the status/sessions/analyze/purge/vacuum settle-line literals, and the orphan-sweep/seat-lock/usage/preflight refusal literals the status leg now names — all one-shot CLI-verb output on the stderr channel, the same detached-process decision as every sibling subcommand writer | m54 (2026-11-11): +1 the session-rename reserved-'agent:' usage-door refusal literal — stderr-only one-shot usage error, the same decision class as the adjacent no_title door
+        'src/Cli/Subcommands.php' => 91, // W-1 (cc-eval-1106 wf/w1) 2026-11-09: +10 the workflow verb family's prefixed literals (no-action/unknown-action/flag-does-not-apply/bad-format/need-name/need-id/bad-param usage refusals, the refusal funnel, the signal-pause line) — one-shot CLI-verb output on the stderr channel | CC-QA-1: the funnel notice literal | +21 gc-cli-1106 (2026-11-06): the gc verb family's prefixed literals across its usage refusals (the action-arg match arm's + 640KiB/128MiB/512MiB vacuum headroom + two live-seat lock-refusal + purge/vacuum decline and lock-refusal doors + the corrupt-store funnel + per-action corrupt/usage lines), the status/sessions/analyze/purge/vacuum settle-line literals, and the orphan-sweep/seat-lock/usage/preflight refusal literals the status leg now names — all one-shot CLI-verb output on the stderr channel, the same detached-process decision as every sibling subcommand writer | m54 (2026-11-11): +1 the session-rename reserved-'agent:' usage-door refusal literal — stderr-only one-shot usage error, the same decision class as the adjacent no_title door
         // C-EXT-6.b: the three prefixed reason strings of a refused hook-log
         // write (directory not private, symlinked leaf, throwing append). All
         // three ride RuntimeNoticeSink::warn() behind a once-per-process latch
@@ -710,6 +708,7 @@ final class StderrEmitterCensusTest extends TestCase
         // neither the transcript seam nor silence; it is a notice that the
         // LOG died.
         'src/Hooks/HookLog.php' => 3,
+        'src/Observability/BatchEventSink.php' => 2, // the OTLP export-failure line and its shutdown summary: operator telemetry, stderr alone (no session owns the exporter)
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the
@@ -773,7 +772,7 @@ final class StderrEmitterCensusTest extends TestCase
         // name — ride warnPermissionConfigOnce, the same sibling as every other
         // config-shape notice; the pair parses both opt-in lists, so both arms
         // of the parse warn once each.
-        'src/Cli/Bootstrap.php' => 51,
+        'src/Cli/Bootstrap.php' => 53,
         // +3 in P1 FIX-2 (L-P1FIX): the three transcript-seam notices of the
         // trusted-bundle hooks arm — uncontained, loose bytes, refused file —
         // moved with the arm's bytes into the TrustedBundleHooks trait under
@@ -841,7 +840,7 @@ final class StderrEmitterCensusTest extends TestCase
         // shared by both pre-compaction memory-flush sites — the row names
         // notes the model saved out of a summarisation that is about to drop
         // what it read them from, invisible from anywhere else.
-        'src/Backend/EngineBackend.php' => 2,
+        'src/Backend/EngineBackend.php' => 3, // +1 the symbol-map rebuild notice (chat.symbol_map.rebuilding): first-turn work the user would otherwise see only as a stall
         // plan_comparison W4 (TUI-4a/TUI-5): the five notice-seam writes in
         // Bootstrap — reload_unchanged, reloaded, the collision rows riding the
         // same sink, the macOS Option-as-Meta launch fallback, and the TUI-5
@@ -859,6 +858,9 @@ final class StderrEmitterCensusTest extends TestCase
         // the seam, not stderr alone. One site, once per refused file per
         // session (the loader's announced set), so it cannot grow per turn.
         'src/Context/InstructionFileLoader.php' => 1,
+        // S-X07: a stored intent when-path glob that cannot be compiled is disclosed once per
+        // tracker - a rule the user wrote is not matching, which the session cannot otherwise say.
+        'src/Context/RulePathNudge.php' => 1,
         // Round 49, lane b (E345): the once-per-process notice for a refused audit
         // write. One call site behind a latch, so it is one row and stays one.
         'src/Hooks/BuiltIn/AuditHook.php' => 1,
@@ -868,14 +870,14 @@ final class StderrEmitterCensusTest extends TestCase
         // mid-frame; a raw line would land inside a frame the renderer owns).
         // Latched per pattern per object, so the row is one SITE regardless
         // of how often the pathological matcher is exercised.
-        'src/Hooks/HookDispatcher.php' => 1,
+        'src/Hooks/HookDispatcher.php' => 2, // +1 the matcher-failed-to-evaluate arm, identical wording to HookRegistry's so one drain batch keeps one row
         // C-EXT-6.b: the once-per-process notice for a refused hook-log write
         // (foreign directory, symlinked leaf, or a throwing append). One call
         // site behind a latch, so it is one row and stays one — the AuditHook
         // shape above, mirrored for the same reason: a broken log must announce
         // itself once and never fail the chain it describes.
         'src/Hooks/HookLog.php' => 1,
-        'src/Hooks/HookRegistry.php' => 1,
+        'src/Hooks/HookRegistry.php' => 2, // +1 the matcher-failed-to-evaluate arm (ISS-090(c)): same notice-drain decision as the dispatcher's twin
         // X-31a / audit 15a A4: the end-of-stream tool-call flush's two drop
         // warnings (never-streamed payload on a truncated end; arguments that
         // are not a complete JSON object), in the streamed tool-call
@@ -884,6 +886,9 @@ final class StderrEmitterCensusTest extends TestCase
         // gone. Each one is a call the model asked for that will NOT run -
         // the routing rule's "failed to produce the call" arm, decided
         // exactly like SglangProvider's Q7 flush warnings below.
+        // S-O21: an over-budget tool-result image/document is dropped from the request; the
+        // row names what the model will no longer see, once per payload - the seam, not stderr.
+        'src/Providers/AttachmentEncoding.php' => 1,
         'src/Providers/Concerns/ReassemblesStreamedToolCalls.php' => 2,
         // Roadmap 5.13b: a request that moved to the next `fallbackModels`
         // entry. The routing decision: the reply the user reads came from a
@@ -1976,7 +1981,7 @@ final class StderrEmitterCensusTest extends TestCase
                 . 'without the sibling census noticing; do not bump either number until you know which.',
         );
         self::assertSame(1, $direct, 'the number of warnings that go to stderr and bypass the once-guard moved');
-        self::assertSame(13, $once, 'the number of stderr-only, once-per-process warnings moved');
+        self::assertSame(15, $once, 'the number of stderr-only, once-per-process warnings moved');
         self::assertSame(
             self::PREFIXED_WRITER_SITES['src/Cli/Bootstrap.php'],
             $direct + $once + $seam,

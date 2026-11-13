@@ -121,7 +121,7 @@ final class BatchEventSink implements EventSink, RetryingEventSink
      * @param \Closure(): int|null $currentPid @internal test seam returning the
      *        current pid (default `getmypid()`), same shape as the MCP arms'
      * @param \Closure(string): void|null $diagnostic @internal test seam for the
-     *        operator-facing export-failure line (default `error_log()`)
+     *        operator-facing export-failure line (default `Log::raw()`, the facade's single stderr sink)
      */
     public function __construct(
         private readonly OtelSink $sink,
@@ -131,7 +131,7 @@ final class BatchEventSink implements EventSink, RetryingEventSink
         ?\Closure $diagnostic = null,
     ) {
         $this->diagnostic = $diagnostic ?? static function (string $line): void {
-            \error_log($line);
+            \SugarCraft\Code\Support\Log::raw($line);
         };
         $this->batchSize = max(OtelConfig::MIN_BATCH_SIZE, min(OtelConfig::MAX_BATCH_SIZE, $batchSize));
 
