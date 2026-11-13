@@ -24,12 +24,28 @@ namespace SugarCraft\CodeTime\Ignore;
  * tracked file's directory), and a file larger than MAX_IGNORE_BYTES is
  * refused loudly rather than slurped: it lives inside a cloned repository,
  * so a multi-gigabyte planted ".sugartrackignore" is an attacker-controlled
- * memory-DoS on every push of an opt-out feature.
+ * memory-DoS on every push of an opt-out feature. An ignore file that exists
+ * but cannot be read is refused the same way (fail-closed): tracking with
+ * the opt-out in an unknown state is the failure mode the file exists to
+ * prevent, so the load throws and the CLI reports it rather than proceeding
+ * as if no patterns were configured.
  */
 final class SugarTrackIgnore
 {
     /** Hard ceiling on ignore-file size (1 MiB of lines is generous). */
     public const MAX_IGNORE_BYTES = 1_048_576;
+
+    /**
+     * Behavioural probes for the wholesale canary (see hasWholesalePattern).
+     *
+     * Deliberately diverse: a one-character name (kills minimum-length
+     * tokens), two letters, distinct first characters across the lower,
+     * upper and digit families (kills character-class anchors), a path with
+     * a separator and a path with a dot (kill suffix/extension claims that
+     * never had to see one). Only patterns free of any such anchor match
+     * all six — and those are exactly the ones that erase a project.
+     */
+    private const WHOLESALE_PROBES = ['a', 'zq', '9x', 'Zf', 'a/b', 'a.b'];
 
     /** @param array<string> $patterns glob patterns */
     public function __construct(private readonly array $patterns = [])
@@ -41,11 +57,14 @@ final class SugarTrackIgnore
      * Lines starting with # are treated as comments and ignored.
      * Empty lines are also skipped.
      *
-     * @throws \RuntimeException if the file exceeds self::MAX_IGNORE_BYTES
+     * @throws \RuntimeException if the file exceeds self::MAX_IGNORE_BYTES,
+     *         or exists but cannot be read — the opt-out is never assumed
+     *         empty, because a silently unreadable ignore file would track
+     *         exactly the files its author asked to protect.
      */
     public static function load(string $path): self
     {
-        if (!is_file($path)) {
+        if (!file_exists($path)) {
             return new self([]);
         }
 
@@ -58,9 +77,15 @@ final class SugarTrackIgnore
             );
         }
 
-        $lines = file($path, FILE_IGNORE_NEW_LINES);
+        // is_file() would be the blunt test, but on Linux file() against a
+        // DIRECTORY succeeds and yields an empty array — a plant standing
+        // where the opt-out file should be must not fail open on that
+        // accident, so a directory is routed through the same refusal.
+        $lines = is_dir($path) ? false : @file($path, FILE_IGNORE_NEW_LINES);
         if ($lines === false) {
-            return new self([]);
+            throw new \RuntimeException(
+                'candy-codetime: ignore file ' . $path . ' could not be read — refusing to track with the opt-out in an unknown state',
+            );
         }
 
         $lines = array_map('trim', $lines);
@@ -89,21 +114,37 @@ final class SugarTrackIgnore
      * planted in. Honest patterns fail the canary by construction: "*.log"
      * demands a suffix, "?*" demands one character.
      *
+     * The empty canary alone under-covers the threat model: a crafted "?*"
+     * ignores every real (non-empty) file name yet passes as honest, so a
+     * planted file silences the whole project through the quiet channel.
+     * The canary is therefore doubled with the behavioural probe set below:
+     * a pattern that swallows every probe has no name, prefix, suffix,
+     * extension or separator anchor left, and it is wholesale in effect even
+     * when it is not wildcard-only in shape. Over-flagging a pathological
+     * class that happens to cover all the probes is the accepted trade —
+     * the loud lane still records, it only records noisily.
+     *
      * The file lives inside tracked repositories, so this is the shape of
      * "repo content as untrusted input to the tracking tool": a checked-in
      * ".sugartrackignore" containing a bare "*" silently erases the whole
      * project's recorded time. The CLI routes that skip to STDERR with the
      * file path, pattern count and project so the notice is hard to miss.
-     *
-     * Disclosed gap: a crafted "?*" ignores every real (non-empty) file name
-     * yet fails the empty canary, so it stays on the honest channel. The
-     * realistic plant is the bare "*"; over-flagging honest patterns that
-     * merely LOOK broad would be the worse trade.
      */
     public function hasWholesalePattern(): bool
     {
         foreach ($this->patterns as $pat) {
             if (fnmatch($pat, '')) {
+                return true;
+            }
+
+            $swallowsEveryProbe = true;
+            foreach (self::WHOLESALE_PROBES as $probe) {
+                if (!fnmatch($pat, $probe)) {
+                    $swallowsEveryProbe = false;
+                    break;
+                }
+            }
+            if ($swallowsEveryProbe) {
                 return true;
             }
         }

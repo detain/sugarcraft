@@ -109,26 +109,51 @@ final class SugarTrackIgnoreTest extends TestCase
         $this->assertTrue($ignore->isIgnored('debug.log'));  // *.log still works
     }
 
-    public function testLoadReturnsEmptyWhenFileCannotBeRead(): void
+    /**
+     * CT-S17 (finding 016): an ignore file that exists but cannot be read
+     * used to load as the empty set — fail-open, with a raw PHP warning on
+     * stderr. The opt-out then silently stopped protecting the very files it
+     * was written for. The load now throws, and the CLI reports it through
+     * its storage-error door.
+     */
+    public function testLoadRefusesAnIgnoreFileThatIsUnreadableForOrdinaryUsers(): void
     {
-        // Create a file that exists but cannot be read (permission denied)
+        // chmod 000 is only unreadable for non-root accounts; root would
+        // shrug it off and the throw expectation would lie (repo convention,
+        // cf. StoreTest's file-mode child probes).
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root bypasses file permission modes');
+        }
+
         $unreadable = $this->tmpDir . '/unreadable.ignore';
         file_put_contents($unreadable, "*.log\n");
         chmod($unreadable, 0000);
 
         try {
-            // file() returns false when it cannot read the file, resulting in empty patterns
-            // Suppress the expected E_WARNING from file() failing to open unreadable file
-            set_error_handler(static fn (): bool => true);
-            try {
-                $ignore = SugarTrackIgnore::load($unreadable);
-                $this->assertFalse($ignore->isIgnored('debug.log'));
-                $this->assertFalse($ignore->isIgnored('any/file.php'));
-            } finally {
-                restore_error_handler();
-            }
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('could not be read');
+            SugarTrackIgnore::load($unreadable);
         } finally {
             chmod($unreadable, 0644);
+        }
+    }
+
+    /**
+     * The same law on a fixture every account trips: a directory where a
+     * file was expected. file() fails regardless of euid, so this half of
+     * the door is green even on root-in-container CI.
+     */
+    public function testLoadRefusesADirectoryStandingWhereTheIgnoreFileShouldBe(): void
+    {
+        $notAFile = $this->tmpDir . '/ignore-is-a-dir';
+        mkdir($notAFile);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('could not be read');
+        try {
+            SugarTrackIgnore::load($notAFile);
+        } finally {
+            @rmdir($notAFile);
         }
     }
 
@@ -215,15 +240,32 @@ final class SugarTrackIgnoreTest extends TestCase
     }
 
     /**
-     * Disclosed narrowness, pinned on purpose: "?*" ignores every non-empty
-     * file name yet fails the empty-name canary, so it stays on the honest
-     * channel. A future widening of the trigger must flip this pin
-     * deliberately, not drift into it.
+     * The deliberate flip of the old "stays honest" pin (CT-S17, finding
+     * 085): "?*" ignores every non-empty file name, so it is wholesale by
+     * BEHAVIOUR even though it fails the empty-string canary. The
+     * behavioural probe set now catches it — the pinned disclosure said a
+     * widening must be flipped on purpose, and this is that flip.
      */
-    public function testTheQuestionMarkStarNearMissStaysOnTheHonestChannel(): void
+    public function testBehaviouralCanaryCatchesTheQuestionMarkStarPlant(): void
     {
         $ignore = new SugarTrackIgnore(['?' . chr(42)]);
         $this->assertTrue($ignore->isIgnored('anything.php'));
-        $this->assertFalse($ignore->hasWholesalePattern());
+        $this->assertTrue($ignore->hasWholesalePattern(), '?* swallows every real path');
+    }
+
+    /**
+     * The probe set's other side: patterns that merely LOOK broad but hold
+     * an anchor the probes can expose stay on the honest channel.
+     */
+    public function testAnchoredLookalikesAreNotWholesaleByBehaviour(): void
+    {
+        // Lowercase class: the digit-first and upper-first probes defeat it.
+        $this->assertFalse((new SugarTrackIgnore(['[a-z]' . chr(42)]))->hasWholesalePattern());
+        // Length floor above one: the single-character probe defeats it.
+        $this->assertFalse((new SugarTrackIgnore(['?' . chr(42) . '?']))->hasWholesalePattern());
+        // Separator anchor: the separator-free probes defeat it.
+        $this->assertFalse((new SugarTrackIgnore([chr(42) . '/' . chr(42)]))->hasWholesalePattern());
+        // Suffix anchor: the dotless probes defeat it.
+        $this->assertFalse((new SugarTrackIgnore([chr(42) . '.b']))->hasWholesalePattern());
     }
 }

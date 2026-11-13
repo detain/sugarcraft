@@ -123,12 +123,18 @@ pattern naming the whole tracked path matches it exactly; and a path pattern
 (`vendor/*`) matches below any `vendor` directory, whether the tracked path is
 relative or absolute. An ignore file larger than 1 MiB is refused outright:
 `push` reports it with a one-line error and exits 1 rather than parsing a
-bloated plant.
+bloated plant. An ignore file that exists but cannot be read is refused the
+same way — tracking with the opt-out in an unknown state is exactly the
+failure the file was written to prevent, so `push` never proceeds as if the
+file were empty.
 
 Trust boundary: ignore files usually live *inside* tracked repositories, so
 their patterns are untrusted input to the tracking tool. A wildcard-only
 pattern (a bare `*`) matches every file name and silently zeroes that
-project's entire recorded time. When the loaded file carries such a pattern,
+project's entire recorded time — and so does anything *behaviourally* equal
+to it (`?*` matches every real, non-empty path while failing a pure-shape
+test), so such patterns are caught by probe-matching, not just by shape.
+When the loaded file carries such a pattern,
 the skip is no longer a quiet stdout line: `push` reports it on **stderr**
 with the ignore file's path, its pattern count, and the affected project —
 then still exits 0, because the opt-out is honored, not refused. To undo a
