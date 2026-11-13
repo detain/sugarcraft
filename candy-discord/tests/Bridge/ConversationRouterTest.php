@@ -17,6 +17,7 @@ use CandyCode\Bundles\Discord\Tests\Fixture\FakeServe;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
 use function React\Promise\resolve;
@@ -38,6 +39,15 @@ final class RecordingRouterFace implements PlatformFace
 
     public int $typingCount = 0;
 
+    /** Test hook: when set, deliver() routes chunk settlement timing through it. */
+    public ?\Closure $deliverGate = null;
+
+    public int $deliverIssued = 0;
+
+    public int $lineLimit = 17;
+
+    public int $byteLimit = 2000;
+
     public function name(): string
     {
         return 'discord';
@@ -45,16 +55,20 @@ final class RecordingRouterFace implements PlatformFace
 
     public function textChunkLimit(): int
     {
-        return 2000;
+        return $this->byteLimit;
     }
 
     public function maxLinesPerMessage(): int
     {
-        return 17;
+        return $this->lineLimit;
     }
 
     public function deliver(array $ref, string $chunk): PromiseInterface
     {
+        $this->deliverIssued++;
+        if ($this->deliverGate !== null) {
+            return ($this->deliverGate)($chunk);
+        }
         $this->delivered[] = $chunk;
 
         return resolve(null);
@@ -457,10 +471,73 @@ final class ConversationRouterTest extends TestCase
         self::assertSame('sess_fixture_1', $this->map->sessionIdFor($key));
     }
 
-    /** @param array<string,mixed> $policy */
-    private function boot(array $policy = []): void
+    public function testMultiChunkRepliesSettleInIssueOrderEvenWhenThePlatformAnswersOutOfOrder(): void
     {
-        $this->router = new ConversationRouter($this->bridge, $this->map, Log::silent(), new TextSafety(), $this->loop, $policy);
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $loop = $this->loop;
+        $face = $this->face;
+        $face->lineLimit = 1;
+        $face->deliverGate = static function (string $chunk) use ($face, $loop): PromiseInterface {
+            $delays = ['alpha' => 0.3, 'beta' => 0.2, 'gamma' => 0.1];
+            $deferred = new Deferred();
+            $loop->addTimer($delays[$chunk] ?? 0.05, static function () use ($face, $chunk, $deferred): void {
+                $face->delivered[] = $chunk;
+                $deferred->resolve(null);
+            });
+
+            return $deferred->promise();
+        };
+        $this->pushSettled($this->envelope('assistant.completed', 91, ['content' => "alpha\nbeta\ngamma"]));
+        self::runFor($this->loop, 800);
+
+        self::assertSame(['alpha', 'beta', 'gamma'], \array_map('trim', $this->face->delivered), 'the chain must beat completion order');
+        self::assertSame(3, $this->face->deliverIssued);
+    }
+
+    public function testAChunkFailureStopsTheChainAndDisclosesExactlyOneRow(): void
+    {
+        $rows = [];
+        $log = new Log(static function (string $line) use (&$rows): void {
+            $rows[] = $line;
+        });
+        $this->boot([], $log);
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $loop = $this->loop;
+        $face = $this->face;
+        $face->lineLimit = 1;
+        $face->deliverGate = static function (string $chunk) use ($face, $loop): PromiseInterface {
+            $deferred = new Deferred();
+            if ($chunk === 'beta') {
+                $loop->addTimer(0.05, static fn () => $deferred->reject(new \RuntimeException('platform shrugged')));
+
+                return $deferred->promise();
+            }
+            $loop->addTimer(0.05, static function () use ($face, $chunk, $deferred): void {
+                $face->delivered[] = $chunk;
+                $deferred->resolve(null);
+            });
+
+            return $deferred->promise();
+        };
+        $this->pushSettled($this->envelope('assistant.completed', 92, ['content' => "alpha\nbeta\ngamma"]));
+        self::runFor($this->loop, 400);
+
+        self::assertSame(['alpha'], \array_map('trim', $this->face->delivered), 'the tail after a failed chunk must never be sent');
+        self::assertSame(2, $this->face->deliverIssued, 'gamma must not even be issued');
+        $warns = \array_values(\array_filter($rows, static fn (string $r): bool => \str_contains($r, 'deliver_failed')));
+        self::assertCount(1, $warns, 'one disclosure row, not one per abandoned chunk');
+        self::assertStringContainsString('"chunk":2', $warns[0]);
+        self::assertStringContainsString('"of":3', $warns[0]);
+        self::assertStringContainsString('"stopped":true', $warns[0]);
+    }
+
+    /** @param array<string,mixed> $policy */
+    private function boot(array $policy = [], ?Log $log = null): void
+    {
+        $this->router = new ConversationRouter($this->bridge, $this->map, $log ?? Log::silent(), new TextSafety(), $this->loop, $policy);
         $this->router->addChannel($this->face, 'default');
 
         $started = false;

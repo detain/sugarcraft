@@ -783,8 +783,30 @@ final class ConversationRouter
 
     private function deliver(PlatformFace $channel, array $ref, string $text): void
     {
-        foreach (OutboundChunker::split($this->safety->outbound($text), $channel->textChunkLimit(), $channel->maxLinesPerMessage()) as $chunk) {
-            $channel->deliver($ref, $chunk)->then(null, fn (\Throwable $e) => $this->log->warn('deliver_failed', ['error' => $e->getMessage()]));
+        $chunks = array_values(OutboundChunker::split($this->safety->outbound($text), $channel->textChunkLimit(), $channel->maxLinesPerMessage()));
+        // Ordered chain (candy-discord-011): a reply's chunks must land in the
+        // order they were written — a scrambled tail is worse than a
+        // truncated one. Each chunk rides the previous chunk's settlement; the
+        // FIRST failure stops the walk with one deliver_failed row naming the
+        // truncation (chunk k of N), and nothing is sent after it.
+        $sequence = \React\Promise\resolve(null);
+        $failed = false;
+        foreach ($chunks as $index => $chunk) {
+            $sequence = $sequence->then(function () use ($channel, $ref, $chunk, $index, $chunks, &$failed): PromiseInterface {
+                if ($failed) {
+                    return \React\Promise\resolve(null);
+                }
+
+                return $channel->deliver($ref, $chunk)->then(null, function (\Throwable $error) use ($index, $chunks, &$failed): void {
+                    $failed = true;
+                    $this->log->warn('deliver_failed', [
+                        'error' => $error->getMessage(),
+                        'chunk' => $index + 1,
+                        'of' => count($chunks),
+                        'stopped' => true,
+                    ]);
+                });
+            });
         }
     }
 
