@@ -648,6 +648,63 @@ final class DatePicker
     }
 
     /**
+     * Preset both range endpoints programmatically (dp-19,
+     * sugar-datepicker-021): restores a saved [from, to] pair without
+     * keystroke simulation — the fragile path that had to survive bounds,
+     * clamps and month arithmetic by accident.
+     *
+     * This does NOT enable range mode — pair it with
+     * {@see withRangeMode}(true). The asymmetry is deliberate: toggling the
+     * mode off clears the endpoints, so a setter that also toggled the mode
+     * would give two methods joint ownership of the same transition.
+     *
+     * Both endpoints must lie inside the current min/max bounds and must not
+     * be crossed ($end, when given, on or after $start — compared on the
+     * calendar day), mirroring the bounds setters' throw-early law. A null
+     * $start clears BOTH endpoints (the programmatic twin of Escape's
+     * full-clear), ignoring $end.
+     *
+     * Why this refuses a crossed pair while the second Enter of keystroke
+     * selection NORMALIZES one: the Enter path preserves wire behaviour of
+     * existing UIs; withRange is a data boundary — a crossed pair arriving
+     * programmatically is caller corruption, and fail-fast is the house law
+     * there (parse, don't validate).
+     *
+     * @throws \InvalidArgumentException naming the offending date
+     */
+    public function withRange(?\DateTimeImmutable $start, ?\DateTimeImmutable $end = null): self
+    {
+        if ($start === null) {
+            $clone = clone $this;
+            $clone->rangeStart = null;
+            $clone->rangeEnd = null;
+
+            return $clone;
+        }
+
+        if (!$this->inBounds($start)) {
+            throw new \InvalidArgumentException('range start ' . $start->format('Y-m-d') . ' lies outside the configured bounds');
+        }
+
+        if ($end !== null) {
+            if (!$this->inBounds($end)) {
+                throw new \InvalidArgumentException('range end ' . $end->format('Y-m-d') . ' lies outside the configured bounds');
+            }
+            if (self::dayKey($end) < self::dayKey($start)) {
+                throw new \InvalidArgumentException(
+                    'range end ' . $end->format('Y-m-d') . ' must not be before range start ' . $start->format('Y-m-d')
+                );
+            }
+        }
+
+        $clone = clone $this;
+        $clone->rangeStart = $start;
+        $clone->rangeEnd = $end;
+
+        return $clone;
+    }
+
+    /**
      * Handle keyboard navigation and selection (single AND range mode).
      *
      * Arrow keys: move cursor (grid clamp, no month-boundary wrap)

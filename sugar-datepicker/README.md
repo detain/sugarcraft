@@ -153,6 +153,18 @@ $picker = $picker->rangeStart();
 $picker = $picker->rangeEnd();
 ```
 
+Restoring a saved range does not need keystrokes: `withRange($from, $to)`
+presets both endpoints programmatically — each must lie inside the current
+bounds (throws naming the offender otherwise) and they may not be crossed.
+It deliberately does **not** enable range mode; compose the two:
+
+```php
+$picker = $picker
+    ->withRange(new \DateTimeImmutable('2026-05-04'), new \DateTimeImmutable('2026-05-08'))
+    ->withRangeMode(true);
+$cleared = $picker->withRange(null); // clears both endpoints, keeps the mode
+```
+
 ## Min/max bounds
 
 ```php

@@ -489,6 +489,105 @@ final class DatePickerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // withRange — programmatic preset (dp-19)
+    // -------------------------------------------------------------------------
+
+    public function testWithRangeRestoresASavedPair(): void
+    {
+        $from = new \DateTimeImmutable('2026-05-04');
+        $to = new \DateTimeImmutable('2026-05-08');
+
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withRange($from, $to);
+
+        $this->assertSame('2026-05-04', $dp->rangeStart()?->format('Y-m-d'));
+        $this->assertSame('2026-05-08', $dp->rangeEnd()?->format('Y-m-d'));
+        // The receiver is untouched (immutability) and the pair survives navigation.
+        $this->assertNull(DatePicker::new(new \DateTimeImmutable('2026-05-01'))->rangeStart());
+        $moved = $dp->goToNextMonth();
+        $this->assertSame('2026-05-04', $moved->rangeStart()?->format('Y-m-d'));
+    }
+
+    public function testWithRangeDoesNotImplyRangeMode(): void
+    {
+        $single = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRange(new \DateTimeImmutable('2026-05-04'), new \DateTimeImmutable('2026-05-08'));
+
+        $this->assertFalse($single->isRangeMode(), 'the endpoint preset must not own the mode');
+
+        $ranged = $single->withRangeMode(true);
+        $this->assertTrue($ranged->isRangeMode());
+        $this->assertSame('2026-05-04', $ranged->rangeStart()?->format('Y-m-d'), 'arming mode keeps the preset');
+
+        $off = $ranged->withRangeMode(false);
+        $this->assertNull($off->rangeStart(), 'disarming mode still clears endpoints (existing law)');
+    }
+
+    public function testWithRangeSingleEndpointArmsJustTheStart(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRange(new \DateTimeImmutable('2026-05-04'));
+
+        $this->assertSame('2026-05-04', $dp->rangeStart()?->format('Y-m-d'));
+        $this->assertNull($dp->rangeEnd());
+    }
+
+    public function testWithRangeNullClearsBothEndpointsIgnoringEnd(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRange(new \DateTimeImmutable('2026-05-04'), new \DateTimeImmutable('2026-05-08'))
+            ->withRange(null, new \DateTimeImmutable('2026-05-20'));
+
+        $this->assertNull($dp->rangeStart());
+        $this->assertNull($dp->rangeEnd());
+    }
+
+    public function testWithRangeRefusesCrossedPair(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('2026-05-02');
+
+        $dp->withRange(new \DateTimeImmutable('2026-05-10'), new \DateTimeImmutable('2026-05-02'));
+    }
+
+    public function testWithRangeRefusesOutOfBoundsEndpoints(): void
+    {
+        $bounded = DatePicker::new(new \DateTimeImmutable('2026-05-10'))
+            ->withMinDate(new \DateTimeImmutable('2026-05-10'))
+            ->withMaxDate(new \DateTimeImmutable('2026-05-20'));
+
+        try {
+            $bounded->withRange(new \DateTimeImmutable('2026-05-01'), new \DateTimeImmutable('2026-05-15'));
+            $this->fail('start outside the window must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('range start 2026-05-01', $e->getMessage());
+        }
+
+        try {
+            $bounded->withRange(new \DateTimeImmutable('2026-05-15'), new \DateTimeImmutable('2026-06-01'));
+            $this->fail('end outside the window must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('range end 2026-06-01', $e->getMessage());
+        }
+
+        // Inclusive edges of the window are accepted.
+        $ok = $bounded->withRange(new \DateTimeImmutable('2026-05-10'), new \DateTimeImmutable('2026-05-20'));
+        $this->assertSame('2026-05-20', $ok->rangeEnd()?->format('Y-m-d'));
+    }
+
+    public function testWithRangeCrossedCheckIsTimezoneSafe(): void
+    {
+        // Same wall day in a later zone must NOT read as crossed (day-key law).
+        $start = new \DateTimeImmutable('2026-05-10T09:00:00+00:00');
+        $endTokyo = new \DateTimeImmutable('2026-05-10T23:00:00+09:00'); // 14:00Z, same day
+
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withRange($start, $endTokyo);
+
+        $this->assertNotNull($dp->rangeEnd());
+    }
+
+    // -------------------------------------------------------------------------
     // Cursor rendering
     // -------------------------------------------------------------------------
 
