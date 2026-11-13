@@ -475,24 +475,29 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   (TrueColor→`TrueColor`, Color256→`Ansi256`, Color16→`Ansi`,
   NoColor→`NoTTY`, empty report→`Ansi` ladder-default parity,
   BasicAscii-only report→`Ascii`).
-- **`AsyncProbe::colorProfile()`** — the same infocmp check in a ReactPHP child
-  process; returns a promise. Every child is bounded (5 s ceiling → TERM, 1 s
-  grace → KILL, the KILL timer cancelled when the child exits first, both
-  pipes drained into keep-a-prefix 8 KiB buffers so a chatty child can neither
-  wedge on a full pipe nor grow the accumulator without end) and slot
-  reclamation kills children whose loop was abandoned, so the public
-  `AsyncProbe::MAX_CONCURRENT_PROBES = 4` cap can never wedge. **Every async
-  settle answers from the detection chain, except the TrueColor promotion read
-  from a `Tc`-declaring child dump** — which itself only runs on the Ansi and
-  Ansi256 rungs and sees at most the capped prefix; no blocking exec ever runs
-  on the loop thread. `AsyncProbe` falls back to the sync `Probe::colorProfile()`
-  only when no event loop is present at all; the sync probe itself runs
-  whenever called, so invoking it from inside a live loop can block that loop
-  on the optional phase-2 `infocmp` exec — and unlike the child, that exec
-  carries neither deadline nor output ceiling: it is a CLI/startup-context
-  face, never a request- or tick-path one. Env suppression, a missing infocmp
-  binary, an unset or `dumb` TERM, a TERM whose shape infocmp would read as an
-  option, a chain rung other than Ansi/Ansi256, the cap being reached, or a
+- **`AsyncProbe::colorProfile(?LoopInterface $loop = null)`** — the same infocmp
+  check in a ReactPHP child process; returns a promise. The child spawns ONLY
+  on the loop you pass in: called without one, the promise resolves in-place
+  through the bounded sync face (an implicit singleton pickup would park the
+  child on a loop its caller may never run, settling only in somebody else's
+  `Loop::run()`). Every child is bounded (5 s ceiling → TERM, 1 s grace →
+  KILL, the KILL timer cancelled when the child exits first, both pipes
+  drained into keep-a-prefix 8 KiB buffers so a chatty child can neither
+  wedge on a full pipe nor grow the accumulator without end), a spawn that
+  fails to launch releases its cap slot and settles from the chain instead
+  of throwing, and slot reclamation kills AND reaps children whose loop was
+  abandoned — so the public `AsyncProbe::MAX_CONCURRENT_PROBES = 4` cap can
+  never wedge, and abandoned probes leave neither zombies nor pipe fds
+  behind. **Every async settle answers from the detection chain, except the
+  TrueColor promotion read from a `Tc`-declaring child dump** — which itself
+  only runs on the Ansi and Ansi256 rungs and sees at most the capped
+  prefix; no blocking exec ever runs on the loop thread. The no-loop
+  fallback is the sync `Probe::colorProfile()`; its phase-2 `infocmp` exec
+  rides the same bounded door as the child (above), but it still blocks the
+  calling thread for up to that ceiling — inside a live loop, pass the loop
+  and stay off the tick path. Env suppression, a missing infocmp binary, an
+  unset or `dumb` TERM, a TERM whose shape infocmp would read as an option,
+  a chain rung other than Ansi/Ansi256, the cap being reached, or a
   timeout/kill all settle to the chain's answer. Results are advisory only.
 
 ## Overriding detection

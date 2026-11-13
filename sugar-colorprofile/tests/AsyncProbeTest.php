@@ -14,10 +14,11 @@ use React\Promise\PromiseInterface;
 /**
  * @covers \SugarCraft\ColorProfile\AsyncProbe
  *
- * Note: These tests verify the synchronous fallback path of AsyncProbe.
- * When no event loop is available, AsyncProbe::colorProfile() returns
- * a promise that resolves to Probe::colorProfile() synchronously.
- * Full async testing would require an actual event loop.
+ * CP-14 contract: AsyncProbe::colorProfile() spawns its infocmp child ONLY
+ * on an explicitly supplied loop; called without one it resolves in-place
+ * through the bounded sync face. Tests that exercise the async leg pass a
+ * private StreamSelectLoop and run THAT — the react/event-loop singleton is
+ * never picked up implicitly.
  */
 final class AsyncProbeTest extends TestCase
 {
@@ -211,7 +212,7 @@ final class AsyncProbeTest extends TestCase
             $counter->setValue(null, self::fakeSlots(4, \microtime(true) + 10.0));
 
             $resolved = null;
-            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+            AsyncProbe::colorProfile(new \React\EventLoop\StreamSelectLoop())->then(function (ColorProfile $p) use (&$resolved): void {
                 $resolved = $p;
             });
 
@@ -233,21 +234,22 @@ final class AsyncProbeTest extends TestCase
 
         try {
             // Four slots whose deadline passed: their callers abandoned the
-            // loop, so no exit/error event could ever release them. The next
-            // call must reclaim them instead of degrading forever.
+            // loop, so no exit event could ever release them. The next call
+            // must reclaim them instead of degrading forever.
             $counter->setValue(null, self::fakeSlots(4, \microtime(true) - 10.0));
 
+            $loop = new \React\EventLoop\StreamSelectLoop();
             $resolved = null;
-            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$resolved): void {
                 $resolved = $p;
             });
 
             if ($resolved === null) {
-                // The reclaimed capacity went to a real infocmp child; run
-                // the loop until the settlement lands, with a wall-clock
-                // watchdog so a wedged child cannot hang the suite (the
-                // probe's own ceiling timer settles it at 5s+1s regardless).
-                $loop = \React\EventLoop\Loop::get();
+                // The reclaimed capacity went to a real infocmp child on the
+                // loop we passed in; run it until the settlement lands, with
+                // a wall-clock watchdog so a wedged child cannot hang the
+                // suite (the probe's own ceiling timer settles it at 5s+1s
+                // regardless).
                 $poll = null;
                 $watchdog = $loop->addTimer(8.0, static function () use ($loop): void {
                     $loop->stop();
@@ -356,13 +358,13 @@ final class AsyncProbeTest extends TestCase
         putenv('TERM=xterm-256color');
 
         try {
+            $loop = new \React\EventLoop\StreamSelectLoop();
             $resolved = null;
-            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+            AsyncProbe::colorProfile($loop)->then(function (ColorProfile $p) use (&$resolved): void {
                 $resolved = $p;
             });
 
             if ($resolved === null) {
-                $loop = \React\EventLoop\Loop::get();
                 $poll = null;
                 $watchdog = $loop->addTimer(8.0, static function () use ($loop): void {
                     $loop->stop();
@@ -399,6 +401,199 @@ final class AsyncProbeTest extends TestCase
         }
     }
 
+    // ─── CP-14: explicit loop contract, start-throw safety, kill-AND-reap ───
+
+    public function testNullLoopResolvesInPlaceThroughTheBoundedSyncFace(): void
+    {
+        // CP-14: called without a loop the surface spawns on NOTHING and the
+        // promise settles in-place via the bounded synchronous face (chain +
+        // deadline-capped door exec). The old code silently took the
+        // react/event-loop singleton, so this exact call returned a PENDING
+        // promise parked on a loop the plain-CLI caller never runs.
+        Probe::_reset();
+        $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $slots->setValue(null, []);
+
+        $counter = \tempnam(\sys_get_temp_dir(), 'cp-syncface-cnt');
+        $printer = \tempnam(\sys_get_temp_dir(), 'cp-syncface');
+        \file_put_contents($printer, "#!/bin/sh\nprintf x >> " . \escapeshellarg($counter) . "\nprintf '\\tTc,\\n'\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+
+        try {
+            $resolved = null;
+            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+                $resolved = $p;
+            });
+
+            // Settled before the call even returned — there was no loop to run.
+            $this->assertSame(
+                ColorProfile::TrueColor,
+                $resolved,
+                'the no-loop path must settle in-place through the bounded sync face',
+            );
+            $this->assertSame(
+                1,
+                \strlen((string) \file_get_contents($counter)),
+                'the answer is ONE door exec — the async surface adds no child of its own',
+            );
+            $this->assertCount(0, $slots->getValue(), 'the no-loop path registers nothing on any loop');
+        } finally {
+            unset($_ENV['TERM']);
+            putenv('TERM');
+            Probe::_reset();
+            @\unlink($printer);
+            @\unlink($counter);
+        }
+    }
+
+    public function testThrowingLoopReleasesTheSlotAndSettlesFromChain(): void
+    {
+        // CP-14 start-throw safety: `new Process()` and `start($loop)` are
+        // the only fallible calls outside every promise handler. A loop that
+        // refuses the child's stream watchers makes start() throw — the
+        // exception must not escape the method, the booked cap slot must be
+        // released, and the promise must settle with the chain answer.
+        Probe::_reset();
+        $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $slots->setValue(null, []);
+
+        $printer = \tempnam(\sys_get_temp_dir(), 'cp-throw');
+        \file_put_contents($printer, "#!/bin/sh\nexec sleep 30\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+
+        try {
+            $resolved = null;
+            AsyncProbe::colorProfile(new ThrowingProbeLoop())->then(function (ColorProfile $p) use (&$resolved): void {
+                $resolved = $p;
+            });
+
+            $this->assertSame(
+                ColorProfile::Ansi256,
+                $resolved,
+                'a failed spawn must fail open to the chain, in-place, without throwing',
+            );
+            $this->assertCount(0, $slots->getValue(), 'a failed spawn must release its cap slot');
+        } finally {
+            unset($_ENV['TERM']);
+            putenv('TERM');
+            Probe::_reset();
+            @\unlink($printer);
+        }
+    }
+
+    public function testReclaimKillsAndReapsAbandonedChildrenAcrossCycles(): void
+    {
+        // CP-14 reclaim reap: terminate() alone strands a ZOMBIE — react/
+        // child-process reaps only through Process::close(), which its own
+        // code reaches from stream-close events on the child's (abandoned)
+        // loop. Real abandoned children across ten cycles prove the reclaim
+        // path leaves neither zombies nor a growing file-descriptor bill.
+        //
+        // The pid asserted is the child proc_open tracks (proc_get_status),
+        // which is what terminate() signals and close() reaps — a killed-but-
+        // unreaped child keeps its /proc entry as state Z on Linux, so entry
+        // absence == killed AND reaped. The announce via a pidfile is dropped
+        // because the sigchild wrapper dash forks makes the script a
+        // grandchild; the tracked child stays alive while its subshell sleeps.
+        if (\PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('zombie-fd accounting requires /proc');
+        }
+
+        Probe::_reset();
+        $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $slots->setValue(null, []);
+
+        $printer = \tempnam(\sys_get_temp_dir(), 'cp-reap');
+        \file_put_contents($printer, "#!/bin/sh\nexec sleep 30\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+
+        $cycles = 10;
+        $fdCount = static fn (): int => \count(\array_diff(\scandir('/proc/self/fd'), ['.', '..']));
+        $trackedPid = static function (\React\ChildProcess\Process $process): int {
+            $resource = (new \ReflectionProperty($process, 'process'))->getValue($process);
+            if (!\is_resource($resource)) {
+                return -1;
+            }
+            return (int) (\proc_get_status($resource)['pid'] ?? -1);
+        };
+
+        $fdBaseline = $fdCount();
+        $previousPid = null;
+
+        try {
+            for ($cycle = 1; $cycle <= $cycles; $cycle++) {
+                // Spawn on a loop that is never run — an abandoning caller.
+                AsyncProbe::colorProfile(new \React\EventLoop\StreamSelectLoop());
+
+                if ($previousPid !== null) {
+                    $entries = $slots->getValue();
+                    $this->assertCount(1, $entries, "cycle {$cycle}: aged slot reclaimed, the new child owns the only one");
+                    $this->assertFalse(
+                        \file_exists('/proc/' . $previousPid),
+                        "cycle {$cycle}: abandoned child {$previousPid} must be killed AND reaped — no zombie may accumulate",
+                    );
+                }
+
+                $entries = $slots->getValue();
+                $entry = \reset($entries);
+                $pid = $trackedPid($entry['process']);
+                $this->assertGreaterThan(0, $pid, "cycle {$cycle}: the direct child must be live before aging");
+                $this->assertFileExists('/proc/' . $pid, "cycle {$cycle}: child {$pid} alive before aging");
+
+                // Age its deadline so the NEXT call reclaims it.
+                $key = \array_key_first($entries);
+                $entries[$key]['deadline'] = \microtime(true) - 1.0;
+                $slots->setValue(null, $entries);
+                $previousPid = $pid;
+            }
+
+            // One more call reclaims the final aged child and leaves its own.
+            AsyncProbe::colorProfile(new \React\EventLoop\StreamSelectLoop());
+            $this->assertLessThan(
+                $fdBaseline + 5,
+                $fdCount(),
+                "fds must not accumulate across {$cycles} abandon/reclaim cycles (baseline {$fdBaseline})",
+            );
+
+            $entries = $slots->getValue();
+            $this->assertCount(1, $entries);
+            $lastPid = $trackedPid(\reset($entries)['process']);
+            $this->assertGreaterThan(0, $lastPid);
+
+            foreach ($entries as $entry) {
+                $entry['process']->terminate(defined('SIGKILL') ? \SIGKILL : 9);
+                $entry['process']->close();
+            }
+            $this->assertFalse(\file_exists('/proc/' . $lastPid), 'the last abandoned child must be killed AND reaped too');
+            $previousPid = null;
+        } finally {
+            unset($_ENV['TERM']);
+            putenv('TERM');
+            foreach ($slots->getValue() as $entry) {
+                $entry['process']->terminate(defined('SIGKILL') ? \SIGKILL : 9);
+                $entry['process']->close();
+            }
+            $slots->setValue(null, []);
+            Probe::_reset();
+            @\unlink($printer);
+            if (isset($previousPid) && $previousPid > 0) {
+                @\posix_kill($previousPid, \SIGKILL);
+            }
+        }
+    }
+
     /**
      * @return array<int, array{process: \\React\\ChildProcess\\Process, deadline: float}>
      */
@@ -418,6 +613,77 @@ final class AsyncProbeTest extends TestCase
             $slot['process']->terminate(defined('SIGKILL') ? \SIGKILL : 9);
         }
         $counter->setValue(null, []);
+    }
+}
+
+/**
+ * Loop double for the CP-14 start-throw pin: it refuses the child's stream
+ * watchers exactly like a poisoned or shut-down loop would, so
+ * Process::start() throws AFTER proc_open succeeded — the one shape that
+ * proves the spawn catch releases the slot and settles from the chain.
+ * Every other LoopInterface member is out of contract for that path and
+ * shouts if the spawn flow ever reaches it.
+ */
+final class ThrowingProbeLoop implements \React\EventLoop\LoopInterface
+{
+    public function addReadStream($stream, $listener)
+    {
+        throw new \RuntimeException('test loop refuses stream watchers');
+    }
+
+    public function addWriteStream($stream, $listener)
+    {
+        throw new \RuntimeException('test loop refuses stream watchers');
+    }
+
+    public function removeReadStream($stream)
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function removeWriteStream($stream)
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function addTimer($interval, $callback)
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function addPeriodicTimer($interval, $callback)
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function cancelTimer(\React\EventLoop\TimerInterface $timer)
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function futureTick($listener)
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function addSignal($signal, $listener)
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function removeSignal($signal, $listener)
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function run()
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
+    }
+
+    public function stop()
+    {
+        throw new \BadMethodCallException('out of contract for the spawn-failure path');
     }
 }
 

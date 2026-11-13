@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile;
 
 use React\ChildProcess\Process;
-use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
@@ -18,12 +17,16 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * Runs `infocmp` in a subprocess to detect TrueColor (Tc/RGB) support so the
  * blocking call never lands on the embedding application's event loop thread.
  *
- * Async settle paths NEVER delegate to the synchronous probe: every resolve
- * is composed from data already in hand — the environment-anchored detection
- * chain (a pure env read, no shell) plus whatever the child's stdout managed
- * to deliver. The single exception is when no event loop can be reached at
- * all: there the async surface degrades to its synchronous sibling, because
- * nothing can be blocked in a context that has no loop.
+ * The child is spawned ONLY on an explicitly supplied loop: pass a
+ * {@see LoopInterface} to run the infocmp leg asynchronously on it, and the
+ * async settle paths NEVER delegate to the synchronous probe mid-flight —
+ * every resolve is composed from data already in hand, the environment-
+ * anchored detection chain (a pure env read, no shell) plus whatever the
+ * child's stdout managed to deliver. Called WITHOUT a loop the promise
+ * resolves in-place through the bounded synchronous face ({@see Probe}),
+ * because a plain-CLI caller has no loop it runs: react/event-loop 1.x
+ * would otherwise lazily create its singleton and park the child there,
+ * settling only when somebody else runs that loop.
  *
  * A chain-only fallback resolves WITHOUT spawning when:
  * - Environment suppression (NO_COLOR / CLICOLOR=0 / TERM=dumb) is in force —
@@ -46,8 +49,8 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * `HOME`, which would steer the database lookup. Both child pipes drain
  * into keep-a-prefix 8 KiB buffers — past the ceiling the child is noise,
  * never an accumulator that grows with the pipe. Slots whose caller
- * abandoned the loop are reclaimed (child killed) by the next call — the
- * static slot table can therefore never wedge permanently.
+ * abandoned the loop are reclaimed — child killed AND reaped — by the next
+ * call, so the static slot table can never wedge permanently.
  *
  * Probe results are ADVISORY ONLY: the terminfo snapshot answers "what could
  * this terminal type advertise", not "what will the renderer emit" — callers
@@ -99,7 +102,8 @@ final class AsyncProbe
     /**
      * In-flight children keyed by an opaque token, each with the child handle
      * and its absolute deadline. Token (not counter) accounting is what makes
-     * both release paths — normal settle and stale reclaim — idempotent.
+     * every release path — normal settle, start-failure catch and stale
+     * reclaim — idempotent.
      *
      * @var array<int, array{process: Process, deadline: float}>
      */
@@ -111,9 +115,17 @@ final class AsyncProbe
     /**
      * Detect the terminal color profile asynchronously.
      *
+     * With an explicit {@see LoopInterface} the infocmp leg runs as a child
+     * on that loop; with none, the answer is the bounded synchronous face,
+     * resolved in-place (the caller has no loop to settle on, and the
+     * react/event-loop singleton must never be picked up implicitly — a
+     * child parked there settles only when someone else runs that loop).
+     *
+     * @param ?LoopInterface $loop Loop instance to spawn the child on; null resolves synchronously
+     *
      * @return PromiseInterface<ColorProfile> Resolves with the detected color profile
      */
-    public static function colorProfile(): PromiseInterface
+    public static function colorProfile(?LoopInterface $loop = null): PromiseInterface
     {
         $chain = DetectionChain::detect();
 
@@ -133,10 +145,12 @@ final class AsyncProbe
             return \React\Promise\resolve($profile);
         }
 
-        $loop = self::getLoop();
         if ($loop === null) {
-            // No event loop exists to run a child on — the synchronous probe
-            // is the full answer here, and blocking is moot without a loop.
+            // No loop handed in: spawn nothing on any loop. The bounded
+            // synchronous face is the full answer — chain plus the deadline-
+            // capped infocmp leg — and it settles the promise in-place
+            // instead of parking a child on the react/event-loop singleton
+            // that this caller may never run.
             return \React\Promise\resolve(Probe::colorProfile());
         }
 
@@ -167,12 +181,7 @@ final class AsyncProbe
         $deferred = new Deferred();
         $command = $infocmpPath . ' -1 ' . escapeshellarg($term);
 
-        $process = new Process($command, null, InfocmpBinary::childEnvironment($term));
         $token = self::$nextToken++;
-        self::$inFlight[$token] = [
-            'process' => $process,
-            'deadline' => \microtime(true) + self::PROBE_TIMEOUT_SECONDS + self::KILL_GRACE_SECONDS,
-        ];
         $settled = false;
         $release = static function () use ($token, &$settled): void {
             if ($settled) {
@@ -181,7 +190,38 @@ final class AsyncProbe
             $settled = true;
             unset(self::$inFlight[$token]);
         };
-        $process->start($loop);
+
+        // The constructor and start() are the only fallible calls in this
+        // whole function (react/child-process 0.6.7: ctor @throws LogicException
+        // when proc_open is disabled or Windows refuses pipes; start()
+        // @throws RuntimeException on a failed spawn) and they sit OUTSIDE
+        // every promise handler — uncaught, a throw would escape the promise
+        // contract AND wedge a booked slot until deadline-reclaim SIGKILLed
+        // a child that never existed. The cap slot is therefore booked only
+        // once the child object is real, and the catch releases whatever was
+        // booked. Fail-open to the chain, same shape as the cap arm.
+        $process = null;
+        try {
+            $process = new Process($command, null, InfocmpBinary::childEnvironment($term));
+            self::$inFlight[$token] = [
+                'process' => $process,
+                'deadline' => \microtime(true) + self::PROBE_TIMEOUT_SECONDS + self::KILL_GRACE_SECONDS,
+            ];
+            $process->start($loop);
+        } catch (\Throwable) {
+            $release();
+            // A launched-but-unwired child (the loop refused its stream
+            // watchers AFTER proc_open succeeded) still has to die here: no
+            // ladder listener ever attached to it. A spawn that never made
+            // it past proc_open left no child — vendor stores the boolean
+            // false in that case, so the handle is checked before signaling.
+            if ($process !== null && \is_resource((new \ReflectionProperty($process, 'process'))->getValue($process))) {
+                $process->terminate(defined('SIGKILL') ? \SIGKILL : 9);
+                $process->close();
+            }
+
+            return \React\Promise\resolve(self::settleFromChain($chain));
+        }
 
         // react/child-process 0.6 exposes the child pipes as stream PROPERTIES
         // (created inside start()); Process itself emits only 'exit'. Listening
@@ -278,9 +318,10 @@ final class AsyncProbe
     }
 
     /**
-     * Kill and forget slots whose deadline passed — these exist only when a
-     * caller spawned on the loop then never ran it, so no exit/error event
-     * could ever fire. Reclamation makes the cap self-healing.
+     * Kill AND reap slots whose deadline passed — these exist only when a
+     * caller spawned on a loop then never ran it, so no exit event could ever
+     * fire and the vendor's own reaper never runs either. Reclamation makes
+     * the cap self-healing.
      */
     private static function reclaimStaleSlots(): void
     {
@@ -291,22 +332,19 @@ final class AsyncProbe
             }
             unset(self::$inFlight[$token]);
             $slot['process']->terminate(defined('SIGKILL') ? \SIGKILL : 9);
-        }
-    }
-
-    /**
-     * Get the current event loop or null if not available.
-     */
-    private static function getLoop(): ?LoopInterface
-    {
-        if (!class_exists(Loop::class)) {
-            return null;
-        }
-
-        try {
-            return Loop::get();
-        } catch (\Throwable) {
-            return null;
+            // The kill alone is not the end of it: react/child-process reaps
+            // only through Process::close(), which its own code reaches from
+            // stream-close events on the child's loop (0.6.7: close() is
+            // public, closing each pipe then proc_close()-ing the handle).
+            // An abandoned loop never delivers those events, so terminate()
+            // without close() would strand a zombie plus its pipe fds for the
+            // life of the PHP process — every abandoned probe accumulating one
+            // — exactly what "dangling processes" cleanup promised and did
+            // not do. close() is idempotent (null handle guard inside), and
+            // proc_close() blocks only until the SIGKILLed child is reaped.
+            // On the Windows face the constructor refuses pipe children
+            // outright, so a slot here is always POSIX.
+            $slot['process']->close();
         }
     }
 }

@@ -45,13 +45,40 @@ final class AsyncProbeBoundedTest extends TestCase
     public function testAsyncSettlesNeverRunTheBlockingSyncProbe(): void
     {
         // DM2: the ONLY sanctioned call of the synchronous full probe is the
-        // getLoop()===null branch (nothing can block when there is no loop).
+        // null-$loop branch (a caller with no loop cannot block anything).
         // Every child-related settle path must compose from the chain.
         self::assertSame(
             1,
             substr_count(self::src(), 'Probe::colorProfile('),
             'async settles must come from the chain, not the blocking sync probe',
         );
+    }
+
+    public function testTheLoopContractIsExplicitNoSingletonPickupNoGetLoopSeam(): void
+    {
+        // CP-14: react/event-loop 1.x Loop::get() lazily CREATES its
+        // singleton, so an "is there a loop?" probe could never answer no
+        // and the documented sync fallback was dead code. The surface now
+        // takes the loop as a parameter and spawns only on what it is given;
+        // these needles keep the foot-gun from creeping back.
+        $src = self::src();
+        self::assertStringNotContainsString('Loop::get(', $src, 'the singleton must never be picked up implicitly');
+        self::assertStringNotContainsString('function getLoop', $src, 'the always-true getLoop() seam is deleted');
+        self::assertStringContainsString('colorProfile(?LoopInterface $loop = null)', $src, 'the loop is an explicit parameter');
+    }
+
+    public function testSpawnFailuresReleaseTheSlotAndReclaimReaps(): void
+    {
+        // CP-14 structural twins of the behavior pins in {@see AsyncProbeTest}:
+        // start() (and the constructor) sit in a try whose catch releases the
+        // booked slot, and stale reclamation calls the vendor reaper — a
+        // terminate()-only reclaim leaves a zombie per abandoned child, which
+        // is precisely what "kills children whose loop was abandoned" always
+        // promised and did not do.
+        $src = self::src();
+        self::assertStringContainsString('$process->start($loop);', $src);
+        self::assertStringContainsString('} catch (\Throwable) {', $src, 'fallible spawn calls must sit behind a catch');
+        self::assertStringContainsString('$slot[\'process\']->close();', $src, 'reclaim must reap, not only kill');
     }
 
     public function testChildStderrIsDrainedIntoABoundedBuffer(): void

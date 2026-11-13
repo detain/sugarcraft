@@ -209,13 +209,16 @@ final class InfocmpTermNameGateTest extends TestCase
 
     private function driveAsync(): ColorProfile
     {
+        // CP-14 contract: the child spawns only on a loop handed in, so the
+        // driver passes one explicitly and runs THAT — the react/event-loop
+        // singleton is never picked up implicitly anymore.
+        $loop = new \React\EventLoop\StreamSelectLoop();
         $resolved = null;
-        AsyncProbe::colorProfile()->then(static function (ColorProfile $profile) use (&$resolved): void {
+        AsyncProbe::colorProfile($loop)->then(static function (ColorProfile $profile) use (&$resolved): void {
             $resolved = $profile;
         });
 
         if ($resolved === null) {
-            $loop = \React\EventLoop\Loop::get();
             $watchdog = null;
             $poll = null;
             $watchdog = $loop->addTimer(10.0, static function () use ($loop, &$poll, &$watchdog): void {
