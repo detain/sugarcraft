@@ -22,6 +22,11 @@ namespace SugarCraft\Spring;
  * as `gravityYDown()` / `terminalGravityYDown()` for code that already maps
  * its own coordinates downward.
  *
+ * **Reduced motion.** Deliberately ignores REDUCE_MOTION: this class is NOT
+ * spring-based — it is a pure function of time with no target to snap *to*,
+ * so the reduced-motion gate belongs in the application (mirror of the note
+ * on {@see Spring::update()}).
+ *
  * ```php
  * $p = Projectile::new(
  *     deltaTime: Spring::fps(60),

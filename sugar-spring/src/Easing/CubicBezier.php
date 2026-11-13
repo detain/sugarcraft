@@ -32,6 +32,11 @@ use SugarCraft\Spring\Lang;
  * sampler refuses them (a Newton iteration has nothing honest to answer
  * with).
  *
+ * **Reduced motion.** Deliberately ignores REDUCE_MOTION: NOT spring-based,
+ * a pure sampler over a fixed curve with no target to snap *to* — the gate
+ * belongs in the application (mirror of the note on
+ * {@see \SugarCraft\Spring\Spring}).
+ *
  * @see https://www.w3.org/TR/css-easing-3/#cubic-bezier-algo
  * @see https://github.com/ai/easings.net (2022 redesign table)
  * @see https://30secondsofcode.org/css/s/easing-variables/ (pre-2022 table

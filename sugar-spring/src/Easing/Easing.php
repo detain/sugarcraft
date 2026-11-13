@@ -9,6 +9,10 @@ namespace SugarCraft\Spring\Easing;
  *
  * Each case applies an easing curve to a normalized time t (0.0 to 1.0).
  *
+ * **Reduced motion.** Deliberately ignores REDUCE_MOTION: NOT spring-based,
+ * pure functions of time with no target to snap *to* — the gate belongs in
+ * the application (mirror of the note on {@see \SugarCraft\Spring\Spring}).
+ *
  * @see https://easings.net/ for visual reference
  */
 enum Easing implements EasingFunction
