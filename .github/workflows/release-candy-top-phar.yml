@@ -195,9 +195,13 @@ jobs:
         # injection edits only the app manifest INSIDE THIS RUNNER; the
         # committed tree never carries it (path-repos inverse policy, pinned
         # by tools/tests). verify mode below re-proves nothing floated.
+        # WF-CURE (#60/#68 lineage): the sidecar is born OUTSIDE the worktree
+        # via --out — the old root-relative candy-top.pins.json relocation was
+        # itself an untracked path in build-phar Guard 2's repo-wide porcelain.
         run: |
           set -euo pipefail
-          php scripts/pin-siblings.php inject candy-top --root . --sha "$TAG_SHA" --ref "$TAG"
+          php scripts/pin-siblings.php inject candy-top --root . --sha "$TAG_SHA" --ref "$TAG" \
+            --out "${RUNNER_TEMP:-/tmp}/pins-candy-top.json"
         env:
           TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
           TAG: ${{ needs.gate.outputs.tag }}
@@ -219,7 +223,30 @@ jobs:
         run: |
           set -euo pipefail
           php scripts/pin-siblings.php verify candy-top
-          mv candy-top/sibling-pins.json candy-top.pins.json
+          # WF-CURE: no sidecar mv here — inject already parked it outside
+          # the worktree (--out, RUNNER_TEMP); verify reads only the lock.
+
+      - name: Restore app manifest + prove Guard 2 preconditions (WF-CURE)
+        # OD-14's inject rewrites the tracked candy-top/composer.json, and
+        # build-phar Guard 2's porcelain is REPO-WIDE (`git -C candy-top
+        # status --porcelain` reports every path of the monorepo), so the
+        # injected manifest froze the stable v* train from 2026-11-04 on
+        # (#101/#102). The injection has done its job by now — vendor holds
+        # the pinned bytes and build-phar reads vendor/composer/installed.json,
+        # never the manifest — so restore it, then prove Guard 2's exact
+        # precondition at the seat: the tripwire runs the same repo-wide
+        # porcelain, so a red names the lingering path here instead of a bare
+        # exit 2 from inside the build. The heavy arm below re-injects for its
+        # dev install. The guard itself stays untouched (ceiling-silence law).
+        run: |
+          set -euo pipefail
+          git checkout -- candy-top/composer.json
+          dirty="$(git -C candy-top status --porcelain)"
+          if [ -n "$dirty" ]; then
+            printf '%s\n' "$dirty"
+            echo "::error::tree still dirty for Guard 2 after manifest restore (repo-wide porcelain via -C candy-top)"
+            exit 1
+          fi
 
       - name: Build the archive
         run: |
@@ -280,7 +307,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$TAG_SHA" > dist/candy-top.phar.commit
-          mv candy-top.pins.json dist/candy-top.phar.pins.json
+          mv "${RUNNER_TEMP:-/tmp}/pins-candy-top.json" dist/candy-top.phar.pins.json
           test -s dist/candy-top.phar.pins.json
           cat dist/candy-top.phar.commit
         env:
@@ -339,11 +366,20 @@ jobs:
         # makes that sentence true). Dev dependencies are installed only now:
         # the artifact above was built from the --no-dev vendor, and
         # re-running install does not touch dist/.
+        # WF-CURE: the manifest was restored before the build, so re-inject
+        # the same closure (throwaway sidecar under RUNNER_TEMP) first — this
+        # dev install must resolve siblings from the tested bytes, never from
+        # the Packagist dev-master float that OD-14 closed for releases.
         run: |
           set -euo pipefail
+          php scripts/pin-siblings.php inject candy-top --root . --sha "$TAG_SHA" --ref "$TAG" \
+            --out "${RUNNER_TEMP:-/tmp}/heavypins-candy-top.json"
           cd candy-top
           composer install --prefer-dist --no-interaction --no-progress
           CANDY_TOP_PHAR="${GITHUB_WORKSPACE}/dist/candy-top.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
+        env:
+          TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       # Deliberately NO upload-artifact step: nothing consumes a run artifact
       # (the release job publishes dist/candy-top.phar and its sidecars

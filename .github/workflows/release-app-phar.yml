@@ -221,9 +221,13 @@ jobs:
         # injection edits only the app manifest INSIDE THIS RUNNER; the
         # committed tree never carries it (path-repos inverse policy, pinned
         # by tools/tests). verify mode below re-proves nothing floated.
+        # WF-CURE (#60/#68 lineage): the sidecar is born OUTSIDE the worktree
+        # via --out — a repo-root relocation would itself be an untracked path
+        # in build-phar Guard 2's repo-wide porcelain.
         run: |
           set -euo pipefail
-          php scripts/pin-siblings.php inject "$APP" --root . --sha "$TAG_SHA" --ref "$TAG"
+          php scripts/pin-siblings.php inject "$APP" --root . --sha "$TAG_SHA" --ref "$TAG" \
+            --out "${RUNNER_TEMP:-/tmp}/pins-$APP.json"
         env:
           APP: ${{ needs.gate.outputs.app }}
           TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
@@ -245,7 +249,32 @@ jobs:
         run: |
           set -euo pipefail
           php scripts/pin-siblings.php verify "$APP"
-          mv "$APP/sibling-pins.json" app-pins.json
+          # WF-CURE: no sidecar mv here — inject already parked it outside
+          # the worktree (--out, RUNNER_TEMP); verify reads only the lock.
+        env:
+          APP: ${{ needs.gate.outputs.app }}
+
+      - name: Restore app manifest + prove Guard 2 preconditions (WF-CURE)
+        # OD-14's inject rewrites the tracked $APP/composer.json, and build-phar
+        # Guard 2's porcelain is REPO-WIDE (`git -C $APP status --porcelain`
+        # reports every path of the monorepo), so the injected manifest froze
+        # the release train from 2026-11-04 on. The injection has done its job
+        # by now — vendor holds the pinned bytes and build-phar reads
+        # vendor/composer/installed.json, never the manifest — so restore it,
+        # then prove Guard 2's exact precondition at the seat: the tripwire
+        # runs the same repo-wide porcelain, so a red names the lingering path
+        # here instead of a bare exit 2 from inside the build. The heavy arm
+        # near the end re-injects for its dev install. The guard itself stays
+        # untouched (ceiling-silence law).
+        run: |
+          set -euo pipefail
+          git checkout -- "$APP/composer.json"
+          dirty="$(git -C "$APP" status --porcelain)"
+          if [ -n "$dirty" ]; then
+            printf '%s\n' "$dirty"
+            echo "::error::tree still dirty for Guard 2 after manifest restore (repo-wide porcelain via -C $APP)"
+            exit 1
+          fi
         env:
           APP: ${{ needs.gate.outputs.app }}
 
@@ -296,7 +325,7 @@ jobs:
           set -euo pipefail
           app="$APP"
           printf '%s\n' "$TAG_SHA" > "dist/$app.phar.commit"
-          mv app-pins.json "dist/$app.phar.pins.json"
+          mv "${RUNNER_TEMP:-/tmp}/pins-$APP.json" "dist/$app.phar.pins.json"
           test -s "dist/$app.phar.pins.json"
           cat "dist/$app.phar.commit"
         env:
@@ -389,6 +418,10 @@ jobs:
         # hardcoded roster. Dev dependencies install only here; the
         # artifact above was built from the --no-dev vendor, and re-running
         # install does not touch dist/.
+        # WF-CURE: the manifest was restored before the build, so re-inject
+        # the same closure (throwaway sidecar under RUNNER_TEMP) first — this
+        # dev install must resolve siblings from the tested bytes, never from
+        # the Packagist dev-master float that OD-14 closed for releases.
         run: |
           set -euo pipefail
           app="$APP"
@@ -396,12 +429,16 @@ jobs:
             echo "$app ships no PharCompatTest — heavy arm not applicable"
             exit 0
           fi
+          php scripts/pin-siblings.php inject "$APP" --root . --sha "$TAG_SHA" --ref "$TAG" \
+            --out "${RUNNER_TEMP:-/tmp}/heavypins-$APP.json"
           cd "$app"
           composer install --prefer-dist --no-interaction --no-progress
           env_var="$(printf '%s' "$app" | tr '[:lower:]-' '[:upper:]_')_PHAR"
           env "$env_var=${GITHUB_WORKSPACE}/dist/$app.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
         env:
           APP: ${{ needs.gate.outputs.app }}
+          TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       - name: Publish GitHub release
         # G6-P OD-8: --target names the explicit tagged SHA — a release

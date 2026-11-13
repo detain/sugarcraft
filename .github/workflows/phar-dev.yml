@@ -239,12 +239,16 @@ jobs:
         # sibling-pins.json sidecar naming every resolved sibling. The
         # committed tree never carries this mutation (it lives only in the
         # runner's copy), so the path-repos inverse policy stays green.
+        # WF-CURE (#60/#68 lineage): the sidecar is born OUTSIDE the worktree
+        # via --out — a repo-root relocation would itself show up as an
+        # untracked path in build-phar Guard 2's repo-wide porcelain.
         env:
           APP: ${{ matrix.app }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          php scripts/pin-siblings.php inject "$APP" --root . --sha "$SHA"
+          php scripts/pin-siblings.php inject "$APP" --root . --sha "$SHA" \
+            --out "${RUNNER_TEMP:-/tmp}/pins-$APP.json"
 
       - name: Install production dependencies
         run: |
@@ -264,8 +268,31 @@ jobs:
         run: |
           set -euo pipefail
           php scripts/pin-siblings.php verify "$APP"
-          # Move the sidecar out of the app dir before build-phar walks it.
-          mv "$APP/sibling-pins.json" "pins-$APP.json"
+          # WF-CURE: no sidecar mv here — inject already parked it outside
+          # the worktree (--out, RUNNER_TEMP); verify reads only the lock.
+
+      - name: Restore app manifest + prove Guard 2 preconditions (WF-CURE)
+        # OD-14's inject rewrites the tracked $APP/composer.json, and build-phar
+        # Guard 2's porcelain is REPO-WIDE (`git -C $APP status --porcelain`
+        # reports every path of the monorepo), so the injected manifest froze
+        # the whole dev fleet from 2026-11-04 on. The injection has done its
+        # job by now — vendor holds the pinned bytes and build-phar reads
+        # vendor/composer/installed.json, never the manifest — so restore it,
+        # then prove Guard 2's exact precondition at the seat: the tripwire
+        # runs the same repo-wide porcelain, so a red names the lingering path
+        # here instead of a bare exit 2 from inside the build. The guard
+        # itself stays untouched (ceiling-silence law).
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          git checkout -- "$APP/composer.json"
+          dirty="$(git -C "$APP" status --porcelain)"
+          if [ -n "$dirty" ]; then
+            printf '%s\n' "$dirty"
+            echo "::error::tree still dirty for Guard 2 after manifest restore (repo-wide porcelain via -C $APP)"
+            exit 1
+          fi
 
       - name: Build the archive
         id: build
@@ -295,7 +322,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$SHA" > "dist/$APP.phar.commit"
-          mv "pins-$APP.json" "dist/$APP.phar.pins.json"
+          mv "${RUNNER_TEMP:-/tmp}/pins-$APP.json" "dist/$APP.phar.pins.json"
           test -s "dist/$APP.phar.commit"
           test -s "dist/$APP.phar.pins.json"
 
