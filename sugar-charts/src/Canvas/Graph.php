@@ -276,13 +276,12 @@ final class Graph
     ): void {
         // sugar-charts-013: single-cell rune door.
         $rune = Rune::cell($rune, 'Graph fill rune');
-        if ($x0 > $x1) { [$x0, $x1] = [$x1, $x0]; }
-        if ($y0 > $y1) { [$y0, $y1] = [$y1, $y0]; }
-        for ($y = $y0; $y <= $y1; $y++) {
-            for ($x = $x0; $x <= $x1; $x++) {
-                $c->setCell($x, $y, $rune, $style);
-            }
-        }
+        // sugar-charts-113: delegate the paint to Canvas::fill, which
+        // measures the constant fill rune once instead of re-measuring
+        // per cell through setCell (coordinate swap and out-of-range
+        // clamping live in the delegate and match the old silent no-op
+        // semantics of off-canvas setCell calls).
+        $c->fill($x0, $y0, $x1, $y1, $rune, $style);
     }
 
     /**

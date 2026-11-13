@@ -265,9 +265,13 @@ final class Canvas implements \SugarCraft\Charts\Support\CellGrid
         $y0 = max(0, $y0);
         $x1 = min($this->width  - 1, $x1);
         $y1 = min($this->height - 1, $y1);
+        // sugar-charts-113: one measurement per fill call, not per cell —
+        // Width::of is memoised but still costs a hash+call 260k times on
+        // a 512² background.
+        $w = $rune === '' ? 1 : (Width::of($rune) >= 2 ? 2 : 1);
         for ($y = $y0; $y <= $y1; $y++) {
             for ($x = $x0; $x <= $x1; $x++) {
-                $this->placeCell($x, $y, $rune, $style, $rune === '' ? 1 : (Width::of($rune) >= 2 ? 2 : 1));
+                $this->placeCell($x, $y, $rune, $style, $w);
             }
         }
     }

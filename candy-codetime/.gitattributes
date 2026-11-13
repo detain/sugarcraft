@@ -1,0 +1,16 @@
+# Development-only material, excluded from dist archives (composer/GitHub
+# zips, ct-082). The runtime surface of this lib is src/, bin/, lang/,
+# composer.json and README.md; everything below is checkout scaffolding:
+# tests (dev), examples (documented from the repo, not shipped in the
+# package), tools/build-phar.php (run by the release
+# workflow from a git checkout, never from a dist), phpunit.xml and
+# CALIBER_LEARNINGS.md (tooling and notes no consumer loads).
+#
+# Fleet rollout of this pattern stays coordinated on the fleet
+# .gitattributes wave (route (b)); this file is lib-local by design.
+/tests/ export-ignore
+/.vhs/ export-ignore
+/examples/ export-ignore
+/tools/ export-ignore
+/phpunit.xml export-ignore
+/CALIBER_LEARNINGS.md export-ignore
