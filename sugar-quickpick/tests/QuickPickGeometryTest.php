@@ -140,6 +140,77 @@ final class QuickPickGeometryTest extends TestCase
         $this->assertGreaterThanOrEqual(2, \count($lines));
     }
 
+    public function testOverlayLandsAtOffsetColumnOverShortAndEmptyRows(): void
+    {
+        // S-01/-001: short and empty background rows must not drag the
+        // overlay left of its column; the prefix is padded to the exact
+        // offset width in display cells.
+        $h = QuickPick::new(['apple'])
+            ->setWindowWidth(12)
+            ->setWindowHeight(3)
+            ->setOffset(10, 0)
+            ->show();
+
+        $bg = "ab\n\n" . \str_repeat('.', 40);
+        $lines = \explode("\n", $h->view($bg));
+
+        $this->assertSame('ab' . \str_repeat(' ', 8) . '> ' . \str_repeat(' ', 10), $lines[0]);
+        $this->assertSame(\str_repeat(' ', 10) . \str_repeat('─', 12), $lines[1]);
+
+        foreach ($lines as $line) {
+            // Frame rows occupy columns 10..21; the long row keeps its
+            // untouched suffix, short rows never exceed the segment end.
+            $this->assertGreaterThanOrEqual(22, Width::of($line));
+        }
+        $this->assertSame(22, Width::of($lines[0]), 'a short background must not grow past the frame edge');
+        $this->assertSame(22, Width::of($lines[1]));
+    }
+
+    public function testWideHeaderNeverExceedsFrameWidth(): void
+    {
+        // S-01/-003: the header used to be pad-only, so a prompt+filter
+        // longer than the frame emitted an over-wide row that reached the
+        // terminal whenever no background column was waiting behind it.
+        $h = QuickPick::new(['x'])
+            ->setWindowWidth(20)
+            ->setWindowHeight(3)
+            ->setPrompt('a prompt far longer than twenty cells: ')
+            ->show();
+
+        $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 10, ''))));
+        foreach (\array_slice($lines, 0, 3) as $line) {
+            $this->assertSame(20, Width::of($line), 'header/separator/item rows clip+pad to the frame width');
+        }
+
+        $this->assertSame(
+            Width::padRight(Width::truncateAnsi('a prompt far longer than twenty cells: ', 20), 20),
+            $lines[0],
+            'the header keeps its left-most 20 cells'
+        );
+    }
+
+    public function testChromeRowsOverflowOnNarrowFramesAsDocumented(): void
+    {
+        // S-01: the marker/no-matches rows keep the documented pad-only
+        // stance — on a frame narrower than the text they spill instead of
+        // clipping; every OTHER row class stays exactly at frame width.
+        $items = [];
+        for ($i = 0; $i < 12; $i++) {
+            $items[] = new FilteredItem($i + 1, "item$i");
+        }
+        $scrolled = QuickPick::new($items)
+            ->setWindowWidth(8)
+            ->setWindowHeight(4)
+            ->show()
+            ->cursorBottom();
+
+        $lines = \explode("\n", $scrolled->view(\implode("\n", \array_fill(0, 6, ''))));
+        $this->assertSame(8, Width::of($lines[0]));
+        $this->assertSame(8, Width::of($lines[1]));
+        $this->assertSame(8, Width::of($lines[2]));
+        $this->assertMatchesRegularExpression('/↕ showing \d+-\d+ of 12/', $lines[3], 'marker text survives in full (pad-only)');
+    }
+
     public function testItemFormatterNeverReceivesUnguardedValuesOnAnyPath(): void
     {
         // M8: the auto-width path used to hand the formatter the RAW value

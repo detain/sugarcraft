@@ -209,9 +209,9 @@ final class QuickPick
      *
      * Two chrome states live in the item area: the overflow marker
      * '  ↕ showing %d-%d of %d' and, when a non-empty filter matches
-     * nothing, '  no matches'. Item rows are truncateAnsi-clipped to the
-     * frame; these two are pad-only, so on a frame narrower than the text
-     * they spill past the right border rather than clipping (cosmetic
+     * nothing, '  no matches'. Item and header rows are truncateAnsi-clipped
+     * to the frame; these two are pad-only, so on a frame narrower than the
+     * text they spill past the right border rather than clipping (cosmetic
      * overflow; clipping would change behavior — owner call).
      *
      * Clamped to a minimum of 2: below that no item row can ever exist
@@ -747,7 +747,11 @@ final class QuickPick
         // The header echoes the filter text typed at runtime and the prompt
         // (which hosts commonly seed from a previously selected history
         // entry). Both are untrusted: guard before they reach the frame.
-        $headerLine = Width::padRight(UntrustedText::guard($prompt . $filter), $winWidth);
+        // The header rides the same clip+pad contract as every other frame
+        // row: a prompt+filter longer than the frame must not emit a row
+        // wider than $winWidth (a pad-only header over an empty background
+        // bypassed even the composite's width guarantee).
+        $headerLine = Width::padRight(Width::truncateAnsi(UntrustedText::guard($prompt . $filter), $winWidth), $winWidth);
 
         $lines = [$headerLine];
 
@@ -1087,25 +1091,19 @@ final class QuickPick
      * bytes are not columns, and grapheme cluster counts for emoji-with-
      * modifier differ between PHP 8.3 and 8.4 ICU behaviour — grapheme_substr
      * on a styled string cut INSIDE the SGR sequence on 8.4.
+     *
+     * The replacement arrives pre-sized: buildOverlayLines() clips and pads
+     * every row to the frame width, so there is no re-measure/re-clamp pass
+     * here — the caller's $width is the truth it already enforced.
      */
     private function replaceSegment(string $line, int $x, int $width, string $replacement): string
     {
-        if ($line === '') {
-            return $replacement;
-        }
-
-        $prefix = $x > 0 ? Width::truncateAnsi($line, $x) : '';
+        // The prefix must occupy exactly $x display columns even when the
+        // background line ends earlier (or is empty): a short row would
+        // otherwise drag the whole overlay left of its column, and the
+        // former empty-line early return landed it at column 0 outright.
+        $prefix = $x > 0 ? Width::padRight(Width::truncateAnsi($line, $x), $x) : '';
         $suffix = Width::dropAnsi($line, $x + $width);
-
-        // The overlay is already truncated + padded to $width columns by the
-        // caller; clamp defensively so a mis-sized replacement can't shift
-        // the suffix out of column alignment.
-        $visible = Width::string($replacement);
-        if ($visible > $width) {
-            $replacement = Width::truncateAnsi($replacement, $width);
-        } elseif ($visible < $width) {
-            $replacement .= \str_repeat(' ', $width - $visible);
-        }
 
         return $prefix . $replacement . $suffix;
     }

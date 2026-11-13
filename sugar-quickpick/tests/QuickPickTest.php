@@ -643,16 +643,20 @@ final class QuickPickTest extends TestCase
 
     public function testReplaceSegmentWithEmptyLine(): void
     {
-        // When background line is empty (lineLen=0), replaceSegment returns
-        // the replacement string unchanged (early exit path).
+        // An empty background line must still honour the overlay column:
+        // the frame lands at $x, not at column 0 (S-01/-001). At x=0 the
+        // replacement is emitted unchanged.
         $h = $this->makeQuickPick()->show();
 
         $reflection = new \ReflectionClass($h);
         $method = $reflection->getMethod('replaceSegment');
         $method->setAccessible(true);
 
-        $result = $method->invoke($h, '', 0, 10, 'hello');
-        $this->assertSame('hello', $result);
+        $atOrigin = $method->invoke($h, '', 0, 10, 'hello');
+        $this->assertSame('hello', $atOrigin);
+
+        $atColumn = $method->invoke($h, '', 10, 10, 'hello     ');
+        $this->assertSame(\str_repeat(' ', 10) . 'hello     ', $atColumn);
     }
 
     public function testReplaceSegmentWithGraphemeCluster(): void
@@ -889,13 +893,14 @@ final class QuickPickTest extends TestCase
 
         // Frame 1: ASCII, help+status bars, offset, background padding, substring highlight.
         $frame1 = \base64_decode(
-            'Li4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLgouLj4gYSAgICAgICAgICAgICAg'
-            . 'ICAgICAgICAgICAgIC4uLi4uLi4uCi4u4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA'
-            . '4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSALi4uLi4u'
-            . 'Li4KICAxLiAbWzMzbWEbWzBtcHBsZSBwaWUgICAgICAgICAgICAgICAgCuKXjyAyLiBiG1szM21hG1sw'
-            . 'bW4bWzMzbWEbWzBtbhtbMzNtYRtbMG0gYnJlG1szM21hG1swbWQgICAgICAgICAgICAgCiAgNC4gZBtb'
-            . 'MzNtYRtbMG10ZSB0G1szM21hG1swbXJ0ICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAg'
-            . 'ICAgICAgICAgICAKRXNjOiBjbG9zZSDilIIgeDogbmF2ICAgICAgICAgICA=',
+            'Li4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLgouLj4gYSAgICAgICAg'
+            . 'ICAgICAgICAgICAgICAgICAgIC4uLi4uLi4uCi4u4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA'
+            . '4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA'
+            . '4pSA4pSA4pSA4pSALi4uLi4uLi4KICAgIDEuIBtbMzNtYRtbMG1wcGxlIHBpZSAgICAgICAg'
+            . 'ICAgICAgICAKICDil48gMi4gYhtbMzNtYRtbMG1uG1szM21hG1swbW4bWzMzbWEbWzBtIGJy'
+            . 'ZRtbMzNtYRtbMG1kICAgICAgICAgICAgIAogICAgNC4gZBtbMzNtYRtbMG10ZSB0G1szM21h'
+            . 'G1swbXJ0ICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg'
+            . 'IAogIEVzYzogY2xvc2Ug4pSCIHg6IG5hdiAgICAgICAgICAg',
         );
         $h1 = QuickPick::new([
             new FilteredItem(1, 'apple pie'),
