@@ -16,7 +16,7 @@ final class TestResultTest extends TestCase
     private function makeResult(array $cmds): TestResult
     {
         return new TestResult(
-            model: new \stdClass(),
+            model: new CounterModel(0),
             view: '',
             cmds: $cmds,
             output: '',

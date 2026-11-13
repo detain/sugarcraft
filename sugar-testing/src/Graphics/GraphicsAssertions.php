@@ -18,6 +18,11 @@ use SugarCraft\Testing\Lang;
  *
  * Pixel-from-PNG paths require ext-gd; every such entry point fails loudly when
  * it is missing rather than silently passing.
+ *
+ * Assertion-home note: this class extends PHPUnit's {@see Assert} (grandfathered
+ * so failures count as assertions automatically); new members keep the same
+ * static-invocation shape as the {@see \SugarCraft\Testing\Snapshot\Assertions}
+ * façade. See CALIBER_LEARNINGS.md 2026-11-13 for the three-homes ruling.
  */
 final class GraphicsAssertions extends Assert
 {

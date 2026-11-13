@@ -339,7 +339,7 @@ final class ReadmeSnippetsTest extends TestCase
         preg_match_all('/\$result->(\w+)/', $text, $matches);
 
         $known = get_object_vars(new TestResult(
-            new \stdClass(),
+            new CounterModel(0),
             '',
             [],
             '',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Testing;
 
 use PHPUnit\Framework\Assert;
+use SugarCraft\Core\Model;
 
 /**
  * The result of a {@see ProgramSimulator::run()} call.
@@ -21,7 +22,7 @@ use PHPUnit\Framework\Assert;
 final readonly class TestResult
 {
     /**
-     * @param object         $model            Final model after all messages processed
+     * @param Model          $model            Final model after all messages processed
      * @param string         $view             Last view() output string
      * @param list<\Closure> $cmds             All commands emitted during the run
      * @param string         $output           Concatenated view() output across
@@ -35,7 +36,7 @@ final readonly class TestResult
      *                                         Program stopping its loop)
      */
     public function __construct(
-        public object $model,
+        public Model $model,
         public string $view,
         public array $cmds,
         public string $output,
