@@ -225,4 +225,29 @@ final class ToastFailFastTest extends TestCase
             $this->assertStringContainsString('positive cells enable fit-content', $e->getMessage());
         }
     }
+
+    public function testCtorAndBothDoorsShareOneExpiryRuleAndWording(): void
+    {
+        // TST-VALID: both doors kept (friendlier subject), routed through
+        // Alert::EXPIRY_RULE so ctor and door messages cannot diverge.
+        $messages = [];
+        foreach ([
+            'ctor' => static fn () => new \SugarCraft\Toast\Alert(\SugarCraft\Toast\ToastType::Info, 'x', 5.0),
+            'alert' => static fn () => \SugarCraft\Toast\Toast::new()->alert('info', 'x', 5.0),
+            'progress' => static fn () => \SugarCraft\Toast\Toast::new()->progressToast('info', 'x', 0.5, 5.0),
+        ] as $door => $call) {
+            try {
+                $call();
+                $this->fail("{$door} accepted a sub-epoch expiry");
+            } catch (\InvalidArgumentException $e) {
+                $messages[$door] = $e->getMessage();
+            }
+        }
+        foreach ($messages as $door => $message) {
+            $this->assertStringContainsString(\SugarCraft\Toast\Alert::EXPIRY_RULE, $message, $door);
+            $this->assertStringContainsString('NAN/INF', $message, $door);
+        }
+        $this->assertStringStartsWith('alert() $expiresAt', $messages['alert']);
+        $this->assertStringStartsWith('Alert $expiresAt', $messages['ctor']);
+    }
 }

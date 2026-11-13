@@ -67,12 +67,8 @@ final class Alert
         public readonly bool $persistent = false,
         public readonly ?string $id = null,
     ) {
-        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < 1_000_000_000)) {
-            throw new \InvalidArgumentException(
-                'Alert $expiresAt must be a finite absolute epoch timestamp (microtime(true)); '
-                . 'NAN/INF never expire and a sub-epoch (duration-shaped) value is born expired — '
-                . "both silently; relative lifetimes belong in withDuration()/withExpiry() — got {$expiresAt}"
-            );
+        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < self::EPOCH_FLOOR)) {
+            throw new \InvalidArgumentException('Alert $expiresAt ' . self::EXPIRY_RULE . $expiresAt);
         }
         if ($progress !== null && !\is_finite($progress)) {
             throw new \InvalidArgumentException(
@@ -91,6 +87,19 @@ final class Alert
             }
         }
     }
+
+    /** Smallest value accepted as an absolute epoch timestamp (Sep 2001); below it a value is duration-shaped. */
+    public const EPOCH_FLOOR = 1_000_000_000;
+
+    /**
+     * Message tail shared by the constructor guard and Toast's alert()/
+     * progressToast() front doors, which prefix their own subject. One rule,
+     * one wording: the doors' friendlier prefix and the ctor's can never
+     * diverge on what is refused.
+     */
+    public const EXPIRY_RULE = 'must be a finite absolute epoch timestamp (microtime(true)); '
+        . 'NAN/INF never expire and a sub-epoch (duration-shaped) value is born expired — '
+        . 'both silently; relative lifetimes belong in withDuration()/$ttlSeconds/withExpiry() — got ';
 
     /**
      * Factory mirroring Action::new() / Toast::new() — Alert once had only

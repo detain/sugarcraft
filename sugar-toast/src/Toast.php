@@ -411,12 +411,8 @@ final class Toast
                 . 'relative lifetime name the same instant; supply exactly one'
             );
         }
-        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < 1_000_000_000)) {
-            throw new \InvalidArgumentException(
-                'alert() $expiresAt must be a finite absolute epoch timestamp (microtime(true)); '
-                . 'NAN/INF never expire, and a relative duration belongs in '
-                . "withDuration() or \$ttlSeconds — got {$expiresAt}"
-            );
+        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < Alert::EPOCH_FLOOR)) {
+            throw new \InvalidArgumentException('alert() $expiresAt ' . Alert::EXPIRY_RULE . $expiresAt);
         }
         if ($ttlSeconds !== null) {
             $expiresAt = \microtime(true) + $ttlSeconds;
@@ -457,12 +453,8 @@ final class Toast
                 . 'relative lifetime name the same instant; supply exactly one'
             );
         }
-        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < 1_000_000_000)) {
-            throw new \InvalidArgumentException(
-                'progressToast() $expiresAt must be a finite absolute epoch timestamp (microtime(true)); '
-                . 'NAN/INF never expire, and a relative duration belongs in '
-                . "withDuration() or \$ttlSeconds — got {$expiresAt}"
-            );
+        if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < Alert::EPOCH_FLOOR)) {
+            throw new \InvalidArgumentException('progressToast() $expiresAt ' . Alert::EXPIRY_RULE . $expiresAt);
         }
         if ($ttlSeconds !== null) {
             $expiresAt = \microtime(true) + $ttlSeconds;
