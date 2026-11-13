@@ -475,6 +475,14 @@ final class Game implements Model
             if ($this->crashed === true) {
                 return [$this, null];
             }
+            // flappy-69 (finding -069): the notice screen hides the world —
+            // a stray space behind it must neither start the run nor bank a
+            // flap the bird will spend the instant the viewport recovers.
+            // Flaps are inert while too-small (q/r stay live on purpose:
+            // quitting and restarting are correct on any posture).
+            if ($this->tooSmall() === true) {
+                return [$this, null];
+            }
             $isFlap = $msg->ctrl === false      // m1 (r2): chords are inert (see quit arm)
                 && ($msg->type === KeyType::Space
                 || $msg->type === KeyType::Enter   // M20: Enter flaps too

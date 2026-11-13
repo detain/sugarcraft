@@ -763,6 +763,29 @@ final class GameTest extends TestCase
         $this->assertSame($a->subscriptions(), $b->subscriptions(), 'the live set must be one memoised object');
     }
 
+    /**
+     * flappy-69 (finding -069): the too-small notice hides the world, so a
+     * flap pressed behind it must be inert — it may neither start the run
+     * nor bank a kick the bird would spend the moment the viewport grows
+     * back. Shrink, flap, grow: the board must still be on its ready card.
+     */
+    public function testFlapsBehindTheTooSmallNoticeAreInert(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        [$g, ] = $g->update(new WindowSizeMsg(40, 10));
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertFalse($g->started, 'a flap behind the notice must not start the run');
+        [$g, ] = $g->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertFalse($g->started);
+
+        [$grown, ] = $g->update(new WindowSizeMsg(80, 24));
+        $this->assertFalse($grown->started, 'flight must NOT be in progress after growing back');
+        $this->assertStringContainsString('to start', $grown->view(), 'the ready card still offers the ready hints');
+        // q/r stay live on any posture: quitting a notice screen works.
+        [, $cmd] = $grown->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotNull($cmd);
+    }
+
     public function testRestartWhileAliveEmitsNoFreshTimerChain(): void
     {
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
