@@ -114,6 +114,28 @@ if ($unknown !== []) {
     exit(2);
 }
 
+// flappy-01 (finding -001): the framed world writes alt-screen and truecolor
+// bytes; a piped or redirected launch used to paint escape-sequence garbage
+// into files and pipes. The in-band NoTty refusal cannot help that shape —
+// sugar-core's bootstrap may already have emitted alternate-screen enter
+// bytes before the first frame (README, Terminal requirements). So the CLI
+// answers once, before any Program object and before any side effect (the
+// legacy migration below): stdout must be a terminal. The documented force
+// rungs of ColorProfile::detect() carry the override — a truthy
+// CLICOLOR_FORCE/FORCE_COLOR means "emit escapes anyway" and plays into the
+// pipe on purpose. The diagnostic flags answer above, so --version/--help
+// stay pipeable.
+$forceRung = static function (string $name): bool {
+    $value = getenv($name);
+
+    return $value !== false && $value !== '' && $value !== '0' && strtolower($value) !== 'false';
+};
+if (!stream_isatty(STDOUT) && !$forceRung('CLICOLOR_FORCE') && !$forceRung('FORCE_COLOR')) {
+    fwrite(STDERR, "candy-flappy: this game needs an interactive terminal on stdout.\n"
+        . "Run it in a terminal window, or set FORCE_COLOR=1 to draw into a pipe on purpose.\n");
+    exit(1);
+}
+
 // One-time migration of the pre-rename high-score directory (plan_rename.md R4.4).
 // Mirrors Game::getDefaultConfigDir()'s base resolution (XDG_CONFIG_HOME, then
 // HOME/.config); when neither resolves the migration is skipped silently — Game

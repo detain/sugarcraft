@@ -109,10 +109,13 @@ simply unused.
   back and the game resumes in place; `r` never snaps the layout away.
 - **`TERM=dumb` / no TTY** (`ColorProfile::NoTty`) — candy-flappy refuses to
   play with a plain message instead of spraying escape codes into a terminal
-  that cannot render them. The non-TTY check runs FIRST inside
-  `ColorProfile::detect()`, so piped stdout with `NO_COLOR` set lands here —
-  the plain NoTty refusal, not the ASCII posture. That refusal frame is
-  flappy's own output; sugar-core's program bootstrap may still have emitted
+  that cannot render them. A launch whose stdout is not a terminal (pipe,
+  redirect, `/dev/null`) is refused by the CLI itself before anything is
+  drawn: a two-line message on stderr, exit 1, zero bytes on stdout.
+  `--version` / `--help` still answer when piped, and a truthy
+  `CLICOLOR_FORCE` / `FORCE_COLOR` plays into the pipe on purpose. A real
+  terminal reporting `TERM=dumb` gets the in-band NoTty refusal frame
+  instead; sugar-core's program bootstrap may still have emitted
   alternate-screen enter bytes ahead of it.
 - **ASCII-only terminal** (`ColorProfile::Ascii`, e.g. `NO_COLOR` on a real
   tty) — same layout in plain glyphs: `+--+` borders, `#` pipes, no emoji,
@@ -231,8 +234,9 @@ defaults could not produce.
 - To reset the leaderboard: `rm ~/.config/.candy-flappy/scores.json`.
 - Colour posture follows `sugar-core`'s `ColorProfile::detect()`:
   `NO_COLOR` forces the ASCII posture; `CLICOLOR_FORCE` / `FORCE_COLOR` can
-  force colour on where detection would demure; a non-TTY stdout or
-  `TERM=dumb` gets the plain refusal screen.
+  force colour on where detection would demure (and let the CLI draw into a
+  pipe on purpose); a non-TTY stdout is refused by the CLI before launch
+  (stderr, exit 1), and a `TERM=dumb` terminal gets the plain refusal screen.
 
 ## Dependencies
 
