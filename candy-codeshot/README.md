@@ -163,7 +163,10 @@ slot after the mode is a colour-space id and not the red component) — and both
 resolve to the same `#rrggbb`. SGR codes the renderers deliberately do not
 map: `reverse` (7), `hidden` (8), `strikethrough` (9), `dim` (2), `blink` (5),
 `rapid blink` (6), `fringe` (21), `overlined` (53) — among others — they are
-parsed and ignored.
+parsed and ignored. The same doctrine covers an out-of-range palette index:
+`38;5;N` / `48;5;N` with N outside 0..255 changes no colour, matching xterm —
+and the public table helper `AnsiParser::xterm256ToHex()` refuses such an
+index with `InvalidArgumentException` rather than clamping or guessing.
 
 ```php
 $svg = SvgRenderer::dark()->render("\x1b[31merror:\x1b[0m something broke");

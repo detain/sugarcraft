@@ -84,10 +84,27 @@ final class AnsiParser
         return $segments;
     }
 
+    /**
+     * The colour at xterm-256 palette index `$i`.
+     *
+     * The contract is the table itself: indices 0..255, nothing else. An
+     * out-of-table index is a CALLER ERROR, not a lookup to be guessed at
+     * (cs-23, -032): silently clamping or falling back used to let a
+     * renderer-killing `#2b02b02b0` out of a public API, and `-1` a
+     * historic white. Dispatch resolves the other half of the same
+     * decision (SgrStateHandler::paletteColour ignores out-of-range
+     * params exactly like xterm does); this helper owns the door.
+     *
+     * @throws InvalidArgumentException when $i is outside 0..255
+     */
     public static function xterm256ToHex(int $i): string
     {
+        if ($i < 0 || $i > 255) {
+            throw new \InvalidArgumentException("xterm-256 palette index out of range: {$i} (the table has 256 entries, 0..255)");
+        }
+
         if ($i < 16) {
-            return self::ANSI16[$i] ?? '#ffffff';
+            return self::ANSI16[$i];
         }
         if ($i >= 232) {
             $g = 8 + ($i - 232) * 10;

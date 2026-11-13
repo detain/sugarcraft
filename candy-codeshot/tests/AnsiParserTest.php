@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot\Tests;
 
 use SugarCraft\CodeShot\AnsiParser;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class AnsiParserTest extends TestCase
@@ -132,6 +133,76 @@ final class AnsiParserTest extends TestCase
             $hex = AnsiParser::xterm256ToHex($i);
             $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $hex, "Index $i produced '$hex'");
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // cs-23 out-of-range colour contract (one decision, two surfaces):
+    // the public helper THROWS outside 0..255, the dispatch IGNORES
+    // out-of-range params like xterm does — never a clamped repaint, never
+    // the malformed `#2b02b02b0` the old unguarded table emitted.
+    // -------------------------------------------------------------------------
+
+    public static function outOfTableIndicesProvider(): array
+    {
+        // The -032 measurements: 300 produced #2b02b02b0 (a 9-digit
+        // renderer-killer), -1 produced #ffffff (historic silent default),
+        // 256 walked off the end of the $levels row.
+        return ['negative five' => [-5], 'historic minus one' => [-1], 'one past the table' => [256], 'the measured repro' => [300], 'parser ceiling' => [65535]];
+    }
+
+    #[DataProvider('outOfTableIndicesProvider')]
+    public function testPublicPaletteHelperRefusesIndicesOutsideTheTable(int $index): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('xterm-256 palette index out of range');
+        AnsiParser::xterm256ToHex($index);
+    }
+
+    public function testEveryTableIndexProducesASixDigitHex(): void
+    {
+        // The whole table, not a sample: 256 entries, each a CSS colour.
+        for ($i = 0; $i <= 255; $i++) {
+            $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', AnsiParser::xterm256ToHex($i), "Index $i");
+        }
+    }
+
+    public function testOutOfRangePaletteParamIsParsedAndIgnored(): void
+    {
+        // xterm ignores `38;5;999` instead of repainting #eeeeee, and the
+        // README doctrine for such params is "parsed and ignored" — the
+        // old dispatch clamp was the undisclosed divergence (-066).
+        // The text still flows; only the colour is dropped.
+        foreach ([999, 256, 300] as $index) {
+            $segments = AnsiParser::parse("\x1b[38;5;{$index}mpayload");
+            $this->assertCount(1, $segments);
+            $this->assertSame('payload', $segments[0]->text);
+            $this->assertNull($segments[0]->fg, "38;5;{$index} must change no colour");
+
+            $backgrounds = AnsiParser::parse("\x1b[48;5;{$index}mpayload");
+            $this->assertNull($backgrounds[0]->bg, "48;5;{$index} must change no colour");
+        }
+    }
+
+    public function testOutOfRangeGroupedPaletteParamIsParsedAndIgnored(): void
+    {
+        // The ECMA-48 grouped spelling takes the same decision.
+        $segments = AnsiParser::parse("\x1b[38:5:999mpayload");
+        $this->assertNull($segments[0]->fg, '38:5:999 must change no colour');
+
+        // A valid neighbour still paints — the refusal is range-based, not
+        // a blanket drop of extended colours after a bad param.
+        $valid = AnsiParser::parse("\x1b[38;5;255mpaint");
+        $this->assertSame('#eeeeee', $valid[0]->fg);
+        $zero = AnsiParser::parse("\x1b[38;5;0mpaint");
+        $this->assertSame('#000000', $zero[0]->fg);
+    }
+
+    public function testIgnoredOutOfRangeParamDoesNotLeakIntoFollowingText(): void
+    {
+        // After the ignored param the stream keeps its prior state: the
+        // following explicit colour still applies normally.
+        $segments = AnsiParser::parse("\x1b[38;5;999m\x1b[31mred");
+        $this->assertSame('#cd0000', $segments[count($segments) - 1]->fg);
     }
     public function testHorizontalTabExpandsToTheNextEightCellStop(): void
     {

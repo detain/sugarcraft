@@ -404,10 +404,21 @@ final class SgrStateHandler implements SubparamsAwareHandler
         return [null, $start];
     }
 
-    /** An xterm-256 index, clamped into the table the renderer owns. */
-    private static function paletteColour(int $index): string
+    /**
+     * An xterm-256 palette colour, or null — meaning NO colour change —
+     * when the index is outside the 256-entry table.
+     *
+     * xterm ignores an out-of-range `38;5;N` / `48;5;N` parameter rather
+     * than repainting with the clamped neighbour, and the README's own
+     * doctrine for such params is "parsed and ignored" (cs-23, -066: the
+     * old 0..255 clamp was the undisclosed divergence — `38;5;999`
+     * painted #eeeeee, a colour nobody asked for). The public door to the
+     * same table is AnsiParser::xterm256ToHex(), which throws; one
+     * decision, two honest surfaces.
+     */
+    private static function paletteColour(int $index): ?string
     {
-        return AnsiParser::xterm256ToHex(self::clampComponent($index));
+        return ($index >= 0 && $index <= 255) ? AnsiParser::xterm256ToHex($index) : null;
     }
 
     /**
