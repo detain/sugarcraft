@@ -17,21 +17,35 @@ use SugarCraft\Widgets\Stopwatch\TickMsg;
  */
 final class StopwatchReviewPinsTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        $r = new \ReflectionClass(Stopwatch::class);
+        $p = $r->getProperty('nextId');
+        $p->setAccessible(true);
+        $p->setValue(null, 0);
+        Stopwatch::setClock(null);
+    }
+
     public function testTickFromStoppedGenerationIsRefused(): void
     {
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
         [$running, $cmd] = Stopwatch::new(1.0)->start();
         self::assertNotNull($cmd);
 
         // In-flight tick captured before a stop/start flip (same id, older
-        // epoch) must not increment the restarted chain.
+        // epoch) must not advance the restarted chain — and the settled
+        // reading is now DERIVED wall time (W-37), scripted here at the
+        // start instant => 0.0.
         $stale = self::unwrap($cmd);
         [$afterFlip, $again] = $running->stop()->start();
         [$settled] = $afterFlip->update($stale);
-        self::assertSame(0.0, $settled->elapsed);
+        self::assertSame(0.0, $settled->elapsed());
 
         $fresh = self::unwrap($again);
+        $now += 1.0;
         [$counted] = $afterFlip->update($fresh);
-        self::assertSame(1.0, $counted->elapsed);
+        self::assertSame(1.0, $counted->elapsed());
     }
 
     public function testEpochAdvancesOncePerFlipIntoRunning(): void

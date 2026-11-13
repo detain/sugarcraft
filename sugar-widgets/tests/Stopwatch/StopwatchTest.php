@@ -17,12 +17,13 @@ final class StopwatchTest extends TestCase
         $prop = $reflection->getProperty('nextId');
         $prop->setAccessible(true);
         $prop->setValue(null, 0);
+        Stopwatch::setClock(null);
     }
 
     public function testInitialState(): void
     {
         $s = Stopwatch::new();
-        $this->assertSame(0.0, $s->elapsed);
+        $this->assertSame(0.0, $s->elapsed());
         $this->assertFalse($s->isRunning());
         $this->assertSame("0:00 \x1b[2mnot started\x1b[0m", $s->view());
     }
@@ -36,9 +37,15 @@ final class StopwatchTest extends TestCase
 
     public function testTickIncrements(): void
     {
+        // W-37 semantics: a tick folds in REAL scripted seconds (clock
+        // seam), not one interval per tick. At scripted 1.0 s/tick the
+        // numbers coincide with the old tick-count world exactly.
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
         [$s, ] = Stopwatch::new()->start();
+        $now = 1001.0;
         [$next, $cmd] = $s->update(new TickMsg($s->id, $s->epoch));
-        $this->assertSame(1.0, $next->elapsed);
+        $this->assertSame(1.0, $next->elapsed());
         $this->assertNotNull($cmd);
     }
 
@@ -66,15 +73,20 @@ final class StopwatchTest extends TestCase
         [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
         [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
         $reset = $s->reset();
-        $this->assertSame(0.0, $reset->elapsed);
+        $this->assertSame(0.0, $reset->elapsed());
         $this->assertFalse($reset->isRunning());
     }
 
     public function testCustomInterval(): void
     {
+        // interval is the REPAINT cadence; elapsed is real time (W-37) —
+        // scripted 0.5 s between start and the first tick.
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
         [$s, ] = Stopwatch::new(0.5)->start();
+        $now += 0.5;
         [$next, ] = $s->update(new TickMsg($s->id, $s->epoch));
-        $this->assertSame(0.5, $next->elapsed);
+        $this->assertSame(0.5, $next->elapsed());
     }
 
     public function testZeroIntervalRejected(): void
@@ -101,8 +113,11 @@ final class StopwatchTest extends TestCase
 
     public function testElapsedAccessor(): void
     {
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
         $s = Stopwatch::new(0.5);
         [$s, ] = $s->start();
+        $now += 0.5;
         [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
         $this->assertSame(0.5, $s->elapsed());
     }
@@ -154,13 +169,18 @@ final class StopwatchTest extends TestCase
 
     public function testViewFormatsElapsedTime(): void
     {
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
         $s = Stopwatch::new(1.0);
         [$s, ] = $s->start();
+        $now += 1.0;
         [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        $now += 1.0;
         [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
         $view = $s->view();
-        // After 2 ticks at 1.0 interval = 2.0 seconds elapsed
-        $this->assertNotSame('0:00', $view);
+        // Scripted 2.0 true seconds elapsed; running carries no state tag
+        // (W-19 zero-move contract) — the exact bytes pin.
+        $this->assertSame('0:02', $view);
     }
 
     public function testNegativeIntervalRejected(): void
@@ -203,9 +223,94 @@ final class StopwatchTest extends TestCase
         $this->assertSame(3, $legacy->id);
     }
 
+    // ─── W-37 wall-clock truth ──────────────────────────────────────
+
+    public function testIrregularCadenceMeasuresTrueTimeNotTickCount(): void
+    {
+        // Binary-exact scripted advances (0.5+2.25+0.125+1.875+7.25 = 12.0);
+        // the old tick-count accumulator would have reported 5 × interval
+        // = 5.0 for the SAME five ticks.
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
+        [$s, ] = Stopwatch::new(1.0)->start();
+        foreach ([0.5, 2.25, 0.125, 1.875, 7.25] as $step) {
+            $now += $step;
+            [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        }
+        $this->assertSame(12.0, $s->elapsed());
+    }
+
+    public function testStalledLoopGapCountsFully(): void
+    {
+        // Five seconds of real time pass between two ticks — the whole
+        // gap counts (a tick-count world charged exactly one interval).
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
+        [$s, ] = Stopwatch::new(1.0)->start();
+        $now += 5.0;
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        $this->assertSame(5.0, $s->elapsed());
+    }
+
+    public function testStopFreezesTheReadingAndHidesTheGap(): void
+    {
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
+        [$s, ] = Stopwatch::new(1.0)->start();
+        $now += 2.0;
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        $stopped = $s->stop();
+        $now += 100.0; // a long idle stretch while stopped
+        $this->assertSame(2.0, $stopped->elapsed());
+        $this->assertSame("0:02 \x1b[2mpaused\x1b[0m", $stopped->view());
+        [$same, $cmd] = $stopped->update(new TickMsg($stopped->id, $stopped->epoch));
+        $this->assertSame($stopped, $same);
+        $this->assertNull($cmd);
+    }
+
+    public function testResumeExcludesTheStoppedGap(): void
+    {
+        // start@1000, one tick at 1001 (1.0), stop freezes the base; the
+        // resume happens at 1101 — the 100s gap must NOT count; one tick
+        // one second after resume reads 2.0.
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
+        [$s, ] = Stopwatch::new(1.0)->start();
+        $now = 1001.0;
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        $s = $s->stop();
+        $now = 1101.0;                        // 100s spent while stopped
+        [$s, ] = $s->start();                 // resume re-baselines at 1101
+        $now = 1102.0;
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        $this->assertSame(2.0, $s->elapsed(), 'the stopped gap is excluded; live time after resume counts');
+        $frozen = $s->stop();
+        $now += 50.0;
+        $this->assertSame(2.0, $frozen->elapsed());
+    }
+
     public function testCrossWidgetTickIsFatalNotSilent(): void
     {
         $this->expectException(\TypeError::class);
         Stopwatch::new()->update(new \SugarCraft\Widgets\Timer\TimerTick(0));
+    }
+
+    public function testLateTicksNeverCompoundIntoExtraSeconds(): void
+    {
+        // The old drift class: re-arming after consumption made every
+        // late tick silently worth MORE than it measured. Under the
+        // wall-clock law two scripted seconds charged is two seconds,
+        // no matter how many extra repaints happen in between.
+        $now = 1000.0;
+        Stopwatch::setClock(static function () use (&$now): float { return $now; });
+        [$s, ] = Stopwatch::new(1.0)->start();
+        $now += 1.0;
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        $now += 0.0;                          // immediate repaint, +0 real time
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        $this->assertSame(1.0, $s->elapsed(), 'a zero-time repaint adds zero seconds');
+        $now += 1.0;
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        $this->assertSame(2.0, $s->elapsed());
     }
 }

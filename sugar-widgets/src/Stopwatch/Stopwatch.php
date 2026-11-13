@@ -29,14 +29,38 @@ final class Stopwatch implements Model
      */
     private static int $nextId = 0;
 
+    /**
+     * Testing-only clock seam (W-37): when set, every wall-clock read
+     * goes through this closure instead of `microtime(true)`, so suites
+     * script irregular cadence deterministically. Never set in production.
+     */
+    private static ?\Closure $clock = null;
+
+    public static function setClock(?\Closure $clock): void
+    {
+        self::$clock = $clock;
+    }
+
+    private static function now(): float
+    {
+        $clock = self::$clock;
+        return $clock !== null ? (float) $clock() : \microtime(true);
+    }
+
     public readonly int $id;
 
+    /**
+     * @param float $accumulated  seconds frozen into the base reading
+     * @param float|null $resumedAt  wall-clock instant the current running
+     *        segment started (null whenever not running)
+     */
     private function __construct(
-        public readonly float $elapsed,
+        public readonly float $accumulated,
         public readonly float $interval,
         public readonly bool $running,
         ?int $id = null,
         public readonly int $epoch = 0,
+        public readonly ?float $resumedAt = null,
     ) {
         $this->id = $id ?? ++self::$nextId;
     }
@@ -64,7 +88,10 @@ final class Stopwatch implements Model
             throw new \TypeError('TimerTick fed to Stopwatch::update(); ticks are per-widget.');
         }
         if ($msg instanceof StopwatchTick && $msg->id === $this->id && $msg->epoch === $this->epoch && $this->running) {
-            $next = $this->copy(elapsed: $this->elapsed + $this->interval);
+            // Repaint driver only (W-37): fold the real seconds since the
+            // last re-baseline into the frozen base, then re-baseline.
+            $now  = self::now();
+            $next = $this->copy(accumulated: $this->elapsed(), resumedAt: $now, resumedAtSet: true);
             return [$next, $next->tick()];
         }
         return [$this, null];
@@ -73,7 +100,7 @@ final class Stopwatch implements Model
     public function view(): string
     {
         $label = $this->stateLabel();
-        $time  = Timer::format($this->elapsed);
+        $time  = Timer::format($this->elapsed());
         return $label === '' ? $time : $time . ' ' . Style::new()->dim()->render($label);
     }
 
@@ -87,7 +114,7 @@ final class Stopwatch implements Model
         if ($this->running) {
             return '';
         }
-        return $this->elapsed <= 0.0
+        return $this->elapsed() <= 0.0
             ? Lang::t('stopwatch.not_started_tag')
             : Lang::t('stopwatch.paused_tag');
     }
@@ -106,18 +133,19 @@ final class Stopwatch implements Model
         if ($this->running) {
             return [$this, null];
         }
-        $next = $this->copy(running: true, epoch: $this->epoch + 1);
+        $next = $this->copy(running: true, epoch: $this->epoch + 1, resumedAt: self::now(), resumedAtSet: true);
         return [$next, $next->tick()];
     }
 
     public function stop(): self
     {
-        return $this->copy(running: false);
+        // Freeze the running segment into the base on the way out.
+        return $this->copy(accumulated: $this->elapsed(), running: false);
     }
 
     public function reset(): self
     {
-        return $this->copy(elapsed: 0.0, running: false);
+        return $this->copy(accumulated: 0.0, running: false);
     }
 
     /**
@@ -140,12 +168,21 @@ final class Stopwatch implements Model
     public function id(): int { return $this->id; }
 
     /**
-     * Elapsed seconds as a tick-count accumulator (ticks consumed ×
-     * {@see $interval}) — NOT wall-clock: it advances only while update()
-     * consumes StopwatchTicks, so a stalled loop or a stopped chain freezes it
-     * regardless of real time passed (M14).
+     * Elapsed seconds measured against the WALL CLOCK (W-37, replaces the
+     * old tick-count accumulator): while running, the frozen base plus the
+     * real time since {@see $resumedAt}; frozen otherwise. Ticks are pure
+     * repaint drivers — a stalled loop keeps accruing real seconds while
+     * running, and start/stop transitions are the only thing that moves
+     * the base. Mirrors charmbracelet/bubbles stopwatch, which adds real
+     * message-time deltas.
      */
-    public function elapsed(): float { return $this->elapsed; }
+    public function elapsed(): float
+    {
+        if (!$this->running || $this->resumedAt === null) {
+            return $this->accumulated;
+        }
+        return $this->accumulated + (self::now() - $this->resumedAt);
+    }
 
     /**
      * Tick cadence in seconds. Mirrors charmbracelet/bubbles `Interval` field
@@ -173,17 +210,20 @@ final class Stopwatch implements Model
      * factory, and this one method only.
      */
     private function copy(
-        ?float $elapsed = null,
+        ?float $accumulated = null,
         ?float $interval = null,
         ?bool $running = null,
         ?int $epoch = null,
+        ?float $resumedAt = null,
+        bool $resumedAtSet = false,
     ): self {
         return new self(
-            $elapsed  ?? $this->elapsed,
-            $interval ?? $this->interval,
-            $running  ?? $this->running,
+            $accumulated ?? $this->accumulated,
+            $interval    ?? $this->interval,
+            $running     ?? $this->running,
             $this->id,
-            $epoch    ?? $this->epoch,
+            $epoch       ?? $this->epoch,
+            $resumedAtSet ? $resumedAt : $this->resumedAt,
         );
     }
 
