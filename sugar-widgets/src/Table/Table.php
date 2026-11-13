@@ -171,7 +171,16 @@ final class Table implements Model
         };
     }
 
-    /** Render the component as a multi-line ANSI string. */
+    /**
+     * Render the component as a multi-line ANSI string.
+     *
+     * Emptiness is silent: with no columns configured this returns the
+     * empty string, and with columns but no rows it paints the header
+     * lines only — no placeholder marks "nothing here" (Table's own
+     * pagination renders '1/0'-style arabic text for zero pages; that is
+     * a Paginator affordance, not an emptiness signal). A host that must
+     * announce emptiness renders its own row above/below.
+     */
     public function view(): string
     {
         $cols = $this->columnWidths();

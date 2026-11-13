@@ -225,7 +225,15 @@ final class Tree implements Model
         return [$this, null];
     }
 
-    /** Render the component as a multi-line ANSI string. */
+    /**
+     * Render the component as a multi-line ANSI string.
+     *
+     * Emptiness is silent: a tree with no visible rows (no roots, or all
+     * branches collapsed) returns the empty string — nothing here marks
+     * "no items", so a host that must announce emptiness renders its own
+     * placeholder (the parked `emptyPlaceholder` concept awaits an owner
+     * ruling; W-40/063).
+     */
     public function view(): string
     {
         $rows = $this->visibleRows();
