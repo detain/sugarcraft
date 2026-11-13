@@ -259,13 +259,25 @@ final class Game implements Model
     public const OVER_CRUSHED = 'crushed';
 
     /**
-     * Construct a new Game from the current state with optional field overrides.
-     * Mirrors the canonical SugarCraft immutable/fluent pattern (see
-     * sugar-style/src/Style.php, sugar-core/src/Concerns/Mutable.php).
+     * Re-mint this immutable model with field overrides.
      *
-     * `lockWindowGeneration` is nullable and closes via explicit null, so
-     * it uses array_key_exists rather than the ?? carry — otherwise
-     * `mutate(['lockWindowGeneration' => null])` could never clear it.
+     * @internal Model plumbing only — never call this from outside src/
+     *   (candy-tetris-078). The one friend the visibility cannot hide from
+     *   is {@see VsGame}: the versus wrapper bookkeeps the two seats it
+     *   owns (epoch bumps, pause parity, over/canHold settle) through
+     *   ~10 production mutate calls, and PHP protected access would fatal
+     *   exactly those (VsGame is a sibling, not a subclass). Public with
+     *   this contract beats six ad-hoc mutators dressed up as API — if a
+     *   future change removes the friend access, protected is the answer.
+     *
+     * Why hand-rolled rather than the canonical sugar-core Concerns\Mutable
+     * trait (whose own docblock sanctions per-class overrides): Game
+     * carries the declared-but-not-constructed $garbageStream property, so
+     * the trait's get_object_vars spread would pass it to the constructor
+     * as an unknown named argument; and the nullable/clearable legs below
+     * (lockWindowGeneration, colorProfile, overReason, lastAward, armed)
+     * need array_key_exists, not the ?? carry the trait applies blindly.
+     * Mirrors the sugar-style/src/Style.php fluent shape.
      *
      * @param array<string,mixed> $changes Field overrides
      */
@@ -554,10 +566,6 @@ final class Game implements Model
     }
 
     /**
-     * The pre-MA-23 dispatch body, unchanged: posture, notice screen,
-     * banner screen, live keys, gravity, lock window.
-     */
-    /**
      * MA-24: the on-ramp screen. The board freezes the way pause freezes
      * it (the gravity chain keeps its heartbeat, nothing steps); 'begin'
      * starts play and marks the record onboarded, and 'quit' leaves
@@ -642,6 +650,15 @@ final class Game implements Model
         return implode(Lang::t('key_or'), $names);
     }
 
+    /**
+     * The live dispatch body (candy-tetris-076: this is what the orphaned
+     * header used to describe): posture gates, notice screen, banner
+     * screens, live keys, gravity, lock window. stepGame is the pre-MA-23
+     * update body; MA-23's settle crossing and MA-26's notice retirement
+     * wrap it in {@see self::update()}.
+     *
+     * @return array{0:Game,1:?\Closure}
+     */
     private function stepGame(Msg $msg): array
     {
         // Terminal posture first (C-2): a resize or capability report is

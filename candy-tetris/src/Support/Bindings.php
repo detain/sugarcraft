@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * candy-tetris/src/Support/Bindings.php
  *
@@ -25,9 +27,6 @@
  * the same action actuates, and without it only plain tokens do. Every
  * gameplay key gate in Game/VsGame dispatches through it.
  */
-
-declare(strict_types=1);
-
 namespace SugarCraft\Tetris\Support;
 
 use SugarCraft\Core\Keys\KeyBindings;

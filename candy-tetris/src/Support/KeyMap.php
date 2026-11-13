@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * candy-tetris/src/Support/KeyMap.php
  *
@@ -18,9 +20,6 @@
  * anything other than a plain file (symlink, socket, FIFO) counts as
  * unreadable: refused by name, never followed, never opened.
  */
-
-declare(strict_types=1);
-
 namespace SugarCraft\Tetris\Support;
 
 use SugarCraft\Core\Keys\KeyBindings;

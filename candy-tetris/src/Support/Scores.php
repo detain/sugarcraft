@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * candy-tetris/src/Support/Scores.php
  *
@@ -28,9 +30,6 @@
  * re-anchored, so the next save deltas from the published state and never
  * re-bills a counter an earlier save already paid.
  */
-
-declare(strict_types=1);
-
 namespace SugarCraft\Tetris\Support;
 
 use SugarCraft\Core\Util\AtomicJsonFile;

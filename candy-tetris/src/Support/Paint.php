@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * candy-tetris/src/Support/Paint.php
  *
@@ -11,9 +13,6 @@
  * implementation now answers for both frames: a change to the stripe, the
  * refusal wording door or the notice wrap lands on solo and VS together.
  */
-
-declare(strict_types=1);
-
 namespace SugarCraft\Tetris\Support;
 
 use SugarCraft\Core\Util\Width;

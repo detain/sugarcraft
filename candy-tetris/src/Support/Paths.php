@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * candy-tetris/src/Support/Paths.php
  *
@@ -8,9 +10,6 @@
  * call time, NEVER cached: a process that learned its HOME after boot should
  * still find its files, and tests sandbox HOME per test).
  */
-
-declare(strict_types=1);
-
 namespace SugarCraft\Tetris\Support;
 
 final class Paths
