@@ -82,7 +82,8 @@ final class ToastMessageCapTest extends TestCase
         $toast = $this->got('many doors', $actions);
         $out = $toast->view('', 120, 240);
 
-        $this->assertStringContainsString('[+3 more]', $out, 'the fold row must announce the hidden buttons');
+        $this->assertStringContainsString("\x1b[0;2m+3 more", $out, 'the fold row announces the hidden buttons as dim prose');
+        $this->assertStringNotContainsString('[+3 more]', $out, 'brackets are the button shape; the fold must not wear them');
         $this->assertStringContainsString('[A64]', $out);
         $this->assertStringNotContainsString('[A65]', $out);
 

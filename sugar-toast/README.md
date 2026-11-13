@@ -123,7 +123,7 @@ replaces them, so under `Enqueue` the queue length only ever grows.
 Per-alert SIZE is bounded too: `Toast::MAX_MESSAGE_CELLS` (fixed at 8192)
 truncates an over-long message with a visible `" …[truncated]"` marker, and
 `Toast::MAX_ACTIONS_PER_ALERT` (fixed at 64) paints only the first 64 buttons
-— the rest fold into a visible `"[+N more]"` row. The caps bind the RENDER
+— the rest fold into a visible dim `"+N more"` prose row (brackets are the button shape; the fold wears neither and never lands in `actionRects()`). The caps bind the RENDER
 only: the full message text and the complete action list still ride the
 `Alert` into history and `activeAlerts()`, so nothing is silently lost to a
 host that reads the data instead of the pixels.
@@ -259,7 +259,7 @@ internationalized via `SugarCraft\Toast\Lang::t()`. All translatable strings
 live as bare keys in `lang/en.php`; the `toast` lookup namespace is baked into
 `src/Lang.php`, not a nesting level inside the arrays.
 
-The fold and truncation markers (` [+(N) more]`, ` …[truncated]`) are
+The fold and truncation markers (`+N more`, ` …[truncated]`) are
 deliberately **not** lang keys: they are locale-neutral chrome, in the same
 class as the box-drawing glyphs that frame the overlay. They stay byte-stable
 across every locale, which is what lets the cap tests pin them exactly.
@@ -511,7 +511,7 @@ already over the new cap survive until the next push evicts them.
 | `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files EVERY queued alert (expired included) into history and stops rendering until `clear()`, which also resets the flag but files nothing; `pruneExpired()` drops expired alerts silently |
 | `->history(): list<Alert>` | Return all recorded alerts — dismissed, `DropOldest` evictees AND `DropNewest` refusals; cumulative, `clear()` never resets it |
 | `->activeAlerts(): list<Alert>` | The live queue exactly as `view()` sees it — expired filtered, queue order; the index space `cancelAlert()`/`extendAlert()` and `actionRects()`'s `alertIndex` share |
-| `->actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button in the frame (omitted args read the last render; args differing from it throw `\LogicException`) — the `"[+N more]"` fold row is not clickable |
+| `->actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button in the frame (omitted args read the last render; args differing from it throw `\LogicException`) — the dim `"+N more"` fold row is prose, not a button — it never appears in the list |
 | `->frame(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?ToastFrame` | The rendered frame as a value: composed `rows`, top-box `x`/`y`, `actionRects()`, `actionAt($col, $row)`, `boxRows()`; null when nothing renders |
 | `->actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action` | The dispatch door: which Action (if any) covers a position of the frame on screen — omitted args read the last render, mismatched args throw; where two boxes share rows, the top-most (newest) one wins |
 | `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — over an empty background these are exactly the box rows, so dashboard-style consumers stop splitting rendered ANSI |

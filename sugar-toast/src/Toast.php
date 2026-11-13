@@ -1503,12 +1503,17 @@ final class Toast
         }
         if ($hiddenActions > 0) {
             // Folded buttons stay on the Alert (history()/activeAlerts());
-            // the frame says so instead of growing a row per button.
-            $more = '[+' . $hiddenActions . ' more]';
-            $middleLines[] = '│' . Width::padRight(
-                Width::truncateMiddle(Ansi::strip($more), $inner),
+            // the frame says so instead of growing a row per button. The
+            // row is prose, NOT affordance: buttons paint as '[Label]', so
+            // the fold wears no brackets and rides dim, and actionRects()
+            // never lists it — a click there hits nothing. '+N more' is
+            // locale-neutral chrome (README i18n section), byte-stable
+            // across every locale.
+            $more = '+' . $hiddenActions . ' more';
+            $middleLines[] = '│' . "\x1b[2m" . Width::padRight(
+                Width::truncateMiddle($more, $inner),
                 $inner
-            ) . '│';
+            ) . "\x1b[0m" . '│';
         }
 
         $lines = [$top, ...$middleLines, $bottom];
