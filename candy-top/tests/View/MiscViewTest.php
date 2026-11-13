@@ -81,6 +81,45 @@ final class MiscViewTest extends TestCase
         $this->assertSame(SizeError::render(90, 20, 80, 24), $coloured->render());
     }
 
+    /**
+     * #101: an accidental shrink to a size the notice itself cannot occupy
+     * used to paint clipped fragments (" erm", "= 120 H") — meaningless.
+     * Below its own width the notice compacts to the actionable core: each
+     * dimension's label letter, its current value in the verdict colour, and
+     * the minimum it must reach.
+     */
+    public function testTheSizeNoticeCompactsToAnActionableHintOnATinyTerminal(): void
+    {
+        $rows = SizeError::surface(5, 10, 80, 24)->plainLines();
+        $this->assertStringContainsString('W 5', $rows[3]);
+        $this->assertStringContainsString('>=80', $rows[4]);
+        $this->assertStringContainsString('H 10', $rows[5]);
+        $this->assertStringContainsString('>=24', $rows[6]);
+        $this->assertStringContainsString(SizeError::RED . '5', SizeError::surface(5, 10, 80, 24)->lines()[3]);
+
+        // 8x20 fits neither paired line ("H 20 >=24" is nine cells), so the
+        // four parts stack one per row.
+        $rows = SizeError::surface(8, 20, 80, 24)->plainLines();
+        $this->assertStringContainsString('W 8', $rows[8]);
+        $this->assertStringContainsString('>=80', $rows[9]);
+        $this->assertStringContainsString('H 20', $rows[10]);
+        $this->assertStringContainsString('>=24', $rows[11]);
+
+        // Nine columns carry each dimension as one paired line.
+        $rows = SizeError::surface(9, 20, 80, 24)->plainLines();
+        $this->assertStringContainsString('W 9 >=80', $rows[9]);
+        $this->assertStringContainsString('H 20 >=24', $rows[10]);
+
+        // The compact form is colour-free on a colourless profile, numbers intact.
+        $mono = SizeError::surface(5, 10, 80, 24, ColorProfile::Ascii);
+        $this->assertSame('>=80 ', $mono->plainLines()[4]);
+        foreach ($mono->lines() as $line) {
+            $this->assertStringNotContainsString(SizeError::WHITE, $line);
+            $this->assertStringNotContainsString(SizeError::RED, $line);
+            $this->assertStringNotContainsString(SizeError::GREEN, $line);
+        }
+    }
+
     public function testUnits(): void
     {
         $this->assertSame('512 Byte', Units::bytes(512));

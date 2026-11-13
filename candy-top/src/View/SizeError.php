@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\View;
 
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Top\Lang;
 
 /**
@@ -46,19 +47,82 @@ final class SizeError
         $hh = intdiv($rows, 2);
         $width = Lang::t('size.width');
         $height = Lang::t('size.height');
+        $tooSmall = Lang::t('size.too_small');
+        $needed = Lang::t('size.needed');
 
         // btop rows (h/2)-2, (h/2)-1, (h/2)+1, (h/2)+2 are 1-based.
-        $s->put(max(0, $hw - 12), $hh - 3, Lang::t('size.too_small'), $white);
+        $notice = [
+            [$hw - 12, $tooSmall],
+            [$hw - 11, ' ' . $width . ' ' . $cols . ' ' . $height . ' ' . $rows],
+            [$hw - 13, $needed],
+            [$hw - 11, $width . ' ' . $minWidth . ' ' . $height . ' ' . $minHeight],
+        ];
+        foreach ($notice as [$x, $text]) {
+            if ($x >= 0 && $x + Width::string($text) <= $cols) {
+                continue;
+            }
+
+            // The notice is wider than the terminal that must carry it —
+            // btop's offsets would clamp to column 0 and clip the words into
+            // meaningless fragments (#101). Fall back to the compact core:
+            // the two verdict numbers and what they must reach, stacked so
+            // the hint stays actionable down to five columns.
+            return self::compact($s, $cols, $rows, $hw, $hh, $width, $height, $minWidth, $minHeight, $verdict, $white);
+        }
+
+        $s->put($hw - 12, $hh - 3, $tooSmall, $white);
         $s->ansi(
-            max(0, $hw - 11),
+            $hw - 11,
             $hh - 2,
             ' ' . $width . ' ' . $verdict($cols < $minWidth) . $cols
                 . ' ' . $white . $height . ' ' . $verdict($rows < $minHeight) . $rows,
             null,
             $white,
         );
-        $s->put(max(0, $hw - 13), $hh, Lang::t('size.needed'), $white);
-        $s->put(max(0, $hw - 11), $hh + 1, $width . ' ' . $minWidth . ' ' . $height . ' ' . $minHeight, $white);
+        $s->put($hw - 13, $hh, $needed, $white);
+        $s->put($hw - 11, $hh + 1, $width . ' ' . $minWidth . ' ' . $height . ' ' . $minHeight, $white);
+
+        return $s;
+    }
+
+    /**
+     * The actionable core of the notice, centred: each dimension's first
+     * label letter, its current value in the verdict colour, and the minimum
+     * it must reach. Two paired lines when they fit, one stacked quartet when
+     * the terminal is narrower still.
+     */
+    private static function compact(
+        Surface $s,
+        int $cols,
+        int $rows,
+        int $hw,
+        int $hh,
+        string $width,
+        string $height,
+        int $minWidth,
+        int $minHeight,
+        callable $verdict,
+        string $white,
+    ): Surface {
+        $centre = static fn (string $text): int => max(0, intdiv($cols - Width::string($text), 2));
+
+        $curW = mb_substr(trim($width), 0, 1) . ' ' . $verdict($cols < $minWidth) . $cols;
+        $curH = mb_substr(trim($height), 0, 1) . ' ' . $verdict($rows < $minHeight) . $rows;
+        $needW = '>=' . $minWidth;
+        $needH = '>=' . $minHeight;
+
+        if (Width::string($curW . ' ' . $needW) <= $cols && Width::string($curH . ' ' . $needH) <= $cols) {
+            $s->ansi($centre($curW . ' ' . $needW), max(0, $hh - 1), $curW . ' ' . $needW, null, $white);
+            $s->ansi($centre($curH . ' ' . $needH), max(0, $hh), $curH . ' ' . $needH, null, $white);
+
+            return $s;
+        }
+
+        $y = max(0, min($hh - 2, $rows - 4));
+        $s->ansi($centre($curW), $y, $curW, null, $white);
+        $s->put($centre($needW), $y + 1, $needW, $white);
+        $s->ansi($centre($curH), $y + 2, $curH, null, $white);
+        $s->put($centre($needH), $y + 3, $needH, $white);
 
         return $s;
     }
