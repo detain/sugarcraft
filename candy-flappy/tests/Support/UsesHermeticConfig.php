@@ -31,4 +31,32 @@ trait UsesHermeticConfig
             spl_object_id($this),
         );
     }
+
+    /**
+     * flappy-48 (finding -048): the scratch lives under /tmp, so a written
+     * save (or a quarantined corrupt-*) would outlive the run — and the
+     * NEXT test in the same worker reuses PID-keyed names its siblings may
+     * still see. Mirror the hand-rolled cleanups: sweep the store, tolerate
+     * absence (most tests never write), then keep the parent chain intact.
+     */
+    protected function tearDown(): void
+    {
+        $dir = $this->hermeticDir;
+        if ($dir !== null) {
+            // Dotfiles included: AtomicJsonFile's .scores.json.lock starts
+            // with a dot and glob() skips those by default — leaving it
+            // behind would make both rmdir legs fail and leak the scratch.
+            foreach (['/.candy-flappy/*', '/.candy-flappy/.*', '/*', '/.*'] as $pattern) {
+                foreach (glob($dir . $pattern) ?: [] as $entry) {
+                    if (is_file($entry)) {
+                        @unlink($entry);
+                    }
+                }
+            }
+            @rmdir($dir . '/.candy-flappy');
+            @rmdir($dir);
+        }
+
+        parent::tearDown();
+    }
 }
