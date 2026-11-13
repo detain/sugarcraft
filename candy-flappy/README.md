@@ -162,6 +162,18 @@ struggle to read it.
 Play happens on the alternate screen (`ProgramOptions(useAltScreen: true)`,
 DECSET 1049), so your normal scrollback is restored untouched on exit.
 
+### Assistive technology
+
+The board is a full-canvas continuous repaint on the alternate screen: every
+tick redraws the whole playfield, so there is no stable text stream for a
+screen reader to follow — the game is played by sight. The refusal and
+too-small notices above are the only AT-tractable output, and they are plain,
+static, folded copy precisely so. There is no high-contrast posture (the
+measured ratios in the colour paragraph are the honest answer, not a gap the
+code hides), and there is no pause key: a run is live from the first flap to
+the crash — an unfocused window freezes the world until focus returns, but
+that is the loop standing down, not a control.
+
 ## Architecture
 
 | File            | Role                                                                           |

@@ -28,8 +28,8 @@ use SugarCraft\Core\Util\ColorProfile;
  * Ctrl+C — quit.  r — restart at any moment, after a crash or mid-flight,
  * landing on the ready card (M19).  Esc is gated to the plain key (n4,
  * step 13): Ctrl+C is the only chord the model reads. Legacy terminals
- * send Ctrl+[ as a bare 0x1B byte — hardware-identical to Esc, so it
- * quits by byte identity and no gate can separate the two.
+ * send Ctrl+[ as a bare 0x1B byte — byte-identical to Esc, so the terminal
+ * itself cannot separate the two and no gate can either.
  *
  * Playability (M10/M18, lib-reviews-1102): the board opens in a READY phase —
  * the bird hovers at spawn and the world does not scroll until the first
@@ -42,6 +42,12 @@ use SugarCraft\Core\Util\ColorProfile;
  * (no ticks). On a no-TTY / TERM=dumb profile (ColorProfile::NoTty) the app
  * refuses to play instead of emitting escape codes nobody can render; the
  * ASCII tier draws plain glyphs.
+ *
+ * Assistive technology (flappy-26): the view is a full-canvas repaint on
+ * the alternate screen — no stable text stream exists for a screen reader
+ * to follow; the notice/refusal copy is the only AT-tractable output, and
+ * there is deliberately no high-contrast posture and no pause key. Mirrors
+ * the README "Assistive technology" subsection.
  *
  * The PRNG is injected as a `Closure(int $maxInclusive): int` so tests
  * pin a specific pipe layout without touching the runtime — the parameter
