@@ -841,6 +841,51 @@ final class Veil
     }
 
     /**
+     * How far the block overhangs the canvas — the predicate that lets a
+     * host warn BEFORE rendering a clipped modal (sugar-overlay-007).
+     *
+     * Same resolvePlacement() arithmetic as composite(); bounding-edge
+     * overhang per side, in cells (a block shoved entirely off-left reports
+     * how far its left edge sticks, not how many of its cells were hidden —
+     * coveredCells() answers that question). Returns null when nothing
+     * overhangs: every cell the block paints lands on-canvas. A fit-to-canvas
+     * SHRINK mode stays a product seam this library does not choose; the
+     * predicate hands the host the numbers to choose it itself.
+     *
+     * @return ?array{clippedLeft: int, clippedRight: int, clippedTop: int, clippedBottom: int}
+     */
+    public function overflowFor(
+        string $foreground,
+        string $background,
+        Position $vertical,
+        Position $horizontal,
+        int $xOffset = 0,
+        int $yOffset = 0,
+    ): ?array {
+        $p = $this->resolvePlacement($foreground, $background, $vertical, $horizontal, $xOffset, $yOffset);
+
+        if ($p['canvasEmpty']) {
+            // No canvas, no clipping: the overlay itself is the frame.
+            return null;
+        }
+
+        $clip = [
+            'clippedLeft'   => \max(0, -$p['x']),
+            'clippedRight'  => \max(0, $p['x'] + $p['fgWidth'] - $p['bgWidth']),
+            'clippedTop'    => \max(0, -$p['y']),
+            'clippedBottom' => \max(0, $p['y'] + $p['fgHeight'] - $p['bgHeight']),
+        ];
+
+        foreach ($clip as $cells) {
+            if ($cells > 0) {
+                return $clip;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param int       $yOffset      Additional lines downward (+) / upward (-)
      * @return string                 The composited output
      */

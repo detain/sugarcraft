@@ -100,7 +100,11 @@ A host that needs to know which canvas cells an overlay covers — to lift
 click zones underneath it, say — can ask `coveredCells($foreground,
 $background, $vertical, $horizontal)`: it returns the clipped paint rect
 (the exact anchor arithmetic `composite()` runs) or null when the overlay
-paints nothing.
+paints nothing. And `overflowFor(...)` (same arguments) returns the
+per-side overhang — `clippedLeft`/`clippedRight`/`clippedTop`/
+`clippedBottom` in cells — or null when everything lands on-canvas:
+measure before rendering a wide dialog on a narrow terminal instead of
+discovering mangled borders after (`examples/overflow.php`).
 
 Any of the nine `Position` cases is accepted on either axis; the case's
 other-half is ignored on that axis. So `TOP` as the horizontal anchor

@@ -418,6 +418,49 @@ final class VeilTest extends TestCase
         );
     }
 
+    /**
+     * SO-10 (sugar-overlay-007): overflowFor() is the pre-render warning
+     * predicate — bounding-edge overhang per side, zero everywhere (null)
+     * exactly when the whole block lands on-canvas. The disk-proven heart
+     * of the finding: a centered 40-col dialog on a 30-col canvas loses
+     * FIVE columns on BOTH sides, silently, unless the host measures first.
+     */
+    public function testOverflowForCountsTheOverhangBeforeRendering(): void
+    {
+        $canvas = "┌────────────────────────────┐\n│   30 columns of terminal   │\n│                            │\n└────────────────────────────┘";
+        $dialog = "┌──────────────────────────────────────┐\n│ Delete everything?                 │\n│ [ Yes, delete ]   [ Cancel ]       │\n└──────────────────────────────────────┘";
+        $veil   = Veil::new();
+
+        // Both-side clip: the CENTER anchor splits the 10-col overhang 5/5.
+        $this->assertSame(
+            ['clippedLeft' => 5, 'clippedRight' => 5, 'clippedTop' => 0, 'clippedBottom' => 0],
+            $veil->overflowFor($dialog, $canvas, Position::CENTER, Position::CENTER),
+        );
+        // Shifted off the right edge only.
+        $this->assertSame(
+            ['clippedLeft' => 0, 'clippedRight' => 15, 'clippedTop' => 0, 'clippedBottom' => 0],
+            $veil->overflowFor($dialog, $canvas, Position::CENTER, Position::LEFT, 5, 0),
+        );
+        // Fits: null, and coveredCells agrees the whole block is painted.
+        $this->assertNull($veil->overflowFor("ab\ncd", $canvas, Position::CENTER, Position::CENTER));
+        $this->assertSame(
+            ['x' => 14, 'y' => 1, 'w' => 2, 'h' => 2],
+            $veil->coveredCells('ab' . "\n" . 'cd', $canvas, Position::CENTER, Position::CENTER),
+        );
+        // No canvas means no clipping (the overlay IS the frame).
+        $this->assertNull($veil->overflowFor("ab\ncd", '', Position::CENTER, Position::CENTER));
+        // Rows pushed off the top by a negative offset, and a block taller
+        // than the backdrop overflowing the bottom.
+        $this->assertSame(
+            ['clippedLeft' => 0, 'clippedRight' => 0, 'clippedTop' => 9, 'clippedBottom' => 0],
+            $veil->overflowFor("ab\ncd\nef", $canvas, Position::BOTTOM, Position::LEFT, 0, -10),
+        );
+        $this->assertSame(
+            ['clippedLeft' => 0, 'clippedRight' => 0, 'clippedTop' => 0, 'clippedBottom' => 4],
+            $veil->overflowFor("a\nb\nc\nd\ne\nf\ng\nh", $canvas, Position::BOTTOM, Position::LEFT),
+        );
+    }
+
     public function testBrightOverlayIsNotDimmedWhileBackgroundIs(): void
     {
         // A FULL-WIDTH styled foreground bar over a dotted background + backdrop.
