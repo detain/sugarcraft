@@ -88,11 +88,21 @@ exits with the child's status. Everything after `--` belongs to the command —
 including its own flags.
 
 `--json` renders the same report as a parseable JSON array — one object per
-segment with `type` (`text` or `sequence`), raw `content` bytes, and the human
-`description`. JSON is never live-streamed: a partial array is not parseable,
+segment with `type` (`text` or `sequence`), raw `content` bytes, the human
+`description`, and the segment's `byteOffset` in the source stream. JSON is
+never live-streamed: a partial array is not parseable,
 so `--json` on a pipe collects the segments and prints the array when the
 source ends; the flag works before or after the file operand, and `--` ends
 flag parsing — the exec report stays line-mode.
+
+`--show-offsets` prefixes every line-mode report with the segment's byte
+position as `@<hex>` — the position column sequin prints. It is what lets you
+locate a line inside a multi-megabyte capture: the offset is the true input
+position, so it stays exact even for the sequences whose reported bytes are
+normalised (an ST-terminated OSC reports one terminator byte but consumed
+two). Offsets count from zero across the whole source — file, pipe, or the
+child's output stream under `-- cmd` — and a normal segment's offset plus its
+reported bytes lands exactly on the next segment's offset.
 
 An empty source is a valid report of nothing: an empty file, or a command that
 printed nothing, yields an empty report, so `cmd | candy-ansi-inspect` stays
@@ -158,16 +168,21 @@ CLI prints:
 echo Inspector::report("\e[1;31mboom\e[0m");   // the three lines above
 ```
 
+Pass `true` as the second argument to get the `--show-offsets` column
+(`report($input, true)` prints `@0  …`, `@7  …`, `@b  …`), and every segment
+parsed by the library carries the same position through `$segment->byteOffset()`.
+
 `reportAsJson()` is the machine-readable view: one object per segment with
-`type` (`sequence` or `text`), raw `content` bytes, and the `description`:
+`type` (`sequence` or `text`), raw `content` bytes, the `description`, and
+the input-stream `byteOffset`:
 
 ```php
 echo Inspector::reportAsJson("\e[1;31mboom");  // pretty JSON:
 ```
 
 ```text
-{ "type": "sequence", "content": "\u001b[1;31m", "description": "ESC[1;31m  SGR bold, foreground red" },
-{ "type": "text",     "content": "boom",         "description": "boom" }
+{ "type": "sequence", "content": "\u001b[1;31m", "description": "ESC[1;31m  SGR bold, foreground red", "byteOffset": 0 },
+{ "type": "text",     "content": "boom",         "description": "boom",                               "byteOffset": 7 }
 ```
 
 For incremental sources — reading a log or a live pipe chunk by chunk —
@@ -248,6 +263,10 @@ A sequin user reading this README should know exactly what differs:
 
 - **`-- cmd` replaces `-cmd`.** Exec mode runs the child on a fresh
   pseudo-terminal and reports the raw bytes it prints (see CLI).
+- **The offset column is opt-in.** sequin prints each sequence's byte
+  position by default; here `--show-offsets` (or `$segment->byteOffset()`
+  from the library) adds it on request, keeping the default transcript
+  byte-stable for scripted diffing.
 - **No `--raw` inline-highlight mode.** The report's first column always
   shows the sent bytes — tokenised into `ESC`/`BEL`-style names, never
   replayed — so sequin's "print the input unhighlighted" toggle has nothing

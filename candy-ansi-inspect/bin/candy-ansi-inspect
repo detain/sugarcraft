@@ -86,12 +86,15 @@ $refusal = static function (string $rawPath): string {
 
 // Flags are scanned before any source is opened: `--help`/`-h` is a request
 // for usage, not a path; `--json` reports a JSON array
-// instead of one line per segment (finding 005); `--` enters exec mode
-// (finding 003). Operands: the first non-flag word names the file, and
+// instead of one line per segment (finding 005); `--show-offsets` prefixes
+// each report line with the segment's byte offset in the source stream
+// (finding 019); `--` enters exec mode (finding 003). Operands: the first
+// non-flag word names the file, and
 // PRESENCE — not truthiness — is the gate (finding 012: empty() treats the
 // string "0" as empty, so `candy-ansi-inspect 0` demoted a file literally
 // named `0` to a stdin read).
 $asJson = false;
+$showOffsets = false;
 $wantHelp = false;
 $wantVersion = false;
 $operand = null;
@@ -104,6 +107,10 @@ for ($i = 1; $i < $argc; $i++) {
     }
     if ($argv[$i] === '--json') {
         $asJson = true;
+        continue;
+    }
+    if ($argv[$i] === '--show-offsets') {
+        $showOffsets = true;
         continue;
     }
     if ($argv[$i] === '--help' || $argv[$i] === '-h') {
@@ -147,7 +154,9 @@ if ($wantVersion) {
 // reports the raw bytes it prints segment by segment as they dispatch,
 // sharing the streaming reader with the stdin arm. Everything after `--`
 // belongs to the child: this tool's own flags do not apply there (the report
-// stays line-mode), and the child's exit status is the tool's exit status.
+// stays line-mode, though `--show-offsets` before `--` decorates it with
+// offsets into the child's output stream), and the child's exit status is
+// the tool's exit status.
 if ($execCmd !== null) {
     if ($execCmd === []) {
         fwrite(STDERR, Lang::t('cli.usage') . "\n");
@@ -156,7 +165,7 @@ if ($execCmd !== null) {
     stream_set_write_buffer(STDOUT, 0);
     exit(ExecRunner::run($execCmd, static function (string $line): void {
         fwrite(STDOUT, $line . "\n");
-    }));
+    }, null, STDERR, $showOffsets));
 }
 
 $source = null;
@@ -224,7 +233,7 @@ if ($source !== null) {
                 $segments[] = $segment;
             } else {
                 $printed = true;
-                fwrite(STDOUT, $segment->describe() . "\n");
+                fwrite(STDOUT, Inspector::formatSegment($segment, $showOffsets) . "\n");
             }
         }
     }
@@ -236,7 +245,7 @@ if ($source !== null) {
             $segments[] = $segment;
         } else {
             $printed = true;
-            fwrite(STDOUT, $segment->describe() . "\n");
+            fwrite(STDOUT, Inspector::formatSegment($segment, $showOffsets) . "\n");
         }
     }
     if ($asJson) {

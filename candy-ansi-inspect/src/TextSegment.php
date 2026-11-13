@@ -13,8 +13,18 @@ namespace SugarCraft\AnsiInspect;
  */
 final class TextSegment extends Segment
 {
-    public function __construct(public readonly string $value) {}
+    /**
+     * @param ?int $offset absolute byte offset of this text's first input byte
+     *                     in the parsed stream (null = hand-constructed,
+     *                     untracked)
+     */
+    public function __construct(
+        public readonly string $value,
+        public readonly ?int $offset = null,
+    ) {}
 
     public function raw(): string      { return $this->value; }
     public function describe(): string { return $this->value; }
+
+    public function byteOffset(): ?int { return $this->offset; }
 }

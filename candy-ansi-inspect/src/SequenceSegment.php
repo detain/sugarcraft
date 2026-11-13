@@ -18,13 +18,20 @@ final class SequenceSegment extends Segment
     /**
      * The raw bytes are stored verbatim; the report renders them through
      * {@see printable()}, which tokenizes every control byte.
+     *
+     * @param ?int $offset absolute byte offset of this sequence's first input
+     *                     byte in the parsed stream (null = hand-constructed,
+     *                     untracked)
      */
     public function __construct(
         public readonly string $bytes,
         public readonly string $label,
+        public readonly ?int $offset = null,
     ) {}
 
     public function raw(): string { return $this->bytes; }
+
+    public function byteOffset(): ?int { return $this->offset; }
 
     public function describe(): string
     {

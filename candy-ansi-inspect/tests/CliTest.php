@@ -107,6 +107,51 @@ final class CliTest extends TestCase
         $this->assertSame('', $stdout);
     }
 
+    public function testShowOffsetsFlagPrefixesEveryLineWithItsHexOffset(): void
+    {
+        // Finding 019 / step AIP-40: `--show-offsets` adds sequin's position
+        // column — `@<hex>` per line — and the positions are TRUE input
+        // offsets, so the ST-normalised OSC (raw loses one terminator byte)
+        // still advances the following text by both consumed bytes.
+        [$code, $stdout, $stderr] = self::runCliWithStdin("hi\x1b]0;t\x1b\\red", ['--show-offsets']);
+        $this->assertSame(0, $code, $stderr);
+        $this->assertSame(
+            "@0  hi\n" .
+            "@2  ESC]0;tBEL  set window title to \"t\"\n" .
+            "@9  red",
+            rtrim($stdout, "\n"),
+        );
+    }
+
+    public function testShowOffsetsFlagWorksBeforeAndAfterTheFileOperand(): void
+    {
+        $dir = sys_get_temp_dir() . '/aip40-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        file_put_contents($dir . '/cap.ansi', "\x1b[31mred\x1b[0m");
+        try {
+            [$code, $flagFirst, $stderrA] = self::runCliWithStdin('', ['--show-offsets', $dir . '/cap.ansi']);
+            $this->assertSame(0, $code, $stderrA);
+            [$code, $flagLast, $stderrB] = self::runCliWithStdin('', [$dir . '/cap.ansi', '--show-offsets']);
+            $this->assertSame(0, $code, $stderrB);
+            $this->assertSame($flagFirst, $flagLast, 'flag position must not change the report');
+            $this->assertStringStartsWith('@0  ESC[31m  SGR foreground red', $flagFirst);
+        } finally {
+            unlink($dir . '/cap.ansi');
+            rmdir($dir);
+        }
+    }
+
+    public function testShowOffsetsUnderJsonStillEmitsOneArrayWithTheField(): void
+    {
+        // --json already carries `byteOffset` unconditionally; the display
+        // flag must not prefix or duplicate anything in the JSON arm.
+        [$code, $stdout, $stderr] = self::runCliWithStdin("hi\x1b[31mred", ['--json', '--show-offsets']);
+        $this->assertSame(0, $code, $stderr);
+        $decoded = json_decode($stdout, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame([0, 2, 7], array_column($decoded, 'byteOffset'));
+        $this->assertStringNotContainsString('@', $stdout);
+    }
+
     public function testJsonFlagOnStdinEmitsAParseableArray(): void
     {
         // Finding 005: `--json` — the report machine-readable, with raw bytes
@@ -116,10 +161,10 @@ final class CliTest extends TestCase
         $decoded = json_decode($stdout, true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame(
             [
-                ['type' => 'text', 'content' => 'hi', 'description' => 'hi'],
-                ['type' => 'sequence', 'content' => "\x1b[31m", 'description' => 'ESC[31m  SGR foreground red'],
-                ['type' => 'text', 'content' => 'red', 'description' => 'red'],
-                ['type' => 'sequence', 'content' => "\x1b[0m", 'description' => 'ESC[0m  SGR reset'],
+                ['type' => 'text', 'content' => 'hi', 'description' => 'hi', 'byteOffset' => 0],
+                ['type' => 'sequence', 'content' => "\x1b[31m", 'description' => 'ESC[31m  SGR foreground red', 'byteOffset' => 2],
+                ['type' => 'text', 'content' => 'red', 'description' => 'red', 'byteOffset' => 7],
+                ['type' => 'sequence', 'content' => "\x1b[0m", 'description' => 'ESC[0m  SGR reset', 'byteOffset' => 10],
             ],
             $decoded,
         );

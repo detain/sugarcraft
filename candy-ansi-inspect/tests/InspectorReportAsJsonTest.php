@@ -95,6 +95,10 @@ final class InspectorReportAsJsonTest extends TestCase
         $this->assertArrayHasKey('type', $entry);
         $this->assertArrayHasKey('content', $entry);
         $this->assertArrayHasKey('description', $entry);
+        // Step AIP-40 (finding 019): every parsed entry also carries its
+        // input-stream byte offset.
+        $this->assertArrayHasKey('byteOffset', $entry);
+        $this->assertSame(0, $entry['byteOffset']);
         $this->assertContains($entry['type'], ['text', 'sequence']);
         $this->assertIsString($entry['content']);
         $this->assertIsString($entry['description']);

@@ -43,8 +43,10 @@ final class ExecRunner
      * @param (callable(list<string>): array{0: object, 1: object})|null $sessionFactory
      *        seam returning [pty-session, child]; defaults to a real sugar-pty pair
      * @param resource                        $errorStream refusal sink (STDERR by default)
+     * @param bool                            $showOffsets prefix each report line with
+     *        the segment's byte offset in the child's output stream (finding 019)
      */
-    public static function run(array $cmd, callable $emitLine, ?callable $sessionFactory = null, $errorStream = STDERR): int
+    public static function run(array $cmd, callable $emitLine, ?callable $sessionFactory = null, $errorStream = STDERR, bool $showOffsets = false): int
     {
         if ($cmd === []) {
             throw new \InvalidArgumentException('ExecRunner::run() requires a non-empty command');
@@ -64,11 +66,11 @@ final class ExecRunner
         $gotBytes = false;
         $printed = false;
 
-        $consume = static function (string $chunk) use ($inspector, $emitLine, &$gotBytes, &$printed): void {
+        $consume = static function (string $chunk) use ($inspector, $emitLine, $showOffsets, &$gotBytes, &$printed): void {
             $gotBytes = true;
             foreach ($inspector->feed($chunk) as $segment) {
                 $printed = true;
-                $emitLine($segment->describe());
+                $emitLine(Inspector::formatSegment($segment, $showOffsets));
             }
         };
 
@@ -104,7 +106,7 @@ final class ExecRunner
 
         foreach ($inspector->finish() as $segment) {
             $printed = true;
-            $emitLine($segment->describe());
+            $emitLine(Inspector::formatSegment($segment, $showOffsets));
         }
         if ($gotBytes && !$printed) {
             // Non-empty stream that dispatched nothing (a lone invalid byte —

@@ -121,6 +121,59 @@ final class AnsiHandler implements Handler
     private string $x10ArmRaw = "\x1b[M";
 
     /**
+     * Total input bytes fed since the last {@see reset()} — the stream clock
+     * every byte offset below is measured against (finding 019).
+     */
+    private int $streamPos = 0;
+
+    /**
+     * Absolute stream position of the first byte of {@see $inFlightBytes}.
+     *
+     * Maintained at every window mutation: a clear re-anchors to
+     * {@see $streamPos}, a front peel advances by the peeled length, and a
+     * peel that also drops a byte off the TAIL (the Execute path: the echoed
+     * control byte was already emitted at its own position) must not let the
+     * tail-peel shift the anchor — the derivation is replaced with the exact
+     * front-strip there.
+     */
+    private int $windowStart = 0;
+
+    /**
+     * Bytes at the head of {@see $inFlightBytes} already attributed to
+     * segments emitted since the window's last anchor change. Within one
+     * dispatch a segment list is emitted in stream order — recovered text,
+     * recovered residue, then the dispatch's own segment — so each emit
+     * advances this cursor and the next segment's offset follows it.
+     */
+    private int $windowEmitted = 0;
+
+    /** Stream position of an armed SS3's `ESC O` prelude (finding 019). */
+    private ?int $ss3ArmOffset = null;
+
+    /** Stream position of an armed X10 report's introducer (finding 019). */
+    private ?int $x10ArmOffset = null;
+
+    /**
+     * Offset the next stream-ordered segment starts at: the window position
+     * past everything already emitted from it.
+     */
+    private function nextOffset(): int
+    {
+        return $this->windowStart + $this->windowEmitted;
+    }
+
+    /**
+     * Re-anchor the bookkeeping cursor after the window was cleared or its
+     * head peeled: every remaining window byte sits right where the stream
+     * clock says it does.
+     */
+    private function reanchorWindow(): void
+    {
+        $this->windowStart = $this->streamPos - strlen($this->inFlightBytes);
+        $this->windowEmitted = 0;
+    }
+
+    /**
      * Parse a complete input in one shot: feed every byte, then finalise.
      *
      * @return list<Segment>
@@ -160,6 +213,7 @@ final class AnsiHandler implements Handler
                 $this->awaitingStringTerminator = false;
             }
             $this->inFlightBytes .= $byte;
+            $this->streamPos++;
             $parser->feed($byte);
         }
     }
@@ -197,6 +251,11 @@ final class AnsiHandler implements Handler
         $this->x10Armed = false;
         $this->x10Payload = '';
         $this->x10ArmRaw = "\x1b[M";
+        $this->streamPos = 0;
+        $this->windowStart = 0;
+        $this->windowEmitted = 0;
+        $this->ss3ArmOffset = null;
+        $this->x10ArmOffset = null;
     }
 
     /**
@@ -224,7 +283,8 @@ final class AnsiHandler implements Handler
         if ($this->textBuf === '') {
             return;
         }
-        $this->segments[] = new TextSegment($this->textBuf);
+        $this->segments[] = new TextSegment($this->textBuf, $this->nextOffset());
+        $this->windowEmitted += strlen($this->textBuf);
         $this->textBuf = '';
     }
 
@@ -254,6 +314,7 @@ final class AnsiHandler implements Handler
 
         // Text bytes ride in the in-flight window until a dispatch consumes
         // them; drop that prefix so what remains is only the sequence tail.
+        // (flushText above already advanced the emit cursor past the text.)
         $tailBytes = $this->inFlightBytes;
         if ($pendingText !== '' && str_starts_with($tailBytes, $pendingText)) {
             $tailBytes = substr($tailBytes, strlen($pendingText));
@@ -279,30 +340,37 @@ final class AnsiHandler implements Handler
                     $this->segments[] = new SequenceSegment(
                         $cancelled,
                         Inspector::describeTruncated($cancelled) . ' — cancelled',
+                        $this->nextOffset(),
                     );
+                    $this->windowEmitted += strlen($cancelled);
                 }
-                $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
+                $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''), $this->nextOffset());
+                $this->windowEmitted += 1;
                 if ($swallowed !== '') {
                     $this->segments[] = new SequenceSegment(
                         $swallowed,
                         Inspector::describeTruncated($swallowed),
+                        $this->nextOffset(),
                     );
+                    $this->windowEmitted += strlen($swallowed);
                 }
             } else {
                 // feed() appends every byte before the parser advances, so an
                 // Escape state without an ESC in the window cannot normally
                 // happen — emit the introducer anyway rather than forget it,
-                // and keep the window bytes as the unterminated tail.
-                $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
+                // and keep the window bytes as the unterminated tail. The
+                // synthesised ESC consumes no input byte, so the tail that
+                // follows keeps the same cursor position.
+                $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''), $this->nextOffset());
                 if ($tailBytes !== '') {
-                    $this->segments[] = new SequenceSegment($tailBytes, Inspector::describeTruncated($tailBytes));
+                    $this->segments[] = new SequenceSegment($tailBytes, Inspector::describeTruncated($tailBytes), $this->nextOffset());
                 }
             }
             $tailBytes = '';
         }
 
         if ($tailBytes !== '' && self::isUnterminatedEscapeState($stateBeforeFlush)) {
-            $this->segments[] = new SequenceSegment($tailBytes, Inspector::describeTruncated($tailBytes));
+            $this->segments[] = new SequenceSegment($tailBytes, Inspector::describeTruncated($tailBytes), $this->nextOffset());
         }
     }
 
@@ -323,8 +391,10 @@ final class AnsiHandler implements Handler
             $overflow = substr($this->x10Payload, 3);
             $this->x10Armed = false;
             $this->x10Payload = '';
-            $this->segments[] = new SequenceSegment($this->x10ArmRaw . $payload, Inspector::describeMouseX10($payload));
+            $this->segments[] = new SequenceSegment($this->x10ArmRaw . $payload, Inspector::describeMouseX10($payload), $this->x10ArmOffset);
+            $this->x10ArmOffset = null;
             $this->inFlightBytes = $overflow;
+            $this->reanchorWindow();
             if ($overflow !== '') {
                 $this->textBuf .= $overflow;
             }
@@ -336,9 +406,12 @@ final class AnsiHandler implements Handler
                 $this->segments[] = new SequenceSegment(
                     "\x1b" . chr($this->ss3Intermediate) . $rune,
                     Inspector::describeSs3($rune),
+                    $this->ss3ArmOffset,
                 );
                 $this->ss3Buffered = false;
+                $this->ss3ArmOffset = null;
                 $this->inFlightBytes = '';
+                $this->reanchorWindow();
                 return;
             }
             // The byte after `ESC O` is outside the SS3 final range 0x40–0x7E
@@ -367,16 +440,33 @@ final class AnsiHandler implements Handler
         $this->flushPendingSs3();
         $this->flushText();
         $residue = $this->residueAfterExecute($pending, $byte);
+        // Bytes the Execute peel takes off the FRONT of the window (the
+        // flushed text prefix). The echoed byte leaves off the tail and is
+        // stamped at its own stream position, so window re-anchoring must
+        // shift by exactly this front strip — the derivation in
+        // reanchorWindow() would also count the tail byte as front-stripped.
+        $frontPeel = $pending !== '' && str_starts_with($this->inFlightBytes, $pending) ? strlen($pending) : 0;
 
         if ($byte >= 0x00 && $byte <= 0x1F && $byte !== 0x1B) {
             $this->segments[] = new SequenceSegment(
                 chr($byte),
                 'C0 ' . C0C1::c0Name($byte),
+                $this->streamPos - 1,
             );
             // CAN/SUB keep README deviation 7's documented floor: the parser
             // cancels without handing this handler the abandoned prelude, and
             // the byte window is flushed with it (pinned in ByteFidelityTest).
+            // The skipped prelude bytes stay unattributed — a later segment's
+            // offset skips them, matching the report's byte content exactly.
+            // An emptied window anchors past the executed byte (its own
+            // position was just stamped); a retained residue anchors at its
+            // true start — past the flushed text — because the executed byte
+            // was peeled off the TAIL and must not shift the front anchor.
             $this->inFlightBytes = ($byte === 0x18 || $byte === 0x1A) ? '' : $residue;
+            $this->windowStart = $this->inFlightBytes === ''
+                ? $this->streamPos
+                : $this->windowStart + $frontPeel;
+            $this->windowEmitted = 0;
         } elseif ($byte === 0x7F) {
             // DEL (0x7F) belongs to the C0 set of ISO 6429 even though it sits
             // outside the 0x00–0x1F range the branch above covers, and the VT500
@@ -386,8 +476,10 @@ final class AnsiHandler implements Handler
             // Mid-sequence the table gives it None (no callback), so the residue
             // this branch can ever see is empty unless a future table change
             // routes it Execute-in-place; retaining is the faithful default.
-            $this->segments[] = new SequenceSegment(chr($byte), 'DEL (delete)');
+            $this->segments[] = new SequenceSegment(chr($byte), 'DEL (delete)', $this->streamPos - 1);
             $this->inFlightBytes = $residue;
+            $this->windowStart = $residue === '' ? $this->streamPos : $this->windowStart + $frontPeel;
+            $this->windowEmitted = 0;
         } elseif ($byte >= 0x80 && $byte <= 0x9F) {
             // C1 bytes 0x80–0x9F: the VT500 "anywhere" transition table routes
             // 0x80–0x8F, 0x91–0x97, 0x99, 0x9A and 0x9C through Action::Execute
@@ -402,13 +494,17 @@ final class AnsiHandler implements Handler
                 $this->segments[] = new SequenceSegment(
                     $residue,
                     Inspector::describeTruncated($residue) . ' — cancelled',
+                    $this->nextOffset(),
                 );
+                $this->windowEmitted += strlen($residue);
             }
             $this->segments[] = new SequenceSegment(
                 chr($byte),
                 'C1 ' . C0C1::c1Name($byte),
+                $this->streamPos - 1,
             );
             $this->inFlightBytes = '';
+            $this->reanchorWindow();
         }
     }
 
@@ -499,7 +595,9 @@ final class AnsiHandler implements Handler
             $this->x10Armed = true;
             $this->x10Payload = '';
             $this->x10ArmRaw = $rawBytes;
+            $this->x10ArmOffset = $this->nextOffset();
             $this->inFlightBytes = '';
+            $this->reanchorWindow();
             return;
         }
         $this->recoverCancelledResidue($rawBytes);
@@ -510,8 +608,9 @@ final class AnsiHandler implements Handler
         // intermediate to refuse `ESC[!5m`-style shapes.
         $label = Inspector::describeCsi($describeInput, $finalChar);
 
-        $this->segments[] = new SequenceSegment($rawBytes, $label);
+        $this->segments[] = new SequenceSegment($rawBytes, $label, $this->nextOffset());
         $this->inFlightBytes = '';
+        $this->reanchorWindow();
     }
 
     /**
@@ -552,7 +651,9 @@ final class AnsiHandler implements Handler
             $this->flushText();
             $this->ss3Buffered = true;
             $this->ss3Intermediate = ord('O');
+            $this->ss3ArmOffset = $this->nextOffset();
             $this->inFlightBytes = '';
+            $this->reanchorWindow();
             return;
         }
 
@@ -565,6 +666,7 @@ final class AnsiHandler implements Handler
             $this->flushText();
             $this->awaitingStringTerminator = false;
             $this->inFlightBytes = '';
+            $this->reanchorWindow();
             return;
         }
         $this->awaitingStringTerminator = false;
@@ -583,8 +685,9 @@ final class AnsiHandler implements Handler
         $this->recoverCancelledResidue($rawBytes);
         $this->flushPendingSs3();
         $this->flushText();
-        $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeEsc(chr($final), $intermediateStr));
+        $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeEsc(chr($final), $intermediateStr), $this->nextOffset());
         $this->inFlightBytes = '';
+        $this->reanchorWindow();
     }
 
     public function oscDispatch(string $data): void
@@ -611,9 +714,11 @@ final class AnsiHandler implements Handler
         $this->segments[] = new SequenceSegment(
             "\x1b]{$data}\x07",
             Inspector::describeOsc($data),
+            $this->nextOffset(),
         );
         $this->awaitingStringTerminator = true;
         $this->inFlightBytes = '';
+        $this->reanchorWindow();
     }
 
     public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
@@ -661,10 +766,12 @@ final class AnsiHandler implements Handler
         $this->segments[] = new SequenceSegment(
             $rawBytes,
             Inspector::describeDcsParts($final, $params, $prefix, $intermediate, $data, $fullPayload),
+            $this->nextOffset(),
         );
 
         $this->awaitingStringTerminator = true;
         $this->inFlightBytes = '';
+        $this->reanchorWindow();
     }
 
     public function sosPmApcDispatch(string $kind, string $data): void
@@ -710,8 +817,9 @@ final class AnsiHandler implements Handler
             // introducer alone and leave its ST to be dispatched on its own.
             $this->flushText();
             $label = $kind === 'sos' ? Inspector::describeEsc('X') : Inspector::describeEsc('^');
-            $this->segments[] = new SequenceSegment("\x1b" . ($kind === 'sos' ? 'X' : '^'), $label);
+            $this->segments[] = new SequenceSegment("\x1b" . ($kind === 'sos' ? 'X' : '^'), $label, $this->nextOffset());
             $this->inFlightBytes = '';
+            $this->reanchorWindow();
             return;
         }
 
@@ -731,9 +839,10 @@ final class AnsiHandler implements Handler
             default => "{$kind} {$data}",
         };
 
-        $this->segments[] = new SequenceSegment($rawBytes, $label);
+        $this->segments[] = new SequenceSegment($rawBytes, $label, $this->nextOffset());
         $this->awaitingStringTerminator = true;
         $this->inFlightBytes = '';
+        $this->reanchorWindow();
     }
 
     /**
@@ -801,7 +910,8 @@ final class AnsiHandler implements Handler
             $this->flushPendingSs3();
             $this->flushText();
         }
-        $this->segments[] = new SequenceSegment($residue, Inspector::describeTruncated($residue) . ' — cancelled');
+        $this->segments[] = new SequenceSegment($residue, Inspector::describeTruncated($residue) . ' — cancelled', $this->nextOffset());
+        $this->windowEmitted += strlen($residue);
     }
 
     /**
@@ -828,8 +938,10 @@ final class AnsiHandler implements Handler
         $this->segments[] = new SequenceSegment(
             "\x1b" . chr($this->ss3Intermediate),
             'SS3 ' . chr($this->ss3Intermediate),
+            $this->ss3ArmOffset,
         );
         $this->ss3Buffered = false;
+        $this->ss3ArmOffset = null;
     }
 
     /**
@@ -850,7 +962,9 @@ final class AnsiHandler implements Handler
         // reports the same byte twice.
         $this->inFlightBytes = substr($this->inFlightBytes, strlen($this->x10Payload));
         $this->x10Payload = '';
-        $this->segments[] = new SequenceSegment($raw, 'X10 mouse report (incomplete payload)');
+        $this->segments[] = new SequenceSegment($raw, 'X10 mouse report (incomplete payload)', $this->x10ArmOffset);
+        $this->x10ArmOffset = null;
+        $this->reanchorWindow();
     }
 
     /**

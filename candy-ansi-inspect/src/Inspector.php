@@ -41,20 +41,42 @@ final class Inspector
         return (new AnsiHandler())->parse($input);
     }
 
-    /** Render parsed segments as a sequin-style report (one per line). */
-    public static function report(string $input): string
+    /** Render parsed segments as a sequin-style report (one per line).
+     *
+     * With `$showOffsets` each line is prefixed by the segment's byte offset
+     * in the input stream as `@<hex>` (finding 019) — the position column
+     * sequin prints, so a line from a multi-megabyte capture can be located
+     * by offset even when its normalised `raw()` bytes no longer grep-match
+     * the input.
+     */
+    public static function report(string $input, bool $showOffsets = false): string
     {
         $lines = [];
         foreach (self::parse($input) as $seg) {
-            $lines[] = $seg->describe();
+            $lines[] = self::formatSegment($seg, $showOffsets);
         }
         return implode("\n", $lines);
     }
 
     /**
+     * One report line for a segment: its `describe()` rendering, prefixed
+     * with the hex byte offset when $showOffsets is set and the segment
+     * carries a stream position (segments hand-constructed outside a parse
+     * are untracked and render without a prefix).
+     */
+    public static function formatSegment(Segment $seg, bool $showOffsets = false): string
+    {
+        $offset = $seg->byteOffset();
+        if ($showOffsets === false || $offset === null) {
+            return $seg->describe();
+        }
+        return sprintf('@%x', $offset) . '  ' . $seg->describe();
+    }
+
+    /**
      * Render parsed segments as a machine-readable JSON array.
      *
-     * Each entry: {"type": "text"|"sequence", "content": "...", "description": "..."}
+     * Each entry: {"type": "text"|"sequence", "content": "...", "description": "...", "byteOffset": int|null}
      *
      * @return string
      */
@@ -68,6 +90,10 @@ final class Inspector
      * reportAsJson() and the bin's `--json` streaming arm (finding 005: a
      * pipe under --json collects segments and encodes the same array shape).
      *
+     * `byteOffset` is the absolute input-stream position where the segment
+     * starts (null for hand-constructed segments) — an offset, not a raw
+     * length, so it stays truthful for the normalised shapes too (finding 019).
+     *
      * @param iterable<Segment> $segments
      */
     public static function encodeSegmentsJson(iterable $segments): string
@@ -78,6 +104,7 @@ final class Inspector
                 'type' => $seg instanceof TextSegment ? 'text' : 'sequence',
                 'content' => $seg->raw(),
                 'description' => $seg->describe(),
+                'byteOffset' => $seg->byteOffset(),
             ];
         }
         // JSON_THROW_ON_ERROR ensures a typed JsonException instead of false-return
