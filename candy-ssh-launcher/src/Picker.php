@@ -175,11 +175,13 @@ class Picker
                         }
                         return $matches[$this->cursor]['endpoint'];
                     case "\x1b[B":
+                    case "\x1bOB": /* SS3 Down — DECCKM application-cursor mode (-020) */
                         if ($this->cursor < count($matches) - 1) {
                             $this->cursor++;
                         }
                         break;
                     case "\x1b[A":
+                    case "\x1bOA": /* SS3 Up — DECCKM application-cursor mode (-020) */
                         if ($this->cursor > 0) {
                             $this->cursor--;
                         }

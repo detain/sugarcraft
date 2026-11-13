@@ -106,10 +106,30 @@ final class PickerInputIntegrityTest extends TestCase
     {
         // ESC O A (application-cursor-mode up) is one key event. Before SS3
         // was parsed, the final byte 'A' leaked into the filter as text —
-        // here only the deliberately-typed 'r' may survive.
+        // here only the deliberately-typed 'r' may survive. (-020 mapped
+        // the SS3 arrows: the chord still evaporates as navigation — at
+        // row 0 Up is a no-op — and never types.)
         [, $out, $p] = $this->drive("\x1bOAr\r");
         $this->assertSame('r', $this->filterOf($p));
         $this->assertFilterLinesCarryNoRawEsc($out);
+    }
+
+    /**
+     * -020 probe inverted: SS3 Down (\x1bOB) must move the cursor like its
+     * CSI sibling. Pre-fix, the switch had no \x1bOB case, the chord
+     * evaporated, and Enter picked row 0 while CSI-Down picked row 1.
+     */
+    public function testSs3DownMovesSelectionLikeCsiDown(): void
+    {
+        [, , $p] = $this->makePicker("\x1bOB\r");
+        $picked = $p->pick($this->threeEndpoints());
+        $this->assertNotNull($picked);
+        $this->assertSame('stage.example.com', $picked->host, 'SS3 Down must move to row 1 before Enter');
+
+        [, , $q] = $this->makePicker("\x1bOB\x1bOA\r");
+        $up = $q->pick($this->threeEndpoints());
+        $this->assertNotNull($up);
+        $this->assertSame('prod.example.com', $up->host, 'SS3 Up must undo SS3 Down at row 1');
     }
 
     public function testUnmappedCsiIsConsumedNotTyped(): void
