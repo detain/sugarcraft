@@ -1679,4 +1679,69 @@ final class GameTest extends TestCase
         $crashed->settleOnExit();
         self::assertFileDoesNotExist($file, 'crash-path persistence belongs to update(), not settleOnExit()');
     }
+
+    public function testSettleOnExitHandsBackTheBankedRunForTheAck(): void
+    {
+        // flappy-70 (finding -070): the bin reads the returned model to
+        // print the plain new-best ack — a banking settle must hand back the
+        // record-carrying instance, stamped so a repeat call is a no-op.
+        $dir = $this->hermeticConfigDir();
+        $g = new Game(
+            bird: Bird::spawn(0, 9.0),
+            pipes: [],
+            score: 12,
+            started: true,
+            configDir: $dir,
+        );
+        $out = $g->settleOnExit();
+
+        self::assertNotSame($g, $out, 'a banking settle hands back a new instance');
+        self::assertTrue($out->newRecord, 'the returned model must carry the shout flag');
+        self::assertSame(12, $out->settledScore, 'the stamp keeps the call idempotent');
+        self::assertSame($out, $out->settleOnExit(), 'a repeat settle is identity on the stamped model');
+    }
+
+    public function testSettleOnExitWithholdsTheBankedRunWhenTheSaveFails(): void
+    {
+        // flappy-70 companion arm: a record that never reached disk must not
+        // earn the ack line — settleOnExit returns the unstamped model.
+        // Child process so the flappy-17 announcement cannot litter the
+        // runner's stderr.
+        $dir = \sys_get_temp_dir() . '/candy-flappy-nobank-' . \uniqid();
+        \mkdir($dir, 0777, true);
+        $blocker = $dir . '/blocker';
+        \file_put_contents($blocker, '');
+        $child = $dir . '/nobank-child.php';
+        \file_put_contents($child, <<<'PHP'
+            <?php
+            require $argv[1];
+            use SugarCraft\Flappy\Bird;
+            use SugarCraft\Flappy\Game;
+            $g = new Game(
+                bird: Bird::spawn(Game::BIRD_COL, 9.0),
+                pipes: [],
+                score: 7,
+                started: true,
+                highScores: [],
+                configDir: $argv[2],
+            );
+            echo $g->settleOnExit() === $g ? 'same' : 'banked';
+            PHP,
+        );
+
+        [$exit, $out, $err] = self::runChild($child, [
+            \dirname(__DIR__) . '/vendor/autoload.php',
+            $blocker . '/nowhere',
+        ]);
+
+        try {
+            self::assertSame(0, $exit);
+            self::assertSame('same', $out, 'a failed write must not hand back the banked model');
+            self::assertStringContainsString('could not save the leaderboard', $err);
+        } finally {
+            @\unlink($child);
+            @\unlink($blocker);
+            @\rmdir($dir);
+        }
+    }
 }

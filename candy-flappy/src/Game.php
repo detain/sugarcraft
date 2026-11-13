@@ -759,29 +759,34 @@ final class Game implements Model
      * Process-boundary settle used by bin/candy-flappy after Program::run()
      * returns. `q`/Esc already settle inside update() via a batched Cmd; the
      * gap this closes is a signal death (Ctrl+C), where no KeyMsg ever ran
-     * and a live qualifying score would be lost. Idempotent: re-persisting
-     * the same list after `q` writes byte-identical JSON. A failed final
-     * save is reported there and then — see the catch — this method never
-     * throws and never touches the exit status.
+     * and a live qualifying score would be lost. Idempotent: the settledScore
+     * stamp means a repeat call after a banking one is a no-op. A failed
+     * final save is reported there and then — see the catch — this method
+     * never throws and never touches the exit status. Returns the settled
+     * model: the banked run with its new-record flag when this call landed a
+     * fresh record on disk (flappy-70's ack line reads it), otherwise the
+     * unchanged instance.
      */
-    public function settleOnExit(): void
+    public function settleOnExit(): Game
     {
         if ($this->crashed === true || $this->started === false || $this->score <= 0) {
-            return;
+            return $this;
         }
         // flappy-38: the run was already banked inside update() (settling
         // q/r) — merging the same score again would double-list it.
         if ($this->settledScore === $this->score) {
-            return;
+            return $this;
         }
         $merged = $this->withHighScore($this->score);
         if ($merged === $this) {
             // flappy-38: identity is the trigger — the list unchanged means
             // nothing earned a slot this run.
-            return;
+            return $this;
         }
+        $banked = false;
         try {
             $merged->persistHighScores();
+            $banked = true;
         } catch (\Throwable) {
             // flappy-17 (finding -017): PHP-03's split. The in-loop swallow
             // in persistCmd() stays right — a full disk must not kill a live
@@ -792,6 +797,13 @@ final class Game implements Model
             // pre-flight refusal — deliberately not Lang-routed.
             \fwrite(\STDERR, "candy-flappy: could not save the leaderboard\n");
         }
+        // flappy-70 (finding -070): hand back the settled model so the exit
+        // site can acknowledge a BANKED new best — but only when the write
+        // actually landed. The settledScore stamp keeps the call idempotent:
+        // a repeat settle sees the run as already banked. A failed save
+        // returns $this, so a record that never reached disk never earns
+        // the ack line.
+        return $banked ? $merged->mutate(['settledScore' => $this->score]) : $this;
     }
 
     /** Deferred leaderboard write (M18): the crash path and the settling

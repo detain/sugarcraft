@@ -238,7 +238,16 @@ if ($final instanceof Game) {
     // sanitised STDERR line) and never throws — a save failure cannot
     // replace the game's exit status, and there is no longer a swallow
     // here to repeat that law.
-    $final->settleOnExit();
+    $final = $final->settleOnExit();
+    // flappy-70 (finding -070): a quit that banked a new best tears the
+    // alternate screen down in the same tick without ever stating the
+    // result — the crash board at least renders its banner. After the
+    // restore, one plain line on stdout says what the run earned; a record
+    // whose save failed never reaches here (settleOnExit hands back the
+    // unstamped model on write failure).
+    if ($final->newRecord && $final->crashed === false) {
+        fwrite(STDOUT, 'candy-flappy: new best — ' . $final->score . "\n");
+    }
 }
 // m5: surface a signal death to the shell as the conventional 128+signo.
 $signal = $program->stopSignal();
