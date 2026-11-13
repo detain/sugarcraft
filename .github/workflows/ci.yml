@@ -496,6 +496,14 @@ jobs:
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
 
+      # The channel bundles (candy-msteams, candy-discord) are tested against the
+      # host tree: tests/bootstrap.php loads ../candy-code/vendor/autoload.php
+      # directly, and CI only installs the lib's own vendor/. Install the host
+      # vendor first so those cells can boot.
+      - name: Install host vendor (channel bundle tests)
+        if: matrix.lib == 'candy-msteams' || matrix.lib == 'candy-discord'
+        run: cd candy-code && composer install --prefer-dist --no-progress -n
+
       # rv-sec-5 (crush-review-1014): dependency vulnerability audit for the
       # flagship app. FAILS ONLY ON HIGH/CRITICAL advisories — low/medium are
       # ignored by severity so the gate stays actionable instead of rotting
