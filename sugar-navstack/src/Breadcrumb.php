@@ -93,6 +93,18 @@ final class Breadcrumb
      */
     private array $lastVisible = [];
 
+    /**
+     * Focus INTENT from setFocusedIndex() (NS-16); resolved against the
+     * visible set at each render — a stale field here never reaches a host.
+     */
+    private ?int $focusedRaw = null;
+
+    /**
+     * The focus the most recent render reflected (null when the intent
+     * fell off the visible set) — see {@see focusedIndex()}.
+     */
+    private ?int $focusedVisible = null;
+
     /** True between a scan() of the current output and the next render. */
     private bool $scanned = false;
 
@@ -197,8 +209,13 @@ final class Breadcrumb
 
     /**
      * Custom per-item renderer. The closure MUST return string|null:
-     * fn(NavigationItem $item, int $index): ?string.
+     * fn(NavigationItem $item, int $index, bool $focused): ?string.
      * Return null to fall back to the default (sanitized) title rendering.
+     *
+     * The third argument is the focus flag from {@see setFocusedIndex()}
+     * (NS-16) — true for exactly the one crumb whose stack index matches
+     * the intent at call time; 2-arg closures keep working, PHP ignores
+     * the extra positional argument (pinned).
      *
      * Returned strings are emitted RAW — see the trust split in the class
      * docblock; theme styling is preserved, sanitizing host data is the
@@ -370,6 +387,33 @@ final class Breadcrumb
     }
 
     /**
+     * Mark which crumb the item renderer should style as selected (NS-16).
+     *
+     * Intent only: the flag is handed to the renderer as its third
+     * argument at the NEXT render. A focus that is not in the visible set
+     * — beyond the stack, negative, or elided off the left edge — is
+     * treated as null, same clamp philosophy as {@see NavStack::popTo()}
+     * on an oversized index (NS-03): no throw, and
+     * {@see focusedIndex()} reports what the render actually reflected.
+     * `null` clears the selection.
+     */
+    public function setFocusedIndex(?int $index): self
+    {
+        $this->focusedRaw = $index;
+        return $this;
+    }
+
+    /**
+     * The focus the most recent render reflected: the raw intent when it
+     * survived into the visible set, otherwise null (NS-16). Renders
+     * without a stack (renderTitles(), empty renders) never carry focus.
+     */
+    public function focusedIndex(): ?int
+    {
+        return $this->focusedVisible;
+    }
+
+    /**
      * Render the current navigation stack as a breadcrumb string.
      *
      * Mirrors KevM/bubbleo Breadcrumb.render.
@@ -378,8 +422,9 @@ final class Breadcrumb
     {
         $items = $stack->items();
         if ($items === []) {
-            $this->lastVisible = [];
-            $this->scanned     = false;
+            $this->lastVisible    = [];
+            $this->scanned        = false;
+            $this->focusedVisible = null;
             $this->clearStamp();
             return '';
         }
@@ -387,7 +432,10 @@ final class Breadcrumb
         $titles = [];
         foreach ($items as $i => $item) {
             $title = $this->itemRenderer !== null
-                ? ($this->itemRenderer)($item, $i)
+                // NS-16: the third argument carries the focus flag; 2-arg
+                // host closures keep working (PHP extra-arg tolerance,
+                // pinned in BreadcrumbTest).
+                ? ($this->itemRenderer)($item, $i, $i === $this->focusedRaw)
                 : null;
 
             if ($title !== null && \is_string($title) === false) {
@@ -405,6 +453,10 @@ final class Breadcrumb
         // resolved against is the stack's state at render time.
         $this->stampedStack      = \WeakReference::create($stack);
         $this->stampedGeneration = $stack->generation();
+        // NS-16: focus survives only if its crumb survived the width math.
+        $this->focusedVisible = \in_array($this->focusedRaw, $this->lastVisible, true)
+            ? $this->focusedRaw
+            : null;
         return $out;
     }
 
@@ -427,8 +479,9 @@ final class Breadcrumb
     public function renderTitles(array $titles): string
     {
         if ($titles === []) {
-            $this->lastVisible = [];
-            $this->scanned     = false;
+            $this->lastVisible    = [];
+            $this->scanned        = false;
+            $this->focusedVisible = null;
             $this->clearStamp();
             return '';
         }
@@ -443,8 +496,10 @@ final class Breadcrumb
 
         $out = $this->doRender(\array_map([TitleSanitizer::class, 'sanitize'], $titles));
         // No stack was consumed: nothing to validate future dispatches
-        // against — clear any previous render stamp (NS-08).
+        // against — clear any previous render stamp (NS-08). There is no
+        // renderer path here either, so no crumb can carry focus (NS-16).
         $this->clearStamp();
+        $this->focusedVisible = null;
         return $out;
     }
 

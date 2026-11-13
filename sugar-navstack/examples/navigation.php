@@ -52,3 +52,12 @@ echo "--- Shell integration (explicit pushDirectory — nothing auto-detects; wa
 $shell = \SugarCraft\NavStack\Shell::new();
 $shell = $shell->pushDirectory('/home/user/projects/sugarcraft/src');
 echo "Shell crumb: " . $shell->renderBreadcrumb() . "\n";
+
+echo "\n--- Focus: the renderer is told which crumb is selected ---\n";
+$focusBc = (new \SugarCraft\NavStack\Breadcrumb())
+    ->setItemRenderer(static fn ($item, int $i, bool $focused = false): ?string => $focused ? '[' . $item->title . ']' : $item->title);
+$focusBc->setFocusedIndex(2);
+echo "focus 2:        " . $focusBc->render($nav2) . "\n";
+$focusBc->setFocusedIndex(99); // off the stack: treated as no selection
+echo "focus off-range: " . $focusBc->render($nav2) . ' -> focusedIndex(): '
+    . var_export($focusBc->focusedIndex(), true) . "\n";

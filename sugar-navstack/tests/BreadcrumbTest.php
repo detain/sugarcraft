@@ -601,4 +601,95 @@ final class BreadcrumbTest extends TestCase
         $this->assertSame('Alpha ›      › Beta', $out);
         $this->assertSame([0, 1, 2], $bc->visibleIndices());
     }
+
+    // ─── NS-16: focus visibility ─────────────────────────────────────────────
+
+    public function testTwoArgItemRendererClosuresKeepWorkingWithFocus(): void
+    {
+        $seen  = [];
+        $stack = (new NavStack())->push('A')->push('B')->push('C');
+        $bc    = (new Breadcrumb())->setItemRenderer(
+            // Exactly TWO parameters: the third focus argument must be
+            // silently tolerated by PHP (the back-compat contract).
+            function ($item, $i) use (&$seen): ?string {
+                $seen[] = $i;
+                return 'T' . $i;
+            }
+        );
+        $bc->setFocusedIndex(1);
+
+        $this->assertSame('T0 › T1 › T2', $bc->render($stack));
+        $this->assertSame([0, 1, 2], $seen);
+        $this->assertSame(1, $bc->focusedIndex());
+    }
+
+    public function testFocusedSurvivorSeesTrueExactlyOnce(): void
+    {
+        $flags = [];
+        $stack = (new NavStack())->push('A')->push('B')->push('C');
+        $bc    = (new Breadcrumb())->setItemRenderer(
+            static function ($item, $i, bool $focused = false) use (&$flags): ?string {
+                $flags[] = $focused;
+                return $focused ? 'SEL' : 'x';
+            }
+        );
+        $bc->setFocusedIndex(1);
+
+        $this->assertSame('x › SEL › x', $bc->render($stack));
+        $this->assertSame([false, true, false], $flags);
+        $this->assertSame(1, $bc->focusedIndex());
+    }
+
+    public function testFocusOffTheVisibleSetIsTreatedAsNull(): void
+    {
+        $flags = [];
+        $stack = (new NavStack())->push('Alpha')->push('Bravo')->push('Charlie')->push('Delta');
+        $bc    = (new Breadcrumb())
+            ->setMaxWidth(20)
+            ->setItemRenderer(static function ($item, $i, bool $focused = false) use (&$flags): ?string {
+                $flags[] = [$i, $focused];
+                return $focused ? 'SEL' : $item->title;
+            });
+        $bc->setFocusedIndex(0);
+
+        // The renderer still runs for every stack item (the flag marks the
+        // intent), but the focused crumb is elided by the width math — so
+        // NOTHING painted carries the selection and the accessor is null.
+        $this->assertSame('… Charlie › Delta', $bc->render($stack));
+        $this->assertSame([[0, true], [1, false], [2, false], [3, false]], $flags);
+        $this->assertSame([2, 3], $bc->visibleIndices());
+        $this->assertNull($bc->focusedIndex());
+
+        // A negative index is simply never a survivor — same clamp, no throw.
+        $bc->setFocusedIndex(-1);
+        $this->assertStringNotContainsString('SEL', $bc->render($stack));
+        $this->assertNull($bc->focusedIndex());
+    }
+
+    public function testNoFocusSetMeansEveryCrumbFalse(): void
+    {
+        $flags = [];
+        $stack = (new NavStack())->push('A')->push('B');
+        $bc    = (new Breadcrumb())->setItemRenderer(
+            static function ($item, $i, bool $focused = false) use (&$flags): ?string {
+                $flags[] = $focused;
+                return 'x';
+            }
+        );
+
+        $this->assertStringNotContainsString('SEL', $bc->render($stack));
+        $this->assertSame([false, false], $flags);
+        $this->assertNull($bc->focusedIndex());
+    }
+
+    public function testStackFreeRendersNeverCarryFocus(): void
+    {
+        $bc = new Breadcrumb();
+        $bc->setFocusedIndex(0);
+        $bc->renderTitles(['A', 'B']);
+        $this->assertNull($bc->focusedIndex(), 'renderTitles has no renderer path — intent cannot be reflected');
+
+        $bc->render(new NavStack()); // empty stack
+        $this->assertNull($bc->focusedIndex());
+    }
 }

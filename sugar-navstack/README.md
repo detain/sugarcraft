@@ -159,7 +159,9 @@ title is bound by `MAX_TITLE_BYTES` here as well (an oversized one throws just
 as on the stack path), but the list LENGTH stays the host's duty: N capped
 titles still cost N crumbs of width math (the trust notes under `Url` spell
 out why).
-`setItemRenderer(fn(NavigationItem, int): ?string)` customizes each crumb
+`setItemRenderer(fn(NavigationItem, int, bool $focused): ?string)` customizes
+each crumb (the third argument is the `setFocusedIndex()` flag; 2-arg
+closures keep working)
 (`null` falls back to the SANITIZED title, not the raw one) — width math runs
 on VISIBLE CELLS, so SGR escape bytes are excluded and a styled trail elides
 exactly where the plain one does. The honest exception is the cut: when the cap
@@ -262,6 +264,15 @@ the jumps the mouse zones serve — resolve a selected visible index against
 the rendered stack and `popTo()` it, and the guard is automatic (a selection
 past the end is a no-op). Mouse zones and key handling are two transports
 for one navigation operation; neither is privileged.
+
+The widget can also tell a renderer which crumb is selected:
+`setFocusedIndex(?int)` hands the item renderer a third argument,
+`bool $focused`, true for exactly the intended crumb (2-arg closures keep
+working unchanged). Focus is intent, not truth — an index beyond the stack,
+negative, or elided off the left edge is treated as no selection, and
+`focusedIndex()` reports what the most recent render actually reflected.
+Pair it with `visibleIndices()`: a key handler that sets focus is guaranteed
+to see, from one accessor, whether the selection survived the width math.
 
 ## Shell
 
