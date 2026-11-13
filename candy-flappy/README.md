@@ -202,7 +202,7 @@ Fall speed is clamped to `Projectile::TERMINAL_GRAVITY` (53 cells/sec) on every 
 
 ## Crash rules
 
-The game ends on any of three contacts, all handled identically:
+The game ends the instant any of three things happen, all handled identically:
 
 - **Floor** — the bird's row reaches `Game::HEIGHT` (row ≥ 18).
 - **Top wall** — the bird's row goes above the ceiling (row < 0). A hard flap into the top edge crashes just like the floor.
