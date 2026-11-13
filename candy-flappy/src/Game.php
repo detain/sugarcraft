@@ -634,6 +634,18 @@ final class Game implements Model
         return $g;
     }
 
+    /**
+     * flappy-87 (finding -079): the live set is a constant — stable id,
+     * constant period, constant Msg factory — so it is built ONCE per
+     * process and every reconcile compares memo identity instead of
+     * minting a throwaway object per frame. Sharing it across Game
+     * instances is safe for the same reason the id law makes restarts
+     * safe: nothing downstream mutates a Subscriptions object, Program's
+     * reconcile reads it (M6/M7 re-arm law: the memo still answers freshly
+     * on every cycle, and stand-downs keep returning null).
+     */
+    private static ?Subscriptions $liveSubscriptions = null;
+
     public function subscriptions(): ?Subscriptions
     {
         // The single source of the game cadence (C1/M11). A stable id means
@@ -655,7 +667,7 @@ final class Game implements Model
             || $this->colorProfile === ColorProfile::NoTty || $this->started === false) {
             return null;
         }
-        return (new Subscriptions())->withTick(
+        return self::$liveSubscriptions ??= (new Subscriptions())->withTick(
             self::TICK_SUBSCRIPTION,
             self::TICK_SECONDS,
             static fn(): Msg => new TickMsg(),

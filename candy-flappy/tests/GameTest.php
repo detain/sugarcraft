@@ -748,6 +748,21 @@ final class GameTest extends TestCase
         $this->assertNull($cmd);
     }
 
+    /**
+     * flappy-87 (finding -079): the live set is a process constant, so two
+     * distinct live boards must ANSWER WITH ONE OBJECT — the memo — instead
+     * of minting a fresh Subscriptions per reconcile frame.
+     */
+    public function testLiveSubscriptionsAreMemoisedAcrossBoards(): void
+    {
+        $a = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $b = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        [$b, ] = $b->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertNotNull($a->subscriptions());
+        $this->assertSame($a->subscriptions(), $b->subscriptions(), 'the live set must be one memoised object');
+    }
+
     public function testRestartWhileAliveEmitsNoFreshTimerChain(): void
     {
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
