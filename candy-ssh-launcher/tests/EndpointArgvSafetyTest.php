@@ -112,4 +112,76 @@ final class EndpointArgvSafetyTest extends TestCase
             $this->assertStringContainsString('opt', $ex->getMessage());
         }
     }
+
+    public function testRemoteCommandRidesAfterTheDestination(): void
+    {
+        // -007: ssh(1) synopsis is `ssh [options] destination [command]` —
+        // the command is the token AFTER the destination, never behind `--`
+        // (that slot would demote the destination itself to command text).
+        $e = new Endpoint(
+            name: 'kprod',
+            host: 'k.test',
+            user: 'admin',
+            remoteCommand: 'kubectl exec -it bash',
+        );
+        $this->assertSame(
+            ['ssh', '--', 'admin@k.test', 'kubectl exec -it bash'],
+            $e->toSshArgv(),
+        );
+    }
+
+    public function testRemoteCommandLeadingDashThrows(): void
+    {
+        // A leading-dash command would land in an option-shaped slot of the
+        // remote argv-0; the shared guard refuses it by field name.
+        $e = new Endpoint(name: 'bad', host: 'b.test', remoteCommand: '-oProxyCommand=calc');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('field [remoteCommand]');
+        $e->toSshArgv();
+    }
+
+    public function testFlagsLaneEmitsDashPrefixedLetters(): void
+    {
+        // -033: `-t`/`-N` are not `-o`-able; the lane carries letters and
+        // adds the dash at argv build, before the destination boundary.
+        $e = new Endpoint(name: 'tty', host: 'p.test', flags: ['t', 'N']);
+        $this->assertSame(['ssh', '-t', '-N', '--', 'p.test'], $e->toSshArgv());
+    }
+
+    public function testFlagWithLeadingDashThrows(): void
+    {
+        // The lane takes letters: an entry that already carries a dash is a
+        // smuggling attempt (e.g. '-oProxyCommand=calc') and is refused by
+        // field name — the very misuse the letters-only rule closes.
+        $e = new Endpoint(name: 'bad', host: 'b.test', flags: ['-N']);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('field [flag]');
+        $e->toSshArgv();
+    }
+
+    public function testEmptyFlagItemSkipped(): void
+    {
+        // An empty flag is config noise, never a bare '-' token on argv.
+        $e = new Endpoint(name: 'tty', host: 'p.test', flags: ['t', '', 'N']);
+        $this->assertSame(['ssh', '-t', '-N', '--', 'p.test'], $e->toSshArgv());
+    }
+
+    public function testIdentityLeadingDashNowThrows(): void
+    {
+        // -074: the identity slot's OpenSSH-only exemption is gone — on
+        // dropbear/busybox a leading-dash `-i` value re-parses as an option,
+        // so identity files pass the same guard as every other argv value.
+        $e = new Endpoint(name: 'id', host: 'i.test', identityFiles: ['-oProxyCommand=calc']);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('field [identityFile]');
+        $e->toSshArgv();
+    }
+
+    public function testEmptyIdentityItemStillSkips(): void
+    {
+        // The guard added to the lane must not regress the empty-skip:
+        // '' has nothing to inject and used to (correctly) pass silently.
+        $e = new Endpoint(name: 'id', host: 'i.test', identityFiles: ['', '/k.pem']);
+        $this->assertSame(['ssh', '-i', '/k.pem', '--', 'i.test'], $e->toSshArgv());
+    }
 }

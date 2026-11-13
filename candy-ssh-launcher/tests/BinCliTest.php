@@ -434,6 +434,27 @@ final class BinCliTest extends TestCase
         $this->assertStringNotContainsString('-- b.test', $output, 'the untouched second endpoint never launched');
     }
 
+    public function testRemoteCommandRidesThePositionalEndToEnd(): void
+    {
+        // -007 acceptance: a kubectl-attach wishlist row must survive the
+        // whole path — ingest, argv build, dispatch — with the command in
+        // ssh's positional slot AFTER the destination (fake ssh /bin/echo
+        // prints the argv it received).
+        $cfg = $this->writeFixture(implode("\n", [
+            '- name: kprod',
+            '  host: k.test',
+            '  remote_command: kubectl exec -it bash',
+        ]) . "\n");
+
+        [$code, $output] = $this->runUnderPty(
+            ['--config', $cfg, '--ssh', '/bin/echo'],
+            selectKey: "\r",
+        );
+
+        $this->assertSame(0, $code, 'pty output: ' . $this->printable($output));
+        $this->assertStringContainsString('-- k.test kubectl exec -it bash', $this->printable($output));
+    }
+
     /**
      * Run the bin on a pty of its own via util-linux `script -qec` (the
      * candy-tetris BinaryLaunchTest shape): -e propagates the child's exit

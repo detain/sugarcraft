@@ -129,6 +129,27 @@ final class EndpointMutateTest extends TestCase
         $this->assertSame(['StrictHostKeyChecking=no'], $e2->options);
     }
 
+    public function testWithFlagsReturnsNewInstance(): void
+    {
+        // -033: the flags lane follows the same immutable-setter contract.
+        $e = $this->baseEndpoint();
+        $e2 = $e->withFlags(['t']);
+        $this->assertNotSame($e, $e2);
+        $this->assertSame([], $e->flags);
+        $this->assertSame(['t'], $e2->flags);
+    }
+
+    public function testWithRemoteCommandReturnsNewInstance(): void
+    {
+        // -007: command positional is immutable too; null rides as "no command".
+        $e = $this->baseEndpoint();
+        $e2 = $e->withRemoteCommand('htop');
+        $this->assertNotSame($e, $e2);
+        $this->assertNull($e->remoteCommand);
+        $this->assertSame('htop', $e2->remoteCommand);
+        $this->assertNull($e2->withRemoteCommand(null)->remoteCommand);
+    }
+
     public function testChainedWithCallsWork(): void
     {
         $e = $this->baseEndpoint();

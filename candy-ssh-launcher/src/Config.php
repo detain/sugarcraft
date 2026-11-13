@@ -54,14 +54,15 @@ final class Config
      */
     private const KNOWN_FIELDS = [
         'name', 'host', 'port', 'user', 'description', 'options',
-        'identityFiles', 'proxyJump',
+        'identityFiles', 'proxyJump', 'flags', 'remoteCommand',
     ];
 
     /**
      * Documented alternative spellings, resolved BEHIND their canonical key
      * (canonical wins when both are present): `proxy_jump`/`identity_files`
      * are the upstream array spellings (-004's migration footgun),
-     * `identity_file`/`identityFile` the historically accepted singulars.
+     * `identity_file`/`identityFile` the historically accepted singulars,
+     * `remote_command` the ssh-config-ish snake of `remoteCommand` (-007).
      *
      * @var array<string,string>
      */
@@ -70,6 +71,7 @@ final class Config
         'identity_file'  => 'identityFiles',
         'identityFile'   => 'identityFiles',
         'proxy_jump'     => 'proxyJump',
+        'remote_command' => 'remoteCommand',
     ];
 
     /**
@@ -474,6 +476,22 @@ final class Config
             self::assertScalar('options', $o);
             $opts[] = (string) $o;
         }
+        // -033: the `flags` lane is the same list shape as `options`, but the
+        // entries are ssh(1) flag LETTERS (`t`, `N`) — the dash is added at
+        // argv build, where the leading-dash guard rejects payload smuggling.
+        $flags = [];
+        foreach (self::normalizeList($row['flags'] ?? null) as $f) {
+            self::assertScalar('flags', $f);
+            $flags[] = (string) $f;
+        }
+        // -007: remoteCommand resolves through the alias chain like proxyJump:
+        // canonical first, upstream-ish `remote_command` spelling behind it.
+        $remoteCommand = isset($row['remoteCommand']) && $row['remoteCommand'] !== null
+            ? $row['remoteCommand']
+            : ($row['remote_command'] ?? null);
+        if ($remoteCommand !== null) {
+            self::assertScalar('remoteCommand', $remoteCommand);
+        }
         $identityFiles = [];
         // F-4: a leading ~ on an identity path expands here, against $HOME
         // (passwd fallback, loud refusal) — the same semantics the ssh_config
@@ -507,6 +525,8 @@ final class Config
             description:  isset($row['description']) ? (string) $row['description'] : null,
             proxyJump:     $proxyJump !== null ? (string) $proxyJump : null,
             options:      $opts,
+            flags:        $flags,
+            remoteCommand: $remoteCommand !== null ? (string) $remoteCommand : null,
         );
     }
 

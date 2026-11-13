@@ -319,16 +319,52 @@ final class ConfigFailLoudTest extends TestCase
         self::assertSame('', $warnings, 'documented aliases must not warn');
     }
 
+    public function testRemoteCommandSnakeAliasBindsWithoutWarning(): void
+    {
+        // -007: remote_command joins the documented alias table; a row using
+        // the snake spelling binds remoteCommand, rides the command positional
+        // at argv build, and stays quiet on the unknown-key channel.
+        $raw = "- name: kprod\n  host: k.test\n  remote_command: kubectl exec -it bash\n";
+        [$endpoints, $warnings] = $this->withWarningCapture(
+            static fn () => Config::parse($raw, 'wishlist.yml')
+        );
+        self::assertSame('kubectl exec -it bash', $endpoints[0]->remoteCommand);
+        self::assertSame(
+            ['ssh', '--', 'k.test', 'kubectl exec -it bash'],
+            $endpoints[0]->toSshArgv(),
+            'the command must ride after the destination (ssh synopsis)',
+        );
+        self::assertSame('', $warnings, 'documented aliases must not warn');
+    }
+
+    public function testFlagsListAndScalarShorthandBind(): void
+    {
+        // -033: the flags lane shares the options list machinery — nested
+        // `- item` lines plus the bare-scalar one-item shorthand.
+        $raw = "- name: tty\n  host: t.test\n  flags:\n    - t\n    - N\n"
+             . "- name: single\n  host: s.test\n  flags: X\n";
+        [$endpoints, $warnings] = $this->withWarningCapture(
+            static fn () => Config::parse($raw, 'wishlist.yml')
+        );
+        self::assertSame(['t', 'N'], $endpoints[0]->flags);
+        self::assertSame(['ssh', '-t', '-N', '--', 't.test'], $endpoints[0]->toSshArgv());
+        self::assertSame(['X'], $endpoints[1]->flags);
+        self::assertSame(['ssh', '-X', '--', 's.test'], $endpoints[1]->toSshArgv());
+        self::assertSame('', $warnings);
+    }
+
     public function testCanonicalKeyWinsOverItsAlias(): void
     {
         // Documented precedence (FIELD_ALIASES): canonical first, alias fills.
         $json = '[{"name":"prod","host":"p.test","proxyJump":"a.test","proxy_jump":"b.test",'
-            . '"identityFiles":["/a"],"identity_files":["/b"]}]';
+            . '"identityFiles":["/a"],"identity_files":["/b"],'
+            . '"remoteCommand":"a.cmd","remote_command":"b.cmd"}]';
         [$endpoints, $warnings] = $this->withWarningCapture(
             static fn () => Config::parse($json, 'wishlist.json')
         );
         self::assertSame('a.test', $endpoints[0]->proxyJump);
         self::assertSame(['/a'], $endpoints[0]->identityFiles);
+        self::assertSame('a.cmd', $endpoints[0]->remoteCommand, '-007: canonical beats alias here too');
         self::assertSame('', $warnings);
     }
 

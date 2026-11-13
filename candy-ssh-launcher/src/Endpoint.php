@@ -24,6 +24,7 @@ final class Endpoint
 
     /**
      * @param array<string> $identityFiles
+     * @param list<string>  $flags ssh(1) flag letters, emitted as `-<letter>` before the destination
      *
      * @throws \RuntimeException when $port is outside {@see MIN_PORT}-{@see MAX_PORT}
      */
@@ -37,6 +38,9 @@ final class Endpoint
         public readonly ?string      $proxyJump = null,
         /** @var list<string> Extra `-o KEY=VALUE` options for ssh */
         public readonly array         $options = [],
+        /** @var list<string> ssh(1) flag letters (`t`, `N`), emitted as `-t`, `-N` */
+        public readonly array         $flags = [],
+        public readonly ?string       $remoteCommand = null,
     ) {
         self::assertPort($name, $port);
         // -023: README documents `name` as required (non-empty) — mirror the
@@ -97,7 +101,9 @@ final class Endpoint
 
     /**
      * Build the argv list for `ssh(1)`. The first element is the
-     * binary name (`ssh`); the rest is the flags + destination.
+     * binary name (`ssh`); the rest is options, the destination and —
+     * per the ssh(1) synopsis `ssh [options] destination [command]` —
+     * an optional remote command riding after the destination.
      * Suitable for `pcntl_exec($argv[0], array_slice($argv, 1))`.
      *
      * @return list<string>
@@ -109,16 +115,33 @@ final class Endpoint
             $argv[] = '-p';
             $argv[] = (string) $this->port;
         }
+        // -033: boolean-flag lane — `-A`/`-t`/`-T`/`-N`/`-f`/`-X` carry no
+        // value and are not expressible through `-o`. Entries are the flag
+        // LETTERS; the leading-dash guard refuses an entry that already
+        // carries one, so the lane cannot smuggle a stand-alone option
+        // (or a `-N`-style payload) past the `--` boundary design.
+        // Empty entries are config noise: skipped, never a bare `-`.
+        foreach ($this->flags as $flag) {
+            if ($flag === '') {
+                continue;
+            }
+            $this->assertNotOption('flag', $flag);
+            $argv[] = '-' . $flag;
+        }
         // Emit one `-i <file>` pair per identity file, preserving order.
         // Previously only identityFiles[0] was passed, silently dropping every
         // additional key ssh(1) should have been offered.
-        // No assertNotOption here on purpose: ssh always consumes the token
-        // after `-i` as the filename, so a leading-dash value cannot turn
-        // into an option — unlike the free-standing values guarded below.
+        // -074: identity values now pass the same leading-dash guard as every
+        // other argv token. The old exemption trusted an OpenSSH-only contract
+        // ("ssh consumes the next token after -i") while this project ships to
+        // alternate clients too (README documents dropbear/busybox, whose getopt
+        // re-parses a `-` value into an option). Defense in depth: no value
+        // reaches argv starting with a dash. Empty entries still skip.
         foreach ($this->identityFiles as $identityFile) {
             if ($identityFile === '') {
                 continue;
             }
+            $this->assertNotOption('identityFile', $identityFile);
             $argv[] = '-i';
             $argv[] = $identityFile;
         }
@@ -145,6 +168,16 @@ final class Endpoint
             : $this->host;
         $this->assertNotOption('host', $dest);
         $argv[] = $dest;
+        // -007: the ssh(1) synopsis is `ssh [options] destination [command]` —
+        // the remote command is the POSITIONAL after the destination, not a
+        // token behind `--` (that would turn the destination itself into the
+        // command). One argv element: ssh re-joins the command words verbatim,
+        // so `kubectl exec -it bash` rides unchanged. A leading dash would land
+        // in the command's own argv-0 position — same guard, refused by name.
+        if ($this->remoteCommand !== null && $this->remoteCommand !== '') {
+            $this->assertNotOption('remoteCommand', $this->remoteCommand);
+            $argv[] = $this->remoteCommand;
+        }
         return $argv;
     }
 
@@ -223,5 +256,19 @@ final class Endpoint
     public function withOptions(array $options): self
     {
         return $this->mutate(['options' => $options]);
+    }
+
+    /**
+     * @param list<string> $flags ssh(1) flag letters without the dash
+     */
+    public function withFlags(array $flags): self
+    {
+        return $this->mutate(['flags' => $flags]);
+    }
+
+    public function withRemoteCommand(?string $remoteCommand): self
+    {
+        // Null is valid here (plain interactive session, no command positional).
+        return $this->mutate(['remoteCommand' => $remoteCommand]);
     }
 }
