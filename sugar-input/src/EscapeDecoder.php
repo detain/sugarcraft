@@ -33,7 +33,8 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
  *    {@see \SugarCraft\Input\Event\TerminalReplyEvent}, never left in the
  *    buffer and never mis-parsed as a keystroke.
  *
- * Mirrors charmbracelet/bubbletea's input handling.
+ * Mirrors charmbracelet/bubbletea's sequence parser — the key.go and
+ * parse.go legs that mint its `tea.KeyMsg`/`tea.MouseMsg` values.
  */
 final class EscapeDecoder
 {

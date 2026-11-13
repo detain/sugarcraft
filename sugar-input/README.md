@@ -525,4 +525,4 @@ MIT
 
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
 
-The decoding semantics follow [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea)'s input handling; the class docblocks cite it as the reference (as do the tests, e.g. the deferred-trailing-ESC strategy). It decodes the same sequences that the kernel and terminal emulators produce.
+The decoding semantics follow [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea): each class docblock names its concrete antecedent (`tea.KeyMsg`, `tea.MouseMsg`, `input.Mod`, `tea.PasteMsg`, `tea.WindowSizeMsg`, ...), as do the tests (e.g. the deferred-trailing-ESC strategy). It decodes the same sequences that the kernel and terminal emulators produce.

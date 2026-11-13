@@ -14,7 +14,8 @@ namespace SugarCraft\Input;
  * translation happens exclusively in `fromKittyInt()`, `fromXtermParam()`
  * and `fromSgrMouse()` — never cast a raw wire field onto these constants.
  *
- * Mirrors charmbracelet/bubbletea's input handling.
+ * Mirrors charmbracelet/bubbletea's `input.Mod` bitmask — the modifier
+ * state carried with a key, translated from each protocol's wire bits.
  */
 final class KeyModifier
 {

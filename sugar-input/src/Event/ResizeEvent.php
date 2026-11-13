@@ -14,7 +14,7 @@ use SugarCraft\Input\Event;
  * every consumer has to re-check (fail-fast at the boundary, the same
  * house law the paste cap follows).
  *
- * Mirrors charmbracelet/bubbletea's input handling.
+ * Mirrors charmbracelet/bubbletea's `tea.WindowSizeMsg`.
  *
  * Instances are immutable value objects: every field is fixed at construction.
  */

@@ -12,7 +12,8 @@ use SugarCraft\Input\Event;
  * CSI I  = focus gained  (DECSET 1004 report)
  * CSI O  = focus lost    (DECSET 1004 report)
  *
- * Mirrors charmbracelet/bubbletea's input handling.
+ * Mirrors charmbracelet/bubbletea's `tea.FocusMsg`/`tea.BlurMsg` pair
+ * (focus.go): gained=true for the first, gained=false for the second.
  *
  * Instances are immutable value objects: every field is fixed at construction.
  */

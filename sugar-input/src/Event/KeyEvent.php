@@ -10,7 +10,7 @@ use SugarCraft\Input\KeyModifier;
 /**
  * A keyboard event — plain key or escape sequence decoded key.
  *
- * Mirrors charmbracelet/bubbletea's input handling.
+ * Mirrors charmbracelet/bubbletea's `tea.KeyMsg` (key.go).
  *
  * Instances are immutable value objects: every field is fixed at construction.
  */

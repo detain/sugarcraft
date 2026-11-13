@@ -19,7 +19,7 @@ use SugarCraft\Input\Lang;
  * $truncated, and truncationNotice() renders the library's translated
  * 'paste.truncated' one-liner suitable for display.
  *
- * Mirrors charmbracelet/bubbletea's input handling.
+ * Mirrors charmbracelet/bubbletea's `tea.PasteMsg`.
  *
  * Instances are immutable value objects: every field is fixed at construction.
  */
