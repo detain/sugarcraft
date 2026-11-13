@@ -416,11 +416,13 @@ final class DecoderTest extends TestCase
     }
 
     /**
-     * M-09: a file over MAX_INPUT_BYTES is refused on the stat, BEFORE the
-     * slurp — a sparse allocation proves the order (read-then-check would
-     * instead reach the header walk and name not_gif/truncated).
+     * SA-D1 (-027, engine twin of gifview-16): a file over MAX_INPUT_BYTES
+     * is refused by the BOUNDED READ ITSELF — at most cap + 1 bytes are
+     * pulled and the length seen decides. A sparse allocation still proves
+     * the order (the old stat-then-slurp ladder named the size from a
+     * promise made a syscall earlier; the refusal now comes from the read).
      */
-    public function testOversizedFileIsRefusedBeforeItIsRead(): void
+    public function testOversizedFileIsRefusedByTheBoundedRead(): void
     {
         $path = sys_get_temp_dir() . '/anim-huge-' . uniqid() . '.gif';
         $handle = fopen($path, 'wb');
@@ -432,11 +434,42 @@ final class DecoderTest extends TestCase
             $this->fail('expected a RuntimeException refusal');
         } catch (\RuntimeException $e) {
             $this->assertSame(
-                'sugar-animation: file is too large (maximum ' . Decoder::MAX_INPUT_BYTES . ' bytes)',
+                'sugar-animation: file is too large (maximum 64 MiB)',
                 $e->getMessage()
             );
         } finally {
             @unlink($path);
         }
+    }
+
+    /**
+     * SA-D1 (-001b): resident bytes face the same ceiling — handing bytes
+     * directly to decodeBytes cannot steer past the file gate.
+     */
+    public function testDecodeBytesRefusesInputOverTheCeiling(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('sugar-animation: file is too large (maximum 64 MiB)');
+        Decoder::decodeBytes(str_repeat("\x00", Decoder::MAX_INPUT_BYTES + 1), 2, 2);
+    }
+
+    /** SA-D1 (-043): a directory names itself, it is not reported as missing. */
+    public function testDirectoryRefusesWithNotAFile(): void
+    {
+        $dir = sys_get_temp_dir();
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('sugar-animation: not a file: ' . $dir);
+        Decoder::readFile($dir);
+    }
+
+    /** SA-D1 (-053): the refusal ceiling renders in binary units. */
+    public function testHumanBytesRendersBinaryUnits(): void
+    {
+        $this->assertSame('64 MiB', Decoder::humanBytes(67108864));
+        $this->assertSame('1 MiB', Decoder::humanBytes(1048576));
+        $this->assertSame('1.5 KiB', Decoder::humanBytes(1536));
+        $this->assertSame('0 B', Decoder::humanBytes(0));
+        $this->assertSame('1023 B', Decoder::humanBytes(1023));
+        $this->assertSame('1 TiB', Decoder::humanBytes(1024 ** 4));
     }
 }

@@ -57,16 +57,50 @@ final class Decoder
     public const MAX_FRAMES = 256;
 
     /**
-     * Maximum file size accepted by the disk-reading entry points —
-     * {@see self::readFile()} and {@see AnsiArt::fromFile()} — checked on the
-     * stat, BEFORE the file is slurped. The three caps above bound decoding
-     * and compositing; they engage only once the bytes are already resident,
-     * so the slurp itself was the one unbounded step. 64 MiB matches the
-     * candy-gifview host gate, so the library refuses no file its flagship
-     * viewer would have played. Bytes handed in through decodeBytes() /
-     * AnsiArt::fromString() are already resident — the caller's budget there.
+     * Upper bound on the bytes the file entry points may ever buffer —
+     * {@see self::readFile()} and {@see AnsiArt::fromFile()} read at most
+     * this + 1 and decide on the length actually seen (SA-D1, the engine
+     * twin of candy-gifview's gifview-16 cure): no check-then-read ladder a
+     * growing file can slip, and a stat that cannot express the size fails
+     * CLOSED instead of skipping the gate. {@see self::decodeBytes()} and
+     * {@see AnsiArt::fromString()} enforce the same ceiling on already
+     * resident bytes so a host cannot steer past the cap, but the memory
+     * cost there is the caller's own. 64 MiB matches the candy-gifview host
+     * gate, so the library refuses no file its flagship viewer would have
+     * played. The other caps above bound decoding and compositing once the
+     * bytes exist.
      */
     public const MAX_INPUT_BYTES = 64 * 1024 * 1024;
+
+    /**
+     * Headroom over {@see self::MAX_FRAMES} the header walk tolerates before
+     * it fails loud (SA-D1, -001): the legal path slices a flood down to
+     * MAX_FRAMES silently, but a stream carrying more than cap + slack
+     * descriptors is a pathological file, and the walk must stop mid-scan
+     * instead of appending unboundedly and slicing at the return.
+     */
+    private const FRAME_WALK_SLACK = 256;
+
+    /**
+     * Render a byte count the way the refusal messages promise: "64 MiB",
+     * not "67108864 bytes" (SA-D1, -053). Binary units, up to two decimals
+     * with trailing zeros trimmed.
+     */
+    public static function humanBytes(int $bytes): string
+    {
+        $units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+        $magnitude = 0;
+        $value = (float) abs($bytes);
+        while ($value >= 1024 && $magnitude < count($units) - 1) {
+            $value /= 1024;
+            $magnitude++;
+        }
+        $number = $magnitude === 0 || floor($value) === $value
+            ? (string) (int) $value
+            : rtrim(rtrim(sprintf('%.2f', $value), '0'), '.');
+
+        return ($bytes < 0 ? '-' : '') . $number . ' ' . $units[$magnitude];
+    }
 
     /**
      * Decode a GIF file on disk into a list of {@see Frame}s.
@@ -94,17 +128,34 @@ final class Decoder
      */
     public static function readFile(string $path): string
     {
+        if (is_dir($path)) {
+            // -043: a directory is not "no such file" — name the observed shape.
+            throw new \RuntimeException(Lang::t('decoder.not_a_file', ['path' => $path]));
+        }
         if (is_file($path) === false) {
             throw new \RuntimeException(Lang::t('decoder.no_file', ['path' => $path]));
         }
-        $size = filesize($path);
-        if ($size !== false && $size > self::MAX_INPUT_BYTES) {
-            throw new \RuntimeException(Lang::t('decoder.input_too_large', ['max' => (string) self::MAX_INPUT_BYTES]));
+        // -027 (engine twin of gifview-16): the gate IS the read, not a
+        // promise made one syscall earlier. The old ladder — a filesize look,
+        // then a whole-file file_get_contents — failed both halves: a file
+        // that grew between the two calls slipped past the cap, and a stat
+        // that cannot express the size (false on any cleared-cache race) let
+        // the check fail OPEN. Here at most MAX_INPUT_BYTES + 1 bytes are
+        // ever pulled and the length actually seen decides. The +1 of
+        // headroom is the whole point: reading AT the cap could not tell
+        // "exactly at the cap" from "grew past it mid-read".
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException(Lang::t('decoder.unreadable', ['path' => $path]));
         }
-        $bytes = file_get_contents($path);
+        $bytes = stream_get_contents($handle, self::MAX_INPUT_BYTES + 1);
+        fclose($handle);
         if ($bytes === false) {
             // Read refusal is not "not a GIF" — the bytes were never even seen.
             throw new \RuntimeException(Lang::t('decoder.unreadable', ['path' => $path]));
+        }
+        if (strlen($bytes) > self::MAX_INPUT_BYTES) {
+            throw new \RuntimeException(Lang::t('decoder.input_too_large', ['max' => self::humanBytes(self::MAX_INPUT_BYTES)]));
         }
 
         return $bytes;
@@ -248,6 +299,14 @@ final class Decoder
     {
         if (extension_loaded('gd') === false) {
             throw new \RuntimeException(Lang::t('decoder.no_gd'));
+        }
+        // -001b / SA-D1: the size ceiling is the FIRST thing that speaks —
+        // already-resident bytes face the same line as the file entry points,
+        // so a host cannot steer past the gate by handing bytes in directly,
+        // and an oversized stream is named as oversized rather than as a
+        // malformed GIF.
+        if (strlen($bytes) > self::MAX_INPUT_BYTES) {
+            throw new \RuntimeException(Lang::t('decoder.input_too_large', ['max' => self::humanBytes(self::MAX_INPUT_BYTES)]));
         }
         // 13 = signature (6) + Logical Screen Descriptor (7). Anything shorter
         // has no dimensions to speak of — it is not a GIF, and parseHeader()
@@ -737,6 +796,14 @@ final class Decoder
                         'frameW' => $visibleW,
                         'frameH' => $visibleH,
                     ];
+                    // -001: stop INSIDE the walk once the list is hopelessly
+                    // past the cap — the old shape appended unboundedly and
+                    // sliced at the return, so a crafted flood paid the full
+                    // allocation before the cap ever bit. Within cap + slack
+                    // the silent slice below still clips the legal-256 path.
+                    if (count($frameInfos) > self::MAX_FRAMES + self::FRAME_WALK_SLACK) {
+                        throw new \RuntimeException(Lang::t('decoder.too_many_frames', ['max' => (string) self::MAX_FRAMES]));
+                    }
                 }
                 // Skip image data: the one-byte LZW minimum code size (and the
                 // Local Color Table when the descriptor declared one), then the
@@ -750,7 +817,8 @@ final class Decoder
             // Unexpected byte — step forward cautiously.
             $i++;
         }
-        // Cap pathological GIFs at MAX_FRAMES so the decoder doesn't OOM.
+        // The walk above already refused anything past cap + slack; this
+        // slice is the documented silent clip for the (256, 512] range.
         return [
             'width' => $width,
             'height' => $height,

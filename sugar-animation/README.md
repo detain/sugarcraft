@@ -107,7 +107,7 @@ The decoder is hand-rolled over the GIF89a byte stream — it never loads the wh
 4. Reassemble a minimal single-frame GIF payload in memory and pass it to `imagecreatefromstring()`.
 5. Area-average downsample the resulting `GdImage` to the requested cell grid, skipping fully transparent pixels in the average.
 
-The caps — 256 frames, a 2,000,000-pixel logical screen, and a 100,000-cell output grid — bound decoding and compositing; on top of them, the file entry points (`Decoder::readFile()`, `Decoder::decode()`, `AnsiArt::fromFile()` — and with it `ArtLibrary`) refuse any file larger than `Decoder::MAX_INPUT_BYTES` (64 MiB) on the stat, before a single byte is read. Bytes you hand in yourself — `Decoder::decodeBytes()`, `AnsiArt::fromString()` — are already resident, so their size is your budget to keep.
+The caps — 256 frames, a 2,000,000-pixel logical screen, and a 100,000-cell output grid — bound decoding and compositing; the header walk also fails loud (`decoder.too_many_frames`) once a stream carries more than 512 frame descriptors, so a flood never pays its full allocation before the cap bites. On top of the caps, the file entry points (`Decoder::readFile()`, `Decoder::decode()`, `AnsiArt::fromFile()` — and with it `ArtLibrary`) read at most `Decoder::MAX_INPUT_BYTES` (64 MiB) **+ 1 byte** and refuse on the length actually seen — the gate *is* the bounded read, so a file growing mid-read cannot slip a check-then-read gap and a stat that cannot express the size fails closed rather than open. Bytes you hand in yourself — `Decoder::decodeBytes()`, `AnsiArt::fromString()` — are already resident, but the same ceiling is enforced before the walk, so the line can never be steered around.
 
 ## Architecture
 

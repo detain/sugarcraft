@@ -154,6 +154,23 @@ final class DecoderHostileCorpusTest extends TestCase
         self::assertLessThanOrEqual(300, count($frames));
     }
 
+    /**
+     * SA-D1 (-001): beyond cap + slack (512) the header walk fails loud
+     * INSIDE the scan — the 300-frame flood above still rides the silent
+     * clip, but a flood with no chance of being kept must not pay its full
+     * descriptor allocation before the cap bites.
+     */
+    public function testFrameFloodPastTheSlackThrowsDuringTheWalk(): void
+    {
+        $bytes = $this->head(2, 2)
+            . str_repeat($this->gce(1, 0) . $this->desc(0, 0, 1, 1) . $this->lzw(1, 1), 600)
+            . "\x3B";
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('sugar-animation: too many frames (maximum 256)');
+        Decoder::decodeBytes($bytes, 2, 2);
+    }
+
     public function testGctFlagMismatchWalkStaysContained(): void
     {
         // GCT flag OFF but size-exp bits SET: the parser trusts the flag

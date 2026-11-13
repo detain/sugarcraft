@@ -406,11 +406,12 @@ final class AnsiArtTest extends TestCase
     }
 
     /**
-     * M-09: art files share the Decoder::MAX_INPUT_BYTES gate — the refusal
-     * rides the stat, so a sparse allocation over the line never gets slurped
-     * (read-then-check would reach the parser and name a different refusal).
+     * M-09 / SA-D1: art files share the Decoder::MAX_INPUT_BYTES ceiling —
+     * the refusal now rides the bounded read (length actually seen, cap + 1
+     * headroom), so a growing file cannot slip the old stat-then-slurp gap;
+     * a sparse allocation over the line still never reaches the parser.
      */
-    public function testOversizedArtFileIsRefusedBeforeItIsRead(): void
+    public function testOversizedArtFileIsRefusedByTheBoundedRead(): void
     {
         $path = sys_get_temp_dir() . '/anim-huge-' . uniqid() . '.ansi';
         $handle = fopen($path, 'wb');
@@ -422,7 +423,7 @@ final class AnsiArtTest extends TestCase
             $this->fail('expected a RuntimeException refusal');
         } catch (RuntimeException $e) {
             $this->assertSame(
-                'sugar-animation: file is too large (maximum ' . Decoder::MAX_INPUT_BYTES . ' bytes)',
+                'sugar-animation: file is too large (maximum 64 MiB)',
                 $e->getMessage()
             );
         } finally {
