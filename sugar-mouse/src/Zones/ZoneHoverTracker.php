@@ -39,6 +39,17 @@ final class ZoneHoverTracker
     private ?string $pendingEnterId;
 
     /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(Manager $manager, ?string $currentZoneId = null, ?string $pendingEnterId = null): self
+    {
+        return new self($manager, $currentZoneId, $pendingEnterId);
+    }
+
+
+    /**
      * @param Manager $manager Zone manager that has already run scan().
      * @param ?string $currentZoneId Currently hovered zone id, null initially.
      */

@@ -19,6 +19,17 @@ use SugarCraft\Core\Msg\MouseMsg;
  */
 final class MsgZoneInBounds implements Msg
 {
+    /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(Zone $zone, MouseMsg $mouse): self
+    {
+        return new self($zone, $mouse);
+    }
+
+
     public function __construct(
         public readonly Zone $zone,
         public readonly MouseMsg $mouse,

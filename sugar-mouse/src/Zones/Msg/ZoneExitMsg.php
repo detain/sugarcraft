@@ -17,6 +17,17 @@ use SugarCraft\Mouse\Zones\Zone;
  */
 final class ZoneExitMsg implements Msg
 {
+    /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(Zone $zone): self
+    {
+        return new self($zone);
+    }
+
+
     public function __construct(
         public readonly Zone $zone,
     ) {}

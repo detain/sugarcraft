@@ -35,6 +35,17 @@ final class Zone
      */
     private readonly MouseZone $geometry;
 
+    /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(string $id, int $startCol, int $startRow, int $endCol, int $endRow): self
+    {
+        return new self($id, $startCol, $startRow, $endCol, $endRow);
+    }
+
+
     public function __construct(
         public readonly string $id,
         public readonly int $startCol,

@@ -12,6 +12,17 @@ namespace SugarCraft\Mouse;
  */
 final readonly class MouseEvent
 {
+    /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(int $x, int $y, int $button, MouseAction $action): self
+    {
+        return new self($x, $y, $button, $action);
+    }
+
+
     public function __construct(
         public int $x,
         public int $y,

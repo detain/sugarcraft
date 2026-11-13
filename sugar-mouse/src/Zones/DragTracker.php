@@ -42,6 +42,17 @@ final class DragTracker
     private ?MouseButton $dragButton;
 
     /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(Manager $manager, ?string $originZoneId = null, ?string $currentZoneId = null, ?MouseButton $dragButton = null): self
+    {
+        return new self($manager, $originZoneId, $currentZoneId, $dragButton);
+    }
+
+
+    /**
      * @param Manager $manager Zone manager that has already run scan().
      * @param ?string $originZoneId Zone id where the drag started, null when not dragging.
      * @param ?string $currentZoneId Zone id mouse is currently in, null when not dragging.

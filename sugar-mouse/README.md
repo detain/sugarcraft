@@ -56,7 +56,7 @@ $zone = $scanner->hit(4, 1); // Zone 'btn-ok'
 // 4. A click fires only when the release's fresh re-hit agrees with the
 //    press zone on id AND box — resolve each event against the frame it
 //    arrived in; never reuse the press-side zone for the release.
-$tracker = new ZoneClickTracker();
+$tracker = ZoneClickTracker::new();
 $tracker->track(MouseEvent::press(4, 1), $scanner->hit(4, 1));
 $click = $tracker->track(MouseEvent::release(4, 1), $scanner->hit(4, 1));
 if ($click !== null) {
@@ -65,6 +65,10 @@ if ($click !== null) {
 ```
 
 ## Key classes
+
+Every class that takes constructor arguments exposes the canonical
+`::new()` factory (same signature; the constructor stays public for BC —
+the house convention from AGENTS.md, landed in SM-S31).
 
 | Class | Role |
 |---|---|
@@ -85,6 +89,7 @@ if ($click !== null) {
 
 | Class | Member | When to use it |
 |---|---|---|
+| all classes | `::new(...)` | House factory with the constructor's exact signature (`Zone`, `MouseEvent`, `ClickResult`, `ZoneClickTracker`, `Zones\*` trackers, `Zones\Zone`, `MsgZoneInBounds`, every `Msg\*`) — the constructor remains public for BC |
 | `Mark` | `new()` / `disabled()` | Marking-enabled / marking-off instance |
 | `Mark` | `zone(id, content)` | Static one-shot wrap through an always-enabled marker |
 | `Mark` | `wrap(id, content)` | Encode one zone on an instance (honours its enabled flag) |
@@ -582,7 +587,7 @@ $manager = new Manager();
 $manager->scan($manager->mark('btn', 'OK'));  // registry knows 'btn' (row 1, cols 1-2)
 $mouseMsg = new MouseMsg(1, 1, MouseButton::None, MouseAction::Motion);
 
-$tracker = new ZoneHoverTracker($manager);
+$tracker = ZoneHoverTracker::new($manager);
 
 [$tracker, $msg] = $tracker->update($mouseMsg);
 if ($msg instanceof ZoneEnterMsg) {
@@ -641,7 +646,7 @@ $manager = new Manager();
 $manager->scan($manager->mark('btn', 'OK'));  // registry knows 'btn' (row 1, cols 1-2)
 $mouseMsg = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
 
-$tracker = new DragTracker($manager);
+$tracker = DragTracker::new($manager);
 
 [$tracker, $msg] = $tracker->update($mouseMsg);
 if ($msg instanceof ZoneDragStartMsg) {
@@ -703,7 +708,7 @@ own `ZoneClickTracker`; `ClickCounter` remains loadable as a deprecated
 alias). It emits `DoubleClickMsg` on the second press
 and `TripleClickMsg` on the third press — all within a configurable
 click interval (default 500 ms — a pointer-timing tolerance, not a law:
-`new MultiClickTracker($manager, clickIntervalMs: N)` widens the window, and
+`MultiClickTracker::new($manager, clickIntervalMs: N)` widens the window, and
 apps should consider exposing it as a setting for users with tremor or
 reduced dexterity, per the Accessibility section). The streak resets when the interval
 expires or when a PRESS lands in a different zone (or outside every zone);
@@ -724,7 +729,7 @@ $manager = new Manager();
 $manager->scan($manager->mark('btn', 'OK'));  // registry knows 'btn' (row 1, cols 1-2)
 $mouseMsg = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
 
-$counter = new MultiClickTracker($manager);
+$counter = MultiClickTracker::new($manager);
 
 [$counter, $msg] = $counter->update($mouseMsg);
 if ($msg instanceof DoubleClickMsg) {

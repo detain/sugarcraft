@@ -43,6 +43,16 @@ final class ZoneClickTracker
     private array $pending = [];
 
     /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
+    /**
      * Feed a mouse event and receive a ClickResult if the event completes
      * a clean Press+Release pair on the same zone.
      *

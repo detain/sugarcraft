@@ -17,6 +17,17 @@ use SugarCraft\Mouse\Zones\Zone;
 final class ZoneDragStartMsg implements Msg
 {
     /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(Zone $originZone, Zone $currentZone): self
+    {
+        return new self($originZone, $currentZone);
+    }
+
+
+    /**
      * @param Zone $originZone The zone the drag started from.
      * @param Zone $currentZone The zone the mouse is in when drag starts
      *                          (same as originZone at start; diverges on

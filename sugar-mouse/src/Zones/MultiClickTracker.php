@@ -56,6 +56,17 @@ final class MultiClickTracker
     private readonly ?\Closure $now;
 
     /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(Manager $manager, int $clickIntervalMs = 500, ?callable $now = null): self
+    {
+        return new self($manager, $clickIntervalMs, $now);
+    }
+
+
+    /**
      * @param Manager $manager Zone manager that has already run scan().
      * @param int $clickIntervalMs Window in milliseconds within which successive
      *                              clicks count toward a double/triple (default 500ms).

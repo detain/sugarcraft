@@ -23,6 +23,17 @@ namespace SugarCraft\Mouse;
 final class Zone
 {
     /**
+     * House `::new()` factory - same signature as the public
+     * constructor, which stays public for BC (SM-S31, gate G12
+     * house-convention half).
+     */
+    public static function new(string $id, int $startCol, int $startRow, int $endCol, int $endRow): self
+    {
+        return new self($id, $startCol, $startRow, $endCol, $endRow);
+    }
+
+
+    /**
      * @param string $id      Zone identifier — matches the id passed to {@see Mark::wrap()}.
      * @param int    $startCol Leftmost column (1-based).
      * @param int    $startRow Topmost row (1-based).
