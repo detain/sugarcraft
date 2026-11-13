@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => 'عرض/ارتفاع الرسم البياني المبعثر يجب أن يكون >= 0',
     'chart.dim_nonneg'         => 'يجب أن يكون عرض/ارتفاع الرسم >= 0',
     'finite.non_finite'        => 'يجب أن تكون قيمة الرسم نهائية، وقد حصل على {value}',
+// Support/Rune.php
+    'rune.empty'               => 'يجب أن يكون {name} خانة واحدة مرئية، لا فارغة',
+    'rune.width_one'           => 'يجب أن يشغل {name} خانة واحدة بالضبط، تم تقديم {cells} خانات',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'يجب أن تكون نقاط TimeSeries أزواجًا [DateTimeImmutable، رقمي]، تم تقديم {given}',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'يجب أن تحتوي قائمة أعمدة OHLC على نسخ Bar فقط، تم تقديم {given}',
 ];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Canvas;
 
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
@@ -83,6 +84,10 @@ final class Graph
      */
     public static function drawHLine(Canvas $c, int $y, int $x0, int $x1, ?Style $style = null, string $rune = '─'): void
     {
+        // sugar-charts-013: single-cell rune door (covers the whole
+        // horizontal family — drawHorizontalLineLeft/Right and drawRows
+        // all delegate here).
+        $rune = Rune::cell($rune, 'Graph horizontal rune');
         if ($x0 > $x1) { [$x0, $x1] = [$x1, $x0]; }
         for ($x = $x0; $x <= $x1; $x++) {
             $c->setCell($x, $y, $rune, $style);
@@ -92,6 +97,10 @@ final class Graph
     /** Draw a vertical line at column `$x` from row `$y0` to `$y1`. */
     public static function drawVLine(Canvas $c, int $x, int $y0, int $y1, ?Style $style = null, string $rune = '│'): void
     {
+        // sugar-charts-013: single-cell rune door (covers the whole
+        // vertical family — drawColumn, drawVerticalLineUp/Down,
+        // drawColumns and drawCandlestick all delegate here).
+        $rune = Rune::cell($rune, 'Graph vertical rune');
         if ($y0 > $y1) { [$y0, $y1] = [$y1, $y0]; }
         for ($y = $y0; $y <= $y1; $y++) {
             $c->setCell($x, $y, $rune, $style);
@@ -195,6 +204,8 @@ final class Graph
         Canvas $c, int $x0, int $y0, int $x1, int $y1,
         string $rune = '·', ?Style $style = null,
     ): void {
+        // sugar-charts-013: single-cell rune door.
+        $rune = Rune::cell($rune, 'Graph line rune');
         $dx = abs($x1 - $x0);
         $dy = -abs($y1 - $y0);
         $sx = $x0 < $x1 ? 1 : -1;
@@ -256,6 +267,8 @@ final class Graph
         Canvas $c, int $x0, int $y0, int $x1, int $y1,
         string $rune = ' ', ?Style $style = null,
     ): void {
+        // sugar-charts-013: single-cell rune door.
+        $rune = Rune::cell($rune, 'Graph fill rune');
         if ($x0 > $x1) { [$x0, $x1] = [$x1, $x0]; }
         if ($y0 > $y1) { [$y0, $y1] = [$y1, $y0]; }
         for ($y = $y0; $y <= $y1; $y++) {

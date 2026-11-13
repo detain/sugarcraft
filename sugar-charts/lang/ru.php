@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => 'ширина/высота точечной диаграммы должна быть >= 0',
     'chart.dim_nonneg'         => 'ширина/высота диаграммы должны быть >= 0',
     'finite.non_finite'        => 'значение диаграммы должно быть конечным, получено {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} должен быть одной видимой ячейкой, а не пустым',
+    'rune.width_one'           => '{name} должен занимать ровно одну ячейку, передано {cells} ячеек',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'Точки TimeSeries должны быть кортежами [DateTimeImmutable, число], передано {given}',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'Список столбцов OHLC должен содержать только экземпляры Bar, передано {given}',
 ];

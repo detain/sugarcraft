@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => 'dağılım grafiği genişlik/yüksekliği >= 0 olmalıdır',
     'chart.dim_nonneg'         => 'grafik genişliği/yüksekliği >= 0 olmalıdır',
     'finite.non_finite'        => 'grafik değeri sonlu olmalıdır, alınan: {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} tek bir görünür hücre olmalı, boş olmamalı',
+    'rune.width_one'           => '{name} tam olarak bir hücre kapmalı, {cells} hücre verildi',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'TimeSeries noktaları [DateTimeImmutable, sayısal] demetleri olmalı, {given} verildi',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'OHLC çubuk listesi yalnızca Bar örnekleri içermeli, {given} verildi',
 ];

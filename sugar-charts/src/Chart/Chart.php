@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Chart;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\UntrustedText;
+use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Theme;
@@ -278,7 +279,7 @@ abstract class Chart
     public function withLegendStyle(?string $indicatorChar = null): self
     {
         return $this->copy(
-            legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar),
+            legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'),
             legendIndicatorCharSet: true,
         );
     }

@@ -83,7 +83,7 @@ final class UntrustedTextTest extends TestCase
             BarChart::new([[$poison, 1.0]], 5, 2)->view(),
             BarChart::new([["a", 1.0]], 5, 2)->withXLabel($poison)->view(),
             BarChart::new([["a", 1.0]], 5, 2)->withYLabel($poison)->view(),
-            Heatmap::new([[1.0]])->withRune($poison)->view(),
+            Heatmap::new([[1.0]])->view(),
             Legend::new([['label' => $poison, 'color' => 'red']])->view(),
         ];
         foreach ($views as $i => $view) {
@@ -92,6 +92,18 @@ final class UntrustedTextTest extends TestCase
             $this->assertStringNotContainsString("\u{202e}", $view, "view {$i} leaked bidi override");
             $this->assertStringNotContainsString("\n\n\n", $view, "view {$i} gained smuggled rows");
         }
+    }
+
+    /**
+     * CH-01 (sugar-charts-013): the Heatmap fill rune moved from
+     * sweep-and-store to refuse-at-door — the swept poison spells a
+     * multi-cell remainder, and a fill rune must be exactly one cell.
+     */
+    public function testPoisonedHeatmapRuneIsRefusedAtTheDoor(): void
+    {
+        $poison = "\x1b]0;evil-title\x07\u{202e}\n";
+        $this->expectException(\InvalidArgumentException::class);
+        Heatmap::new([[1.0]])->withRune($poison);
     }
 
     public function testNewlineSmugglingCannotAddRowsToABarFrame(): void

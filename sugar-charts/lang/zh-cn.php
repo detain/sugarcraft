@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => '散点图宽/高必须 >= 0',
     'chart.dim_nonneg'         => '图表宽度/高度必须 >= 0',
     'finite.non_finite'        => '图表值必须是有限值，实际为 {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} 必须是单个可见单元格，不能为空',
+    'rune.width_one'           => '{name} 必须恰好占一个单元格，给定 {cells} 个单元格',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'TimeSeries 点必须是 [DateTimeImmutable, 数值] 元组，给定 {given}',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'OHLC 条形列表只能包含 Bar 实例，给定 {given}',
 ];

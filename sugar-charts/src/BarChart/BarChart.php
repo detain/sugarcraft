@@ -8,6 +8,7 @@ use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
+use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Core\Util\Color;
@@ -302,7 +303,7 @@ final class BarChart
     /** Customize legend indicator character. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar), legendIndicatorCharSet: true);
+        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'), legendIndicatorCharSet: true);
     }
 
     /** Set the chart title. */

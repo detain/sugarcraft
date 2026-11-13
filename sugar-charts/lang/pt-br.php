@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => 'a largura/altura do gráfico de dispersão deve ser >= 0',
     'chart.dim_nonneg'         => 'a largura/altura do gráfico deve ser >= 0',
     'finite.non_finite'        => 'o valor do gráfico deve ser finito, obtido {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} deve ser uma única célula visível, não vazia',
+    'rune.width_one'           => '{name} deve ocupar exatamente uma célula, {cells} células fornecidas',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'Os pontos do TimeSeries devem ser tuplas [DateTimeImmutable, numérico], {given} fornecido',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'A lista de barras OHLC deve conter apenas instâncias de Bar, {given} fornecido',
 ];

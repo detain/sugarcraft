@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => '散布図の幅/高さは >= 0 である必要があります',
     'chart.dim_nonneg'         => 'チャートの幅/高さは >= 0 である必要があります',
     'finite.non_finite'        => 'チャートの値は有限である必要があります。取得値: {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} は単一の表示セルである必要があります（空にできません）',
+    'rune.width_one'           => '{name} は正確に 1 セルを占める必要があります（{cells} セル指定）',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'TimeSeries の点は [DateTimeImmutable, 数値] タプルである必要があります（指定: {given}）',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'OHLC バーリストには Bar インスタンスのみを含められます（指定: {given}）',
 ];

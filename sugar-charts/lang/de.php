@@ -43,4 +43,13 @@ return [
     'scatter.dim_nonneg'       => 'Streudiagramm-Breite/-Höhe muss >= 0 sein',
     'chart.dim_nonneg'         => 'Diagrammbreite/-höhe muss >= 0 sein',
     'finite.non_finite'        => 'Diagrammwert muss endlich sein, erhalten: {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} muss eine einzelne sichtbare Zelle sein, nicht leer',
+    'rune.width_one'           => '{name} muss genau eine Zelle belegen, {cells} Zellen angegeben',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'TimeSeries-Punkte müssen [DateTimeImmutable, numerisch]-Tupel sein, {given} angegeben',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'Die OHLC-Balkenliste darf nur Bar-Instanzen enthalten, {given} angegeben',
 ];

@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => 'szerokość/wysokość wykresu punktowego musi być >= 0',
     'chart.dim_nonneg'         => 'szerokość/wysokość wykresu musi wynosić >= 0',
     'finite.non_finite'        => 'wartość wykresu musi być skończona, otrzymano {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} musi być pojedynczą widoczną komórką, nie pustą',
+    'rune.width_one'           => '{name} musi zajmować dokładnie jedną komórkę, podano {cells} komórek',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'Punkty TimeSeries muszą być krotkami [DateTimeImmutable, liczbowe], podano {given}',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'Lista słupków OHLC może zawierać wyłącznie instancje Bar, podano {given}',
 ];

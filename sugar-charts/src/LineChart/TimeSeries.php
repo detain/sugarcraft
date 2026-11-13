@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\LineChart;
 
+use SugarCraft\Charts\Lang;
+
 /**
  * Time-series LineChart variant. Wraps {@see LineChart} but accepts
  * `[\DateTimeImmutable, value]` tuples and renders X-axis labels
@@ -15,16 +17,39 @@ namespace SugarCraft\Charts\LineChart;
  */
 final class TimeSeries
 {
+    /**
+     * Point tuples as validated by the constructor door
+     * (sugar-charts-064): `[DateTimeImmutable, numeric]` pairs only, so a
+     * mis-typed element throws at ingestion instead of exploding as a deep
+     * TypeError inside `view()`.
+     *
+     * @var list<array{0:\DateTimeImmutable,1:int|float}>
+     */
+    public readonly array $points;
+
     /** @param list<array{0:\DateTimeImmutable,1:int|float}> $points */
     private function __construct(
-        public readonly array $points,
+        array $points,
         public readonly int $width,
         public readonly int $height,
         public readonly string $timeFormat,
         public readonly int $xLabelCount,
         public readonly ?\DateTimeImmutable $rangeStart = null,
         public readonly ?\DateTimeImmutable $rangeEnd = null,
-    ) {}
+    ) {
+        foreach ($points as $p) {
+            if (
+                !is_array($p) || count($p) < 2
+                || !$p[0] instanceof \DateTimeImmutable
+                || !is_numeric($p[1])
+            ) {
+                throw new \InvalidArgumentException(Lang::t('timeseries.point_shape', [
+                    'given' => get_debug_type($p),
+                ]));
+            }
+        }
+        $this->points = array_values($points);
+    }
 
     /** @param list<array{0:\DateTimeImmutable,1:int|float}> $points */
     public static function new(array $points = [], int $width = 40, int $height = 8): self

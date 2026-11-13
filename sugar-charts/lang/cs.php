@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => 'šířka/výška bodového grafu musí být >= 0',
     'chart.dim_nonneg'         => 'šířka/výška grafu musí být >= 0',
     'finite.non_finite'        => 'hodnota grafu musí být konečná, získáno {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} musí být jeden viditelný symbol, ne prázdný',
+    'rune.width_one'           => '{name} musí zabírat přesně jeden symbol, zadáno {cells} symbolů',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'Body TimeSeries musí být tuple [DateTimeImmutable, číslo], zadáno {given}',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'Seznam sloupců OHLC musí obsahovat pouze instance Bar, zadáno {given}',
 ];

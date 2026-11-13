@@ -47,4 +47,14 @@ return [
 
     // Support/Finite.php
     'finite.non_finite'        => 'chart value must be finite, got {value}',
+
+    // Support/Rune.php
+    'rune.empty'               => '{name} must be a single visible cell, not empty',
+    'rune.width_one'           => '{name} must occupy exactly one cell, {cells} cells given',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'TimeSeries points must be [DateTimeImmutable, numeric] tuples, {given} given',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'OHLC bar list must contain only Bar instances, {given} given',
 ];

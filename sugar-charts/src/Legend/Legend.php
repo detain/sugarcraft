@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Legend;
 
 use SugarCraft\Charts\Chart\Position;
+use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
@@ -29,13 +30,20 @@ use SugarCraft\Style\Style;
  */
 final class Legend
 {
+    /**
+     * Indicator glyph as stored after the {@see \SugarCraft\Charts\Support\Rune}
+     * ingress door (sugar-charts-013): declared and assigned in the
+     * constructor body so only the guarded single-cell value can be stored.
+     */
+    public readonly string $indicatorChar;
     /** @param list<array{label: string, color: string}> $items */
     private function __construct(
         public readonly array $items,
         public readonly Position $position,
-        public readonly string $indicatorChar,
+        string $indicatorChar,
         public readonly bool $showBorder,
     ) {
+        $this->indicatorChar = Rune::cell($indicatorChar, 'legend indicator');
     }
 
     /**

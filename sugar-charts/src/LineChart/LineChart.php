@@ -11,6 +11,7 @@ use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Support\Range;
+use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Charts\Canvas\BrailleGrid;
@@ -45,6 +46,15 @@ use SugarCraft\Style\Theme;
  */
 final class LineChart extends Chart
 {
+    /**
+     * Point glyph as stored after the {@see \SugarCraft\Charts\Support\Rune}
+     * ingress door (single display cell, control bytes swept). Declared
+     * here and assigned in the constructor instead of promoted so the
+     * guarded value — never the raw caller string — is what lands on the
+     * readonly property.
+     */
+    public readonly string $point;
+
     /**
      * Auto-legend color cycle for {@see withDataset()}. Ordered for
      * color-blind safety: the old first pair (red, green) is the classic
@@ -84,7 +94,7 @@ final class LineChart extends Chart
         int $height,
         public readonly ?float $min,
         public readonly ?float $max,
-        public readonly string $point,
+        string $point,
         public readonly array $datasets    = [],
         public readonly array $datasetPoints = [],
         public readonly bool $showAxes     = false,
@@ -159,6 +169,15 @@ final class LineChart extends Chart
             throw new \InvalidArgumentException(
                 'dataset-point name ' . self::PRIMARY_SERIES . ' is reserved for the primary data series',
             );
+        }
+
+        // Ingress doors (sugar-charts-001/-013): every rune stored here is
+        // painted one cell at a time, so each passes the single-cell guard
+        // in the constructor — the one sweep point covering new(),
+        // withPoint()/point() and every lineChartCopy() rebuild.
+        $this->point = Rune::cell($point, 'line chart point rune');
+        foreach ($datasetPoints as $seriesName => $seriesRune) {
+            $datasetPoints[$seriesName] = Rune::cell((string) $seriesRune, 'line chart dataset point rune');
         }
     }
 
@@ -466,7 +485,7 @@ final class LineChart extends Chart
     public function withLegendStyle(?string $indicatorChar = null): self
     {
         return $this->lineChartCopy(
-            legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar),
+            legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'),
             legendIndicatorCharSet: true,
         );
     }
@@ -578,7 +597,7 @@ final class LineChart extends Chart
      */
     public function legendItems(array $items): self
     {
-        return $this->lineChartCopy(legendItems: $items);
+        return $this->lineChartCopy(legendItems: UntrustedText::guardItems($items));
     }
 
     // ─── Animation Support ──────────────────────────────────────────────

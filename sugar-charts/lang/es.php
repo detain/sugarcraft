@@ -43,4 +43,13 @@ return [
     'scatter.dim_nonneg'       => 'el ancho/alto del diagrama de dispersión debe ser >= 0',
     'chart.dim_nonneg'         => 'el ancho/alto del gráfico debe ser >= 0',
     'finite.non_finite'        => 'el valor del gráfico debe ser finito, se obtuvo {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} debe ser una sola celda visible, no vacía',
+    'rune.width_one'           => '{name} debe ocupar exactamente una celda, se indicaron {cells} celdas',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'Los puntos de TimeSeries deben ser tuplas [DateTimeImmutable, numérico], se recibió {given}',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'La lista de barras OHLC debe contener solo instancias de Bar, se recibió {given}',
 ];

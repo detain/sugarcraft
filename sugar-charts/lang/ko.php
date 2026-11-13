@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => '산점도 너비/높이는 >= 0이어야 합니다',
     'chart.dim_nonneg'         => '차트 너비/높이는 0 이상이어야 합니다',
     'finite.non_finite'        => '차트 값은 유한해야 하며, 다음 값을 받았습니다: {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name}은(는) 단일 표시 셀이어야 하며 비워 둘 수 없습니다',
+    'rune.width_one'           => '{name}은(는) 정확히 한 셀을 차지해야 하며 {cells}셀이 제공되었습니다',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'TimeSeries 점은 [DateTimeImmutable, 숫자] 튜플이어야 하며 {given}이(가) 제공되었습니다',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'OHLC 막대 목록에는 Bar 인스턴스만 포함할 수 있으며 {given}이(가) 제공되었습니다',
 ];

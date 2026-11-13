@@ -26,4 +26,13 @@ return [
     'scatter.dim_nonneg'       => 'spreidingsdiagram breedte/hoogte moet >= 0 zijn',
     'chart.dim_nonneg'         => 'breedte/hoogte van de grafiek moet >= 0 zijn',
     'finite.non_finite'        => 'de grafiekwaarde moet eindig zijn, gekregen {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} moet één zichtbare cel zijn, niet leeg',
+    'rune.width_one'           => '{name} moet exact één cel innemen, {cells} cellen opgegeven',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'TimeSeries-punten moeten [DateTimeImmutable, numeriek]-tupels zijn, {given} gegeven',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'De OHLC-balklijst mag alleen Bar-instanties bevatten, {given} gegeven',
 ];

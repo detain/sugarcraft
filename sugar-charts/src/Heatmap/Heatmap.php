@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Heatmap;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\Range;
+use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
@@ -36,6 +37,12 @@ use SugarCraft\Style\Style;
 final class Heatmap
 {
     /**
+     * Fill rune as stored after the {@see \SugarCraft\Charts\Support\Rune}
+     * ingress door (sugar-charts-013): declared and assigned in the
+     * constructor body so only the guarded single-cell value can be stored.
+     */
+    public readonly string $rune;
+    /**
      * Monochrome density ramp, lightest to densest. Seven evenly spaced
      * steps keep the buckets visually distinguishable at cell size.
      */
@@ -53,7 +60,7 @@ final class Heatmap
         public readonly int $height,
         public readonly ?float $min,
         public readonly ?float $max,
-        public readonly string $rune,
+        string $rune,
         public readonly Color $coldColor,
         public readonly Color $hotColor,
         public readonly ColorProfile $profile,
@@ -68,6 +75,10 @@ final class Heatmap
         }
         // pinned value range must be finite and ordered.
         Range::pin($min, $max, 'value');
+        // sugar-charts-013: the fill rune is repainted on every cell — one
+        // sweep point in the constructor covers new(), withRune()/rune()
+        // and every copy() rebuild.
+        $this->rune = Rune::cell($rune, 'heatmap fill rune');
     }
 
     /** @param list<list<int|float>> $grid */

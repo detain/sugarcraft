@@ -6,7 +6,6 @@ namespace SugarCraft\Charts\Tests\Heatmap;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\Heatmap\Heatmap;
-use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Core\Util\Color;
 
 /**
@@ -63,21 +62,26 @@ final class HeatmapMonoRampTest extends TestCase
 
     public function testRuneIsGuardedAgainstTerminalInjection(): void
     {
+        // CH-01 (sugar-charts-013): the sweep-and-store posture was
+        // upgraded to refuse-at-door — a swept poison still spells a
+        // multi-cell remainder (or empty), and a fill rune must occupy
+        // exactly one cell. The door throws instead of storing a broken
+        // claim; no ESC byte can reach any frame because the rune never
+        // enters the object at all.
         $poisoned = "\x1b[2J" . "\x1b]8;;http://evil\x07prompt\x0end";
-        $h = Heatmap::new([[1.0]])->withRune($poisoned);
-
-        $this->assertSame(UntrustedText::guard($poisoned), $h->rune);
-        $this->assertStringNotContainsString("\x1b", $h->rune);
-        $this->assertStringNotContainsString("\x07", $h->rune);
-        $this->assertStringNotContainsString("\x0e", $h->rune);
-        $this->assertStringNotContainsString("\x1b[2J", $h->view());
+        $h = Heatmap::new([[1.0]])->withRune('▓');
+        $this->assertSame('▓', $h->rune);
+        $this->expectException(\InvalidArgumentException::class);
+        $h->withRune($poisoned);
     }
 
     public function testWithRuneAliasSharesTheGuard(): void
     {
-        $h = Heatmap::new([[1.0]])->rune("\nblock");
-        $this->assertStringStartsWith(' ', $h->rune);
-        $this->assertStringNotContainsString("\n", $h->rune);
+        // CH-01: the short alias routes through the same door as
+        // withRune() — the newline flattens to a space and the
+        // remainder is multi-cell, so both refuse.
+        $this->expectException(\InvalidArgumentException::class);
+        Heatmap::new([[1.0]])->rune("\nblock");
     }
 
     public function testMonoRampFlagSurvivesResizeThroughCopy(): void

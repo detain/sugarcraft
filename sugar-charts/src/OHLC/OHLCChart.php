@@ -8,6 +8,7 @@ use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
+use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
@@ -48,6 +49,14 @@ final class OHLCChart
 {
     use ChartExtras;
     /**
+     * Candle glyphs as stored after the {@see \SugarCraft\Charts\Support\Rune}
+     * ingress doors (sugar-charts-003): declared and assigned in the
+     * constructor body so only guarded single-cell values can be stored.
+     */
+    public readonly string $bodyBullish;
+    public readonly string $bodyBearish;
+    public readonly string $wick;
+    /**
      * @param list<Bar>                            $bars
      * @param list<array{label: string, color: string}> $legendItems
      */
@@ -57,9 +66,9 @@ final class OHLCChart
         public readonly int $height,
         public readonly ?float $min,
         public readonly ?float $max,
-        public readonly string $bodyBullish,
-        public readonly string $bodyBearish,
-        public readonly string $wick,
+        string $bodyBullish,
+        string $bodyBearish,
+        string $wick,
         public readonly ?Color $bullishColor,
         public readonly ?Color $bearishColor,
         public readonly bool $showLegend = false,
@@ -76,6 +85,19 @@ final class OHLCChart
         }
         // pinned price range must be finite and ordered.
         Range::pin($min, $max, 'Y');
+        // sugar-charts-003/-064: one sweep point for the three candle
+        // runes and the bar element type, covering new(), push(),
+        // withBars()/bars() and withBodyRunes()/withWickRune() rebuilds.
+        foreach ($bars as $bar) {
+            if (!$bar instanceof Bar) {
+                throw new \InvalidArgumentException(Lang::t('ohlc.bar_type', [
+                    'given' => get_debug_type($bar),
+                ]));
+            }
+        }
+        $this->bodyBullish = Rune::cell($bodyBullish, 'OHLC bullish body rune');
+        $this->bodyBearish = Rune::cell($bodyBearish, 'OHLC bearish body rune');
+        $this->wick        = Rune::cell($wick, 'OHLC wick rune');
     }
 
     /** @param list<Bar> $bars */
@@ -146,7 +168,7 @@ final class OHLCChart
     /** Customize legend indicator character. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar), legendIndicatorCharSet: true);
+        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'), legendIndicatorCharSet: true);
     }
 
     /** Set the chart title. */
@@ -174,7 +196,7 @@ final class OHLCChart
      */
     public function withLegendItems(array $items): self
     {
-        return $this->copy(legendItems: $items);
+        return $this->copy(legendItems: UntrustedText::guardItems($items));
     }
 
     // ─── Short-form Aliases ─────────────────────────────────────────────

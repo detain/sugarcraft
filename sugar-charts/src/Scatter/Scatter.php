@@ -10,6 +10,7 @@ use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Support\Range;
+use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Legend\Legend;
 
@@ -38,6 +39,12 @@ final class Scatter
 {
     use ChartExtras;
     /**
+     * Point glyph as stored after the {@see \SugarCraft\Charts\Support\Rune}
+     * ingress door (sugar-charts-002): declared and assigned in the
+     * constructor body so only the guarded single-cell value can be stored.
+     */
+    public readonly string $rune;
+    /**
      * @param list<array{0:int|float,1:int|float}>       $points
      * @param list<array{label: string, color: string}> $legendItems
      */
@@ -49,7 +56,7 @@ final class Scatter
         public readonly ?float $maxX,
         public readonly ?float $minY,
         public readonly ?float $maxY,
-        public readonly string $rune,
+        string $rune,
         public readonly bool $showLegend = false,
         public readonly Position $legendPosition = Position::Right,
         public readonly ?string $legendIndicatorChar = null,
@@ -66,6 +73,9 @@ final class Scatter
         // ranges must be finite and ordered; null ends stay legal ("auto").
         Range::pin($minX, $maxX, 'X');
         Range::pin($minY, $maxY, 'Y');
+        // sugar-charts-002: one sweep point for the rune, covering
+        // new(), withRune()/rune() and every copy() rebuild.
+        $this->rune = Rune::cell($rune, 'scatter point rune');
     }
 
     /** @param list<array{0:int|float,1:int|float}> $points */
@@ -136,7 +146,7 @@ final class Scatter
     /** Customize legend indicator character. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar), legendIndicatorCharSet: true);
+        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : Rune::cell($indicatorChar, 'legend indicator'), legendIndicatorCharSet: true);
     }
 
     /** Set the chart title. */

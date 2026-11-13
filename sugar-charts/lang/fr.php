@@ -43,4 +43,13 @@ return [
     'scatter.dim_nonneg'       => 'la largeur/hauteur du nuage de points doit être >= 0',
     'chart.dim_nonneg'         => 'la largeur/hauteur du graphique doit être >= 0',
     'finite.non_finite'        => 'la valeur du graphique doit être finie, valeur reçue : {value}',
+// Support/Rune.php
+    'rune.empty'               => '{name} doit être une seule cellule visible, et non vide',
+    'rune.width_one'           => '{name} doit occuper exactement une cellule, {cells} cellules fournies',
+
+    // LineChart/TimeSeries.php
+    'timeseries.point_shape'   => 'Les points TimeSeries doivent être des tuples [DateTimeImmutable, numérique], {given} fourni',
+
+    // OHLC/OHLCChart.php
+    'ohlc.bar_type'            => 'La liste de barres OHLC ne doit contenir que des instances Bar, {given} fourni',
 ];
