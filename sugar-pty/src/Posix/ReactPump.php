@@ -12,6 +12,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\PumpOptions;
+use SugarCraft\Pty\PtyException;
 
 /**
  * ReactPHP-compatible byte pump — the event-loop counterpart to
@@ -134,6 +135,9 @@ final class ReactPump
     private bool $running = false;
 
     private ?Deferred $deferred = null;
+
+    /** Throwable that escaped a loop callback; finish() routes it to the reject channel. */
+    private ?\Throwable $loopFailure = null;
 
     private ?MasterPty $master = null;
 
@@ -270,13 +274,13 @@ final class ReactPump
         // now; finish() hands it back.
         $this->masterWasBlocking = (bool) (\stream_get_meta_data($this->masterStream)['blocked'] ?? true);
         \stream_set_blocking($this->masterStream, false);
-        $this->loop->addReadStream($this->masterStream, fn () => $this->onMasterReadable());
+        $this->loop->addReadStream($this->masterStream, fn () => $this->guarded(fn () => $this->onMasterReadable()));
 
         if ($this->stdinStream !== null) {
             $this->stdinStreamOrig = $this->stdinStream;
             $this->stdinWasBlocking = (bool) (\stream_get_meta_data($this->stdinStream)['blocked'] ?? true);
             \stream_set_blocking($this->stdinStream, false);
-            $this->loop->addReadStream($this->stdinStream, fn () => $this->onStdinReadable());
+            $this->loop->addReadStream($this->stdinStream, fn () => $this->guarded(fn () => $this->onStdinReadable()));
             $this->stdinReadAttached = true;
         }
 
@@ -298,7 +302,7 @@ final class ReactPump
         // child-exit poll, onIdle/keepalive, resize detection.
         $this->pollTimer = $this->loop->addPeriodicTimer(
             \max(0.001, $opts->selectTimeoutUs / 1_000_000),
-            fn () => $this->onPollTick(),
+            fn () => $this->guarded(fn () => $this->onPollTick()),
         );
 
         return $this->deferred->promise();
@@ -432,7 +436,7 @@ final class ReactPump
                 $this->pendingStdin = \substr($toWrite, $written);
                 if (!$this->masterWriteAttached) {
                     $this->masterWriteAttached = true;
-                    $this->loop->addWriteStream($this->masterStream, fn () => $this->onMasterWritable());
+                    $this->loop->addWriteStream($this->masterStream, fn () => $this->guarded(fn () => $this->onMasterWritable()));
                 }
                 // Flow control propagates upstream: stop pulling stdin while
                 // the master owes bytes.
@@ -489,7 +493,7 @@ final class ReactPump
         if ($this->stdinReadAttached || $this->stdinStream === null || !$this->running) {
             return;
         }
-        $this->loop->addReadStream($this->stdinStream, fn () => $this->onStdinReadable());
+        $this->loop->addReadStream($this->stdinStream, fn () => $this->guarded(fn () => $this->onStdinReadable()));
         $this->stdinReadAttached = true;
     }
 
@@ -499,7 +503,7 @@ final class ReactPump
             return;
         }
         $this->sinkWriteAttached = true;
-        $this->loop->addWriteStream($this->stdoutStream, fn () => $this->onSinkWritable());
+        $this->loop->addWriteStream($this->stdoutStream, fn () => $this->guarded(fn () => $this->onSinkWritable()));
     }
 
     private function detachSinkWrite(): void
@@ -533,7 +537,7 @@ final class ReactPump
         }
         $this->masterReadHeld = false;
         if ($this->running) {
-            $this->loop->addReadStream($this->masterStream, fn () => $this->onMasterReadable());
+            $this->loop->addReadStream($this->masterStream, fn () => $this->guarded(fn () => $this->onMasterReadable()));
         }
     }
 
@@ -639,9 +643,64 @@ final class ReactPump
     }
 
     /**
-     * Tear down every loop registration and resolve the promise. All
+     * Run a loop callback under the teardown guard. A throwable escaping
+     * a handler would otherwise reach ReactPHP's rethrow path, which
+     * abandons run() WITHOUT any cleanup of this pump's watchers — every
+     * stream and timer stays registered on the loop, the co-tenants never
+     * get their loop back, and the start() Deferred settles never. Every
+     * handle callback registers through guarded() instead (the resize leg
+     * of onPollTick already did this by hand for the same reason).
+     */
+    private function guarded(\Closure $handler): void
+    {
+        if (!$this->running) {
+            return;
+        }
+        try {
+            $handler();
+        } catch (\Throwable $e) {
+            $this->fail($e);
+        }
+    }
+
+    /**
+     * Latch the escaping throwable and funnel the pump through the full
+     * teardown so the promise rejects with the real cause and the loop is
+     * handed back empty.
+     */
+    private function fail(\Throwable $e): void
+    {
+        $this->loopFailure = $e;
+        if ($this->running) {
+            $this->finish();
+            return;
+        }
+        // finish() itself threw mid-teardown (running already false, the
+        // promise still unsettled): settle it — a caller must never await
+        // a pump that cannot die.
+        if ($this->deferred !== null) {
+            $deferred = $this->deferred;
+            $this->deferred = null;
+            $deferred->reject($this->failureForPromise());
+        }
+    }
+
+    private function failureForPromise(): PtyException
+    {
+        $failure = $this->loopFailure;
+        \assert($failure !== null);
+
+        return $failure instanceof PtyException
+            ? $failure
+            : new PtyException('ReactPump aborted inside a loop callback: ' . $failure->getMessage(), 0, $failure);
+    }
+
+    /**
+     * Tear down every loop registration and settle the promise. All
      * exit paths funnel here so a stopped/finished pump can never leak
-     * a read stream, write stream, or timer into the loop.
+     * a read stream, write stream, or timer into the loop. A callback
+     * that threw mid-loop (see {@see fail()}) rejects with the cause
+     * instead of resolving with the exit-code contract.
      */
     private function finish(): void
     {
@@ -682,6 +741,16 @@ final class ReactPump
         if ($this->deadlineTimer !== null) {
             $this->loop->cancelTimer($this->deadlineTimer);
             $this->deadlineTimer = null;
+        }
+
+        if ($this->loopFailure !== null) {
+            // A callback threw: the exit-code probe may itself be the thing
+            // that broke, so skip it and settle with the cause.
+            $deferred = $this->deferred;
+            $this->deferred = null;
+            $deferred?->reject($this->failureForPromise());
+            $this->loopFailure = null;
+            return;
         }
 
         if ($this->child === null) {
