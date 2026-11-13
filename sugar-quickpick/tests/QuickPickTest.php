@@ -1017,15 +1017,21 @@ final class QuickPickTest extends TestCase
         // Frame 1: ASCII, help+status bars, offset, background padding, substring highlight.
         // Re-pinned at S-11: the header row now draws the end-of-filter caret
         // cell ('▏' after 'a'); every other row is byte-identical.
+        // Re-pinned again at S-12: the corpus carries one anchor-bias drop
+        // ('cherry cake' — first 'a' at position 8 of 11, past halfway), so
+        // the frame gains the '1 hidden by anchor bias' hint row where a
+        // blank pad row used to sit (-032); every other row byte-identical.
         $frame1 = \base64_decode(
-            'Li4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLgouLj4gYeKWjyAgICAg'
-            . 'ICAgICAgICAgICAgICAgICAgICAgLi4uLi4uLi4KLi7ilIDilIDilIDilIDilIDilIDilIDi'
-            . 'lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi'
-            . 'lIDilIDilIDilIDilIAuLi4uLi4uLgogICAgMS4gG1szM21hG1swbXBwbGUgcGllICAgICAg'
-            . 'ICAgICAgICAgIAogIOKXjyAyLiBiG1szM21hG1swbW4bWzMzbWEbWzBtbhtbMzNtYRtbMG0g'
-            . 'YnJlG1szM21hG1swbWQgICAgICAgICAgICAgCiAgICA0LiBkG1szM21hG1swbXRlIHQbWzMz'
-            . 'bWEbWzBtcnQgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAg'
-            . 'ICAgCiAgRXNjOiBjbG9zZSDilIIgeDogbmF2ICAgICAgICAgICA=',
+            'Li4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLgouLj4g'
+            . 'YeKWjyAgICAgICAgICAgICAgICAgICAgICAgICAgLi4uLi4uLi4KLi7ilIDi'
+            . 'lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi'
+            . 'lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAuLi4u'
+            . 'Li4uLgogICAgMS4gG1szM21hG1swbXBwbGUgcGllICAgICAgICAgICAgICAg'
+            . 'IAogIOKXjyAyLiBiG1szM21hG1swbW4bWzMzbWEbWzBtbhtbMzNtYRtbMG0g'
+            . 'YnJlG1szM21hG1swbWQgICAgICAgICAgICAgCiAgICA0LiBkG1szM21hG1sw'
+            . 'bXRlIHQbWzMzbWEbWzBtcnQgICAgICAgICAgICAgICAgCiAgICAxIGhpZGRl'
+            . 'biBieSBhbmNob3IgYmlhcyAgICAgCiAgRXNjOiBjbG9zZSDilIIgeDogbmF2'
+            . 'ICAgICAgICAgICA=',
         );
         $h1 = QuickPick::new([
             new FilteredItem(1, 'apple pie'),

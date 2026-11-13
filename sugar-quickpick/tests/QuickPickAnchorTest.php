@@ -132,4 +132,52 @@ final class QuickPickAnchorTest extends TestCase
         $this->assertSame(2, $h->itemCount());
         $this->assertSame([1, 2], \array_map(static fn(Item $i): int => $i->number(), $h->items()));
     }
+
+    public function testAnchorDropHintRowNamesWhatTheBiasHid(): void
+    {
+        // -032: 'e' is a full substring of both apple (past halfway → dropped
+        // by the bias) and cherry (anchored → kept), and of nothing else.
+        // The old silence made the search look broken; the hint row counts
+        // the loss.
+        $h = QuickPick::new(['apple', 'banana', 'cherry'])->show()->type('e');
+        $this->assertSame(['cherry'], \array_map(static fn(Item $i): string => $i->value(), $h->items()));
+
+        $frame = $h->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $this->assertStringContainsString('1 hidden by anchor bias', $frame);
+    }
+
+    public function testAnchorDropHintIsAbsentWhenNothingDropped(): void
+    {
+        // 'a' anchors in both apple and banana — zero drops, zero hint.
+        $h = QuickPick::new(['apple', 'banana'])->show()->type('a');
+        $frame = $h->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $this->assertStringNotContainsString('hidden by anchor bias', $frame);
+
+        // The ranker REPLACES the rule — its path must clear the census too.
+        $ranked = $h
+            ->setRanker($this->scoreMatcher(['apple' => 10, 'banana' => 5]))
+            ->type('e');
+        $rankedFrame = $ranked->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $this->assertStringNotContainsString('hidden by anchor bias', $rankedFrame);
+    }
+
+    public function testAnchorDropCensusCountsTheRuleNotTheHostPredicate(): void
+    {
+        // A host filterFn rejection is NOT the bias's doing: with fn=false
+        // nothing renders, and the census still answers only for the rule
+        // ('e': apple substring-hit but unanchored = 1 drop, cherry anchored
+        // then fn-rejected = not a drop).
+        $h = QuickPick::new(['apple', 'cherry'])
+            ->setFilterFn(static fn(): bool => false)
+            ->show()
+            ->type('e');
+        $this->assertSame(0, $h->itemCount());
+        $frame = $h->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $this->assertStringContainsString('1 hidden by anchor bias', $frame);
+        // And a needle with zero substring answers drops nothing: 'z'.
+        $none = QuickPick::new(['apple', 'cherry'])->show()->type('z');
+        $noneFrame = $none->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $this->assertStringNotContainsString('hidden by anchor bias', $noneFrame);
+        $this->assertStringContainsString('no matches', $noneFrame);
+    }
 }

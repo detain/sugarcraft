@@ -118,6 +118,8 @@ Worked misses: `ry` does not match `cherry` (its first hit starts past the
 midpoint — the accepted window is positions `[0, len/2)`, so a hit beginning
 exactly at the halfway point is already rejected), and `e` does not match
 `apple` (its first hit is past halfway).
+When the bias hides matches that plain substring would have kept, the frame
+says so: a `N hidden by anchor bias` row counts what the rule dropped.
 These are deliberate — deep matches are usually noise — and `setRanker()` is
 the escape hatch: plug in a
 [sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) ranker to switch to **true subsequence matching**,

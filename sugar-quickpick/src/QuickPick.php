@@ -105,6 +105,15 @@ final class QuickPick
     /** @var list<Item> */
     private array $filteredItems = [];
 
+    /**
+     * How many full-substring hits the anchor rule alone rejected on the
+     * last filter pass (-032). Recomputed with every keystroke on the
+     * substring path; reset to 0 by the empty-text and ranker paths, which
+     * carry no anchor rule. The renderer turns it into the 'hidden by
+     * anchor bias' hint row.
+     */
+    private int $anchorDropped = 0;
+
     private bool $isShown = false;
 
     /** 0-based cursor index within filteredItems. */
@@ -975,6 +984,17 @@ final class QuickPick
             $lines[] = Width::padRight($filter !== '' ? '  no matches' : '  no items', $winWidth);
         }
 
+        // -032: the anchor rule is documented, but a silent drop still reads
+        // as "the search is broken". Say what the bias hid — on a drop, not
+        // on a rule. Chrome string hardcoded at this single seat; the S-15
+        // Lang pass wraps every chrome row here together.
+        if ($this->anchorDropped > 0) {
+            $lines[] = Width::padRight(
+                \sprintf('  %d hidden by anchor bias', $this->anchorDropped),
+                $winWidth
+            );
+        }
+
         // -002 invariant: the windowed region never emits more than
         // $windowHeight rows (padded up to exactly that below); help/status
         // chrome appends under it by design and is outside this budget.
@@ -1068,6 +1088,7 @@ final class QuickPick
         $fn = $this->filterFn;
         if ($text === '') {
             // Single-pass collect — avoids array_filter + array_values creating two intermediate arrays.
+            $this->anchorDropped = 0; // no needle, no bias to drop anything
             $filtered = [];
             foreach ($this->allItems as $item) {
                 if ($fn($item)) {
@@ -1077,6 +1098,7 @@ final class QuickPick
             return $filtered;
         }
         if ($this->ranker !== null) {
+            $this->anchorDropped = 0; // the ranker replaces the anchor rule entirely
             return $this->applyRankedFilter($this->ranker, $text);
         }
         // The anchor rule is computed in CODEPOINTS, not bytes: a multibyte
@@ -1086,16 +1108,31 @@ final class QuickPick
         // the ASCII fast path would leave 'ecl' unable to reach 'Éclair').
         $lower    = \mb_strtolower($text, 'UTF-8');
         $filtered = [];
+        // -032 adds the drop census beside the memo walk: `substringHits`
+        // counts every full-substring answer, `anchored` counts those the
+        // bias accepted — their difference is what ONLY the anchor rule
+        // rejected (a host-predicate rejection is not the bias's doing).
+        $substringHits = 0;
+        $anchored      = 0;
         // -009: the folded spelling and codepoint length are the corpus
         // memo built at install; a keystroke now pays only one mb_strpos
         // per item plus the host predicate — no per-keystroke fold of the
         // whole corpus.
         foreach ($this->foldedMemo as $order => $memo) {
             $pos = \mb_strpos($memo['folded'], $lower, 0, 'UTF-8');
-            if ($pos !== false && $pos * 2 < $memo['length'] && $fn($this->allItems[$order])) {
-                $filtered[] = $this->allItems[$order];
+            if ($pos === false) {
+                continue;
+            }
+            $substringHits++;
+            $isAnchored = $pos * 2 < $memo['length'];
+            if ($isAnchored) {
+                $anchored++;
+                if ($fn($this->allItems[$order])) {
+                    $filtered[] = $this->allItems[$order];
+                }
             }
         }
+        $this->anchorDropped = $substringHits - $anchored;
         return $filtered;
     }
 
