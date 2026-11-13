@@ -19,6 +19,27 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 final class SpinCommandTest extends TestCase
 {
+    /** Global React loop as found on entry — restored in tearDown (see below). */
+    private ?LoopInterface $savedLoop = null;
+
+    protected function setUp(): void
+    {
+        $this->savedLoop = \React\EventLoop\Loop::get();
+    }
+
+    protected function tearDown(): void
+    {
+        // Loop-pollution cure (surfaced by scriptui-02): the timeout tests
+        // below swap the GLOBAL loop (Loop::set) for a throwaway
+        // StreamSelectLoop carrying an armed 2 s stop-backstop. Restoring
+        // the original here means that throwaway — and its pending stop
+        // timer — can never cut short the NEXT Loop::get() consumer's run.
+        if ($this->savedLoop !== null) {
+            \React\EventLoop\Loop::set($this->savedLoop);
+            $this->savedLoop = null;
+        }
+    }
+
     public function testStyleAliases(): void
     {
         foreach (['line','dot','minidot','points','pulse','globe','meter'] as $name) {

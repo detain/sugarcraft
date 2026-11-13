@@ -51,7 +51,20 @@ final class FakeProcess implements Process
     /** Count of {@see drain()} calls — lets pins assert the run-loop pump actually ran. */
     public int $drainCount = 0;
 
+    /** Pump bookkeeping (scriptui-02): records that SpinCommand wired the loop drain. */
+    public bool $pumpAttached = false;
+    public bool $pumpDetached = false;
+    public ?\React\EventLoop\LoopInterface $pumpLoop = null;
+
     public function drain(): void       { $this->drainCount++; }
+
+    public function attachPump(\React\EventLoop\LoopInterface $loop): void
+    {
+        $this->pumpLoop     = $loop;
+        $this->pumpAttached = true;
+    }
+
+    public function detachPump(): void  { $this->pumpDetached = true; }
 
     public function pid(): int          { return 12345; }
     public function exited(): bool      { return $this->exitCode !== null; }

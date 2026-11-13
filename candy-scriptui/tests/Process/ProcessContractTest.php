@@ -41,6 +41,7 @@ final class ProcessContractTest extends TestCase
             'pid', 'exited', 'wait', 'exitCode', 'kill',      // sugar-pty contract
             'stdoutBytes', 'stderrBytes',                      // capture accessors
             'drain', 'terminate', 'close', 'stdout', 'stderr', // spin-chain additions
+            'attachPump', 'detachPump',                        // scriptui-02 loop pump
         ] as $verb) {
             $this->assertContains($verb, $methods, "Process interface must declare {$verb}()");
         }

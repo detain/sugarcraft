@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\ScriptUi\Process;
 
+use React\EventLoop\LoopInterface;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\PtyException;
 
@@ -62,6 +63,12 @@ final class RealProcess implements Process
     private bool $terminated = false;
 
     private ?int $cachedExit = null;
+
+    /** Loop the capture pipes are currently pumped on (null = pure polling) */
+    private ?LoopInterface $pumpLoop = null;
+
+    /** @var array{0: bool, 1: bool} per-slot "read stream registered on pumpLoop" flags */
+    private array $pumped = [false, false];
 
     private function __construct(
         private readonly int $pid,
@@ -151,7 +158,13 @@ final class RealProcess implements Process
             while ($budget > 0) {
                 $chunk = @\fread($pipe, \min(self::DRAIN_CHUNK_BYTES, $budget));
                 if ($chunk === false || $chunk === '') {
-                    break; // dry (non-blocking) or EOF — nothing more right now
+                    // Dry (non-blocking) — or the writer is gone. A pipe at
+                    // EOF must leave the pump: an always-readable dead fd
+                    // would spin the event loop at 100% CPU.
+                    if ($chunk === false || \feof($pipe)) {
+                        $this->retireSlot($slot);
+                    }
+                    break;
                 }
                 $budget -= \strlen($chunk);
                 if ($slot === 0) {
@@ -161,6 +174,55 @@ final class RealProcess implements Process
                 }
             }
         }
+    }
+
+    /**
+     * Register both open capture pipes on the event loop (scriptui-02, the
+     * 64KiB cure). The run loop used to poll only the exit verdict, so a
+     * child writing past the ~64KiB OS pipe buffer blocked forever while
+     * the spinner painted: nobody drained until after the loop ended.
+     * With the pump attached, every loop wakeup that sees readable pipe
+     * bytes runs {@see drain()} — the child never stalls, the parents
+     * poll keeps ticking, and EOF retires the watcher.
+     *
+     * Idempotent per loop; attaching on a different loop moves the pump.
+     */
+    public function attachPump(LoopInterface $loop): void
+    {
+        if ($this->pumpLoop !== null && $this->pumpLoop !== $loop) {
+            $this->detachPump();
+        }
+        $this->pumpLoop = $loop;
+
+        foreach ([0, 1] as $slot) {
+            $pipe = $this->pipes[$slot];
+            if (!\is_resource($pipe) || $this->pumped[$slot]) {
+                continue;
+            }
+            $loop->addReadStream($pipe, function (): void {
+                $this->drain();
+            });
+            $this->pumped[$slot] = true;
+        }
+    }
+
+    /**
+     * Unregister the read-stream pump (no-op when not attached). Called by
+     * the command right after the run loop returns and by every wait()
+     * settle path, so capture fds never outlive the loop watching them.
+     */
+    public function detachPump(): void
+    {
+        if ($this->pumpLoop === null) {
+            return;
+        }
+        foreach ([0, 1] as $slot) {
+            if ($this->pumped[$slot] && \is_resource($this->pipes[$slot])) {
+                $this->pumpLoop->removeReadStream($this->pipes[$slot]);
+            }
+            $this->pumped[$slot] = false;
+        }
+        $this->pumpLoop = null;
     }
 
     /**
@@ -262,6 +324,7 @@ final class RealProcess implements Process
     public function wait(): int
     {
         if ($this->cachedExit !== null) {
+            $this->detachPump();
             $this->drain();
             $this->closeCapturePipes();
             if (\is_resource($this->process)) {
@@ -284,6 +347,7 @@ final class RealProcess implements Process
             \usleep(10_000);
         }
 
+        $this->detachPump();
         $this->drain();
         $this->closeCapturePipes();
         \proc_close($this->process);
@@ -309,6 +373,16 @@ final class RealProcess implements Process
         return $this->bufferedStdout;
     }
 
+    /**
+     * Zero-IO view of the buffered stdout — for pump-proof instrumentation
+     * that must observe bytes WITHOUT draining (a peek that drains would
+     * hide a broken pump behind its own polling).
+     */
+    public function bufferedPeek(): string
+    {
+        return $this->bufferedStdout;
+    }
+
     public function stderrBytes(): string
     {
         $this->drain();
@@ -323,5 +397,24 @@ final class RealProcess implements Process
             }
             $this->pipes[$slot] = null;
         }
+    }
+
+    /**
+     * Take one exhausted slot out of service: unregister its pump watcher
+     * first (never leave a closed fd on the loop), then close the read
+     * end. Only ever called from drain() once feof() proves the writer
+     * is gone, so no child bytes are lost.
+     */
+    private function retireSlot(int $slot): void
+    {
+        $pipe = $this->pipes[$slot];
+        if ($this->pumpLoop !== null && $this->pumped[$slot] && \is_resource($pipe)) {
+            $this->pumpLoop->removeReadStream($pipe);
+        }
+        $this->pumped[$slot] = false;
+        if (\is_resource($pipe)) {
+            @\fclose($pipe);
+        }
+        $this->pipes[$slot] = null;
     }
 }

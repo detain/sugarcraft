@@ -166,9 +166,17 @@ final class SpinCommand extends Command
             },
         );
 
+        // scriptui-02 (the 64KiB cure): the capture pipes ride the run
+        // loop as read streams, so a child writing more than the OS pipe
+        // buffer keeps moving bytes instead of blocking while the spinner
+        // polls an exit verdict that can never arrive. With no capture
+        // pipes (--show-output/--show-error unset) the attach is a no-op.
+        $process->attachPump($loop);
+
         /** @var SpinModel $final */
         $final = $program->run();
         $guard->disarm();
+        $process->detachPump();
 
         // Decide the exit code with the deadline checked FIRST: a timed-out
         // run also leaves exitCode() null, so any other order would

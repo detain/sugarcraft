@@ -27,6 +27,19 @@ interface Process extends \SugarCraft\Pty\Contract\Process
     public function drain(): void;
 
     /**
+     * Register the capture pipes on `$loop` so bytes move while the run
+     * loop is alive (scriptui-02: the cure for a child blocking at the
+     * ~64KiB OS pipe buffer with nobody reading). Idempotent per loop.
+     */
+    public function attachPump(\React\EventLoop\LoopInterface $loop): void;
+
+    /**
+     * Unregister the read-stream pump. No-op when not attached; every
+     * settle path calls it so watchers never outlive the loop.
+     */
+    public function detachPump(): void;
+
+    /**
      * Signal the child (SIGTERM); does NOT reap. close() reaps.
      */
     public function terminate(): void;

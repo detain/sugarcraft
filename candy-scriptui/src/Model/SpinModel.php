@@ -73,6 +73,12 @@ final class SpinModel implements Model
             return [self::finish($this->spinner, $this->process, $this->title, SignalExit::EXIT_INTERRUPTED, $this->align), Cmd::quit()];
         }
         if ($msg instanceof TickMsg && $msg->id === $this->spinner->id) {
+            // Pump the capture pipes every tick (scriptui-02): the exit
+            // probe alone never read them, which is how a >64KiB child
+            // deadlocked the whole run. The read-stream pump carries the
+            // heavy lifting; this keeps polling callers honest even
+            // between loop wakeups (drain() is O(new bytes)).
+            $this->process->drain();
             $code = $this->process->exitCode();
             if ($code !== null) {
                 return [self::finish($this->spinner, $this->process, $this->title, $code, $this->align), Cmd::quit()];
