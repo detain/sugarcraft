@@ -14,9 +14,10 @@ use SugarCraft\Pty\PtyPool;
 /**
  * m3 (round lib-fixes-1103): abandoned pairs must stop pinning pool
  * capacity. Bookkeeping is weak-referenced, so a pair dropped without
- * release() frees its slot at collection (its master fd leak until
- * process end is documented on PtyPool — release() remains the
- * closing contract).
+ * release() frees its slot at collection; since PTY-38 a pool-created
+ * POSIX pair left FULLY unreachable also loses its master fd to the
+ * sweep, while a caller who keeps the master keeps the obligation —
+ * release() remains the closing contract elsewhere.
  */
 final class PtyPoolWeakSlotTest extends TestCase
 {

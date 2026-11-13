@@ -12,6 +12,16 @@ use SugarCraft\Pty\PtyException;
 /**
  * @see creack/pty.Pty
  * @see portable-pty.MasterPTY
+ *
+ * ## Abandonment
+ *
+ * There is deliberately NO destructor here: an abandoned master leaks
+ * its fd until process exit (and sends no SIGHUP cascade), which beats
+ * the alternative — auto-closing on GC would yank a descriptor a child
+ * still legitimately owns through php://fd inheritance or setsid
+ * wiring. `close()` is the contract. Pool-created pairs are the one
+ * rescue: PtyPool's sweep closes masters left fully unreachable
+ * (PTY-38). See "Abandoned masters" under Known limitations.
  */
 final class PosixMasterPty implements MasterPty
 {

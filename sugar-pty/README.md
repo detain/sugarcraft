@@ -811,6 +811,16 @@ private arrow-key or Ctrl-key buffering.
 
 ## Known limitations
 
+- **Abandoned masters leak their descriptor (by design).** Neither
+  `PosixMasterPty` nor `ConPtyMasterPty` carries a destructor: dropping
+  the last reference without `close()` leaves the fd (or the pseudo-
+  console handle set) alive until process exit, and no SIGHUP cascade
+  reaches the child. That is deliberate — consumers legitimately hand
+  the raw master fd to children (php://fd inheritance, setsid wiring),
+  so a GC-triggered close would yank a descriptor a live child still
+  owns: a worse hazard than the leak. The one automatic rescue is pool
+  ownership (PTY-38): `PtyPool` closes POSIX masters that are *fully*
+  abandoned. Everywhere else, `close()` stays the contract.
 - **Windows ConPTY caveats.** `Windows\ConPtySystem` ships as the Windows
   backend (Windows 10 1809+, PHP 8.4+, ext-ffi), but the pseudo console is
   not a PTY: `capabilities()` reports `controllingTerminal`, `signals` and

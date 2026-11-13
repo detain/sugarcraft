@@ -11,6 +11,15 @@ use SugarCraft\Pty\PtyException;
  * The ConPTY master end: the pseudo console plus the two pipes that carry
  * its side of the byte stream.
  *
+ * ## Abandonment
+ *
+ * There is deliberately NO destructor here: an abandoned ConPTY master
+ * leaks its handle set until process exit. Auto-closing on GC is the
+ * worse hazard — the same reasoning that keeps it off PosixMasterPty
+ * (a consumer may still hand these handles to a live child), and the
+ * PtyPool sweep rescue does not reach non-POSIX handles. `close()` is
+ * the contract.
+ *
  * ## Ownership
  *
  * This object owns the HPCON handle AND all four pipe handles, which is
