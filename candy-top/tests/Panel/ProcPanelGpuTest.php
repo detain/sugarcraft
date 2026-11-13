@@ -309,6 +309,47 @@ final class ProcPanelGpuTest extends TestCase
         $this->assertSame(0, $q->gpuGraphs()->count());
     }
 
+    /**
+     * S-N10 (U-03): the lit `gpu-only` token paints in inactive_fg while the
+     * post-toggle resample is pending — the filter does not judge yet — and
+     * turns bold once fresh values land.
+     */
+    public function testTheGpuOnlyTokenDimsWhileTheResampleIsPending(): void
+    {
+        $this->resize(120, 40);
+        $p = ProcPanel::new(FakeProcList::demo(8))->withGpu(FakeGpuProcesses::demo());
+        $first = ($p->collect(new PanelContext($this->config, $this->layout, null)))();
+        $p = $this->apply($p->update($first, $this->ctx()));
+        $p = $this->sample($p, 2);
+        $this->assertFalse($p->gpuUsage()->fresh(), 'narrow ticks dropped the values');
+
+        $this->resize(180, 40, ['proc_gpu_only' => true]);
+        $ink = Ink::new(ThemeConfig::new(), ColorProfile::TrueColor);
+        $pending = $this->painted($p, $ink);
+        [$y, $x] = self::tokenCell($pending, 'gpu-only');
+        $style = $pending->style($x + 1, $y);
+        $this->assertStringContainsString($ink->fg('inactive_fg'), $style, 'the pending label wears inactive_fg');
+        $this->assertStringNotContainsString('[1;', $style, 'no bold while the filter still does not judge');
+
+        $ready = $this->painted($this->sample($p, 1), $ink);
+        [$y2, $x2] = self::tokenCell($ready, 'gpu-only');
+        $this->assertStringContainsString('[1;', $ready->style($x2 + 1, $y2), 'fresh values light the token bold again');
+    }
+
+    /**
+     * @return array{int, int}
+     */
+    private static function tokenCell(Surface $s, string $needle): array
+    {
+        foreach ($s->plainLines() as $y => $line) {
+            $x = mb_strpos($line, $needle);
+            if ($x !== false) {
+                return [$y, (int) $x];
+            }
+        }
+        self::fail($needle . ' is not painted');
+    }
+
     // ---- goldens ------------------------------------------------------------------------
 
     private function painted(ProcPanel $p, ?Ink $ink = null): Surface

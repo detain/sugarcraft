@@ -230,6 +230,7 @@ final class ProcView
         bool $returning = false,
         ?ProcGraphTracker $gpuGraphs = null,
         bool $gpu = false,
+        bool $gpuPending = false,
     ): void {
         $W = $region->width();
         $H = $region->height();
@@ -255,7 +256,7 @@ final class ProcView
         if ($detail !== null) {
             self::paintDetail($region, $frame, $detail, $sel, $rows, $memTotal, $cores, $followed);
         }
-        self::paintTitleRow($region, $frame, $dy, $edit, $gpu);
+        self::paintTitleRow($region, $frame, $dy, $edit, $gpu, $gpuPending);
         // btop_draw.cpp:1949: ↑ also lights while the detailed pid is the
         // followed one and closing the view will return the selection to it.
         $upLit = $sel->selected !== 0 || ($returning && $followed !== null && $detailPid === $followed);
@@ -408,7 +409,7 @@ final class ProcView
     }
 
     /** Filter, gpu-only, Omit ctr, per-core, reverse, tree and the sort selector (btop_draw.cpp:1899-1957, #1873, #1552). */
-    private static function paintTitleRow(Region $r, PanelFrame $f, int $y, ?TextEdit $edit, bool $gpu = false): void
+    private static function paintTitleRow(Region $r, PanelFrame $f, int $y, ?TextEdit $edit, bool $gpu = false, bool $gpuPending = false): void
     {
         $ink = $f->ink;
         $config = $f->config;
@@ -430,7 +431,17 @@ final class ProcView
         self::embed($r, 9, $y, $inner, $line, $f->border, false);
 
         if (self::showGpuOnly($W, $config, $gpu)) {
-            self::embed($r, $sortPos - 52, $y, ($config->bool('proc_gpu_only') ? self::BOLD : '') . FrameBuilder::hotkey(Lang::t('proc.gpu_only'), 'g', $ink), $line, $f->border, false);
+            // S-N10: while the post-toggle resample is still on its way the
+            // filter does not judge, so the lit token must not read as active:
+            // its label paints in inactive_fg until fresh (the hotkey letter
+            // keeps its identity). hotkey() resets the stream per run, so the
+            // dim variant is spelled out here rather than prefixed.
+            $lit = $config->bool('proc_gpu_only');
+            $gpuOnly = Lang::t('proc.gpu_only');
+            $token = $lit && $gpuPending
+                ? $ink->fg('hi_fg') . 'g' . $ink->fg('inactive_fg') . mb_substr($gpuOnly, 1)
+                : ($lit ? self::BOLD : '') . FrameBuilder::hotkey($gpuOnly, 'g', $ink);
+            self::embed($r, $sortPos - 52, $y, $token, $line, $f->border, false);
         }
         if ($showOmit) {
             self::embed($r, $sortPos - 42, $y, ($config->bool('proc_filter_containers') ? self::BOLD : '') . FrameBuilder::hotkey(Lang::t('proc.omit_ctr'), 'O', $ink), $line, $f->border, false);

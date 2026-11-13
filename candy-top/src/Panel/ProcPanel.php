@@ -501,6 +501,8 @@ final class ProcPanel implements Panel, ClickCapture
             $this->returnToFollowed,
             $this->gpuGraphs(),
             $this->gpuAvailable(),
+            // btop "not yet" signal (S-N10): lit filter waiting on fresh values paints dimmed.
+            $config->bool('proc_gpu_only') && $this->gpuAvailable() && !$this->gpuFilterable(),
         );
     }
 
