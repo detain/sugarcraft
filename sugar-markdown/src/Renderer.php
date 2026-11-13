@@ -1483,6 +1483,15 @@ final class Renderer
      */
     private function renderListItem(ListItem $item, int $markerWidth = 0): string
     {
+        // Past the nesting ceiling the item flattens too: content renders,
+        // margin and indent stops (see MAX_NESTED_BLOCK_DEPTH — without
+        // this leg the flattened-list children kept stacking margin
+        // contexts and the wrap width collapsed cell by cell past the
+        // advertised cap, SM-S08).
+        if ($this->blockStack->depth() >= self::MAX_NESTED_BLOCK_DEPTH) {
+            return $this->renderChildren($item);
+        }
+
         $parentCtx = $this->blockStack->peek();
         $depth = $this->blockStack->depth();
         $parentStyle = $parentCtx?->cascadedStyle ?? ($this->theme->paragraph ?? Style::new());

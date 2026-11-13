@@ -89,6 +89,26 @@ final class NestingDepthCapTest extends TestCase
         $this->assertLessThanOrEqual(strlen($a) + 100, strlen($b));
     }
 
+    public function testListItemDepthFreezesAtTheCapLikeQuoteSiblings(): void
+    {
+        // SM-S08: the list cap stopped the List context but its flattened
+        // item children still pushed a margin context each, so a '- '
+        // chain kept adding decoration — and collapsing the child wrap
+        // width toward the 1-cell floor — well past the advertised cap.
+        // With the cap on the item leg too, the block stack freezes and
+        // the output is byte-stable: a hostile 1,000-level nest renders
+        // exactly like one at the ceiling (each nest level stacks two
+        // contexts, so the 32-cap freezes the ladder at 16 levels; the
+        // ceiling itself is the documented reference point).
+        $render = static fn (int $depth): string =>
+            Renderer::plain()->withWordWrap(40)->render(str_repeat('- ', $depth) . "x\n");
+        $cap = Renderer::MAX_NESTED_BLOCK_DEPTH;
+
+        $this->assertSame($render($cap), $render($cap + 1), 'an item past the ceiling renders content only');
+        $this->assertSame($render($cap), $render(1000), 'the frozen stack makes deeper nests byte-identical');
+        $this->assertStringContainsString('• • • • x', $render(4), 'ordinary nesting keeps every marker');
+    }
+
     public function testOrdinaryNestingKeepsFullDecoration(): void
     {
         // One level below the cap still wears its bar: the ceiling is a
