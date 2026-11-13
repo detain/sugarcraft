@@ -283,8 +283,14 @@ product:
   output) — the machine just lands in Ground and the next sequence starts
   clean. The flush recovers *string* states only: an in-flight CSI/ESC
   sequence and a half-read DCS prelude end undispatched either way.
-- **`DebugHandler` has no cap:** its public `$log` grows one row per dispatched
-  action, forever; it is a development mirror, not a production sink.
+- **`DebugHandler` mirrors, bounded or not:** its default shape is an
+  unbounded public `$log` — one row per dispatched action (test-fixture
+  ergonomics on finite input). For a long-lived mirror pass
+  `maxLogRows:`: a keep-newest ring that drops the oldest in batches (vterm's
+  numbers: `MAX_LOG_ROWS` 100_000 with `EVICT_GRACE_ROWS` 4_096 headroom, a
+  configured smaller cap scales the grace to itself), counts every eviction
+  in a public `$dropped` (cap drops are signalable, like
+  `stringOverflowed()`), and clears both with `resetLog()`.
 
 Test breadth is hand-built edge pins (`ParserOverflowTest`,
 `Utf8PolicyTest`, `DcsTruncationTest` and friends); there is no continuous
