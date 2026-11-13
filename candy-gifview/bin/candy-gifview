@@ -15,9 +15,13 @@ declare(strict_types=1);
 // candidates are preserved verbatim for every non-archive run.
 // ---------------------------------------------------------------------------
 (static function (): void {
+    // Phar can be absent entirely (`php -n` drops the shared module, the
+    // exact shape found in the field). Absence is exactly the '' non-archive
+    // answer this guard already handles — ask before calling.
+    $running = class_exists('Phar') ? \Phar::running(false) : '';
     $archive = str_ends_with(__FILE__, '.phar')
         ? 'phar://' . __FILE__
-        : (\Phar::running(false) !== '' ? 'phar://' . \Phar::running(false) : '');
+        : ($running !== '' ? 'phar://' . $running : '');
     $candidates = $archive !== ''
         ? [$archive . '/vendor/autoload.php']
         : ['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];

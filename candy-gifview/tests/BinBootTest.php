@@ -119,8 +119,34 @@ final class BinBootTest extends TestCase
         $this->assertStringContainsString('usage:', $out);
     }
 
-    public function testAPlainScriptWithoutAutoloadStillRefusesHonestly(): void
+    /**
+     * Finding 033: on a phar-less host (`php -n`) the bare \Phar::running
+     * calls used to fatal rc 255 in BOTH seats (bin guard and
+     * Cli::runningVersion) before anything was parsed. The class_exists
+     * gates turn absence into the '' non-archive answer, so --version —
+     * which stands in front of the gd preflight — must answer honestly.
+     * Gated on the -n lever actually dropping Phar, per the GdGuard
+     * disclosure law (hosts with phar compiled in skip with a named reason).
+     */
+    public function testTheBinAnswersVersionWithoutThePharClass(): void
     {
+        $probe = $this->runChild(['timeout', '10', \PHP_BINARY, '-n', '-r',
+            'echo class_exists("Phar") ? "present" : "absent";']);
+        if (trim($probe[2]) !== 'absent') {
+            $this->markTestSkipped('phar survives `php -n` on this host (compiled in); the gate cannot be exercised behaviourally');
+        }
+
+        [$code, $err, $out] = $this->runChild(
+            ['timeout', '15', \PHP_BINARY, '-n', realpath(self::BIN), '--version'],
+        );
+
+        $this->assertStringNotContainsString('Class "Phar" not found', $err, 'the class_exists gate came off: ' . $err);
+        $this->assertNotSame(255, $code, 'a phar-less host fatal-ed the bin: ' . $err);
+        $this->assertSame(0, $code, 'the -n --version arm must still answer from source: ' . $err);
+        $this->assertSame("candy-gifview 0.1.0\n", $out);
+    }
+
+    public function testAPlainScriptWithoutAutoloadStillRefusesHonestly(): void    {
         // The mapPhar probe must not turn the no-autoload refusal into a
         // PharException fatal: copy the bin where no vendor/ resolves and
         // assert the old contract (exit 1 + the cannot-find-autoload line).

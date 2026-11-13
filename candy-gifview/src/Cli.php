@@ -83,7 +83,11 @@ final class Cli
      */
     public static function runningVersion(): string
     {
-        return Support\Version::resolve(\Phar::running(false) ?: '', Support\Version::CURRENT);
+        // A phar-less host (`php -n` drops the shared module): absence is
+        // exactly the '' non-archive answer resolve() already handles.
+        $running = \class_exists('Phar') ? \Phar::running(false) : '';
+
+        return Support\Version::resolve($running ?: '', Support\Version::CURRENT);
     }
 
     private function __construct()
