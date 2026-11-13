@@ -37,4 +37,15 @@ final readonly class Region
     {
         return new self(0, 0, $width, $height);
     }
+
+    /**
+     * Translate without resizing — replaces the 4-arg constructor re-spell
+     * (sugar-style Solver.php:37 precedent) for callers that only ever move
+     * a box. A negative destination is refused loudly by the same boundary
+     * guard the constructor carries.
+     */
+    public function withOrigin(int $x, int $y): self
+    {
+        return new self($x, $y, $this->width, $this->height);
+    }
 }
