@@ -11,9 +11,12 @@ declare(strict_types=1);
  *
  * Reads <outDir>/clover-0.xml .. clover-<K-1>.xml as written by
  * `scripts/parallel-tests.sh --clover` and unions them into one report so the
- * sharded candy-code coverage job can hand Codecov/Codacy exactly the same
- * artifact shape the serial run produced — the destination path is what the
+ * sharded candy-code coverage job can hand Codecov exactly the same artifact
+ * shape the serial run produced — the destination path is what the
  * downstream upload steps reference, nothing below this script changes.
+ * (The Codacy mirror of that upload was removed by owner ruling 2026-11-11;
+ * its client script get_codacy_coverage.sh was retired by RT-08 on
+ * 2026-11-12 — historical bytes at f7c517b0c.)
  *
  * UNION SEMANTICS — why summed counts, not OR'd covered bits:
  *  * Each shard runs a DISJOINT set of test files, and PHPUnit's <source>
