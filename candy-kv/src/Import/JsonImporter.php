@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Import;
 
 use SugarCraft\Core\Util\Json;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\Support\Ttl;
 use SugarCraft\Kv\YamlDialect;
 
 /**
@@ -39,6 +40,8 @@ use SugarCraft\Kv\YamlDialect;
  */
 final class JsonImporter
 {
+    private readonly array $options;
+
     /**
      * @param array{ttl?: array<string, int>} $options Import options.
      *                   ttl: Map of key → seconds until expiry. Keys match
@@ -48,8 +51,54 @@ final class JsonImporter
      */
     public function __construct(
         private readonly Store $store,
-        private readonly array $options = [],
+        array $options = [],
     ) {
+        $this->options = self::validatedOptions($options);
+    }
+
+    /**
+     * Fail fast on the constructor `ttl` map (candy-kv-031): the options and
+     * a document share one write path, so they must share one law. A raw
+     * `'soon'` used to leak a TypeError out of resolveTtl's return type
+     * where every document-level shape answers with a domain exception.
+     *
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    private static function validatedOptions(array $options): array
+    {
+        if (!\array_key_exists('ttl', $options) || $options['ttl'] === null) {
+            return $options;
+        }
+        if (!\is_array($options['ttl'])) {
+            throw new \RuntimeException(
+                \sprintf('Import option "ttl" must be a map of key → seconds, got %s.', \get_debug_type($options['ttl']))
+            );
+        }
+
+        $validated = [];
+        foreach ($options['ttl'] as $key => $seconds) {
+            if (!\is_int($seconds) && !\is_numeric($seconds)) {
+                throw new \RuntimeException(
+                    \sprintf('TTL option for entry "%s" must be an integer number of seconds, got %s.', (string) $key, \get_debug_type($seconds))
+                );
+            }
+            if ((float) $seconds !== (float) (int) $seconds) {
+                throw new \RuntimeException(
+                    \sprintf('TTL option for entry "%s" must be an integer number of seconds, got %s.', (string) $key, (string) $seconds)
+                );
+            }
+            $ttl = (int) $seconds;
+            if ($ttl < 1 || $ttl > Ttl::MAX_SECONDS) {
+                throw new \RuntimeException(
+                    \sprintf('TTL option for entry "%s" must be between 1 and %d seconds.', (string) $key, Ttl::MAX_SECONDS)
+                );
+            }
+            $validated[(string) $key] = $ttl;
+        }
+        $options['ttl'] = $validated;
+
+        return $options;
     }
 
     /**
@@ -153,6 +202,18 @@ final class JsonImporter
             $key = (string) $key; // JSON object keys are strings; PHP may hand us int subscripts.
             $binary = ($binaryKeys[$key] ?? false) === true;
             $ttl = self::resolveTtl($ttlMap, $key);
+            // The key law pre-writes too (candy-kv-030): Store::splitKey is
+            // the same authority Store::set routes by, and the walk happens
+            // HERE, so a malformed key refuses the document before any row
+            // is committed — under atomic=false the old shape left prefix
+            // rows mutated and made the docblock's refuse-before-any-write
+            // law false for exactly this error class.
+            if (Store::splitKey($key, $this->store->defaultDatabase())[1] === '') {
+                // Same law and wording Store::set applies after parsing; an
+                // empty entry key ({"":"v"}) would otherwise still poison
+                // the pre-pass's completeness.
+                throw new \InvalidArgumentException('Entry key must not be empty.');
+            }
 
             if (\is_int($value) || \is_float($value)) {
                 $value = (string) $value;
@@ -231,6 +292,16 @@ final class JsonImporter
         if ($ttl <= 0) {
             throw new \RuntimeException(
                 \sprintf('TTL for entry "%s" must be at least 1 second; omit it for a forever entry.', $key)
+            );
+        }
+        // The shared horizon (candy-kv-001): an integer-shaped value that
+        // passed the number law (PHP_INT_MAX rides the float round-trip)
+        // used to reach the writer unbounded — overflow poisons the row and
+        // a near-max value mints the forever zombie the TTL spells the
+        // opposite of.
+        if ($ttl > Ttl::MAX_SECONDS) {
+            throw new \RuntimeException(
+                \sprintf('TTL for entry "%s" exceeds the maximum of %d seconds.', $key, Ttl::MAX_SECONDS)
             );
         }
         return $ttl;

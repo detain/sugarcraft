@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kv\Cli;
 
+use SugarCraft\Kv\Support\Ttl;
+
 /**
  * Argument parser for the candy-kv CLI.
  *
@@ -24,9 +26,6 @@ namespace SugarCraft\Kv\Cli;
  */
 final class ArgParser
 {
-    /** Largest accepted --ttl payload in seconds (~31.7 years). */
-    private const TTL_MAX_SECONDS = 999999999;
-
     /**
      * Parse arguments for the `set` command.
      *
@@ -332,14 +331,15 @@ final class ArgParser
             throw new \InvalidArgumentException(
                 sprintf(
                     'Option --ttl expects an integer of seconds from 1 to %d, got "%s".',
-                    self::TTL_MAX_SECONDS,
+                    Ttl::MAX_SECONDS,
                     $raw
                 )
             );
         }
-        // The 9-digit regex ceiling IS TTL_MAX_SECONDS (999999999), so no
-        // second upper comparison is needed here — keep the const as the
-        // single documented bound.
+        // The 9-digit regex ceiling IS Ttl::MAX_SECONDS (999999999), so no
+        // second upper comparison is needed here — keep the shared const as
+        // the single documented bound (candy-kv-001: it was private to this
+        // class while Store/Database/importers accepted any int).
         $seconds = (int) $raw;
         if ($seconds < 1) {
             throw new \InvalidArgumentException(

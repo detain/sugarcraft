@@ -717,4 +717,119 @@ final class ImportExportTest extends TestCase
         $this->assertSame('1', $this->store->get('x'));
         $this->assertSame('2', $this->store->get('y'));
     }
+
+    // ─── Write-path import law pins (candy-kv-001/030/031) ──────────────────
+
+    public function testANonAtomicJsonImportWithABadKeyWritesNothing(): void
+    {
+        // kv-030: splitKey was first reached inside Store::set during the
+        // write loop, so under atomic=false the good prefix COMMITTED before
+        // the bad key threw — the refuse-before-any-write docblock was false
+        // for exactly this error class. The pre-pass now walks every key.
+        $importer = new JsonImporter($this->store);
+        try {
+            $importer->importFromString('{"good":"kept","bad@x@y":"v"}', false);
+            self::fail('Expected InvalidArgumentException for the ambiguous key.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('cannot contain', $e->getMessage());
+        }
+        $this->assertSame('', $this->store->get('good'), 'Nothing may commit before the whole document is valid.');
+        // The poison key cannot even round-trip a read (splitKey refuses it
+        // there too), so prove emptiness through the listing door instead.
+        $this->assertSame([], \iterator_to_array($this->store->list()));
+    }
+
+    public function testANonAtomicJsonImportRefusesTheEmptyKeyPreWriteToo(): void
+    {
+        // The empty entry key rides past splitKey (["", ''] is a legal
+        // split); the pre-pass applies Store::set's non-empty law so the
+        // {"":"ghost","good":…} shape cannot commit a prefix either.
+        $importer = new JsonImporter($this->store);
+        try {
+            $importer->importFromString('{"":"ghost","good":"kept"}', false);
+            self::fail('Expected InvalidArgumentException for the empty key.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('must not be empty', $e->getMessage());
+        }
+        $this->assertSame('', $this->store->get('good'));
+    }
+
+    public function testAHorizonBreachingDocumentTtlIsRefusedBeforeAnyWrite(): void
+    {
+        // kv-001's float round-trip route: JSON decodes the 19-digit
+        // literal to a float, (float)===(float)(int) passes the integer
+        // shape law, and the writer used to receive PHP_INT_MAX unbounded.
+        $importer = new JsonImporter($this->store);
+        try {
+            $importer->importFromString('{"_ttl":{"poison":9223372036854775807},"poison":"v"}', false);
+            self::fail('Expected RuntimeException for the oversized document TTL.');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('exceeds the maximum of 999999999 seconds', $e->getMessage());
+        }
+        $this->assertNull($this->store->entry('poison'));
+    }
+
+    public function testTheConstructorTtlMapAnswersWithDomainRefusals(): void
+    {
+        // kv-031: every one of these used to leak a raw TypeError out of
+        // resolveTtl's return type (or never fire at all for 0/oversized);
+        // document-level shapes answer with a RuntimeException naming the
+        // entry, so the options map must too.
+        $cases = [
+            'string' => 'soon',
+            'float' => 1.5,
+            'array' => [5],
+            'null' => null,
+            'zero' => 0,
+            'negative' => -10,
+            'horizon-breaker' => 9_999_999_999,
+        ];
+        foreach ($cases as $label => $value) {
+            try {
+                new JsonImporter($this->store, ['ttl' => ['k' => $value]]);
+                self::fail("Expected RuntimeException for the {$label} option value.");
+            } catch (\RuntimeException $e) {
+                self::assertStringContainsString('entry "k"', $e->getMessage(), $label);
+            }
+        }
+        // A valid map survives validation untouched.
+        new JsonImporter($this->store, ['ttl' => ['k' => 60]]);
+        self::assertTrue(true, 'valid option map constructs');
+    }
+
+    public function testANonAtomicYamlImportWithABadKeyWritesNothing(): void
+    {
+        // kv-030 twin for the YAML door.
+        $importer = new YamlImporter($this->store);
+        try {
+            $importer->importFromString("good: kept\nbad@x@y: v\n", false);
+            self::fail('Expected InvalidArgumentException for the ambiguous key.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('cannot contain', $e->getMessage());
+        }
+        $this->assertSame('', $this->store->get('good'));
+        $this->assertSame([], \iterator_to_array($this->store->list()));
+    }
+
+    public function testTheYamlDocumentTtlSharesTheHorizonAndTheOptionLaw(): void
+    {
+        // skate_ttl_ route: a 10-digit value passes the integer shape law
+        // and must hit the shared ceiling pre-write…
+        $importer = new YamlImporter($this->store);
+        try {
+            $importer->importFromString("poison: v\nskate_ttl_poison: 9999999999\n", false);
+            self::fail('Expected RuntimeException for the oversized document TTL.');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('exceeds the maximum of 999999999 seconds', $e->getMessage());
+        }
+        $this->assertNull($this->store->entry('poison'));
+
+        // …and the constructor map answers with the same domain refusal.
+        try {
+            new YamlImporter($this->store, ['ttl' => ['k' => 'soon']]);
+            self::fail('Expected RuntimeException for the string option value.');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('entry "k"', $e->getMessage());
+        }
+    }
 }

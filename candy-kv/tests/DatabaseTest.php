@@ -396,4 +396,23 @@ final class DatabaseTest extends TestCase
         $this->assertSame(0, $perms & 0o077);
         $db->close();
     }
+
+    // ─── Write-path TTL law (candy-kv-001) ──────────────────────────────────
+
+    public function testTheDirectDatabaseDoorAppliesTheSameTtlLaw(): void
+    {
+        // Store::set guards, but Database is public too: a consumer wiring
+        // it directly must hit the same horizon, not the epoch arithmetic
+        // underneath (the mirror guard in Database::set).
+        foreach ([0, -1, \PHP_INT_MAX] as $bad) {
+            try {
+                $this->db->set('poison', 'v', false, $bad);
+                self::fail("Expected InvalidArgumentException for TTL {$bad}.");
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('between 1 and 999999999 seconds', $e->getMessage());
+            }
+            self::assertNull($this->db->get('poison'), 'A refused write must leave no row at all.');
+        }
+        $this->db->close();
+    }
 }

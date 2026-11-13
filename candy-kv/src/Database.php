@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Kv;
 
 use SugarCraft\Kv\Lang;
+use SugarCraft\Kv\Support\Ttl;
 
 /**
  * SQLite-backed store for one named database.
@@ -295,9 +296,24 @@ final class Database
         // INSERT path — reading the bind list without the SET list makes
         // this upsert look like it re-stamps creation time on every write,
         // which it does not.
+        // Mirror guard (candy-kv-001): Store::set already refuses out-of-range
+        // TTLs, but Database is a public door too — an embedded consumer
+        // reaching it directly must hit the same horizon, not the epoch
+        // arithmetic underneath.
+        if ($ttlSeconds !== null && !Ttl::inRange($ttlSeconds)) {
+            throw new \InvalidArgumentException(\sprintf(
+                'TTL must be between 1 and %d seconds, got %d; omit the TTL for a forever entry.',
+                Ttl::MAX_SECONDS,
+                $ttlSeconds,
+            ));
+        }
         $expiresAt = null;
-        if ($ttlSeconds !== null && $ttlSeconds > 0) {
+        if ($ttlSeconds !== null) {
             $expiresAt = \time() + $ttlSeconds;
+            // Belt-and-braces on the overflow math that minted the kv-001
+            // poison row: with the guard above this cannot fire — if it ever
+            // does, the horizon arithmetic broke and the write stops dead.
+            \assert($expiresAt <= \PHP_INT_MAX);
         }
 
         $stmt = $this->db->prepare(

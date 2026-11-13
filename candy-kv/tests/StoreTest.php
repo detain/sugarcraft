@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Kv\Tests;
 
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\Support\Ttl;
 use PHPUnit\Framework\TestCase;
 
 final class StoreTest extends TestCase
@@ -768,5 +769,57 @@ final class StoreTest extends TestCase
         $this->assertFileDoesNotExist($path);
         $this->assertFileDoesNotExist($path . '-wal', 'WAL sidecar must not survive the delete');
         $this->assertFileDoesNotExist($path . '-shm', 'SHM sidecar must not survive the delete');
+    }
+
+    // ─── Write-path TTL law (candy-kv-001/014) ──────────────────────────────
+
+    public function testAZeroTtlRaisesInsteadOfStoringSilentForever(): void
+    {
+        // kv-014: the writer used to DROP non-positive TTLs, silently
+        // inverting an expiry request into a forever entry. A forever entry
+        // is made by omitting the TTL, never by a clever value.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('TTL must be between 1 and 999999999 seconds, got 0');
+        $this->store->set('zero', 'v', false, 0);
+    }
+
+    public function testANegativeTtlRaisesInsteadOfStoringSilentForever(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('TTL must be between 1 and 999999999 seconds, got -100');
+        $this->store->set('neg', 'v', false, -100);
+    }
+
+    public function testAnOversizedTtlIsRefusedAndTheLiveRowSurvivesIntact(): void
+    {
+        // kv-001: `time() + PHP_INT_MAX` overflowed to a negative epoch —
+        // the poison row committed permanently invisible while the upsert
+        // had ALREADY destroyed the previous live value. The guard fires
+        // pre-write, so the old row must survive untouched.
+        $this->store->set('spine', 'old');
+        try {
+            $this->store->set('spine', 'new', false, \PHP_INT_MAX);
+            self::fail('Expected InvalidArgumentException for a PHP_INT_MAX TTL.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('between 1 and 999999999 seconds', $e->getMessage());
+        }
+        $this->assertSame('old', $this->store->get('spine'), 'The refusal must not touch the live row.');
+        $this->assertNull($this->store->entry('spine')?->expiresAt, 'No expiry may leak onto the surviving row.');
+    }
+
+    public function testJustPastTheHorizonIsRefusedToo(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->store->set('edge-plus', 'v', false, Ttl::MAX_SECONDS + 1);
+    }
+
+    public function testTheHorizonEdgeItselfStillStores(): void
+    {
+        // The bound is INCLUSIVE: ~31.7 years is storable, one second past
+        // it is not — pin the boundary so a future refactor does not
+        // silently shrink or lift it.
+        $entry = $this->store->set('edge', 'v', false, Ttl::MAX_SECONDS);
+        $this->assertNotNull($entry->expiresAt);
+        $this->assertSame('v', $this->store->get('edge'));
     }
 }

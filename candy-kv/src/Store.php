@@ -20,6 +20,7 @@ namespace SugarCraft\Kv;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Kv\Lang;
+use SugarCraft\Kv\Support\Ttl;
 
 /**
  * Main entry point for the candy-kv key/value store.
@@ -98,6 +99,18 @@ final class Store
      */
     public function set(string $key, string $value, bool $binary = false, ?int $ttlSeconds = null): Entry
     {
+        // Guard first (candy-kv-001/014): a non-positive TTL is a silent
+        // inversion (the writer would drop it → forever entry, the exact
+        // opposite of what an expiry spells), and an oversized one overflows
+        // the epoch arithmetic into poison/zombie rows. A forever entry is
+        // made by passing NO ttl, never by a clever value.
+        if ($ttlSeconds !== null && !Ttl::inRange($ttlSeconds)) {
+            throw new \InvalidArgumentException(\sprintf(
+                'TTL must be between 1 and %d seconds, got %d; omit the TTL for a forever entry.',
+                Ttl::MAX_SECONDS,
+                $ttlSeconds,
+            ));
+        }
         [$dbName, $entryKey] = $this->parseKey($key);
         if ($entryKey === '') {
             throw new \InvalidArgumentException('Entry key must not be empty.');
