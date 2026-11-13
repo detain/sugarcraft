@@ -13,10 +13,10 @@ namespace SugarCraft\SshLauncher;
  *
  * `dispatch()` never returns normally: on success the process image
  * is replaced, and on failure the default executor THROWS a
- * `RuntimeException` naming the binary (which propagates out of
- * `dispatch()`). ext-pcntl is a hard composer requirement, so there
- * is no runtime feature probe here — an absent extension fails at
- * install time, not at dispatch time.
+ * `RuntimeException` naming the binary and the recorded OS reason
+ * (which propagates out of `dispatch()`). ext-pcntl is a hard
+ * composer requirement, so there is no runtime feature probe here —
+ * an absent extension fails at install time, not at dispatch time.
  *
  * For tests, `executor` is a callable receiving the argv list —
  * defaults to `pcntl_exec` but tests can swap it for a recorder.
@@ -35,16 +35,31 @@ final class Launcher
     private $executor;
 
     /**
-     * @param callable(string,list<string>): void|null $executor
+     * @param (callable(string,list<string>): void)|null $executor
      */
     public function __construct(?callable $executor = null)
     {
         $this->executor = $executor ?? static function (string $bin, array $args): void {
             // pcntl_exec wants the binary path + arg list (without
             // argv[0]). On success it never returns.
-            \pcntl_exec($bin, $args);
+            //
+            // -080: PHP reports the OS reason (ENOENT/EACCES/ENOEXEC)
+            // as an E_WARNING that used to vanish behind the generic
+            // exec_failed throw. The @ idiom suppresses display while
+            // error_get_last() still records it (a userland handler
+            // would consume it unrecorded); the before/after compare
+            // keeps an unrelated stale error from being mislabeled as
+            // the exec reason. bin's stderr boundary sanitizes the
+            // spliced text at the CLI edge.
+            $before = error_get_last()['message'] ?? null;
+            @\pcntl_exec($bin, $args);
+            $last = error_get_last()['message'] ?? null;
+            $reason = $last !== null && $last !== $before ? $last : null;
             // If we got here, exec failed.
-            throw new \RuntimeException(Lang::t('launcher.exec_failed', ['bin' => $bin]));
+            throw new \RuntimeException(
+                Lang::t('launcher.exec_failed', ['bin' => $bin])
+                . ($reason !== null ? ': ' . $reason : ''),
+            );
         };
     }
 

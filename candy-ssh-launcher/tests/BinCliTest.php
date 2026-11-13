@@ -534,6 +534,31 @@ final class BinCliTest extends TestCase
     }
 
     /**
+     * -080 acceptance: --ssh at an existing executable that the kernel
+     * refuses to run (chmod +x data file → ENOEXEC) must exit 3 with
+     * the OS reason on the wire, not just the generic exec_failed text.
+     */
+    public function testUnexecutableSshBinaryExitsThreeWithTheOsReason(): void
+    {
+        $cfg = $this->writeFixture(implode("\n", [
+            '- name: only',
+            '  host: o.test',
+        ]) . "\n");
+        $fake = $this->writeFixture("just bytes, no shebang anywhere\n", '.fake-ssh');
+        chmod($fake, 0755);
+
+        [$code, $output] = $this->runUnderPty(
+            ['--config', $cfg, '--ssh', $fake],
+            selectKey: "\r",
+        );
+
+        $printable = $this->printable($output);
+        $this->assertSame(3, $code, 'pty output: ' . $printable);
+        $this->assertStringContainsString('failed to exec', $printable);
+        $this->assertStringContainsString('Exec format error', $printable, '-080: the errno reason must reach the wire');
+    }
+
+    /**
      * Run the bin on a pty of its own via util-linux `script -qec` (the
      * candy-tetris BinaryLaunchTest shape): -e propagates the child's exit
      * code and the typescript is discarded. $selectKey is typed once the

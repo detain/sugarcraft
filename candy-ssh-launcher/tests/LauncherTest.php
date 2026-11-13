@@ -67,4 +67,51 @@ final class LauncherTest extends TestCase
 
         $this->assertSame(['--', 'just-a-host.example.com'], $captured);
     }
+
+    /**
+     * -080: the default executor must splice the recorded OS reason
+     * into the exec_failed throw instead of losing it to a vanished
+     * E_WARNING. A nonexistent binary is deterministic ENOENT.
+     */
+    public function testDefaultExecutorFailureSplicesTheOsReason(): void
+    {
+        $launcher = new Launcher();
+        $e = new Endpoint(name: 'a', host: 'a.test');
+
+        $this->expectException(\RuntimeException::class);
+        try {
+            $launcher->dispatch($e, '/definitely-not-here/no-ssh');
+        } catch (\RuntimeException $ex) {
+            $message = $ex->getMessage();
+            $this->assertStringContainsString('failed to exec /definitely-not-here/no-ssh', $message);
+            $this->assertStringContainsString('No such file or directory', $message, 'errno reason must ride the throw');
+            throw $ex;
+        }
+    }
+
+    /**
+     * -080 staleness guard: an unrelated suppressed error recorded
+     * BEFORE the exec must not be mislabeled as the exec reason —
+     * the fresh pcntl_exec warning still wins when it lands.
+     */
+    public function testStaleErrorDoesNotReplaceTheRealExecReason(): void
+    {
+        @\file_get_contents('/definitely-not-here/stale-probe');
+        $stale = error_get_last()['message'] ?? null;
+        $this->assertIsString($stale, 'probe premise: a suppressed error is on record');
+
+        $launcher = new Launcher();
+        $e = new Endpoint(name: 'a', host: 'a.test');
+
+        try {
+            $launcher->dispatch($e, '/definitely-not-here/no-ssh');
+            $this->fail('expected RuntimeException');
+        } catch (\RuntimeException $ex) {
+            // Either the fresh pcntl reason (correct) or no reason at
+            // all (guarded stale) is acceptable; replaying the STALE
+            // text as if it were the exec reason is not.
+            $this->assertStringNotContainsString('stale-probe', $ex->getMessage());
+            $this->assertStringContainsString('No such file or directory', $ex->getMessage());
+        }
+    }
 }
