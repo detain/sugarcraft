@@ -141,7 +141,14 @@ final class PixelGrid
             throw new RuntimeException(Lang::t('graphics.gd.unavailable'));
         }
 
-        $image = imagecreatetruecolor(max($this->width, 1), max($this->height, 1));
+        // A degenerate raster is a bug in whoever built it, not a canvas
+        // shape: the old max(w,1) silently handed back a 1x1 image for a
+        // 0-width or 0-height grid, so an empty decode looked successful.
+        if ($this->width === 0 || $this->height === 0) {
+            throw new MalformedGraphicsException(Lang::t('graphics.grid.degenerate_raster'));
+        }
+
+        $image = imagecreatetruecolor($this->width, $this->height);
         imagealphablending($image, false);
         imagesavealpha($image, true);
         $transparent = imagecolorallocatealpha($image, 0, 0, 0, 127);

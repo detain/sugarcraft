@@ -157,6 +157,32 @@ final class KittyStreamTest extends TestCase
         KittyStream::decode("\x1bPqc=8,r=4\x1b\\m=1,AAAA");
     }
 
+    public function testHeaderBytesEmbeddedInAPayloadCannotReframeTheChunk(): void
+    {
+        // 'm=0,' inside payload text used to be reframed as a boundary:
+        // the fragments AAAA+BBBB glued to a valid base64 and the corrupt
+        // stream decoded silently. Wire framing discipline now refuses —
+        // a final-flag chunk can never be followed by another chunk.
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('follows an m=0');
+
+        KittyStream::decode("\x1bPqc=8,r=4\x1b\\m=0,AAAAm=0,BBBBm=0\x1b\\");
+    }
+
+    public function testMisalignedOrPaddedIntermediateChunkIsRefused(): void
+    {
+        // Chunk boundaries fall on whole base64 quanta; a '=' or an odd
+        // fragment mid-stream is corruption, not framing.
+        foreach (['m=1,ABm=0,CDEF', 'm=1,AAAB=m=0,CDEF'] as $region) {
+            try {
+                KittyStream::decode("\x1bPqc=8,r=4\x1b\\" . $region . "m=0\x1b\\");
+                self::fail("reframed corrupt region: {$region}");
+            } catch (MalformedGraphicsException $error) {
+                self::assertStringContainsString('base64 quanta', $error->getMessage());
+            }
+        }
+    }
+
     public function testInvalidBase64Throws(): void
     {
         $this->expectException(MalformedGraphicsException::class);

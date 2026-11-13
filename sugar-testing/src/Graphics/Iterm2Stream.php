@@ -234,7 +234,11 @@ final class Iterm2Stream
             if ($eq === false) {
                 throw new MalformedGraphicsException(Lang::t('graphics.iterm2.bad_parameter', ['token' => $pair]));
             }
-            $params[substr($pair, 0, $eq)] = urldecode(substr($pair, $eq + 1));
+            // Raw values only: the emitter (sugar-core Ansi::iterm2InlineImage)
+            // writes key=value verbatim and percent-encodes nothing, so a
+            // urldecode here would invent wire values — 'width=%31%32' must
+            // refuse as non-numeric, not silently decode to 12.
+            $params[substr($pair, 0, $eq)] = substr($pair, $eq + 1);
         }
 
         $payload = self::decodeBase64(substr($arguments, $colon + 1));

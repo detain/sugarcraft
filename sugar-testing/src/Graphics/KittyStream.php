@@ -280,6 +280,15 @@ final class KittyStream
 
     /**
      * Concatenate the base64 of every `m=<flag>,<b64>` chunk in a DCS region.
+     *
+     * Framing discipline, not blind concatenation: the old code split at
+     * every `m=[01],` occurrence and glued the fragments together, so
+     * corrupt bytes that spelled a header vanished into framing (payload
+     * `AAAAm=0,BBBB` silently became `AAAABBBB`). Two wire rules catch
+     * that now: an m=0 (final) chunk can never be followed by another
+     * chunk, and every intermediate chunk must carry unpadded base64 of a
+     * whole 4-character quantum - padding belongs to the end of a stream,
+     * never to its middle.
      */
     private static function reassemble(string $region): string
     {
@@ -288,12 +297,34 @@ final class KittyStream
         }
 
         $chunks = preg_split('/(?=m=[01],)/', $region, -1, PREG_SPLIT_NO_EMPTY);
+        if ($chunks === false || $chunks === []) {
+            throw new MalformedGraphicsException(Lang::t('graphics.kitty.bad_chunk'));
+        }
+
+        $chunks = array_values($chunks);
+        $last   = count($chunks) - 1;
         $base64 = '';
-        foreach ($chunks as $chunk) {
+
+        foreach ($chunks as $index => $chunk) {
             if (!preg_match('/^m=([01]),(.*)$/s', $chunk, $m)) {
                 throw new MalformedGraphicsException(Lang::t('graphics.kitty.bad_chunk'));
             }
-            $base64 .= $m[2];
+
+            [, $flag, $payload] = $m;
+
+            if ($flag === '0' && $index !== $last) {
+                // Either the emitter broke the protocol or corrupt payload
+                // bytes were reframed into a phantom boundary - refuse.
+                throw new MalformedGraphicsException(Lang::t('graphics.kitty.chunk_after_end'));
+            }
+
+            if ($index !== $last && (str_contains($payload, '=') || strlen($payload) % 4 !== 0)) {
+                throw new MalformedGraphicsException(Lang::t('graphics.kitty.chunk_alignment', [
+                    'len' => strlen($payload),
+                ]));
+            }
+
+            $base64 .= $payload;
         }
 
         return $base64;

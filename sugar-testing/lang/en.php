@@ -40,6 +40,7 @@ return [
     // Graphics decoders (SugarCraft\Testing\Graphics)
     'graphics.detect.unknown_protocol' => 'Stream does not introduce a recognized graphics protocol (Sixel/Kitty/iTerm2)',
     'graphics.gd.unavailable' => 'The GD extension is required to materialize this image',
+    'graphics.grid.degenerate_raster' => 'A PixelGrid with zero width or zero height has no pixels to rasterize — refusing to materialize a misleading 1x1 canvas',
     'graphics.image_too_large' => 'Image declares {width}x{height} pixels, exceeding the {max}-pixel decode budget',
     'graphics.payload_not_image' => 'The decoded payload is not a readable image',
     'graphics.grid.ragged_rows' => 'Pixel grid row {row} has {got} cells but the first row declared {expected}',
@@ -68,6 +69,8 @@ return [
     'graphics.kitty.unterminated_begin' => 'Kitty transmit header is not closed by ST (ESC \\)',
     'graphics.kitty.missing_end' => 'Kitty transmit is missing its m=0 end marker',
     'graphics.kitty.bad_chunk' => 'Kitty data chunk is malformed (expected m=<0|1>,<base64>)',
+    'graphics.kitty.chunk_after_end' => 'Kitty chunk follows an m=0 (final) chunk — only the last chunk of a transmission may carry m=0',
+    'graphics.kitty.chunk_alignment' => 'Kitty intermediate chunk carries {len} characters — chunk boundaries must fall on unpadded 4-character base64 quanta',
     'graphics.kitty.invalid_base64' => 'Kitty payload is not valid base64',
     'graphics.kitty.decompress_failed' => 'Kitty zlib payload failed to inflate',
     'graphics.kitty.decompress_too_large' => 'Kitty o=z payload inflates beyond the {max}-byte decode budget',

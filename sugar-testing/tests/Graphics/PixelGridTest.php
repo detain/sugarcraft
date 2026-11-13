@@ -6,6 +6,7 @@ namespace SugarCraft\Testing\Tests\Graphics;
 
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use SugarCraft\Testing\Graphics\MalformedGraphicsException;
 use SugarCraft\Testing\Graphics\PixelGrid;
 
 /**
@@ -106,15 +107,23 @@ final class PixelGridTest extends TestCase
         self::assertSame(255, $red['red']);
     }
 
-    public function testEmptyGridToGdImageStillYieldsAUsableCanvas(): void
+    public function testDegenerateGridRefusesToMaterializeACanvas(): void
     {
         if (!function_exists('imagecreatetruecolor')) {
             self::markTestSkipped('ext-gd is required to materialize a PixelGrid');
         }
 
-        $image = PixelGrid::transparent(0, 0)->toGdImage();
-
-        self::assertInstanceOf(\GdImage::class, $image);
+        // The old max(w,1) hid the degenerate: a 0-column or 0-row grid
+        // came back as a plausible 1x1 canvas. Zero pixels is a bug in
+        // whoever built the grid, so every zero dimension must throw.
+        foreach ([[0, 0], [0, 3], [3, 0]] as [$width, $height]) {
+            try {
+                PixelGrid::transparent($width, $height)->toGdImage();
+                self::fail("a {$width}x{$height} grid materialized a canvas");
+            } catch (MalformedGraphicsException $error) {
+                self::assertStringContainsString('no pixels to rasterize', $error->getMessage());
+            }
+        }
     }
 
     public function testToGdImageFailsLoudlyWithoutGd(): void

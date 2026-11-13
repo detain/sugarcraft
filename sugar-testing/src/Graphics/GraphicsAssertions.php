@@ -166,16 +166,32 @@ final class GraphicsAssertions extends Assert
             $grid->height(),
             self::describe($message, 'decoded height does not match the declared raster'),
         );
+        $painted = $grid->paintedPixels();
+
         self::assertNotEmpty(
-            $grid->paintedPixels(),
+            $painted,
             self::describe($message, 'raster decoded with no painted pixels'),
         );
 
-        foreach ($grid->paintedPixels() as $cell) {
-            self::assertContains(
-                $cell,
-                array_values($palette),
-                self::describe($message, 'a rendered pixel references an undefined palette entry'),
+        // Membership is a one-time keyed set — the old per-pixel
+        // assertContains() scanned the whole palette linearly once per
+        // painted cell (O(pixels x palette)), and re-checked identical
+        // triples over and over.
+        $defined = [];
+        foreach ($palette as $entry) {
+            $defined[implode(',', $entry)] = true;
+        }
+
+        $used = [];
+        foreach ($painted as $cell) {
+            $used[implode(',', $cell)] = true;
+        }
+
+        foreach (array_keys($used) as $triple) {
+            self::assertArrayHasKey(
+                $triple,
+                $defined,
+                self::describe($message, "a rendered pixel ({$triple}) references an undefined palette entry"),
             );
         }
     }

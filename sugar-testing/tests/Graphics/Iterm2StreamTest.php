@@ -125,4 +125,19 @@ final class Iterm2StreamTest extends TestCase
         // An argument segment with no `=` is malformed, not ignorable.
         Iterm2Stream::decode("\x1b]1337;File=width=1;oops:AAAA\x07");
     }
+
+    public function testPercentEncodedWidthIsRefusedNotDecoded(): void
+    {
+        // The first-party emitter (sugar-core Ansi::iterm2InlineImage)
+        // writes argument values verbatim and percent-encodes nothing, so
+        // a %-encoded number on the wire is corruption. The removed
+        // urldecode() would have turned %31%32 into a phantom width of 12.
+        try {
+            Iterm2Stream::decode("\x1b]1337;File=width=%31%32;height=2:AAAA\x07");
+            self::fail('percent-encoded numeric argument was accepted');
+        } catch (MalformedGraphicsException $error) {
+            self::assertStringContainsString('non-negative integer', $error->getMessage());
+            self::assertStringContainsString('%31%32', $error->getMessage(), 'the raw wire value must surface in the refusal');
+        }
+    }
 }
