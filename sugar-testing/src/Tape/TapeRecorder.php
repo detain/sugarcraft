@@ -70,6 +70,9 @@ final class TapeRecorder
      * @param int    $width  Terminal width in pixels
      * @param int    $height Terminal height in pixels
      * @param int    $fontSize Font size
+     * @param float|null $typingSpeed Per-character typing delay in seconds;
+     *                                null (default) emits no directive, so
+     *                                existing tapes stay byte-identical
      * @return $this
      * @throws \RuntimeException when a different header set follows the first
      */
@@ -78,6 +81,7 @@ final class TapeRecorder
         int $width = 800,
         int $height = 480,
         int $fontSize = 14,
+        ?float $typingSpeed = null,
     ): self {
         // $theme is caller-supplied and CI executes the tape: escape it
         // like typed content so a quote or newline cannot forge a line.
@@ -86,8 +90,19 @@ final class TapeRecorder
             'Set FontSize ' . $fontSize,
             'Set Width ' . $width,
             'Set Height ' . $height,
-            '',
         ];
+
+        if ($typingSpeed !== null) {
+            if (!\is_finite($typingSpeed) || $typingSpeed < 0) {
+                throw new \InvalidArgumentException(Lang::t('tape.bad_typing_speed', [
+                    'seconds' => \var_export($typingSpeed, true),
+                ]));
+            }
+
+            $candidate[] = 'Set TypingSpeed ' . self::formatSeconds($typingSpeed);
+        }
+
+        $candidate[] = '';
 
         if ($this->headerLines === []) {
             foreach ($candidate as $directive) {

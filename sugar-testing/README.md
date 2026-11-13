@@ -457,6 +457,8 @@ use SugarCraft\Testing\Tape\TapeRecorder;
 
 TapeRecorder::to(__DIR__ . '/.vhs/demo.tape')
     ->header(theme: 'TokyoNight')          // Set Theme/FontSize/Width/Height
+                                          // (+ Set TypingSpeed when the optional
+                                          //  $typingSpeed float is passed)
     ->type('php examples/demo.php')
     ->enter()
     ->sleep(1.0)

@@ -459,4 +459,48 @@ final class TapeRecorderTest extends TestCase
         $this->assertStringContainsString("Sleep 0.001\n", $written);
         $this->assertStringNotContainsString('Sleep 2.0', $written);
     }
+
+    public function testHeaderEmitsTypingSpeedAfterHeightWhenPassed(): void
+    {
+        TapeRecorder::to($this->tapePath)
+            ->header(width: 100, height: 80, fontSize: 12, typingSpeed: 0.05)
+            ->save();
+
+        $written = (string) file_get_contents($this->tapePath);
+
+        $this->assertStringContainsString("Set Height 80\nSet TypingSpeed 0.05\n", $written);
+    }
+
+    public function testHeaderWithoutTypingSpeedCarriesNoDirective(): void
+    {
+        // The parameter is optional precisely so existing tapes stay
+        // byte-identical: null must not shift a single byte.
+        TapeRecorder::to($this->tapePath)->header()->save();
+
+        $written = (string) file_get_contents($this->tapePath);
+
+        $this->assertStringNotContainsString('TypingSpeed', $written);
+    }
+
+    public function testHeaderTypingSpeedRefusesNonFiniteAndNegative(): void
+    {
+        foreach ([NAN, \INF, -0.5] as $bad) {
+            try {
+                TapeRecorder::to($this->tapePath)->header(typingSpeed: $bad);
+                $this->fail('header() accepted typingSpeed ' . var_export($bad, true));
+            } catch (\InvalidArgumentException $error) {
+                $this->assertStringContainsString('finite non-negative delay', $error->getMessage());
+            }
+        }
+    }
+
+    public function testHeaderTypingSpeedParticipatesInTheConflictGuard(): void
+    {
+        $recorder = TapeRecorder::to($this->tapePath)->header(typingSpeed: 0.05);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('already emitted with a different set');
+
+        $recorder->header();
+    }
 }
