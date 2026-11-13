@@ -1269,7 +1269,7 @@ final class Subcommands
             return NonInteractive::EXIT_OK;
         }
 
-        echo 'candy-code gc status', \PHP_EOL;
+        echo Lang::t('cli.gc.status_heading'), \PHP_EOL;
         echo '  ', $inventory['db_path'], \PHP_EOL;
         echo Lang::t('cli.gc.files_line', [
             'db' => self::gcFormatBytes((int) $inventory['files']['db']),
@@ -1518,7 +1518,7 @@ final class Subcommands
             return NonInteractive::EXIT_OK;
         }
 
-        echo 'candy-code gc sessions', \PHP_EOL;
+        echo Lang::t('cli.gc.sessions_heading'), \PHP_EOL;
         echo \sprintf('%-12s  %-8s  %-8s  %-40s  %s', 'ID', 'FLAGS', 'AGE', 'TITLE', 'SIZE  (db / on-disk)'), \PHP_EOL;
         foreach ($shown as $row) {
             $cells = self::gcRowCells($row, $now);
@@ -1819,7 +1819,7 @@ final class Subcommands
             return NonInteractive::EXIT_OK;
         }
 
-        echo 'candy-code gc analyze', \PHP_EOL;
+        echo Lang::t('cli.gc.analyze_heading'), \PHP_EOL;
         echo Lang::t('cli.gc.analyze_top', [
             'top' => (string) \count($topRows),
             'count' => (string) \count($rows),
@@ -1977,7 +1977,7 @@ final class Subcommands
                 return NonInteractive::EXIT_OK;
             }
 
-            echo 'candy-code gc vacuum', $incremental ? ' [--incremental]' : '', \PHP_EOL;
+            echo Lang::t('cli.gc.vacuum_heading', ['flags' => $incremental ? ' [--incremental]' : '']), \PHP_EOL;
             echo Lang::t('cli.gc.vacuum.reclaimable', [
                 'reclaimable' => self::gcFormatBytes($reclaimable),
                 'auto_vacuum' => (string) $inventory['pragma']['auto_vacuum_label'],
@@ -3007,7 +3007,7 @@ final class Subcommands
             return;
         }
 
-        echo 'candy-code gc purge', $dryRun ? ' [--dry-run]' : '', \PHP_EOL;
+        echo Lang::t('cli.gc.purge_heading', ['flags' => $dryRun ? ' [--dry-run]' : '']), \PHP_EOL;
         if ($selectors['deleteMode'] && $plan['deleteIds'] !== []) {
             echo '  ' . Lang::t('cli.gc.purge.targets_header', ['count' => (string) \count($plan['deleteIds'])]) . \PHP_EOL;
             self::gcPurgeEchoRows($rows, $now);
@@ -7415,7 +7415,7 @@ final class Subcommands
             return NonInteractive::EXIT_OK;
         }
 
-        echo 'candy-code workflow status: ', $name, ' - ', $status->value, \PHP_EOL;
+        echo Lang::t('cli.workflow.status_heading', ['name' => $name, 'status' => $status->value]), \PHP_EOL;
 
         return NonInteractive::EXIT_OK;
     }
@@ -7503,8 +7503,12 @@ final class Subcommands
             return $exit;
         }
 
-        echo 'candy-code workflow ', $action, ': ', $name, ' - ', $result->status->value,
-            ' (', \count($result->stageResults), ' stages)', \PHP_EOL;
+        echo Lang::t('cli.workflow.report_heading', [
+            'action' => $action,
+            'name' => $name,
+            'status' => $result->status->value,
+            'stages' => \count($result->stageResults),
+        ]), \PHP_EOL;
         foreach ($lint['findings'] ?? [] as $finding) {
             echo '  lint warning: ', \ltrim(\substr($finding, \strlen('- warning')), ' '), \PHP_EOL;
         }
