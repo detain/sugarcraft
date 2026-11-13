@@ -685,6 +685,17 @@ final class StdioMcpServer implements McpServer
      * docblock). A wrapper that genuinely needs a shell spells it as argv
      * (`['/bin/sh', '-c', $script]`) and owns that consequence explicitly.
      *
+     * The NAMED RESIDUAL of that law is the server's OWN children. The group
+     * arm of the teardown ladder fires only when the direct child LEADS its
+     * process group (`posix_getpgid(child) === child`, checked while it
+     * lives); a plain proc_open spawn runs in the embedding process's group,
+     * so stop() addresses exactly one pid — and a worker the server daemonizes
+     * outlives it, keeping the invoking uid's rights while only its inherited
+     * stdio dies to EPIPE. Widening the reach would need setsid-at-spawn,
+     * which proc_open cannot express without the wrapper shell this plan
+     * refuses; containment of a fork-out tree is the server's job or the
+     * embedder's supervisor's, never something this class can fake.
+     *
      * @return array{0: list<string>, 1: ?array<string,string>}
      */
     private function spawnPlan(): array
@@ -944,6 +955,18 @@ final class StdioMcpServer implements McpServer
         }
     }
 
+    /**
+     * Tear the connection down: pipes first (a well-behaved server exits on
+     * stdin EOF before ever seeing a signal), then the TERM → poll → KILL →
+     * reap ladder, then the lock and the per-call state. Idempotent, and
+     * fork-aware — a non-owner clone closes only its own copies and leaves
+     * the connection to the process that started it.
+     *
+     * REACH: the ladder addresses the ONE process proc_open started. Group
+     * kill needs a group-leading child and a plain spawn never leads one, so
+     * a server that daemonizes its own workers outlives stop() — the named
+     * residual of {@see spawnPlan()}'s argv law, not a bug this pass hides.
+     */
     public function stop(): void
     {
         if ($this->process !== null && !$this->isOwnerProcess()) {
