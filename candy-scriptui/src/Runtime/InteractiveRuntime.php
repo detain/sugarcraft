@@ -76,9 +76,22 @@ final class InteractiveRuntime
         // callers already print runtime.no_terminal for that.
         $tty = self::ttyPair();
         if ($tty !== null) {
-            // Only the READ side comes from /dev/tty unless STDERR cannot
-            // display anything: the write side is the paint handle.
-            $paint = self::stderrIsTerminal() ? STDERR : $tty[1];
+            // scriptui-70 (finding 091): the pair is FRESH per call, so it
+            // is owned here. A STDERR that can paint makes the write side
+            // dead on arrival — closed before returning. When STDERR cannot
+            // display, the write handle IS the paint output and travels with
+            // the options; its lifetime then belongs to whoever runs the
+            // Program (the sugar-core close-on-teardown note is the rider).
+            // The read side always travels with the options for the same
+            // reason.
+            if (self::stderrIsTerminal()) {
+                $paint = STDERR;
+                if (is_resource($tty[1])) {
+                    fclose($tty[1]);
+                }
+            } else {
+                $paint = $tty[1];
+            }
 
             return self::warnIfPcntlAbsent(new ProgramOptions(
                 useAltScreen:    $useAltScreen,
@@ -253,9 +266,18 @@ final class InteractiveRuntime
         return defined('STDIN') && is_resource(STDIN) && @stream_isatty(STDIN);
     }
 
+    /** @var array{0:resource,1:resource}|null */
+    private static ?array $ownedTtyPair = null;
+
     /**
      * The /dev/tty read/write pair, or null when there is no controlling
-     * terminal. The probe seam may hand in a substitute pair.
+     * terminal. scriptui-70 (finding 091): exactly one pair is opened per
+     * process and reused by every prompt and every paint() — an embedder
+     * looping 100 prompts pays one fd, not two hundred. The pair's read
+     * side (and the write side whenever it is the paint output) then
+     * travels with ProgramOptions; sugar-core closing them at Program
+     * teardown is the rider note. The probe seam may hand in a substitute
+     * pair, which is passed through untouched.
      *
      * @return array{0:resource,1:resource}|null
      */
@@ -267,6 +289,10 @@ final class InteractiveRuntime
             return is_array($pair) ? $pair : null;
         }
 
-        return Tty::openTty();
+        if (self::$ownedTtyPair === null) {
+            self::$ownedTtyPair = Tty::openTty();
+        }
+
+        return self::$ownedTtyPair;
     }
 }

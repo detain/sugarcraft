@@ -31,7 +31,9 @@ final class PaintStreamBranchTest extends TestCase
     {
         InteractiveRuntime::setTerminalProbesForTesting(null);
         foreach ($this->ttyPair as $handle) {
-            fclose($handle);
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
         }
     }
 
@@ -57,6 +59,10 @@ final class PaintStreamBranchTest extends TestCase
         self::assertNotNull($options);
         self::assertSame($this->ttyPair[0], $options->input, 'keys come from /dev/tty');
         self::assertSame(STDERR, $options->output, 'a tty STDERR is the honest paint target');
+        // scriptui-70 (finding 091): the paintable-STDERR shape makes the
+        // write side dead on arrival — it must be closed here, not leaked.
+        self::assertFalse(is_resource($this->ttyPair[1]), 'write side closed: paintable STDERR makes it dead weight');
+        self::assertIsResource($this->ttyPair[0], 'the read side travels with the options');
     }
 
     public function testBothStreamsRedirectedPaintsThroughTheTtyHandleNotTheLog(): void
@@ -77,6 +83,9 @@ final class PaintStreamBranchTest extends TestCase
         self::assertSame($this->ttyPair[0], $options->input);
         self::assertSame($this->ttyPair[1], $options->output);
         self::assertNotSame(STDERR, $options->output);
+        // scriptui-70: here the write side IS the paint output, so it stays
+        // open and travels with the options (its lifetime follows Program).
+        self::assertIsResource($this->ttyPair[1]);
 
         InteractiveRuntime::paint("\x1b[?25lframe\x1b[0m");
         rewind($this->ttyPair[1]);
@@ -114,5 +123,25 @@ final class PaintStreamBranchTest extends TestCase
         // Reaching the next line is the cure: paint() in the no-display
         // shape returns silently instead of fwrite()-ing a dead handle.
         self::assertTrue(true);
+    }
+
+    public function testRealBackendPairIsOpenedOnceAndReused(): void
+    {
+        // scriptui-70 acceptance: an embedder looping prompts pays ONE fd
+        // pair, not one per prompt. Exercises the REAL cache path (no probe
+        // override); on a session without a controlling terminal every
+        // answer is null — still the honest flat-fd outcome.
+        InteractiveRuntime::setTerminalProbesForTesting(null);
+        $method = new \ReflectionMethod(InteractiveRuntime::class, 'ttyPair');
+        $method->setAccessible(true);
+
+        $before = count(glob('/proc/self/fd') ?: []);
+        $first  = $method->invoke(null);
+        for ($i = 0; $i < 100; $i++) {
+            self::assertSame($first, $method->invoke(null), 'one pair, reused');
+        }
+        $after = count(glob('/proc/self/fd') ?: []);
+
+        self::assertLessThanOrEqual(1, $after - $before, '100 prompts must not grow the fd table');
     }
 }
