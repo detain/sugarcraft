@@ -374,6 +374,53 @@ final class StickyViewportTest extends TestCase
 
     // ---- withVerticalScrollbar accepts THIS lib's wrapper (shadowing trap) --
 
+    public function testStickyPathPaintsTheSameScrollbarColumnAsThePlainPath(): void
+    {
+        // The old sticky substitution read only raw runes and ignored the
+        // attached component, so one call produced two different scrollbars
+        // (two in truth: the plain path painted the component's column,
+        // the sticky path its own).
+        $content = implode("\n", array_map(
+            static fn (int $n): string => 'line ' . $n,
+            range(1, 30),
+        ));
+        $plain = Viewport::withContent($content, 20, 6)
+            ->withVerticalScrollbar(Scrollbar::vertical());
+        $sticky = $plain->withStickyHeader(1);
+
+        $plainColumn = array_map(
+            static fn (string $l): string => mb_substr($l, -1, null, 'UTF-8'),
+            explode("\n", $plain->view()),
+        );
+        $stickyColumn = array_map(
+            static fn (string $l): string => mb_substr($l, -1, null, 'UTF-8'),
+            explode("\n", $sticky->view()),
+        );
+
+        $this->assertSame($plainColumn, $stickyColumn, 'one scrollbar, both paths');
+        $this->assertContains('█', $stickyColumn, 'the component thumb rides the sticky frame');
+        $this->assertContains('▲', $stickyColumn, 'the component arrows ride the sticky frame');
+    }
+
+    public function testStickyWideThumbReservesItsTrueCells(): void
+    {
+        // A CJK thumb through the component door: the sticky reservation
+        // reads the carried runes, so the budget stays width-invariant.
+        $content = implode("\n", array_map(
+            static fn (int $n): string => 'line ' . $n,
+            range(1, 30),
+        ));
+        $bar = Scrollbar::vertical()->withThumbChar("\u{6771}");
+        $v = Viewport::withContent($content, 20, 6)
+            ->withVerticalScrollbar($bar)
+            ->withStickyHeader(1);
+        $view = $v->view();
+        $this->assertStringContainsString("\u{6771}", $view);
+        foreach (explode("\n", $view) as $i => $line) {
+            $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "wide-thumb sticky row $i");
+        }
+    }
+
     public function testTheViewportAcceptsItsOwnScrollbarWrapper(): void
     {
         // The documented companion is sugar-flexbox's own Scrollbar; the

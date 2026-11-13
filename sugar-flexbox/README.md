@@ -47,7 +47,10 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
   `isSynced()`, but propagates nothing (scroll state never crosses to the partner)
 - **Mouse wheel** support with configurable delta
 - **Horizontal scrolling** with step-based navigation
-- **Smooth scroll** and scrollbar toggle; wide scrollbar runes reserve their true cell width
+- **Smooth scroll** and scrollbar toggle (`showScrollbar()`; the old boolean
+  `withScrollbar()` spelling is a deprecated forwarder); attaching a component
+  with `withVerticalScrollbar()` arms the bar and renders the SAME thumb/track
+  in the plain and sticky paths; wide scrollbar runes reserve their true cell width
 
 ### Scrollbar
 - **Scrollbar** — composes the canonical `sugar-forms` `Scrollbar` (same alias chain)
@@ -171,7 +174,7 @@ $lines = implode("\n", array_map(
 )) . "\n";
 
 $viewport = Viewport::withContent($lines, 80, 24);
-$viewport = $viewport->withScrollbar(true);
+$viewport = $viewport->showScrollbar(true);
 
 // Viewport is a plain immutable component, not a Core\Model: drive it from
 // your own Model's update() and render the view it returns.
@@ -255,16 +258,19 @@ behaviour is always correct.
 ## Accessor deprecation (2026-10-24)
 
 `Viewport`'s dimension accessors follow the house bare-accessor convention:
-call `width()` and `height()`. The legacy `getWidth()`/`getHeight()` still
-work — they are one-line backward-compatibility forwarders that return the
-same values — but each is marked `@deprecated` with `REMOVED-IN: 2.0.0` in
-its docblock and they will be deleted in sugar-flexbox v2.0.0. Migrating is
-a name swap with no behavior change:
+call `width()` and `height()`. The scrollbar toggle's old boolean
+`withScrollbar()` reads as a fluent setter and shadows the component-attach
+verb `withVerticalScrollbar()` — its honest name is `showScrollbar()`. The
+legacy spellings still work — they are one-line backward-compatibility
+forwarders that return the same values — but each is marked `@deprecated`
+with `REMOVED-IN: 2.0.0` in its docblock and they will be deleted in
+sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
 | `Flexbox` | `Viewport` | `getWidth()` | `width()` |
 | `Flexbox` | `Viewport` | `getHeight()` | `height()` |
+| `Flexbox` | `Viewport` | `withScrollbar()` | `showScrollbar()` |
 
 ## License
 

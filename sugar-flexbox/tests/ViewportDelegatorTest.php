@@ -154,9 +154,44 @@ final class ViewportDelegatorTest extends TestCase
         $this->assertNotSame($vp, $vp2);
     }
 
+    // ---- Injected scrollbar component (FBX-01) -------------------------
+
     public function testXOffsetDefaultsToZero(): void
     {
         $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
         $this->assertSame(0, $vp->xOffset());
+    }
+
+    public function testInjectedScrollbarArmsAndPaintsThePlainPath(): void
+    {
+        // Historically the attach hop forwarded the component but never
+        // armed the flag (the delegate's copy() omits showScrollbar), so
+        // the documented companion painted nothing at all.
+        $content = implode("\n", array_map(
+            static fn (int $n): string => 'line ' . $n,
+            range(1, 30),
+        ));
+        $vp = Viewport::withContent($content, 20, 6)
+            ->withVerticalScrollbar(Scrollbar::vertical());
+
+        $view = $vp->view();
+        $this->assertStringContainsString('█', $view, 'the injected thumb must paint');
+        $this->assertStringContainsString('░', $view, 'the injected track must paint');
+        foreach (explode("\n", $view) as $i => $line) {
+            $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "plain row $i");
+        }
+    }
+
+    public function testDeprecatedWithScrollbarToggleIsByteIdenticalToTheBareTwin(): void
+    {
+        $content = implode("\n", array_map(
+            static fn (int $n): string => 'line ' . $n,
+            range(1, 30),
+        ));
+        $a = Viewport::withContent($content, 20, 6)->showScrollbar(true)->view();
+        $b = Viewport::withContent($content, 20, 6)->withScrollbar(true)->view();
+
+        $this->assertSame($a, $b);
+        $this->assertStringContainsString('█', $a, 'the armed plain toggle paints the rune bar');
     }
 }

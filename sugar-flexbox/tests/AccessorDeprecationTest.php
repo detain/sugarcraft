@@ -24,13 +24,17 @@ final class AccessorDeprecationTest extends TestCase
     private const MARKER = 'REMOVED-IN: 2.0.0';
 
     /**
-     * @return array<string, array{0: class-string, 1: string, 2: string, 3: list<mixed>}>
+     * @return array<string, array{0: class-string, 1: string, 2: string, 3: list<mixed>, 4: 'same'|'equal'}>
      */
     public static function deprecatedAccessors(): array
     {
         return [
-            'Viewport::getWidth' => [Viewport::class, 'getWidth', 'width', []],
-            'Viewport::getHeight' => [Viewport::class, 'getHeight', 'height', []],
+            'Viewport::getWidth' => [Viewport::class, 'getWidth', 'width', [], 'same'],
+            'Viewport::getHeight' => [Viewport::class, 'getHeight', 'height', [], 'same'],
+            // Fluent forwarders answer with a NEW wrapper each call, so the
+            // BC leg compares structure (every property of both instances);
+            // a mis-wired twin differs on the delegate it hands back.
+            'Viewport::withScrollbar' => [Viewport::class, 'withScrollbar', 'showScrollbar', [true], 'equal'],
         ];
     }
 
@@ -49,12 +53,17 @@ final class AccessorDeprecationTest extends TestCase
      *
      * @param class-string $class
      * @param list<mixed> $args
+     * @param 'same'|'equal' $mode
      */
     #[DataProvider('deprecatedAccessors')]
-    public function testTheDeprecatedForwarderMatchesTheBareTwin(string $class, string $legacy, string $bare, array $args): void
+    public function testTheDeprecatedForwarderMatchesTheBareTwin(string $class, string $legacy, string $bare, array $args, string $mode): void
     {
         $object = self::fixture($class);
         $this->assertTrue(method_exists($object, $bare), $class . "::" . $bare . "() must exist");
+        if ($mode === 'equal') {
+            $this->assertEquals($object->{$bare}(...$args), $object->{$legacy}(...$args));
+            return;
+        }
         $this->assertSame($object->{$bare}(...$args), $object->{$legacy}(...$args));
     }
 
@@ -93,10 +102,12 @@ final class AccessorDeprecationTest extends TestCase
 
     /**
      * Census leg: discovery-first scan of src/ finds exactly the MARKED
-     * forwarders — a marked get* outside the tested pairs, or a tested
-     * pair whose mark drifted away, reddens this leg. An unmarked get*
-     * addition is out of scope for this scan; the inverse leg that
-     * accuses unmarked accessors exists only on sugar-dashboard.
+     * forwarders — a marked method outside the tested pairs, or a tested
+     * pair whose mark drifted away, reddens this leg. Any method carrying
+     * the REMOVED-IN marker joins the roster obligation, whichever name
+     * shape it renames (get* accessor, boolean toggle, future verbs); an
+     * unmarked addition is out of scope for this scan; the inverse leg
+     * that accuses unmarked accessors exists only on sugar-dashboard.
      */
     public function testTheSrcCensusFindsExactlyTheTestedPairs(): void
     {
@@ -118,9 +129,6 @@ final class AccessorDeprecationTest extends TestCase
                     break;
                 }
                 $name = $tokens[$j]->text;
-                if (preg_match('/^get[A-Z]/', $name) !== 1) {
-                    continue;
-                }
                 for ($k = $i - 1; $k >= 0; $k--) {
                     if (
                         $tokens[$k]->id === T_WHITESPACE
@@ -146,7 +154,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(2, $found);
+        $this->assertCount(3, $found);
     }
 
     /**
@@ -164,12 +172,12 @@ final class AccessorDeprecationTest extends TestCase
             ))
         ];
         preg_match_all(
-            '/^\| `[^`]*` \| `(?P<class>[^`]+)` \| `(?P<legacy>get[A-Za-z]+)\(\)` \| `(?P<bare>[a-z][A-Za-z]+)\(\)` \|$/m',
+            '/^\| `[^`]*` \| `(?P<class>[^`]+)` \| `(?P<legacy>[a-z][A-Za-z]+)\(\)` \| `(?P<bare>[a-z][A-Za-z]+)\(\)` \|$/m',
             $section,
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(2, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(3, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Widgets\Scrollbar\ScrollbarState;
 use SugarCraft\Widgets\Viewport\Viewport as WidgetsViewport;
 
 /**
@@ -287,14 +288,34 @@ final readonly class Viewport
             : 0;
         $thumbStart = max(0, min($thumbStart, $maxThumbStart));
 
+        // When a Scrollbar component is attached, answer the column from
+        // it — the delegate's plain path does exactly this, and the old
+        // sticky substitution painted raw runes the component's thumb
+        // geometry never saw, so the two paths produced two different
+        // scrollbars (or none) from one call.
+        $column = $this->inner->verticalScrollbar !== null
+            ? $this->inner->verticalScrollbar->view(new ScrollbarState(
+                total: $total,
+                position: $this->inner->yOffset,
+                viewport: $this->inner->height,
+            ), $rendered)
+            : null;
+
         $out = [];
         foreach ($window as $i => $line) {
             $padded = $bodyWidth > 0
                 ? $this->padRight($line, $bodyWidth)
                 : $line;
-            $sb = ($i >= $thumbStart && $i < $thumbStart + $thumbHeight)
-                ? $scrollbarChar
-                : $scrollbarTrack;
+            if ($column !== null) {
+                $sb = mb_substr($column, $i, 1, 'UTF-8');
+                if ($sb === '') {
+                    $sb = $scrollbarTrack;
+                }
+            } else {
+                $sb = ($i >= $thumbStart && $i < $thumbStart + $thumbHeight)
+                    ? $scrollbarChar
+                    : $scrollbarTrack;
+            }
             $out[] = $this->padRight($padded . $sb, $this->inner->width);
         }
         return implode("\n", $out);
@@ -378,10 +399,29 @@ final readonly class Viewport
         return new self($this->inner->withMouseWheelDelta($delta), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
-    public function withScrollbar(bool $on = true): self
+    /**
+     * Toggle the scrollbar column on/off.
+     *
+     * The name reads as what it flips — the delegate's `showScrollbar`
+     * flag — instead of impersonating the fluent `with*` idiom with a
+     * boolean (which sat one letter away from {@see self::withVerticalScrollbar()}
+     * and confused the two). {@see self::withScrollbar()} remains as a
+     * deprecated forwarder until 2.0.0.
+     */
+    public function showScrollbar(bool $on = true): self
     {
         return new self($this->inner->withScrollbar($on), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
+
+    /**
+     * BC forwarder for the pre-rename toggle name.
+     *
+     * @deprecated The boolean `withScrollbar` name collided with the
+     *     component-attach verb {@see self::withVerticalScrollbar()} and
+     *     dressed a toggle as a setter. Use {@see self::showScrollbar()}.
+     *     REMOVED-IN: 2.0.0.
+     */
+    public function withScrollbar(bool $on = true): self { return $this->showScrollbar($on); }
 
     public function withScrollbarRunes(string $thumb, string $track): self
     {
@@ -389,17 +429,30 @@ final readonly class Viewport
     }
 
     /**
-     * Attach the lib's own {@see Scrollbar} wrapper.
+     * Attach the lib's own {@see Scrollbar} component and render it.
      *
      * The parameter previously type-hinted the shadowing `use` import of the
      * widgets alias, so passing THIS lib's Scrollbar — the documented
      * companion — threw a TypeError (historically). It now accepts the
      * library's own value object and unwraps the canonical forms widget for
      * the delegate.
+     *
+     * Attaching also ARMS the bar: the delegate's
+     * `copy(verticalScrollbar:)` omits the `showScrollbar` flag (that root
+     * fix is a tracked sugar-forms row), so without the wrapper-side
+     * `withScrollbar(true)` hop the injected component would never paint.
+     * The component's thumb/track runes are carried through the rune door
+     * so the sticky path's column reservation measures the runes that
+     * actually render (a wide thumb must still reserve two cells).
      */
     public function withVerticalScrollbar(Scrollbar $scrollbar): self
     {
-        return new self($this->inner->withVerticalScrollbar($scrollbar->widgetScrollbar()), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        $widget = $scrollbar->widgetScrollbar();
+        $inner = $this->inner
+            ->withVerticalScrollbar($widget)
+            ->withScrollbar(true)
+            ->withScrollbarRunes($widget->thumbChar, $widget->trackChar);
+        return new self($inner, $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
     public function withSmoothScroll(bool $enable = true): self
