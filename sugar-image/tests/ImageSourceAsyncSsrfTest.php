@@ -36,18 +36,26 @@ final class ImageSourceAsyncSsrfTest extends TestCase
 {
     private string $pngBytes = '';
     private ?SocketServer $socket = null;
+    private ?SocketServer $socket2 = null;
     private int $port = 0;
+    private int $port2 = 0;
+
+    /** Header sightings per watched path, recorded by the loopback handlers. */
+    private array $headerLog = [];
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->pngBytes = (string) file_get_contents(__DIR__ . '/fixtures/4x2.png');
+        $this->pngBytes  = (string) file_get_contents(__DIR__ . '/fixtures/4x2.png');
+        $this->headerLog = [];
     }
 
     protected function tearDown(): void
     {
         $this->socket?->close();
-        $this->socket = null;
+        $this->socket  = null;
+        $this->socket2?->close();
+        $this->socket2 = null;
         // Never leak the test resolver into another test.
         ImageSource::overrideHostResolver(null);
         parent::tearDown();
@@ -115,6 +123,53 @@ final class ImageSourceAsyncSsrfTest extends TestCase
 
     // ---- allow-list bypass + happy path (real loopback server) ----------
 
+    // ---- allow-list bypass + happy path (real loopback server) ----------
+
+    public function testAsyncSameAuthorityRedirectKeepsCredentialsAndStrangers(): void
+    {
+        // finding sugar-image-101 (async twin): the caller's Authorization /
+        // Cookie / X-Keep ride a relative (same-authority) redirect whole —
+        // replay to the same origin is the contract, and shedding legitimate
+        // bearer tokens on internal CDN hops would break real deployments.
+        $this->startServer();
+
+        $img = $this->await(ImageSource::fromUrlAsync(
+            "http://127.0.0.1:{$this->port}/auth-orig",
+            ['Authorization' => 'Bearer token123', 'Cookie' => 'session=abc', 'X-Keep' => 'k'],
+            null,
+            allowedHosts: ['127.0.0.1'],
+        ));
+
+        $this->assertSame(4, $img->width);
+        $rec = $this->headerLog['/poster-auth.png'] ?? [];
+        $this->assertSame('Bearer token123', $rec['authorization'] ?? null, 'same-authority replay vanished');
+        $this->assertSame('session=abc', $rec['cookie'] ?? null);
+        $this->assertSame('k', $rec['x-keep'] ?? null);
+    }
+
+    public function testAsyncCrossAuthorityRedirectShedsCredentialsKeepsOthers(): void
+    {
+        // The attacker-chosen hop: an absolute Location naming a DIFFERENT
+        // authority (here: the second loopback port — same host, foreign
+        // port, so it is purely the port component moving) must arrive
+        // WITHOUT Authorization / Proxy-Authorization / Cookie, while every
+        // other header carries on untouched.
+        $this->startServer();
+
+        $img = $this->await(ImageSource::fromUrlAsync(
+            "http://127.0.0.1:{$this->port}/auth-cross",
+            ['Authorization' => 'Bearer token123', 'Cookie' => 'session=abc', 'X-Keep' => 'k'],
+            null,
+            allowedHosts: ['127.0.0.1'],
+        ));
+
+        $this->assertSame(4, $img->width);
+        $rec = $this->headerLog['/poster-auth.png'] ?? [];
+        $this->assertSame('', $rec['authorization'] ?? '', 'cross-authority hop leaked a bearer token');
+        $this->assertSame('', $rec['cookie'] ?? '', 'cross-authority hop leaked a session cookie');
+        $this->assertSame('k', $rec['x-keep'] ?? null, 'non-credential headers must ride on');
+    }
+
     public function testAsyncAllowListBypassFetchesImage(): void
     {
         // The opt-in allow-list bypasses the deny-list for the loopback origin
@@ -155,25 +210,51 @@ final class ImageSourceAsyncSsrfTest extends TestCase
     // ---- helpers --------------------------------------------------------
 
     /**
-     * Start an ephemeral loopback HTTP server that serves the fixture PNG at
-     * /poster.png, a same-origin redirect at /redirect-ok, and a redirect into
-     * the cloud-metadata IP at /redirect-metadata.
+     * Start ephemeral loopback HTTP servers: the primary serves the fixture PNG
+     * at /poster.png, a same-origin redirect at /redirect-ok, a redirect into
+     * the cloud-metadata IP at /redirect-metadata, and the credential-leg pair
+     * (/auth-orig -> relative same-authority, /auth-cross -> absolute SECOND
+     * PORT — a different authority). The watched landing route
+     * /poster-auth.png records the headers each chain delivered.
      */
     private function startServer(): void
     {
         $png = $this->pngBytes;
 
-        $server = new HttpServer(static function (ServerRequestInterface $request) use ($png): Response {
-            return match ($request->getUri()->getPath()) {
-                '/poster.png'        => new Response(200, ['Content-Type' => 'image/png'], $png),
-                '/redirect-ok'       => new Response(302, ['Location' => '/poster.png'], ''),
-                '/redirect-metadata' => new Response(302, ['Location' => 'http://169.254.169.254/latest/meta-data/'], ''),
-                default              => new Response(404, [], 'not found'),
-            };
-        });
+        $handler = function (ServerRequestInterface $request) use ($png): Response {
+            $path = $request->getUri()->getPath();
 
-        $this->socket = new SocketServer('127.0.0.1:0');
+            if ($path === '/poster-auth.png') {
+                $seen = [];
+                foreach (['authorization', 'cookie', 'proxy-authorization', 'x-keep'] as $name) {
+                    $seen[$name] = $request->getHeaderLine($name);
+                }
+                $this->headerLog[$path] = $seen;
+
+                return new Response(200, ['Content-Type' => 'image/png'], $png);
+            }
+
+            return match ($path) {
+                '/poster.png'         => new Response(200, ['Content-Type' => 'image/png'], $png),
+                '/redirect-ok'        => new Response(302, ['Location' => '/poster.png'], ''),
+                '/redirect-metadata'  => new Response(302, ['Location' => 'http://169.254.169.254/latest/meta-data/'], ''),
+                '/auth-orig'          => new Response(302, ['Location' => '/poster-auth.png'], ''),
+                // Absolute target on the SECOND ephemeral port: same host,
+                // same path, foreign authority — purely the port moves, so a
+                // leak can only be the port component failing to shed.
+                '/auth-cross'         => new Response(302, ['Location' => "http://127.0.0.1:{$this->port2}/poster-auth.png"], ''),
+                default               => new Response(404, [], 'not found'),
+            };
+        };
+
+        $server  = new HttpServer($handler);
+        $server2 = new HttpServer($handler);
+
+        $this->socket  = new SocketServer('127.0.0.1:0');
+        $this->socket2 = new SocketServer('127.0.0.1:0');
+        $this->port2   = (int) parse_url((string) $this->socket2->getAddress(), PHP_URL_PORT);
         $server->listen($this->socket);
+        $server2->listen($this->socket2);
         $this->port = (int) parse_url((string) $this->socket->getAddress(), PHP_URL_PORT);
     }
 

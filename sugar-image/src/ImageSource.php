@@ -1275,6 +1275,11 @@ final class ImageSource
      * {@see self::fromUrlAsync()}, which fetches the same contract on the
      * loop instead of freezing it.
      *
+     * Redirect credentials (finding 101): Authorization, Proxy-Authorization
+     * and Cookie ride only hops that stay on the same authority; a redirect
+     * that changes scheme, host, or port sheds them (RFC 9110 §15.5.3) while
+     * every other header — order and casing included — carries on.
+     *
      * @param string $url     Absolute URL (http/https/file/data).
      * @param array<string,string>|list<string> $headers  Optional request
      *               headers, either associative ('Authorization' => 'Bearer x')
@@ -1574,6 +1579,10 @@ final class ImageSource
      * with a clear instruction rather than fataling.
      *
      * Security (host / SSRF): mirrors the synchronous {@see self::fromUrl()}.
+     * The same manual hop walk also carries the same credential law
+     * (finding 101): Authorization, Proxy-Authorization and Cookie replay to
+     * next hops only while the authority is unchanged, and shed on any
+     * cross-authority redirect — RFC 9110 §15.5.3, both twins.
      * `React\Http\Browser` follows 3xx redirects INTERNALLY by default, which
      * would chase a `Location` into `169.254.169.254` (cloud metadata) or an
      * RFC-1918 host WITHOUT re-checking it — the async SSRF hole left open by
@@ -1721,11 +1730,14 @@ final class ImageSource
                     $next = self::resolveRedirectUrl($url, $location);
 
                     // Recurse — the next hop re-guards scheme + host before it
-                    // is fetched. Returning a promise chains it into this one.
+                    // is fetched, and sheds the caller's origin-scoped
+                    // credentials if the authority changed (RFC 9110 §15.5.3,
+                    // the same law fetchUrlSync() applies per hop). Returning
+                    // a promise chains it into this one.
                     return self::fetchUrlAsyncGuarded(
                         $browser,
                         $next,
-                        $headers,
+                        self::stripCredentialsForHop($headers, $url, $next),
                         $allowedSchemes,
                         $allowedHosts,
                         $maxPixels,
@@ -1824,10 +1836,17 @@ final class ImageSource
         ?array $allowedSchemes = null,
         ?array $allowedHosts = null,
     ): string {
-        $headerLines = ($headers !== null && $headers !== []) ? self::formatHeaders($headers) : null;
-        $current     = $url;
+        // Hop-carried header state: the caller's set rides same-authority
+        // chains untouched, but every redirect recomputes the NEXT hop's
+        // copy through the RFC 9110 §15.5.3 credential strip (see
+        // {@see self::stripCredentialsForHop()}), so the stream context
+        // below is formatted fresh per hop.
+        $hopHeaders = $headers;
+        $current    = $url;
 
         for ($hop = 0; $hop <= self::MAX_REDIRECTS; $hop++) {
+            $headerLines = ($hopHeaders !== null && $hopHeaders !== []) ? self::formatHeaders($hopHeaders) : null;
+
             // Re-validate the scheme on every hop — the initial URL and each
             // redirect target — so a 3xx cannot smuggle a disallowed scheme in.
             self::validateUrlScheme($current, $allowedSchemes);
@@ -1898,7 +1917,13 @@ final class ImageSource
                         Lang::t('image_source.redirect_no_location', ['url' => $current]),
                     );
                 }
-                $current = self::resolveRedirectUrl($current, $location);
+                $next = self::resolveRedirectUrl($current, $location);
+
+                // The redirect target is attacker-chosen text: if it names a
+                // DIFFERENT authority, the origin-scoped credential headers
+                // shed there instead of riding along (see the helper's law).
+                $hopHeaders = self::stripCredentialsForHop($hopHeaders, $current, $next);
+                $current    = $next;
                 continue;
             }
 
@@ -1938,6 +1963,87 @@ final class ImageSource
         }
 
         return $bytes;
+    }
+
+    /**
+     * Origin-scoped header names that must not ride a cross-authority
+     * redirect: the credential-bearing trio of RFC 9110 §15.5.3
+     * (Authorization, Proxy-Authorization) and RFC 6265's stateful Cookie.
+     */
+    private const CREDENTIAL_HEADERS = ['authorization', 'proxy-authorization', 'cookie'];
+
+    /**
+     * The RFC 9110 §15.5.3 carry-strip, applied by BOTH fetch twins on every
+     * redirect hop (finding sugar-image-101).
+     *
+     * A caller hands its Authorization/Cookie headers to ONE origin; the
+     * redirect Location that moves the chain to another is attacker-chosen
+     * text, so echoing the bearer token (or session cookie) to the new
+     * authority is a credential leak the caller never authorised. Same-
+     * authority hops keep replaying the headers verbatim — internal CDNs
+     * redirect constantly behind one origin and the auth story there is the
+     * whole point. Both accepted input shapes (associative map and
+     * pre-formatted 'Name: value' lines) are shed in place; everything else
+     * about the set — order, casing, the non-credential entries — rides on.
+     *
+     * @param array<string,string>|list<string>|null $headers
+     * @return array<string,string>|list<string>|null
+     */
+    private static function stripCredentialsForHop(?array $headers, string $from, string $to): ?array
+    {
+        if ($headers === null || $headers === []) {
+            return $headers;
+        }
+
+        $origin = self::authorityOf($from);
+        if ($origin !== null && $origin === self::authorityOf($to)) {
+            return $headers; // same authority: replay is the contract
+        }
+
+        $names = self::CREDENTIAL_HEADERS;
+
+        if (array_is_list($headers)) {
+            return array_values(array_filter(
+                $headers,
+                static function ($line) use ($names): bool {
+                    $name = strtolower(trim(explode(':', (string) $line, 2)[0]));
+
+                    return !in_array($name, $names, true);
+                },
+            ));
+        }
+
+        return array_filter(
+            $headers,
+            static fn ($value, $key): bool => !in_array(strtolower((string) $key), $names, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
+    }
+
+    /**
+     * Lowercased 'scheme://host[:port]' origin tuple with the scheme's
+     * DEFAULT port folded away (http:80, https:443), so semantically equal
+     * authorities compare equal; IPv6 brackets are kept as written on both
+     * sides of any realistic comparison. Null for URLs without a host part
+     * (file://, data://) — a hop involving such a leg is never "the same
+     * authority", so credentials shed, which is the safe direction.
+     */
+    private static function authorityOf(string $url): ?string
+    {
+        $parts = parse_url($url);
+        if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+
+        $scheme = strtolower($parts['scheme']);
+        $host   = strtolower($parts['host']);
+        $port   = isset($parts['port']) ? (int) $parts['port'] : null;
+
+        if (($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443)) {
+            $port = null;
+        }
+
+        return $scheme . '://' . $host . ($port === null ? '' : ':' . $port);
     }
 
     /**
