@@ -97,3 +97,18 @@ Source: findings/plan_sugar-mouse.md — Item 5.3
 - **[gotcha:id-charset]** `Mark::wrap()` (PR #1272) validates the marked id against `/\A[A-Za-z0-9._:-]+\z/` (byte-wise anchors — no newline-allowed `$`, no `u` flag needed for this charset) and throws `\InvalidArgumentException` otherwise. `Manager::mark()` validates the id EVEN ON A DISABLED MANAGER — the previous "only when enabled; disabled managers still pass content through unvalidated" carve-out was removed: `Mark::wrap()` validates unconditionally and merely skips the tag emission when disabled (an invalid id must fail the same way whether or not the frame carries markers). `Mark::MAX_ID_BYTES`/`Mark::MAX_CONTENT_BYTES` bound id and content lengths. The APC-era instruction to re-baseline raw-byte tests to PUA sentinels (`SugarCraft\Mouse\Sentinel::OPEN`/`CLOSE`) is done history; keep behavioral assertions as-is.
 - **[gotcha:consumer-wire-format-test]** The `TabsTest::testViewContainsZoneMarkersWhenManagerIsSet` that asserted the OLD APC bytes (`\x1b_`, `candyzone:S:testtab-0`) in `Tabs::view()` lives in **sugar-widgets** (`sugar-widgets/tests/Tabs/TabsTest.php` — an earlier draft of this entry misfiled it under sugar-bits). The APC→PUA change makes that assertion fail; it was re-baselined to PUA sentinels on the consumer side (outside this lib's edit scope). The behavioral sugar-widgets path (`testMsgZoneInBoundsActivatesMatchingTab`, mark→scan→`MsgZoneInBounds->zone->id`) stays green. <!-- @rename-keep historical wire token -->
 - **[gotcha:strip-scan-lockstep]** `Scan::strip()` (public since the Manager refactor — `Manager::scan()` delegates to it; it used to be a private `Manager::stripMarkers()`) must apply the SAME tag rule as `Scan::parse()`: a `U+E000 [/] <id> U+E001` span is a tag only when `<id>` is empty or passes `Mark::isValidId()` (length-checked against `Mark::MAX_ID_BYTES` before substr); otherwise only the 3 sentinel bytes go and the following text stays. Stripping "everything up to the next U+E001" desynced the cleaned frame from the scanned bounds — zones landed on cells they never painted. Pinned by `tests/Zones/ManagerStripMarkersTest.php` (`cellOf()` cross-checks bounds against the cleaned frame). Lock-step is byte-wise-strip vs grid-walking-parse: they diverge only for well-formed tags embedded inside OSC/CSI payloads (parse skips them, strip removes them) — a known, documented edge; sweep hostile input with `Mark::untrusted()` instead of relying on either.
+
+## Lineage vocabulary (ruling 2026-11-13, SM-S04)
+
+- Hover, drag and multi-click do NOT exist upstream: lrstanley/bubblezone
+  ships no hover/drag/click-count machinery (its own gap table in
+  `docs/research/libraries/sugar-mouse-zones-research.md` records them as
+  manual or not built-in). The three trackers and the seven zone event
+  messages therefore cite "Extends bubblezone — upstream ships no …",
+  never "Mirrors".
+- "Mirrors bubblezone's `X`" stays reserved for surfaces with verified
+  upstream parity: `Mark`/`Scan`/`Get`, the `Manager` methods
+  (`SetEnabled`, `NewPrefix`, `SetMotionTracking`, `Close`,
+  `AnyInBounds`, `AnyInBoundsAndUpdate`), and the package-level facade.
+  Cites must be self-contained — always name bubblezone, never a bare
+  "Mirrors `SetEnabled`" without the upstream qualifier.

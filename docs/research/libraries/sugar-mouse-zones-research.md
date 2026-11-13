@@ -4,6 +4,25 @@
 
 **Current Implementation:** `/home/sites/sugarcraft/sugar-mouse/src/` with 4 files: `Manager.php`, `Zone.php`, `MsgZoneInBounds.php`, `Zones.php`.
 
+> **Errata (2026-11-13, sugar-mouse SM-S04).** This document predates the
+> candy-zone → sugar-mouse rename and carries stale claims against shipped
+> code. §3's title "Current Candy-Zone Implementation Analysis" names the
+> pre-rename package. §3.1 claim 1 ("Faithful bubblezone port —
+> `Manager::scan()` mirrors upstream algorithm exactly") is false against
+> this doc's own divergence record: the port is synchronous where upstream
+> runs a `zoneWorker` goroutine, departs on CR/LF geometry, and ships the
+> 1006 companion upstream omits. §3.1 claim 2 ("APC marker handling")
+> describes the REMOVED wire — the lib ships the PUA sentinel pair
+> (U+E000/U+E001, see README's Sentinel design section); the
+> `candyzone:S:`/`candyzone:E:` tokens are historical only. Hover, drag
+> and multi-click trackers and their events are this lib's EXTENSIONS —
+> upstream ships none of that machinery (the gap table below says so), and
+> the class docblocks now read "Extends bubblezone", not "Mirrors".
+> Residual open item (not re-litigated here): verifying upstream
+> `Manager`/`DefaultManager`/`zoneWorker`/`Scanner`/`New*Tracker` names
+> needs an upstream clone — a could-not-verify leg deferred to the
+> researcher lane for a later re-merge pass.
+
 ---
 
 ## 1. Library Comparisons by Language

@@ -15,7 +15,8 @@ use SugarCraft\Mouse\Zones\Zone;
  * The origin zone never changes for the lifetime of a drag; the current
  * zone updates whenever the cursor crosses a zone boundary.
  *
- * Mirrors bubblezone's zone drag-move event.
+ * Extends bubblezone — upstream ships no drag machinery and no such
+ * event.
  */
 final class ZoneDragMoveMsg implements Msg
 {

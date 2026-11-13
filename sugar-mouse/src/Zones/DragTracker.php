@@ -27,7 +27,8 @@ use SugarCraft\Mouse\Zones\Msg\ZoneDragStartMsg;
  *   [$tracker, $msg] = $tracker->update($mouseMsg);
  *   if ($msg instanceof ZoneDragStartMsg) { ... }
  *
- * Mirrors bubblezone's `NewZoneDragTracker`.
+ * Extends bubblezone — upstream ships no drag tracker (its own gap
+ * table records drag as manual).
  */
 final class DragTracker
 {

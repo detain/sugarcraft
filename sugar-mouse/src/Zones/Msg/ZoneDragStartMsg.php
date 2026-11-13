@@ -11,7 +11,8 @@ use SugarCraft\Mouse\Zones\Zone;
  * Emitted when a mouse button is pressed inside a zone, starting a drag
  * sequence.
  *
- * Mirrors bubblezone's zone drag-start event.
+ * Extends bubblezone — upstream ships no drag machinery and no such
+ * event.
  */
 final class ZoneDragStartMsg implements Msg
 {

@@ -10,7 +10,8 @@ use SugarCraft\Mouse\Zones\Zone;
 /**
  * Emitted when the cursor enters a zone.
  *
- * Mirrors bubblezone's zone enter event. The {@see Zone} object is
+ * Extends bubblezone — upstream ships no hover machinery and no such
+ * event. The {@see Zone} object is
  * carried so handlers can inspect the zone's bounds without an
  * additional manager lookup.
  */

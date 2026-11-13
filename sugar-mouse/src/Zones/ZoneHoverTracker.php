@@ -25,7 +25,8 @@ use SugarCraft\Mouse\Zones\Msg\ZoneExitMsg;
  *   [$tracker, $msg] = $tracker->update($mouseMsg);
  *   if ($msg instanceof ZoneEnterMsg) { ... }
  *
- * Mirrors bubblezone's `NewZoneHoverTracker`.
+ * Extends bubblezone — upstream ships no hover tracker (its own gap
+ * table records hover as manual via motion events).
  */
 final class ZoneHoverTracker
 {

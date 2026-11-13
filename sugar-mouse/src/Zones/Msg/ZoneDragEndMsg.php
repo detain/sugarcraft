@@ -10,7 +10,8 @@ use SugarCraft\Mouse\Zones\Zone;
 /**
  * Emitted when the drag button is released, ending a drag sequence.
  *
- * Mirrors bubblezone's zone drag-end event.
+ * Extends bubblezone — upstream ships no drag machinery and no such
+ * event.
  */
 final class ZoneDragEndMsg implements Msg
 {

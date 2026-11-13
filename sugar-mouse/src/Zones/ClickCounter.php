@@ -23,7 +23,8 @@ use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
  *   if ($msg instanceof DoubleClickMsg) { ... }
  *   if ($msg instanceof TripleClickMsg) { ... }
  *
- * Mirrors bubblezone's `NewZoneClickTracker`.
+ * Extends bubblezone — upstream ships no double/triple-click machinery
+ * (its own gap table records click count as not built-in).
  *
  * dedup overlap with {@see \SugarCraft\Mouse\ZoneClickTracker} deferred: the
  * primitive's ZoneClickTracker does Press+Release single-click dedup, NOT the

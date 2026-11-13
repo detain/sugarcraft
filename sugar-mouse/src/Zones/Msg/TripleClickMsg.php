@@ -11,7 +11,8 @@ use SugarCraft\Mouse\Zones\Zone;
  * Emitted when a third click occurs inside the same zone within the
  * click interval (default 500ms).
  *
- * Mirrors bubblezone's zone triple-click event.
+ * Extends bubblezone — upstream ships no multi-click machinery and no
+ * such event.
  */
 final class TripleClickMsg implements Msg
 {

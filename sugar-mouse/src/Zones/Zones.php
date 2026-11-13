@@ -68,20 +68,20 @@ final class Zones
         return self::defaultManager()->mark($id, $content);
     }
 
-    /** Mirrors `Scan`. `$width` clamps zone columns into [1, $width]. */
+    /** Mirrors bubblezone's `Scan`. `$width` clamps zone columns into [1, $width]. */
     public static function scan(string $rendered, ?int $width = null): string
     {
         return self::defaultManager()->scan($rendered, $width);
     }
 
-    /** Mirrors `Get`. */
+    /** Mirrors bubblezone's `Get`. */
     public static function get(string $id): ?Zone
     {
         return self::defaultManager()->get($id);
     }
 
     /**
-     * Mirrors `Clear`. Pass an id to drop a single zone; omit to wipe
+     * Mirrors bubblezone's `Clear`. Pass an id to drop a single zone; omit to wipe
      * every zone tracked by the default manager.
      */
     public static function clear(?string $id = null): void
@@ -90,7 +90,7 @@ final class Zones
     }
 
     /**
-     * Mirrors `Close`. After calling this the default manager is
+     * Mirrors bubblezone's `Close`. After calling this the default manager is
      * disabled (mark / scan become pass-through). Idempotent.
      */
     public static function close(): void
@@ -98,20 +98,20 @@ final class Zones
         self::defaultManager()->close();
     }
 
-    /** Mirrors `SetEnabled`. */
+    /** Mirrors bubblezone's `SetEnabled`. */
     public static function setEnabled(bool $on): void
     {
         self::defaultManager()->setEnabled($on);
     }
 
-    /** Mirrors `Enabled`. */
+    /** Mirrors bubblezone's `Enabled`. */
     public static function isEnabled(): bool
     {
         return self::defaultManager()->isEnabled();
     }
 
     /**
-     * Mirrors `NewPrefix` — but unlike upstream (which returns a
+     * Mirrors bubblezone's `NewPrefix` — but unlike upstream (which returns a
      * string prefix scoped to the default manager), this returns a
      * **fresh prefixed Manager**. Compose multiple components by
      * giving each its own prefixed manager rather than sharing the
@@ -122,13 +122,13 @@ final class Zones
         return Manager::newPrefix($prefix);
     }
 
-    /** Mirrors `AnyInBounds`. */
+    /** Mirrors bubblezone's `AnyInBounds`. */
     public static function anyInBounds(Msg $mouse): ?Zone
     {
         return self::defaultManager()->anyInBounds($mouse);
     }
 
-    /** Mirrors `AnyInBoundsAndUpdate`. */
+    /** Mirrors bubblezone's `AnyInBoundsAndUpdate`. */
     public static function anyInBoundsAndUpdate(Model $model, Msg $mouse): array
     {
         return self::defaultManager()->anyInBoundsAndUpdate($model, $mouse);
