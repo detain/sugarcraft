@@ -184,20 +184,6 @@ if ($cmd === '--version' || $cmd === '-v') {
     exit(0);
 }
 
-$store = new Store(getenv('CANDY_CODETIME_DIR') ?: Store::defaultDir());
-$dbPath = $store->dir . '/candy-codetime.db';
-
-// Lazily open the SQLite backend, ensuring the data dir exists first and failing
-// loudly (rather than fataling) when the sqlite3 extension is absent.
-$sqlite = static function () use ($store, $dbPath): SqliteBackend {
-    if (!extension_loaded('sqlite3')) {
-        fwrite(STDERR, Lang::t('cli.backend_unavailable') . "\n");
-        exit(1);
-    }
-    Store::ensurePrivateDir($store->dir);
-    return new SqliteBackend($dbPath);
-};
-
 // One convention for storage failure at EVERY read/write site. SQLite3's own
 // exceptions do not extend RuntimeException, so the old narrower catches let
 // a locked or corrupt database surface as an uncaught fatal with exit 255;
@@ -222,6 +208,31 @@ $writeStdout = static function (string $payload) use ($storageError): void {
         $payload = substr($payload, $written);
     }
 };
+
+$store = new Store(getenv('CANDY_CODETIME_DIR') ?: Store::defaultDir());
+$dbPath = $store->dir . '/candy-codetime.db';
+
+// The privacy contract is a launch invariant, not a write-path favor:
+// plugin-direct appends and the pre-rename migration move never run the
+// mode doors, so every launch — reads and help included — sweeps the tree
+// back to owner-private before it touches or prints anything.
+try {
+    $store->enforcePrivateModes();
+} catch (\Throwable $e) {
+    $storageError($e);
+}
+
+// Lazily open the SQLite backend, ensuring the data dir exists first and failing
+// loudly (rather than fataling) when the sqlite3 extension is absent.
+$sqlite = static function () use ($store, $dbPath): SqliteBackend {
+    if (!extension_loaded('sqlite3')) {
+        fwrite(STDERR, Lang::t('cli.backend_unavailable') . "\n");
+        exit(1);
+    }
+    Store::ensurePrivateDir($store->dir);
+    return new SqliteBackend($dbPath);
+};
+
 
 // Show usage for help flags or unknown commands
 if ($cmd === 'help' || $cmd === '--help' || $cmd === '-h') {

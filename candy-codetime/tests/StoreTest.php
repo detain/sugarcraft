@@ -580,4 +580,37 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         unlink($script);
         return [$out, $err, $exit];
     }
+
+    public function testSweepTightensLooseDirsDayFilesDatabasesAndArchives(): void
+    {
+        // Plant the exact shapes a plugin-direct `>>` or a migration move
+        // leaves behind: loose dir, loose day file, loose db, loose archive.
+        $dayFile = $this->tmp . '/' . date('Y-m-d') . '.jsonl';
+        file_put_contents($dayFile, '{"time":1,"project":"p","language":"php","file":"f","duration":60,"tags":[]}' . "\n");
+        chmod($this->tmp, 0o755);
+        chmod($dayFile, 0o644);
+        file_put_contents($this->tmp . '/candy-codetime.db', 'not-really-sqlite-but-mode-matters');
+        chmod($this->tmp . '/candy-codetime.db', 0o644);
+        $backupDir = $this->tmp . '-backups';
+        mkdir($backupDir);
+        chmod($backupDir, 0o755);
+        $archived = $backupDir . '/candy-codetime-2026-01-02.jsonl';
+        file_put_contents($archived, "x\n");
+        chmod($archived, 0o644);
+
+        (new Store($this->tmp))->enforcePrivateModes();
+
+        clearstatcache();
+        $this->assertSame(0o700, fileperms($this->tmp) & 0o777);
+        $this->assertSame(0o600, fileperms($dayFile) & 0o777);
+        $this->assertSame(0o600, fileperms($this->tmp . '/candy-codetime.db') & 0o777);
+        $this->assertSame(0o700, fileperms($backupDir) & 0o777);
+        $this->assertSame(0o600, fileperms($archived) & 0o777);
+    }
+
+    public function testSweepOnAMissingDirectoryIsANoOp(): void
+    {
+        (new Store($this->tmp . '/never-created'))->enforcePrivateModes();
+        $this->assertDirectoryDoesNotExist($this->tmp . '/never-created');
+    }
 }

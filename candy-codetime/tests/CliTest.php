@@ -721,4 +721,18 @@ final class CliTest extends TestCase
         $this->assertSame(1, substr_count($res['stderr'], "\n"), 'exactly one error line: ' . $res['stderr']);
         $this->assertSame('', $res['stdout'], 'a failed export writes no partial payload');
     }
+
+    public function testAnyCommandLaunchSweepsLoosePluginMintedFilesPrivate(): void
+    {
+        $dayFile = $this->dataDir . '/' . date('Y-m-d') . '.jsonl';
+        file_put_contents($dayFile, '{"time":' . (time() - 60) . ',"project":"p","language":"php","file":"f.php","duration":60,"tags":[]}' . "\n");
+        chmod($this->dataDir, 0o755);
+        chmod($dayFile, 0o644);
+
+        $res = $this->runCli(['export', 'csv', '1']);
+        $this->assertSame(0, $res['exit'], $res['stdout'] . $res['stderr']);
+        clearstatcache();
+        $this->assertSame(0o600, fileperms($dayFile) & 0o777, 'a read-only launch must heal plugin-minted modes');
+        $this->assertSame(0o700, fileperms($this->dataDir) & 0o777);
+    }
 }

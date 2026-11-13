@@ -11,7 +11,9 @@ use SugarCraft\Core\Util\Sanitize;
 /**
  * JSONL-backed heartbeat store. One file per day under
  * `~/.local/share/candy-codetime/YYYY-MM-DD.jsonl` — the path stays
- * appendable, every editor plugin just `>>` echoes a JSON line.
+ * appendable, every editor plugin just `>>` echoes a JSON line; whatever
+ * loose modes such a line is minted with are swept back to owner-private by
+ * {@see self::enforcePrivateModes()} on the next CLI launch.
  *
  * The dashboard treats the store as read-only; writes happen via the
  * `push` CLI subcommand or by your editor plugin appending directly.
@@ -111,6 +113,41 @@ final class Store implements HeartbeatReader
     public static function ensurePrivateFile(string $path, string $label = 'data file'): void
     {
         self::makePrivate($path, 0o077, 0o600, $label);
+    }
+
+    /**
+     * Re-establish the whole privacy contract, not just the paths this
+     * process writes. A plugin that direct-appends with `>>` runs no
+     * candy-codetime code at all, and a pre-rename migration merely moves
+     * the tree — files minted that way can sit at the shell's umask, world-
+     * readable absolute paths and project maps. The sweep tightens the data
+     * directory (0700), every day file and archived day file (0600), and the
+     * SQLite database with its `-wal`/`-shm` sidecars (0600). It runs on
+     * every CLI launch — reads included — so any exposure lasts at most
+     * until the tool is run next, and it throws on an unfixable mode exactly
+     * like the write paths do.
+     */
+    public function enforcePrivateModes(): void
+    {
+        if (!is_dir($this->dir)) {
+            return;
+        }
+        self::ensurePrivateDir($this->dir);
+        foreach (new \GlobIterator($this->dir . '/*.jsonl') as $beat) {
+            self::ensurePrivateFile($beat->getPathname(), 'day file');
+        }
+        foreach (['candy-codetime.db', 'candy-codetime.db-wal', 'candy-codetime.db-shm'] as $database) {
+            if (is_file($path = $this->dir . '/' . $database)) {
+                self::ensurePrivateFile($path, 'database file');
+            }
+        }
+        $backupDir = $this->dir . '-backups';
+        if (is_dir($backupDir)) {
+            self::ensurePrivateDir($backupDir, 'backup directory');
+            foreach (new \GlobIterator($backupDir . '/*.jsonl') as $archived) {
+                self::ensurePrivateFile($archived->getPathname(), 'archived heartbeat file');
+            }
+        }
     }
 
     /**

@@ -192,10 +192,14 @@ sidecars are the exception to that timing: SQLite creates them mid-transaction,
 so on a fresh database the first beats can land on a `-wal` microseconds before
 the constructor's sweep tightens it — there, the `0700` directory is the
 protection window. The sweep tightens every sidecar visible at open and
-re-asserts on every subsequent open. A
-directory or file left loose by an older version is tightened on the next
-write; if that fails, the write aborts rather than storing your data in the
-open. Every `print`/`echo` of a stored project or file name goes through a
+re-asserts on every subsequent open. The contract is a launch invariant, not
+a write-path favor: a directory or file left loose — by an older version, a
+plugin direct-appending with `>>` (which runs none of this code), or the
+pre-rename migration moving a legacy tree — is tightened on the next CLI run,
+any command, reads included; if that fails, the run aborts rather than
+printing over data that is still out in the open. Until that next run, a
+raw-echoed file sits at the shell's umask, so plugin and cron writers should
+run under `umask 077`. Every `print`/`echo` of a stored project or file name goes through a
 control-byte strip (every C0 byte except TAB, CR and LF included), so a doctored
 store cannot paint escape sequences into your terminal and every name paints as
 a single line.
@@ -253,8 +257,10 @@ The Store is intentionally append-only at the file level, so editor hooks can
 `>>` echo a JSON line directly without coordinating with the dashboard (no
 plugins ship — see *Automating collection* for the worked example) — the
 trade-off is honest: raw `>>` redirection does not take the advisory lock
-`push` uses, so a hand-echoed line could theoretically interleave; plugin
-integrations should `flock` or just call `push`. The dashboard re-reads on
+`push` uses, so a hand-echoed line could theoretically interleave, and it runs
+none of the privacy-mode doors — the next CLI launch sweeps such files to
+`0600`, but write under `umask 077` meanwhile; plugin integrations should
+`flock` or just call `push`. The dashboard re-reads on
 launch and on `r`; it has no clock subscription, so an open panel never
 refreshes by itself. Reads degrade loudly too: a day file that exists but
 cannot be opened is named in a one-line stderr warning and counted as an
