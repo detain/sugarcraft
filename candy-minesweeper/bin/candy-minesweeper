@@ -296,4 +296,7 @@ if ($screen['cols'] > 0 && $screen['rows'] > 0) {
     // relaxation of the gate cannot silently re-arm them on a pipe).
     useAltScreen: $profile !== ColorProfile::NoTty,
     mouseMode: $profile !== ColorProfile::NoTty ? MouseMode::CellMotion : MouseMode::Off,
+    // Paste arrives as one bracketed chunk the parser can swallow whole;
+    // unbracketed, a stray paste detonates a machine-gun of keypresses.
+    bracketedPaste: true,
 )))->run();
