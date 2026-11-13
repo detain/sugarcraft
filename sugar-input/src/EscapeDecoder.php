@@ -1621,23 +1621,48 @@ final class EscapeDecoder
     }
 
     /**
+     * Upper bound on the raw bytes a drained reply event retains. Past it the
+     * head rides with the truncation flagged — the same law the string drain
+     * applies to payloads, stated at the reply seam instead of trusting the
+     * driver's 8 KiB chunk slice.
+     */
+    private const MAX_RAW_RETENTION = 64;
+
+    /**
      * Consume a recognized terminal reply and surface it as a TerminalReplyEvent.
      * Numeric parameters are the digit runs of the CSI body, in wire order.
+     *
+     * Bounded at this seam, not merely at chunk scale: the digit scan stops
+     * after MAX_PARAMS + 1 runs (the 33rd run only proves the wire exceeded
+     * the cap; runs past it are neither materialized nor counted individually),
+     * and raw keeps its first MAX_RAW_RETENTION bytes with truncated set —
+     * honouring the class promise that no hostile whole-blob reply can key
+     * retained memory off its size.
      *
      * @return array{events: list<Event>, remaining: string}
      */
     private function drainReply(string $family, string $seq, string $rest): array
     {
         $params = [];
-        preg_match_all('/\d+/', $seq, $numeric);
-        foreach ($numeric[0] as $value) {
-            $params[] = (int) $value;
+        $scanBound = TerminalReplyEvent::MAX_PARAMS + 1;
+        $offset = 0;
+        while (count($params) < $scanBound && preg_match('/\d+/', $seq, $run, PREG_OFFSET_CAPTURE, $offset) === 1) {
+            $params[] = (int) $run[0][0];
+            $offset = $run[0][1] + strlen($run[0][0]);
         }
+
+        $raw = "\x1b[" . $seq;
+        $truncated = strlen($raw) > self::MAX_RAW_RETENTION;
 
         $this->drainedReplyCount++;
 
         return [
-            'events' => [new TerminalReplyEvent($family, $params, "\x1b[" . $seq)],
+            'events' => [new TerminalReplyEvent(
+                $family,
+                $params,
+                $truncated ? substr($raw, 0, self::MAX_RAW_RETENTION) : $raw,
+                truncated: $truncated,
+            )],
             'remaining' => $rest,
         ];
     }

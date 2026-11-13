@@ -91,16 +91,22 @@ final readonly class TerminalReplyEvent implements Event
      *                                 prefixes and intermediate bytes are not params).
      * @param string        $raw       The exact bytes consumed from the stream,
      *                                 including "ESC ["/"ESC P" introducer and final
-     *                                 byte — one exception: a string reply clipped at
+     *                                 byte — two exceptions: a string reply clipped at
      *                                 the decoder's size cap carries only the
      *                                 introducer plus the drained head (its
-     *                                 terminator was never seen); {@see $body} is the
-     *                                 authoritative payload slice there.
+     *                                 terminator was never seen; {@see $body} is the
+     *                                 authoritative payload slice there), and a CSI
+     *                                 reply past the decoder's raw-retention cap
+     *                                 carries its leading bytes with {@see $truncated}
+     *                                 set.
      * @param string        $body      Decoded payload for string sequences (OSC/DCS/APC/PM):
      *                                 the bytes between introducer and terminator. Empty
      *                                 for CSI-family replies.
      * @param bool          $truncated True when a string sequence exceeded the decoder's
-     *                                 size cap and its tail was discarded mid-payload.
+     *                                 size cap and its tail was discarded mid-payload,
+     *                                 or when a drained CSI reply frame passed the
+     *                                 decoder's raw-retention cap and only its head
+     *                                 rides on the event.
      */
     public function __construct(
         public string $family,

@@ -626,6 +626,43 @@ final class TerminalReplyDrainTest extends TestCase
         $this->assertSame($oneShot->drainedReplyCount(), $chunked->drainedReplyCount());
     }
 
+    public function testWholeBlobReplyFrameKeepsOnlyTheRetainedHeadAndBoundedParams(): void
+    {
+        // A ~120 KB private-mode frame arriving in ONE decode() blob must honour
+        // the never-unbounded promise at THIS scale, not just at the driver's
+        // 8 KiB slice: raw clipped to the retention cap with truncated set, the
+        // transient digit-run list bounded, and no key spam behind the drain.
+        $frame = "\x1b[?" . str_repeat('12;', 20000) . '34c';
+        $events = $this->decoder->decode($frame);
+        $this->assertCount(1, $events, 'the whole blob drains as one reply');
+        $this->assertSame(TerminalReplyEvent::FAMILY_DEVICE_ATTRIBUTES, $events[0]->family);
+        $this->assertSame(64, strlen($events[0]->raw), 'retention cap, not frame size');
+        $this->assertStringStartsWith("\x1b[?12;12;", $events[0]->raw);
+        $this->assertTrue($events[0]->truncated, 'a clipped head is flagged, never silent');
+        $this->assertCount(TerminalReplyEvent::MAX_PARAMS, $events[0]->params);
+        $this->assertSame(12, $events[0]->params[0]);
+        $this->assertSame(1, $events[0]->paramsDropped, 'scan bound proves the wire ran past the cap');
+        $this->assertSame(1, $this->decoder->drainedReplyCount());
+        $this->assertSame(0, $this->decoder->droppedUnknownCount());
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testRetainedHeadCapLeavesOrdinaryFramesByteExactAndUnflagged(): void
+    {
+        // The cap sits above every legitimate reply: a 64-byte exactly-at-cap
+        // DA1 frame and a short CPR ride whole with truncated false.
+        $atCap = "\x1b[?" . str_repeat('1;', 30) . 'c';
+        $this->assertSame(64, strlen($atCap));
+        $events = $this->decoder->decode($atCap);
+        $this->assertSame($atCap, $events[0]->raw);
+        $this->assertFalse($events[0]->truncated, 'exactly-cap frame is whole, not truncated');
+        $this->assertCount(30, $events[0]->params);
+        $this->assertSame(0, $events[0]->paramsDropped);
+
+        $this->assertDrained($this->decoder->decode("\x1b[4;100R"), TerminalReplyEvent::FAMILY_CURSOR_POSITION, [4, 100], "\x1b[4;100R");
+        $this->assertDrained($this->decoder->decode("\x1b[?6c"), TerminalReplyEvent::FAMILY_DEVICE_ATTRIBUTES, [6], "\x1b[?6c");
+    }
+
     public function testCoalescedPastePairsDecodeWithoutRecursion(): void
     {
         // 20 000 paste pairs in ONE coalesced read used to recurse decode() per
