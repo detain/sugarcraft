@@ -354,7 +354,10 @@ $writer->close();
 - Headings 1-6, paragraphs, `**bold**`, `_italic_`, `~~strike~~`.
 - Inline code, fenced code blocks (with regex syntax highlighting for
   PHP / JS / TS / JSON / Python / Go / Bash / SQL / Rust / Java / C / C++ /
-  Ruby / YAML / HTML / CSS), indented code.
+  Ruby / YAML / HTML / CSS — a curated subset: 16 languages and four
+  token kinds against chroma's full lexer catalogue; a fence naming
+  anything else degrades to the plain code-block style, dated 2026-11),
+  indented code.
 - Bullet + ordered + nested lists — items always render tight; loose-list
   spacing (blank lines between items) is not honoured, unlike CommonMark and
   glamour — a dated port decision (see the `renderList()` docblock).
@@ -366,6 +369,10 @@ $writer->close();
   flush-left description line; the parser consumes the `:` marker,
   so input indentation is optional.
 - Links (with OSC 8 hyperlinks), autolinks, images (alt + url).
+  Images are text-fallback only: glamour ≥ 0.8 embeds sixel/kitty
+  graphics, this port mirrors its pre-0.8 alt+URL rendering; embedding
+  is candy-mosaic / candy-flip territory, not a markdown-layer
+  capability (dated 2026-11).
 - HTML blocks + inline HTML — pass through with theme styling.
 - Thematic breaks.
 

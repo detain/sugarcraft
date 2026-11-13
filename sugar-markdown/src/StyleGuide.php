@@ -50,6 +50,11 @@ use SugarCraft\Style\Style;
  * addressable on this object via {@see element()} / {@see chroma()}, so a
  * future richer Theme slot can adopt them without re-parsing.
  *
+ * What theme() also cannot project is capability, not style: glamour ≥ 0.8
+ * embeds sixel/kitty images and no theme field changes that here — the
+ * `inline_image` / `block_image` primitives style the alt-text only (dated
+ * 2026-11, README What it renders).
+ *
  * Colour vocabulary: `#rrggbb` / `#rgb` hex (invalid hex THROWS — fail fast
  * on a corrupt file), `"N"` numeric strings / ints as xterm-256 indices
  * (0-255; out-of-range numbers are ignored rather than guessed), and
