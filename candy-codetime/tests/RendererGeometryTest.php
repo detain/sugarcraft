@@ -338,6 +338,21 @@ final class RendererGeometryTest extends TestCase
      * Sanitize::untrusted(): the C1 codepoint is gone and the invalid name
      * keeps its clean bytes.
      */
+    public function testTheHeaderPaintsTheSelectedWindowSpan(): void
+    {
+        // CT-S06: the range is derived from the Model's days, not a baked-in
+        // week — a 30-day window has to say so at the top of the frame,
+        // because a viewer who cannot see the rows must still see the range.
+        $end = new \DateTimeImmutable(self::END);
+        $monthAgo = $end->modify('-29 days')->format('M j');
+        $thirty = self::frame(62, self::busy(), 30);
+        $this->assertStringContainsString($monthAgo, $thirty);
+        $this->assertStringContainsString($end->format('M j'), $thirty);
+
+        $week = self::frame(62, self::busy(), 7);
+        $this->assertStringNotContainsString($monthAgo, $week);
+    }
+
     public function testC1NamesAreSweptAndInvalidUtf8NamesAreNotBlanked(): void
     {
         $end = new \DateTimeImmutable(self::END);

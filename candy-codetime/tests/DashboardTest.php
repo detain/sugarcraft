@@ -169,6 +169,61 @@ final class DashboardTest extends TestCase
         $this->assertNull($cmd);
     }
 
+    public function testPlusKeyStepsTheWindowUpTheLadder(): void
+    {
+        $store = new Store($this->storeDir);
+        $day = new \DateTimeImmutable('2024-06-07');
+        $d = new Dashboard($store, $day, 7, new Stats([], []), 62);
+
+        [$next, $cmd] = $d->update(new KeyMsg(KeyType::Char, '+'));
+
+        $this->assertNotSame($d, $next);
+        $this->assertSame(14, $next->days);
+        $this->assertSame(62, $next->width, 'a window step must keep the terminal width');
+        $this->assertEquals($day, $next->endDay);
+        $this->assertNull($cmd);
+    }
+
+    public function testMinusKeyStepsTheWindowDownTheLadder(): void
+    {
+        $store = new Store($this->storeDir);
+        $day = new \DateTimeImmutable('2024-06-07');
+        $d = new Dashboard($store, $day, 14, new Stats([], []), 62);
+
+        [$next, $cmd] = $d->update(new KeyMsg(KeyType::Char, '-'));
+
+        $this->assertSame(7, $next->days);
+        $this->assertNull($cmd);
+    }
+
+    public function testTheWindowLadderEndsAreSticky(): void
+    {
+        $store = new Store($this->storeDir);
+        $day = new \DateTimeImmutable('2024-06-07');
+        $top = new Dashboard($store, $day, 90, new Stats([], []));
+        $bottom = new Dashboard($store, $day, 7, new Stats([], []));
+
+        [$sameTop, $cmd1] = $top->update(new KeyMsg(KeyType::Char, '+'));
+        [$sameBottom, $cmd2] = $bottom->update(new KeyMsg(KeyType::Char, '-'));
+
+        // Past the end rung the Model is returned untouched: no rebuild, no
+        // recompute, no command — a keypress at the end is a no-op, not a
+        // window that shrinks to one day or runs past a quarter.
+        $this->assertSame($top, $sameTop);
+        $this->assertNull($cmd1);
+        $this->assertSame($bottom, $sameBottom);
+        $this->assertNull($cmd2);
+    }
+
+    public function testWindowStepsSnapNonLadderWidthsToTheNearestRung(): void
+    {
+        $this->assertSame(7, Dashboard::nextWindow(3, +1));
+        $this->assertSame(14, Dashboard::nextWindow(30, -1));
+        $this->assertSame(30, Dashboard::nextWindow(21, +1));
+        $this->assertSame(1, Dashboard::nextWindow(1, -1));
+        $this->assertSame(90, Dashboard::nextWindow(90, +1));
+    }
+
     public function testUpdateWithRightArrowShiftsForward(): void
     {
         $store = new Store($this->storeDir);

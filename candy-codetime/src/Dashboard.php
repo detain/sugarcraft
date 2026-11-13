@@ -25,6 +25,13 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class Dashboard implements Model
 {
+    /**
+     * The window ladder (CT-S06): `+`/`-` step the visible range through
+     * these widths. The endpoints are sticky — a stray keypress at 90 or 7
+     * cannot run the view off into a single day or a full quarter+.
+     */
+    public const WINDOW_LADDER = [7, 14, 30, 90];
+
     public function __construct(
         public readonly HeartbeatReader $source,
         public readonly \DateTimeImmutable $endDay,
@@ -90,6 +97,12 @@ final class Dashboard implements Model
         if ($msg->type === KeyType::Right) {
             return [$this->shift(+1), null];
         }
+        if ($msg->type === KeyType::Char && $msg->rune === '+') {
+            return [$this->stepWindow(+1), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === '-') {
+            return [$this->stepWindow(-1), null];
+        }
         return [$this, null];
     }
 
@@ -130,6 +143,51 @@ final class Dashboard implements Model
         // out for an unknown terminal and the rows we sized to the window
         // (panes, timeline) silently stop being clipped.
         return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height))->recompute();
+    }
+
+    /**
+     * Step the window up or down the ladder. From a width the ladder does
+     * not carry (the `dashboard [days]` argument) `+` snaps to the next
+     * larger rung and `-` to the next smaller one; at the ends the current
+     * window is returned untouched, so nothing recomputes for no reason.
+     */
+    private function stepWindow(int $direction): self
+    {
+        $days = self::nextWindow($this->days, $direction);
+        if ($days === $this->days) {
+            return $this;
+        }
+        return (new self(
+            $this->source,
+            $this->endDay,
+            $days,
+            $this->stats,
+            $this->width,
+            $this->colorProfile,
+            $this->height,
+        ))->recompute();
+    }
+
+    /**
+     * The ladder neighbour of an arbitrary width in one direction; the width
+     * itself when it is already the end rung.
+     */
+    public static function nextWindow(int $current, int $direction): int
+    {
+        if ($direction > 0) {
+            foreach (self::WINDOW_LADDER as $rung) {
+                if ($rung > $current) {
+                    return $rung;
+                }
+            }
+            return $current;
+        }
+        foreach (\array_reverse(self::WINDOW_LADDER) as $rung) {
+            if ($rung < $current) {
+                return $rung;
+            }
+        }
+        return $current;
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

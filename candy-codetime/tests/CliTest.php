@@ -635,6 +635,16 @@ final class CliTest extends TestCase
     }
 
     /** Run examples/plugin-heartbeat.example.sh with extra env over the default data dir. */
+    public function testDashboardRefusesNonNumericDaysWithoutATerminal(): void
+    {
+        // The days door runs BEFORE the tty check: `dashboard 30x` must be
+        // the same one-line refusal piped or not, never a silent fallback
+        // to the default week.
+        $res = $this->runCli(['dashboard', '30x']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('days must be a whole number, got "30x"', $res['stderr']);
+    }
+
     private function runHook(string $hookBin, string $file, string $project, string $language): array
     {
         $script = dirname(__DIR__) . '/examples/plugin-heartbeat.example.sh';

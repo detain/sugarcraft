@@ -596,13 +596,23 @@ if ($cmd !== 'dashboard') {
 // stream a terminal that just meant an alt-screen dump into a cron log and a
 // process that never exits (bare `dashboard` on a pipe hung). Refuse loudly
 // and point at the machine-readable door instead.
+// CT-S06: the window is operator-selectable. Same refusal law as the gaps
+// door — `dashboard 30x` is an error, never a silent fallback to 7. The
+// argument is validated BEFORE the tty check so a mistyped width fails in a
+// pipe exactly like it does on a terminal.
+$daysRaw = $positional[1] ?? null;
+if ($daysRaw !== null && !ctype_digit($daysRaw)) {
+    fwrite(STDERR, Lang::t('cli.invalid_days', ['value' => Sanitize::untrusted($daysRaw)]) . "\n");
+    exit(1);
+}
+$dashDays = $daysRaw === null ? 7 : Store::clampRangeDays((int) $daysRaw);
 if (!TtyDetect::isAtty(STDIN) || !TtyDetect::isAtty(STDOUT)) {
     fwrite(STDERR, Lang::t('cli.dashboard_needs_tty') . "\n");
     exit(1);
 }
 try {
     $reader = $backend === 'sqlite' ? $sqlite() : $store;
-    $dashboard = Dashboard::start($reader);
+    $dashboard = Dashboard::start($reader, null, $dashDays);
 } catch (\Throwable $e) {
     $storageError($e);
 }
