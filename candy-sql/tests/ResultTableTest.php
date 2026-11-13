@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Tests;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sql\ResultTable;
 use PHPUnit\Framework\TestCase;
 
 final class ResultTableTest extends TestCase
 {
+    private const SGR = '/\x1b\[[0-9;]*m/u';
+
     private function rows(): array
     {
         return [
@@ -226,31 +229,55 @@ final class ResultTableTest extends TestCase
         $this->assertSame(0, $t->offset);
     }
 
-    // ── Bounded column measurement (page-size) ───────────────────────────────
+    // ── Column measurement over the full row set (C07) ──────────────────────
 
-    public function testColWidthBoundedToRenderedPageSize(): void
+    public function testColWidthMeasuresEveryRowNotJustPageZero(): void
     {
-        // Create a table where the first row has a short value but a later row (beyond
-        // DEFAULT_PAGE_SIZE=25) has a very long value. The column width should be
-        // determined by the first 25 rows only, not the full set.
-        $shortValue = 'short';
-        $longValue = str_repeat('x', 200); // Very long value
-
-        // Row 0 has short value
-        $rows = [['col' => $shortValue]];
-        // Add rows 1-24 with short values
+        // C07 reverses the old page-0-only sampling: the window slides with
+        // the cursor/viewport, so a wide value on row 26 must widen the
+        // column too — with maxCellWidth clamping the damage (C07's own
+        // negative pin would be a clamp-free full scan; the 40-cell ceiling
+        // is the guard). Pre-C07 this column measured 5 cells and the wide
+        // tail row spilled its column.
+        $rows = [['col' => 'short']];
         for ($i = 1; $i < 25; $i++) {
             $rows[] = ['col' => 'medium'];
         }
-        // Row 25 has the very long value — beyond DEFAULT_PAGE_SIZE=25
-        $rows[] = ['col' => $longValue];
+        $rows[] = ['col' => str_repeat('x', 200)]; // beyond the old page bound
 
-        $t = ResultTable::fromRows($rows);
-        $widths = $t->colWidths();
+        $widths = ResultTable::fromRows($rows)->colWidths();
 
-        // Width should be based on short/medium values in rows 0-24, not the
-        // very long value in row 25 which is beyond the rendered page.
-        $this->assertLessThan(200, $widths['col']);
+        $this->assertSame(40, $widths['col'], 'tail row feeds the measurement, clamp caps it');
+    }
+
+    public function testCjkAndEmojiCellsPaintOnMeasuredColumns(): void
+    {
+        // C07: widths/padding/truncation run on display cells, not
+        // codepoints — a CJK or emoji value counts its real 2-cell glyphs.
+        $rows = [
+            ['id' => 1, 'note' => '日本語テキスト', 'tag' => '🎉'],
+            ['id' => 2, 'note' => 'plain', 'tag' => 'ok'],
+        ];
+        $out = ResultTable::fromRows($rows)->withVisibleWidth(200)->render();
+        $widths = array_map(
+            static fn (string $line): int => Width::of($line),
+            explode("\n", preg_replace(self::SGR, '', $out) ?? $out),
+        );
+        $this->assertCount(1, array_unique($widths), 'grid lines must be column-aligned');
+    }
+
+    public function testOversizedCellIsClippedToItsColumn(): void
+    {
+        // Belt: pad() left-clips (truncate to width) instead of overflowing
+        // when the cell exceeds the column it is painted into.
+        $t = new ResultTable(
+            rows: [['v' => '日本語']],
+            visibleWidth: 20,
+            precomputedColWidths: ['v' => 2],
+        );
+        $body = explode("\n", $t->render())[1] ?? '';
+        $plain = preg_replace(self::SGR, '', $body) ?? $body;
+        $this->assertSame(2, Width::of($plain), 'a wide cell must not spill its column');
     }
 
     public function testColWidthWithRowsChangeRecomputes(): void

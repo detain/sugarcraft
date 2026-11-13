@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
@@ -561,42 +562,50 @@ final class ResultTable
     }
 
     /**
-     * Truncate $str to at most $this->maxCellWidth chars, adding `…`.
+     * Truncate $str to at most $this->maxCellWidth DISPLAY CELLS, adding `…`.
+     * C07: measured in cells, not codepoints — CJK/emoji no longer count 1.
      */
     private function maybeTruncate(string $str): string
     {
-        if (mb_strlen($str) <= $this->maxCellWidth) {
+        if (Width::of($str) <= $this->maxCellWidth) {
             return $str;
         }
-        return mb_substr($str, 0, $this->maxCellWidth - 1) . '…';
+        return Width::truncate($str, $this->maxCellWidth - 1) . '…';
     }
 
     /**
-     * Right-pad $str to exactly $width characters.
+     * Lay $str on exactly $width display cells (C07): right-pad with spaces,
+     * and left-clip with a truncation when the value is wider than the
+     * column — the old code only right-padded, so an oversized cell
+     * overflowed the grid and the frame desynced on wide glyphs.
      */
     private function pad(string $str, int $width): string
     {
-        $diff = $width - mb_strlen($str);
-        return $diff > 0 ? $str . str_repeat(' ', $diff) : $str;
+        if (Width::of($str) > $width) {
+            return Width::truncate($str, $width);
+        }
+        return Width::padRight($str, $width);
     }
 
     /**
-     * Compute per-column widths based on the full row set.
+     * Compute per-column widths over the FULL row set.
+     *
+     * C07: measurement used to sample page 0 only while render() slices its
+     * window from the cursor/rowOffset — rows on page 2 spilled outside the
+     * column they were painted in. maxCellWidth still clamps, so a single
+     * blob-sized value cannot blow the grid up.
      *
      * @return array<string, int>
      */
     private function computeColWidths(): array
     {
         $widths = [];
-        // Bound measurement to the rows that can actually be rendered (page size).
-        // Wide values beyond row 25 no longer influence column widths.
-        $renderedRows = array_slice($this->rows, 0, self::DEFAULT_PAGE_SIZE);
         foreach ($this->columns as $col) {
             // Measure the sanitized label so widths match what is painted.
-            $max = mb_strlen(CellValue::sanitize($col));
-            foreach ($renderedRows as $row) {
+            $max = Width::of(CellValue::sanitize($col));
+            foreach ($this->rows as $row) {
                 $val = $this->formatValuePlain($row[$col] ?? null);
-                $len = mb_strlen($val);
+                $len = Width::of($val);
                 if ($len > $max) {
                     $max = $len;
                 }

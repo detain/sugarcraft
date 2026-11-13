@@ -6,7 +6,6 @@ namespace SugarCraft\Sql;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Tty;
-use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Table\{Column, Row, RowData, Table};
