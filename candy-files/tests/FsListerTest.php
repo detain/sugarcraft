@@ -101,4 +101,46 @@ final class FsListerTest extends TestCase
 
         $this->assertSame($linkPath, $next->cwd, 'navigating into a symlinked dir must enter it');
     }
+
+    /**
+     * CF-22 (closes audit 031): the lister contract splits "empty" from
+     * "cannot read". A missing path is no longer a lying [] — it answers
+     * null so the UI can tell the two facts apart.
+     */
+    public function testMissingPathAnswersNull(): void
+    {
+        $this->assertNull((FsLister::lister())($this->tmpDir . '/never-existed-candy-files'));
+    }
+
+    public function testPlainFileAnswersNull(): void
+    {
+        file_put_contents($this->tmpDir . '/f.txt', 'x');
+        $this->assertNull((FsLister::lister())($this->tmpDir . '/f.txt'), 'a file is not a listing — answer null, not empty');
+    }
+
+    public function testEmptyReadableDirectoryAnswersEmptyListNotNull(): void
+    {
+        mkdir($this->tmpDir . '/vacant', 0755, true);
+        $entries = (FsLister::lister())($this->tmpDir . '/vacant');
+        $this->assertIsArray($entries, 'an empty dir is a FACT, not a refusal');
+        $this->assertSame([], $entries);
+    }
+
+    public function testUnreadableDirectoryAnswersNull(): void
+    {
+        $secret = $this->tmpDir . '/secret';
+        mkdir($secret, 0755, true);
+        file_put_contents($secret . '/topsecret.txt', 'x');
+        chmod($secret, 0000);
+        if (is_readable($secret)) {
+            chmod($secret, 0755);
+            $this->markTestSkipped('this environment defeats directory read permissions (running as root?)');
+        }
+
+        try {
+            $this->assertNull((FsLister::lister())($secret), 'a 0500 dir answers null, never a lying []');
+        } finally {
+            chmod($secret, 0755);
+        }
+    }
 }

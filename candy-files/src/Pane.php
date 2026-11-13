@@ -18,11 +18,15 @@ namespace SugarCraft\Files;
  * cleanly.
  *
  * Filesystem reads happen via an injected `\Closure(string $path):
- * list<Entry>` — tests pass a closure returning a fixed list, prod
+ * list<Entry>|null` — tests pass a closure returning a fixed list, prod
  * passes an FsLister lister (`scandir` + `lstat`: size and mtime
  * always describe the link itself, never the followed target).
  * Decoupling the I/O lets the entire transition layer be tested
  * with no tmp-dir setup or filesystem fixtures.
+ *
+ * CF-22: a null listing is the lister saying "cannot read" — the
+ * `readable` flag below carries that truth into the UI instead of
+ * collapsing it to a fake empty directory.
  */
 final class Pane
 {
@@ -42,6 +46,7 @@ final class Pane
         array $selected = [],
         public readonly Sort $sort = Sort::NameAsc,
         public readonly bool $showHidden = false,
+        public readonly bool $readable = true,
     ) {
         $this->entries = $entries;
         $this->selected = $selected;
@@ -51,11 +56,21 @@ final class Pane
      * Build a fresh Pane for `$cwd` by listing entries via
      * `$lister` and applying the current sort order.
      *
-     * @param \Closure(string): list<Entry> $lister
+     * CF-22: `$lister` answering null means "cannot read" — the pane is
+     * built with only the escape route (the `..` sentinel when there is
+     * one) and `readable = false`, so the UI can say unreadable instead
+     * of lying "empty".
+     *
+     * @param \Closure(string): list<Entry>|null $lister
      */
     public static function open(string $cwd, \Closure $lister, Sort $sort = Sort::NameAsc, bool $showHidden = false): self
     {
-        $entries = self::filterHidden($lister($cwd), $showHidden);
+        $listed = $lister($cwd);
+        if ($listed === null) {
+            $fallback = $cwd !== '/' && $cwd !== '' ? [Entry::parent()] : [];
+            return new self($cwd, $fallback, 0, [], $sort, $showHidden, false);
+        }
+        $entries = self::filterHidden($listed, $showHidden);
         if ($cwd !== '/' && $cwd !== '') {
             $entries = array_merge([Entry::parent()], $entries);
         }
@@ -67,7 +82,12 @@ final class Pane
      * `..` sentinel). Files don't navigate — caller decides what
      * to do with them (open in viewer, edit, etc.).
      *
-     * @param \Closure(string): list<Entry> $lister
+     * CF-22: if the target answers null (unreadable), the move is
+     * REFUSED and this listing is retained with `readable = false` —
+     * the pane never strands the user inside a directory it cannot
+     * show, and the caller can name the refusal in the status line.
+     *
+     * @param \Closure(string): list<Entry>|null $lister
      */
     public function navigate(\Closure $lister): self
     {
@@ -78,7 +98,22 @@ final class Pane
         $next = $current->isParentSentinel()
             ? self::parentPath($this->cwd)
             : self::join($this->cwd, $current->name);
-        return self::open($next, $lister, $this->sort, $this->showHidden);
+        $moved = self::open($next, $lister, $this->sort, $this->showHidden);
+        if (!$moved->readable) {
+            return $this->unreadable();
+        }
+        return $moved;
+    }
+
+    /**
+     * A copy of this pane carrying the same listing with the
+     * "cannot read" truth attached (CF-22). The preserved entries
+     * are the LAST HONEST READ, not a phantom: the directory simply
+     * stopped answering between reads.
+     */
+    public function unreadable(): self
+    {
+        return new self($this->cwd, $this->entries, $this->cursor, $this->selected, $this->sort, $this->showHidden, false);
     }
 
     /**
@@ -91,13 +126,21 @@ final class Pane
      * ENTERING a (new) directory and legitimately starts empty; using it
      * for re-reads silently wiped user selection on every `r` and `.`.
      *
-     * @param \Closure(string): list<Entry> $lister
+     * CF-22: a null answer (the directory stopped answering — deleted,
+     * unmounted, chmod'ed away under us) RETAINS this listing and marks
+     * the pane unreadable, rather than serving a lying "empty" pane.
+     *
+     * @param \Closure(string): list<Entry>|null $lister
      * @param bool|null $showHidden new hidden-visibility state (default: keep)
      */
     public function relist(\Closure $lister, ?bool $showHidden = null): self
     {
         $show = $showHidden ?? $this->showHidden;
-        $entries = self::filterHidden($lister($this->cwd), $show);
+        $listed = $lister($this->cwd);
+        if ($listed === null) {
+            return $this->unreadable();
+        }
+        $entries = self::filterHidden($listed, $show);
         if ($this->cwd !== '/' && $this->cwd !== '') {
             $entries = array_merge([Entry::parent()], $entries);
         }
@@ -128,18 +171,18 @@ final class Pane
             return $this;
         }
         $next = max(0, min($count - 1, $this->cursor + $delta));
-        return new self($this->cwd, $this->entries, $next, $this->selected, $this->sort, $this->showHidden);
+        return new self($this->cwd, $this->entries, $next, $this->selected, $this->sort, $this->showHidden, $this->readable);
     }
 
     public function gotoTop(): self
     {
-        return new self($this->cwd, $this->entries, 0, $this->selected, $this->sort, $this->showHidden);
+        return new self($this->cwd, $this->entries, 0, $this->selected, $this->sort, $this->showHidden, $this->readable);
     }
 
     public function gotoBottom(): self
     {
         $last = max(0, count($this->entries) - 1);
-        return new self($this->cwd, $this->entries, $last, $this->selected, $this->sort, $this->showHidden);
+        return new self($this->cwd, $this->entries, $last, $this->selected, $this->sort, $this->showHidden, $this->readable);
     }
 
     /**
@@ -151,7 +194,7 @@ final class Pane
     {
         foreach ($this->entries as $i => $entry) {
             if ($entry->name === $name) {
-                return new self($this->cwd, $this->entries, $i, $this->selected, $this->sort, $this->showHidden);
+                return new self($this->cwd, $this->entries, $i, $this->selected, $this->sort, $this->showHidden, $this->readable);
             }
         }
         return $this;
@@ -170,16 +213,16 @@ final class Pane
         } else {
             $sel[$entry->name] = true;
         }
-        return new self($this->cwd, $this->entries, $this->cursor, $sel, $this->sort, $this->showHidden);
+        return new self($this->cwd, $this->entries, $this->cursor, $sel, $this->sort, $this->showHidden, $this->readable);
     }
 
     public function clearSelection(): self
     {
-        return new self($this->cwd, $this->entries, $this->cursor, [], $this->sort, $this->showHidden);
+        return new self($this->cwd, $this->entries, $this->cursor, [], $this->sort, $this->showHidden, $this->readable);
     }
 
     /**
-     * @param \Closure(string): list<Entry> $lister
+     * @param \Closure(string): list<Entry>|null $lister
      */
     public function setSort(Sort $sort, \Closure $lister): self
     {
@@ -196,7 +239,7 @@ final class Pane
         }
         $sorted = $sort->apply($rest);
         $entries = $parent !== null ? array_merge([$parent], $sorted) : $sorted;
-        return new self($this->cwd, $entries, 0, $this->selected, $sort, $this->showHidden);
+        return new self($this->cwd, $entries, 0, $this->selected, $sort, $this->showHidden, $this->readable);
     }
 
     /**
@@ -206,7 +249,7 @@ final class Pane
      * multi-selection for the entries that remain listed, nor teleport the
      * cursor to the top of the pane.
      *
-     * @param \Closure(string): list<Entry> $lister
+     * @param \Closure(string): list<Entry>|null $lister
      */
     public function toggleHidden(\Closure $lister): self
     {

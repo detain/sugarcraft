@@ -7,8 +7,14 @@ namespace SugarCraft\Files;
 /**
  * Default `Pane` lister — reads a directory off the live
  * filesystem via `scandir` + `lstat`. The whole rest of the app
- * accepts a `Closure(string $path): list<Entry>` so tests can
+ * accepts a `Closure(string $path): list<Entry>|null` so tests can
  * substitute a deterministic in-memory fake.
+ *
+ * CF-22 (closes audit 031): null means "cannot read" (missing path,
+ * not a directory, or `scandir` refused) and is NEVER collapsed to
+ * `[]` — an empty list is a fact ("this directory is empty"), while
+ * a silent `[]` over a 0500 dir was the UI lying that a real listing
+ * had succeeded. Callers must keep the two states apart.
  *
  * Consistency disclosure: size/mtime come from `lstat()` (the link's own
  * inode for symlinks), while `isDir` deliberately FOLLOWS the link so a
@@ -20,11 +26,14 @@ final class FsLister
 {
     public static function lister(): \Closure
     {
-        return static function (string $path): array {
+        return static function (string $path): ?array {
             if (!\is_dir($path)) {
-                return [];
+                return null;
             }
-            $names = @\scandir($path) ?: [];
+            $names = @\scandir($path);
+            if ($names === false) {
+                return null;
+            }
             $out = [];
             foreach ($names as $name) {
                 if ($name === '.' || $name === '..') {

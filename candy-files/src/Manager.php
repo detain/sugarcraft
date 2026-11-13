@@ -50,7 +50,7 @@ final class Manager implements Model
      */
     use Mutable;
 
-    /** @var \Closure(string): list<Entry> */
+    /** @var \Closure(string): list<Entry>|null */
     private readonly \Closure $lister;
 
     private const UNDO_LIMIT = 50;
@@ -72,7 +72,7 @@ final class Manager implements Model
     private static ?string $trashRoot = null;
 
     /**
-     * @param \Closure(string): list<Entry>|null $lister
+     * @param (\Closure(string): list<Entry>|null)|null $lister
      * @param array<int,array{left:Pane,right:Pane,activeIdx:int}> $tabs
      * @param list<UndoAction> $undoStack Stack of undoable actions
      * @param list<UndoAction> $redoStack Stack of redoable actions (cleared on new action)
@@ -103,7 +103,7 @@ final class Manager implements Model
     }
 
     /**
-     * @param \Closure(string): list<Entry>|null $lister
+     * @param (\Closure(string): list<Entry>|null)|null $lister
      */
     public static function start(string $leftCwd, string $rightCwd, ?\Closure $lister = null): self
     {
@@ -507,7 +507,21 @@ final class Manager implements Model
 
     private function navigate(): self
     {
-        return $this->withActivePane(fn(Pane $p) => $p->navigate($this->lister));
+        $active = $this->activePane();
+        $pane = $active->navigate($this->lister);
+        if (!$pane->readable && $pane->cwd === $active->cwd) {
+            // CF-22 (closes audit 031): the target directory answered the
+            // lister with null (missing/unreadable). The pane keeps its
+            // last honest listing and the status names the door that
+            // refused — silently swapping in a fake-empty pane was the old lie.
+            $target = $active->currentEntry();
+            $refused = $target === null ? $active->cwd : ($target->isParentSentinel()
+                ? Pane::parentPath($active->cwd)
+                : Pane::join($active->cwd, $target->name));
+            return $this->withActivePane(fn(Pane $p) => $pane)
+                ->withStatus(Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($refused)]));
+        }
+        return $this->withActivePane(fn(Pane $p) => $pane);
     }
 
     /**
@@ -655,12 +669,16 @@ final class Manager implements Model
 
     private function goUp(): self
     {
-        return $this->withActivePane(function (Pane $p): Pane {
-            $oldCwd = $p->cwd;
-            $parent = Pane::open(Pane::parentPath($oldCwd), $this->lister, $p->sort, $p->showHidden);
-            // Position cursor on the directory we came from (superfile/MC behavior)
-            return $parent->cursorOnName(basename($oldCwd));
-        });
+        $active = $this->activePane();
+        $parentPath = Pane::parentPath($active->cwd);
+        // CF-22: an unreadable parent is refused, not entered blind — the
+        // listing stays and the status names the door that shut.
+        $parent = Pane::open($parentPath, $this->lister, $active->sort, $active->showHidden);
+        if (!$parent->readable) {
+            return $this->withActivePane(fn(Pane $p) => $p->unreadable())
+                ->withStatus(Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($parentPath)]));
+        }
+        return $this->withActivePane(fn(Pane $p) => $parent->cursorOnName(basename($active->cwd)));
     }
 
     private function cycleSort(): self
@@ -673,8 +691,14 @@ final class Manager implements Model
     {
         // relist() (not Pane::open) so a re-read does not silently wipe the
         // cursor position and the entries of the selection that survived.
-        return $this->withActivePane(fn(Pane $p) => $p->relist($this->lister))
-            ->withStatus(Lang::t('status.refreshed'));
+        $pane = $this->activePane()->relist($this->lister);
+        // CF-22: `r` on a directory that stopped answering no longer reports
+        // "refreshed" — it names the refusal, and the pane above the status
+        // still shows the last honest listing (relist retained it).
+        return $this->withActivePane(fn(Pane $p) => $pane)
+            ->withStatus($pane->readable
+                ? Lang::t('status.refreshed')
+                : Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($pane->cwd)]));
     }
 
     private function armDelete(): self

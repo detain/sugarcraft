@@ -528,4 +528,21 @@ final class RendererTest extends TestCase
             $this->assertLessThanOrEqual(80, Width::of(Ansi::strip($line)));
         }
     }
+
+    /**
+     * CF-22 (closes audit 031): a pane that cannot read its directory keeps
+     * its last honest listing, and the header admits the situation with the
+     * localized (unreadable) marker — the fake-empty look-alike dies here.
+     */
+    public function testUnreadablePaneHeaderCarriesTheMarker(): void
+    {
+        $tree = ['/' => [new Entry('home', true, 0, 0)], '/locked' => null];
+        $lister = static fn(string $p) => array_key_exists($p, $tree) ? $tree[$p] : [];
+
+        $out = Renderer::render(Manager::start('/locked', '/', $lister));
+        $this->assertStringContainsString('(unreadable)', $out);
+
+        $clean = Renderer::render(Manager::start('/', '/', $this->fakeFs()));
+        $this->assertStringNotContainsString('(unreadable)', $clean, 'the marker is earned, not decoration');
+    }
 }

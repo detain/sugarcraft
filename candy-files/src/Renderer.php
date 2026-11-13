@@ -135,9 +135,15 @@ final class Renderer
             ->padding(0, 1)
             ->width($inner);
 
+        // CF-22: an unreadable pane says so in its own header — the listing
+        // above the status line is the last honest read, and the UI admits it.
+        $dirLabel = Entry::sanitizeName($pane->cwd);
+        if (!$pane->readable) {
+            $dirLabel .= ' ' . Lang::t('pane.unreadable');
+        }
         $header = sprintf(
             "%s  [%s%s]",
-            self::truncate(Entry::sanitizeName($pane->cwd), $headCap),
+            self::truncate($dirLabel, $headCap),
             $pane->sort->value,
             $pane->showHidden ? ' ' . Lang::t('pane.hidden_suffix') : '',
         );

@@ -50,7 +50,7 @@ final class ManagerBuilder
     }
 
     /**
-     * @param \Closure(string): list<Entry>|null $lister
+     * @param (\Closure(string): list<Entry>|null)|null $lister
      */
     public function withLister(?\Closure $lister): self
     {

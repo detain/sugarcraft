@@ -302,4 +302,66 @@ final class PaneTest extends TestCase
         $empty = new Pane('/empty', []);
         $this->assertNull($empty->currentEntry());
     }
+
+    /** CF-22 (closes audit 031): lister contract — null means "cannot read". */
+    private function fsRefusing(string $blocked, array $tree): \Closure
+    {
+        return static function (string $path) use ($blocked, $tree): ?array {
+            if ($path === $blocked) {
+                return null;
+            }
+            return $tree[$path] ?? [];
+        };
+    }
+
+    public function testOpenOverUnreadableKeepsOnlyTheEscapeRoute(): void
+    {
+        $pane = Pane::open('/locked', $this->fsRefusing('/locked', []));
+
+        $this->assertFalse($pane->readable);
+        $this->assertSame('/locked', $pane->cwd);
+        $names = array_map(static fn(Entry $e) => $e->name, $pane->entries);
+        $this->assertSame(['..'], $names, 'an unreadable dir still shows the way out');
+    }
+
+    public function testNavigateIntoUnreadableRefusesTheMoveAndKeepsTheListing(): void
+    {
+        $fs = $this->fsRefusing('/home/bob', $this->tree());
+        $pane = Pane::open('/home', $fs);
+        $names = array_map(static fn(Entry $e) => $e->name, $pane->entries);
+        $bob = array_search('bob', $names, true);
+
+        $after = $pane->moveCursor((int) $bob)->navigate($fs);
+
+        $this->assertSame('/home', $after->cwd, 'the refused door must not teleport the pane');
+        $this->assertSame($names, array_map(static fn(Entry $e) => $e->name, $after->entries));
+        $this->assertFalse($after->readable, 'but the UI must know the attempt failed');
+    }
+
+    public function testRelistOverUnreadableRetainsEntriesCursorAndSelection(): void
+    {
+        $fs = $this->fakeFs($this->tree());
+        $pane = Pane::open('/home', $fs);
+        $names = array_map(static fn(Entry $e) => $e->name, $pane->entries);
+        $cursor = (int) array_search('bob', $names, true);
+        $selected = $pane->moveCursor($cursor)->toggleSelection();
+
+        $refused = $selected->relist($this->fsRefusing('/home', $this->tree()));
+
+        $this->assertFalse($refused->readable);
+        $this->assertSame($names, array_map(static fn(Entry $e) => $e->name, $refused->entries), 'last honest listing survives');
+        $this->assertSame($cursor, $refused->cursor, 'cursor position survives');
+        $this->assertSame(['bob'], $refused->selectedNames(), 'selection survives');
+    }
+
+    public function testReadabilityRecoversOnTheNextSuccessfulRead(): void
+    {
+        $refused = Pane::open('/locked', $this->fsRefusing('/locked', []))
+            ->clearSelection();
+        $this->assertFalse($refused->readable, 'transitions must carry the flag, not reset it');
+
+        $recovered = $refused->relist($this->fakeFs(['/locked' => [new Entry('finally.txt', false, 1, 0)]]));
+
+        $this->assertTrue($recovered->readable, 'a real read clears the unreadable mark');
+    }
 }

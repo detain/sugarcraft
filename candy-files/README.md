@@ -159,8 +159,9 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Test plan
 
-- 329 tests / 4882 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
+- 347 tests / 5016 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
 - Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / relist-with-selection-preservation / navigate / move / select / sort / hidden toggle / parent-path / join)
+- Lister contract (CF-22): `null` answers "cannot read" and is never collapsed to "empty" — a refused `navigate`/`goUp` keeps the last honest listing, `relist` preserves cursor + selection through the outage, the pane header carries the localized `(unreadable)` marker, `r` names the refusal instead of lying `refreshed`, the launcher refuses a missing or unreadable argv directory (`Support\LaunchDir`), and `FsLister` splits an empty dir (`[]`) from a 0000 one (`null`)
 - `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` or the prompt's taught localized affirmative confirms, anything else cancels; modified chords never confirm), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths **and rows**, other non-key Msgs dropped)
 - `t` duplicates the current tab; `Manager::openNewTab(path)` lands a tab on the given directory as an API (no key binding carries a path)
 - Async copy end-to-end: the `c`/`y` command is executed against the real event loop and its `CopyCompletedMsg` re-enters `update()` — status, undo entry and refreshed destination pane are all asserted, plus the error-count path, the skipped-name path, the overwrite announcement and undo-recording-successes-only
