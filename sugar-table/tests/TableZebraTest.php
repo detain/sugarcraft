@@ -150,4 +150,30 @@ final class TableZebraTest extends TestCase
         // r4 is slot 1 (odd under slot parity) but data index 4 (even).
         $this->assertStringContainsString($striped, $page1['r4'], 'even data row lost its stripe after a page turn');
     }
+
+    public function testZebraStylesAreConfigurable(): void
+    {
+        $t = $this->table(
+            Row::new(RowData::from(['a' => 'zero'])),
+            Row::new(RowData::from(['a' => 'one'])),
+        )->withZebraStyleEven('44')->withZebraStyleOdd('41');
+        $view = $t->view();
+        $this->assertStringContainsString('48;2;0;0;238', $view);
+        $this->assertStringContainsString('48;2;205;0;0', $view);
+        $this->assertStringNotContainsString('48;2;229;229;229', $view);
+    }
+
+    public function testZebraStyleAcceptsStyleObjects(): void
+    {
+        $t = $this->table(Row::new(RowData::from(['a' => 'zero'])))
+            ->withZebraStyleEven(\SugarCraft\Style\Style::new()->bold());
+        $this->assertStringContainsString("\x1b[0;1m", $t->view());
+    }
+
+    public function testStripeIsSuppressedUnderTheCursor(): void
+    {
+        $rows = [Row::new(RowData::from(['a' => 'zero'])), Row::new(RowData::from(['a' => 'one']))];
+        $base = Table::fromColumns([Column::new('a', 'A', 8)])->withRows($rows)->withSelectable(true);
+        $this->assertSame($base->view(), $base->withZebra(true)->view(), 'selected+striped must equal selected-unstriped');
+    }
 }

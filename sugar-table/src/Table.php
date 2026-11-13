@@ -630,6 +630,27 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Style of the EVEN zebra stripe (default black on light-gray, '30;47').
+     * Accepts the same shapes as the styleFunc funnel: an SGR string, a
+     * CellBuffer Style or a declarative SugarCraft\Style\Style. An empty
+     * string clears the stripe.
+     */
+    public function withZebraStyleEven(string|Style|\SugarCraft\Style\Style $style): self
+    {
+        $clone = clone $this;
+        $clone->zebraStyleEven = $this->normalizeStyleResult($style, -1, -1);
+        return $clone;
+    }
+
+    /** Style of the ODD zebra stripe (default none); see {@see withZebraStyleEven()}. */
+    public function withZebraStyleOdd(string|Style|\SugarCraft\Style\Style $style): self
+    {
+        $clone = clone $this;
+        $clone->zebraStyleOdd = $this->normalizeStyleResult($style, -1, -1);
+        return $clone;
+    }
+
     public function withHeaderStyle(string $s): self
     {
         $clone = clone $this;
@@ -2347,7 +2368,7 @@ final class Table
         if ($rowData->style !== '') {
             $rowStyle = $rowData->style;
         }
-        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $absoluteRowIndex));
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $absoluteRowIndex, $isSelected));
 
         // Selection is the TOP tier (audit M3: it used to replace rowStyle
         // before the cell chain ran, so the winning cell style threw the
@@ -2444,7 +2465,7 @@ final class Table
         if ($rowData->style !== '') {
             $rowStyle = $rowData->style;
         }
-        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $absoluteRowIndex));
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $absoluteRowIndex, $isSelected));
         if ($isSelected) {
             $rowStyle = self::mergeStyle($rowStyle, '7');
         } // reverse composes on top (audit M3)
@@ -2521,7 +2542,7 @@ final class Table
         if ($row->style !== '') {
             $rowStyle = $row->style;
         }
-        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($row, $absoluteRowIndex));
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($row, $absoluteRowIndex, $isSelected));
 
         $bandStyle = $isSelected ? self::mergeStyle($rowStyle, '7') : $rowStyle;
 
@@ -2969,9 +2990,11 @@ final class Table
      * scroll step shifts the stripe window by one row instead of flipping
      * every visible row's parity through the frame slot.
      */
-    private function zebraStyleForRow(Row $rowData, int $rowIndex): string
+    private function zebraStyleForRow(Row $rowData, int $rowIndex, bool $isSelected = false): string
     {
-        if (!$this->zebraEnabled) {
+        // OG-2 / ST-19: the cursor band is the single highlight, so the stripe
+        // is suppressed under it (selected+striped == selected-unstriped).
+        if (!$this->zebraEnabled || $isSelected) {
             return '';
         }
         if ($rowData->zebra) {

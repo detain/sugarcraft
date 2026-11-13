@@ -185,8 +185,12 @@ StyledCell::new('value', '31;1')        // red bold cell
 $t = $t->withZebra(true);
 ```
 
-**Stripe model**: the two stripes are hard-wired — the even slot is
-`30;47` (black on white), the odd slot carries no style.
+**Stripe model**: the even slot defaults to `30;47` (black on white), the odd
+slot to no style; `withZebraStyleEven()` / `withZebraStyleOdd()` replace
+either with an SGR string, a `CellBuffer\Style` or a `SugarCraft\Style\Style`.
+The selected row never carries a stripe — the cursor band is the single
+highlight, so a selected striped row renders byte-identically to a selected
+unstriped one.
 `Row::withZebra(bool $on = true)` opts a row into the ODD stripe explicitly,
 overriding its positional parity; `withZebra(false)` (or no call at all)
 leaves parity in charge. While the table switch is on, rows without an
@@ -825,9 +829,10 @@ What the renderer does for you:
   winning style — it needs no color channel, so the cursor row stays readable
   on light and dark palettes alike. A cursorless table is one call away:
   `withSelectable(false)`.
-- **Zebra striping is a fixed black-on-white inversion** (`30;47` on even
+- **Zebra striping defaults to a black-on-white inversion** (`30;47` on even
   stripes, odd stripes plain) rather than a dimmed grey — again readable
-  without a color vocabulary. Enable it with `$table->withZebra(true)`.
+  without a color vocabulary; restyle with `withZebraStyleEven/Odd()`. Enable
+  it with `$table->withZebra(true)`.
 - **The empty-state message is translatable** (`no_data`, see
   Internationalization) instead of a silent blank box.
 
@@ -1136,6 +1141,8 @@ in this README is still documented — this table is the completeness floor.
 | `withScrollY(int $offset): self` | — |
 | `scrollY(): int` | — |
 | `withZebra(bool $v = true): self` | — |
+| `withZebraStyleEven(string\|Style\|Style $style): self` | Even stripe style (default `30;47`) |
+| `withZebraStyleOdd(string\|Style\|Style $style): self` | Odd stripe style (default none) |
 | `withHeaderStyle(string $s): self` | — |
 | `withShowHeader(bool $v): self` | — |
 | `withShowFooter(bool $v): self` | — |
