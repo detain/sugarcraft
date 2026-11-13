@@ -1,7 +1,9 @@
 <p class="lede" style="margin-top: 28px;">Launch <code>candy-ssh-launcher</code>, pick a host, hit Enter — the current process is replaced with <code>ssh</code> connecting to it. Reads YAML or JSON; supports identity files, ssh options, ProxyJump.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ssh-launcher</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ssh-launcher:@dev   # today: dev-only until the first release tag
+composer require sugarcraft/candy-ssh-launcher        # bare, once a release tag exists</code></pre>
+    <p>The package publishes its dev branch until the first <code>candy-ssh-launcher/v*</code> tag is cut, so projects on Composer's default <code>minimum-stability</code> need the <code>:@dev</code> suffix. A single-file <code>.phar</code> is built from <code>tools/build-phar.php</code> (see the README); release download URLs appear with the tags.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-yaml"># ~/.config/wishlist.yml
@@ -28,11 +30,14 @@
       <div class="feature"><strong>Type-filter</strong><span>Type to fuzzy-narrow the list (sugar-fuzzy Smith–Waterman scoring, live match count, 16 locales).</span></div>
       <div class="feature"><strong>ProxyJump / Options</strong><span>Pass any ssh option through the entry's <code>options</code> array.</span></div>
       <div class="feature"><strong>pcntl_exec</strong><span>Replaces the launcher process — no double-shell — so signals + exit codes propagate cleanly.</span></div>
-      <div class="feature"><strong>Composer-installable</strong><span>Single binary at <code>vendor/bin/candy-ssh-launcher</code>.</span></div>
+      <div class="feature"><strong>Composer-installable</strong><span>Single binary at <code>vendor/bin/candy-ssh-launcher</code>, plus a self-contained <code>.phar</code> built by <code>tools/build-phar.php</code>.</span></div>
+      <div class="feature"><strong>Keys</strong><span>↑/↓, Home/End, PgUp/PgDn move; type to narrow; Enter connects; Ctrl+U/W/H edit the query; Esc quits with 130. Bracketed paste is text, never a command.</span></div>
+      <div class="feature"><strong>Requirements</strong><span>PHP 8.3+ with <code>ext-pcntl</code>, Unix only, UTF-8 terminal. Honors <code>NO_COLOR</code>/<code>CLICOLOR=0</code> and <code>TERM=dumb</code>.</span></div>
+      <div class="feature"><strong>Accessibility</strong><span>Keyboard-only with glyph-marked selection and zero animation; screen-reader path is <code>--list</code> plus direct named dispatch (<code>candy-ssh-launcher home</code>).</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Security</h3>
-    <p>Your config file is <strong>trusted input</strong> — exactly like <code>~/.ssh/config</code> itself. Whatever a config declares, the launcher passes to ssh: <code>options:</code> entries become real <code>-o</code> settings verbatim, and OpenSSH options such as <code>ProxyCommand</code> / <code>LocalCommand</code> <strong>execute arbitrary commands at connect time</strong>. Keep config files (and <code>~/.ssh/config</code>) owned by you with <code>0600</code>/<code>0644</code> permissions and do not accept endpoint files from strangers; see the fleet-wide <a href="../TRUST-BOUNDARY.md">trust boundary</a>.</p>
+    <p>Your config file is <strong>trusted input</strong> — exactly like <code>~/.ssh/config</code> itself. Whatever a config declares, the launcher passes to ssh: <code>options:</code> entries become real <code>-o</code> settings verbatim, and OpenSSH options such as <code>ProxyCommand</code> / <code>LocalCommand</code> <strong>execute arbitrary commands at connect time</strong>. Keep config files (and <code>~/.ssh/config</code>) owned by you with <code>0600</code>/<code>0644</code> permissions and do not accept endpoint files from strangers; see the fleet-wide <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">trust boundary</a>.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -53,7 +58,7 @@
 <tr><td>Endpoint</td><td>withDescription(text) · withProxyJump(host) · withOptions(options[])</td><td>Fluent setters — each returns a new endpoint</td></tr>
 <tr><td>Endpoint</td><td>parsePort(host, raw)</td><td>Validate a port value (1–65535); junk is refused naming the endpoint</td></tr>
 <tr><td>Config</td><td>load(path)</td><td>Load endpoints from YAML/JSON (format auto-detected)</td></tr>
-<tr><td>Config</td><td>parse(raw, hintPath)</td><td>Parse config text directly (extension hint, else JSON iff the payload opens with <code>[</code> or <code>{</code>)</td></tr>
+<tr><td>Config</td><td>parse(raw, hintPath)</td><td>Parse config text directly (extension hint, else JSON when the payload opens with <code>[</code> or <code>{</code>)</td></tr>
 <tr><td>Config</td><td>importFromSshConfig(path)</td><td>Import endpoints from ~/.ssh/config</td></tr>
 <tr><td>Picker</td><td>pick(endpoints)</td><td>Interactive selection (null on cancel or empty endpoint list)</td></tr>
 <tr><td>Launcher</td><td>__construct(executor)</td><td>Optional callable executor seam for embedding and tests</td></tr>
@@ -68,7 +73,7 @@
         <p class="lede">VHS-recorded GIF of the endpoint picker, regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-ssh-launcher/.vhs/picker.gif" alt="Picker">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-ssh-launcher/.vhs/picker.gif" alt="The endpoint picker listing three hosts under the wishlist banner while a typed filter narrows the list">
                 <h3>Picker</h3>
                 <span class="demo-caption">Type-filtered SSH endpoint picker — Enter to launch.</span>
             </div>

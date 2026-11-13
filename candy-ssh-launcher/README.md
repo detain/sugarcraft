@@ -13,7 +13,7 @@
 > Formerly published as `sugarcraft/sugar-wishlist` (renamed 2026-10). <!-- @rename-keep -->
 
 
-![demo](.vhs/picker.gif)
+![The endpoint picker listing three hosts under the `── wishlist ──` banner while a typed filter narrows the list](.vhs/picker.gif)
 
 candy-ssh-launcher — a TUI directory of SSH endpoints for PHP 8.3+. Launch it, pick a host, hit Enter: the launcher replaces itself with an `ssh` session to that host, so prompts, keys and exit codes are all native ssh. Your machines live in one searchable list — type to filter, arrows to move, Enter to connect.
 
@@ -56,6 +56,30 @@ composer global require sugarcraft/candy-ssh-launcher
 ```
 
 With a global install, put your endpoints in `~/.config/wishlist.yml` and run bare from anywhere — that is the zero-flag flow the demo above assumes.
+
+Until the first release tag is cut, the package publishes its dev branch only: with Composer's default `minimum-stability: stable` a bare `composer require` finds nothing, so add the explicit suffix — `composer require sugarcraft/candy-ssh-launcher:@dev`. Once `candy-ssh-launcher/v0.1.0` exists a bare require resolves the tagged line again, and `:@dev` keeps naming master. (The same applies to `composer global require`.)
+
+## Single-file artifact
+
+The package ships `tools/build-phar.php`, which assembles a self-contained `candy-ssh-launcher.phar` — `bin/candy-ssh-launcher` is the archive stub verbatim, so the artifact runs with no checkout and no composer install:
+
+```bash
+php -d phar.readonly=0 tools/build-phar.php --out dist/candy-ssh-launcher.phar
+```
+
+`-d phar.readonly=0` is build-only, never a runtime requirement: the app never mutates its own archive. `--gz` writes a compressed artifact instead (ext-zlib is needed to build it and to read it).
+
+A published build refuses loudly, and the refusals are the design:
+
+* a source tree that is dirty, detached, or unverifiable by git — the commit stamped into the metadata must describe the code that is frozen;
+* any symlink inside a packaged tree — the monorepo's linked-mode vendor points `vendor/sugarcraft/*` at working-tree siblings, and following those would freeze uncommitted sibling code into an artifact that claims a tag;
+* `phar.readonly` left On (an archive could not be written anyway).
+
+`--vendor=monorepo` skips only the integrity preflight, prints a loud stderr notice, and is for development artifacts that must never be published.
+
+Version law: the build stamps `metadata['version']` — `--version=X` wins, else the newest `candy-ssh-launcher/v*` tag via `git describe`, else `dev-build`, which the runtime refuses to read as a version. Inside an archive `--version` prints the stamp; the stamp beats the compiled-in constant, and outside an archive (or on an unparseable stamp) the constant answers. That precedence keeps `--version` honest under a frozen `vendor/`, where Composer's own `InstalledVersions` would report the build root's guess instead.
+
+Public download links live on GitHub Releases and appear once release tags exist — cutting the first `candy-ssh-launcher/v0.1.0` tag is the owner's release-discipline decision, so no download URL is documented here yet.
 
 Running from a checkout? Add `candy-ssh-launcher/bin/` to your `$PATH`. The checkout also ships `examples/sample-wishlist.yml` — a ready-made endpoint list to try with `--config examples/sample-wishlist.yml`.
 
@@ -100,7 +124,7 @@ candy-ssh-launcher [--config <path>] [--ssh <path>] [--from-ssh-config] [--list]
 | `--ssh <path>` | ssh binary to exec. Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. Without the flag the binary resolves through the environment variable `SSH_LAUNCHER_SSH`, then the candidate list (`/usr/bin/ssh`, `/run/current-system/sw/bin/ssh`, `/opt/homebrew/bin/ssh` — first existing executable wins), then the default `/usr/bin/ssh`. A config row may override this for itself with `command:` (see the field table). |
 | `--list` | Print the resolved endpoints to stdout as TAB-joined `name`, `host:port`, `user` columns (an unset or empty user prints as a literal `-`; a name that occurs more than once is suffixed with its 1-based config index, `dup#1`/`dup#3`), and exit `0` — no terminal, no ssh, no picker, and no `--ssh` executability check. Control and line bytes in every column are folded to spaces, so the output is exactly one physical row per endpoint and safe to `awk -F'\t'`. |
 | `-h`, `--help` | Print the usage block (synopsis, picker keys, exit codes, no-terminal and `--` notes) and exit `0`. |
-| `-v`, `--version` | Print `candy-ssh-launcher <version>` and exit `0` — reads no config, touches no terminal. |
+| `-v`, `--version` | Print `candy-ssh-launcher <version>` and exit `0` — reads no config, touches no terminal. Inside a phar artifact the printed value is the tag stamped into the archive at build time, which beats the constant compiled into a checkout (see [Single-file artifact](#single-file-artifact)). |
 | `--` | End of options — remaining arguments are ignored (the terminator ends option parsing; it does not introduce the positional). |
 
 Unrecognized flags, a second bare positional, and options given without their value exit `2` and name the offending argument. Flags that take no value ignore a glued `=value` portion: `--list=x` behaves as `--list`, and `-h=junk` prints help.
@@ -197,6 +221,18 @@ Unfiltered, the picker lists endpoints in exactly the order they appear in the f
 
 Arrow keys arrive as an `ESC [ A`-style byte burst; the decoder waits 150 ms for follow-on bytes so a burst fragmented by latency (tmux under load, a WAN hop) still reads as one keypress. Set `ESCDELAY` (milliseconds) to tune that window.
 
+## Accessibility
+
+The picker is keyboard-only: no gestures, no drag, nothing timing-dependent. The table above is the complete binding set; `--help` mirrors its primary keys (arrows, type-to-filter, Enter, Ctrl+U/W/H, Esc).
+
+Nothing is conveyed by color alone. The highlighted row is the `▸` glyph in its list position, filter state prints as text (`(3 of 9)`, `(no matches — backspace or Esc)`), and the capability signals are honored, not merely detected: `NO_COLOR` (and `CLICOLOR=0`) drop every color sequence while the frame keeps its markers, and `TERM=dumb` additionally draws single-pass frames with no cursor addressing (Requirements). The picker animates nothing and burns no CPU when untouched — there is no timer or idle loop; a frame is drawn only in response to input.
+
+Screen readers: the interactive picker is visual-only — it erase-and-repaints its own frames at absolute coordinates, so there is no text flow a reader can follow. The reader-friendly path is the non-visual one: `--list` prints one deterministic tab-joined row per endpoint (name, host:port, user), and a named endpoint dispatches directly — `candy-ssh-launcher home` connects `home` without ever drawing a picker, terminal or not.
+
+Cursor keys arrive as `ESC [ A`-style CSI bursts, and the DECCKM application-mode spelling (`ESC O A`, SS3) is accepted too. A terminal emitting some other encoding still reaches every endpoint the ordinary way: type to filter, Enter to connect.
+
+One sanitizer property matters to reading, not just viewing: zero-width and bidi marks from config-supplied text are rendered as visible sentinels (`<U+2066>`-style) instead of being silently removed — in the picker, in `--list`, and on stderr. A row that reads plain is plain; a row built to look plain while hiding marks says so.
+
 ## Implementation
 
 The picker is a tiny standalone widget — not a full SugarWidgets `List`. The lifecycle is
@@ -274,7 +310,7 @@ Portability edge: `-o` support is client-dependent — OpenSSH honors all three,
 
 ## Security
 
-**Your config file is trusted input** — exactly like `~/.ssh/config` itself. Whatever a config declares, the launcher passes to ssh: `options:` entries become real `-o` settings verbatim, and OpenSSH options such as `ProxyCommand` / `LocalCommand` **execute arbitrary commands at connect time**. Keep configs (and `~/.ssh/config`) owned by you with `0600`/`0644` permissions and do not accept endpoint files from strangers; see the fleet-wide [trust boundary](../docs/TRUST-BOUNDARY.md). Within that posture, the host-key-trust-destruction family is still named before launch: `-o` requests for `StrictHostKeyChecking` (no/never/accept-new), `UserKnownHostsFile`, `GlobalKnownHostsFile`, `LogLevel` (quiet/error/fatal), `IdentityAgent`, or `CertificateFile` print one stderr line per hit describing what it costs, so a MITM payload inside an otherwise-legit config never looks like a plain login (notice only — lab configs legitimately pin `StrictHostKeyChecking=no`).
+**Your config file is trusted input** — exactly like `~/.ssh/config` itself. Whatever a config declares, the launcher passes to ssh: `options:` entries become real `-o` settings verbatim, and OpenSSH options such as `ProxyCommand` / `LocalCommand` **execute arbitrary commands at connect time**. Keep configs (and `~/.ssh/config`) owned by you with `0600`/`0644` permissions and do not accept endpoint files from strangers; see the fleet-wide [trust boundary](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md). Within that posture, the host-key-trust-destruction family is still named before launch: `-o` requests for `StrictHostKeyChecking` (no/never/accept-new), `UserKnownHostsFile`, `GlobalKnownHostsFile`, `LogLevel` (quiet/error/fatal), `IdentityAgent`, or `CertificateFile` print one stderr line per hit describing what it costs, so a MITM payload inside an otherwise-legit config never looks like a plain login (notice only — lab configs legitimately pin `StrictHostKeyChecking=no`).
 
 Untrusted bytes are fenced where they only reach the *display* path: every picker row, the filter echo, and the `--list` columns pass through the canonical sanitizer (`Sanitize::untrusted()` plus its display policy `untrustedForDisplay()`) — escape sequences, C0 controls and encoded-C1 shims are removed, invisible formatting is marked as a visible sentinel, and CR/LF/TAB are folded to spaces so no field can forge an extra row. Fields that reach ssh as arguments are REFUSED, not stripped: a leading-dash `host`, `user`, `proxyJump`, `options` entry, `identityFiles` item, `flags` item, or `remoteCommand` aborts with a named error (`Endpoint::assertNotOption family`) rather than being altered into a safe shape — every argv value passes the same guard, identity slots included (the old `-i` exemption assumed an OpenSSH-only contract; dropbear/busybox re-parse a leading-dash value after `-i` as an option).
 
