@@ -9,6 +9,7 @@ use SugarCraft\Code\Memory\HybridMemoryRanker;
 use SugarCraft\Code\Memory\MemoryEntry;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Messages\UserMessage;
+use SugarCraft\Core\Util\Width;
 
 /**
  * The memory notes most relevant to the user's latest message, recalled once
@@ -244,13 +245,13 @@ final class MemoryRecallBlock
      */
     private static function clip(string $text, int $max, string $marker): string
     {
-        if (\strlen($text) <= $max) {
+        // S-X04: the UTF-8-safe byte cut is sugar-core's; the pinned law that a
+        // cut never carries trailing space into the marker stays here.
+        if (strlen($text) <= $max) {
             return $text;
         }
 
-        $cut = mb_strcut($text, 0, $max - \strlen($marker), 'UTF-8');
-
-        return rtrim($cut) . $marker;
+        return rtrim(Width::clipBytes($text, $max - strlen($marker), '')) . $marker;
     }
 
     /**

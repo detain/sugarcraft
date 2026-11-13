@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Memory;
 
 use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
+use SugarCraft\Core\Util\Width;
 
 /**
  * An append-only, tagged journal of the summaries compactions write (roadmap
@@ -241,14 +242,7 @@ final class CompactionJournal
     /** $text to at most $limit bytes, cut on a UTF-8 boundary and marked. */
     private static function clipBytes(string $text, int $limit): string
     {
-        if (strlen($text) <= $limit) {
-            return $text;
-        }
-        if ($limit <= 3) {
-            return '';
-        }
-
-        return mb_strcut($text, 0, $limit - 3, 'UTF-8') . '…';
+        return Width::clipBytes($text, $limit);
     }
 
     /**

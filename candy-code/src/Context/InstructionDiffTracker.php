@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Context;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Diff\Diff;
 
 /**
@@ -619,10 +620,6 @@ final class InstructionDiffTracker
 
     private static function clip(string $path): string
     {
-        if (strlen($path) <= self::MAX_PATH_BYTES) {
-            return $path;
-        }
-
-        return mb_strcut($path, 0, self::MAX_PATH_BYTES - strlen(' [clipped]'), 'UTF-8') . ' [clipped]';
+        return Width::clipBytes($path, self::MAX_PATH_BYTES, ' [clipped]');
     }
 }

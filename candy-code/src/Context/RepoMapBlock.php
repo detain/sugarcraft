@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Context;
 
 use SugarCraft\Code\Support\ContainedPath;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Renders a structural map of the workspace — which directories hold code and
@@ -733,13 +734,13 @@ final readonly class RepoMapBlock implements PromptSection
      */
     private function clip(string $text): string
     {
+        // S-X04: the UTF-8-safe byte cut is sugar-core's; the pinned law that a
+        // cut never carries trailing space into the marker stays here.
         if (strlen($text) <= self::MAX_ENTRY_BYTES) {
             return $text;
         }
 
-        $room = self::MAX_ENTRY_BYTES - strlen(self::TRUNCATION_MARKER);
-
-        return rtrim(mb_strcut($text, 0, $room, 'UTF-8')) . self::TRUNCATION_MARKER;
+        return rtrim(Width::clipBytes($text, self::MAX_ENTRY_BYTES - strlen(self::TRUNCATION_MARKER), '')) . self::TRUNCATION_MARKER;
     }
 
     /**

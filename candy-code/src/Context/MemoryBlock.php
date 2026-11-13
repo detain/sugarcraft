@@ -8,6 +8,7 @@ use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Memory\MemoryEntry;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Workspace\GitRunner;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Renders the memory INDEX for the system prompt — one line per saved note
@@ -1193,14 +1194,12 @@ final class MemoryBlock implements PromptSection
      */
     private function clip(string $text): string
     {
+        // S-X04: the UTF-8-safe byte cut is sugar-core's; the pinned law that a
+        // cut never carries trailing space into the marker stays here.
         if (strlen($text) <= $this->maxEntryBytes) {
             return $text;
         }
 
-        // The marker comes out of the budget, not on top of it: a cut line is
-        // at most MAX_ENTRY_BYTES bytes, marker included.
-        $room = $this->maxEntryBytes - strlen(self::TRUNCATION_MARKER);
-
-        return rtrim(mb_strcut($text, 0, $room, 'UTF-8')) . self::TRUNCATION_MARKER;
+        return rtrim(Width::clipBytes($text, $this->maxEntryBytes - strlen(self::TRUNCATION_MARKER), '')) . self::TRUNCATION_MARKER;
     }
 }
