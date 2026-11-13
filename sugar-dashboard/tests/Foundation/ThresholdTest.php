@@ -62,4 +62,13 @@ final class ThresholdTest extends TestCase
         $this->assertCount(1, $stops);
         $this->assertSame(0.5, $stops[0]['limit']);
     }
+
+    public function testEmptyStopListThrowsAtConstruction(): void
+    {
+        // D-138: the old empty path died in colorFor() with a null-key
+        // TypeError (array_key_last([]) === null); the factory refuses now.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('at least one stop');
+        Threshold::of([]);
+    }
 }

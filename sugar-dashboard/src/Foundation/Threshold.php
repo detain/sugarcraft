@@ -33,6 +33,13 @@ final class Threshold
      */
     public static function of(array $stops): self
     {
+        // Fail fast: an empty stop list has no color to resolve — the old
+        // path reached array_key_last([]) === null and died with a TypeError
+        // far from the constructor (finding sugar-dashboard-141).
+        if ($stops === []) {
+            throw new \InvalidArgumentException('Threshold::of() requires at least one stop');
+        }
+
         $normalized = array_map(
             static fn(array $s): array => ['limit' => (float) $s[0], 'color' => $s[1]],
             $stops,
