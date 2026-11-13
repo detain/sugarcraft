@@ -163,27 +163,60 @@ final class ReleasePublishPostureTest extends TestCase
         }
     }
 
-    public function testTheLatestChannelWaitsForCiAndPinsSiblings(): void
+    public function testTheLatestChannelBuildsOnlyFromAGreenCiRunAndPinsSiblings(): void
     {
         $text = $this->workflow('phar-latest.yml');
-        $gate = $this->jobSection($text, 'ci-gate');
-        self::assertStringContainsString(
-            'gh run list --workflow CI --branch master --commit "$TARGET_SHA"',
-            $gate,
-            'phar-latest polls CI at the pushed SHA (OD-7)'
+        // WF-CURE redesign: triggered BY the CI workflow's completion, not by
+        // the push in parallel with it. No poll loop, no ci-gate job.
+        self::assertStringNotContainsString("\n  ci-gate:\n", $text, 'phar-latest has no polling gate job any more');
+        self::assertStringNotContainsString('seq 1 ', $text, 'phar-latest polls nothing');
+        self::assertMatchesRegularExpression(
+            '/^on:\n  workflow_run:\n    workflows: \[CI\]\n    types: \[completed\]\n/m',
+            $text,
+            'phar-latest is triggered by CI completing'
         );
+        self::assertStringNotContainsString("\n  push:\n", $text, 'phar-latest has no push trigger (it would race CI again)');
+        $detect = $this->jobSection($text, 'detect');
+        foreach ([
+            "github.event.workflow_run.conclusion == 'success'",
+            "github.event.workflow_run.event == 'push'",
+            "github.event.workflow_run.head_branch == 'master'",
+            'github.event.workflow_run.head_repository.full_name == github.repository',
+        ] as $leg) {
+            self::assertStringContainsString($leg, $detect, "detect door filter: $leg");
+        }
+        self::assertStringContainsString(
+            'ref: ${{ github.event.workflow_run.head_sha || github.sha }}',
+            $detect,
+            'detect checks out the TESTED commit, not the default-branch tip'
+        );
+        self::assertMatchesRegularExpression(
+            '/refusing build: CI at \$sha concluded \'\$WR_CONCLUSION\'" >&2\W*exit 1/',
+            $detect,
+            'a non-success workflow_run conclusion refuses (exit 1 is load-bearing)'
+        );
+        self::assertMatchesRegularExpression(
+            '/refusing build: CI at \$sha concluded \'\$run_line\'" >&2\W*exit 1/',
+            $detect,
+            'a dispatch at a commit without a green CI run refuses (one-shot, exit 1 load-bearing)'
+        );
+        self::assertStringContainsString('git merge-base --is-ancestor "$sha" origin/master', $detect, 'only master history publishes');
+        self::assertStringContainsString('git merge-base --is-ancestor "$SHA" "$base"', $detect, 'a late older CI run never moves a channel backwards');
+        self::assertStringNotContainsString('|| true', $detect, 'no escape hatch on the verdict path');
         $build = $this->jobSection($text, 'build');
-        self::assertStringContainsString('needs: [detect, ci-gate]', $build, 'phar-latest build needs the gate');
-        // MAJOR-1 companion pin: the guard's blind spot is semantic
-        // composition — `needs: [detect, ci-gate]` is textually present even
-        // when the gate is decorative, because a custom job-level `if`
-        // REPLACES GitHub's implicit all-needs-succeeded check. The condition
-        // line itself must name the gate's result for the wait to be real.
+        self::assertStringContainsString('needs: detect', $build, 'phar-latest build needs detect');
+        // The condition itself must name the door's verdict (a custom `if`
+        // is the only enforcement; `needs:` alone is decorative).
         self::assertStringContainsString(
-            "if: needs.detect.outputs.matrix_count != '0' && needs.ci-gate.result == 'success'",
+            "if: needs.detect.result == 'success' && needs.detect.outputs.ci_green == 'true' && needs.detect.outputs.matrix_count != '0'",
             $build,
-            'phar-latest build folds needs.ci-gate.result into its custom if (the gate is enforced, not ornamental)'
+            'build folds the resolved CI-green verdict into its custom if'
         );
+        self::assertStringContainsString('ref: ${{ needs.detect.outputs.sha }}', $build, 'build checks out the tested SHA');
+        // Under workflow_run github.sha is master's TIP, not the tested
+        // commit: no build/publish step may read it.
+        self::assertStringNotContainsString('${{ github.sha }}', $build, 'build never reads github.sha (it is the default-branch tip under workflow_run)');
+        self::assertStringContainsString('GITHUB_SHA: ${{ needs.detect.outputs.sha }}', $build, 'the publish step targets the tested SHA');
         $inject = strpos($text, 'php scripts/pin-siblings.php inject "$APP" --root . --sha "$SHA"');
         $install = strpos($text, 'composer install --no-dev');
         $verify = strpos($text, 'php scripts/pin-siblings.php verify "$APP"');
@@ -238,7 +271,6 @@ final class ReleasePublishPostureTest extends TestCase
             'release-phar.yml' => ['gate', 'release'],
             'release-app-phar.yml' => ['gate', 'release'],
             'release-candy-top-phar.yml' => ['gate', 'release'],
-            'phar-latest.yml' => ['ci-gate', 'build'],
             'sync-sugarcraft.yml' => ['ci-gate', 'sync'],
         ];
         foreach ($pollers as $file => [$job, $verb]) {

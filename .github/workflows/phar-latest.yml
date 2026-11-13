@@ -28,10 +28,24 @@
 # Version::fromPharMetadata — metadata truth, independent of whether the
 # app's CLI happens to surface it).
 #
-# RELEASE POSTURE (OD-7 + OD-14 pinning, reviews-1103 G6-P): nothing here
-# publishes on an untested SHA. A ci-gate job polls the CI workflow run for
-# the pushed commit and fails closed — red CI, or no CI verdict inside the
-# poll budget, holds the channel back; only green releases. Siblings are
+# RELEASE POSTURE (OD-7 + OD-14 pinning, reviews-1103 G6-P; WF-CURE gate
+# redesign 2026-11-13): nothing here publishes on an untested SHA, by
+# construction rather than by waiting. The workflow is TRIGGERED by the CI
+# workflow's own completion (`workflow_run`, conclusion success, push to
+# master) and builds exactly `workflow_run.head_sha` — the commit CI blessed.
+# Red or cancelled CI never starts a run (job-level filter), so the channel
+# cannot publish while CI is red and no runner burns hours polling for a
+# verdict that never comes (the old push-trigger + 240-minute ci-gate poll
+# parked every queued run behind a red CI). A workflow_run run executes the
+# DEFAULT-BRANCH copy of this file with github.sha = master's tip, not the
+# tested commit, so every step reads the tested SHA from the detect job's
+# `sha` output and never from github.sha. workflow_dispatch stays for the
+# owner and re-checks the CI verdict at the dispatched SHA once (no poll).
+# Which apps rebuild is decided per app from the published channel itself:
+# the range is the app's own `<app>/latest` tag (always the tested SHA it was
+# last published at) to the tested head, so commits whose CI was red in
+# between are still covered by the next green run, and a late-finishing
+# older CI run never moves a channel backwards. Siblings are
 # pinned too: composer.json's sugarcraft/* requires are transiently resolved
 # against the SAME checkout by scripts/pin-siblings.php (symlink:false path
 # repositories, so vendor carries real bytes and build-phar's linked-mode
@@ -50,8 +64,9 @@
 name: Latest PHARs
 
 on:
-  push:
-    branches: [master]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   workflow_dispatch:
     inputs:
       all:
@@ -79,14 +94,30 @@ env:
 
 jobs:
   detect:
+    # The CI-green door (OD-7), enforced at the trigger: a workflow_run run
+    # exists only for a push to master whose CI run concluded success in THIS
+    # repository (a fork's head_repository can never match). Dispatch is the
+    # other entry and is re-verified in the resolve step below.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'master' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      ci_green: ${{ steps.resolve.outputs.ci_green }}
       matrix: ${{ steps.select.outputs.matrix }}
       matrix_count: ${{ steps.select.outputs.matrix_count }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          # The range diff needs both endpoints on disk.
+          # The tested commit, not the default-branch tip a workflow_run run
+          # would otherwise check out. Full history + tags: the per-app range
+          # diff needs both endpoints on disk.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Setup PHP
@@ -95,56 +126,91 @@ jobs:
           php-version: '8.3'
           coverage: none
 
+      - name: Resolve the tested SHA and prove its CI verdict (OD-7)
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha }}
+          WR_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          DISPATCH_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: detain/sugarcraft
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            sha="$WR_SHA"
+            # Belt and braces over the job-level filter.
+            if [ "$WR_CONCLUSION" != "success" ]; then
+              echo "refusing build: CI at $sha concluded '$WR_CONCLUSION'" >&2
+              exit 1
+            fi
+          else
+            sha="$DISPATCH_SHA"
+            # One-shot verdict read, no poll: a dispatch is a deliberate act
+            # on a commit that either has a green CI run or does not.
+            run_line="$(gh run list --workflow CI --branch master --commit "$sha" \
+              --limit 5 --json status,conclusion \
+              --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (first(.[]) | .conclusion) end')"
+            if [ "$run_line" != "success" ]; then
+              echo "refusing build: CI at $sha concluded '$run_line'" >&2
+              exit 1
+            fi
+          fi
+          # Only master history is publishable (a re-run of an old PR-merge
+          # commit is still an ancestor; a stray branch commit is not).
+          git fetch --quiet origin master
+          if ! git merge-base --is-ancestor "$sha" origin/master; then
+            echo "refusing build: $sha is not on master" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$sha"
+          echo "CI is green at $sha - building that commit"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "ci_green=true" >> "$GITHUB_OUTPUT"
+
       - name: Select phar-capable affected apps
         id: select
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
+          SHA: ${{ steps.resolve.outputs.sha }}
           DISPATCH_ALL: ${{ github.event.inputs.all }}
         run: |
           set -euo pipefail
-          ZERO="0000000000000000000000000000000000000000"
-          MODE="--all"
-          case "$EVENT_NAME" in
-            workflow_dispatch)
-              # 'all' checked -> whole fleet; otherwise just the head commit's
-              # blast radius (the script itself falls back to force-all when
-              # HEAD~1 is unresolvable, e.g. the repo's first commit).
-              if [ "${DISPATCH_ALL:-false}" != "true" ]; then
-                MODE="--range HEAD~1..HEAD"
-              fi
-              ;;
-            push)
-              if [ -n "${BEFORE_SHA:-}" ] && [ "$BEFORE_SHA" != "$ZERO" ]; then
-                MODE="--range ${BEFORE_SHA}..${HEAD_SHA}"
-              fi
-              ;;
-          esac
-          # A force push (rewritten history) arrives as BEFORE_SHA=ZERO ->
-          # MODE stays --all, exactly the ci.yml fallback.
-
-          echo "affected-libs mode: $MODE" >&2
-          # shellcheck disable=SC2086 # intentional word-split for --range
-          JSON=$(php scripts/affected-libs.php $MODE)
-          if [ "${DISPATCH_ALL:-false}" = "true" ]; then
-            JSON=$(echo "$JSON" | jq '.force_all = true')
-          fi
-          echo "$JSON" | jq -r '"force_all=\(.force_all) affected=\(.affected | length)"' >&2
-
-          # Universe: every lib when force-all (or dispatch-all), else the
-          # affected closure; filtered to dirs actually carrying build-phar.
-          mapfile -t CANDIDATES < <(echo "$JSON" | jq -r 'if .force_all then .all_libs[] else .affected[] end')
+          # Candidates: every dir carrying build-phar. Each is judged against
+          # its OWN published channel: no <app>/latest yet (or an unrelated
+          # history) -> build; channel already at or past the tested SHA ->
+          # skip (never move a channel backwards); else build iff the app is
+          # in the affected closure of <app>/latest..SHA.
+          git fetch --quiet --tags --force origin
           APPS=()
-          for lib in "${CANDIDATES[@]}"; do
-            if [ -f "$lib/tools/build-phar.php" ]; then
+          for dir in */; do
+            lib="${dir%/}"
+            [ -f "$lib/tools/build-phar.php" ] || continue
+            if [ "${DISPATCH_ALL:-false}" = "true" ]; then
+              APPS+=("$lib"); continue
+            fi
+            if ! base="$(git rev-parse --verify --quiet "refs/tags/$lib/latest^{commit}")"; then
+              echo "$lib: no published latest - building" >&2
+              APPS+=("$lib"); continue
+            fi
+            if git merge-base --is-ancestor "$SHA" "$base"; then
+              echo "$lib: channel already at or past $SHA - skipping" >&2
+              continue
+            fi
+            if ! git merge-base --is-ancestor "$base" "$SHA"; then
+              echo "$lib: published latest is not an ancestor of $SHA - rebuilding" >&2
+              APPS+=("$lib"); continue
+            fi
+            JSON="$(php scripts/affected-libs.php --range "$base..$SHA")"
+            if echo "$JSON" | jq -e --arg l "$lib" 'if .force_all then true else (.affected | index($l)) != null end' >/dev/null; then
               APPS+=("$lib")
+            else
+              echo "$lib: unaffected since $base" >&2
             fi
           done
 
           COUNT=${#APPS[@]}
           if [ "$COUNT" -eq 0 ]; then
-            echo "No phar-capable app in this change-set — nothing to build."
+            echo "No phar-capable app needs a rebuild - nothing to build."
             # Empty matrix DIMENSIONS are a hard job-setup error; the
             # `{include: []}` shape collapses to zero cells cleanly, and the
             # build job is additionally gated on matrix_count != '0' below
@@ -162,55 +228,12 @@ jobs:
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "matrix_count=$COUNT" >> "$GITHUB_OUTPUT"
 
-  ci-gate:
-    # G6-P OD-7: the rolling latest channel publishes ONLY from a commit CI
-    # tested green. The push trigger arrives in parallel with the CI run for
-    # the same SHA, so this job waits on that verdict instead of bypassing
-    # it: bounded poll, fail-closed on red, cancelled, or budget exhaustion.
-    # Skipped in lockstep with an empty matrix (docs-only pushes must not
-    # park a runner polling for a build that will never happen).
-    needs: detect
-    if: needs.detect.outputs.matrix_count != '0'
-    runs-on: ubuntu-latest
-    timeout-minutes: 250
-    steps:
-      - name: CI-green door (OD-7)
-        env:
-          TARGET_SHA: ${{ github.sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # This job carries no actions/checkout, so gh cannot infer the repo
-          # from a git context and dies with "failed to determine base repo".
-          # GH_REPO gives every gh call here its target explicitly.
-          GH_REPO: detain/sugarcraft
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 240); do
-            run_line="$(gh run list --workflow CI --branch master --commit "$TARGET_SHA" \
-              --limit 5 --json status,conclusion \
-              --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (first(.[]) | .conclusion) end')"
-            if [ "$run_line" = "success" ]; then
-              echo "CI is green at $TARGET_SHA — building"
-              exit 0
-            fi
-            case "$run_line" in
-              PENDING) echo "CI at $TARGET_SHA not concluded yet (attempt $attempt/240)";;
-              *) echo "refusing build: CI at $TARGET_SHA concluded '$run_line'" >&2; exit 1;;
-            esac
-            sleep 60
-          done
-          echo "refusing build: no green CI at $TARGET_SHA within the poll budget (fail-closed)" >&2
-          exit 1
-
   build:
-    needs: [detect, ci-gate]
-    # G6-P MAJOR-1 cure: a job-level custom `if` REPLACES GitHub's implicit
-    # "all needs succeeded" gate, so the needs list alone is decorative — the
-    # condition itself must name the gate's verdict. Without the ci-gate.result
-    # leg, a red/cancelled/budget-exhausted CI at the pushed SHA still built
-    # and force-published the rolling <app>/latest prerelease (exactly the
-    # untested-bytes publish OD-7 rules out). With it: matrix_count 0 skips
-    # both jobs in lockstep; any non-success ci-gate outcome skips the build.
-    if: needs.detect.outputs.matrix_count != '0' && needs.ci-gate.result == 'success'
+    needs: detect
+    # A job-level custom `if` is evaluated with the same needs context, so the
+    # condition itself names the door's verdict (G6-P MAJOR-1 lineage): no
+    # CI-green resolution from detect, no build. matrix_count 0 skips quietly.
+    if: needs.detect.result == 'success' && needs.detect.outputs.ci_green == 'true' && needs.detect.outputs.matrix_count != '0'
     runs-on: ubuntu-latest
     strategy:
       # One app's broken build must not cancel its siblings' publishes.
@@ -219,6 +242,10 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
+          # The tested commit (detect's resolved sha), never github.sha:
+          # under workflow_run that is master's tip, which may be newer than
+          # what CI blessed.
+          ref: ${{ needs.detect.outputs.sha }}
           fetch-depth: 0
 
       - name: Setup PHP
@@ -244,7 +271,7 @@ jobs:
         # untracked path in build-phar Guard 2's repo-wide porcelain.
         env:
           APP: ${{ matrix.app }}
-          SHA: ${{ github.sha }}
+          SHA: ${{ needs.detect.outputs.sha }}
         run: |
           set -euo pipefail
           php scripts/pin-siblings.php inject "$APP" --root . --sha "$SHA" \
@@ -322,7 +349,7 @@ jobs:
         # stamp inside the archive stays the dev-<short7> metadata.
         env:
           APP: ${{ matrix.app }}
-          SHA: ${{ github.sha }}
+          SHA: ${{ needs.detect.outputs.sha }}
         run: |
           set -euo pipefail
           printf '%s\n' "$SHA" > "dist/$APP.phar.commit"
@@ -462,7 +489,7 @@ jobs:
           else
             signed="Unsigned in this build (no SUGARCRAFT_SIGNING_KEY on the runner at build time)."
           fi
-          notes="Rolling development PHAR for $app at ${stamp}. Rebuilt by .github/workflows/phar-latest.yml whenever a CI-green change touches the app (master push, gated on that commit's CI verdict, or workflow_dispatch with 'all'). This archive carries the locatable stamp dev-${GITHUB_SHA::7} in its manifest metadata, and the .phar.commit sidecar names the full tested SHA. ${signed} Not a stable channel — the bytes move with every CI-green master merge."
+          notes="Rolling development PHAR for $app at ${stamp}. Rebuilt by .github/workflows/phar-latest.yml whenever a CI-green change touches the app (triggered by that commit's own green CI run, or workflow_dispatch with 'all'). This archive carries the locatable stamp dev-${GITHUB_SHA::7} in its manifest metadata, and the .phar.commit sidecar names the full tested SHA. ${signed} Not a stable channel — the bytes move with every CI-green master merge."
           if gh release view "$app/latest" >/dev/null 2>&1; then
             gh release upload "$app/latest" "${assets[@]}" --clobber
             gh release edit "$app/latest" --target "$GITHUB_SHA" --title "$app latest ${stamp#dev-}" --notes "$(printf '%b' "$notes")"
@@ -476,5 +503,5 @@ jobs:
         env:
           APP: ${{ matrix.app }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SHA: ${{ needs.detect.outputs.sha }}
           STEP_STAMP: dev-${{ steps.build.outputs.short }}

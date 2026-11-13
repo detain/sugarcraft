@@ -402,7 +402,10 @@ final class WorkflowRunInterpolationTest extends TestCase
             '.github/workflows/phar-latest.yml' => [
                 '/EVENT_NAME:\s*\$\{\{\s*github\.event_name\s*\}\}/',
                 '/DISPATCH_ALL:\s*\$\{\{\s*github\.event\.inputs\.all\s*\}\}/',
-                '/TARGET_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/',
+                // WF-CURE redesign: the tested commit arrives from the
+                // workflow_run payload (or the dispatched ref) through env.
+                '/WR_SHA:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}/',
+                '/DISPATCH_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/',
             ],
             '.github/workflows/sync-sugarcraft.yml' => [
                 '/TARGET_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/',
@@ -416,7 +419,8 @@ final class WorkflowRunInterpolationTest extends TestCase
                 self::assertMatchesRegularExpression($pattern, $raw, $rel . ': missing env binding ' . $pattern);
             }
             $joined = \implode("\n", self::runBodies($rel));
-            self::assertStringContainsString('$TARGET_SHA', $joined, $rel . ': no run body reads the TARGET_SHA env binding');
+            $shaVar = \str_contains($rel, 'phar-latest') ? '$WR_SHA' : '$TARGET_SHA';
+            self::assertStringContainsString($shaVar, $joined, $rel . ': no run body reads the ' . $shaVar . ' env binding');
         }
         $devJoined = \implode("\n", self::runBodies('.github/workflows/phar-latest.yml'));
         self::assertStringContainsString('${DISPATCH_ALL', $devJoined, 'phar-latest.yml: no run body reads the DISPATCH_ALL env binding');
