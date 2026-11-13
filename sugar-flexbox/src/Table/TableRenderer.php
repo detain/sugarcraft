@@ -27,6 +27,15 @@ use SugarCraft\Core\Util\Width;
  */
 final class TableRenderer
 {
+    /**
+     * The house factory shape. The implicit public constructor stays
+     * available until 2.0.0, when new() becomes the only door.
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
     /** @var Buffer|null Previous rendered frame for diff-based emission */
     private ?Buffer $previousFrame = null;
 

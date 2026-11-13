@@ -13,9 +13,9 @@ use SugarCraft\Flexbox\Table\{Table, Column};
 
 // Build a table with user data
 $table = (new Table())
-    ->withColumn(Column::make('Name', 20))
-    ->withColumn(Column::make('Role', 15))
-    ->withColumn(Column::make('Active', 10))
+    ->withColumn(Column::new('Name', 20))
+    ->withColumn(Column::new('Role', 15))
+    ->withColumn(Column::new('Active', 10))
     ->withRow(['Alice', 'Admin', 'Yes'])
     ->withRow(['Bob', 'Dev', 'Yes'])
     ->withRow(['Carol', 'Dev', 'No'])

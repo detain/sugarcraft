@@ -20,6 +20,10 @@ use SugarCraft\Core\Util\Width;
  *
  * NOTE: Diff-based emission has moved to TableRenderer. Call TableRenderer::render()
  * for bandwidth-efficient delta output. Table::render() always returns the full frame.
+ *
+ * Construction: `Table::new()` is the house shape. The public constructor
+ * stays available until 2.0.0, when `new()` becomes the only door (FBX-24
+ * note — not enforced yet).
  */
 final class Table
 {

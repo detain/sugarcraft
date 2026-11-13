@@ -49,6 +49,11 @@ final class AccessorDeprecationTest extends TestCase
             // exact stored strings, structurally identical to the raw* twins.
             'Table::currentRow' => [Table::class, 'currentRow', 'rawCurrentRow', [], 'same'],
             'Table::currentCell' => [Table::class, 'currentCell', 'rawCurrentCell', [0], 'same'],
+            // The static factory BC alias (FBX-24): AGENTS.md bans
+            // ::make(); new() is the house shape. Static forwarders ride
+            // the same legs — the structural regex accepts the self::
+            // delegate form.
+            'Column::make' => [Column::class, 'make', 'new', ['Name', 10], 'equal'],
         ];
     }
 
@@ -58,6 +63,7 @@ final class AccessorDeprecationTest extends TestCase
         return match ($class) {
             Viewport::class => Viewport::new(40, 12),
             Table::class => Table::new()->withColumn(Column::make('Name', 10))->withRow(['Alice']),
+            Column::class => Column::new('Name', 10),
             default => self::fail("no fixture for {$class}"),
         };
     }
@@ -105,7 +111,7 @@ final class AccessorDeprecationTest extends TestCase
         );
         $this->assertCount(1, $lines, $class . '::' . $legacy . ' must be a single-line forwarder');
         $this->assertMatchesRegularExpression(
-            '/public function ' . preg_quote($legacy, '/') . '\(.*\)[^{]*\{ return \$this->' . preg_quote($bare, '/') . '\((\$\w+(, \$\w+)*)?\); \}\s*$/',
+            '/public (?:static )?function ' . preg_quote($legacy, '/') . '\(.*\)[^{]*\{ return (?:\$this->|self::)' . preg_quote($bare, '/') . '\((\$\w+(, \$\w+)*)?\); \}\s*$/',
             $lines[0]
         );
         $bareMethod = new \ReflectionMethod($class, $bare);
@@ -169,7 +175,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(10, $found);
+        $this->assertCount(11, $found);
     }
 
     /**
@@ -192,7 +198,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(10, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(11, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];

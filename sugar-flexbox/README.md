@@ -150,7 +150,7 @@ result must be assigned (or chained) — calling a method for effect discards it
 ```php
 use SugarCraft\Flexbox\Table\{Table, Column};
 
-$table = (new Table())
+$table = Table::new()
     ->withColumn(Column::new('Name', 20))
     ->withColumn(Column::new('Age', 5)->withAlign('right'))
     ->withColumn(Column::new('City', 15))
@@ -243,7 +243,7 @@ cell), and a dimension change resets the state so the next frame is complete aga
 ```php
 use SugarCraft\Flexbox\Table\{Column, Table, TableRenderer};
 
-$renderer = new TableRenderer();
+$renderer = TableRenderer::new();
 
 $table = Table::new()
     ->withColumn(Column::new('Status', 8))
@@ -301,6 +301,7 @@ sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 | `Flexbox\Table` | `Table` | `setCursor()` | `withCursor()` |
 | `Flexbox\Table` | `Table` | `currentRow()` | `rawCurrentRow()` |
 | `Flexbox\Table` | `Table` | `currentCell()` | `rawCurrentCell()` |
+| `Flexbox\Table` | `Column` | `make()` | `new()` |
 
 ## License
 

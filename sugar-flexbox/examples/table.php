@@ -13,10 +13,10 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Flexbox\Table\{Column, Table};
 
 $t = (new Table())
-    ->withColumn(Column::make('Name',    15))
-    ->withColumn(Column::make('Age',      5)->withAlign('right'))
-    ->withColumn(Column::make('City',    15))
-    ->withColumn(Column::make('Score',    6)->withAlign('right'))
+    ->withColumn(Column::new('Name',    15))
+    ->withColumn(Column::new('Age',      5)->withAlign('right'))
+    ->withColumn(Column::new('City',    15))
+    ->withColumn(Column::new('Score',    6)->withAlign('right'))
     ->withRow(['Alice',   30, 'New York',     95.5])
     ->withRow(['Bob',     25, 'Los Angeles',  82.3])
     ->withRow(['Carol',   35, 'Chicago',      91.0])

@@ -81,13 +81,12 @@ final class Column
     }
 
     /**
-     * BC alias of {@see self::new()} — kept for callers written against
-     * the original API.
+     * @deprecated Use {@see self::new()} — the house factory shape
+     *             (AGENTS.md bans ::make()); this is the lib's own
+     *             earlier API with no upstream-mirror exemption.
+     *             REMOVED-IN: 2.0.0
      */
-    public static function make(string $title, int $width): self
-    {
-        return self::new($title, $width);
-    }
+    public static function make(string $title, int $width): self { return self::new($title, $width); }
 
     /**
      * @param string $align one of 'left', 'right', 'center' — the padding
