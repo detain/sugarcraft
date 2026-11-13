@@ -213,6 +213,19 @@ source-ref build argument (named in
 `local`, so a plain build needs no `--build-arg`; passing a per-build value is
 what makes CI builds uncachable against each other.
 
+## The Bash sandbox does not run in this image
+
+The image ships no `bwrap` (bubblewrap is not installed), and installing it in
+a derived image does not help under Docker's default seccomp profile, which
+blocks the `unshare` call bubblewrap needs to build its namespaces. So
+`bashSandbox` is off by default and should stay off here: with `bashSandbox`
+set to `on` or `no-network` inside the container, the jail cannot start and
+every `Bash` call is refused with the reason rather than run unsandboxed. The
+container boundary is the isolation this image offers; `candy-code doctor`'s
+`sandbox` row reports the same state before a first command. See
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md#every-bash-call-is-refused) and the
+`bashSandbox` row in [SETTINGS.md](SETTINGS.md).
+
 ## Launch notices in the log
 
 At startup the CLI prints advisory rows to stderr before anything else, so
@@ -290,3 +303,6 @@ clock lands between rows already written.
 - [PERMISSIONS.md](PERMISSIONS.md) — what `--permission-mode` may be asked
   for; the container ships the default mode and passing a dangerous one
   through `--allow-bypass` is a decision for the image consumer, not this one.
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md#every-bash-call-is-refused) — the
+  refused-`Bash` symptom when `bashSandbox` is on but `bwrap` cannot start.
+- [SETTINGS.md](SETTINGS.md) — the `bashSandbox` setting roster.
