@@ -163,7 +163,10 @@ final class ManagerMutateTest extends TestCase
             'withSearch (via search)' => [
                 'base' => fn() => $this->richManager(),
                 'apply' => fn(Manager $m) => $m->search('read'),
-                'changed' => ['searchQuery', 'searchResults', 'searchCursor'],
+                'changed' => ['searchQuery', 'searchResults', 'searchCursor',
+                    // CF-17: the parallel dir array is re-derived with
+                    // every rebuild — alignment, not an independent wish.
+                    'searchResultDirs'],
             ],
             'withActive (Tab swap)' => [
                 'base' => fn() => $this->richManager(),

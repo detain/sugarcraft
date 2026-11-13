@@ -35,6 +35,9 @@ use React\Promise\PromiseInterface;
  */
 final class AsyncOps
 {
+    /** CF-17: directories a single findAsync tick may scan before re-arming. */
+    public const FIND_DIRS_PER_TICK = 64;
+
     /**
      * @param \Closure(string,string):bool|null $engine CF-21 test seam: replaces
      *        the synchronous copy engine inside copyAsync()/copyManyAsync() so a
@@ -83,6 +86,87 @@ final class AsyncOps
             }
         });
 
+        return $deferred->promise();
+    }
+
+    /**
+     * CF-17 (closes 013): a budgeted recursive walk, tick-sliced the same
+     * way every other engine here is — finding 011's law is that the UI
+     * loop never blocks on disk, so the queue drains {@see self::FIND_DIRS_PER_TICK}
+     * directories per tick and re-arms itself. Breadth-first, so the hit
+     * cap fills with the shallowest matches first and a deep junk tree
+     * cannot starve a near hit.
+     *
+     * The budgets are the honesty of the feature: depth stops at
+     * $maxDepth (a `~/` walk going 40 levels is never the point), total
+     * seen names at $maxSeen, and kept hits at $maxHits — each cap that
+     * fires flips `truncated`, so the status line can say "partial"
+     * rather than silently presenting a lie. Hidden entries are pruned
+     * at the walk itself (search must not surface what the UI hides),
+     * and unreadable directories are skipped, never fatal. Symlinks are
+     * recorded as opaque files — a search walk that follows them can
+     * loop forever through bind-mounts.
+     *
+     * @param string $root Directory to walk (absolute)
+     * @param int $maxDepth Levels below root still descended
+     * @param int $maxSeen Total entry names examined before giving up
+     * @param int $maxHits Kept (accepted) entries before giving up
+     * @param \Closure(string): bool $accept Name predicate — only names it accepts are kept, so a huge directory costs nothing beyond the stat-free name check
+     * @return PromiseInterface<array{hits: list<array{dir: string, name: string, isDir: bool}>, truncated: bool}>
+     */
+    public function findAsync(string $root, int $maxDepth, int $maxSeen, int $maxHits, \Closure $accept): PromiseInterface
+    {
+        $deferred = new Deferred();
+
+        $queue = [[$root, 0]];
+        $hits  = [];
+        $seen  = 0;
+        $truncated = false;
+
+        $slice = static function () use (&$queue, &$hits, &$seen, &$truncated, $deferred, $maxDepth, $maxSeen, $maxHits, $accept): void {
+            $budget = self::FIND_DIRS_PER_TICK;
+            while ($queue !== [] && $budget-- > 0) {
+                [$dir, $depth] = array_shift($queue);
+                $entries = @scandir($dir);
+                if ($entries === false) {
+                    continue; // unreadable directory: pruned, not fatal
+                }
+                foreach ($entries as $name) {
+                    if ($name === '.' || $name === '..' || $name[0] === '.') {
+                        continue; // chrome + hidden pruning (CF-09's visibility law)
+                    }
+                    if (++$seen > $maxSeen || count($hits) >= $maxHits) {
+                        $truncated = true;
+                        break 2;
+                    }
+                    $full = $dir . DIRECTORY_SEPARATOR . $name;
+                    if (\is_link($full)) {
+                        if ($accept($name)) {
+                            $hits[] = ['dir' => $dir, 'name' => $name, 'isDir' => false];
+                        }
+                        continue; // never descended
+                    }
+                    $isDir = \is_dir($full);
+                    if ($accept($name)) {
+                        $hits[] = ['dir' => $dir, 'name' => $name, 'isDir' => $isDir];
+                    }
+                    if ($isDir) {
+                        if ($depth < $maxDepth) {
+                            $queue[] = [$full, $depth + 1];
+                        } else {
+                            $truncated = true; // deeper tree exists; the cap said stop
+                        }
+                    }
+                }
+            }
+            if ($queue === [] || $truncated) {
+                $deferred->resolve(['hits' => $hits, 'truncated' => $truncated]);
+                return;
+            }
+            \React\EventLoop\Loop::futureTick($slice);
+        };
+
+        \React\EventLoop\Loop::futureTick($slice);
         return $deferred->promise();
     }
 

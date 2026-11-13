@@ -20,6 +20,7 @@ use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Files\Manager\ManagerBuilder;
 use SugarCraft\Files\Msg\CopyCompletedMsg;
+use SugarCraft\Files\Msg\SearchDoneMsg;
 use SugarCraft\Files\Support\Home;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
@@ -67,6 +68,10 @@ final class Manager implements Model
     /** @var int Result ceiling for a live-height-less search (CF-02's window math caps the real frame). */
     private const SEARCH_CAP = 20;
 
+    /** CF-17: recursive-walk budgets — depth, and total names examined. */
+    private const FIND_DEPTH = 8;
+    private const FIND_MAX_SEEN = 20000;
+
     /**
      * Per-process trash directory, created lazily on first delete. @see trashRoot()
      *
@@ -98,6 +103,10 @@ final class Manager implements Model
         public readonly ?string $searchQuery = null,
         public readonly array $searchResults = [],
         public readonly int $searchCursor = 0,
+        /** CF-17: containing directory per result row ('' = the pane's own cwd — index-aligned with searchResults). */
+        public readonly array $searchResultDirs = [],
+        /** CF-17: search mode's recursive toggle (reset on every search exit). */
+        public readonly bool $searchRecursive = false,
         public readonly array $tabs = [],
         public readonly int $tabIndex = 0,
         public readonly array $undoStack = [],
@@ -224,6 +233,15 @@ final class Manager implements Model
             return [$this->handleCopyCompleted($msg), null];
         }
 
+        // CF-17: a finished recursive-find walk re-enters as a message on
+        // the same promise→Msg→update() circuit as copy completions. The
+        // staleness guards live inside the merge — typing continues while
+        // the walk slices through ticks, and an Esc'd search simply stops
+        // recognizing the answer.
+        if ($msg instanceof SearchDoneMsg) {
+            return [$this->mergeSearchHits($msg), null];
+        }
+
         // CF-03: a spawned external program (editor / pager / runner) has
         // exited and the runtime restored the screen. Refresh the pane the
         // program may have mutated (an editor rewrites the file; a script
@@ -244,7 +262,7 @@ final class Manager implements Model
             // burst, so the collecting buffers take it as one atomic
             // edit. Every other non-key Msg keeps falling through.
             if ($msg instanceof PasteMsg) {
-                return [$this->applyPaste($msg), null];
+                return $this->applyPaste($msg);
             }
             return [$this, null];
         }
@@ -267,7 +285,7 @@ final class Manager implements Model
 
         // Search mode intercepts all keys
         if ($this->searchQuery !== null) {
-            return [$this->handleSearchKey($msg), null];
+            return $this->handleSearchKey($msg);
         }
 
         // CF-28: `?` opens the overlay. Search mode was already intercepted
@@ -1812,34 +1830,51 @@ final class Manager implements Model
         // The parent sentinel is chrome, not a matchable entry: excluded.
         $cap = $this->termRows > 0 ? max(3, $this->termRows - 6) : self::SEARCH_CAP;
         $candidates = [];
+        $dirs = [];
         foreach ($this->activePane()->entries as $entry) {
             if (!$entry->isParentSentinel()) {
                 $candidates[] = $entry;
+                $dirs[] = ''; // '' = the pane's own cwd (CF-17 alignment law)
             }
         }
         if ($query === '') {
             // Empty query shows the (now visibility-correct) full listing,
             // capped, and stays in search mode.
-            return $this->withSearch('', array_slice($candidates, 0, $cap), 0);
+            return $this->withSearch('', array_slice($candidates, 0, $cap), 0, array_slice($dirs, 0, $cap));
         }
-        // Fuzzy-match filenames through the sugar-fuzzy SSOT (Smith-Waterman
-        // local alignment). matchAll() ranks by score descending, so the
-        // strongest subsequence matches float to the top and a query whose
-        // characters never appear yields no results.
-        //
-        // Charset prefilter: a Smith-Waterman score above zero requires at
-        // least one aligned character pair, so a name sharing no (case-folded)
-        // character with the query can never rank. Dropping those names
-        // before matchAll() skips the alignment matrix for the great
-        // majority of a large directory and cannot drop a single result —
-        // it is a strict superset of the scorer's positive set.
+        [$results, $resultDirs] = $this->scoreCandidates($query, $candidates, $dirs, $cap);
+        return $this->withSearch($query, $results, 0, $resultDirs);
+    }
+
+    /**
+     * CF-17: the scoring pipeline lifted out of search() verbatim so the
+     * recursive walk's hits and the pane's in-memory entries rank through
+     * the SAME normalized prefilter + Smith-Waterman path — a hit found
+     * two levels down competes on exactly the local results' scale. The
+     * $dirs array is index-aligned with $candidates; the returned pair
+     * preserves the alignment through the scoring.
+     *
+     * Charset prefilter: a Smith-Waterman score above zero requires at
+     * least one aligned character pair, so a name sharing no (case-folded)
+     * character with the query can never rank. Dropping those names
+     * before matchAll() skips the alignment matrix for the great
+     * majority of a large directory and cannot drop a single result —
+     * it is a strict superset of the scorer's positive set.
+     *
+     * CF-48 (closes 095): the whole match view is NFC-normalized on
+     * BOTH sides. macOS stores names decomposed (NFD) while keyboards
+     * emit composed characters (NFC), so a raw compare loses matches in
+     * both directions; one shared normalized view means `café` finds
+     * cafe+acute on disk and vice versa. Display and selection keep
+     * the raw on-disk name.
+     *
+     * @param list<Entry> $candidates
+     * @param list<string> $dirs
+     * @return array{list<Entry>, list<string>}
+     */
+    private function scoreCandidates(string $query, array $candidates, array $dirs, int $cap): array
+    {
         $queryChars = [];
-        // CF-48 (closes 095): the whole match view is NFC-normalized on
-        // BOTH sides. macOS stores names decomposed (NFD) while keyboards
-        // emit composed characters (NFC), so a raw compare loses matches in
-        // both directions; one shared normalized view means `café` finds
-        // cafe+acute on disk and vice versa. Display and selection keep
-        // the raw on-disk name.
         $normalizedQuery = self::norm($query);
         foreach (self::codepoints(mb_strtolower($normalizedQuery)) as $ch) {
             $queryChars[$ch] = true;
@@ -1849,28 +1884,30 @@ final class Manager implements Model
         // distinct raw names that collapse to one under normalization.
         $byName = [];
         $names  = [];
-        foreach ($candidates as $entry) {
+        foreach ($candidates as $i => $entry) {
             $normalizedName = self::norm($entry->name);
             foreach (self::codepoints(mb_strtolower($normalizedName)) as $ch) {
                 if (isset($queryChars[$ch])) {
                     $names[] = $normalizedName;
-                    $byName[$normalizedName][] = $entry;
+                    $byName[$normalizedName][] = [$entry, $dirs[$i] ?? ''];
                     break;
                 }
             }
         }
         $matcher = SmithWatermanMatcher::new();
         $results = [];
+        $resultDirs = [];
         // Hard cap via the matcher's own limit: ranking is global, so the
         // cap must apply after the sort (MatchResultSorter), not before.
         // The scorer sees the SAME normalized view as the prefilter (CF-48).
         foreach ($matcher->matchAll($normalizedQuery, $names, $cap) as $result) {
-            $entry = array_shift($byName[$result->haystack]);
-            if ($entry !== null) {
-                $results[] = $entry;
+            $pair = array_shift($byName[$result->haystack]);
+            if ($pair !== null) {
+                $results[] = $pair[0];
+                $resultDirs[] = $pair[1];
             }
         }
-        return $this->withSearch($query, $results, 0);
+        return [$results, $resultDirs];
     }
 
     /** Grapheme-ish codepoint split for the search charset prefilter. */
@@ -1905,7 +1942,7 @@ final class Manager implements Model
             return $this;
         }
         $newCursor = max(0, min(count($this->searchResults) - 1, $this->searchCursor + $delta));
-        return $this->withSearch($this->searchQuery, $this->searchResults, $newCursor);
+        return $this->withSearch($this->searchQuery, $this->searchResults, $newCursor, $this->searchResultDirs);
     }
 
     /** Open selected search result */
@@ -1918,6 +1955,11 @@ final class Manager implements Model
         if ($entry === null) {
             return $this;
         }
+        // CF-17: a walk hit lives in its own directory — the parallel
+        // dirs array says where; '' means the pane's own cwd.
+        $pane = $this->activePane();
+        $dir = $this->searchResultDirs[$this->searchCursor] ?? '';
+        $home = $dir === '' ? $pane->cwd : $dir;
         // If it's a directory, navigate into it; if file, CF-09: exit search
         // AND land the pane cursor on the hit — before, Enter on a file
         // result dropped the user back to wherever the cursor previously
@@ -1925,21 +1967,35 @@ final class Manager implements Model
         // on a different file than the one just chosen.
         if ($entry->isDir) {
             return $this->withActivePane(fn(Pane $p) => Pane::open(
-                Pane::join($p->cwd, $entry->name),
+                Pane::join($home, $entry->name),
                 $this->lister,
                 $p->sort,
                 $p->showHidden
             ))->exitSearch();
         }
+        if ($home !== $pane->cwd) {
+            // Deep hit: home the pane on the hit's directory and park
+            // the cursor on the raw name — the same honest landing the
+            // local case gives, one directory deeper.
+            $landed = Pane::open($home, $this->lister, $pane->sort, $pane->showHidden)
+                ->cursorOnName($entry->name);
+            return $this->withActivePane(static fn(Pane $p) => $landed)->exitSearch();
+        }
         return $this->withActivePane(fn(Pane $p) => $p->cursorOnName($entry->name))->exitSearch();
     }
 
-    private function withSearch(?string $query, array $results, int $cursor): self
+    private function withSearch(?string $query, array $results, int $cursor, array $dirs = []): self
     {
         return $this->mutate([
             'searchQuery' => $query,
             'searchResults' => $results,
             'searchCursor' => $cursor,
+            // CF-17 alignment law: every result row carries exactly one
+            // dir slot; no query means no rows means no slots.
+            'searchResultDirs' => $dirs === [] ? array_fill(0, count($results), '') : $dirs,
+            // The recursive wish dies with the search mode (CF-17):
+            // bare `r` back in browse mode must mean refresh again.
+            'searchRecursive' => $query === null ? false : $this->searchRecursive,
         ]);
     }
 
@@ -1957,11 +2013,11 @@ final class Manager implements Model
      * has no meaning in this UI, and re-typing it as keystrokes is the
      * hijack this mode exists to prevent.
      */
-    private function applyPaste(PasteMsg $msg): self
+    private function applyPaste(PasteMsg $msg): array
     {
         $text = self::flattenPaste($msg->content);
         if ($text === '') {
-            return $this;
+            return [$this, null];
         }
         // The four text-entry submodes collect a buffer; the armed
         // y/n gates (copy/move/delete) do not, and a paste must not
@@ -1972,14 +2028,15 @@ final class Manager implements Model
             || $this->confirm === ConfirmState::PathPrompt
             || $this->confirm === ConfirmState::SelectPattern;
         if ($inTextEntry) {
-            return $this->withInputBuffer((string) $this->inputBuffer . $text);
+            return [$this->withInputBuffer((string) $this->inputBuffer . $text), null];
         }
         if ($this->searchQuery !== null) {
             // The same rebuild a typed char gets — results and cursor
-            // are re-derived, never patched.
-            return $this->search(($this->searchQuery ?? '') . $text);
+            // are re-derived, never patched — and the same CF-17
+            // re-arming of the walk when recursion is live.
+            return $this->rebuildSearch(($this->searchQuery ?? '') . $text);
         }
-        return $this;
+        return [$this, null];
     }
 
     /** candy-git App::flattenPaste shape: runs of CR/LF/TAB to one space. */
@@ -1988,15 +2045,23 @@ final class Manager implements Model
         return preg_replace('/[\r\n\t]+/', ' ', $content) ?? '';
     }
 
-    private function handleSearchKey(KeyMsg $msg): self
+    /**
+     * Keys while in search mode. CF-17: the return shape grows to
+     * [model, ?Cmd] because the recursive toggle and every query edit
+     * that follows one may schedule a budgeted walk on the loop; its
+     * answer re-enters update() later as a SearchDoneMsg.
+     *
+     * @return array{self, ?\Closure}
+     */
+    private function handleSearchKey(KeyMsg $msg): array
     {
-        // Escape exits search
+        // Escape exits search (and the recursive wish exits with it).
         if ($msg->type === KeyType::Escape) {
-            return $this->exitSearch();
+            return [$this->exitSearch(), null];
         }
         // Enter opens result
         if ($msg->type === KeyType::Enter) {
-            return $this->openSearchResult();
+            return [$this->openSearchResult(), null];
         }
         // Up/Down navigate results. CF-09: ARROWS ONLY — the old k/j legs
         // hijacked two letters that legitimately occur in file names, so
@@ -2004,31 +2069,153 @@ final class Manager implements Model
         // workaround was a phantom of the hijack). k and j now fall through
         // to the append leg like every other printable.
         if ($msg->type === KeyType::Up) {
-            return $this->moveSearchCursor(-1);
+            return [$this->moveSearchCursor(-1), null];
         }
         if ($msg->type === KeyType::Down) {
-            return $this->moveSearchCursor(1);
+            return [$this->moveSearchCursor(1), null];
+        }
+        // CF-17 (closes 013): Ctrl+r INSIDE search toggles the budgeted
+        // recursive walk. A bare letter would repeat the CF-09 defect —
+        // 'r' legitimately occurs in file names, so only a modified
+        // chord may own it. Outside search ^r is unbound, so plain `r`
+        // still refreshes; the flag resets with the mode.
+        if ($msg->type === KeyType::Char && $msg->rune === 'r' && $msg->ctrl && !$msg->alt) {
+            if ($this->searchRecursive) {
+                return [$this->mutate(['searchRecursive' => false])
+                    ->search($this->searchQuery ?? '')
+                    ->withStatus(Lang::t('status.search_recursive_off')), null];
+            }
+            $armed = $this->mutate([
+                'searchRecursive' => true,
+                'searchResultDirs' => array_fill(0, count($this->searchResults), ''),
+            ])->withStatus(Lang::t('status.search_recursive_on'));
+            $query = $this->searchQuery ?? '';
+            return [$armed, $query === '' ? null : $this->scheduleFind($query)];
         }
         // Backspace removes last char from query
         if ($msg->type === KeyType::Backspace) {
             if ($this->searchQuery === '') {
                 // Empty query + backspace = exit search
-                return $this->exitSearch();
+                return [$this->exitSearch(), null];
             }
             $newQuery = self::dropLast($this->searchQuery);
             if ($newQuery === '') {
                 // Backspacing to empty = exit search
-                return $this->exitSearch();
+                return [$this->exitSearch(), null];
             }
-            return $this->search($newQuery);
+            return $this->rebuildSearch($newQuery);
         }
         // Regular chars append to query. Space arrives as its own key
         // type (see dispatch), so it must append here or a file whose
         // name contains a space can never be searched for (C-1 family).
         if (($msg->type === KeyType::Char || $msg->type === KeyType::Space) && !$msg->ctrl && $msg->rune !== '/') {
-            return $this->search(($this->searchQuery ?? '') . $msg->rune);
+            return $this->rebuildSearch(($this->searchQuery ?? '') . $msg->rune);
         }
-        return $this;
+        return [$this, null];
+    }
+
+    /**
+     * Re-score the pane corpus against a new query and — when the
+     * recursive wish is live — re-arm the walk for THAT query. Every
+     * in-flight walk answer must match the live query byte-for-byte,
+     * so a burst of keystrokes simply outlives its own schedule.
+     *
+     * @return array{self, ?\Closure}
+     */
+    private function rebuildSearch(string $query): array
+    {
+        $next = $this->search($query);
+        if (!$this->searchRecursive || $query === '') {
+            return [$next, null];
+        }
+        return [$next, $this->scheduleFind($query)];
+    }
+
+    /**
+     * CF-17: arm the walk behind a Cmd (same promise→Msg→update()
+     * circuit as the async copy). The accept predicate IS the scorer's
+     * charset prefilter — shared through the same norm()/codepoints()
+     * helpers — so a name the walk drops here could never have ranked
+     * anyway, and a huge tree costs the loop nothing but readdir and
+     * two lstat-free string checks per tick.
+     *
+     * @return \Closure the Program-runnable Cmd
+     */
+    private function scheduleFind(string $query): \Closure
+    {
+        $root = $this->activePane()->cwd;
+        // Find-arm budget from the row family: four screens of hits is
+        // already unscrollable chrome; the scorer's rows-based cap trims
+        // the display anyway.
+        $hitsCap = $this->termRows > 0 ? $this->termRows * 4 : self::SEARCH_CAP * 4;
+        $queryChars = [];
+        foreach (self::codepoints(mb_strtolower(self::norm($query))) as $ch) {
+            $queryChars[$ch] = true;
+        }
+        $accept = static function (string $name) use ($queryChars): bool {
+            foreach (self::codepoints(mb_strtolower(self::norm($name))) as $ch) {
+                if (isset($queryChars[$ch])) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        $asyncOps = new AsyncOps();
+        return Cmd::promise(static function () use ($asyncOps, $root, $query, $hitsCap, $accept): \React\Promise\PromiseInterface {
+            return $asyncOps->findAsync($root, self::FIND_DEPTH, self::FIND_MAX_SEEN, $hitsCap, $accept)
+                ->then(static function (array $r) use ($query): SearchDoneMsg {
+                    return new SearchDoneMsg($query, $r['hits'], $r['truncated']);
+                });
+        });
+    }
+
+    /**
+     * CF-17: fold a finished walk into the live result set. Three
+     * guards decide whether this answer still belongs to the question:
+     * still in search mode, recursion still on, and the query byte-
+     * identical to the one that armed the walk. Pane-level hits are
+     * deduplicated against the pane's own (visibility-filtered) corpus.
+     */
+    private function mergeSearchHits(SearchDoneMsg $msg): self
+    {
+        if ($this->searchQuery === null || !$this->searchRecursive || $msg->query !== $this->searchQuery) {
+            return $this;
+        }
+        $pane = $this->activePane();
+        $candidates = [];
+        $dirs = [];
+        foreach ($pane->entries as $entry) {
+            if (!$entry->isParentSentinel()) {
+                $candidates[] = $entry;
+                $dirs[] = '';
+            }
+        }
+        foreach ($msg->hits as $hit) {
+            if ($hit['dir'] === $pane->cwd) {
+                continue; // the top level is already in the corpus
+            }
+            $full = $hit['dir'] . DIRECTORY_SEPARATOR . $hit['name'];
+            $stat = @stat($full); // the walk is a snapshot; the byte may be gone
+            if ($stat === false && !$hit['isDir']) {
+                continue;
+            }
+            $candidates[] = new Entry(
+                $hit['name'],
+                $hit['isDir'],
+                $stat === false ? 0 : (int) $stat['size'],
+                $stat === false ? 0 : (int) $stat['mtime'],
+            );
+            $dirs[] = $hit['dir'];
+        }
+        $cap = $this->termRows > 0 ? max(3, $this->termRows - 6) : self::SEARCH_CAP;
+        [$results, $resultDirs] = $this->scoreCandidates($msg->query, $candidates, $dirs, $cap);
+        $next = $this->withSearch($msg->query, $results, 0, $resultDirs);
+        if ($msg->truncated) {
+            // Say "partial" rather than silently presenting a budget's
+            // slice as the truth.
+            return $next->withStatus(Lang::t('status.search_partial'));
+        }
+        return $next;
     }
 
     /** Drop last UTF-8 character from string */

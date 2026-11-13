@@ -355,10 +355,46 @@ final class Renderer
         $lines[] = Ansi::sgr(Ansi::BOLD) . Lang::t('search.prompt') . Entry::sanitizeName($m->searchQuery) . Ansi::reset();
         $lines[] = '';
         $total = count($m->searchResults);
+        // CF-17 exposed a CF-02 gap: the result block was never
+        // windowed, so on a live height many results pushed the frame
+        // past termRows and the bottom belt sliced the PROMPT away.
+        // The block now windows around the cursor like the pane list,
+        // keeping the query line and the counter on screen — the rows
+        // in the middle are the only thing allowed to fold.
+        $shown = $total;
+        $start = 0;
+        if ($m->termRows > 0 && $total > 0) {
+            $maxShown = max(1, $m->termRows - 11); // prompt, blank, counter, fold, blanks, box, tab bar, status
+            if ($total > $maxShown) {
+                $start = max(0, min($m->searchCursor - intdiv($maxShown, 2), $total - $maxShown));
+                $shown = $maxShown;
+            }
+        }
+        // CF-17: a walk hit shows the PATH RELATIVE TO THE PANE, not the
+        // bare basename — two 'config.json' two levels apart must not
+        // render as the same line, and 'where' is the whole payload of
+        // the feature.
+        $cwd = $m->activePane()->cwd;
+        $visible = 0;
         foreach ($m->searchResults as $i => $entry) {
+            if ($i < $start || $i >= $start + $shown) {
+                continue;
+            }
+            ++$visible;
             $prefix = $i === $m->searchCursor ? '> ' : '  ';
             $type = $entry->isDir ? Lang::t('search.type_dir') : Lang::t('search.type_file');
-            $lines[] = "{$prefix}{$type} " . Entry::sanitizeName($entry->name);
+            $dir = $m->searchResultDirs[$i] ?? '';
+            $label = $entry->name;
+            if ($dir !== '' && $dir !== $cwd) {
+                $rel = str_starts_with($dir, $cwd . DIRECTORY_SEPARATOR)
+                    ? substr($dir, strlen($cwd) + 1)
+                    : ltrim($dir, '/\\');
+                $label = $rel . DIRECTORY_SEPARATOR . $entry->name;
+            }
+            $lines[] = "{$prefix}{$type} " . Entry::sanitizeName($label);
+        }
+        if ($visible < $total) {
+            $lines[] = '  ' . Lang::t('help.more', ['count' => $total - $visible]);
         }
         if ($total === 0) {
             $lines[] = '  ' . Lang::t('search.no_match');
