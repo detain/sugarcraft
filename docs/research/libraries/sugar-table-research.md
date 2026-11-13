@@ -4,6 +4,13 @@
 **Context:** Improving sugar-table (PHP TUI table library) based on patterns from other languages
 **Upstream:** Evertras/bubble-table
 
+> **SUPERSEDED (2026-11-13).** This snapshot describes the May-2026 tree and is
+> kept as research provenance only, not as an authority. Every "Gap" below is
+> historical: viewport virtualization, dynamic/percentage/flex column widths,
+> text wrapping with multiline rows, row-height tracking, and a generalised
+> styleFunc have all since landed. Current truth = `sugar-table/README.md` and
+> `sugar-table/src/`.
+
 ---
 
 ## Executive Summary
@@ -27,6 +34,8 @@ Research across Go (bubble-table, lipgloss, tview), Rust (ratatui, comfy-table),
 
 ### Gaps vs. Other Libraries
 
+*(As of May 2026; items 1–5 have since landed — see the SUPERSEDED banner above.)*
+
 1. **No viewport virtualization** — renders all rows on every `View()` call
 2. **No dynamic column sizing** — requires explicit widths, no auto-expand/shrink
 3. **No percentage-based widths** — only fixed pixel widths
@@ -37,6 +46,8 @@ Research across Go (bubble-table, lipgloss, tview), Rust (ratatui, comfy-table),
 ---
 
 ## Feature Comparison Matrix
+
+*(The sugar-table column is the May-2026 state; several ❌/partial cells now read ✅ — see the SUPERSEDED banner above.)*
 
 | Feature | bubble-table | lipgloss | ratatui | comfy-table | textual | rich | cli-table3 | sugar-table |
 |---------|-------------|----------|---------|-------------|---------|------|------------|-------------|
@@ -649,6 +660,8 @@ final class Table
 ---
 
 ## Appendix: sugar-table Source Files
+
+*(Counts as of May 2026 — by 2026-11-13 `Table.php` measures 3,319 lines and `Column.php` 415; see the SUPERSEDED banner above.)*
 
 | File | Lines | Purpose |
 |------|-------|---------|
