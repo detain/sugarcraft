@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot: '{path}' не является допустимым файлом шрифта (ожидались TTF, OTF, WOFF или WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: неверный формат подсветки '{format}'. Используйте начало:конец (например, 3:7) или начало:конец:#цвет (например, 3:7:#fffbe6)",
     'cli.read_failed'          => 'candy-codeshot: не удалось прочитать ввод',
+    'cli.input_too_large'     => 'candy-codeshot: входные данные превышают лимит в {limit} байт (чтение отклонено)',
     'cli.path_outside_cwd'    => "candy-codeshot: путь '{path}' находится вне текущего рабочего каталога (используйте --unsafe-paths, чтобы разрешить)",
     'cli.write_failed'        => "candy-codeshot: не удалось записать '{path}'",
     'cli.missing_value'       => "candy-codeshot: {option} требует значение",

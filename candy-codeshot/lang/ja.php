@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot：'{path}'は有効なフォントファイルではありません（TTF、OTF、WOFFまたはWOFF2が必要）",
     'cli.bad_highlight'       => "candy-codeshot：不正なハイライト形式 '{format}'。開始:終了（例 3:7）または開始:終了:#色（例 3:7:#fffbe6）を使用してください",
     'cli.read_failed'          => 'candy-codeshot：入力の読み取りに失敗',
+    'cli.input_too_large'     => 'candy-codeshot：入力が上限 {limit} バイトを超過しています（読み取りを拒否）',
     'cli.path_outside_cwd'    => "candy-codeshot：パス '{path}' は現在の作業ディレクトリの外にあります（許可するには --unsafe-paths を使用）",
     'cli.write_failed'        => "candy-codeshot：書き込みに失敗 '{path}'",
     'cli.missing_value'       => "candy-codeshot：{option} には値が必要です",

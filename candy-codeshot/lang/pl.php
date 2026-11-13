@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot: '{path}' nie jest prawidłowym plikiem czcionki (oczekiwano TTF, OTF, WOFF lub WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: nieprawidłowy format podświetlenia '{format}'. Użyj start:koniec (np. 3:7) lub start:koniec:#kolor (np. 3:7:#fffbe6)",
     'cli.read_failed'          => 'candy-codeshot: nie można odczytać danych wejściowych',
+    'cli.input_too_large'     => 'candy-codeshot: dane wejściowe przekraczają limit {limit} bajtów (odczyt odrzucony)',
     'cli.path_outside_cwd'    => "candy-codeshot: ścieżka '{path}' jest poza bieżącym katalogiem roboczym (użyj --unsafe-paths, aby zezwolić)",
     'cli.write_failed'        => "candy-codeshot: nie można zapisać do '{path}'",
     'cli.missing_value'       => "candy-codeshot: {option} wymaga wartości",

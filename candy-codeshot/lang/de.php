@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot: '{path}' ist keine gültige Schriftdatei (erwartet TTF, OTF, WOFF oder WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: ungültiges Highlight-Format '{format}'. Format start:end (z. B. 3:7) oder start:end:#farbe (z. B. 3:7:#fffbe6)",
     'cli.read_failed'          => 'candy-codeshot: Eingabe konnte nicht gelesen werden',
+    'cli.input_too_large'     => 'candy-codeshot: Eingabe überschreitet das Limit von {limit} Bytes (Lesen verweigert)',
     'cli.path_outside_cwd'    => "candy-codeshot: Pfad '{path}' liegt außerhalb des aktuellen Arbeitsverzeichnisses (mit --unsafe-paths erlauben)",
     'cli.write_failed'        => "candy-codeshot: Schreiben fehlgeschlagen '{path}'",
     'cli.missing_value'       => "candy-codeshot: {option} erwartet einen Wert",

@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot: '{path}' není platný soubor písma (očekáváno TTF, OTF, WOFF nebo WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: neplatný formát zvýraznění '{format}'. Použijte start:konec (např. 3:7) nebo start:konec:#barva (např. 3:7:#fffbe6)",
     'cli.read_failed'          => 'candy-codeshot: nelze číst vstup',
+    'cli.input_too_large'     => 'candy-codeshot: vstup překračuje limit {limit} bajtů (čtení zamítnuto)',
     'cli.path_outside_cwd'    => "candy-codeshot: cesta '{path}' je mimo aktuální pracovní adresář (povolte pomocí --unsafe-paths)",
     'cli.write_failed'        => "candy-codeshot: nelze zapisovat do '{path}'",
     'cli.missing_value'       => "candy-codeshot: {option} vyžaduje hodnotu",

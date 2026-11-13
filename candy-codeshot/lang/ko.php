@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot: '{path}'는 유효한 글꼴 파일이 아닙니다 (TTF, OTF, WOFF 또는 WOFF2 필요)",
     'cli.bad_highlight'       => "candy-codeshot: 잘못된 강조 형식 '{format}'. 시작:끝 (예: 3:7) 또는 시작:끝:#색 (예: 3:7:#fffbe6)을 사용하세요",
     'cli.read_failed'          => 'candy-codeshot: 입력 읽기 실패',
+    'cli.input_too_large'     => 'candy-codeshot: 입력이 제한값 {limit}바이트를 초과합니다(읽기 거부)',
     'cli.path_outside_cwd'    => "candy-codeshot: 경로 '{path}'가 현재 작업 디렉터리 밖에 있습니다 (허용하려면 --unsafe-paths 사용)",
     'cli.write_failed'        => "candy-codeshot: 쓰기 실패 '{path}'",
     'cli.missing_value'       => "candy-codeshot: {option}에는 값이 필요합니다",

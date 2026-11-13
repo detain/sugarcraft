@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot: '{path}' ليس ملف خط صالح (المتوقع TTF أو OTF أو WOFF أو WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: صيغة تظليل غير صالحة '{format}'. استخدم البداية:النهاية (مثل 3:7) أو البداية:النهاية:#اللون (مثل 3:7:#fffbe6)",
     'cli.read_failed'          => 'candy-codeshot: تعذر قراءة الإدخال',
+    'cli.input_too_large'     => 'candy-codeshot: يتجاوز الإدخال حد {limit} بايت (تم رفض القراءة)',
     'cli.path_outside_cwd'    => "candy-codeshot: المسار '{path}' يقع خارج مجلد العمل الحالي (استخدم --unsafe-paths للسماح)",
     'cli.write_failed'        => "candy-codeshot: تعذر الكتابة إلى '{path}'",
     'cli.missing_value'       => "candy-codeshot: {option} يتطلب قيمة",

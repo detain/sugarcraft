@@ -44,6 +44,14 @@ final class SvgRenderer
     public const MAX_EMBEDDED_FONT_BYTES = 33_554_432;
 
     /**
+     * Hard ceiling on output pixels (~40M), mirroring
+     * PngRenderer::MAX_PNG_PIXELS. The engines' asymmetry WAS the -011
+     * attack surface: the 5 MB single-line repro happily emitted a
+     * `width="42000048"` non-renderable document while PNG refused.
+     */
+    public const MAX_SVG_PIXELS = 40_000_000;
+
+    /**
      * "Not passed" marker for copy()'s `mixed $fontPath` leg. A path string
      * containing a NUL byte can never be a real filename, and null is a VALUE
      * on this leg — `withFont(null)` means "clear" — so the unset case needs
@@ -196,6 +204,18 @@ final class SvgRenderer
                 // `--window-style none` frame carries an empty header.
                 chrome: $this->windowStyle !== WindowStyle::None,
             );
+
+        // cs-08 (-011): refuse oversized geometry BEFORE the per-line loop
+        // spends CPU on it — the 5 MB single-line repro used to emit a
+        // `width="42000048"` document that no downstream renderer can paint
+        // (bin turns this into exit 2 via its render catch). The ceiling is
+        // the PNG engine's number: one advertised pipeline, one posture.
+        if ((int) $totalW * (int) $totalH > self::MAX_SVG_PIXELS) {
+            throw new \RuntimeException(sprintf(
+                'SVG output too large (%d x %d = %d pixels; cap %d). Reduce content, padding or line count.',
+                $totalW, $totalH, (int) $totalW * (int) $totalH, self::MAX_SVG_PIXELS,
+            ));
+        }
 
         $svgWidth  = (int) ($totalW - $shadowMargin * 2);
         $svgHeight = (int) ($totalH - $shadowMargin * 2);

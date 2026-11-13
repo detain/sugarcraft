@@ -432,12 +432,23 @@ if ($inputPath === null && stream_isatty(STDIN)) {
     fwrite(STDERR, Lang::t('cli.stdin_tty') . "\n");
 }
 
+// cs-08 (-011): the read legs used to slurp unlimited bytes (30 MB of
+// binary cost 66 s of CPU before the engine even saw it). House number
+// 32 MiB, the font-embed precedent (SvgRenderer::MAX_EMBEDDED_FONT_BYTES);
+// both legs read AT MOST cap+1 bytes so the refusal never pays for the
+// whole oversized input.
+$maxInputBytes = 33_554_432;
+
 $text = $inputPath !== null
-    ? @file_get_contents($inputPath)
-    : stream_get_contents(STDIN);
+    ? @file_get_contents($inputPath, false, null, 0, $maxInputBytes + 1)
+    : stream_get_contents(STDIN, $maxInputBytes + 1);
 if ($text === false || $text === null) {
     fwrite(STDERR, Lang::t('cli.read_failed') . "\n");
     exit(1);
+}
+if (strlen($text) > $maxInputBytes) {
+    fwrite(STDERR, Lang::t('cli.input_too_large', ['limit' => $maxInputBytes]) . "\n");
+    exit(2);
 }
 
 // Detect the language, then apply plaintext syntax highlighting — but only for

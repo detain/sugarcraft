@@ -148,6 +148,27 @@ final class SvgRendererTest extends TestCase
         $this->assertStringContainsString('pre??post', $svg);
     }
 
+    public function testOversizedSvgGeometryIsRefused(): void
+    {
+        // cs-08 (-011): the 5 MB single-line repro emitted width="42000048"
+        // — a document no downstream renderer can paint. The ceiling is the
+        // PNG engine's 40 Mpx number; refusal happens in the layout
+        // arithmetic, before the per-line loop spends any CPU.
+        $huge = str_repeat('x', 40_000) . "\n"; // ~336k px wide x ~131 tall ≈ 44M px
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/SVG output too large \(\d+ x \d+ = \d+ pixels; cap 40000000\)/');
+        SvgRenderer::dark()->withWindow(false)->render($huge);
+    }
+
+    public function testCeilingDoesNotEatLegitimateScreenshots(): void
+    {
+        // A wide-ish real frame (120 cols x 200 lines ≈ 4M px) must still
+        // render under the same ceiling that refuses 42M px.
+        $text = str_repeat(str_repeat('y', 120) . "\n", 200);
+        $svg = SvgRenderer::dark()->render($text);
+        $this->assertStringContainsString('<svg', $svg);
+    }
+
     private function assertNoIllegalControlBytes(string $svg): void
     {
         // Golden byte-scan: the swept bytes and the illegal scalars must

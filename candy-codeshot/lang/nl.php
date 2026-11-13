@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot: '{path}' is geen geldig lettertypebestand (verwacht TTF, OTF, WOFF of WOFF2)",
     'cli.bad_highlight'       => "candy-codeshot: ongeldig markeringformaat '{format}'. Gebruik begin:einde (bijv. 3:7) of begin:einde:#kleur (bijv. 3:7:#fffbe6)",
     'cli.read_failed'          => 'candy-codeshot: kan invoer niet lezen',
+    'cli.input_too_large'     => 'candy-codeshot: invoer overschrijdt de limiet van {limit} bytes (lezen geweigerd)',
     'cli.path_outside_cwd'    => "candy-codeshot: pad '{path}' valt buiten de huidige werkmap (gebruik --unsafe-paths om dit toe te staan)",
     'cli.write_failed'        => "candy-codeshot: kan niet schrijven naar '{path}'",
     'cli.missing_value'       => "candy-codeshot: {option} vereist een waarde",

@@ -724,6 +724,40 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString('bold">PLAIN', $result['stdout']);
     }
 
+    public function testOversizedInputFileIsRefusedAtTheCeiling(): void
+    {
+        // cs-08 (-011): the read legs slurped unlimited bytes. Sparse-truncate
+        // a file to cap+1 bytes: the bin reads at most cap+1 and refuses —
+        // bounded read, bounded time, exit 2 with the catalogued message.
+        $dir  = $this->makeTempDir();
+        $path = $dir . '/huge.txt';
+        $fh = fopen($path, 'wb');
+        $this->assertNotFalse($fh);
+        fwrite($fh, str_repeat('a', 1 << 20));
+        ftruncate($fh, 33_554_433); // one byte past the 32 MiB ceiling
+        fclose($fh);
+
+        $started = microtime(true);
+        $result = $this->runCli(['--no-window', '--unsafe-paths', $path]);
+        $elapsed = microtime(true) - $started;
+
+        $this->assertSame(2, $result['exitCode'], $result['stderr']);
+        $this->assertStringContainsString('input exceeds the 33554432-byte limit', $result['stderr']);
+        $this->assertLessThan(10.0, $elapsed, 'refusal must be a bounded read, not a 66 s slurp');
+    }
+
+    public function testGeometryCeilingSurfacesAsExitTwoThroughTheBin(): void
+    {
+        // cs-08: SvgRenderer's 40 Mpx refusal must ride the bin's existing
+        // render-catch to a diagnostic exit 2, not an uncaught fatal.
+        // 80k cols x the bare 1-line frame (67 px tall without window or
+        // shadow margins) is ~45M px — over the 40M ceiling.
+        $result = $this->runCli(['--no-window', '--no-shadow'], str_repeat('x', 80_000) . "\n");
+
+        $this->assertSame(2, $result['exitCode'], $result['stderr']);
+        $this->assertStringContainsString('SVG output too large', $result['stderr']);
+    }
+
     private function makeTempDir(): string
     {
         $dir = sys_get_temp_dir() . '/codeshot_cwd_' . uniqid('', true);

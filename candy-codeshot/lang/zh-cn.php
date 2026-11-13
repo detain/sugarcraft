@@ -18,6 +18,7 @@ return [
     'cli.font_invalid'        => "candy-codeshot：'{path}' 不是有效的字体文件（期望 TTF、OTF、WOFF 或 WOFF2）",
     'cli.bad_highlight'       => "candy-codeshot：无效的高亮格式 '{format}'。请使用 开始:结束（例如 3:7）或 开始:结束:#颜色（例如 3:7:#fffbe6）",
     'cli.read_failed'          => 'candy-codeshot：读取输入失败',
+    'cli.input_too_large'     => 'candy-codeshot：输入超过 {limit} 字节上限，拒绝读取',
     'cli.path_outside_cwd'    => "candy-codeshot：路径 '{path}' 位于当前工作目录之外（使用 --unsafe-paths 允许）",
     'cli.write_failed'        => "candy-codeshot：写入失败 '{path}'",
     'cli.missing_value'       => "candy-codeshot：{option} 需要一个值",
