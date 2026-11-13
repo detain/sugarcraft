@@ -81,6 +81,7 @@ use SugarCraft\Kv\Cli\ImportCommand;
 use SugarCraft\Kv\Cli\ExportCommand;
 use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\Support\PluralChooser;
 use SugarCraft\Kv\Support\SizeCap;
 use SugarCraft\Kv\Support\Version;
 
@@ -340,7 +341,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
                 fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => Store::sanitizeForTty($opts['key'])]) . "\n");
                 exit(1);
             }
-            echo Lang::t($n === 1 ? 'cli.would_delete_one' : 'cli.would_delete_n', ['count' => $n]) . "\n";
+            echo PluralChooser::t('would_delete', $n) . "\n";
             break;
         }
         $n = $store->delete($opts['key']);
@@ -351,7 +352,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
             fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => Store::sanitizeForTty($opts['key'])]) . "\n");
             exit(1);
         }
-        echo Lang::t($n === 1 ? 'cli.deleted_one' : 'cli.deleted_n', ['count' => $n]) . "\n";
+        echo PluralChooser::t('deleted', $n) . "\n";
         break;
 
     case 'prune':
@@ -366,7 +367,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
                 $n = $store->pruneDatabase($dbName);
                 $total += $n;
                 if ($n > 0) {
-                    echo Lang::t($n === 1 ? 'cli.pruned_one' : 'cli.pruned_n', ['count' => $n]) . ' (' . Store::sanitizeForTty($dbName) . ")\n";
+                    echo PluralChooser::t('pruned', $n) . ' (' . Store::sanitizeForTty($dbName) . ")\n";
                 }
             }
             if ($total === 0) {
@@ -392,7 +393,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         }
         if ($n > 0) {
             $suffix = $db !== null ? ' (' . Store::sanitizeForTty($db) . ')' : '';
-            echo Lang::t($n === 1 ? 'cli.pruned_one' : 'cli.pruned_n', ['count' => $n]) . $suffix . "\n";
+            echo PluralChooser::t('pruned', $n) . $suffix . "\n";
         } else {
             echo Lang::t('cli.pruned_none') . "\n";
         }

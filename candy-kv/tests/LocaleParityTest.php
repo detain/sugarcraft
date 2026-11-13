@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Kv\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Kv\Support\PluralChooser;
 
 /**
  * Locale-parity guard for candy-kv.
@@ -67,8 +68,12 @@ final class LocaleParityTest extends TestCase
                 continue;
             }
 
-            $missing = \array_values(\array_diff(\array_keys($reference), \array_keys($data)));
-            $extra = \array_values(\array_diff(\array_keys($data), \array_keys($reference)));
+            // The only sanctioned superset: the CLDR plural forms a locale's
+            // own rule can reach (PluralChooser::EXTRA_SUFFIXES). Anything
+            // else beyond en.php is still a stale/unknown key.
+            $expected = \array_merge(\array_keys($reference), self::pluralExtras($code));
+            $missing = \array_values(\array_diff($expected, \array_keys($data)));
+            $extra = \array_values(\array_diff(\array_keys($data), $expected));
 
             $this->assertSame([], $missing, "locale '{$code}' is missing keys: " . \implode(', ', $missing));
             $this->assertSame([], $extra, "locale '{$code}' carries keys unknown to en.php: " . \implode(', ', $extra));
@@ -92,6 +97,11 @@ final class LocaleParityTest extends TestCase
 
                 $expected = self::placeholders($englishValue);
                 $actual = self::placeholders((string) $data[$key]);
+                if (self::isPluralKey($key) && $actual === ['count']) {
+                    // A plural-family `_one` may carry {count} where English
+                    // spells a literal 1: Russian's `one` also covers 21, 31...
+                    $expected = $actual;
+                }
                 \sort($expected);
                 \sort($actual);
 
@@ -104,6 +114,29 @@ final class LocaleParityTest extends TestCase
         }
     }
 
+    public function testPluralExtrasAreDocumentedAndCarryCount(): void
+    {
+        $locales = self::allLocales();
+        foreach (PluralChooser::EXTRA_SUFFIXES as $code => $suffixes) {
+            $this->assertArrayHasKey($code, $locales, "plural extras name an unshipped locale '{$code}'");
+            foreach (PluralChooser::BASES as $base) {
+                foreach ($suffixes as $suffix) {
+                    $key = "cli.{$base}_{$suffix}";
+                    $this->assertArrayHasKey($key, $locales[$code], "{$code}: {$key}");
+                    $placeholders = self::placeholders($locales[$code][$key]);
+                    // `zero`/`two` forms may name the number in words.
+                    $this->assertContains($placeholders, [['count'], []], "{$code}: {$key}");
+                    if (!\in_array($suffix, ['zero', 'two'], true)) {
+                        $this->assertSame(['count'], $placeholders, "{$code}: {$key} must interpolate the number");
+                    }
+                }
+            }
+        }
+        foreach (['en', 'de', 'ja'] as $code) {
+            $this->assertSame([], self::pluralExtras($code), "{$code} has no extra plural forms");
+        }
+    }
+
     public function testEveryValueIsANonEmptyString(): void
     {
         foreach (self::allLocales() as $code => $data) {
@@ -112,6 +145,24 @@ final class LocaleParityTest extends TestCase
                 $this->assertNotSame('', \trim($value), "locale '{$code}' key '{$key}' must not be empty");
             }
         }
+    }
+
+    /** @return list<string> */
+    private static function pluralExtras(string $code): array
+    {
+        $keys = [];
+        foreach (PluralChooser::EXTRA_SUFFIXES[$code] ?? [] as $suffix) {
+            foreach (PluralChooser::BASES as $base) {
+                $keys[] = "cli.{$base}_{$suffix}";
+            }
+        }
+
+        return $keys;
+    }
+
+    private static function isPluralKey(string $key): bool
+    {
+        return \preg_match('/_(?:one|zero|two|few|many)$/', $key) === 1;
     }
 
     /**

@@ -35,4 +35,9 @@ return [
     'cli.pruned_n'               => 'Usunięto {count} wygasłych wpisów.',
     'cli.pruned_one'             => 'Usunięto 1 wygasły wpis.',
     'cli.pruned_none'            => 'Brak wygasłych wpisów do usunięcia.',
+    'cli.deleted_few'            => 'Usunięto {count} wpisy.',
+    'cli.imported_few'           => 'Zaimportowano {count} wpisy.',
+    'cli.overwrote_few'          => 'Nadpisano {count} wpisy.',
+    'cli.would_delete_few'       => '{count} wpisy zostałyby usunięte.',
+    'cli.pruned_few'             => 'Usunięto {count} wygasłe wpisy.',
 ];

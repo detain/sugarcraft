@@ -10,6 +10,7 @@ use SugarCraft\Kv\Import\YamlImporter;
 use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\InputPath;
+use SugarCraft\Kv\Support\PluralChooser;
 use SugarCraft\Kv\Support\SizeCap;
 
 /**
@@ -140,13 +141,13 @@ final class ImportCommand
      */
     private static function successLine(ImportReport $report): string
     {
-        $line = Lang::t($report->imported === 1 ? 'cli.imported_one' : 'cli.imported_n', ['count' => $report->imported]);
+        $line = PluralChooser::t('imported', $report->imported);
         if ($report->overwritten === 0) {
             return $line;
         }
 
-        // Second sentence, own plural — the same _one/_n pair shape the
-        // kv-040 chooser will route, so no compound key matrix to translate.
-        return $line . ' ' . Lang::t($report->overwritten === 1 ? 'cli.overwrote_one' : 'cli.overwrote_n', ['count' => $report->overwritten]);
+        // Second sentence, own plural: each clause picks its own CLDR form,
+        // so there is no compound key matrix to translate.
+        return $line . ' ' . PluralChooser::t('overwrote', $report->overwritten);
     }
 }

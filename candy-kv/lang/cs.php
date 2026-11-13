@@ -35,4 +35,9 @@ return [
     'cli.pruned_n'               => 'Odstraněno {count} expirovaných položek.',
     'cli.pruned_one'             => 'Odstraněna 1 expirovaná položka.',
     'cli.pruned_none'            => 'Žádné expirované položky k odstranění.',
+    'cli.deleted_few'            => 'Smazány {count} položky.',
+    'cli.imported_few'           => 'Importovány {count} položky.',
+    'cli.overwrote_few'          => 'Přepsány {count} položky.',
+    'cli.would_delete_few'       => '{count} položky by byly smazány.',
+    'cli.pruned_few'             => 'Odstraněny {count} expirované položky.',
 ];

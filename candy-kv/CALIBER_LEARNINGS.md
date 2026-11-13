@@ -96,3 +96,7 @@ Source: step-33 ai/filter-consumers
 ## Upstream citations (KV-062)
 
 - LAW: `Mirrors charmbracelet/skate.<verb>` is cited ONLY on the `case` of a CLI verb in `bin/candy-kv` that skate itself ships (`set get list delete list-dbs delete-db` — the evidence table in `docs/research/libraries/candy-kv-research.md` §Operations). `prune`, `import`, `export` and every `src/` method are candy-kv-original or behaviour-diverging (skate lowercases keys, candy-kv preserves case) and carry NO such cite; a parity claim needs research-table evidence first. `tests/CitationProvenanceGuardTest.php` pins both directions.
+
+## Plural forms (S39)
+
+- Counted CLI lines route through `Support/PluralChooser::t($base, $n)` (CLDR integer cardinals), never an inline `$n === 1 ?` switch. `_one` / `_n` (= `other`) ship in every locale; extra suffixes exist only where the locale's rule reaches them (`PluralChooser::EXTRA_SUFFIXES`: ru/pl/cs `_few`, ar `_zero/_two/_few/_many`; ru `many` folds into `_n`). `LocaleParityTest` allows exactly that superset. A locale whose `one` covers more than 1 (ru: 21, 31...) must interpolate `{count}` in `_one`.
