@@ -1257,7 +1257,13 @@ final class Player implements Model
     /**
      * Clip $text to at most $cells terminal display cells (East-Asian Width
      * aware — CJK/emoji cost 2, composing marks 0), never splitting a
-     * codepoint. The byte-wise mb_strcut this replaces counted neither.
+     * GRAPHEME CLUSTER (SV-PPAINT/067: the old codepoint walk could cut a
+     * ZWJ family or a flag mid-sequence and leave the head of it painting a
+     * dangling half-glyph on caption/error rows — reachable with hostile
+     * subtitle content). Segmentation rides {@see Width::nextCluster()},
+     * the same clustering Width::of() itself sums over, so clip and width
+     * can never disagree about what a cell costs. The byte-wise mb_strcut
+     * this replaced counted neither.
      */
     private static function clipToCells(string $text, int $cells): string
     {
@@ -1266,13 +1272,17 @@ final class Player implements Model
         }
         $out = '';
         $used = 0;
-        foreach (mb_str_split($text, 1, 'UTF-8') as $char) {
-            $width = Width::of($char);
+        $i = 0;
+        $length = strlen($text);
+        while ($i < $length) {
+            $cluster = Width::nextCluster($text, $i);
+            $width = Width::of($cluster);
             if ($used + $width > $cells) {
                 break;
             }
-            $out .= $char;
+            $out .= $cluster;
             $used += $width;
+            $i += strlen($cluster);
         }
 
         return $out;
@@ -1319,6 +1329,22 @@ final class Player implements Model
 
         $bytes = $frame->bytes;
         $byteLen = strlen($bytes);
+
+        // SV-PPAINT/071: a truncated RGB24 buffer used to paint BLACK in the
+        // block rungs (pixelRgb's silent zero fallback) while the identical
+        // corrupt frame was refused LOUDLY by the text rung's
+        // ImageSource::fromRgb length assert — same defect, two behaviours.
+        // One length check per frame, up front, for every rung that reads
+        // raw bytes (a PNG frame carries its pixels in $png, not $bytes):
+        // the typed FfmpegDecodeFailure the stream side already speaks.
+        if ($frame->png === null && $byteLen !== $w * $h * 3) {
+            throw new FfmpegDecodeFailure(Lang::t('decoder.frame_truncated', [
+                'len' => (string) $byteLen,
+                'w' => (string) $w,
+                'h' => (string) $h,
+                'want' => (string) ($w * $h * 3),
+            ]));
+        }
 
         if ($mode === Mode::HalfBlock) {
             // INLINE HalfBlock path: renders directly via Buffer → toAnsi().

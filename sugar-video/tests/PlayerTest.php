@@ -2627,8 +2627,11 @@ final class PlayerTest extends TestCase
     public function testASeekAfterAFailureRecoversTheStream(): void
     {
         $frames = [];
+        // SV-PPAINT/071: frames now conform to the decoder byte contract —
+        // 4x1 needs EXACTLY 12 bytes (the old fixture carried a 36-byte
+        // surplus that frameToBuffer silently ignored).
         for ($i = 0; $i < 20; $i++) {
-            $frames[] = new RgbFrame(str_repeat("\x10\x20\x30", 12), 4, 1);
+            $frames[] = new RgbFrame(str_repeat("\x10\x20\x30", 4), 4, 1);
         }
         // Paints one frame, then crashes exactly once — the way a real ffmpeg
         // child dies mid-stream — then feeds fresh frames on the rebuilt walk.
@@ -3137,6 +3140,91 @@ final class PlayerTest extends TestCase
         } finally {
             RendererFactory::setDiagnoseForTesting(null);
         }
+    }
+
+    /**
+     * SV-PPAINT/067: caption/error clipping walks GRAPHEME CLUSTERS. A ZWJ
+     * family is ONE 2-cell cluster; the old codepoint walk could emit its
+     * lead person alone — a dangling half-glyph with hostile subtitle
+     * content one keystroke away.
+     */
+    public function testTheCaptionClipNeverSplitsAGraphemeCluster(): void
+    {
+        $family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+        $flag = "\u{1F1E6}\u{1F1E8}";
+        $this->assertSame(2, \SugarCraft\Core\Util\Width::of($family), 'premise: the family is one 2-cell cluster');
+        $this->assertSame(2, \SugarCraft\Core\Util\Width::of($flag), 'premise: the flag is one 2-cell cluster');
+
+        $clip = new \ReflectionMethod(Player::class, 'clipToCells');
+        $clip->setAccessible(true);
+
+        // Budget INSIDE the sequence: bytes exist for a partial emission,
+        // but no cluster boundary fits — the whole family is refused.
+        $this->assertSame('', $clip->invoke(null, $family . 'A', 1), 'no head of a 2-cell cluster may paint');
+        $this->assertSame($family . 'A', $clip->invoke(null, $family . 'A', 3), 'clusters plus the ASCII tail fit exactly');
+        $this->assertSame($family, $clip->invoke(null, $family . 'A', 2), 'the second cluster is refused whole');
+        $this->assertSame($flag . 'AB', $clip->invoke(null, $flag . 'AB', 4));
+        $this->assertSame($flag . 'A', $clip->invoke(null, $flag . 'AB', 3));
+    }
+
+    /**
+     * SV-PPAINT/071: a truncated RGB24 buffer painted silent BLACK in the
+     * block rungs while the text rung refused the identical frame loudly.
+     * One length check now fronts every raw rung, answering the typed
+     * FfmpegDecodeFailure — pinned on BOTH rung families for the parity.
+     */
+    public function testATruncatedFrameRefusesTypedOnEveryRawRung(): void
+    {
+        // 4x4 grid wants 48 bytes; deliver 30 (the shape a killed ffmpeg
+        // leaves in the pipe when the reader accepts a partial fill).
+        $decoder = new FakeDecoder([new \SugarCraft\Video\Decode\RgbFrame(str_repeat("\xff\x00\x00", 10), 4, 4)]);
+        $player = Player::openForTest($decoder, 30.0);
+        $player = $player->play();
+        $player = $this->backdateLastTick($player, 1.0 / 30.0);
+        [$player] = $player->update(new TickMsg());
+        $this->assertNotNull($player->currentFrame, 'precondition: the corrupt frame reached the model');
+
+        // Rung family 1: the block rung (openForTest mounts HalfBlock).
+        $mutate = new \ReflectionMethod(Player::class, 'mutate');
+        $mutate->setAccessible(true);
+        try {
+            $player->view();
+            $this->fail('the block rung must refuse a truncated frame');
+        } catch (\SugarCraft\Video\Decode\FfmpegDecodeFailure $failure) {
+            $this->assertStringContainsString('truncated', $failure->getMessage());
+            $this->assertStringContainsString('needs 48', $failure->getMessage());
+        }
+
+        // Rung family 2: the palette/text rung (direct render through
+        // ImageSource::fromRgb — the door that was ALWAYS loud). Parity is
+        // the point: one corrupt buffer, both families refuse typed.
+        $asText = $mutate->invoke($player, [
+            'mode' => \SugarCraft\Video\Render\Mode::Ansi256,
+            'renderer' => new \SugarCraft\Video\Render\AsciiRenderer('standard'),
+        ]);
+        $second = null;
+        try {
+            $asText->view();
+        } catch (\Throwable $thrown) {
+            $second = $thrown;
+        }
+        $this->assertNotNull($second, 'the text rung must refuse the identical corrupt buffer');
+        $this->assertStringContainsString('30', $second->getMessage());
+        $this->assertStringContainsString('48', $second->getMessage(), 'both doors name the same sizes: one corrupt buffer, one refusal story per rung');
+
+        // The plain-text buffer rung answers the SAME typed failure as the
+        // block rung (both ride frameToBuffer's one front check).
+        $asAscii = $mutate->invoke($player, [
+            'mode' => \SugarCraft\Video\Render\Mode::Ascii,
+            'renderer' => new \SugarCraft\Video\Render\AsciiRenderer('standard'),
+        ]);
+        $third = null;
+        try {
+            $asAscii->view();
+        } catch (\Throwable $thrown) {
+            $third = $thrown;
+        }
+        $this->assertInstanceOf(\SugarCraft\Video\Decode\FfmpegDecodeFailure::class, $third);
     }
 }
 

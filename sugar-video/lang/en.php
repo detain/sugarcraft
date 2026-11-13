@@ -47,6 +47,7 @@ return [
     // rows. Values keep the exact historical wording (placeholders swapped in)
     // so the existing substring pins stay green as an equivalence proof.
     'decoder.source_missing' => 'video source not found: {path}',
+    'decoder.frame_truncated' => 'sugar-video: RGB24 frame arrived truncated — {len} bytes for a {w}x{h} grid (needs {want}); refusing to paint the remainder black',
     'player.fps_positive' => 'fps must be greater than zero',
     'url.not_http' => 'Not an http(s) URL: {url}',
     'ramp.unknown' => 'Unknown ramp name: {name}',
