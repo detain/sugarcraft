@@ -16,8 +16,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Findings 008 + 042: the unset* family's per-method sentinel/SGR-reset
- * halves. The shared `withUnset` plumbing was pinned via a handful of
- * members; the rest drifted unexercised (the CALIBER patch-sentinel bug
+ * halves. The shared reset idiom was pinned via a handful of members; the
+ * rest drifted unexercised (the CALIBER patch-sentinel bug
  * class lives exactly here). This provider walks every `unset*` method:
  * set → unset → the accessor is back on its field default AND the rendered
  * bytes are back on the plain-Style baseline, byte-for-byte. Colour slots

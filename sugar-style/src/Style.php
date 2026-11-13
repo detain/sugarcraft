@@ -984,23 +984,23 @@ final class Style
 
     // ─── Unset* resetters ──────────────────────────────────────────────
 
-    public function unsetForeground(): self    { return $this->withUnset('fg', fg: null); }
-    public function unsetBackground(): self    { return $this->withUnset('bg', bg: null); }
-    public function unsetBold(): self          { return $this->withUnset('bold', bold: false); }
-    public function unsetItalic(): self        { return $this->withUnset('italic', italic: false); }
-    public function unsetUnderline(): self     { return $this->withUnset('underline', underline: false); }
-    public function unsetStrikethrough(): self { return $this->withUnset('strike', strike: false); }
-    public function unsetFaint(): self         { return $this->withUnset('faint', faint: false); }
+    public function unsetForeground(): self    { return $this->with(fg: null, fgSet: true)->withUnsetProp('fg'); }
+    public function unsetBackground(): self    { return $this->with(bg: null, bgSet: true)->withUnsetProp('bg'); }
+    public function unsetBold(): self          { return $this->with(bold: false)->withUnsetProp('bold'); }
+    public function unsetItalic(): self        { return $this->with(italic: false)->withUnsetProp('italic'); }
+    public function unsetUnderline(): self     { return $this->with(underline: false)->withUnsetProp('underline'); }
+    public function unsetStrikethrough(): self { return $this->with(strike: false)->withUnsetProp('strike'); }
+    public function unsetFaint(): self         { return $this->with(faint: false)->withUnsetProp('faint'); }
     /** Alias for {@see unsetFaint()}. */
     public function unsetDim(): self           { return $this->unsetFaint(); }
-    public function unsetBlink(): self         { return $this->withUnset('blink', blink: false); }
-    public function unsetReverse(): self       { return $this->withUnset('reverse', reverse: false); }
-    public function unsetOverline(): self      { return $this->withUnset('overline', overline: false); }
-    public function unsetInvisible(): self     { return $this->withUnset('invisible', invisible: false); }
-    public function unsetWidth(): self         { return $this->withUnset('width', width: null); }
-    public function unsetHeight(): self        { return $this->withUnset('height', height: null); }
-    public function unsetMaxWidth(): self      { return $this->withUnset('maxWidth', maxWidth: null); }
-    public function unsetMaxHeight(): self     { return $this->withUnset('maxHeight', maxHeight: null); }
+    public function unsetBlink(): self         { return $this->with(blink: false)->withUnsetProp('blink'); }
+    public function unsetReverse(): self       { return $this->with(reverse: false)->withUnsetProp('reverse'); }
+    public function unsetOverline(): self      { return $this->with(overline: false)->withUnsetProp('overline'); }
+    public function unsetInvisible(): self     { return $this->with(invisible: false)->withUnsetProp('invisible'); }
+    public function unsetWidth(): self         { return $this->with(width: null, widthSet: true)->withUnsetProp('width'); }
+    public function unsetHeight(): self        { return $this->with(height: null, heightSet: true)->withUnsetProp('height'); }
+    public function unsetMaxWidth(): self      { return $this->with(maxWidth: null, maxWidthSet: true)->withUnsetProp('maxWidth'); }
+    public function unsetMaxHeight(): self     { return $this->with(maxHeight: null, maxHeightSet: true)->withUnsetProp('maxHeight'); }
     /**
      * Drop the border AND its side toggles: the side flags revert to the
      * all-sides default and leave propsSet, so a later {@see inherit()}
@@ -1008,11 +1008,12 @@ final class Style
      */
     public function unsetBorder(): self
     {
-        return $this->withUnset('border', border: null)
+        return $this->with(border: null, borderSet: true)
             ->with(borderSides: [true, true, true, true])
+            ->withUnsetProp('border')
             ->withUnsetProp('borderSides');
     }
-    public function unsetTransform(): self     { return $this->withUnset('transform', transform: null); }
+    public function unsetTransform(): self     { return $this->with(transform: null, transformSet: true)->withUnsetProp('transform'); }
 
     /**
      * Drop the currently-set hyperlink. Mirrors lipgloss's
@@ -2265,86 +2266,12 @@ final class Style
     }
 
     /**
-     * Reset a property to its zero value AND scrub it from $propsSet so
-     * future inherit() calls can re-apply the parent's value.
-     */
-    private function withUnset(
-        string $prop,
-        ?Color $fg = null, bool $fgSet = false,
-        ?Color $bg = null, bool $bgSet = false,
-        ?bool $bold = null,
-        ?bool $italic = null,
-        ?bool $underline = null,
-        ?bool $strike = null,
-        ?bool $faint = null,
-        ?bool $blink = null,
-        ?bool $reverse = null,
-        ?bool $overline = null,
-        ?bool $invisible = null,
-        ?int $width = null, bool $widthSet = false,
-        ?int $height = null, bool $heightSet = false,
-        ?int $maxWidth = null, bool $maxWidthSet = false,
-        ?int $maxHeight = null, bool $maxHeightSet = false,
-        ?Border $border = null, bool $borderSet = false,
-        ?\Closure $transform = null, bool $transformSet = false,
-    ): self {
-        $next = $this;
-        $newProps = $this->propsSet;
-        unset($newProps[$prop]);
-        // Apply zero value on the relevant slot.
-        return new self(
-            fg:               $prop === 'fg'         ? null         : $next->fg,
-            bg:               $prop === 'bg'         ? null         : $next->bg,
-            fgAdaptive:       $next->fgAdaptive,
-            bgAdaptive:       $next->bgAdaptive,
-            fgComplete:       $next->fgComplete,
-            bgComplete:       $next->bgComplete,
-            bold:             $prop === 'bold'       ? false        : $next->bold,
-            italic:           $prop === 'italic'     ? false        : $next->italic,
-            underline:        $prop === 'underline'  ? false        : $next->underline,
-            strike:           $prop === 'strike'     ? false        : $next->strike,
-            faint:            $prop === 'faint'      ? false        : $next->faint,
-            blink:            $prop === 'blink'      ? false        : $next->blink,
-            rapidBlink:       $prop === 'rapidBlink' ? false        : $next->rapidBlink,
-            reverse:          $prop === 'reverse'    ? false        : $next->reverse,
-            overline:         $prop === 'overline'   ? false        : $next->overline,
-            invisible:        $prop === 'invisible'  ? false        : $next->invisible,
-            padding:          $next->padding,
-            margin:           $next->margin,
-            width:            $prop === 'width'      ? null         : $next->width,
-            height:           $prop === 'height'     ? null         : $next->height,
-            maxWidth:         $prop === 'maxWidth'   ? null         : $next->maxWidth,
-            maxHeight:        $prop === 'maxHeight'  ? null         : $next->maxHeight,
-            alignH:           $next->alignH,
-            alignV:           $next->alignV,
-            border:           $prop === 'border'     ? null         : $next->border,
-            borderSides:      $next->borderSides,
-            borderFg:         $next->borderFg,
-            borderBg:         $next->borderBg,
-            borderSideFg:     $next->borderSideFg,
-            borderSideBg:     $next->borderSideBg,
-            profile:          $next->profile,
-            propsSet:         $newProps,
-            inline:           $next->inline,
-            marginBg:         $next->marginBg,
-            colorWhitespace:  $next->colorWhitespace,
-            tabWidth:         $next->tabWidth,
-            transform:        $prop === 'transform'  ? null         : $next->transform,
-            hyperlink:        $next->hyperlink,
-            hyperlinkId:      $next->hyperlinkId,
-            boundString:      $next->boundString,
-            underlineColor:   $next->underlineColor,
-            underlineStyle:   $next->underlineStyle,
-            paddingChar:      $next->paddingChar,
-            marginChar:       $next->marginChar,
-        );
-    }
-
-    /**
-     * Lightweight reset variant — only scrubs `$prop` from `propsSet`.
-     * Caller is expected to have already applied the new value via
-     * `with()`. Used by per-side unsetters that flip a value to its
-     * default rather than to a true zero.
+     * Scrub `$prop` from the `propsSet` ledger — THE reset idiom: pair it
+     * with the `with()` call that applies the slot's zero (or default, for
+     * per-side flags) value. Once this file carried a second, 26-parameter
+     * `withUnset()` choke whose value params were never read; finding 036
+     * collapsed the split-brain into this one shape (2026-11), pinned by
+     * {@see StyleUnsetRoundTripTest}.
      */
     private function withUnsetProp(string $prop): self
     {
