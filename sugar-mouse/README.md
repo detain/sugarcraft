@@ -658,6 +658,16 @@ if ($msg instanceof DoubleClickMsg) {
 }
 ```
 
+**Thinking twice (the revoke question):** `DoubleClickMsg` fires the
+moment the second press lands — a later third press emits
+`TripleClickMsg` but cannot take the double back. Word-vs-line actions
+(double = word, triple = line) therefore need app-layer deferral: on
+receiving `DoubleClickMsg`, schedule the word action only after the
+remaining interval elapses with no third press (or hold word selection
+until the window closes). The counter itself stays immediate-delivery;
+an opt-in `deferDoubleClick` was declined in favour of this recipe
+(gate G10).
+
 **State accessors:**
 - `clickCount()` — current streak count (0 when no streak is active)
 - `withManager(Manager)` — rebind to a different manager (the streak is
@@ -665,7 +675,8 @@ if ($msg instanceof DoubleClickMsg) {
 - `$counter->manager` / `$counter->clickIntervalMs` — public **readonly**
   properties; rebind via `withManager()` or tune by constructing a new
   counter. The third constructor parameter, `?callable $now`, is a test
-  clock seam (defaults to `microtime(true)`); there are no setters.
+  clock seam (defaults to the monotonic `hrtime()` clock, so an NTP step
+  can neither swallow nor coalesce a streak); there are no setters.
 
 ### Motion tracking escape sequences
 

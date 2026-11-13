@@ -45,7 +45,8 @@ final class ClickCounter
     /** Zone id of the last click, used to detect same-zone rapid clicks. */
     private ?string $lastClickZoneId = null;
 
-    /** Streak clock (see ctor); normalized so the property type is legal. */
+    /** Streak clock (see ctor); normalized so the property type is legal.
+     *  null selects the monotonic default, never a wall-clock read. */
     private readonly ?\Closure $now;
 
     /**
@@ -57,10 +58,16 @@ final class ClickCounter
      *                              or reduced dexterity can widen the streak (README,
      *                              Accessibility).
      * @param ?callable $now Clock returning "now" in seconds as a float.
-     *                       Defaults to {@see microtime} when null. The seam lets
-     *                       tests drive interval expiry deterministically instead
-     *                       of sleeping (a real-sleep test is CI noise waiting to
-     *                       happen under co-shard load).
+     *                       Defaults to a monotonic clock
+     *                       ({@see hrtime()}) when null. The seam lets
+     *                       tests drive interval expiry deterministically
+     *                       instead of sleeping (a real-sleep test is CI
+     *                       noise waiting to happen under co-shard load).
+     *                       The default is deliberately NOT wall-clock:
+     *                       an NTP step during a streak could otherwise
+     *                       jump the elapsed figure backwards (swallowing
+     *                       the streak) or far forwards (coalescing two
+     *                       streaks into one).
      */
     public function __construct(
         public readonly Manager $manager,
@@ -74,7 +81,7 @@ final class ClickCounter
     private function nowSeconds(): float
     {
         $clock = $this->now;
-        return $clock !== null ? $clock() : microtime(true);
+        return $clock !== null ? $clock() : hrtime(true) / 1e9;
     }
 
     /**

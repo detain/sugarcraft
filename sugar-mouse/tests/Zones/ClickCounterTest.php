@@ -365,4 +365,22 @@ final class ClickCounterTest extends TestCase
         $this->assertInstanceOf(DoubleClickMsg::class, $msg);
         $this->assertSame(2, $counter->clickCount());
     }
+
+    /**
+     * SM-S25: the default streak clock is the monotonic reference (hrtime),
+     * not a wall-clock read — an NTP step between two presses could otherwise
+     * drive the elapsed figure negative (swallowing the streak) or huge
+     * (coalescing two streaks). Pinned by magnitude order: uptime-scale is
+     * well under 1e8 seconds, epoch-scale is ~1.7e9.
+     */
+    public function testDefaultClockIsMonotonicNotWallClock(): void
+    {
+        $counter = new ClickCounter($this->buildManager());
+        $method  = new \ReflectionMethod($counter, 'nowSeconds');
+
+        $seconds = $method->invoke($counter);
+
+        $this->assertGreaterThan(0.0, $seconds);
+        $this->assertLessThan(1e8, $seconds, 'default clock must not return epoch-scale seconds');
+    }
 }
