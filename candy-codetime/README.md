@@ -101,6 +101,7 @@ Options (accepted before or after the command):
 |--------------|--------|
 | `--backend=file\|sqlite` | Storage for `push`/`export`/`gaps`/`dashboard`. Both forms work: `--backend=sqlite` and `--backend sqlite`. The sqlite backend needs the `sqlite3` PHP extension; without it the CLI exits with a clear message instead of crashing. With neither the flag nor `CANDY_CODETIME_BACKEND` set, the CLI auto-selects `sqlite` when the database holds records and the JSONL store does not — the store is re-decided per invocation, never persisted. |
 | `CANDY_CODETIME_BACKEND=<name>` | Default backend (`file` or `sqlite`) for every invocation, so an sqlite user need not repeat the flag. An explicit `--backend` on the command line outranks it; a junk value is refused like a junk flag. The dashboard header badges the store it actually reads (`[file]`/`[sqlite]`), and when the *other* store also holds records the CLI prints a one-line pointer on STDERR. |
+| `CANDY_CODETIME_GOAL=<seconds>` | Daily goal for the dashboard: the header gains a `today 2h01 / 1h00` cell and every day that reaches the goal shows as a shaded block in the activity band. A whole number of seconds, or a whole number of hours like `6h`; junk is refused like a junk flag. Presentation only — recording nothing, gating nothing. |
 | `--sqlite` (with `backup`) | Archive the SQLite database itself: `VACUUM INTO` writes a consistent standalone snapshot named `candy-codetime-<timestamp>.db` under `<dir>-backups/`, owner-private like every other archived payload. The live database is untouched — this is archive-only, no prune, no in-place vacuum. |
 | `CANDY_CODETIME_DIR=<path>` | Data directory (default `$XDG_DATA_HOME/candy-codetime`, falling back to `~/.local/share/candy-codetime` — note that an unset `HOME` resolves to `./.local/share/…`). |
 
@@ -280,7 +281,7 @@ frames plus a gap) and stack vertically below that. Every dashboard line is
 clipped to the terminal width and never wraps: the timeline frame fills the
 width, while the ranking panes keep their budgeted 62-cell band, and days
 that cannot be drawn are counted
-("+N earlier") rather than silently dropped.
+("+N earlier") rather than silently dropped. When `CANDY_CODETIME_GOAL` is set the header gains a `today 2h01 / 1h00` cell and days that reach the goal render as shaded blocks in the band.
 
 ## Accessibility
 

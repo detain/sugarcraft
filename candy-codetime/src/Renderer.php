@@ -81,6 +81,10 @@ final class Renderer
             $d->droppedLines,
             $d->unreadableFiles,
             $d->loadError,
+            // CT-S31 rider: the join rebuild forgot byTags (a `t` flip would
+            // snap back to languages mid-join) and carries the goal through.
+            $d->byTags,
+            $d->goalSeconds,
         ), 0);
         $lines = array_slice(explode("\n", rtrim($joined, "\n")), 0, max(1, $d->height));
         return self::clipRows(implode("\n", $lines), $d->width) . "\n";
@@ -230,7 +234,34 @@ final class Renderer
             $badge = self::tint(Style::new(), '#7d6e98', $d->colorProfile)
                     ->render('[' . self::clean($d->backendLabel) . ']') . ' ';
         }
-        return $title . '  ' . $badge . $range . '   ' . Lang::t('ui.total') . ' ' . $tot;
+        // CT-S31: the daily goal, when one is set, is a first-class header
+        // cell — 'today 2h01 / 1h00'. A window that excludes the real today
+        // paints the dash rather than a fabricated zero.
+        $goal = '';
+        if ($d->goalSeconds !== null) {
+            $today = date('Y-m-d');
+            $buckets = $d->stats->timeline();
+            $seconds = null;
+            foreach ($d->stats->days as $index => $day) {
+                if ($day->format('Y-m-d') === $today) {
+                    $seconds = $buckets[$index] ?? 0;
+                }
+            }
+            $shownToday = $seconds === null ? '—' : self::formatCompact($seconds);
+            $goal = '   ' . Lang::t('ui.goal_today') . ' '
+                . self::tint(Style::new()->bold(), '#6ee7b7', $d->colorProfile)->render($shownToday)
+                . ' / ' . self::formatCompact($d->goalSeconds);
+        }
+        return $title . '  ' . $badge . $range . '   ' . Lang::t('ui.total') . ' ' . $tot . $goal;
+    }
+
+    /**
+     * CT-S31 compact clock for the goal cell: '2h01', never '2h 01m' — the
+     * header shares its line with the range and the total.
+     */
+    private static function formatCompact(int $seconds): string
+    {
+        return sprintf('%dh%02d', intdiv($seconds, 3600), intdiv($seconds % 3600, 60));
     }
 
     /**
@@ -375,7 +406,12 @@ final class Renderer
         }
 
         $flat = max($shown) === 0;
-        $bars = self::bars($shown, $slotWidths, $flat);
+        // CT-S31: a day that reaches the goal (whole minutes, ceiling of the
+        // goal) paints as a full block. Shape first, like the milestone '*' —
+        // it survives NO_COLOR and plain profiles because it is a glyph,
+        // not a colour.
+        $goalMin = $d->goalSeconds === null ? null : max(1, intdiv($d->goalSeconds + 59, 60));
+        $bars = self::bars($shown, $slotWidths, $flat, $goalMin);
         $weekdays = array_map(
             static fn(\DateTimeImmutable $day): string => $day->format(Lang::t('ui.weekday_format')),
             $labels,
@@ -470,7 +506,7 @@ final class Renderer
      * @param list<int> $minutes
      * @param list<int> $slots
      */
-    private static function bars(array $minutes, array $slots, bool $flat): string
+    private static function bars(array $minutes, array $slots, bool $flat, ?int $goalMin = null): string
     {
         if ($flat) {
             return str_repeat(' ', array_sum($slots));
@@ -478,7 +514,14 @@ final class Renderer
         $strip = preg_split('//u', Ansi::strip(Sparkline::new($minutes, count($minutes))->view()), -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $line = '';
         foreach ($slots as $index => $width) {
-            $line .= str_repeat((string) ($strip[$index] ?? ' '), max(1, $width));
+            $glyph = (string) ($strip[$index] ?? ' ');
+            if ($goalMin !== null && (int) ($minutes[$index] ?? 0) >= $goalMin) {
+                // Not the full block: Sparkline's own top level (index 8) is
+                // already '█', so the flag would be indistinguishable from
+                // "busiest day" on every frame. '▓' is outside its alphabet.
+                $glyph = '▓';
+            }
+            $line .= str_repeat($glyph, max(1, $width));
         }
         return $line;
     }

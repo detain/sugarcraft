@@ -74,6 +74,13 @@ final class Dashboard implements Model
          * toggle is a pure view flip over the already-loaded Stats.
          */
         public readonly bool $byTags = false,
+        /**
+         * CT-S31: the daily goal in seconds (CANDY_CODETIME_GOAL), or null
+         * when no goal is set. The header paints today against it and timeline
+         * slots that reach it show as full blocks — presentation riding the
+         * existing buckets, no schema change anywhere.
+         */
+        public readonly ?int $goalSeconds = null,
     ) {
         // CT-S16 parse-at-boundary honesty: before this door, days=0 silently
         // widened into a two-day window, days=-5 sign-flipped the composed
@@ -84,12 +91,15 @@ final class Dashboard implements Model
             throw new \InvalidArgumentException('Dashboard window must cover at least one day, got ' . $days);
         }
         $this->days = min($days, Store::MAX_RANGE_DAYS);
+        if ($goalSeconds !== null && $goalSeconds < 1) {
+            throw new \InvalidArgumentException('Dashboard goal must be at least one second, got ' . $goalSeconds);
+        }
     }
 
-    public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7, ?string $backendLabel = null): self
+    public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7, ?string $backendLabel = null, ?int $goalSeconds = null): self
     {
         $end = ($endDay ?? new \DateTimeImmutable('today'))->setTime(0, 0);
-        return (new self($source, $end, $days, backendLabel: $backendLabel))->reload();
+        return (new self($source, $end, $days, backendLabel: $backendLabel, goalSeconds: $goalSeconds))->reload();
     }
 
     public function init(): ?\Closure
@@ -113,6 +123,7 @@ final class Dashboard implements Model
                 $this->unreadableFiles,
                 $this->loadError,
                 $this->byTags,
+                $this->goalSeconds,
             ), null];
         }
         if ($msg instanceof ColorProfileMsg) {
@@ -132,6 +143,7 @@ final class Dashboard implements Model
                 $this->unreadableFiles,
                 $this->loadError,
                 $this->byTags,
+                $this->goalSeconds,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -171,6 +183,8 @@ final class Dashboard implements Model
                 $this->unreadableFiles,
                 $this->loadError,
                 !$this->byTags,
+                $this->goalSeconds,
+                $this->goalSeconds,
             ), null];
         }
         return [$this, null];
@@ -215,6 +229,7 @@ final class Dashboard implements Model
                 $notes['unreadable'],
                 null,
                 $this->byTags,
+                $this->goalSeconds,
             );
         } catch (\Throwable $error) {
             if ($this->source instanceof Store) {
@@ -233,6 +248,7 @@ final class Dashboard implements Model
                 $this->unreadableFiles,
                 $error->getMessage(),
                 $this->byTags,
+                $this->goalSeconds,
             );
         }
     }
@@ -254,7 +270,7 @@ final class Dashboard implements Model
         // The width has to ride the shift: without it the next frame is laid
         // out for an unknown terminal and the rows we sized to the window
         // (panes, timeline) silently stop being clipped.
-        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel, byTags: $this->byTags))->recompute();
+        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel, byTags: $this->byTags, goalSeconds: $this->goalSeconds))->recompute();
     }
 
     /**
@@ -279,6 +295,7 @@ final class Dashboard implements Model
             $this->height,
             $this->backendLabel,
             byTags: $this->byTags,
+            goalSeconds: $this->goalSeconds,
         ))->recompute();
     }
 

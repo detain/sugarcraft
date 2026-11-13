@@ -186,6 +186,24 @@ if (!in_array($backend, ['file', 'sqlite'], true)) {
     fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
     exit(1);
 }
+// CT-S31: CANDY_CODETIME_GOAL carries the daily goal for the dashboard —
+// plain whole seconds, or a whole number of hours like 6h. Junk is refused
+// like every other preference: a typo'd goal silently read as "no goal"
+// would turn the absence of a header cell into a liar.
+$goalSeconds = null;
+$goalRaw = getenv('CANDY_CODETIME_GOAL');
+if (is_string($goalRaw) && trim($goalRaw) !== '') {
+    $goalValue = trim($goalRaw);
+    if (preg_match('/^\d+$/', $goalValue) === 1) {
+        $goalSeconds = (int) $goalValue;
+    } elseif (preg_match('/^\d+[hH]$/', $goalValue) === 1) {
+        $goalSeconds = (int) $goalValue * 3600;
+    }
+    if ($goalSeconds === null || $goalSeconds < 1) {
+        fwrite(STDERR, Lang::t('cli.invalid_goal', ['value' => Sanitize::untrusted($goalValue)]) . "\n");
+        exit(1);
+    }
+}
 
 $cmd = $positional[0] ?? 'dashboard';
 
@@ -715,7 +733,7 @@ if (!TtyDetect::isAtty(STDIN) || !TtyDetect::isAtty(STDOUT)) {
 }
 try {
     $reader = $backend === 'sqlite' ? $sqlite() : $store;
-    $dashboard = Dashboard::start($reader, null, $dashDays, $backend);
+    $dashboard = Dashboard::start($reader, null, $dashDays, $backend, goalSeconds: $goalSeconds);
 } catch (\Throwable $e) {
     $storageError($e);
 }

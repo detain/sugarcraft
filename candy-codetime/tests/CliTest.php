@@ -1046,4 +1046,28 @@ final class CliTest extends TestCase
         self::assertIsArray($rows);
         self::assertSame([], $rows[0]['tags']);
     }
+
+    public function testAGarbageGoalIsRefusedLikeEveryOtherPreference(): void
+    {
+        $res = $this->runCli(['export', 'csv'], null, ['CANDY_CODETIME_GOAL' => 'banana']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('CANDY_CODETIME_GOAL', $res['stderr']);
+        $this->assertStringContainsString('banana', $res['stderr']);
+        $this->assertSame('', $res['stdout']);
+
+        $res = $this->runCli(['export', 'csv'], null, ['CANDY_CODETIME_GOAL' => '0']);
+        $this->assertSame(1, $res['exit']);
+    }
+
+    public function testAWholeHoursGoalPassesTheDoorAndPaintsNothingElse(): void
+    {
+        $this->runCli(['push', 'goalproj', 'php', '/x/a.php', '60'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $res = $this->runCli(['export', 'csv'], null, [
+            'CANDY_CODETIME_DIR' => $this->dataDir,
+            'CANDY_CODETIME_GOAL' => '6h',
+        ]);
+        $this->assertSame(0, $res['exit']);
+        $this->assertStringContainsString('goalproj', $res['stdout']);
+        $this->assertSame('', $res['stderr']);
+    }
 }

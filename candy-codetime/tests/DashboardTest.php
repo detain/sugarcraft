@@ -583,4 +583,40 @@ final class DashboardTest extends TestCase
         [$moved, ] = $tagged->update(new KeyMsg(KeyType::Left, ''));
         $this->assertTrue($moved->byTags, 'a window shift keeps the chosen pane');
     }
+
+    public function testTheGoalIsCarriedThroughResizeShiftAndWindowSteps(): void
+    {
+        $store = new Store($this->storeDir);
+        $end = new \DateTimeImmutable('2024-06-07');
+        $d = new Dashboard($store, $end, 7, new Stats([], []), 62, null, null, null, 0, 0, null, true, 7200);
+
+        [$resized] = $d->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $this->assertSame(7200, $resized->goalSeconds);
+        $this->assertTrue($resized->byTags);
+
+        [$profiled] = $d->update(new \SugarCraft\Core\Msg\ColorProfileMsg(\SugarCraft\Core\Util\ColorProfile::TrueColor));
+        $this->assertSame(7200, $profiled->goalSeconds);
+
+        [$shifted] = $resized->update(new KeyMsg(KeyType::Left, ''));
+        $this->assertSame(7200, $shifted->goalSeconds);
+
+        [$widened] = $shifted->update(new KeyMsg(KeyType::Char, '+'));
+        $this->assertSame(7200, $widened->goalSeconds);
+        $this->assertSame(14, $widened->days);
+
+        [$flipped] = $d->update(new KeyMsg(KeyType::Char, 't'));
+        $this->assertSame(7200, $flipped->goalSeconds);
+    }
+
+    public function testASubSecondGoalIsRefusedAtTheDoor(): void
+    {
+        $store = new Store($this->storeDir);
+        $end = new \DateTimeImmutable('2024-06-07');
+        try {
+            new Dashboard($store, $end, 7, new Stats([], []), 62, null, null, null, 0, 0, null, false, 0);
+            $this->fail('goal seconds below one must not build a Dashboard');
+        } catch (\InvalidArgumentException $error) {
+            $this->assertStringContainsString('at least one second', $error->getMessage());
+        }
+    }
 }

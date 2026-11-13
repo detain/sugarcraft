@@ -544,4 +544,74 @@ final class RendererGeometryTest extends TestCase
         $empty = self::plain(self::tagFrame(62, [], true));
         self::assertStringContainsString('(no activity)', implode("\n", $empty));
     }
+
+    /** @param list<Heartbeat> $beats */
+    private static function goalFrame(int $width, array $beats, ?int $goal, string $end = self::END, int $days = 7, bool $byTags = false): string
+    {
+        $endDay = new \DateTimeImmutable($end);
+        $stats = Stats::compute($beats, $endDay->modify('-' . ($days - 1) . ' days'), $endDay);
+        return Renderer::render(new Dashboard(
+            new Store(sys_get_temp_dir()), $endDay, $days, $stats, $width,
+            null, null, null, 0, 0, null, $byTags, $goal
+        ));
+    }
+
+    public function testTheGoalCellRidesTheHeaderAndReachedDaysFlagTheBand(): void
+    {
+        $now = new \DateTimeImmutable('today 09:00');
+        $beats = [
+            new Heartbeat($now->getTimestamp(), 'proj', 'php', 'a.php', 7290),
+            new Heartbeat($now->modify('-1 day')->getTimestamp(), 'proj', 'php', 'a.php', 1800),
+        ];
+        $plain = self::plain(self::goalFrame(80, $beats, null, 'today'));
+        $with = self::plain(self::goalFrame(80, $beats, 3600, 'today'));
+
+        $plainText = implode("\n", $plain);
+        self::assertStringNotContainsString(' / 1h00', $plainText);
+        self::assertStringNotContainsString(chr(226) . chr(150) . chr(147), $plainText);
+
+        $withText = implode("\n", $with);
+        self::assertStringContainsString('today 2h01 / 1h00', $withText);
+        self::assertStringContainsString(chr(226) . chr(150) . chr(147), $withText);
+
+        // Presentation rides the existing buckets: no row is added, and only
+        // the header cell and the one reached day's glyph move.
+        self::assertCount(count($plain), $with);
+        $diffs = [];
+        foreach ($plain as $index => $row) {
+            if ($row !== $with[$index]) {
+                $diffs[] = $index;
+            }
+        }
+        self::assertSame(2, count($diffs), 'goal must only move the header and the bars row, saw ' . json_encode($diffs));
+        self::assertSame(0, $diffs[0]);
+
+        // The band flag is width-independent: even the minimum frame shows
+        // which days reached the goal, whatever the header can afford.
+        $narrow = implode("\n", self::plain(self::goalFrame(62, $beats, 3600, 'today')));
+        self::assertStringContainsString(chr(226) . chr(150) . chr(147), $narrow);
+        foreach (self::plain(self::goalFrame(62, $beats, 3600, 'today')) as $line) {
+            self::assertLessThanOrEqual(62, Width::string($line));
+        }
+    }
+
+    public function testAGoalWindowThatExcludesTodayPaintsTheDashNotAFabricatedZero(): void
+    {
+        $joined = implode("\n", self::plain(self::goalFrame(80, self::busy(), 3600)));
+        self::assertStringContainsString('today ' . chr(226) . chr(128) . chr(148) . ' / 1h00', $joined);
+        self::assertStringNotContainsString('today 0h00', $joined);
+    }
+
+    public function testTheSideBySideJoinKeepsTheChosenPane(): void
+    {
+        $end = new \DateTimeImmutable(self::END);
+        $stats = Stats::compute(self::everyDay(), $end->modify('-6 days'), $end);
+        // Height 6 forces the side-by-side join over a full seven-day
+        // timeline; the rebuild must carry the `t` flip (CT-S31 rider).
+        $joined = implode("\n", self::plain(Renderer::render(new Dashboard(
+            new Store(sys_get_temp_dir()), $end, 7, $stats, 62, null, 6, null, 0, 0, null, true, null
+        ))));
+        self::assertStringContainsString('By tag', $joined);
+        self::assertStringNotContainsString('By language', $joined);
+    }
 }
