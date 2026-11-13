@@ -142,6 +142,40 @@ final class InternalErrorLoggingTest extends TestCase
     }
 
     /**
+     * S-O28: two sessions' -32099 lines carry their own session id, the
+     * connection id and a distinct token, so server.log can be split per session.
+     */
+    public function testAnInternalErrorLineNamesSessionConnectionAndAFreshToken(): void
+    {
+        $lines = [];
+        $fixture = ProtocolFixture::new(log: static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        });
+        $this->servers[] = $fixture;
+        $fixture->dispatcher->registry()->add(\SugarCraft\Code\Protocol\MethodSpec::new(
+            'test.boom',
+            \SugarCraft\Code\Protocol\Scope::Read,
+            'throws',
+            static function (): never {
+                throw new \RuntimeException('kaboom');
+            },
+        ));
+        $client = $fixture->client('conn-xyz');
+
+        $a = $client->request('test.boom', ['sessionId' => 'sess-A']);
+        $b = $client->request('test.boom', ['sessionId' => 'sess-B']);
+
+        self::assertSame(2, \count($lines));
+        self::assertMatchesRegularExpression('/^\[session=sess-A conn=conn-xyz err=[0-9a-f]{8}\] test\.boom failed: RuntimeException: kaboom/', $lines[0]);
+        self::assertStringContainsString('session=sess-B', $lines[1]);
+        \preg_match('/err=([0-9a-f]+)/', $lines[0], $m0);
+        \preg_match('/err=([0-9a-f]+)/', $lines[1], $m1);
+        self::assertNotSame($m0[1], $m1[1], 'each dispatch mints its own token');
+        self::assertSame('internal error', $a['error']['message'], 'the wire stays cause-free');
+        self::assertStringNotContainsString('kaboom', (string) \json_encode($b));
+    }
+
+    /**
      * The absence of a sink changes the answer not at all — the refusal is the
      * contract, the log is a courtesy to the operator.
      */

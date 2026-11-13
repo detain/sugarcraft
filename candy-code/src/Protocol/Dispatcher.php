@@ -477,7 +477,17 @@ final class Dispatcher implements MessageHandler
             // The message may carry a path, a prompt or a secret: the client
             // gets the code and the kind, never the text — but the cause goes
             // to the server's log, which is where SERVER.md promised it (ISS-057).
-            $this->context->logError($e, \sprintf('%s failed', $spec->name ?? $request->method));
+            // Session + connection + a per-dispatch token ride the line so two
+            // sessions' failures are separable in server.log (S-O28); the
+            // client still gets only the code and kind.
+            $sessionId = $request->params['sessionId'] ?? null;
+            $this->context->logError($e, \sprintf(
+                '[session=%s conn=%s err=%s] %s failed',
+                \is_string($sessionId) && $sessionId !== '' ? \substr(\preg_replace('/[^A-Za-z0-9_.:-]/', '?', $sessionId) ?? '', 0, 64) : '-',
+                $client->id(),
+                \bin2hex(\random_bytes(4)),
+                $spec->name ?? $request->method,
+            ));
             if ($request->hasId) {
                 $client->send(JsonRpc::error($request->id, RpcError::of(ErrorCode::Internal, 'internal error')));
             }
