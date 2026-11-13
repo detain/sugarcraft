@@ -5311,4 +5311,5 @@ TXT,
     'cmd.sendto.mode.mask' => '{mode} + маска',
     'cmd.sendto.row' => '{name} отправлен в форму генерации — импортировано полей: {count} ({via}, {mode})',
     'context.intent.unusable_glob' => 'У заметки памяти {id} непригодный триггер `when: path:` ({glob}), поэтому он никогда не сработает. Измените или удалите заметку.',
+    'host.memory.repo_ignore_planted' => 'Создан `.candy-code/memory/.gitignore` (`*`), чтобы заметки проекта не попадали в git. Удалите этот файл, если хотите их закоммитить.',
 ];

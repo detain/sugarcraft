@@ -5312,4 +5312,5 @@ brouillon du formulaire de génération. Les valeurs déjà présentes dans le b
     'cmd.sendto.mode.mask' => '{mode} + masque',
     'cmd.sendto.row' => '{name} envoyé au formulaire de génération — {count} champs importés ({via}, {mode})',
     'context.intent.unusable_glob' => 'La note de mémoire {id} a un déclencheur `when: path:` ({glob}) inutilisable, elle ne se déclenchera donc jamais. Modifiez ou supprimez la note.',
+    'host.memory.repo_ignore_planted' => '`.candy-code/memory/.gitignore` (`*`) a été créé pour que les notes du projet restent hors de git. Supprimez ce fichier si vous souhaitez les valider.',
 ];

@@ -362,6 +362,10 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
                 . ' a system reminder, when a tool touches a path matching its `when:` trigger, and'
                 . ' the note index lists it under its own heading.';
         }
+        if ($result->ignorePlanted) {
+            $text .= ' A `.gitignore` containing `*` was created in ' . ProjectMemoryWriter::RELATIVE_DIRECTORY
+                . ' so project notes stay out of git; delete it to commit them.';
+        }
         if ($result->fellBackToHome) {
             $text .= ' The repository could not host ' . ProjectMemoryWriter::RELATIVE_DIRECTORY
                 . ', so this project note is kept on this machine only.';

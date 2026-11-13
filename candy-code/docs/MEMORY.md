@@ -99,6 +99,11 @@ command accepts.
 
 ### Hand-edited notes
 
+The first project-scope save into a repo plants `<repo>/.candy-code/memory/.gitignore`
+(`*`) and says so in the save reply, so raw notes are not one `git add .` from
+shared history. It is planted once and never overwritten: delete it (or
+hand-write your own) to commit the notes.
+
 Notes are plain files and a repo's `.candy-code/memory/` is git-visible, so the
 reader tolerates the edits people actually make: an unquoted date
 (`createdAt: 2024-01-01`, which YAML returns as an int timestamp), a bare

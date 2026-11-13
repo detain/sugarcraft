@@ -66,6 +66,23 @@ final class MemoryWriterTest extends TestCase
         self::assertNull($this->store->get($saved->id), 'not also in the home store');
     }
 
+    /** S-X02: the first repo save plants a self-ignoring .gitignore, once, and never clobbers one. */
+    public function testFirstRepoSavePlantsSelfIgnoreOnceAndKeepsUserOwnedOnes(): void
+    {
+        $writer = MemoryWriter::new($this->store, $this->root);
+        $first = $writer->save('one', 'project');
+        $ignore = $this->root . '/.candy-code/memory/.gitignore';
+
+        self::assertTrue($first->ignorePlanted);
+        self::assertSame("*\n", file_get_contents($ignore));
+        self::assertFalse($writer->save('two', 'project')->ignorePlanted, 'second save is silent');
+
+        file_put_contents($ignore, "# mine\n");
+        self::assertFalse($writer->save('three', 'project')->ignorePlanted);
+        self::assertSame("# mine\n", file_get_contents($ignore), 'a user-owned ignore is never rewritten');
+        self::assertFalse($writer->save('home', 'user')->ignorePlanted);
+    }
+
     public function testAProjectNoteFallsBackToTheHomeStoreAndSaysSo(): void
     {
         $saved = MemoryWriter::new($this->store, '')->save('no repository here');

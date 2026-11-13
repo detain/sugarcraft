@@ -5311,4 +5311,5 @@ sobrescriben (la ley onlyUnset).',
     'cmd.sendto.mode.mask' => '{mode} + máscara',
     'cmd.sendto.row' => '{name} enviado al formulario de generación — {count} campos importados ({via}, {mode})',
     'context.intent.unusable_glob' => 'La nota de memoria {id} tiene un disparador `when: path:` ({glob}) que no se puede usar, así que nunca se activará. Edita o elimina la nota.',
+    'host.memory.repo_ignore_planted' => 'Se creó `.candy-code/memory/.gitignore` (`*`) para que las notas del proyecto queden fuera de git. Elimina ese archivo si quieres confirmarlas.',
 ];

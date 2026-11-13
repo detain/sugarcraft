@@ -5311,4 +5311,5 @@ Generierungsformular-Entwurf. Bereits im Entwurf vorhandene Werte werden nie
     'cmd.sendto.mode.mask' => '{mode} + Maske',
     'cmd.sendto.row' => '{name} an das Generierungsformular gesendet — {count} Felder importiert ({via}, {mode})',
     'context.intent.unusable_glob' => 'Die Gedächtnisnotiz {id} hat einen `when: path:`-Auslöser ({glob}), der nicht verwendbar ist und daher nie ausgelöst wird. Bearbeite oder lösche die Notiz.',
+    'host.memory.repo_ignore_planted' => '`.candy-code/memory/.gitignore` (`*`) wurde angelegt, damit Projektnotizen nicht in Git landen. Lösche die Datei, wenn du sie committen möchtest.',
 ];

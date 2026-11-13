@@ -5308,4 +5308,5 @@ TXT,
     'cmd.sendto.mode.mask' => '{mode} + 마스크',
     'cmd.sendto.row' => '{name}을(를) 생성 폼으로 보냈습니다 — {count}개 필드 가져옴 ({via}, {mode})',
     'context.intent.unusable_glob' => '메모리 노트 {id}의 `when: path:` 트리거({glob})를 사용할 수 없어 절대 실행되지 않습니다. 노트를 수정하거나 삭제하세요.',
+    'host.memory.repo_ignore_planted' => '프로젝트 노트가 git에 포함되지 않도록 `.candy-code/memory/.gitignore`(`*`)를 만들었습니다. 커밋하려면 이 파일을 삭제하세요.',
 ];

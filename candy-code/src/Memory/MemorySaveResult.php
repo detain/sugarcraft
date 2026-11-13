@@ -7,7 +7,8 @@ namespace SugarCraft\Code\Memory;
 /**
  * What {@see MemoryWriter::save()} did: the new note's id, the scope it was
  * saved under, and whether a project note fell back to the home store because
- * the repository could not host `.candy-code/memory/`.
+ * the repository could not host `.candy-code/memory/`, and whether this save
+ * planted the self-ignoring `.gitignore` in that directory (first write only).
  */
 final readonly class MemorySaveResult
 {
@@ -16,6 +17,7 @@ final readonly class MemorySaveResult
         public string $scope,
         public bool $inRepository,
         public bool $fellBackToHome,
+        public bool $ignorePlanted = false,
     ) {
     }
 }

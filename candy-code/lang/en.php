@@ -5386,4 +5386,5 @@ overwritten (the onlyUnset law).',
     'cmd.sendto.mode.mask' => '{mode} + mask',
     'cmd.sendto.row' => 'sent {name} to the generate form — {count} fields imported ({via}, {mode})',
     'context.intent.unusable_glob' => 'Memory note {id} has a `when: path:` trigger ({glob}) that cannot be used, so it will never fire. Edit or delete the note.',
+    'host.memory.repo_ignore_planted' => 'Created `.candy-code/memory/.gitignore` (`*`) so project notes stay out of git. Delete that file if you want to commit them.',
 ];

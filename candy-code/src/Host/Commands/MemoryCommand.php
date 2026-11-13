@@ -188,6 +188,9 @@ final class MemoryCommand implements HostCommand
             if ($landed !== null && $landed !== '') {
                 $response .= "\n\n" . Lang::t('host.memory.saved_to', ['dir' => $landed]);
             }
+            if ($saved->ignorePlanted) {
+                $response .= "\n\n" . Lang::t('host.memory.repo_ignore_planted');
+            }
             if ($saved->fellBackToHome) {
                 $response .= "\n\n" . Lang::t('host.memory.fell_back_home');
             }

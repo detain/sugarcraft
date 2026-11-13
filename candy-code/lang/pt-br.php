@@ -5311,4 +5311,5 @@ sobrescritos (a lei onlyUnset).',
     'cmd.sendto.mode.mask' => '{mode} + máscara',
     'cmd.sendto.row' => '{name} enviado ao formulário de geração — {count} campos importados ({via}, {mode})',
     'context.intent.unusable_glob' => 'A nota de memória {id} tem um gatilho `when: path:` ({glob}) inutilizável, então nunca será disparada. Edite ou exclua a nota.',
+    'host.memory.repo_ignore_planted' => 'Criado `.candy-code/memory/.gitignore` (`*`) para manter as notas do projeto fora do git. Exclua esse arquivo se quiser commitá-las.',
 ];

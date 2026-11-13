@@ -5312,4 +5312,5 @@ sovrascritti (la legge onlyUnset).',
     'cmd.sendto.mode.mask' => '{mode} + maschera',
     'cmd.sendto.row' => '{name} inviato al modulo di generazione — {count} campi importati ({via}, {mode})',
     'context.intent.unusable_glob' => 'La nota di memoria {id} ha un trigger `when: path:` ({glob}) non utilizzabile, quindi non scatterà mai. Modifica o elimina la nota.',
+    'host.memory.repo_ignore_planted' => 'Creato `.candy-code/memory/.gitignore` (`*`) affinché le note del progetto restino fuori da git. Elimina quel file se vuoi committarle.',
 ];

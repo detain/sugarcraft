@@ -5306,4 +5306,5 @@ TXT,
     'cmd.sendto.mode.mask' => '{mode} + 蒙版',
     'cmd.sendto.row' => '已将 {name} 发送到生成表单 — 导入了 {count} 个字段（{via}，{mode}）',
     'context.intent.unusable_glob' => '记忆笔记 {id} 的 `when: path:` 触发器（{glob}）无法使用，因此永远不会触发。请编辑或删除该笔记。',
+    'host.memory.repo_ignore_planted' => '已创建 `.candy-code/memory/.gitignore`（`*`），使项目笔记不进入 git。如需提交笔记，请删除该文件。',
 ];

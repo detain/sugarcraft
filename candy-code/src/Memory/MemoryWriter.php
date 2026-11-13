@@ -152,7 +152,7 @@ final class MemoryWriter
             $id = $repoWriter->write($content, $tags);
             self::restyle($repoWriter->store(), $id, $type, $normalizedWhen);
 
-            return new MemorySaveResult($id, $scope, true, false);
+            return new MemorySaveResult($id, $scope, true, false, self::plantRepoIgnore($repoWriter->directory()));
         }
 
         $home = $this->home() ?? throw new \RuntimeException('the memory store is not available');
@@ -160,6 +160,29 @@ final class MemoryWriter
         self::restyle($home, $id, $type, $normalizedWhen);
 
         return new MemorySaveResult($id, $scope, false, $scope === 'project');
+    }
+
+    /**
+     * Make the repo-local memory tree ignore itself, once, so a first project
+     * save does not leave raw notes sitting untracked in `git status` one
+     * `git add .` from shared history (audit context-002; the precedent is
+     * `AgentMemory::plantLocalIgnore()`).
+     *
+     * A `.gitignore` already there is never touched: its absence is the only
+     * signal that the user has not yet chosen, so deleting the planted file (or
+     * hand-writing another) is how a team opts into committing its notes.
+     * Best-effort — a hygiene file must not fail the save.
+     *
+     * @return bool True only when THIS call planted the file (the reply says so once).
+     */
+    private static function plantRepoIgnore(string $directory): bool
+    {
+        $ignore = $directory . '/.gitignore';
+        if (file_exists($ignore) || is_link($ignore)) {
+            return false;
+        }
+
+        return @file_put_contents($ignore, "*\n") !== false;
     }
 
     /**
