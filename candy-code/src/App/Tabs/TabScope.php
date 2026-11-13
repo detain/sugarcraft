@@ -7,6 +7,7 @@ namespace SugarCraft\Code\App\Tabs;
 use Closure;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\BatchMsg;
+use SugarCraft\Core\EveryRequest;
 use SugarCraft\Core\ExecRequest;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ExceptionMsg;
@@ -88,6 +89,7 @@ final class TabScope
         BatchMsg::class,
         SequenceMsg::class,
         TickRequest::class,
+        EveryRequest::class,
         AsyncCmd::class,
     ];
 
@@ -145,6 +147,13 @@ final class TabScope
 
         if ($msg instanceof TickRequest) {
             return new TickRequest($msg->seconds, self::cmd($tabKey, $msg->produce));
+        }
+
+        if ($msg instanceof EveryRequest) {
+            // sugar-core-004: Cmd::every()'s shared periodic producer. Every
+            // value it returns is scoped to the owning tab; a null (stepping
+            // down from the shared chain) stays null.
+            return new EveryRequest($msg->period, self::cmd($tabKey, $msg->produce));
         }
 
         if ($msg instanceof AsyncCmd) {

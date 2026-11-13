@@ -23,6 +23,7 @@ use SugarCraft\Core\Msg\SubscriptionsMsg;
 use SugarCraft\Core\Msg\SuspendMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\PrintMsg;
+use SugarCraft\Core\EveryRequest;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\Screen;
@@ -127,6 +128,24 @@ final class TabScopeTest extends TestCase
         $this->assertSame($inner, $produced->inner());
     }
 
+    public function testAnEveryRequestKeepsItsPeriodAndScopesItsProducerButNotItsStepDown(): void
+    {
+        $inner = $this->scopeProbeMsg();
+        $values = [$inner, null];
+        $every = new EveryRequest(2.0, static function () use (&$values): ?Msg {
+            return array_shift($values);
+        });
+
+        $mapped = TabScope::msg(self::SCOPE_KEY, $every);
+
+        $this->assertInstanceOf(EveryRequest::class, $mapped);
+        $this->assertSame(2.0, $mapped->period);
+        $produced = ($mapped->produce)();
+        $this->assertInstanceOf(TabScopedMsg::class, $produced);
+        $this->assertSame($inner, $produced->inner());
+        $this->assertNull(($mapped->produce)(), 'a null still steps the producer down from the shared chain');
+    }
+
     public function testDeeplyNestedProducerTreesAreScopedAtTheLeaf(): void
     {
         $leaf = $this->scopeProbeMsg();
@@ -217,7 +236,7 @@ final class TabScopeTest extends TestCase
 
     public function testTheStructuralSetMatchesTheSentinelClassesMappedNotSkipped(): void
     {
-        $expected = ['AsyncCmd', 'BatchMsg', 'SequenceMsg', 'TickRequest'];
+        $expected = ['AsyncCmd', 'BatchMsg', 'EveryRequest', 'SequenceMsg', 'TickRequest'];
         $actual = array_map(
             static fn (string $class): string => substr($class, strrpos($class, '\\') === false ? 0 : strrpos($class, '\\') + 1),
             TabScope::STRUCTURAL,
