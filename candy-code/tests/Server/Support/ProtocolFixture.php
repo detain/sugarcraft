@@ -49,7 +49,7 @@ final class ProtocolFixture
 
     public readonly Dispatcher $dispatcher;
 
-    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log, ?AgentManager $agentManager, ?PermissionGate $permissionGate, ?\Closure $clock, ?ViewerTokens $viewerTokens = null)
+    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log, ?AgentManager $agentManager, ?PermissionGate $permissionGate, ?\Closure $clock, ?ViewerTokens $viewerTokens = null, ?\React\EventLoop\LoopInterface $loop = null)
     {
         $this->dir = \sys_get_temp_dir() . '/crush-protocol-' . \bin2hex(\random_bytes(6));
         $this->root = $this->dir . '/project';
@@ -80,7 +80,7 @@ final class ProtocolFixture
 
         $config ??= ServerConfig::new($this->dir);
         $this->hub = SessionHub::new($workspace, $config->maxOpenSessions);
-        $this->context = ServerContext::new($this->hub, $config->withRoot($this->root), 'test', Loop::get(), clock: $clock, log: $log);
+        $this->context = ServerContext::new($this->hub, $config->withRoot($this->root), 'test', $loop ?? Loop::get(), clock: $clock, log: $log);
         $this->dispatcher = Dispatcher::new($this->context);
     }
 
@@ -103,10 +103,12 @@ final class ProtocolFixture
      * @param ViewerTokens|null $viewerTokens the workspace's viewer-token store;
      *        none by default, which makes `token.*` answer `tokens_unavailable`
      *        (the G4-G addendum pins inject one)
+     * @param \React\EventLoop\LoopInterface|null $loop the server context's loop; null is the
+     *        shared one (the S-O04 pins hand in a {@see FaultableLoop})
      */
-    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null, ?AgentManager $agentManager = null, ?PermissionGate $permissionGate = null, ?\Closure $clock = null, ?ViewerTokens $viewerTokens = null): self
+    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null, ?AgentManager $agentManager = null, ?PermissionGate $permissionGate = null, ?\Closure $clock = null, ?ViewerTokens $viewerTokens = null, ?\React\EventLoop\LoopInterface $loop = null): self
     {
-        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log, $agentManager, $permissionGate, $clock, $viewerTokens);
+        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log, $agentManager, $permissionGate, $clock, $viewerTokens, $loop);
     }
 
     /** A client that has said hello. */

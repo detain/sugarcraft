@@ -195,6 +195,45 @@ final class AttachResumeTest extends TestCase
         self::assertSame('user walked away', $host->closeReason());
     }
 
+    public function testARedialThatThrowsEndsTheAttachmentInsteadOfUnwindingTheLoop(): void
+    {
+        // S-O04: the backoff timer runs the redial from the Loop. A redial that
+        // THROWS (a dialer that faults before it can return a promise) must end
+        // the attachment with a verdict, not escape into Loop::run().
+        $queue = [];
+        $server = $this->server();
+        $socket = $this->fixture->await(Attach::stream('ws://127.0.0.1:' . $server->port() . '/ws', self::LADDER_TOKEN));
+        self::assertIsArray($socket, $socket instanceof \Throwable ? $socket->getMessage() : 'no handshake');
+        $host = RemoteSessionHost::overStream(
+            $socket[0],
+            RemoteSessionHost::CLIENT_NAME,
+            $socket[1],
+            static function (): never {
+                throw new \RuntimeException('redial exploded');
+            },
+            static function (float $seconds, \Closure $run) use (&$queue): void {
+                $queue[] = $run;
+            },
+        );
+        $this->hosts[] = $host;
+        $opened = $this->fixture->await($host->hello()->then(static fn (): PromiseInterface => $host->open()));
+        self::assertNotInstanceOf(\Throwable::class, $opened, $opened instanceof \Throwable ? $opened->getMessage() : '');
+        $closes = [];
+        $host->onClose(static function (string $reason) use (&$closes): void {
+            $closes[] = $reason;
+        });
+
+        $server->stop();
+        $this->fixture->run(0.05);
+        self::assertCount(1, $queue, 'the drop queued the first redial');
+
+        $queue[0]();
+
+        self::assertCount(1, $closes, 'the throw ended the attachment with one verdict');
+        self::assertStringContainsString('redial exploded', $closes[0]);
+        self::assertFalse($host->isOpen());
+    }
+
     public function testTheLadderEndsWhenTheServerIsGoneForGood(): void
     {
         $server = $this->server();
