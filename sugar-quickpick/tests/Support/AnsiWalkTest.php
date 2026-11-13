@@ -57,6 +57,71 @@ final class AnsiWalkTest extends TestCase
         self::assertSame(['a', "\xA9", 'b'], $chars);
     }
 
+    public function testInvalidContinuationDoesNotSwallowFollowingAscii(): void
+    {
+        // -042: the lead 0xC3 promises one continuation byte; when the next
+        // byte is not 0x80..0xBF the lead stands alone and 'g' survives as
+        // its own display piece (the old size-from-lead-only scan folded
+        // "\xc3g" into one piece and silently ate the character).
+        self::assertSame(['a', "\xC3", 'g'], AnsiWalk::chars("a\xC3g"));
+        // With the bad lead folded into one piece, 'g' would not be its own
+        // addressable cell — the display index of 'g' shifts by one and a
+        // highlight at index 2 paints the wrong rune. Pin the addressing:
+        $cells = AnsiWalk::chars("a\xC3<g>");
+        self::assertSame(['a', "\xC3", '<', 'g', '>'], $cells);
+        self::assertSame("\xC3", $cells[1]);
+        self::assertSame('g', $cells[3]);
+        // A 3-byte lead truncated after one valid continuation stops there —
+        // the ASCII behind the bad byte is not collateral.
+        self::assertSame(['x', "\xE4\xB8", 'y'], AnsiWalk::chars("x\xE4\xB8y"));
+        // Truncation at end of input keeps the valid prefix as one piece.
+        self::assertSame(['a', "\xE4\xB8"], AnsiWalk::chars("a\xE4\xB8"));
+        // A genuinely valid 3-byte codepoint still walks as one piece.
+        self::assertSame(['a', '中', 'b'], AnsiWalk::chars("a\xe4\xb8\xadb"));
+    }
+
+    public function testOscClosedByStringTerminatorMidString(): void
+    {
+        // -081: `sequenceEnd()` claims ESC-ST ("\x1b\\") closure but nothing
+        // pinned it. An OSC/DCS/SOS/PM/APC sequence closed by ST mid-string
+        // must consume the introducer, the payload, AND the terminator.
+        self::assertSame('ab', AnsiWalk::plain("a\x1b]0;t\x1b\\b"));
+        $pieces = AnsiWalk::pieces("\x1b_x\x1b\\y");
+        self::assertSame(
+            [
+                ['escape' => true, 'text' => "\x1b_x\x1b\\"],
+                ['escape' => false, 'text' => 'y'],
+            ],
+            $pieces,
+        );
+    }
+
+    public function testApcAndPmIntroducersConsumePayload(): void
+    {
+        // -081 dataset rows: APC (0x5F) and PM (0x5E) — each closed by BEL
+        // and by ST — plus DCS/SOS for the same claim in the docblock.
+        self::assertSame('ok', AnsiWalk::plain("\x1b_gencat\x07ok"));
+        self::assertSame('ok', AnsiWalk::plain("\x1b_gencat\x1b\\ok"));
+        self::assertSame('ok', AnsiWalk::plain("\x1b^priv\x07ok"));
+        self::assertSame('ok', AnsiWalk::plain("\x1b^priv\x1b\\ok"));
+        self::assertSame('ok', AnsiWalk::plain("\x1bPq#0payload\x07ok"));
+        self::assertSame('ok', AnsiWalk::plain("\x1bXsos-payload\x07ok"));
+    }
+
+    public function testPiecesMemoizationAnswersByteIdentically(): void
+    {
+        // -070: the split is cached per string; a cache hit must answer with
+        // exactly the same bytes (arrays are value types, so callers cannot
+        // alias or corrupt the stored list).
+        $text = "\x1b[1mbanana\x1b[0m";
+        self::assertSame(AnsiWalk::pieces($text), AnsiWalk::pieces($text));
+        // Different strings never share a slot.
+        self::assertNotSame(
+            \count(AnsiWalk::pieces($text)),
+            \count(AnsiWalk::pieces($text . 'x')),
+        );
+    }
+
     public function testTruncatedStringSequenceSwallowsPayload(): void
     {
         // Unterminated OSC at end of input: everything after the introducer is

@@ -17,18 +17,52 @@ use SugarCraft\Core\Util\Ansi;
  * cannibalised any SGR the formatter had applied.
  *
  * The tokenizer is a linear byte scan; UTF-8 codepoint widths are derived
- * from the lead byte. Stray continuation bytes (invalid UTF-8) are emitted
- * one byte at a time — render ingress already repairs them via
- * {@see UntrustedText::guard()}, so they are inert here by construction.
+ * from the lead byte, and a lead byte only CLAIMS bytes that are genuine
+ * 0x80..0xBF continuations — when the promised trail is not there, the lead
+ * emits as its own piece and the following ASCII survives as the next one
+ * (-042: an unvalidated `0xC3` used to swallow the byte behind it, silently
+ * shifting every later match index by one). Stray continuation bytes are one
+ * byte each. Render ingress repairs invalid UTF-8 via
+ * {@see UntrustedText::guard()} beforehand, so these arms are the belt to
+ * that suspenders: a host formatter closing over raw disk bytes can still
+ * reach this walker unguarded.
+ *
+ * Piece lists are memoized per string (-070): `paint()` ran once per styled
+ * row per frame and each call re-split the whole row into per-codepoint
+ * pieces. The cache is bounded with oldest-drop, and every public answer is
+ * byte-identical with or without a hit.
  */
 final class AnsiWalk
 {
+    /** Bound on the pieces() memo — oldest entry drops on overflow. */
+    private const PIECE_CACHE_LIMIT = 4096;
+
+    /** @var array<string, list<array{escape: bool, text: string}>> */
+    private static array $pieceCache = [];
+
     /**
      * Split a string into escape pieces and single-codepoint text pieces.
      *
      * @return list<array{escape: bool, text: string}>
      */
     public static function pieces(string $text): array
+    {
+        $cached = self::$pieceCache[$text] ?? null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $out = self::split($text);
+        if (\count(self::$pieceCache) >= self::PIECE_CACHE_LIMIT) {
+            unset(self::$pieceCache[\array_key_first(self::$pieceCache)]);
+        }
+        self::$pieceCache[$text] = $out;
+
+        return $out;
+    }
+
+    /** @return list<array{escape: bool, text: string}> */
+    private static function split(string $text): array
     {
         $len = \strlen($text);
         $out = [];
@@ -41,7 +75,7 @@ final class AnsiWalk
                 $i = $end;
                 continue;
             }
-            $size = self::codepointSize(\ord($text[$i]));
+            $size = self::codepointSize($text, $i, $len);
             $out[] = ['escape' => false, 'text' => \substr($text, $i, $size)];
             $i += $size;
         }
@@ -116,22 +150,42 @@ final class AnsiWalk
         return $result;
     }
 
-    /** Expected UTF-8 sequence length from its lead byte (1 for stray bytes). */
-    private static function codepointSize(int $lead): int
+    /**
+     * Actual UTF-8 sequence length from the lead byte at $i, validated
+     * against the continuation bytes present (1 for stray/invalid leads).
+     *
+     * -042: the former version returned the EXPECTED width from the lead
+     * alone, so a truncated multibyte swallowed the following ASCII. Now
+     * each promised continuation is checked for the 0x80..0xBF shape; on a
+     * bad byte, the lead emits as its own one-byte piece and the scan
+     * resumes at the offending byte.
+     */
+    private static function codepointSize(string $text, int $i, int $len): int
     {
+        $lead = \ord($text[$i]);
         if ($lead < 0x80) {
             return 1;
         }
         if ($lead >= 0xC2 && $lead <= 0xDF) {
-            return 2;
+            $expected = 2;
+        } elseif ($lead >= 0xE0 && $lead <= 0xEF) {
+            $expected = 3;
+        } elseif ($lead >= 0xF0 && $lead <= 0xF4) {
+            $expected = 4;
+        } else {
+            return 1; // stray continuation or invalid lead (0x80..0xC1, 0xF5..0xFF)
         }
-        if ($lead >= 0xE0 && $lead <= 0xEF) {
-            return 3;
+
+        $size = 1;
+        while ($size < $expected) {
+            $j      = $i + $size;
+            $byte   = $j < $len ? \ord($text[$j]) : -1;
+            if ($byte < 0x80 || $byte > 0xBF) {
+                break; // bad/truncated continuation — emit the lead alone
+            }
+            $size++;
         }
-        if ($lead >= 0xF0 && $lead <= 0xF4) {
-            return 4;
-        }
-        return 1;
+        return $size;
     }
 
     /**
