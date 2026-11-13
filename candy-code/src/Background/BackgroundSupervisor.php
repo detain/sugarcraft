@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Background;
 
 use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
@@ -735,7 +736,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
 
         if (!is_resource($proc)) {
             $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath, ...($answerPath === null ? [] : [$answerPath]));
-            throw new \RuntimeException('Failed to spawn session process');
+            throw new \RuntimeException(Lang::t('background.task.spawn.failed'));
         }
 
         // Create the Unix socket server AFTER the fork, deliberately (audit

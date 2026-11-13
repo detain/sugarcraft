@@ -8,6 +8,7 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Host\SpendLedger;
+use SugarCraft\Code\Lang;
 
 /**
  * Represents a single background session running an agent in a child process.
@@ -315,7 +316,7 @@ final class BackgroundSession
 
         $output = rtrim($this->output);
         if ($output === '') {
-            $lines[] = 'Output: (none)';
+            $lines[] = Lang::t('background.task.output.none');
         } else {
             $length = mb_strlen($output, 'UTF-8');
             if ($length > $maxOutputChars) {

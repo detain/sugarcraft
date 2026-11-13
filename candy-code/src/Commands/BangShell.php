@@ -265,7 +265,7 @@ final class BangShell
             "[The user ran a shell command: %s]\n%s\n%s",
             self::printable($command),
             $status,
-            $output === '' ? 'Output: (none)' : "Output:\n" . $output,
+            $output === '' ? Lang::t('background.task.output.none') : "Output:\n" . $output,
         ));
     }
 

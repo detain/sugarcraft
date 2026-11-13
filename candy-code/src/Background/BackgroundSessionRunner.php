@@ -11,6 +11,7 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\PermissionConfigException;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Host\TurnController;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\ToolRefusal;
 use SugarCraft\Code\Session\EnhancedSessionStore;
@@ -605,7 +606,7 @@ final class BackgroundSessionRunner
         [$turnNotes, $turnBlocked] = $this->fireTurnHooks($this->task, $fork !== null);
         if ($turnBlocked !== null) {
             $this->log('[session:task:failed] turn hook blocked: ' . $this->oneLine($turnBlocked));
-            $this->saveFork($fork, [Message::user($this->task), Message::notice('Background task blocked by a turn hook: ' . $this->oneLine($turnBlocked))]);
+            $this->saveFork($fork, [Message::user($this->task), Message::notice(Lang::t('background.task.turn_blocked', ['reason' => $this->oneLine($turnBlocked)]))]);
 
             return 1;
         }
@@ -624,7 +625,7 @@ final class BackgroundSessionRunner
                 $this->append($pending . "\n");
             }
             $this->log('[session:task:failed] ' . $this->oneLine($e->getMessage()));
-            $this->saveFork($fork, [$user, Message::notice('Background task failed: ' . $this->oneLine($e->getMessage()))]);
+            $this->saveFork($fork, [$user, Message::notice(Lang::t('background.task.failed', ['reason' => $this->oneLine($e->getMessage())]))]);
 
             return 1;
         }
