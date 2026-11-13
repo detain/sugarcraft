@@ -44,6 +44,12 @@ final class SftpStub implements SubsystemHandler
         $this->called = true;
     }
 
+    /**
+     * {@internal Test-only visibility accessor — exists only so the
+     * suite can observe invocation; production callers must not wire
+     * against a quarantined stub (audit 050). Delete it when a real
+     * subsystem lands, per the class's QUARANTINED note.}
+     */
     public function wasCalled(): bool
     {
         return $this->called;
