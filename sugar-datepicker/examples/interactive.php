@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Runnable interactive path for sugar-datepicker.
  *
- * Unlike basic.php (imperative View() walk) and constraints.php (min/max
+ * Unlike basic.php (imperative view() walk) and constraints.php (min/max
  * bounds), this example mounts the TEA Model inside a real sugar-core
  * Program loop and feeds it a fixed script of KeyMsgs — the only place a
  * reader can see how a live keystroke travels through update(), which
@@ -14,6 +14,19 @@ declare(strict_types=1);
  * escapes are emitted, so the run is byte-deterministic even piped to a
  * file; the drained EventStore transcript and the final grid are printed
  * once the loop has stopped.
+ *
+ * Input: the loop reads from one end of a socket pair that is never written
+ * to and never closed, NOT from STDIN. Program treats a real stdin EOF as a
+ * cooperative QuitMsg (sugar-core-006), so a piped run against a closed
+ * stdin would stop the loop after the first couple of scripted steps and
+ * print a truncated transcript. A silent open stream keeps the loop alive
+ * for the full script; the run ends through the demo's own QuitMsg.
+ *
+ * Transcript honesty: every unlabelled `label -> type payload` line is a
+ * byte for byte EventStore event. The only non-event line is the host's
+ * range-mode switch, prefixed `[host]` so no reader mistakes it for a
+ * fifth wire event the store does not emit. Steps that record nothing
+ * simply print nothing.
  *
  * Determinism: fixed seed date 2026-05-01 (also pinned as the "today"
  * reference so no wall-clock cell can drift) and a fixed EventStore clock.
@@ -48,8 +61,9 @@ final class RangeModeMsg implements Msg
 /**
  * TEA host program for the demo: holds the DatePicker model, walks a
  * fixed message script through the real Program event loop, collects one
- * transcript line per EventStore event (or per no-event step), and quits
- * the loop itself when the script is done.
+ * transcript line per EventStore event (the host's range-mode switch is
+ * the only other line, `[host]`-prefixed), and quits the loop itself when
+ * the script is done.
  */
 final class InteractiveDemo implements CoreModel
 {
@@ -140,16 +154,15 @@ final class InteractiveDemo implements CoreModel
                 static fn (DatePicker $p): DatePicker => $p->withRangeMode(true),
             );
 
-            return [$this->withState($switched, [sprintf('%-12s -> %-14s {}', 'range-mode', 'mode')]), $this->nextCmd()];
+            // Host-local line, deliberately NOT in wire-event format: the
+            // store emits no event for a mode flip (see README Events).
+            return [$this->withState($switched, ['[host] range-mode toggled']), $this->nextCmd()];
         }
 
         [$next, ] = $this->dp->update($msg);
         $events = $this->store->release();
 
         $lines = [];
-        if ($events === []) {
-            $lines[] = sprintf('%-12s -> %-14s {}', $this->script[$this->step]['label'], 'no-event');
-        }
         foreach ($events as $event) {
             $payload = $event['payload'] === [] ? '{}' : json_encode($event['payload']);
             $lines[] = sprintf(
@@ -220,19 +233,27 @@ final class InteractiveDemo implements CoreModel
 
 $demo = InteractiveDemo::create();
 
+// Silent, never-EOF input stream (see docblock): one end feeds Program, the
+// other end is held open by the demo so the watcher never sees EOF and the
+// loop is driven purely by the scripted commands.
+$inputPair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+assert($inputPair !== false);
+
 $program = new Program(
     $demo,
-    new ProgramOptions(withoutRenderer: true, hideCursor: false, unicodeMode: false),
+    new ProgramOptions(withoutRenderer: true, hideCursor: false, unicodeMode: false, input: $inputPair[0]),
 );
 
 $final = $program->run();
 assert($final instanceof InteractiveDemo);
+fclose($inputPair[0]);
+fclose($inputPair[1]);
 
 echo "\n";
 echo $final->view(), "\n";
 echo "\n";
-echo "EventStore transcript (", count($final->transcript()), " lines from ",
-    $final->scriptLength(), " scripted messages):\n";
+echo 'Demo transcript (store events verbatim; [host] lines labelled — ', count($final->transcript()),
+    " lines from ", $final->scriptLength(), " scripted messages):\n";
 foreach ($final->transcript() as $line) {
     echo '  ', $line, "\n";
 }

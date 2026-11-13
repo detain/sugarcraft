@@ -401,9 +401,14 @@ php examples/interactive.php   # real Program loop: scripted KeyMsgs through upd
 The third example, `examples/interactive.php`, mounts `Model` inside a
 sugar-core `Program` loop and feeds it a fixed script of `KeyMsg`s — the
 runnable reference for how a live keystroke travels through `update()`. It
-ends by printing the drained `EventStore` transcript (`cursor_moved`,
-`range_started`, `date_selected`, `date_cleared`) plus the final grid, so the
-event wiring is verifiable without a TTY.
+ends by printing the drained `EventStore` transcript plus the final grid, so
+the event wiring is verifiable without a TTY. Every transcript line is a
+byte-for-byte store event (`cursor_moved`, `date_selected`, `date_cleared`,
+`range_started` appear in this script — four of the eight kinds); the only
+other line is the host's mode switch, prefixed `[host]` so it can never be
+mistaken for a fifth wire event. The loop reads from a held-open socket pair
+rather than STDIN, because `Program` turns a real stdin EOF into a
+cooperative quit that would truncate the script mid-run.
 
 Run them from the lib root; from a standalone clone of the split repo, run
 `composer install` first so the sibling `sugarcraft/*` packages resolve.
