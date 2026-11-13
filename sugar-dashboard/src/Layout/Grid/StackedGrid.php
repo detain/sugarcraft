@@ -24,6 +24,12 @@ use SugarCraft\Style\Position;
  * Supports nested grids (a StackedGrid can be added as an item) and any
  * type implementing Sizer for explicit dimension propagation.
  *
+ * Immutability (finding sugar-dashboard-028): like every other class in
+ * this namespace, `withItem()` and `setSize()` return a NEW grid — and
+ * children are boxed through their own immutable setters, so a child
+ * shared between two parents (or two frames) never accumulates a stale
+ * in-place size from whichever parent rendered last.
+ *
  * @implements \SugarCraft\Dashboard\Foundation\Sizer
  */
 final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
@@ -39,21 +45,28 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
     ) {}
 
     /**
-     * Add an item to the grid with the given placement options.
+     * Return a new grid with the item appended at the given placement.
+     *
+     * A wither per the house immutability law: the receiver is unchanged
+     * (finding sugar-dashboard-028 — the old void addItem() mutated the
+     * instance, so `with*` naming plus clone-and-return is the honest shape).
      */
-    public function addItem(\SugarCraft\Dashboard\Foundation\Item $item, ItemOptions $options = new ItemOptions()): void
+    public function withItem(\SugarCraft\Dashboard\Foundation\Item $item, ItemOptions $options = new ItemOptions()): self
     {
-        $this->items[] = new ItemWithOptions($item, $options);
+        $clone = clone $this;
+        $clone->items[] = new ItemWithOptions($item, $options);
+        return $clone;
     }
 
     /**
-     * Propagate terminal dimensions to the grid.
+     * Propagate terminal dimensions to the grid, returning a sized clone.
      */
     public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
     {
-        $this->width = $width;
-        $this->height = $height;
-        return $this;
+        $clone = clone $this;
+        $clone->width = $width;
+        $clone->height = $height;
+        return $clone;
     }
 
     /**
@@ -239,14 +252,13 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
      */
     private function renderItem(\SugarCraft\Dashboard\Foundation\Item $item, int $width, int $height): string
     {
-        // Nested grid
-        if ($item instanceof self) {
-            $item->setSize($width, $height);
-            return $item->render();
-        }
-
-        // Sizer (e.g. Frame) — setSize returns a NEW sized clone for immutable
-        // items, so we MUST use the return value.
+        // Sizer (a nested grid, a Frame, any chart) — setSize returns a NEW
+        // sized clone for every immutable item in this library, so the clone
+        // IS the box: the shared child itself is never mutated (finding
+        // sugar-dashboard-028: the old `instanceof self` special case called
+        // setSize in place and discarded the result, so a child attached to
+        // two parents — or rendered twice — carried whichever size wrote
+        // last). Plain Item falls through to the wrap-and-pad path below.
         if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
             return $item->setSize($width, $height)->render();
         }
@@ -282,18 +294,39 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
 
     /**
      * Compute the natural rendered height of an item (number of lines).
+     *
+     * Finding sugar-dashboard-028: the old arms measured LIES — a nested
+     * grid reported the OUTER grid's height, and every Sizer child got a
+     * flat 1-row budget no matter how many lines it actually emitted, so
+     * taller children overflowed their column. Every child is now measured
+     * by what it truly renders.
      */
     private function getItemNaturalHeight(\SugarCraft\Dashboard\Foundation\Item $item): int
     {
         if ($item instanceof self) {
-            // For nested grids, use current height or default to 1
-            return $this->height > 0 ? $this->height : 1;
-        }
-        if ($item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
-            return 1; // Sizer will receive explicit size from renderItem
+            return $item->naturalColumnHeight();
         }
         $lines = substr_count($item->render(), "\n") + 1;
         return max(1, $lines);
+    }
+
+    /**
+     * A nested grid's natural height: the summed item heights of its
+     * tallest column (private access is class-scoped, so measuring a
+     * sibling instance is fine).
+     */
+    private function naturalColumnHeight(): int
+    {
+        $tallest = 0;
+        foreach ($this->groupByColumn() as $colItems) {
+            $height = 0;
+            foreach ($colItems as $itemWithOpts) {
+                $height += $this->getItemNaturalHeight($itemWithOpts->item);
+            }
+            $tallest = max($tallest, $height);
+        }
+
+        return max(1, $tallest);
     }
 
     // ─── Persistence ─────────────────────────────────────────────

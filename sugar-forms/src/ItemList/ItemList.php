@@ -350,7 +350,7 @@ final class ItemList implements Model
     }
 
     /** @param list<Item> $items */
-    public function setItems(array $items): self
+    public function withItems(array $items): self
     {
         self::assertSingleLineTitles($items);
         $clone = $this->mutate(items: array_values($items));
@@ -358,11 +358,21 @@ final class ItemList implements Model
     }
 
     /**
+     * @deprecated Use the with-spelling {@see self::withItems()} — the
+     *             set-name promised in-place mutation this immutable model
+     *             never performed (accessor-law completion, 2026-11-13;
+     *             sugar-forms-063). REMOVED-IN: 2.0.0
+     *
+     * @param list<Item> $items
+     */
+    public function setItems(array $items): self { return $this->withItems($items); }
+
+    /**
      * Replace a single item in place. Negative indices count from the
      * end (Pythonic). Out-of-range indices are silently ignored, matching
      * upstream Bubbles' `SetItem`.
      */
-    public function setItem(int $index, Item $item): self
+    public function withItem(int $index, Item $item): self
     {
         self::assertSingleLineTitles([$item]);
         $count = count($this->items);
@@ -379,6 +389,13 @@ final class ItemList implements Model
         $items[$index] = $item;
         return $this->mutate(items: array_values($items));
     }
+
+    /**
+     * @deprecated Use the with-spelling {@see self::withItem()}
+     *             (accessor-law completion, 2026-11-13; sugar-forms-063).
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setItem(int $index, Item $item): self { return $this->withItem($index, $item); }
 
     /**
      * Insert one or more items at the given position. Negative indices

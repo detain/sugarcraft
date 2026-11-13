@@ -22,7 +22,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Form Components Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -63,12 +63,12 @@ $settingsStack = VStack::spaced(1,
 );
 $settingsFrame = Card::titled($settingsStack, 'Preferences');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $formFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $settingsFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -79,7 +79,7 @@ $grid->addItem(
 $termsCheckbox = Checkbox::new([['label' => 'I agree to the terms and conditions', 'checked' => false]]);
 $agreementFrame = Card::titled($termsCheckbox, 'Agreement');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $agreementFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );

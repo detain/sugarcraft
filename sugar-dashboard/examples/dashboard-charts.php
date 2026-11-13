@@ -26,7 +26,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 $titleText = Text::new('Charts Dashboard');
 $headerContent = HStack::spaced(2, $titleText, Text::new('(Bar, Donut, Area, Funnel, Sparkline)'));
 
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled($headerContent, ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -51,12 +51,12 @@ $donut = Donut::mocha([
 ]);
 $donutFrame = Card::titled($donut, 'Traffic Sources');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $barFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $donutFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -77,12 +77,12 @@ $funnel = FunnelChart::new([
 ]);
 $funnelFrame = Card::titled($funnel, 'Conversion Funnel');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $areaFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $funnelFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -93,7 +93,7 @@ $grid->addItem(
 $spark = SparklineBar::new([3.0, 5.0, 2.0, 8.0, 6.0, 4.0, 7.0, 5.0, 9.0, 3.0, 6.0, 8.0])->withWidth(50);
 $sparkFrame = Card::titled($spark, 'Activity Sparkline');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $sparkFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );

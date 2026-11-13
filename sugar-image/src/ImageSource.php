@@ -10,6 +10,7 @@ use SugarCraft\Animation\Decoder as AnimationDecoder;
 use SugarCraft\Animation\Frame as AnimationFrame;
 
 use function React\Promise\reject;
+use SugarCraft\Image\Concerns\ForceTrueColor;
 
 /**
  * A decoded image ready for rendering. Stores raw bytes, detected
@@ -218,9 +219,7 @@ final class ImageSource
         }
 
         // Palette PNG → truecolor so PixelGrid always sees 24-bit pixels.
-        if (!imageistruecolor($img)) {
-            imagepalettetotruecolor($img);
-        }
+        ForceTrueColor::convert($img);
 
         $width  = imagesx($img);
         $height = imagesy($img);
@@ -313,9 +312,7 @@ final class ImageSource
 
         // Palette PNGs need truecolor conversion so PixelGrid always sees
         // 24-bit pixels (matching fromFile() behavior).
-        if (!imageistruecolor($img)) {
-            imagepalettetotruecolor($img);
-        }
+        ForceTrueColor::convert($img);
 
         $width  = imagesx($img);
         $height = imagesy($img);
@@ -507,9 +504,7 @@ final class ImageSource
      */
     public static function fromGd(\GdImage $resource, string $format, int $maxPixels = self::MAX_PIXELS): self
     {
-        if (!imageistruecolor($resource)) {
-            imagepalettetotruecolor($resource);
-        }
+        ForceTrueColor::convert($resource);
 
         $width  = imagesx($resource);
         $height = imagesy($resource);
@@ -2240,13 +2235,11 @@ final class ImageSource
             );
         }
 
-        $src = imagecreatefromstring($this->bytes);
+        $src = @imagecreatefromstring($this->bytes);
         if ($src === false) {
             throw new \RuntimeException(Lang::t('image_source.gd_load_failed_from_string'));
         }
-        if (!imageistruecolor($src)) {
-            imagepalettetotruecolor($src);
-        }
+        ForceTrueColor::convert($src);
 
         $cropped = imagecrop($src, ['x' => $x, 'y' => $y, 'width' => $w, 'height' => $h]);
         imagedestroy($src);
@@ -2281,13 +2274,11 @@ final class ImageSource
         // fromGd()'s own guard only fires after that allocation already happened.
         self::guardPixelCount($w, $h, $this->maxPixels);
 
-        $src = imagecreatefromstring($this->bytes);
+        $src = @imagecreatefromstring($this->bytes);
         if ($src === false) {
             throw new \RuntimeException(Lang::t('image_source.gd_load_failed_from_string'));
         }
-        if (!imageistruecolor($src)) {
-            imagepalettetotruecolor($src);
-        }
+        ForceTrueColor::convert($src);
 
         $dst = imagecreatetruecolor($w, $h);
         if ($dst === false) {

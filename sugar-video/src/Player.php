@@ -16,6 +16,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Video\Lang;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\ColorProfile\Color as PaletteColor;
 use SugarCraft\ColorProfile\Probe;
 use SugarCraft\Video\Decode\Decoder;
 use SugarCraft\Video\Decode\DecoderFactory;
@@ -124,7 +125,7 @@ final class Player implements Model
      * @param int                         $cellPxW      Pixel width of a terminal cell (graphics-mode resolution)
      * @param int                         $cellPxH      Pixel height of a terminal cell
      * @param WebVtt|null                 $subtitles    Parsed subtitle track, or null when no subtitles
-     * @param FrameRenderer|null          $renderer     Cached renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256)
+     * @param FrameRenderer|null          $renderer     Cached renderer for direct-render modes (Sixel/Kitty/iTerm2)
      * @param array<array-key, string>    $headers      HTTP request headers for a remote source, re-presented on every decoder rebuild
      * @param float                       $frameBudgetMs Wall-clock budget for one tick's decode+skip work before catch-up bails (0 = unbounded); enforced between frames, never mid-decode
      * @param WindowSizeMsg|null          $pendingResize Clamped geometry received from a `WindowSizeMsg` whose decoder rebuild is still deferred by the resize debounce; null when nothing is pending
@@ -1278,9 +1279,15 @@ final class Player implements Model
         $hasStatus = $this->ended;
         $reserve = ($hasCaption ? 1 : 0) + ($hasStatus ? 1 : 0);
 
-        // Ansi256 (38;5;N) and the image protocols render directly — they are
-        // not expressible through the truecolor-only Buffer cell grid.
-        if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || $this->mode === Mode::Iterm2 || $this->mode === Mode::Ansi256) {
+        // Only the image protocols render directly: one indivisible raster
+        // paint no cell grid can express. Ansi256 used to ride this branch
+        // because the Buffer grid was once truecolor-only — sugar-cellbuffer's
+        // palette-slot identity (Style::withFgSlot, the CB-30 emitter) made
+        // 38;5;N a first-class cell pen, so the rung joined its text siblings
+        // on the raw-rgb24 inline path and stopped paying the per-frame
+        // RGB→GD→PNG(9)→GD→resample chain the sugar-image bridge implies
+        // (SV-H12/012).
+        if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || $this->mode === Mode::Iterm2) {
             $out = $this->renderDirect($frame);
         } else {
             $out = $this->frameToBuffer($frame, $this->mode)->toAnsi();
@@ -1523,10 +1530,7 @@ final class Player implements Model
                     $luma = (($r * 77) + ($g * 150) + ($b * 29)) >> 8;
                     $ch = LumaRamp::char((float)$luma, $this->ramp);
 
-                    $fg = self::rgbToStyleColor($r, $g, $b, $mode);
-                    $style = $fg !== null ? new Style($fg) : null;
-
-                    $grid[] = Cell::new($ch, $style, null, 1);
+                    $grid[] = Cell::new($ch, self::textCellStyle($r, $g, $b, $mode), null, 1);
                 }
             }
         }
@@ -1563,6 +1567,21 @@ final class Player implements Model
     ];
 
     /**
+     * Squared RGB distance — the quad-grouping measure.
+     *
+     * SV-H12/085: the original quarterCell allocated this (plus a luma and a
+     * pack closure) as Closures per cell per frame on the hottest loop; a
+     * static call carries the same arithmetic with zero per-cell allocation.
+     */
+    private static function quadDist(array $a, array $b): int
+    {
+        $dr = $a[0] - $b[0];
+        $dg = $a[1] - $b[1];
+        $db = $a[2] - $b[2];
+        return $dr * $dr + $dg * $dg + $db * $db;
+    }
+
+    /**
      * Pick a quadrant glyph + fg/bg colours for one 2×2 cell. The four quadrant
      * colours are split into two groups (a one-step 2-means around the
      * most-distant pair); the glyph marks the brighter foreground group and each
@@ -1573,17 +1592,12 @@ final class Player implements Model
      */
     private static function quarterCell(array $quads): array
     {
-        $dist = static fn (array $a, array $b): int =>
-            ($a[0] - $b[0]) ** 2 + ($a[1] - $b[1]) ** 2 + ($a[2] - $b[2]) ** 2;
-        $luma = static fn (array $c): int => LumaRamp::compute($c[0], $c[1], $c[2]);
-        $pack = static fn (array $c): int => Color::pack($c[0], $c[1], $c[2]);
-
         $maxD = -1;
         $a = 0;
         $b = 0;
         for ($i = 0; $i < 4; $i++) {
             for ($j = $i + 1; $j < 4; $j++) {
-                $d = $dist($quads[$i], $quads[$j]);
+                $d = self::quadDist($quads[$i], $quads[$j]);
                 if ($d > $maxD) {
                     $maxD = $d;
                     $a = $i;
@@ -1593,12 +1607,16 @@ final class Player implements Model
         }
 
         if ($maxD === 0) {
-            return [self::QUARTER_GLYPHS[15], $pack($quads[0]), $pack($quads[0])];
+            $flat = Color::pack($quads[0][0], $quads[0][1], $quads[0][2]);
+            return [self::QUARTER_GLYPHS[15], $flat, $flat];
         }
 
-        [$fgSeed, $bgSeed] = $luma($quads[$a]) >= $luma($quads[$b])
-            ? [$quads[$a], $quads[$b]]
-            : [$quads[$b], $quads[$a]];
+        [$fgIdx, $bgIdx] = LumaRamp::compute($quads[$a][0], $quads[$a][1], $quads[$a][2])
+            >= LumaRamp::compute($quads[$b][0], $quads[$b][1], $quads[$b][2])
+            ? [$a, $b]
+            : [$b, $a];
+        $fgSeed = $quads[$fgIdx];
+        $bgSeed = $quads[$bgIdx];
 
         $mask = 0;
         $fgSum = [0, 0, 0];
@@ -1606,7 +1624,7 @@ final class Player implements Model
         $fgN = 0;
         $bgN = 0;
         for ($i = 0; $i < 4; $i++) {
-            if ($dist($quads[$i], $fgSeed) <= $dist($quads[$i], $bgSeed)) {
+            if (self::quadDist($quads[$i], $fgSeed) <= self::quadDist($quads[$i], $bgSeed)) {
                 $mask |= (1 << $i);
                 $fgSum[0] += $quads[$i][0];
                 $fgSum[1] += $quads[$i][1];
@@ -1623,7 +1641,7 @@ final class Player implements Model
         $fg = $fgN > 0 ? [intdiv($fgSum[0], $fgN), intdiv($fgSum[1], $fgN), intdiv($fgSum[2], $fgN)] : $fgSeed;
         $bg = $bgN > 0 ? [intdiv($bgSum[0], $bgN), intdiv($bgSum[1], $bgN), intdiv($bgSum[2], $bgN)] : $bgSeed;
 
-        return [self::QUARTER_GLYPHS[$mask], $pack($fg), $pack($bg)];
+        return [self::QUARTER_GLYPHS[$mask], Color::pack($fg[0], $fg[1], $fg[2]), Color::pack($bg[0], $bg[1], $bg[2])];
     }
 
     /**
@@ -1690,9 +1708,12 @@ final class Player implements Model
     /**
      * Convert RGB to a sugar-cellbuffer Style color (0xRRGGBB) based on mode.
      *
-     * Only the buffer-backed modes reach this — Ascii has no color, the rest
-     * (TrueColor/HalfBlock) pack the channels into a 0xRRGGBB int. Ansi256 and
-     * the image protocols never use the Buffer path (they renderDirect()).
+     * Only the packed-rgb rungs reach this — Ascii has no color (its pen is
+     * answered by {@see self::textCellStyle()}), and the rest
+     * (TrueColor/HalfBlock) pack the channels into a 0xRRGGBB int. Ansi256
+     * rides a palette SLOT, not a packed rgb (see the slot arm in
+     * {@see self::textCellStyle()}); the image protocols never use the
+     * Buffer path (they renderDirect()).
      *
      * Packing delegates to {@see Color::pack()} — the same helper `RgbFrame::toGd()`
      * uses — so the terminal path and the GD export path can never drift on how
@@ -1707,6 +1728,27 @@ final class Player implements Model
         }
 
         return Color::pack($r, $g, $b);
+    }
+
+    /**
+     * The text-rung cell pen for one averaged pixel (SV-H12/012).
+     *
+     * Ascii carries no colour; TrueColor rides the packed 0xRRGGBB pen;
+     * Ansi256 quantises to the xterm 256 palette through the canonical
+     * {@see PaletteColor::toAnsi256Index()} wheel — the very quantiser the
+     * sugar-image bridge this rung used to render through consulted, so the
+     * emitted 38;5;N index is unchanged (parity pinned by
+     * tests/Ansi256BufferRungTest). The slot rides
+     * {@see Style::withFgSlot()}, the palette-slot identity that made the
+     * 256 rung expressible on the cell grid at all.
+     */
+    private static function textCellStyle(int $r, int $g, int $b, Mode $mode): ?Style
+    {
+        return match ($mode) {
+            Mode::Ascii => null,
+            Mode::Ansi256 => Style::new()->withFgSlot((new PaletteColor($r, $g, $b))->toAnsi256Index()),
+            default => new Style(self::rgbToStyleColor($r, $g, $b, $mode)),
+        };
     }
 
     /**
@@ -1728,8 +1770,8 @@ final class Player implements Model
      * than fataling on a null method call mid-frame.
      *
      * Disclosure on the other half of that build: in the Buffer-rung modes
-     * (Ascii, TrueColor, HalfBlock, QuarterBlock) view() never calls this
-     * method, so the factory-built AsciiRenderer, HalfBlockRenderer and
+     * (Ascii, Ansi256, TrueColor, HalfBlock, QuarterBlock) view() never calls
+     * this method, so the factory-built AsciiRenderer, HalfBlockRenderer and
      * QuarterBlockRenderer are never reached by the Player runtime either —
      * the frames are composed inline in frameToBuffer() instead. Those three
      * classes exist for direct factory use and tests; HalfBlockParityTest

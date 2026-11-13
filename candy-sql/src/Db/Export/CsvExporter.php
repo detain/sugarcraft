@@ -59,10 +59,13 @@ final class CsvExporter
      *
      * The first row of the CSV must contain column headers matching table columns.
      * Each subsequent row is inserted using safe SQL with proper escaping.
-     * Table name is backtick-quoted for safety.
+     * The table name and column names are quoted with the connection's actual
+     * driver flavor (Identifier::quote) — backticks on MySQL, double-quotes on
+     * PostgreSQL/SQLite — so emitting backticks against a PG connection (an
+     * invalid-SQL hazard) never happens.
      *
      * @param string $path  Path to the CSV file
-     * @param string $table Target table name (backtick-quoted)
+     * @param string $table Target table name (flavor-quoted at build time)
      * @throws \RuntimeException If the file doesn't exist or can't be opened
      * @throws \PDOException     On database errors
      */
@@ -95,7 +98,7 @@ final class CsvExporter
                 throw new \RuntimeException("CSV file has no columns: " . $path);
             }
 
-            // Build column list with identifier quoting (MySQL backtick standard)
+            // Build column list with identifier quoting for the actual driver flavor
             $columnList = implode(',', array_map(
                 fn(string $col): string => Identifier::quote($this->quoteFlavor(), $col),
                 $headers

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\ColorUtil;
+use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Dither\Ditherer;
 use SugarCraft\Image\ImageSource;
@@ -99,13 +100,11 @@ final class AsciiRenderer implements Renderer, AcceptsOptimization
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
-        $src = imagecreatefromstring($image->bytes);
+        $src = @imagecreatefromstring($image->bytes);
         if ($src === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
         }
-        if (!imageistruecolor($src)) {
-            imagepalettetotruecolor($src);
-        }
+        ForceTrueColor::convert($src);
 
         // One pixel per cell: resample to exactly width × effectiveHeight.
         $scaled = imagecreatetruecolor($width, $effectiveHeight);

@@ -23,7 +23,7 @@ $header = HStack::spaced(3,
     Text::new('SugarDashboard Layout Demo'),
     Text::new('v1.0.0')
 );
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled($header, ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -36,7 +36,7 @@ $leftColumn = VStack::spaced(1,
     Card::titled(Text::new('Panel 2'), 'Card 2'),
     Card::titled(Text::new('Panel 3'), 'Card 3')
 );
-$grid->addItem(
+$grid = $grid->withItem(
     $leftColumn,
     new ItemOptions(column: 0, expandVertical: true)
 );
@@ -48,7 +48,7 @@ $rightColumn = VStack::spaced(1,
     Card::titled(Text::new('Wide panel content goes here'), 'Wide Panel'),
     Card::titled(Text::new('Another panel'), 'Short Panel')
 );
-$grid->addItem(
+$grid = $grid->withItem(
     $rightColumn,
     new ItemOptions(column: 1, expandVertical: true)
 );

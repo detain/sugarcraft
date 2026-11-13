@@ -22,7 +22,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Media Components Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -44,7 +44,7 @@ $pictogramFrame = Card::titled($pictogram, 'Pictogram');
 
 $mediaRow = HStack::spaced(2, $qrFrame, $barcodeFrame, $pictogramFrame);
 
-$grid->addItem(
+$grid = $grid->withItem(
     $mediaRow,
     new ItemOptions(column: 0, expandVertical: false)
 );

@@ -131,7 +131,9 @@ final class Renderer
         foreach ($m->tabs as $i => $tab) {
             // cwd is filesystem data like any name — sanitize before render.
             $label = self::truncate(Entry::sanitizeName($tab['left']->cwd), 20, $glyphs);
-            $prefix = $i === $m->tabIndex ? '[' : ' ';
+            // CF-29 (closes 084): the index prefix is the binding — the
+            // tab bar names its own direct-switch keys, 1..9.
+            $prefix = ($i + 1) . ($i === $m->tabIndex ? '[' : ' ');
             $suffix = $i === $m->tabIndex ? ']' : ' ';
             // CF-47: each tab cell is one bidi island (CF-02's Latin paths
             // inside bracket neutrals must not drift across neighbours in

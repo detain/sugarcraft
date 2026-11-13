@@ -20,7 +20,7 @@ $components = [
     ['VStack', 'new', 'VStack::new(Text::new("Item 1"), Text::new("Item 2"))', 'Vertical stack of items'],
     ['HStack', 'new', 'HStack::new(Text::new("Left"), Text::new("Right"))', 'Horizontal stack of items'],
     ['ZStack', 'new', 'ZStack::new(Text::new("Back"), Text::new("Front"))', 'Layered stack'],
-    ['StackedGrid', 'new', '$grid = new StackedGrid(new Options(fitScreen: true)); $grid->addItem(Frame::new(Text::new("Col 1"))->withPadding(1), new ItemOptions(column: 0, expandVertical: true)); $grid->addItem(Frame::new(Text::new("Col 2"))->withPadding(1), new ItemOptions(column: 1)); $grid', 'Multi-column grid layout'],
+    ['StackedGrid', 'new', '$grid = new StackedGrid(new Options(fitScreen: true)); $grid = $grid->withItem(Frame::new(Text::new("Col 1"))->withPadding(1), new ItemOptions(column: 0, expandVertical: true)); $grid = $grid->withItem(Frame::new(Text::new("Col 2"))->withPadding(1), new ItemOptions(column: 1)); $grid', 'Multi-column grid layout'],
     ['Frame', 'new', 'Frame::new(Text::new("Framed Content"))', 'Bordered frame container'],
     ['Card', 'new', 'Card::new(Text::new("Card Content"))', 'Card with optional title'],
     ['Center', 'new', 'Center::new(Text::new("Centered Text"))', 'Center-aligned content'],

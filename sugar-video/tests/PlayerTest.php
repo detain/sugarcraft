@@ -3242,9 +3242,11 @@ final class PlayerTest extends TestCase
             $this->assertStringContainsString('needs 48', $failure->getMessage());
         }
 
-        // Rung family 2: the palette/text rung (direct render through
-        // ImageSource::fromRgb — the door that was ALWAYS loud). Parity is
-        // the point: one corrupt buffer, both families refuse typed.
+        // Rung family 2: the palette rung (Ansi256). SV-H12/012 moved it onto
+        // the Buffer path, so it answers the SAME typed failure as the block
+        // rung now — both ride frameToBuffer's one front check; the
+        // sugar-image bridge's length assert is no longer its door.
+        // Parity is still the point: one corrupt buffer, one refusal story.
         $asText = $mutate->invoke($player, [
             'mode' => \SugarCraft\Video\Render\Mode::Ansi256,
             'renderer' => new \SugarCraft\Video\Render\AsciiRenderer('standard'),

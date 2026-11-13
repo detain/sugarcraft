@@ -64,7 +64,7 @@ final class GraphicsRenderer implements FrameRenderer
         $cellsW = max(1, (int) round($frame->w / $this->cellPxW));
         $cellsH = max(1, (int) round($frame->h / $this->cellPxH));
 
-        return $this->pickRenderer()->render($source, $cellsW, $cellsH);
+        return $this->delegate()->render($source, $cellsW, $cellsH);
     }
 
     /**
@@ -94,14 +94,22 @@ final class GraphicsRenderer implements FrameRenderer
     }
 
     /**
+     * SV-H12/085: the sugar-image delegate is mode-constant for this
+     * renderer's whole life (the mode is a readonly constructor property,
+     * and the Sixel construction args — dither, palette size, cell pixels —
+     * too), so the instance is armed once instead of re-`new`ed per frame.
+     */
+    private ?Renderer $delegate = null;
+
+    /**
      * Pick the sugar-image renderer for the current mode. Sixel is encoded in
      * pure PHP by {@see SixelRenderer}, constructed with the real cell pixel
      * size so its canvas matches the frame exactly; no external binary is
      * spawned from this path.
      */
-    private function pickRenderer(): Renderer
+    private function delegate(): Renderer
     {
-        return match ($this->mode) {
+        return $this->delegate ??= match ($this->mode) {
             Mode::Iterm2 => new Iterm2Renderer(),
             Mode::Kitty  => new KittyRenderer(),
             Mode::Sixel  => new SixelRenderer(Dither::FloydSteinberg, 256, $this->cellPxW, $this->cellPxH),

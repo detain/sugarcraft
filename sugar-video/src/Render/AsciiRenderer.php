@@ -33,6 +33,16 @@ use SugarCraft\Video\Decode\RgbFrame;
  */
 final class AsciiRenderer implements FrameRenderer
 {
+    /**
+     * SV-H12/085: the canonical bridge is mode-constant per colour depth, so
+     * one instance per projected AsciiColorMode is hoisted on first use
+     * instead of re-`new`ed every frame (the renderer is immutable — every
+     * render() builds its own OutputOptimizer pen).
+     *
+     * @var array<string, ImageAsciiRenderer>
+     */
+    private array $bridgeByKey = [];
+
     public function __construct(private readonly string $ramp = 'standard')
     {
     }
@@ -63,7 +73,10 @@ final class AsciiRenderer implements FrameRenderer
 
         $source = ImageSource::fromRgb($frame->bytes, $frame->w, $frame->h);
 
-        return (new ImageAsciiRenderer(self::colorModeFor($mode), self::rampChars($this->ramp)))
+        $colorMode = self::colorModeFor($mode);
+
+        return ($this->bridgeByKey[$colorMode->name]
+            ??= new ImageAsciiRenderer($colorMode, self::rampChars($this->ramp)))
             ->render($source, $frame->w, $frame->h);
     }
 

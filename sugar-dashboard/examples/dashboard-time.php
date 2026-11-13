@@ -22,7 +22,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Time & Date Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -36,12 +36,12 @@ $clockFrame = Card::titled($clock, 'Current Time');
 $calendar = Calendar::now();
 $calendarFrame = Card::titled($calendar, 'Calendar');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $clockFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $calendarFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -55,12 +55,12 @@ $timerFrame = Card::titled($timer, 'Timer');
 $stopwatch = Stopwatch::new();
 $stopwatchFrame = Card::titled($stopwatch, 'Stopwatch');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $timerFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $stopwatchFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -77,7 +77,7 @@ $heatmap = Heatmap::new([
 ]);
 $heatmapFrame = Card::titled($heatmap, 'Activity Heatmap (Last 5 Days)');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $heatmapFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );

@@ -251,7 +251,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     {
         $next = $this->input
             ->withSuggestions($candidates)
-            ->showSuggestions($candidates !== []);
+            ->withShowSuggestions($candidates !== []);
         return $this->mutate(input: $next);
     }
 
@@ -537,7 +537,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             $next = $this->mutate(
                 input: $this->input
                     ->withSuggestions($msg->suggestions)
-                    ->showSuggestions($msg->suggestions !== []),
+                    ->withShowSuggestions($msg->suggestions !== []),
             );
             return [$next, null];
         }
@@ -552,7 +552,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
         [$ti, $cmd] = $this->input->update($msg);
         if ($this->suggestionsFunc !== null) {
             $candidates = ($this->suggestionsFunc)($ti->value);
-            $ti = $ti->withSuggestions($candidates)->showSuggestions($candidates !== []);
+            $ti = $ti->withSuggestions($candidates)->withShowSuggestions($candidates !== []);
         }
         $next = $this->mutate(input: $ti);
         // Only validate per-keystroke when timing is None/Change (the default).

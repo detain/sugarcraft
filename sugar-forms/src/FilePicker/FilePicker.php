@@ -220,7 +220,7 @@ final class FilePicker implements Model
         return $this->mutate(focused: false);
     }
 
-    public function setCwd(string $path): self
+    public function withCwd(string $path): self
     {
         return $this->mutate(
             cwd: self::normalizeCwd($path),
@@ -228,6 +228,14 @@ final class FilePicker implements Model
             selected: null, touchSelected: true,
         )->refresh();
     }
+
+    /**
+     * @deprecated Use the with-spelling {@see self::withCwd()} — the
+     *             set-name promised in-place mutation this immutable
+     *             model never performed (accessor-law completion,
+     *             2026-11-13; sugar-forms-063). REMOVED-IN: 2.0.0
+     */
+    public function setCwd(string $path): self { return $this->withCwd($path); }
 
     /**
      * Trim trailing separators while preserving the root path. Without

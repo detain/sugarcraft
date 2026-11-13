@@ -24,7 +24,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Data Display Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -48,12 +48,12 @@ $tableZebra = TableZebra::new([
 ]);
 $tableZebraFrame = Card::titled($tableZebra, 'Sales (Zebra)');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $tableBorderedFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $tableZebraFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -84,12 +84,12 @@ $tree = Tree::new([
 ]);
 $treeFrame = Card::titled($tree, 'File Tree');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $listFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $treeFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );

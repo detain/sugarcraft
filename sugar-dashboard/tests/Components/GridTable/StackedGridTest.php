@@ -51,7 +51,7 @@ final class StackedGridTest extends TestCase
     public function testEmptyGridBeforeSetSize(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('hello'));
+        $grid = $grid->withItem($this->strItem('hello'));
         $this->assertSame('Loading...', $grid->render());
     }
 
@@ -62,8 +62,8 @@ final class StackedGridTest extends TestCase
     public function testSingleColumnStacksVertically(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Line 1'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Line 2'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Line 1'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Line 2'), new ItemOptions(column: 0));
         $grid->setSize(20, 10);
 
         $rendered = $grid->render();
@@ -74,7 +74,7 @@ final class StackedGridTest extends TestCase
     public function testItemsInSameColumnHaveEqualWidth(): void
     {
         $grid = new StackedGrid(new Options(fitScreen: true));
-        $grid->addItem($this->strItem('Short'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Short'), new ItemOptions(column: 0));
         $grid->setSize(40, 10);
 
         $rendered = $grid->render();
@@ -93,8 +93,8 @@ final class StackedGridTest extends TestCase
     public function testDifferentColumnsPlacedSideBySide(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Left'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Right'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Left'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Right'), new ItemOptions(column: 1));
         $grid->setSize(40, 5);
 
         $rendered = $grid->render();
@@ -105,9 +105,9 @@ final class StackedGridTest extends TestCase
     public function testThreeColumnsWithMixedWidths(): void
     {
         $grid = new StackedGrid(new Options(fitScreen: true));
-        $grid->addItem($this->strItem('Col0'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Col1'), new ItemOptions(column: 1));
-        $grid->addItem($this->strItem('Col2'), new ItemOptions(column: 2));
+        $grid = $grid->withItem($this->strItem('Col0'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Col1'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Col2'), new ItemOptions(column: 2));
         $grid->setSize(60, 3);
 
         $rendered = $grid->render();
@@ -119,8 +119,8 @@ final class StackedGridTest extends TestCase
     public function testSkippedColumnIndexCreatesGap(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('First'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Third'), new ItemOptions(column: 2));
+        $grid = $grid->withItem($this->strItem('First'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Third'), new ItemOptions(column: 2));
         $grid->setSize(40, 5);
 
         $rendered = $grid->render();
@@ -135,8 +135,8 @@ final class StackedGridTest extends TestCase
     public function testFitScreenDividesWidthEqually(): void
     {
         $grid = new StackedGrid(new Options(fitScreen: true));
-        $grid->addItem($this->strItem('A'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('B'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('A'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('B'), new ItemOptions(column: 1));
         $grid->setSize(40, 5);
 
         $rendered = $grid->render();
@@ -147,8 +147,8 @@ final class StackedGridTest extends TestCase
     public function testFitScreenDisabledUsesNaturalWidth(): void
     {
         $grid = new StackedGrid(new Options(fitScreen: false));
-        $grid->addItem($this->strItem('Short'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('LongContent'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Short'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('LongContent'), new ItemOptions(column: 1));
         $grid->setSize(40, 5);
 
         $rendered = $grid->render();
@@ -164,8 +164,8 @@ final class StackedGridTest extends TestCase
     {
         $grid = new StackedGrid();
         // Fixed item takes 2 lines; expanding item fills the rest
-        $grid->addItem($this->strItem("Fixed\nLine"), new ItemOptions(column: 0, expandVertical: false));
-        $grid->addItem($this->strItem('Expanding'), new ItemOptions(column: 0, expandVertical: true));
+        $grid = $grid->withItem($this->strItem("Fixed\nLine"), new ItemOptions(column: 0, expandVertical: false));
+        $grid = $grid->withItem($this->strItem('Expanding'), new ItemOptions(column: 0, expandVertical: true));
         $grid->setSize(20, 10);
 
         $rendered = $grid->render();
@@ -176,8 +176,8 @@ final class StackedGridTest extends TestCase
     public function testMultipleExpandingItemsShareSpace(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('One'), new ItemOptions(column: 0, expandVertical: true));
-        $grid->addItem($this->strItem('Two'), new ItemOptions(column: 0, expandVertical: true));
+        $grid = $grid->withItem($this->strItem('One'), new ItemOptions(column: 0, expandVertical: true));
+        $grid = $grid->withItem($this->strItem('Two'), new ItemOptions(column: 0, expandVertical: true));
         $grid->setSize(20, 10);
 
         $rendered = $grid->render();
@@ -188,9 +188,9 @@ final class StackedGridTest extends TestCase
     public function testRemainderGoesToLastItem(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Fixed'), new ItemOptions(column: 0, expandVertical: false));
-        $grid->addItem($this->strItem('Expanding1'), new ItemOptions(column: 0, expandVertical: true));
-        $grid->addItem($this->strItem('Expanding2'), new ItemOptions(column: 0, expandVertical: true));
+        $grid = $grid->withItem($this->strItem('Fixed'), new ItemOptions(column: 0, expandVertical: false));
+        $grid = $grid->withItem($this->strItem('Expanding1'), new ItemOptions(column: 0, expandVertical: true));
+        $grid = $grid->withItem($this->strItem('Expanding2'), new ItemOptions(column: 0, expandVertical: true));
         $grid->setSize(20, 5);
 
         // With 5 height, fixed takes 1, remaining 4 split as 2+2
@@ -205,10 +205,10 @@ final class StackedGridTest extends TestCase
     public function testNestedGridPropagatesSize(): void
     {
         $inner = new StackedGrid();
-        $inner->addItem($this->strItem('Inner Content'), new ItemOptions(column: 0));
+        $inner = $inner->withItem($this->strItem('Inner Content'), new ItemOptions(column: 0));
 
         $outer = new StackedGrid();
-        $outer->addItem($inner, new ItemOptions(column: 0));
+        $outer = $outer->withItem($inner, new ItemOptions(column: 0));
         $outer->setSize(40, 10);
 
         $rendered = $outer->render();
@@ -218,12 +218,12 @@ final class StackedGridTest extends TestCase
     public function testNestedGridInColumnMultiColumn(): void
     {
         $innerLeft = new StackedGrid();
-        $innerLeft->addItem($this->strItem('L1'), new ItemOptions(column: 0));
-        $innerLeft->addItem($this->strItem('L2'), new ItemOptions(column: 0));
+        $innerLeft = $innerLeft->withItem($this->strItem('L1'), new ItemOptions(column: 0));
+        $innerLeft = $innerLeft->withItem($this->strItem('L2'), new ItemOptions(column: 0));
 
         $outer = new StackedGrid();
-        $outer->addItem($innerLeft, new ItemOptions(column: 0));
-        $outer->addItem($this->strItem('Right'), new ItemOptions(column: 1));
+        $outer = $outer->withItem($innerLeft, new ItemOptions(column: 0));
+        $outer = $outer->withItem($this->strItem('Right'), new ItemOptions(column: 1));
         $outer->setSize(40, 8);
 
         $rendered = $outer->render();
@@ -238,7 +238,7 @@ final class StackedGridTest extends TestCase
     public function testWidePlainItemIsTruncated(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->failingItem(), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->failingItem(), new ItemOptions(column: 0));
         $grid->setSize(10, 3);
 
         $rendered = $grid->render();

@@ -52,10 +52,14 @@ final class MdViewModel implements Model
 
     /**
      * The chords this model owns (the Viewport takes every navigation key).
-     * Config's keymap block may replace either rune; the Escape and Ctrl+C
+     * Config's keymap block may replace any of them; the Escape and Ctrl+C
      * quit legs are structural and never remap.
      */
-    public const DEFAULT_KEYMAP = ['quit' => 'q', 'reload' => 'r'];
+    public const DEFAULT_KEYMAP = ['quit' => 'q', 'reload' => 'r', 'help' => '?'];
+
+    /** One-row key strip: every binding from the README's table, condensed. */
+    private const HELP_ROW       = '↑↓ j/k · PgUp b space f · Ctrl+U/D · Home g End G · h/l scroll · r reload · q quit · ? toggle';
+    private const HELP_ROW_ASCII = 'up/down j/k | PgUp b space f | Ctrl+U/D | Home g End G | h/l scroll | r reload | q quit | ? toggle';
 
     public static function fromContent(string $content, int $width = 80, int $height = 24): self
     {
@@ -86,13 +90,15 @@ final class MdViewModel implements Model
         private readonly ?\Closure $reflowAt = null,
         /** action => chord for this model's own keys; starts at DEFAULT_KEYMAP. */
         public readonly array $keymap = self::DEFAULT_KEYMAP,
+        /** True while the `?` key strip replaces the top body row. */
+        public readonly bool $helpShown = false,
     ) {}
 
     /**
      * Structural clone with named overrides — the ONE derivation site, so
      * no state field can be silently zeroed by a hand-rolled copy.
      *
-     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool,pendingReload?:bool,reflowAt?:?\Closure,keymap?:array<string,string>} $overrides
+     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool,pendingReload?:bool,reflowAt?:?\Closure,keymap?:array<string,string>,helpShown?:bool} $overrides
      */
     private function copy(array $overrides = []): self
     {
@@ -114,6 +120,7 @@ final class MdViewModel implements Model
             $pick('pendingReload', $this->pendingReload),
             $pick('reflowAt', $this->reflowAt),
             $pick('keymap', $this->keymap),
+            $pick('helpShown', $this->helpShown),
         );
     }
 
@@ -293,6 +300,13 @@ final class MdViewModel implements Model
                     'pendingReload' => true,
                 ]), null];
             }
+            if (self::chordMatches($msg, $this->keymap['help'])) {
+                // The `?` strip (finding 079): toggling swaps the top body
+                // row for the condensed key table — the frame keeps its
+                // exact line count, so no height invariant is disturbed and
+                // the strip is still skipped at zero body rows (finding 038).
+                return [$this->copy(['helpShown' => !$this->helpShown]), null];
+            }
         }
         [$next, $cmd] = $this->viewport->update($msg);
         return [$this->copy(['viewport' => $next]), $cmd];
@@ -417,7 +431,9 @@ final class MdViewModel implements Model
             ));
         }
         if ($this->documentName === null) {
-            return $body;
+            return $this->helpShown === true && $this->viewport->height > 0
+                ? $this->overlayHelp($body)
+                : $body;
         }
         if ($this->viewport->height <= 0) {
             // Zero body rows (a 1-row terminal, finding 038): the header
@@ -426,7 +442,31 @@ final class MdViewModel implements Model
             // a real height still gets its blank body row above.
             return $this->statusLine();
         }
-        return $this->statusLine() . "\n" . $body;
+        return $this->statusLine() . "\n"
+            . ($this->helpShown === true ? $this->overlayHelp($body) : $body);
+    }
+
+    /**
+     * Replace the TOP body row with the key strip: the same number of
+     * lines leaves the frame (Viewport::view() hands over exactly
+     * `height` rows, and sugar-core maps them 1:1 to terminal rows — any
+     * growth would tear the alt screen), so the first scrolled line
+     * yields to the help while it is shown.
+     */
+    private function overlayHelp(string $body): string
+    {
+        $rows = explode("\n", $body);
+        array_shift($rows);
+        array_unshift($rows, $this->helpRow());
+        return implode("\n", $rows);
+    }
+
+    /** The one-row key strip, clipped and padded to the viewport width. */
+    private function helpRow(): string
+    {
+        $text  = self::headerIsAsciiOnly() ? self::HELP_ROW_ASCII : self::HELP_ROW;
+        $width = $this->viewport->width;
+        return Width::padRight(Width::truncate($text, max(0, $width)), $width);
     }
 
     /**

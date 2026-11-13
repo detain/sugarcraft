@@ -236,6 +236,10 @@ final class HttpListener
             'connected_at'  => $now,
             'last_activity' => $now,
             'scan'          => ['pos' => 0, 'mode' => 'size', 'want' => 0, 'decoded' => 0, 'done' => false],
+            // 047: the framing decision parses once (head is complete
+            // exactly once) and rides the seat as data, the same
+            // cursor-on-the-row shape as the chunk scan above.
+            'framing'       => null,
         ];
 
         if ($this->workers !== null) {
@@ -327,7 +331,11 @@ final class HttpListener
         if (($this->clients[$id]['stream'] ?? null) !== $client) {
             return false;
         }
-        $data = @\fread($client, 8192);
+        // The lib's 64 KiB read quantum, shared with the write helper
+        // through HttpWire::CHUNK_BYTES (047): 8 KiB slices on a
+        // cap-sized push bought the pump ~32x more ticks for zero
+        // smaller worst-case buffers.
+        $data = @\fread($client, HttpWire::CHUNK_BYTES);
         if ($data === false || ($data === '' && \feof($client))) {
             $this->closeClient($client);
 
@@ -358,7 +366,18 @@ final class HttpListener
 
         $head = \substr($buffer, 0, $headEnd);
         $bodySoFar = \substr($buffer, $headEnd + 4);
-        $needs = $this->expectedBodyBytes($head, $bodySoFar, $this->clients[$id]['scan']);
+        $framing = $this->clients[$id]['framing'] ?? null;
+        if ($framing === null) {
+            // 047: header parsing lands exactly once per seat. The old
+            // shape re-split and re-regexed the whole head on every read
+            // tick, riding ~2 GiB of redundant analysis on a cap-sized
+            // push; the decision is now persisted on the client row in
+            // the same cursor-on-the-seat shape the chunk scan already
+            // used (and forks with it).
+            $framing = $this->parseBodyFraming($head);
+            $this->clients[$id]['framing'] = $framing;
+        }
+        $needs = $this->expectedBodyBytes($framing, $bodySoFar, $this->clients[$id]['scan']);
         if ($needs === self::BODY_TOO_LARGE) {
             unset($buffer);
             $this->writeStatus($client, 413, 'Payload Too Large');
@@ -379,7 +398,7 @@ final class HttpListener
         }
 
         unset($buffer);
-        $this->dispatch($client, $head, $this->decodeBody($head, $bodySoFar));
+        $this->dispatch($client, $head, $this->decodeBody($framing, $bodySoFar));
         $this->closeClient($client);
 
         return false;
@@ -432,20 +451,58 @@ final class HttpListener
     private const BODY_MALFORMED_FRAMING = -2;
 
     /**
-     * Remaining body bytes for the given head + body seen so far:
-     * 0 = complete, >0 = still needed, BODY_TOO_LARGE = over the cap,
-     * BODY_MALFORMED_FRAMING = conflicting Content-Length duplicates.
+     * Parse the body-framing decision from a complete header block —
+     * ONCE per seat (047). Precedence and semantics are unchanged from
+     * the old per-tick shape: an explicit chunked TE wins, otherwise
+     * the single Content-Length claim, otherwise disagreement between
+     * duplicates is malformed (refused), otherwise zero-length.
      *
-     * The chunked path advances a PERSISTED scan cursor instead of
-     * re-decoding the whole buffer per read — re-scanning turned a
-     * cap-sized upload into quadratic work for the listener.
+     * @return array{mode: 'chunked'|'length'|'malformed', length?: int}
+     */
+    private function parseBodyFraming(string $head): array
+    {
+        if ($this->hasHeader($head, 'transfer-encoding', 'chunked')) {
+            return ['mode' => 'chunked'];
+        }
+
+        $length = null;
+        foreach (\explode("\r\n", $head) as $line) {
+            if (\preg_match('/^content-length:\s*(\d+)$/i', $line, $m) !== 1) {
+                continue;
+            }
+            $value = (int) $m[1];
+            if ($length !== null && $length !== $value) {
+                // Request-smuggling bait: two claims about where the body
+                // ends. Last-wins would silently adopt whichever framing a
+                // downstream proxy may not have seen; refuse the request.
+                return ['mode' => 'malformed'];
+            }
+            $length = $value;
+        }
+
+        return ['mode' => 'length', 'length' => $length ?? 0];
+    }
+
+    /**
+     * Remaining body bytes for a persisted framing decision plus the
+     * body seen so far: 0 = complete, >0 = still needed,
+     * BODY_TOO_LARGE = over the cap, BODY_MALFORMED_FRAMING =
+     * conflicting Content-Length duplicates.
      *
+     * Consumes the {@see parseBodyFraming()} verdict instead of the raw
+     * head: the header must not be re-split and re-regexed on every
+     * read tick (047). The chunked path additionally advances a
+     * PERSISTED scan cursor instead of re-decoding the whole buffer per
+     * read — re-scanning turned a cap-sized upload into quadratic work
+     * for the listener.
+     *
+     * @param array{mode: string, length?: int} $framing
      * @param array{pos: int, mode: string, want: int, decoded: int, done: bool} $scan
      */
-    private function expectedBodyBytes(string $head, string $body, array &$scan): int
+    private function expectedBodyBytes(array $framing, string $body, array &$scan): int
     {
         $cap = $this->router->maxRequestBodyBytes();
-        if ($this->hasHeader($head, 'transfer-encoding', 'chunked')) {
+        if ($framing['mode'] === 'chunked') {
             if (\strlen($body) > $cap + self::CHUNKED_RAW_SLACK_BYTES) {
                 // Hostile framing padding (tiny chunks): the raw buffer is
                 // past any legitimate overhead before the decoded cap can
@@ -460,21 +517,11 @@ final class HttpListener
             return $scan['done'] ? 0 : 1;
         }
 
-        $length = null;
-        foreach (\explode("\r\n", $head) as $line) {
-            if (\preg_match('/^content-length:\s*(\d+)$/i', $line, $m) !== 1) {
-                continue;
-            }
-            $value = (int) $m[1];
-            if ($length !== null && $length !== $value) {
-                // Request-smuggling bait: two claims about where the body
-                // ends. Last-wins would silently adopt whichever framing a
-                // downstream proxy may not have seen; refuse the request.
-                return self::BODY_MALFORMED_FRAMING;
-            }
-            $length = $value;
+        if ($framing['mode'] === 'malformed') {
+            return self::BODY_MALFORMED_FRAMING;
         }
-        $length ??= 0;
+
+        $length = $framing['length'];
         if ($length > $cap) {
             return self::BODY_TOO_LARGE;
         }
@@ -525,9 +572,17 @@ final class HttpListener
         }
     }
 
-    private function decodeBody(string $head, string $body): string
+    /**
+     * Decode the completed body through the seat's persisted framing
+     * decision (047): chunked streams run the full decoder, every other
+     * mode carries its bytes verbatim. Sentinels never reach this point;
+     * the pump refuses those requests before dispatch.
+     *
+     * @param array{mode: string, length?: int} $framing
+     */
+    private function decodeBody(array $framing, string $body): string
     {
-        if ($this->hasHeader($head, 'transfer-encoding', 'chunked')) {
+        if ($framing['mode'] === 'chunked') {
             return self::decodeChunked($body) ?? '';
         }
 

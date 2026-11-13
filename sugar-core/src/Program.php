@@ -156,6 +156,14 @@ final class Program
     /** True once pcntl async signal delivery has been enabled (see installSignalHandlers()). */
     private bool $asyncSignals = false;
     /**
+     * Sole-Resume latch (sugar-core-014): true from just before the real
+     * SIGTSTP stop until the post-wake re-setup has completed, so a SIGCONT
+     * arriving as part of this stop cycle is attributed to it.
+     */
+    private bool $suspendStopPending = false;
+    /** Latch half two: a Resume has already been emitted for the current stop. */
+    private bool $suspendResumeIssued = false;
+    /**
      * One-shot loop timers armed on the model's behalf (TickRequest, the
      * lone-ESC flush, the stale-paste flush), keyed by spl_object_id. The
      * loop is usually the process-wide Loop::get(), so a timer still armed
@@ -1522,30 +1530,33 @@ final class Program
     }
 
     /**
-     * Implement Ctrl-Z semantics: tear down, deliver SuspendMsg, raise
-     * SIGTSTP on this process group with the default handler so the
-     * process actually stops, then on SIGCONT restore terminal state
-     * and dispatch ResumeMsg.
+     * Implement Ctrl-Z semantics: deliver the SuspendMsg stash to the
+     * model, tear down, raise SIGTSTP on this process with the default
+     * handler so the process actually stops, then on wake restore
+     * terminal state and dispatch exactly one ResumeMsg (sugar-core-014).
+     *
+     * Without pcntl the process can never stop, so the whole cycle is
+     * refused quietly: running half of it (stash, then an immediate
+     * Resume for a suspend that never happened) told the model a lie.
      */
     private function suspendProgram(): void
     {
-        // Notify the model first so it can stash any state it cares about.
-        if ($this->options->filter === null) {
-            $updated = $this->userUpdate($this->model, new SuspendMsg());
-            if ($updated !== null) { // handler-absorbed throw: suspend without the stash
-                [$nextModel, $cmd] = $updated;
-                $this->model = $nextModel;
-                if ($cmd !== null) {
-                    $this->scheduleCmd($cmd);
-                }
-            }
+        if (!function_exists('pcntl_signal') || !defined('SIGTSTP') || !defined('SIGCONT')) {
+            return;
         }
 
-        if (!function_exists('pcntl_signal') || !defined('SIGTSTP') || !defined('SIGCONT')) {
-            // Without pcntl we can't actually suspend; emit Resume
-            // immediately so the model knows nothing happened.
-            $this->dispatch(new ResumeMsg());
-            return;
+        // Notify the model first so it can stash any state it cares about.
+        // Runtime bookkeeping, not a filtered key event: the stash reaches
+        // the model whether or not WithFilter is installed — the old
+        // `filter === null` gate meant a filtered app never learned it was
+        // being suspended.
+        $updated = $this->userUpdate($this->model, new SuspendMsg());
+        if ($updated !== null) { // handler-absorbed throw: suspend without the stash
+            [$nextModel, $cmd] = $updated;
+            $this->model = $nextModel;
+            if ($cmd !== null) {
+                $this->scheduleCmd($cmd);
+            }
         }
 
         $this->teardownTerminal();
@@ -1558,6 +1569,12 @@ final class Program
             ? pcntl_signal_get_handler(SIGTSTP)
             : null;
         pcntl_signal(SIGTSTP, SIG_DFL);
+        // Arm the sole-Resume latch before the stop: every wake path —
+        // the SIGCONT handler racing the post-kill code below — checks
+        // it, so one stop emits at most one ResumeMsg however many
+        // CONTs the shell or a stray kill -CONT delivers.
+        $this->suspendStopPending = true;
+        $this->suspendResumeIssued = false;
         if (function_exists('posix_getpid')) {
             posix_kill(posix_getpid(), SIGTSTP);
         }
@@ -1572,7 +1589,11 @@ final class Program
         $this->lastImageSignature = '';
         $this->lastImageRows = [];
         $this->dirty = true;
-        $this->dispatch(new ResumeMsg());
+        if (!$this->suspendResumeIssued) {
+            $this->suspendResumeIssued = true;
+            $this->dispatch(new ResumeMsg());
+        }
+        $this->suspendStopPending = false;
     }
 
     /**
@@ -2495,9 +2516,21 @@ final class Program
             });
         }
         // SIGCONT can fire spuriously (kill -CONT $$) — turn it into a
-        // ResumeMsg so models that care can re-emit state.
+        // ResumeMsg so models that care can re-emit state. While a real
+        // stop is in flight it belongs to that cycle instead: the latch
+        // lets at most one Resume through per suspend (sugar-core-014),
+        // whichever wake path — this handler or the re-setup code below
+        // — gets there first, because the stop already tore the terminal
+        // down and re-raised it, so an extra Resume here would either
+        // duplicate the code path's or beat it with an unsynced one.
         if (defined('SIGCONT') === true) {
             $this->installProgramSignal(SIGCONT, function (): void {
+                if ($this->suspendStopPending && $this->suspendResumeIssued) {
+                    return; // this stop's single Resume already went out
+                }
+                if ($this->suspendStopPending) {
+                    $this->suspendResumeIssued = true;
+                }
                 $this->send(new ResumeMsg());
             });
         }

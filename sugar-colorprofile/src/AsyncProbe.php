@@ -42,7 +42,8 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  *   in parity with the sync leg's promotion gate
  *
  * Every spawned child is bounded: a wall-clock ceiling timer escalates
- * TERM → KILL and the exit/error handlers cancel BOTH rungs, so a settled
+ * TERM → KILL and the exit handler cancels BOTH rungs (spawn failures never
+ * reach a handler — they are caught at start(), CP-14), so a settled
  * caller can never be followed by a stray SIGKILL. Each child runs under the
  * shared minimal environment ({@see InfocmpBinary::childEnvironment()}) —
  * `TERM` and a fixed `PATH`, never the parent's `TERMINFO`/`TERMINFO_DIRS`/
@@ -277,12 +278,11 @@ final class AsyncProbe
             $deferred->resolve(self::settleFromChain($chain));
         });
 
-        // Ensure we don't leave dangling processes
-        $process->on('error', function () use ($deferred, $release, $cancelLadder, $chain): void {
-            $cancelLadder();
-            $release();
-            $deferred->resolve(self::settleFromChain($chain));
-        });
+        // There is deliberately no 'error' listener: react/child-process
+        // 0.6.x never emits 'error' on Process (vendor grep: 'exit' is the
+        // only event it forwards, and a spawn that fails dies inside
+        // start() — CP-14's catch already settles the caller and frees the
+        // cap slot there). The old block could not fire.
 
         return $deferred->promise();
     }

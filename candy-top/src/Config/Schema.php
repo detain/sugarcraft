@@ -56,7 +56,13 @@ final class Schema
     /** btop Config::ONE_DAY_MILLIS — update_ms ceiling. */
     public const ONE_DAY_MILLIS = 86_400_000;
 
-    /** btop's update_ms floor. */
+    /**
+     * btop's update_ms floor. Measured at the floor in real mode: 45-63 ms
+     * CPU per frame (~45-50 % of a core) — frames hold and RSS is stable,
+     * but the box burns close to half a core there; the disclosures in
+     * config.desc/options.desc say so (S-N19; gate G11 default: note, not
+     * auto-degrade).
+     */
     public const MIN_UPDATE_MS = 100;
 
     /** btop Config::valid_graph_symbols, plus `block2` sextants (btop PR #1783 — stock 1.4.7 rejects it). */

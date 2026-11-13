@@ -90,6 +90,7 @@ final class TapeToGif
      *   exec?: bool,
      *   maxFrames?: int,
      *   maxRuntimeSeconds?: float,
+     *   onProgress?: callable(int, int, int): void,
      * } $options
      *
      * `maxFrames` / `maxRuntimeSeconds` override the frame-stream safety

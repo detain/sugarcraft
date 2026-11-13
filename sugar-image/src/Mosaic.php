@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image;
 
+use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\Renderer\AsciiColorMode;
 use SugarCraft\Image\Renderer\AsciiRenderer;
 use SugarCraft\Image\Renderer\AcceptsOptimization;
@@ -921,13 +922,11 @@ final class Mosaic implements IncrementalRenderer
         $padX    = intdiv($cellW - $image->width, 2);
         $padY    = intdiv($canvasH - $image->height, 2);
 
-        $src = imagecreatefromstring($image->bytes);
+        $src = @imagecreatefromstring($image->bytes);
         if ($src === false) {
             throw new \RuntimeException(Lang::t('image_source.gd_load_failed_from_string'));
         }
-        if (!imageistruecolor($src)) {
-            imagepalettetotruecolor($src);
-        }
+        ForceTrueColor::convert($src);
 
         $canvas = imagecreatetruecolor($cellW, $canvasH);
         if ($canvas === false) {

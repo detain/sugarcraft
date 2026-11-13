@@ -19,7 +19,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Interactive Components Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -42,12 +42,12 @@ $timeline = Timeline::new([
 ]);
 $timelineFrame = Card::titled($timeline, 'Timeline');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $accordionFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $timelineFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );

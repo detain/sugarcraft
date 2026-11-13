@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\Emphasis;
@@ -253,7 +254,7 @@ final class ChooseModel implements Model
             if ($this->list->showStatusBar && ($status = $this->list->status()) !== '') {
                 $lines[] = $status;
             }
-            return implode("\n", $lines);
+            return implode("\n", $this->clipLines($lines));
         }
 
         // scriptui-13 (finding 041): row ↔ checked mapping via ITEM
@@ -289,7 +290,39 @@ final class ChooseModel implements Model
         if ($this->list->showStatusBar && ($status = $this->list->status()) !== '') {
             $lines[] = $status;
         }
-        return implode("\n", $lines);
+        return implode("\n", $this->clipLines($lines));
+    }
+
+    /**
+     * scriptui-14 (finding 004): the mirror renderer must keep ItemList's
+     * clip contract. {@see ItemList::view()} truncates every emitted line
+     * to its declared width (ANSI-aware, visible cells); the model's own
+     * multi/per-row body used to emit full-length titles, the filter echo,
+     * the header and the status bar unclipped — over-long items soft-wrapped
+     * in the terminal, the logical-vs-physical line count diverged and the
+     * line-addressed frame diff painted onto drifted rows. The width comes
+     * from the SAME resolved budget the ItemList already enforces on the
+     * delegated single-select path, so a 200-cell title renders identically
+     * (byte-for-byte, plain truncation — the mirror contract keeps
+     * ItemList's no-ellipsis form, so the custom body must not add one)
+     * whichever path drew the row. width == 0 declares no budget: the
+     * byte-identical legacy path.
+     *
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function clipLines(array $lines): array
+    {
+        $width = $this->list->width;
+        if ($width <= 0) {
+            return $lines;
+        }
+
+        return array_map(
+            static fn(string $line): string => Width::truncateAnsi($line, $width),
+            $lines
+        );
     }
 
     /** Selected option's title once submitted (single mode). */

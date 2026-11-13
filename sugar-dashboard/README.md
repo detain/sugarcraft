@@ -911,7 +911,7 @@ use SugarCraft\Dashboard\Components\Card\Text;
 $grid = new StackedGrid(new Options(fitScreen: true));
 
 // Add items to columns
-$grid->addItem(
+$grid = $grid->withItem(
     Frame::new(
         VStack::centered(
             Text::new('Welcome to SugarDashboard'),
@@ -922,7 +922,7 @@ $grid->addItem(
 );
 
 // Add a panel to the second column
-$grid->addItem(
+$grid = $grid->withItem(
     Panel::titled(
         Text::new('This is a panel'),
         'Dashboard'

@@ -122,7 +122,7 @@ final class Select implements \SugarCraft\Forms\Field
     public function withOptions(string ...$options): self
     {
         $items = array_map(static fn(string $o) => new StringItem($o), $options);
-        return $this->mutate(list: $this->list->setItems($items));
+        return $this->mutate(list: $this->list->withItems($items));
     }
 
     /**
@@ -137,7 +137,7 @@ final class Select implements \SugarCraft\Forms\Field
     {
         $items = array_map(static fn(string $o) => new StringItem($o), $candidates);
         return $this->mutate(
-            list: $this->list->setItems($items),
+            list: $this->list->withItems($items),
             fuzzyCandidates: $candidates,
         );
     }
@@ -336,7 +336,7 @@ final class Select implements \SugarCraft\Forms\Field
                 static fn(string $o) => new StringItem($o),
                 $msg->suggestions,
             );
-            $next = $this->mutate(list: $this->list->setItems($items));
+            $next = $this->mutate(list: $this->list->withItems($items));
             return [$next, null];
         }
 
@@ -360,14 +360,14 @@ final class Select implements \SugarCraft\Forms\Field
                     static fn(string $o) => new StringItem($o),
                     $this->fuzzyCandidates,
                 );
-                $l = $l->setItems($items);
+                $l = $l->withItems($items);
             } else {
                 // Apply fuzzy ranking via sugar-fuzzy's SmithWatermanMatcher.
                 $results = $this->matcher->matchAll($filterText, $this->fuzzyCandidates);
                 if ($results !== []) {
                     $ranked = array_map(static fn($r) => $r->haystack, $results);
                     $items = array_map(static fn(string $o) => new StringItem($o), $ranked);
-                    $l = $l->setItems($items);
+                    $l = $l->withItems($items);
                 }
             }
         }

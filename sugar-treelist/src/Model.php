@@ -392,6 +392,10 @@ final class Model
     /**
      * Desired number of context lines kept above the cursor.
      *
+     * DO NOT CONFUSE: this is the viewport scroll knob. The near-homophone
+     * {@see self::withLineOffset()} does not move the viewport at all — it
+     * is a pass-through context value for gutter hooks (sugar-treelist-028).
+     *
      * Validated like every other geometry knob (negative values are a caller
      * bug, not a render decision). The renderer additionally clamps the gap
      * to height-1, so an offset larger than the viewport can never strand
@@ -483,6 +487,9 @@ final class Model
     /**
      * Context-line offset handed to the prefixer/suffixer on every init call
      * (relative positioning input for gutter hooks — not a viewport knob).
+     *
+     * DO NOT CONFUSE: scrolling is cursor-driven; the viewport knob is
+     * {@see self::withCursorOffset()}, not this pass-through (sugar-treelist-028).
      *
      * @throws \InvalidArgumentException on negative $n
      */

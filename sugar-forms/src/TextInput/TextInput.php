@@ -787,26 +787,38 @@ final class TextInput implements Model
     }
 
     /**
-     * Replace the suggestion pool. Call {@see showSuggestions()} to
+     * Replace the suggestion pool. Call {@see withShowSuggestions()} to
      * enable rendering of the matching subset.
      *
      * @param list<string> $candidates
      */
-    public function setSuggestions(array $candidates): self
+    public function withSuggestions(array $candidates): self
     {
         return $this->mutate(suggestions: array_values($candidates), currentSuggestionIndex: 0);
     }
 
-    public function withSuggestions(array $candidates): self
-    {
-        return $this->setSuggestions($candidates);
-    }
+    /**
+     * @deprecated Use the with-spelling {@see self::withSuggestions()} —
+     *             the set-name promised in-place mutation this immutable
+     *             model never performed (accessor-law completion,
+     *             2026-11-13; sugar-forms-063). REMOVED-IN: 2.0.0
+     *
+     * @param list<string> $candidates
+     */
+    public function setSuggestions(array $candidates): self { return $this->withSuggestions($candidates); }
 
     /** Toggle whether suggestions render below the input. Default off. */
-    public function showSuggestions(bool $on = true): self
+    public function withShowSuggestions(bool $on = true): self
     {
         return $this->mutate(showSuggestions: $on);
     }
+
+    /**
+     * @deprecated Use the with-spelling {@see self::withShowSuggestions()}
+     *             (accessor-law completion, 2026-11-13; sugar-forms-063).
+     *             REMOVED-IN: 2.0.0
+     */
+    public function showSuggestions(bool $on = true): self { return $this->withShowSuggestions($on); }
 
     /**
      * Filter the suggestion pool by current prefix, case-insensitively.
@@ -966,10 +978,18 @@ final class TextInput implements Model
     public function placeholderStyle(Style $s): self { return $this->withPlaceholderStyle($s); }
 
     /** Latest validator error or null. */
-    public function err(): ?string
+    public function error(): ?string
     {
         return $this->err;
     }
+
+    /**
+     * @deprecated Use the {@see self::error()} reader — the field-level
+     *             and FilePicker widgets all answer to `error()`, the
+     *             third spelling was sugar-forms-071 (accessor-law
+     *             completion, 2026-11-13). REMOVED-IN: 2.0.0
+     */
+    public function err(): ?string { return $this->error(); }
 
     /** Manually move the cursor (clamped to `[0, length()]` and snapped down to the start of the cluster at the target). */
     public function setCursor(int $pos): self

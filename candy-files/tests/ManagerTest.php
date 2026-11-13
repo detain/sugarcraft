@@ -119,6 +119,79 @@ final class ManagerTest extends TestCase
         $this->assertSame('?', $m->searchQuery);
     }
 
+    /** @return list<string> */
+    private function typed(string $s): array
+    {
+        return array_map(static fn(string $c): string => $c, str_split($s));
+    }
+
+    private function typeIntoPathPrompt(Manager $m, string $path): Manager
+    {
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        foreach ($this->typed($path) as $ch) {
+            [$m] = $m->update($ch === ' '
+                ? new KeyMsg(KeyType::Space, ' ')
+                : new KeyMsg(KeyType::Char, $ch));
+        }
+        [$m] = $m->update(new KeyMsg(KeyType::Enter, ''));
+        return $m;
+    }
+
+    public function testPathPromptNavigatesAbsoluteAndRelative(): void
+    {
+        $m = $this->start();
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertSame(ConfirmState::PathPrompt, $armed->confirm);
+        $done = $this->typeIntoPathPrompt($m, '/home');
+        $this->assertSame('/home', $done->left->cwd);
+        $this->assertStringContainsString('Opened', $done->status);
+        // relative: 'etc' from '/' joins onto the pane's cwd
+        $rel = $this->typeIntoPathPrompt($m, 'etc');
+        $this->assertSame('/etc', $rel->left->cwd);
+    }
+
+    public function testPathPromptRefusesUnreadableAndKeepsPane(): void
+    {
+        $nullFs = static fn(string $p): ?array => null;
+        $m = new Manager($this->start()->left, $this->start()->right, lister: $nullFs);
+        $done = $this->typeIntoPathPrompt($m, '/nowhere');
+        $this->assertSame(ConfirmState::None, $done->confirm);
+        $this->assertSame('/', $done->left->cwd, 'refusal leaves the pane where it was');
+        $this->assertStringContainsString('Cannot read', $done->status);
+        // '~' rides the same refusal when home answers null
+        $tilde = $this->typeIntoPathPrompt($m, '~');
+        $this->assertStringContainsString('Cannot read', $tilde->status);
+    }
+
+    public function testPathPromptEmptyAndEscapeCancel(): void
+    {
+        $m = $this->start();
+        [$empty] = $this->typeIntoPathPrompt($m, '')->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertSame('/', $empty->left->cwd);
+        [$esc] = $m->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        [$esc] = $esc->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertSame(ConfirmState::None, $esc->confirm);
+        $this->assertSame('/', $esc->left->cwd);
+    }
+
+    public function testDigitsSwitchTabsAndAltDigitsRideAlong(): void
+    {
+        $m = $this->start();
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 't'));   // tab 2
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 't'));   // tab 3
+        $this->assertCount(3, $m->tabs);
+        [$one] = $m->update(new KeyMsg(KeyType::Char, '1'));
+        $this->assertSame(0, $one->tabIndex);
+        [$three] = $m->update(new KeyMsg(KeyType::Char, '3'));
+        $this->assertSame(2, $three->tabIndex);
+        [$alt] = $three->update(new KeyMsg(KeyType::Char, '2', alt: true));
+        $this->assertSame(1, $alt->tabIndex);
+        // past the last tab: silent no-op, no crash, nothing closed
+        [$edge] = $m->update(new KeyMsg(KeyType::Char, '9'));
+        $this->assertSame($m->tabIndex, $edge->tabIndex);
+        $this->assertCount(3, $edge->tabs);
+    }
+
     public function testTabSwapsActivePane(): void
     {
         $m = $this->start();

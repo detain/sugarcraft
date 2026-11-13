@@ -6,6 +6,7 @@ namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Image\Codec\TiffUncompressed;
+use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
 use SugarCraft\Image\Support\GdAvailability;
@@ -45,9 +46,7 @@ final class Iterm2Renderer implements Renderer
             if ($img === false) {
                 throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
             }
-            if (!imageistruecolor($img)) {
-                imagepalettetotruecolor($img);
-            }
+            ForceTrueColor::convert($img);
             $ok = false;
             $pngBytes = '';
             try {

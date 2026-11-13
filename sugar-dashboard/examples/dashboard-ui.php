@@ -21,7 +21,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('UI Components Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -39,7 +39,7 @@ $tags = HStack::spaced(1,
 );
 $tagsFrame = Card::titled($tags, 'Badges & Tags');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $tagsFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -53,12 +53,12 @@ $highlightFrame = Card::titled($highlight, 'Highlight');
 $hint = Hint::new('This is a helpful hint for the user.');
 $hintFrame = Card::titled($hint, 'Hint');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $highlightFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $hintFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -72,12 +72,12 @@ $tooltipFrame = Card::titled($tooltip, 'Tooltip');
 $popover = Popover::new('Click me', 'Popover content with more details');
 $popoverFrame = Card::titled($popover, 'Popover');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $tooltipFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $popoverFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -91,12 +91,12 @@ $commentFrame = Card::titled($comment, 'Comment');
 $testimonial = Testimonial::single(['text' => 'SugarDashboard is amazing!', 'author' => 'Jane Smith', 'role' => 'CEO at TechCorp']);
 $testimonialFrame = Card::titled($testimonial, 'Testimonial');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $commentFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $testimonialFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );

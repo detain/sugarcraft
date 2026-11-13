@@ -88,8 +88,8 @@ branch-HEAD break answers as one named refusal at launch instead of failing mid-
 
 `App::start($db, Flavor $flavor = Flavor::Sqlite, ?HistoryRecorder $historyRecorder = null, ?string $sslMode = null)` accepts an
 optional `$flavor` override, an optional history recorder (the launcher builds one itself — see Status-Snapshot History), and an optional
-`$sslMode` override: unset, the MySQL ssl-mode is derived from a real `MysqlDatabase` handle to feed the TLS gate (see MySQL SSL
-above); the explicit string exists as a test seam because `MysqlDatabase` is final with a private constructor.
+`$sslMode` override: unset, the MySQL ssl-mode is derived from a real `MysqlDatabase` handle to feed the TLS gate (see the
+*MySQL SSL* note under [DSN format](#dsn-format) below); the explicit string exists as a test seam because `MysqlDatabase` is final with a private constructor.
 
 ## Saved connections
 
@@ -239,7 +239,7 @@ these tables.
 | `Explain\ExplainProviderInterface` | Interface for driver-specific EXPLAIN parsing. Implement `explain(string $sql): array` returning a list of explain rows; the connection handle is constructor-injected on the provider, never a parameter. |
 | `Explain\SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Returns raw rows; tree-prefix (`|--`, `` `-- ``) depth parsing lives in `ExplainView::depthFromDetail()`. |
 | `Explain\MysqlExplainProvider` | `ExplainProviderInterface` via `EXPLAIN`. Returns `EXPLAIN` formatted rows with tag/parent/detail/indent. |
-| `Explain\PostgresExplainProvider` | `ExplainProviderInterface` via `EXPLAIN (ANALYZE, FORMAT JSON)`. Parses JSON structure for tree hierarchy. |
+| `Explain\PostgresExplainProvider` | `ExplainProviderInterface` via `EXPLAIN (FORMAT JSON)`. Parses JSON structure for tree hierarchy. `(ANALYZE)` is deliberately NOT added: on PostgreSQL `EXPLAIN ANALYZE` EXECUTES the statement, and a plan inspector must never run what it inspects. |
 | `Admin\AdminProviderInterface` | Flavor-agnostic admin-data port: `flavor()`, `fetchStatusVariables()`, `fetchServerVariables()`, `fetchProcesslist()`, `maxConnections()`, `statusVariablesTs()`, `wasReset()`, `refresh()`. Bridges to `ServerContextInterface` and `ServerContext`. |
 | `Admin\Providers\MysqlAdminProvider` | `AdminProviderInterface` adapter over `ServerContext` — the context issues `SHOW GLOBAL STATUS`, `SHOW GLOBAL VARIABLES`, and `SHOW PLUGINS`; the provider itself issues `fetchProcesslist()` (prefers Performance Schema `performance_schema.threads` with graceful fallback to `SHOW FULL PROCESSLIST` on permission errors). |
 | `Admin\Providers\PostgresAdminProvider` | `AdminProviderInterface` via `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard/connections implemented via `PostgresWidgetCatalog`. |
@@ -349,7 +349,7 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 | host     | Server hostname or IP; IPv6 addresses use brackets: `[::1]`           |
 | port     | Server port (default varies by driver)                                |
 | dbname   | Database name                                                         |
-| query    | Optional query string — `ssl-mode=MODE` is parsed and stored in `ConnectionConfig.sslMode`, then applied as PDO driver options at connect time |
+| query    | Optional query string — `ssl-mode=MODE` is parsed and stored in `ConnectionConfig.sslMode`. At connect time each driver carries TLS its own way: MySQL applies it as PDO driver options (never a DSN parameter), PostgreSQL folds it into libpq's `sslmode=` DSN parameter — the two mechanisms are named in the notes below |
 
 > **MySQL SSL** — `ssl-mode` is parsed from the query string (e.g. `?ssl-mode=require`) and stored in `ConnectionConfig.sslMode`; matching is case-insensitive and accepts the hyphenated/underscored spellings (`verify-ca` == `verify_ca`). It is **never** embedded in the MySQL DSN string (PDO mysql does not support `ssl-mode` as a DSN parameter). `MysqlDatabase::connect()`/`reconnect()` apply it via `sslDriverOptions()`:
 >
@@ -424,7 +424,7 @@ Each detail line is classified by op type: `SEARCH` (cyan), `SCAN` (yellow), `US
 Available providers:
 - **`SqliteExplainProvider`** — `EXPLAIN QUERY PLAN`; raw rows only — the tree-prefix (`|--`, `` `-- ``) depth parsing happens in `ExplainView::depthFromDetail()`
 - **`MysqlExplainProvider`** — `EXPLAIN` formatted rows with tag/parent/detail/indent
-- **`PostgresExplainProvider`** — `EXPLAIN (ANALYZE, FORMAT JSON)`, parses JSON structure for tree hierarchy
+- **`PostgresExplainProvider`** — `EXPLAIN (FORMAT JSON)`, parses JSON structure for tree hierarchy; `ANALYZE` is deliberately absent (it would execute the inspected statement)
 
 > **EXPLAIN safety guard** — `ConnectionDetailTabs::explain()` (Connections page, MDL detail tab — the `[3]` shortcut that opens it is standalone-only; see the unreachable-handler note above) will not run `EXPLAIN` on a thread's query unless it is a single `SELECT` statement. Multi-statement queries (containing `;`) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) are rejected before execution. This prevents accidental execution of write/cleanup statements when inspecting a thread's current query. Returns `null` when the query is ineligible or explain fails.
 
@@ -1044,7 +1044,7 @@ $csvString = (new CsvExporter($db))->exportReportResultsToString($columns, $rows
 - **`exportCsv(path, table)`** — writes table rows to a CSV file (RFC-4180 compliant)
 - **`exportReportResults(path, columns, rows)`** — writes arbitrary result set to a CSV file
 - **`exportReportResultsToString(columns, rows)`** — returns CSV as a string (used by ReportsPage)
-- **`importCsv(path, table)`** — imports a CSV file into a table (backtick-quoted column names)
+- **`importCsv(path, table)`** — imports a CSV file into a table (flavor-quoted identifiers — backticks on MySQL, double-quotes on PostgreSQL/SQLite)
 
 **Complete exports** — `exportCsv` pages the table through `rows(table, 500, offset)` until it
 reaches the row count, so a 100 000-row table exports in full (it no longer stops at the `rows()`
@@ -1075,7 +1075,7 @@ the partial file and raises `RuntimeException` rather than shipping an incomplet
 
 **Column detection** — uses `SELECT * FROM table LIMIT 1` to extract column names driver-neutrally.
 
-To add MySQL or Postgres support, implement `DatabaseInterface` and pass your implementation to `App::builder()->withDb($yourImpl)->build()`.
+To add a NEW driver (or replace one of the shipped ones), implement `DatabaseInterface` and pass your implementation to `App::builder()->withDb($yourImpl)->build()`.
 
 ## Test
 

@@ -10,7 +10,7 @@ use SugarCraft\Dashboard\Components\Card\Text;
 
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-$grid->addItem(
+$grid = $grid->withItem(
     Frame::new(
         VStack::centered(
             Text::new('SugarDashboard Dashboard'),
@@ -20,7 +20,7 @@ $grid->addItem(
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     Frame::new(Text::new('Column 2 Panel'))->withPadding(1),
     new ItemOptions(column: 1)
 );

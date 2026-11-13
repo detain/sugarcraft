@@ -71,6 +71,18 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('readme.txt', $out, 'frame back to the panes');
     }
 
+    public function testTabBarLabelsCarryTheirDigit(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs())->duplicateTab();
+        $out = Renderer::render($m);
+        // CF-29: the bar names its own direct-switch bindings. The tab bar
+        // is the first line; duplicateTab activates the new tab, so the
+        // active cell reads "2[" and the dormant one "1 ".
+        $bar = explode("\n", $out)[0];
+        $this->assertStringContainsString('2[', $bar);
+        $this->assertStringContainsString('1 ', $bar);
+    }
+
     /**
      * MAJOR-2 (docs-fix-1023) / CF-01: pane boxes derive from the live
      * terminal width captured via WindowSizeMsg. At 120 cols each pane box

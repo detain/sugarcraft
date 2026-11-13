@@ -6,6 +6,7 @@ namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Dither\Ditherer;
 use SugarCraft\Image\ImageSource;
@@ -282,9 +283,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
         if ($src === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
         }
-        if (!imageistruecolor($src)) {
-            imagepalettetotruecolor($src);
-        }
+        ForceTrueColor::convert($src);
         $resized = imagecreatetruecolor($pixelW, $pixelH);
         if ($resized === false) {
             imagedestroy($src);

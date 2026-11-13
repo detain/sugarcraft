@@ -41,9 +41,7 @@ trait ResolvesRawPixelsTrait
         if ($src === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
         }
-        if (!imageistruecolor($src)) {
-            imagepalettetotruecolor($src);
-        }
+        ForceTrueColor::convert($src);
 
         try {
             return RawRgba::fromGdImage($src);

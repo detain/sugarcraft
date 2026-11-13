@@ -19,6 +19,7 @@ use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Files\Manager\ManagerBuilder;
 use SugarCraft\Files\Msg\CopyCompletedMsg;
+use SugarCraft\Files\Support\Home;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
@@ -533,6 +534,22 @@ final class Manager implements Model
                 => $this->closeTab(),
             $plain && $msg->rune === 't'
                 => $this->duplicateTab(),
+            // CF-29 (closes 084): direct tab switch. Bare 1..9 index the
+            // tab bar; Alt+n rides along because terminals that feed the
+            // keypad through Alt still deliver ESC-digits as alt-flagged
+            // runes. switchTab bounds-guards, so a digit past the last
+            // tab is a silent no-op — and with tabs===[] the flat pair
+            // has no index to point at, same no-op. The Ctrl+Tab/PageUp
+            // cycle arms above keep their monopoly on the chords.
+            $msg->type === KeyType::Char && ($plain || $msg->alt)
+                && strlen($msg->rune) === 1 && $msg->rune >= '1' && $msg->rune <= '9'
+                => $this->switchTab((int) $msg->rune - 1),
+            // CF-29 (closes 042): the typed-path prompt. mc's lineage
+            // chord — ':' is a visible rune that invites the bare-letter
+            // arms to collide, and ranger's 'g' prefix needs a submode
+            // timer for no gain. Ctrl+O is unambiguous at the parser.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o'
+                => $this->armPathPrompt(),
             default => $this,
         };
         return [$next, null];
@@ -853,16 +870,21 @@ final class Manager implements Model
         // sub-mode — characters accumulate in $inputBuffer, Enter commits,
         // Escape cancels, backspace edits. Only the prompt and the commit
         // leg differ. (The branch was rename-only; parameterising it keeps
-        // the two grammar surfaces from drifting.)
+        // the grammar surfaces from drifting. CF-29 adds PathPrompt — a
+        // typed directory, committed through performPathOpen instead of
+        // a name write.)
+        $isPath = $this->confirm === ConfirmState::PathPrompt;
         $isMkdir = $this->confirm === ConfirmState::MkdirPrompt;
-        if ($this->confirm === ConfirmState::RenameSelected || $isMkdir) {
+        if ($this->confirm === ConfirmState::RenameSelected || $isMkdir || $isPath) {
             // Two literal key spellings below — the coverage guard greps
             // for literal key arguments and a dynamic key name is invisible.
-            $promptText = static fn(self $m): string => $isMkdir
-                ? Lang::t('prompt.mkdir')
-                : Lang::t('confirm.rename', ['name' => Entry::sanitizeName($m->pendingOpDest ?? '')]);
+            $promptText = static fn(self $m): string => match (true) {
+                $isMkdir => Lang::t('prompt.mkdir'),
+                $isPath => Lang::t('prompt.path'),
+                default => Lang::t('confirm.rename', ['name' => Entry::sanitizeName($m->pendingOpDest ?? '')]),
+            };
             $restate = static fn(self $m, string $status, ?string $buf): self =>
-                $m->withConfirm($m->confirm, $status, $m->pendingOpDest, $isMkdir ? 'mkdir' : 'rename', $buf);
+                $m->withConfirm($m->confirm, $status, $m->pendingOpDest, $isPath ? 'path' : ($isMkdir ? 'mkdir' : 'rename'), $buf);
             // Backspace: drop last character from buffer
             if ($msg->type === KeyType::Backspace) {
                 $buf = $this->inputBuffer ?? '';
@@ -876,9 +898,11 @@ final class Manager implements Model
                     return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
                         ->withInputBuffer(null), null];
                 }
-                $committed = $isMkdir
-                    ? $restate($this, $promptText($this), $newName)->performMkdir()
-                    : $restate($this, $promptText($this), $newName)->performRenameWithBuffer();
+                $committed = match (true) {
+                    $isMkdir => $restate($this, $promptText($this), $newName)->performMkdir(),
+                    $isPath => $restate($this, $promptText($this), $newName)->performPathOpen($newName),
+                    default => $restate($this, $promptText($this), $newName)->performRenameWithBuffer(),
+                };
                 return [$committed, null];
             }
             // Escape: cancel
@@ -1126,6 +1150,54 @@ final class Manager implements Model
     private function armMkdir(): self
     {
         return $this->withConfirm(ConfirmState::MkdirPrompt, Lang::t('prompt.mkdir'));
+    }
+
+    /**
+     * CF-29 (closes 042): arm the typed-path prompt. Same text-entry
+     * machinery the rename and mkdir chords already drive — only the
+     * commit leg differs (a navigation, not a name write). The API was
+     * built at CF-13 and no gesture reached it; README had to admit
+     * "no key binding carries a path".
+     */
+    private function armPathPrompt(): self
+    {
+        return $this->withConfirm(ConfirmState::PathPrompt, Lang::t('prompt.path'));
+    }
+
+    /**
+     * Commit a typed path: `~` expands through the same Home cascade the
+     * launcher uses, relative paths join onto the active pane's cwd, and
+     * the result re-homes that pane through Pane::open with its sort and
+     * hidden-truth intact. An unreadable target is REFUSED with the pane
+     * left where it was — the CF-22 law: never strand a user inside a
+     * directory the app cannot show.
+     */
+    private function performPathOpen(string $typed): self
+    {
+        $path = trim($typed);
+        if ($path === '') {
+            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                ->withInputBuffer(null);
+        }
+        if ($path === '~' || str_starts_with($path, '~/')) {
+            $home = Home::resolve();
+            $path = $path === '~' ? $home : $home . substr($path, 1);
+        }
+        $pane = $this->activePane();
+        $full = $path !== '' && $path[0] === '/' ? $path : Pane::join($pane->cwd, $path);
+        $opened = Pane::open($full, $this->lister, $pane->sort, $pane->showHidden);
+        // A path the lister answers null for — missing, private, or a
+        // plain file where FsLister refuses to pretend — is REFUSED with
+        // the pane retained. Failing loud here would crash the app on a
+        // typo at a prompt; the honest state is a localized refusal.
+        if (!$opened->readable) {
+            return $this
+                ->withConfirm(ConfirmState::None, Lang::t('status.path_unreadable', ['path' => Entry::sanitizeName($full)]))
+                ->withInputBuffer(null);
+        }
+        return $this->withActivePane(static fn(Pane $p): Pane => $opened)
+            ->withConfirm(ConfirmState::None, Lang::t('status.path_opened', ['path' => Entry::sanitizeName($full)]))
+            ->withInputBuffer(null);
     }
 
     /**

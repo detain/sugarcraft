@@ -99,6 +99,36 @@ final class AccessorDeprecationTest extends TestCase
     ];
 
     /**
+     * SF-43 (sugar-forms-063/-071, 2026-11-13) — the mutator half of the
+     * accessor law: in-place-NAMED set- and show-prefix methods that always returned
+     * mutate-clones (the W6-flexbox footgun class) gain canonical with*
+     * spellings, and the widgets' err() readers fold onto the family's
+     * error() spelling. The old names STAY as silent @deprecated
+     * delegators marked REMOVED-IN: 2.0.0 — same house shape as the
+     * get* era above. legacy => [canonical, forwarder call args].
+     */
+    private const SF43_ROWS = [
+        'ItemList::setItems'          => ['withItems',          [[]]],
+        'ItemList::setItem'           => ['withItem',           [0, null]],
+        'FilePicker::setCwd'          => ['withCwd',            ['sf43-missing-dir']],
+        'TextArea::setWidth'          => ['withWidth',          [40]],
+        'TextArea::setHeight'         => ['withHeight',         [8]],
+        'TextArea::showLineNumbers'   => ['withShowLineNumbers', [true]],
+        'TextArea::err'               => ['error',              []],
+        'TextInput::setSuggestions'   => ['withSuggestions',    [['a', 'b']]],
+        'TextInput::showSuggestions'  => ['withShowSuggestions', [true]],
+        'TextInput::err'              => ['error',              []],
+    ];
+
+    /** Short roster name => [FQCN, fixture builder]. */
+    private const SF43_WIRING = [
+        'ItemList'   => [\SugarCraft\Forms\ItemList\ItemList::class, '\SugarCraft\Forms\ItemList\ItemList'],
+        'FilePicker' => [\SugarCraft\Forms\FilePicker\FilePicker::class, '\SugarCraft\Forms\FilePicker\FilePicker'],
+        'TextArea'   => [TextArea::class, 'TextArea'],
+        'TextInput'  => [TextInput::class, 'TextInput'],
+    ];
+
+    /**
      * Accessors whose bare name is taken: [bare, kind] where kind is
      * 'setter' (bare() is a live fluent setter on this class),
      * 'contract' (local bare slot free, interface binding blocks the
@@ -215,7 +245,7 @@ final class AccessorDeprecationTest extends TestCase
             }
         }
         sort($marked);
-        $expected = array_keys(self::ERA_MARKED);
+        $expected = array_merge(array_keys(self::ERA_MARKED), array_keys(self::SF43_ROWS));
         sort($expected);
         self::assertSame($expected, $marked, 'the REMOVED-IN population drifted from the marked roster');
     }
@@ -346,6 +376,104 @@ final class AccessorDeprecationTest extends TestCase
         }
         ksort($expected);
         self::assertSame($expected, $tabled, 'README Accessor-deprecation table must tie the class-level era pairs');
+    }
+
+    // ─── SF-43 mutator-law legs ─────────────────────────────────────────
+
+    /** @return array<string, array{0:string, 1:string, 2:list<mixed>}> */
+    public static function sf43Provider(): array
+    {
+        $out = [];
+        foreach (self::SF43_ROWS as $legacy => [$canonical, $args]) {
+            $out[$legacy] = [$legacy, $canonical, $args];
+        }
+        return $out;
+    }
+
+    /**
+     * @param array{0:string, 1:string, 2:list<mixed>} $row
+     */
+    #[DataProvider('sf43Provider')]
+    public function testEachSf43ForwarderDelegatesToItsCanonicalTwin(string $legacy, string $canonical, array $args): void
+    {
+        [$short, $method] = explode('::', $legacy);
+        [$fqcn]           = self::SF43_WIRING[$short];
+        $reflection       = new \ReflectionClass($fqcn);
+
+        self::assertTrue($reflection->hasMethod($method), "roster row {$legacy} is stale — gone from disk");
+        self::assertTrue($reflection->hasMethod($canonical), "canonical twin {$canonical}() missing for {$legacy}");
+
+        $forwarder = $reflection->getMethod($method);
+        $twin      = $reflection->getMethod($canonical);
+        $doc       = (string) self::docblockOf($forwarder);
+        self::assertStringContainsString('@deprecated', $doc, "{$legacy} must stay @deprecated");
+        self::assertStringContainsString(self::MARKER, $doc, "{$legacy} lost its REMOVED-IN marker");
+        self::assertStringContainsString('{@see self::' . $canonical . '()}', $doc, "{$legacy} must name its canonical twin");
+        self::assertStringNotContainsString(
+            self::MARKER,
+            (string) self::docblockOf($twin),
+            "the canonical {$fqcn}::{$canonical}() must not be deprecation-marked",
+        );
+
+        // BC identity: the delegator answers exactly what the canonical
+        // returns (setItem with a null item is a type-door skip leg —
+        // exercise both through the no-op index instead).
+        $fixture = self::sf43Fixture($short);
+        if ($legacy === 'ItemList::setItem') {
+            $args = [0, new class implements \SugarCraft\Forms\ItemList\Item {
+                public function title(): string { return 'x'; }
+                public function description(): string { return ''; }
+                public function filterValue(): string { return 'x'; }
+            }];
+        }
+        $viaCanonical = $fixture->{$canonical}(...$args);
+        $viaForwarder = $fixture->{$method}(...$args);
+        if ($legacy === 'TextArea::err' || $legacy === 'TextInput::err') {
+            self::assertSame($viaCanonical, $viaForwarder, "{$legacy} read parity");
+        } else {
+            self::assertEquals($viaCanonical, $viaForwarder, "{$legacy} mutate-clone parity");
+        }
+    }
+
+    public function testNoNewInPlaceNamedMutatorsEnteredTheLibrary(): void
+    {
+        // The walk sees docblocked methods; the frozen list below is the
+        // re-derived truth of this file's own discovery (docblock-less set*
+        // survivors like Cursor::setMode are outside its sight — SF-43
+        // scoped seven names plus the err() pair, not the widget-internal
+        // machinery of Viewport/Cursor).
+        $allowed = [
+            'FilePicker::setCwd',
+            'ItemList::setItem', 'ItemList::setItems', 'ItemList::setSize',
+            'TextArea::setCursor', 'TextArea::setCursorColumn', 'TextArea::setHeight',
+            'TextArea::setPromptFunc', 'TextArea::setWidth',
+            'TextInput::setCursor', 'TextInput::setSuggestions',
+            'Viewport::setHeight', 'Viewport::setWidth',
+            'Viewport::setXOffset', 'Viewport::setYOffset',
+        ];
+        $found = [];
+        foreach (self::phpFilesIn(dirname(__DIR__) . '/src') as $file) {
+            foreach (self::methodDocblocks((string) file_get_contents($file)) as $name => $doc) {
+                $method = explode('::', $name)[1];
+                if (preg_match('/\Aset[A-Z]/', $method) === 1) {
+                    $found[] = $name;
+                }
+            }
+        }
+        sort($found);
+        sort($allowed);
+        self::assertSame($allowed, $found, 'new set* spellings are forbidden — use the with* family (SF-43)');
+    }
+
+    private static function sf43Fixture(string $short): object
+    {
+        $fqcn = self::SF43_WIRING[$short][0];
+
+        return match ($short) {
+            'ItemList'   => $fqcn::new([], 40, 4),
+            'FilePicker' => $fqcn::new(),
+            default      => $fqcn::new(),
+        };
     }
 
     // ─── helpers ────────────────────────────────────────────────────────

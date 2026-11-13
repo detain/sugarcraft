@@ -30,7 +30,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // HEADER
 // ============================================
 $breadcrumb = Breadcrumb::fromPath('Analytics / Reports / Q4 2024');
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled($breadcrumb, 'Navigation'),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -45,7 +45,7 @@ $metricsGrid = MetricsGrid::new([
     new MetricCard('Memory', '62.4%', '+5.7%', 'up', Color::hex('#CBA6F7')),
 ])->withColumns(4);
 
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled($metricsGrid, 'Performance Metrics'),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -80,22 +80,22 @@ $sparkline = SparklineBar::new([3.0, 5.0, 2.0, 8.0, 6.0, 4.0, 7.0, 5.0, 9.0, 6.0
 $sparkFrame = Card::titled($sparkline, 'Activity Trend');
 
 // Charts in 2x2 grid
-$grid->addItem(
+$grid = $grid->withItem(
     $barFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $areaFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $donutFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $sparkFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -122,12 +122,12 @@ $avatarGroup = AvatarGroup::compact([
 ], 5);
 $avatarFrame = Card::titled($avatarGroup, 'Active Users');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $timelineFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $avatarFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -142,7 +142,7 @@ $stats = VStack::spaced(1,
 );
 $statsFrame = Card::titled($stats, 'Summary');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $statsFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );

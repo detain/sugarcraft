@@ -38,6 +38,7 @@ return [
     'image_source.crop_failed'          => 'GD failed to crop the image',
     'image_source.gd_create_failed'     => 'GD failed to create an image buffer',
     'image_source.gd_encode_failed'     => 'GD failed to encode the image as {mime}',
+    'gd.palette_conversion_failed'      => 'GD failed to convert a palette image to truecolor',
 
     // DiskCache
     'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',

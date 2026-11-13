@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
 use SugarCraft\Image\Lang;
@@ -366,9 +367,7 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         if ($src === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
         }
-        if (!imageistruecolor($src)) {
-            imagepalettetotruecolor($src);
-        }
+        ForceTrueColor::convert($src);
 
         $tmp = @fopen('php://temp', 'w+b');
         if ($tmp === false) {

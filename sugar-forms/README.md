@@ -517,6 +517,31 @@ Roster and shapes are pinned by `tests/AccessorDeprecationTest.php` (census,
 markers, forwarder delegation, BC identity, and the exception list with its
 collision reasons).
 
+### Mutator law completion (2026-11-13)
+
+The same immutability logic applies to the write side: seven methods carried
+in-place `set*`/`show*` names while returning mutate-clones like every other
+`with*` — the discarded-return footgun. Each gained a canonical `with*`
+spelling; the old name remains as a silent `@deprecated` delegator marked
+`REMOVED-IN: 2.0.0` (pinned by `tests/AccessorDeprecationTest.php` alongside
+the get* census, which the sweep left at 53):
+
+| Footgun name | Canonical |
+| --- | --- |
+| `ItemList::setItems()` | `withItems()` |
+| `ItemList::setItem()` | `withItem()` |
+| `FilePicker::setCwd()` (widget) | `withCwd()` |
+| `TextArea::setWidth()` / `setHeight()` | `withWidth()` / `withHeight()` |
+| `TextArea::showLineNumbers()` | `withShowLineNumbers()` |
+| `TextInput::setSuggestions()` | `withSuggestions()` |
+| `TextInput::showSuggestions()` | `withShowSuggestions()` |
+
+The error readers were the third spelling drift (`getError()` / `error()` /
+`err()`): the widgets' `err()` folds onto the family's `error()` with `err()`
+kept as a deprecated alias, so `error()` is the one read everywhere while the
+validators' `true|string` return remains the value shape, not a name.
+
+
 ## Dependencies
 
 Runtime requires (see `composer.json`):

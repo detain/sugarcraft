@@ -22,7 +22,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Text Components Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -36,12 +36,12 @@ $figletFrame = Card::titled($figlet, 'Figlet Text');
 $borderText = BorderText::new('IMPORTANT');
 $borderTextFrame = Card::titled($borderText, 'Border Text');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $figletFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $borderTextFrame,
     new ItemOptions(column: 1, expandVertical: false)
 );
@@ -55,12 +55,12 @@ $marqueeFrame = Card::titled($marquee, 'Marquee');
 $loadingText = LoadingText::new('Processing...');
 $loadingTextFrame = Card::titled($loadingText, 'Loading Text');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $marqueeFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $loadingTextFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );

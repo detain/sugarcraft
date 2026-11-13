@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Renderer;
 
+use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
 use SugarCraft\Image\PixelGrid;
@@ -59,13 +60,11 @@ final class HalfBlockRenderer implements Renderer, IncrementalRenderer, AcceptsO
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
         // Load the GD image.
-        $img = imagecreatefromstring($image->bytes);
+        $img = @imagecreatefromstring($image->bytes);
         if ($img === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
         }
-        if (!imageistruecolor($img)) {
-            imagepalettetotruecolor($img);
-        }
+        ForceTrueColor::convert($img);
 
         try {
             $grid = PixelGrid::fromGd($img, $width, $effectiveHeight);

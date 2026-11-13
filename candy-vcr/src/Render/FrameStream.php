@@ -561,7 +561,7 @@ final class FrameStream implements \IteratorAggregate
                 }
                 if (!$child->exited()) {
                     try {
-                        $child->kill(MasterPty::SIGKILL);
+                        $child->kill(Child::SIGKILL);
                     } catch (\Throwable) {
                         // best-effort
                     }

@@ -38,8 +38,8 @@ final class StackedGridResponsiveTest extends TestCase
     public function testWideLayoutShowsBothColumnsAtWidth120(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Left Column Content'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Right Column Content'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Left Column Content'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Right Column Content'), new ItemOptions(column: 1));
         $grid->setSize(120, 10);
 
         $rendered = $grid->render();
@@ -56,8 +56,8 @@ final class StackedGridResponsiveTest extends TestCase
     public function testWideLayoutAtWidth120NotCollapsed(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Left'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Right'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Left'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Right'), new ItemOptions(column: 1));
         $grid->setSize(120, 5);
 
         $rendered = $grid->render();
@@ -82,8 +82,8 @@ final class StackedGridResponsiveTest extends TestCase
     public function testNarrowLayoutCollapsesToSingleColumnAtWidth80(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Top Panel'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Bottom Panel'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Top Panel'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Bottom Panel'), new ItemOptions(column: 1));
         $grid->setSize(80, 10);
 
         $rendered = $grid->render();
@@ -98,8 +98,8 @@ final class StackedGridResponsiveTest extends TestCase
     public function testNarrowLayoutAtWidth80UsesFullWidth(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Content A'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Content B'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Content A'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Content B'), new ItemOptions(column: 1));
         $grid->setSize(80, 8);
 
         $rendered = $grid->render();
@@ -119,9 +119,9 @@ final class StackedGridResponsiveTest extends TestCase
     public function testNarrowLayoutPreservesAllItemsFromAllColumns(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Col0-Item'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Col1-Item'), new ItemOptions(column: 1));
-        $grid->addItem($this->strItem('Col2-Item'), new ItemOptions(column: 2));
+        $grid = $grid->withItem($this->strItem('Col0-Item'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Col1-Item'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Col2-Item'), new ItemOptions(column: 2));
         $grid->setSize(80, 15);
 
         $rendered = $grid->render();
@@ -142,8 +142,8 @@ final class StackedGridResponsiveTest extends TestCase
     public function testBoundaryAtWidth90RendersWideNotNarrow(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Left'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Right'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Left'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Right'), new ItemOptions(column: 1));
         $grid->setSize(90, 5);
 
         $rendered = $grid->render();
@@ -158,8 +158,8 @@ final class StackedGridResponsiveTest extends TestCase
     public function testWidth89IsNarrowAndCollapses(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Left'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('Right'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Left'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Right'), new ItemOptions(column: 1));
         $grid->setSize(89, 5);
 
         $rendered = $grid->render();
@@ -179,11 +179,11 @@ final class StackedGridResponsiveTest extends TestCase
     public function testSingleColumnGridUnaffectedByNarrowBreakpoint(): void
     {
         $gridNarrow = new StackedGrid();
-        $gridNarrow->addItem($this->strItem('Only'), new ItemOptions(column: 0));
+        $gridNarrow = $gridNarrow->withItem($this->strItem('Only'), new ItemOptions(column: 0));
         $gridNarrow->setSize(80, 5);
 
         $gridWide = new StackedGrid();
-        $gridWide->addItem($this->strItem('Only'), new ItemOptions(column: 0));
+        $gridWide = $gridWide->withItem($this->strItem('Only'), new ItemOptions(column: 0));
         $gridWide->setSize(120, 5);
 
         $this->assertStringContainsString('Only', $gridNarrow->render());

@@ -115,6 +115,83 @@ final class MdViewModelTest extends TestCase
         unlink($path);
     }
 
+    public function testHelpStripTogglesWithoutGrowingTheFrame(): void
+    {
+        // Finding 079: `?` answers with the condensed key table. The frame
+        // line count is the invariant — the strip REPLACES the top body row
+        // (sugar-core maps frame lines 1:1 to rows; growth tears the screen).
+        $model = MdViewModel::fromContent($this->content(9), 40, 6)->withDocument('doc.md');
+        $plain = $model->view();
+        $this->assertStringNotContainsString('? toggle', $plain);
+
+        [$on, $cmd] = $model->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertNull($cmd, 'help toggling never quits or schedules a command');
+        $this->assertTrue($on->helpShown);
+        $helped = $on->view();
+        $this->assertSame(
+            count(explode("\n", $plain)),
+            count(explode("\n", $helped)),
+            'the strip may not grow the frame by even one line'
+        );
+        $lines = explode("\n", $helped);
+        $this->assertStringContainsString('? toggle', $lines[1], 'the strip rides directly under the header');
+        $this->assertSame(40, \SugarCraft\Core\Util\Width::of($lines[1]), 'the strip is padded to the exact viewport width');
+        foreach (['j/k', 'PgUp', 'Ctrl+U/D', 'Home g', 'End G', 'h/l', 'r reload', 'q quit'] as $binding) {
+            $this->assertStringContainsString($binding, $lines[1], 'strip must carry table binding: ' . $binding);
+        }
+
+        [$off, ] = $on->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertFalse($off->helpShown);
+        $this->assertSame($plain, $off->view(), 'toggling back restores the frame byte-for-byte');
+    }
+
+    public function testHelpRespectsTheZeroAndOneRowFloors(): void
+    {
+        // rows=1 → viewport height 0 → the header alone (finding 038's
+        // invariant), strip skipped; rows=2 → one body row exists and the
+        // strip replaces exactly it.
+        [$one, ] = MdViewModel::fromContent($this->content(9), 40, 1)
+            ->withDocument('doc.md')
+            ->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($one->helpShown);
+        $this->assertCount(1, explode("\n", $one->view()));
+
+        [$two, ] = MdViewModel::fromContent($this->content(9), 40, 2)
+            ->withDocument('doc.md')
+            ->update(new KeyMsg(KeyType::Char, '?'));
+        $lines = explode("\n", $two->view());
+        $this->assertCount(2, $lines);
+        $this->assertStringContainsString('? toggle', $lines[1]);
+    }
+
+    public function testHelpRidesScrollCopiesAndWorksInChromelessMode(): void
+    {
+        // The toggle must survive derived states (viewport copies), and the
+        // stdin pager (no header row) must show the strip too — replacing
+        // its first body row, count unchanged.
+        $base = MdViewModel::fromContent($this->content(9), 40, 6);
+        [$on, ] = $base->update(new KeyMsg(KeyType::Char, '?'));
+        [$moved, ] = $on->update(new KeyMsg(KeyType::Down));
+        $this->assertTrue($moved->helpShown, 'the strip rode the scroll copy');
+        $this->assertStringContainsString('? toggle', explode("\n", $moved->view())[0]);
+        $this->assertCount(
+            count(explode("\n", $base->view())),
+            explode("\n", $moved->view())
+        );
+    }
+
+    public function testHelpChordIsRemappableAndPlainQNeverToggles(): void
+    {
+        [$on, ] = MdViewModel::fromContent($this->content(3))
+            ->withKeymap(['help' => 'ctrl-h'])
+            ->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertFalse($on->helpShown, 'with help moved off `?`, the old rune answers to nothing');
+        [$chord, ] = MdViewModel::fromContent($this->content(3))
+            ->withKeymap(['help' => 'ctrl-h'])
+            ->update(new KeyMsg(KeyType::Char, 'h', ctrl: true));
+        $this->assertTrue($chord->helpShown);
+    }
+
     public function testDownScrollsViewport(): void
     {
         $m = MdViewModel::fromContent($this->content(20), 80, 3);

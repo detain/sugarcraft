@@ -199,6 +199,204 @@ final class DiffWriterTest extends TestCase
         }
     }
 
+    // ------------------------------------------------------------------
+    // VCR-S22 · real diff algorithm + honest report bytes (findings 027, 106, 114)
+    // ------------------------------------------------------------------
+
+    public function testOnePrependedLineMarksExactlyOneHunk(): void
+    {
+        $expected = implode("\n", ['l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'l7', 'l8']) . "\n";
+        $actual = "NEW\n" . $expected;
+
+        $diff = $this->writer->buildUnifiedDiff($expected, $actual);
+
+        // The finding's acceptance: a prepend is ONE region naming the
+        // inserted line — the retired positional walker marked every
+        // later line "changed" and bloated this into a full re-print.
+        self::assertSame(1, preg_match_all('/^@@/m', $diff));
+        self::assertStringContainsString("+NEW\n l1\n", $diff);
+        self::assertSame(
+            0,
+            preg_match_all('/^-(?!-)/m', $diff),
+            'nothing was deleted, so the hunks must carry no removal rows',
+        );
+    }
+
+    public function testAdjacentChangesMergeIntoOneRegionAndContextPrintsOnce(): void
+    {
+        $lines = array_map(static fn (int $i): string => "line $i", range(1, 20));
+        $expected = implode("\n", $lines) . "\n";
+
+        $far = $lines;
+        $far[1] = 'changed 2';
+        $far[11] = 'changed 12';
+        self::assertSame(
+            2,
+            preg_match_all('/^@@/m', $this->writer->buildUnifiedDiff($expected, implode("\n", $far) . "\n")),
+            'changes more than 2x context apart stay separate hunks',
+        );
+
+        $near = $lines;
+        $near[1] = 'changed 2';
+        $near[2] = 'changed 3';
+        $diff = $this->writer->buildUnifiedDiff($expected, implode("\n", $near) . "\n");
+        self::assertSame(
+            1,
+            preg_match_all('/^@@/m', $diff),
+            'two edits a line apart are one region (finding 027: the old layout reprinted context per change)',
+        );
+
+        // No context row repeats inside the single hunk (finding lines
+        // excluded; blank ' ' context lines are structural, not content).
+        $content = [];
+        foreach (explode("\n", $diff) as $row) {
+            if (strlen($row) > 1 && $row[0] === ' ' && !isset($content[$row])) {
+                $content[$row] = true;
+            } elseif (strlen($row) > 1 && $row[0] === ' ') {
+                self::fail("context row repeated within one hunk: {$row}");
+            }
+        }
+        self::assertArrayHasKey(' line 1', $content);
+    }
+
+    public function testUnifiedDiffAppliesWithGnuPatch(): void
+    {
+        $patch = trim((string) @shell_exec('command -v patch 2>/dev/null'));
+        if ($patch === '') {
+            self::markTestSkipped('GNU patch not installed on this host');
+        }
+
+        // A drift spread exercising all three op kinds: a mid change, a
+        // deletion block, and a tail append — the shapes whose @@ headers
+        // the retired positional generator got wrong (finding 027: the
+        // compat claim was printed but unproven).
+        $expected = implode("\n", array_map(
+            static fn (int $i): string => "row {$i}",
+            range(1, 20),
+        )) . "\n";
+        $actual = implode("\n", array_merge(
+            ['row 1', 'ROW 2 EDITED', 'row 3', 'row 4', 'row 5', 'row 6', 'row 7', 'row 8'],
+            ['row 9', 'row 10', 'row 11', 'row 14', 'row 15', 'row 16', 'row 17', 'row 18'],
+            ['row 19', 'row 20', 'row 21 appended', 'row 22 appended'],
+        )) . "\n";
+
+        $dir = self::scratchDir();
+        file_put_contents("{$dir}/expected.txt", $expected);
+        file_put_contents("{$dir}/drift.diff", $this->writer->buildUnifiedDiff($expected, $actual));
+
+        exec(
+            sprintf('cd %s && patch --silent --fuzz=0 expected.txt drift.diff 2>&1', escapeshellarg($dir)),
+            $output,
+            $status,
+        );
+        self::assertSame(0, $status, 'GNU patch must apply the generated diff: ' . implode("\n", $output));
+        self::assertSame($actual, file_get_contents("{$dir}/expected.txt"));
+    }
+
+    public function testWrittenDiffCarriesNoRawControlBytesFromThePayload(): void
+    {
+        // The cassette side of the comparison is recorded terminal bytes:
+        // an ESC in them used to ship straight into the .diff and fire in
+        // the operator's pager (finding 106).
+        $expected = "prompt\n" . "\x1b[2J\x07done\x9bmore\xC2\x85tail\nlast\n";
+        $actual = "prompt\n\x1b[31mred\x1b[0m\nlast\n";
+
+        $path = tempnam(sys_get_temp_dir(), 'diff-clean-');
+        $this->assertNotFalse($path);
+        $written = $this->writer->writeUnifiedDiff($path, $expected, $actual);
+        $this->assertNotFalse($written);
+        self::assertSame($written, filesize($path), 'the return shape is the documented byte count');
+
+        $content = (string) file_get_contents($path);
+        unlink($path);
+
+        foreach (["\x1b", "\x07", "\x9b", "\xC2\x85"] as $raw) {
+            self::assertStringNotContainsString($raw, $content, 'payload control bytes must not survive raw');
+        }
+        self::assertStringContainsString('\\e[2J\\adone\\x9Bmore\\x85tail', $content);
+    }
+
+    public function testAnsiReportRowsNeverEmitThePayloadAsLiveBytes(): void
+    {
+        $expected = "ok\n" . "\x1b[2Jpwn\x07" . "\nend\n";
+        $stream = Stream::memory('w+');
+        $this->writer->writeAnsiDiff($expected, "ok\nplain\nend\n", $stream);
+        rewind($stream);
+        $raw = (string) stream_get_contents($stream);
+
+        // The report's own chrome is SGR; the payload substring must not
+        // be present as live bytes anywhere.
+        self::assertStringNotContainsString("\x1b[2Jpwn\x07", $raw);
+
+        $plain = $this->ansiDiffPlain($expected, "ok\nplain\nend\n");
+        self::assertStringContainsString('\\e[2Jpwn\\a', $plain, 'escaped form is what the operator reads');
+    }
+
+    public function testValidUtf8PayloadSurvivesIntactWithoutContinuationByteMangling(): void
+    {
+        // A blind 0x7f-0x9f byte class would escape the continuation bytes
+        // inside every CJK character (日 = E6 97 A5 — 0x97 in band) and
+        // mangle the payload the report exists to show.
+        $expected = "héllo 日本語\nplain\n";
+        $diff = $this->writer->buildUnifiedDiff($expected, "héllo 日本語\nchanged\n");
+
+        self::assertStringContainsString('héllo 日本語', $diff);
+        self::assertStringNotContainsString('\\x', $diff, 'printable UTF-8 needs no escapes at all');
+    }
+
+    public function testMinifiedLineIsCappedAndEllipsizedWithUniformRows(): void
+    {
+        // finding 114: one 10 KB minified line must not pad every row to
+        // 10 KB — the field caps at MAX_ROW_WIDTH and the cut is marked.
+        $minified = str_repeat('m', 10000);
+        $plain = $this->ansiDiffPlain("short\n", $minified . "\ntail\n");
+
+        $rows = array_filter(
+            explode("\n", $plain),
+            static fn (string $r): bool => $r !== '',
+        );
+        $lengths = array_values(array_unique(array_map('strlen', $rows)));
+        self::assertSame(
+            [DiffWriter::MAX_ROW_WIDTH + 2],
+            $lengths,
+            'every report row lands on exactly fieldWidth + 2 columns',
+        );
+        self::assertStringContainsString('…', $plain, 'the cut must be marked, not silent');
+    }
+
+    public function testReportRowCapPrintsOverflowFooter(): void
+    {
+        $lines = array_map(static fn (int $i): string => "l{$i}", range(1, 410));
+        $expected = implode("\n", $lines) . "\n";
+        $lines[409] = 'l409 changed past the cap';
+        $actual = implode("\n", $lines) . "\n";
+
+        $plain = $this->ansiDiffPlain($expected, $actual);
+
+        self::assertSame(2, substr_count($plain, "… +10 lines"), 'one footer per side');
+        self::assertStringNotContainsString('l409', $plain, 'rows past the cap are not printed');
+        $body = array_filter(
+            explode("\n", $plain),
+            static fn (string $r): bool => $r !== '' && !str_starts_with($r, '---') && !str_starts_with($r, '  …'),
+        );
+        self::assertLessThanOrEqual(800, count($body), 'both sides together stay under 2x the row cap');
+    }
+
+    public function testContextWidthIsHonouredEndToEnd(): void
+    {
+        $lines = array_map(static fn (int $i): string => "line {$i}", range(1, 20));
+        $expected = implode("\n", $lines) . "\n";
+        $changed = $lines;
+        $changed[9] = 'line 9 EDITED';
+        $diff = $this->writer->buildUnifiedDiff($expected, implode("\n", $changed) . "\n", 1);
+
+        $contextRows = array_filter(
+            explode("\n", $diff),
+            static fn (string $r): bool => str_starts_with($r, ' line '),
+        );
+        self::assertCount(2, $contextRows, 'context 1 prints exactly the named surround, not a hardcoded 3');
+    }
+
     /**
      * Run writeAnsiDiff and return its output with every SGR sequence
      * removed — what a NO_COLOR pipe or colour-blind reader effectively
@@ -212,5 +410,13 @@ final class DiffWriterTest extends TestCase
         $raw = stream_get_contents($stream) ?: '';
 
         return preg_replace('/\x1b\[[0-9;]*m/', '', $raw) ?? $raw;
+    }
+
+    private function scratchDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/diffwriter-' . bin2hex(random_bytes(6));
+        self::assertNotFalse(mkdir($dir, 0700, true));
+
+        return $dir;
     }
 }

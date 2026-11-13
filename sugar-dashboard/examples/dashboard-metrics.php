@@ -22,7 +22,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Metrics Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -39,7 +39,7 @@ $metricsGrid = MetricsGrid::new([
     new MetricCard('Bounce Rate', '24%', '-2.0%', 'down', Color::hex('#F38BA8')),
 ])->withColumns(3);
 
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled($metricsGrid, 'Key Performance Indicators'),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -61,12 +61,12 @@ $statusRow = VStack::spaced(1,
 );
 $statusFrame = Card::titled($statusRow, 'System Status');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $statsFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $statusFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );

@@ -1001,10 +1001,17 @@ final class TextArea implements Model
     }
 
     /** Show 1-based line numbers in a left gutter. Default off. */
-    public function showLineNumbers(bool $on = true): self
+    public function withShowLineNumbers(bool $on = true): self
     {
         return $this->mutate(showLineNumbers: $on);
     }
+
+    /**
+     * @deprecated Use the with-spelling {@see self::withShowLineNumbers()}
+     *             (accessor-law completion, 2026-11-13; sugar-forms-063).
+     *             REMOVED-IN: 2.0.0
+     */
+    public function showLineNumbers(bool $on = true): self { return $this->withShowLineNumbers($on); }
 
     /**
      * Character drawn for empty rows beyond the last line of content
@@ -1061,7 +1068,15 @@ final class TextArea implements Model
     public function prompt(string $p): self       { return $this->withPrompt($p); }
     public function validator(?\Closure $fn): self { return $this->withValidator($fn); }
 
-    public function err(): ?string { return $this->err; }
+    /** Latest validator error, or null when the buffer passes. */
+    public function error(): ?string { return $this->err; }
+
+    /**
+     * @deprecated Use the {@see self::error()} reader (accessor-law
+     *             completion, 2026-11-13; sugar-forms-071).
+     *             REMOVED-IN: 2.0.0
+     */
+    public function err(): ?string { return $this->error(); }
 
     /** Move the cursor to (`$row`, `$col`); both clamp to range. */
     public function setCursor(int $row, int $col): self
@@ -1356,10 +1371,19 @@ final class TextArea implements Model
     public function rowOffset(): int { return $this->rowOffset; }
 
     /**
-     * Idiomatic split for callers that prefer dedicated setters over
-     * the bundled `with*` chain. Mirrors upstream's `SetWidth(int)`.
+     * @deprecated Use the with-spelling {@see self::withWidth()} /
+     *             {@see self::withHeight()} — the set-names promised
+     *             in-place mutation these return-new clones never
+     *             performed (accessor-law completion, 2026-11-13;
+     *             sugar-forms-063). REMOVED-IN: 2.0.0
      */
-    public function setWidth(int $w): self  { return $this->withWidth($w); }
+    public function setWidth(int $w): self { return $this->withWidth($w); }
+
+    /**
+     * @deprecated Use the with-spelling {@see self::withHeight()}
+     *             (accessor-law completion, 2026-11-13; sugar-forms-063).
+     *             REMOVED-IN: 2.0.0
+     */
     public function setHeight(int $h): self { return $this->withHeight($h); }
 
     // ---- editing primitives -----------------------------------------

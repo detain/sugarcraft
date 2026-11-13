@@ -32,7 +32,7 @@ works, and a German `(j/n)` answers to `j`.
 ┃    notes.md                    12.0KB    ┃  │    Xorg.0.log                   4.0KB    │
 ┃    todo.txt                      512B    ┃  └──────────────────────────────────────────┘
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
- focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo
+ focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs
 ```
 
 ## Run it
@@ -111,6 +111,8 @@ on a bare php-cli machine the step that refuses is `composer install`, naming `s
 | `Escape`        | Exit search mode; cancels armed confirmations and text-entry (cancel-intent is never a confirm — only the gate's taught affirmative confirms the pending `d`/`c`/`m` op); otherwise clears the selection |
 | `t`             | Duplicate current tab                                     |
 | `Ctrl+w`        | Close current tab (refused on the last tab: "cannot close last tab") |
+| `Ctrl+O`        | Open a typed path in the active pane (CF-29): `~` expands through the launcher's home cascade, relative paths join onto the pane's cwd, Enter commits, `Esc` cancels; an unreadable target is refused and the pane stays put |
+| `1`–`9`         | Switch to tab 1–9 by number (bare digits or `Alt+n`; past the last tab it is a no-op); the tab bar prints each label with its number, so the bindings are self-named |
 | `Ctrl+Tab`      | Cycle to next tab — needs a terminal that reports modified Tab (see below) |
 | `Ctrl+Shift+Tab`| Cycle to previous tab — same terminal-support caveat |
 | `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — standard terminal emulators report the modified Page keys unambiguously (tmux/browser terminals may intercept them) |
@@ -152,7 +154,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 | `Entry`             | Value object: name, isDir, size, mtime, isLink, isHidden                |
 | `Sort`              | Enum (NameAsc/NameDesc/MtimeAsc/MtimeDesc/SizeAsc/SizeDesc) + comparator |
 | `Pane`              | One pane: cwd, entries, cursor, selection set, sort, showHidden          |
-| `ConfirmState`      | Pending-confirmation enum (None / DeleteSelected / CopySelected / MoveSelected / RenameSelected)     |
+| `ConfirmState`      | Pending-confirmation enum (None / DeleteSelected / CopySelected / MoveSelected / RenameSelected / MkdirPrompt / PathPrompt)     |
 | `Manager`           | SugarCraft Model — orchestrates two panes, handles all keys + confirm gate |
 | `FsLister`          | Default lister: `scandir` + `lstat` against the live filesystem          |
 | `Renderer`          | Pure view function — tab bar, two pane boxes side-by-side, optional search overlay, status line |
@@ -170,7 +172,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 - Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / relist-with-selection-preservation / navigate / move / select / sort / hidden toggle / parent-path / join)
 - Lister contract (CF-22): `null` answers "cannot read" and is never collapsed to "empty" — a refused `navigate`/`goUp` keeps the last honest listing, `relist` preserves cursor + selection through the outage, the pane header carries the localized `(unreadable)` marker, `r` names the refusal instead of lying `refreshed`, the launcher refuses a missing or unreadable argv directory (`Support\LaunchDir`), and `FsLister` splits an empty dir (`[]`) from a 0000 one (`null`)
 - `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` or the prompt's taught localized affirmative confirms, anything else cancels; modified chords never confirm), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths **and rows**, other non-key Msgs dropped)
-- `t` duplicates the current tab; `Manager::openNewTab(path)` lands a tab on the given directory as an API (no key binding carries a path). CF-23 made both honest: the duplicate carries BOTH pane cwds and the active side, and every tab mutator re-projects the flat left/right/activeIdx mirror onto the current tab, so the Tab flip and the renderer can never disagree again.
+- `t` duplicates the current tab; `Manager::openNewTab(path)` lands a tab on the given directory as an API, and since CF-29 a key binding DOES carry a path: `Ctrl+O` opens the typed-path prompt in the active pane. CF-23 made both honest: the duplicate carries BOTH pane cwds and the active side, and every tab mutator re-projects the flat left/right/activeIdx mirror onto the current tab, so the Tab flip and the renderer can never disagree again.
 - Async copy end-to-end: the `c`/`y` command is executed against the real event loop and its `CopyCompletedMsg` re-enters `update()` — status, undo entry and refreshed destination pane are all asserted, plus the error-count path, the skipped-name path, the overwrite announcement and undo-recording-successes-only
 - Status-line injection defense: filenames carrying raw ESC/OSC bytes render inert in every rename/copy/move message (adversarial pins), plus the structural pins for the rename containment boundary and the single copyDir home
 - Renderer: cell-width math for CJK names (size column stays aligned), tab-bar clipping never splits a codepoint, search echo is sanitized, pane widths follow the terminal

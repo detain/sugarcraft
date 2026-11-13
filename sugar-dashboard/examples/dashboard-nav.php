@@ -20,7 +20,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Navigation Components Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -31,7 +31,7 @@ $grid->addItem(
 $breadcrumb = Breadcrumb::new(['Home', 'Products', 'Electronics', 'Smartphones']);
 $breadcrumbFrame = Card::titled($breadcrumb, 'Breadcrumb');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $breadcrumbFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -47,7 +47,7 @@ $navbar = Navbar::new([
 ]);
 $navbarFrame = Card::titled($navbar, 'Navbar');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $navbarFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -62,7 +62,7 @@ $menuItems = VStack::spaced(1,
 );
 $menuFrame = Card::titled($menuItems, 'Menu');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $menuFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );

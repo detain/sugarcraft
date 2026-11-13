@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\ColorUtil;
+use SugarCraft\Image\Concerns\ForceTrueColor;
 use SugarCraft\Image\Concerns\OptimizationCarrierTrait;
 use SugarCraft\Image\Concerns\RenderValidationTrait;
 use SugarCraft\Image\ImageSource;
@@ -225,13 +226,11 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
-        $img = imagecreatefromstring($image->bytes);
+        $img = @imagecreatefromstring($image->bytes);
         if ($img === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
         }
-        if (!imageistruecolor($img)) {
-            imagepalettetotruecolor($img);
-        }
+        ForceTrueColor::convert($img);
         imagesavealpha($img, true);
 
         try {

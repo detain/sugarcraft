@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image;
 
+use SugarCraft\Image\Concerns\ForceTrueColor;
 /**
  * Internal: decode a GD image into a 2-D grid of RGB triples at a
  * given cell resolution. Consumers never construct this directly —
@@ -117,13 +118,11 @@ final class PixelGrid
      */
     public static function fromString(string $bytes, int $cellW, int $cellH, int $alphaThreshold = 127): self
     {
-        $img = imagecreatefromstring($bytes);
+        $img = @imagecreatefromstring($bytes);
         if ($img === false) {
             throw new \RuntimeException(Lang::t('pixel_grid.decode_failed'));
         }
-        if (!imageistruecolor($img)) {
-            imagepalettetotruecolor($img);
-        }
+        ForceTrueColor::convert($img);
         $grid = self::fromGd($img, $cellW, $cellH, $alphaThreshold);
         imagedestroy($img);
         return $grid;

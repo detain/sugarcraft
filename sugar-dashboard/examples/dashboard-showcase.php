@@ -42,7 +42,7 @@ $breadcrumb = Breadcrumb::new(['Home', 'Servers', 'Production', 'prod-web-01']);
 $headerContent = HStack::spaced(3, Text::new('Production Dashboard'), $breadcrumb);
 $headerFrame = Card::titled($headerContent, '')->withPadding(1);
 
-$grid->addItem(
+$grid = $grid->withItem(
     $headerFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -57,7 +57,7 @@ $metricsGrid = MetricsGrid::new([
     new MetricCard('Network', '23.4%', '-0.5%', 'down', Color::hex('#CBA6F7')),
 ])->withColumns(4);
 
-$grid->addItem(
+$grid = $grid->withItem(
     $metricsGrid,
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -79,12 +79,12 @@ $donut = Donut::mocha([
 ]);
 $donutFrame = Card::titled($donut, 'Resource Usage');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $areaFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $donutFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -104,12 +104,12 @@ $timeline = Timeline::new([
 ]);
 $timelineFrame = Card::titled($timeline, 'Recent Events');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $avatarFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $timelineFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -120,7 +120,7 @@ $grid->addItem(
 $statusText = Text::new('12,847 requests  •  99.97% uptime  •  127ms avg latency  •  4 alerts');
 $footerFrame = Card::titled($statusText, 'Summary');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $footerFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );

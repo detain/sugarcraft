@@ -21,7 +21,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Developer Tools Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -40,12 +40,12 @@ $logFrame = Card::titled($logViewer, 'Log Viewer');
 $console = Console::new();
 $consoleFrame = Card::titled($console, 'Console');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $logFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $consoleFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -59,12 +59,12 @@ $terminalFrame = Card::titled($terminal, 'Terminal');
 $hexDump = HexDump::new('Hello, SugarDashboard! This is a test string for hex dump display.');
 $hexFrame = Card::titled($hexDump, 'Hex Dump');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $terminalFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $hexFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -78,7 +78,7 @@ $diff = Diff::new(
 );
 $diffFrame = Card::titled($diff, 'Diff View');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $diffFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );

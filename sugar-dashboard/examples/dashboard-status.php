@@ -26,7 +26,7 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // ============================================
 // HEADER
 // ============================================
-$grid->addItem(
+$grid = $grid->withItem(
     Card::titled(Text::new('Status & Feedback Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -47,7 +47,7 @@ $progress = Progress::new(0.75);
 $progressFrame = Card::titled($progress, 'Progress');
 
 $loadingRow = HStack::spaced(1, $spinnerFrame, $skeletonFrame, $nProgressFrame, $progressFrame);
-$grid->addItem(
+$grid = $grid->withItem(
     $loadingRow,
     new ItemOptions(column: 0, expandVertical: false)
 );
@@ -64,22 +64,22 @@ $progressRingFrame = Card::titled($progressRing, 'Progress Ring');
 $gauge = Gauge::new(0.85);
 $gaugeFrame = Card::titled($gauge, 'Gauge');
 
-$grid->addItem(
+$grid = $grid->withItem(
     $progressBarFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $progressRingFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $gaugeFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->addItem(
+$grid = $grid->withItem(
     $gaugeFrame,
     new ItemOptions(column: 1, expandVertical: true)
 );
@@ -105,7 +105,7 @@ $queueToast = Toast::fromQueue($queue);
 $toastFrame = Card::titled($queueToast ?? Toast::new('Queue empty'), 'NotificationQueue (5 items)');
 
 $notificationRow = HStack::spaced(1, $toastFrame, $alertFrame, $modalNotificationFrame);
-$grid->addItem(
+$grid = $grid->withItem(
     $notificationRow,
     new ItemOptions(column: 0, expandVertical: false)
 );

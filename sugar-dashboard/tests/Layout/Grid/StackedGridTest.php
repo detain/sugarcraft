@@ -49,7 +49,7 @@ final class StackedGridTest extends TestCase
     public function testSetSizeZeroWidthReturnsLoadingMessage(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('test'), new ItemOptions());
+        $grid = $grid->withItem($this->strItem('test'), new ItemOptions());
 
         $rendered = $grid->render();
 
@@ -59,7 +59,7 @@ final class StackedGridTest extends TestCase
     public function testSetSizeZeroHeightReturnsLoadingMessage(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('test'), new ItemOptions());
+        $grid = $grid->withItem($this->strItem('test'), new ItemOptions());
         $grid->setSize(100, 0);
 
         $rendered = $grid->render();
@@ -196,7 +196,7 @@ final class StackedGridTest extends TestCase
         $theme = Theme::dark();
         $plainItem = $this->strItem('plain');
 
-        $grid->addItem($plainItem, new ItemOptions());
+        $grid = $grid->withItem($plainItem, new ItemOptions());
 
         // Should not throw, should return themed grid
         $themed = $grid->withTheme($theme);
@@ -208,7 +208,7 @@ final class StackedGridTest extends TestCase
     public function testWithThemePreservesGridDimensions(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('item'), new ItemOptions());
+        $grid = $grid->withItem($this->strItem('item'), new ItemOptions());
         $grid->setSize(100, 20);
         $theme = Theme::dark();
 
@@ -225,7 +225,7 @@ final class StackedGridTest extends TestCase
     public function testRenderSingleColumnGridRendersCorrectly(): void
     {
         $grid = new StackedGrid();
-        $grid->addItem($this->strItem('Column 0 Item'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('Column 0 Item'), new ItemOptions(column: 0));
         $grid->setSize(100, 20);
 
         $rendered = $grid->render();
@@ -242,7 +242,7 @@ final class StackedGridTest extends TestCase
         $options = new Options(fitScreen: false);
         $grid = new StackedGrid($options);
 
-        $grid->addItem($this->strItem('test'), new ItemOptions());
+        $grid = $grid->withItem($this->strItem('test'), new ItemOptions());
         $grid->setSize(100, 20);
 
         // Should render without error
@@ -284,8 +284,8 @@ final class StackedGridTest extends TestCase
         // width x colCount after joinHorizontal (which pads and joins, it
         // does NOT crop).
         $grid = new StackedGrid(new Options(fitScreen: false));
-        $grid->addItem($this->strItem(str_repeat('A', 90)), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem(str_repeat('B', 90)), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem(str_repeat('A', 90)), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem(str_repeat('B', 90)), new ItemOptions(column: 1));
         $grid->setSize(120, 3);
 
         $lines = explode("\n", $grid->render());
@@ -314,8 +314,8 @@ final class StackedGridTest extends TestCase
         // frame where the content stops: 5 + 11 natural cells, not 200.
         // 200 keeps the grid on the multi-column path (90 would collapse).
         $grid = new StackedGrid(new Options(fitScreen: false));
-        $grid->addItem($this->strItem('Short'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('LongContent'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Short'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('LongContent'), new ItemOptions(column: 1));
         $grid->setSize(200, 3);
 
         $lines = explode("\n", $grid->render());
@@ -341,8 +341,8 @@ final class StackedGridTest extends TestCase
         // widths asserted above can only ever come from the flag, never
         // from a regression in the default path.
         $grid = new StackedGrid(new Options(fitScreen: true));
-        $grid->addItem($this->strItem('Short'), new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('LongContent'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($this->strItem('Short'), new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('LongContent'), new ItemOptions(column: 1));
         $grid->setSize(200, 3);
 
         $lines = explode("\n", $grid->render());
@@ -361,11 +361,11 @@ final class StackedGridTest extends TestCase
         // even share (100) while the plain column beside it stays natural
         // (11): joined 111, filling neither 200 nor collapsing to 1.
         $inner = new StackedGrid();
-        $inner->addItem($this->strItem('Inner'), new ItemOptions(column: 0));
+        $inner = $inner->withItem($this->strItem('Inner'), new ItemOptions(column: 0));
 
         $grid = new StackedGrid(new Options(fitScreen: false));
-        $grid->addItem($inner, new ItemOptions(column: 0));
-        $grid->addItem($this->strItem('LongContent'), new ItemOptions(column: 1));
+        $grid = $grid->withItem($inner, new ItemOptions(column: 0));
+        $grid = $grid->withItem($this->strItem('LongContent'), new ItemOptions(column: 1));
         $grid->setSize(200, 3);
 
         $lines = explode("\n", $grid->render());
