@@ -19,8 +19,14 @@ use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Forms\Validator\Validator;
 
 /**
- * Yes / No question. The user toggles the answer with `←/→`, `h/l`, or
- * `Tab`, or commits a side directly with `y` / `n`.
+ * Yes / No question. The user toggles the answer with `←/→`, `h/l`, `y` /
+ * `n`, or `Tab` — with the honest caveat that `Tab` is the qualified one:
+ * `consumes()` never claims it, so under the default KeyMap Tab is routed
+ * to navigation at the form door and the toggle arm below is unreachable
+ * (the README row carries the same sentence — this docblock used to
+ * advertise the bare promise, the divergence SF-26 closed). The arm fires
+ * only when a custom map frees Tab from navigation; both polarities are
+ * pinned in tests/FormKeyDispatchTest.php.
  */
 final class Confirm implements \SugarCraft\Forms\Field
 {
@@ -209,6 +215,11 @@ final class Confirm implements \SugarCraft\Forms\Field
      */
     public function getError(): ?string { return $this->error(); }
     public function skippable(): bool         { return false; }
+    // SF-26: the Tab arm in update() is real but this field never claims
+    // Tab, so under the default map the form consumes it as `next` first.
+    // A field claiming Tab would flip the default navigation contract for
+    // every form — an OWNER-GATE product call (E736 F3); the doc-truth leg
+    // ships now, the claim stays gated.
     public function consumes(Msg $msg): bool  { return false; }
 
 

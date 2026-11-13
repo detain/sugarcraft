@@ -51,7 +51,10 @@ final class KeyMap
      * `::new()` default, never `::default()`; round-90 audit rename, no
      * cross-lib callers existed):
      *
-     *   next   — Tab, Down arrow
+     *   next   — Tab, Down arrow (a widget advertising Tab as content —
+     *            Confirm's toggle arm — only sees it when a custom map
+     *            frees it from navigation, same door as the Ctrl+C chord
+     *            below; both polarities pinned in FormKeyDispatchTest)
      *   prev   — Shift+Tab (Tab + shift, the shape CSI `Z` decodes to), Up
      *            arrow; alt+Tab is kept as a legacy alias spelling
      *   submit — Enter (only effective on the last field of the last group)
