@@ -117,7 +117,7 @@ final readonly class Rail
      * Replace a single card by id (e.g. when its poster finishes loading).
      * A card whose id is not in the list is a silent no-op: the RECEIVER
      * comes back unchanged — the same identity law synced() and
-     * withoutItemsOutside() follow (this was pinned by tests but undocumented).
+     * withoutItemsOutside() follow; RailTest pins the silent no-op.
      */
     public function withCard(PosterCard $card): self
     {
