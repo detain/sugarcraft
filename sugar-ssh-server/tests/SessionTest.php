@@ -165,6 +165,86 @@ final class SessionTest extends TestCase
         $this->assertSame('-', $ctx['key_fingerprint']);
     }
 
+    public function testAPeerSmuggledGeometryAboveTheCeilingIsClamped(): void
+    {
+        // COLUMNS/LINES reach us through sshd AcceptEnv, so a hostile wrapper
+        // can declare COLUMNS=100000 and make row-buffer-hungry child TUIs
+        // allocate against a geometry nobody typed. The channel stays
+        // disclosed; the amplification vector is capped. (audit MINOR 11, MINOR 16)
+        $_SERVER['USER']    = 'alice';
+        $_SERVER['COLUMNS'] = '100000';
+        $_SERVER['LINES']   = '999999';
+
+        $s = Session::fromEnvironment();
+
+        $this->assertSame(Session::MAX_DECLARED_COLS, $s->cols);
+        $this->assertSame(Session::MAX_DECLARED_ROWS, $s->rows);
+        $this->assertSame(4096, $s->cols);
+    }
+
+    public function testTheDefaultConstructorCarriesThePlaceholderShape(): void
+    {
+        // Every constructor field is defaulted so mutate()/fromEnvironment()
+        // can rebuild from a partial map; the placeholders must match the
+        // ones fromEnvironment() fills when sshd delivers nothing. (audit 003)
+        $s = new Session();
+
+        $this->assertSame('',     $s->user);
+        $this->assertSame('',     $s->clientHost);
+        $this->assertSame(0,      $s->clientPort);
+        $this->assertSame('xterm-256color', $s->term);
+        $this->assertSame(Session::DEFAULT_COLS, $s->cols);
+        $this->assertSame(Session::DEFAULT_ROWS, $s->rows);
+        $this->assertSame('C.UTF-8', $s->lang);
+        $this->assertNull($s->tty);
+        $this->assertNull($s->command);
+        $this->assertNull($s->sessionId);
+    }
+
+    public function testToLogContextDashesAnAbsentCommand(): void
+    {
+        // Every other absent field dashes; an empty-string command made the
+        // 'no command' case grep-indistinguishable from a smuggled empty one.
+        // '-' means 'not carried', same as tty/session/auth columns. (audit 042)
+        $ctx = (new Session())->toLogContext();
+
+        $this->assertSame('-', $ctx['command']);
+    }
+
+    public function testAccumulatedStatusTravelsThroughEveryRebuild(): void
+    {
+        // The transports hand ONE Session down the stack and every hop
+        // rebuilds it; a settled exit code or refusal that a rebuild dropped
+        // would turn a denied login back into a clean exit 0. (audit MAJOR 9)
+        $s = $this->shaped();
+        $s->recordExitStatus(7);
+        $s->markRefused();
+
+        $afterSize = $s->withSize(120, 40);
+        $this->assertSame(7, $afterSize->exitStatus());
+        $this->assertTrue($afterSize->refused());
+        $this->assertSame(120, $afterSize->cols);
+
+        $afterMeta = $afterSize->withProtocolMetadata('sess-9', 'password', null, null, null);
+        $this->assertSame(7, $afterMeta->exitStatus());
+        $this->assertTrue($afterMeta->refused());
+        $this->assertSame('sess-9', $afterMeta->sessionId);
+        $this->assertSame(120, $afterMeta->cols);
+        $this->assertSame('wishlist', $afterMeta->command);
+    }
+
+    public function testWithersRouteThroughTheSingleRebuildSite(): void
+    {
+        // Structural guard for the mutate() rule: `new self(` may appear in
+        // exactly two places (mutate() and fromEnvironment()). A wither that
+        // hand-carries its own rebuild is the hazard this closes - a field
+        // added later gets dropped silently by every such site. (audit 003)
+        $src = (string) \file_get_contents(__DIR__ . '/../src/Session.php');
+
+        $this->assertSame(2, \substr_count($src, 'new self('));
+        $this->assertGreaterThanOrEqual(2, \substr_count($src, '$this->mutate('));
+    }
+
     private function shaped(): Session
     {
         return new Session(

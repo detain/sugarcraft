@@ -34,24 +34,76 @@ namespace SugarCraft\SshServer;
  */
 final class Session
 {
+    /** Geometry defaults matching the {@see fromEnvironment()} placeholders. */
+    public const DEFAULT_COLS = 80;
+    public const DEFAULT_ROWS = 24;
+
+    /**
+     * Upper bound on peer-declared geometry. AcceptEnv can carry any digit
+     * string, so the spawn-time winsize is capped — see declaredSize().
+     */
+    public const MAX_DECLARED_COLS = 4096;
+    public const MAX_DECLARED_ROWS = 4096;
+
     public function __construct(
-        public readonly string  $user,
-        public readonly string  $clientHost,
-        public readonly int     $clientPort,
-        public readonly string  $serverHost,
-        public readonly int     $serverPort,
-        public readonly string  $term,
-        public readonly int     $cols,
-        public readonly int     $rows,
-        public readonly ?string $tty,
-        public readonly ?string $command,
-        public readonly string  $lang,
+        public readonly string  $user = '',
+        public readonly string  $clientHost = '',
+        public readonly int     $clientPort = 0,
+        public readonly string  $serverHost = '',
+        public readonly int     $serverPort = 0,
+        public readonly string  $term = 'xterm-256color',
+        public readonly int     $cols = self::DEFAULT_COLS,
+        public readonly int     $rows = self::DEFAULT_ROWS,
+        public readonly ?string $tty = null,
+        public readonly ?string $command = null,
+        public readonly string  $lang = 'C.UTF-8',
         public readonly ?string $sessionId = null,
         public readonly ?string $authMethod = null,
         public readonly ?string $keyFingerprint = null,
         public readonly ?string $clientVersion = null,
         public readonly ?string $serverVersion = null,
     ) {}
+
+    /**
+     * Clone-with-changes: the single rebuild site for this value object.
+     *
+     * Every `with*()` routes through here so the accumulated state
+     * (`exitStatus`/`refused`) is carried STRUCTURALLY — the hand-carried
+     * fifteen-arg rebuilds this class used to hold could silently drop any
+     * field added later, which is the hazard the house `mutate()` rule
+     * exists to close (see `SugarCraft\Core\Concerns\Mutable`; the trait
+     * itself is not usable verbatim because `get_object_vars()` here would
+     * leak the two private accumulators into the constructor spread).
+     *
+     * @param array<string,mixed> $overrides Constructor-argument overrides.
+     */
+    private function mutate(array $overrides = []): self
+    {
+        $copy = new self(...array_merge([
+            'user'           => $this->user,
+            'clientHost'     => $this->clientHost,
+            'clientPort'     => $this->clientPort,
+            'serverHost'     => $this->serverHost,
+            'serverPort'     => $this->serverPort,
+            'term'           => $this->term,
+            'cols'           => $this->cols,
+            'rows'           => $this->rows,
+            'tty'            => $this->tty,
+            'command'        => $this->command,
+            'lang'           => $this->lang,
+            'sessionId'      => $this->sessionId,
+            'authMethod'     => $this->authMethod,
+            'keyFingerprint' => $this->keyFingerprint,
+            'clientVersion'  => $this->clientVersion,
+            'serverVersion'  => $this->serverVersion,
+        ], $overrides));
+        // A hop that already settled a status keeps it: the number does
+        // not travel back to null just because geometry or metadata
+        // refreshed on the way down the stack.
+        $copy->exitStatus = $this->exitStatus;
+        $copy->refused    = $this->refused;
+        return $copy;
+    }
 
     /**
      * Read the current sshd environment and build a Session.
@@ -113,8 +165,8 @@ final class Session
             // which makes it asserted rather than observed. This value is
             // therefore an assumption about the client, not a fact about it.
             term:       $env('TERM')    ?? 'xterm-256color',
-            cols:       self::declaredSize($env('COLUMNS'), 80),
-            rows:       self::declaredSize($env('LINES'),   24),
+            cols:       self::declaredSize($env('COLUMNS'), self::DEFAULT_COLS, self::MAX_DECLARED_COLS),
+            rows:       self::declaredSize($env('LINES'),   self::DEFAULT_ROWS, self::MAX_DECLARED_ROWS),
             tty:        $env('SSH_TTY'),
             command:    $env('SSH_ORIGINAL_COMMAND'),
             lang:       $env('LANG')    ?? 'C.UTF-8',
@@ -127,9 +179,16 @@ final class Session
      * `COLUMNS=0`, and `COLUMNS=eighty` (which casts to 0), used to be handed
      * straight through to `Pty::spawn()`, where a zero-width PTY confuses
      * every client that asks its own terminal how big it is. A value that is
-     * not a positive integer is treated as undeclared. (audit MINOR 11, MINOR 16)
+     * not a positive integer is treated as undeclared.
+     *
+     * The ceiling is the other half of the same hazard: `COLUMNS`/`LINES`
+     * reach us through sshd `AcceptEnv`, so a peer (or a hostile wrapper)
+     * can smuggle `COLUMNS=100000`, and row-buffer-hungry child TUIs then
+     * allocate against a geometry nobody typed. Values above the maximum are
+     * clamped — the channel stays disclosed in the README env table, the
+     * amplification vector is capped here. (audit MINOR 11, MINOR 16)
      */
-    private static function declaredSize(?string $value, int $default): int
+    private static function declaredSize(?string $value, int $default, int $max): int
     {
         if ($value === null || ! ctype_digit($value)) {
             return $default;
@@ -137,7 +196,7 @@ final class Session
 
         $size = (int) $value;
 
-        return $size >= 1 ? $size : $default;
+        return $size >= 1 ? \min($size, $max) : $default;
     }
 
     public function isInteractive(): bool
@@ -168,30 +227,13 @@ final class Session
         ?string $clientVersion,
         ?string $serverVersion,
     ): self {
-        $copy = new self(
-            user:             $this->user,
-            clientHost:       $this->clientHost,
-            clientPort:       $this->clientPort,
-            serverHost:       $this->serverHost,
-            serverPort:       $this->serverPort,
-            term:             $this->term,
-            cols:             $this->cols,
-            rows:             $this->rows,
-            tty:              $this->tty,
-            command:          $this->command,
-            lang:             $this->lang,
-            sessionId:        $sessionId,
-            authMethod:        $authMethod,
-            keyFingerprint:   $keyFingerprint,
-            clientVersion:    $clientVersion,
-            serverVersion:    $serverVersion,
-        );
-        // A hop that already settled a status keeps it: the number does
-        // not travel back to null just because geometry or metadata
-        // refreshed on the way down the stack.
-        $copy->exitStatus = $this->exitStatus;
-        $copy->refused    = $this->refused;
-        return $copy;
+        return $this->mutate([
+            'sessionId'      => $sessionId,
+            'authMethod'     => $authMethod,
+            'keyFingerprint' => $keyFingerprint,
+            'clientVersion'  => $clientVersion,
+            'serverVersion'  => $serverVersion,
+        ]);
     }
 
     /**
@@ -202,30 +244,7 @@ final class Session
      */
     public function withSize(int $cols, int $rows): self
     {
-        $copy = new self(
-            user:             $this->user,
-            clientHost:       $this->clientHost,
-            clientPort:       $this->clientPort,
-            serverHost:       $this->serverHost,
-            serverPort:       $this->serverPort,
-            term:             $this->term,
-            cols:             $cols,
-            rows:             $rows,
-            tty:              $this->tty,
-            command:          $this->command,
-            lang:             $this->lang,
-            sessionId:        $this->sessionId,
-            authMethod:       $this->authMethod,
-            keyFingerprint:   $this->keyFingerprint,
-            clientVersion:    $this->clientVersion,
-            serverVersion:    $this->serverVersion,
-        );
-        // A hop that already settled a status keeps it: the number does
-        // not travel back to null just because geometry or metadata
-        // refreshed on the way down the stack.
-        $copy->exitStatus = $this->exitStatus;
-        $copy->refused    = $this->refused;
-        return $copy;
+        return $this->mutate(['cols' => $cols, 'rows' => $rows]);
     }
 
     /**
@@ -245,6 +264,10 @@ final class Session
 
     /**
      * The child's exit code once a spawner has run one, else null.
+     *
+     * Read side of the transport-only contract below: the value is written
+     * by the transport loop as its child settles, never by request-path
+     * decisions.
      */
     public function exitStatus(): ?int
     {
@@ -252,8 +275,14 @@ final class Session
     }
 
     /**
-     * Called by a transport as its child settles (see
-     * {@see \SugarCraft\SshServer\Transport\ChildSpawner}).
+     * Transport-only: called by the transport loop as its child settles
+     * (see {@see \SugarCraft\SshServer\Transport\ChildSpawner}), which is
+     * the only place a child's exit code is known.
+     *
+     * Kept public — the transports live in a sibling namespace and a
+     * fluent setter would be discarded by the next stack hop — but that
+     * is a forgiveness, not a permission: any middleware can set these
+     * (forgery surface; see Security Considerations).
      */
     public function recordExitStatus(int $status): void
     {
@@ -281,6 +310,13 @@ final class Session
      * thing to a caller reading `$?`: this session did not run. Marking
      * them once at the deny site is the difference between a CI step that
      * notices and one that logs a green check.
+     *
+     * Transport/deny-site API only — the legitimate writers are this
+     * library's gates (Auth, PasswordAuth, KeyboardInteractive,
+     * CertificateAuth, RateLimit, the channel handler's refusals) and your
+     * own refusal points. Like recordExitStatus() above, it is public by
+     * necessity, not invitation: a middleware that marks a session it did
+     * not refuse forges the exit contract.
      */
     public function markRefused(): void
     {
@@ -313,7 +349,7 @@ final class Session
             'term'            => $this->term,
             'tty'             => $this->tty ?? '-',
             'pty'             => $this->cols . 'x' . $this->rows,
-            'command'         => $this->command ?? '',
+            'command'         => $this->command ?? '-',
             'session'         => $this->sessionId ?? '-',
             'auth_method'     => $this->authMethod ?? '-',
             'key_fingerprint' => $this->keyFingerprint ?? '-',
