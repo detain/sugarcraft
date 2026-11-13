@@ -89,6 +89,33 @@ final class Inspector
 
     public static function describeCsi(string $params, string $final): string
     {
+        // Bounded memo (step AIP-39): a stream dense with one sequence —
+        // `ESC[1m` over and over, the shape real styled logs take — rebuilds
+        // the SAME label per dispatch, and the regex ladder below dominates
+        // the per-segment cost. describeCsi is a pure function of
+        // (params, final), so one lookup answers every repeat. Bounded so a
+        // pathological unique-prefix stream cannot grow the memo with the
+        // stream: at the cap it is flushed wholesale (amortised O(1), worst
+        // case one extra rebuild per label).
+        static $memo = [];
+
+        $key = $params . "\x00" . $final;
+        if (isset($memo[$key])) {
+            return $memo[$key];
+        }
+
+        $label = self::describeCsiUncached($params, $final);
+
+        if (count($memo) >= 4096) {
+            $memo = [];
+        }
+        $memo[$key] = $label;
+
+        return $label;
+    }
+
+    private static function describeCsiUncached(string $params, string $final): string
+    {
         // Bracketed paste, focus reporting, mouse modes — DEC private.
         if (isset($params[0]) && $params[0] === '?' && ($final === 'h' || $final === 'l')) {
             $on    = $final === 'h';

@@ -84,11 +84,6 @@ $refusal = static function (string $rawPath): string {
     return $message;
 };
 
-$input = '';
-// Did the caller actually hand us a source (file argument or a piped stdin)?
-// "No source at all" (interactive TTY, no argument) is misuse and answers with
-// usage; a source that happens to be empty is a legitimate report of nothing.
-$sawSource = false;
 // Flags are scanned before any source is opened: `--help`/`-h` is a request
 // for usage, not a path; `--json` reports a JSON array
 // instead of one line per segment (finding 005); `--` enters exec mode
@@ -164,11 +159,7 @@ if ($execCmd !== null) {
     }));
 }
 
-$input = '';
-// Did the caller actually hand us a source (file argument or a piped stdin)?
-// "No source at all" (interactive TTY, no argument) is misuse and answers with
-// usage; a source that happens to be empty is a legitimate report of nothing.
-$sawSource = false;
+$source = null;
 if ($operandSeen && $operand !== '') {
     // Reject stream wrappers (php://, data://, http://, …) — a file-path argument
     // must not be coerced into fetching a URL or evaluating a wrapper. is_file()
@@ -180,8 +171,14 @@ if ($operandSeen && $operand !== '') {
         fwrite(STDERR, $refusal((string) $operand) . "\n");
         exit(1);
     }
-    $sawSource = true;
-    $input = (string) file_get_contents($operand);
+    $source = fopen($operand, 'rb');
+    if ($source === false) {
+        // The door between the readability gate and the open closed (TOCTOU):
+        // the named source can no longer be read — refuse by name, never
+        // report an empty phantom of it.
+        fwrite(STDERR, $refusal((string) $operand) . "\n");
+        exit(1);
+    }
 } elseif ($operandSeen) {
     // `candy-ansi-inspect ""` — a present-but-empty argument names the source
     // as the empty string, which is never a file: refuse it (exit 1) rather
@@ -189,12 +186,17 @@ if ($operandSeen && $operand !== '') {
     fwrite(STDERR, $refusal('') . "\n");
     exit(1);
 } elseif (!stream_isatty(STDIN)) {
-    $sawSource = true;
-    // Stream, do not slurp: a slow producer (`tail -f log | candy-ansi-inspect`)
-    // must see each completed sequence the moment it dispatches, not only after
-    // the writer closes — the old `stream_get_contents()` waited for EOF and
-    // then rendered everything at once. Output is byte-identical to the
-    // file-argument path: one `describe()` line per segment, newline-joined.
+    $source = STDIN;
+}
+if ($source !== null) {
+    // File and pipe share ONE streaming loop (step AIP-39: the old file arm
+    // slurped the whole input and built every segment before printing a line,
+    // so a multi-megabyte capture peaked at ~60x its size in memory; chunking
+    // caps the peak at one chunk's segments). A slow producer (`tail -f log |
+    // candy-ansi-inspect`) sees each completed sequence the moment it
+    // dispatches, not only after the writer closes. Output is byte-identical
+    // across the two source kinds: one `describe()` line per segment,
+    // newline-joined.
     // Under `--json` there is no live form: a partial JSON array is not
     // parseable, so segments are collected and one array is emitted at EOF
     // (a sequin-style NDJSON mode is an open question, parked with finding
@@ -205,13 +207,13 @@ if ($operandSeen && $operand !== '') {
     $printed = false;
     /** @var list<\SugarCraft\AnsiInspect\Segment> $segments */
     $segments = [];
-    while (!feof(STDIN)) {
-        $chunk = fread(STDIN, 8192);
+    while (!feof($source)) {
+        $chunk = fread($source, 8192);
         if ($chunk === false) {
             break;
         }
         if ($chunk === '') {
-            if (feof(STDIN)) {
+            if (feof($source)) {
                 break;
             }
             continue;
@@ -225,6 +227,9 @@ if ($operandSeen && $operand !== '') {
                 fwrite(STDOUT, $segment->describe() . "\n");
             }
         }
+    }
+    if ($source !== STDIN) {
+        fclose($source);
     }
     foreach ($streaming->finish() as $segment) {
         if ($asJson) {
@@ -243,25 +248,15 @@ if ($operandSeen && $operand !== '') {
         // deviation 10): the old slurp echoed the one empty `report()` line.
         echo PHP_EOL;
     }
+
+    // A source that was EMPTY (empty file, `printf '' | candy-ansi-inspect`)
+    // reaches this same exit too: an empty report of an empty source is
+    // success, not misuse.
     exit(0);
 }
 
-if ($input === '') {
-    if (!$sawSource) {
-        // Nothing was piped and no file was named (interactive TTY): the caller
-        // has not said what to inspect — usage is the honest answer.
-        fwrite(STDERR, Lang::t('cli.usage') . "\n");
-        exit(1);
-    }
-    // A source WAS given and it is empty (empty file, `printf '' | candy-ansi-inspect`):
-    // the report of an empty stream is an empty report, and inspecting nothing
-    // successfully is success. Exiting 1 here used to break scripts that pipe
-    // possibly-empty command output into the inspector. Under `--json` the
-    // parseable shape of "nothing reported" is the empty array.
-    if ($asJson) {
-        echo Inspector::encodeSegmentsJson([]), PHP_EOL;
-    }
-    exit(0);
-}
-
-echo ($asJson ? Inspector::reportAsJson($input) : Inspector::report($input)), PHP_EOL;
+// No operand named and stdin is a terminal: the caller has not said what to
+// inspect — usage is the honest answer (exit-status contract, README).
+fwrite(STDERR, Lang::t('cli.usage') . "
+");
+exit(1);
