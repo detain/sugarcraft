@@ -209,8 +209,9 @@ final class DiskCache
     /**
      * Store a value for the key, then evict the oldest entries if over cap.
      *
-     * The write is atomic: bytes land in a temp file that is renamed into
-     * place, so readers never observe a partial entry.
+     * The write is atomic AND durable: bytes land in an exclusive-create
+     * temp file (0600, fsynced) that is renamed into place, so readers never
+     * observe a partial entry and a power loss never reveals a renamed hole.
      *
      * @throws \RuntimeException  if the cache directory or entry cannot be written
      */
@@ -219,12 +220,38 @@ final class DiskCache
         $this->ensureDir();
 
         $path = $this->path($key);
-        $tmp  = @tempnam($this->dir, 'mc-');
-        if ($tmp === false) {
+        // Same-directory exclusive create — deliberately NOT tempnam(): when
+        // the wanted directory is unwritable, tempnam silently falls back to
+        // the SYSTEM temp, and a rename across filesystems is neither atomic
+        // nor litter-free (an orphan left in /tmp is outside every sweep in
+        // this class). 'xb' refuses to pre-empt or follow.
+        $tmp = $this->dir . '/mc-' . bin2hex(random_bytes(12)) . '.tmp';
+        $handle = @fopen($tmp, 'xb');
+        if ($handle === false) {
             throw new \RuntimeException(Lang::t('disk_cache.write_failed', ['dir' => $this->dir]));
         }
 
-        if (@file_put_contents($tmp, $value) === false || !@rename($tmp, $path)) {
+        $written = false;
+        try {
+            // Owner-only regardless of umask: fopen's 'x' mode creates at
+            // 0666 & ~umask — world-readable under a permissive umask — so
+            // the explicit 0600 lands BEFORE any bytes (and the rename
+            // carries it; the entry file is never wide).
+            @chmod($tmp, 0o600);
+            $written = @fwrite($handle, $value) === strlen($value) && @fflush($handle);
+            if ($written) {
+                // Durability law (finding 033): the rename must not outpace
+                // the data. Without fsync-before-rename a power loss can
+                // journal the rename while the payload still sits in the
+                // drive cache — readers wake to a zero-padded file under a
+                // name that promised content.
+                $written = @fsync($handle);
+            }
+        } finally {
+            @fclose($handle);
+        }
+
+        if (!$written || !@rename($tmp, $path)) {
             @unlink($tmp);
             throw new \RuntimeException(Lang::t('disk_cache.write_failed', ['dir' => $this->dir]));
         }
@@ -341,8 +368,8 @@ final class DiskCache
     }
 
     /**
-     * Remove temp files orphaned by a process that died between tempnam() and
-     * rename(). A live write occupies its temp file for microseconds, so any
+     * Remove temp files orphaned by a process that died between the
+     * exclusive create and rename(). A live write occupies its temp file for microseconds, so any
      * `mc-*` older than the grace window is certainly abandoned.
      */
     private function sweepStaleTemp(): void
@@ -393,8 +420,12 @@ final class DiskCache
         }
 
         // 0o700: cached payloads are render output of (possibly private)
-        // source images — the entry file mode is umask-dependent, so the
-        // containing directory is the privacy boundary that must be owner-only.
+        // source images. The entries themselves are born owner-only too —
+        // put() chmods its temp to 0600 before any bytes land and the rename
+        // carries that mode, so entry privacy never leaned on the process
+        // umask (the older claim that it did was false, and a reader
+        // "fixing" a non-existent hole could only chmod-widen by accident).
+        // The owner-only directory is defence in depth, not the sole barrier.
         if (!@mkdir($this->dir, 0o700, true) && !is_dir($this->dir)) {
             throw new \RuntimeException(Lang::t('disk_cache.mkdir_failed', ['dir' => $this->dir]));
         }

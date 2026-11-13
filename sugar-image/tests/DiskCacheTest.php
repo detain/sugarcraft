@@ -501,4 +501,101 @@ final class DiskCacheTest extends TestCase
             $this->assertSame(min(3, $i + 1), $cache->count(), 'trim is immediate after every write past the cap');
         }
     }
+
+    // --- SI-20 (findings 033+110+111): same-dir exclusive create, durable
+    // rename, umask-proof entry mode, sweep covers the real temp naming ---
+
+    public function testPutOnUnwritableDirectoryRefusesWithoutSystemTmpLitter(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root ignores directory write permissions — the refusal cannot be simulated');
+        }
+
+        // Finding 110's law: a refused write must be refused INSIDE the
+        // cache dir. The pre-row tempnam() silently retreated to the system
+        // temp when the wanted dir was unwritable, so a death mid-write
+        // stranded an mc-* orphan in /tmp outside every sweep this class
+        // owns. Exclusive create there simply fails, cleanly.
+        mkdir($this->dir, 0o700);
+        chmod($this->dir, 0o500);
+        $litterBefore = count(glob(sys_get_temp_dir() . '/mc-*') ?: []);
+
+        $cache = new DiskCache($this->dir);
+        $threw = null;
+        try {
+            $cache->put('k', 'v');
+        } catch (\Throwable $e) {
+            $threw = $e;
+        }
+        chmod($this->dir, 0o700); // restore before assertions so tearDown can reach the dir
+
+        $this->assertInstanceOf(\RuntimeException::class, $threw, 'the write must be refused, not redirected');
+        $this->assertStringContainsString('Failed to write cache entry', $threw->getMessage());
+        $this->assertSame($litterBefore, count(glob(sys_get_temp_dir() . '/mc-*') ?: []), 'a refused put must not touch the system temp');
+        $this->assertSame([], glob($this->dir . '/mc-*') ?: [], 'nor leave an orphan beside the target');
+    }
+
+    public function testPutEntryModeIsSixHundredUnderPermissiveUmask(): void
+    {
+        // Finding 111's truth: entry privacy must not ride the umask. The
+        // exclusive create starts at 0666 & ~umask — world-readable under a
+        // permissive one — and the row chmods the temp to 0600 BEFORE bytes
+        // land; the rename carries that mode to the entry.
+        $umask = umask(0o000);
+        try {
+            $cache = new DiskCache($this->dir);
+            $cache->put('k', 'v');
+        } finally {
+            umask($umask);
+        }
+
+        $this->assertSame(0o600, fileperms($this->entryFor('k')) & 0o777, 'entries are born owner-only, umask cannot widen them');
+    }
+
+    public function testWrittenEntrySurvivesReReadDigestCheck(): void
+    {
+        $value = random_bytes(4096);
+        $cache = new DiskCache($this->dir);
+
+        $cache->put('poster', $value);
+
+        $this->assertSame($value, $cache->get('poster'));
+        $this->assertSame(hash('xxh3', $value), hash('xxh3', (string) file_get_contents($this->entryFor('poster'))), 'the bytes on disk digest-match what put() was handed');
+    }
+
+    public function testPutSweepsStaleTempsUnderTheRealExclusiveCreateName(): void
+    {
+        // The sweep glob and the name put() actually produces must agree —
+        // tempnam() minted extensionless mc-* while the row writes
+        // mc-<hex>.tmp; a glob that drifted to '*.tmp' or the create that
+        // drifted to bare 'mc-' would silently un-reap every orphan.
+        $cache = new DiskCache($this->dir);
+        $cache->put('seed', 'v');
+
+        $orphan = $this->dir . '/mc-' . bin2hex(random_bytes(12)) . '.tmp';
+        file_put_contents($orphan, 'crashed-write');
+        touch($orphan, time() - 3600);
+
+        $cache->put('again', 'v2');
+
+        $this->assertFileDoesNotExist($orphan);
+    }
+
+    public function testPutShapePinIsExclusiveCreateWithFsyncAndNoTempnam(): void
+    {
+        // The crash-window laws (no system-temp retreat, rename never
+        // outpaces data) are structural — no in-process test can simulate
+        // the power cut — so the shape itself is pinned, house idiom for
+        // guard-by-grep invariants (cf. the banded-sampler pin in SI-09).
+        $file = (new \ReflectionClass(DiskCache::class))->getFileName();
+        $src  = (string) file_get_contents($file);
+        $start = (int) strpos($src, 'public function put(');
+        $body  = substr($src, $start, (int) strpos(substr($src, $start), "\n    }"));
+
+        $this->assertNotFalse($start);
+        $this->assertStringNotContainsString('@tempnam(', $body, 'the system-temp fallback is dead on this door (call form; prose may name it)');
+        $this->assertStringContainsString("'xb'", $body, 'the temp must be an exclusive same-dir create');
+        $this->assertStringContainsString('fsync(', $body, 'the rename must not outpace the data');
+        $this->assertStringContainsString('chmod($tmp, 0o600)', $body, 'entry mode lands before bytes');
+    }
 }
