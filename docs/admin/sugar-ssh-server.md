@@ -75,6 +75,13 @@ has no code to report).
 | `SIGINT` | Reaches the PTY child (controlling terminal semantics); pump loop drains and exits |
 | `SIGWINCH` | Forwarded into the PTY master to resize the child |
 
+SIGWINCH has one process-wide handler slot. While a session runs, this stack
+holds that slot, and on teardown it restores the **DEFAULT** disposition — not
+whatever handler was installed before. An embedding app that owns its own
+SIGWINCH handler must therefore re-attach it after each served session; an app
+that needs resizes handled across sessions should read the size and call
+`resize()` itself rather than letting this stack attach (audit 049).
+
 ### Files written
 
 | Path | When | Contents |

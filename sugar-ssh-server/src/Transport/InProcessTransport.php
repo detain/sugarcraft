@@ -479,6 +479,17 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
             // PTY, the kernel sends SIGWINCH to us; dispatch a
             // WindowChangeMsg through the handler so it can update its
             // state, then apply the resize to the master PTY.
+            //
+            // Disposition caveat (audit 049): SIGWINCH has ONE
+            // process-wide handler slot, the attach takes it, and the
+            // teardown reset below restores the DEFAULT disposition —
+            // NOT whatever handler ran before this session. An embedding
+            // app that owns its own SIGWINCH handler must therefore
+            // re-attach it after each served session (a second
+            // Server::serve() disposes of it either way), and an app
+            // that needs resizes kept across sessions should skip this
+            // stack's attach entirely: read the size and call resize()
+            // itself, as sugar-pty's SignalForwarder documents.
             $sigwinchAttached = false;
             if ($this->sigwinchSupported) {
                 $sizeProvider = $this->sizeProvider ?? fn (): array => $this->readHostStdinSize($stdin, $cols, $rows);
@@ -533,6 +544,8 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
             } finally {
                 $this->master = null;
                 if ($sigwinchAttached && \defined('SIGWINCH')) {
+                    // Restores DEFAULT disposition, not a prior handler
+                    // (audit 049 — see the attach-site caveat above).
                     SignalForwarder::reset(\SIGWINCH);
                 }
                 // Give the caller's stream back the way we found it
