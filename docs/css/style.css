@@ -746,6 +746,10 @@ pre.code .num  { color: #fcd5b4; }
 
 .copy-btn.copied { background: var(--pink); border-color: var(--pink); }
 
+/* SD-S13: visible failure state when even the execCommand fallback was
+   refused (http origin, locked-down browser) — instead of silence. */
+.copy-btn.copy-failed { background: #b91c5c; border-color: #b91c5c; color: #fff; }
+
 /* ── Quickstart card ───────────────────────────────────────────── */
 .quickstart {
     background: var(--card);
@@ -1188,6 +1192,19 @@ pre.code .num  { color: #fcd5b4; }
     max-width: 70ch;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
+
+/* SD-S13: while the dialog is open it owns the demo card's navigation —
+   the card's own href surfaces here, inside the focus trap. */
+.lightbox-page {
+    color: #fbeefa;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.lightbox-page:hover { border-color: #fff; color: #fff; }
 
 .lightbox-close {
     position: absolute;
