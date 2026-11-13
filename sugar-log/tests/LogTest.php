@@ -214,8 +214,11 @@ final class LogTest extends TestCase
     {
         // Pipe stderr is not a TTY: the unforced call must be swallowed by the
         // guard entirely, while force=true emits the DECSET pair byte-exactly.
-        // Pinning the shape here gives the capability gate (SL-30) a slot.
+        // Pinning the shape here gave the capability gate (SL-30) a slot;
+        // with the gate in, the child pins TERM to a capable value so the
+        // pair is deterministic regardless of the runner's ambient TERM.
         $result = StderrNoticeCapture::run(<<<'CODE'
+            \putenv('TERM=xterm-256color');
             \SugarCraft\Log\Log::restoreTerminal();
             \SugarCraft\Log\Log::restoreTerminal(true);
             CODE);
@@ -224,6 +227,22 @@ final class LogTest extends TestCase
         // Exactly one altscreen-exit + cursor-show; a guardless build would double
         // the bytes, a force-ignoring build would emit nothing.
         $this->assertSame("\x1b[?1049l\x1b[?25h", $result['stderr']);
+    }
+
+    /**
+     * Capability arm (SL-30): on TERM=dumb the altscreen DECSET is dropped
+     * while the universal cursor-show survives — the byte that matters is
+     * never held hostage by the byte that is optional.
+     */
+    public function testRestoreTerminalSkipsTheAltscreenDecsetOnDumbTerminals(): void
+    {
+        $result = StderrNoticeCapture::run(<<<'CODE'
+            \putenv('TERM=dumb');
+            \SugarCraft\Log\Log::restoreTerminal(true);
+            CODE);
+
+        $this->assertSame(0, $result['exitCode']);
+        $this->assertSame("\x1b[?25h", $result['stderr']);
     }
 
     public function testInstallPanicHandlerSetsExceptionHandler(): void

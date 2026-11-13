@@ -324,8 +324,16 @@ final class Log
             return;
         }
 
-        // Exit altscreen mode (SGR 1049).
-        \fwrite($terminalStderr, "\x1b[?1049l");
+        // [SL-30] The altscreen toggle is a capability, not a given: TERM=dumb
+        // declares no alternate screen, so the 1049 DECSET is noise there. The
+        // cursor-show below is universal and stays unconditional — it is the
+        // byte that actually un-breaks a hidden cursor. Unset TERM keeps the
+        // historical behavior (emit both).
+        $term = \getenv('TERM');
+        if ('dumb' !== (false === $term ? '' : $term)) {
+            // Exit altscreen mode (SGR 1049).
+            \fwrite($terminalStderr, "\x1b[?1049l");
+        }
         // Show cursor.
         \fwrite($terminalStderr, "\x1b[?25h");
         \fflush($terminalStderr);
