@@ -96,7 +96,13 @@ final class RenderTapeProgressTest extends TestCase
         self::assertSame(0, $exit);
 
         rewind($stdout);
+        rewind($stderr);
 
-        return (string) stream_get_contents($stdout);
+        // S09's dual-stream plumbing sends human progress to stderr (the
+        // ConsoleOutputInterface door the command already coded for but
+        // Application::run never actually provided); this helper answers
+        // with BOTH channels so the pins stay about the messages, not the
+        // stream they ride.
+        return ((string) stream_get_contents($stdout)) . ((string) stream_get_contents($stderr));
     }
 }

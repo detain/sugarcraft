@@ -85,7 +85,7 @@ final class RenderTapeCommand extends Command
         }
 
         if ($dryRun) {
-            return $this->dryRun($tapePath, $output);
+            return $this->dryRun($tapePath, $output, (bool) $input->getOption('strict'));
         }
 
         $fontOpt = $input->getOption('font');
@@ -141,7 +141,7 @@ final class RenderTapeCommand extends Command
      * tooling can pick it out. No Renderer / Rasterizer / Encoder runs, so
      * this is the fastest way to inspect what a `.tape` source compiles to.
      */
-    private function dryRun(string $tapePath, OutputInterface $output): int
+    private function dryRun(string $tapePath, OutputInterface $output, bool $strict = false): int
     {
         try {
             // Size law (finding 032): the stat gate refuses an oversized
@@ -159,7 +159,10 @@ final class RenderTapeCommand extends Command
             $tokens = (new Lexer())->tokenize($source);
             $ast = (new Parser())->parse($tokens);
             $compiler = new Compiler();
-            $cassette = $compiler->compile($ast, $tapePath);
+            // Strict pass-through (finding 024): `--dry-run --strict` must
+            // abort on the same UNKNOWN class the GIF path aborts on, not
+            // print a clean stream with the bad directive quietly removed.
+            $cassette = $compiler->compile($ast, $tapePath, $strict);
         } catch (\Throwable $e) {
             $output->writeln("<error>Failed: {$e->getMessage()}</error>");
             return 1;

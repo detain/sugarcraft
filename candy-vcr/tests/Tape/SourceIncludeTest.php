@@ -91,12 +91,48 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($tmpDir . '/level12.tape', "Type \"deep\"\n");
 
         try {
-            $result = Compiler::parseSource(Stream::read($tmpDir . '/level0.tape'));
-
+            // S09 moved the depth guard onto the shared strict gate: an
+            // over-deep chain ABORTS a strict compile (was: threw under
+            // every mode) and WARNS the default one instead of crashing
+            // the CLI mid-render.
             $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('Source include depth exceeded');
+            $this->expectExceptionMessage('exceeded the include depth of');
 
-            $this->compiler->compile($result['ast'], $tmpDir . '/level0.tape');
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/level0.tape'));
+            $this->compiler->compile($result['ast'], $tmpDir . '/level0.tape', true);
+        } finally {
+            for ($i = 0; $i <= 12; $i++) {
+                @unlink($tmpDir . "/level{$i}.tape");
+            }
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testDepthLimitWarnsAndStopsUnderDefaultMode(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/vcr-src-depth-warn-' . getmypid();
+        mkdir($tmpDir, 0755, true);
+
+        for ($i = 0; $i < 12; $i++) {
+            $next = $i + 1;
+            file_put_contents($tmpDir . "/level{$i}.tape", "Type \"{$i}\"\nSource level{$next}.tape\n");
+        }
+        file_put_contents($tmpDir . '/level12.tape', "Type \"deep\"\n");
+
+        try {
+            $compiler = new Compiler();
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/level0.tape'));
+            $cassette = $compiler->compile($result['ast'], $tmpDir . '/level0.tape');
+
+            $found = false;
+            foreach ($compiler->warnings() as $warning) {
+                if (str_contains($warning, 'exceeded the include depth of')) {
+                    $found = true;
+                    break;
+                }
+            }
+            $this->assertTrue($found, 'the silent depth crash became a named warning (finding 105)');
+            $this->assertLessThan(12 * 8, $cassette->eventCount(), 'compilation stopped at the ceiling');
         } finally {
             for ($i = 0; $i <= 12; $i++) {
                 @unlink($tmpDir . "/level{$i}.tape");

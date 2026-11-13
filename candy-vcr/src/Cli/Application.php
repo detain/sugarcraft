@@ -168,7 +168,11 @@ final class Application
         }
         $input = new StringInput($argString);
 
-        $output = new StreamOutput($stdout);
+        // A dual-stream output so ConsoleOutputInterface-aware diagnostics
+        // (dry-run warnings, progress) reach the caller's stderr instead of
+        // vanishing behind the plain StreamOutput the S09 warning channel
+        // could not see through (finding 024).
+        $output = new DualStreamOutput($stdout, $stderr);
 
         return $symfonyApp->run($input, $output);
     }

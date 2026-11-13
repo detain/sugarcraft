@@ -121,6 +121,15 @@ final class Compiler
     private array $warnings = [];
 
     /**
+     * The content-LOSING subset of warnings (S09 / finding 024): ParseError
+     * drops, unencodable Type chars, skipped cycles / depth overruns and
+     * subinclude errors — every directive that did not reach the cassette.
+     *
+     * @var list<string>
+     */
+    private array $droppedDiagnostics = [];
+
+    /**
      * @param list<Directive|ParseError> $ast
      */
     public function compile(array $ast, string $sourcePath, bool $strict = false): Cassette
@@ -137,7 +146,7 @@ final class Compiler
                 // Non-strict still records the problem (finding 005's silence
                 // close): a skipped unknown directive is a loud diagnostic,
                 // not a vanishing keystroke.
-                $this->warnings[] = "Parse error at line {$node->line}: {$node->message}";
+                $this->recordDropped("Parse error at line {$node->line}: {$node->message}");
                 continue;
             }
             $this->compileNode($node);
@@ -274,6 +283,7 @@ final class Compiler
         $this->sourceStack = [];
         $this->strict = false;
         $this->warnings = [];
+        $this->droppedDiagnostics = [];
         $this->pendingAlt = false;
         $this->pendingShift = false;
     }
@@ -360,6 +370,31 @@ final class Compiler
         $this->warnings[] = $message;
     }
 
+    /**
+     * Report a problem that LOST tape content, and book it in
+     * {@see droppedDiagnostics()} too (finding 024): callers that surface a
+     * summary — the CLI's default-mode warning print, S08's accepted-not-
+     * enforced channel — can ask specifically what vanished without
+     * re-parsing the prose of every warning.
+     */
+    private function recordDropped(string $message): void
+    {
+        $this->droppedDiagnostics[] = $message;
+        $this->reportCompileProblem($message);
+    }
+
+    /**
+     * Content-losing diagnostics from the most recent compile() (see
+     * {@see recordDropped()}). Under strict mode the run aborts at the
+     * first one; a non-strict compile finishes and carries every drop here.
+     *
+     * @return list<string>
+     */
+    public function droppedDiagnostics(): array
+    {
+        return $this->droppedDiagnostics;
+    }
+
     private function compileSet(SetDirective $node): void
     {
         match ($node->key) {
@@ -438,6 +473,7 @@ final class Compiler
             $this->pendingAlt = $this->pendingShift = false;
         }
 
+        $dropped = [];
         foreach ($chars as $char) {
             if ($shift && strlen($char) === 1 && $char >= 'a' && $char <= 'z') {
                 $char = chr(ord($char) - 32);
@@ -445,8 +481,24 @@ final class Compiler
             $byte = $this->charToByte($char);
             if ($byte !== null) {
                 $this->emitInputBytes($alt ? "\x1b" . $byte : $byte);
+            } else {
+                // Finding 107's char class: an unencodable code point (C1
+                // controls, invalid UTF-8) used to evaporate mid-run — the
+                // rest of the Type continued as if nothing was lost. The
+                // strict gate (S09) turns it into an abort, non-strict into
+                // a counted summary naming the first offender.
+                $dropped[] = $char;
             }
             $this->currentTime += $this->typingSpeed / 1000.0;
+        }
+
+        if ($dropped !== []) {
+            $preview = bin2hex(mb_substr($dropped[0], 0, 4));
+            $where = $this->currentSourcePath !== '' ? ' in ' . $this->currentSourcePath : '';
+            $this->recordDropped(
+                'Type directive dropped ' . count($dropped)
+                . ' unencodable character(s), first 0x' . $preview . $where,
+            );
         }
     }
 
@@ -726,7 +778,9 @@ final class Compiler
      */
     private function reportSourceProblem(string $path, string $reason): void
     {
-        $this->reportCompileProblem("Source include {$reason}: {$path}");
+        // Every Source problem is a dropped include — booked in the
+        // dropped channel as well as warned (finding 024).
+        $this->recordDropped("Source include {$reason}: {$path}");
     }
 
     private function compileSource(SourceDirective $node): void
@@ -736,15 +790,18 @@ final class Compiler
             ? $baseDir . '/' . $node->path
             : $node->path;
 
-        // Attempt realpath resolution; use the string path as the canonical
-        // stack key for cycle detection (realpath can return false for files
-        // that are currently being parsed via a sibling Source directive).
+        // Attempt realpath resolution; the cycle stack is keyed on realpath
+        // (finding 105) so the same file reached under two spellings
+        // (`a/./b` vs `a/b` vs a sibling Source re-include) is ONE stack
+        // entry. The raw path is the fallback key only when realpath cannot
+        // resolve yet (uncreatable paths route through the problem channel
+        // below anyway).
         $realPath = realpath($fullPath);
         if ($realPath === false) {
             $realPath = realpath($node->path);
         }
-        // Canonical stack key — always use the string path
-        $stackKey = $fullPath;
+        // Canonical stack key — realpath when known, else the string path
+        $stackKey = $realPath !== false ? $realPath : $fullPath;
 
         // Base-dir confinement: reject paths that escape the tape's directory
         $baseReal = realpath($baseDir ?: '.');
@@ -757,14 +814,20 @@ final class Compiler
             }
         }
 
-        // Cycle guard: skip if this string path is already being compiled
+        // Cycle guard: skip if this path is already being compiled — but
+        // SKIP IS NOT SILENT (finding 105): the strict gate aborts, and the
+        // non-strict run records the drop instead of looping forever on a
+        // mutual-`Source` pair whose second hop used to vanish.
         if (isset($this->sourceStack[$stackKey])) {
+            $this->reportSourceProblem($node->path, 'cycle detected — skipped');
             return;
         }
 
-        // Depth guard
+        // Depth guard: same channel as the cycle (finding 105) — a deep
+        // include chain is a malformed tape, not a crash the CLI owes.
         if ($this->sourceDepth >= self::MAX_SOURCE_DEPTH) {
-            throw new \RuntimeException("Source include depth exceeded (max " . self::MAX_SOURCE_DEPTH . "): {$fullPath}");
+            $this->reportSourceProblem($node->path, 'exceeded the include depth of ' . self::MAX_SOURCE_DEPTH);
+            return;
         }
 
         // Size law (finding 032): a sub-include is a tape file too — route an
@@ -797,6 +860,17 @@ final class Compiler
             $this->currentSourcePath = $realPath !== false ? $realPath : $fullPath;
 
             $subResult = Compiler::parseSource($source);
+            // Findings 100/105: the include's own ParseErrors used to be
+            // split out by parseSource() and evaporate — a broken line in a
+            // sub-include neither aborted a strict compile nor surfaced a
+            // warning. Route every dropped diagnostic through the strict
+            // gate, naming the file it came from.
+            foreach ($subResult['errors'] as $subError) {
+                $this->recordDropped(
+                    'Source include ' . ($realPath !== false ? $realPath : $fullPath)
+                    . ": parse error at line {$subError->line}: {$subError->message}",
+                );
+            }
             foreach ($subResult['ast'] as $subNode) {
                 if (!$subNode instanceof ParseError) {
                     $this->compileNode($subNode);

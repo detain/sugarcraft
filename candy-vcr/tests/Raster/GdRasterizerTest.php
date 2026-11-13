@@ -31,7 +31,8 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertGreaterThan(0, imagesx($image));
+        $this->assertSame(5 * 8, imagesx($image));
+        $this->assertSame(1 * 16, imagesy($image));
         imagedestroy($image);
     }
 
@@ -70,7 +71,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertGreaterThan(0, imagesx($image));
+        $this->assertSame(3 * 8, imagesx($image), 'a visible cursor changes no pixel of the grid box');
         imagedestroy($image);
     }
 
@@ -86,7 +87,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertGreaterThan(0, imagesx($image));
+        $this->assertSame(5 * 8, imagesx($image));
         imagedestroy($image);
     }
 
@@ -102,7 +103,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertGreaterThan(0, imagesx($image));
+        $this->assertSame(5 * 8, imagesx($image));
         imagedestroy($image);
     }
 
@@ -118,7 +119,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertGreaterThan(0, imagesx($image));
+        $this->assertSame(5 * 8, imagesx($image));
         imagedestroy($image);
     }
 
@@ -129,7 +130,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertGreaterThan(0, imagesx($image));
+        $this->assertSame(3 * 8, imagesx($image), 'the hidden-cursor variant keeps the same grid box');
         imagedestroy($image);
     }
 
@@ -141,7 +142,8 @@ final class GdRasterizerTest extends TestCase
             $snapshot = $this->makeSnapshotWithCursor('X', 1, 1, 0, 0, true, $shape);
             $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-            $this->assertGreaterThan(0, imagesx($image), "Shape {$shape} should produce valid image");
+            $this->assertSame(1 * 8, imagesx($image), "Shape {$shape} should produce valid image");
+            $this->assertSame(1 * 16, imagesy($image), "Shape {$shape} height must not depend on the cursor shape");
             imagedestroy($image);
         }
     }
@@ -153,7 +155,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, null);
 
-        $this->assertGreaterThan(0, imagesx($image));
+        $this->assertSame(4 * 8, imagesx($image), 'the self-created FontLoader path rasterizes the same grid box');
         imagedestroy($image);
     }
 
