@@ -14,7 +14,7 @@ namespace SugarCraft\Async;
  * holding the token can fire it. Register callbacks, never trigger them,
  * and do not hand tokens to untrusted code.
  *
- * Mirrors Go's context.Context.Done channel pattern.
+ * See {@see Cancellable} for the family's canonical upstream citation.
  */
 final class CancellationToken
 {

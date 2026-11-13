@@ -11,7 +11,7 @@ namespace SugarCraft\Async;
  * Create via CancellationSource::new(). Call cancel() to request cancellation
  * of all consumers holding the token.
  *
- * Mirrors .NET's CancellationTokenSource.
+ * See {@see Cancellable} for the family's canonical upstream citation.
  */
 final class CancellationSource implements Cancellable
 {

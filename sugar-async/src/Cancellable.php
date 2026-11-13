@@ -7,7 +7,10 @@ namespace SugarCraft\Async;
 /**
  * Contract for a component that can be cancelled.
  *
- * Mirrors the cancellation token pattern from .NET and Go's context.
+ * This is the family's one canonical upstream citation (siblings point here
+ * instead of restating it): the shape mirrors Go's context.Context Done
+ * channel, and the source/token split follows .NET's CancellationTokenSource
+ * lineage.
  * Callbacks registered via onCancel() fire exactly once when cancel() is called,
  * regardless of how many times cancel() is invoked.
  */
