@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Canvas;
 
+use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
@@ -220,16 +221,16 @@ final class Canvas implements \SugarCraft\Charts\Support\CellGrid
 
     /**
      * Place a string of glyphs along row `$y` starting at column `$x`.
-     * Multibyte-safe via `mb_str_split`. Mirrors ntcharts' `SetString`.
+     * Split into display clusters via {@see BufferHelper::clusters()}
+     * (ICU grapheme boundaries through the hard ext-intl requirement;
+     * codepoint arms only guard malformed input).
+     * Mirrors ntcharts' `SetString`.
      *
      * @return void
      */
     public function setString(int $x, int $y, string $s, ?Style $style = null): void
     {
-        $clusters = function_exists('grapheme_str_split')
-            ? (grapheme_str_split($s) ?: mb_str_split($s, 1, 'UTF-8'))
-            : mb_str_split($s, 1, 'UTF-8');
-        $this->setRunes($x, $y, $clusters, $style);
+        $this->setRunes($x, $y, BufferHelper::clusters($s), $style);
     }
 
     /**

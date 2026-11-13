@@ -35,6 +35,65 @@ final class BufferHelper
     }
 
     /**
+     * Split a string into display clusters — the fleet-proven ladder
+     * (identical to sugar-cellbuffer's Buffer::clusters): optional
+     * `grapheme_str_split()` accelerator (symfony polyfill / future
+     * core), then `IntlBreakIterator` character boundaries, which is
+     * what this package's hard ext-intl requirement guarantees
+     * (sugar-charts-044: without it combining marks and ZW sequences
+     * used to silently degrade to CODEPOINT cells — same bytes
+     * diverging per platform, zero diagnostic). The mb/preg codepoint
+     * arms remain only as defence for malformed UTF-8 and installs
+     * that bypass composer. Centralised here so the Buffer and Canvas
+     * placement paths cannot drift.
+     *
+     * @return list<string>
+     */
+    public static function clusters(string $s): array
+    {
+        if ($s === '') {
+            return [];
+        }
+        if (function_exists('grapheme_str_split')) {
+            $g = grapheme_str_split($s);
+            if (is_array($g)) {
+                return $g;
+            }
+        }
+        if (class_exists(\IntlBreakIterator::class)) {
+            $iterator = \IntlBreakIterator::createCharacterInstance();
+            $iterator->setText($s);
+            $out = [];
+            $previous = 0;
+            foreach ($iterator as $end) {
+                if ($end > $previous) {
+                    $out[] = substr($s, $previous, $end - $previous);
+                    $previous = $end;
+                }
+            }
+            return $out;
+        }
+        if (function_exists('mb_str_split')) {
+            return mb_str_split($s, 1, 'UTF-8');
+        }
+        return preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    }
+
+    /**
+     * Introspection seam for the splitter actually in force: 'grapheme'
+     * when either accelerator is available (composer contract via
+     * ext-intl) or 'codepoint' on a host that somehow lacks both arms.
+     * Diagnostics and tests pin which canon produced a render instead
+     * of guessing from platform bytes (sugar-charts-044).
+     */
+    public static function clusterMode(): string
+    {
+        return function_exists('grapheme_str_split') || class_exists(\IntlBreakIterator::class)
+            ? 'grapheme'
+            : 'codepoint';
+    }
+
+    /**
      * Place a string into a Buffer row starting at column $x, returning
      * the modified grid. Handles wide characters by creating continuation
      * cells for each wide char.
@@ -44,9 +103,7 @@ final class BufferHelper
      */
     public static function placeString(array $grid, int $width, int $height, int $x, int $y, string $s, ?BufferStyle $style = null): array
     {
-        $clusters = function_exists('grapheme_str_split')
-            ? (grapheme_str_split($s) ?: mb_str_split($s, 1, 'UTF-8'))
-            : mb_str_split($s, 1, 'UTF-8');
+        $clusters = self::clusters($s);
 
         $col = $x;
         foreach ($clusters as $cluster) {

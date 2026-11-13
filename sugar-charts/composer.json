@@ -35,12 +35,12 @@
     "require": {
         "php": "^8.3",
         "ext-mbstring": "*",
+        "ext-intl": "*",
         "sugarcraft/sugar-cellbuffer": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-style": "dev-master"
     },
     "suggest": {
-        "ext-intl": "Enables grapheme-cluster splitting in BufferHelper/Canvas so combining marks and ZW sequences keep exact display widths.",
         "sugarcraft/sugar-dashboard": "Optional display helpers whose BrailleGrid/Plot widgets pair with LineChart's braille mode — not a runtime dependency: withBraille() and the withCanvas() CellGrid bridge are self-contained to this lib (sugar-charts-007)."
     },
     "require-dev": {
