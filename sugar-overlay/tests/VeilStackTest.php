@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Tests;
 
+use SugarCraft\Overlay\Animation\AnimationKind;
 use SugarCraft\Style\Border;
 use SugarCraft\Overlay\{Position, Veil, VeilStack};
 use PHPUnit\Framework\TestCase;
@@ -494,6 +495,39 @@ final class VeilStackTest extends TestCase
      * tied layer wins the shared cell. Both insertion orders are checked,
      * so the winner is proven to follow order, not content.
      */
+    public function testMemberVeilsKeepANullLastFullFrameAfterStackRender(): void
+    {
+        // SO-34 declared contract (sugar-overlay-034): the stack renders on
+        // throwaway withoutSession() clones, so member sessions never
+        // remember a frame — dismissal wiring must scan the RETURNED canvas.
+        $panel  = Veil::new()->withContent('[panel]')->withZIndex(1);
+        $dim    = Veil::new()->withBackdrop(40);
+        $canvas = VeilStack::new()->add($dim)->add($panel)
+            ->composite("base line\nbase line\n", Position::TOP, Position::LEFT);
+
+        $this->assertNull($panel->lastFullFrame(), 'the member veil rendered through a throwaway clone');
+        $this->assertNull($dim->lastFullFrame());
+        $this->assertStringContainsString('[panel]', $canvas, 'the zones to scan live in the returned canvas');
+    }
+
+    public function testPerLayerAnimationIsInertOnTheStackPasses(): void
+    {
+        // SO-34 declared contract (sugar-overlay-034): composite()/
+        // compositeAll() never call animate(), so a member's driver changes
+        // no bytes — pinned as byte-equality against the same stack un-animated.
+        $base = Veil::new()->withContent('[a]')->withBackdrop(30);
+        $bg   = str_repeat("line below\n", 5);
+
+        $animated = VeilStack::new()->add($base->withAnimation(AnimationKind::FADE));
+        $plain    = VeilStack::new()->add($base);
+
+        $this->assertSame(
+            $plain->composite($bg, Position::TOP, Position::LEFT),
+            $animated->composite($bg, Position::TOP, Position::LEFT),
+            'the FADE member must paint exactly like the un-animated one',
+        );
+    }
+
     public function testEqualZTiesPaintInInsertionOrder(): void
     {
         $bg = str_repeat('.', 10) . "\n" . str_repeat('.', 10);

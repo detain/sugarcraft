@@ -91,6 +91,17 @@ final class VeilStack implements \Countable
      * withoutSession(), and the chain returns one full canvas. Delta state
      * belongs to standalone Veil composites only — a chained delta would
      * encode cursor moves against a screen the NEXT layer then repaints.
+     * The per-layer clone carries the whole immutable veil while only the
+     * fresh session is load-bearing; sharing one throwaway session across
+     * layers would chain the inner diffs, so the clone cost is the price
+     * of full-frame composition, not an oversight (sugar-overlay-076).
+     *
+     * Two consequences of the throwaway clones, both by design: a member
+     * veil's {@see Veil::lastFullFrame()} stays NULL after a stack render
+     * (the frames die with the clones — scan/hit-test the RETURNED canvas,
+     * never the members' session state), and per-layer ANIMATION never
+     * runs (this pass calls composite(), not animate(); withAnimation()
+     * on a member is inert, its static style still paints).
      *
      * TRUST BOUNDARY: every veil's content() — and the $background — is
      * spliced into the frame VERBATIM. The stack runs no sanitizer sweep of
@@ -136,6 +147,8 @@ final class VeilStack implements \Countable
      * lower ones. Like composite(), this pass emits only FULL frames and
      * reads content() verbatim — sweep untrusted layers with
      * {@see Veil::withUntrustedContent()} before stacking (see composite()).
+     * The throwaway-clone clauses of composite() (NULL lastFullFrame on
+     * members, inert per-layer animation) apply here too.
      *
      * @param string $background The base content (trust boundary — see composite())
      * @return string The composited output

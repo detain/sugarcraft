@@ -493,6 +493,11 @@ final class Veil
      * Scanner) to hit-test a modal across animated/diffed frames; scanning
      * the delta itself silently registers zero zones.
      *
+     * A veil that only ever renders through a {@see VeilStack} keeps this
+     * NULL forever: the stack composites throwaway withoutSession() clones,
+     * so no frame is ever remembered on the member's own session — hosts
+     * scan/hit-test the canvas the stack RETURNED instead.
+     *
      * @see RenderSession::lastFullFrame()
      */
     public function lastFullFrame(): ?string

@@ -366,7 +366,12 @@ echo $stack->composite($background, Position::CENTER, Position::CENTER) . "\n";
 Both passes feed every layer the **accumulated** canvas (later veils see
 earlier veils, including their dimming) and run each veil
 `withoutSession()` so stacked painting always emits full frames (the stack
-never diffs — full frames are its architecture, not an oversight). A stack
+never diffs — full frames are its architecture, not an oversight). The
+member veils keep a NULL `lastFullFrame()` (the clones throw their frames
+away): scan/hit-test the **returned canvas**, not the members' session
+state. Per-layer `withAnimation()` is inert on both passes too — the
+stack calls `composite()`, never `animate()` — while each layer's static
+style (dims, border, zones) paints as usual. A stack
 holds at most `VeilStack::MAX_LAYERS` (256) layers; `add()` throws
 `OverflowException` beyond the bound, which keeps the per-frame walk cost
 of both `composite()` and `compositeAll()` finite.
