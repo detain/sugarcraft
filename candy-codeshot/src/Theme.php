@@ -14,8 +14,20 @@ use SugarCraft\Core\Util\Palettes;
  * typographic settings (font family, size, line height). The active
  * window-chrome style lives on the renderers, not the theme.
  *
- * Mirrors charmbracelet/freeze's `Theme`. Built-in presets cover the
+ * Related to charmbracelet/freeze's `Theme` but not a mirror of it:
+ * freeze sources its chrome (border, shadow, window buttons) from a
+ * separate style.Theme, while this class carries those chrome slots
+ * directly, and it additionally carries the nullable syntax-token slots
+ * below, which freeze has no equivalent for. Built-in presets cover the
  * common dark / light / Dracula / Tokyo Night / Nord palettes.
+ *
+ * Chrome and syntax are two separate axes (cs-07): the window buttons,
+ * border and gutter are chrome, and imported themes may only paint the
+ * syntax slots — {@see \SugarCraft\CodeShot\Theme\VsCodeThemeLoader} and
+ * {@see \SugarCraft\CodeShot\Theme\ChromaThemeLoader} route token scopes
+ * here, never onto the window colours, so a `keyword` scope can no
+ * longer tint the traffic lights. Null token slots fall back to the
+ * contrast heuristic in {@see CodeHighlighter::forTheme()}.
  */
 final class Theme
 {
@@ -32,6 +44,17 @@ final class Theme
         public readonly float  $fontSize     = 14.0,
         public readonly float  $lineHeight   = 1.4,
         public readonly ?string $highlight = null,
+        /**
+         * Syntax-token colours a theme carries for code text (the loaders'
+         * own vocabularies). Null means "the theme says nothing about this
+         * token" and {@see CodeHighlighter::forTheme()} falls back to its
+         * contrast heuristic. The renderers never paint chrome from these.
+         */
+        public readonly ?string $keyword = null,
+        public readonly ?string $string = null,
+        public readonly ?string $number = null,
+        public readonly ?string $comment = null,
+        public readonly ?string $type = null,
     ) {}
 
     /** Default dark theme (charm-ish). */

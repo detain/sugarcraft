@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeShot\Tests;
 
+use SugarCraft\CodeShot\CodeHighlighter;
 use SugarCraft\CodeShot\Theme\VsCodeThemeLoader;
 use PHPUnit\Framework\TestCase;
 
@@ -130,8 +131,14 @@ final class VsCodeThemeLoaderTest extends TestCase
 
         $theme = VsCodeThemeLoader::fromArray($data);
 
-        // lineNumber is mapped from comment.
+        // The theme carries no editorLineNumber key, so the comment token
+        // backs the gutter (fallback, cs-07); the keyword lands on the slot.
         $this->assertSame('#6272a4', $theme->lineNumber);
+        $this->assertSame('#6272a4', $theme->comment);
+        $this->assertSame('#ff79c6', $theme->keyword);
+        $this->assertNull($theme->string);
+        $this->assertNull($theme->number);
+        $this->assertNull($theme->type);
     }
 
     public function testLoadFromFileRoundTrip(): void
@@ -185,9 +192,81 @@ final class VsCodeThemeLoaderTest extends TestCase
         $this->assertSame('#1a1b26', $theme->background);
         $this->assertSame('#a9b1d6', $theme->foreground);
         $this->assertSame('#565f89', $theme->lineNumber);
-        $this->assertSame('#f7768e', $theme->windowRed);
-        $this->assertSame('#9ece6a', $theme->windowGreen);
-        $this->assertSame('#ff9e64', $theme->windowYellow);
+        // cs-07: tokens cascade to slots (last entry wins), chrome stays put.
+        // type slot ends at 'attribute' (#e0af68): class/function/attribute
+        // all fold there and function's #7dcfff is overridden by the later
+        // attribute entry, exactly as VS Code would apply the array.
+        $this->assertSame('#f7768e', $theme->keyword);
+        $this->assertSame('#9ece6a', $theme->string);
+        $this->assertSame('#ff9e64', $theme->number);
+        $this->assertSame('#565f89', $theme->comment);
+        $this->assertSame('#e0af68', $theme->type);
+        $this->assertSame('#ff5f56', $theme->windowRed);
+        $this->assertSame('#ffbd2e', $theme->windowYellow);
+        $this->assertSame('#27c93f', $theme->windowGreen);
+    }
+
+    public function testKeywordScopeNeverTintsTrafficLights(): void
+    {
+        // The cs-07 acceptance probe: a theme whose `keyword` deliberately
+        // clashes with the chrome red. Code text must take the token colour
+        // and the traffic lights must refuse it — the old SCOPE_MAP carried
+        // keyword => windowRed, so BOTH assertions would have failed there.
+        $theme = VsCodeThemeLoader::fromArray([
+            'colors' => [
+                'editor.background' => '#000000',
+                'editor.foreground' => '#ffffff',
+            ],
+            'tokenColors' => [
+                ['scope' => 'keyword', 'settings' => ['foreground' => '#123456']],
+            ],
+        ]);
+
+        $this->assertSame('#123456', $theme->keyword);
+        $this->assertSame('#ff5f56', $theme->windowRed);
+
+        $highlighter = CodeHighlighter::forTheme($theme);
+        $this->assertSame('#123456', $highlighter->keyword);
+        // rgb(18, 52, 86) = #123456, painted onto real tokenised code.
+        $this->assertStringContainsString(
+            "\x1b[38;2;18;52;86m",
+            $highlighter->highlight('return 1;', 'php'),
+        );
+    }
+
+    public function testTokenColorsCascadeLastWinsLikeVsCode(): void
+    {
+        // VS Code applies tokenColors top-to-bottom; a repeated scope
+        // overrides itself. buildPropertyMap used to stop at the FIRST hit,
+        // pinning #111111 here — the pre-cs-07 inversion of the cascade.
+        $theme = VsCodeThemeLoader::fromArray([
+            'colors' => [],
+            'tokenColors' => [
+                ['scope' => 'keyword', 'settings' => ['foreground' => '#111111']],
+                ['scope' => 'storage.type', 'settings' => ['foreground' => '#222222']],
+                ['scope' => 'keyword', 'settings' => ['foreground' => '#333333']],
+            ],
+        ]);
+
+        $this->assertSame('#333333', $theme->keyword);
+        // 'storage' is not a mapped root; it must not leak anywhere.
+        $this->assertNull($theme->type);
+    }
+
+    public function testUiGutterKeyBeatsCommentToken(): void
+    {
+        // Chrome is sourced from UI keys only: an explicit gutter colour in
+        // the colors section outranks the comment token's fallback (the old
+        // code let the token override even an explicit UI key).
+        $theme = VsCodeThemeLoader::fromArray([
+            'colors' => ['editorLineNumber.foreground' => '#010203'],
+            'tokenColors' => [
+                ['scope' => 'comment', 'settings' => ['foreground' => '#040506']],
+            ],
+        ]);
+
+        $this->assertSame('#010203', $theme->lineNumber);
+        $this->assertSame('#040506', $theme->comment);
     }
 
     public function testFontFamilyWhitelistRefusesMarkupAndKeepsPlainNames(): void

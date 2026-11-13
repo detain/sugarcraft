@@ -43,8 +43,16 @@ final class ChromaThemeLoaderTest extends TestCase
 
         $this->assertSame('#1e1e1e', $theme->background);
         $this->assertSame('#d4d4d4', $theme->foreground);
+        // cs-07: tokens land on syntax slots, never on chrome. The old pin
+        // asserted keyword -> windowRed, the wrong map this step removed.
+        $this->assertSame('#569cd6', $theme->keyword);
+        $this->assertSame('#6a9955', $theme->comment);
+        // A theme with no lineNumberColor lets the comment colour back the
+        // gutter — that fallback survives; the chrome buttons do not move.
         $this->assertSame('#6a9955', $theme->lineNumber);
-        $this->assertSame('#569cd6', $theme->windowRed);
+        $this->assertSame('#ff5f56', $theme->windowRed);
+        $this->assertSame('#ffbd2e', $theme->windowYellow);
+        $this->assertSame('#27c93f', $theme->windowGreen);
     }
 
     public function testNormalizes3DigitHex(): void
@@ -101,9 +109,14 @@ final class ChromaThemeLoaderTest extends TestCase
 
         $theme = ChromaThemeLoader::fromArray($data);
 
+        // cs-07 corrected mapping: tokens fill syntax slots; the gutter only
+        // backs off to the comment colour, and the chrome buttons stay home.
         $this->assertSame('#6272a4', $theme->lineNumber);
-        $this->assertSame('#ff79c6', $theme->windowRed);
-        $this->assertSame('#f1fa8c', $theme->windowGreen);
+        $this->assertSame('#ff79c6', $theme->keyword);
+        $this->assertSame('#f1fa8c', $theme->string);
+        $this->assertSame('#ff5f56', $theme->windowRed);
+        $this->assertSame('#ffbd2e', $theme->windowYellow);
+        $this->assertSame('#27c93f', $theme->windowGreen);
     }
 
     public function testLoadFromFileRoundTrip(): void
@@ -152,9 +165,18 @@ final class ChromaThemeLoaderTest extends TestCase
         $this->assertSame('#1a1b26', $theme->background);
         $this->assertSame('#a9b1d6', $theme->foreground);
         $this->assertSame('#565f89', $theme->lineNumber);
-        $this->assertSame('#f7768e', $theme->windowRed);
-        $this->assertSame('#9ece6a', $theme->windowGreen);
-        $this->assertSame('#ff9e64', $theme->windowYellow);
+        // cs-07: every scope lands on its syntax slot. Where several names
+        // fold onto one slot, the most-specific first entry of TOKEN_MAP
+        // wins: keyword over tag/error, number over constant, type over
+        // class/function/attribute. Chrome is untouched by tokens.
+        $this->assertSame('#f7768e', $theme->keyword);
+        $this->assertSame('#9ece6a', $theme->string);
+        $this->assertSame('#ff9e64', $theme->number);
+        $this->assertSame('#565f89', $theme->comment);
+        $this->assertSame('#e0af68', $theme->type);
+        $this->assertSame('#ff5f56', $theme->windowRed);
+        $this->assertSame('#ffbd2e', $theme->windowYellow);
+        $this->assertSame('#27c93f', $theme->windowGreen);
     }
 
     public function testChromaTopLevelFontFamilyPassesThroughTheSameCharsetDoor(): void

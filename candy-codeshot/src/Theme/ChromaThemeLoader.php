@@ -20,22 +20,32 @@ final class ChromaThemeLoader
 {
     use NormalizesHexColor;
 
-    /** Maps chroma token names to Theme property names. */
+    /**
+     * Maps chroma token names to Theme syntax-token slots (cs-07) — never
+     * to chrome colours: a `keyword` token tinting the traffic lights was
+     * the same mis-mapping the VS Code loader carried.
+     *
+     * A chroma JSON `colors` object has no cascade order (each key is
+     * unique), so where several names fold onto one slot the entry listed
+     * FIRST wins — the list order is the precedence, most-specific first
+     * (`type` over `class`/`attribute`).
+     *
+     * 'variable'/'operator'/'punctuation' are deliberately absent: the old
+     * map folded them onto 'foreground', which the builder ignored anyway,
+     * so code text keeps the theme's base foreground for those classes.
+     */
     private const TOKEN_MAP = [
-        'comment'          => 'lineNumber',
-        'keyword'          => 'windowRed',
-        'string'           => 'windowGreen',
-        'number'           => 'windowYellow',
-        'variable'         => 'foreground',
-        'constant'         => 'windowRed',
-        'operator'         => 'foreground',
-        'type'             => 'windowYellow',
-        'class'            => 'windowYellow',
-        'function'         => 'windowGreen',
-        'punctuation'      => 'foreground',
-        'attribute'        => 'windowYellow',
-        'tag'              => 'windowRed',
-        'error'            => 'windowRed',
+        'comment'          => 'comment',
+        'keyword'          => 'keyword',
+        'string'           => 'string',
+        'number'           => 'number',
+        'constant'         => 'number',
+        'type'             => 'type',
+        'class'            => 'type',
+        'function'         => 'type',
+        'attribute'        => 'type',
+        'tag'              => 'keyword',
+        'error'            => 'keyword',
     ];
 
     /**
@@ -87,15 +97,18 @@ final class ChromaThemeLoader
             }
         }
 
-        $windowRed    = $propertyMap['windowRed']    ?? '#ff5f56';
-        $windowYellow = $propertyMap['windowYellow'] ?? '#ffbd2e';
-        $windowGreen  = $propertyMap['windowGreen']  ?? '#27c93f';
+        $windowRed    = '#ff5f56';
+        $windowYellow = '#ffbd2e';
+        $windowGreen  = '#27c93f';
 
         $border = self::coerceColor($data['border'] ?? $data['editorBackgroundColor'] ?? null)
             ?? '#30363d';
 
-        $lineNumber = $propertyMap['lineNumber']
-            ?? self::coerceColor($data['lineNumberColor'] ?? null)
+        // Chrome from UI keys only (cs-07); the comment token stays a gutter
+        // FALLBACK for themes carrying no lineNumberColor, mirroring the VS
+        // Code loader. Previously the token overrode even an explicit UI key.
+        $lineNumber = self::coerceColor($data['lineNumberColor'] ?? null)
+            ?? $propertyMap['comment']
             ?? '#6e7681';
 
         // A hostile theme can carry fontFamily as a list or a number, and the
@@ -119,6 +132,11 @@ final class ChromaThemeLoader
             fontFamily:    self::sanitizeFontFamily($fontFamily),
             fontSize:      14.0,
             lineHeight:    1.4,
+            keyword:       $propertyMap['keyword'] ?? null,
+            string:        $propertyMap['string'] ?? null,
+            number:        $propertyMap['number'] ?? null,
+            comment:       $propertyMap['comment'] ?? null,
+            type:          $propertyMap['type'] ?? null,
         );
     }
 

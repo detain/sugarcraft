@@ -125,4 +125,28 @@ final class ThemeTest extends TestCase
             $this->assertTrue($property->isReadOnly(), "Property {$prop} should be readonly");
         }
     }
+
+    public function testSyntaxTokenSlotsDefaultToNullOnBuiltInPresets(): void
+    {
+        // cs-07: the built-in presets carry no syntax-token opinions, which is
+        // exactly what keeps their rendered bytes identical to the pre-split
+        // era — CodeHighlighter::forTheme() still applies its contrast
+        // heuristic when the slots are null.
+        $slots = ['keyword', 'string', 'number', 'comment', 'type'];
+        foreach ([Theme::dark(), Theme::light(), Theme::dracula(), Theme::tokyoNight(), Theme::nord()] as $theme) {
+            foreach ($slots as $slot) {
+                $this->assertNull($theme->$slot, "Theme::{$slot} must default to null");
+            }
+        }
+    }
+
+    public function testSyntaxTokenSlotsAreReadonly(): void
+    {
+        $reflection = new \ReflectionClass(Theme::class);
+        foreach (['keyword', 'string', 'number', 'comment', 'type'] as $prop) {
+            $property = $reflection->getProperty($prop);
+            $this->assertTrue($property->isReadOnly(), "Property {$prop} should be readonly");
+            $this->assertTrue($property->getType()->allowsNull(), "Property {$prop} should be nullable");
+        }
+    }
 }

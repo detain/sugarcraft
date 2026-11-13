@@ -141,4 +141,31 @@ final class CodeHighlighterTest extends TestCase
             $this->assertSame('#6272a4', $h->comment);
         }
     }
+
+    public function testForThemePrefersImportedTokenSlots(): void
+    {
+        // cs-07: an imported theme speaks for CODE. With slots set on a
+        // light background, the theme's own hues must win and only the null
+        // slot falls back to the GitHub-Light heuristic — the pre-split
+        // forTheme() never looked at slots, reddening every leg here.
+        $theme = new Theme(
+            background:   '#ffffff',
+            foreground:   '#000000',
+            border:       '#dddddd',
+            shadow:       'rgba(0, 0, 0, 0.1)',
+            lineNumber:   '#888888',
+            windowRed:    '#ff5f56',
+            windowYellow: '#ffbd2e',
+            windowGreen:  '#27c93f',
+            keyword:      '#101010',
+            string:       '#202020',
+            comment:      '#404040',
+        );
+
+        $h = CodeHighlighter::forTheme($theme);
+        $this->assertSame('#101010', $h->keyword);
+        $this->assertSame('#202020', $h->string);
+        $this->assertSame('#0550ae', $h->number, 'null slot falls back to the light heuristic');
+        $this->assertSame('#404040', $h->comment);
+    }
 }

@@ -22,19 +22,30 @@ final class VsCodeThemeLoader
 {
     use NormalizesHexColor;
 
-    /** Maps TextMate scope roots to Theme property names. */
+    /**
+     * Maps TextMate scope roots to Theme syntax-token slots (cs-07).
+     *
+     * The tokenColors array cascades last-wins (see buildPropertyMap),
+     * which is VS Code's own documented precedence, so a theme repeating
+     * or broadening a scope overrides itself as the editor would. Nothing
+     * maps to the window/chrome colours any more: a `keyword` scope
+     * tinting the traffic lights was the bug this split closes.
+     */
     private const SCOPE_MAP = [
-        'comment'          => 'lineNumber',
-        'keyword'          => 'windowRed',
-        'string'           => 'windowGreen',
-        'number'           => 'windowYellow',
-        'constant'         => 'windowRed',
-        'type'             => 'windowYellow',
-        'class'            => 'windowYellow',
-        'function'         => 'windowGreen',
-        // 'variable', 'operator', 'entity' are not in SCOPE_MAP so they fall
-        // through to the foreground fallback. This preserves editor.foreground
-        // as the base text colour and lets syntax colours tint specific props.
+        'comment'          => 'comment',
+        'keyword'          => 'keyword',
+        'string'           => 'string',
+        'number'           => 'number',
+        'constant'         => 'number',
+        'type'             => 'type',
+        'class'            => 'type',
+        'function'         => 'type',
+        'attribute'        => 'type',
+        'tag'              => 'keyword',
+        'error'            => 'keyword',
+        // 'variable', 'operator', 'entity', 'punctuation' are not in SCOPE_MAP
+        // so they fall through to the foreground fallback. This preserves
+        // editor.foreground as the base text colour.
     ];
 
     /**
@@ -93,25 +104,19 @@ final class VsCodeThemeLoader
             'focusBorder',
         ], '#30363d');
 
-        $lineNumber = self::resolveColor($colors, [
-            'editorLineNumber.foreground',
-        ], '#6e7681');
-
-        // Map token colors to a flat property map for Theme construction.
-        // Note: foreground is NOT overridden by tokenColors — editor.foreground
-        // in the colors array is the authoritative base text colour.
+        // Token scopes now feed only the syntax slots; chrome comes from UI
+        // keys alone (cs-07). The gutter still backs off to the theme's
+        // comment colour when the theme carries no editorLineNumber key —
+        // reading chrome and code in one hue is the older house default, and
+        // a UI key always wins over that fallback.
         $propertyMap = self::buildPropertyMap($tokenColors);
 
-        // Override UI colours with token-derived values where available.
-        // lineNumber is commonly derived from comment token color.
-        $lineNumber  = $propertyMap['lineNumber']  ?? $lineNumber;
+        $lineNumber = self::resolveColor($colors, [
+            'editorLineNumber.foreground',
+        ], $propertyMap['comment'] ?? '#6e7681');
 
         $fontFamily = $propertyMap['fontFamily']
             ?? 'Hack, "JetBrains Mono", Menlo, Consolas, monospace';
-
-        $windowRed    = $propertyMap['windowRed']    ?? '#ff5f56';
-        $windowYellow = $propertyMap['windowYellow'] ?? '#ffbd2e';
-        $windowGreen  = $propertyMap['windowGreen']  ?? '#27c93f';
 
         return new Theme(
             background:     $background,
@@ -119,12 +124,17 @@ final class VsCodeThemeLoader
             border:         $border,
             shadow:         'rgba(0, 0, 0, 0.5)',
             lineNumber:     $lineNumber,
-            windowRed:      $windowRed,
-            windowYellow:   $windowYellow,
-            windowGreen:    $windowGreen,
+            windowRed:      '#ff5f56',
+            windowYellow:   '#ffbd2e',
+            windowGreen:    '#27c93f',
             fontFamily:     self::sanitizeFontFamily($fontFamily),
             fontSize:       14.0,
             lineHeight:     1.4,
+            keyword:        $propertyMap['keyword'] ?? null,
+            string:         $propertyMap['string'] ?? null,
+            number:         $propertyMap['number'] ?? null,
+            comment:        $propertyMap['comment'] ?? null,
+            type:           $propertyMap['type'] ?? null,
         );
     }
 
@@ -151,7 +161,12 @@ final class VsCodeThemeLoader
 
     /**
      * Walk tokenColors entries and build a flat property map from
-     * TextMate scope roots to color values.
+     * TextMate scope roots to syntax-token colour values.
+     *
+     * Later entries win: VS Code applies tokenColors top-to-bottom, so a
+     * theme that repeats or broadens a scope overrides its earlier value.
+     * (The pre-cs-07 first-wins flip inverted that cascade; the traffic
+     * lights tinting from `keyword` was the same mis-mapping's other face.)
      *
      * Foreground is NOT mapped from tokenColors — editor.foreground in
      * the colors array is the authoritative base text colour.
@@ -191,10 +206,7 @@ final class VsCodeThemeLoader
                     }
                     $root = self::scopeRoot($s);
                     if (isset(self::SCOPE_MAP[$root])) {
-                        $prop = self::SCOPE_MAP[$root];
-                        if (!isset($map[$prop])) {
-                            $map[$prop] = $hex;
-                        }
+                        $map[self::SCOPE_MAP[$root]] = $hex;
                     }
                     // Note: we intentionally do NOT fall through to set 'foreground'
                     // from tokenColors — editor.foreground is the base text colour.

@@ -52,9 +52,11 @@ final class CodeHighlighter
 
     /**
      * Build a highlighter whose {@see TokenKind::Plain} colour tracks the given
-     * theme's foreground, choosing accents that stay readable on the theme's
-     * background: the Dracula set on dark themes, a GitHub-Light-ish set on
-     * pale ones.
+     * theme's foreground. Syntax accents come from the theme's own token slots
+     * when it carries them (imported VS Code / chroma themes repaint CODE from
+     * their tokenColors); slots that are null fall back to accents that stay
+     * readable on the theme's background: the Dracula set on dark themes, a
+     * GitHub-Light-ish set on pale ones.
      */
     public static function forTheme(Theme $theme): self
     {
@@ -62,10 +64,10 @@ final class CodeHighlighter
 
         return new self(
             foreground: $theme->foreground,
-            keyword:    $accents['keyword'] ?? Palettes::DRACULA['pink'],
-            string:     $accents['string']  ?? Palettes::DRACULA['yellow'],
-            number:     $accents['number']  ?? Palettes::DRACULA['purple'],
-            comment:    $accents['comment'] ?? Palettes::DRACULA['comment'],
+            keyword:    $theme->keyword    ?? ($accents['keyword'] ?? Palettes::DRACULA['pink']),
+            string:     $theme->string     ?? ($accents['string']  ?? Palettes::DRACULA['yellow']),
+            number:     $theme->number     ?? ($accents['number']  ?? Palettes::DRACULA['purple']),
+            comment:    $theme->comment    ?? ($accents['comment'] ?? Palettes::DRACULA['comment']),
         );
     }
 
