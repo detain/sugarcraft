@@ -371,7 +371,7 @@ $theme = new Theme(
 echo (new Renderer($theme))->render("# Custom\n");
 ```
 
-The full slot reference (left-to-right reading the constructor):
+The full slot reference (read the constructor left to right):
 
 | Block | Slots |
 |---|---|
@@ -405,10 +405,10 @@ constructor call as in the example. Scalar decorations such as
 resolves the theme from the environment without code changes: a
 non-empty `NO_COLOR` wins first and returns `plain()`; otherwise
 `GLAMOUR_STYLE` names a preset (case-insensitive, hyphen / underscore
-tolerant), the literal `auto` picks `dark()` on a TTY and `notty()`
-off one, and an unknown name falls back to `$default` (default
+tolerant), the literal `auto` picks `dark()` when stdout is a TTY and
+`notty()` when it is not, and an unknown name falls back to `$default` (default
 `ansi()`). `new Renderer()` keeps its own `ansi()` hard default —
-honouring the environment is exactly what this channel is for.
+honouring the environment is exactly what this factory is for.
 `examples/render.php` prints an extra section when either variable is
 set:
 
@@ -418,7 +418,7 @@ NO_COLOR=1 php examples/render.php
 ```
 
 User-facing strings route through the shipped i18n surface —
-`Lang::t()` (`src/Lang.php`) over 16 locales in `lang/`; candy-mdview
+`Lang::t()` (`src/Lang.php`) across the 16 locales in `lang/`; candy-mdview
 consumes localized messages such as `theme.read_failed`.
 
 ## Renderer options
@@ -459,15 +459,15 @@ pipelines whose terminals do not render OSC-8.
 With emoji on, expansion runs after parsing — code spans, fenced
 blocks and link destinations keep the source bytes. 1,842 codes
 resolve: the 1,837-entry GitHub cheat-sheet corpus (`GithubEmoji::MAP`)
-merged with 39 curated house codes; the 34 names both spellings share
-resolve to the house bytes. Unknown `:codes:` pass through verbatim.
+merged with 39 curated house codes; the 34 names shared by both sets
+resolve to the house glyphs. Unknown `:codes:` pass through verbatim.
 
 `Renderer::renderMarkdown($md, ?Theme)` is a one-shot static
 convenience for ad-hoc rendering. For repeated renders with the same
 theme, build a Renderer and reuse it (the parser is cached per
 instance). A Renderer is not reentrant: each render resets its block
-stack, so reuse renders sequentially, not concurrently from one
-object.
+stack, so reuse one instance for sequential renders — never two at
+once.
 
 ### API at a glance
 
@@ -527,9 +527,9 @@ Packagist instead.
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-The flag is create-only: an existing fixture that differs still fails
-and is never rewritten. To re-baseline after intentional output changes,
-delete the fixture and re-record it:
+`UPDATE_GOLDENS=1` is create-only: an existing fixture that differs
+still fails and is never rewritten. To re-baseline after intentional
+output changes, delete the fixture and re-record it:
 
 ```sh
 rm tests/fixtures/<name>.golden
@@ -539,8 +539,11 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit   # recreates the missing file
 ## Related
 
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
-- Originally inspired by [charmbracelet/glamour](https://github.com/charmbracelet/glamour)
 
 ## Credits & inspiration
 
-Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+Markdown parsing is delegated to [league/commonmark](https://commonmark.thephpleague.com/);
+the rendering layer, themes and ANSI pipeline were originally inspired by
+[charmbracelet/glamour](https://github.com/charmbracelet/glamour) and the Go
+[Charm](https://github.com/charmbracelet) ecosystem, of which SugarCraft is a
+native PHP port.
