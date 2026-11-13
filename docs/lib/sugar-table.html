@@ -191,7 +191,7 @@ echo $table-&gt;view();</code></pre>
             <div class="feature"><strong>StyledCell</strong><span>Per-cell SGR styling — bold, underline and colors from a restricted attribute set.</span></div>
             <div class="feature"><strong>Pagination</strong><span>Paginate large datasets, navigate between pages.</span></div>
             <div class="feature"><strong>Frozen columns</strong><span>Pin the leftmost columns with withFrozenCols([0..k]) so they stay put during horizontal scroll.</span></div>
-            <div class="feature"><strong>Row selection</strong><span>Programmatic cursor - SelectNext/SelectPrevious/withSelectedIndex; handleKey(KEY_*) scrolls. No mouse handling: wire input events yourself.</span></div>
+            <div class="feature"><strong>Row selection</strong><span>Programmatic cursor - SelectNext/SelectPrevious/withSelectedIndex; handleScrollKey(key|KeyEvent) scrolls; a checked-row set (toggleChecked, optional checkbox gutter) gives multi-select. No mouse handling: wire input events yourself.</span></div>
             <div class="feature"><strong>Viewport virtualization</strong><span>Render only visible rows with withViewportHeight() + withScrollY().</span></div>
             <div class="feature"><strong>Column width modes</strong><span>ColumnWidth enum — Fixed, Percent, Dynamic, Content, Flex.</span></div>
             <div class="feature"><strong>Borderless + width-exact</strong><span>withBorderless() + withWidth() — compose inside another box at an exact width, with continuous reverse-video selection.</span></div>
@@ -228,9 +228,15 @@ echo $table-&gt;view();</code></pre>
 <tr><td>Table</td><td>addRow(row) / addRows(rows)</td><td>Append one row / a batch</td></tr>
 <tr><td>Table</td><td>withBaseStyle(style) / withHeaderStyle(style)</td><td>Base cell SGR / header-row SGR (default '1;37')</td></tr>
 <tr><td>Table</td><td>withShowHeader(bool) / withShowFooter(bool)</td><td>Toggle the header row / footer row</td></tr>
-<tr><td>Table</td><td>withZebra(bool)</td><td>Table-level alternating-row stripe</td></tr>
+<tr><td>Table</td><td>withZebra(bool) / withZebraStyleEven(style) / withZebraStyleOdd(style)</td><td>Table-level alternating-row stripe (default 30;47 even); suppressed under the cursor row</td></tr>
+<tr><td>Table</td><td>withMaxLines(n) / renderedLineCount()</td><td>Line budget for the data region / lines the frame paints (withViewportHeight counts rows)</td></tr>
+<tr><td>Table</td><td>withFilterFunc(fn) / withPaginationWrap(bool) / withStaticFooter(text)</td><td>Search predicate, cycling cursor+pages, fixed footer text</td></tr>
+<tr><td>Table</td><td>withRowSeparator(bool) / withMaxTotalWidth(n) / withOverflowArrows(bool) / scrollLeft() / scrollRight()</td><td>Rules between rows, horizontal window with overflow marks and pan helpers</td></tr>
+<tr><td>Table</td><td>toggleChecked() / checkedRows() / withCheckMarks()</td><td>Multi-row checked set with optional checkbox gutter</td></tr>
+<tr><td>Table</td><td>withStrictPercent(bool)</td><td>Throw instead of normalising Percent sets over 100</td></tr>
+<tr><td>Column</td><td>withSortType(SortType) / withSortFunc(fn) / withFormatString(fmt)</td><td>Auto/Text/Natural sort, raw-value comparator, sprintf display template</td></tr>
 <tr><td>Table</td><td>withStyleFunc(callable)</td><td>Per-cell style callback (row, col, value) → CellBuffer\Style|string</td></tr>
-<tr><td>Table</td><td>withMissingIndicator(text)</td><td>Placeholder for cells whose row has no entry (default '-')</td></tr>
+<tr><td>Table</td><td>withMissingIndicator(text)</td><td>Placeholder for cells whose row has no entry (default '--')</td></tr>
 <tr><td>Table</td><td>withPageSize(size)</td><td>Set rows per page for pagination</td></tr>
 <tr><td>Table</td><td>withPage(n)</td><td>Jump to page n (0-based; PageFooter shows n+1)</td></tr>
 <tr><td>Table</td><td>SelectPage(n) / nextPage() / previousPage()</td><td>Page navigation (clamped to valid pages; cursor snaps to the page)</td></tr>
@@ -243,7 +249,7 @@ echo $table-&gt;view();</code></pre>
 <tr><td>Table</td><td>ClearSort()</td><td>Remove all sorting</td></tr>
 <tr><td>Table</td><td>Filter(key, text) / clearFilter(key) / clearAllFilters()</td><td>Per-column substring filter (filterable-marked columns only once any is marked)</td></tr>
 <tr><td>Table</td><td>search(text) / clearSearch()</td><td>OR search across the scanned columns</td></tr>
-<tr><td>Table</td><td>handleKey(KEY_*)</td><td>Keyboard scrolling - KEY_ARROW_UP/DOWN, PAGE_UP/DOWN, HOME, END; clamps to maxScrollY()</td></tr>
+<tr><td>Table</td><td>handleScrollKey(key|KeyEvent)</td><td>Keyboard scrolling - arrowUp/ArrowUp spellings, PageUp/Down, Home, End; clamps to maxScrollY(); handleKey() is the older alias</td></tr>
 <tr><td>Table</td><td>SelectNext() / selectPrevious()</td><td>Move the row cursor (follows the viewport)</td></tr>
 <tr><td>Table</td><td>maxScrollY()</td><td>Highest valid scrollY for the current page + viewport (public, page-aware)</td></tr>
 <tr><td>Table</td><td>withFrozenCols(indices)</td><td>Pin a contiguous prefix [0..k]; anything else throws</td></tr>
