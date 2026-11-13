@@ -170,19 +170,31 @@ final class Dashboard implements Model
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
+        // CT-S60: quit and reload answer bare keys only, matching the
+        // fleet idiom (candy-mdview): Ctrl+q / Alt+q must not quit and
+        // Ctrl+r must not silently reload. Escape and Ctrl+C stay
+        // unguarded — they are the terminal's own escape hatches.
         if ($msg->type === KeyType::Escape
-            || ($msg->type === KeyType::Char && $msg->rune === 'q')
+            || ($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl && !$msg->alt && !$msg->shift)
             || ($msg->ctrl && $msg->rune === 'c')) {
             return [$this, Cmd::quit()];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 'r') {
+        if ($msg->type === KeyType::Char && $msg->rune === 'r' && !$msg->ctrl && !$msg->alt && !$msg->shift) {
             return [$this->reload(), null];
         }
-        if ($msg->type === KeyType::Left) {
+        if ($msg->type === KeyType::Left
+            || ($msg->type === KeyType::Char && $msg->rune === 'h' && !$msg->ctrl && !$msg->alt && !$msg->shift)) {
             return [$this->shift(-1), null];
         }
-        if ($msg->type === KeyType::Right) {
+        if ($msg->type === KeyType::Right
+            || ($msg->type === KeyType::Char && $msg->rune === 'l' && !$msg->ctrl && !$msg->alt && !$msg->shift)) {
             return [$this->shift(+1), null];
+        }
+        // 'g' jumps the window end to today: a shift large enough to
+        // always hit the today-clamp (the shift floor keeps endDay within
+        // one servable range of today, so this never overshoots).
+        if ($msg->type === KeyType::Char && $msg->rune === 'g' && !$msg->ctrl && !$msg->alt && !$msg->shift) {
+            return [$this->shift(Store::MAX_RANGE_DAYS * 2), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === '+') {
             return [$this->stepWindow(+1), null];

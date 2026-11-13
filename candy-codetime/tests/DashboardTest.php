@@ -664,4 +664,46 @@ final class DashboardTest extends TestCase
             @rmdir($dir);
         }
     }
+
+    // CT-S60: letter commands answer unmodified keys only (fleet idiom),
+    // and h/l/g replace arrow-key-only navigation for compact keyboards.
+
+    public function testModifiedLetterCommandsAreInert(): void
+    {
+        $d = $this->makeDashboard();
+
+        foreach ([
+            new KeyMsg(KeyType::Char, 'q', ctrl: true),
+            new KeyMsg(KeyType::Char, 'q', alt: true),
+            new KeyMsg(KeyType::Char, 'q', shift: true),
+            new KeyMsg(KeyType::Char, 'r', ctrl: true),
+            new KeyMsg(KeyType::Char, 'h', alt: true),
+            new KeyMsg(KeyType::Char, 'l', ctrl: true),
+            new KeyMsg(KeyType::Char, 'g', shift: true),
+        ] as $msg) {
+            [$next, $cmd] = $d->update($msg);
+            $this->assertSame($d, $next, $msg->string() . ' must not rebuild');
+            $this->assertNull($cmd, $msg->string() . ' must not command');
+        }
+
+        [$next, $cmd] = $d->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertSame($d, $next);
+        $this->assertEquals(Cmd::quit(), $cmd);
+    }
+
+    public function testHLAndGWalkTheWindowWithoutArrowKeys(): void
+    {
+        $store = new Store($this->storeDir);
+        $day = new \DateTimeImmutable('2024-06-07');
+        $d = new Dashboard($store, $day, 7, new Stats([], []), 62);
+
+        [$next] = $d->update(new KeyMsg(KeyType::Char, 'l'));
+        $this->assertEquals($day->modify('+1 day'), $next->endDay);
+
+        [$back] = $d->update(new KeyMsg(KeyType::Char, 'h'));
+        $this->assertEquals($day->modify('-1 day'), $back->endDay);
+
+        [$today] = $d->update(new KeyMsg(KeyType::Char, 'g'));
+        $this->assertEquals(new \DateTimeImmutable('today'), $today->endDay);
+    }
 }

@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\CodeTime\Dashboard;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Renderer;
+use SugarCraft\CodeTime\Lang;
 use SugarCraft\CodeTime\Stats;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Util\Ansi;
@@ -493,7 +494,7 @@ final class RendererGeometryTest extends TestCase
             // The German help row needs 67 cells; at 62 the frame trades it
             // for the key-only variant instead of clipping words away. A
             // window wide enough gets the translated full row back.
-            self::assertStringContainsString('q/Esc  quit', $frame, 'compact help fallback missing at 62');
+            self::assertStringContainsString('q/Esc/Ctrl+C  quit', $frame, 'compact help fallback missing at 62');
             $wide = self::frame(80, self::busy());
             self::assertStringContainsString('beenden', $wide, 'full translated help row missing at 80');
             foreach (self::plain($frame) as $line) {
@@ -720,5 +721,29 @@ final class RendererGeometryTest extends TestCase
         $quiet = Stats::compute([], $same->modify('-6 days'), $same);
         $plain = Ansi::strip(Renderer::render(new Dashboard(new NullReader(), $same, 7, $quiet, 80)));
         self::assertStringContainsString('[Jun 1 – Jun 7]', $plain);
+    }
+
+    /**
+     * CT-S60: the letter aliases ride the help row, and the terminal's own
+     * exit hatch is named on the surface a low-vision user reads.
+     */
+    public function testTheHelpRowCarriesTheAliasesAndTheTerminalExit(): void
+    {
+        $wide = self::frame(80, self::busy());
+        self::assertStringContainsString('prev day', $wide);
+        self::assertStringContainsString('q/Esc/Ctrl+C  quit', $wide);
+
+        // The compact tier is where the letter aliases live; English at 62
+        // already fits its full row, so the tier itself is pinned from the
+        // catalogue, and a frame at 62 must surface the terminal exit one
+        // way or the other.
+        $compact = Lang::t('ui.help_row_compact');
+        self::assertStringContainsString('←h', $compact);
+        self::assertStringContainsString('→l', $compact);
+        self::assertStringContainsString('g today', $compact);
+        self::assertStringContainsString('q/Esc/Ctrl+C  quit', $compact);
+
+        $narrow = self::frame(62, self::busy());
+        self::assertStringContainsString('q/Esc/Ctrl+C', $narrow);
     }
 }

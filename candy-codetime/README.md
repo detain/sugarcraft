@@ -341,14 +341,20 @@ the frame under the stored profile.
 
 | Key            | Action                       |
 |----------------|------------------------------|
-| `←`            | Move the window back one day |
-| `→`            | Move it forward one day      |
+| `←` / `h`      | Move the window back one day |
+| `→` / `l`      | Move it forward one day      |
+| `g`            | Jump the window end back to today |
 | `+`            | Widen the window (7/14/30/90 days) |
 | `-`            | Narrow the window back down  |
 | `t`            | Toggle the lower pane between languages and tags |
 | `r`            | Reload from disk             |
 | `q` / `Esc`    | Quit                         |
 | `Ctrl+C`       | Quit                         |
+
+Letter commands answer unmodified keys only: Ctrl+q does not quit and
+Ctrl+r does not reload (the two bare-metal exits, `Esc` and `Ctrl+C`, stay
+guarded by their own shapes). `h`/`l` exist because arrow keys are the only
+other way to walk the window, and not every keyboard has them.
 
 The two ranking panes render side by side from 62 columns up (two 30-cell
 frames plus a gap) and stack vertically below that. Every dashboard line is
