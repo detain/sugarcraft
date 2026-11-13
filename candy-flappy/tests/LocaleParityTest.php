@@ -64,6 +64,8 @@ final class LocaleParityTest extends TestCase
                 'plain_live_full', 'plain_live_short',
                 'quit_hint',
                 'quarantine', 'plain_quarantine',
+                'why_splat', 'why_ceiling', 'why_ground', 'why_pipe',
+                'plain_why_splat', 'plain_why_ceiling', 'plain_why_ground', 'plain_why_pipe',
             ] as $suffix
         ) {
             $this->assertArrayHasKey("ui.$suffix", $en);

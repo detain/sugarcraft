@@ -292,10 +292,23 @@ final class TerminalPostureTest extends TestCase
         );
         // flappy-31: both postures sweep — the plain crash card draws the
         // plain_* tier family and (post -034 cure) shares fit()'s clamp.
+        // flappy-78: tiers arrive as {why} templates; this board carries no
+        // cause, so expand them exactly as the renderer's splat fallback.
+        $expand = static function (string $key, string $why) use ($en): string {
+            return str_replace('{why}', $en[$why], $en[$key]);
+        };
         [$plain,] = $g->update(new ColorProfileMsg(ColorProfile::Ascii));
         $arms = [
-            'colour' => [$g, [$en['ui.crash_full'], $en['ui.crash_short'], $en['ui.crash_floor']]],
-            'plain' => [$plain, [$en['ui.plain_crash_full'], $en['ui.plain_crash_short'], $en['ui.plain_crash_floor']]],
+            'colour' => [$g, [
+                $expand('ui.crash_full', 'ui.why_splat'),
+                $expand('ui.crash_short', 'ui.why_splat'),
+                $en['ui.crash_floor'],
+            ]],
+            'plain' => [$plain, [
+                $expand('ui.plain_crash_full', 'ui.plain_why_splat'),
+                $expand('ui.plain_crash_short', 'ui.plain_why_splat'),
+                $en['ui.plain_crash_floor'],
+            ]],
         ];
         foreach ($arms as $posture => [$board, $tiers]) {
             foreach (range(62, 82) as $cols) {
@@ -350,7 +363,10 @@ final class TerminalPostureTest extends TestCase
         $colourStatus = (string) end($colourRows);
         $this->assertLessThanOrEqual(62, Width::of($colourStatus));
         foreach (['ui.crash_full', 'ui.crash_short', 'ui.crash_floor'] as $key) {
-            $this->assertStringNotContainsString($en[$key], $colourStatus, "colour tier $key cannot fit at this budget");
+            // flappy-78: expand the {why} templates as the splat fallback
+            // would, so this pins the ACTUAL tier text at this budget.
+            $tier = str_replace('{why}', $en['ui.why_splat'], $en[$key]);
+            $this->assertStringNotContainsString($tier, $colourStatus, "colour tier $key cannot fit at this budget");
         }
         $this->assertStringNotContainsString('💥', $colourStatus, 'a too-wide hint must be omitted, never clipped');
         [$plainSized,] = $plain->update(new WindowSizeMsg(62, 24));
@@ -359,7 +375,7 @@ final class TerminalPostureTest extends TestCase
         $this->assertLessThanOrEqual(62, Width::of($plainStatus), 'plain status spills past 62 cols');
         $plainWhole = false;
         foreach (['ui.plain_crash_full', 'ui.plain_crash_short', 'ui.plain_crash_floor'] as $key) {
-            if (str_contains($plainStatus, $en[$key]) === true) {
+            if (str_contains($plainStatus, str_replace('{why}', $en['ui.plain_why_splat'], $en[$key])) === true) {
                 $plainWhole = true;
             }
         }

@@ -87,6 +87,19 @@ final class Game implements Model
     public const MAX_HIGH_SCORES = 10;
 
     /**
+     * flappy-78 (finding -068): every death used to print the same 'splat'.
+     * advance() now records WHY the run ended so the hint can name the
+     * cause; the values double as the ui.why_* lang-key suffixes the
+     * renderer selects (literal keys at every call site — no dynamic
+     * Lang::t composition).
+     */
+    public const CRASH_CEILING = 'ceiling';
+
+    public const CRASH_GROUND = 'ground';
+
+    public const CRASH_PIPE = 'pipe';
+
+    /**
      * Read ceiling (m8): a save larger than this is not a leaderboard, it is
      * garbage or an attack — it is quarantined without being parsed.
      */
@@ -120,6 +133,12 @@ final class Game implements Model
         public readonly array $pipes,
         public readonly int $score = 0,
         public readonly bool $crashed = false,
+        /**
+         * flappy-78: one of Game::CRASH_* when crashed, null while alive or
+         * on boards that assert only the boolean (the hint then falls back
+         * to the generic splat).
+         */
+        public readonly ?string $crashCause = null,
         public readonly int $tickIndex = 0,
         public readonly array $highScores = [],
         public readonly bool $newRecord = false,
@@ -342,6 +361,7 @@ final class Game implements Model
             pipes: $changes['pipes'] ?? $this->pipes,
             score: $changes['score'] ?? $this->score,
             crashed: $changes['crashed'] ?? $this->crashed,
+            crashCause: $changes['crashCause'] ?? $this->crashCause,
             tickIndex: $changes['tickIndex'] ?? $this->tickIndex,
             highScores: $changes['highScores'] ?? $this->highScores,
             newRecord: $changes['newRecord'] ?? $this->newRecord,
@@ -663,12 +683,19 @@ final class Game implements Model
         // M27 (comment truth only — behaviour is the game spec): PHP's round()
         // rounds half AWAY from zero, so y = -0.5 rounds to -1 and CRASHES;
         // safe is y > -0.5 strictly (row() >= 0).
+        // flappy-78 (finding -068): the cause is stored, not just the fact —
+        // a ceiling death deserves different coaching than a floor splat,
+        // and most first deaths are the ceiling at ~1 s (mash-starters).
         $birdRow = $bird->row();
-        $crashed = $birdRow < 0 || $birdRow >= self::HEIGHT;
-        if ($crashed === false) {
+        $crashCause = null;
+        if ($birdRow >= self::HEIGHT) {
+            $crashCause = self::CRASH_GROUND;
+        } elseif ($birdRow < 0) {
+            $crashCause = self::CRASH_CEILING;
+        } else {
             foreach ($pipes as $p) {
                 if ($p->collides($bird->x, $birdRow) === true) {
-                    $crashed = true;
+                    $crashCause = self::CRASH_PIPE;
                     break;
                 }
             }
@@ -678,7 +705,8 @@ final class Game implements Model
             'bird' => $bird,
             'pipes' => $pipes,
             'score' => $score,
-            'crashed' => $crashed,
+            'crashed' => $crashCause !== null,
+            'crashCause' => $crashCause,
             'tickIndex' => $tick,
         ]);
     }

@@ -140,6 +140,70 @@ final class GameTest extends TestCase
         $this->assertTrue($g2->newRecord);
     }
 
+    public function testAdvanceRecordsTheCrashCause(): void
+    {
+        // flappy-78 (finding -068): the hint must be able to blame the
+        // right thing — every death used to print the same 'splat'.
+        $ground = (new Game(
+            bird: Bird::spawn(Game::BIRD_COL, (float) Game::HEIGHT),
+            pipes: [],
+            started: true,
+            configDir: $this->hermeticConfigDir(),
+        ))->tickN(1);
+        $this->assertTrue($ground->crashed);
+        $this->assertSame(Game::CRASH_GROUND, $ground->crashCause);
+
+        // Ceiling: flapped at row 0, the bird's y runs past the -0.5 round
+        // boundary (M27) within two ticks.
+        $ceiling = (new Game(
+            bird: Bird::spawn(Game::BIRD_COL, 0.0)->flap(),
+            pipes: [],
+            started: true,
+            configDir: $this->hermeticConfigDir(),
+        ))->tickN(2);
+        $this->assertTrue($ceiling->crashed, 'the flap must reach the ceiling within two ticks');
+        $this->assertSame(Game::CRASH_CEILING, $ceiling->crashCause);
+
+        // Pipe: slid into the bird's column at a row the gap does not hold.
+        $pipe = (new Game(
+            bird: Bird::spawn(Game::BIRD_COL, 0.4),
+            pipes: [new Pipe(Game::BIRD_COL + 1, 14, 5)],
+            started: true,
+            configDir: $this->hermeticConfigDir(),
+        ))->tickN(1);
+        $this->assertTrue($pipe->crashed);
+        $this->assertSame(Game::CRASH_PIPE, $pipe->crashCause);
+    }
+
+    public function testTheCrashHintNamesTheCause(): void
+    {
+        // flappy-78: the {why} slot renders the cause noun…
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, 0.0),
+            pipes: [],
+            score: 3,
+            crashed: true,
+            crashCause: Game::CRASH_CEILING,
+            started: true,
+            configDir: $this->hermeticConfigDir(),
+        );
+        $view = $g->view();
+        $this->assertStringContainsString('hit the ceiling', $view);
+        $this->assertStringNotContainsString('splat', $view, 'a named cause replaces the generic noun');
+
+        // …and a board that only asserts the boolean keeps the historical
+        // splat byte-for-byte (the golden-compatible fallback).
+        $legacy = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, (float) Game::HEIGHT),
+            pipes: [],
+            score: 3,
+            crashed: true,
+            started: true,
+            configDir: $this->hermeticConfigDir(),
+        );
+        $this->assertStringContainsString('💥 splat', $legacy->view());
+    }
+
     public function testWithHighScoreFillsTheOpenSlots(): void
     {
         // flappy-38 (finding -012) law pin, flipped from the old
@@ -1423,7 +1487,9 @@ final class GameTest extends TestCase
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())->tickN(80);
         $this->assertTrue($g->crashed);
         $view = $g->view();
-        $this->assertStringContainsString('press r to restart', $view);
+        // flappy-78 note: the ground cause widened the noun, so this frame
+        // may land on either tier — 'restart' is the verb in both.
+        $this->assertStringContainsString('restart', $view);
         $this->assertStringNotContainsString('flap again', $view);
     }
 

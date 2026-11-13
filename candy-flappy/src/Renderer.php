@@ -157,11 +157,17 @@ final class Renderer
                     ->render($highScorePlain) . '   ';
                 $highScorePlain .= '   ';
             }
+            // flappy-78 (finding -068): the hint names the cause of death
+            // through a {why} placeholder in the crash templates; boards
+            // that carry only the boolean (direct constructions, old
+            // fixtures) keep the generic splat — byte-identical to the
+            // pre-variant copy.
+            $why = self::crashWhy($g, 'ui.why_ceiling', 'ui.why_ground', 'ui.why_pipe', 'ui.why_splat');
             $hintPlain = self::pickHint(
                 $g,
                 $scoreText . $highScorePlain,
-                Lang::t('ui.crash_full'),
-                Lang::t('ui.crash_short'),
+                Lang::t('ui.crash_full', ['why' => $why]),
+                Lang::t('ui.crash_short', ['why' => $why]),
                 Lang::t('ui.crash_floor'),
             );
             $hint = Style::new()->foreground(Color::hex(self::CRASH))->bold()
@@ -271,11 +277,18 @@ final class Renderer
             } elseif ($highScore > 0) {
                 $recordPlain = Lang::t('ui.best', ['best' => $highScore]) . '   ';
             }
+            $why = self::crashWhy(
+                $g,
+                'ui.plain_why_ceiling',
+                'ui.plain_why_ground',
+                'ui.plain_why_pipe',
+                'ui.plain_why_splat',
+            );
             $hint = self::pickHint(
                 $g,
                 $scoreText . $recordPlain,
-                Lang::t('ui.plain_crash_full'),
-                Lang::t('ui.plain_crash_short'),
+                Lang::t('ui.plain_crash_full', ['why' => $why]),
+                Lang::t('ui.plain_crash_short', ['why' => $why]),
                 Lang::t('ui.plain_crash_floor'),
             );
             return self::fit($g, implode("\n", $rows) . "\n " . $scoreText . $recordPlain . '    ' . $hint . "\n");
@@ -394,6 +407,29 @@ final class Renderer
             return $hintShort;
         }
         return $used + Width::of($hintFloor) <= $g->frameCols ? $hintFloor : '';
+    }
+
+    /**
+     * flappy-78 (finding -068): the cause noun slotting into the crash
+     * templates' {why}. The lang keys arrive as literals from every call
+     * site (fleet Lang-key law: grep sees the whole key), and the plain arm
+     * gets the ui.plain_why_* set because cs/tr/pl transliterate their
+     * plain tiers to ASCII. A null cause (boards that only assert the crash
+     * boolean) keeps the historical generic splat.
+     */
+    private static function crashWhy(
+        Game $g,
+        string $kCeiling,
+        string $kGround,
+        string $kPipe,
+        string $kSplat,
+    ): string {
+        return Lang::t(match ($g->crashCause) {
+            Game::CRASH_CEILING => $kCeiling,
+            Game::CRASH_GROUND => $kGround,
+            Game::CRASH_PIPE => $kPipe,
+            default => $kSplat,
+        });
     }
 
     /** Last-resort guarantee (M26): no rendered row exceeds the viewport. */
