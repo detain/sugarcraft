@@ -37,6 +37,46 @@ final class MailboxTest extends TestCase
         $this->recursiveDelete($this->basePath);
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function hostileIds(): array
+    {
+        return ['traversal' => ['../escape'], 'dotdot' => ['..'], 'slash' => ['a/b'], 'empty' => [''], 'nul' => ["a\0b"], 'absolute' => ['/etc']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('hostileIds')]
+    public function testHostileIdsAreRefusedOnEveryEntryPointAndTouchNothing(string $id): void
+    {
+        $mailbox = new Mailbox($this->basePath);
+        $msg = new TeamMessage('m1', 'a', 'b', 'idle', [], new \DateTimeImmutable());
+        $calls = [
+            static fn () => $mailbox->send('a', $id, $msg),
+            static fn () => $mailbox->markRead($id, 'm1'),
+            static fn () => iterator_to_array($mailbox->receive($id)),
+            static fn () => $mailbox->peek($id),
+            static fn () => $mailbox->unreadCount($id),
+            static fn () => $mailbox->inboxSize($id),
+            static fn () => $mailbox->waitForMessage($id, 0.01),
+        ];
+        foreach ($calls as $n => $call) {
+            try {
+                $call();
+                $this->fail("entry point #{$n} accepted hostile id");
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertDirectoryDoesNotExist($this->basePath);
+        $this->assertFileDoesNotExist(dirname($this->basePath) . '/escape');
+    }
+
+    public function testMarkReadRefusesAMultiLineMessageId(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new Mailbox($this->basePath))->markRead('teammate-b', "m1\nm2");
+    }
+
     // -------------------------------------------------------------------------
     // send
     // -------------------------------------------------------------------------

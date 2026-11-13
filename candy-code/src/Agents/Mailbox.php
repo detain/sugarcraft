@@ -25,6 +25,14 @@ use SugarCraft\Code\Support\LineAppends;
  */
 final class Mailbox
 {
+    /**
+     * A teammate/agent id names a directory under the base path, so it stays one
+     * safe path segment (no separators, no NUL, no traversal). Deliberately the
+     * superset every live caller already enforces ({@see Live\AgentInbox},
+     * {@see Live\SessionMailbox}); TeamTool layers its stricter team-id shape on top.
+     */
+    public const ID_PATTERN = '/\A[A-Za-z0-9._-]{1,128}\z/';
+
     public function __construct(
         private readonly string $basePath,
     ) {}
@@ -188,6 +196,9 @@ final class Mailbox
         // Append the messageId to the read-markers file (oneId per line).
         // receive() checks this file to determine read status without ever
         // needing to modify the inbox itself.
+        if ($messageId === '' || preg_match('/[\r\n\0]/', $messageId) === 1) {
+            throw new \InvalidArgumentException('Mailbox message id must be non-empty and single-line.');
+        }
         LineAppends::append($this->readMarkersPath($teammateId), $messageId . "\n");
     }
 
@@ -305,8 +316,18 @@ final class Mailbox
     // Internal helpers
     // -------------------------------------------------------------------------
 
+    /** Gate every path built from an id: send/receive/markRead/inboxSize/wake all route through the three path helpers. */
+    private static function assertId(string $teammateId): void
+    {
+        if (preg_match(self::ID_PATTERN, $teammateId) !== 1 || $teammateId === '.' || $teammateId === '..') {
+            throw new \InvalidArgumentException('Invalid mailbox teammate id: must be 1-128 chars of [A-Za-z0-9._-] and not "." or "..".');
+        }
+    }
+
     private function inboxPath(string $teammateId): string
     {
+        self::assertId($teammateId);
+
         return $this->basePath . '/' . $teammateId . '/inbox.jsonl';
     }
 
@@ -329,6 +350,8 @@ final class Mailbox
 
     private function readMarkersPath(string $teammateId): string
     {
+        self::assertId($teammateId);
+
         return $this->basePath . '/' . $teammateId . '/inbox.jsonl.read_markers';
     }
 
@@ -363,6 +386,8 @@ final class Mailbox
 
     private function wakeMarkerPath(string $teammateId): string
     {
+        self::assertId($teammateId);
+
         return $this->basePath . '/' . $teammateId . '/.wake';
     }
 
