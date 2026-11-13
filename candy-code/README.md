@@ -52,7 +52,7 @@ where its section says, and `/help` inside a session repeats the shortcuts.
 
 | To | Do |
 |---|---|
-| Continue where you left off | Launch with `--continue` to reopen the last session in this directory, or `/resume` to pick one by name. |
+| Continue where you left off | Launch with `--continue` to reopen the last session in this directory, or `/sessions` (`Ctrl+R`) to pick one by name. |
 | Take a change back | `/undo` steps one checkpoint back, and `/rewind` goes to a chosen earlier point — the chat, the files, or both. |
 | Stop a turn | `Esc` stops the running tool and then the turn at its next step; a second press cancels hard. `Ctrl+C` quits. |
 | Change provider or model | `/model` opens the picker (Ctrl+P carries the same menu); `/model <provider> <model>` switches outright, and the choice persists. |
@@ -217,7 +217,7 @@ backs one):
 | Piece | Who needs it | Without it |
 |---|---|---|
 | `ext-sqlite3` (required) | the Team task board | board-backed team runs refuse |
-| `pdo_sqlite` (required) | the session store | sessions cannot be written, listed or read back — `--continue` and `/resume` have nothing to reopen |
+| `pdo_sqlite` (required) | the session store | sessions cannot be written, listed or read back — `--continue` and `/sessions` have nothing to reopen |
 | `ext-mbstring` + `ext-intl` (required) | the rendering stack: text width, cluster walking, NFKC-normalised edit matching | no painted frame — the TUI counts and clips through them on every screen |
 | `git` on PATH | turn checkpoints (`/undo`, `/rewind`), the `RepoMap` tool and the prompt's symbol map, tracked project-memory notes, `isolation: worktree` sub-agent runs | each feature refuses at its own call site and names the reason (see [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)); the files your turns write are still written, there is just no step-back point for them |
 | `ext-dom` | WebFetch's HTML-to-Markdown conversion (its default format) | HTML bodies come back raw with a one-line note, still inside the output budget |
