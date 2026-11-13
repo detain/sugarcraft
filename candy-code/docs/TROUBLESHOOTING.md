@@ -628,6 +628,29 @@ run through the Bash tool's own probe, so a `bwrap` the kernel will not let run
 (Ubuntu 24.04's `apparmor_restrict_unprivileged_userns` sysctl) is reported as
 WARN with the AppArmor profile remedy, not as a healthy install.
 
+### Proxy variables inside the sandbox (`curl`, `npm`, `git`)
+
+With `bashSandbox` in allowlist mode (`sandboxAllowedDomains` set), the jail still
+has no network namespace of its own; the only way out is the egress proxy socket
+bound at `/tmp/.candy-egress.sock` (`Bubblewrap::JAIL_EGRESS_SOCKET`), reached
+through an in-jail bridge on `127.0.0.1:<port>` (`EgressBridge::JAIL_TCP_PORT`).
+Every command therefore sees `HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy` and
+`https_proxy` pointing at that `http://127.0.0.1:<port>` address, and
+`NO_PROXY=localhost,127.0.0.1`. Your own values of these variables are replaced
+for the jailed command, not merged.
+
+- `curl`, `npm` and `git` over HTTP(S) honour those variables, so they work for
+  hosts on `sandboxAllowedDomains`; any other host gets a proxy `403`, which
+  surfaces as `curl: (56) CONNECT tunnel failed, response 403`, an `npm`
+  `ECONNREFUSED`/`403`, or `git`'s `unable to access ... 403`. Add the host to
+  `sandboxAllowedDomains` rather than unsetting the variables.
+- A tool that ignores proxy variables (raw sockets, `git://` and `ssh://`, most
+  database clients) has no route and fails with a network-unreachable error.
+- Loopback is exempt (`NO_PROXY`), so a dev server the command starts itself
+  can still be called.
+- If the proxy failed to start, the jail degrades to plain `no-network`: the
+  variables are unset and nothing connects.
+
 ## Terminal and display problems
 
 | Symptom | Try |
