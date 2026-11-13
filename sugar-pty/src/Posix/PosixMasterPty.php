@@ -277,9 +277,8 @@ final class PosixMasterPty implements MasterPty
             $this->anchorSlaveFd = -1;
         }
 
-        $usedStream = $this->stream !== null;
         $fcloseFailed = false;
-        if ($usedStream) {
+        if ($this->stream !== null) {
             $stream = $this->stream;
             $this->stream = null;
             // A failed fclose is RECORDED, not thrown here: throwing at this
@@ -296,97 +295,21 @@ final class PosixMasterPty implements MasterPty
             // must be closed explicitly or tty_hangup() never fires.
         }
 
-        // WHAT THIS BLOCK USED TO BE: `self::libc()->dup($this->fd);`,
-        // discarding the return value, under a comment saying it existed to
-        // "prevent FD reuse race" -- that our libc fd may have been recycled
-        // by an unrelated open() between our fopen() and this close(), so
-        // duping first gives us a stable reference.
-        //
-        // WHAT IS TRUE NOW, in two parts.
-        //
-        // 1. The leak was real and is fixed. `dup(2)` returns a NEW
-        //    descriptor, and one that nothing ever closes is a leak of
-        //    exactly one descriptor per master that was read from or written
-        //    to -- every one of them still pinning the master side of a pty
-        //    the caller believes it has closed. MEASURED on this box, PHP
-        //    8.3.6, counting entries of `/proc/self/fd` whose readlink is
-        //    `/dev/ptmx`, over five open/write/close cycles: 1, 2, 3, 4, 5
-        //    leaked -- linear in the number of closes. Five further cycles
-        //    that never materialise the stream leak none, which is the
-        //    control: the leak was this branch and not `open()`. Releasing
-        //    the dup is what `tty_hangup()` needs, and
-        //    PosixMasterPtyTest::testClosingAMasterThatWasWrittenToLeaksNoDescriptor()
-        //    pins it against a live witness pty.
-        //
-        // 2. The RACE the old comment named cannot occur, and the dup could
-        //    not prevent it if it could. MEASURED, PHP 8.3.6, reading
-        //    /proc/self/fd/* either side of each call: `fopen('php://fd/N')`
-        //    ALLOCATES A NEW descriptor (fd 4 -> the stream got 5) and
-        //    `fclose()` closes that new one, leaving 4 open. `$this->fd` is
-        //    therefore open continuously from posix_openpt() until the
-        //    `close()` below, and its number is never free during the window
-        //    the old comment described. Worse, `dup($this->fd)` is taken
-        //    AFTER the `fclose()` above, so had the number ever been
-        //    recycled it would duplicate whatever now owns it -- it can
-        //    neither detect the substitution nor prevent it.
-        //
-        // WHY THE DUP STILL EARNS ITS PLACE: honestly, on the evidence, only
-        // as a deliberately retained seam. MEASURED: removing the dup AND its
-        // release together is behaviourally inert across sugar-pty's Posix
-        // suite -- `vendor/bin/phpunit --filter Posix` gives
-        // 165 tests / 394 assertions / 1 warning / 2 skipped / rc 0, the same
-        // figures as with it. It costs two syscalls and defers the hangup by
-        // that much.
-        //
-        // WHAT THIS PARAGRAPH USED TO SAY: that no search had been run for a
-        // caller pattern that WOULD need a stable reference, and that until
-        // somebody ran it the block was justified only by "no test notices".
-        // WHAT IS TRUE NOW -- E466 ran the search, and the answer has two
-        // halves, one of which is structural enough to stay true.
-        //
-        // MEASURED: every caller of this close() across the libraries that
-        // can reach it was walked for the one shape that would matter, a
-        // scope that takes the master's fd NUMBER and reads it after a
-        // close() call in the same scope. The callers are PtyPool::release()
-        // and PtyPool::drain() in this package, the deprecated Pty facade
-        // here, sugar-ssh-server's InProcessTransport teardown, candy-code's
-        // CapturesProcessOutput pty drain, and the finally-block cleanups in
-        // the sugar-pty, sugar-animation, sugar-core and candy-code suites
-        // (sugar-image never touches a pty). NONE reads the number back.
-        // Two honest caveats on the instrument: this walk replaces the
-        // `--filter Posix` measurement above for this question, because the
-        // fd-holding candidates are class-named SizeIoctl* and
-        // TermiosFactory* -- names no Posix filter selects, so that earlier
-        // run could not have seen them; and a census is a fact about today's
-        // tree, which is why the second half matters more.
-        //
-        // STRUCTURAL: no caller COULD be helped by this dup, because the dup
-        // does not survive the call. $stableFd is closed below, inside this
-        // method, before it ever returns -- so there exists no window,
-        // however brief, in which the master would be reachable BY NUMBER
-        // after close() that this block could stabilise. A caller reading
-        // the number back gets EBADF with the dup or without it. That is the
-        // same conclusion {@see \SugarCraft\Pty\Master}'s own doc-block
-        // draws from the other side of the boundary: a snapshot value, never
-        // the source of truth for whether an fd is still open. What the dup
-        // actually buys is that tty_hangup() lands at the release below
-        // rather than at the close above -- a deferral of two syscalls,
-        // within this thread, unobservable from any caller's position.
-        //
-        // So the block stays on the house rule -- dormant code here is wired
-        // or justified, never quietly removed -- and this paragraph IS the
-        // justification the old one promised to wait for. Deleting it now
-        // takes an argument, not a search.
-        $stableFd = -1;
-        if ($usedStream) {
-            $stableFd = self::libc()->dup($this->fd);
-        }
+        // HISTORY (was ~85 forensic comment lines; finding sugar-pty-038):
+        // this branch once dup()ed the master fd and discarded the result
+        // under an "FD reuse race" claim. The ghost-hunt measured the
+        // truth: fopen('php://fd/N') takes a NEW descriptor, $this->fd is
+        // open continuously from posix_openpt() until the close below, and
+        // the dup never survived the call — a caller reading the number
+        // back after close() answers EBADF with or without it. The pair
+        // only deferred tty_hangup() by two syscalls, unobservable from any
+        // caller position, so the seam is deleted; the leak lesson the hunt
+        // also taught (a discarded dup pins the master forever) stays
+        // pinned by testClosingAMasterThatWasWrittenToLeaksNoDescriptor().
         $rc = self::libc()->close($this->fd);
-        // errno is read before the stable-fd release below can overwrite it.
+        // errno is read immediately: nothing may overwrite it before the
+        // failure surface below.
         $errno = $rc !== 0 ? Libc::errnoDetail() : '';
-        if ($stableFd >= 0) {
-            self::libc()->close($stableFd);
-        }
         // A failed libc close is surfaced on BOTH paths. It used to be
         // checked only when no stream had been materialised, so a master
         // that had been read from or written to -- every real consumer's

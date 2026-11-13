@@ -69,8 +69,7 @@ final class PosixMasterPtyTest extends TestCase
         $this->assertSame(
             [],
             array_values(array_diff($afterStreamPath, $before)),
-            'close() leaked a /dev/ptmx descriptor after the master was written to. The dup() in '
-            . 'PosixMasterPty::close() must be closed again, not discarded.',
+            'close() leaked a /dev/ptmx descriptor after the master was written to. The stream-path fclose must release the php://fd duplicate AND close() must release the original fd.',
         );
         $this->assertSame(
             [],
