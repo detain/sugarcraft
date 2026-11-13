@@ -655,6 +655,10 @@ cd sugar-widgets && composer install && vendor/bin/phpunit
 
 ## Demos
 
+The three `Program`-driven demos (Tabs, Timer loop, Tree) refuse fast
+with exit 1 when stdin is not a TTY (CI/cron/piped runs); the rest are
+plain scripts that render and exit.
+
 ### Cursor
 
 ![cursor](.vhs/cursor.gif)

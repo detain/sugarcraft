@@ -13,6 +13,13 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
 
+// Non-TTY stdin (CI, cron, pipes) would leave the event loop waiting forever;
+// refuse fast instead of hanging until the caller's timeout (sugar-widgets W-28).
+if (!\function_exists('stream_isatty') || !\stream_isatty(\STDIN)) {
+    \fwrite(\STDERR, "this demo needs an interactive terminal (TTY); run it from a terminal\n");
+    exit(1);
+}
+
 /**
  * Example: interactive Tree component.
  *
