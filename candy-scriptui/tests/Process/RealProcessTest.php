@@ -18,52 +18,36 @@ final class RealProcessTest extends TestCase
 
     public function testSpawnReadsExitCodeFromTrueCommand(): void
     {
+        // scriptui-50: bounded wait() replaces the hand-rolled 50x10ms poll.
         $proc = RealProcess::spawn(['/bin/sh', '-c', 'exit 0']);
-        // Poll briefly — `exit 0` should finish near-instantly.
-        $code = null;
-        for ($i = 0; $i < 50 && $code === null; $i++) {
-            $code = $proc->exitCode();
-            if ($code === null) usleep(10_000);
-        }
-        $this->assertSame(0, $code);
-        $proc->close();
+        $this->assertSame(0, $proc->wait());
     }
 
     public function testSpawnPropagatesNonZeroExit(): void
     {
         $proc = RealProcess::spawn(['/bin/sh', '-c', 'exit 7']);
-        $code = null;
-        for ($i = 0; $i < 50 && $code === null; $i++) {
-            $code = $proc->exitCode();
-            if ($code === null) usleep(10_000);
-        }
-        $this->assertSame(7, $code);
-        $proc->close();
+        $this->assertSame(7, $proc->wait());
     }
 
     public function testCloseIsIdempotentAfterCachedExit(): void
     {
-        // Regression for the leak: even when exitCode() has already
-        // resolved (and cached) the child's status, close() must still
-        // reap the proc_open handle exactly once.
+        // Regression for the leak: even when the child's status has already
+        // resolved (and cached), close() must still hand back that exit code
+        // exactly once — repeat calls are safe no-ops.
         $proc = RealProcess::spawn(['/bin/sh', '-c', 'exit 0']);
-        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
-            usleep(10_000);
-        }
-        $first  = $proc->close();   // should call proc_close() under the hood
-        $second = $proc->close();   // safe no-op
+        $code   = $proc->wait();     // reaps and caches
+        $first  = $proc->close();    // must not double-reap
+        $second = $proc->close();    // safe no-op
+        $this->assertSame($code, $first);
         $this->assertSame($first, $second);
     }
 
     public function testTerminateIsNoOpAfterClose(): void
     {
         $proc = RealProcess::spawn(['/bin/sh', '-c', 'exit 0']);
-        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
-            usleep(10_000);
-        }
-        $proc->close();
-        // After close() the underlying handle is gone; terminate() must
-        // not fall through to proc_terminate() on a closed resource.
+        $proc->wait();               // full reap
+        // After the handle is gone; terminate() must not fall through to
+        // proc_terminate() on a closed resource.
         $proc->terminate();
         $this->assertSame(0, $proc->close());
     }
@@ -75,10 +59,7 @@ final class RealProcessTest extends TestCase
             captureStdout: true,
             captureStderr: false,
         );
-        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
-            usleep(10_000);
-        }
-        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame(0, $proc->wait());
         $this->assertSame("hello world\n", $proc->stdout());
         $this->assertSame('', $proc->stderr());
         $proc->close();
@@ -91,10 +72,7 @@ final class RealProcessTest extends TestCase
             captureStdout: false,
             captureStderr: true,
         );
-        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
-            usleep(10_000);
-        }
-        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame(0, $proc->wait());
         $this->assertSame('', $proc->stdout());
         $this->assertSame("error\n", $proc->stderr());
         $proc->close();
@@ -107,10 +85,7 @@ final class RealProcessTest extends TestCase
             captureStdout: true,
             captureStderr: true,
         );
-        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
-            usleep(10_000);
-        }
-        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame(0, $proc->wait());
         $this->assertSame("out\n", $proc->stdout());
         $this->assertSame("err\n", $proc->stderr());
         $proc->close();
@@ -188,10 +163,7 @@ final class RealProcessTest extends TestCase
     public function testTerminateAfterNaturalExitIsNoOp(): void
     {
         $proc = RealProcess::spawn(['/bin/sh', '-c', 'exit 0']);
-        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
-            usleep(10_000);
-        }
-        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame(0, $proc->wait());
         // The child already exited on its own: terminate() must not signal
         // the (possibly recycled) PID, and close() still reaps normally.
         $proc->terminate();
@@ -205,10 +177,7 @@ final class RealProcessTest extends TestCase
             captureStdout: true,
             captureStderr: false,
         );
-        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
-            usleep(10_000);
-        }
-        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame(0, $proc->wait());
         // stdoutBytes() and stdout() should return the same thing.
         $this->assertSame($proc->stdout(), $proc->stdoutBytes());
         $proc->close();
@@ -221,10 +190,7 @@ final class RealProcessTest extends TestCase
             captureStdout: false,
             captureStderr: true,
         );
-        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
-            usleep(10_000);
-        }
-        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame(0, $proc->wait());
         // stderrBytes() and stderr() should return the same thing.
         $this->assertSame($proc->stderr(), $proc->stderrBytes());
         $proc->close();
