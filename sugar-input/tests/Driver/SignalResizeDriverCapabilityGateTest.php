@@ -66,17 +66,17 @@ final class SignalResizeDriverCapabilityGateTest extends TestCase
     public function testLegitCapabilitiesProduceExactlyQuotedCommands(): void
     {
         $driver = $this->makeDriver($recorder);
-        $getTput = new \ReflectionMethod($driver, 'getTput');
+        $probeTput = new \ReflectionMethod($driver, 'probeTput');
 
-        $colsValue = $getTput->invoke($driver, 'cols');
+        $colsValue = $probeTput->invoke($driver, 'cols');
         // Command-shape pin: validated name, escapeshellarg'd, redirect kept.
         $this->assertSame(["tput 'cols' 2>/dev/null"], $this->commands($recorder));
         $this->assertSame(80, $colsValue);
 
         $driver = $this->makeDriver($recorder);
-        $getTput = new \ReflectionMethod($driver, 'getTput');
+        $probeTput = new \ReflectionMethod($driver, 'probeTput');
 
-        $linesValue = $getTput->invoke($driver, 'lines');
+        $linesValue = $probeTput->invoke($driver, 'lines');
         $this->assertSame(["tput 'lines' 2>/dev/null"], $this->commands($recorder));
         $this->assertSame(80, $linesValue);
     }
@@ -84,7 +84,7 @@ final class SignalResizeDriverCapabilityGateTest extends TestCase
     public function testNumericParseBehaviourSurvivesTheGuard(): void
     {
         $driver = $this->makeDriver($recorder, "132\n");
-        $value = (new \ReflectionMethod($driver, 'getTput'))->invoke($driver, 'cols');
+        $value = (new \ReflectionMethod($driver, 'probeTput'))->invoke($driver, 'cols');
 
         $this->assertCount(1, $this->commands($recorder));
         $this->assertSame(132, $value);
@@ -119,10 +119,10 @@ final class SignalResizeDriverCapabilityGateTest extends TestCase
     public function testInjectionShapedNamesAreRefusedBeforeAnyShellOut(string $capability): void
     {
         $driver = $this->makeDriver($recorder);
-        $getTput = new \ReflectionMethod($driver, 'getTput');
+        $probeTput = new \ReflectionMethod($driver, 'probeTput');
 
         try {
-            $getTput->invoke($driver, $capability);
+            $probeTput->invoke($driver, $capability);
             $this->fail('expected InvalidArgumentException for ' . var_export($capability, true));
         } catch (\InvalidArgumentException $exception) {
             $this->assertStringContainsString('refused', $exception->getMessage());

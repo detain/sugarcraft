@@ -40,8 +40,9 @@ use SugarCraft\Input\Event;
  * driver disarms, the SIGWINCH disposition returns to SIG_DFL.
  *
  * Construction is side-effect free. Arm() flips the process-global signal
- * disposition (pcntl_async_signals + a SIGWINCH handler) and shells out to
- * tput for the initial dimensions — opt-in only, so merely building the
+ * disposition (pcntl_async_signals + a SIGWINCH handler) and probes the
+ * initial terminal size once (fork-free tty ioctl first, tput only as a
+ * last resort) — opt-in only, so merely building the
  * driver never mutates the process it lives in.
  *
  * @see ResizeEvent
@@ -59,9 +60,9 @@ final class SignalResizeDriver implements InputDriver
      * caller — and never reaches a shell.
      *
      * This guard, plus escapeshellarg() on the validated name, is
-     * defense-in-depth for the shell_exec() in getTput(). The guard parses;
-     * the quoting stays even though a passing name needs none, so a later
-     * regex relaxation cannot silently un-defend the shell-out.
+     * defense-in-depth for the shell_exec() in probeTput(). The guard parses;
+     * quoting is applied unconditionally, so a future regex relaxation cannot
+     * reintroduce an injection vector.
      */
     private const CAPABILITY_PATTERN = '/^[a-z][a-z0-9]{0,4}$/';
 
@@ -103,12 +104,23 @@ final class SignalResizeDriver implements InputDriver
     private $commandRunner;
 
     /**
-     * @param (callable(string): (string|null|false))|null $commandRunner test seam, not public API
+     * @var callable(): (array{cols:int, rows:int}) First-arm probe of the
+     *      kernel terminal size; internal seam so tests keep the tput last
+     *      resort reachable on hosts whose terminal answers the real ioctl.
+     *      Defaults to sugar-core's Tty over STDOUT.
      */
-    public function __construct(?callable $commandRunner = null)
+    private $ttyProbe;
+
+    /**
+     * @param (callable(string): (string|null|false))|null $commandRunner test seam, not public API
+     * @param (callable(): (array{cols:int, rows:int}))|null $ttyProbe    test seam, not public API
+     */
+    public function __construct(?callable $commandRunner = null, ?callable $ttyProbe = null)
     {
         $this->commandRunner = $commandRunner
             ?? static fn (string $command): string|false|null => @\shell_exec($command);
+        $this->ttyProbe = $ttyProbe
+            ?? static fn (): array => (new \SugarCraft\Core\Util\Tty(STDOUT))->size();
     }
 
     /**
@@ -116,8 +128,9 @@ final class SignalResizeDriver implements InputDriver
      *
      * Arm() is the ONLY place this class touches global state: it registers
      * the instance with the shared SIGWINCH fan-out registry, installs the
-     * process-wide handler (flipping pcntl_async_signals on), and shells out
-     * to tput once for the initial dimensions. Construction alone never does
+     * process-wide handler (flipping pcntl_async_signals on), and probes the
+     * initial dimensions once via the probeDimensions() ladder — forking only
+     * if the tput last resort is reached. Construction alone never does
      * any of that — callers who only build (or test-build) a driver leave the
      * process disposition untouched. Calling arm() twice is harmless: the
      * WeakMap set is idempotent and the handler re-install is the same closure.
@@ -226,10 +239,11 @@ final class SignalResizeDriver implements InputDriver
     /**
      * Read the next resize event, or null if no resize has been detected.
      *
-     * This method is non-blocking — it returns null immediately if no
-     * SIGWINCH has been received since the last call. When a resize is
-     * delivered, dimensions are re-probed here (not in the signal handler)
-     * before the event is constructed (m2).
+     * Per-path honesty: the null fast path (no SIGWINCH since the last call)
+     * is non-blocking and does nothing else. When a resize IS delivered, the
+     * dimensions are re-probed HERE — not in the signal handler (m2) — and
+     * the probe only forks on the tput last-resort arm: the Tty ioctl/env
+     * legs are in-process (see probeDimensions).
      *
      * @return Event|ResizeEvent|null
      */
@@ -250,12 +264,51 @@ final class SignalResizeDriver implements InputDriver
     }
 
     /**
-     * Update stored terminal dimensions using tput.
+     * Refresh stored terminal dimensions from the cheapest truthful source.
+     *
+     * Arm 1 is sugar-core's Tty probe over STDOUT: the kernel's TIOCGWINSZ
+     * ioctl on the terminal fd — zero forks, and it is the only source that
+     * tracks a resize LIVE. Its documented ladder (see
+     * SugarCraft\Core\Util\Tty) is ioctl first, then exported LINES/COLUMNS,
+     * then the controlling terminal, then its own stty query; kernel truth
+     * deliberately outranks env because bash refreshes COLUMNS/LINES only for
+     * its own prompt and SSH/tmux exports capture the login size — trusting
+     * stale env sizes frames to the wrong (often halved) terminal. An
+     * exported env still beats the terminfo defaults below: it is somebody's
+     * real answer, where tput-on-a-quiet-terminal is a guess.
+     *
+     * Arm 2 keeps tput as the LAST resort (the capability allowlist and its
+     * test seam stay meaningful), for the cases Tty cannot answer at all —
+     * no controlling terminal, no exported size, stubbed probes.
+     *
+     * @return array{0:int, 1:int} cols, rows — zeros mean "no source
+     *                    answered; keep the last known dimensions"
+     */
+    private function probeDimensions(): array
+    {
+        try {
+            $size = ($this->ttyProbe)();
+            $ttyCols = (int) ($size['cols'] ?? 0);
+            $ttyRows = (int) ($size['rows'] ?? 0);
+        } catch (\Throwable) {
+            // A host with no answerable terminal at all — the probe's own
+            // failure is not an error to propagate, it is the signal to
+            // consult the last resort below.
+            $ttyCols = $ttyRows = 0;
+        }
+        if ($ttyCols > 0 && $ttyRows > 0) {
+            return [$ttyCols, $ttyRows];
+        }
+
+        return [$this->probeTput('cols'), $this->probeTput('lines')];
+    }
+
+    /**
+     * Update stored terminal dimensions from the probe ladder above.
      */
     private function updateDimensions(): void
     {
-        $cols = $this->getTput('cols');
-        $rows = $this->getTput('lines');
+        [$cols, $rows] = $this->probeDimensions();
 
         if ($cols > 0) {
             $this->cols = $cols;
@@ -266,12 +319,13 @@ final class SignalResizeDriver implements InputDriver
     }
 
     /**
-     * Run tput and return the numeric value, or 0 on failure.
+     * Fork a `tput` and return its numeric answer, or 0 on failure — the
+     * last-resort arm of probeDimensions(), named for the fork+parse it does.
      *
      * @throws \InvalidArgumentException when the capability is not a
      *                   well-formed terminfo name — never shelled.
      */
-    private function getTput(string $capability): int
+    private function probeTput(string $capability): int
     {
         $output = ($this->commandRunner)(self::tputCommand($capability));
         if ($output === null || $output === '') {
@@ -305,7 +359,7 @@ final class SignalResizeDriver implements InputDriver
         }
 
         // 2>/dev/null: tput grumbles on stderr when terminfo cannot be
-        // resolved (no tty, unknown TERM); getTput() reads the empty stdout
+        // resolved (no tty, unknown TERM); probeTput() reads the empty stdout
         // as "keep last known dimensions". POSIX-sh idiom — on cmd.exe the
         // redirect is inert and the error text lands on stdout, where the
         // numeric cast yields 0: the same safe answer by a different road (n24).

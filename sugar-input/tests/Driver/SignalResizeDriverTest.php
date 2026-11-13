@@ -78,6 +78,16 @@ final class SignalResizeDriverTest extends TestCase
         $this->assertSame($handlerBefore, pcntl_signal_get_handler(SIGWINCH));
     }
 
+    /**
+     * Silence the first arm of the probe ladder so the tput seam is reached.
+     *
+     * @return callable(): array{cols:int, rows:int}
+     */
+    private static function ttySilent(): callable
+    {
+        return static fn (): array => ['cols' => 0, 'rows' => 0];
+    }
+
     public function testArmIsWhatInstallsTheHandler(): void
     {
         if (!function_exists('pcntl_signal')) {
@@ -88,7 +98,7 @@ final class SignalResizeDriverTest extends TestCase
         $driver = new SignalResizeDriver(static function (string $command) use (&$calls): string {
             $calls++;
             return "80\n";
-        });
+        }, self::ttySilent());
 
         $driver->arm();
 
@@ -135,12 +145,12 @@ final class SignalResizeDriverTest extends TestCase
         $driverA = new SignalResizeDriver(static function (string $command) use (&$callsA): string {
             $callsA++;
             return str_contains($command, 'lines') ? "30\n" : "100\n";
-        });
+        }, self::ttySilent());
         $callsB = 0;
         $driverB = new SignalResizeDriver(static function (string $command) use (&$callsB): string {
             $callsB++;
             return str_contains($command, 'lines') ? "50\n" : "200\n";
-        });
+        }, self::ttySilent());
 
         // Construction is side-effect free; arm() is what joins the fan-out
         // registry and probes cols + lines exactly once per driver.
@@ -194,7 +204,7 @@ final class SignalResizeDriverTest extends TestCase
         $driver = new SignalResizeDriver(static function (string $command) use (&$calls): string {
             $calls++;
             return "80\n";
-        });
+        }, self::ttySilent());
 
         $this->assertTrue($driver->arm(), 'arm() must report the installation (M8)');
         $this->assertSame(2, $calls, 'arm() probes cols + lines once');
@@ -209,6 +219,78 @@ final class SignalResizeDriverTest extends TestCase
 
         $this->assertNull($driver->read());
         $this->assertSame(4, $calls, 'an idle read() must not probe again');
+
+        $driver->disarm();
+    }
+
+    /**
+     * SI-09 pin: when the fork-free tty leg answers, neither an exported
+     * (stale) size nor a tput fork may reach the dimensions — the kernel's
+     * TIOCGWINSZ answer is the whole ladder.
+     */
+    public function testTtyLegAnsweringMeansNoForkAndNoStaleEnv(): void
+    {
+        if (!function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('fork-free pin needs pcntl and posix');
+        }
+
+        $calls = 0;
+        $driver = new SignalResizeDriver(
+            static function (string $command) use (&$calls): string {
+                $calls++;
+                return "80\n";
+            },
+            static fn (): array => ['cols' => 137, 'rows' => 37]
+        );
+
+        putenv('COLUMNS=99');
+        putenv('LINES=11');
+        try {
+            $this->assertTrue($driver->arm());
+            $this->assertSame(0, $calls, 'a live terminal size needs no tput fork');
+
+            $this->assertTrue(posix_kill(posix_getpid(), SIGWINCH));
+            pcntl_signal_dispatch();
+
+            $event = $driver->read();
+            $this->assertInstanceOf(ResizeEvent::class, $event);
+            $this->assertSame(137, $event->cols);
+            $this->assertSame(37, $event->rows);
+            $this->assertSame(0, $calls, 'the resize path must still never fork');
+        } finally {
+            putenv('COLUMNS=');
+            putenv('LINES=');
+            $driver->disarm();
+        }
+    }
+
+    /**
+     * SI-09 pin: a host the tty probe cannot answer (no controlling
+     * terminal) silently descends to the tput last resort — arm() never
+     * dies on the probe's own failure.
+     */
+    public function testTtyProbeThrowingFallsBackToTput(): void
+    {
+        if (!function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('fallback pin needs pcntl and posix');
+        }
+
+        $driver = new SignalResizeDriver(
+            static fn (string $command): string => str_contains($command, 'lines') ? "40\n" : "120\n",
+            static function (): array {
+                throw new \RuntimeException('no terminal to ask');
+            }
+        );
+
+        $this->assertTrue($driver->arm(), 'a throwing tty probe must not break arm()');
+
+        $this->assertTrue(posix_kill(posix_getpid(), SIGWINCH));
+        pcntl_signal_dispatch();
+
+        $event = $driver->read();
+        $this->assertInstanceOf(ResizeEvent::class, $event);
+        $this->assertSame(120, $event->cols);
+        $this->assertSame(40, $event->rows, 'the tput last resort answers when the tty probe cannot');
 
         $driver->disarm();
     }
@@ -232,7 +314,7 @@ final class SignalResizeDriverTest extends TestCase
         pcntl_signal(SIGWINCH, $marker);
         $this->assertSame($marker, pcntl_signal_get_handler(SIGWINCH));
 
-        $driver = new SignalResizeDriver(static fn (string $command): string => "80\n");
+        $driver = new SignalResizeDriver(static fn (string $command): string => "80\n", self::ttySilent());
         $this->assertTrue($driver->arm());
         $this->assertNotSame(
             $marker,
@@ -252,7 +334,7 @@ final class SignalResizeDriverTest extends TestCase
         $this->assertNotSame($marker, pcntl_signal_get_handler(SIGWINCH));
 
         // Disarming a driver that never registered is a harmless no-op.
-        $neverArmed = new SignalResizeDriver(static fn (string $command): string => "80\n");
+        $neverArmed = new SignalResizeDriver(static fn (string $command): string => "80\n", self::ttySilent());
         $this->assertTrue($neverArmed->disarm());
 
         // Hand the process back clean for any later test.
