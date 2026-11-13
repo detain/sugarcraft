@@ -452,4 +452,103 @@ final class ContainersTest extends TestCase
         $this->assertNull(Containers::statValue("inactive_file x\n", 'inactive_file'));
         $this->assertNull(Containers::statValue(null, 'inactive_file'));
     }
+
+    /**
+     * @param int $calls counts every socket exchange
+     * @return \Closure(list<int>): string a canned reply for each docker id prefix
+     */
+    private function reply(int &$calls): \Closure
+    {
+        return static function () use (&$calls): string {
+            $calls++;
+
+            return '[{"Id":"' . self::ID . '","Names":["/web01"},{"Id":"'
+                . str_repeat('a', 64) . '","Names":["/build02"}]';
+        };
+    }
+
+    public function testDockerFetchIsCoalescedAcrossTheWindow(): void
+    {
+        // candy-top-034: one blocking exchange per window, not per churn.
+        $now = 0;
+        $calls = 0;
+        $c = Containers::new($this->root, $this->reply($calls), static function () use (&$now): int {
+            return $now;
+        });
+        $first = self::docker('/system.slice/docker-' . self::ID . '.scope');
+        $second = self::docker('/system.slice/docker-' . str_repeat('a', 64) . '.scope');
+        $this->cgroup('/system.slice/docker-' . self::ID . '.scope', 'usage_usec 1', '1', "inactive_file 0\n", 'max');
+        $this->cgroup('/system.slice/docker-' . str_repeat('a', 64) . '.scope', 'usage_usec 1', '1', "inactive_file 0\n", 'max');
+
+        [, $c] = $c->collect([self::proc(1, 1.0, 5, $first)], 0, 4, false, 10);
+        $this->assertSame(1, $calls, 'first docker sighting asks');
+
+        $now += 3_000_000; // still inside the 5 s window
+        [$snap, $c] = $c->collect([self::proc(1, 1.0, 5, $first), self::proc(2, 1.0, 5, $second)], 0, 4, false, 10);
+        $this->assertSame(1, $calls, 'a second new container rides the cached reply');
+        $this->assertSame(['build02', 'web01'], array_map(static fn ($x): string => $x->name, $snap->containers), 'names resolved from the cache');
+
+        $now += 3_000_000; // past the window
+        [$snap, $c] = $c->collect([self::proc(1, 1.0, 5, $first), self::proc(3, 1.0, 5, self::docker('/system.slice/docker-' . str_repeat('b', 64) . '.scope'))], 0, 4, false, 10);
+        $this->assertSame(2, $calls, 'the window expiring allows a fresh exchange');
+    }
+
+    public function testWedgedDaemonBacksOffAndKeepsLastGoodNames(): void
+    {
+        $now = 0;
+        $calls = 0;
+        $state = ['good'];
+        $c = Containers::new($this->root, static function () use (&$calls, &$state): string {
+            $calls++;
+
+            return $state[0] === 'good'
+                ? '[{"Id":"' . self::ID . '","Names":["/web01"}]'
+                : '';
+        }, static function () use (&$now): int {
+            return $now;
+        });
+        $ref = self::docker('/system.slice/docker-' . self::ID . '.scope');
+        $this->cgroup('/system.slice/docker-' . self::ID . '.scope', 'usage_usec 1', '1', "inactive_file 0\n", 'max');
+        [, $c] = $c->collect([self::proc(1, 1.0, 5, $ref)], 0, 4, false, 10);
+        $this->assertSame(1, $calls);
+
+        $state[0] = 'wedged';
+        // The daemon now blocks: each attempt would cost a full second. The
+        // strike schedule must stretch the gaps: none before 1 s, then 2 s.
+        $now += 500_000;
+        [$snap] = $c->collect([self::proc(1, 1.0, 5, $ref), self::proc(2, 1.0, 5, self::docker('/system.slice/docker-' . str_repeat('c', 64) . '.scope'))], 0, 4, false, 10);
+        $this->assertSame(1, $calls, 'inside the strike backoff the thread is never blocked');
+        $names = array_column($snap->containers, 'name');
+        $this->assertContains('web01', $names, 'the wedged stretch still labels with the last good reply');
+    }
+
+    public function testBackoffSaturatesAtTheCap(): void
+    {
+        $now = 0;
+        $calls = 0;
+        $c = Containers::new($this->root, static function () use (&$calls): string {
+            $calls++;
+
+            return '';
+        }, static function () use (&$now): int {
+            return $now;
+        });
+        $path = '/system.slice/docker-' . self::ID . '.scope';
+        $this->cgroup($path, 'usage_usec 1', '1', "inactive_file 0\n", 'max');
+        [, $c] = $c->collect([self::proc(1, 1.0, 5, self::docker($path))], 0, 4, false, 10);
+        $this->assertSame(1, $calls);
+
+        // Drive many strikes: fails doubles the gap; at the 30 s cap a fresh
+        // 30 s step always admits exactly one more attempt.
+        $extra = fn (int $n): Process => self::proc(10 + $n, 1.0, 5, self::docker('/system.slice/docker-' . sprintf('%064b', $n) . '.scope'));
+        for ($i = 0; $i < 40; $i++) {
+            $now += 31_000_000;
+            [, $c] = $c->collect([self::proc(1, 1.0, 5, self::docker($path)), $extra($i)], 0, 4, false, 10);
+        }
+        $this->assertSame(41, $calls, 'at saturation one exchange per cap window, no more');
+
+        $now += 5_000_000;
+        [, $c] = $c->collect([self::proc(1, 1.0, 5, self::docker($path)), $extra(99)], 0, 4, false, 10);
+        $this->assertSame(41, $calls, 'below the cap a strike means no retry');
+    }
 }

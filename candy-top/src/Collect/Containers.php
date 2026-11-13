@@ -45,10 +45,21 @@ final class Containers implements ContainerCollector
 {
     public const CGROUP_ROOT = Cgroup::DEFAULT_V2_ROOT;
 
+    /** Reuse a good /containers/json reply this long (candy-top-034). */
+    private const DOCKER_TTL_US = 5_000_000;
+
+    /** First retry gap after a failed exchange; doubles per failure… */
+    private const DOCKER_BACKOFF_BASE_US = 1_000_000;
+
+    /** …capped here. */
+    private const DOCKER_BACKOFF_MAX_US = 30_000_000;
+
     /**
      * @param list<ContainerInfo> $current
      * @param \Closure(): string  $docker the `/containers/json` reply ("" when unreachable)
      * @param \Closure(): int     $clock  monotonic microseconds
+     * @param array{response: string, at: int, fails: int}|null $dockerCache
+     *        last reply and when it was fetched (candy-top-034 coalescing)
      */
     private function __construct(
         private readonly string $root,
@@ -58,6 +69,7 @@ final class Containers implements ContainerCollector
         private readonly array $current,
         private readonly int $oldTime,
         private readonly bool $vms = true,
+        private readonly ?array $dockerCache = null,
     ) {
     }
 
@@ -101,12 +113,15 @@ final class Containers implements ContainerCollector
             array_map(static fn (ContainerInfo $c): ContainerInfo => $c->withCpu($c->cpu, 0), $this->current),
             0,
             $this->vms,
+            $this->dockerCache,
         );
     }
 
     public function withVms(bool $vms): self
     {
-        return $vms === $this->vms ? $this : new self($this->root, $this->docker, $this->clock, $this->enabled, $this->current, $this->oldTime, $vms);
+        return $vms === $this->vms
+            ? $this
+            : new self($this->root, $this->docker, $this->clock, $this->enabled, $this->current, $this->oldTime, $vms, $this->dockerCache);
     }
 
     public function vms(): bool
@@ -125,16 +140,17 @@ final class Containers implements ContainerCollector
         if (!$this->enabled) {
             return [new ContainerSnapshot([], $memTotal, $cores), $this];
         }
+        $now = ($this->clock)();
         [$ctrs, $newDocker] = self::group($this->current, $processes, $this->vms);
+        $cache = $this->dockerCache;
         if ($newDocker) {
-            $response = ($this->docker)();
+            [$response, $cache] = $this->dockerFetch($now);
             if ($response !== '') {
                 $ctrs = self::named($ctrs, $response);
             }
         }
         $ctrs = self::sorted($ctrs);
 
-        $now = ($this->clock)();
         $out = [];
         foreach ($ctrs as $c) {
             $dir = $this->root . $c->path;
@@ -167,8 +183,41 @@ final class Containers implements ContainerCollector
 
         return [
             new ContainerSnapshot($out, $memTotal, $cores),
-            new self($this->root, $this->docker, $this->clock, true, $out, $now, $this->vms),
+            new self($this->root, $this->docker, $this->clock, true, $out, $now, $this->vms, $cache),
         ];
+    }
+
+    /**
+     * One socket exchange per window, not per churn sample (candy-top-034):
+     * a wedged or paused daemon used to cost a blocking ≤1 s read plus an
+     * 8 MiB name-scan on the UI thread EVERY time a new docker cgroup
+     * appeared — input, clock and render all froze with it. A fresh reply
+     * is reused inside the window; a failing one backs off 1 s, 2 s, 4 s …
+     * up to half a minute, and the last good bytes keep labelling the
+     * names meanwhile. (The finding's full non-blocking loop exchange is
+     * the alternative arm; coalescing is the shipped one.)
+     *
+     * @return array{0: string, 1: array{response: string, at: int, fails: int}}
+     */
+    private function dockerFetch(int $now): array
+    {
+        $cache = $this->dockerCache;
+        if ($cache !== null) {
+            $gap = $cache['fails'] === 0
+                ? self::DOCKER_TTL_US
+                : min(self::DOCKER_BACKOFF_MAX_US, self::DOCKER_BACKOFF_BASE_US * (2 ** min(10, $cache['fails'])));
+            if ($now - $cache['at'] < $gap) {
+                return [$cache['response'], $cache];
+            }
+        }
+
+        $response = ($this->docker)();
+        if ($response === '' && $cache !== null && $cache['response'] !== '') {
+            // Backoff keeps labelling with the last good reply.
+            return [$cache['response'], ['response' => $cache['response'], 'at' => $now, 'fails' => $cache['fails'] + 1]];
+        }
+
+        return [$response, ['response' => $response, 'at' => $now, 'fails' => $response === '' ? ($cache['fails'] ?? 0) + 1 : 0]];
     }
 
     /**
