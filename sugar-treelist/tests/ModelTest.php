@@ -1247,7 +1247,7 @@ final class ModelTest extends TestCase
         $this->assertGreaterThan($ids[1], $ids[2]);
     }
 
-    public function testLinesStreamReturnsGenerator(): void
+    public function testEachLineReturnsGenerator(): void
     {
         $m = $this->model
             ->withItem(new StringItem('apple'))
@@ -1256,7 +1256,7 @@ final class ModelTest extends TestCase
             ->withSuffixer(new DefaultSuffixer())
             ->withViewport(80, 24);
 
-        $stream = $m->linesStream();
+        $stream = $m->eachLine();
         $this->assertInstanceOf(\Generator::class, $stream);
 
         $lines = [];
@@ -1265,6 +1265,9 @@ final class ModelTest extends TestCase
         }
         $this->assertNotEmpty($lines);
         $this->assertStringContainsString('apple', $lines[0]);
+        // sugar-treelist-029: the deprecated stream name is a one-way alias
+        // — identical output until REMOVED-IN 2.0.0.
+        $this->assertSame($lines, \iterator_to_array($m->linesStream()));
     }
 
     // ─── Edge cases for partial coverage ────────────────────────────────────
@@ -1830,9 +1833,9 @@ final class ModelTest extends TestCase
         $this->assertSame("\x1b[3;1H\x1b[K", $rows[2]);
     }
 
-    public function testLinesStreamPropagatesTheGutterRefusal(): void
+    public function testEachLinePropagatesTheGutterRefusal(): void
     {
-        // linesStream() shares lines()'s eager door: the refusal is raised on
+        // eachLine() shares lines()'s eager door: the refusal is raised on
         // first consumption, exactly like lines().
         $m = $this->model
             ->withItem(new StringItem('main.php'))
@@ -1843,7 +1846,7 @@ final class ModelTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage(Lang::t('list.no_content_width'));
-        \iterator_to_array($m->linesStream());
+        \iterator_to_array($m->eachLine());
     }
 
     public function testSingleContentColumnAtTheBoundaryStillRenders(): void
@@ -2558,7 +2561,7 @@ final class ModelTest extends TestCase
         ], $lines);
     }
 
-    public function testLinesStreamCarriesTheRepairedFrameIdentically(): void
+    public function testEachLineCarriesTheRepairedFrameIdentically(): void
     {
         $value = str_repeat("\xC3", 40) . 'tail-content-here-xx';
         $model = Model::new()
@@ -2570,7 +2573,7 @@ final class ModelTest extends TestCase
             ->withSuffixer(new DefaultSuffixer());
 
         $streamed = [];
-        foreach ($model->linesStream() as $line) {
+        foreach ($model->eachLine() as $line) {
             $streamed[] = $line;
         }
         $this->assertSame($model->lines(), $streamed);

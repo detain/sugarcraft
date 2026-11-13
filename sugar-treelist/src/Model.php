@@ -1333,20 +1333,36 @@ final class Model
     }
 
     /**
-     * Generator wrapper over lines().
+     * Renders the list and yields the laid-out rows one at a time.
      *
-     * HONEST SCOPE: rendering is EAGER — lines() computes the
-     * complete array before the first yield, so this provides no interleaving
-     * points for event loops. It exists only for generator-shaped consumers;
-     * output is identical to lines() when fully consumed.
+     * HONEST SCOPE (sugar-treelist-029): rendering is EAGER — lines()
+     * computes the complete array before the first yield, so this provides
+     * no interleaving points for event loops. The name says ITERATE, not
+     * stream; it exists for generator-shaped consumers and is byte-identical
+     * to lines() when fully consumed.
+     *
+     * Inherits lines() throws contract verbatim: RuntimeException on an
+     * empty list, a zero viewport, or gutters consuming every column.
      *
      * @return \Generator<int, string, mixed, void>
+     * @throws \RuntimeException on the same conditions as lines()
      */
-    public function linesStream(): \Generator
+    public function eachLine(): \Generator
     {
         foreach ($this->lines() as $index => $line) {
             yield $index => $line;
         }
+    }
+
+    /**
+     * @deprecated Renamed to {@see self::eachLine()} — the stream name
+     *             promised a laziness this eager renderer never had
+     *             (sugar-treelist-029). Returns the identical generator.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function linesStream(): \Generator
+    {
+        return $this->eachLine();
     }
 
     /**
