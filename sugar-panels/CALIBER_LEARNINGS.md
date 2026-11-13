@@ -69,6 +69,7 @@ preserving the boundary between the layout engine and the styling system.
 ### 2026-05-24 — lang-facade-base
 **Pattern:** Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 **Source:** core i18n refactor (lang-consolidation, f7e39f21e).
+**Superseded 2026-11:** the dormant facade and its unread keys were dropped before any caller landed; see README *Internationalization*.
 
 ### 2026-05-31 — buffer-diff-boundaries
 **Pattern:** The renderer invalidates the diff cache only at the two boundaries it can detect — first paint and viewport size change. Anything else that disturbs the terminal cursor between renders (an external cursor move, a host writing elsewhere) is invisible to the library: the consumer must call `resetPreviousFrame()` after it. Never try to diff across such a boundary.

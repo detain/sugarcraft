@@ -297,12 +297,6 @@ Applied on every node in — `Node::leaf()` / `withContent()` / `withTitle()` no
 | `Sanitize::paintedTitle(string)` | Same, with line feeds additionally flattened to spaces — a title paints on one row |
 | both | Idempotent: feeding output back in changes nothing, so a host may pre-sanitise and round-trip content unchanged |
 
-### `Lang`
-
-| Entry | Description |
-|-------|-------------|
-| `Lang` | Dormant translation facade (namespace `panels`, keys pre-wired in `lang/en.php`) — the render path emits no user-facing strings, so no production `Lang::t()` caller exists today; see *Internationalization* |
-
 ## Border Characters
 
 ```
@@ -510,11 +504,12 @@ snippet that drifts from the API fails CI rather than misleads a reader.
 
 ## Internationalization
 
-The `Lang` facade and `lang/en.php` keys (`align.*`, `valign.*`) are wired but
-currently **dormant**: the render path emits no user-facing strings, so no
-production `Lang::t()` caller exists today. The pre-wired surface gives a
-future label UI its locale plumbing; lookup follows the house chain exact
-locale → base locale → `en` → raw key.
+sugar-panels emits no user-facing strings, so it ships no translation
+surface: the dormant `Lang` facade and its pre-wired `align.*` / `valign.*`
+keys — never read by the render path — were dropped in 2026-11 before any
+caller landed. A future label UI starts from the shared
+`SugarCraft\Core\I18n\Lang` base; the house lookup chain is exact locale →
+base locale → `en` → raw key.
 
 ## License
 
