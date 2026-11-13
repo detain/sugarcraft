@@ -154,4 +154,30 @@ final class ToastMotionAndColorEnvTest extends TestCase
         \putenv('NO_COLOR=1');
         $this->assertStringNotContainsString('48;2;', $build());
     }
+
+    public function testThreadedEnvContextIsLoadBearingNotDecorative(): void
+    {
+        // TST-ENVPERF: scan/apply helpers take the booleans computed once per
+        // layout pass. With the live environment NEUTRAL (setUp guarantees
+        // that), an explicit ctx must decide the decode — if any helper ever
+        // re-reads env instead of honouring the threaded pair, THIS reddens
+        // (the perf threading then silently becomes the observable contract,
+        // which is the point: one verdict per render, from one evaluation).
+        $apply = new \ReflectionMethod(Toast::class, 'applySgr');
+        $toast = Toast::new(40);
+
+        $suppressed = $apply->invoke($toast, null, '31', [true, false]);
+        $kept = $apply->invoke($toast, null, '31', [false, false]);
+        $this->assertNull($suppressed?->fg(), 'ctx[0]=true must suppress the fg with NO_COLOR unset');
+        $this->assertNotNull($kept?->fg(), 'ctx[0]=false must keep the colour with NO_COLOR unset');
+
+        $reduced = $apply->invoke($toast, null, '5', [false, true]);
+        $blinking = $apply->invoke($toast, null, '5', [false, false]);
+        $this->assertSame(0, $reduced?->attrs() ?? 0, 'ctx[1]=true must strip blink with REDUCE_MOTION unset');
+        $this->assertNotSame(0, $blinking?->attrs() ?? 0, 'ctx[1]=false must keep blink');
+
+        // Null ctx (direct seam calls) still reads the live environment.
+        $live = $apply->invoke($toast, null, '31');
+        $this->assertNotNull($live?->fg(), 'unthreaded seam call must fall back to live env (neutral here)');
+    }
 }

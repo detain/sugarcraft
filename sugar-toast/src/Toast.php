@@ -988,10 +988,17 @@ final class Toast
         }
 
         $bgLines = $this->splitLines($background);
+        // TST-ENVPERF: the env predicates are evaluated ONCE for this render
+        // and threaded through the scan/apply helpers ([c0]=colour-suppression,
+        // [c1]=reduced-motion). The docblock's "read per render, not cached"
+        // cadence holds — every call below happens inside this single pass;
+        // the NEXT view() re-reads, so a host flipping NO_COLOR between frames
+        // heals on the next frame exactly as before.
+        $envCtx = [$this->coloursSuppressed(), $this->reducedMotionPreferred()];
         $boxes = [];
         $stackHeight = 0;
         foreach ($active as $alert) {
-            $box = $this->renderAlertToBuffer($alert, $viewportWidth);
+            $box = $this->renderAlertToBuffer($alert, $viewportWidth, $envCtx);
             $boxes[] = ['alert' => $alert, 'buffer' => $box, 'x' => 0, 'y' => 0];
             $stackHeight += $box->height();
         }
@@ -1008,7 +1015,7 @@ final class Toast
         }
 
         $viewport = Buffer::new($frameWidth, $contentHeight);
-        $viewport = $this->fillViewportFromString($viewport, $bgLines);
+        $viewport = $this->fillViewportFromString($viewport, $bgLines, $envCtx);
 
         return [
             'viewport' => $viewport,
@@ -1178,7 +1185,7 @@ final class Toast
      * Fill a viewport Buffer with content from an array of strings.
      * Each line is placed with ANSI parsing for styles.
      */
-    private function fillViewportFromString(Buffer $buf, array $lines): Buffer
+    private function fillViewportFromString(Buffer $buf, array $lines, ?array $envCtx = null): Buffer
     {
         // The host frame arrives as one flat grid built from single
         // scanLine passes — the old row-by-row place chain was the same
@@ -1188,7 +1195,7 @@ final class Toast
         $grid = [];
         $blank = Cell::new();
         for ($row = 0; $row < $height; $row++) {
-            $cells = $row < \count($lines) ? $this->scanLine($lines[$row], $width, true) : [];
+            $cells = $row < \count($lines) ? $this->scanLine($lines[$row], $width, true, $envCtx) : [];
             for ($col = 0; $col < $width; $col++) {
                 $grid[] = $cells[$col] ?? $blank;
             }
@@ -1207,7 +1214,7 @@ final class Toast
      *                      width) — the box can never outgrow what it is
      *                      drawn on, even when maxWidth is larger.
      */
-    private function renderAlert(Alert $alert, int $capWidth): string
+    private function renderAlert(Alert $alert, int $capWidth, ?array $envCtx = null): string
     {
         // Null message renders as empty string — the width probe coalesces it
         // too, because under strict_types Width::string(null) would fatal
@@ -1228,7 +1235,7 @@ final class Toast
         // NO_COLOR/CLICOLOR=0 the icon rides plain — Width::string
         // of the prefix therefore also collapses, giving the message one
         // extra cell of budget instead of dead SGR padding.
-        $prefix = $this->coloursSuppressed()
+        $prefix = ($envCtx[0] ?? $this->coloursSuppressed())
             ? $icon . ' '
             : Ansi::CSI . $color . 'm' . $icon . Ansi::reset() . ' ';
 
@@ -1358,9 +1365,9 @@ final class Toast
      *                      width equals the box's own cell width — never the
      *                      canvas — so view() blits precisely the box.
      */
-    private function renderAlertToBuffer(Alert $alert, int $capWidth): Buffer
+    private function renderAlertToBuffer(Alert $alert, int $capWidth, ?array $envCtx = null): Buffer
     {
-        $alertStr = $this->renderAlert($alert, $capWidth);
+        $alertStr = $this->renderAlert($alert, $capWidth, $envCtx);
         $lines = $this->splitLines($alertStr);
 
         $height = \count($lines);
@@ -1371,7 +1378,7 @@ final class Toast
         $grid = [];
         $blank = Cell::new();
         foreach ($lines as $line) {
-            $cells = $this->scanLine($line, $boxWidth);
+            $cells = $this->scanLine($line, $boxWidth, false, $envCtx);
             for ($col = 0; $col < $boxWidth; $col++) {
                 $grid[] = $cells[$col] ?? $blank;
             }
@@ -1383,7 +1390,7 @@ final class Toast
         if ($alert->backgroundColor !== null
             || $alert->foregroundColor !== null
             || $alert->borderColor !== null) {
-            $grid = $this->colorAlertGrid($grid, $boxWidth, $alert, $lines);
+            $grid = $this->colorAlertGrid($grid, $boxWidth, $alert, $lines, $envCtx);
         }
 
         return Buffer::fromGrid($boxWidth, $height, $grid);
@@ -1426,9 +1433,9 @@ final class Toast
      * @param list<Cell> $grid
      * @return list<Cell>
      */
-    private function colorAlertGrid(array $grid, int $bufWidth, Alert $alert, array $lines): array
+    private function colorAlertGrid(array $grid, int $bufWidth, Alert $alert, array $lines, ?array $envCtx = null): array
     {
-        if ($this->coloursSuppressed()) {
+        if (($envCtx[0] ?? $this->coloursSuppressed())) {
             // Custom background/foreground/border colours are colour
             // output too — under NO_COLOR the alert keeps its glyphs, layout
             // and (non-colour) attributes, the palette stays off the wire.
@@ -1503,7 +1510,7 @@ final class Toast
      *
      * @return list<Cell>
      */
-    private function scanLine(string $s, int $maxCols, bool $hostFrame = false): array
+    private function scanLine(string $s, int $maxCols, bool $hostFrame = false, ?array $envCtx = null): array
     {
         $cells = [];
         $len = \strlen($s);
@@ -1562,7 +1569,7 @@ final class Toast
                     // of cells, and a sugar-cellbuffer-emitted `\e[0;…m`
                     // preamble resets then rebuilds instead of erasing
                     // everything.
-                    $currentStyle = $this->applySgr($currentStyle, \substr($s, $i + 2, $j - $i - 3));
+                    $currentStyle = $this->applySgr($currentStyle, \substr($s, $i + 2, $j - $i - 3), $envCtx);
                 }
                 // Any other final byte (cursor-move H, erase K/J, DEC modes…)
                 // CONSUMES the sequence and leaves the style run untouched —
@@ -1681,7 +1688,7 @@ final class Toast
      * 22-29 (individual off) and 53/55 (overline) that cellbuffer lacks — a
      * documented superset, not a silent drift.
      */
-    private function applySgr(?Style $base, string $sgr): ?Style
+    private function applySgr(?Style $base, string $sgr, ?array $envCtx = null): ?Style
     {
         // explode(';', '') yields [''] → intval 0 → the spec's implicit reset.
         $params = \array_map('intval', \explode(';', $sgr));
@@ -1690,8 +1697,14 @@ final class Toast
         $fg = $base?->fg();
         $bg = $base?->bg();
         $attrs = $base?->attrs() ?? 0;
-        $suppressColour = $this->coloursSuppressed();
-        $reducedMotion = $this->reducedMotionPreferred();
+        // TST-ENVPERF: the env booleans ride the per-render $envCtx
+        // ([suppressColour, reducedMotion]) computed once in layout(). The
+        // null fallback (direct seam calls) still reads env live — the
+        // docblock cadence "per render, not cached" is exactly what this
+        // threading restored: folded per escape, ~5 getenv ran for EVERY SGR
+        // in a dense host frame instead of once per frame.
+        $suppressColour = $envCtx !== null ? $envCtx[0] : $this->coloursSuppressed();
+        $reducedMotion = $envCtx !== null ? $envCtx[1] : $this->reducedMotionPreferred();
 
         for ($k = 0; $k < $count; $k++) {
             $code = $params[$k];
