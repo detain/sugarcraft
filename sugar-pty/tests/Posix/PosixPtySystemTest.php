@@ -13,6 +13,8 @@ use SugarCraft\Pty\PtyException;
 
 final class PosixPtySystemTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
     /**
      * Invoke the private static requireCloexec guard via reflection.
      *
@@ -39,19 +41,6 @@ final class PosixPtySystemTest extends TestCase
     {
         $this->callRequireCloexec(0, 7);
         $this->addToAssertionCount(1); // reaching here == no throw
-    }
-
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host (sandbox or container restriction).');
-        }
     }
 
     public function testOpenReturnsPtyPairExposingMasterAndSlave(): void

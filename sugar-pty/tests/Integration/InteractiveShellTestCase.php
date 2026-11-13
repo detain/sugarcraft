@@ -23,31 +23,21 @@ use SugarCraft\Pty\PtySystemFactory;
  */
 abstract class InteractiveShellTestCase extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
+    protected function requirePtySyscalls(): void
+    {
+        $this->requireBasePtyCapability();
+        if (!\extension_loaded('pcntl')) {
+            $this->markTestSkipped('ext-pcntl is required to fork the shell child.');
+        }
+    }
+
     /**
      * Wallclock budget per test in seconds. Kept conservative so a
      * stalled child can't blow the suite's <10s/test target.
      */
     protected const WALLCLOCK_BUDGET_SEC = 5.0;
-
-    /**
-     * POSIX + FFI prerequisites — must run before any PTY syscall.
-     * Mirrors the helper in {@see \SugarCraft\Pty\Tests\Posix\PosixChildTest}.
-     */
-    protected function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\extension_loaded('pcntl')) {
-            $this->markTestSkipped('ext-pcntl is required to fork the shell child.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-    }
 
     /**
      * Skip cleanly if the named binary is not executable. Test files

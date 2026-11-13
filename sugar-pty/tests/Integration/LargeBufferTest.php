@@ -26,6 +26,16 @@ use SugarCraft\Pty\PtySystemFactory;
  */
 final class LargeBufferTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
+    private function requirePtySyscalls(): void
+    {
+        $this->requireBasePtyCapability();
+        if (!\extension_loaded('pcntl')) {
+            $this->markTestSkipped('ext-pcntl is required to fork the cat child.');
+        }
+    }
+
     private const BASH_PATH = '/usr/bin/bash';
     private const CAT_PATH = '/usr/bin/cat';
     private const PAYLOAD_BYTES = 1_048_576;
@@ -39,27 +49,7 @@ final class LargeBufferTest extends TestCase
      */
     private const FLUSH_DEADLINE_SEC = 5.0;
 
-    /**
-     * POSIX + FFI prerequisites — must run before any PTY syscall.
-     * Mirrors {@see InteractiveShellTestCase::requirePtySyscalls()}.
-     */
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\extension_loaded('pcntl')) {
-            $this->markTestSkipped('ext-pcntl is required to fork the cat child.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-    }
-
-    public function testOneMegabyteRoundTripsByteForByte(): void
+        public function testOneMegabyteRoundTripsByteForByte(): void
     {
         $this->requirePtySyscalls();
         if (!\is_executable(self::BASH_PATH)) {

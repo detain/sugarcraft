@@ -19,28 +19,7 @@ use SugarCraft\Pty\SignalForwarder;
  */
 final class PosixPumpIdleVsSigwinchTest extends TestCase
 {
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-    }
-
-    private function requirePcntl(): void
-    {
-        if (!\function_exists('pcntl_signal')) {
-            $this->markTestSkipped('ext-pcntl is required for SIGWINCH forwarding.');
-        }
-        if (!\defined('SIGWINCH')) {
-            $this->markTestSkipped('SIGWINCH is not defined on this platform.');
-        }
-    }
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
     /**
      * Verify onIdle fires on every idle tick and is independent of

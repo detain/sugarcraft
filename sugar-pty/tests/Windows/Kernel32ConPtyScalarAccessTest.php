@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Windows;
 
 use FFI;
+use SugarCraft\Pty\Tests\Support\PtyCapability;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -47,8 +48,8 @@ final class Kernel32ConPtyScalarAccessTest extends TestCase
 
     public function testAScalarCDataRoundTripsThroughCdataAndRefusesDimensionAccess(): void
     {
-        if (!extension_loaded('ffi')) {
-            self::markTestSkipped('the ffi extension is not loaded on this host');
+        if (!PtyCapability::ffiParsable()) {
+            self::markTestSkipped('ffi is unusable on this host (not loaded, or ffi.enable refuses cdef)');
         }
 
         $ffi = FFI::cdef('', null);

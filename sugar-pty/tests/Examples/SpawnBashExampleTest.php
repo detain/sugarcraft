@@ -14,21 +14,15 @@ use PHPUnit\Framework\TestCase;
  */
 final class SpawnBashExampleTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
     private const EXAMPLE = __DIR__ . '/../../examples/spawn-bash.php';
 
     private function requireRuntime(): void
     {
-        if (\PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty examples are POSIX-only.');
-        }
-        if (!\extension_loaded('ffi')) {
-            $this->markTestSkipped('ext-ffi is required.');
-        }
+        $this->requireBasePtyCapability();
         if (!\extension_loaded('pcntl')) {
             $this->markTestSkipped('ext-pcntl is required for controllingTerminal:true.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx unreadable on this host.');
         }
         if (!\is_executable('/bin/bash')) {
             $this->markTestSkipped('/bin/bash required.');

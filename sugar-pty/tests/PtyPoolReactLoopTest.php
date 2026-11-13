@@ -22,6 +22,8 @@ use SugarCraft\Pty\Tests\Support\SharedLoopResidue;
  */
 final class PtyPoolReactLoopTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
     /**
      * NOTHING THIS CLASS ARMS ON THE SHARED LOOP MAY OUTLIVE THE TEST THAT
      * ARMED IT.
@@ -56,19 +58,6 @@ final class PtyPoolReactLoopTest extends TestCase
                 . 'including the path where a safety cap fired - cancelling an already-'
                 . 'cancelled timer is a no-op.',
         );
-    }
-
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
     }
 
     /**

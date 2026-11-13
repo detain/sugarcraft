@@ -16,7 +16,8 @@ use SugarCraft\Pty\Posix\PosixChild;
  * concurrent waitAsync() calls all resolve.
  *
  * These tests spawn plain proc_open children (no PTY), so they need
- * neither FFI nor /dev/ptmx — only a POSIX host. Loop runs are
+ * only a POSIX host — except the killed-child wait-polarity leg, which
+ * reads 128+signo through the FFI waitpid probe (see the test itself). Loop runs are
  * hard-bounded by safety timers so CI cannot hang.
  *
  * Each test builds its own StreamSelectLoop and nothing here touches the
@@ -28,6 +29,8 @@ use SugarCraft\Pty\Posix\PosixChild;
  */
 final class ChildWaitAsyncTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
     private function requirePosix(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
@@ -148,6 +151,10 @@ final class ChildWaitAsyncTest extends TestCase
 
     public function testCancellationStopsPollingWithoutTouchingChild(): void
     {
+        // The final assertGreaterThan(0, wait()) reads the signal-death polarity
+        // (128+signo) through the FFI waitpid probe; the proc_get_status
+        // fallback reports -1 for killed children, so this leg needs a usable FFI.
+        $this->requireFfiOnlyCapability();
         $this->requirePosix();
 
         $loop = new StreamSelectLoop();

@@ -18,15 +18,7 @@ use SugarCraft\Pty\SizeIoctl;
 
 final class LibcAccessTest extends TestCase
 {
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required.');
-        }
-    }
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
     /**
      * Structural guard: every FFI-touching class funnels libc access
@@ -84,7 +76,7 @@ final class LibcAccessTest extends TestCase
 
     public function testLibcAccessorReturnsTheSharedFfiHandle(): void
     {
-        $this->requirePtySyscalls();
+        $this->requireFfiOnlyCapability();
 
         $accessor = new \ReflectionMethod(SizeIoctl::class, 'libc');
         $ffi = $accessor->invoke(null);

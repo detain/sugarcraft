@@ -16,15 +16,7 @@ use SugarCraft\Pty\Libc;
  */
 final class LibcTermiosTest extends TestCase
 {
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-    }
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
     public function testCdefContainsTcgetattr(): void
     {
@@ -63,7 +55,7 @@ final class LibcTermiosTest extends TestCase
 
     public function testCdefParsesWithoutThrowing(): void
     {
-        $this->requirePtySyscalls();
+        $this->requireFfiOnlyCapability();
 
         $ffi = \FFI::cdef(Libc::cdef(), Libc::libraryPath());
         $this->assertInstanceOf(\FFI::class, $ffi);
@@ -71,7 +63,7 @@ final class LibcTermiosTest extends TestCase
 
     public function testTermiosSymbolsResolve(): void
     {
-        $this->requirePtySyscalls();
+        $this->requireFfiOnlyCapability();
 
         $ffi = \FFI::cdef(Libc::cdef(), Libc::libraryPath());
 

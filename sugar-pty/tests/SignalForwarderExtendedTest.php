@@ -14,28 +14,7 @@ use SugarCraft\Pty\SignalForwarder;
  */
 final class SignalForwarderExtendedTest extends TestCase
 {
-    private function requirePcntl(): void
-    {
-        if (!SignalForwarder::pcntlReady()) {
-            $this->markTestSkipped('ext-pcntl is required for SignalForwarder.');
-        }
-        if (!\defined('SIGWINCH')) {
-            $this->markTestSkipped('SIGWINCH is not defined on this host.');
-        }
-    }
-
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-    }
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
     protected function tearDown(): void
     {

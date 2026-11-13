@@ -15,23 +15,16 @@ use SugarCraft\Pty\SignalForwarder;
  */
 final class SignalForwarderDevTtyTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
     private function requireDevTty(): void
     {
+        $this->requireFfiOnlyCapability();
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
         if (!\is_readable('/dev/tty') || !\is_writable('/dev/tty')) {
             $this->markTestSkipped('/dev/tty is not available on this host (headless CI environment).');
-        }
-    }
-
-    private function requirePcntl(): void
-    {
-        if (!SignalForwarder::pcntlReady()) {
-            $this->markTestSkipped('ext-pcntl is required for SignalForwarder.');
-        }
-        if (!\defined('SIGWINCH')) {
-            $this->markTestSkipped('SIGWINCH is not defined on this host.');
         }
     }
 

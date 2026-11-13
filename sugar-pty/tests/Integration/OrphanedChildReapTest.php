@@ -25,35 +25,23 @@ use PHPUnit\Framework\TestCase;
  */
 final class OrphanedChildReapTest extends TestCase
 {
-    private const WALLCLOCK_BUDGET_SEC = 3.0;
-    private const FIXTURE = __DIR__ . '/_fixtures/orphan-spawn.php';
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
-    /**
-     * POSIX + FFI prerequisites — the fixture itself opens a PTY, so
-     * the test inherits all the same syscall constraints even though
-     * the test body never touches `/dev/ptmx` directly. `posix_kill`
-     * is the liveness probe of choice and lives in ext-posix.
-     */
     private function requirePtySyscalls(): void
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
+        $this->requireBasePtyCapability();
         if (!\extension_loaded('pcntl')) {
             $this->markTestSkipped('ext-pcntl is required to fork the fixture child.');
         }
         if (!\extension_loaded('posix')) {
             $this->markTestSkipped('ext-posix is required to probe orphan liveness with kill(pid, 0).');
         }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
     }
 
-    public function testFixtureExitWithoutWaitLeavesNoLingeringChild(): void
+    private const WALLCLOCK_BUDGET_SEC = 3.0;
+    private const FIXTURE = __DIR__ . '/_fixtures/orphan-spawn.php';
+
+        public function testFixtureExitWithoutWaitLeavesNoLingeringChild(): void
     {
         $this->requirePtySyscalls();
 

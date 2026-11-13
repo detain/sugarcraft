@@ -18,20 +18,9 @@ use SugarCraft\Pty\TermiosFactory;
  */
 final class TermiosFactoryTest extends TestCase
 {
-    private const O_RDWR = 0x0002;
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi cannot bind libc in this SAPI (ffi.enable=0); PTY syscalls unavailable.');
-        }
-    }
+    private const O_RDWR = 0x0002;
 
     private function requireFfi(): void
     {

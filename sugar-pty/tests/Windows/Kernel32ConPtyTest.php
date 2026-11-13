@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Windows;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Pty\Tests\Support\PtyCapability;
 use SugarCraft\Pty\Windows\ConPtyApi;
 use SugarCraft\Pty\Windows\Kernel32ConPty;
 
@@ -190,6 +191,10 @@ final class Kernel32ConPtyTest extends TestCase
 
     public function testTypesBlockParsesAndTheStructLayoutsMatchTheWindowsNumbers(): void
     {
+        if (!PtyCapability::ffiParsable()) {
+            self::markTestSkipped('ffi is unusable on this host (not loaded, or ffi.enable refuses cdef)');
+        }
+
         $ffi = \FFI::cdef(Kernel32ConPty::typesCdef(), null);
 
         foreach (self::EXPECTED_SIZES as $type => $bytes) {
@@ -203,6 +208,10 @@ final class Kernel32ConPtyTest extends TestCase
 
     public function testTheLayoutOnlyHoldsBecauseDWORDIsNotSpelledUnsignedLong(): void
     {
+        if (!PtyCapability::ffiParsable()) {
+            self::markTestSkipped('ffi is unusable on this host (not loaded, or ffi.enable refuses cdef)');
+        }
+
         // The pin that keeps the previous test honest. If anyone respells DWORD as
         // `unsigned long` — the SDK's own spelling — the struct sizes become
         // Linux's numbers on this host and Windows's on the real one, and the
@@ -228,6 +237,10 @@ final class Kernel32ConPtyTest extends TestCase
 
     public function testTheWholeCdefParsesEvenThoughNothingResolvesHere(): void
     {
+        if (!PtyCapability::ffiParsable()) {
+            self::markTestSkipped('ffi is unusable on this host (not loaded, or ffi.enable refuses cdef)');
+        }
+
         // The two-phase evidence described in the class doc-block: reaching symbol
         // resolution means the PARSER ACCEPTED all twenty prototypes, including the
         // ones after the first. A ParserException here is a syntax error in the
@@ -335,6 +348,10 @@ final class Kernel32ConPtyTest extends TestCase
 
     public function testTheTestDoubleSatisfiesTheContractItWasBuiltFor(): void
     {
+        if (!PtyCapability::ffiParsable()) {
+            self::markTestSkipped('ffi is unusable on this host (not loaded, or ffi.enable refuses cdef)');
+        }
+
         // The interface's whole purpose is a double that runs on Linux. This is
         // the check that it is not decorative: instantiating it only succeeds if
         // EVERY method on ConPtyApi is implemented, so a method added to the
@@ -415,6 +432,10 @@ final class Kernel32ConPtyTest extends TestCase
 
     public function testEveryDeclaredFieldLandsWhereWindowsDeclaresIt(): void
     {
+        if (!PtyCapability::ffiParsable()) {
+            self::markTestSkipped('ffi is unusable on this host (not loaded, or ffi.enable refuses cdef)');
+        }
+
         // The cdef is parsed identically on this host, so the offsets FFI
         // assigns to its fields are checkable here against the hand-written
         // MSDN table — a dropped pointer moves everything after it, a swapped
@@ -446,6 +467,10 @@ final class Kernel32ConPtyTest extends TestCase
 
     public function testTheExtendedStructPlacesItsAttributeListAfterTheWholeStartupInfo(): void
     {
+        if (!PtyCapability::ffiParsable()) {
+            self::markTestSkipped('ffi is unusable on this host (not loaded, or ffi.enable refuses cdef)');
+        }
+
         $ffi = \FFI::cdef(Kernel32ConPty::typesCdef(), null);
         $ex = $ffi->new('STARTUPINFOEXW');
         \FFI::memset($ex, 0, \FFI::sizeof($ex));
@@ -526,6 +551,10 @@ final class Kernel32ConPtyTest extends TestCase
 
     public function testAHandleSlotRoundTripsAnOpaqueValueWithoutAConversionDiagnostic(): void
     {
+        if (!PtyCapability::ffiParsable()) {
+            self::markTestSkipped('ffi is unusable on this host (not loaded, or ffi.enable refuses cdef)');
+        }
+
         // MAJOR-2's behavioural half, Linux-provable because the conversion is
         // an FFI-semantic property, not a kernel32 call: an integer written
         // into a handle slot must come back out as the SAME integer, silently,

@@ -16,18 +16,7 @@ use SugarCraft\Pty\SizeIoctl;
  */
 final class SizeIoctlExtendedTest extends TestCase
 {
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi cannot bind libc in this SAPI (ffi.enable=0); PTY syscalls unavailable.');
-        }
-    }
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
     // ─────────────────────────────────────────────────────────────
     // pack() edge cases
@@ -274,6 +263,8 @@ final class SizeIoctlExtendedTest extends TestCase
 
     public function testParseSttySizeReadsTheBsdTranscriptShape(): void
     {
+        $this->requireFfiOnlyCapability();
+
         // Shape MEASURED from macOS/BSD stty -a: geometry first, BSD
         // word order ("<n> rows" / "<n> columns" — GNU prints the
         // reverse, and a GNU reading must NOT parse; see the sibling
@@ -296,6 +287,8 @@ final class SizeIoctlExtendedTest extends TestCase
 
     public function testParseSttySizeRejectsGnuWordOrderAndIncompleteReadings(): void
     {
+        $this->requireFfiOnlyCapability();
+
         $parse = new \ReflectionMethod(SizeIoctl::class, 'parseSttySize');
         $parse->setAccessible(true);
 

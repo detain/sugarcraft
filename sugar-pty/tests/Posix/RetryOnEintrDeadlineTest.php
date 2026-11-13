@@ -52,7 +52,7 @@ final class RetryOnEintrDeadlineTest extends TestCase
                 $this->markTestSkipped("ext-pcntl is required ({$fn} missing).");
             }
         }
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             // errno() is read through the libc shim; without it stream_select's
             // false is indistinguishable from a real error and the retry branch
             // is never entered.

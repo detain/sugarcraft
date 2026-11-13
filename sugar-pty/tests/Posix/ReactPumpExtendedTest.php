@@ -20,17 +20,11 @@ use SugarCraft\Pty\PumpOptions;
  */
 final class ReactPumpExtendedTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
     private function requirePtySyscalls(): void
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
+        $this->requireBasePtyCapability();
         if (!\is_executable('/bin/bash')) {
             $this->markTestSkipped('/bin/bash is not executable.');
         }

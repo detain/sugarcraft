@@ -9,6 +9,8 @@ use SugarCraft\Pty\Posix\StreamPump;
 
 final class StreamPumpTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
     /** @return array{0: resource, 1: resource} */
     private function pair(): array
     {
@@ -152,6 +154,7 @@ final class StreamPumpTest extends TestCase
         if (!\function_exists('pcntl_alarm') || !\function_exists('pcntl_signal')) {
             self::markTestSkipped('ext-pcntl required');
         }
+        $this->requireBasePtyCapability();
         [$a1, $a2] = $this->pair();
         $handled = 0;
         $prevAsync = \pcntl_async_signals(true);

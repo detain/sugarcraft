@@ -39,6 +39,16 @@ use SugarCraft\Pty\PumpOptions;
  */
 final class PumpBoundingContractTest extends TestCase
 {
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+
+    private function requirePtySyscalls(): void
+    {
+        $this->requireBasePtyCapability();
+        if (!\is_executable('/bin/sleep') || !\is_executable('/bin/bash')) {
+            $this->markTestSkipped('/bin/sleep and /bin/bash are required by the pump fixtures.');
+        }
+    }
+
     /** Ceiling for "the bound I armed fired": every fixture child sleeps 30s, so anything under this can only be the bound. */
     private const BOUND_CEILING_SEC = 8.0;
 
@@ -67,22 +77,6 @@ final class PumpBoundingContractTest extends TestCase
             }
         }
         $this->tempStreams = [];
-    }
-
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-        if (!\is_executable('/bin/sleep') || !\is_executable('/bin/bash')) {
-            $this->markTestSkipped('/bin/sleep and /bin/bash are required by the pump fixtures.');
-        }
     }
 
     /**

@@ -17,18 +17,7 @@ use SugarCraft\Pty\SizeIoctl;
  */
 final class SizeIoctlQueryTest extends TestCase
 {
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
-            $this->markTestSkipped('ext-ffi cannot bind libc in this SAPI (ffi.enable=0); PTY syscalls unavailable.');
-        }
-    }
+    use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
     public function testQueryReturnsCorrectSizeAfterResize(): void
     {
@@ -80,6 +69,8 @@ final class SizeIoctlQueryTest extends TestCase
 
     public function testQueryThrowsOnNonTtyFd(): void
     {
+        $this->requireFfiOnlyCapability();
+
         $libc = \SugarCraft\Pty\Libc::lib();
         $pipeFd = $libc->open('/dev/null', 0x0002);
 

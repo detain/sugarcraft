@@ -40,6 +40,28 @@ final class PtyCapability
      * Full gate: working FFI plus a usable /dev/ptmx. Tests that need
      * BOTH can skip on this single predicate.
      */
+    /**
+     * Can FFI parse C declarations on this host at all? True with the
+     * extension loaded AND ffi.enable permitting cdef — the question the
+     * Windows cdef-structure suites ask without needing a posix libc.
+     */
+    public static function ffiParsable(): bool
+    {
+        static $ok = null;
+        if ($ok === null) {
+            $ok = false;
+            if (\extension_loaded('ffi')) {
+                try {
+                    \FFI::cdef('', null);
+                    $ok = true;
+                } catch (\Throwable) {
+                    $ok = false;
+                }
+            }
+        }
+        return $ok;
+    }
+
     public static function ptySyscallsUsable(): bool
     {
         if (PHP_OS_FAMILY === 'Windows') {
@@ -49,6 +71,12 @@ final class PtyCapability
             return false;
         }
 
+        return self::devPtmxUsable();
+    }
+
+    /** The PTY multiplexer exists and is openable (r+w) on this host. */
+    public static function devPtmxUsable(): bool
+    {
         return \is_readable('/dev/ptmx') && \is_writable('/dev/ptmx');
     }
 }
