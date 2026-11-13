@@ -265,8 +265,6 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'NARROWED_GRANT_OVERFLOW_FORMAT' => ['method' => 'grantRows', 'conversions' => 2],
         // Audit R1's two prompt-budget rows and audit R12's nonsense-ceiling
         // row, read back by BootstrapLaunchNoticeRoutingTest; quoted on no page.
-        'INSTRUCTION_DEFERRAL_NOTICE_FORMAT' => ['method' => 'reportPromptBudgetDeferrals', 'conversions' => 4],
-        'SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT' => ['method' => 'reportPromptBudgetDeferrals', 'conversions' => 5],
         'NONSENSE_LIMIT_NOTICE_FORMAT' => ['method' => 'reportNonsenseLimits', 'conversions' => 4],
         // v1:F-1's Claude-settings skip aggregate, read back by
         // ClaudeSettingsHooksSkipRecordTest. Quoted on no page, so no
@@ -554,9 +552,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'mcpClient' => ["'path'", "'status'", "'userStatus'", "'canonicalRoot'", "'/'", "'userPath'", "''", "'fingerprint'", "'summary'", "'deny'", "'; '"],
         // Audit 15d-05's binding row: the plural pair and the is/are pick.
         'reportMemorySkips' => ["''", "'s'", "'is'", "'are'"],
-        // Audit R1's two rows: the plural pair, the was/were pick of the
-        // instruction row, and the is/are and its/their picks of the skill row.
-        'reportPromptBudgetDeferrals' => ["''", "'s'", "'was'", "'were'", "'is'", "'are'", "'its'", "'their'"],
+        // Audit R1's two rows carry no literal: S-X08 moved the plural
+        // grammar into one catalogue key per plural class (cli.deferral.*).
+        'reportPromptBudgetDeferrals' => [],
         // Audit R12: both sentences are named constants and both keys are, so
         // the body holds no literal at all.
         'reportNonsenseLimits' => [],
@@ -899,8 +897,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     {
         $census = self::sprintfCensus(self::bootstrapSource());
 
+        // -2 in S-X08: the two prompt-budget deferral rows left sprintf() for
+        // count-keyed catalogue sentences (cli.deferral.*).
         self::assertSame(
-            34,
+            32,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

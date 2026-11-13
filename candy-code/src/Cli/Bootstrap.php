@@ -545,29 +545,6 @@ final class Bootstrap
         '%d skill file%s %s not loaded (unreadable, or shadowed by a same-named skill); set %s=1 to list %s';
 
     /**
-     * The aggregate row {@see reportPromptBudgetDeferrals()} raises for
-     * instruction files the system prompt leaves out (audit R1).
-     *
-     * `%d` the count, `%s` the noun plural, `%s` was/were, `%s` the
-     * `path (reason); …` list. The reasons are the loader's and the splice's
-     * own words ({@see InstructionFileLoader::refusedPaths()}), so the row
-     * says over WHICH budget, or that the file resolved out of the checkout,
-     * without a second vocabulary for the same verdicts.
-     */
-    public const INSTRUCTION_DEFERRAL_NOTICE_FORMAT =
-        '%d instruction file%s %s left out of the system prompt — %s';
-
-    /**
-     * The aggregate row {@see reportPromptBudgetDeferrals()} raises for enabled
-     * skills whose bodies are over the skill budget (audit R1).
-     *
-     * `%d` the count, `%s` the noun plural, `%s` is/are, `%s` its/their, `%s`
-     * the `name (reason); …` list.
-     */
-    public const SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT =
-        '%d enabled skill%s %s over the skill budget, so only %s heading and a pointer reach the system prompt — %s';
-
-    /**
      * The row {@see reportNonsenseLimits()} raises for a `maxToolSteps` or
      * `maxOutputTokens` value its resolver will not use (audit R12).
      *
@@ -1022,8 +999,6 @@ final class Bootstrap
         self::PROJECT_TIER_TOOL_REMOVAL_LEAVING => 'cli.launch.tool_removal_leaving',
         self::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE => 'cli.launch.tool_removal_leaving_none',
         self::SKILL_SKIP_NOTICE_FORMAT => 'cli.launch.skill_skip',
-        self::INSTRUCTION_DEFERRAL_NOTICE_FORMAT => 'cli.launch.instruction_deferral',
-        self::SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT => 'cli.launch.skill_budget_deferral',
         self::NONSENSE_LIMIT_NOTICE_FORMAT => 'cli.launch.nonsense_limit',
         self::NONSENSE_STEPS_EXPECTED => 'cli.launch.nonsense_steps_expected',
         self::NONSENSE_STEPS_CONSEQUENCE => 'cli.launch.nonsense_steps_consequence',
@@ -6066,24 +6041,20 @@ public static function useMaxCost(?string $maxCost): void
 
         $documents = self::instructionDeferrals($root);
         if ($documents !== []) {
-            $rows[] = sprintf(
-                self::translated(self::INSTRUCTION_DEFERRAL_NOTICE_FORMAT),
-                \count($documents),
-                \count($documents) === 1 ? '' : 's',
-                \count($documents) === 1 ? 'was' : 'were',
-                self::deferralList($documents),
+            // The COUNT goes to the catalogue, which owns the grammar: one key
+            // per plural class, each a whole sentence, so a locale inflects
+            // its own noun and verb instead of receiving spliced morphemes.
+            $rows[] = Lang::t(
+                \count($documents) === 1 ? 'cli.deferral.instruction_one' : 'cli.deferral.instruction_other',
+                ['count' => \count($documents), 'list' => self::deferralList($documents)],
             );
         }
 
         $skillBodies = self::skillBodyDeferrals($root, $skills);
         if ($skillBodies !== []) {
-            $rows[] = sprintf(
-                self::translated(self::SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT),
-                \count($skillBodies),
-                \count($skillBodies) === 1 ? '' : 's',
-                \count($skillBodies) === 1 ? 'is' : 'are',
-                \count($skillBodies) === 1 ? 'its' : 'their',
-                self::deferralList($skillBodies),
+            $rows[] = Lang::t(
+                \count($skillBodies) === 1 ? 'cli.deferral.skill_one' : 'cli.deferral.skill_other',
+                ['count' => \count($skillBodies), 'list' => self::deferralList($skillBodies)],
             );
         }
 

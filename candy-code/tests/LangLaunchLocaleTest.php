@@ -172,6 +172,25 @@ final class LangLaunchLocaleTest extends TestCase
         }
     }
 
+    /**
+     * S-X08 (candy-code-context-011): the deferral rows take the COUNT and a
+     * whole sentence per plural class, so German inflects its own noun and
+     * verb instead of receiving an English-shaped plural suffix.
+     */
+    public function testTheDeferralRowsInflectInGermanWithoutSplicedMorphemes(): void
+    {
+        $render = static fn (string $key, int $count): string => Lang::inLocale(
+            'de',
+            static fn (): string => Lang::t($key, ['count' => $count, 'list' => 'X (y)']),
+        );
+
+        self::assertSame('1 Anweisungsdatei wurde aus dem System-Prompt ausgeschlossen — X (y)', $render('cli.deferral.instruction_one', 1));
+        self::assertSame('3 Anweisungsdateien wurden aus dem System-Prompt ausgeschlossen — X (y)', $render('cli.deferral.instruction_other', 3));
+        self::assertStringContainsString('1 aktivierter Skill liegt', $render('cli.deferral.skill_one', 1));
+        self::assertStringContainsString('2 aktivierte Skills liegen', $render('cli.deferral.skill_other', 2));
+        self::assertStringNotContainsString('Skill s ', $render('cli.deferral.skill_other', 2));
+    }
+
     /** Remove the launch's sandboxed home however deep the child wrote. */
     private function sweepChildHome(string $dir): void
     {
