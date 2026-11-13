@@ -1878,9 +1878,75 @@ final class ModelTest extends TestCase
         $this->assertLessThan(2.0, $elapsed, 'wrap ignored the row budget');
 
         // Same for the explicit wrap knob: the huge item is truncated to its
-        // wrap rows and the next item still gets the remaining window.
+        // wrap rows and the next item still gets the remaining window. The
+        // 2.4 MB value also trips the byte cap, so its LAST wrap row is the
+        // loud truncation marker (treelist-004) — content bytes were dropped,
+        // and the frame says so instead of silently showing a prefix.
         $wrapped = $m->withWrap(2)->lines();
-        $this->assertSame(['filler line', 'filler line', 'tail'], $wrapped);
+        $this->assertSame(['filler line', '… (item truncated)', 'tail'], $wrapped);
+    }
+
+    public function testByteCapCutsASingleHugeParagraphWithALoudMarker(): void
+    {
+        // A 400 KB single-line value in a 3-row window: the raw scan window
+        // is sized to the budget (3 rows × 21 + 1 = 64 bytes), so the tail
+        // outside it is announced — a prefix alone would be a silent lie.
+        $huge = new StringItem(str_repeat('x', 400_000));
+        $m = $this->model->withViewport(20, 3)->withItem($huge);
+
+        $lines = $m->withCursor(0)->lines();
+        $this->assertCount(3, $lines);
+        $this->assertSame(str_repeat('x', 20), $lines[0]);
+        $this->assertSame(str_repeat('x', 20), $lines[1]);
+        $this->assertSame('… (item truncated)', $lines[2]);
+    }
+
+    public function testWindowCutNeverSplitsACodepointAtItsSeam(): void
+    {
+        // The window here ends one byte into the trailing 2-byte codepoint
+        // (42 a's + the 43rd byte = é's lead); splitting it would hand the /u
+        // tokenizer in hardWrap() a malformed chunk and silently drop the row
+        // (sugar-treelist-012's failure shape). The cut must back off.
+        $value = str_repeat('a', 42) . 'é';
+        $m = $this->model->withViewport(20, 2)->withItem(new StringItem($value));
+
+        $lines = $m->withCursor(0)->lines();
+        $this->assertSame(str_repeat('a', 20), $lines[0], 'clean rows up to the cut');
+        $this->assertSame('… (item truncated)', $lines[1], 'budget row shows the cut');
+    }
+
+    public function testScanWindowSizesToTheBudgetNotJustTheCeiling(): void
+    {
+        // 40 bytes fits the 43-byte budget window of a 2×20 viewport: pure
+        // content, no marker. 44 bytes does not: the marker appears even
+        // though the value is far under MAX_ITEM_RENDER_BYTES.
+        $fits = $this->model->withViewport(20, 2)
+            ->withItem(new StringItem(str_repeat('b', 40)));
+        $lines = $fits->withCursor(0)->lines();
+        $this->assertSame(str_repeat('b', 20), $lines[0]);
+        $this->assertSame(str_repeat('b', 20), $lines[1]);
+
+        $over = $this->model->withViewport(20, 2)
+            ->withItem(new StringItem(str_repeat('b', 44)));
+        $lines = $over->withCursor(0)->lines();
+        $this->assertSame(str_repeat('b', 20), $lines[0]);
+        $this->assertSame('… (item truncated)', $lines[1]);
+    }
+
+    public function testCarriedRowWidthsWrapWideViewportsIdentically(): void
+    {
+        // 1500 words in a width-5000 panel: the token loop now sums carried
+        // part widths instead of re-measuring the growing concat per token
+        // (the quadratic that cost 220 ms). Wrap edges must be EXACTLY the
+        // old measurements: 1000 words fit (5*1000-1 = 4999 cells), the
+        // 1001st word flushes the row.
+        $words = \array_fill(0, 1500, 'word');
+        $m = Model::new()->withViewport(5000, 2)
+            ->withItem(new StringItem(\implode(' ', $words)));
+
+        $lines = $m->withCursor(0)->lines();
+        $this->assertSame(\implode(' ', \array_fill(0, 1000, 'word')), $lines[0]);
+        $this->assertSame(\implode(' ', \array_fill(0, 500, 'word')), $lines[1]);
     }
 
     /**

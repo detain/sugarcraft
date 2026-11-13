@@ -14,4 +14,7 @@ return [
     // retired 2026-11-03 — users get a sentence, not an error-variable name.
     'list.no_items'    => 'The list has no items to display.',
     'list.zero_viewport' => 'The viewport has zero width or height, so the list cannot be displayed.',
+    // Byte-cap marker: an item value over Model::MAX_ITEM_RENDER_BYTES
+    // renders its first window plus this loud row (sugar-treelist-004).
+    'list.render_truncated' => '… (item truncated)',
 ];

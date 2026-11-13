@@ -77,6 +77,20 @@ final class Model
      */
     public const MAX_TOTAL_CELLS = 4_000_000;
 
+    /**
+     * Hard ceiling on how many bytes of a single item value one frame will
+     * scan (256 KB). The row budget bounds the WRAP loop, and renderItem()
+     * additionally sizes its raw scan window to the budget (every displayed
+     * cell costs at least one raw byte, so rows × (width + 1) + 1 is
+     * provably enough) — but a huge viewport must not widen the scan without
+     * limit, so this ceiling stands behind it. Without any bound, the
+     * sanitize/split/expand sweeps ran O(value) no matter how small the
+     * viewport: a pathological Stringable (a 4.4 MB log tail) froze the
+     * frame at ~161 ms/view. When raw bytes fall outside the window the
+     * item renders the window plus a loud truncation marker row.
+     */
+    public const MAX_ITEM_RENDER_BYTES = 262_144;
+
     // Configuration is PRIVATE: every field below has a guarded fluent setter
     // and a bare accessor, so no write can bypass
     // assertDimension()/assertArea()/sgrCodes()/the filter bookkeeping. A
@@ -1242,6 +1256,36 @@ final class Model
     }
 
     /**
+     * Cut a raw value to the render window (bytes) on a codepoint boundary:
+     * back over any trailing continuation bytes, then drop an orphaned or
+     * truncated lead byte. A split codepoint would hand the /u-mode tokenizer
+     * in hardWrap() a malformed chunk and silently drop the row
+     * (sugar-treelist-012's failure shape) — the cut must never manufacture
+     * that state at its own seam. A lone trailing CR is dropped for the same
+     * reason on the fold leg: with its LF outside the window it is not a line
+     * ending yet, and sweepForFrame() would invent one.
+     */
+    private static function cutRenderWindow(string $raw, int $window): string
+    {
+        $cut = \substr($raw, 0, $window);
+        $end = \strlen($cut) - 1;
+        while ($end >= 0 && (\ord($cut[$end]) & 0xC0) === 0x80) {
+            $end--; // continuation bytes of a sequence whose lead survived
+        }
+        if ($end >= 0 && (\ord($cut[$end]) & 0xC0) === 0xC0) {
+            $lead  = \ord($cut[$end]);
+            $want  = $lead >= 0xF0 ? 4 : ($lead >= 0xE0 ? 3 : 2);
+            if (\strlen($cut) - $end < $want) {
+                $end--; // lead truncated mid-sequence: drop it too
+            }
+        }
+        if ($end >= 0 && $cut[$end] === "\r") {
+            $end--; // CR whose LF never made the window
+        }
+        return \substr($cut, 0, $end + 1);
+    }
+
+    /**
      * Render styled lines for a single item — applies prefix, optional padded
      * suffix, and per-item style. Mirrors Go upstream's getItemLines.
      *
@@ -1287,17 +1331,44 @@ final class Model
         // otherwise ride the CUP+EL delta as a cursor-return overwrite.
         // The legitimate SGR ESC is injected LATER by applyStyle(), after this
         // point, and therefore survives — item-value ANSI is stripped by design.
-        // Row budget: no item can usefully contribute more rows than the
-        // viewport shows (wrap() caps tighter still), so the wrap loop stops
-        // there — a pathological 200k-line value now costs O(budget) per
-        // frame instead of O(value).
+        // Row budget + scan window: no item can usefully contribute more rows
+        // than the viewport shows (wrap() caps tighter still), so hardWrap()
+        // extracts paragraphs lazily and stops at the budget — a pathological
+        // 200k-line value costs O(budget), not O(value). The one shape
+        // laziness cannot bound is a single huge paragraph, so the RAW scan
+        // window is sized to the budget too: every displayed cell needs at
+        // least one raw byte (sanitize and CR-fold never grow the value), so
+        // rowsNeeded × (contentWidth + 1) + 1 bytes is provably enough, and
+        // anything beyond it is undisplaysize. The window is additionally
+        // hard-capped at MAX_ITEM_RENDER_BYTES — a huge viewport must not
+        // widen the scan past a fixed ceiling either. Whenever raw bytes
+        // remain outside the window the tail was dropped and the frame carries
+        // a loud truncation marker row: prefix content is never a silent lie.
+        $rawValue = (string) $item->value;
+        $rawLength = \strlen($rawValue);
+        $rowCap    = $this->wrap > 0 ? $this->wrap : $this->height;
+        $window    = min(
+            $rawLength,
+            self::MAX_ITEM_RENDER_BYTES,
+            $rowCap * ($contentWidth + 1) + 1,
+        );
+        $valueTruncated = $window < $rawLength;
+        $sweepSource    = $valueTruncated ? self::cutRenderWindow($rawValue, $window) : $rawValue;
         $rawLines = $this->hardWrap(
-            self::sweepForFrame((string) $item->value),
+            self::sweepForFrame($sweepSource),
             $contentWidth,
-            $this->wrap > 0 ? $this->wrap : $this->height,
+            $rowCap,
         );
         if ($this->wrap > 0 && \count($rawLines) > $this->wrap) {
             $rawLines = \array_slice($rawLines, 0, $this->wrap);
+        }
+        if ($valueTruncated) {
+            $marker = Lang::t('list.render_truncated');
+            if (\count($rawLines) >= $rowCap) {
+                $rawLines[$rowCap - 1] = $marker; // the cap row announces the cut
+            } else {
+                $rawLines[] = $marker;
+            }
         }
         $total = \count($rawLines);
 
@@ -1349,9 +1420,9 @@ final class Model
      * whole budget cannot be split further and keeps its own (overflowing)
      * chunk.
      *
-     * @param int|null $maxLines Stop after this many rows (row budget: one
-     *                           pathological value costs O(budget) per frame,
-     *                           not O(value)).
+     * @param int|null $maxLines Stop after this many rows (row budget: the
+     *                           paragraph walk stops there, so one pathological
+     *                           value costs O(budget) per frame, not O(value)).
      *
      * @return list<string>
      */
@@ -1363,11 +1434,20 @@ final class Model
         $budget = $maxLines ?? \PHP_INT_MAX;
 
         $lines = [];
-        // Full split: a bounded explode() would fuse the tail paragraphs on
-        // their newlines into one "line" and smuggle raw \n into a rendered
-        // row. The savings that matter come from stopping the wrap loop at
-        // the budget below, not from the split.
-        foreach (\explode("\n", $text) as $paragraphLine) {
+        // Lazy paragraph extraction: a strpos-driven walk, so the scan stops
+        // at the row budget instead of materialising all 200k lines of a huge
+        // value before the first budget check can fire. (A bounded explode()
+        // would fuse the tail paragraphs on their newlines into one "line"
+        // and smuggle raw \n into a rendered row; taking one whole paragraph
+        // at a time does not.) The walk mirrors explode()'s trailing-paragraph
+        // semantics exactly: "a\n" yields ["a", ""].
+        $offset = 0;
+        $length = \strlen($text);
+        do {
+            $breakAt       = \strpos($text, "\n", $offset);
+            $end           = $breakAt === false ? $length : $breakAt;
+            $paragraphLine = \substr($text, $offset, $end - $offset);
+            $offset        = $end + 1;
             // HTAB is a layout command, not content: the host terminal would
             // expand it to a tab stop no width calculation here can see, so
             // the frame could exceed its column budget. Expand to spaces
@@ -1389,23 +1469,29 @@ final class Model
             $tokens = \preg_split('/(\s+)/u', $paragraphLine, -1, \PREG_SPLIT_DELIM_CAPTURE)
                 ?: [$paragraphLine];
 
-            $current = '';
-            $pending = '';
+            $current      = '';
+            $currentWidth = 0;
+            $pending      = '';
+            $pendingWidth = 0;
             foreach ($tokens as $token) {
                 if ($token === '') {
                     continue;
                 }
                 if (\preg_match('/\A\s+\z/u', $token) === 1) {
-                    $pending = $token;
+                    $pending      = $token;
+                    $pendingWidth = $this->ansiWidth($token);
                     continue;
                 }
 
-                if ($this->ansiWidth($token) > $contentWidth) {
+                $tokenWidth = $this->ansiWidth($token);
+
+                if ($tokenWidth > $contentWidth) {
                     // Unbreakable word: flush, then chunk it with the pending
                     // run still attached (the indent rides the first chunk).
                     if ($current !== '') {
                         $lines[] = $current;
-                        $current = '';
+                        $current      = '';
+                        $currentWidth = 0;
                         if (\count($lines) >= $budget) {
                             return $lines;
                         }
@@ -1415,7 +1501,8 @@ final class Model
                         $contentWidth,
                         $budget - \count($lines),
                     );
-                    $pending = '';
+                    $pending      = '';
+                    $pendingWidth = 0;
                     foreach ($chunks as $chunk) {
                         $lines[] = $chunk;
                         if (\count($lines) >= $budget) {
@@ -1425,21 +1512,41 @@ final class Model
                     continue;
                 }
 
-                if ($current === '' && $this->ansiWidth($pending) > $contentWidth) {
-                    $pending = ''; // an indent wider than the column cannot fit
+                if ($current === '' && $pendingWidth > $contentWidth) {
+                    $pending      = ''; // an indent wider than the column cannot fit
+                    $pendingWidth = 0;
                 }
 
-                $candidate = $current . $pending . $token;
-                if ($current !== '' && $this->ansiWidth($candidate) > $contentWidth) {
+                // Carried widths replace the whole-concat re-measure that made
+                // this loop O(row-length²) on wide viewports (a 1500-word line
+                // in a 5000-col panel measured 220 ms). The sum is exact
+                // unless the token FUSES into the last cluster of the carried
+                // row, and a cluster extension (combining mark, ZWJ, variation
+                // selector) is never ASCII: an open non-ASCII token spliced
+                // directly onto a carried row is re-measured whole at the seam.
+                // A pending whitespace run absorbs any leading mark (ASCII
+                // seams are additive), and an overcount can only flush a row
+                // early, which is safe. Plain word/whitespace rows never pay a
+                // re-measure.
+                $candidateWidth = $currentWidth + $pendingWidth + $tokenWidth;
+                if ($current !== '' && $pending === ''
+                    && $candidateWidth <= $contentWidth && \ord($token[0]) >= 0x80) {
+                    $candidateWidth = $this->ansiWidth($current . $token);
+                }
+
+                if ($current !== '' && $candidateWidth > $contentWidth) {
                     $lines[] = $current; // the run straddling the break is consumed
                     if (\count($lines) >= $budget) {
                         return $lines;
                     }
-                    $current = $token;
+                    $current      = $token;
+                    $currentWidth = $tokenWidth;
                 } else {
-                    $current = $candidate;
+                    $current      = $current . $pending . $token;
+                    $currentWidth = $candidateWidth;
                 }
-                $pending = '';
+                $pending      = '';
+                $pendingWidth = 0;
             }
 
             if ($current !== '') {
@@ -1448,7 +1555,7 @@ final class Model
                     return $lines;
                 }
             }
-        }
+        } while ($offset <= $length);
 
         return $lines !== [] ? $lines : [''];
     }
