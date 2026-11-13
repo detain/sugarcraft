@@ -39,9 +39,17 @@ final class SizeQueryDescriptorTest extends TestCase
     {
         $cli = (self::scanTargets())['src/Cli.php'];
 
-        $this->assertStringContainsString('SizeIoctl::query(1)', $cli);
-        $this->assertStringNotContainsString('query((int)', $cli, 'the cast shape names the wrong stream');
+        $this->assertStringContainsString('PosixBackend::queryWinsize(1)', $cli);
+        $this->assertStringNotContainsString('queryWinsize((int)', $cli, 'the cast shape names the wrong stream');
         $this->assertStringNotContainsString('posix_isatty', $cli, 'the gate stays core stream_isatty — no ext-posix symbol in the app');
+    }
+
+    public function testTheDeletedSizeIoctlQueryIsNotCalled(): void
+    {
+        $cli = (self::scanTargets())['src/Cli.php'];
+
+        // sugar-pty PTY-40 deleted SizeIoctl::query(); a call left behind fails silently.
+        $this->assertStringNotContainsString('SizeIoctl::query', $cli);
     }
 
     public function testTheTtyGateWrapsTheQuery(): void
@@ -49,7 +57,7 @@ final class SizeQueryDescriptorTest extends TestCase
         $cli = (self::scanTargets())['src/Cli.php'];
 
         $this->assertMatchesRegularExpression(
-            '/stream_isatty\(STDOUT\)[\s\S]{0,120}SizeIoctl::query\(1\)/',
+            '/stream_isatty\(STDOUT\)[\s\S]{0,120}PosixBackend::queryWinsize\(1\)/',
             $cli,
             'the query must sit inside the stream_isatty(STDOUT) branch',
         );

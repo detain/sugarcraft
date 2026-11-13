@@ -10,6 +10,7 @@ use SugarCraft\Animation\Renderer;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Image\Detect;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
@@ -17,7 +18,6 @@ use SugarCraft\Image\Scale;
 use SugarCraft\Image\Symbol\CanvasMode;
 use SugarCraft\Image\Symbol\SymbolMap;
 use SugarCraft\Image\TermDb;
-use SugarCraft\Pty\SizeIoctl;
 
 /**
  * Command-line entry point: parse argv, detect the terminal (or honour the
@@ -568,7 +568,7 @@ final class Cli
     public static function viewportCells(): array
     {
         if (\is_resource(\STDOUT) && stream_isatty(STDOUT)) {
-            $size = SizeIoctl::query(1);
+            $size = PosixBackend::queryWinsize(1);
 
             return [$size['cols'], max(1, $size['rows'] - 1)];
         }

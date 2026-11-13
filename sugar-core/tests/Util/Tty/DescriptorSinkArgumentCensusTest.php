@@ -165,22 +165,11 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'see PosixBackendRestoreLastDescriptorTest.',
         ],
 
-        // ---- sugar-animation -------------------------------------------------
-        'sugar-animation/src/Renderer.php::SizeIoctl::query(1)' => [
-            DescriptorSinkScanner::LITERAL_INT,
-            'CORRECT. withAdaptiveSize(). Was `(int) STDOUT`, which is 2, i.e. STDERR -- the one '
-            . 'member of this family that misbehaved with no unusual process state, only '
-            . '`2>err.log`. See RendererAdaptiveSizeDescriptorTest in sugar-animation.',
-        ],
-
-        // ---- candy-image ------------------------------------------------
-        'candy-image/src/Cli.php::SizeIoctl::query(1)' => [
-            DescriptorSinkScanner::LITERAL_INT,
-            'CORRECT. viewportCells(). The literal 1 is STDOUT\'s descriptor, behind a '
-            . 'stream_isatty(STDOUT) gate -- the app-package twin of the candy-gifview pin '
-            . 'above, arriving with the F-18 viewer (s7-2 pick, W7 weld). See '
-            . 'SizeQueryDescriptorTest in candy-image.',
-        ],
+        // sugar-animation/src/Renderer.php and candy-image/src/Cli.php rows retired:
+        // both called SizeIoctl::query(1), which PTY-40 deleted; they now call
+        // PosixBackend::queryWinsize(1), whose single sink is the
+        // posix_isatty($fd) row above (pinned by RendererAdaptiveSizeDescriptorTest
+        // in sugar-animation and SizeQueryDescriptorTest in candy-image).
 
         // ---- sugar-pty ---------------------------------------------------
         'sugar-pty/src/Posix/PosixTermios.php::posix_isatty($this->fd)' => [

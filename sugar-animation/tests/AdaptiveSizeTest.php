@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
  * Tests for adaptive cell-size behaviour in Renderer.
  *
  * Note: withAdaptiveSize() requires a real TTY (STDOUT must be a terminal
- * for SizeIoctl::query() to succeed). Those tests skip gracefully when no TTY
+ * for PosixBackend::queryWinsize() to succeed). Those tests skip gracefully when no TTY
  * is present, e.g. in CI pipelines.
  */
 final class AdaptiveSizeTest extends TestCase
@@ -90,13 +90,20 @@ final class AdaptiveSizeTest extends TestCase
         $this->assertStringContainsString("\033[48;2;0;0;0m", $out);
     }
 
+    public function testRendererDoesNotCallTheDeletedSizeIoctlQuery(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/Renderer.php');
+        $this->assertStringContainsString('PosixBackend::queryWinsize(1)', $src);
+        $this->assertDoesNotMatchRegularExpression('/SizeIoctl::query\(\d/', $src);
+    }
+
     public function testWithAdaptiveSizeThrowsWhenNotATty(): void
     {
         if (\posix_isatty(STDOUT)) {
             $this->markTestSkipped('STDOUT is a TTY — would query real terminal size');
         }
 
-        // When STDOUT is not a TTY, SizeIoctl::query throws.
+        // When STDOUT is not a TTY, PosixBackend::queryWinsize throws.
         $this->expectException(\RuntimeException::class);
         Renderer::withAdaptiveSize();
     }

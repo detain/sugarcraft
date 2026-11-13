@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Animation;
 
 use SugarCraft\Core\Util\Ansi;
-use SugarCraft\Pty\SizeIoctl;
+use SugarCraft\Core\Util\Tty\PosixBackend;
 
 /**
  * Render a {@see Frame} as ANSI-coloured cells.
@@ -69,16 +69,16 @@ final class Renderer
      *
      *     posix_isatty(1)  [real STDOUT] = true
      *     posix_isatty(2)  [real STDERR] = false
-     *     SizeIoctl::query(1) -> succeeds
-     *     SizeIoctl::query(2) -> RuntimeException: Cannot query size of non-tty fd
+     *     queryWinsize(1) -> succeeds
+     *     queryWinsize(2) -> RuntimeException: Cannot query size of non-tty fd
      *
      * — so the method threw on a live terminal, and the diagnostic a caller
      * saw pointed at STDOUT, which was demonstrably fine. Unlike the rest of
      * this cast family it needed no unusual process state, only a shell
      * redirection.
      *
-     * WHY THE CAST IS NOT SIMPLY DELETED: `SizeIoctl::query()` takes an `int`
-     * descriptor and there is no portable way to get one out of a PHP stream.
+     * WHY THE CAST IS NOT SIMPLY DELETED: `PosixBackend::queryWinsize()` takes an `int`
+     * descriptor (it replaced `SizeIoctl::query()`, deleted by sugar-pty PTY-40) and there is no portable way to get one out of a PHP stream.
      * The defect was the wrong number, not the presence of a number. STDOUT's
      * descriptor is the literal 1, which is correct and total.
      *
@@ -88,7 +88,7 @@ final class Renderer
     {
         // Descriptor 1, spelled as the literal. NOT `(int) STDOUT`, which is
         // the resource id 2 and names STDERR. See the doc-block above.
-        $size = SizeIoctl::query(1);
+        $size = PosixBackend::queryWinsize(1);
         return new self($size['rows'], $size['cols']);
     }
 
