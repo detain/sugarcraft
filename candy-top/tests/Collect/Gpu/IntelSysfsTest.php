@@ -135,6 +135,40 @@ final class IntelSysfsTest extends TestCase
         $this->assertSame(165.0, $snap->devices[1]->powerLimit, 'power1_cap when power1_max is gone');
     }
 
+    public function testClockChainsFallThroughBothMembersThenToSentinels(): void
+    {
+        // S-P20 (candy-top-084): each clocks() slot is a two-path chain;
+        // the finding pins that the SECOND member answers when the first
+        // vanishes and that both sentinels survive when the whole chain
+        // is gone — on both driver flavours.
+        $root = $this->tree->root;
+        unlink("$root/sys/class/drm/card5/gt_act_freq_mhz");
+        unlink("$root/sys/class/drm/card5/gt_RP0_freq_mhz");
+        [$snap] = $this->intel()->poll(DrmScan::none());
+        $this->assertSame(1350.0, $snap->devices[0]->clockGraphics, 'i915: cur_freq behind act_freq');
+        $this->assertSame(1450.0, $snap->devices[0]->clockGraphicsMax, 'i915: gt_max_freq_mhz behind RP0');
+
+        unlink("$root/sys/class/drm/card5/gt_cur_freq_mhz");
+        unlink("$root/sys/class/drm/card5/gt_max_freq_mhz");
+        unlink("$root/sys/class/drm/card6/device/tile0/gt0/freq0/act_freq");
+        unlink("$root/sys/class/drm/card6/device/tile0/gt0/freq0/rp0_freq");
+        [$snap] = $this->intel()->poll(DrmScan::none());
+        $this->assertSame(Sentinel::UNMEASURED, $snap->devices[0]->clockGraphics, 'i915: whole chain gone');
+        $this->assertSame(Sentinel::UNMEASURED, $snap->devices[0]->clockGraphicsMax);
+        $this->assertSame(2100.0, $snap->devices[1]->clockGraphics, 'xe: cur_freq behind act_freq');
+        $this->assertSame(2400.0, $snap->devices[1]->clockGraphicsMax, 'xe: max_freq behind rp0_freq (same value as rp0 — content distinguishes below)');
+
+        $this->tree->write('sys/class/drm/card6/device/tile0/gt0/freq0/max_freq', "2600\n");
+        [$snap] = $this->intel()->poll(DrmScan::none());
+        $this->assertSame(2600.0, $snap->devices[1]->clockGraphicsMax, 'the fallback really answered, not a leftover rp0 read');
+
+        unlink("$root/sys/class/drm/card6/device/tile0/gt0/freq0/cur_freq");
+        unlink("$root/sys/class/drm/card6/device/tile0/gt0/freq0/max_freq");
+        [$snap] = $this->intel()->poll(DrmScan::none());
+        $this->assertSame(Sentinel::UNMEASURED, $snap->devices[1]->clockGraphics, 'xe: whole chain gone');
+        $this->assertSame(Sentinel::UNMEASURED, $snap->devices[1]->clockGraphicsMax);
+    }
+
     public function testNoIntelHardwareInstallsNothing(): void
     {
         $amd = GpuTree::of('amd');

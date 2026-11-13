@@ -127,6 +127,21 @@ final class AmdSysfsTest extends TestCase
         $this->assertSame(12.0, $snap->devices[0]->memUtilization, 'the rest still reads');
     }
 
+    public function testMclkTableAnswersTheCurrentArmWhenHwmonFreq2Vanishes(): void
+    {
+        // S-P20 (candy-top-085): clockMem prefers hwmon freq2_input and
+        // falls through to the starred line of pp_dpm_mclk — the dpm
+        // CURRENT arm was never the answering source in any earlier pin.
+        unlink($this->tree->root . '/sys/class/drm/card0/device/hwmon/hwmon2/freq2_input');
+        $this->tree->write('sys/class/drm/card0/device/pp_dpm_mclk', "0: 800Mhz\n1: 1200Mhz *\n2: 1560Mhz\n");
+        $amd = AmdSysfs::detect($this->tree->paths());
+        $this->assertNotNull($amd);
+        [$snap] = $amd->poll(DrmScan::none());
+
+        $this->assertSame(1200.0, $snap->devices[0]->clockMem, 'the starred row is current');
+        $this->assertSame(1560.0, $snap->devices[0]->clockMemMax, 'the highest non-S row is max');
+    }
+
     public function testNoAmdHardwareInstallsNothing(): void
     {
         $this->assertNull(AmdSysfs::detect(Paths::under($this->tree->root . '/nonexistent')));
