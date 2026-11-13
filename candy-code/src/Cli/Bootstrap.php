@@ -1850,6 +1850,15 @@ final class Bootstrap
         // pack ran out of room.
         self::drainNarrowedGrantWarnings($agentManager);
 
+        // G-14: a Ctrl+C that journaled an unsent draft last session says so
+        // once; the text is in the prompt history (Up recalls it).
+        $draftChars = (new \SugarCraft\Code\Session\DraftJournal(
+            dirname(self::promptHistory()->path()) . '/unsent_draft.json',
+        ))->take();
+        if ($draftChars !== null) {
+            LaunchNotices::record(Lang::t('chat.ctrlc.draft_restored', ['chars' => $draftChars]), self::launchNoticeLimit());
+        }
+
         $chat = $chat->withLaunchNotices(self::launchNotices());
 
         // C3 (RS-AGENT): `--agent <name>` lands between the warnings and the

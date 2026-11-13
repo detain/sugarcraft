@@ -54,7 +54,7 @@ where its section says, and `/help` inside a session repeats the shortcuts.
 |---|---|
 | Continue where you left off | Launch with `--continue` to reopen the last session in this directory, or `/sessions` (`Ctrl+R`) to pick one by name. |
 | Take a change back | `/undo` steps one checkpoint back, and `/rewind` goes to a chosen earlier point — the chat, the files, or both. |
-| Stop a turn | `Esc` stops the running tool and then the turn at its next step; a second press cancels hard. `Ctrl+C` quits. |
+| Stop a turn | `Esc` stops the running tool and then the turn at its next step; a second press cancels hard. `Ctrl+C` interrupts the turn too (and clears a draft); `Ctrl+C` twice quits. |
 | Change provider or model | `/model` opens the picker (Ctrl+P carries the same menu); `/model <provider> <model>` switches outright, and the choice persists. |
 | Cap the spend | `--max-cost 5` at launch, or `/budget 5` mid-session: once the reported spend reaches the ceiling, the next turn refuses before it runs. |
 | Answer a permission prompt | `y` runs it once, `n` refuses, `a` allows that pattern for the session, `p` saves the allowance for good — and `Esc` refuses in any state. |
@@ -395,7 +395,7 @@ all one component tree — not two parallel UIs.
 | `Esc` `Esc` | Cancel an in-flight turn — press **twice** within 0.6 s (`doubleEscSeconds`); the same two presses while **idle** with an empty draft open the **message picker** instead — see the fine print below. |
 | `Esc` | Close the palette or the session picker (a filter typed into the picker is cleared first) |
 | `/new` | New session, through a **folder picker** that opens on this project — see the fine print below. |
-| `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 65,536 characters with a notice) and the next press quits |
+| `Ctrl+C` | Interrupt — cancels an in-flight turn, else clears a non-empty draft (journaled to the prompt history, so `↑` recalls it, and announced at the next launch if you quit before sending it), else arms the quit. Press `Ctrl+C` **twice** within 2 s to quit. With a draft selection the first press copies it (OSC 52, clipped to 65,536 characters with a notice) and the presses after that interrupt and quit as above. Exit codes are unchanged: a cooperative quit exits `0`, a stopping signal `128+N` |
 | `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
 | `Ctrl+O` | Expand or collapse the tool output and thought at the row cursor — see the fine print below. |
 | `Ctrl+F` | Walk the transcript row cursor one row older, toggling nothing — the focused row now paints in the theme's active style, so the settled cursor is visible. See the fine print below. |
@@ -1164,7 +1164,7 @@ Every launch opens a **new** session. The conversation is saved as it changes �
 every message, tool call, tool result and thought — so any session can be picked
 up again later, with the model seeing the whole earlier exchange. Saves are
 batched: a change is written within half a second, and at once when you switch
-sessions, `/branch`, `/fork` or quit (Ctrl+C included), so only a hard kill
+sessions, `/branch`, `/fork` or quit (Ctrl+C Ctrl+C included), so only a hard kill
 (`kill -9`, a power cut) can lose the last half-second:
 
 ```sh

@@ -513,10 +513,26 @@ final class Chat implements Model
      */
     public const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
 
+    /**
+     * Two Ctrl+C presses within this window quit (G-14): the first only
+     * interrupts the turn / clears the draft / arms the quit, so a reflexive
+     * ^C never ends the session or silently eats a half-written message.
+     * Exit codes are unchanged: a cooperative quit exits 0, a SIGINT 130.
+     */
+    public const CTRL_C_QUIT_WINDOW_SECONDS = 2.0;
+
     /** The double-Esc window in force: `doubleEscSeconds` (N-P4g). */
     private static function doubleEscapeWindowSeconds(): float
     {
         return \SugarCraft\Code\Config\Settings\UiSettings::float('doubleEscSeconds');
+    }
+
+    /** The unsent-draft marker next to the prompt history file, or null with no history wired. */
+    private function draftJournal(): ?\SugarCraft\Code\Session\DraftJournal
+    {
+        return $this->promptHistory === null
+            ? null
+            : new \SugarCraft\Code\Session\DraftJournal(dirname($this->promptHistory->path()) . '/unsent_draft.json');
     }
 
     /** Alias of {@see \SugarCraft\Code\Host\CompactionService::PARK_NOTICE_PREFIX}, which documents it. */
@@ -894,6 +910,13 @@ final class Chat implements Model
          * a press straddling a turn boundary can never pair across the two.
          */
         private readonly ?float $lastEscapeAt = null,
+    /**
+         * Timestamp (microtime(true)) of the most recent Ctrl+C that did NOT
+         * quit (an interrupt, a draft clear, or the idle "press again" arm);
+         * a second Ctrl+C within {@see CTRL_C_QUIT_WINDOW_SECONDS} quits. Null
+         * once consumed or expired.
+         */
+        private readonly ?float $lastCtrlCAt = null,
     /**
          * The permission mode a `/review` clamp stepped the session away
          * from (C-AGT-2.b), restored by {@see restoreReviewMode()} the
@@ -9264,6 +9287,7 @@ final class Chat implements Model
             'generation' => $this->generation,
             'inFlightCancellation' => $this->inFlightCancellation,
             'lastEscapeAt' => $this->lastEscapeAt,
+            'lastCtrlCAt' => $this->lastCtrlCAt,
             'reviewModeRestore' => $this->reviewModeRestore,
             'rows' => $this->rows,
             'cols' => $this->cols,
@@ -20364,6 +20388,7 @@ final class Chat implements Model
         // make the leaving command the first thing ↑ offers in every new one.
         if ($text !== '' && $text !== '/exit' && $text !== '/quit' && $this->promptHistory !== null) {
             $this->promptHistory->append($text);
+            $this->draftJournal()?->clear();
             $newest = $this->inputHistory === [] ? null : $this->inputHistory[array_key_last($this->inputHistory)];
             if ($newest !== $text) {
                 $changes['inputHistory'] = [...$this->inputHistory, $text];

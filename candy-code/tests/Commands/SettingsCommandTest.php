@@ -166,8 +166,9 @@ final class SettingsCommandTest extends TestCase
         self::assertSame('', $typed->chat?->inputBuf, 'a key aimed at the view does not type into the chat it covers');
         self::assertNotNull($typed->settingsEditor);
 
-        [, $quit] = $open->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
-        self::assertNotNull($quit, 'Ctrl+C reaches the chat, which quits');
+        [$armed] = $open->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        [, $quit] = $armed->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        self::assertNotNull($quit, 'Ctrl+C reaches the chat, which quits on the second press');
 
         [$closed] = $open->update(new KeyMsg(KeyType::Escape));
         self::assertNull($closed->settingsEditor);

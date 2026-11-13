@@ -191,8 +191,9 @@ final class MouseTextSelectionTest extends TestCase
         self::assertNull($cmd, 'the text is already on the clipboard; quitting out from under the copy would be the surprise');
         self::assertNull(Chat::textSelection());
 
-        [, $quit] = $chat->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
-        self::assertNotNull($quit, 'with no selection up, Ctrl+C is the quit chord again');
+        [$armed] = $chat->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        [, $quit] = $armed->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        self::assertNotNull($quit, 'with no selection up, a double Ctrl+C is the quit chord again');
     }
 
     public function testNoSelectionWhenMouseClicksAreDisabled(): void

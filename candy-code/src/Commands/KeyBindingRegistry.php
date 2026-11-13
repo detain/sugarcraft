@@ -1145,8 +1145,10 @@ final class KeyBindingRegistry
             // that delivers `√` instead (C-TUI-7.b) is served by re-chording
             // THIS id through the `keybindings` setting.
             KeyBinding::new('chat.voice', 'Alt+V', Lang::t('keys.chat.voice'), $c),
-            // E744: with a draft selection held this chord COPIES first and the
-            // next press quits (Chat's Ctrl+C arm). The nuance stays out of the
+            // G-14: one press interrupts the turn / clears a dirty draft
+            // (journaled, Up recalls it); a second press within two seconds
+            // quits. E744: with a draft selection held this chord COPIES first
+            // and the next press arms (Chat's Ctrl+C arm). The nuance stays out of the
             // description — renderKeyHelp() clips long text and KeyHelpTest
             // demands every row paint in full — and lives in the README table.
             KeyBinding::new('chat.quit', 'Ctrl+C', Lang::t('keys.chat.quit'), $c),

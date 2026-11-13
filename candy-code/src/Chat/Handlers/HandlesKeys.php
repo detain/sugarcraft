@@ -156,6 +156,64 @@ use SugarCraft\Code\Lang;
 trait HandlesKeys
 {
     /**
+     * Save a non-blank draft where the next launch finds it: into the
+     * cross-session prompt history (Up recalls it) plus the one-line marker
+     * {@see \SugarCraft\Code\Session\DraftJournal} that the launch notice
+     * reads. Best effort — never blocks a quit.
+     */
+    private function journalDraft(): void
+    {
+        $draft = trim($this->inputBuf);
+        if ($draft === '' || $this->promptHistory === null) {
+            return;
+        }
+        try {
+            $this->promptHistory->append($draft);
+            $this->draftJournal()?->mark(mb_strlen($draft));
+        } catch (\Throwable) {
+            // a failed journal must not cost the user the quit
+        }
+    }
+
+    /**
+     * The first Ctrl+C of a pair (G-14): stops the running turn, else clears a
+     * dirty draft (journaled, and recallable with Up), else arms the quit with
+     * a notice. A second press inside the window quits (see the caller).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function firstCtrlC(float $now): array
+    {
+        if ($this->inFlight) {
+            // The same hard cancel two Escapes inside the window perform; the
+            // arm is stamped so the very next Ctrl+C quits.
+            [$soft] = $this->handleKeysMessages(new KeyMsg(KeyType::Escape)) ?? [$this];
+            [$hard, $cmd] = $soft->handleKeysMessages(new KeyMsg(KeyType::Escape)) ?? [$soft, null];
+
+            return [$hard->mutate(['lastCtrlCAt' => $now]), $cmd];
+        }
+
+        $draft = trim($this->inputBuf);
+        if ($draft !== '') {
+            $this->journalDraft();
+            $cleared = $this->mutate(['inputBuf' => '', 'lastCtrlCAt' => $now]);
+            if ($this->promptHistory !== null) {
+                $newest = $this->inputHistory === [] ? null : $this->inputHistory[array_key_last($this->inputHistory)];
+                if ($newest !== $draft) {
+                    $cleared = $cleared->mutate(['inputHistory' => [...$this->inputHistory, $draft]]);
+                }
+            }
+
+            return [$cleared->mutate(['history' => [...$cleared->history, Message::notice(Lang::t('chat.ctrlc.draft_cleared'))]]), null];
+        }
+
+        return [$this->mutate([
+            'lastCtrlCAt' => $now,
+            'history' => [...$this->history, Message::notice(Lang::t('chat.ctrlc.armed'))],
+        ]), null];
+    }
+
+    /**
      * Route family handler: owns the KeyMsg gate, the prematch arms, and the
      * terminal binding table (W7-S4 decomposition). The gate answers null for
      * every non-key message so route()'s other family links can take them —
@@ -205,6 +263,22 @@ trait HandlesKeys
             if ($msg->ctrl && $msg->rune === 'c' && $this->input->hasSelection()) {
                 return $this->delegateToInput($msg);
             }
+
+            // G-14: the terminal's Ctrl+C (flagged pair) is an INTERRUPT first
+            // and a quit only when pressed twice inside the window; the raw
+            // synthetic "\x03" stays an immediate quit (above). Whatever the
+            // first press does, it never drops a draft silently.
+            if ($msg->ctrl && $msg->rune === 'c') {
+                $now = microtime(true);
+                $armed = $this->lastCtrlCAt !== null
+                    && ($now - $this->lastCtrlCAt) <= self::CTRL_C_QUIT_WINDOW_SECONDS;
+                if (!$armed) {
+                    return $this->firstCtrlC($now);
+                }
+            }
+
+            // A dirty draft at the moment of quitting is journaled, not lost.
+            $this->journalDraft();
 
             // CC-QA-2: quitting mid-turn abandons whatever command children
             // the backend is still holding — without this the whole process

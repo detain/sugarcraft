@@ -70,10 +70,11 @@ final class WidgetCmdRelayTest extends TestCase
     {
         $chat = new Chat(input: $this->focusedTextArea('hello world'));
 
-        [, $cmd] = $chat->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        [$armed] = $chat->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        [, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
 
         $this->assertNotNull($cmd);
-        $this->assertInstanceOf(QuitMsg::class, $cmd(), 'no selection keeps the quit law byte-unchanged');
+        $this->assertInstanceOf(QuitMsg::class, $cmd(), 'no selection: the second Ctrl+C quits (G-14)');
     }
 
     public function testRawControlCRuneQuitsEvenWithASelection(): void

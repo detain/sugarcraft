@@ -1301,7 +1301,8 @@ final class KeyHelpTest extends TestCase
     public function testCtrlCStillQuitsWithTheReferenceUp(): void
     {
         [$open] = $this->chat()->update(new KeyMsg(KeyType::Char, '?'));
-        [, $cmd] = $open->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        [$armed] = $open->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        [, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
 
         $this->assertNotNull($cmd, 'quitting must never require dismissing the modal first');
     }

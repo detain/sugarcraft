@@ -1260,8 +1260,11 @@ final class KeyBindingDriftTest extends TestCase
                 }
             },
             'chat.quit' => function (array $k): void {
-                [, $cmd] = $this->chat()->update($k[0]);
-                $this->assertNotNull($cmd, 'Ctrl+C must return a quit Cmd');
+                // G-14: the first press interrupts / clears / arms; the second quits.
+                [$armed, $first] = $this->chat()->update($k[0]);
+                $this->assertNull($first, 'the first Ctrl+C only arms the quit');
+                [, $cmd] = $armed->update($k[0]);
+                $this->assertNotNull($cmd, 'a second Ctrl+C must return a quit Cmd');
             },
 
             // ── Panes & windows (the App shell's KeyboardHandler) ─────────
