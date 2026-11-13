@@ -33,7 +33,7 @@ undefined-function error.
 # From a clone of the monorepo (each lib carries its own vendor):
 cd candy-flappy
 composer install
-./bin/candy-flappy      # or: php examples/play.php
+./bin/candy-flappy      # or: php examples/play.php — interactive use only, no migration
 
 # As a library dependency (pre-1.0: the package publishes a dev branch only):
 #   composer require sugarcraft/candy-flappy:@dev
