@@ -170,6 +170,19 @@ final class CubicBezier implements EasingFunction
     }
 
     /**
+     * Factory alias of the constructor — the house `::new()` entry shape
+     * (finding 052), SHIPPED rather than exempted on purpose: this class
+     * already answers static calls with named presets, and the uniform door
+     * costs nothing next to teaching five classes one vocabulary. Custom
+     * (off-table) curves take this door; the 26 named ones take their
+     * presets, which stay the memoized shared instances.
+     */
+    public static function new(float $x1, float $y1, float $x2, float $y2): self
+    {
+        return new self($x1, $y1, $x2, $y2);
+    }
+
+    /**
      * The CSS `ease` transition-timing-function keyword. Named `cssEase()`
      * because the seam sampler {@see ease()} owns the bare spelling — PHP
      * forbids one name as both static preset and instance sampler. The

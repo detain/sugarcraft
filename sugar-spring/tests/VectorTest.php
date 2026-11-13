@@ -366,4 +366,13 @@ final class VectorTest extends TestCase
         $this->expectExceptionMessage('Vector components must be finite');
         Vector::fromArray([INF, 0.0, 0.0]);
     }
+
+    // ── SPR-35 (finding 052): ::new() is the same door as the constructor ──
+
+    public function testNewFactoryMirrorIsTheSameDoorAsTheConstructor(): void
+    {
+        $this->assertEquals(new Vector(1.5, -2.0), Vector::new(1.5, -2.0));
+        $this->assertEquals(new Vector(1.5, -2.0, 3.0), Vector::new(1.5, -2.0, 3.0));
+    }
+
 }

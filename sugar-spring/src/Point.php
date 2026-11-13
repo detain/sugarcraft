@@ -36,6 +36,15 @@ final class Point implements \JsonSerializable
         return new self(0.0, 0.0, 0.0);
     }
 
+    /**
+     * Factory alias of the constructor — the house `::new()` entry shape
+     * (finding 052); the same door as `new Point(...)`.
+     */
+    public static function new(float $x, float $y, float $z = 0.0): self
+    {
+        return new self($x, $y, $z);
+    }
+
     /** Add a {@see Vector} delta to this point, returning a new Point. */
     public function add(Vector $v): self
     {

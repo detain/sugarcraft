@@ -21,6 +21,15 @@ final readonly class SpringConfig
     public float $dampingRatio;
 
     /**
+     * Factory alias of the constructor — the house `::new()` entry shape
+     * (finding 052); the same door as `new SpringConfig(...)`.
+     */
+    public static function new(float $tension, float $friction, float $mass): self
+    {
+        return new self($tension, $friction, $mass);
+    }
+
+    /**
      * @param float $tension  Restoring force constant (higher = snappier).
      * @param float $friction Damping force (higher = less oscillation).
      * @param float $mass     Oscillator mass (higher = slower response).

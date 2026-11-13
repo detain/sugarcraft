@@ -177,6 +177,20 @@ final class Spring
     }
 
     /**
+     * Factory alias of the constructor — the house `::new()` entry shape,
+     * one vocabulary across the library (finding 052). `Spring::new(...)`
+     * and `new Spring(...)` are the same door, not two behaviours.
+     */
+    public static function new(
+        float $deltaTime,
+        float $angularFrequency,
+        float $dampingRatio,
+        ?bool $reducedMotionOverride = null,
+    ): self {
+        return new self($deltaTime, $angularFrequency, $dampingRatio, $reducedMotionOverride);
+    }
+
+    /**
      * Advance one step toward $target, returning the new position and velocity.
      *
      * If reduced motion is enabled via environment (REDUCE_MOTION or

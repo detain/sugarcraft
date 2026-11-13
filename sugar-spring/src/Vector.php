@@ -54,6 +54,15 @@ final class Vector implements \JsonSerializable
         return new self(0.0, 0.0, 0.0);
     }
 
+    /**
+     * Factory alias of the constructor — the house `::new()` entry shape
+     * (finding 052); the same door as `new Vector(...)`.
+     */
+    public static function new(float $x, float $y, float $z = 0.0): self
+    {
+        return new self($x, $y, $z);
+    }
+
     public function add(self $other): self
     {
         return new self(

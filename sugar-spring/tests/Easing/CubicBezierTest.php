@@ -597,4 +597,21 @@ final class CubicBezierTest extends TestCase
             }
         }
     }
+
+    // ── SPR-35 (finding 052): ::new() ships as the uniform custom door ─────
+
+    public function testNewFactoryMirrorIsTheSameDoorAsTheConstructor(): void
+    {
+        $this->assertEquals(new CubicBezier(0.1, 0.7, 0.9, 0.2), CubicBezier::new(0.1, 0.7, 0.9, 0.2));
+
+        // The mirror is the CUSTOM curve door: it builds fresh instances and
+        // deliberately bypasses the 26-preset memo — cssEase() stays shared.
+        $this->assertNotSame(CubicBezier::cssEase(), CubicBezier::new(0.25, 0.10, 0.25, 1.00));
+        $this->assertEquals(CubicBezier::cssEase(), CubicBezier::new(0.25, 0.10, 0.25, 1.00));
+
+        // and the typo door still refuses names that are not methods at all
+        $this->expectException(\BadMethodCallException::class);
+        CubicBezier::quinticIn();
+    }
+
 }

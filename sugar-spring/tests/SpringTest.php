@@ -386,4 +386,22 @@ final class SpringTest extends TestCase
         $movingPair = $moving->update(0.0, 0.0, 42.0);
         $this->assertNotSame([42.0, 0.0], [$movingPair[0], $movingPair[1]]);
     }
+
+    // ── SPR-35 (finding 052): ::new() is the same door as the constructor ──
+
+    public function testNewFactoryMirrorIsTheSameDoorAsTheConstructor(): void
+    {
+        $direct  = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $viaFact = Spring::new(1.0 / 60.0, 6.0, 1.0);
+
+        $this->assertEquals($direct, $viaFact);
+        $this->assertSame($direct->update(0.0, 0.0, 100.0), $viaFact->update(0.0, 0.0, 100.0));
+
+        // the override parameter rides the mirror too
+        $snapped = Spring::new(1.0 / 60.0, 6.0, 1.0, true);
+        [$pos, $vel] = $snapped->update(0.0, 0.0, 100.0);
+        $this->assertSame(100.0, $pos);
+        $this->assertSame(0.0, $vel);
+    }
+
 }

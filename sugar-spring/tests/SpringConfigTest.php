@@ -193,4 +193,17 @@ final class SpringConfigTest extends TestCase
             'negative mass' => [-1.0],
         ];
     }
+
+    // ── SPR-35 (finding 052): ::new() is the same door as the constructor ──
+
+    public function testNewFactoryMirrorIsTheSameDoorAsTheConstructor(): void
+    {
+        $direct  = new SpringConfig(100.0, 10.0, 1.0);
+        $viaFact = SpringConfig::new(100.0, 10.0, 1.0);
+
+        $this->assertEquals($direct, $viaFact);
+        $this->assertSame($direct->angularFrequency, $viaFact->angularFrequency);
+        $this->assertSame($direct->dampingRatio, $viaFact->dampingRatio);
+    }
+
 }

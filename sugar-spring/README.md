@@ -51,6 +51,12 @@ integrate backwards, so the
 constructor refuses these instead of letting your frame loop run until the
 user closes the window.
 
+One entry vocabulary: every class in this library answers both the plain
+`new X(...)` form and the house factory shape `X::new(...)` — `Spring`,
+`SpringConfig`, `Vector`, `Point`, `CubicBezier`, `Projectile`,
+`SpringChain`. Same door, same guarantees; the mirror is not a semantics
+fork.
+
 ```php
 use SugarCraft\Spring\Spring;
 

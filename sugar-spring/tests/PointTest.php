@@ -237,4 +237,13 @@ final class PointTest extends TestCase
         $this->expectExceptionMessage('Point components must be finite');
         Point::fromArray([0.0, NAN, 0.0]);
     }
+
+    // ── SPR-35 (finding 052): ::new() is the same door as the constructor ──
+
+    public function testNewFactoryMirrorIsTheSameDoorAsTheConstructor(): void
+    {
+        $this->assertEquals(new Point(1.5, -2.0), Point::new(1.5, -2.0));
+        $this->assertEquals(new Point(1.5, -2.0, 3.0), Point::new(1.5, -2.0, 3.0));
+    }
+
 }
