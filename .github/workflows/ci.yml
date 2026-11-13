@@ -739,11 +739,17 @@ jobs:
             php "$env:MAT_LIB\vendor\bin\phpunit" -c "$env:MAT_LIB\phpunit.xml" --colors=never
           }
 
-  # macOS test job — verifies POSIX PTY paths (sugar-pty's libc FFI:
-  # posix_openpt / grantpt / unlockpt / ptsname_r / ioctl + the macOS
-  # TIOCSWINSZ / TIOCGWINSZ constants that diverge from Linux) work
-  # on Darwin. Scoped to sugar-pty only — other libs would catch
-  # macOS-specific regressions on demand if/when issues surface.
+  # macOS test job — verifies POSIX PTY paths on Darwin. The matrix
+  # source is MACOS_LIBS in scripts/affected-libs.php, currently
+  # sugar-core and sugar-ssh-server: both exercise the same
+  # posix_openpt + grantpt + TIOCSWINSZ chain sugar-pty's libc FFI
+  # drives (posix_openpt / grantpt / unlockpt / ptsname_r / ioctl and
+  # the macOS TIOCSWINSZ / TIOCGWINSZ constants that diverge from
+  # Linux), which is how sugar-pty's Darwin coverage flows today.
+  # sugar-pty's own cell is held out pending re-admission evidence;
+  # the dated rationale lives beside the MACOS_LIBS constant. Other
+  # libs would catch macOS-specific regressions on demand if/when
+  # issues surface.
   macos-test:
     name: 'macOS · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     # macos-15 is the current stable Apple Silicon (arm64) image.
