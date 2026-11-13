@@ -78,11 +78,72 @@ final class DatePickerTest extends TestCase
 
     public function testGoToToday(): void
     {
+        // Single clock window: snapshot BEFORE and AFTER the picker's own
+        // read, so a midnight/new-year straddle can never produce a monthly
+        // false red from three separately-read references.
+        $before = new \DateTimeImmutable();
         $dp = DatePicker::new(new \DateTimeImmutable('2020-01-01'))
             ->goToToday();
+        $after = new \DateTimeImmutable();
 
-        $this->assertSame((int) (new \DateTimeImmutable())->format('n'),  $dp->viewMonth());
-        $this->assertSame((int) (new \DateTimeImmutable())->format('Y'),  $dp->viewYear());
+        $actual = [$dp->viewMonth(), $dp->viewYear()];
+        $expected = [(int) $before->format('n'), (int) $before->format('Y')];
+        $boundary = [(int) $after->format('n'), (int) $after->format('Y')];
+
+        if ($expected === $boundary) {
+            $this->assertSame($expected, $actual, 'clock was stable across the call');
+        } else {
+            $this->assertContains($actual, [$expected, $boundary], 'the picker read the clock between our snapshots');
+        }
+    }
+
+    public function testGoToTodayAimsTheCursorAtTodaysCell(): void
+    {
+        // Synthetic today keeps the pin deterministic (sugar-datepicker-037):
+        // start focused on some unrelated weekday column, jump to today, and
+        // require the cursor to land ON today, not on the carried index.
+        $picker = DatePicker::new(new \DateTimeImmutable('2020-01-01'))
+            ->withToday(new \DateTimeImmutable('2026-12-31'))
+            ->goToToday();
+
+        $this->assertSame(12, $picker->viewMonth());
+        $this->assertSame(2026, $picker->viewYear());
+        $this->assertSame(
+            '2026-12-31',
+            $picker->dateAtCursor()?->format('Y-m-d'),
+            'goToToday must re-aim the cursor at today\'s cell',
+        );
+    }
+
+    public function testGoToTodayWithOutOfBoundsTodayAimsTheDimmedCellLikeMoveToDate(): void
+    {
+        // Shared law with setTime()/moveToDate() (dp-25/31): cursorForDate
+        // aims at the target whenever it is inside the viewed month — even a
+        // dimmed out-of-bounds day — and only re-aims to the first
+        // selectable day when it cannot aim at all. A dimmed cursor is safe:
+        // Enter there records a selection_refused (dp-09).
+        $picker = DatePicker::new(new \DateTimeImmutable('2020-01-01'))
+            ->withToday(new \DateTimeImmutable('2026-01-05'))
+            ->withMinDate(new \DateTimeImmutable('2026-01-20'))
+            ->goToToday();
+
+        $this->assertSame(1, $picker->viewMonth());
+        $this->assertSame('2026-01-05', $picker->dateAtCursor()?->format('Y-m-d'));
+    }
+
+    public function testGoToTodayWhenBoundsSuppressTodaysMonthFallsBackToFirstSelectable(): void
+    {
+        // Today is January 2026 but the window ends 2025-12-31: the view
+        // clamps to December and the cursor takes the view's first
+        // selectable day instead of an unaimable target.
+        $picker = DatePicker::new(new \DateTimeImmutable('2020-01-01'))
+            ->withToday(new \DateTimeImmutable('2026-01-05'))
+            ->withMaxDate(new \DateTimeImmutable('2025-12-31'))
+            ->goToToday();
+
+        $this->assertSame(2025, $picker->viewYear());
+        $this->assertSame(12, $picker->viewMonth());
+        $this->assertSame('2025-12-01', $picker->dateAtCursor()?->format('Y-m-d'));
     }
 
     public function testSetTime(): void

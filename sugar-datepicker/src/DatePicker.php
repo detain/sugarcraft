@@ -245,7 +245,11 @@ final class DatePicker
             (int) $today->format('n'),
             0,
         );
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+        // Same law as setTime()/moveToDate() (dp-25): RE-AIM the cursor at
+        // today's cell — carrying the previous month's index would leave it
+        // on a different weekday column than the day we just navigated to.
+        // Out-of-bounds today falls back to the first selectable day.
+        $clone->cursorIndex = $clone->cursorForDate($today);
 
         return $clone;
     }
