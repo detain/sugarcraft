@@ -299,6 +299,28 @@ final class ApprovalGateTest extends TestCase
 
     // ── harness ──
 
+    public function testBootPostureWarnsOnceOnOpenRosterOnly(): void
+    {
+        $capture = static function (array &$rows): Log {
+            return new Log(static function (string $line) use (&$rows): void {
+                $rows[] = $line;
+            });
+        };
+
+        $openRows = [];
+        new ConversationRouter($this->bridge, $this->map, $capture($openRows), new TextSafety(), $this->loop, ['approvals' => ['enabled' => true]]);
+        $open = \array_values(\array_filter($openRows, static fn (string $r): bool => \str_contains($r, 'approvals_open_roster')));
+        self::assertCount(1, $open, 'an enabled approval posture with an empty roster must announce itself exactly once at boot');
+
+        $gatedRows = [];
+        new ConversationRouter($this->bridge, $this->map, $capture($gatedRows), new TextSafety(), $this->loop, ['approvals' => ['enabled' => true, 'approvers' => ['boss']]]);
+        self::assertSame([], \array_filter($gatedRows, static fn (string $r): bool => \str_contains($r, 'approvals_open_roster')), 'a configured roster is not the open posture — no warning');
+
+        $offRows = [];
+        new ConversationRouter($this->bridge, $this->map, $capture($offRows), new TextSafety(), $this->loop, ['approvals' => ['enabled' => false]]);
+        self::assertSame([], \array_filter($offRows, static fn (string $r): bool => \str_contains($r, 'approvals_open_roster')), 'buttons-off posture is a presentation choice, not an open-roster boot warning');
+    }
+
     /** @param array<string,mixed> $policy */
     private function bootRouter(array $policy = []): void
     {

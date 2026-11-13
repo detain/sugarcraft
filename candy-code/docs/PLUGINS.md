@@ -146,7 +146,11 @@ entrypoint. Installing it exercises every rule above:
 2. The channel stays dark until `channels.discord` says otherwise: it is a
    user-tier Map (`enabled`, intent, DM/guild gates, queue mode, chunk and
    media caps, approval posture, slash deploy, per-account overrides — see
-   [SETTINGS.md](SETTINGS.md)). The bot token never lives in settings: it
+   [SETTINGS.md](SETTINGS.md)). Endpoint overrides are https/wss-gated:
+    `transport.insecureLoopbackProxy` (default false) admits plaintext http/ws
+    for a **loopback** host only — a local-proxy debugging aid, and with it on
+    the bot token rides those requests in plaintext; non-loopback hosts stay
+    https/wss regardless. The bot token never lives in settings: it
    lives in `~/.candy-code/channels.json` under `platforms.discord.accounts`,
    mode 0600, with `DISCORD_BOT_TOKEN` honored for the default account only.
 3. It dials the local serve process over the ordinary WebSocket protocol —
@@ -160,7 +164,11 @@ entrypoint. Installing it exercises every rule above:
    transcripts or logs.
 5. Approvals surface as message buttons only for the configured approvers;
    the roster check runs server-side in the bundle's router, and the button
-   list is a courtesy filter. With `approvals.enabled` false (or where a
+   list is a courtesy filter. `approvals.approvers` is EMPTY by default: with
+    no roster, any paired user who can speak in the ask's own conversation may
+    answer `once` or `deny` (`always` is refused until a roster exists), and
+    the bundle logs one content-free `approvals_open_roster` warning at
+    startup — set the list to gate who may answer. With `approvals.enabled` false (or where a
    button cannot render) the ask falls back to a same-chat `/approve <id>
    once|always|deny` line — never a silent bypass.
 

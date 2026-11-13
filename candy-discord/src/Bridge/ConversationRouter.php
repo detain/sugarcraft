@@ -44,7 +44,8 @@ use React\Promise\PromiseInterface;
  * to dm/channel conversations, `sessionFilter`/`agentFilter` are regex
  * doors, and `approvers` is the answer roster enforced by
  * {@see answerApproval()}. The configured roster is ONE wall (empty =
- * documented everyone); behind it rides the C-1 answer gate: every answer
+ * documented everyone; a boot in that posture logs one content-free
+ * `approvals_open_roster` row); behind it rides the C-1 answer gate: every answer
  * must also prove conversation binding — a button/card click carries the
  * per-ask nonce minted at presentation, a text `/approve` must arrive in
  * the ask's own conversation, and the adapter applies the platform's
@@ -94,6 +95,14 @@ final class ConversationRouter
         $serve->onFollowResult(function (string $sessionId, array $result): void {
             $this->consumeFollowResult($sessionId, $result);
         });
+        $approvals = (array) ($this->policy['approvals'] ?? []);
+        $roster = (array) ($approvals['approvers'] ?? $this->policy['approvers'] ?? []);
+        if ((bool) ($approvals['enabled'] ?? true) && $roster === []) {
+            // Operator truth (candy-discord-002): an empty roster is an OPEN
+            // posture — any paired voice in the ask's conversation may answer
+            // once/deny. Say so once at boot; content-free by design.
+            $this->log->warn('approvals_open_roster');
+        }
     }
 
     /**
