@@ -109,7 +109,8 @@ final class BootstrapTest extends TestCase
 
     public function testBackendForThrowsForAnUnknownProviderName(): void
     {
-        $this->expectException(\Throwable::class);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown provider type: this-provider-does-not-exist');
         Bootstrap::backendFor('this-provider-does-not-exist');
     }
 

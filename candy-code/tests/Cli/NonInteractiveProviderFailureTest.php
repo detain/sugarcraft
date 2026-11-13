@@ -341,7 +341,17 @@ final class NonInteractiveProviderFailureTest extends TestCase
     {
         putenv('CANDY_CODE_PROVIDER=' . $provider);
 
-        $this->expectException(\Throwable::class);
+        // Two distinct refusals, one per misconfiguration shape: a known type
+        // missing its credential is a RuntimeException, an unresolvable name
+        // an InvalidArgumentException. Naming both keeps an unrelated Error
+        // (TypeError, missing class) from satisfying the assertion.
+        if ($provider === 'openai') {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage("Provider type 'openai' requires 'apiKey'");
+        } else {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('Unknown provider type: ' . $provider);
+        }
         Bootstrap::backendFor($provider, $this->tempDir . '/repo');
     }
 
