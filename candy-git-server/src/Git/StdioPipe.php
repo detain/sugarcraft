@@ -22,11 +22,15 @@ namespace SugarCraft\GitServer\Git;
  * exit path — normal drain, idle give-up, hard deadline, or an
  * unwinding exception — funnels through one `finally` that terminates
  * (SIGTERM, then SIGKILL after a grace poll) and closes the handle, so
- * no git child can outlive run(). The pump itself runs synchronously
- * on the caller's thread (a blocking select loop or one event-loop
- * readiness callback); a long transfer therefore delays the other
- * clients for its duration — the same disclosed limitation the daemon
- * has always had.
+ * no git child can outlive run(). The pump itself is SYNCHRONOUS with
+ * respect to its caller — it drives one blocking select loop from start
+ * to finish. WHO the caller is decides whether that delays anyone else:
+ * under the HTTP smart-protocol front door (owner ruling 8b) each
+ * connection runs in its own {@see \SugarCraft\GitServer\Support\WorkerFork}
+ * worker, so a long transfer stalls no sibling; on the git:// daemon and
+ * the SSH transport, where the pump runs inside a shared event-loop
+ * readiness callback, it still holds that loop for its duration — the
+ * per-transport limitation S39 keeps on the record.
  */
 final class StdioPipe
 {

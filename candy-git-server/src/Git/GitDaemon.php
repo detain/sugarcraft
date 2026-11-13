@@ -258,8 +258,16 @@ final class GitDaemon
      * per-request protocol work is the same synchronous delegation the
      * blocking mode runs — a `git upload-pack` child driven through the
      * bounded {@see StdioPipe} pump — executing inside the readiness
-     * callback, so a long transfer still delays the other clients for
-     * its duration (disclosed).
+     * callback, so a long transfer still delays the other clients on
+     * THIS transport for its duration. That is the git:// daemon's own
+     * serial contract, disclosed and standing (it is the shape git's
+     * reference daemon shipped too); the smart-HTTP front door took a
+     * different path with the owner-8b worker pool — each HTTP
+     * connection is served by its own forked worker
+     * ({@see \SugarCraft\GitServer\HttpSmartProtocol\HttpListener} and
+     * {@see \SugarCraft\GitServer\Support\WorkerFork}) — and the git://
+     * and SSH transports remain on the shared-loop design described
+     * here.
      *
      * Naming/shape mirrors sugar-pty's ReactPump: lazily resolves the
      * global loop, returns a promise that settles on stop, and funnels
