@@ -140,6 +140,10 @@ final class McpPromptCommandsTest extends TestCase
         self::assertSame(['mcp__srv__x', 'mcp__srv__kept'], array_keys($specs));
         self::assertSame('first', $specs['mcp__srv__x']->description);
         self::assertStringContainsString('MCP prompt "kept"', $specs['mcp__srv__kept']->description);
+        // S-N11: the fallback frame is a catalogue key, so a German session's
+        // palette shows a translated frame around the verbatim names.
+        $german = \SugarCraft\Code\Lang::inLocale('de', fn (): array => McpPromptCommands::specs($this->providerFor(['srv' => $server])));
+        self::assertSame('MCP-Prompt „kept“ vom Server „srv“', $german['mcp__srv__kept']->description);
     }
 
     public function testNoClientNoServerAndRefusalAllCostTheRosterNotTheLaunch(): void

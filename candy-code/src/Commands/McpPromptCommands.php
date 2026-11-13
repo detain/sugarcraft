@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Commands;
 
 use SugarCraft\Code\CommandParser;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Core\Util\Sanitize;
@@ -221,7 +222,7 @@ final class McpPromptCommands
         return new CommandSpec(
             name: McpToolBridge::NAME_PREFIX . McpToolBridge::sanitize($server) . '__' . McpToolBridge::sanitize($promptName),
             description: $description === ''
-                ? sprintf('MCP prompt "%s" from server "%s"', self::clipped($promptName), self::clipped($server))
+                ? Lang::t('cmd.mcp.prompt_description', ['name' => self::clipped($promptName), 'server' => self::clipped($server)])
                 : self::clipped($description),
             category: 'MCP',
             argumentHint: $hintParts === [] ? null : implode(' ', $hintParts),
