@@ -439,6 +439,35 @@ propagate normally — but the inline fallback is **unbounded**: the wall-clock
 ceiling can only rein in the forked child, so a hung action on a pcntl-less
 host blocks forever.
 
+### Internationalization (i18n)
+
+Every user-facing string — validation messages, key-bind labels, the
+`Step x of y` footer, the `[submitted]`/`[aborted]` terminal lines, the empty-list
+copy — routes through `SugarCraft\Forms\Lang::t()`, a thin per-library facade
+(`src/Lang.php`) over the shared `SugarCraft\Core\I18n\T` registry with the `forms`
+namespace baked in. The catalogue lives in `lang/en.php` and interpolates
+`{placeholder}` tokens: `Lang::t('form.step_of', ['current' => 1, 'total' => 3])`.
+
+The host selects a locale process-wide on the registry:
+
+```php
+use SugarCraft\Core\I18n\T;
+
+T::setLocale('de');         // explicit
+T::setLocale(T::detect());  // from $LANG / $LC_ALL
+```
+
+Lookup order is exact locale → base language (`de-at` falls back to `de`) →
+`en` → the raw dotted key, returned verbatim when the catalogue has no such entry
+at all.
+
+**Today `lang/` ships only `en.php` — the catalogue is English-only.** Additional
+locales seed over time following the house add-locale pattern (copy `en.php`,
+translate values only, keep every key and `{placeholder}` token verbatim). Until a
+locale is seeded, a non-`en` setting resolves through the `en` fallback: translated
+output arrives only once the matching file lands, and nothing crashes on a missing
+one.
+
 ### Demos
 
 ![form](.vhs/form.gif) ![confirm](.vhs/confirm.gif) ![input](.vhs/input.gif) ![select](.vhs/select.gif)
