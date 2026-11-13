@@ -115,7 +115,9 @@ function main(array $argv): int
     // reads — an off-roster POP_ANYTHING maps to a CANDY_MAIL_ANYTHING
     // that nothing consumes, and warning about it invented a migration
     // target that does not exist. The import itself stays whole-prefix
-    // (LegacyEnv semantics): those extras are simply inert.
+    // (LegacyEnv semantics): those extras are simply inert. POP_SMTP_TLS
+    // is the single off-roster exception: it has a real successor under a
+    // different suffix (SMTP_REQUIRE_TLS) and is mapped by name below.
     $mailEnvRoster = [ // suffixes of CANDY_MAIL_* read by envString()/envFlag()
         'FROM', 'SIGNATURE', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME',
         'SMTP_PASSWORD', 'SMTP_REQUIRE_TLS', 'SMTP_IMPLICIT_TLS',
@@ -125,6 +127,33 @@ function main(array $argv): int
         'POP_' => 'CANDY_MAIL_', // @rename-keep
     ]) as $legacyVar) {
         $suffix = \substr($legacyVar, \strlen('POP_')); // @rename-keep
+        if ($suffix === 'SMTP_TLS') {
+            // The one off-roster name that HAS a real successor: POP_SMTP_TLS
+            // predates the REQUIRE/IMPLICIT split, and whole-prefix import put
+            // its value on CANDY_MAIL_SMTP_TLS — a name nothing reads. Carry
+            // the value onto the semantically closest knob (the old switch
+            // only ever forced or refused TLS enforcement, which today is
+            // REQUIRE_TLS' job), honouring the new-name-always-wins rule, and
+            // warn under that successor's name. Word validation still belongs
+            // to envFlag: a garbage carry throws cli.invalid_env_flag naming
+            // the successor, loudly, never guessed.
+            $legacyValue = \getenv($legacyVar); // @rename-keep
+            if (\is_string($legacyValue) && $legacyValue !== '' && \getenv('CANDY_MAIL_SMTP_REQUIRE_TLS') === false) {
+                \putenv('CANDY_MAIL_SMTP_REQUIRE_TLS=' . $legacyValue);
+                $_ENV['CANDY_MAIL_SMTP_REQUIRE_TLS']    = $legacyValue;
+                $_SERVER['CANDY_MAIL_SMTP_REQUIRE_TLS'] = $legacyValue;
+            }
+            if (\is_string($legacyValue) && $legacyValue !== '' && \getenv('CANDY_MAIL_SMTP_TLS') === $legacyValue) {
+                // The phantom CANDY_MAIL_SMTP_TLS the import just minted has
+                // no reader — sweep it so no future knob can grow one onto a
+                // stale value. A same-valued pre-set (operator-written) copy
+                // is indistinguishable but inert; dropping it costs nothing.
+                unset($_ENV['CANDY_MAIL_SMTP_TLS'], $_SERVER['CANDY_MAIL_SMTP_TLS']);
+                \putenv('CANDY_MAIL_SMTP_TLS');
+            }
+            fwrite(STDERR, Sanitize::untrusted('candy-mail: ' . Lang::t('cli.deprecated_env', ['old' => $legacyVar, 'new' => 'CANDY_MAIL_SMTP_REQUIRE_TLS']) . "\n")); // @rename-keep
+            continue;
+        }
         if (!\in_array($suffix, $mailEnvRoster, true)) {
             continue;
         }

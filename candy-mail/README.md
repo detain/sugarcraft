@@ -292,7 +292,10 @@ export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to the plain-text 
 # Pre-rename POP_* exports are imported onto CANDY_MAIL_* equivalents whole-prefix
 # (an already-set CANDY_MAIL_* wins); the 11 names this program reads also emit a
 # one-time deprecation warning — off-roster POP_* vars map to names nothing consumes,
-# staying inert and silent.
+# staying inert and silent. The exception is POP_SMTP_TLS: it predates the
+# REQUIRE/IMPLICIT split, so its value carries to CANDY_MAIL_SMTP_REQUIRE_TLS
+# (nearest meaning — that knob is what the old switch enforced), and the warning
+# names that successor; the new name still wins if both are set.
 ```
 <!-- @rename-keep -->
 

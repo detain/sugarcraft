@@ -957,6 +957,128 @@ final class BinDispatchTest extends TestCase
         $this->assertStringNotContainsString('KERNEL_PANIC', $result['err']);
     }
 
+    public function testLegacyPopSmtpTlsAnnouncesItsRealSuccessor(): void
+    {
+        // CM-35: POP_SMTP_TLS is off-roster by suffix, but unlike POP_KERNEL_
+        // PANIC it has a REAL successor — CANDY_MAIL_SMTP_REQUIRE_TLS. The old
+        // whole-prefix import parked its value on a name nothing reads and the
+        // roster filter kept the bridge silent: a security knob that stopped
+        // working while pretending it never existed.
+        $result = $this->runCli(['--version'], extraEnv: ['POP_SMTP_TLS' => '0']);
+
+        $this->assertSame(0, $result['status']);
+        $this->assertStringContainsString('POP_SMTP_TLS is deprecated', $result['err']);
+        $this->assertStringContainsString('CANDY_MAIL_SMTP_REQUIRE_TLS', $result['err']);
+    }
+
+    public function testLegacyPopSmtpTlsValueCarriesToRequireTlsAndNewNameWins(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl not available');
+        }
+
+        $errno  = 0;
+        $errstr = '';
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($server === false) {
+            $this->markTestSkipped("cannot bind loopback server: {$errstr}");
+        }
+        $name = \stream_socket_get_name($server, false);
+        $port = (int) \substr((string) $name, \strrpos((string) $name, ':') + 1);
+
+        $pid = \pcntl_fork();
+        if ($pid === -1) {
+            @\fclose($server);
+            $this->markTestSkipped('pcntl_fork failed');
+        }
+        if ($pid === 0) {
+            // Child: plain relay, advertises no STARTTLS (see the success-
+            // banner test for the dialogue shape this mirrors). Serves the
+            // carry leg and the new-name-wins leg: two connections.
+            for ($round = 0; $round < 2; $round++) {
+                $conn = @\stream_socket_accept($server, 10);
+                if ($conn === false) {
+                    break;
+                }
+                @\fwrite($conn, "220 fake ESMTP\r\n");
+                $deadline = \microtime(true) + 15.0;
+                $inData   = false;
+                while (\microtime(true) < $deadline && !\feof($conn)) {
+                    $line = \fgets($conn, 4096);
+                    if ($line === false) {
+                        break;
+                    }
+                    $trim = \rtrim($line, "\r\n");
+                    if ($inData) {
+                        if ($trim === '.') {
+                            $inData = false;
+                            @\fwrite($conn, "250 OK queued\r\n");
+                        }
+                        continue;
+                    }
+                    $up = \strtoupper($trim);
+                    if (\str_starts_with($up, 'EHLO') || \str_starts_with($up, 'HELO')) {
+                        @\fwrite($conn, "250 fake\r\n");
+                    } elseif (\str_starts_with($up, 'MAIL') || \str_starts_with($up, 'RCPT')) {
+                        @\fwrite($conn, "250 OK\r\n");
+                    } elseif (\str_starts_with($up, 'DATA')) {
+                        $inData = true;
+                        @\fwrite($conn, "354 Send\r\n");
+                    } elseif (\str_starts_with($up, 'QUIT')) {
+                        @\fwrite($conn, "221 Bye\r\n");
+                        break;
+                    } else {
+                        @\fwrite($conn, "250 OK\r\n");
+                    }
+                }
+                @\fclose($conn);
+            }
+            @\fclose($server);
+            if (\function_exists('posix_kill')) {
+                \posix_kill(\getmypid(), \SIGKILL);
+            }
+            exit(0);
+        }
+        @\fclose($server);
+
+        try {
+            // Carry leg: POP_SMTP_TLS=0 alone must reach REQUIRE_TLS and let
+            // the plaintext send succeed (old behaviour: silently ignored,
+            // requireTls stayed on, send refused).
+            $carried = $this->runCli(
+                ['--to', 'b@example.com'],
+                'hello body',
+                [
+                    'CANDY_MAIL_FROM'      => 'a@example.com',
+                    'CANDY_MAIL_SMTP_HOST' => '127.0.0.1',
+                    'CANDY_MAIL_SMTP_PORT' => (string) $port,
+                ],
+                extraEnv: ['POP_SMTP_TLS' => '0']
+            );
+            $this->assertSame(0, $carried['status'], 'the carried legacy 0 must switch REQUIRE_TLS off');
+            $this->assertStringContainsString('Email sent', $carried['out']);
+            $this->assertStringContainsString('POP_SMTP_TLS is deprecated', $carried['err']);
+
+            // New-name-wins leg: CANDY_MAIL_SMTP_REQUIRE_TLS=1 beside the
+            // legacy 0 must keep the floor ON — same relay, refusal.
+            $fresh = $this->runCli(
+                ['--to', 'b@example.com'],
+                'hello body',
+                [
+                    'CANDY_MAIL_FROM'             => 'a@example.com',
+                    'CANDY_MAIL_SMTP_HOST'        => '127.0.0.1',
+                    'CANDY_MAIL_SMTP_PORT'        => (string) $port,
+                    'CANDY_MAIL_SMTP_REQUIRE_TLS' => '1',
+                ],
+                extraEnv: ['POP_SMTP_TLS' => '0']
+            );
+            $this->assertSame(1, $fresh['status'], 'the new name must win over the legacy carry');
+            $this->assertStringNotContainsString('Email sent', $fresh['out']);
+        } finally {
+            $this->reapHostileServer($pid);
+        }
+    }
+
     private function reapHostileServer(int $pid): void
     {
         $deadline = \microtime(true) + 5.0;
