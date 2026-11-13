@@ -21,10 +21,13 @@ use SugarCraft\Vterm\Theme;
  *
  * Tile cache lives on the rasterizer instance so per-cell `\Imagick`
  * allocations are amortised across a tape's many snapshots — keyed on
- * the same shape as {@see Glyphs} but with the source `Imagick` cloned
- * before each `compositeImage()` call. Cache fingerprint matches the
- * GD rasterizer: (cellW, cellH, theme spl_object_id, fontFamily,
- * fontSize). `__destruct` releases the cached `Imagick` resources.
+ * the same shape as {@see Glyphs}. A cache hit hands the cached
+ * `Imagick` straight to `compositeImage()`: the composite is measured
+ * (non-mutating on its argument — signature and pixels stable across
+ * repeated no-op composites), so no per-cell clone is paid. Cache
+ * fingerprint matches the GD rasterizer: (cellW, cellH, theme
+ * spl_object_id, fontFamily, fontSize). `__destruct` releases the
+ * cached `Imagick` resources.
  *
  * No upstream counterpart: charmbracelet/vhs screenshots a live ttyd with
  * Chromium and ffmpeg — it ships no cell-grid rasterizer. This .tape→GIF
@@ -64,8 +67,9 @@ final class ImagickRasterizer implements Rasterizer
         $clone = new self($this->fontSize, $this->fontFamily, $theme);
         $clone->cacheDisabled = $this->cacheDisabled;
         // Deep-clone tileCache so each instance has independent Imagick objects.
-        // Without this, clearTileCache() on a clone would destroy tiles the
-        // original instance is still using.
+        // Required even more now that cache hits hand out the stored instance
+        // directly: without this, clearTileCache() on a derived instance would
+        // clear tiles the original instance is still compositing.
         foreach ($this->tileCache as $key => $tile) {
             $clone->tileCache[$key] = clone $tile;
         }
@@ -84,8 +88,9 @@ final class ImagickRasterizer implements Rasterizer
         );
         $clone->cacheDisabled = $this->cacheDisabled;
         // Deep-clone tileCache so each instance has independent Imagick objects.
-        // Without this, clearTileCache() on a clone would destroy tiles the
-        // original instance is still using.
+        // Required even more now that cache hits hand out the stored instance
+        // directly: without this, clearTileCache() on a derived instance would
+        // clear tiles the original instance is still compositing.
         foreach ($this->tileCache as $key => $tile) {
             $clone->tileCache[$key] = clone $tile;
         }
@@ -201,7 +206,12 @@ final class ImagickRasterizer implements Rasterizer
 
         if (!$this->cacheDisabled && isset($this->tileCache[$key])) {
             $this->hits++;
-            return clone $this->tileCache[$key];
+            // compositeImage() is argument-safe (measured: signature and pixel
+            // bytes stable across repeated no-op composites), so a hit hands
+            // out the cached instance itself — the per-cell clone that used to
+            // sit here re-copied the pixel cache times the whole grid on every
+            // single frame (finding 015).
+            return $this->tileCache[$key];
         }
 
         $this->misses++;
@@ -209,7 +219,7 @@ final class ImagickRasterizer implements Rasterizer
 
         if (!$this->cacheDisabled) {
             $this->tileCache[$key] = $tile;
-            return clone $tile;
+            return $tile;
         }
 
         return $tile;

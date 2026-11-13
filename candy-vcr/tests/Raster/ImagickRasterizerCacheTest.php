@@ -98,6 +98,89 @@ final class ImagickRasterizerCacheTest extends TestCase
     }
 
     /**
+     * Clone-count probe (finding 015): a cache hit must hand out the stored
+     * instance itself, not a per-cell copy. Before the fix this returned
+     * `clone $tile`, re-copying the pixel cache once per grid cell per frame.
+     */
+    public function testCacheHitReturnsTheSharedInstance(): void
+    {
+        $rasterizer = new ImagickRasterizer(14, 'DejaVuSansMono');
+        $rasterizer->rasterize($this->snapshotWithChars(['A']), 8, 16, $this->fonts)->clear();
+
+        $cacheProperty = new \ReflectionProperty($rasterizer, 'tileCache');
+        $cacheProperty->setAccessible(true);
+        /** @var array<string, \Imagick> $cache */
+        $cache = $cacheProperty->getValue($rasterizer);
+        $cached = $cache[array_key_first($cache)];
+        $this->assertInstanceOf(\Imagick::class, $cached, 'one tile must be cached after the miss');
+
+        $getTile = new \ReflectionMethod($rasterizer, 'getTile');
+        $getTile->setAccessible(true);
+        $returned = $getTile->invoke($rasterizer, new Cell('A', 7, 0), 8, 16, $this->fonts, 8, false);
+
+        $this->assertSame($cached, $returned, 'a hit must reuse the cached instance, not clone it');
+        $this->assertSame(1, $rasterizer->cacheStats()['hits'], 'the direct reflection call must have hit the cache');
+    }
+
+    /**
+     * The contract that makes the shared-instance return safe: compositing a
+     * tile repeatedly must leave the cached tile bit-for-bit intact. Mirrors
+     * the real tape workload — the same tile instance composited across whole
+     * frames, nothing else touching the wand between reads.
+     */
+    public function testCachedTileSurvivesCompositingUnmutated(): void
+    {
+        $rasterizer = new ImagickRasterizer(14, 'DejaVuSansMono');
+        $rasterizer->rasterize($this->snapshotWithChars(['A', 'B']), 8, 16, $this->fonts)->clear();
+
+        $cacheProperty = new \ReflectionProperty($rasterizer, 'tileCache');
+        $cacheProperty->setAccessible(true);
+        /** @var array<string, \Imagick> $cache */
+        $cache = $cacheProperty->getValue($rasterizer);
+        $tileA = $cache[array_key_first($cache)];
+        // Blob first: the first encoding read normalizes the pixel cache, which
+        // is what makes the value stable afterwards (measured).
+        $blob = (string) $tileA->getImageBlob();
+
+        for ($frame = 0; $frame < 5; $frame++) {
+            $rasterizer->rasterize($this->snapshotWithChars(['A', 'A', 'B']), 8, 16, $this->fonts)->clear();
+        }
+
+        $this->assertSame($blob, (string) $tileA->getImageBlob(), 'cached tile pixels must be stable across frames');
+    }
+
+    /**
+     * Pixel-identical acceptance: the cache-disabled path (fresh tile per
+     * lookup) and the shared-instance hit path must render the same bytes.
+     */
+    public function testCacheEnabledAndDisabledRenderPixelIdentical(): void
+    {
+        $rasterizer = new ImagickRasterizer(14, 'DejaVuSansMono');
+        $frame = $this->snapshotWithChars(['A', 'B', 'A', 'C', 'B', 'A']);
+
+        $withCache = $rasterizer->rasterize($frame, 8, 16, $this->fonts);
+        $againWithCache = $rasterizer->rasterize($frame, 8, 16, $this->fonts);
+
+        $rasterizer->setCacheDisabled(true);
+        $withoutCache = $rasterizer->rasterize($frame, 8, 16, $this->fonts);
+
+        $this->assertSame(
+            $withCache->getImageSignature(),
+            $againWithCache->getImageSignature(),
+            'second pass (all shared-instance hits) must render pixel-identically',
+        );
+        $this->assertSame(
+            $withCache->getImageSignature(),
+            $withoutCache->getImageSignature(),
+            'shared cached tiles must render pixel-identically to fresh per-lookup tiles',
+        );
+
+        $withCache->clear();
+        $againWithCache->clear();
+        $withoutCache->clear();
+    }
+
+    /**
      * @param list<string> $chars
      */
     private function snapshotWithChars(array $chars): Snapshot
