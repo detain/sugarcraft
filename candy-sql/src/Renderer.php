@@ -280,12 +280,16 @@ final class Renderer
         // scroll grid with JSON pretty-printing + a styled NULL token); regular
         // table browsing renders through sugar-table.
         if ($a->browse->resultTable !== null) {
-                        $windowStart = intdiv($a->browse->rowCursor, ResultTable::DEFAULT_PAGE_SIZE) * ResultTable::DEFAULT_PAGE_SIZE;
+            // D-C2/D-C06: the row cursor drives the vertical window so every
+            // row of a long result set is reachable — and the grid now fits
+            // the pane's height budget. The old unconditional 25-row page
+            // overflowed short panes: the Frame clipped the counter, the
+            // help line and the query pane away (editor unreachable until a
+            // resize), and the page-aligned intdiv window could park the
+            // cursor itself inside the clipped band.
             $body = $a->browse->resultTable
                 ->withVisibleWidth($width)
-                // D-C2: the row cursor drives the vertical window so every
-                // row of a long result set is reachable, not just the first 25.
-                ->withRowOffset($windowStart)
+                ->withViewport($available, $a->browse->rowCursor)
                 ->render();
             return self::frame($a, Pane::Rows, $title, $body, $width);
         }

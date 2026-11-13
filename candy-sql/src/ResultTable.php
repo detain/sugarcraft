@@ -57,6 +57,12 @@ final class ResultTable
     /** First row index of the rendered window (D-C2 vertical paging). */
     private int $rowOffset = 0;
 
+    /** Total-line render budget in rows (D-C06); 0 = unbounded legacy page. */
+    private int $viewportRows = 0;
+
+    /** Row index the cursor sits on (D-C06); -1 = unknown → rowOffset rules. */
+    private int $cursorRow = -1;
+
     /** Derived: column names from the first row. */
     private readonly array $columns;
 
@@ -163,8 +169,11 @@ final class ResultTable
 
     /**
      * Move the vertical render window (D-C2). The window always spans at
-     * most DEFAULT_PAGE_SIZE rows; the caller tracks page alignment (the
-     * App derives the offset from the row cursor).
+     * most DEFAULT_PAGE_SIZE rows (or the viewport budget from
+     * {@see self::withViewport()}, whichever is tighter). D-C06: the live
+     * caller no longer page-aligns the offset — it hands the cursor to
+     * withViewport() so the window centres on it; a plain rowOffset still
+     * windows from the top of that page when no cursor is given.
      */
     public function withRowOffset(int $rowOffset): self
     {
@@ -179,6 +188,34 @@ final class ResultTable
             precomputedColWidths: $this->colWidths,
             rowOffset: max(0, $rowOffset),
         );
+    }
+
+    /**
+     * Hand the renderer the pane's height budget and the cursor's row index
+     * (D-C06). The unconditional 25-row page overflowed short panes: the
+     * sugar-cli Frame clipped everything below the budget away — the row
+     * counter, the help line and the query pane went dark, and the
+     * page-aligned window could park the cursor itself inside the clipped
+     * band. With a budget the window shrinks to fit (header, scroll hint and
+     * row counter all live inside the envelope) and slides to keep the cursor
+     * centred.
+     */
+    public function withViewport(int $viewportRows, int $cursorRow = -1): self
+    {
+        $new = new self(
+            rows: $this->rows,
+            offset: $this->offset,
+            visibleWidth: $this->visibleWidth,
+            maxCellWidth: $this->maxCellWidth,
+            jsonPretty: $this->jsonPretty,
+            nullToken: $this->nullToken,
+            colSpacing: $this->colSpacing,
+            precomputedColWidths: $this->colWidths,
+            rowOffset: $this->rowOffset,
+        );
+        $new->viewportRows = max(0, $viewportRows);
+        $new->cursorRow = $cursorRow;
+        return $new;
     }
 
     public function withOffset(int $offset): self
@@ -311,8 +348,9 @@ final class ResultTable
     /**
      * Render the table as ANSI-coloured string.
      *
-     * Produces a header row followed by data rows (up to
-     * {@see DEFAULT_PAGE_SIZE}). Long cells are truncated with `…`.
+     * Produces a header row followed by the row window (at most
+     * {@see DEFAULT_PAGE_SIZE} rows, tightened by the viewport budget of
+     * {@see self::withViewport()} — D-C06). Long cells are truncated with `…`.
      */
     public function render(): string
     {
@@ -321,10 +359,14 @@ final class ResultTable
                 ->render('(empty result set)');
         }
 
+        $budget = $this->rowBudget();
+        $windowStart = $this->windowStart($budget);
+        $window = array_slice($this->rows, $windowStart, $budget);
+
         $lines = [];
         $lines[] = $this->renderHeader();
 
-        foreach (array_slice($this->rows, $this->rowOffset, self::DEFAULT_PAGE_SIZE) as $row) {
+        foreach ($window as $row) {
             $lines[] = $this->renderRow($row);
         }
 
@@ -333,14 +375,43 @@ final class ResultTable
         }
 
         $totalRows = count($this->rows);
-        if ($totalRows > self::DEFAULT_PAGE_SIZE || $this->rowOffset > 0) {
-            $start = $this->rowOffset + 1;
-            $end = min($this->rowOffset + self::DEFAULT_PAGE_SIZE, $totalRows);
+        if ($totalRows > count($window) || $windowStart > 0) {
+            $start = $windowStart + 1;
+            $end = $windowStart + count($window);
             $lines[] = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render("rows {$start}–{$end} of {$totalRows}");
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Data-row lines renderable inside the viewport (D-C06): three lines are
+     * reserved for the header, the scroll hint and the row counter so the
+     * whole render fits the pane envelope; unbounded (legacy 25-row page)
+     * when no viewport was set.
+     */
+    private function rowBudget(): int
+    {
+        if ($this->viewportRows <= 0) {
+            return self::DEFAULT_PAGE_SIZE;
+        }
+        return min(self::DEFAULT_PAGE_SIZE, max(1, $this->viewportRows - 3));
+    }
+
+    /**
+     * First row index of the render window (D-C06): a known cursor is
+     * centred — the old page-aligned `intdiv(rowCursor, 25) * 25` window
+     * could park the cursor inside the clipped band — otherwise the caller's
+     * {@see self::withRowOffset()} page stands.
+     */
+    private function windowStart(int $budget): int
+    {
+        if ($this->cursorRow >= 0) {
+            $maxStart = max(0, count($this->rows) - $budget);
+            return max(0, min($this->cursorRow - intdiv($budget - 1, 2), $maxStart));
+        }
+        return max(0, $this->rowOffset);
     }
 
     /**

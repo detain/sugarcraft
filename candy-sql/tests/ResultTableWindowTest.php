@@ -61,6 +61,11 @@ final class ResultTableWindowTest extends TestCase
 
     public function testTheAppWindowFollowsTheRowCursor(): void
     {
+        // D-C06 re-derives D-C2: the window CENTRES on the cursor instead of
+        // page-aligning under it. At 200x60 the budget affords the full
+        // 25-row page; cursor 26 (row "a27") pulls the start to the tail
+        // clamp (row 6) so the cursor sits mid-window — the old intdiv window
+        // started at row 26 and left the first 25 rows unreachable.
         $rows = array_map(static fn (int $i): array => ['v' => "a{$i}"], range(1, 30));
         $db = new SqliteDatabase(new PDO('sqlite::memory:'));
         $app = App::builder()
@@ -71,9 +76,16 @@ final class ResultTableWindowTest extends TestCase
             ->withResultTable(ResultTable::fromRows($rows))
             ->withRowCursor(26)
             ->build();
-        $out = Renderer::render($app);
-        $this->assertStringContainsString('a26', $out, 'cursor at row 27 must open page two');
-        $this->assertStringContainsString('rows 26–30 of 30', $out);
+        try {
+            Renderer::setSize(200, 60);
+            $out = Renderer::render($app);
+            $this->assertStringContainsString('a27', $out, 'the cursor row itself must render');
+            $this->assertStringContainsString('a26', $out);
+            $this->assertStringContainsString('rows 6–30 of 30', $out);
+            $this->assertStringNotContainsString('a5', $out, 'centring clips the head, not the tail');
+        } finally {
+            Renderer::resetSizeCache();
+        }
     }
 
     public function testRowOffsetSurvivesColumnScrollClones(): void
