@@ -78,19 +78,21 @@ final class AmbientColorProfileTest extends TestCase
 
     public function testDumbTerminalRefusesColourEntirely(): void
     {
+        // CP-22: the delegated chain answers TERM=dumb as Ascii; bin/candy-top
+        // maps dumb to the NoTty full-screen veto itself.
         $ambient = ColorProfile::detect(['TERM' => 'dumb']);
-        $this->assertSame(ColorProfile::NoTty, $ambient);
+        $this->assertSame(ColorProfile::Ascii, $ambient);
 
         [$app] = Harness::app()->update(new ColorProfileMsg($ambient));
 
-        $this->assertSame(ColorProfile::NoTty, $app->ink->profile());
+        $this->assertSame(ColorProfile::Ascii, $app->ink->profile());
         $this->assertSame('', $app->ink->fg('main_fg'));
     }
 
     public function testForceColorRescuesTheRefusalAndTheConfigDepthStands(): void
     {
         $ambient = ColorProfile::detect(['TERM' => 'dumb', 'FORCE_COLOR' => '1']);
-        $this->assertSame(ColorProfile::TrueColor, $ambient, 'the ladder itself must rescue force out of NoTty');
+        $this->assertSame(ColorProfile::Ansi, $ambient, 'the chain itself must rescue force out of the refusal (CP-22: Ansi, was TrueColor)');
 
         [$app] = Harness::app()->update(new ColorProfileMsg($ambient));
 
