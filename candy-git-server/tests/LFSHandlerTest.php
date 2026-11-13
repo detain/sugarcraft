@@ -186,6 +186,14 @@ final class LFSHandlerTest extends TestCase
         // nothing dispatched.
         $this->assertStringContainsString('/test-repo/info/lfs/objects/' . \str_repeat('d', 64), $result['objects'][0]['actions']['upload']['href']);
         $this->assertStringContainsString('/test-repo/info/lfs/objects/' . \str_repeat('d', 64) . '/verify', $result['objects'][0]['actions']['verify']['href']);
+
+        // 058: the actions are BARE hrefs. The batch docblock used to
+        // promise a per-action "header" credential map the code never
+        // minted — this server issues no batch tokens; object routes
+        // demand the client's own auth. The exact key sets weld
+        // docblock truth to response shape so neither can drift again.
+        $this->assertSame(['href'], array_keys($result['objects'][0]['actions']['upload']));
+        $this->assertSame(['href'], array_keys($result['objects'][0]['actions']['verify']));
     }
 
     public function testHandleBatchWithMultipleObjects(): void

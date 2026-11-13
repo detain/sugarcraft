@@ -442,7 +442,7 @@ form address the same routes:
 | `/{repo}/info/lfs/objects/batch` | POST | Batch API — advertises download/upload/verify actions |
 | `/{repo}/info/lfs/objects/{oid}` | GET | Download an object |
 | `/{repo}/info/lfs/objects/{oid}` | PUT | Upload an object |
-| `/{repo}/info/lfs/objects/{oid}/verify` | POST | Post-upload existence + size check |
+| `/{repo}/info/lfs/objects/{oid}/verify` | POST | Post-upload integrity check — exists, size, and stored bytes re-hashed |
 
 Rules enforced at the HTTP boundary:
 
@@ -452,8 +452,11 @@ Rules enforced at the HTTP boundary:
   (Basic or `X-CandyGitServer-User`) as the pack endpoints.
 - Uploads are capped by `http.max_pack_bytes` (413 when exceeded) and the
   body's SHA-256 must match the OID (422 on mismatch); downloads refuse an
-  oversize object before it is read, and storage writes publish atomically
-  (temp + `0600` + rename, no residue on failure).
+  oversize object before it is read; `verify` re-hashes the STORED bytes
+  (422 sends the client's re-upload, closing the poisoned-object window);
+  and the default storage backend publishes atomically (temp + `0600` +
+  fsync + rename, no residue on failure) — durability is that class's
+  policy, not this layer's law; see Custom storage backends below.
 - Batch requests validate every entry before touching storage: 64-hex
   oids, sizes within the cap, operations from `{download, upload}`, and a
   transfer list that must include `basic` — malformed entries answer with
@@ -462,8 +465,22 @@ Rules enforced at the HTTP boundary:
   refused at load (`config.tls_not_supported`) — HTTPS termination is
   out of scope for the class.
 
-Objects are stored via `LFS\LocalStorageBackend` under `<data_path>/lfs/`
-using the standard `aa/bb/oid` fan-out layout.
+Objects are stored by default via `LFS\LocalStorageBackend` under
+`<data_path>/lfs/` using the standard `aa/bb/oid` fan-out layout, and the
+storage class itself re-checks the 64-hex oid shape — a direct embedder
+cannot hand it a path fragment either.
+
+**Custom storage backends.** The swap point is one argument on
+`LFSHandler`: its `$storageBackend` constructor parameter (null builds
+the default) or `withStorageBackend()`, which forwards every other
+setting. The interface contract is the six verbs and their
+`RuntimeException` promises; the atomic publish, `0600`/`0750` modes,
+fsync-before-rename durability, and oid containment described above are
+the DEFAULT class's policy, which a custom backend inherits only by
+implementing. Only the HTTP router gates oid shape before a backend
+call, so a custom implementation must treat oids as untrusted input.
+The `@note` on `LFSStorageBackendInterface` is the authority on that
+boundary.
 
 ## Mirrors
 

@@ -49,6 +49,13 @@ final class LFSHandler
     /** Object size ceiling when the deployment does not configure one. */
     public const MAX_OBJECT_BYTES = 268435456;
 
+    /**
+     * @param LFSStorageBackendInterface|null $storageBackend 050: THE
+     *        swap point — null builds the default LocalStorageBackend
+     *        over $lfsPath; an implementation replaces storage
+     *        entirely (the interface @note lists which guarantees the
+     *        swap hands over to the custom class).
+     */
     public function __construct(
         Repo $repo,
         ?User $user,
@@ -77,7 +84,10 @@ final class LFSHandler
     }
 
     /**
-     * Create with a custom storage backend.
+     * Create with a custom storage backend (050: the named swap point —
+     * every other setting is forwarded; see the
+     * LFSStorageBackendInterface @note for which guarantees a swap
+     * hands over from the default class to the custom one).
      */
     public function withStorageBackend(LFSStorageBackendInterface $backend): self
     {
@@ -221,7 +231,8 @@ final class LFSHandler
      *       "size": ...,
      *       "actions": {
      *         "download": { "href": "https://..." },
-     *         "upload":  { "href": "https://...", "header": { "Authorization": "..." } }
+     *         "upload":   { "href": "https://..." },
+     *         "verify":   { "href": "https://.../verify" }
      *       },
      *       "error": { "code": 404, "message": "..." }
      *     }
@@ -231,6 +242,16 @@ final class LFSHandler
      * Href schemes follow the configured http.public_url (https appears only
      * when the deployment sits behind an external TLS terminator — this
      * server refuses to terminate TLS itself).
+     *
+     * Actions carry BARE hrefs (058): no per-action "header" credential
+     * map is minted — this server issues no short-lived batch tokens, so
+     * every object-route request must bring its own auth (the same
+     * Basic / X-CandyGitServer-User shapes the pack endpoints use).
+     * Upstream soft-serve has since grown per-action headers; the
+     * divergence is deliberate and disclosed (the README Known-gaps
+     * line lands with the docs wave). A strict client that requires
+     * header-carried credentials must supply its own, as with any
+     * plain-Basic server.
      */
     public function handleBatch(array $request): array
     {

@@ -9,6 +9,21 @@ namespace SugarCraft\GitServer\LFS;
  *
  * Implement this interface to provide custom storage for LFS objects.
  * Examples: local filesystem, S3, GCS, Azure Blob Storage, etc.
+ *
+ * @note 050 — THE swap point is LFSHandler's `$storageBackend`
+ * constructor argument (null builds the default LocalStorageBackend over
+ * the configured lfs path; LFSHandler::withStorageBackend() returns a
+ * copy with every other setting forwarded). What this interface
+ * REQUIRES of any implementation is only what its method signatures
+ * promise: the six verbs, a readable stream resource from read(), and
+ * RuntimeException for missing objects and failed writes. What
+ * LocalStorageBackend additionally PROVIDES — atomic temp+fsync+rename
+ * publish, 0600 object modes, 0750 shard dirs, and its own 64-hex oid
+ * containment — is default-backend policy, not storage law this layer
+ * checks. A custom backend that wants those guarantees implements them
+ * itself; and because only the HTTP router gates oid shape before a
+ * call reaches a backend, embedders' custom implementations must treat
+ * the oid string as untrusted input and contain it in their own layer.
  */
 interface LFSStorageBackendInterface
 {
