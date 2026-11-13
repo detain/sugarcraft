@@ -32,7 +32,7 @@ sugar-datepicker — an interactive date picker component for terminal UIs, for 
   `Model` contract (`init()`/`update(Msg)`/`view()`), recording picker events
   into an optional `EventStore`
 - **Today highlight** — show the reference "today" distinctly; `withoutToday()`
-  drops the pinned reference again
+  hides the marker outright, `withClockToday()` resumes wall-clock following
 - **Selected date and range styling** — seven SGR style setters, validated
 - **Pure renderer** — outputs ANSI strings, no external TUI framework needed
 
@@ -190,15 +190,20 @@ existing one — setting `minDate` after `maxDate` (or `maxDate` before
 
 ```php
 $picker = $picker->withToday(new \DateTimeImmutable('2026-05-15')); // pin "today"
-$picker = $picker->withoutToday();  // drop the pin (falls back to the real clock)
+$picker = $picker->withoutToday();     // hide the marker (no today cell renders)
+$picker = $picker->withClockToday();   // follow the wall clock again
 ```
 
-`withoutToday()` removes only the pinned reference — the picker then treats the
-real wall-clock as "today", so the highlight keeps rendering (it is not a way to
-hide the marker; set `withTodayStyle('')` to suppress it). `goToToday()` navigates
-to the pinned date, or to the real current day when nothing is pinned — unless
-that day lies outside a `min`/`max` window, in which case the view stays
-clamped inside the window (see the Min/max bounds section above).
+`withoutToday()` is a true hide (dp-33): until `withClockToday()` or a fresh
+`withToday()` restores an anchor, no cell wears the today/selected-today style
+(the only marker-suppression route since invalid SGR is refused — an empty
+style string would have been a lie). `goToToday()` still navigates to the real
+current day while hidden: the date exists, the highlight is off (unless that
+day lies outside a `min`/`max` window, in which case the view stays clamped
+inside the window — see the Min/max bounds section above). A
+clock-following picker re-reads the wall clock on every render, so a session
+open across midnight silently repaints a different today — there is no tick
+source to cache against, by design.
 
 ## Rendering
 

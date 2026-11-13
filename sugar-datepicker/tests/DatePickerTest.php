@@ -1087,6 +1087,8 @@ final class DatePickerTest extends TestCase
     public function testWithoutTodayDropsThePinnedReference(): void
     {
         // docs-fix-1023 E2 (XSet law): withToday had no counterpart unset.
+        // dp-33: that counterpart now HIDES the marker; navigation by
+        // goToToday still falls back to the real wall clock while hidden.
         $pinned = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-12-25'));
 
@@ -1095,6 +1097,7 @@ final class DatePickerTest extends TestCase
 
         $unpinned = $pinned->withoutToday();
         $this->assertNotSame($pinned, $unpinned);
+        $this->assertTrue($unpinned->todayHidden());
 
         // Without it, GoToToday follows the real wall clock — prove the
         // reference is gone by comparing against a bare picker's behaviour.
@@ -1103,6 +1106,69 @@ final class DatePickerTest extends TestCase
 
         // Immutability: the pinned instance keeps its injected today.
         $this->assertSame(12, $pinned->goToToday()->viewMonth());
+    }
+
+    public function testWithoutTodayHidesTheMarkerOutright(): void
+    {
+        // dp-33 coercion against the REAL clock-following shape (the finding):
+        // a default picker renders today from the wall clock; withoutToday()
+        // must remove that marker too, not merely drop a pin.
+        $day = (int) (new \DateTimeImmutable())->format('j');
+        $dp = DatePicker::new(); // clock month == clock day always in view
+        $this->assertStringContainsString('38;2;0;205;0', $dp->view(),
+            'a clock-following picker marks the real today (control)');
+
+        $hidden = $dp->withoutToday();
+        $this->assertStringNotContainsString('38;2;0;205;0', $hidden->view(),
+            'a hidden today renders no green cell — not even the clock one');
+        $this->assertStringContainsString((string) $day, $hidden->view(),
+            'the day itself is still on the grid — only the marker is off');
+    }
+
+    public function testSelectedTodayDanceRestoresViaClockAndPin(): void
+    {
+        // dp-33 three state: pinned -> hidden -> clock-following -> re-pinned.
+        $may = new \DateTimeImmutable('2026-05-15');
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->withToday($may);
+        $this->assertStringContainsString("\x1b[0;38;2;0;205;0;1m15\x1b[0m", $dp->view());
+
+        $hidden = $dp->withoutToday();
+        $this->assertTrue($hidden->todayHidden());
+
+        // Clock-following again: today is now whatever the wall clock says, so
+        // the May 15 cell reads plain — state probe instead of byte probe.
+        $clock = $hidden->withClockToday();
+        $this->assertFalse($clock->todayHidden());
+        $this->assertStringNotContainsString("\x1b[0;38;2;0;205;0;1m15\x1b[0m", $clock->view());
+
+        // Re-pinning un-hides and restores the byte.
+        $repinned = $clock->withoutToday()->withToday($may);
+        $this->assertFalse($repinned->todayHidden());
+        $this->assertStringContainsString("\x1b[0;38;2;0;205;0;1m15\x1b[0m", $repinned->view());
+    }
+
+    public function testSelectedDateStaysReadableWhileTodayHidden(): void
+    {
+        // dp-33: withoutToday only removes the TODAY cue; a selection on the
+        // same date keeps its selected styling (dp-01 dual-cue composes on the
+        // chosen style, and the chosen style here is selected, not today).
+        $may = new \DateTimeImmutable('2026-05-15');
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday($may)
+            ->moveToDate($may)
+            ->selectDate()
+            ->withoutToday();
+
+        $view = $dp->view();
+        // Channel probes rather than exact bytes: the cursor rests on 15, so
+        // the cell composes selected cyan with reverse. What must be absent
+        // are the green today channel and the yellow selectedToday channel.
+        $this->assertStringContainsString('38;2;0;205;205', $view,
+            'the selected date keeps its cyan styling');
+        $this->assertStringNotContainsString('38;2;205;205;0', $view,
+            'no yellow selected-today composite may render while hidden');
+        $this->assertStringNotContainsString('38;2;0;205;0', $view,
+            'no green today marker may render while hidden');
     }
 
     public function testSelectDateOnEmptyCellIsRefused(): void

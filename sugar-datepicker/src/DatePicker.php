@@ -129,6 +129,9 @@ final class DatePicker
     /** Injected "today" reference (null = real wall-clock now). */
     private ?\DateTimeImmutable $today = null;
 
+    /** dp-33: withoutToday() is a TRUE hide; withClockToday() restores the wall-clock marker. */
+    private bool $todayHidden = false;
+
     /** Cursor grid index 0-41 (6 weeks × 7 days). */
     private int $cursorIndex = 0;
 
@@ -474,23 +477,53 @@ final class DatePicker
 
     /**
      * Pin the "today" reference (testability). Default (unset) uses the
-     * real wall-clock now, so production behavior is unchanged.
+     * real wall-clock now, so production behavior is unchanged. Pinning also
+     * un-hides the marker if withoutToday() had hidden it (dp-33).
      */
     public function withToday(\DateTimeImmutable $today): self
     {
         $clone = clone $this;
         $clone->today = $today;
+        $clone->todayHidden = false;
 
         return $clone;
     }
 
-    /** Drop the pinned "today" reference (back to real wall-clock now). */
+    /**
+     * Hide the today marker entirely (dp-33 honest semantics): no cell renders
+     * with the today/selected-today style until `withClockToday()` restores
+     * the wall-clock anchor or `withToday()` pins a new one. Navigation by
+     * `goToToday()` still works while hidden — the date exists, only the
+     * marker is off.
+     */
     public function withoutToday(): self
     {
         $clone = clone $this;
         $clone->today = null;
+        $clone->todayHidden = true;
 
         return $clone;
+    }
+
+    /**
+     * Follow the real wall clock as "today" again after withoutToday() — the
+     * state a freshly built picker starts in. The marker re-reads the clock on
+     * every render, so a session crossing midnight silently repaints a
+     * different today (no tick source, by design; dp-33 documentation flip).
+     */
+    public function withClockToday(): self
+    {
+        $clone = clone $this;
+        $clone->today = null;
+        $clone->todayHidden = false;
+
+        return $clone;
+    }
+
+    /** True while the today marker is hidden by withoutToday() (dp-33). */
+    public function todayHidden(): bool
+    {
+        return $this->todayHidden;
     }
 
     /** Resolve the "today" reference: injected value or real now. */
@@ -1416,7 +1449,7 @@ final class DatePicker
         $daysInMonth = (int) $firstOfMonth->format('t');
         $firstDow    = (int) $firstOfMonth->format('w'); // 0=Sun
 
-        $todayKey    = self::dayKey($this->today());
+        $todayKey = $this->todayHidden ? 0 : self::dayKey($this->today());
         $selectedKey = $this->selectedDate !== null
             ? self::dayKey($this->selectedDate) : 0;
 
