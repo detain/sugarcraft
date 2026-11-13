@@ -55,8 +55,10 @@ composer require sugarcraft/sugar-navstack
 
 The Quick Start and renderer follow runnable demos in this repository:
 `php examples/basic.php` drives the stack and the breadcrumb renderer, and
-`php examples/navigation.php` walks the push/pop/back-navigation flow. Both
-register the Composer autoloader themselves.
+`php examples/navigation.php` walks the push/pop/back-navigation flow, and
+`php examples/mouse.php` is the compilable click-zones reference — scanner
+wiring, stack-indexed zones surviving elision, and the expansion gesture on
+the `…` marker. All three register the Composer autoloader themselves.
 
 ## NavStack Quick Start
 
@@ -243,7 +245,8 @@ if ($item !== null) {
 ```
 
 `hit($col, $row)` stays available when you want the `Zone` itself rather
-than the item. The failure shapes form ONE rule table (mirrored in the
+than the item — and the whole recipe above, run end to end with printed
+cell ranges, is `php examples/mouse.php`. The failure shapes form ONE rule table (mirrored in the
 `scan()`/`hit()` docblocks): no scanner attached — `scan()` THROWS,
 `hit()`/`hitItem()` answer `null` QUIETLY (optional-mouse hosts must not
 crash on a stray click; the missing `withScanner()` surfaces loudly at the
