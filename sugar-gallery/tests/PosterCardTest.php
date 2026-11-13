@@ -708,6 +708,31 @@ final class PosterCardTest extends TestCase
         self::assertNotSame($card, $renamed);
     }
 
+    public function testWithProgressRefusesNonFiniteRatios(): void
+    {
+        // sugar-gallery-035: ±INF silently read as "100 %" downstream and NAN
+        // even round()-ed into a full bar — a poisoned remote ratio must name
+        // itself at admission instead of decorating the card.
+        $card = new PosterCard('1', 'X');
+
+        foreach ([['NAN', NAN], ['+INF', INF], ['-INF', -INF]] as [$label, $value]) {
+            try {
+                $card->withProgress($value);
+                self::fail('withProgress(' . $label . ') must throw');
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString('refuses non-finite progress (' . $label . ')', $e->getMessage());
+            }
+        }
+    }
+
+    public function testWithProgressNullStaysTheDocumentedUnset(): void
+    {
+        $card = (new PosterCard('1', 'X', progress: 0.5))->withProgress(null);
+
+        self::assertNull($card->progress);
+        self::assertStringNotContainsString('%', $card->render(false, 20, 1), 'no progress row without a ratio');
+    }
+
     /**
      * The README's cache-levers paragraph publishes the clear methods as the
      * sanctioned surface and states that both caps are PRIVATE constants whose

@@ -179,8 +179,28 @@ final readonly class PosterCard
         return $this->carrying(['posterImage' => $bytes, 'imageId' => $id]);
     }
 
+    /**
+     * Set the download/watch progress fraction, or null to UNSET it (the
+     * progress row disappears). NAN/±INF are refused at this ingress
+     * (sugar-gallery-035: ±INF read silently as a full bar and NAN even
+     * rendered "100 %" downstream — a poisoned float from a remote ratio
+     * must name itself, not decorate the card).
+     *
+     * @throws InvalidArgumentException when $progress is a non-finite float
+     */
     public function withProgress(?float $progress): self
     {
+        if ($progress !== null && !is_finite($progress)) {
+            throw new InvalidArgumentException(sprintf(
+                'PosterCard::withProgress() refuses non-finite progress (%s) — pass a finite ratio or null to unset',
+                match (true) {
+                    is_nan($progress) => 'NAN',
+                    $progress > 0 => '+INF',
+                    default => '-INF',
+                },
+            ));
+        }
+
         return $this->carrying(['progress' => $progress]);
     }
 

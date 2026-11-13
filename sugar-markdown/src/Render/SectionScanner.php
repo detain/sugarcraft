@@ -61,7 +61,21 @@ final class SectionScanner
      */
     private int $consumed = 0;
 
-    private string $section = '';
+    /**
+     * The open section as a line list, never one grown string: after a
+     * `clone`, an in-place `.=` on either side would copy the shared bytes
+     * whole (PHP separates refcount>1 strings on write), which made the
+     * per-frame clone preview ladder quadratic (SM-S15). Appending a line
+     * here touches only that line; the section is joined once, when some
+     * consumer asks for it.
+     *
+     * @var list<string>
+     */
+    private array $sectionLines = [];
+
+    /** Bytes held by {@see $sectionLines}, kept so the cap test costs no join. */
+    private int $sectionBytes = 0;
+
     private ?string $fenceChar = null;
     private int $fenceLen = 0;
 
@@ -90,12 +104,13 @@ final class SectionScanner
             if ($done !== null && trim($done) !== '') {
                 $closed[] = $done;
             }
-            if (strlen($this->section) > self::MAX_SECTION_BYTES) {
+            if ($this->sectionBytes > self::MAX_SECTION_BYTES) {
                 // SM-S03: the open section blew the cap without proposing a
                 // boundary. Flush it provisionally at the line edge — the
                 // consumer's parser confirms or re-joins the cut.
-                $closed[]       = $this->section;
-                $this->section  = '';
+                $closed[]            = $this->joinSection();
+                $this->sectionLines  = [];
+                $this->sectionBytes  = 0;
             }
         }
 
@@ -132,7 +147,13 @@ final class SectionScanner
      */
     public function openSection(): string
     {
-        return $this->section;
+        return $this->joinSection();
+    }
+
+    /** The open section's bytes, joined once for whoever asks (SM-S15). */
+    private function joinSection(): string
+    {
+        return \count($this->sectionLines) === 1 ? $this->sectionLines[0] : implode('', $this->sectionLines);
     }
 
     /**
@@ -152,8 +173,9 @@ final class SectionScanner
         }
         $this->buffer   = '';
         $this->consumed = 0;
-        $rest = ($closed ?? '') . $this->section;
-        $this->section = '';
+        $rest = ($closed ?? '') . $this->joinSection();
+        $this->sectionLines = [];
+        $this->sectionBytes = 0;
 
         return trim($rest) === '' ? null : $rest;
     }
@@ -170,7 +192,8 @@ final class SectionScanner
         $this->afterFence = false;
 
         if ($this->fenceChar !== null) {
-            $this->section .= $open;
+            $this->sectionLines[] = $open;
+        $this->sectionBytes  += strlen($open);
             if (preg_match('/^ {0,3}' . preg_quote($this->fenceChar, '/') . '{' . $this->fenceLen . ',}[ \t]*$/', $line) === 1) {
                 $this->fenceChar  = null;
                 $this->fenceLen   = 0;
@@ -180,7 +203,8 @@ final class SectionScanner
             return null;
         }
         if ($this->rawEnd !== null) {
-            $this->section .= $open;
+            $this->sectionLines[] = $open;
+        $this->sectionBytes  += strlen($open);
             if (stripos($line, $this->rawEnd) !== false) {
                 $this->rawEnd = null;
             }
@@ -188,7 +212,8 @@ final class SectionScanner
             return null;
         }
         if (trim($line) === '') {
-            $this->section .= $open;
+            $this->sectionLines[] = $open;
+        $this->sectionBytes  += strlen($open);
             $this->sawBlank = true;
             return null;
         }
@@ -209,9 +234,10 @@ final class SectionScanner
             )
         );
         if ($isHeadingBoundary) {
-            $closed           = $this->section;
-            $this->section    = $open;
-            $this->sawBlank   = false;
+            $closed             = $this->joinSection();
+            $this->sectionLines = [$open];
+            $this->sectionBytes = strlen($open);
+            $this->sawBlank     = false;
             $this->lastNonBlank = null;
             return $closed;
         }
@@ -227,7 +253,8 @@ final class SectionScanner
             // Self-contained on one line: the end marker follows the start.
             $this->rawEnd = stripos($line, $end, strpos($line, '<') + 1) === false ? $end : null;
         }
-        $this->section    .= $open;
+        $this->sectionLines[] = $open;
+        $this->sectionBytes  += strlen($open);
         $this->lastNonBlank = $line;
         $this->sawBlank     = false;
         return null;

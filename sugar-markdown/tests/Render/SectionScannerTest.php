@@ -189,6 +189,8 @@ final class SectionScannerTest extends TestCase
             return $p->getValue($scanner);
         };
 
-        return strlen($read('section')) + strlen($read('buffer')) - $read('consumed');
+        // SM-S15: the open section is a line list now; sectionBytes is its
+        // live byte count without materialising it.
+        return $read('sectionBytes') + strlen($read('buffer')) - $read('consumed');
     }
 }

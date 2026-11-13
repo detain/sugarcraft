@@ -53,9 +53,11 @@ use SugarCraft\Markdown\Renderer;
  * by the number of chunks. (A pair whose `[` and `]` sit in different text
  * runs carries a label the parsed tree no longer shows verbatim, so such an
  * entry stays pessimistic and re-renders on every definition event.) The
- * open tail alone is parsed afresh per frame. A preview built with
- * `(clone $stream)->finish()` therefore replays the held sections exactly as
- * the full stream would (M4).
+ * open tail alone is parsed afresh per frame. {@see preview()} therefore
+ * replays the held sections exactly as the full stream would (M4) — and
+ * since SM-S15 the scanner's open section is a line list, not one grown
+ * string, so previewing per frame no longer forces a whole-buffer copy on
+ * either side of the clone.
  */
 final class SectionStream
 {
@@ -169,6 +171,23 @@ final class SectionStream
         $this->queue = [];
 
         return $bodies;
+    }
+
+    /**
+     * What {@see finish()} would answer right now, without disturbing this
+     * stream: the frames of a growing reply concatenate their released
+     * bodies with this preview and byte-match a full render of everything
+     * fed so far. Internally a clone finishes, so the held-section replay
+     * (M4) is the same code the real finish runs — no second implementation
+     * to drift. The open tail is re-parsed per call; past
+     * {@see SectionScanner::MAX_SECTION_BYTES} the tail is capped, so an
+     * unbounded preview ladder is bounded per frame by construction (SM-S15).
+     *
+     * @return list<string>
+     */
+    public function preview(): array
+    {
+        return (clone $this)->finish();
     }
 
     /**

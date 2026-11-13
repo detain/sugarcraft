@@ -179,7 +179,7 @@ final class SectionStreamTest extends TestCase
             $queue[0]['body'],
             'the held body is rendered when the section is confirmed',
         );
-        $this->assertRendersLike($doc, (clone $stream)->finish());
+        $this->assertRendersLike($doc, $stream->preview());
     }
 
     public function testADefinitionInTheOpenTailResolvesAHeldSection(): void
@@ -188,7 +188,7 @@ final class SectionStreamTest extends TestCase
         $stream = new SectionStream($this->renderer());
         $this->assertSame([], $stream->push($doc));
 
-        $preview = (clone $stream)->finish();
+        $preview = $stream->preview();
         $this->assertStringContainsString('https://r.x', $preview[0], 'a cached body is not reused once a later definition exists');
         $this->assertRendersLike($doc, $preview);
     }
@@ -283,6 +283,57 @@ final class SectionStreamTest extends TestCase
 
         $this->assertSame($rendered, $streamed, 'a bracket-free ladder streams byte-identical to render()');
         $this->assertLessThan(max(2.0, 3 * $renderTime), $streamTime, 'bracket-free sections must not pay for the document definition count');
+    }
+
+    public function testAPreviewLadderStaysNearLinearAndByteExact(): void
+    {
+        // SM-S15: the chat tail-preview pattern — one heading, then every
+        // token chunk lands in the still-open section, each frame previewed.
+        // Since the scanner keeps the open section as a line list, pushes
+        // after a clone no longer copy the shared bytes whole; what remains
+        // per frame is the M4 tail replay. Best-of-two at n=400/800 must
+        // stay under 2.5x per doubling (2.11x measured here) and every
+        // 64th frame must answer the byte-exact whole prefix.
+        $renderer = $this->renderer();
+
+        $bodies = '';
+        $prefix = "# Head\n\n";
+        $stream = new SectionStream($renderer);
+        $stream->push($prefix);
+
+        for ($i = 0; $i < 800; $i++) {
+            $token = 'tok' . $i . ' ';
+            $bodies .= implode('', $stream->push($token));
+            $prefix .= $token;
+            if ($i % 64 === 63) {
+                $this->assertRendersLike($prefix, [$bodies, ...$stream->preview()]);
+            }
+        }
+        $bodies .= implode('', $stream->finish());
+        // The finish() answer must complete the released bodies exactly.
+        $this->assertRendersLike($prefix, [$bodies]);
+
+        // Twice at each size so the 2.5x bound can only trip on a real
+        // superlinear regression, not on jitter between cold pages.
+        $best400 = min($this->timePreviewLadder(400), $this->timePreviewLadder(400));
+        $best800 = min($this->timePreviewLadder(800), $this->timePreviewLadder(800));
+        $this->assertLessThan(2.5 * $best400, $best800, 'doubling the previewed token stream must not more-than-2.5x the wall time');
+    }
+
+    /** Push one heading, then $n token chunks into the open section, previewing each frame; wall time in ms. */
+    private function timePreviewLadder(int $n): float
+    {
+        $stream = new SectionStream($this->renderer());
+        $stream->push("# Head\n\n");
+
+        $start = hrtime(true);
+        for ($i = 0; $i < $n; $i++) {
+            $stream->push('tok' . $i . ' ');
+            $stream->preview();
+        }
+        $stream->finish();
+
+        return (hrtime(true) - $start) / 1e6;
     }
 
     public function testMultiLineLabelResolvesAcrossStreamedSections(): void
