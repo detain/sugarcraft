@@ -441,7 +441,11 @@ its own SQLite file: `<dir>/<dbname>.db` (`default.db` for unsuffixed keys).
 Neither the directory nor any database file is created until the first
 write. `XDG_CONFIG_HOME` and `HOME`, when set, must be absolute paths — a
 relative home would silently move the store with the working directory, so
-candy-kv refuses it. Database names are `[A-Za-z0-9_-]+`.
+candy-kv refuses it. Database names are `[A-Za-z0-9_-]+`. The name `settings`
+is reserved: `listDatabases()` never shows it and every write aimed at it
+(`set`, `delete`, `deleteDatabase`, imports) is refused, so a listing-driven
+backup can never miss a half-written values database; reading a planted
+`key@settings` still works.
 
 The directory keeps the pre-rename **skate** name on disk so existing
 installs (and upstream skate itself) keep working; new code can point

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kv\Tests;
 
+use SugarCraft\Kv\Database;
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\Ttl;
 use PHPUnit\Framework\TestCase;
@@ -198,6 +199,67 @@ final class StoreTest extends TestCase
         $this->store->set('x@wipeout', 'v');
         $this->assertTrue($this->store->deleteDatabase('wipeout'));
         $this->assertNotContains('wipeout', $this->store->listDatabases());
+    }
+
+    /**
+     * kv-033: pin the `settings` exclusion in Database::listDatabases().
+     * A raw handle seeds the file the way a neighbouring config layer
+     * would — Store itself can no longer create it (kv-023).
+     */
+    public function testReservedSettingsDatabaseIsHiddenFromListing(): void
+    {
+        (new Database($this->tmpDir . '/settings.db', 'settings'))->set('token', 'secret');
+        $this->store->set('x@alpha', '1');
+        $this->store->set('x@beta', '2');
+
+        $this->assertSame(['alpha', 'beta'], $this->store->listDatabases());
+    }
+
+    /**
+     * @return array<string, array{0: callable}>
+     */
+    public static function settingsWriteArms(): array
+    {
+        return [
+            'set' => [static fn (Store $s): Entry => $s->set('token@settings', 'x')],
+            'delete' => [static fn (Store $s): int => $s->delete('token@settings')],
+            'deleteDatabase' => [static fn (Store $s): bool => $s->deleteDatabase('settings')],
+            'transaction' => [static fn (Store $s): mixed => $s->transaction('settings', static fn (): null => null)],
+            'pruneExpired' => [static fn (Store $s): int => (new Store($s->dataDir(), 'settings'))->pruneExpired()],
+        ];
+    }
+
+    /**
+     * kv-023: every write admission refuses the reserved name, naming the
+     * reservation — and refuses it without leaving the file behind.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('settingsWriteArms')]
+    public function testWriteToReservedSettingsDatabaseIsRefused(callable $write): void
+    {
+        try {
+            $write($this->store);
+            $this->fail('A write reached the reserved settings database.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertMatchesRegularExpression(
+                '/^Database \'settings\' is reserved in the candy-kv data directory/',
+                $e->getMessage()
+            );
+        }
+        $this->assertFileDoesNotExist($this->tmpDir . '/settings.db');
+    }
+
+    /**
+     * Hiding a name is not destroying someone else's config: the read
+     * side of the reservation keeps working on a planted file.
+     */
+    public function testReservedSettingsDatabaseStaysReadable(): void
+    {
+        (new Database($this->tmpDir . '/settings.db', 'settings'))->set('token', 'secret');
+
+        $this->assertSame('secret', $this->store->get('token@settings'));
+        $entry = $this->store->entry('token@settings');
+        $this->assertNotNull($entry);
+        $this->assertSame('secret', $entry->rawValue());
     }
 
     public function testDataDir(): void

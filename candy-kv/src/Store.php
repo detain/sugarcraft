@@ -50,6 +50,19 @@ final class Store
     /** Default data directory relative to home. */
     public const DEFAULT_SUBDIR = '.config/skate';
 
+    /**
+     * Database names reserved against the layout of the data directory
+     * (kv-023). A config database may live under one of these names beside
+     * the value databases; `Database::listDatabases()` hides them, so these
+     * writes refuse them too — the same API can neither create a database
+     * no listing will ever show nor tear down one it never could see.
+     * Reads (`get`, `entry`) still reach a planted file: hiding a name is
+     * not the same as destroying someone else's config.
+     *
+     * @var list<string>
+     */
+    private const RESERVED_DATABASES = ['settings'];
+
     /** @var array<string, Database> Cached open database connections. */
     private array $databases = [];
 
@@ -363,6 +376,7 @@ final class Store
     public function delete(string $key): int
     {
         [$dbName, $entryKey] = $this->parseKey($key);
+        $this->assertWritableDatabase($dbName);
 
         $db = $this->database($dbName);
         if ($db === null) {
@@ -489,6 +503,7 @@ final class Store
      */
     public function pruneExpired(): int
     {
+        $this->assertWritableDatabase($this->defaultDb);
         return $this->database($this->defaultDb)?->pruneExpired() ?? 0;
     }
 
@@ -501,6 +516,7 @@ final class Store
      */
     public function deleteDatabase(string $dbName): bool
     {
+        $this->assertWritableDatabase($dbName);
         $path = $this->dbPath($dbName);
         if (!\file_exists($path)) {
             return false;
@@ -578,6 +594,9 @@ final class Store
      */
     private function database(string $name, bool $create = false): ?Database
     {
+        if ($create) {
+            $this->assertWritableDatabase($name);
+        }
         if (isset($this->databases[$name])) {
             return $this->databases[$name];
         }
@@ -621,6 +640,23 @@ final class Store
             );
         }
         return $this->dataDir . '/' . $name . '.db';
+    }
+
+    /**
+     * Refuse every write path aimed at a reserved database name (kv-023).
+     *
+     * The throw names the reservation so a caller moving a `settings`
+     * write from skate learns the law at the first attempt instead of
+     * discovering it in a backup that never saw the file.
+     */
+    private function assertWritableDatabase(string $dbName): void
+    {
+        if (\in_array($dbName, self::RESERVED_DATABASES, true)) {
+            throw new \InvalidArgumentException(\sprintf(
+                "Database '%s' is reserved in the candy-kv data directory: reads work, writes are refused.",
+                $dbName,
+            ));
+        }
     }
 
     /**

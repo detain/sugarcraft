@@ -822,10 +822,13 @@ final class Database
             if ($basename === '' || !\is_file($dataDir . '/' . $entry)) {
                 continue;
             }
-            // `settings` is reserved: it carried per-app config in the
-            // upstream skate tool this port began from, and skate's own
-            // listing excluded it. The exclusion survives so a directory
-            // shared with skate does not surface a phantom value database.
+            // `settings` is reserved in the data directory: a config
+            // database may live under that name beside the value
+            // databases, and a list-driven backup must never mistake it
+            // for one. The exclusion is paired with Store's refusal to
+            // write reserved names — hiding a database from enumeration
+            // is only honest when the same API cannot create or change
+            // what no listing will ever show (kv-023, kv-106).
             if ($basename !== 'settings') {
                 $dbs[] = $basename;
             }
