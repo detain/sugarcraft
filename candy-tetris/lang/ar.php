@@ -45,6 +45,7 @@ return [
     'b2b_line'   => 'B2B جاهز',
     'over.best'    => 'أفضل: {points}',
     'over.new_best' => 'رقم قياسي جديد!',
+    'over.games' => 'ألعاب مكتملة: {games}',
 
     // Versus renderer
     'label.player'   => 'اللاعب',

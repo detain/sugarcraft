@@ -45,6 +45,7 @@ yeniden (sonra)
     'b2b_line'   => 'B2B hazır',
     'over.best'    => 'en iyi: {points}',
     'over.new_best' => 'yeni rekor!',
+    'over.games' => 'tamamlanan oyunlar: {games}',
 
     // Versus renderer
     'label.player'   => 'OYUNCU',

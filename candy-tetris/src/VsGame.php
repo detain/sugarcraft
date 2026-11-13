@@ -526,10 +526,12 @@ final class VsGame implements Model
             return $this->mutate($changes);
         }
         $next = ($this->scores ?? new Scores())->withVersusResult($playerWon);
-        $changes['scores'] = $next;
         try {
-            $next->save($this->scoresPath);
+            // The written (merged — -035) record is what the next match
+            // deltas from; a failed save keeps the un-published intent.
+            $changes['scores'] = $next->save($this->scoresPath);
         } catch (\Throwable $problem) {
+            $changes['scores'] = $next;
             fwrite(STDERR, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]) . "\n");
         }
 

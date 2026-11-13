@@ -45,6 +45,7 @@ quitter',
     'b2b_line'   => 'B2B armé',
     'over.best'    => 'record : {points}',
     'over.new_best' => 'nouveau record !',
+    'over.games' => 'parties terminées : {games}',
 
     // Versus renderer
     'label.player'   => 'JOUEUR',

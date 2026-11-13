@@ -45,6 +45,7 @@ wyjście',
     'b2b_line'   => 'B2B gotowe',
     'over.best'    => 'rekord: {points}',
     'over.new_best' => 'nowy rekord!',
+    'over.games' => 'ukończone gry: {games}',
 
     // Versus renderer
     'label.player'   => 'GRACZ',

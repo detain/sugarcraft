@@ -45,6 +45,7 @@ return [
     'b2b_line'   => 'B2B готов',
     'over.best'    => 'рекорд: {points}',
     'over.new_best' => 'новый рекорд!',
+    'over.games' => 'завершённых игр: {games}',
 
     // Versus renderer
     'label.player'   => 'ИГРОК',

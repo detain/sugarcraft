@@ -467,7 +467,10 @@ final class Game implements Model
         $pair[0] = $game;
 
         try {
-            $next->save($this->scoresPath);
+            // Adopt the record as written (merged with the disk — -035) so
+            // a later settlement in this session deltas from the published
+            // state and never re-bills a counter another save already paid.
+            $pair[0] = $game->mutate(['scores' => $next->save($this->scoresPath)]);
         } catch (\Throwable $problem) {
             // Loud, and only loud: the session keeps its honest banner and
             // the untouched old file still holds the true record.
@@ -501,10 +504,12 @@ final class Game implements Model
                 $closed = $this->mutate(['introPending' => false]);
                 if ($closed->scoresPath !== null) {
                     $next = ($closed->scores ?? new Scores())->withOnboarded();
-                    $closed = $closed->mutate(['scores' => $next]);
                     try {
-                        $next->save($closed->scoresPath);
+                        // The written (merged — -035) record is the session's
+                        // truth from here: later settles delta from it.
+                        $closed = $closed->mutate(['scores' => $next->save($closed->scoresPath)]);
                     } catch (\Throwable $problem) {
+                        $closed = $closed->mutate(['scores' => $next]);
                         fwrite(STDERR, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]) . "\n");
                     }
                 }

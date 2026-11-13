@@ -45,6 +45,7 @@ esci',
     'b2b_line'   => 'B2B pronto',
     'over.best'    => 'migliore: {points}',
     'over.new_best' => 'nuovo record!',
+    'over.games' => 'partite completate: {games}',
 
     // Versus renderer
     'label.player'   => 'GIOCATORE',

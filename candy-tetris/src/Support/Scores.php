@@ -17,6 +17,16 @@
  *   - a malformed file THROWS naming the path — the launcher announces on
  *     stderr and starts fresh, and the old file is left untouched on disk.
  *     A corrupt record is never silently zeroed away by a save.
+ *
+ * Save discipline (candy-tetris-035): a loaded record remembers the disk
+ * state it was read from, and save() re-reads the file before publishing —
+ * the session's own deltas are merged onto whatever the disk holds NOW, not
+ * onto the boot-time snapshot. Two terminals settling the same store each
+ * keep their games; the best is the max of both views. A record built in
+ * memory counts as booted from the EMPTY record (that is exactly how the
+ * launcher first-run builds it), and save() answers the record as written,
+ * re-anchored, so the next save deltas from the published state and never
+ * re-bills a counter an earlier save already paid.
  */
 
 declare(strict_types=1);
@@ -45,6 +55,15 @@ final class Scores
          * closing the game unseen must not count as having seen it.
          */
         public readonly bool $onboarded = false,
+        /**
+         * candy-tetris-035: the disk state this record was last reconciled
+         * with. save() writes (disk-as-found + [this − baseline]) so a
+         * settlement made in another terminal between our read and our
+         * write is kept, not clobbered. Null means "built in memory" — the
+         * boot-empty contract: the launcher's first-run record is exactly
+         * `new Scores()`, so its deltas are its own counters.
+         */
+        private readonly ?self $baseline = null,
     ) {}
 
     /**
@@ -106,22 +125,91 @@ final class Scores
             }
         }
 
-        return new self($soloBest, $soloGames, $versusWins, $versusLosses, $data['onboarded']);
+        return self::anchored(new self($soloBest, $soloGames, $versusWins, $versusLosses, $data['onboarded']));
     }
 
-    /** Write the record atomically at 0600 (mode settled before the publish rename). */
-    public function save(string $path): void
+    /**
+     * Write the record atomically at 0600 (mode settled before the publish
+     * rename), merged with whatever the file holds NOW (candy-tetris-035):
+     * the disk is re-read, this session's deltas since its boot anchor are
+     * applied on top, and the best becomes the max of both views. A file
+     * that became unreadable mid-run falls back to the legacy straight
+     * write — the launcher already refused to boot from it, and losing the
+     * current session's own settlement would be the louder failure.
+     *
+     * Returns the record as written, re-anchored to that disk state: the
+     * caller's next settlement counts as a delta only from HERE, so a
+     * second save from the same session never double-bills the first.
+     */
+    public function save(string $path): self
     {
+        try {
+            $disk = self::load($path);
+        } catch (\RuntimeException) {
+            $disk = null;
+        }
+
+        $merged = $this->mergeOnto($disk);
         AtomicJsonFile::new($path)->withPermissions(0600)->write([
             'version' => self::VERSION,
             'data' => [
-                'soloBest' => $this->soloBest,
-                'soloGames' => $this->soloGames,
-                'versusWins' => $this->versusWins,
-                'versusLosses' => $this->versusLosses,
-                'onboarded' => $this->onboarded,
+                'soloBest' => $merged->soloBest,
+                'soloGames' => $merged->soloGames,
+                'versusWins' => $merged->versusWins,
+                'versusLosses' => $merged->versusLosses,
+                'onboarded' => $merged->onboarded,
             ],
         ]);
+
+        return self::anchored($merged);
+    }
+
+    /**
+     * (disk-as-found) + (this − boot anchor). Counters only ever walked up
+     * in this session, so every delta is non-negative; a vanished or
+     * unreadable file answers with the session view alone, which is then
+     * the whole publishable truth.
+     */
+    private function mergeOnto(?self $disk): self
+    {
+        if ($disk === null) {
+            return $this;
+        }
+        $base = $this->baseline ?? new self();
+
+        return new self(
+            self::bestOf($this->soloBest, $disk->soloBest),
+            $disk->soloGames + ($this->soloGames - $base->soloGames),
+            $disk->versusWins + ($this->versusWins - $base->versusWins),
+            $disk->versusLosses + ($this->versusLosses - $base->versusLosses),
+            $this->onboarded || $disk->onboarded,
+        );
+    }
+
+    /** The higher of two nullable bests (null = no game ever finished). */
+    private static function bestOf(?int $left, ?int $right): ?int
+    {
+        if ($left === null) {
+            return $right;
+        }
+        if ($right === null) {
+            return $left;
+        }
+
+        return max($left, $right);
+    }
+
+    /** Copy of $record whose baseline is the record itself (fresh anchor). */
+    private static function anchored(self $record): self
+    {
+        return new self(
+            $record->soloBest,
+            $record->soloGames,
+            $record->versusWins,
+            $record->versusLosses,
+            $record->onboarded,
+            $record,
+        );
     }
 
     /**
@@ -136,6 +224,7 @@ final class Scores
             $this->versusWins,
             $this->versusLosses,
             $this->onboarded,
+            $this->baseline,
         );
     }
 
@@ -154,6 +243,7 @@ final class Scores
             $this->versusWins + ($playerWon ? 1 : 0),
             $this->versusLosses + ($playerWon ? 0 : 1),
             $this->onboarded,
+            $this->baseline,
         );
     }
 
@@ -165,6 +255,7 @@ final class Scores
             $this->versusWins,
             $this->versusLosses,
             true,
+            $this->baseline,
         );
     }
 

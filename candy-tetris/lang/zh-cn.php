@@ -45,6 +45,7 @@ return [
     'b2b_line'   => 'B2B 就绪',
     'over.best'    => '最佳: {points}',
     'over.new_best' => '新纪录！',
+    'over.games' => '已完成游戏: {games}',
 
     // Versus renderer
     'label.player'   => '玩家',

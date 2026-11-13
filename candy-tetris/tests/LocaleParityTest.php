@@ -186,7 +186,7 @@ final class LocaleParityTest extends TestCase
             'over.title', 'over.final_score', 'over.restart_hint', 'over.reason',
             'over.reason.spawn_blocked', 'over.reason.top_out', 'over.reason.crushed',
             'hold_used', 'combo_line', 'b2b_line',
-            'over.best', 'over.new_best',
+            'over.best', 'over.new_best', 'over.games',
             'label.player', 'label.computer', 'win.player', 'win.computer',
             'vs.garbage_rule', 'vs.record',
             'intro.title', 'intro.goal', 'intro.press', 'intro.vs', 'key_or',

@@ -149,6 +149,12 @@ final class Renderer
         if ($game->scores !== null && $game->scores->soloBest !== null) {
             $lines[] = Lang::t('over.best', ['points' => $game->scores->soloBest]);
         }
+        // candy-tetris-096: the finished-games denominator rode the same
+        // JSON but never reached the frame — the banner now says how many
+        // runs this best came out of.
+        if ($game->scores !== null && $game->scores->soloGames > 0) {
+            $lines[] = Lang::t('over.games', ['games' => $game->scores->soloGames]);
+        }
         if ($game->newBest === true) {
             $lines[] = Lang::t('over.new_best');
         }

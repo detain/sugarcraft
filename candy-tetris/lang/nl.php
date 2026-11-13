@@ -45,6 +45,7 @@ afsluiten',
     'b2b_line'   => 'B2B klaar',
     'over.best'    => 'beste: {points}',
     'over.new_best' => 'nieuw record!',
+    'over.games' => 'voltooide spellen: {games}',
 
     // Versus renderer
     'label.player'   => 'SPELER',

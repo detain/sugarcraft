@@ -45,6 +45,7 @@ return [
     'b2b_line'   => 'B2B 대기',
     'over.best'    => '최고 점수: {points}',
     'over.new_best' => '신기록!',
+    'over.games' => '완료된 게임: {games}',
 
     // Versus renderer
     'label.player'   => '플레이어',

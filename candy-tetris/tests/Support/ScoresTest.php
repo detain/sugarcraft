@@ -194,6 +194,98 @@ final class ScoresTest extends TestCase
         self::assertTrue($read->onboarded, 'the on-ramp choice must survive a solo settle write');
     }
 
+    /**
+     * candy-tetris-035 two-run sim: both terminals boot the same store,
+     * A settles and saves first, B settles later against its stale view —
+     * B's save must merge, not erase. Best takes the max, games the sum
+     * of both deltas.
+     */
+    public function testASecondWriterKeepsTheFirstWritersSettlement(): void
+    {
+        $path = $this->dir . '/scores.json';
+        (new Scores(100, 1, 0, 0, true))->save($path);
+
+        $a = Scores::load($path);
+        $b = Scores::load($path);
+        self::assertInstanceOf(Scores::class, $a);
+        self::assertInstanceOf(Scores::class, $b);
+
+        $a->withSolo(50)->save($path);
+        $b->withSolo(300)->save($path);
+
+        $read = Scores::load($path);
+        self::assertInstanceOf(Scores::class, $read);
+        self::assertSame(300, $read->soloBest, 'the best of either session wins');
+        self::assertSame(3, $read->soloGames, 'both terminals keep their finished game');
+        self::assertTrue($read->onboarded, 'a flag either view holds survives the merge');
+    }
+
+    /**
+     * candy-tetris-035 anchor leg: once a session adopts its written record
+     * (save answers it), the next settlement deltas from the PUBLISHED
+     * state — the first delta is never billed a second time.
+     */
+    public function testSequentialSavesFromOneTerminalDoNotDoubleBillTheFirst(): void
+    {
+        $path = $this->dir . '/scores.json';
+        (new Scores(100, 1, 0, 0, false))->save($path);
+
+        $boot = Scores::load($path);
+        self::assertInstanceOf(Scores::class, $boot);
+        $written = $boot->withSolo(200)->save($path);
+        $second = $written->withSolo(50)->save($path);
+
+        $read = Scores::load($path);
+        self::assertInstanceOf(Scores::class, $read);
+        self::assertSame(3, $read->soloGames, 'one boot, two settlements, two counts — not four');
+        self::assertSame(200, $read->soloBest);
+        self::assertSame(3, $second->soloGames, 'the answered record is the published truth');
+    }
+
+    /**
+     * candy-tetris-035 delta leg for the versus counters: wins and losses
+     * merge the same way games do.
+     */
+    public function testVersusCountersMergeByDeltaAcrossWriters(): void
+    {
+        $path = $this->dir . '/scores.json';
+        (new Scores(null, 0, 2, 3, true))->save($path);
+
+        $a = Scores::load($path);
+        $b = Scores::load($path);
+        self::assertInstanceOf(Scores::class, $a);
+        self::assertInstanceOf(Scores::class, $b);
+
+        $a->withVersusResult(true)->save($path);
+        $b->withVersusResult(true)->save($path);
+
+        $read = Scores::load($path);
+        self::assertInstanceOf(Scores::class, $read);
+        self::assertSame(4, $read->versusWins, 'each writer adds exactly its own match');
+        self::assertSame(3, $read->versusLosses, 'untouched counters ride the disk view');
+    }
+
+    /**
+     * candy-tetris-035 fallback door: a file that went unreadable mid-run
+     * cannot be merged — the session view publishes alone rather than
+     * losing its settlement over an unreadable third-party blob.
+     */
+    public function testAnUnreadableDiskFileFallsBackToTheSessionView(): void
+    {
+        $path = $this->dir . '/scores.json';
+        (new Scores(100, 1, 0, 0, false))->save($path);
+        $boot = Scores::load($path);
+        self::assertInstanceOf(Scores::class, $boot);
+
+        file_put_contents($path, 'not json at all');
+        $boot->withSolo(20)->save($path);
+
+        $read = Scores::load($path);
+        self::assertInstanceOf(Scores::class, $read);
+        self::assertSame(100, $read->soloBest, 'the session still knows the boot best');
+        self::assertSame(2, $read->soloGames, 'and its own one settlement');
+    }
+
     private function refuse(string $contents, string $needle): void
     {
         $path = $this->dir . '/scores.json';

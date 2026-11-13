@@ -45,6 +45,7 @@ return [
     'b2b_line'   => 'B2B 準備完了',
     'over.best'    => 'ベスト: {points}',
     'over.new_best' => '新記録！',
+    'over.games' => '終了したゲーム: {games}',
 
     // Versus renderer
     'label.player'   => 'プレイヤー',

@@ -50,6 +50,7 @@ return [
     'b2b_line'   => 'B2B armed',
     'over.best'    => 'best: {points}',
     'over.new_best' => 'new best!',
+    'over.games' => 'games finished: {games}',
 
     // Versus renderer
     'label.player'   => 'PLAYER',

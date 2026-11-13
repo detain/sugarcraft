@@ -45,6 +45,7 @@ beenden',
     'b2b_line'   => 'B2B bereit',
     'over.best'    => 'Bestwert: {points}',
     'over.new_best' => 'neuer Bestwert!',
+    'over.games' => 'Beendete Spiele: {games}',
 
     // Versus renderer
     'label.player'   => 'SPIELER',

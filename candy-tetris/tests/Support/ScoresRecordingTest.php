@@ -69,6 +69,9 @@ final class ScoresRecordingTest extends TestCase
         $frame = $after->view();
         self::assertStringContainsString(Lang::t('over.best', ['points' => 500]), $frame);
         self::assertStringContainsString(Lang::t('over.new_best'), $frame);
+        // candy-tetris-096: the finished-games denominator rode the JSON
+        // unseen — the banner now reads the score against it.
+        self::assertStringContainsString(Lang::t('over.games', ['games' => 1]), $frame);
     }
 
     public function testAQuietRestartCarriesTheRecordAndTheHigherBestWins(): void

@@ -45,6 +45,7 @@ konec',
     'b2b_line'   => 'B2B připraveno',
     'over.best'    => 'nejlépe: {points}',
     'over.new_best' => 'nový rekord!',
+    'over.games' => 'dokončené hry: {games}',
 
     // Versus renderer
     'label.player'   => 'HRÁČ',
