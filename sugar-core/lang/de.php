@@ -45,4 +45,5 @@ return [
     'program.exec_select_unsupported' => 'exec capture cannot stream-select these pipes on this platform; stdout and stderr were read sequentially with blocking reads',
     'program.subscription_duplicate_id' => 'subscription id {id} was declared twice in one batch; ids must be unique across the model tree',
     'program.subscription_interval_invalid' => 'subscription {id} has an invalid {param}: it must be a positive number of seconds',
+    'program.screen_stack_unsupported' => 'root model {root} does not own a screen stack, so {msg} was refused',
 ];

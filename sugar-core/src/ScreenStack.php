@@ -24,7 +24,14 @@ final class ScreenStack implements \Countable
 
     /**
      * Push a new screen onto the stack.
-     * Note: callers should invoke $screen->onEnter() if needed.
+     *
+     * Lifecycle hooks: this builder never fires them. They are the driven
+     * root's contract — Program routes ScreenStackPushedMsg to a
+     * ScreenStackCapable root, and {@see RootModelWithScreenStack::update()}
+     * invokes $screen->onEnter() there (sugar-core-034, RUN-10). A consumer
+     * that manipulates the stack directly owns calling the hook itself;
+     * silently expecting the builder to fire it is exactly the drift that
+     * made hook-only screens look broken.
      */
     public function push(Screen $screen): self
     {
@@ -33,8 +40,12 @@ final class ScreenStack implements \Countable
 
     /**
      * Pop the current screen (if any).
-     * Note: callers should invoke $screen->onExit() if needed.
-     * Returns a new stack. When the stack is empty, returns $this unchanged.
+     *
+     * Returns a new stack. When the stack is empty, returns $this unchanged —
+     * a documented no-op, not a failure (nothing to exit from). Like push(),
+     * this builder never fires onExit(); the driven root does, via
+     * {@see RootModelWithScreenStack::update()} on ScreenStackPoppedMsg, and
+     * direct stack owners must invoke it themselves (sugar-core-034, RUN-10).
      */
     public function pop(): self
     {

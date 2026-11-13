@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core;
 
+use SugarCraft\Core\Exception\TerminalException;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\EnvMsg;
 use SugarCraft\Core\Msg\ExceptionMsg;
@@ -136,9 +137,11 @@ final class Program
     /**
      * Handlers displaced by signal subscriptions, keyed by signal number, so
      * cancelling a signal subscription can restore whatever was installed
-     * before ours instead of leaking our handler.
+     * before ours instead of leaking our handler. A null VALUE means the
+     * predecessor was unobservable (no pcntl_signal_get_handler): cancel then
+     * refuses to restore rather than fabricate SIG_DFL (sugar-core-034).
      *
-     * @var array<int, callable|int>
+     * @var array<int, callable|int|string|array|null>
      */
     private array $prevSignalHandlers = [];
     /**
@@ -146,9 +149,11 @@ final class Program
      * number, restored by {@see restoreSignalHandlers()} when run() ends.
      * Kept apart from {@see $prevSignalHandlers}: a signal subscription on
      * SIGWINCH displaces OUR handler, and cancelling it must hand the signal
-     * back to us, not to whatever predated the Program.
+     * back to us, not to whatever predated the Program. Null VALUE = the
+     * predecessor was unobservable; restore then refuses to guess
+     * (sugar-core-034, RUN-13).
      *
-     * @var array<int, callable|int>
+     * @var array<int, callable|int|string|array|null>
      */
     private array $prevProgramSignalHandlers = [];
     /** pcntl_async_signals() as it was before installSignalHandlers() turned it on; null = untouched. */
@@ -1100,7 +1105,19 @@ final class Program
                 if ($cmd !== null) {
                     $this->scheduleCmd($cmd);
                 }
+                return;
             }
+            // sugar-core-034 (RUN-9): a stack message reaching a root that does
+            // not own a stack used to vanish — the whole push/pop was a no-op
+            // with no trace. Named refusal instead, on the ExceptionMsg
+            // channel (never RawMsg: Program writes an input RawMsg verbatim
+            // to the terminal, and the user's exception handler stays wired
+            // for absorb-or-die policy, InputReader's bounded-overflow
+            // refusal is the cited precedent).
+            $this->dispatch(new ExceptionMsg(new TerminalException(Lang::t(
+                'program.screen_stack_unsupported',
+                ['root' => $this->model::class, 'msg' => $msg::class],
+            ))));
             return;
         }
 
@@ -1956,6 +1973,12 @@ final class Program
         }
         if ($this->options->hideCursor === true) {
             $this->writeOutput(Ansi::cursorHide());
+            // sugar-core-034 (RUN-11): seed the visibility mirror from the
+            // state we just observed on the wire. Unseeded, the first
+            // cursor-less frame re-emitted a redundant cursorHide, and any
+            // reader trusting the flag (teardown symmetry) saw "visible" on
+            // a terminal we had explicitly hidden.
+            $this->lastCursorHidden = true;
         }
         // Bubble Tea v2 enables grapheme-cluster mode (DEC 2027) by
         // default to fix long-standing emoji-width drift. We follow.
@@ -2554,9 +2577,15 @@ final class Program
     private function installProgramSignal(int $signo, \Closure $handler): void
     {
         if (!array_key_exists($signo, $this->prevProgramSignalHandlers)) {
+            // sugar-core-034 (RUN-13): an unknown predecessor is recorded as
+            // null, never guessed as SIG_DFL — restoring SIG_DFL over a host
+            // handler we never saw (and could not read) clobbers someone
+            // else's signal answer. restoreSignalHandlers() leaves our
+            // handler in place when the predecessor is unknown: a retained
+            // handler on ancient pcntl builds beats a fabricated default.
             $this->prevProgramSignalHandlers[$signo] = function_exists('pcntl_signal_get_handler')
                 ? pcntl_signal_get_handler($signo)
-                : (defined('SIG_DFL') ? SIG_DFL : 0);
+                : null;
         }
         pcntl_signal($signo, $handler);
     }
@@ -2572,6 +2601,12 @@ final class Program
     {
         if ($this->prevProgramSignalHandlers !== [] && function_exists('pcntl_signal')) {
             foreach ($this->prevProgramSignalHandlers as $signo => $prev) {
+                if ($prev === null) {
+                    // Unknown predecessor (sugar-core-034 RUN-13): refuse to
+                    // guess — leaving our handler installed is the honest
+                    // no-op; SIG_DFL here would clobber an unreadable host one.
+                    continue;
+                }
                 pcntl_signal($signo, $prev);
             }
         }
@@ -2817,8 +2852,14 @@ final class Program
             // Remember the handler we're about to displace so cancel can put it
             // back. Guard against clobbering it if the same signo is installed
             // again before being cancelled (keep the ORIGINAL predecessor).
-            if (function_exists('pcntl_signal_get_handler') && !isset($this->prevSignalHandlers[$signo])) {
-                $this->prevSignalHandlers[$signo] = pcntl_signal_get_handler($signo);
+            // sugar-core-034 (RUN-13): when the predecessor cannot be read
+            // (no pcntl_signal_get_handler) record null — cancel must then
+            // refuse to restore, never fabricate SIG_DFL over someone
+            // else's live handler.
+            if (!array_key_exists($signo, $this->prevSignalHandlers)) {
+                $this->prevSignalHandlers[$signo] = function_exists('pcntl_signal_get_handler')
+                    ? pcntl_signal_get_handler($signo)
+                    : null;
             }
             $handler = function (int $signo) use ($sub): void {
                 $msg = $this->userProduce($sub->produce);
@@ -2843,9 +2884,18 @@ final class Program
             return;
         }
         $signo = $sub->params['signo'] ?? 0;
-        $prev = $this->prevSignalHandlers[$signo] ?? (defined('SIG_DFL') ? SIG_DFL : 0);
-        pcntl_signal($signo, $prev);
+        if (!array_key_exists($signo, $this->prevSignalHandlers)) {
+            // Nothing installed through us — no-op (old code restored SIG_DFL
+            // here, clobbering whatever handler the signo actually had).
+            return;
+        }
+        $prev = $this->prevSignalHandlers[$signo];
         unset($this->prevSignalHandlers[$signo]);
+        if ($prev === null) {
+            // Unknown predecessor (sugar-core-034 RUN-13): refuse the guess.
+            return;
+        }
+        pcntl_signal($signo, $prev);
     }
 
     /**

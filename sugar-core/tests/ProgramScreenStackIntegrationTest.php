@@ -7,6 +7,7 @@ namespace SugarCraft\Core\Tests;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Cmd\PopScreenCmd;
 use SugarCraft\Core\Cmd\PushScreenCmd;
+use SugarCraft\Core\Exception\TerminalException;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -144,6 +145,26 @@ final class UnwritableRoot implements Model, ScreenStackCapable
     }
 }
 
+/** Root with NO stack capability: stack msgs here used to vanish (sugar-core-034). */
+final class PlainNoStackRoot implements Model
+{
+    use SubscriptionCapable;
+
+    /** @var list<Msg> */
+    public array $log = [];
+
+    public function init(): ?\Closure { return null; }
+
+    public function update(Msg $msg): array
+    {
+        $next = clone $this;
+        $next->log = [...$this->log, $msg];
+        return [$next, null];
+    }
+
+    public function view(): string { return 'plain'; }
+}
+
 final class ProgramScreenStackIntegrationTest extends TestCase
 {
     /** Drive one dispatch synchronously without entering the loop. */
@@ -255,6 +276,53 @@ final class ProgramScreenStackIntegrationTest extends TestCase
             $live->replaceCurrentModel(new CountingScreenModel(0)),
             'empty stack no-ops (same object)',
         );
+    }
+
+    /**
+     * sugar-core-034 (RUN-9): a stack message reaching a NON-capable root must
+     * surface as a named refusal on the ExceptionMsg channel, never vanish.
+     */
+    public function testAStackMsgToANonCapableRootRefusesByNamedException(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $program = new Program(new PlainNoStackRoot(), $this->makeOptions($in, $out, $loop));
+        $this->sendThroughDispatch($program, new ScreenStackPushedMsg(
+            new Screen(new CountingScreenModel(), title: 'Count')
+        ));
+
+        $root = $this->dispatchTo($program);
+        $this->assertInstanceOf(PlainNoStackRoot::class, $root);
+        $this->assertCount(1, $root->log, 'only the refusal reaches the root — the stack msg must not');
+        $refusal = $root->log[0];
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\ExceptionMsg::class, $refusal);
+        $this->assertInstanceOf(TerminalException::class, $refusal->exception);
+        $this->assertStringContainsString(PlainNoStackRoot::class, $refusal->exception->getMessage());
+        $this->assertStringContainsString(ScreenStackPushedMsg::class, $refusal->exception->getMessage());
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** The same named refusal covers pops. */
+    public function testAPopMsgToANonCapableRootRefusesByNamedException(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $program = new Program(new PlainNoStackRoot(), $this->makeOptions($in, $out, $loop));
+        $this->sendThroughDispatch($program, new \SugarCraft\Core\Msg\ScreenStackPoppedMsg());
+
+        $root = $this->dispatchTo($program);
+        $this->assertInstanceOf(PlainNoStackRoot::class, $root);
+        $this->assertCount(1, $root->log);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\ExceptionMsg::class, $root->log[0]);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
     }
 
     /** @return array{0:resource, 1:resource, 2:resource} */
