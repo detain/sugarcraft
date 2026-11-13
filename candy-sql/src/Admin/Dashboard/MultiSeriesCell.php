@@ -24,17 +24,25 @@ use SugarCraft\Sql\Admin\StatusSnapshot;
  * MySQL Workbench's DBTimeLineGraph, which plots SELECT/INSERT/UPDATE/…
  * rates as separate colored lines in one frame.
  *
- * Why not sugar-charts LineChart: its renderChart() stamps cells through
- * Canvas::setCell() with a single shared point rune — withDataset() colors
- * never reach the strokes, and its withCanvas(BrailleCanvas) is plumbed
- * through the constructor but never consumed by any render path. Drawing
- * per-series colored polylines at sub-cell resolution needs the dot grid,
- * so this cell rasterizes with sugar-dashboard's Bresenham + BrailleMatrix
- * primitives (the same ones sugar-dashboard\BrailleCanvas is built from) into
- * one mutable bit buffer: BrailleCanvas.setPoint() clones the whole cell
- * grid per dot, which is fine for one-shot charts but would cost hundreds
- * of thousands of cell copies per frame at 7 series × 120 samples redrawn
- * every second.
+ * Why not sugar-charts LineChart: since 2026-09-30 its braille mode is
+ * real — renderBrailleSeries rasterizes dot-matrix strokes carrying the
+ * series' legend color, so dataset colors DO reach the strokes and the old
+ * "never consumed" rationale is gone (the mode is selected by plumbing a
+ * BrailleCanvas the renderer never reads — an upstream wart filed to the
+ * sugar-charts lane, not fixed from here). What still earns this cell its
+ * keep: (1) the ring windows — updateFromCounters appends one per-series
+ * delta per tick into fixed 120-sample windows in place, where feeding
+ * LineChart means building fresh sample arrays every second for every
+ * series; (2) the 8-slot palette — LineChart's per-dataset default legend
+ * colors cycle after six, so seven SQL statement series (select…drop)
+ * would collide (its withSeriesColorFn() resolver is the workaround —
+ * added upstream after this cell); (3) sugar-dashboard's
+ * BrailleCanvas::setPoint is clone-per-dot, fine for one-shot charts but
+ * hundreds of thousands of cell copies per frame at 7 series × 120 samples
+ * redrawn every second — LineChart's batched walk fixes that cost yet
+ * still assumes a static dataset, so the live-window raster stays here,
+ * built from sugar-dashboard's Bresenham + BrailleMatrix primitives into
+ * one mutable bit buffer.
  *
  * Zero IS plottable (an idle counter traces a flat line along the floor,
  * matching Workbench); only negative deltas and non-finite values are
