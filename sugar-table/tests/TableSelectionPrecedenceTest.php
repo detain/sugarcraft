@@ -106,4 +106,15 @@ final class TableSelectionPrecedenceTest extends TestCase
             $t->withSelectable(false)->view(),
         );
     }
+
+    /** ST-59 / OG-7: a bordered selected row is ONE reverse run across its in-row rules. */
+    public function testSelectedBorderedRowBandIsContinuousAcrossSeparators(): void
+    {
+        $t = Table::fromColumns([Column::new('a', 'A', 4), Column::new('b', 'B', 4)])
+            ->withRows([Row::new(RowData::from(['a' => 'x', 'b' => 'y'])), Row::new(RowData::from(['a' => 'p', 'b' => 'q']))]);
+        $lines = \explode("\n", $t->view());
+        $selected = $lines[3];
+        $this->assertSame(1, \substr_count($selected, "\x1b[0;7m"), 'one open of the reverse band for the whole row');
+        $this->assertStringNotContainsString("\x1b[0;7m", $lines[4], 'unselected rows carry no reverse');
+    }
 }

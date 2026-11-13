@@ -2771,7 +2771,9 @@ final class Table
         $bandStyle = $isSelected ? self::mergeStyle($rowStyle, '7') : $rowStyle;
 
         $style = $bandStyle !== '' ? $this->styleFor($bandStyle) : null;
-        $sepStyle = $this->styleOrNull($this->borderStyle);
+        // ST-59 / OG-7: the selected row's in-row rules ride the reverse band, so the
+        // highlight is one solid run instead of chunks split by plain border glyphs.
+        $sepStyle = $this->styleOrNull($isSelected ? self::mergeStyle($this->borderStyle, '7') : $this->borderStyle);
         [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
 
         // Data cells - visible columns laid out contiguously (hidden and
@@ -2870,7 +2872,9 @@ final class Table
         } // reverse composes on top (audit M3)
 
         $style = $rowStyle !== '' ? $this->styleFor($rowStyle) : null;
-        $sepStyle = $this->styleOrNull($this->borderStyle);
+        // ST-59 / OG-7: the selected row's in-row rules ride the reverse band, so the
+        // highlight is one solid run instead of chunks split by plain border glyphs.
+        $sepStyle = $this->styleOrNull($isSelected ? self::mergeStyle($this->borderStyle, '7') : $this->borderStyle);
 
         $parts = [];
         foreach ($visibleColumnIndices as $ci) {
@@ -2949,7 +2953,9 @@ final class Table
         $bandStyle = $isSelected ? self::mergeStyle($rowStyle, '7') : $rowStyle;
 
         $style = $bandStyle !== '' ? $this->styleFor($bandStyle) : null;
-        $sepStyle = $this->styleOrNull($this->borderStyle);
+        // ST-59 / OG-7: the selected row's in-row rules ride the reverse band, so the
+        // highlight is one solid run instead of chunks split by plain border glyphs.
+        $sepStyle = $this->styleOrNull($isSelected ? self::mergeStyle($this->borderStyle, '7') : $this->borderStyle);
         // ST-67: the rightmost visible column is fixed for the whole row —
         // resolve it once instead of re-ending() the index list per line.
         $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);

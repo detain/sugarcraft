@@ -875,7 +875,9 @@ What the renderer does for you:
 - **Selection is pure reverse video** (`ESC[0;7m`) composed over the row's
   winning style — it needs no color channel, so the cursor row stays readable
   on light and dark palettes alike. A cursorless table is one call away:
-  `withSelectable(false)`.
+  `withSelectable(false)`. In a bordered table the cursor row's in-row rules
+  and right edge ride the same reverse run, so the band is solid end to end
+  (bordered and borderless agree).
 - **Zebra striping defaults to a black-on-white inversion** (`30;47` on even
   stripes, odd stripes plain) rather than a dimmed grey — again readable
   without a color vocabulary; restyle with `withZebraStyleEven/Odd()`. Enable
