@@ -17,7 +17,7 @@ final class BinBootFitTest extends TestCase
 {
     public function testTooSmallTerminalRefusesBootWithPlainExitOne(): void
     {
-        // EASY needs 17 rows; 12 offered → refuse BEFORE the alt screen.
+        // Easy needs 17 rows; 12 offered → refuse BEFORE the alt screen.
         [$code, $output] = PtyLaunch::run(['--easy'], 12, 60);
         self::assertSame(1, $code, 'output was: ' . PtyLaunch::printable($output));
         self::assertStringContainsString('needs a terminal', $output);

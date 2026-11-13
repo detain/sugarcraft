@@ -66,7 +66,7 @@ final class CarryCensusTest extends TestCase
     }
 
     /**
-     * withGame(EASY) must touch ONLY the three easy fields; the other nine
+     * withGame(Easy) must touch ONLY the three easy fields; the other nine
      * (three presets x three fields) ride the carry unchanged.
      */
     public function testStatsWithGameTouchesOnlyItsOwnPresetBucket(): void
@@ -77,7 +77,7 @@ final class CarryCensusTest extends TestCase
             mediumGames: 2, mediumWins: 1, mediumBest: 60,
             expertGames: 8, expertWins: 6, expertBest: 200,
         );
-        $after = $stats->withGame(Difficulty::EASY, won: true, time: 42);
+        $after = $stats->withGame(Difficulty::Easy, won: true, time: 42);
 
         foreach ($this->ctorParams(Stats::class) as $param) {
             self::assertTrue(

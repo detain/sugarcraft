@@ -20,7 +20,7 @@ use SugarCraft\Minesweeper\Stats;
  * NEW BEST badge gate (preset games only, strict beat against the
  * PREVIOUS tally, never on a loss).
  *
- * The deterministic rand→0 EASY fixture flood-resolves to a win (the
+ * The deterministic rand→0 Easy fixture flood-resolves to a win (the
  * golden mines-win-overlay proves the same drive); a loss is driven by
  * detonating the first planted mine after the safe opener.
  */
@@ -66,7 +66,7 @@ final class BannerFinishTest extends TestCase
     public function testWinBannerCarriesFrozenTimeAndFirstRecordBadge(): void
     {
         $g = self::winDrive(Game::withDifficulty(
-            Difficulty::EASY,
+            Difficulty::Easy,
             static fn(int $max): int => 0,
             stats: new Stats(),
         ));
@@ -81,7 +81,7 @@ final class BannerFinishTest extends TestCase
     {
         // msw-03: with stats disabled there is no record to beat — a badge
         // celebrating a time nobody keeps is a lie, so the gate refuses.
-        $g = self::winDrive(Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0));
+        $g = self::winDrive(Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0));
         $this->assertFalse($g->newBest, 'no tally when the transition ran, no record');
         $this->assertStringNotContainsString(Lang::t('ui.new_best'), $g->view());
     }
@@ -92,7 +92,7 @@ final class BannerFinishTest extends TestCase
         // record win, never cleared. A second (slower) win after r therefore
         // kept advertising a record it did not set.
         $g = self::winDrive(Game::withDifficulty(
-            Difficulty::EASY,
+            Difficulty::Easy,
             static fn(int $max): int => 0,
             stats: new Stats(),
         ));
@@ -109,7 +109,7 @@ final class BannerFinishTest extends TestCase
         // easyBest 0: the driven win lands at 0 s, and 0 < 0 is no beat —
         // a tie never re-wears the badge.
         $g = self::winDrive(Game::withDifficulty(
-            Difficulty::EASY,
+            Difficulty::Easy,
             static fn(int $max): int => 0,
             stats: new Stats(easyBest: 0),
         ));
@@ -119,7 +119,7 @@ final class BannerFinishTest extends TestCase
 
     public function testLossCarriesTimeNeverTheBadge(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Space));
         $b = $g->board;
         for ($y = 0; $y < $b->height; $y++) {

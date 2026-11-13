@@ -36,7 +36,7 @@ final class FooterWidthGuardTest extends TestCase
     /** @return list<array{0:string,1:Game}> */
     private function fixtures(): array
     {
-        $fresh = Game::withDifficulty(Difficulty::STANDARD, static fn(int $max): int => 0);
+        $fresh = Game::withDifficulty(Difficulty::Standard, static fn(int $max): int => 0);
 
         // Exploded 3x3 with a detonated mine: hand-built through the public
         // Board ctor (LossBoardGlyphTest idiom) so no drive randomness is
@@ -93,15 +93,15 @@ final class FooterWidthGuardTest extends TestCase
         unset($winRows);
 
         return [['fresh', $fresh], ['exploded', $exploded], ['won+3digit', $won],
-            // EXPERT (30×16) is the widest shipped preset board — 16+8 = 24
+            // Expert (30×16) is the widest shipped preset board — 16+8 = 24
             // rows, the exact boot-fit floor, and the longest footer budget.
-            ['expert', Game::withDifficulty(Difficulty::EXPERT)],
+            ['expert', Game::withDifficulty(Difficulty::Expert)],
             // msw-08: the stats variant of the status line (preset name +
             // best-time segment with the widest legal number) and the
             // banner that quotes a beaten record — both ride the same
             // budget as the plain strings, in every locale.
             ['stats-status', Game::withDifficulty(
-                Difficulty::EXPERT,
+                Difficulty::Expert,
                 static fn(int $max): int => 0,
                 stats: new Stats(expertGames: 1, expertBest: 3599),
             )],
@@ -136,10 +136,10 @@ final class FooterWidthGuardTest extends TestCase
         ];
     }
 
-    /** `n` from a fresh EASY board — the plain preset list. */
+    /** `n` from a fresh Easy board — the plain preset list. */
     private static function pickerFixture(): Game
     {
-        [$picker] = Game::withDifficulty(Difficulty::EASY)
+        [$picker] = Game::withDifficulty(Difficulty::Easy)
             ->update(new KeyMsg(KeyType::Char, 'n'));
         return $picker;
     }
@@ -203,12 +203,12 @@ final class FooterWidthGuardTest extends TestCase
         // bakes the validator's translated message into model state at
         // drive time, so it must be driven under each locale.
         $fixtures = static fn(): array => [
-            ['fresh', Game::withDifficulty(Difficulty::EASY)],
-            ['expert', Game::withDifficulty(Difficulty::EXPERT)],
-            ['toasted', Game::withDifficulty(Difficulty::STANDARD, notice: 'saved')],
+            ['fresh', Game::withDifficulty(Difficulty::Easy)],
+            ['expert', Game::withDifficulty(Difficulty::Expert)],
+            ['toasted', Game::withDifficulty(Difficulty::Standard, notice: 'saved')],
             // msw-08 stats status must word-wrap inside the live columns too.
             ['stats', Game::withDifficulty(
-                Difficulty::EXPERT,
+                Difficulty::Expert,
                 static fn(int $max): int => 0,
                 stats: new Stats(expertGames: 1, expertBest: 3599),
             )],

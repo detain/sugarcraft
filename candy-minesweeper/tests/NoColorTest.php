@@ -64,7 +64,7 @@ final class NoColorTest extends TestCase
         Renderer::setBoardColourOverride(false);
         Style::setDefaultProfile(ColorProfile::Ascii);
         try {
-            $frame = Renderer::render(Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0));
+            $frame = Renderer::render(Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0));
 
             $this->assertStringNotContainsString('38;2;', $frame,
                 'no TrueColor sequences may survive a colour-refused boot');
@@ -88,7 +88,7 @@ final class NoColorTest extends TestCase
 
     public function testBoardRendersTheFullChainByDefault(): void
     {
-        $frame = Renderer::render(Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0));
+        $frame = Renderer::render(Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0));
 
         $this->assertStringContainsString('38;2;', $frame,
             'sanity for the pin above: a capable terminal keeps the colours');

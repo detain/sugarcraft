@@ -37,7 +37,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testFirstClickSafeAreaRendersAnsi(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
 
         $keySpace = new KeyMsg(KeyType::Space, '');
         [$g] = $g->update($keySpace);
@@ -53,7 +53,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testCascadeRevealRendersAnsi(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
 
         $keySpace = new KeyMsg(KeyType::Space, '');
         [$g] = $g->update($keySpace);
@@ -86,7 +86,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testWinOverlayRendersAnsi(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
 
         $keySpace = new KeyMsg(KeyType::Space, '');
         [$g] = $g->update($keySpace);
@@ -129,7 +129,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testResolveClickReturnsCorrectCell(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
 
         $keySpace = new KeyMsg(KeyType::Space, '');
         [$g] = $g->update($keySpace);
@@ -159,7 +159,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testResolveClickReturnsNullForOutOfBounds(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
 
         $result = Renderer::resolveClick($g, -1, -1);
         $this->assertNull($result, 'Out-of-bounds click should return null');
@@ -179,7 +179,7 @@ final class GoldenRenderTest extends TestCase
      */
     public function testResolveClickReturnsNullForMalformedZoneId(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
         [$output, $scanner] = Renderer::renderWithScanner($g);
         $this->assertNotEmpty($output, 'sanity: the game renders');
 
@@ -199,7 +199,7 @@ final class GoldenRenderTest extends TestCase
         // Renderer reuses one Scanner per board). Without the regex guard
         // the hit would resolve to a guessed [0, 0] from uninitialized
         // matches — the null below can only come from the guard.
-        $g2 = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g2 = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
         [, $tampered] = Renderer::renderWithScanner($g2);
         $zones = $zonesProp->getValue($tampered);
         unset($zones['cell:0:0']);
@@ -219,12 +219,12 @@ final class GoldenRenderTest extends TestCase
     public function testOneScannerIsReusedPerBoardAndNotAcrossBoards(): void
     {
         // msw-10/-014 pin: the click path holds one scan per board object.
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
         [, $first] = Renderer::renderWithScanner($g);
         [, $again] = Renderer::renderWithScanner($g);
         $this->assertSame($first, $again, 'the same board must not pay a second full scan');
 
-        $g2 = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g2 = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
         [, $other] = Renderer::renderWithScanner($g2);
         $this->assertNotSame($first, $other, 'a different board object re-scans');
 
@@ -236,7 +236,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testRenderWithScannerReturnsScanner(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
 
         [$output, $scanner] = Renderer::renderWithScanner($g);
 
@@ -246,7 +246,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testExplodedBoardRendersAnsi(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
 
         $keySpace = new KeyMsg(KeyType::Space, '');
         [$g] = $g->update($keySpace);

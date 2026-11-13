@@ -173,7 +173,7 @@ final class SaveLoadTest extends TestCase
         $this->assertNotNull($savedElapsed, 'sanity: live game carries a running clock');
 
         // A DIFFERENT game (other shape, virgin clock) receives the load.
-        $h = Game::withDifficulty(Difficulty::EASY);
+        $h = Game::withDifficulty(Difficulty::Easy);
         [$h, ] = $h->update(self::press(KeyType::Char, 'L'));
 
         $this->assertSame($savedBoard, $h->board->serialize(), 'board restores byte-identical');

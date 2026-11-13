@@ -43,7 +43,7 @@ final class WindowSizeFitTest extends TestCase
 
     public function testWindowSizeMsgSeedsTheLiveFrame(): void
     {
-        $game = Game::withDifficulty(Difficulty::EASY);
+        $game = Game::withDifficulty(Difficulty::Easy);
         self::assertSame(80, $game->frameCols);
         self::assertSame(24, $game->frameRows);
 
@@ -58,24 +58,24 @@ final class WindowSizeFitTest extends TestCase
 
     public function testRequiredRowsCountsBoardPlusFooterBudget(): void
     {
-        // EASY is 9 rows tall: 9 + border(2) + status(1) + help(4) + spare(1) = 17.
-        $easy = Game::withDifficulty(Difficulty::EASY);
+        // Easy is 9 rows tall: 9 + border(2) + status(1) + help(4) + spare(1) = 17.
+        $easy = Game::withDifficulty(Difficulty::Easy);
         self::assertSame(17, $easy->requiredRows());
 
         // A riding toast (the boot resume hint) adds one line.
-        $toasted = Game::withDifficulty(Difficulty::EASY, notice: 'toast');
+        $toasted = Game::withDifficulty(Difficulty::Easy, notice: 'toast');
         self::assertSame(18, $toasted->requiredRows());
 
-        // EXPERT (30×16) is the board the README claimed "fits 80×24 exactly" —
+        // Expert (30×16) is the board the README claimed "fits 80×24 exactly" —
         // it does, but only until the resume hint exists: 16+8 = 24, +1 = 25.
-        $expert = Game::withDifficulty(Difficulty::EXPERT);
+        $expert = Game::withDifficulty(Difficulty::Expert);
         self::assertSame(24, $expert->requiredRows());
-        self::assertSame(25, Game::withDifficulty(Difficulty::EXPERT, notice: 'resume')->requiredRows());
+        self::assertSame(25, Game::withDifficulty(Difficulty::Expert, notice: 'resume')->requiredRows());
     }
 
     public function testShrinkBelowBudgetPaintsNoticeNotBoard(): void
     {
-        $game = Game::withDifficulty(Difficulty::EXPERT)->update(new WindowSizeMsg(80, 40))[0];
+        $game = Game::withDifficulty(Difficulty::Expert)->update(new WindowSizeMsg(80, 40))[0];
         self::assertFalse($game->tooSmall());
         self::assertStringContainsString(self::BOARD_EDGE[0], Renderer::render($game));
 
@@ -98,7 +98,7 @@ final class WindowSizeFitTest extends TestCase
 
     public function testGameplayKeysAndClicksAreDeadWhileTooSmall(): void
     {
-        $game = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0)
+        $game = Game::withDifficulty(Difficulty::Easy, static fn(int $_max): int => 0)
             ->update(new WindowSizeMsg(80, 6))[0];
         self::assertTrue($game->tooSmall());
 
@@ -123,7 +123,7 @@ final class WindowSizeFitTest extends TestCase
 
     public function testRestartAndLoadStillRouteWhileTooSmall(): void
     {
-        $game = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0, notice: 'toast')
+        $game = Game::withDifficulty(Difficulty::Easy, static fn(int $_max): int => 0, notice: 'toast')
             ->update(new WindowSizeMsg(80, 6))[0];
         [$after] = $game->update(new KeyMsg(KeyType::Char, 'r'));
         self::assertNotSame($game, $after, 'r still restarts below the fit budget');
@@ -131,7 +131,7 @@ final class WindowSizeFitTest extends TestCase
 
     public function testNarrowTerminalWordWrapsTheFooterInsideItsColumns(): void
     {
-        foreach ([Difficulty::EASY, Difficulty::STANDARD, Difficulty::EXPERT] as $preset) {
+        foreach ([Difficulty::Easy, Difficulty::Standard, Difficulty::Expert] as $preset) {
             $game = Game::withDifficulty($preset)->update(new WindowSizeMsg(40, 40))[0];
             self::assertFalse($game->tooSmall());
             $max = 0;
@@ -147,7 +147,7 @@ final class WindowSizeFitTest extends TestCase
     {
         // The column budget only ever matters below 80; a wide terminal must
         // render byte-identically to the default frame (zero golden drift).
-        $game = Game::withDifficulty(Difficulty::STANDARD, notice: 'saved');
+        $game = Game::withDifficulty(Difficulty::Standard, notice: 'saved');
         $legacy = Renderer::render($game);
         $wide = Renderer::render($game->update(new WindowSizeMsg(120, 40))[0]);
         self::assertSame($legacy, $wide);
@@ -155,7 +155,7 @@ final class WindowSizeFitTest extends TestCase
 
     public function testMouseMappingSurvivesAResizeCycle(): void
     {
-        $game = Game::withDifficulty(Difficulty::STANDARD, static fn(int $_max): int => 0)
+        $game = Game::withDifficulty(Difficulty::Standard, static fn(int $_max): int => 0)
             ->update(new WindowSizeMsg(60, 30))[0];
         [$moved] = $game->update(new KeyMsg(KeyType::Char, 'j'));
         self::assertSame(1, $moved->cursorY);

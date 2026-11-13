@@ -412,8 +412,8 @@ final class SaveTamperTest extends TestCase
         // msw-03 trust spine: the clock rides back from a user-editable file,
         // so a win on restored time is ineligible for the record — games and
         // wins still tally, bestTime and the badge never move. The board is
-        // EASY-shaped so it files into the same bucket the record lives in.
-        $seed = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        // Easy-shaped so it files into the same bucket the record lives in.
+        $seed = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
         [$seed, ] = $seed->update(new KeyMsg(KeyType::Space)); // opener, board unfinished
         $this->assertFalse($seed->board->isWon(), 'sanity: opener leaves the board live');
         $this->writeSlot([
@@ -424,7 +424,7 @@ final class SaveTamperTest extends TestCase
         ]);
 
         $g = Game::withDifficulty(
-            Difficulty::EASY,
+            Difficulty::Easy,
             static fn(int $max): int => 0,
             stats: new \SugarCraft\Minesweeper\Stats(easyGames: 4, easyWins: 2, easyBest: 300),
         );
@@ -443,9 +443,9 @@ final class SaveTamperTest extends TestCase
         }
         $this->assertTrue($loaded->board->isWon(), 'sanity: the restored board was drivable to a win');
         $this->assertFalse($loaded->newBest, 'a restored clock cannot wear the badge');
-        $this->assertSame(5, $loaded->stats->gamesPlayed(Difficulty::EASY), 'the game still counts');
-        $this->assertSame(3, $loaded->stats->wins(Difficulty::EASY), 'the win still counts');
-        $this->assertSame(300, $loaded->stats->bestTime(Difficulty::EASY), 'the record never moved');
+        $this->assertSame(5, $loaded->stats->gamesPlayed(Difficulty::Easy), 'the game still counts');
+        $this->assertSame(3, $loaded->stats->wins(Difficulty::Easy), 'the win still counts');
+        $this->assertSame(300, $loaded->stats->bestTime(Difficulty::Easy), 'the record never moved');
     }
 
     public function testRestoredFlagSurvivesRestartButNothingElseLendsIt(): void
@@ -583,7 +583,7 @@ final class SaveTamperTest extends TestCase
         $path = $this->writeStats(['easyGames' => 5, 'easyWins' => 3, 'easyBest' => 11]);
         $loaded = DifficultyStats::load($path);
         $this->assertNotNull($loaded);
-        $this->assertSame(5, $loaded->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(5, $loaded->stats()->gamesPlayed(Difficulty::Easy));
     }
 
     public function testStatsSaveIsOwnerOnly(): void

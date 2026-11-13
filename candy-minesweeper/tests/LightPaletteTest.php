@@ -70,14 +70,14 @@ final class LightPaletteTest extends TestCase
     }
 
     /**
-     * Deterministic exploded EASY fixture: opener → a revealed digit (if the
+     * Deterministic exploded Easy fixture: opener → a revealed digit (if the
      * flood left one), a flag planted on a safe cell (wrong once lost), then
      * detonation, so one frame exercises digits, F, ✗, missed mines, the
      * hidden dot, the boom banner, the help footer and a toast.
      */
     private function explodedFixture(): Game
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
         [$g, ] = $g->update(new KeyMsg(KeyType::Space));
 
         $b = $g->board;

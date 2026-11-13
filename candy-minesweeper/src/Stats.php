@@ -41,10 +41,10 @@ final class Stats
     public function withGame(Difficulty $d, bool $won, ?int $time): self
     {
         $p = match ($d) {
-            Difficulty::EASY     => 'easy',
-            Difficulty::STANDARD => 'standard',
-            Difficulty::MEDIUM   => 'medium',
-            Difficulty::EXPERT   => 'expert',
+            Difficulty::Easy     => 'easy',
+            Difficulty::Standard => 'standard',
+            Difficulty::Medium   => 'medium',
+            Difficulty::Expert   => 'expert',
         };
 
         return $this->mutate([
@@ -68,20 +68,20 @@ final class Stats
     public function gamesPlayed(Difficulty $d): int
     {
         return match ($d) {
-            Difficulty::EASY     => $this->easyGames,
-            Difficulty::STANDARD => $this->standardGames,
-            Difficulty::MEDIUM   => $this->mediumGames,
-            Difficulty::EXPERT   => $this->expertGames,
+            Difficulty::Easy     => $this->easyGames,
+            Difficulty::Standard => $this->standardGames,
+            Difficulty::Medium   => $this->mediumGames,
+            Difficulty::Expert   => $this->expertGames,
         };
     }
 
     public function wins(Difficulty $d): int
     {
         return match ($d) {
-            Difficulty::EASY     => $this->easyWins,
-            Difficulty::STANDARD => $this->standardWins,
-            Difficulty::MEDIUM   => $this->mediumWins,
-            Difficulty::EXPERT   => $this->expertWins,
+            Difficulty::Easy     => $this->easyWins,
+            Difficulty::Standard => $this->standardWins,
+            Difficulty::Medium   => $this->mediumWins,
+            Difficulty::Expert   => $this->expertWins,
         };
     }
 
@@ -97,10 +97,10 @@ final class Stats
     public function bestTime(Difficulty $d): ?int
     {
         return match ($d) {
-            Difficulty::EASY     => $this->easyBest,
-            Difficulty::STANDARD => $this->standardBest,
-            Difficulty::MEDIUM   => $this->mediumBest,
-            Difficulty::EXPERT   => $this->expertBest,
+            Difficulty::Easy     => $this->easyBest,
+            Difficulty::Standard => $this->standardBest,
+            Difficulty::Medium   => $this->mediumBest,
+            Difficulty::Expert   => $this->expertBest,
         };
     }
 }

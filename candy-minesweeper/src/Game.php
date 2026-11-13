@@ -397,7 +397,7 @@ final class Game implements Model
                 => $this->moveCursor(-1, 0),
             $msg->type === KeyType::Right || ($msg->type === KeyType::Char && $char === 'l')
                 => $this->moveCursor(+1, 0),
-            // Large-board navigation aids (msw-27, finding -046): EXPERT
+            // Large-board navigation aids (msw-27, finding -046): Expert
             // crossing was one cell per keystroke from the 0,0 spawn.
             $msg->type === KeyType::Home                       => $this->jumpToColumn(0),
             $msg->type === KeyType::End                        => $this->jumpToColumn($this->board->width - 1),
@@ -425,10 +425,10 @@ final class Game implements Model
     public static function presetKeys(): array
     {
         return [
-            '1' => Difficulty::EASY,
-            '2' => Difficulty::STANDARD,
-            '3' => Difficulty::MEDIUM,
-            '4' => Difficulty::EXPERT,
+            '1' => Difficulty::Easy,
+            '2' => Difficulty::Standard,
+            '3' => Difficulty::Medium,
+            '4' => Difficulty::Expert,
         ];
     }
 
@@ -1009,7 +1009,7 @@ final class Game implements Model
      * The returned Game has the same board state but updated stats.
      *
      * Recording is per-preset ({@see Difficulty}): the shipped default shape
-     * (10×10, 12 mines) is the STANDARD preset, so default games DO tally.
+     * (10×10, 12 mines) is the Standard preset, so default games DO tally.
      * Truly custom boards match no preset and record no stats — a mixed-size
      * "custom" bucket would make best-time meaningless, so the gap is
      * deliberate and documented rather than silently dishonest. They still

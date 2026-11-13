@@ -320,7 +320,7 @@ final class GameTest extends TestCase
 
     public function testWithDifficultyCreatesCorrectBoard(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY);
+        $g = Game::withDifficulty(Difficulty::Easy);
         $this->assertSame(9, $g->board->width);
         $this->assertSame(9, $g->board->height);
         $this->assertSame(10, $g->board->mineCount);
@@ -328,7 +328,7 @@ final class GameTest extends TestCase
 
     public function testWithDifficultyMedium(): void
     {
-        $g = Game::withDifficulty(Difficulty::MEDIUM);
+        $g = Game::withDifficulty(Difficulty::Medium);
         $this->assertSame(16, $g->board->width);
         $this->assertSame(16, $g->board->height);
         $this->assertSame(40, $g->board->mineCount);
@@ -336,7 +336,7 @@ final class GameTest extends TestCase
 
     public function testWithDifficultyExpert(): void
     {
-        $g = Game::withDifficulty(Difficulty::EXPERT);
+        $g = Game::withDifficulty(Difficulty::Expert);
         $this->assertSame(30, $g->board->width);
         $this->assertSame(16, $g->board->height);
         $this->assertSame(99, $g->board->mineCount);
@@ -352,14 +352,14 @@ final class GameTest extends TestCase
 
     public function testDifficultyReturnsCorrectEnum(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY);
-        $this->assertSame(Difficulty::EASY, $g->difficulty());
+        $g = Game::withDifficulty(Difficulty::Easy);
+        $this->assertSame(Difficulty::Easy, $g->difficulty());
 
-        $g = Game::withDifficulty(Difficulty::MEDIUM);
-        $this->assertSame(Difficulty::MEDIUM, $g->difficulty());
+        $g = Game::withDifficulty(Difficulty::Medium);
+        $this->assertSame(Difficulty::Medium, $g->difficulty());
 
-        $g = Game::withDifficulty(Difficulty::EXPERT);
-        $this->assertSame(Difficulty::EXPERT, $g->difficulty());
+        $g = Game::withDifficulty(Difficulty::Expert);
+        $this->assertSame(Difficulty::Expert, $g->difficulty());
     }
 
     public function testDifficultyReturnsNullForCustomSize(): void
@@ -370,7 +370,7 @@ final class GameTest extends TestCase
 
     public function testTimerStartsOnFirstReveal(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $_max): int => 0);
         $this->assertNull($g->startedAt);
         $this->assertNull($g->elapsed());
 
@@ -381,27 +381,27 @@ final class GameTest extends TestCase
 
     public function testElapsedReturnsNullBeforeFirstReveal(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY);
+        $g = Game::withDifficulty(Difficulty::Easy);
         $this->assertNull($g->elapsed());
     }
 
     public function testStatsStartsEmpty(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY);
+        $g = Game::withDifficulty(Difficulty::Easy);
         $stats = $g->stats();
-        $this->assertSame(0, $stats->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(0, $stats->gamesPlayed(Difficulty::Easy));
     }
 
     public function testRecordResultUpdatesStatsOnWin(): void
     {
         // Test that recordResult correctly updates stats when called with a win
-        $g = Game::withDifficulty(Difficulty::EASY);
+        $g = Game::withDifficulty(Difficulty::Easy);
 
         // Manually trigger a win state by modifying the board (not possible with immutable design)
         // Instead, test that recordResult updates stats for a known win condition
         // by creating a game that we can verify has isWon=true
         $rand = static fn(int $_max): int => 0;
-        $g = Game::withDifficulty(Difficulty::EASY, $rand);
+        $g = Game::withDifficulty(Difficulty::Easy, $rand);
 
         // Reveal cells - if we happen to win, great. If not, we still test the stats mechanism.
         for ($i = 0; $i < 20; $i++) {
@@ -412,23 +412,23 @@ final class GameTest extends TestCase
         $g = $g->recordResult(42);
         $stats = $g->stats();
 
-        $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(1, $stats->gamesPlayed(Difficulty::Easy));
         // Win count depends on whether we actually won
         if ($g->board->isWon()) {
-            $this->assertSame(1, $stats->wins(Difficulty::EASY));
-            $this->assertSame(42, $stats->bestTime(Difficulty::EASY));
-            $this->assertEqualsWithDelta(100.0, $stats->winRate(Difficulty::EASY), 0.01);
+            $this->assertSame(1, $stats->wins(Difficulty::Easy));
+            $this->assertSame(42, $stats->bestTime(Difficulty::Easy));
+            $this->assertEqualsWithDelta(100.0, $stats->winRate(Difficulty::Easy), 0.01);
         } else {
-            $this->assertSame(0, $stats->wins(Difficulty::EASY));
-            $this->assertNull($stats->bestTime(Difficulty::EASY));
-            $this->assertEqualsWithDelta(0.0, $stats->winRate(Difficulty::EASY), 0.01);
+            $this->assertSame(0, $stats->wins(Difficulty::Easy));
+            $this->assertNull($stats->bestTime(Difficulty::Easy));
+            $this->assertEqualsWithDelta(0.0, $stats->winRate(Difficulty::Easy), 0.01);
         }
     }
 
     public function testRecordResultUpdatesStatsOnLoss(): void
     {
         $rand = static fn(int $_max): int => 0;
-        $g = Game::withDifficulty(Difficulty::EASY, $rand);
+        $g = Game::withDifficulty(Difficulty::Easy, $rand);
 
         // First reveal (safe)
         [$g, ] = $g->update(self::key(KeyType::Space));
@@ -459,47 +459,47 @@ final class GameTest extends TestCase
         // recordResult() again here would double-count the game.
         $stats = $g->stats();
 
-        $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
-        $this->assertSame(0, $stats->wins(Difficulty::EASY));
-        $this->assertEqualsWithDelta(0.0, $stats->winRate(Difficulty::EASY), 0.01);
+        $this->assertSame(1, $stats->gamesPlayed(Difficulty::Easy));
+        $this->assertSame(0, $stats->wins(Difficulty::Easy));
+        $this->assertEqualsWithDelta(0.0, $stats->winRate(Difficulty::Easy), 0.01);
     }
 
     public function testBestTimeOnlyUpdatesOnWin(): void
     {
         // Test the stats mechanism directly with Stats class
         $stats = new Stats();
-        $stats = $stats->withGame(Difficulty::EASY, true, 100);
-        $this->assertSame(100, $stats->bestTime(Difficulty::EASY));
+        $stats = $stats->withGame(Difficulty::Easy, true, 100);
+        $this->assertSame(100, $stats->bestTime(Difficulty::Easy));
 
         // Recording a loss with time should not update best time
-        $stats = $stats->withGame(Difficulty::EASY, false, null);
-        $this->assertSame(100, $stats->bestTime(Difficulty::EASY));
+        $stats = $stats->withGame(Difficulty::Easy, false, null);
+        $this->assertSame(100, $stats->bestTime(Difficulty::Easy));
 
         // Recording a win with worse time should not update best time
-        $stats = $stats->withGame(Difficulty::EASY, true, 200);
-        $this->assertSame(100, $stats->bestTime(Difficulty::EASY));
+        $stats = $stats->withGame(Difficulty::Easy, true, 200);
+        $this->assertSame(100, $stats->bestTime(Difficulty::Easy));
 
         // Recording a win with better time should update best time
-        $stats = $stats->withGame(Difficulty::EASY, true, 50);
-        $this->assertSame(50, $stats->bestTime(Difficulty::EASY));
+        $stats = $stats->withGame(Difficulty::Easy, true, 50);
+        $this->assertSame(50, $stats->bestTime(Difficulty::Easy));
     }
 
     public function testWinRateCalculation(): void
     {
         $stats = new \SugarCraft\Minesweeper\Stats();
-        $stats = $stats->withGame(Difficulty::EASY, true, 30);
-        $stats = $stats->withGame(Difficulty::EASY, true, 40);
-        $stats = $stats->withGame(Difficulty::EASY, false, null);
-        $stats = $stats->withGame(Difficulty::EASY, false, null);
+        $stats = $stats->withGame(Difficulty::Easy, true, 30);
+        $stats = $stats->withGame(Difficulty::Easy, true, 40);
+        $stats = $stats->withGame(Difficulty::Easy, false, null);
+        $stats = $stats->withGame(Difficulty::Easy, false, null);
 
-        $this->assertSame(4, $stats->gamesPlayed(Difficulty::EASY));
-        $this->assertSame(2, $stats->wins(Difficulty::EASY));
-        $this->assertEqualsWithDelta(50.0, $stats->winRate(Difficulty::EASY), 0.01);
+        $this->assertSame(4, $stats->gamesPlayed(Difficulty::Easy));
+        $this->assertSame(2, $stats->wins(Difficulty::Easy));
+        $this->assertEqualsWithDelta(50.0, $stats->winRate(Difficulty::Easy), 0.01);
     }
 
     public function testTimerUsesMicrotimePrecision(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $_max): int => 0);
 
         // Before first reveal, elapsed is null.
         $this->assertNull($g->elapsed());
@@ -522,20 +522,20 @@ final class GameTest extends TestCase
 
     public function testRecordResultAcceptsFloatElapsed(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $_max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Space));
 
         // Record result with a float elapsed time.
         $g = $g->recordResult(12.345);
         $stats = $g->stats();
 
-        $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(1, $stats->gamesPlayed(Difficulty::Easy));
     }
 
     // ─── W15: update() wires recordResult() into the win/lose transition ─────
 
     /**
-     * Build a 9×9 EASY board that is exactly one safe reveal away from a win,
+     * Build a 9×9 Easy board that is exactly one safe reveal away from a win,
      * with the cursor on the last unrevealed safe cell (8,8). The target has a
      * non-zero adjacent count so revealing it does not cascade. Presets are
      * required because recordResult() only records for recognised difficulties.
@@ -577,20 +577,20 @@ final class GameTest extends TestCase
     {
         $g = self::nearWinEasyGame();
         $this->assertFalse($g->board->isWon(), 'sanity: game not yet won');
-        $this->assertSame(0, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(0, $g->stats()->gamesPlayed(Difficulty::Easy));
 
         // Revealing the last safe cell wins — update() must record it.
         [$g, ] = $g->update(self::key(KeyType::Space));
 
         $this->assertTrue($g->board->isWon(), 'sanity: reveal should win the board');
-        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
-        $this->assertSame(1, $g->stats()->wins(Difficulty::EASY));
-        $this->assertNotNull($g->stats()->bestTime(Difficulty::EASY), 'a win must record a best time');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::Easy));
+        $this->assertSame(1, $g->stats()->wins(Difficulty::Easy));
+        $this->assertNotNull($g->stats()->bestTime(Difficulty::Easy), 'a win must record a best time');
     }
 
     public function testUpdateRecordsLossTransition(): void
     {
-        // 9×9 EASY board with a mine under the cursor at (0,0).
+        // 9×9 Easy board with a mine under the cursor at (0,0).
         $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '0,1'];
         $rows = [];
         for ($y = 0; $y < 9; $y++) {
@@ -607,32 +607,32 @@ final class GameTest extends TestCase
         [$g, ] = $g->update(self::key(KeyType::Space));
 
         $this->assertTrue($g->board->exploded, 'sanity: reveal should explode the board');
-        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
-        $this->assertSame(0, $g->stats()->wins(Difficulty::EASY));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::Easy));
+        $this->assertSame(0, $g->stats()->wins(Difficulty::Easy));
     }
 
     public function testUpdateDoesNotRecordTwiceAfterGameEnds(): void
     {
         $g = self::nearWinEasyGame();
         [$g, ] = $g->update(self::key(KeyType::Space));   // win, records once
-        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::Easy));
 
         // Further keys on a finished board must not re-record.
         [$g, ] = $g->update(self::key(KeyType::Space));
         [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
-        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::Easy));
     }
 
     public function testRestartPreservesAccumulatedStats(): void
     {
         $g = self::nearWinEasyGame();
         [$g, ] = $g->update(self::key(KeyType::Space));   // win recorded
-        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::Easy));
 
         // Restart must carry the session tally (and stats path) forward.
         [$g, ] = $g->update(self::key(KeyType::Char, 'r'));
         $this->assertFalse($g->board->minesPlaced, 'sanity: restart resets the board');
-        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::Easy));
     }
 
     public function testUpdatePersistsStatsToDiskOnGameOver(): void
@@ -647,8 +647,8 @@ final class GameTest extends TestCase
             $this->assertFileExists($path, 'winning game must write the opt-in stats file');
             $loaded = DifficultyStats::load($path)?->stats();
             $this->assertNotNull($loaded);
-            $this->assertSame(1, $loaded->gamesPlayed(Difficulty::EASY));
-            $this->assertSame(1, $loaded->wins(Difficulty::EASY));
+            $this->assertSame(1, $loaded->gamesPlayed(Difficulty::Easy));
+            $this->assertSame(1, $loaded->wins(Difficulty::Easy));
         } finally {
             if (is_file($path)) {
                 unlink($path);
@@ -914,7 +914,7 @@ final class GameTest extends TestCase
         $this->assertSame($g->board->revealedCount, $next->board->revealedCount);
     }
 
-    // ─── M3: the shipped default shape records (STANDARD preset) ────────────
+    // ─── M3: the shipped default shape records (Standard preset) ────────────
 
     /**
      * Near-win fixture on the DEFAULT 10×10/12 shape — one unrevealed safe
@@ -954,7 +954,7 @@ final class GameTest extends TestCase
 
     public function testDefaultGameShapeIsTheStandardPreset(): void
     {
-        $this->assertSame(Difficulty::STANDARD, Game::start()->difficulty());
+        $this->assertSame(Difficulty::Standard, Game::start()->difficulty());
     }
 
     public function testWinOnDefaultShapeRecordsStandardStats(): void
@@ -965,14 +965,14 @@ final class GameTest extends TestCase
         [$g, ] = $g->update(self::key(KeyType::Space));   // reveal the last safe cell
 
         $this->assertTrue($g->board->isWon(), 'sanity: board won');
-        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::STANDARD));
-        $this->assertSame(1, $g->stats()->wins(Difficulty::STANDARD));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::Standard));
+        $this->assertSame(1, $g->stats()->wins(Difficulty::Standard));
     }
 
     public function testDefaultShapeLossRecordsStandardGame(): void
     {
         // An unrevealed MINE as the target cell: revealing it explodes and
-        // must still tally one STANDARD game, zero wins. One other safe cell
+        // must still tally one Standard game, zero wins. One other safe cell
         // stays hidden so the board is NOT already won before the reveal —
         // a finished board would short-circuit update() to r/q only.
         $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '9,0', '8,8', '9,9'];
@@ -1002,8 +1002,8 @@ final class GameTest extends TestCase
         [$g, ] = $g->update(self::key(KeyType::Space));
 
         $this->assertTrue($g->board->exploded, 'sanity: reveal should explode the board');
-        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::STANDARD));
-        $this->assertSame(0, $g->stats()->wins(Difficulty::STANDARD));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::Standard));
+        $this->assertSame(0, $g->stats()->wins(Difficulty::Standard));
     }
 
     public function testDefaultShapeWinPersistsStandardBucketToDisk(): void
@@ -1015,8 +1015,8 @@ final class GameTest extends TestCase
 
             $loaded = DifficultyStats::load($path)?->stats();
             $this->assertNotNull($loaded);
-            $this->assertSame(1, $loaded->gamesPlayed(Difficulty::STANDARD));
-            $this->assertSame(1, $loaded->wins(Difficulty::STANDARD));
+            $this->assertSame(1, $loaded->gamesPlayed(Difficulty::Standard));
+            $this->assertSame(1, $loaded->wins(Difficulty::Standard));
         } finally {
             if (is_file($path)) {
                 unlink($path);
@@ -1142,7 +1142,7 @@ final class GameTest extends TestCase
         $this->assertSame(9, $frozen->elapsedSeconds, 'custom freeze floors the float like presets');
         $this->assertSame(9.0, $frozen->elapsed(), 'elapsed() reads the frozen end time, not null');
         $this->assertStringContainsString('💥 boom', $frozen->view(), 'end screen still paints the boom line');
-        $this->assertSame(0, $frozen->stats()->gamesPlayed(Difficulty::STANDARD), 'but custom games still tally nothing');
+        $this->assertSame(0, $frozen->stats()->gamesPlayed(Difficulty::Standard), 'but custom games still tally nothing');
     }
 
     public function testCapsLockUppercaseRunesStillPlayTheGame(): void
@@ -1151,7 +1151,7 @@ final class GameTest extends TestCase
         // player's J/K/F/R/Q all fell through to the default arm — the game
         // silently stopped answering. The fold accepts them; the genuinely
         // case-significant keys (S save, L load, l move) stay split.
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0);
 
         [$g, ] = $g->update(self::key(KeyType::Char, 'J'));
         $this->assertSame(1, $g->cursorY, 'J moves down like j');
@@ -1215,14 +1215,14 @@ final class GameTest extends TestCase
     public function testPickerDigitsStartPresetsCarryingStatsAndResettingBoard(): void
     {
         $stats = new Stats(easyGames: 7);
-        $g = Game::withDifficulty(Difficulty::EXPERT, static fn(int $_): int => 0, stats: $stats, statsPath: '/tmp/msw09-stats.json');
+        $g = Game::withDifficulty(Difficulty::Expert, static fn(int $_): int => 0, stats: $stats, statsPath: '/tmp/msw09-stats.json');
         [$g] = $g->update(self::key(KeyType::Space));  // live clock, dirty board
         $picker = self::picker($g);
         [$g] = $picker->update(self::key(KeyType::Char, '1'));
 
         $this->assertSame(9, $g->board->width);
         $this->assertSame(9, $g->board->height);
-        $this->assertSame(10, $g->board->mineCount, 'key 1 starts the EASY row the picker printed');
+        $this->assertSame(10, $g->board->mineCount, 'key 1 starts the Easy row the picker printed');
         $this->assertFalse($g->picking);
         $this->assertSame(0, $g->cursorX);
         $this->assertNull($g->startedAt, 'a new board starts with no clock');
@@ -1260,7 +1260,7 @@ final class GameTest extends TestCase
         $picker = self::picker($lost);
         $this->assertTrue($picker->picking);
         [$fresh] = $picker->update(self::key(KeyType::Char, '3'));
-        $this->assertFalse($fresh->board->exploded, 'the switch lands a live MEDIUM board');
+        $this->assertFalse($fresh->board->exploded, 'the switch lands a live Medium board');
         $this->assertSame(16, $fresh->board->width);
         $this->assertFalse($fresh->picking);
     }

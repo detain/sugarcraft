@@ -49,7 +49,7 @@ final class TeachToPlayTest extends TestCase
 
     public function testTheFreshBoardFrameCarriesTheRulesLine(): void
     {
-        $frame = Renderer::render(Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0));
+        $frame = Renderer::render(Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0));
         $rules = Lang::t('ui.help_rules');
         $this->assertNotSame('ui.help_rules', $rules, 'facade fell through to the raw key');
         $this->assertStringContainsString($rules, $frame);
@@ -57,7 +57,7 @@ final class TeachToPlayTest extends TestCase
 
     public function testTheRulesLineLeadsTheKeyLegendInTheFooter(): void
     {
-        $frame = Renderer::render(Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0));
+        $frame = Renderer::render(Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0));
         $rulesPos = strpos($frame, Lang::t('ui.help_rules'));
         $movesPos = strpos($frame, Lang::t('ui.help_moves'));
         $this->assertNotFalse($rulesPos);
@@ -68,7 +68,7 @@ final class TeachToPlayTest extends TestCase
     public function testTheRulesLineIsTranslatedNotHardcoded(): void
     {
         T::setLocale('de');
-        $frame = Renderer::render(Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0));
+        $frame = Renderer::render(Game::withDifficulty(Difficulty::Easy, static fn(int $max): int => 0));
         $de = require __DIR__ . '/../lang/de.php';
         $en = require __DIR__ . '/../lang/en.php';
         $this->assertStringContainsString($de['ui.help_rules'], $frame);

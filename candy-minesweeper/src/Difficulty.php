@@ -7,49 +7,55 @@ namespace SugarCraft\Minesweeper;
 /**
  * Difficulty levels for minesweeper.
  *
- * EASY, MEDIUM and EXPERT carry the classic Windows Minesweeper
+ * Cases are PascalCase to match the fleet enum convention (sugar-core
+ * MouseButton/Kind, candy-vcr EventKind, sugar-widgets Paginator\Type —
+ * msw-33, finding -071). The enum is unbacked and the stats wire keys are
+ * its own flat lowercase literals (easyGames…), so the rename touches no
+ * on-disk bytes.
+ *
+ * Easy, Medium and Expert carry the classic Windows Minesweeper
  * shapes — no transcribed go-sweep counterpart for the set (the repo_map
  * parity record, docs/old/repo_map/sugarcraft_candy-minesweeper.md,
- * transcribes none). STANDARD is this port's own plain-boot shape:
- *   - EASY     (9×9, 10 mines)
- *   - STANDARD (10×10, 12 mines) — the shape `Game::start()` ships with
- *   - MEDIUM   (16×16, 40 mines)
- *   - EXPERT   (30×16, 99 mines)
+ * transcribes none). Standard is this port's own plain-boot shape:
+ *   - Easy     (9×9, 10 mines)
+ *   - Standard (10×10, 12 mines) — the shape `Game::start()` ships with
+ *   - Medium   (16×16, 40 mines)
+ *   - Expert   (30×16, 99 mines)
  */
 enum Difficulty
 {
-    case EASY;
-    case STANDARD;
-    case MEDIUM;
-    case EXPERT;
+    case Easy;
+    case Standard;
+    case Medium;
+    case Expert;
 
     public function width(): int
     {
         return match ($this) {
-            self::EASY     => 9,
-            self::STANDARD => 10,
-            self::MEDIUM   => 16,
-            self::EXPERT   => 30,
+            self::Easy     => 9,
+            self::Standard => 10,
+            self::Medium   => 16,
+            self::Expert   => 30,
         };
     }
 
     public function height(): int
     {
         return match ($this) {
-            self::EASY     => 9,
-            self::STANDARD => 10,
-            self::MEDIUM   => 16,
-            self::EXPERT   => 16,
+            self::Easy     => 9,
+            self::Standard => 10,
+            self::Medium   => 16,
+            self::Expert   => 16,
         };
     }
 
     public function mines(): int
     {
         return match ($this) {
-            self::EASY     => 10,
-            self::STANDARD => 12,
-            self::MEDIUM   => 40,
-            self::EXPERT   => 99,
+            self::Easy     => 10,
+            self::Standard => 12,
+            self::Medium   => 40,
+            self::Expert   => 99,
         };
     }
 

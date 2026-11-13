@@ -72,14 +72,14 @@ final class DifficultyStatsTest extends TestCase
         $stats = new Stats();
         $ds = DifficultyStats::fromStats($stats);
 
-        $ds2 = $ds->withGame(Difficulty::EASY, true, 30);
+        $ds2 = $ds->withGame(Difficulty::Easy, true, 30);
 
         $this->assertNotSame($ds, $ds2);
-        $this->assertSame(1, $ds2->stats()->gamesPlayed(Difficulty::EASY));
-        $this->assertSame(30, $ds2->stats()->bestTime(Difficulty::EASY));
+        $this->assertSame(1, $ds2->stats()->gamesPlayed(Difficulty::Easy));
+        $this->assertSame(30, $ds2->stats()->bestTime(Difficulty::Easy));
 
         // Original is unchanged.
-        $this->assertSame(0, $ds->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(0, $ds->stats()->gamesPlayed(Difficulty::Easy));
     }
 
     public function testSaveOverwritesExistingFile(): void
@@ -254,13 +254,13 @@ final class DifficultyStatsTest extends TestCase
      * On-disk format law: files may arrive compact or pretty (the format
      * switch to pretty-printed output never broke reads of the FULL key set),
      * but msw-12 made absent counter keys a refusal. This leg pins both
-     * truths for a pre-STANDARD-era compact file: readable shape, refused
+     * truths for a pre-Standard-era compact file: readable shape, refused
      * because the standard trio is genuinely missing.
      */
     public function testLoadRefusesLegacyCompactPayloadMissingStandardTrio(): void
     {
         // msw-12 turned the default-on-absent rung into a refusal, so a
-        // pre-STANDARD-era compact file (which genuinely lacked the standard
+        // pre-Standard-era compact file (which genuinely lacked the standard
         // trio) is now refused rather than silently re-zeroed: the CLI warns
         // "ignoring unreadable stats file" and starts a fresh full-set tally.
         // Losing one ancient tally is honest; overwriting a live file with

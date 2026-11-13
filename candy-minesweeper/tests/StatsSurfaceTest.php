@@ -41,7 +41,7 @@ final class StatsSurfaceTest extends TestCase
         return $g;
     }
 
-    /** Open every safe cell (rand→0 EASY flood-resolves to a win). */
+    /** Open every safe cell (rand→0 Easy flood-resolves to a win). */
     private function winDrive(Game $g): Game
     {
         [$g, ] = $g->update(self::key(KeyType::Space));
@@ -65,7 +65,7 @@ final class StatsSurfaceTest extends TestCase
 
     public function testPresetStatusWithStatsNamesThePresetAndDashesAnEmptyRecord(): void
     {
-        $view = Game::withDifficulty(Difficulty::STANDARD, static fn(int $max): int => 0, stats: new Stats())->view();
+        $view = Game::withDifficulty(Difficulty::Standard, static fn(int $max): int => 0, stats: new Stats())->view();
 
         $this->assertStringContainsString(Lang::t('ui.preset_standard'), $view, 'stats keep score — the status must say for which preset');
         $this->assertStringContainsString('best: --', $view, 'no record yet, the segment shows a placeholder');
@@ -75,7 +75,7 @@ final class StatsSurfaceTest extends TestCase
     public function testPresetStatusShowsTheCurrentBestTime(): void
     {
         $stats = new Stats(standardGames: 5, standardWins: 2, standardBest: 42);
-        $view = Game::withDifficulty(Difficulty::STANDARD, static fn(int $max): int => 0, stats: $stats)->view();
+        $view = Game::withDifficulty(Difficulty::Standard, static fn(int $max): int => 0, stats: $stats)->view();
 
         $this->assertStringContainsString('best: 0:42', $view, 'the stored tally must surface without catting the JSON');
     }
@@ -95,7 +95,7 @@ final class StatsSurfaceTest extends TestCase
 
     public function testNoStatsStatusStaysThePlainLegacyLine(): void
     {
-        $view = Game::withDifficulty(Difficulty::STANDARD, static fn(int $max): int => 0)->view();
+        $view = Game::withDifficulty(Difficulty::Standard, static fn(int $max): int => 0)->view();
 
         $this->assertStringContainsString('mines: 12', $view);
         $this->assertStringNotContainsString('best:', $view, 'nothing is being tallied, nothing is advertised');
@@ -104,7 +104,7 @@ final class StatsSurfaceTest extends TestCase
     public function testBannerNamesTheRecordItBeat(): void
     {
         $g = $this->winDrive(Game::withDifficulty(
-            Difficulty::EASY,
+            Difficulty::Easy,
             static fn(int $max): int => 0,
             stats: new Stats(easyGames: 1, easyWins: 0, easyBest: 3600),
         ));
@@ -122,7 +122,7 @@ final class StatsSurfaceTest extends TestCase
     public function testFirstRecordWearsTheBareBadge(): void
     {
         $g = $this->winDrive(Game::withDifficulty(
-            Difficulty::EASY,
+            Difficulty::Easy,
             static fn(int $max): int => 0,
             stats: new Stats(),
         ));
@@ -140,7 +140,7 @@ final class StatsSurfaceTest extends TestCase
     public function testRestartClearsTheBeatenRecord(): void
     {
         $g = $this->winDrive(Game::withDifficulty(
-            Difficulty::EASY,
+            Difficulty::Easy,
             static fn(int $max): int => 0,
             stats: new Stats(easyGames: 1, easyWins: 0, easyBest: 3600),
         ));
@@ -155,7 +155,7 @@ final class StatsSurfaceTest extends TestCase
     public function testStatusSegmentsFitTheFortyColumnBudget(): void
     {
         $stats = new Stats(standardGames: 5, standardWins: 2, standardBest: 3599);
-        $game = Game::withDifficulty(Difficulty::STANDARD, static fn(int $max): int => 0, stats: $stats)
+        $game = Game::withDifficulty(Difficulty::Standard, static fn(int $max): int => 0, stats: $stats)
             ->update(new WindowSizeMsg(40, 40))[0];
         foreach (explode("\n", $game->view()) as $line) {
             $clean = rtrim(preg_replace('/\x1b\[[0-9;]*m/', '', $line) ?? $line, ' ');

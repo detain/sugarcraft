@@ -246,10 +246,10 @@ function integerArgument(array $positional, int $index, string $name, string $us
 $preset = null;
 $positional = [];
 $presets = [
-    '--easy'     => Difficulty::EASY,
-    '--standard' => Difficulty::STANDARD,
-    '--medium'   => Difficulty::MEDIUM,
-    '--expert'   => Difficulty::EXPERT,
+    '--easy'     => Difficulty::Easy,
+    '--standard' => Difficulty::Standard,
+    '--medium'   => Difficulty::Medium,
+    '--expert'   => Difficulty::Expert,
 ];
 // msw-32 (finding -070): a standalone '--' closes the option grammar and
 // every token after it is positional. Digit positionals can never start
