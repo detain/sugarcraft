@@ -204,6 +204,23 @@ final class Tree implements Model
             if ($msg->rune === 'g') return [$this->copy(cursor: 0)->clamp(),                          null];
             if ($msg->rune === 'G') return [$this->copy(cursor: max(0, $this->visibleCount() - 1))->clamp(), null];
         }
+        // W-41/065: window-relative paging. PageUp/PageDown stride the
+        // visible height (the whole list when height 0 = unbounded, where
+        // clamp() lands the cursor on the last row); Home/End jump to the
+        // same targets as g/G so mouse-less hosts have named keys too.
+        if ($msg->type === KeyType::Home) {
+            return [$this->copy(cursor: 0)->clamp(), null];
+        }
+        if ($msg->type === KeyType::End) {
+            return [$this->copy(cursor: max(0, $this->visibleCount() - 1))->clamp(), null];
+        }
+        $page = $this->height > 0 ? $this->height : max(1, $this->visibleCount() - 1);
+        if ($msg->type === KeyType::PageUp) {
+            return [$this->copy(cursor: $this->cursor - $page)->clamp(), null];
+        }
+        if ($msg->type === KeyType::PageDown) {
+            return [$this->copy(cursor: $this->cursor + $page)->clamp(), null];
+        }
 
         return [$this, null];
     }
