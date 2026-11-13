@@ -2,10 +2,11 @@
 
 > Formerly published as `sugarcraft/candy-testing` (renamed 2026-10). <!-- @rename-keep -->
 
-Deterministic test harness for PHP 8.3+ SugarCraft programs — the MVC-style
-Model–Update–View apps in this repo: scripted input, golden snapshots
-(committed byte-exact reference output), cell-grid assertions, program
-simulation, VHS tape building, and graphics-stream decoding.
+Deterministic test harness for PHP 8.3+ SugarCraft programs (the
+MVC-style Model–Update–View apps in this repo). It provides scripted input,
+golden snapshots (committed byte-exact reference output), cell-grid
+assertions, program simulation, VHS tape building, and graphics-stream
+decoding.
 
 > **Architecture background:** SugarCraft apps follow the MVC-style Model–Update–View architecture. `sugar-testing` is the deterministic test harness for such programs in this PHP toolchain.
 
@@ -18,41 +19,45 @@ simulation, VHS tape building, and graphics-stream decoding.
   (see [Simulation subset](#simulation-subset))
 - **`ScriptedInput`** — fluent builder for message sequences (`->key('q')->enter()`)
 - **Snapshot assertions** — `assertGoldenAnsi`, `assertCellGrid`, `assertAnsiEquals`,
-  `assertViewIdempotent` — the parsers reject malformed expectation shapes at the
-  boundary, so an assertion that would compare nothing fails loudly instead of passing
-  (`assertViewIdempotent`'s model-unchanged leg uses a shallow clone: nested
-  mutation by reference is out of its reach, output idempotence is the guarantee)
+  `assertViewIdempotent`. The parsers reject malformed expectation shapes at the
+  boundary, so an assertion that would compare nothing fails loudly instead of
+  passing. Caveat: `assertViewIdempotent`'s model-unchanged leg uses a shallow
+  clone — nested mutation by reference is out of its reach; output idempotence
+  is the guarantee.
 - **`GoldenFile`** — lifecycle-aware `.golden` helper: `load()` (null only when
   missing; unreadable or symlinked goldens throw), `save()` (atomic clobber —
   fixture seeding), `create()` (one-way, refuses an existing golden),
   `update()` (deliberate re-baseline), `resolve()` (fixtures-relative path — the
-  traversal *and* symlink jail keeps the walk inside `<base>/fixtures`'s subtree;
-  the fixtures root itself is the sanctioned container)
+  traversal *and* symlink jail keeps the walk inside the `<base>/fixtures`
+  subtree; the fixtures root itself is the sanctioned container)
 - **`TestResult`** — what `run()` returns: final model, last view, captured cmds,
   raw output, per-turn `frames`, and `droppedAfterStop`
-- **`Graphics\`** — inline-image stream assertions (`KittyStream`, `KittyImage`,
-  `Iterm2Stream`, `SixelStream`, `PixelGrid`, `Mode`, `DecodeLimits`,
-  `MalformedGraphicsException`)
-  — consumed by sugar-image
+- **`Graphics\`** — inline-image stream assertions headlined by
+  `GraphicsAssertions::assertRendersTo()`, over `KittyStream`, `KittyImage`,
+  `Iterm2Stream`, `SixelStream`, `PixelGrid`, `Mode`, `DecodeLimits`, and
+  `MalformedGraphicsException`; consumed by sugar-image's renderer tests
 - **`LoopPin`** — pins the shared ReactPHP loop to `StreamSelectLoop` so safety
   timers keep their real deadlines (see below)
 - **`TapeRecorder`** — builds VHS-compatible `.tape` files for demo rendering, with
   an escape guarantee: typed text can never forge a standalone directive line
 - **`TemporaryDirectoryTrait`** — unique, mode-`0700`, symlink-safe scratch dirs
   for filesystem tests
+- **`Lang`** — thrown exception messages are translated through `Lang::t()` with
+  family keys (`simulator.*`, `input.*`, `golden.*`, `tape.*`, `concerns.*`,
+  `assertions.*`, `graphics.*`) declared in `lang/en.php`; assertion-failure
+  guidance prose stays English by ruling (see CALIBER_LEARNINGS.md)
 
 ## Requirements
 
 - PHP 8.3+
-- PHPUnit `^10.5` — `Assertions` extends `PHPUnit\Framework\Assert` and the
-  `TestResult` verbs report through it; that is the version this suite is
-  verified against
 - `sugarcraft/sugar-core` (Program, Msg, Model, Cmd)
 - `sugarcraft/sugar-cellbuffer` (Buffer for cell-grid assertions)
 - `react/event-loop` (the loop `LoopPin` swaps)
-- `phpunit/phpunit` `^10.5` — a de facto dependency of the consumer: `Assertions`
-  delegates to PHPUnit's `Assert` (declared here as a dev-requirement, because the
-  lib is only ever pulled into test code)
+- `phpunit/phpunit` `^10.5` — `Assertions` delegates to PHPUnit's `Assert`
+  (static calls; it does not extend it — `GraphicsAssertions` does), and the
+  `TestResult` verbs report through it; this is the version the suite is
+  verified against, declared as a dev-requirement because the lib is only
+  ever pulled into test code
 - `ext-gd` — only needed to materialize pixels in `Graphics` assertions; it is a
   `suggest`, not a hard requirement, and streams can be decoded without it
 
@@ -63,7 +68,10 @@ composer require --dev sugarcraft/sugar-testing:@dev
 ```
 
 This is a PHPUnit test harness: it belongs in `require-dev` and must not enter
-runtime dependencies.
+runtime dependencies. In a monorepo checkout, `php scripts/refresh-deps.php
+--status` reports whether each lib's sibling copies are path-linked or resolved
+from Packagist `dev-master`, and `--mode=linked` restores development wiring —
+suites must only be scored against the figure you know the mode of.
 
 ## Quickstart
 
