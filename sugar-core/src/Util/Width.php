@@ -227,6 +227,80 @@ final class Width
     }
 
     /**
+     * Clip $s to at most $maxBytes BYTES, the marker INCLUDED in that budget
+     * ("marker-in-budget": the result never exceeds $maxBytes, so a caller
+     * sizing a buffer, a prompt slot or a column by bytes can trust it).
+     *
+     * Text that already fits is returned untouched (no marker). Otherwise the
+     * text is cut at a UTF-8 codepoint boundary — never mid-sequence — and the
+     * marker appended. A marker that alone exceeds the budget is itself cut to
+     * fit, so the bound holds for every input. ANSI is NOT interpreted: this
+     * is a byte primitive; a caller clipping styled text clips the plain
+     * string first. Boundaries are codepoint-, not grapheme-aware, so a clip
+     * can still separate a base character from its combining mark — use
+     * {@see clipCells()} for text that is displayed.
+     *
+     * $maxBytes <= 0 yields ''.
+     */
+    public static function clipBytes(string $text, int $maxBytes, string $marker = '…'): string
+    {
+        if ($maxBytes <= 0) {
+            return '';
+        }
+        if (\strlen($text) <= $maxBytes) {
+            return $text;
+        }
+
+        $markerBytes = \strlen($marker);
+        if ($markerBytes >= $maxBytes) {
+            return self::utf8Prefix($marker, $maxBytes);
+        }
+
+        return self::utf8Prefix($text, $maxBytes - $markerBytes) . $marker;
+    }
+
+    /**
+     * {@see clipBytes()}'s display-cell twin: clip $s to at most $maxCells
+     * terminal cells with the marker INCLUDED in the budget. Text that fits is
+     * returned untouched (ANSI preserved); a clip goes through
+     * {@see truncate()}, so it is grapheme-safe and ANSI is dropped, as there.
+     * A marker wider than the budget is itself truncated to fit.
+     */
+    public static function clipCells(string $s, int $maxCells, string $marker = '…'): string
+    {
+        if ($maxCells <= 0) {
+            return '';
+        }
+        if (self::string($s) <= $maxCells) {
+            return $s;
+        }
+
+        $markerCells = self::string($marker);
+        if ($markerCells >= $maxCells) {
+            return self::truncate($marker, $maxCells);
+        }
+
+        return self::truncate($s, $maxCells - $markerCells) . $marker;
+    }
+
+    /**
+     * The longest prefix of $s no longer than $bytes that does not end inside a
+     * UTF-8 multi-byte sequence (continuation bytes 0x80..0xBF are walked back
+     * over to the lead byte, which is dropped with them).
+     */
+    private static function utf8Prefix(string $s, int $bytes): string
+    {
+        if ($bytes >= \strlen($s)) {
+            return $s;
+        }
+        while ($bytes > 0 && (\ord($s[$bytes]) & 0xC0) === 0x80) {
+            $bytes--;
+        }
+
+        return substr($s, 0, $bytes);
+    }
+
+    /**
      * Truncate $s to display width $max by removing the MIDDLE and
      * inserting $ellipsis, keeping both ends visible. ANSI sequences are
      * dropped. Returns $s (ANSI-stripped) unchanged when it already fits.
