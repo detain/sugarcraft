@@ -279,6 +279,7 @@ Each writes a plan file only — no implementation.
 2. `step-02-candy-git-server-tui.md`
 3. `step-03-sugar-vterm-graphics.md`
 4. `step-04-sugar-animation-mosaic-split.md`
+5. `step-05-sugar-input-escape-decoder-split.md`
 
 ### Phase 12 — Deferred (`phase-12-deferred/`) — pause indefinitely per user
 
