@@ -11,7 +11,9 @@ use SugarCraft\ColorProfile\ColorDistance;
 use SugarCraft\ColorProfile\NearestColor;
 
 /**
- * error-compensated palette lookup pins for NearestColor::withError().
+ * error-compensated palette lookup pins for
+ * NearestColor::bestMatchWithError() (CP-49 rename of withError(); the
+ * deprecated bridge is pinned at the end of this class).
  *
  * The contract mirrors chafa chafa-palette.c:1160-1197: the query is pushed by
  * the accumulated error damped 0.9/16, the entry is chosen for the COMPENSATED
@@ -38,10 +40,10 @@ final class NearestColorErrorCompensationTest extends TestCase
         ];
 
         foreach ([ColorDistance::Euclidean, ColorDistance::Cie76, ColorDistance::Cie2000] as $metric) {
-            $matcher = new NearestColor($metric);
+            $matcher = NearestColor::forMetric($metric);
             foreach ($queries as $query) {
                 $err = null;
-                self::assertSame($matcher->ansi256($query), $matcher->withError($query, $err));
+                self::assertSame($matcher->ansi256($query), $matcher->bestMatchWithError($query, $err));
                 self::assertNull($err, 'passthrough must not materialize an accumulator');
             }
         }
@@ -53,11 +55,11 @@ final class NearestColorErrorCompensationTest extends TestCase
      */
     public function testZeroErrorChoosesPlainNearestAndWritesResidual(): void
     {
-        $matcher = new NearestColor(ColorDistance::Euclidean);
+        $matcher = NearestColor::forMetric(ColorDistance::Euclidean);
         $query = new Color(30, 70, 200);
         $err = [0.0, 0.0, 0.0];
 
-        $index = $matcher->withError($query, $err);
+        $index = $matcher->bestMatchWithError($query, $err);
 
         self::assertSame($matcher->ansi256($query), $index);
         $found = NearestColor::palette256()[$index];
@@ -75,7 +77,7 @@ final class NearestColorErrorCompensationTest extends TestCase
      */
     public function testDampedErrorCompensationMovesSelection(): void
     {
-        $matcher = new NearestColor(ColorDistance::Euclidean);
+        $matcher = NearestColor::forMetric(ColorDistance::Euclidean);
         $query = new Color(90, 90, 90);
 
         $compensated = [
@@ -90,7 +92,7 @@ final class NearestColorErrorCompensationTest extends TestCase
         ));
 
         $err = [120.0, 120.0, 0.0];
-        $index = $matcher->withError($query, $err);
+        $index = $matcher->bestMatchWithError($query, $err);
 
         self::assertSame($expected, $index);
         self::assertNotSame($matcher->ansi256($query), $index, 'feedback must change this fixture');
@@ -112,10 +114,10 @@ final class NearestColorErrorCompensationTest extends TestCase
      */
     public function testResidualUsesUnclampedCompensatedQuery(): void
     {
-        $matcher = new NearestColor(ColorDistance::Euclidean);
+        $matcher = NearestColor::forMetric(ColorDistance::Euclidean);
         $err = [160.0, 160.0, 160.0];
 
-        $index = $matcher->withError(new Color(255, 255, 255), $err);
+        $index = $matcher->bestMatchWithError(new Color(255, 255, 255), $err);
 
         // Lookup side: clamped to the pure-white entry (first minimizer by the
         // lowest-index rule — derived, never hard-coded).
@@ -133,10 +135,10 @@ final class NearestColorErrorCompensationTest extends TestCase
      */
     public function testNegativeErrorPullsAndKeepsDrag(): void
     {
-        $matcher = new NearestColor(ColorDistance::Euclidean);
+        $matcher = NearestColor::forMetric(ColorDistance::Euclidean);
         $err = [-32.0, -300.0, 0.0];
 
-        $index = $matcher->withError(new Color(1, 1, 1), $err);
+        $index = $matcher->bestMatchWithError(new Color(1, 1, 1), $err);
 
         $pullR = 1 + (-32.0 * 0.9) / 16;
         $pullG = 1 + (-300.0 * 0.9) / 16;
@@ -155,13 +157,13 @@ final class NearestColorErrorCompensationTest extends TestCase
      */
     public function testChainFeedsForwardAcrossLookups(): void
     {
-        $matcher = new NearestColor(ColorDistance::Euclidean);
+        $matcher = NearestColor::forMetric(ColorDistance::Euclidean);
         $sequence = [new Color(41, 42, 43), new Color(44, 45, 46), new Color(40, 200, 90)];
 
         $err = [0.0, 0.0, 0.0];
         $got = [];
         foreach ($sequence as $query) {
-            $got[] = $matcher->withError($query, $err);
+            $got[] = $matcher->bestMatchWithError($query, $err);
         }
 
         // Reference replay of chafa :1160-1197 in plain floats.
@@ -197,9 +199,9 @@ final class NearestColorErrorCompensationTest extends TestCase
     #[DataProvider('malformedAccumulators')]
     public function testRejectsMalformedAccumulator(array $err): void
     {
-        $matcher = new NearestColor();
+        $matcher = NearestColor::new();
         $this->expectException(\InvalidArgumentException::class);
-        $matcher->withError(new Color(1, 2, 3), $err);
+        $matcher->bestMatchWithError(new Color(1, 2, 3), $err);
     }
 
     /**
@@ -219,7 +221,7 @@ final class NearestColorErrorCompensationTest extends TestCase
      */
     public function testCie76MatcherCompensatesInItsOwnSpace(): void
     {
-        $matcher = new NearestColor(ColorDistance::Cie76);
+        $matcher = NearestColor::forMetric(ColorDistance::Cie76);
         $query = new Color(120, 121, 122);
         $err = [64.0, 0.0, -64.0];
 
@@ -228,7 +230,7 @@ final class NearestColorErrorCompensationTest extends TestCase
             121,
             (int) round(122 + (-64.0 * 0.9) / 16),
         ];
-        $index = $matcher->withError($query, $err);
+        $index = $matcher->bestMatchWithError($query, $err);
 
         self::assertSame($matcher->ansi256(new Color($comp[0], $comp[1], $comp[2])), $index);
         $found = NearestColor::palette256()[$index];
@@ -237,5 +239,26 @@ final class NearestColorErrorCompensationTest extends TestCase
             121.0 - $found->g,
             (122.0 + (-64.0 * 0.9) / 16) - $found->b,
         ], $err);
+    }
+
+    public function testTheDeprecatedWithErrorBridgeIsTheSameBehaviourDoor(): void
+    {
+        // CP-49 bridge pin: withError() is retained as a passthrough — same
+        // index answer AND the by-reference residual must arrive at the
+        // caller's variable through the bridge exactly as through the named
+        // door (the one place ->withError( may legally appear tree-wide).
+        $matcher = NearestColor::forMetric(ColorDistance::Cie76);
+        $query = new Color(120, 121, 122);
+
+        $viaDoor = [64.0, 0.0, -64.0];
+        $viaBridge = [64.0, 0.0, -64.0];
+        $doorIndex = $matcher->bestMatchWithError($query, $viaDoor);
+        $bridgeIndex = $matcher->withError($query, $viaBridge);
+
+        self::assertSame($doorIndex, $bridgeIndex, 'the bridge must answer the same index');
+        self::assertSame($viaDoor, $viaBridge, 'the by-reference residual must forward intact');
+
+        $nullBridge = null;
+        self::assertSame($matcher->ansi256($query), $matcher->withError($query, $nullBridge));
     }
 }

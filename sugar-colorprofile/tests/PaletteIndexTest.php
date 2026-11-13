@@ -45,7 +45,7 @@ final class PaletteIndexTest extends TestCase
         $checked = 0;
 
         foreach ([ColorDistance::Euclidean, ColorDistance::Cie76] as $metric) {
-            $matcher = new NearestColor($metric);
+            $matcher = NearestColor::forMetric($metric);
             for ($p = 0; $p < self::FUZZ_PALETTES; $p++) {
                 $size = $randomizer->getInt(1, 40);
                 // Alternating corpus: fully random channels (near-ties are then
@@ -221,7 +221,7 @@ final class PaletteIndexTest extends TestCase
         }
 
         foreach ([ColorDistance::Euclidean, ColorDistance::Cie76] as $metric) {
-            $matcher = new NearestColor($metric);
+            $matcher = NearestColor::forMetric($metric);
             $index = PaletteIndex::fromPalette(NearestColor::palette256(), $metric);
             foreach ($queries as $query) {
                 self::assertSame(

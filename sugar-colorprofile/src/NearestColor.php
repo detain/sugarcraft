@@ -33,6 +33,11 @@ namespace SugarCraft\ColorProfile;
  * and made encode/decode round-trips disagree with matching).
  *
  * Exact ties resolve to the first matching palette entry (lowest index).
+ *
+ * Construction follows the house factory convention (CP-49, finding
+ * -062/DX-14): {@see self::new()} for the default metric and
+ * {@see self::forMetric()} when a strategy is chosen on purpose — the
+ * constructor is the private implementation door.
  */
 final class NearestColor
 {
@@ -75,9 +80,25 @@ final class NearestColor
      *                              [perceptual-distance]); documented split,
      *                              2.0 candidate.
      */
-    public function __construct(
+    private function __construct(
         private readonly ColorDistance $metric = ColorDistance::DEFAULT_METRIC,
     ) {
+    }
+
+    /**
+     * House front door: a matcher on the default metric seat (CP-49).
+     */
+    public static function new(ColorDistance $metric = ColorDistance::DEFAULT_METRIC): self
+    {
+        return new self($metric);
+    }
+
+    /**
+     * House front door spelling an intentional strategy choice (CP-49).
+     */
+    public static function forMetric(ColorDistance $metric): self
+    {
+        return new self($metric);
     }
 
     /**
@@ -86,6 +107,20 @@ final class NearestColor
     public function metric(): ColorDistance
     {
         return $this->metric;
+    }
+
+    /**
+     * @deprecated 2026-11-13 (CP-49, finding -062/DX-14) — the `with` prefix
+     *             masqueraded as the immutable-setter convention; use
+     *             {@see self::bestMatchWithError()} (the error-compensated
+     *             palette lookup mirroring chafa chafa-palette.c:1160-1197).
+     *             This bridge is a same-behaviour passthrough — by-reference
+     *             feedback forwarding intact — pinned by
+     *             NearestColorErrorCompensationTest and removable at 2.0.
+     */
+    public function withError(Color $color, ?array &$err = null): int
+    {
+        return $this->bestMatchWithError($color, $err);
     }
 
     /**
@@ -177,16 +212,18 @@ final class NearestColor
      * "no feedback" and the call is exactly {@see self::ansi256()} — plain
      * nearest, no writes.
      *
-     * The `with` in the name reads "accompanied by", not the immutable-setter
-     * convention: this is a lookup with a by-reference feedback vector, the
-     * shape chafa's dither loop prescribes verbatim.
+     * The name says the shape: this is a lookup with a by-reference feedback
+     * vector (the form chafa's dither loop prescribes verbatim), NOT an
+     * immutable setter — CP-49 retired the old `withError` spelling, whose
+     * `with` prefix read as the setter convention at a glance; a deprecated
+     * same-behaviour bridge keeps that name answering until 2.0.
      *
      * @param ?array{0: float|int, 1: float|int, 2: float|int} $err in/out accumulator, list-shaped triple
      *
      * @throws \InvalidArgumentException when $err is non-null but not a
      *                                   3-element list of numbers
      */
-    public function withError(Color $color, ?array &$err = null): int
+    public function bestMatchWithError(Color $color, ?array &$err = null): int
     {
         if ($err === null) {
             return $this->ansi256($color);

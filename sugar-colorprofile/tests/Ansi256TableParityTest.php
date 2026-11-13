@@ -92,7 +92,7 @@ final class Ansi256TableParityTest extends TestCase
      */
     public function testEncoderAndMatcherAgreeOnExactNodes(): void
     {
-        $matcher = new NearestColor();
+        $matcher = NearestColor::new();
 
         // Nodes chosen to NOT overlap the ANSI-16 set (cube red #ff0000 and
         // white #ffffff tie with bright slots 9/15 and correctly resolve to

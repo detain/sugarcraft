@@ -75,7 +75,7 @@ final class NearestColorTest extends TestCase
 
     public function testMetricDefaultsToEuclidean(): void
     {
-        self::assertSame(ColorDistance::Euclidean, (new NearestColor())->metric());
+        self::assertSame(ColorDistance::Euclidean, (NearestColor::new())->metric());
     }
 
     public function testTheLabMemosTrackStandardColorReassignments(): void
@@ -94,7 +94,7 @@ final class NearestColorTest extends TestCase
             // The 256-entry table leads with the same mutable slots — same guarantee there.
             self::assertSame(ColorMath::toLab(0x12, 0x34, 0x56), NearestColor::palette256Lab()[1]);
             // CIE ANSI-16 matching honors the sentinel without any manual rebuild.
-            self::assertSame(1, (new NearestColor(ColorDistance::Cie76))->ansi16(new Color(0x12, 0x34, 0x56)));
+            self::assertSame(1, (NearestColor::forMetric(ColorDistance::Cie76))->ansi16(new Color(0x12, 0x34, 0x56)));
         } finally {
             StandardColors::$red = $original;
         }
@@ -105,7 +105,7 @@ final class NearestColorTest extends TestCase
 
     public function testEuclideanAnsi256SnapsToExactCubeAndRampNodes(): void
     {
-        $matcher = new NearestColor();
+        $matcher = NearestColor::new();
         // (175,95,0) is cube level (3,1,0) -> distance 0, unique winner.
         self::assertSame(16 + 36 * 3 + 6 * 1 + 0, $matcher->ansi256(new Color(175, 95, 0)));
         // (128,128,128) is grey-ramp step 12 (8 + 12*10) -> distance 0.
@@ -135,7 +135,7 @@ final class NearestColorTest extends TestCase
     public function testExactPaletteNodesMapToThemselvesUnderEveryMetric(int $expected, Color $color): void
     {
         foreach (ColorDistance::cases() as $metric) {
-            self::assertSame($expected, (new NearestColor($metric))->ansi256($color), $metric->value);
+            self::assertSame($expected, (NearestColor::forMetric($metric))->ansi256($color), $metric->value);
         }
     }
 
@@ -143,7 +143,7 @@ final class NearestColorTest extends TestCase
     {
         $grey = new Color(128, 128, 128);
         foreach (ColorDistance::cases() as $metric) {
-            $winner = NearestColor::palette256()[(new NearestColor($metric))->ansi256($grey)];
+            $winner = NearestColor::palette256()[(NearestColor::forMetric($metric))->ansi256($grey)];
             self::assertSame($winner->r, $winner->g, $metric->value);
             self::assertSame($winner->g, $winner->b, $metric->value);
         }
@@ -152,21 +152,21 @@ final class NearestColorTest extends TestCase
     public function testTiesResolveToLowestPaletteIndex(): void
     {
         // Index 0 (standard black) and index 16 (cube origin) are both #000000.
-        self::assertSame(0, (new NearestColor())->ansi256(new Color(0, 0, 0)));
+        self::assertSame(0, (NearestColor::new())->ansi256(new Color(0, 0, 0)));
         // Index 15 and 231 are both #ffffff.
-        self::assertSame(15, (new NearestColor())->ansi256(new Color(255, 255, 255)));
+        self::assertSame(15, (NearestColor::new())->ansi256(new Color(255, 255, 255)));
     }
 
     public function testAnsi16HandMatchesBasicBlue(): void
     {
         // (0,0,200) sits nearest basic blue (0,0,238) — d=1444 vs bright blue
         // (92,92,255) d=19953 — so index 4, not bright.
-        self::assertSame(4, (new NearestColor())->ansi16(new Color(0, 0, 200)));
+        self::assertSame(4, (NearestColor::new())->ansi16(new Color(0, 0, 200)));
     }
 
     public function testAnsi16FindsEveryStandardColorItself(): void
     {
-        $matcher = new NearestColor(ColorDistance::Cie2000);
+        $matcher = NearestColor::forMetric(ColorDistance::Cie2000);
         foreach (StandardColors::all() as $index => $color) {
             self::assertSame($index, $matcher->ansi16($color));
         }
@@ -178,8 +178,8 @@ final class NearestColorTest extends TestCase
         // between cube greens, Euclidean drifts to the teal-tinged (0,135,95)
         // #00875f while CIE2000 keeps the pure hue at (0,135,0) #008700.
         $green = new Color(0, 143, 52);
-        self::assertSame(29, (new NearestColor())->ansi256($green));
-        self::assertSame(28, (new NearestColor(ColorDistance::Cie2000))->ansi256($green));
+        self::assertSame(29, (NearestColor::new())->ansi256($green));
+        self::assertSame(28, (NearestColor::forMetric(ColorDistance::Cie2000))->ansi256($green));
     }
 
     public function testDarkNavyMapsToGreyRampWithMetricSplit(): void
@@ -189,8 +189,8 @@ final class NearestColorTest extends TestCase
         // blue node is close enough — both metrics now pick the grey ramp,
         // Euclidean step 3 (#262626) and CIE2000 step 2 (#1c1c1c).
         $navy = new Color(12, 34, 56);
-        self::assertSame(235, (new NearestColor())->ansi256($navy));
-        self::assertSame(234, (new NearestColor(ColorDistance::Cie2000))->ansi256($navy));
+        self::assertSame(235, (NearestColor::new())->ansi256($navy));
+        self::assertSame(234, (NearestColor::forMetric(ColorDistance::Cie2000))->ansi256($navy));
     }
 
     /**
@@ -213,14 +213,14 @@ final class NearestColorTest extends TestCase
                     $expected = $index;
                 }
             }
-            self::assertSame($expected, (new NearestColor($metric))->ansi256($probe), $metric->value);
+            self::assertSame($expected, (NearestColor::forMetric($metric))->ansi256($probe), $metric->value);
         }
     }
 
     public function testClosestOnArbitraryPaletteMatchesAnsi256(): void
     {
         $probe = new Color(23, 200, 120);
-        $matcher = new NearestColor(ColorDistance::Cie2000);
+        $matcher = NearestColor::forMetric(ColorDistance::Cie2000);
         self::assertSame($matcher->ansi256($probe), $matcher->closest($probe, NearestColor::palette256()));
     }
 
@@ -228,16 +228,16 @@ final class NearestColorTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('empty palette');
-        (new NearestColor())->closest(new Color(1, 2, 3), []);
+        (NearestColor::new())->closest(new Color(1, 2, 3), []);
     }
 
     public function testClosestReturnsStringKeyForAssociativePalette(): void
     {
         $palette = ['brand' => new Color(10, 20, 30), 'other' => new Color(240, 250, 255)];
-        self::assertSame('brand', (new NearestColor())->closest(new Color(12, 18, 33), $palette));
+        self::assertSame('brand', (NearestColor::new())->closest(new Color(12, 18, 33), $palette));
         self::assertSame(
             'brand',
-            (new NearestColor(ColorDistance::Cie2000))->closest(new Color(12, 18, 33), $palette),
+            (NearestColor::forMetric(ColorDistance::Cie2000))->closest(new Color(12, 18, 33), $palette),
         );
     }
 
@@ -250,7 +250,7 @@ final class NearestColorTest extends TestCase
      */
     public function testCie2000WarmSearchScalesForMediaClients(): void
     {
-        $matcher = new NearestColor(ColorDistance::Cie2000);
+        $matcher = NearestColor::forMetric(ColorDistance::Cie2000);
         $probe = new Color(30, 120, 30);
 
         $started = \microtime(true);
@@ -260,5 +260,20 @@ final class NearestColorTest extends TestCase
         $elapsed = \microtime(true) - $started;
 
         self::assertLessThan(15.0, $elapsed, "2k CIE2000 searches took {$elapsed}s");
+    }
+
+    public function testTheHouseFactoriesAnswerOnTheirOwnDoors(): void
+    {
+        // CP-49 factory pins: the constructor went private (zero consumers
+        // tree-wide, enumerated in the commit message) — the two named doors
+        // must build matchers whose strategy is the requested seat, and the
+        // optional-metric leg of new() must ride DEFAULT_METRIC unchanged.
+        $default = NearestColor::new();
+        self::assertSame(ColorDistance::DEFAULT_METRIC, $default->metric());
+
+        foreach (ColorDistance::cases() as $metric) {
+            self::assertSame($metric, NearestColor::forMetric($metric)->metric(), $metric->name);
+            self::assertSame($metric, NearestColor::new($metric)->metric(), $metric->name);
+        }
     }
 }

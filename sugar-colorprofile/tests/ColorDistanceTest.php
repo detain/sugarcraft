@@ -100,7 +100,7 @@ final class ColorDistanceTest extends TestCase
         $this->assertSame(ColorDistance::DEFAULT_METRIC, $default);
         $this->assertSame(
             ColorDistance::Euclidean,
-            (new NearestColor())->metric(),
+            (NearestColor::new())->metric(),
             'the resolved default answer is unchanged — BC by construction',
         );
     }
