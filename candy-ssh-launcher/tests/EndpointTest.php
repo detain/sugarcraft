@@ -54,10 +54,10 @@ final class EndpointTest extends TestCase
 
     public function testDisplayLineDefaultPort(): void
     {
+        // -077: the default port rides every surface, picker included.
         $e = new Endpoint(name: 'a', host: 'a.test', user: 'me');
         $line = $e->displayLine();
-        $this->assertStringContainsString('me@a.test', $line);
-        $this->assertStringNotContainsString(':22', $line);
+        $this->assertSame('a  ─  me@a.test:22', $line);
     }
 
     public function testConstructorRefusesOutOfRangePorts(): void

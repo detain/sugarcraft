@@ -23,8 +23,8 @@ The config schema here is a **flat top-level list** of endpoint objects; charmbr
 ── wishlist ──
 filter:
 ▸ production  ─  deploy@prod.example.com:2222
-  staging     ─  stage.example.com
-  dev         ─  dev.example.com
+  staging     ─  stage.example.com:22
+  dev         ─  dev.example.com:22
 
   ↑/↓ select · Enter connect · Esc quit · type to filter
 ```
@@ -64,7 +64,7 @@ candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [
 |----------|---------|
 | `--config <path>` | Read this config file and skip the search. Accepts `--config <path>` and `--config=<path>`; a missing value is refused. |
 | `--ssh <path>` | ssh binary to exec (default `/usr/bin/ssh`). Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. |
-| `--list` | Print the resolved endpoints to stdout as TAB-joined `name`, `host:port`, `user` columns (an unset user prints as a literal `-`) and exit `0` — no terminal, no ssh, no picker, and no `--ssh` executability check. |
+| `--list` | Print the resolved endpoints to stdout as TAB-joined `name`, `host:port`, `user` columns (an unset or empty user prints as a literal `-`; a name that occurs more than once is suffixed with its 1-based config index, `dup#1`/`dup#3`), and exit `0` — no terminal, no ssh, no picker, and no `--ssh` executability check. Control and line bytes in every column are folded to spaces, so the output is exactly one physical row per endpoint and safe to `awk -F'\t'`. |
 | `-h`, `--help` | Print the usage line and exit `0`. |
 | `-v`, `--version` | Print `candy-ssh-launcher <version>` and exit `0` — reads no config, touches no terminal. |
 | `--` | End of options — remaining arguments are ignored (there are no positional arguments). |
@@ -124,7 +124,7 @@ Flat list of endpoint objects (YAML subset or JSON). The reader format follows t
 
 | Key | Type | Meaning |
 |-----|------|---------|
-| `name` | string, required (non-empty) | Label shown in the picker (the filter scores the whole display line `name ─ user@host[:port]`, so usernames and port digits match too). |
+| `name` | string, required (non-empty) | Label shown in the picker (the filter scores the whole display line `name ─ user@host:port`, so usernames and port digits match too). |
 | `host` | string, required and non-empty | Destination hostname — what ssh connects to; an empty host is refused. |
 | `port` | `1`–`65535`, default `22` | SSH port; junk values are refused with the endpoint's name. |
 | `user` | string, optional | Remote user (omitted → ssh's own default). |

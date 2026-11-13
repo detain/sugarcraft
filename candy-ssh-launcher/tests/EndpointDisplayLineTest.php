@@ -25,20 +25,19 @@ final class EndpointDisplayLineTest extends TestCase
         $this->assertSame('prod  ─  prod.example.com:2222', $line);
     }
 
-    public function testDisplayLineWithUserAndDefaultPortOmitsPort(): void
+    public function testDisplayLineWithUserAndDefaultPortShowsPort(): void
     {
+        // -077: one rule on every surface — the default port is shown, never hidden.
         $e = new Endpoint(name: 'prod', host: 'prod.example.com', user: 'admin');
         $line = $e->displayLine();
-        $this->assertStringContainsString('admin@prod.example.com', $line);
-        $this->assertStringNotContainsString(':22', $line);
+        $this->assertSame('prod  ─  admin@prod.example.com:22', $line);
     }
 
-    public function testDisplayLineWithNullUserAndDefaultPortOmitsPort(): void
+    public function testDisplayLineWithNullUserAndDefaultPortShowsPort(): void
     {
         $e = new Endpoint(name: 'prod', host: 'prod.example.com', port: 22, user: null);
         $line = $e->displayLine();
-        $this->assertStringContainsString('prod.example.com', $line);
-        $this->assertStringNotContainsString(':22', $line);
+        $this->assertSame('prod  ─  prod.example.com:22', $line);
     }
 
     public function testDisplayLineFormatIsNameThenDashedSeparatorsThenDestination(): void

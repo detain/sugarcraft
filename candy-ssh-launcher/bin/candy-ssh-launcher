@@ -217,10 +217,37 @@ try {
 }
 
 if ($wantList) {
+    // -003: the documented TSV contract says one physical row per endpoint
+    // and exactly two field tabs. Sanitize::untrusted() KEEPS CR/LF/TAB for
+    // paste fidelity, so a config name carrying a newline forged a phantom
+    // second row and a tab shifted every column. The columns go through the
+    // display policy and fold the line bytes to spaces — the same discipline
+    // the picker applies in stripControls() (docs/TRUST-BOUNDARY.md).
+    $display = static fn (string $value): string => str_replace(
+        ["\t", "\r", "\n"],
+        ' ',
+        Sanitize::untrustedForDisplay($value)
+    );
+
+    // -078's pairing with the duplicate-name warning (config.duplicate_name):
+    // both rows still print, suffixed with their 1-based config index so an
+    // `awk -F'\t'` consumer can address either one by name.
+    $nameCounts = [];
     foreach ($endpoints as $endpoint) {
-        fwrite(STDOUT, Sanitize::untrusted($endpoint->name) . "\t"
-            . Sanitize::untrusted($endpoint->host) . ':' . $endpoint->port . "\t"
-            . Sanitize::untrusted($endpoint->user ?? '-') . "\n");
+        $folded = $display($endpoint->name);
+        $nameCounts[$folded] = ($nameCounts[$folded] ?? 0) + 1;
+    }
+
+    foreach ($endpoints as $index => $endpoint) {
+        $name = $display($endpoint->name);
+        if ($nameCounts[$name] > 1) {
+            $name .= '#' . ($index + 1);
+        }
+        // -078: a set-but-empty user prints exactly like an unset one.
+        $user = $endpoint->user;
+        fwrite(STDOUT, $name . "\t"
+            . $display($endpoint->host) . ':' . $endpoint->port . "\t"
+            . ($user !== null && $user !== '' ? $display($user) : '-') . "\n");
     }
     exit(0);
 }

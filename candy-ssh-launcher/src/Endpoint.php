@@ -197,13 +197,19 @@ final class Endpoint
         }
     }
 
+    /**
+     * The picker row for this endpoint.
+     *
+     * One visibility rule on every surface (-077): the port is ALWAYS
+     * rendered, default 22 included. `--list` has always shown it, and a
+     * picker that hid it made the same endpoint look different on the two
+     * surfaces — and silently merged "port unset" with "port explicitly 22".
+     */
     public function displayLine(): string
     {
         $dest = ($this->user !== null && $this->user !== '' ? "{$this->user}@" : '') . $this->host;
-        if ($this->port !== 22) {
-            $dest .= ":{$this->port}";
-        }
-        return "{$this->name}  ─  {$dest}";
+
+        return "{$this->name}  ─  {$dest}:{$this->port}";
     }
 
     // -------------------------------------------------------------------------

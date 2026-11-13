@@ -241,6 +241,79 @@ final class BinCliTest extends TestCase
         $this->assertStringContainsString('b', $out);
     }
 
+    public function testListForgedNewlineStaysASinglePhysicalRow(): void
+    {
+        // -003: a config name carrying a newline used to print a phantom
+        // second TSV row (and a bare \r let an awk-style consumer repaint);
+        // the line bytes now fold to spaces before the row is written.
+        $path = $this->writeFixture(json_encode([
+            ['name' => "prod\nforged", 'host' => 'p.test', 'user' => 'root'],
+            ['name' => 'box', 'host' => 'b.test'],
+        ]) . "\n", ".json");
+
+        [$code, $out, $err] = $this->runBin(['--config', $path, '--list']);
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $rows = explode("\n", rtrim($out, "\n"));
+        $this->assertCount(2, $rows, 'one physical row per endpoint, never a forged third: ' . $out);
+        foreach ($rows as $row) {
+            $this->assertCount(3, explode("\t", $row), 'exactly two field tabs per row: ' . $row);
+        }
+        $this->assertSame("prod forged\tp.test:22\troot\nbox\tb.test:22\t-\n", $out);
+    }
+
+    public function testListForgedTabAndCarriageReturnCannotShiftColumns(): void
+    {
+        // -003 companion: a TAB inside a name used to push every later
+        // column one field right; a CR used to let the row overwrite itself.
+        $path = $this->writeFixture(json_encode([
+            ['name' => "a\tb\rc", 'host' => "h\tx.test", 'user' => "u\rv"],
+        ]) . "\n", ".json");
+
+        [$code, $out, $err] = $this->runBin(['--config', $path, '--list']);
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $rows = explode("\n", rtrim($out, "\n"));
+        $this->assertCount(1, $rows);
+        $this->assertSame('a b c', explode("\t", $rows[0])[0]);
+        $this->assertSame("a b c\th x.test:22\tu v\n", $out);
+    }
+
+    public function testListPrintsEmptyUserLikeAnUnsetOne(): void
+    {
+        // -078: user "" and user unset are the same statement — one dash.
+        $path = $this->writeFixture(json_encode([
+            ['name' => 'a', 'host' => 'h.test', 'user' => ''],
+        ]) . "\n", ".json");
+
+        [$code, $out, $err] = $this->runBin(['--config', $path, '--list']);
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertSame("a\th.test:22\t-\n", $out);
+    }
+
+    public function testListSuffixesDuplicateNamesWithTheConfigIndex(): void
+    {
+        // -078 pairing config.duplicate_name (sshl-12): both rows stay in the
+        // listing, each addressable by its suffixed name.
+        $path = $this->writeFixture(implode("\n", [
+            '- name: dup',
+            '  host: one.test',
+            '- name: uniq',
+            '  host: two.test',
+            '- name: dup',
+            '  host: three.test',
+        ]) . "\n");
+
+        [$code, $out, $err] = $this->runBin(['--config', $path, '--list']);
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertSame(
+            "dup#1\tone.test:22\t-\nuniq\ttwo.test:22\t-\ndup#3\tthree.test:22\t-\n",
+            $out
+        );
+    }
+
     public function testEmptyConfigIsNoEndpointsNotCancelled(): void
     {
         // A wholly-commented config previously produced zero endpoints,
