@@ -210,26 +210,41 @@ final class LogTest extends TestCase
         $this->assertStringContainsString('should appear', $content);
     }
 
-    public function testRestoreTerminalDoesNotThrow(): void
+    public function testRestoreTerminalEmitsExactSequencesOnlyForTerminalStreams(): void
     {
-        // Log::restoreTerminal() should not throw - it writes ANSI codes to STDERR
-        Log::restoreTerminal();
-        // If we get here without exception, the test passes
-        $this->assertTrue(true);
+        // Pipe stderr is not a TTY: the unforced call must be swallowed by the
+        // guard entirely, while force=true emits the DECSET pair byte-exactly.
+        // Pinning the shape here gives the capability gate (SL-30) a slot.
+        $result = StderrNoticeCapture::run(<<<'CODE'
+            \SugarCraft\Log\Log::restoreTerminal();
+            \SugarCraft\Log\Log::restoreTerminal(true);
+            CODE);
+
+        $this->assertSame(0, $result['exitCode']);
+        // Exactly one altscreen-exit + cursor-show; a guardless build would double
+        // the bytes, a force-ignoring build would emit nothing.
+        $this->assertSame("\x1b[?1049l\x1b[?25h", $result['stderr']);
     }
 
     public function testInstallPanicHandlerSetsExceptionHandler(): void
     {
-        $formatter = PanicFormatter::pretty();
-
-        Log::installPanicHandler($formatter);
-
-        // Verify that a custom exception handler was registered
-        $previousHandler = \set_exception_handler(function () {});
+        // Two installs must leave the SECOND wrapper live: install captures
+        // once (m5/noop probe), then overwrites its own slot, so exactly one
+        // report prints per exception and the most recent formatter governs.
+        // The old null-or-is_callable tautology accepted any slot state,
+        // including the capture no-op itself - which is also defined in
+        // src/Log.php and defeated a filename-only probe.
+        $first = PanicFormatter::pretty();
+        $second = PanicFormatter::plain();
+        Log::installPanicHandler($first);
+        Log::installPanicHandler($second);
+        $slotContents = \set_exception_handler(static fn () => null);
         \restore_exception_handler();
-
-        // The previous handler should be null (no previous handler) or a callable
-        $this->assertTrue($previousHandler === null || \is_callable($previousHandler));
+        $this->assertIsCallable($slotContents);
+        $used = (new \ReflectionFunction($slotContents))->getClosureUsedVariables();
+        $this->assertArrayHasKey('formatter', $used, 'the live handler must be an install wrapper');
+        $this->assertSame($second, $used['formatter'], 'the live wrapper must bind the most recent formatter');
+        $this->assertNotSame($first, $used['formatter']);
     }
 
     public function testInstallPanicHandlerWithNullFormatter(): void

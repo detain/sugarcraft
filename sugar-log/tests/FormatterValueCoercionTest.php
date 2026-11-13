@@ -161,11 +161,15 @@ final class FormatterValueCoercionTest extends TestCase
         $this->assertStringContainsString('DateTimeImmutable', $content);
     }
 
-    public function testJsonFormatterNeverReturnsEmptyLineOnEncodeFailure(): void
+    public function testJsonFormatterOrdinaryContextAlwaysWritesValidJsonLine(): void
     {
-        // Create a JsonFormatter and trigger a scenario where json_encode might fail
-        // by creating an invalid UTF-8 sequence (though this is hard to trigger in practice)
-        // Instead, we verify that even if json_encode returns false, we get a valid output
+        // The name this test carried claimed an encode-failure scenario; there is
+        // none — ValueCoercion normalises everything the encoder could choke on
+        // (non-finite floats to 'INF'/'-INF'/'NAN', resources to null, cycles to
+        // '[...]') BEFORE encoding, which is exactly why the per-field belt in
+        // JsonFormatter is a by-construction-unreachable defence. What this pins
+        // is the ordinary-shape guarantee: a context line is never empty and is
+        // always decodable.
         $log = Logger::new(
             formatter: new JsonFormatter(false),
             level: Level::Debug,
@@ -181,6 +185,7 @@ final class FormatterValueCoercionTest extends TestCase
         // Should be valid JSON
         $decoded = \json_decode(\trim($content), true);
         $this->assertIsArray($decoded);
+        $this->assertSame('value', $decoded['normal'] ?? null);
     }
 
     public function testBoolAndNullCoercion(): void
@@ -288,16 +293,17 @@ final class FormatterValueCoercionTest extends TestCase
     // JsonFormatter json_encode failure fallback
     // -------------------------------------------------------------------------
 
-    public function testJsonFormatterHandlesEncodeFailure(): void
+    public function testJsonFormatterEmptyContextKeepsEnvelopeShape(): void
     {
-        // Create a mock JsonFormatter and use reflection to trigger the failure path
-        // We can't easily trigger json_encode failure, but we can test the fallback exists
+        // Formerly "HandlesEncodeFailure" — it handled no failure: an empty
+        // context encodes trivially. The honest claim it pins is the envelope
+        // floor: even the barest record carries level (and decodes).
         $formatter = new JsonFormatter(false);
         $line = $formatter->format(Level::Info, 'test', [], new \DateTimeImmutable(), null, null);
 
-        // Should still return valid JSON even if encoding fails
         $decoded = \json_decode(\trim($line), true);
         $this->assertIsArray($decoded);
         $this->assertArrayHasKey('level', $decoded);
+        $this->assertSame('test', $decoded['msg']);
     }
 }

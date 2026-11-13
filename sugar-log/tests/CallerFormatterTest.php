@@ -25,13 +25,53 @@ final class CallerFormatterTest extends TestCase
         $this->assertStringNotContainsString('/sugar-log/src/', $caller);
     }
 
-    public function testFindReturnsNullWhenNoExternalCaller(): void
+    /**
+     * Accessor for the private frame walk — bound into class scope so the
+     * null path and the cap boundary are testable without fabricating stack
+     * depth inside the package (SL-13).
+     */
+    private static function locator(): \Closure
     {
-        // When called from within the log package with no external frame, find() walks
-        // the full trace and returns null
-        $result = CallerFormatter::find();
-        // At minimum the test framework itself (PHPUnit) is an external frame,
-        // so we always get a result in real usage; this documents the null path
-        $this->assertTrue($result === null || \is_string($result));
+        return \Closure::bind(
+            static fn (array $traces, string $selfDir): ?string => CallerFormatter::locate($traces, $selfDir),
+            null,
+            CallerFormatter::class,
+        );
+    }
+
+    public function testLocateReturnsNullWhenEveryFrameIsInternal(): void
+    {
+        $dir = '/opt/app/sugar-log/src';
+        $traces = [
+            ['file' => $dir . '/Log.php', 'line' => 240],
+            ['file' => $dir . '/Formatter/TextFormatter.php', 'line' => 88],
+        ];
+
+        $this->assertNull((self::locator())($traces, $dir));
+    }
+
+    public function testLocateStillFindsExternalCallerJustInsideTheFrameCap(): void
+    {
+        $dir = '/opt/app/sugar-log/src';
+        $traces = [];
+        for ($i = 0; $i < 19; ++$i) {
+            $traces[] = ['file' => "{$dir}/Frame{$i}.php", 'line' => $i];
+        }
+        $traces[] = ['file' => '/var/app/main.php', 'line' => 77];
+
+        $this->assertSame('main.php:77', (self::locator())($traces, $dir));
+    }
+
+    public function testLocateGoesSilentPastTheFrameCap(): void
+    {
+        $dir = '/opt/app/sugar-log/src';
+        $traces = [];
+        for ($i = 0; $i < 20; ++$i) {
+            $traces[] = ['file' => "{$dir}/Frame{$i}.php", 'line' => $i];
+        }
+        // Frame 21 is the real caller — but the bounded walk never sees it.
+        $traces[] = ['file' => '/var/app/main.php', 'line' => 77];
+
+        $this->assertNull((self::locator())($traces, $dir));
     }
 }

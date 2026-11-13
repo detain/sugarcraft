@@ -576,12 +576,21 @@ final class LoggerTest extends TestCase
     public function testSetStylesUpdatesTextFormatter(): void
     {
         $log = $this->logger();
-        $newStyles = \SugarCraft\Log\Styles::default();
+        // A fresh instance — Styles::default() is the process-wide singleton the
+        // logger already rides, so identity would prove nothing, and mutating it
+        // would repaint every other logger in the suite.
+        $newStyles = new \SugarCraft\Log\Styles();
         $log->setStyles($newStyles);
 
-        // Should not throw - styles were applied
-        $log->info('styled message');
-        $this->assertTrue(true);
+        // setStyles must swap the wired TextFormatter for one carrying the new
+        // styles object; dropping the reseed would silently dead-end the knob.
+        $formatter = (new \ReflectionProperty(Logger::class, 'formatter'))->getValue($log);
+        $this->assertInstanceOf(TextFormatter::class, $formatter);
+        $this->assertSame(
+            $newStyles,
+            (new \ReflectionProperty(TextFormatter::class, 'styles'))->getValue($formatter),
+            'the wired formatter must carry the object passed to setStyles',
+        );
     }
 
     // -------------------------------------------------------------------------

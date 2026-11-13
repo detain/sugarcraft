@@ -306,15 +306,21 @@ final class Log
      *
      * Called automatically by the panic handler but also safe to call
      * directly during normal shutdown.
+     *
+     * @param bool $force Emit the ANSI sequences even when stderr is not a detected
+     *                    TTY — the escape hatch for callers that know their stderr is
+     *                    a terminal where probing misleads them, and for tests pinning
+     *                    the exact wire bytes through a captured pipe. Writing to a
+     *                    non-terminal sink under $force is harmless escape noise.
      */
-    public static function restoreTerminal(): void
+    public static function restoreTerminal(bool $force = false): void
     {
         // Guard: only emit ANSI codes when running in a real TTY.
         // fwrite to a closed or non-TTY stream can cause warnings.
         // stream_isatty() is core PHP — no ext-posix dependency.
         // [PORT-01] SAPI-safe: Stdio::err() never touches an undefined constant.
         $terminalStderr = Stdio::err();
-        if (null === $terminalStderr || !\stream_isatty($terminalStderr)) {
+        if (null === $terminalStderr || (!$force && !\stream_isatty($terminalStderr))) {
             return;
         }
 

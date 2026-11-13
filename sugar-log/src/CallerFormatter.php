@@ -17,21 +17,36 @@ namespace SugarCraft\Log;
 final class CallerFormatter
 {
     /**
+     * Hard cap on the frame walk: a caller nested deeper than this inside the
+     * package reports no caller rather than paying an unbounded trace (N8).
+     */
+    private const MAX_FRAMES = 20;
+
+    /**
      * Walk back the call stack to find the first file outside the log package.
      *
-     * The walk is bounded at 20 frames: a caller nested deeper than that
-     * inside the package reports no caller rather than paying an unbounded
-     * trace (N8) — the null below is that cap, not an error.
+     * The walk is bounded at {@see self::MAX_FRAMES} frames: a caller nested
+     * deeper than that inside the package reports no caller rather than paying
+     * an unbounded trace (N8) — the null below is that cap, not an error.
      *
      * @return string|null "basename:line" of the first frame outside the
      *                     package, or null when none appears in the walk.
      */
     public static function find(): ?string
     {
-        $traces = \debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 20);
-        $selfDir = __DIR__;
+        return self::locate(\debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, self::MAX_FRAMES), __DIR__);
+    }
 
-        foreach ($traces as $t) {
+    /**
+     * The frame walk over a supplied trace, separated from find() so the
+     * null path and the cap boundary are reachable without fabricating
+     * stack depth inside the package (SL-13).
+     *
+     * @param list<array{file?: string, line?: int|string}> $traces
+     */
+    private static function locate(array $traces, string $selfDir): ?string
+    {
+        foreach (\array_slice($traces, 0, self::MAX_FRAMES) as $t) {
             $file = $t['file'] ?? '';
             // Skip frames inside the log package itself
             if (\strpos($file, $selfDir) === 0) {
