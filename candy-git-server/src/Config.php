@@ -47,6 +47,15 @@ final class Config
     public readonly string $httpPublicUrl;
 
     /**
+     * Worker-per-request HTTP mode (owner ruling 8b): every accepted
+     * connection is owned by a forked worker that serves it to completion
+     * and exits, so one wedged request can never delay its neighbours.
+     * Hosts without pcntl fall back to the serial loop and the bin NAMES
+     * that trade-off at startup — never a silent single-threaded surprise.
+     */
+    public readonly bool $httpWorkerPerRequest;
+
+    /**
      * RESERVED — NOT yet enforced. No HTTPS/TLS listener is wired (that is a
      * separate feature), so populating these does NOT enable TLS. To avoid a
      * false sense of security, setting BOTH paths is rejected at config load
@@ -198,6 +207,7 @@ final class Config
         }
 
         $this->maxPackBytes   = isset($http['max_pack_bytes']) ? (int) $http['max_pack_bytes'] : null;
+        $this->httpWorkerPerRequest = (bool) ($http['worker_per_request'] ?? true);
         $this->userTrustMode  = self::parseUserTrustMode((string) ($http['user_trust_mode'] ?? 'off'));
         $this->trustedProxies = self::parseTrustedProxies($http['trusted_proxies'] ?? []);
         $this->authSecret     = (string) ($http['auth_secret'] ?? '');

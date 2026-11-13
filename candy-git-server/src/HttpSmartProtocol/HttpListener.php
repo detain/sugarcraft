@@ -7,6 +7,7 @@ namespace SugarCraft\GitServer\HttpSmartProtocol;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use SugarCraft\GitServer\Support\WorkerFork;
 
 /**
  * The socket half of smart HTTP: accepts TCP connections, buffers complete
@@ -21,8 +22,18 @@ use React\EventLoop\TimerInterface;
  * Built on the react/event-loop stream watch the StatsServer already uses
  * (same accept/read/close discipline, same loopback-default floor) — the
  * lib has no react/http or react/socket dependency and this file adds
- * neither. The router never blocks on a child longer than the bounded read
- * ladder in Git\StatelessRpc allows, so an accept tick always terminates.
+ * neither.
+ *
+ * Concurrency is constructor-chosen (8b redesign): WITHOUT a
+ * {@see WorkerFork} the listener runs every seat on the caller's event
+ * loop, one request at a time — a bounded but strictly SERIAL house: a
+ * served request cannot be preempted mid-dispatch, so a long push delays
+ * every other client behind it (finding 006's disclosure). WITH a pool,
+ * each accepted connection is handed to a forked worker that owns it to
+ * completion and exits, so one wedged request stalls nobody; the parent
+ * keeps only accept, capacity, and reap duties. Windows (no fork) and
+ * non-pool constructions stay on the serial loop — the degraded mode the
+ * bin names out loud at startup, never a silent surprise.
  *
  * Every seat is bounded three ways: a connection cap (the newcomer is
  * refused while the house is full, mirroring the daemon), an IDLE deadline
@@ -87,6 +98,16 @@ final class HttpListener
 
     private ?TimerInterface $sweepTimer = null;
 
+    /**
+     * Worker-mode state (8b redesign): the pool the listener hands every
+     * accepted connection to, the child-side flag that detaches teardown
+     * from the (never-running-in-child) event loop, and this process's own
+     * connection start stamp as seen by a worker.
+     */
+    private ?WorkerFork $workers = null;
+
+    private bool $inWorker = false;
+
     public function __construct(
         private readonly Server $router,
         private readonly string $host = '127.0.0.1',
@@ -95,8 +116,10 @@ final class HttpListener
         private readonly float $idleTimeoutSeconds = self::IDLE_TIMEOUT_SECONDS,
         private readonly float $absoluteDeadlineSeconds = self::ABSOLUTE_DEADLINE_SECONDS,
         private readonly int $maxClients = self::MAX_CLIENTS,
+        ?WorkerFork $workers = null,
     ) {
         $this->loop = $loop;
+        $this->workers = $workers;
     }
 
     /**
@@ -137,7 +160,7 @@ final class HttpListener
         );
     }
 
-    /** Stop accepting, drop the watches, and drop every client; idempotent. */
+    /** Stop accepting, drop the watches, end every worker, and drop every client; idempotent. */
     public function stop(): void
     {
         if ($this->serverStream === null) {
@@ -150,6 +173,11 @@ final class HttpListener
         $this->loop?->removeReadStream($this->serverStream);
         @\fclose($this->serverStream);
         $this->serverStream = null;
+        // 8b: the pool's workers own their connections; terminating them
+        // (TERM, bounded poll, KILL) is what releases the seats. Each
+        // worker also carries a parent-death pipe, so even a stop() that
+        // never runs (SIGKILL to the parent) ends them — see WorkerFork.
+        $this->workers?->terminateAll();
         foreach (\array_keys($this->clients) as $id) {
             $client = $this->clients[$id]['stream'];
             $this->loop?->removeReadStream($client);
@@ -169,10 +197,10 @@ final class HttpListener
         return $name === false ? null : $name;
     }
 
-    /** Seats currently held (accepted, request unfinished). */
+    /** Seats currently held (accepted, request unfinished), worker-owned included. */
     public function activeConnectionCount(): int
     {
-        return \count($this->clients);
+        return \count($this->clients) + ($this->workers?->live() ?? 0);
     }
 
     // -------------------------------------------------------------------------
@@ -207,12 +235,59 @@ final class HttpListener
             'last_activity' => $now,
             'scan'          => ['pos' => 0, 'mode' => 'size', 'want' => 0, 'decoded' => 0, 'done' => false],
         ];
+
+        if ($this->workers !== null) {
+            // 8b worker-per-request: hand the freshly registered seat to a
+            // forked owner. The bookkeeping entry above is COPIED into the
+            // child by the fork, which is why registration precedes it.
+            // After a successful fork the parent closes its own client
+            // copy — keeping it would hold the connection's EOF hostage
+            // to the parent's lifetime and the port past a stop(). The
+            // listen socket and every OTHER seat travel in $foreign so the
+            // child closes them immediately: a worker must never keep the
+            // accept queue or a neighbour's stream alive.
+            $foreign = [];
+            if ($this->serverStream !== null) {
+                $foreign[] = $this->serverStream;
+            }
+            foreach ($this->clients as $id => $seat) {
+                if ($id !== (int) $client) {
+                    $foreign[] = $seat['stream'];
+                }
+            }
+            $spawned = $this->workers->fork(
+                function ($client): bool {
+                    return $this->workerTick($client);
+                },
+                $client,
+                $foreign
+            );
+            $entry = $this->clients[(int) $client] ?? null;
+            unset($this->clients[(int) $client]);
+            if (!$spawned) {
+                // Pool full / fork failed: refuse the newcomer exactly like
+                // the capacity arm above — established seats are never cut.
+                if ($entry !== null) {
+                    @\fclose($entry['stream']);
+                }
+
+                return;
+            }
+            @\fclose($client);
+
+            return;
+        }
+
         $this->loop?->addReadStream($client, fn () => $this->onClientReadable($client));
     }
 
     /** Close every seat whose idle or absolute deadline has expired. */
     private function sweepDeadlines(): void
     {
+        // Worker seats sweep themselves (the pool alarm is the outer
+        // bound); the parent's sweep keeps their bookkeeping current and
+        // frees their seats the moment they exit.
+        $this->workers?->reap();
         $now = \microtime(true);
         foreach ($this->clients as $client) {
             if ($now - $client['last_activity'] > $this->idleTimeoutSeconds
@@ -228,18 +303,36 @@ final class HttpListener
     /** @param resource $client */
     private function onClientReadable($client): void
     {
+        $this->pumpClient($client);
+    }
+
+    /**
+     * The loop-free seat pump: one readable event buffers, frames, and —
+     * when the request completes — dispatches and closes. Returns whether
+     * the seat is STILL connected (true = keep waiting for more bytes).
+     *
+     * @param resource $client
+     */
+    private function pumpClient($client): bool
+    {
         $id = (int) $client;
         if (!isset($this->clients[$id])) {
-            return;
+            return false;
         }
         $data = @\fread($client, 8192);
         if ($data === false || ($data === '' && \feof($client))) {
             $this->closeClient($client);
 
-            return;
+            return false;
         }
-
-        $this->clients[$id]['last_activity'] = \microtime(true);
+        if ($data !== '') {
+            // Activity means BYTES. The worker's timeout ticks pump this
+            // same method on empty select-expiries; refreshing last_activity
+            // there would resurrect a silent seat forever and defeat the
+            // idle deadline — which is exactly what a worker enforces for
+            // itself, the parent's sweep not running in its process.
+            $this->clients[$id]['last_activity'] = \microtime(true);
+        }
         $buffer = &$this->clients[$id]['buffer'];
         $buffer .= $data;
 
@@ -250,9 +343,9 @@ final class HttpListener
                 $this->writeStatus($client, 431, 'Request Header Fields Too Large');
                 $this->closeClient($client);
 
-                return;
+                return false;
             }
-            return; // head incomplete — keep buffering
+            return true; // head incomplete — keep buffering
         }
 
         $head = \substr($buffer, 0, $headEnd);
@@ -263,23 +356,59 @@ final class HttpListener
             $this->writeStatus($client, 413, 'Payload Too Large');
             $this->closeClient($client);
 
-            return;
+            return false;
         }
         if ($needs === self::BODY_MALFORMED_FRAMING) {
             unset($buffer);
             $this->writeStatus($client, 400, 'Bad Request');
             $this->closeClient($client);
 
-            return;
+            return false;
         }
         if ($needs > 0) {
             unset($buffer);
-            return; // body incomplete — keep buffering
+            return true; // body incomplete — keep buffering
         }
 
         unset($buffer);
         $this->dispatch($client, $head, $this->decodeBody($head, $bodySoFar));
         $this->closeClient($client);
+
+        return false;
+    }
+
+    /**
+     * The worker child's view of the pump (8b): identical framing through
+     * {@see pumpClient()}, plus the seat's own deadline enforcement — the
+     * parent's sweep timer does not run inside a worker (there is no
+     * event loop to run it), and WorkerFork's alarm ceiling is only the
+     * OUTER bound on one request. Returns false (connection finished) the
+     * way the pool expects.
+     *
+     * @param resource $client
+     */
+    private function workerTick($client): bool
+    {
+        // The inherited loop is the PARENT's: never add, remove, or run
+        // anything on it from here — closeClient consults this flag.
+        $this->inWorker = true;
+
+        $id = (int) $client;
+        if (!isset($this->clients[$id])) {
+            return false;
+        }
+        $now = \microtime(true);
+        if ($now - $this->clients[$id]['last_activity'] > $this->idleTimeoutSeconds
+            || $now - $this->clients[$id]['connected_at'] > $this->absoluteDeadlineSeconds
+        ) {
+            // Silent drop, the sweep's semantics carried into the seat:
+            // nothing answerable arrived (or never will).
+            $this->closeClient($client);
+
+            return false;
+        }
+
+        return $this->pumpClient($client);
     }
 
     /** Sentinel returned by expectedBodyBytes() when the body overruns the cap. */
@@ -635,7 +764,12 @@ final class HttpListener
     {
         $id = (int) $client;
         if (isset($this->clients[$id])) {
-            $this->loop?->removeReadStream($this->clients[$id]['stream']);
+            if (!$this->inWorker) {
+                // The loop belongs to the parent process; a worker child
+                // must never touch the inherited watch structures (the uv /
+                // select internals were not forked with them).
+                $this->loop?->removeReadStream($this->clients[$id]['stream']);
+            }
             @\fclose($this->clients[$id]['stream']);
             unset($this->clients[$id]);
         }

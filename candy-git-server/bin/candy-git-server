@@ -320,7 +320,25 @@ function cmdServeHttp(array $args): int
         $served++;
     }
 
-    $listener = new \SugarCraft\GitServer\HttpSmartProtocol\HttpListener($server, $host, $port);
+    // Worker-per-request pool (owner ruling 8b): when the config knob is
+    // on AND the host can fork, every accepted connection is served by a
+    // dedicated worker that exits when done — one wedged push can no
+    // longer delay the client queued behind it. Both degraded arms are
+    // named out loud before the banner: an explicit off, and a host
+    // without pcntl, because the serial loop is a real throughput and
+    // availability trade the operator deserves to see, not inherit.
+    $pool = null;
+    if ($config->httpWorkerPerRequest) {
+        if (\SugarCraft\GitServer\Support\WorkerFork::supported()) {
+            $pool = new \SugarCraft\GitServer\Support\WorkerFork();
+        } else {
+            \fwrite(\STDERR, "candy-git-server: worker_per_request is on but this host cannot fork (no pcntl) — serving SERIALLY: one wedged request delays every other client\n");
+        }
+    } else {
+        \fwrite(\STDERR, "candy-git-server: worker_per_request is off — serving SERIALLY: one wedged request delays every other client\n");
+    }
+
+    $listener = new \SugarCraft\GitServer\HttpSmartProtocol\HttpListener($server, $host, $port, workers: $pool);
     try {
         $listener->start();
     } catch (\RuntimeException $e) {
