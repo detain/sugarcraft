@@ -29,7 +29,7 @@ Every shipped file, and what it demonstrates:
 ```
 my-app/
 ├── composer.json         # type: project — requires sugar-core + sugar-style
-├── phpunit.xml           # failOnWarning gate; tests scan tests/, coverage covers src/
+├── phpunit.xml           # failOnWarning gate; tests scan tests/, coverage spans src/
 ├── LICENSE               # MIT
 ├── README.md             # this walkthrough
 ├── CALIBER_LEARNINGS.md  # template gotchas for AI-agent config sync (fine to delete downstream)
@@ -40,7 +40,7 @@ my-app/
 │   └── Counter.php       # demo Model: up/down/quit, styled border
 ├── tests/
 │   ├── BinStartExitTailTest.php           # pins the bin's stopSignal() exit tail (128+N)
-│   ├── CounterTest.php                    # pinned behavior matrix — the test-shape reference
+│   ├── CounterTest.php                    # pinned behaviour matrix — the test-shape reference
 │   ├── ModelContractDocumentationTest.php # README fence vs interface drift guard
 │   ├── ReadmeSnippetsTest.php             # lint+execute every README php fence
 │   └── SiteBodyTruthTest.php              # docs site body matches the README's claims
@@ -59,7 +59,7 @@ The autoloader resolves relative to the script's own file — the one `<package>
 
 ## Requirements
 
-PHP 8.3+ with `ext-intl` and `ext-mbstring` (both hard-required by `sugar-core`) and `ext-ffi` (required by `sugar-pty`, which arrives transitively via `sugar-core`). On Windows, `sugar-pty`'s FFI termios backend wants PHP 8.4+. The skeleton declares no `ext-*` of its own; `composer` fails loudly with a platform error if one is missing — enable it with your distro's `php-intl` / `php-mbstring` / `php-ffi` packages (`pecl install ffi` where FFI isn't bundled). A TTY-capable terminal is assumed for interactive use — colour is auto-detected and the demo renders monochrome-safe — see the `openTty` note under "Forking checklist" for piped-stream setups. That auto-detection is the limit of the terminal intelligence: the harness emits DEC private-mode escapes unconditionally, and box-drawing and cursor support are not probed, so under `TERM=dumb` expect raw control-sequence garbage rather than a graceful degrade — run the demo in a real terminal.
+PHP 8.3+ with `ext-intl` and `ext-mbstring` (both hard-required by `sugar-core`) and `ext-ffi` (required by `sugar-pty`, which arrives transitively via `sugar-core`). On Windows, `sugar-pty`'s FFI termios backend wants PHP 8.4+. The skeleton declares no `ext-*` of its own; `composer` fails loudly with a platform error if one is missing — enable it with your distro's `php-intl` / `php-mbstring` / `php-ffi` packages (`pecl install ffi` where FFI isn't bundled). A TTY-capable terminal is assumed for interactive use — colour is auto-detected and, since the demo emits no palette at all, it renders cleanly in monochrome — see the `openTty` note under "Forking checklist" for piped-stream setups. That auto-detection is the limit of the terminal intelligence: the harness emits DEC private-mode escapes unconditionally, and box-drawing and cursor support are not probed, so under `TERM=dumb` expect raw control-sequence garbage rather than a graceful degrade — run the demo in a real terminal.
 
 Packagist carries only `dev-master` today, so the quickstart passes `--stability=dev` — `create-project` refuses a dev-only package unless told to accept it. The equivalent command shape is `composer create-project sugarcraft/candy-starter:dev-master my-app`. Release tags (`candy-starter/v*`) do not exist yet; until the first one is cut and synced, `dev-master` plus the committed `composer.lock` from the Forking checklist is the only reproducibility lever, and the flag stays required.
 
@@ -106,11 +106,11 @@ Keys are not the only traffic `update()` sees. The harness also dispatches `Wind
 
 `update()` only ever sees what the harness dispatches, and there are exactly four doors in. The terminal is the first: keystrokes, mouse events, resizes and pastes arrive as `Msg` objects with no work from you. The other three are yours to wire — and the `bin/start` promise that "you just write the Model" holds only because they exist:
 
-- **`subscriptions()` — the live-source seam.** The required interface method is not decoration. Return a `Subscriptions` collection — e.g. `(new Subscriptions())->withTick('clock', 1.0, $produce)` (also `withKey`, `withSignal`, `withCustom`; each `produce` is a `Closure(): Msg`) — and the harness starts every entry, re-diffs the set after each `update()` cycle (starting new ones, cancelling dropped ones), and dispatches whatever a subscription's `produce` returns for as long as it stays in the set. The demo returns `null`: nothing live, nothing to reconcile.
+- **`subscriptions()` — the live-source seam.** The required interface method is not decoration. Return a `Subscriptions` collection — e.g. `(new Subscriptions())->withTick('clock', 1.0, $produce)` (also `withKey`, `withSignal`, `withCustom`; each `produce` is a `Closure(): Msg`) — and the harness starts every entry, re-diffs the set after each `update()` cycle (starting new ones, cancelling dropped ones), and dispatches whatever a subscription's `produce` returns, for as long as it stays in the set. The demo returns `null`: nothing live, nothing to reconcile.
 - **A promise that resolves to a Msg.** `Cmd::promise($factory)` runs work off-loop; when its promise resolves **with a `Msg`**, the harness dispatches that Msg straight into your `update()` (resolving `null` dispatches nothing), and a rejection arrives as an `ExceptionMsg` — the failure channel named above.
 - **`Program::send()`.** Public on the harness, and not a test-only back door — the harness itself uses it, e.g. its resize poll injects `WindowSizeMsg` through `send()`. Anything holding the program handle can push a Msg onto the running loop; a `send()` issued before `run()` is buffered and drained when the loop starts.
 
-The demo takes none of these doors (no subscriptions, no promises, external `send()` has no caller in `bin/start`) — and before any door opens at all, the harness dispatches boot Msgs (`EnvMsg`, `ColorProfileMsg`, an initial `WindowSizeMsg`) that every `Model` must tolerate; "Beyond keys" shows the branching. Every real app wires at least one door, and they are how non-keyboard traffic reaches the Model.
+The demo takes none of these doors (no subscriptions, no promises, no external `send()` caller) — and before any door opens at all, the harness dispatches boot Msgs (`EnvMsg`, `ColorProfileMsg`, an initial `WindowSizeMsg`) that every `Model` must tolerate; "Beyond keys" shows the branching. Every real app wires at least one door, and they are how non-keyboard traffic reaches the Model.
 
 ### Trust boundary
 
@@ -144,7 +144,7 @@ One pattern the demo already models for you: its frame `Style` is built once int
 
 One trust note for the log-tail row: multi-line external text is exactly where CR-overwrite and bidi spoofing apply — pipe log contents (or any other foreign stream) through `Sanitize::untrustedForDisplay()` before it reaches a pane: the `untrusted()` sweep plus CR-to-LF conversion and invisible-format marking (sugar-core).
 
-Add the dep, import its classes, return them from `view()`. Most are renderers on the shared `Style`-based vocabulary — but not all of them are pure: `sugar-ssh-server` runs an authenticated server around your Program, and `sugar-core`'s `Lang` registers its locale dir on first use and reads the locale files lazily per locale (memoised after the first lookup). Check each package's own README for setup and side effects instead of assuming the render-on-call shape. The demo itself covers the happy path only — one static frame, no colour anywhere (the frame is rounded border glyphs, not a palette), and no loading or empty state — and the rows above are where you take it from there.
+Add the dep, import its classes, return them from `view()`. Most are renderers on the shared `Style`-based vocabulary — but not all of them are pure: `sugar-ssh-server` runs an authenticated server around your Program, and `sugar-core`'s `Lang` registers its locale dir on first use and reads the locale files lazily per locale (memoized after the first lookup). Check each package's own README for setup and side effects instead of assuming the render-on-call shape. The demo itself covers the happy path only — one static frame, no colour anywhere (the frame is rounded border glyphs, not a palette), and no loading or empty state — and the rows above are where you take it from there.
 
 ## Forking checklist
 
