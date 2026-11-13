@@ -203,6 +203,16 @@ final class TableRenderer
      * cluster slots — the previous byte-indexed, last-SGR-wins map shifted
      * styles rightward of every multibyte character.
      *
+     * One preg_split over the CSI family replaces the old three-walk loop:
+     * even parts are literals (the only runs needing a grapheme split),
+     * odd parts are escapes. A part whose final byte is 'm' with an all
+     * digits-and-semicolons body is exactly the SGR form applySgr() speaks;
+     * every other CSI (cursor moves, erases — and a truncated tail at the
+     * line end, which the `[a-zA-Z]?` arm swallows whole, as the old scan
+     * did) moves the terminal but paints nothing and is dropped. Bare ESC
+     * or non-CSI escape bytes stay in the literal run: Width::string maps
+     * them to zero cells, so they never produce a cell here either.
+     *
      * @return array{list<string>, list<Style|null>}
      */
     private static function splitStyledLine(string $line): array
@@ -211,39 +221,32 @@ final class TableRenderer
         $styles = [];
         $state = self::freshSgrState();
 
-        $flush = static function (string $text, array $state) use (&$graphemes, &$styles): void {
-            if ($text === '') {
-                return;
-            }
-            $style = self::styleFromState($state);
-            foreach (self::graphemes($text) as $grapheme) {
-                $graphemes[] = $grapheme;
-                $styles[] = $style;
-            }
-        };
+        $parts = \preg_split(
+            '/(\x1b\[[^a-zA-Z]*[a-zA-Z]?)/',
+            $line,
+            -1,
+            \PREG_SPLIT_DELIM_CAPTURE
+        );
 
-        $len = \strlen($line);
-        $literal = '';
-        for ($i = 0; $i < $len; $i++) {
-            if ($line[$i] === "\x1b" && ($line[$i + 1] ?? '') === '[') {
-                $j = $i + 2;
-                while ($j < $len && !\ctype_alpha($line[$j])) {
-                    $j++;
+        foreach ($parts as $index => $part) {
+            if (($index & 1) === 0) {
+                if ($part === '') {
+                    continue;
                 }
-                $seq = \substr($line, $i, $j - $i + 1);
-                $flush($literal, $state);
-                $literal = '';
-                if (\preg_match('/^\x1b\[([0-9;]*)m$/', $seq, $m) === 1) {
-                    self::applySgr($m[1], $state);
+                $style = self::styleFromState($state);
+                foreach (self::graphemes($part) as $grapheme) {
+                    $graphemes[] = $grapheme;
+                    $styles[]    = $style;
                 }
-                // Non-SGR CSI moves the terminal but paints no cells; it is
-                // invisible to the grid, exactly like Ansi::strip() treats it.
-                $i = $j;
                 continue;
             }
-            $literal .= $line[$i];
+            // Consume every CSI-shaped run (the old scan did), but apply
+            // state only to the exact SGR form: a body of stray junk never
+            // touches the accumulation, it merely stays off the grid.
+            if (\preg_match('/^\x1b\[([0-9;]*)m$/', $part, $m) === 1) {
+                self::applySgr($m[1], $state);
+            }
         }
-        $flush($literal, $state);
 
         return [$graphemes, $styles];
     }

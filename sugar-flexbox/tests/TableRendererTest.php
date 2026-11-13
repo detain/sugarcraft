@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Flexbox\Table\{Column, Table, TableRenderer};
 
 /**
@@ -494,6 +495,116 @@ final class TableRendererTest extends TestCase
                 $renMemo->render($swept),
                 "cursor {$cursor} delta"
             );
+        }
+    }
+
+    /**
+     * FBX-17 oracle: the preg_split walk answers exactly what the old
+     * byte-indexed walk answered, cluster for cluster and style for style,
+     * across the corpus AND the malformed shapes the old scan swallowed by
+     * consuming every CSI run to its first alphabetic terminator (junk
+     * bodies stay off the grid without touching SGR state).
+     *
+     * @return array{list<string>, list<\SugarCraft\CellBuffer\Style|null>}
+     */
+    private function splitLine(string $line): array
+    {
+        $m = new \ReflectionMethod(TableRenderer::class, 'splitStyledLine');
+        $m->setAccessible(true);
+        /** @var array{list<string>, list<\SugarCraft\CellBuffer\Style|null>} $r */
+        $r = $m->invoke(null, $line);
+        return $r;
+    }
+
+    public function testSplitStyledLineKeepsTheOldWalkContract(): void
+    {
+        $bold = \SugarCraft\CellBuffer\Style::new(null, null, \SugarCraft\CellBuffer\Style::ATTR_BOLD);
+        $red = \SugarCraft\CellBuffer\Style::new(0x800000, null, 0);
+        $boldRed = \SugarCraft\CellBuffer\Style::new(0x800000, null, \SugarCraft\CellBuffer\Style::ATTR_BOLD);
+
+        [$g, $s] = $this->splitLine('');
+        $this->assertSame([], $g);
+        $this->assertSame([], $s);
+
+        [$g, $s] = $this->splitLine("A\x1b[1mB\x1b[0mC");
+        $this->assertSame(['A', 'B', 'C'], $g);
+        $this->assertNull($s[0]);
+        $this->assertEquals($bold, $s[1]);
+        $this->assertNull($s[2]);
+
+        [$g, $s] = $this->splitLine("A\x1b[31mRED\x1b[0m");
+        $this->assertSame(['A', 'R', 'E', 'D'], $g);
+        $this->assertNull($s[0]);
+        $this->assertEquals($red, $s[1]);
+        $this->assertEquals($red, $s[3]);
+
+        [$g, $s] = $this->splitLine("A\x1b[2Jb");
+        $this->assertSame(['A', 'b'], $g, 'mid-line CSI paints nothing');
+        $this->assertNull($s[0]);
+        $this->assertNull($s[1]);
+
+        [$g, $s] = $this->splitLine("A\x1b[31");
+        $this->assertSame(['A'], $g, 'a truncated CSI tail is consumed, never cells');
+        $this->assertNull($s[0]);
+
+        [$g, $s] = $this->splitLine("A\x1b[1!mB");
+        $this->assertSame(['A', 'B'], $g, 'a junk-body CSI run is consumed whole…');
+        $this->assertNull($s[0]);
+        $this->assertNull($s[1], '…and never touches SGR state');
+
+        [$g, $s] = $this->splitLine("A\x1b[1!4BC");
+        $this->assertSame(['A', 'C'], $g, 'old scan ran the terminator to the FIRST letter');
+        $this->assertNull($s[0]);
+        $this->assertNull($s[1]);
+
+        [$g, $s] = $this->splitLine("A\x1b[38:2:0:1:2:3mB");
+        $this->assertSame(['A', 'B'], $g, 'colon sub-params are invisible at the split');
+        $this->assertNull($s[1]);
+
+        [$g, $s] = $this->splitLine("X\x1b");
+        $this->assertSame(["X", "\x1b"], $g, 'a bare ESC is a zero-width literal, as always');
+        $this->assertNull($s[0]);
+        $this->assertNull($s[1]);
+
+        [$g, $s] = $this->splitLine("a│b\x1b[7mT");
+        $this->assertSame(['a', '│', 'b', 'T'], $g, 'multibyte clusters never shift attribution');
+        $this->assertNull($s[1]);
+
+        [$g, $s] = $this->splitLine("\x1b[1m\x1b[31mX");
+        $this->assertSame(['X'], $g);
+        $this->assertEquals($boldRed, $s[0], 'attributes accumulate across back-to-back SGRs');
+    }
+
+    public function testSplitStyledLineWalksEveryRenderedCorpusLine(): void
+    {
+        // Property leg: no line any Table shape can produce — header
+        // arrows, styles, markers, separators — may change cluster count
+        // or attribution under the new walk: the split must cover every
+        // visible cell and leave invisible SGR outside it.
+        $t = Table::new()
+            ->withColumn(Column::new('Nāme', 6))
+            ->withColumn(Column::new('Ci🌆ty', 5)->withStyle('31'))
+            ->withColumn(Column::new('Hidden', 0))
+            ->withCursorStyle('7')
+            ->withCursorMarker('> ')
+            ->withSeparator(' │ ')
+            ->withSort(0, true);
+        $t = $t
+            ->withRow(['Alice', 'Berlíén', 'x'])
+            ->withRow(['東', '🙂', 'y'])
+            ->withRow(['Bob', 'Cairo', 'z'])
+            ->withCursor(1);
+
+        foreach ($t->buildLines() as $i => $line) {
+            [$g, $s] = $this->splitLine($line);
+            $visible = \array_values(\array_filter($g, static fn(string $c): bool => Width::string($c) > 0));
+            $this->assertSame(
+                Width::string($line),
+                \array_sum(\array_map(Width::string(...), $g)),
+                "line {$i}: clusters account for every cell of the line"
+            );
+            $this->assertCount(\count($g), $s);
+            $this->assertNotSame([], $visible, "line {$i} carries content clusters");
         }
     }
 }
