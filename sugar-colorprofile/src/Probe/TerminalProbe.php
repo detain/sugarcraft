@@ -237,7 +237,10 @@ class TerminalProbe
             return $caps;
         }
 
-        $output = $this->runCommand($binary . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null');
+        // Exec the bounded door for exactly the TERM gated above; the
+        // human-readable command handed to the seam names the request the
+        // base answers (overrides may log or fake it).
+        $output = $this->runCommand($binary . ' -1 ' . escapeshellarg($term));
         if ($output === null || $output === '') {
             return $caps;
         }
@@ -419,36 +422,27 @@ class TerminalProbe
     }
 
     /**
-     * Run a shell command and return the output.
+     * Run the phase-2 command and return its output.
      * Override in tests to inject mock output.
      *
-     * The base implementation launches under the shared minimal environment
-     * ({@see InfocmpBinary::childEnvironment()}) — the terminfo child must not
-     * inherit parent variables that steer its database lookup. An override
-     * takes over that responsibility too: the README's trust-boundary
-     * paragraph says the minimal environment is part of the contract.
+     * The base implementation is a bounded door, not a shell: it launches
+     * the roster binary for THIS probe's TERM through
+     * {@see InfocmpBinary::runBounded()} — array-form argv (no shell, no
+     * redirect string), 8 KiB keep-a-prefix stdout, SIGTERM → grace →
+     * SIGKILL deadline, fail-open null — and answers from the shared
+     * per-TERM dump table, so the re-probes the docblocks encourage cost
+     * nothing. The $cmd argument describes the request being made;
+     * overrides receive it unchanged (and take over the environment
+     * responsibility too — the README's trust-boundary paragraph says the
+     * minimal environment is part of the contract).
      *
      * @return string|null
      */
     protected function runCommand(string $cmd): ?string
     {
-        $handle = @\proc_open(
-            $cmd,
-            [1 => ['pipe', 'w']],
-            $pipes,
-            null,
-            InfocmpBinary::childEnvironment($this->getEnv('TERM')),
-        );
+        $term = $this->getEnv('TERM');
 
-        if (!\is_resource($handle)) {
-            return null;
-        }
-
-        $output = \stream_get_contents($pipes[1]);
-        \fclose($pipes[1]);
-        \proc_close($handle);
-
-        return $output === false ? null : $output;
+        return InfocmpBinary::runBounded($term ?? '');
     }
 
     // -------------------------------------------------------------------------

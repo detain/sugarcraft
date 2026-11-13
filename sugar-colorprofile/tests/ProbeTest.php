@@ -265,15 +265,16 @@ final class ProbeTest extends TestCase
     {
         // The old body was `_reset(); assertTrue(true)` — a tautology that
         // stayed green no matter what the seam did. Stuff BOTH statics the
-        // seam owns, reset, and prove they actually drained.
-        $memo = new \ReflectionProperty(Probe::class, 'terminfoUpgradeMemo');
-        $memo->setValue(null, ['xterm' => true, 'vt100' => false]);
+        // seam owns, reset, and prove they actually drained. (CP-11 moved
+        // the phase-2 verdict table into the exec door; it drains here.)
+        $memo = new \ReflectionProperty(InfocmpBinary::class, 'dumpMemo');
+        $memo->setValue(null, ['xterm' => "\tTc,\n", 'vt100' => null]);
         $path = new \ReflectionProperty(InfocmpBinary::class, 'path');
         $path->setValue(null, '/usr/bin/infocmp');
 
         Probe::_reset();
 
-        $this->assertSame([], $memo->getValue(), 'the phase-2 memo must drain');
+        $this->assertSame([], $memo->getValue(), 'the shared dump memo must drain');
         $this->assertNull($path->getValue(), 'the binary-path memo must drain');
     }
 }

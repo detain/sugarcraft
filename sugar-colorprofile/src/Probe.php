@@ -19,15 +19,19 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  *  Phase 2: infocmp declares `Tc`/`RGB` at capability-name position
  *           → upgrade Ansi or Ansi256 to TrueColor.
  *
- * Phase 2 is capped per TERM value for the process lifetime: repeated calls
- * never re-shell (the old code ran a fresh unbounded shell_exec per call),
- * and {@see self::_reset()} clears the cap for tests.
+ * Phase 2 answers from ONE shared table and ONE bounded exec face
+ * ({@see InfocmpBinary::runBounded()}): repeated calls never re-spawn (the
+ * old code ran a fresh unbounded shell per call, and each class kept its
+ * own memo — now the per-TERM dump table lives beside the binary it caches
+ * answers about), and {@see self::_reset()} drains it for tests.
  *
- * That cap bounds FREQUENCY, not the exec itself: a phase-2 shell-out is
- * un-timed and output-unbounded — the proc_open child blocks until infocmp
- * exits and its whole dump is slurped. It is a CLI/startup-context face;
- * inside a live event loop or a request path use {@see AsyncProbe}, whose
- * child carries a deadline ladder and capped pipes instead. What the child
+ * The bound is a contract, not a hint: 5 s wall-clock deadline (SIGTERM →
+ * 1 s grace → SIGKILL), 8 KiB keep-a-prefix stdout, array-form argv with no
+ * shell in the path, stderr drained and closed, and fail-open semantics —
+ * anything short of a clean dump leaves the chain answer standing. A wedged
+ * infocmp can therefore never block the caller: the sync face carries its
+ * own bound and no longer defers the problem to {@see AsyncProbe}, whose
+ * child rides the same ladder via the event loop instead. What the child
  * does get, at both surfaces, is only the shared minimal environment
  * ({@see InfocmpBinary::childEnvironment()}) — parent TERMINFO,
  * TERMINFO_DIRS and HOME never reach the database lookup.
@@ -36,13 +40,6 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  */
 final class Probe
 {
-    /**
-     * Per-TERM phase-2 upgrade verdicts (true = infocmp declares Tc/RGB).
-     *
-     * @var array<string, bool>
-     */
-    private static array $terminfoUpgradeMemo = [];
-
     private function __construct()
     {
     }
@@ -129,6 +126,10 @@ final class Probe
 
     /**
      * Optional Phase 2: does infocmp declare Tc/RGB for this TERM?
+     *
+     * The verdict answers from the ONE bounded, memoized exec face
+     * ({@see InfocmpBinary::runBounded()}) — deadline, output cap, and the
+     * per-TERM dump table all live there, shared with TerminalProbe.
      */
     private static function terminfoHasTrueColor(string $term): bool
     {
@@ -138,57 +139,32 @@ final class Probe
 
         // Exec gate: a TERM infocmp would read as its own option (leading
         // dash survives quoting) never reaches the binary — the chain
-        // answer stands. Shared predicate with AsyncProbe/TerminalProbe.
+        // answer stands. The door re-checks this; the caller-side check
+        // keeps the memo untouched by names that must never exec.
         if (!InfocmpBinary::isSafeTermName($term)) {
             return false;
         }
 
-        $key = strtolower($term);
-        if (array_key_exists($key, self::$terminfoUpgradeMemo)) {
-            return self::$terminfoUpgradeMemo[$key];
-        }
-
-        $binary = InfocmpBinary::path();
-        if ($binary === null) {
-            return self::$terminfoUpgradeMemo[$key] = false;
-        }
-
-        // Minimal environment (shared builder): TERMINFO/TERMINFO_DIRS/HOME
-        // cannot steer the database lookup from the parent process.
-        $handle = @\proc_open(
-            $binary . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null',
-            [1 => ['pipe', 'w']],
-            $pipes,
-            null,
-            InfocmpBinary::childEnvironment($term),
-        );
-
-        if (!\is_resource($handle)) {
-            return self::$terminfoUpgradeMemo[$key] = false;
-        }
-
-        $output = \stream_get_contents($pipes[1]);
-        \fclose($pipes[1]);
-        \proc_close($handle);
-
-        if ($output === false) {
-            return self::$terminfoUpgradeMemo[$key] = false;
+        $output = InfocmpBinary::runBounded($term);
+        if ($output === null || $output === '') {
+            return false;
         }
 
         // Tc (true-color) or RGB (direct color string cap) at NAME position —
         // the old /\bTc\b/ whole-output regex false-matched descriptions.
-        return self::$terminfoUpgradeMemo[$key] =
-            TerminfoParser::hasCapName($output, TerminfoParser::TRUECOLOR_NAMES);
+        return TerminfoParser::hasCapName($output, TerminfoParser::TRUECOLOR_NAMES);
     }
 
     /**
      * Reset internal static state (for testing only).
+     *
+     * The exec door owns both statics now (binary-path sniff + per-TERM
+     * dump memo); this drains them together so one seam clears the table.
      *
      * @internal
      */
     public static function _reset(): void
     {
         InfocmpBinary::reset();
-        self::$terminfoUpgradeMemo = [];
     }
 }

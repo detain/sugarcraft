@@ -91,8 +91,10 @@ final class AsyncProbe
      * 8 KiB. Past the ceiling the child is noise — the accumulator stops
      * growing and the settle treats the truncated prefix as the whole dump
      * (advisory), instead of letting a pathological writer grow with the pipe.
+     * The number is the door's: {@see InfocmpBinary::OUTPUT_CAP_BYTES} is the
+     * one ceiling every infocmp surface shares (sync face, async pump).
      */
-    private const STDOUT_CAP_BYTES = 8192;
+    private const STDOUT_CAP_BYTES = InfocmpBinary::OUTPUT_CAP_BYTES;
 
     /**
      * In-flight children keyed by an opaque token, each with the child handle

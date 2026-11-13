@@ -708,4 +708,58 @@ final class TerminalProbeTest extends TestCase
             InfocmpBinary::reset();
         }
     }
+
+    public function testRepeatedRunsAnswerTheTerminfoLegFromTheSharedTable(): void
+    {
+        // 013 (CP-11): checkTerminfo re-execed infocmp on EVERY gated
+        // runProbe — the docblocks encouraged cheap re-probing while the
+        // base seam paid a fresh child each time. The bounded door memoizes
+        // per TERM now; the fake counts its own launches in a marker file,
+        // so the proof is bytes, not a reflection peek.
+        $counter = (string) \tempnam(\sys_get_temp_dir(), 'cp-tp-count');
+        $printer = (string) \tempnam(\sys_get_temp_dir(), 'infocmp');
+        \file_put_contents(
+            $printer,
+            "#!/bin/sh\nprintf 'x\\n' >> " . \escapeshellarg($counter) . "\nprintf '\\tTc,\\n'\n",
+        );
+        \chmod($printer, 0755);
+
+        InfocmpBinary::reset();
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        $probe = new class extends TerminalProbe {
+            public function __construct()
+            {
+                parent::__construct(['TERM' => 'xterm'], false);
+            }
+
+            protected function isInteractive(): bool
+            {
+                return false;
+            }
+
+            protected function infocmpAvailable(): bool
+            {
+                return true;
+            }
+        };
+
+        try {
+            $first = $probe->runProbe();
+            $second = $probe->runProbe();
+
+            $this->assertTrue($first->has(Capability::TrueColor), 'the terminfo leg answers the first run');
+            $this->assertTrue($second->has(Capability::TrueColor), 'and the second, from the shared table');
+            $this->assertSame('terminfo:Tc|RGB', $second->source(Capability::TrueColor));
+            $this->assertSame(
+                1,
+                \count(\file($counter)),
+                'the child launched exactly once across two gated probes',
+            );
+        } finally {
+            @\unlink($printer);
+            @\unlink($counter);
+            InfocmpBinary::reset();
+        }
+    }
 }

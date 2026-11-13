@@ -150,4 +150,105 @@ final class ProbeInfocmpTest extends TestCase
             Probe::_reset();
         }
     }
+
+    // -----------------------------------------------------------------
+    // CP-11: the bounded execution door (InfocmpBinary::runBounded)
+    // -----------------------------------------------------------------
+
+    public function testBoundedExecNeverOutlivesItsDeadline(): void
+    {
+        // 012/013: a wedged infocmp used to block the caller forever. The
+        // door must fail open (null → chain answer stands) inside its
+        // deadline ladder, not when the child eventually feels like
+        // exiting. `exec` replaces the shell so TERM/KILL land on the
+        // sleeper itself — no orphaned grandchildren outliving the pin.
+        $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
+        $this->assertIsString($printer);
+        \file_put_contents($printer, "#!/bin/sh\nexec sleep 30\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        try {
+            $started = \microtime(true);
+            $answer = InfocmpBinary::runBounded('xterm', 1.0);
+            $elapsed = \microtime(true) - $started;
+        } finally {
+            @\unlink($printer);
+            Probe::_reset();
+        }
+
+        $this->assertNull($answer, 'a wedged child must fail open, never a partial verdict');
+        $this->assertLessThan(
+            6.0,
+            $elapsed,
+            'deadline 1 s + two 1 s grace rungs must close the child long before its 30 s sleep ' . \sprintf('(took %.2f s)', $elapsed),
+        );
+    }
+
+    public function testBoundedExecKeepsOnlyThePrefix(): void
+    {
+        // 012: the output cap is a keep-a-prefix read. A Tc line buried
+        // past 8 KiB of filler is noise by contract — and the child must
+        // still run to clean exit (stderr/stdout drained to EOF), never be
+        // killed for talking too much.
+        $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
+        $this->assertIsString($printer);
+        \file_put_contents(
+            $printer,
+            "#!/bin/sh\nprintf '\\tFx0," . \str_repeat('x', 16384) . ",\\n'\nprintf '\\tTc,\\n'\n",
+        );
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        try {
+            $dump = InfocmpBinary::runBounded('xterm');
+        } finally {
+            @\unlink($printer);
+            Probe::_reset();
+        }
+
+        $this->assertIsString($dump, 'a fast-exiting chatty child still answers');
+        $this->assertLessThanOrEqual(InfocmpBinary::OUTPUT_CAP_BYTES, \strlen($dump), 'the kept prefix never exceeds the cap');
+        $this->assertFalse(
+            TerminfoParser::hasCapName($dump, TerminfoParser::TRUECOLOR_NAMES),
+            'a capability line beyond the cap must not reach the verdict',
+        );
+    }
+
+    public function testDumpMemoAnswersRepeatedProbesWithoutAChild(): void
+    {
+        // 013: every gated re-probe used to re-exec. The shared per-TERM
+        // table must serve the second call from itself — the fake counts
+        // its own launches in a marker file, so the proof is the byte
+        // count of that file, not a reflection peek.
+        $counter = (string) \tempnam(\sys_get_temp_dir(), 'cp-exec-count');
+        $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
+        $this->assertIsString($printer);
+        \file_put_contents(
+            $printer,
+            "#!/bin/sh\nprintf 'x\\n' >> " . \escapeshellarg($counter) . "\nprintf '\\tTc,\\n'\n",
+        );
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        try {
+            $first = InfocmpBinary::runBounded('xterm');
+            $second = InfocmpBinary::runBounded('xterm');
+
+            $this->assertSame($first, $second, 'the memo answers identically');
+            $this->assertSame("\tTc,\n", $first);
+            $this->assertCount(1, \file($counter), 'the child ran exactly once for two calls');
+
+            // _reset() drains the table AND the stuffed path (both statics),
+            // so the re-arm leg restuffs the same fake before asking again.
+            Probe::_reset();
+            (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+            InfocmpBinary::runBounded('xterm');
+            $this->assertCount(2, \file($counter), 'the reset seam re-arms the door');
+        } finally {
+            @\unlink($printer);
+            @\unlink($counter);
+            Probe::_reset();
+        }
+    }
 }

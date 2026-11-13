@@ -188,6 +188,16 @@ color depth. That suppression check is a decision, not one input among many,
 which is why it also gates the escape-query phase. A bare `Palette::detect()`
 never runs terminfo; it is the ladder plus the step-0 stream gate.
 
+**The synchronous probe is bounded:** every `infocmp` child on the sync faces
+launches through one door (`Probe\InfocmpBinary::runBounded()`): a 5 s
+wall-clock deadline with SIGTERM → 1 s grace → SIGKILL escalation, an 8 KiB
+keep-a-prefix stdout cap, an array-form argv launch with no shell in the
+path, the child's stderr drained rather than redirected, and fail-open
+semantics — anything short of a clean, on-time dump leaves the env-anchored
+chain answer standing. Results are memoized per `TERM` for the process
+lifetime (including recorded misses), so a long-lived consumer pays at most
+one child per terminal type; `Probe::_reset()` drains the table in tests.
+
 ### Env-var precedence
 
 The ladder's env legs, one table row per variable, in ladder order:

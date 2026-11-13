@@ -114,10 +114,14 @@ final class AsyncProbeBoundedTest extends TestCase
 
     public function testEveryInfocmpLaunchPassesTheSharedMinimalEnvironment(): void
     {
-        // M7 structural: all three exec sites must hand the child the shared
+        // M7 structural: every exec site must hand the child the shared
         // minimal environment builder — the behavior pins live in
         // tests/Probe/InfocmpEnvPurityTest.php; these needles make a silent
         // slip back to an inherited-env launch red even if those hosts die.
+        // CP-11 moved the synchronous launches behind one bounded door
+        // (InfocmpBinary::runBounded), so the needles follow: Probe.php and
+        // TerminalProbe.php must carry NO proc_open call site at all, and
+        // the door itself must launch under childEnvironment.
         $async = self::src();
         self::assertStringContainsString(
             'new Process($command, null, InfocmpBinary::childEnvironment($term))',
@@ -126,18 +130,25 @@ final class AsyncProbeBoundedTest extends TestCase
         );
 
         $root = \dirname(__DIR__);
-        $sync = (string) \file_get_contents($root . '/src/Probe.php');
+        $door = (string) \file_get_contents($root . '/src/Probe/InfocmpBinary.php');
         self::assertStringContainsString(
-            'InfocmpBinary::childEnvironment($term)',
+            'self::childEnvironment($term)',
+            $door,
+            'the bounded sync door must carry the minimal environment',
+        );
+
+        $sync = (string) \file_get_contents($root . '/src/Probe.php');
+        self::assertStringNotContainsString(
+            'proc_open(',
             $sync,
-            'the sync phase-2 proc_open must carry the minimal environment',
+            'CP-11: the sync face must not launch a child of its own anymore',
         );
 
         $terminal = (string) \file_get_contents($root . '/src/Probe/TerminalProbe.php');
-        self::assertStringContainsString(
-            "InfocmpBinary::childEnvironment(\$this->getEnv('TERM'))",
+        self::assertStringNotContainsString(
+            'proc_open(',
             $terminal,
-            'the terminal-probe base exec must carry the minimal environment',
+            'CP-11: the terminal probe phase-2 leg must answer through the door',
         );
     }
 }
