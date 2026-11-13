@@ -70,7 +70,10 @@ final class Renderer
             ? self::keyHelp($m->termCols, Width::of($focus), $glyphs, $rtl)
             : $m->status;
         $status = $focus . ' ' . Bidi::pinSeparator($glyphs->sep, $rtl) . ' ' . $rest;
-        if ($m->bookmarkCursor !== null) {
+        if ($m->viewer !== null) {
+            // CF-03: in-app text viewer - the same frame-replacement contract.
+            $frame = self::renderViewer($m) . "\n" . self::statusBar($status);
+        } elseif ($m->bookmarkCursor !== null) {
             // CF-30: bookmarks overlay - the same frame-replacement contract.
             $frame = self::renderBookmarks($m, $glyphs) . "\n" . self::statusBar($status);
         } elseif ($m->infoLines !== null) {
@@ -439,6 +442,34 @@ final class Renderer
         $lines[] = '';
         $lines[] = ' ' . Lang::t('help.dismiss');
         return implode("\n", $lines) . "\n\n";
+    }
+
+    /**
+     * CF-03: the in-app viewer. Lines were scrubbed and sanitized when the
+     * file was read; here they are windowed to the live height (page =
+     * rows - 4: title, blank, dismiss, status) and clipped by the frame's
+     * width belt. A head-only read says so on the title row.
+     */
+    private static function renderViewer(Manager $m): string
+    {
+        $v = $m->viewer ?? ['name' => '', 'lines' => [], 'top' => 0, 'truncated' => false];
+        $total = count($v['lines']);
+        $page = $m->termRows > 0 ? max(1, $m->termRows - 4) : 20;
+        $shown = array_slice($v['lines'], $v['top'], $page);
+        $title = Lang::t('viewer.title', ['name' => $v['name'], 'line' => $total === 0 ? 0 : $v['top'] + 1, 'total' => $total]);
+        if ($v['truncated']) {
+            $title .= ' ' . Lang::t('viewer.truncated', ['kb' => intdiv(Manager::VIEWER_MAX_BYTES, 1024)]);
+        }
+        $out = [Ansi::sgr(Ansi::BOLD) . $title . Ansi::reset()];
+        if ($total === 0) {
+            $out[] = ' ' . Lang::t('viewer.empty');
+        }
+        foreach ($shown as $line) {
+            $out[] = ' ' . $line;
+        }
+        $out[] = '';
+        $out[] = ' ' . Lang::t('viewer.dismiss');
+        return implode("\n", $out) . "\n";
     }
 
     /**

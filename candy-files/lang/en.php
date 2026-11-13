@@ -76,7 +76,7 @@ return [
     'undo.copy'   => 'items copied: {count}',
 
     // Key help
-    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern · I info · mouse click/wheel · y/Y yank · p paste · a pin · B bookmarks · w/W copy path/name · archive: Enter browse · x extract',
+    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern · I info · mouse click/wheel · y/Y yank · p paste · a pin · B bookmarks · w/W copy path/name · archive: Enter browse · x extract · o default app',
     'keyhelp.terse' => 'Tab swap · ↑↓ jk move · Enter open · l view · ← h up · space select · s sort · e ext · c copy · m move · R rename · d delete · q quit · / search · u/^z undo · ^y redo',
     'keyhelp.minimal' => 'Enter open · l view · q quit · / search',
     'help.title' => '{count} key bindings',
@@ -162,4 +162,11 @@ Usage:
     'status.archive_browse_hidden' => '{name} — read-only; {count} link/special/unsafe entries hidden',
     'confirm.extract' => 'extract {names} to {dest}? (y/n)',
     'status.extract_pending' => 'extracting {count} entries…',
+    'viewer.title' => '{name} — line {line}/{total}',
+    'viewer.truncated' => '(first {kb} KiB shown)',
+    'viewer.empty' => '(empty file)',
+    'viewer.dismiss' => 'j/k scroll · Space/PgDn page · g/G ends · q or Esc closes',
+    'status.nothing_to_open' => 'nothing to open',
+    'status.no_opener' => 'no default-open helper (xdg-open/open) found for {name}',
+    'status.opening_default' => 'opening {name} with the default application…',
 ];

@@ -67,6 +67,9 @@ final class Manager implements Model
     /** CF-55: two left clicks on the same row within this many seconds are one double-click. */
     private const DOUBLE_CLICK_SECONDS = 0.4;
 
+    /** CF-03: bytes the in-app viewer reads from the head of a file. */
+    public const VIEWER_MAX_BYTES = 262144;
+
     /** CF-50: OSC 52 payload ceiling in raw bytes (before base64). */
     private const CLIPBOARD_MAX_BYTES = 100000;
 
@@ -169,6 +172,8 @@ final class Manager implements Model
         public readonly array $bookmarks = [],
         /** CF-30: the `B` overlay's cursor row; null = overlay closed. */
         public readonly ?int $bookmarkCursor = null,
+        /** CF-03: the in-app text viewer (no $PAGER fallback) - sanitized lines + scroll top; null = closed. @var array{name:string,lines:list<string>,top:int,truncated:bool}|null */
+        public readonly ?array $viewer = null,
     ) {
         // The lister arrives exactly as the seam decided it (start() and
         // ManagerBuilder::build() are the memoized production paths);
@@ -339,6 +344,12 @@ final class Manager implements Model
                 return [$this->mutate(['infoLines' => null]), null];
             }
             return [$this, null];
+        }
+
+        // CF-03: the in-app viewer owns the keyboard while open (q closes it,
+        // it never quits the app from behind a frame).
+        if ($this->viewer !== null) {
+            return [$this->handleViewerKey($msg), null];
         }
 
         // CF-30: the bookmarks overlay owns the keyboard while open.
@@ -567,6 +578,10 @@ final class Manager implements Model
             // to run in a read-only listing); everywhere else it still runs.
             return Archive::inside($this->activePane()->cwd) ? [$this->armExtract(), null] : $this->runEntry();
         }
+        // CF-03: `o` hands the entry to the platform's default application.
+        if ($plain && $msg->rune === 'o') {
+            return $this->openWithDefault();
+        }
         // CF-33: the archive view is read-only. Every mutating chord is
         // refused with a visible status instead of failing deep in the copy
         // engine against a path that is not on disk.
@@ -750,6 +765,13 @@ final class Manager implements Model
      */
     private function handleMouse(MouseMsg $msg): array
     {
+        if ($this->viewer !== null) {
+            // The viewer is the one modal the wheel may drive.
+            if ($msg instanceof MouseWheelMsg || $msg->button === MouseButton::WheelUp || $msg->button === MouseButton::WheelDown) {
+                return [$this->scrollViewer($msg->button === MouseButton::WheelUp ? -self::WHEEL_ROWS : self::WHEEL_ROWS), null];
+            }
+            return [$this, null];
+        }
         if ($this->confirm !== ConfirmState::None || $this->helpMode
             || $this->infoLines !== null || $this->searchQuery !== null || $this->bookmarkCursor !== null) {
             return [$this, null];
@@ -964,9 +986,14 @@ final class Manager implements Model
             // the head, a file beyond 32 MiB, or an unreadable one refuses
             // with a localized status instead of painting escape sequences
             // across the user's terminal.
-            $argv = $this->isBinaryOrHuge($full) ? null : $this->pagerCommand();
-            if ($argv === null) {
+            if ($this->isBinaryOrHuge($full)) {
                 return [$this->withStatus(Lang::t('status.no_viewer', ['name' => $label])), null];
+            }
+            $argv = $this->pagerCommand();
+            if ($argv === null) {
+                // CF-03: no $PAGER, less or more on this host - the viewer
+                // is built in, so `l` never dead-ends on a text file.
+                return [$this->openViewer($entry->name, $full), null];
             }
             return [
                 $this->withStatus(Lang::t('status.opening_pager', ['name' => $label])),
@@ -1377,6 +1404,129 @@ final class Manager implements Model
             $lines[] = Lang::t('info.free') . ': ' . Entry::humanSize($free);
         }
         return $this->mutate(['infoLines' => $lines, 'status' => '']);
+    }
+
+    /**
+     * CF-03 `o`: open the entry under the cursor with the platform's
+     * default handler - xdg-open (Linux/BSD), open (macOS), `cmd /c start`
+     * (Windows) - as an argv LIST (never a shell string, so a filename
+     * cannot inject; same discipline as the `x` arm). The handler is
+     * located first: a host with none says so instead of spawning a
+     * guaranteed failure.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function openWithDefault(): array
+    {
+        $pane = $this->activePane();
+        $entry = $pane->currentEntry();
+        if ($entry === null || $entry->isParentSentinel()) {
+            return [$this->withStatus(Lang::t('status.nothing_to_open')), null];
+        }
+        $label = Entry::sanitizeName($entry->name);
+        if (Archive::inside($pane->cwd)) {
+            return [$this->withStatus(Lang::t('status.archive_entry_readonly')), null];
+        }
+        $prefix = self::defaultOpener();
+        if ($prefix === null) {
+            return [$this->withStatus(Lang::t('status.no_opener', ['name' => $label])), null];
+        }
+        return [
+            $this->withStatus(Lang::t('status.opening_default', ['name' => $label])),
+            Cmd::exec([...$prefix, Pane::join($pane->cwd, $entry->name)]),
+        ];
+    }
+
+    /**
+     * The default-open helper argv prefix for this platform, or null when
+     * the host has none installed.
+     *
+     * @return ?list<string>
+     */
+    private static function defaultOpener(): ?array
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $cmd = self::resolveBinary('cmd');
+            return $cmd === null ? null : [$cmd, '/c', 'start', ''];
+        }
+        $bin = self::resolveBinary(PHP_OS_FAMILY === 'Darwin' ? 'open' : 'xdg-open');
+        return $bin === null ? null : [$bin];
+    }
+
+    /**
+     * CF-03: open the in-app read-only viewer on the head of a text file.
+     * Invalid UTF-8 is scrubbed, tabs expand to four spaces, and every
+     * line goes through the filename sanitizer - a file's bytes are as
+     * hostile as its name, and an ESC in a log must not reach the terminal.
+     */
+    private function openViewer(string $name, string $full): self
+    {
+        $label = Entry::sanitizeName($name);
+        $fh = @fopen($full, 'rb');
+        $raw = $fh === false ? false : fread($fh, self::VIEWER_MAX_BYTES + 1);
+        if ($fh !== false) {
+            fclose($fh);
+        }
+        if (!is_string($raw)) {
+            return $this->withStatus(Lang::t('status.no_viewer', ['name' => $label]));
+        }
+        $truncated = strlen($raw) > self::VIEWER_MAX_BYTES;
+        if ($truncated) {
+            $raw = substr($raw, 0, self::VIEWER_MAX_BYTES);
+        }
+        $raw = mb_convert_encoding($raw, 'UTF-8', 'UTF-8');
+        $lines = [];
+        foreach (preg_split('/\r\n|\n|\r/', str_replace("\t", '    ', $raw)) ?: [] as $line) {
+            $lines[] = Entry::sanitizeName($line);
+        }
+        if ($raw === '') {
+            $lines = [];
+        } elseif (end($lines) === '' && count($lines) > 1) {
+            array_pop($lines); // the phantom row after a trailing newline
+        }
+        return $this->mutate([
+            'viewer' => ['name' => $label, 'lines' => $lines, 'top' => 0, 'truncated' => $truncated],
+            'status' => '',
+        ]);
+    }
+
+    private function viewerPage(): int
+    {
+        return $this->termRows > 0 ? max(1, $this->termRows - 4) : 20;
+    }
+
+    private function scrollViewer(int $delta): self
+    {
+        $v = $this->viewer;
+        if ($v === null) {
+            return $this;
+        }
+        $max = max(0, count($v['lines']) - $this->viewerPage());
+        $v['top'] = max(0, min($max, $v['top'] + $delta));
+        return $this->mutate(['viewer' => $v]);
+    }
+
+    private function handleViewerKey(KeyMsg $msg): self
+    {
+        $plain = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt;
+        $page = $this->viewerPage();
+        return match (true) {
+            $msg->type === KeyType::Escape, $plain && ($msg->rune === 'q' || $msg->rune === 'l')
+                => $this->mutate(['viewer' => null]),
+            $msg->type === KeyType::Up, $plain && $msg->rune === 'k'
+                => $this->scrollViewer(-1),
+            $msg->type === KeyType::Down, $plain && $msg->rune === 'j'
+                => $this->scrollViewer(1),
+            $msg->type === KeyType::PageUp, $plain && $msg->rune === 'b'
+                => $this->scrollViewer(-$page),
+            $msg->type === KeyType::PageDown, $msg->type === KeyType::Space
+                => $this->scrollViewer($page),
+            $msg->type === KeyType::Home, $plain && $msg->rune === 'g'
+                => $this->scrollViewer(-PHP_INT_MAX >> 1),
+            $msg->type === KeyType::End, $plain && $msg->rune === 'G'
+                => $this->scrollViewer(PHP_INT_MAX >> 1),
+            default => $this,
+        };
     }
 
     /**

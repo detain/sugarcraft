@@ -119,7 +119,8 @@ naming `sugar-core`.
 | `Home` / `g`    | Top of listing                                      |
 | `End` / `G`     | Bottom of listing                                   |
 | `Enter` / `→`   | Open: a directory navigates, an archive (`.zip`, `.tar`, `.tar.gz`/`.tgz`, `.tar.bz2`/`.tbz2`) browses as a read-only directory (CF-33), any other file launches `$EDITOR` (via the `VISUAL`/`EDITOR` chain; refused with a status when none resolves) |
-| `l`             | Page the file under cursor through `$PAGER` (binary or > 32 MiB payloads are refused with a status); on a directory it opens — `l` is the right half of the vim diamond `h j k l` |
+| `l`             | Page the file under cursor through `$PAGER` (then `less`, `more`); with none installed the **built-in viewer** opens instead (CF-03, below). Binary or > 32 MiB payloads are refused with a status; on a directory it opens — `l` is the right half of the vim diamond `h j k l` |
+| `o`             | Open the entry under cursor with the platform default (`xdg-open`, `open`, or `cmd /c start`) as an argv list — never a shell string, so a hostile filename cannot inject; with no helper installed the status says so (CF-03). The TUI suspends while the helper runs, like `x` and the editor |
 | `x`             | Run the entry under cursor when it carries the exec bit (argv spawn — never a shell string). **Inside an archive view `x` extracts** the selection (or cursor entry; directories recurse) into the other pane through the copy confirm gate (CF-33) |
 | `←` / `h`       | Go up one directory                                 |
 | `Space`         | Toggle selection on the entry under cursor + advance|
@@ -198,6 +199,16 @@ contour and friends. `Ctrl+PgUp`/`Ctrl+PgDn` are the alternative on
 standard terminal emulators: there the Page keys report modified
 unambiguously — but tmux and browser terminals may intercept modified
 Page keys themselves.
+
+### Built-in viewer (CF-03)
+
+When `l` finds no pager, a read-only viewer overlay shows the head (first 256 KiB)
+of the text file: `j`/`k`/arrows scroll, `Space`/`PgDn` and `b`/`PgUp` page,
+`g`/`G` or `Home`/`End` jump, the wheel scrolls three rows, `q`/`l`/`Esc` close
+it (`q` closes the viewer; it never quits the app from behind a frame). Invalid
+UTF-8 is scrubbed, tabs expand to four spaces and every line goes through the same
+control-byte sanitizer as filenames, so an escape sequence in a log cannot reach
+the terminal. A head-only read is announced on the title row.
 
 ### Archives (CF-33)
 
@@ -405,7 +416,7 @@ reads through `FsLister`.
 
 ## Test plan
 
-- 542 tests / 9121 assertions — this pair is hand-typed: candy-files runs its
+- 555 tests / 9510 assertions — this pair is hand-typed: candy-files runs its
   suite lib-local and its totals are not part of the repository-wide pinned
   count, so re-derive them by running `vendor/bin/phpunit` in this directory
   whenever tests change.
