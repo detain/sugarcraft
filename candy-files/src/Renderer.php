@@ -70,7 +70,10 @@ final class Renderer
             ? self::keyHelp($m->termCols, Width::of($focus), $glyphs, $rtl)
             : $m->status;
         $status = $focus . ' ' . Bidi::pinSeparator($glyphs->sep, $rtl) . ' ' . $rest;
-        if ($m->infoLines !== null) {
+        if ($m->bookmarkCursor !== null) {
+            // CF-30: bookmarks overlay - the same frame-replacement contract.
+            $frame = self::renderBookmarks($m, $glyphs) . "\n" . self::statusBar($status);
+        } elseif ($m->infoLines !== null) {
             // CF-52: stat overlay, same frame-replacement contract as help.
             $frame = self::renderInfo($m) . "\n" . self::statusBar($status);
         } elseif ($m->helpMode) {
@@ -435,6 +438,35 @@ final class Renderer
         }
         $lines[] = '';
         $lines[] = ' ' . Lang::t('help.dismiss');
+        return implode("\n", $lines) . "\n\n";
+    }
+
+    /**
+     * CF-30: the `B` overlay. Paths are filesystem data (sanitized), the
+     * list windows around the cursor with the pane law (rowWindow), and an
+     * empty list teaches the pin chord instead of showing a blank frame.
+     */
+    private static function renderBookmarks(Manager $m, GlyphSet $glyphs): string
+    {
+        $count = count($m->bookmarks);
+        $cursor = (int) $m->bookmarkCursor;
+        $capacity = $m->termRows > 0 ? max(1, $m->termRows - 5) : 0;
+        [$start, $end, $above, $below] = self::rowWindow($count, $cursor, $capacity);
+        $lines = [Ansi::sgr(Ansi::BOLD) . Lang::t('bookmarks.title', ['count' => $count]) . Ansi::reset()];
+        if ($count === 0) {
+            $lines[] = ' ' . Lang::t('bookmarks.empty');
+        }
+        if ($above > 0) {
+            $lines[] = '  ' . $glyphs->up . ' ' . Lang::t('pane.more_above', ['count' => $above]);
+        }
+        foreach (array_slice($m->bookmarks, $start, $end - $start) as $offset => $path) {
+            $lines[] = ($start + $offset === $cursor ? $glyphs->cursor : ' ') . ' ' . Entry::sanitizeName($path);
+        }
+        if ($below > 0) {
+            $lines[] = '  ' . $glyphs->down . ' ' . Lang::t('pane.more_below', ['count' => $below]);
+        }
+        $lines[] = '';
+        $lines[] = ' ' . Lang::t('bookmarks.dismiss');
         return implode("\n", $lines) . "\n\n";
     }
 

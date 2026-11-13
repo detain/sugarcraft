@@ -25,6 +25,7 @@ use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Files\Manager\ManagerBuilder;
 use SugarCraft\Files\Msg\CopyCompletedMsg;
 use SugarCraft\Files\Msg\SearchDoneMsg;
+use SugarCraft\Files\Support\Bookmarks;
 use SugarCraft\Files\Support\Home;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
@@ -159,6 +160,10 @@ final class Manager implements Model
         public readonly ?array $yank = null,
         /** CF-32: set only while a paste's confirm gate is armed — the sources the perform legs read instead of the active pane. @var array{dir:string,names:list<string>}|null */
         public readonly ?array $pasteSrc = null,
+        /** CF-30: pinned directories, loaded from the store at start(). @var list<string> */
+        public readonly array $bookmarks = [],
+        /** CF-30: the `B` overlay's cursor row; null = overlay closed. */
+        public readonly ?int $bookmarkCursor = null,
     ) {
         // The lister arrives exactly as the seam decided it (start() and
         // ManagerBuilder::build() are the memoized production paths);
@@ -212,6 +217,7 @@ final class Manager implements Model
             pendingOpDest: null,
             pendingOpType: null,
             inputBuffer: null,
+            bookmarks: Bookmarks::load(),
         );
     }
 
@@ -324,6 +330,11 @@ final class Manager implements Model
                 return [$this->mutate(['infoLines' => null]), null];
             }
             return [$this, null];
+        }
+
+        // CF-30: the bookmarks overlay owns the keyboard while open.
+        if ($this->bookmarkCursor !== null) {
+            return $this->handleBookmarkKey($msg);
         }
 
         // Search mode intercepts all keys
@@ -650,6 +661,11 @@ final class Manager implements Model
                 => $this->armMkdir(),
             $plain && $msg->rune === 'r'
                 => $this->refresh(),
+            // CF-30: a pins the active pane's directory, B opens the list.
+            $plain && $msg->rune === 'a'
+                => $this->pinBookmark(),
+            $plain && $msg->rune === 'B'
+                => $this->mutate(['bookmarkCursor' => 0, 'status' => '']),
             // CF-52: full metadata for the entry under the cursor.
             $plain && $msg->rune === 'I'
                 => $this->openInfo(),
@@ -712,7 +728,7 @@ final class Manager implements Model
     private function handleMouse(MouseMsg $msg): array
     {
         if ($this->confirm !== ConfirmState::None || $this->helpMode
-            || $this->infoLines !== null || $this->searchQuery !== null) {
+            || $this->infoLines !== null || $this->searchQuery !== null || $this->bookmarkCursor !== null) {
             return [$this, null];
         }
         $hit = Renderer::hit($this, $msg->x, $msg->y);
@@ -1029,6 +1045,78 @@ final class Manager implements Model
         $head = fread($fh, 8192);
         fclose($fh);
         return !is_string($head) || str_contains($head, "\x00");
+    }
+
+    /**
+     * CF-30 `a`: pin the active pane's directory. Idempotent - pinning a
+     * directory twice says so instead of growing a duplicate. The store is
+     * written through immediately (atomic), so a crash never loses a pin.
+     */
+    private function pinBookmark(): self
+    {
+        $cwd = $this->activePane()->cwd;
+        $label = Entry::sanitizeName($cwd);
+        if (in_array($cwd, $this->bookmarks, true)) {
+            return $this->withStatus(Lang::t('status.bookmark_exists', ['path' => $label]));
+        }
+        if (count($this->bookmarks) >= Bookmarks::MAX) {
+            return $this->withStatus(Lang::t('status.bookmark_failed'));
+        }
+        $next = [...$this->bookmarks, $cwd];
+        if (!Bookmarks::save($next)) {
+            return $this->withStatus(Lang::t('status.bookmark_failed'));
+        }
+        return $this->mutate(['bookmarks' => $next, 'status' => Lang::t('status.bookmark_added', ['path' => $label])]);
+    }
+
+    /**
+     * CF-30: keys inside the `B` overlay - j/k/arrows move, Enter jumps
+     * through the CF-29 typed-path door (so an unreadable or vanished
+     * bookmark is REFUSED with the pane retained, never entered blind), `d`
+     * / Delete unpins, `B` or Escape closes. Every other key is swallowed.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function handleBookmarkKey(KeyMsg $msg): array
+    {
+        $cursor = (int) $this->bookmarkCursor;
+        $count = count($this->bookmarks);
+        $plain = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt;
+        if ($msg->type === KeyType::Escape || ($plain && $msg->rune === 'B')) {
+            return [$this->mutate(['bookmarkCursor' => null]), null];
+        }
+        if ($msg->type === KeyType::Up || ($plain && $msg->rune === 'k')) {
+            return [$this->mutate(['bookmarkCursor' => max(0, $cursor - 1)]), null];
+        }
+        if ($msg->type === KeyType::Down || ($plain && $msg->rune === 'j')) {
+            return [$this->mutate(['bookmarkCursor' => max(0, min($count - 1, $cursor + 1))]), null];
+        }
+        if ($count === 0) {
+            return [$this, null];
+        }
+        if ($msg->type === KeyType::Enter) {
+            $target = $this->bookmarks[$cursor] ?? null;
+            if ($target === null) {
+                return [$this, null];
+            }
+            return [$this->mutate(['bookmarkCursor' => null])->performPathOpen($target), null];
+        }
+        if ($msg->type === KeyType::Delete || ($plain && $msg->rune === 'd')) {
+            $gone = $this->bookmarks[$cursor] ?? null;
+            if ($gone === null) {
+                return [$this, null];
+            }
+            $next = array_values(array_filter($this->bookmarks, static fn(string $p): bool => $p !== $gone));
+            if (!Bookmarks::save($next)) {
+                return [$this->withStatus(Lang::t('status.bookmark_failed')), null];
+            }
+            return [$this->mutate([
+                'bookmarks' => $next,
+                'bookmarkCursor' => max(0, min(count($next) - 1, $cursor)),
+                'status' => Lang::t('status.bookmark_removed', ['path' => Entry::sanitizeName($gone)]),
+            ]), null];
+        }
+        return [$this, null];
     }
 
     /**

@@ -76,7 +76,7 @@ return [
     'undo.copy'   => 'items copied: {count}',
 
     // Key help
-    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern · I info · mouse click/wheel · y/Y yank · p paste',
+    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern · I info · mouse click/wheel · y/Y yank · p paste · a pin · B bookmarks',
     'keyhelp.terse' => 'Tab swap · ↑↓ jk move · Enter open · l view · ← h up · space select · s sort · e ext · c copy · m move · R rename · d delete · q quit · / search · u/^z undo · ^y redo',
     'keyhelp.minimal' => 'Enter open · l view · q quit · / search',
     'help.title' => '{count} key bindings',
@@ -143,4 +143,11 @@ Usage:
     'status.cut' => 'cut {count} entries for move — p pastes',
     'status.nothing_to_yank' => 'nothing to yank',
     'status.nothing_to_paste' => 'nothing to paste — y or Y stages entries first',
+    'status.bookmark_added' => 'pinned {path}',
+    'status.bookmark_exists' => 'already pinned: {path}',
+    'status.bookmark_removed' => 'unpinned {path}',
+    'status.bookmark_failed' => 'cannot save bookmarks',
+    'bookmarks.title' => '{count} bookmarks',
+    'bookmarks.empty' => 'no bookmarks — a pins the current directory',
+    'bookmarks.dismiss' => 'Enter jumps · d removes · B or Esc closes',
 ];
