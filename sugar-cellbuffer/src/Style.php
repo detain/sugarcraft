@@ -686,52 +686,61 @@ final class Style implements \JsonSerializable
             return ($gray << 16) | ($gray << 8) | $gray;
         }
         $cube = $n - 16;
-        $step = static fn(int $v): int => $v === 0 ? 0 : 55 + $v * 40;
-        return ($step(intdiv($cube, 36)) << 16)
-            | ($step(intdiv($cube % 36, 6)) << 8)
-            | $step($cube % 6);
+        return (self::cubeStep(intdiv($cube, 36)) << 16)
+            | (self::cubeStep(intdiv($cube % 36, 6)) << 8)
+            | self::cubeStep($cube % 6);
+    }
+
+    /** One axis of the 6×6×6 cube: 0 stays 0, 1-5 ride the 55+40v ramp. */
+    private static function cubeStep(int $v): int
+    {
+        return $v === 0 ? 0 : 55 + $v * 40;
     }
 
     /**
-     * Standard ANSI 8-colour palette (and bright variants) to 0xRRGGBB.
+     * Standard ANSI 8-colour palette and bright variants as 0xRRGGBB.
      *
-     * The bright-1..7 values are an approximation: each channel is
-     * lightened by ~40%, which diverges from xterm (where, say, bright
-     * red often equals red in the active palette); bright-black is the
-     * one hand-tuned case (0x7F7F7F, xterm colour 8 / sugar-colorprofile's
-     * StandardColors::$brightBlack) because lightening #000000 would keep
-     * it invisible on dark terminals. This map exists only for fixture
-     * parsing and hex belts — real theme-following goes through the
-     * palette-slot fields, which never consult this approximation.
+     * The bright-1..7 values are an approximation: each channel of the
+     * standard colour is lightened by ~40% (clamped), which for these
+     * fully-saturated primaries is a no-op — so bright 1-7 equal their
+     * standard twins in the table, the historical law flattened into
+     * constants by CB-36 (differential-proven byte-identical to the
+     * formula over the probed index domain, fallbacks included). bright-black (slot 8) is the one hand-tuned case (0x7F7F7F,
+     * xterm colour 8 / sugar-colorprofile's StandardColors::$brightBlack)
+     * because lightening #000000 would keep it invisible on dark
+     * terminals. This map exists only for fixture parsing and hex belts —
+     * real theme-following goes through the palette-slot fields, which
+     * never consult this approximation.
      */
+    private const PALETTE_16 = [
+        // Standard colours
+        0x000000, // 0  black
+        0xff0000, // 1  red
+        0x00ff00, // 2  green
+        0xffff00, // 3  yellow
+        0x0000ff, // 4  blue
+        0xff00ff, // 5  magenta
+        0x00ffff, // 6  cyan
+        0xffffff, // 7  white
+        // Bright variants (lighten-40% flattened: saturated channels are fixed points)
+        0x7f7f7f, // 8  bright black (hand-tuned, see docblock)
+        0xff0000, // 9  bright red
+        0x00ff00, // 10 bright green
+        0xffff00, // 11 bright yellow
+        0x0000ff, // 12 bright blue
+        0xff00ff, // 13 bright magenta
+        0x00ffff, // 14 bright cyan
+        0xffffff, // 15 bright white
+    ];
+
     private static function ansiColorToHex(int $idx, bool $bright = false): int
     {
-        $palette = [
-            // Standard colours
-            0x000000, // 0 black
-            0xff0000, // 1 red
-            0x00ff00, // 2 green
-            0xffff00, // 3 yellow
-            0x0000ff, // 4 blue
-            0xff00ff, // 5 magenta
-            0x00ffff, // 6 cyan
-            0xffffff, // 7 white
-        ];
-        $base = $palette[$idx] ?? 0xffffff;
-        if ($bright) {
-            if ($idx === 0) {
-                return 0x7f7f7f;
-            }
-            // Bright: lighten the colour
-            $r = ($base >> 16) & 0xff;
-            $g = ($base >> 8) & 0xff;
-            $b = $base & 0xff;
-            $r = min(255, (int) ($r + ($r * 0.4)));
-            $g = min(255, (int) ($g + ($g * 0.4)));
-            $b = min(255, (int) ($b + ($b * 0.4)));
-            return ($r << 16) | ($g << 8) | $b;
+        // Domain is 0-7 (both callers normalise into it); the historical
+        // fallback for anything else — lightened or plain white — is kept.
+        if ($idx < 0 || $idx > 7) {
+            return 0xffffff;
         }
-        return $base;
+        return self::PALETTE_16[$idx + ($bright ? 8 : 0)];
     }
 
     /**
