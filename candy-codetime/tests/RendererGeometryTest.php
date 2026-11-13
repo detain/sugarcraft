@@ -364,6 +364,34 @@ final class RendererGeometryTest extends TestCase
         );
     }
 
+    /**
+     * CT-S09 (finding candy-codetime-008): the Trojan Source door. A zero-width
+     * space makes two different names look identical on screen, and U+202E
+     * repaints the rest of the row reversed — neither may survive into the
+     * frame invisible. clean() now rides Sanitize::untrustedForDisplay(), so
+     * both land as visible `<U+XXXX>` markers and visually-cloned names paint
+     * as different bytes.
+     */
+    public function testInvisibleFormattingIsMarkedNotPainted(): void
+    {
+        $end = new \DateTimeImmutable(self::END);
+
+        $spoof = self::frame(80, [
+            new Heartbeat($end->getTimestamp(), "proj\u{200B}B", 'php', 'a.php', 600),
+        ]);
+        $plainTwin = self::frame(80, [
+            new Heartbeat($end->getTimestamp(), 'projB', 'php', 'a.php', 600),
+        ]);
+        $this->assertStringContainsString('<U+200B>', $spoof, 'a zero-width space must paint as a marker');
+        $this->assertNotSame($plainTwin, $spoof, 'visually-cloned names must not land byte-identical');
+
+        $rtl = self::frame(80, [
+            new Heartbeat($end->getTimestamp(), "repo\u{202E}eviler", 'php', 'b.php', 700),
+        ]);
+        $this->assertStringNotContainsString("\u{202E}", $rtl, 'a stored RTL override must never reach the terminal');
+        $this->assertStringContainsString('<U+202E>', $rtl, 'the override paints as its marker');
+    }
+
     private static function timelineRows(string $frame): array
     {
         $rows = self::plain($frame);

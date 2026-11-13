@@ -270,10 +270,19 @@ final class Renderer
      * rather than the whole name: the old `/u` pass returned false on any
      * single invalid byte and the `?? ''` fallback blanked the entry in
      * silence — fail-open-by-erasure is not a defense.
+     *
+     * The door is {@see Sanitize::untrustedForDisplay()} (not bare
+     * untrusted()): invisible bidi overrides and zero-width characters are
+     * the Trojan Source class — U+202E repaints the rest of the row reversed,
+     * and a ZWSP makes two different project names look byte-identical on
+     * screen. The display policy marks them as `<U+XXXX>` instead of keeping
+     * them invisible, so a painted name can never say something other than
+     * what it is; markers are printable ASCII and flow through the width
+     * budget like any other character.
      */
     private static function clean(string $text): string
     {
-        return str_replace(["\t", "\n", "\r"], '', Sanitize::untrusted($text));
+        return str_replace(["\t", "\n", "\r"], '', Sanitize::untrustedForDisplay($text));
     }
 
     private static function timeline(Dashboard $d): string
