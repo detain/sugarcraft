@@ -273,7 +273,7 @@ final class HyperlinkTest extends TestCase
         // Real IRI payloads: '→' is E2 86 92, the grinning face is F0 9F 98 80
         // and Cyrillic 'ет' is D0 B5 D1 82 — each carries bytes inside the
         // 0x80-0x9F window as UTF-8 CONTINUATION bytes, which a byte-blind
-        // [\x80-\x9f] class wrongly refuses (CB-8b, r1 MAJOR-1). café carries
+        // [\x80-\x9f] class wrongly refuses (review round 1, MAJOR-1). café carries
         // C3 A9 and NBSP carries C2 A0 — neither is a C1 control either, so
         // the refusal must not turn into a bare-UTF8 ban.
         $payloads = [

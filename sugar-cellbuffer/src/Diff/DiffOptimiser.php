@@ -12,8 +12,12 @@ use SugarCraft\CellBuffer\Style;
  *
  * Optimisations applied:
  * 1. Adjacent SetStyleOps → keep only the last one (last-wins SGR).
- * 2. Adjacent SetCellOps whose tail/head state matches by VALUE
- *    (same style and same hyperlink) → merge into one span.
+ * 2. Adjacent single-cell SetCellOps whose tail/head state matches by
+ *    VALUE (same style and same hyperlink) → merge into one span.
+ *    Multi-cell SetCellOps never coalesce: the merge check is
+ *    deliberately single-cell only, so a hand-built stream of spans
+ *    rides the wire as written (Buffer::diff() emits one cell per op,
+ *    so real diffs never depend on span merging).
  * 3. EraseRunOp always overwrites all prior state; no need to
  *    optimise further at this layer.
  *

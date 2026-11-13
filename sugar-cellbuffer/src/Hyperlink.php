@@ -14,7 +14,7 @@ use SugarCraft\Core\Util\Ansi;
  * injection into the OSC 8 wire format: C0/DEL controls are refused, and so
  * are C1 escape introducers in both shapes that can reach the wire — lone raw
  * 0x80-0x9F bytes that do not continue a well-formed UTF-8 sequence, and
- * their C2 xx encodings (CB-8b). Well-formed multibyte payloads (arrows,
+ * their C2 xx encodings (C2 80-C2 9F). Well-formed multibyte payloads (arrows,
  * emoji, Cyrillic — an IRI) pass, even though their continuation bytes fall
  * in the C1 window. A semicolon is rejected in the ID, which would shift the
  * URL field.

@@ -15,6 +15,7 @@ use SugarCraft\CellBuffer\Style;
  * (SgrEmitter policy), not a minimal delta; the encoder skips the op
  * entirely when the active style has not changed.
  *
+ * @readonly
  */
 final class SetStyleOp extends DiffOp
 {

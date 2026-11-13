@@ -12,7 +12,6 @@ namespace SugarCraft\CellBuffer\Diff;
  *
  * The operation map follows ratatui's Buffer::diff, rendered onto the
  * xterm control sequences for ECH / REP / CUP / SGR / OSC 8.
- *
  */
 abstract class DiffOp
 {

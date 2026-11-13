@@ -10,8 +10,10 @@ use SugarCraft\CellBuffer\Cell;
  * Write one or more cells at the current cursor position using
  * direct character output (SGR transitions are separate SetStyleOp).
  *
- * The cursor advances by the cell widths (1 for normal, 2 for wide).
- * Wide-char cells emit the rune then a zero-width continuation cell.
+ * The cursor advances by the cell widths (1 for normal, 2 for wide, N
+ * for run-length spans). Encoded streams write each lead rune and trust its
+ * declared width for the advance; width-0 continuation cells are grid-only
+ * state and are never emitted.
  *
  * @readonly
  */

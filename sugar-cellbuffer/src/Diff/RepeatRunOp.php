@@ -14,6 +14,7 @@ namespace SugarCraft\CellBuffer\Diff;
  * repeats is decided at encode time by {@see RepeatGate::worth()}
  * (chafa's canvas-printer byte-arithmetic precedent).
  *
+ * @readonly
  */
 final class RepeatRunOp extends DiffOp
 {

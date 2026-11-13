@@ -282,7 +282,10 @@ final class Buffer implements \JsonSerializable
      * carries the rune); cells with no rune fall back to a single space so
      * blank columns stay visible to search/clipboard layers. When a region
      * is given, extraction is clipped to the region ∩ buffer intersection
-     * (negative origins simply read from the region's start cell).
+     * (negative origins simply read from the region's start cell). Clipped
+     * rows are returned SHORTER than the region width — no padding is
+     * inserted — so offset→coordinate arithmetic must not assume a fixed
+     * row length across the clipped tail.
      */
     public function text(?Region $region = null): string
     {
@@ -822,7 +825,12 @@ final class Buffer implements \JsonSerializable
      * a cell's style differs from the previous cell, and OSC 8 hyperlink
      * sequences around linked cells.
      *
-     * @return string Raw ANSI byte string suitable for terminal output
+     * @return string Raw ANSI byte string suitable for terminal output.
+     *                Rows are joined with a bare LF — no CR, no cursor
+     *                addressing — so the stream lands on the right rows
+     *                only under cooked mode (ONLCR) or exact terminal
+     *                width; raw-mode callers own the CRLF post-process
+     *                (see the render contract in README).
      */
     public function toAnsi(): string
     {
