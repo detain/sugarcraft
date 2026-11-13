@@ -112,6 +112,12 @@ collapses toward the nearest color the profile can actually render.
   they define "nearest" for the color reduction above.
 - **TTY vs pipe** — `stream_isatty()` tells an interactive terminal from
   redirected output; the same environment answers differently on each.
+- **Rung words for assistive tech** — the `Ascii` rung means *no color codes
+  (decoration kept)*; the name is a depth label, not a character-set claim.
+  `Fgbg` means *two-color foreground/background* (the terminal's own colors,
+  brightness-selected); `Ansi240` means *240-color fixed palette* (slots
+  16-255, the themeable system 16 excluded). These glosses mirror
+  `ColorProfile::description()`.
 
 ## Profiles
 
@@ -269,7 +275,7 @@ The ladder's env legs, one table row per variable, in ladder order:
 | `GOOGLE_CLOUD_SHELL` | 10 | set to exactly `true` → TrueColor; any other value (`false` and `1` included) carries no 24-bit promise — CP-09 one-way tightening of the old set-and-non-empty grant |
 | `TMUX` / `STY` | 11 | set + base TERM begins `tmux*` → Ansi256, consulted **behind** `COLORTERM` — modern tmux may honestly forward truecolor (the screen/tmux split behind step 6, pinned by twin tests) |
 | `TERM` | 12-13 | ladder levels: `*-256color`/`xterm-kitty`/`xterm-ghostty` → Ansi256; `xterm*`/`screen*`/`tmux*` prefix → Ansi (all case-insensitive) |
-| `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` | — | non-empty and not `0/false/no/off` → `Probe::reducedMotion()` true (motion preference, outside the color ladder) |
+| `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` | — | non-empty and not `0/false/no/off` → `Probe::reducedMotion()` true (motion preference, outside the color ladder). Either variable on ⇒ reduced; one does not cancel the other — `REDUCE_MOTION=0` ahead of a positive `PREFERS_REDUCED_MOTION=1` does not mask it (accessibility bias, intentional, pinned by `ProbeTest`). No mainstream desktop exports either variable (unlike the no-color.org crowd), so apps bridging an OS-level setting should `putenv()` them |
 
 **Accessibility caveat for the force rows.** An exported `FORCE_COLOR`/
 `CLICOLOR_FORCE` — from a shell alias, a dotfile, or a CI image — silently
@@ -340,6 +346,28 @@ $out = str_replace("\x1b", '', $out);
 To keep bold/underline while
 dropping color regardless of environment, pin the same floor the suppressions
 already answer: `(new Palette())->withProfile(ColorProfile::Ascii)`.
+
+## Accessibility
+
+Four settled texts, linked rather than copied (single-source discipline — this
+section adds no facts):
+
+- **Force variables outrank suppression by design.** `CLICOLOR_FORCE` and
+  `FORCE_COLOR` silently re-enable color over `NO_COLOR` — the accessibility
+  caveat under the [env-var precedence](#env-var-precedence) table warns
+  about exactly this override.
+- **Suppression lands on the colorless rung.** Since CP-05 `NO_COLOR`,
+  `CLICOLOR=0` and `TERM=dumb` answer `Ascii` (color codes dropped,
+  decoration kept); `NoTTY` and its `stripAnsi()` full strip are reserved for
+  hardware absence — the story and the pin-your-floor recipe live under
+  [Color Degradation](#color-degradation).
+- **Residual escape fragments.** Output rewritten through the degradation
+  path can carry a lone `ESC` from a truncated introducer; the
+  consumer-facing caveat and the residual-scrub snippet sit under
+  [Color Degradation](#color-degradation) (CP-32).
+- **Reduced motion.** `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` drive
+  `Probe::reducedMotion()` with a deliberate one-way bias — see the
+  [env-var precedence](#env-var-precedence) row.
 
 ## Perceptual Color Distance (opt-in)
 
