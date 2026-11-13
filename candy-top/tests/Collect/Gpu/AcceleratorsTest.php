@@ -15,6 +15,7 @@ use SugarCraft\Top\Collect\Gpu\DrmFdinfo;
 use SugarCraft\Top\Collect\Gpu\IntelNpu;
 use SugarCraft\Top\Collect\Gpu\IntelSysfs;
 use SugarCraft\Top\Collect\GpuOutcome;
+use SugarCraft\Top\Collect\GpuDevice;
 use SugarCraft\Top\Collect\GpuProcess;
 use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\GpuVendor;
@@ -390,5 +391,52 @@ final class AcceleratorsTest extends TestCase
         [$back] = $acc->sample();
         $this->assertSame(array_map(static fn ($d): string => $d->uuid, $before->devices), array_map(static fn ($d): string => $d->uuid, $back->devices));
         $this->assertNotSame(Sentinel::UNMEASURED, $back->devices[1]->utilization, 'it returns to its own slot');
+    }
+
+    public function testADeviceGoneForGoodAgesOutOfItsSlot(): void
+    {
+        // S-P23 / candy-top-091: eGPU churn used to leave a lifetime n/a
+        // row rebuilt every cycle. GpuHold's window (5 samples AND 30 s of
+        // silence, mirrored as the G9 default) must release it.
+        $this->tree = GpuTree::of('amd');
+        $csv = (string) file_get_contents(dirname(__DIR__, 2) . '/fixtures/linux/nvidia-smi/skynet2-query-extended.csv');
+        $lines = array_values(array_filter(explode("\n", $csv)));
+        $drop = false;
+        $nvidia = Gpu::new(function (array $argv) use ($lines, &$drop): array {
+            if (!str_starts_with($argv[1], '--query-gpu=')) {
+                return [GpuOutcome::Absent, ''];
+            }
+            $rows = $drop ? [$lines[0], preg_replace('/^2,/', '1,', $lines[2]), preg_replace('/^3,/', '2,', $lines[3])] : $lines;
+
+            return [GpuOutcome::Ok, implode("\n", $rows) . "\n"];
+        }, fn (): float => $this->now, candidates: ['nvidia-smi']);
+        $acc = Accelerators::detect($this->tree->paths(), $nvidia, fn (): float => $this->now);
+        $uuids = static fn (GpuSnapshot $s): array => array_map(static fn (GpuDevice $d): string => $d->uuid, $s->devices);
+        [$before, $acc] = $acc->sample();
+        $this->assertCount(7, $before->devices);
+        $gone = $before->devices[1]->uuid;
+
+        $drop = true;
+        for ($cycle = 1; $cycle <= 6; $cycle++) {
+            $this->now += 5.0;
+            [$snap, $acc] = $acc->sample();
+            $this->assertCount(7, $snap->devices, "cycle $cycle: inside the window the slot holds");
+        }
+        $this->now += 5.0;
+        [$snap, $acc] = $acc->sample();
+        $this->assertCount(6, $snap->devices, 'past the window the churn settles out of the table');
+        $this->assertNotContains($gone, $uuids($snap));
+        $this->assertSame(
+            array_values(array_filter($uuids($before), static fn (string $u): bool => $u !== $gone)),
+            $uuids($snap),
+            'the survivors keep their order',
+        );
+
+        $drop = false;
+        $this->now += 5.0;
+        [$back, $acc] = $acc->sample();
+        $this->assertCount(7, $back->devices);
+        $this->assertSame($gone, $back->devices[3]->uuid, 'a reconnected GPU is appended at its backend slice, not resurrected mid-table');
+        $this->assertNotSame(Sentinel::UNMEASURED, $back->devices[3]->utilization, 'and answers live again');
     }
 }

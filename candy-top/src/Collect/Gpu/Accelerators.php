@@ -60,8 +60,22 @@ use function React\Promise\resolve;
 final class Accelerators
 {
     /**
+     * Seconds a device must stay silent before its slot ages out —
+     * {@see \SugarCraft\Top\Panel\Gpu\GpuHold::HOLD_SECONDS} mirrored (the
+     * G9 default): the panel already stops holding a silent device at 30 s,
+     * so the collector must not keep rebuilding a stand-in the UI has
+     * forgotten (eGPU/dock churn used to leave lifetime n/a rows,
+     * candy-top-091).
+     */
+    public const float STALE_SECONDS = 30.0;
+
+    /** Samples of silence a slot survives at minimum — GpuHold::MIN_SAMPLES mirrored. */
+    public const MIN_MISSES = 5;
+
+    /**
      * @param list<Backend>|null           $backends null = not discovered yet
      * @param array<int, list<GpuDevice>>   $last     backend position → last answered devices
+     * @param array<int, array<string, array{0: int, 1: float}>> $lost backend position → device key → [silent samples, first-silence instant]
      * @param list<GpuVendor>|null         $vendors  GPU vendor filter (btop shown_gpus); null = all
      * @param \Closure(): float            $clock
      */
@@ -75,6 +89,7 @@ final class Accelerators
         private readonly ?array $vendors,
         private readonly array $last,
         private readonly bool $sysfs,
+        private readonly array $lost = [],
     ) {
     }
 
@@ -117,7 +132,7 @@ final class Accelerators
             $this->backends,
         );
 
-        return new self($this->paths, $this->clock, $this->nvidia->withProcesses($on), $backends, $this->scanner, $on, $this->vendors, $this->last, $this->sysfs);
+        return new self($this->paths, $this->clock, $this->nvidia->withProcesses($on), $backends, $this->scanner, $on, $this->vendors, $this->last, $this->sysfs, $this->lost);
     }
 
     public function processesEnabled(): bool
@@ -147,7 +162,7 @@ final class Accelerators
             }
         }
 
-        return new self($this->paths, $this->clock, $this->nvidia, $this->backends, $this->scanner, $this->processes, $vendors, $this->last, $this->sysfs);
+        return new self($this->paths, $this->clock, $this->nvidia, $this->backends, $this->scanner, $this->processes, $vendors, $this->last, $this->sysfs, $this->lost);
     }
 
     /**
@@ -221,6 +236,7 @@ final class Accelerators
     {
         ksort($results);
         $last = $this->last;
+        $lost = $this->lost;
         $gpus = [];
         $npus = [];
         $standIns = 0;
@@ -229,8 +245,16 @@ final class Accelerators
         foreach ($results as $i => [$snap, $next]) {
             $b = $backends[$i];
             $backends[$i] = $next;
-            [$devices, $standIn] = self::pad($snap->accelerators(), $last[$i] ?? []);
-            if ($devices !== []) {
+            [$devices, $standIn, $missing] = self::pad($snap->accelerators(), $last[$i] ?? [], $this->lost[$i] ?? [], ($this->clock)());
+            if ($missing !== []) {
+                $lost[$i] = $missing;
+            } else {
+                unset($lost[$i]);
+            }
+            if ($devices !== [] || isset($last[$i])) {
+                // A backend that has ever reported records its projection even
+                // when empty: an aged-out whole backend must clear its slot,
+                // or the preserved list would resurrect fresh stand-ins.
                 $last[$i] = $devices;
             }
             $native = [];
@@ -267,7 +291,7 @@ final class Accelerators
         }
         $snapshot = new GpuSnapshot($gpus, $processes, $npus);
 
-        return [$snapshot, new self($this->paths, $this->clock, $this->nvidia, $backends, $scanner, $this->processes, $this->vendors, $last, $this->sysfs)];
+        return [$snapshot, new self($this->paths, $this->clock, $this->nvidia, $backends, $scanner, $this->processes, $this->vendors, $last, $this->sysfs, $lost)];
     }
 
     /**
@@ -277,15 +301,19 @@ final class Accelerators
      * now, an {@see GpuDevice::unmeasured()} stand-in when it did not
      * (a transient failure of the whole backend, or one GPU dropping out
      * of nvidia-smi's list) — and devices never seen before are appended.
-     * A device that is gone for good therefore keeps its slot as a
-     * stand-in for the collector's lifetime: indexes never shift under a
-     * consumer's per-index history.
+     * Silence is no longer forever (candy-top-091): a device that stays
+     * silent for the GpuHold-shaped window (both {@see MIN_MISSES} samples
+     * and {@see STALE_SECONDS}, mirroring the panel's own hold so the
+     * collector never rebuilds what the UI has forgotten) loses its slot,
+     * and eGPU/dock churn settles instead of haunting the table for the
+     * collector's lifetime.
      *
      * @param list<GpuDevice> $now
      * @param list<GpuDevice> $before
-     * @return array{0: list<GpuDevice>, 1: array<int, true>} [devices, positions that are stand-ins]
+     * @param array<string, array{0: int, 1: float}> $lost key → [silent samples, first-silence instant]
+     * @return array{0: list<GpuDevice>, 1: array<int, true>, 2: array<string, array{0: int, 1: float}>} [devices, positions that are stand-ins, still-missing keys]
      */
-    private static function pad(array $now, array $before): array
+    private static function pad(array $now, array $before, array $lost, float $at): array
     {
         $key = static fn (GpuDevice $d): string => $d->uuid !== Sentinel::UNAVAILABLE ? 'u:' . $d->uuid
             : ($d->busId !== Sentinel::UNAVAILABLE ? 'b:' . $d->busId : 'n:' . $d->kind->value . ':' . $d->name . ':' . $d->index);
@@ -296,6 +324,7 @@ final class Accelerators
         $out = [];
         $standIn = [];
         $placed = [];
+        $missing = [];
         foreach ($before as $prev) {
             $k = $key($prev);
             if (isset($placed[$k])) {
@@ -305,6 +334,11 @@ final class Accelerators
             if (isset($current[$k])) {
                 $out[] = $current[$k];
             } else {
+                [$misses, $since] = $lost[$k] ?? [0, $at];
+                if (++$misses >= self::MIN_MISSES && $at - $since >= self::STALE_SECONDS) {
+                    continue; // aged out: the slot is released, the churn settles
+                }
+                $missing[$k] = [$misses, $since];
                 $standIn[count($out)] = true;
                 $out[] = $prev->unmeasured();
             }
@@ -315,7 +349,7 @@ final class Accelerators
             }
         }
 
-        return [$out, $standIn];
+        return [$out, $standIn, $missing];
     }
 
     /**
