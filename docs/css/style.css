@@ -477,6 +477,9 @@ code, pre, .mono {
     display: flex;
     flex-direction: column;
     text-decoration: none;
+    /* div since SD-S02; body-click enhancement makes the pointer cursor
+       honest on the whole card, as it was when the card itself was an <a>. */
+    cursor: pointer;
 }
 
 .lib-card::after {
@@ -569,6 +572,10 @@ code, pre, .mono {
     line-height: 1.3;
 }
 
+/* Card title link (SD-S02): reads as the card's own text, not as body
+   prose — the card's lift + border hover already signal interactivity. */
+.lib-card h3 a.lib-card-title { color: inherit; text-decoration: none; }
+
 .lib-card .lib-source {
     color: var(--ink-2);
     font-size: 0.82rem;
@@ -589,9 +596,10 @@ code, pre, .mono {
     flex-grow: 1;
 }
 
-/* GitHub pill rendered inline with the title in .lib-icon-row.
-   Nested <a> inside <a class="lib-card"> is invalid HTML so it
-   ships as a <span data-href="…">; main.js promotes the click. */
+/* The GitHub pill sits inline with the title in .lib-icon-row. Since
+   SD-S02 it is a real <a> sibling of the title link (the old span +
+   data-href + JS-promotion trick left keyboard and screen-reader users
+   with no route upstream); main.js only enhances card-body clicks. */
 .lib-card .lib-github {
     margin-left: auto;
     display: inline-flex;
@@ -601,6 +609,7 @@ code, pre, .mono {
     border-radius: 999px;
     font-size: 0.78rem;
     color: var(--ink-2);
+    text-decoration: none;
     background: transparent;
     transition: border-color .15s ease, color .15s ease, background .15s ease;
     cursor: pointer;

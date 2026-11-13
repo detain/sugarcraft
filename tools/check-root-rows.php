@@ -318,9 +318,11 @@ final class CheckRootRows
 
     /**
      * The lib-card tile summary paragraph, located only through the card
-     * anchor — a bare href also occurs in the icon strip and the demo-card,
-     * so matching on those would certify the wrong row. A second card
-     * appearing before any summary paragraph is a fail-closed no-summary.
+     * title anchor — since SD-S02 the card is a div and its package href
+     * lives on <a class="lib-card-title">. A bare href also occurs in the
+     * icon strip and the demo-card, so matching on those would certify
+     * the wrong row. A second card appearing before any summary paragraph
+     * is a fail-closed no-summary.
      * Since the L2b split $cards is the libraries.html + apps.html pair; the
      * index page itself carries no catalogue cards any more.
      *
@@ -328,7 +330,7 @@ final class CheckRootRows
      */
     private static function cardTile(string $cards, string $slug, array &$findings): ?string
     {
-        $anchor = sprintf('class="lib-card" href="lib/%s.html"', $slug);
+        $anchor = sprintf('class="lib-card-title" href="lib/%s.html"', $slug);
         $hits = self::lineHits($cards, $anchor);
         if (count($hits) === 0) {
             $findings[] = sprintf('FAIL index %s: missing: %s', $slug, $slug);

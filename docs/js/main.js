@@ -25,29 +25,24 @@ document.querySelectorAll('.lib-card .glyph-tag').forEach((g) => {
     g.style.transform = `rotate(${r}deg)`;
 });
 
-// GitHub pill in .lib-icon-row. Nested <a> inside <a class="lib-card">
-// is invalid HTML, so the pill ships as a <span data-href="…"> and we
-// promote the click here. Honours modifier keys / middle-click for
-// "open in new tab" and stops propagation so the outer card link
-// doesn't also fire.
-document.querySelectorAll('.lib-card .lib-github').forEach((pill) => {
-    const go = (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        const href = pill.getAttribute('data-href');
+// Pointer convenience for catalogue cards (SD-S02 restructured them to
+// div + real anchors): clicking the card body follows the title link,
+// ctrl/meta-click and middle-click open it in a new tab — the same
+// mouse affordance the old whole-card <a> gave. Keyboard and
+// screen-reader users need none of this: title and GitHub pill are
+// genuine anchors.
+document.querySelectorAll('div.lib-card').forEach((card) => {
+    const hrefOf = () => { const t = card.querySelector('a.lib-card-title'); return t ? t.getAttribute('href') : null; };
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('a')) return;
+        const href = hrefOf();
         if (!href) return;
-        const newTab = e.metaKey || e.ctrlKey || e.button === 1;
-        if (newTab) {
-            window.open(href, '_blank', 'noopener');
-        } else if (href && !/^(javascript|data|vbscript):/i.test(href) &&
-                   (href.startsWith('http://') || href.startsWith('https://') ||
-                    (href.startsWith('/') && !href.startsWith('//')))) {
-            // Only allow safe URL schemes or root-relative paths to prevent XSS
-            window.location.href = href;
-        }
-    };
-    pill.addEventListener('click', go);
-    pill.addEventListener('auxclick', (e) => { if (e.button === 1) go(e); });
+        if (e.metaKey || e.ctrlKey) window.open(href, '_blank', 'noopener');
+        else window.location.href = href;
+    });
+    card.addEventListener('auxclick', (e) => {
+        if (e.button === 1) { const href = hrefOf(); if (href) { e.preventDefault(); window.open(href, '_blank', 'noopener'); } }
+    });
 });
 
 // ── Lightbox: click any demo-card image to see it full-size.
