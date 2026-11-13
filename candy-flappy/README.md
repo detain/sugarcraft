@@ -258,7 +258,11 @@ The board loads on the next `Game::start()`, and loading is forgiving. A
 corrupt, unreadable, or oversized (over `Game::MAX_SCORE_FILE_BYTES`) save is
 set aside as `scores.json.corrupt-<timestamp>` and play starts with an empty
 board, so a bad file can never brick launch. On read, entries that are not
-whole positive scores below `Game::SCORE_CEILING` are dropped.
+whole positive scores below `Game::SCORE_CEILING` are dropped. The write path
+enforces the same ceiling, so a score that was ever banked can never be
+dropped by the next load — the rule bounds the board's declared score space
+(reaching 100 000 means ~16.7 hours of flawless play), it is not a claim that
+such a run is impossible.
 
 - Save file: `~/.config/.candy-flappy/scores.json` (0600, atomic; a corrupt
   file is quarantined to `scores.json.corrupt-<timestamp>` instead of

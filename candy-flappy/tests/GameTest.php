@@ -635,6 +635,22 @@ final class GameTest extends TestCase
         @rmdir($tmp);
     }
 
+    public function testTheCeilingGatesTheWriteSideAsWellAsTheRead(): void
+    {
+        // flappy-77 (finding -067): the read filter and the write refuse the
+        // same declared score space, so the load step can never silently
+        // drop a score this program banked — at-or-over the ceiling nothing
+        // gets banked in the first place.
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0),
+            pipes: [],
+        );
+        $this->assertSame([], $g->withHighScore(Game::SCORE_CEILING)->highScores(), 'at-ceiling is outside the board');
+        $this->assertFalse($g->withHighScore(Game::SCORE_CEILING)->newRecord);
+        $this->assertSame([99999], $g->withHighScore(Game::SCORE_CEILING - 1)->highScores(), 'the last legal value must land');
+        $this->assertTrue($g->withHighScore(Game::SCORE_CEILING - 1)->newRecord);
+    }
+
     public function testOversizedSaveFileIsQuarantinedWithoutBeingParsed(): void
     {
         $tmp = sys_get_temp_dir() . '/candy-flappy-bigsave-' . getmypid();

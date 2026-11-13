@@ -106,10 +106,19 @@ final class Game implements Model
     public const MAX_SCORE_FILE_BYTES = 65536;
 
     /**
-     * Legality ceiling (m7), exclusive: scores at or above this cannot have
-     * been earned at 30 ticks/s (one point per pipe, pipes spawn every
-     * PIPE_EVERY ticks), so a save claiming them is forged and the entry is
-     * dropped on read.
+     * Legality ceiling (m7), exclusive — and enforced SYMMETRICALLY: the
+     * write path ({@see withHighScore()}) refuses scores at or above it, so
+     * the read filter below can never silently drop a score this program
+     * banked; it only rejects tampered files and cross-build strays.
+     *
+     * WHY the premise is a stated bound, not "cannot have been earned": at
+     * 30 ticks/s with one point per pipe, 100 000 points is roughly 16.7
+     * hours of flawless non-stop play — and nothing in this build ends or
+     * caps a session, so an over-ceiling value is not physically impossible,
+     * merely outside the declared score space of the board. A player who
+     * somehow crosses the line still sees their score on the crash card;
+     * the leaderboard, whose file contract needs a bound to stay parseable,
+     * declines the entry. SugarCraft addition; no upstream parity.
      */
     public const SCORE_CEILING = 100000;
 
@@ -422,6 +431,10 @@ final class Game implements Model
     public function withHighScore(int $score): self
     {
         if ($score <= 0) {
+            return $this;
+        }
+        // flappy-77 (finding -067): write-side ceiling — see SCORE_CEILING.
+        if ($score >= self::SCORE_CEILING) {
             return $this;
         }
         $scores = $this->highScores;
