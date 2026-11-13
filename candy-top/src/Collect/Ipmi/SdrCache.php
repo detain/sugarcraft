@@ -30,11 +30,29 @@ final class SdrCache
     /** @var list<string> files reserved and not yet released */
     private array $files = [];
 
+    /** @var list<string> files the last sweep() found but could not attribute */
+    private array $indeterminate = [];
+
+    /** @var \Closure(int): ?bool the liveness oracle, swappable for tests */
+    private \Closure $liveness;
+
     private bool $hooked = false;
 
     private function __construct(
         public readonly string $dir,
     ) {
+        $this->liveness = self::probeLiveness(...);
+    }
+
+    /**
+     * Override the liveness oracle (tests; the seam that lets a suite exercise
+     * a /proc-less, posix-less host on a machine that has both).
+     *
+     * @param \Closure(int): ?bool $liveness true alive, false dead, null unknowable
+     */
+    public function setLivenessOracle(\Closure $liveness): void
+    {
+        $this->liveness = $liveness;
     }
 
     /**
@@ -75,22 +93,53 @@ final class SdrCache
     /**
      * Remove the caches left by candy-tops that are gone (killed before
      * their exit hook ran). Files of live pids — another candy-top of the
-     * same user — are kept. Returns how many were removed.
+     * same user — are kept. Returns how many were removed. Where the host
+     * carries no liveness oracle at all (no ext-posix and no /proc: the
+     * FreeBSD-without-procfs and macOS legs this collector targets as an
+     * option), files of unverifiable pids are NEVER guessed away — deleting
+     * one from under a live long-running candy-top would yank the cache it
+     * re-reads via `-S <cache>` all session — and are reported through
+     * {@see self::indeterminate()} instead of silently accumulating.
      */
     public function sweep(): int
     {
         $removed = 0;
+        $this->indeterminate = [];
         foreach (glob($this->dir . '/' . self::PREFIX . '*.cache') ?: [] as $file) {
             if (preg_match('/^' . preg_quote(self::PREFIX, '/') . '(\d+)-[0-9a-f]+\.cache$/D', basename($file), $m) !== 1) {
                 continue;
             }
             $pid = (int) $m[1];
-            if ($pid !== getmypid() && !self::alive($pid) && @unlink($file)) {
+            if ($pid === getmypid()) {
+                continue;
+            }
+            $alive = ($this->liveness)($pid);
+            if ($alive === true) {
+                continue;
+            }
+            if ($alive === null) {
+                $this->indeterminate[] = $file;
+
+                continue;
+            }
+            if (@unlink($file)) {
                 $removed++;
             }
         }
 
         return $removed;
+    }
+
+    /**
+     * Cache files the last {@see self::sweep()} found but could not attribute
+     * to a live or dead process because the host has no liveness oracle;
+     * empty on every host where the verdict is decidable.
+     *
+     * @return list<string>
+     */
+    public function indeterminate(): array
+    {
+        return $this->indeterminate;
     }
 
     /**
@@ -138,7 +187,14 @@ final class SdrCache
         $this->files = [];
     }
 
-    private static function alive(int $pid): bool
+    /**
+     * The host's own liveness probe: true alive, false dead, null when the
+     * host cannot know. ext-posix answers on its own; without it, /proc
+     * answers ONLY where /proc exists — the old `is_dir('/proc/'.$pid)
+     * || !is_dir('/proc/self')` fallback made every pid alive on hosts
+     * without /proc, so crashed caches accumulated forever (candy-top-064).
+     */
+    private static function probeLiveness(int $pid): ?bool
     {
         if ($pid <= 0) {
             return false;
@@ -148,6 +204,6 @@ final class SdrCache
             return posix_kill($pid, 0) || posix_get_last_error() !== self::ESRCH;
         }
 
-        return is_dir('/proc/' . $pid) || !is_dir('/proc/self');
+        return is_dir('/proc/self') ? is_dir('/proc/' . $pid) : null;
     }
 }

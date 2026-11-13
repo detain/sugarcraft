@@ -107,4 +107,24 @@ final class SdrCacheTest extends TestCase
         $this->assertFileExists($mine);
         $this->assertFileExists($other, 'only cache-named files are touched');
     }
+
+    public function testSweepReportsRatherThanGuessesOnHostsWithoutALivenessOracle(): void
+    {
+        $cache = SdrCache::open($this->base);
+        $this->assertNotNull($cache);
+        $foreign = $cache->dir . '/candy-top-sdr-2147483646-0badc0de.cache';
+        touch($foreign);
+
+        // A macOS / FreeBSD-without-procfs host: no posix, no /proc, no verdict.
+        $cache->setLivenessOracle(static fn (int $pid): ?bool => null);
+        $this->assertSame(0, $cache->sweep(), 'guessing deletes a live candy-top\'s cache out from under its session');
+        $this->assertFileExists($foreign);
+        $this->assertSame([$foreign], $cache->indeterminate(), 'the undecided file is reported, never silently accumulated');
+
+        // A decidable host reclaims the very same file.
+        $cache->setLivenessOracle(static fn (int $pid): ?bool => false);
+        $this->assertSame(1, $cache->sweep());
+        $this->assertFileDoesNotExist($foreign);
+        $this->assertSame([], $cache->indeterminate(), 'the report clears each sweep');
+    }
 }
