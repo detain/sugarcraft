@@ -411,8 +411,9 @@ final class Config
 
     /**
      * Copy with the runtime `tty_mode` settled — btop configure_tty_mode():
-     * an explicit CLI `--force-tty`/`--no-force-tty` wins, then config
-     * `force_tty`, then auto-detection of a real `/dev/tty*` console.
+     * config `force_tty` wins over auto-detection of a real `/dev/tty*`
+     * console. btop's explicit CLI force arm sits in the `$cliForce` slot,
+     * which no candy-top flag parses yet (bin always passes null).
      */
     public function withTtyModeResolved(?bool $cliForce, bool $onRealTty): self
     {
