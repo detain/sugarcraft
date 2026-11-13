@@ -356,7 +356,7 @@ per-route cap is a separate change).
 Channel bundles mount their own inbound routes under `/channels/<bundle>/`
 — the router forwards the whole request and never learns a platform's
 protocol; each bundle terminates its own trust door (see
-[PLUGINS.md](PLUGINS.md), whose `@candy/msteams` example also covers the
+[PLUGINS.md](PLUGINS.md), whose `sugarcraft/candy-msteams` example also covers the
 developer tunnel — devtunnel, ngrok, or a Tailscale Funnel URL — because
 Teams cannot reach a laptop's localhost).
 

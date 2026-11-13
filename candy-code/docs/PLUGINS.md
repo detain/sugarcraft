@@ -134,7 +134,7 @@ One list gates both surfaces, so the audit you do before adding a name is
 the whole decision: that bundle can run code in-process and react to every
 session event. The notices at launch exist to keep that decision visible.
 
-### Worked example: the `@candy/discord` bundle
+### Worked example: the `sugarcraft/candy-discord` bundle
 
 The reference bundle shipped in this repository lives at `candy-discord/` and
 declares one `channel` entrypoint. Installing it exercises every rule above:
@@ -163,7 +163,7 @@ declares one `channel` entrypoint. Installing it exercises every rule above:
    button cannot render) the ask falls back to a same-chat `/approve <id>
    once|always|deny` line — never a silent bypass.
 
-### Worked example: the `@candy/msteams` bundle
+### Worked example: the `sugarcraft/candy-msteams` bundle
 
 `candy-msteams/` ships beside it with the same single `channel` entrypoint —
 but Teams is the INVERSE transport: Microsoft POSTs at the daemon instead of
