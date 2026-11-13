@@ -39,6 +39,8 @@ final class PagerCommand extends Command
             ->addOption('show-line-numbers',  null, InputOption::VALUE_NONE,     'Prefix every line with a 1-based line number.')
             ->addOption('match',              null, InputOption::VALUE_REQUIRED, 'Highlight every case-insensitive occurrence of the substring.', '')
             ->addOption('soft-wrap',          null, InputOption::VALUE_NONE,     'Wrap long lines at the pager width instead of clipping.')
+            ->addOption('hard-wrap',          null, InputOption::VALUE_NONE,     'Break long lines at exactly the pager width, mid-word if needed (--soft-wrap breaks on word boundaries).')
+            ->addOption('fade',               null, InputOption::VALUE_REQUIRED, 'Dim the last N visible rows while more content lies below (0 = off).', 0)
             ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
             ->addOption('no-alt-screen',      null, InputOption::VALUE_NONE,     'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-exit after N seconds (0 = none).', 0);
@@ -60,6 +62,7 @@ final class PagerCommand extends Command
         try {
             $width  = PositiveInt::parse('width', $input->getOption('width'));
             $height = PositiveInt::parse('height', $input->getOption('height'));
+            $fade   = PositiveInt::parse('fade', $input->getOption('fade'));
         } catch (\InvalidArgumentException $e) {
             // Refuse a typo'd geometry BEFORE reading the file/stdin.
             fwrite(STDERR, $e->getMessage() . "\n");
@@ -80,6 +83,17 @@ final class PagerCommand extends Command
         // --soft-wrap pre-wraps lines at the pager width before
         // feeding the viewport, so long source lines stay visible
         // without horizontal scroll.
+        if ((bool) $input->getOption('soft-wrap') && (bool) $input->getOption('hard-wrap')) {
+            fwrite(STDERR, Lang::t('runtime.conflicting_flags', ['first' => '--soft-wrap', 'second' => '--hard-wrap']) . "\n");
+            return Command::FAILURE;
+        }
+        if ((bool) $input->getOption('hard-wrap')) {
+            $wrapWidth = $width;
+            if ($wrapWidth <= 0) {
+                $wrapWidth = \SugarCraft\ScriptUi\Runtime\Geometry::columnsOrNull() ?? 80;
+            }
+            $raw = PagerModel::hardWrap($raw, $wrapWidth);
+        }
         if ((bool) $input->getOption('soft-wrap')) {
             $wrapWidth = $width;
             if ($wrapWidth <= 0) {
@@ -106,6 +120,7 @@ final class PagerCommand extends Command
             (bool)   $input->getOption('show-line-numbers'),
             (string) $input->getOption('match'),
             frameRows: $frameRows,
+            fade: $fade,
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(loop: $loop, 

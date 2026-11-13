@@ -6,6 +6,7 @@ namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Style\StyleBuilder;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -39,6 +40,9 @@ final class FormatCommand extends Command
             ->addArgument('file',  InputArgument::OPTIONAL, 'A file to read, or — when not an existing file — the text itself. Default: stdin.')
             ->addOption('theme', null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | dracula | tokyo-night | pink | notty | ascii', 'ansi')
             ->addOption('type',  't',  InputOption::VALUE_REQUIRED, 'Render type: markdown | code | template | emoji. Default markdown.', 'markdown')
+            ->addOption('code', null, InputOption::VALUE_NONE, 'Shorthand for `--type code`: render the input as a fenced code block.')
+            ->addOption('foreground', null, InputOption::VALUE_REQUIRED, 'Base text colour layered under the rendered output (hex, 0-255 index, or colour name).', '')
+            ->addOption('background', null, InputOption::VALUE_REQUIRED, 'Base background colour layered under the rendered output (hex, 0-255 index, or colour name).', '')
             ->addOption('language', 'l', InputOption::VALUE_REQUIRED, 'Source language for `--type code`.', '')
             ->addOption('allow-env', null, InputOption::VALUE_REQUIRED, 'Comma-separated allowlist of env var names permitted for {{VAR}} expansion in --type template. Empty = expand none; "*" = expand all (opt-in, unsafe with untrusted input).', '')
             ->addOption('strip-ansi', null, InputOption::VALUE_NONE, 'Strip ANSI escapes from the rendered output.')
@@ -53,6 +57,26 @@ final class FormatCommand extends Command
         // exception box). Refusals are plain sentences on STDERR; the data
         // stream stays byte-clean for pipelines.
         $type = strtolower((string) $input->getOption('type'));
+        if ($input->getOption('code')) {
+            // `--code` is `--type code`; an explicit different --type is a
+            // contradiction, not something to pick a winner for.
+            if ($input->hasParameterOption(['--type', '-t']) && $type !== 'code') {
+                fwrite(STDERR, Lang::t('runtime.conflicting_flags', ['first' => '--code', 'second' => '--type ' . $type]) . "\n");
+                return Command::FAILURE;
+            }
+            $type = 'code';
+        }
+        try {
+            // Colours route through the clamped builder so NO_COLOR / --no-ansi
+            // / a narrow TERM tier drop or requantise them like every other flag.
+            $baseStyle = StyleBuilder::fromFlags([
+                'foreground' => (string) $input->getOption('foreground'),
+                'background' => (string) $input->getOption('background'),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
         if ($type !== '' && !in_array($type, self::TYPES, true)) {
             fwrite(STDERR, Lang::t('runtime.unknown_choice', [
                 'option' => '--type',
@@ -130,6 +154,10 @@ final class FormatCommand extends Command
             ]) . "\n");
         }
 
+        if ((string) $input->getOption('foreground') !== '' || (string) $input->getOption('background') !== '') {
+            $rendered = self::applyBase($rendered, $baseStyle);
+        }
+
         if ($input->getOption('strip-ansi')) {
             $rendered = \SugarCraft\Core\Util\Ansi::strip($rendered);
         }
@@ -144,6 +172,33 @@ final class FormatCommand extends Command
         // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
         $output->write($rendered . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
+    }
+
+    /**
+     * Layer a base colour under already-styled output. The renderer ends
+     * spans with a full reset, which would drop an outer colour after the
+     * first styled word — so the opener is re-asserted after every reset
+     * and each line is self-contained (opener ... closer).
+     */
+    private static function applyBase(string $rendered, \SugarCraft\Style\Style $style): string
+    {
+        $probe = $style->render("\u{1}");
+        $at = strpos($probe, "\u{1}");
+        if ($at === false || $at === 0) {
+            // No escapes under this tier (NO_COLOR, --no-ansi): nothing to layer.
+            return $rendered;
+        }
+        $open = substr($probe, 0, $at);
+        $close = substr($probe, $at + 1);
+        $lines = explode("\n", $rendered);
+        foreach ($lines as $i => $line) {
+            if ($line === '') {
+                continue;
+            }
+            $line = str_replace(["\x1b[0m", "\x1b[m"], ["\x1b[0m" . $open, "\x1b[m" . $open], $line);
+            $lines[$i] = $open . $line . $close;
+        }
+        return implode("\n", $lines);
     }
 
     public static function pickTheme(string $name): Theme

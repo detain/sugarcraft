@@ -42,6 +42,7 @@ final class PagerModel implements Model
         bool $showLineNumbers = false,
         string $match = '',
         int $frameRows = 0,
+        int $fade = 0,
     ): self {
         // A 0 dimension means "use the terminal": resolve it from Geometry
         // now (the initial WindowSizeMsg then keeps it current on resize);
@@ -73,7 +74,7 @@ final class PagerModel implements Model
             $content = self::numberLines($content);
         }
         $vp = Viewport::new($width, max(1, $height))->setContent($content);
-        return new self($vp, false, terminalRows: $rows ?? 0, frameRows: $frameRows, terminalCols: $cols ?? 0);
+        return new self($vp, false, terminalRows: $rows ?? 0, frameRows: $frameRows, terminalCols: $cols ?? 0, fade: max(0, $fade));
     }
 
     /**
@@ -121,6 +122,9 @@ final class PagerModel implements Model
         // wraps into the rows budget the HINT_ROWS reservation just freed
         // — the too-narrow leg yields (gum hides its help line).
         public readonly int $terminalCols = 0,
+        // scriptui-84: trailing viewport rows painted faint while more content
+        // lies below (0 = off) — a scroll-affordance, not data.
+        public readonly int $fade = 0,
     ) {}
 
     public function init(): ?\Closure
@@ -143,7 +147,7 @@ final class PagerModel implements Model
                 // 'q'/Esc are a normal finish (exit 0); Ctrl+C is a
                 // cancellation and the command must exit 130, not pretend
                 // the page was read to the end.
-                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c', $this->terminalRows, $this->frameRows, $this->terminalCols), Cmd::quit()];
+                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c', $this->terminalRows, $this->frameRows, $this->terminalCols, $this->fade), Cmd::quit()];
             }
         }
         if ($msg instanceof WindowSizeMsg) {
@@ -157,7 +161,7 @@ final class PagerModel implements Model
             $rows   = max(1, $msg->rows);
             $height = max(1, $rows - self::HINT_ROWS - $this->frameRows);
             if ($width !== $this->viewport->width || $height !== $this->viewport->height || $rows !== $this->terminalRows) {
-                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted, $rows, $this->frameRows, $width), null];
+                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted, $rows, $this->frameRows, $width, $this->fade), null];
             }
             return [$this, null];
         }
@@ -166,12 +170,12 @@ final class PagerModel implements Model
         // defaults — one scroll key erased the launch census the footer
         // gates read (rows and cols both fell to 0, frameRows to 0). The
         // geometry state now travels.
-        return [new self($next, false, $this->interrupted, $this->terminalRows, $this->frameRows, $this->terminalCols), $cmd];
+        return [new self($next, false, $this->interrupted, $this->terminalRows, $this->frameRows, $this->terminalCols, $this->fade), $cmd];
     }
 
     public function view(): string
     {
-        $body = $this->viewport->view();
+        $body = $this->fadeTail($this->viewport->view());
         if (!$this->exited && ($this->terminalRows === 0 || $this->terminalRows >= self::HINT_ROWS + 1)) {
             // scriptui-57 (146): the footer is the only in-frame
             // discoverability channel, and one line could not carry the
@@ -198,6 +202,56 @@ final class PagerModel implements Model
         }
         return $body;
     }
+    /**
+     * Dim the last `$fade` rows of the visible window while there is more
+     * content below, so the cut-off edge reads as "continues". At the end of
+     * the document nothing is faded — the rows are then final, not a teaser.
+     * Wraps each row separately: a viewport row must stay self-contained for
+     * the line-addressed frame diff.
+     */
+    private function fadeTail(string $body): string
+    {
+        if ($this->fade <= 0 || $this->viewport->atBottom()) {
+            return $body;
+        }
+        $faint = Emphasis::sgr(Ansi::FAINT);
+        if ($faint === '') {
+            return $body;
+        }
+        $rows = explode("\n", $body);
+        $from = max(0, count($rows) - $this->fade);
+        foreach ($rows as $i => $row) {
+            if ($i >= $from && $row !== '') {
+                $rows[$i] = $faint . $row . Emphasis::reset();
+            }
+        }
+        return implode("\n", $rows);
+    }
+
+    /**
+     * Break every line at exactly `$width` cells, mid-word if need be (the
+     * strict sibling of {@see \SugarCraft\ScriptUi\Command\PagerCommand::prewrapSoftWrap()},
+     * which breaks on word boundaries). ANSI-aware: escape bytes never count
+     * toward the width.
+     */
+    public static function hardWrap(string $raw, int $width): string
+    {
+        $width = max(1, $width);
+        $out = [];
+        foreach (explode("\n", $raw) as $line) {
+            while (Width::string($line) > $width) {
+                $head = Width::takeAnsi($line, $width);
+                if ($head === '' || Width::string($head) === 0) {
+                    break;
+                }
+                $out[] = $head;
+                $line = Width::dropAnsi($line, $width);
+            }
+            $out[] = $line;
+        }
+        return implode("\n", $out);
+    }
+
     public function isExited(): bool { return $this->exited; }
     public function isInterrupted(): bool { return $this->interrupted; }
 

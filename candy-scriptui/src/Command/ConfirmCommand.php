@@ -45,6 +45,7 @@ final class ConfirmCommand extends Command
             ->addOption('negative',    null, InputOption::VALUE_REQUIRED, 'Label for the no option.',   'No')
             ->addOption('show-output', null, InputOption::VALUE_NONE,     'Print the chosen label on stdout.')
             ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header banner rendered above the prompt.', '')
+            ->addOption('pointer',     null, InputOption::VALUE_REQUIRED, 'Marker drawn before the chosen answer (e.g. "›").', '')
             ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (candy extension).')
             ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
 
@@ -97,6 +98,7 @@ final class ConfirmCommand extends Command
             default:     $defaultYes,
             affirmative: $affirm,
             negative:    $negate,
+            pointer:     (string) $input->getOption('pointer'),
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(loop: $loop, useAltScreen: false, hideCursor: false);
