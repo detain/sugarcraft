@@ -402,6 +402,17 @@ completion and their verdicts are dropped, uncancellable (both shapes
 pinned in `tests/FormAsyncValidateTest.php`). Throttle in your fetcher if
 that fan-out is too hot for the endpoint.
 
+Verdicts carry an identity law (SF-49): a promise answers the bytes it
+dispatched, not the bytes the field holds when it lands, and there is no
+channel to re-land it on your copy. If you call `validateAsync()` on a field
+directly, capture its `value()` before dispatch and discard the resolution —
+including a clean `null`, which is exactly how a mid-flight edit would sneak
+unvalidated bytes through — if the value changed in the meantime. The form's
+submit gate carries this duty for you (edits clear the pending-round overlay;
+the seq guard drops superseded verdicts); direct callers bear it by hand. The
+race is pinned in `tests/AsyncValidationVerdictIdentityTest.php`; folding the
+judged value into the promise payload itself is an owner-gated tuple upgrade.
+
 ### ActionSpinner
 
 A standalone blocking spinner for scripts and CLIs that need a visible

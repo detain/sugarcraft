@@ -23,6 +23,32 @@ use React\Promise\PromiseInterface;
  * `PromiseInterface<?string>` — resolving with an error message or null.
  * Anything else is a programming error and surfaces as a REJECTION naming
  * the offending key, never as a silent pass.
+ *
+ * DISCARD LAW (sugar-forms-078): a verdict judges the bytes dispatched at
+ * call time, never the bytes the field holds when it lands. A host calling
+ * {@see validateAsync()} directly MUST capture `$judged = $field->value()`
+ * before dispatch and DROP the resolution — including a clean `null`, the
+ * stale-submit hazard this finding names — whenever the live value has
+ * changed by the time the verdict arrives:
+ *
+ *     $judged = $field->value();
+ *     $field->validateAsync()->then(
+ *         static function (?string $error) use (&$field, $judged): void {
+ *             if ($field->value() !== $judged) {
+ *                 return; // stale verdict — the bytes it judged are gone.
+ *             }
+ *             // only now may $error be painted, or a null submit honoured.
+ *         }
+ *     );
+ *
+ * Immutability gives this surface no instance-return channel (see VERDICT
+ * AUTHORITY on validateAsync()), so a blindly applied stale verdict submits
+ * unvalidated input. The form submit gate carries this duty for Enter-driven
+ * flows internally: any value edit clears the pending-round overlay and the
+ * seq generation guard drops verdicts aimed at superseded rounds. Only
+ * direct callers bear it by hand. Binding the judged value into the promise
+ * payload itself (a [$error, $judged] tuple) is the owner-gated upgrade of
+ * this surface (SF-49 gate), not something this law replaces.
  */
 trait HasAsyncValidation
 {
@@ -52,7 +78,8 @@ trait HasAsyncValidation
      * host still holds keeps its pre-call error() until a revalidating path
      * (the submit gate's re-apply) lands it — immutability gives this method
      * no instance-return channel, and binding the verdict to an instance is
-     * the queued tuple upgrade (sugar-forms-49), not an accident to paper. With no async validator attached this is exactly
+     * the queued tuple upgrade (sugar-forms-49), not an accident to paper — until that ships, the DISCARD LAW in the trait docblock is what
+     * makes the shape safe (pins in `tests/AsyncValidationVerdictIdentityTest.php`). With no async validator attached this is exactly
      * `resolve(revalidate()->error())` — the async view of a purely
      * synchronous field.
      *
