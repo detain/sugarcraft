@@ -86,6 +86,15 @@ final class DefaultChannelHandler implements ChannelHandler
     private $stderr;
 
     /**
+     * Policy gate consulted after `$allowedExec` admits the program;
+     * native-typed `?callable` at the constructor parameter (audit 077 —
+     * a non-callable is refused by the engine at construction). Declared
+     * `mixed` because PHP forbids `callable` as a property type: the
+     * parameter keeps the static safety, the slot keeps the legality.
+     */
+    private readonly mixed $execGate;
+
+    /**
      * Names the child never learns from the peer, even when an operator
      * lists them in `$acceptEnv` (audit MINOR 5).
      *
@@ -132,6 +141,31 @@ final class DefaultChannelHandler implements ChannelHandler
     ];
 
     /**
+     * Store-time budget for peer-supplied environment entries (audit 048).
+     *
+     * Every peer-facing surface in this library is bounded — the auth
+     * gate echoes at most {@see \SugarCraft\SshServer\Middleware\Auth::MAX_ECHOED_BYTES}
+     * bytes, keyboard-interactive reads at most 4 KiB per response — and
+     * this map is named by the class docblock as THE seam a wire decoder
+     * feeds, so the day dispatch lands it must not be the one surface an
+     * unauthenticated peer can spray. The numbers are generous against
+     * real terminals and tight against payloads: 64 entries, 256-byte
+     * names, 4 KiB values. Overshooting drops the ENTRY (counted), never
+     * earlier ones, and the first drop announces itself once on the
+     * refusal stream — announce, don't swallow.
+     */
+    public const ENV_MAX_ENTRIES = 64;
+
+    public const ENV_MAX_NAME_BYTES = 256;
+
+    public const ENV_MAX_VALUE_BYTES = 4096;
+
+    /** Peer-supplied env entries refused by the budget (announce-don't-swallow). */
+    private int $envDrops = 0;
+
+    private bool $envNoticeSent = false;
+
+    /**
      * Last-resort interpreter for shell requests when neither an explicit
      * configured shell nor a `SHELL` environment variable is available
      * `/bin/sh` is the POSIX-guaranteed path — unlike
@@ -154,7 +188,9 @@ final class DefaultChannelHandler implements ChannelHandler
      *                                     Empty (the default) refuses EVERY exec request —
      *                                     the exec program is chosen by the peer, so it is
      *                                     not granted by silence.
-     * @param callable|null     $execGate  `fn(Session, list<string> $argv): bool`, consulted
+     * @param null|callable     $execGate  `fn(Session, list<string> $argv): bool`, natively
+     *                                     typed — anything not callable is refused by the
+     *                                     engine at construction (audit 077). Consulted
      *                                     only after `$allowedExec` has admitted the program;
      *                                     use it for argument- and user-level policy. Null
      *                                     adds no condition beyond the path list.
@@ -168,9 +204,10 @@ final class DefaultChannelHandler implements ChannelHandler
         private readonly array $acceptEnv = [],
         private readonly ?string $shell = null,
         private readonly array $allowedExec = [],
-        private readonly mixed $execGate = null,
+        ?callable $execGate = null,
         $stderr = null,
     ) {
+        $this->execGate = $execGate;
         $this->stderr = StreamHelper::openOrValidate($stderr);
         if ($session !== null && $session->cols > 0) {
             $this->cols = $session->cols;
@@ -189,10 +226,21 @@ final class DefaultChannelHandler implements ChannelHandler
         }
     }
 
+    /**
+     * Apply a peer's window change. A zero in either dimension means the
+     * sender declared nothing for it, and the current size is KEPT — the
+     * pty-req leg already resolved the session/default fallback once, and
+     * a mid-session non-declaration must not demote a known terminal to
+     * the 80×24 floor (audit 081).
+     */
     public function handleWindowChange(WindowChangeMsg $msg, Session $session): void
     {
-        $this->cols = $msg->cols > 0 ? $msg->cols : 80;
-        $this->rows = $msg->rows > 0 ? $msg->rows : 24;
+        if ($msg->cols > 0) {
+            $this->cols = $msg->cols;
+        }
+        if ($msg->rows > 0) {
+            $this->rows = $msg->rows;
+        }
     }
 
     public function handleShell(ShellMsg $msg, Session $session): void
@@ -306,15 +354,26 @@ final class DefaultChannelHandler implements ChannelHandler
      * A byte-wise `[\x7f-\x9f]` class would eat continuation bytes of
      * real multibyte characters, so this walks codepoints (//u) and
      * falls back to a fixed token when the input is not UTF-8 at all.
+     * Newlines are folded to spaces BEFORE the strip (audit 040): the
+     * exemption the class used to carry for `\n` let a peer-named
+     * program forge a second line into whatever notice embeds this
+     * value. The cap counts characters, not bytes, cut on the same
+     * codepoint prefix idiom as {@see \SugarCraft\SshServer\Middleware\Auth::sanitize()}
+     * — the old byte `substr` could halve a multibyte character,
+     * breaking exactly what this method promises.
      */
     private static function printable(string $value): string
     {
-        $clean = \preg_replace('/[^\P{C}\n]+/u', '', $value);
+        $clean = \preg_replace('/[^\P{C}]+/u', '', \str_replace(["\r\n", "\n", "\r"], ' ', $value));
         if ($clean === false || $clean === '') {
             return '<unreadable>';
         }
 
-        return \strlen($clean) > 128 ? \substr($clean, 0, 128) . '…' : $clean;
+        if (\preg_match('/^.{0,128}/us', $clean, $cut) === 1 && \strlen($cut[0]) < \strlen($clean)) {
+            return $cut[0] . "\u{2026}";
+        }
+
+        return $clean;
     }
 
     public function handleSignal(SignalMsg $msg, Session $session): void
@@ -348,8 +407,34 @@ final class DefaultChannelHandler implements ChannelHandler
         }
     }
 
+    /**
+     * Store a peer-supplied environment variable, within the budget.
+     *
+     * The accessor contract (audit 088, pinned beside the child-env veto
+     * in DefaultChannelHandlerTest): entries are stored RAW here and
+     * deny/allow filtering happens only in {@see buildEnv()} — but RAW
+     * does not mean UNBOUNDED (audit 048): oversize names, oversize
+     * values and a 65th distinct entry are dropped at the door, counted,
+     * and the first drop says so once on the refusal stream.
+     */
     public function handleEnv(EnvMsg $msg, Session $session): void
     {
+        $overBudget = \strlen($msg->name) === 0
+            || \strlen($msg->name) > self::ENV_MAX_NAME_BYTES
+            || \strlen($msg->value) > self::ENV_MAX_VALUE_BYTES
+            || (!\array_key_exists($msg->name, $this->envVars)
+                && \count($this->envVars) >= self::ENV_MAX_ENTRIES);
+
+        if ($overBudget) {
+            $this->envDrops++;
+            if (!$this->envNoticeSent && \is_resource($this->stderr)) {
+                $this->envNoticeSent = true;
+                \fwrite($this->stderr, Lang::t('channel.env_dropped') . "\n");
+            }
+
+            return;
+        }
+
         $this->envVars[$msg->name] = $msg->value;
     }
 
@@ -468,11 +553,12 @@ final class DefaultChannelHandler implements ChannelHandler
     /**
      * Build the environment for the child process.
      *
-     * Always returns a floor of safe vars (TERM, USER, LANG, PATH, HOME).
-     * Client-supplied env vars are merged only if their names appear in
-     * the $acceptEnv allowlist, and never includes known-dangerous vars
-     * (LD_PRELOAD, LD_LIBRARY_PATH, BASH_ENV, ENV, IFS, PATH, SHELL)
-     * even if explicitly allowlisted.
+     * Always returns a floor of safe vars (TERM, USER, LANG, PATH, and
+     * HOME when the session carries a user name — see the empty-user leg
+     * below). Client-supplied env vars are merged only if their names
+     * appear in the $acceptEnv allowlist, and never includes known-
+     * dangerous vars (LD_PRELOAD, LD_LIBRARY_PATH, BASH_ENV, ENV, IFS,
+     * PATH, SHELL) even if explicitly allowlisted.
      *
      * @return array<string,string>
      */
@@ -496,8 +582,16 @@ final class DefaultChannelHandler implements ChannelHandler
             'USER'  => $session->user,
             'LANG'  => $session->lang ?: 'C.UTF-8',
             'PATH'  => getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin',
-            'HOME'  => '/home/' . $session->user,
         ];
+        // HOME is DERIVED (`/home/<user>`), never looked up — and only
+        // derived at all when a user name exists to hang it on. `/home/`
+        // plus an empty name is the root-owned directory itself, and a
+        // trustingly-writing child would land there; omitting the key
+        // instead leaves the child in the platform's own "unset HOME"
+        // posture, which every program already handles (audit 041).
+        if ($session->user !== '') {
+            $env['HOME'] = '/home/' . $session->user;
+        }
 
         // Merge only allowlisted client vars; exclude dangerous ones unconditionally.
         foreach ($this->envVars as $name => $value) {

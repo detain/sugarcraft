@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'Autenticação falhou.',
     'keyboardinteractive.input_visible' => 'Este terminal não está silenciado: tudo o que escrever aqui será mostrado.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'As variáveis de ambiente do par excederam o orçamento aceite e foram descartadas.',
     'transport.pty_outside_loop' => 'pty() chamado fora do ciclo de bombeamento ativo',
     'keyboardinteractive.bad_challenge' => 'O desafio {index} deve ser uma string de prompt ou uma matriz com uma chave "prompt" de string; obtido: {got}.',
     'auth.reject_user' => 'usuário não permitido: {name}',

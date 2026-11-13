@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'Uwierzytelnianie nie powiodło się.',
     'keyboardinteractive.input_visible' => 'Ten terminal nie jest wyciszony: wszystko, co tutaj wpiszesz, zostanie wyświetlone.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'Zmienne środowiska od partnera przekroczyły akceptowany limit i zostały odrzucone.',
     'transport.pty_outside_loop' => 'pty() wywołane poza aktywną pętlą pompy',
     'keyboardinteractive.bad_challenge' => 'Wyzwanie {index} musi być ciągiem promptu lub tablicą z kluczem "prompt" typu string; otrzymano: {got}.',
     'auth.reject_user' => 'użytkownik niedozwolony: {name}',

@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'Verificatie mislukt.',
     'keyboardinteractive.input_visible' => 'Deze terminal is niet gedempt: alles wat u hier typt wordt teruggegeven.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'Omgevingsvariabelen van de peer overschreden het geaccepteerde budget en zijn verworpen.',
     'transport.pty_outside_loop' => 'pty() aangeroepen buiten een actieve pump-loop',
     'keyboardinteractive.bad_challenge' => 'Challenge {index} moet een prompt-tekenreeks of een array met een tekenreeissleutel "prompt" zijn; gekregen: {got}.',
     'auth.reject_user' => 'gebruiker niet toegestaan: {name}',

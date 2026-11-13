@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'Authentication failed.',
     'keyboardinteractive.input_visible' => 'This terminal is not silenced: everything you type here is echoed back.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'Environment entries from the peer exceeded the accepted budget and were dropped.',
     'transport.pty_outside_loop'      => 'pty() called outside of active pump loop',
     'keyboardinteractive.bad_challenge' => 'Challenge {index} must be a prompt string or an array with a string "prompt" key; got {got}.',
     'auth.reject_user'                => 'user not allowed: {name}',

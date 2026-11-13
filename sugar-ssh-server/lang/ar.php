@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'فشلت المصادقة.',
     'keyboardinteractive.input_visible' => 'لم يتم إسكات هذا الطرفية: كل ما تكتبه هنا يظهر على الشاشة.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'تم إسقاط متغيرات البيئة الواردة من الند لأنها تجاوزت الميزانية المقبولة.',
     'transport.pty_outside_loop' => 'تم استدعاء pty() خارج حلقة الضخ النشطة',
     'keyboardinteractive.bad_challenge' => 'يجب أن يكون التحدي {index} سلسلة مطالبة نصية أو مصفوفًا يحتوي على مفتاح "prompt" نصي؛ تم الحصول على: {got}.',
     'auth.reject_user' => 'المستخدم غير مسموح به: {name}',

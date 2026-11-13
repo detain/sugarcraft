@@ -632,7 +632,7 @@ name it also chose for itself. `Session::$lang` is that same peer-asserted
 value: log it, do not obey it.
 
 Coverage is uneven, and the suite keeps the list honest rather than letting
-it grow quietly: eleven of the thirty-three keys are still English placeholders
+it grow quietly: eleven of the thirty-four keys are still English placeholders
 in all fifteen translated locales (`ACCEPTED_UNTRANSLATED` in
 `tests/LangRosterTest.php`; curing one means deleting it from the roster).
 
@@ -928,7 +928,8 @@ $handler = new DefaultChannelHandler(
 `$allowedExec` matches the whole path, never a prefix (`/bin/ls` does not admit
 `/bin/lsblk`). `$execGate` must return exactly `true`; a gate that throws, or
 returns a truthy non-bool, refuses — a policy that cannot answer has not given
-permission. Refusals are announced with one line naming the requested program
+permission; a gate that is not callable at all is refused by the engine at
+construction. Refusals are announced with one line naming the requested program
 and nothing about the allowlist behind it, and the program name is scrubbed of
 control characters first (it is peer-chosen text). Note the sink default: under
 `ForceCommand` a notice on stderr travels to the connecting client, not to your
@@ -957,7 +958,12 @@ one -- that is the server configuring its own child, not the peer describing
 its terminal. Two exceptions are honest ones: the child's `PATH` comes from
 the daemon (a search-less child cannot find `/bin/sh`), and `HOME` is derived
 as `/home/<user>` rather than read from the passwd database, so a deployment
-whose homes differ passes `HOME` itself.
+whose homes differ passes `HOME` itself — and when a session carries no user
+name at all the floor omits `HOME` rather than inventing `/home/` for nobody.
+Peer-supplied entries are also bounded where they are stored: at most
+`ENV_MAX_ENTRIES` (64) distinct names, names of `ENV_MAX_NAME_BYTES` (256)
+bytes, values of `ENV_MAX_VALUE_BYTES` (4 KiB); anything past that is dropped
+with a counted drop and a one-time notice on the refusal stream.
 
 Replacing the handler replaces the policy. `ChannelHandler` is an interface, so
 a custom implementation of `handleExec()` is bound by nothing here: if you

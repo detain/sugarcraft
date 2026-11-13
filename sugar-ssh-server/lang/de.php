@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'Authentifizierung fehlgeschlagen.',
     'keyboardinteractive.input_visible' => 'Dieses Terminal ist nicht stummgeschaltet: Alles, was Sie hier eingeben, wird zurückgegeben.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'Umgebungsvariablen vom Peer haben das akzeptierte Budget überschritten und wurden verworfen.',
     'transport.pty_outside_loop' => 'pty() wurde außerhalb einer aktiven Pump-Schleife aufgerufen',
     'keyboardinteractive.bad_challenge' => 'Challenge {index} muss eine Prompt-Zeichenkette oder ein Array mit einem Zeichenketten-Schlüssel "prompt" sein; erhalten: {got}.',
     'auth.reject_user' => 'Benutzer nicht erlaubt: {name}',

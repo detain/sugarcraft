@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'Autenticación fallida.',
     'keyboardinteractive.input_visible' => 'Esta terminal no está silenciada: todo lo que escriba aquí se mostrará.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'Las variables de entorno del par excedieron el presupuesto aceptado y se descartaron.',
     'transport.pty_outside_loop' => 'pty() llamado fuera del bucle activo de bombeo',
     'keyboardinteractive.bad_challenge' => 'El desafío {index} debe ser una cadena de prompt o un array con una clave "prompt" de tipo cadena; se obtuvo: {got}.',
     'auth.reject_user' => 'usuario no permitido: {name}',

@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => '認証に失敗しました。',
     'keyboardinteractive.input_visible' => 'この端末はエコーをオフにしていません: ここに入力した内容はすべて表示されます。',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'ピアからの環境変数が許容範囲を超えたため破棄されました。',
     'transport.pty_outside_loop' => 'pty() がアクティブなポンプループの外で呼び出されました',
     'keyboardinteractive.bad_challenge' => 'チャレンジ {index} は、プロンプト文字列または文字列の "prompt" キーを持つ配列でなくてはなります。取得した型: {got}。',
     'auth.reject_user' => 'ユーザーは許可されていません: {name}',

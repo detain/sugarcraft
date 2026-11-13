@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'Échec de l’authentification.',
     'keyboardinteractive.input_visible' => 'Ce terminal n\'est pas masqué : tout ce que vous tapez ici est affiché.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'Les variables d’environnement du pair ont dépassé le budget accepté et ont été ignorées.',
     'transport.pty_outside_loop' => 'pty() appelé en dehors de la boucle de pompage active',
     'keyboardinteractive.bad_challenge' => 'Le défi {index} doit être une chaîne de prompt ou un tableau avec une clé "prompt" de type chaîne ; obtenu : {got}.',
     'auth.reject_user' => 'utilisateur non autorisé : {name}',

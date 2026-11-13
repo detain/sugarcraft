@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => 'Kimlik doğrulama başarısız.',
     'keyboardinteractive.input_visible' => 'Bu uçbirim sessize alınmadı: buraya yazdığınız her şey geri yansıtılır.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => 'Eşten gelen ortam değişkenleri kabul edilen bütçeyi aştı ve atıldı.',
     'transport.pty_outside_loop' => 'pty() etkin pompalama döngüsü dışında çağrıldı',
     'keyboardinteractive.bad_challenge' => 'Challenge {index} bir istem dizisi veya "prompt" anahtarınlı bir dizi olmalı; alınan: {got}.',
     'auth.reject_user' => 'kullanıcıya izin yok: {name}',

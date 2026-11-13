@@ -35,6 +35,7 @@ return [
     'keyboardinteractive.auth_failed' => '认证失败。',
     'keyboardinteractive.input_visible' => '此终端未静音: 您在此处输入的任何内容都会被回显.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'channel.env_dropped' => '对端提供的环境变量超出允许的预算，已被丢弃。',
     'transport.pty_outside_loop' => 'pty() 在活动的泵循环之外被调用',
     'keyboardinteractive.bad_challenge' => 'Challenge {index} 必须是提示字符串或带字符串 "prompt" 键的数组；得到：{got}。',
     'auth.reject_user' => '不允许的用户：{name}',

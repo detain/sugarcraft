@@ -113,13 +113,47 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame(50, $handler->rows());
     }
 
-    public function testHandleWindowChangeWithZeroValuesFallsBack(): void
+    /**
+     * Renamed from `...WithZeroValuesFallsBack` (audit 081): the zero leg
+     * is no longer a FALLBACK — it declares nothing and the current size
+     * is KEPT. On a fresh handler the kept size is the default shape, so
+     * this pin says so honestly.
+     */
+    public function testAWindowChangeWithNothingDeclaredKeepsTheDefaultShape(): void
     {
         $handler = new DefaultChannelHandler();
         $handler->handleWindowChange(new WindowChangeMsg(cols: 0, rows: 0), $this->fakeSession());
 
         $this->assertSame(80, $handler->cols());
         $this->assertSame(24, $handler->rows());
+    }
+
+    /**
+     * A mid-session non-declaration must not demote a known terminal to
+     * the 80×24 floor (audit 081): the pty-req leg already resolved the
+     * session/default fallback once, and zero means "nothing declared",
+     * not "reset to default".
+     */
+    public function testAWindowChangeThatDeclaresNothingKeepsTheKnownSize(): void
+    {
+        $handler = new DefaultChannelHandler();
+        $handler->handleWindowChange(new WindowChangeMsg(cols: 160, rows: 50), $this->fakeSession());
+
+        $handler->handleWindowChange(new WindowChangeMsg(cols: 0, rows: 0), $this->fakeSession());
+
+        $this->assertSame(160, $handler->cols());
+        $this->assertSame(50, $handler->rows());
+    }
+
+    public function testAWindowChangeOfOneDimensionMovesOnlyThatDimension(): void
+    {
+        $handler = new DefaultChannelHandler();
+        $handler->handleWindowChange(new WindowChangeMsg(cols: 160, rows: 50), $this->fakeSession());
+
+        $handler->handleWindowChange(new WindowChangeMsg(cols: 0, rows: 30), $this->fakeSession());
+
+        $this->assertSame(160, $handler->cols(), 'an undeclared width survives the change');
+        $this->assertSame(30, $handler->rows());
     }
 
     public function testHandleShellSetsShellRequestedFalse(): void
@@ -276,6 +310,74 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame(['FOO' => 'bar', 'BAZ' => 'qux'], $handler->envVars());
     }
 
+    /**
+     * Store-time budget (audit 048): an unnamed entry, an over-long name,
+     * and an over-long value are all dropped AT THE DOOR — the raw map
+     * never sees them. The drops do not evict the one good entry, and
+     * announce themselves exactly once on the refusal stream
+     * (announce-don't-swallow).
+     */
+    public function testOverBudgetPeerEntriesAreDroppedAtTheDoor(): void
+    {
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler(stderr: $err);
+
+        $handler->handleEnv(new EnvMsg('OK', 'fine'), $this->fakeSession());
+        $handler->handleEnv(new EnvMsg('', 'nameless'), $this->fakeSession());
+        $handler->handleEnv(new EnvMsg(str_repeat('n', DefaultChannelHandler::ENV_MAX_NAME_BYTES + 1), 'v'), $this->fakeSession());
+        $handler->handleEnv(new EnvMsg('BIG', str_repeat('v', DefaultChannelHandler::ENV_MAX_VALUE_BYTES + 1)), $this->fakeSession());
+
+        $this->assertSame(['OK' => 'fine'], $handler->envVars());
+        $this->assertSame(
+            "Environment entries from the peer exceeded the accepted budget and were dropped.\n",
+            $read(),
+            'the first drop announces itself once, in English (the catalogued default)',
+        );
+    }
+
+    /**
+     * The budget edges are inclusive: a 256-byte name carrying a 4096-byte
+     * value is a real terminal environment, not an attack.
+     */
+    public function testTheBudgetEdgesAreInclusive(): void
+    {
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler(stderr: $err);
+
+        $handler->handleEnv(
+            new EnvMsg(str_repeat('n', DefaultChannelHandler::ENV_MAX_NAME_BYTES), str_repeat('v', DefaultChannelHandler::ENV_MAX_VALUE_BYTES)),
+            $this->fakeSession(),
+        );
+
+        $this->assertCount(1, $handler->envVars());
+        $this->assertSame('', $read(), 'within budget never announces');
+    }
+
+    /**
+     * The entry cap counts DISTINCT names: a 65th name is dropped while
+     * every earlier entry stands, and re-setting a KNOWN name past the
+     * cap is a replacement, not a 65th entry.
+     */
+    public function testTheEntryCapDropsOnlyTheSurplusNameAndNeverEvictsEarlierOnes(): void
+    {
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler(stderr: $err);
+
+        for ($i = 0; $i < DefaultChannelHandler::ENV_MAX_ENTRIES; $i++) {
+            $handler->handleEnv(new EnvMsg('V' . $i, 'x'), $this->fakeSession());
+        }
+        $handler->handleEnv(new EnvMsg('OVER', 'x'), $this->fakeSession());
+
+        $this->assertCount(DefaultChannelHandler::ENV_MAX_ENTRIES, $handler->envVars());
+        $this->assertArrayNotHasKey('OVER', $handler->envVars());
+        $this->assertSame('x', $handler->envVars()['V0'], 'the cap never evicts an earlier entry');
+
+        $handler->handleEnv(new EnvMsg('V0', 'replaced'), $this->fakeSession());
+        $this->assertSame('replaced', $handler->envVars()['V0'], 'an existing name re-sets at full count');
+
+        $this->assertSame(1, substr_count($read(), "\n"), 'the surplus is announced once, not per drop');
+    }
+
     public function testHandleBreakIsNoOp(): void
     {
         $handler = new DefaultChannelHandler();
@@ -356,6 +458,49 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertArrayHasKey('LANG', $result['env']);
         $this->assertArrayHasKey('PATH', $result['env']);
         $this->assertArrayHasKey('HOME', $result['env']);
+    }
+
+    public function testTheHomeFloorIsDerivedFromTheUserName(): void
+    {
+        $result = $this->captureChildEnv([]);
+
+        $this->assertSame('/home/alice', $result['env']['HOME'], 'derived, never looked up (audit 041)');
+    }
+
+    /**
+     * `/home/` plus an empty name is the root-owned directory itself —
+     * a trustingly-writing child with no user would land there (audit
+     * 041). The honest posture is to omit HOME entirely and let the
+     * child face the platform's own "unset HOME" path, which every
+     * program already handles.
+     */
+    public function testTheFloorOmitsHomeWhenTheSessionCarriesNoUserName(): void
+    {
+        $capturedEnv = [];
+        $spy = new class($capturedEnv) implements ChildSpawner {
+            /** @var array<string,string> */
+            private array $captured;
+
+            public function __construct(array &$captured)
+            {
+                $this->captured = &$captured;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->captured = $env ?? [];
+
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        $handler = new DefaultChannelHandler($spy);
+        $handler->handleShell(new ShellMsg(wantShell: true), new Session(user: ''));
+
+        $this->assertArrayNotHasKey('HOME', $capturedEnv, 'no user means no invented /home/ root');
+        $this->assertArrayHasKey('USER', $capturedEnv, 'the empty USER leg is untouched');
     }
 
     public function testBuildEnvDropsDangerousVarsEvenIfAllowlisted(): void
@@ -865,6 +1010,42 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame([], $spy->spawned, 'a truthy non-bool is not consent');
     }
 
+    /**
+     * The gate is natively typed `?callable` at the constructor parameter
+     * (audit 077): a value that cannot be called is refused BY THE ENGINE
+     * at construction — not swallowed and rediscovered at the first exec,
+     * where a null-gate posture would have ADMITTED everything the
+     * allowlist covers. The slot property stays `mixed` only because PHP
+     * forbids `callable` as a property type; the static safety rides the
+     * parameter.
+     */
+    public function testAGateThatIsNotCallableIsRefusedByTheEngineAtConstruction(): void
+    {
+        $this->expectException(\TypeError::class);
+
+        new DefaultChannelHandler(execGate: 'this is not a function');
+    }
+
+    public function testAnArrayGateIsAlsoRefusedAtConstruction(): void
+    {
+        $this->expectException(\TypeError::class);
+
+        new DefaultChannelHandler(execGate: [['not', 'callable']]);
+    }
+
+    public function testACallableStringRidesTheSamePolicyVetoAsAClosure(): void
+    {
+        // Typing the parameter must not regress ergonomics: a callable
+        // string is still a gate. is_string($session) answers false, so
+        // the request is refused exactly like a vetoing closure.
+        [$spy, $handler, $read] = $this->recordingHandler(['/bin/ls'], 'is_string');
+
+        $handler->handleExec(new ExecMsg('/bin/ls'), $this->fakeSession());
+
+        $this->assertSame([], $spy->spawned);
+        $this->assertStringContainsString('Exec request refused: /bin/ls', $read());
+    }
+
     public function testAnEmptyRequestIsNotAnnouncedAsARefusal(): void
     {
         [$spy, $handler, $read] = $this->recordingHandler();
@@ -907,6 +1088,60 @@ final class DefaultChannelHandlerTest extends TestCase
         $handler->handleExec(new ExecMsg("/bin/ls\u{00e9}\u{00e9}"), $this->fakeSession());
 
         $this->assertStringContainsString("/bin/ls\u{00e9}\u{00e9}", $read());
+    }
+
+    /**
+     * The `\n` exemption this method used to carry let a peer-named
+     * program forge a SECOND line into the notice (audit 040) — under
+     * ForceCommand that notice reaches the connecting client. Newlines
+     * now fold to spaces before the strip; the token stays readable and
+     * the notice stays one line.
+     */
+    public function testANewlineInAPeerNamedProgramCannotForgeASecondNoticeLine(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler();
+
+        $handler->handleExec(new ExecMsg("/bin/evil\u{000a}INJECTED"), $this->fakeSession());
+
+        $this->assertSame("Exec request refused: /bin/evil INJECTED\n", $read());
+    }
+
+    public function testACarriageReturnIsFoldedToo(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler();
+
+        $handler->handleExec(new ExecMsg("/bin/evil\u{000d}\u{000a}INJECTED\u{000d}TAIL"), $this->fakeSession());
+
+        $this->assertSame("Exec request refused: /bin/evil INJECTED TAIL\n", $read());
+    }
+
+    /**
+     * The cap counts CHARACTERS, not bytes (audit 040): the old byte
+     * `substr` could halve a multibyte character, breaking exactly what
+     * printable() promises. 128 codepoints, cut on a codepoint prefix,
+     * ellipsis appended — the notice is a complete valid string.
+     */
+    public function testTheTruncationCountsCodepointsAndNeverHalvesACharacter(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler();
+
+        $handler->handleExec(new ExecMsg('/bin/x' . str_repeat("\u{00e9}", 200)), $this->fakeSession());
+
+        // '/bin/x' is 6 codepoints, so the 128-codepoint window keeps 122
+        // accents and appends the ellipsis; nothing past it survives.
+        $this->assertSame(
+            "Exec request refused: /bin/x" . str_repeat("\u{00e9}", 122) . "\u{2026}\n",
+            $read(),
+        );
+    }
+
+    public function testTheCodepointCapIsInclusive(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler();
+
+        $handler->handleExec(new ExecMsg(str_repeat('a', 128)), $this->fakeSession());
+
+        $this->assertSame('Exec request refused: ' . str_repeat('a', 128) . "\n", $read(), 'exactly 128 characters passes through whole');
     }
 
     public function testTheDecoderIsThePublicOriginalCommandEntryPoint(): void
