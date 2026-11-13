@@ -154,7 +154,6 @@ final class MultiPump
      * `has()` bookkeeping stays consistent with the sync path. Sessions
      * already done when runAsync() is called are skipped (their exit
      * codes still appear in the resolved map).
-
      *
      * @param LoopInterface|null $loop defaults to the global Loop::get()
      * @return PromiseInterface<array<int, int|null>>

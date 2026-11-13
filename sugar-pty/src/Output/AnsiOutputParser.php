@@ -122,9 +122,10 @@ final class AnsiOutputParser
     }
 
     /**
-     * Current SGR state after the last readChunk call.
-     *
-     * @readonly
+     * Current SGR state after the last readChunk call. The state object
+     * itself is replaced wholesale by the handler on each chunk, so the
+     * value returned here is a snapshot; it is not a language-level
+     * readonly member (@readonly belongs on declarations, not methods).
      */
     public function state(): SgrState
     {

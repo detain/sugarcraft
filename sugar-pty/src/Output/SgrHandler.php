@@ -11,14 +11,15 @@ use SugarCraft\AnsiParser\Parser\Handler;
  *
  * Feed PTY output bytes through a {@see \SugarCraft\AnsiParser\Parser\Parser}
  * that uses this handler to accumulate the current text style (colors,
- * bold, underline, etc.). Callers can then inspect {@see self::$state} after
- * each chunk to observe style transitions.
+ * bold, underline, etc.). Callers can then inspect the public
+ * {@see SgrState} `$state` property after each chunk to observe style
+ * transitions.
  *
  * This handler is used by {@see AnsiOutputParser} to enable PTY consumers
- * to track SGR state without implementing the full VT500 state machine.
+ * to track SGR state without implementing the full VT500 state machine —
+ * the same SGR-state-tracking role charmbracelet/x/ansi plays upstream.
  *
  * @see \SugarCraft\AnsiParser\Parser\Parser
- * @see Mirrors charmbracelet/x/ansi SGR state tracking.
  */
 final class SgrHandler implements Handler
 {

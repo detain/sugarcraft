@@ -53,10 +53,8 @@ use SugarCraft\Pty\PtyException;
  *
  * Naming follows the house `React*` prefix for event-loop adapters
  * (sugar-input `ReactInputDriver`, candy-sql `ReactMysqlConnection`).
-
  *
  * @see PosixPump   the blocking select-loop pump (unchanged)
- * @see portable-pty.Pump
  */
 final class ReactPump
 {
