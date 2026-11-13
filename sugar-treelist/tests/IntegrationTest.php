@@ -449,4 +449,25 @@ final class IntegrationTest extends TestCase
         $this->assertStringNotContainsString($sentinelOpen, $second, 'sentinel on delta sink');
         $this->assertStringNotContainsString($sentinelClose, $second, 'sentinel on delta sink');
     }
+
+    public function testFilteredToEmptyFrameIsTheHeightTallErrorSinkBytePin(): void
+    {
+        // sugar-treelist-043 / sugar-treelist-003 leg: the error sink doubles
+        // as the empty-state frame. A filter matching nothing renders the
+        // localized no-items message as row 1 of a viewport-height frame
+        // whose remaining rows are absolute CUP + erase-line clears. Full
+        // byte pin so both the message text and the clearing scheme freeze.
+        $frame = Model::new()
+            ->withViewport(20, 3)
+            ->withItem(new StringItem('alpha'))
+            ->withFilterFn(static fn (\Stringable $item): bool => false)
+            ->view();
+
+        $this->assertSame(
+            "\x1b[1;1HThe list has no items to display.\x1b[K\n"
+            . "\x1b[2;1H\x1b[K\n"
+            . "\x1b[3;1H\x1b[K\n",
+            $frame,
+        );
+    }
 }

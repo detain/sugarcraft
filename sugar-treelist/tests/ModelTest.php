@@ -1681,6 +1681,105 @@ final class ModelTest extends TestCase
         $this->assertStringNotContainsString("\r", $frame);
         $this->assertStringContainsString('layout', $frame);
         $this->assertStringContainsString('broke', $frame);
+
+        // treelist-03: a caught frame is HEIGHT TALL. The thrown message
+        // "layout\rbroke\r\nnow" sweeps into three message rows (CR folds to
+        // LF — content SPLITS), and the frame addresses all 10 viewport rows
+        // through the delta path's CUP+EL scheme so the 24-row frame it
+        // replaces is rewritten or erased row by row; the trailing "\n" of
+        // the last row makes the explode see 11 cells.
+        $frameRows = \explode("\n", $frame);
+        $this->assertCount(11, $frameRows, 'a caught frame is exactly height rows plus the trailing terminator');
+        $this->assertSame("\x1b[1;1Hlayout\x1b[K", $frameRows[0], 'message row 1 rides the absolute CUP/erase-line addressing');
+        $this->assertSame("\x1b[2;1Hbroke\x1b[K", $frameRows[1], 'CR-folded message row 2');
+        $this->assertSame("\x1b[3;1Hnow\x1b[K", $frameRows[2], 'CR-folded message row 3');
+        foreach (\range(3, 9) as $i) {
+            $this->assertSame("\x1b[" . ($i + 1) . ";1H\x1b[K", $frameRows[$i], "viewport row " . ($i + 1) . ' is an erase-only cleared row');
+        }
+        $this->assertSame('', $frameRows[10], 'the frame terminates with a trailing "\n"');
+    }
+
+    public function testCaughtFrameLogsTheRawMessageThroughThePsr3Arm(): void
+    {
+        // view()'s public LoggerInterface arm (sugar-treelist-019) was
+        // zero-tested. A recording PSR-3 double pins: exactly one WARNING,
+        // and the context carries the RAW exception message — the frame is
+        // swept, but the log channel must not lose the original bytes.
+        $logger = new class extends \Psr\Log\AbstractLogger {
+            /** @var list<array{level: string, message: string, context: array<mixed>}> */
+            public array $records = [];
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->records[] = ['level' => (string) $level, 'message' => (string) $message, 'context' => $context];
+            }
+        };
+        $hostile = new class implements Suffixer {
+            public function initSuffixer(
+                \Stringable $value,
+                int $currentIndex,
+                int $cursorIndex,
+                int $lineOffset,
+                int $width,
+                int $height,
+            ): int {
+                return 0;
+            }
+
+            public function suffix(int $currentLine, int $totalLines): string
+            {
+                throw new \RuntimeException("boom\raw");
+            }
+        };
+
+        $frame = $this->model
+            ->withViewport(20, 4)
+            ->withItem(new StringItem('anything'))
+            ->withSuffixer($hostile)
+            ->view($logger);
+
+        $this->assertCount(1, $logger->records, 'a caught frame warns exactly once');
+        $this->assertSame('warning', $logger->records[0]['level']);
+        $this->assertSame(
+            ['message' => "boom\raw"],
+            $logger->records[0]['context'],
+            'the logger context carries the raw, un-swept exception message',
+        );
+        $this->assertStringNotContainsString("\r", $frame, 'the raw message never rides the frame — only the log does');
+        $this->assertStringContainsString('boom', $frame);
+
+        // The arm is opt-in: rendering a healthy frame with a logger attached
+        // records nothing.
+        $logger->records = [];
+        $this->model->withViewport(20, 4)->withItem(new StringItem('fine'))->view($logger);
+        $this->assertSame([], $logger->records, 'a successful frame never touches the logger');
+    }
+
+    public function testShrinkToEmptyLeavesNoGhostRowsOverA24RowPaint(): void
+    {
+        // The sugar-treelist-003 reproducer: a 24-row list painted, then
+        // cleared. Every viewport row of the caught empty frame must carry
+        // its own CUP address + erase-line, so no row of the old list can
+        // ghost through (the pre-fix one-line return erased zero of them).
+        $m = $this->model->withViewport(20, 24);
+        for ($i = 1; $i <= 24; $i++) {
+            $m = $m->withItem(new StringItem("row $i"));
+        }
+        $painted = $m->view();
+        $this->assertCount(25, \explode("\n", $painted), 'the healthy frame is 24 rows plus the terminator');
+
+        $emptyFrame = $m->clear()->view();
+        $rows = \explode("\n", $emptyFrame);
+        $this->assertCount(25, $rows, 'the caught frame keeps the viewport-height invariant');
+        for ($row = 1; $row <= 24; $row++) {
+            $this->assertStringStartsWith("\x1b[$row;1H", $rows[$row - 1], "viewport row $row is addressed — it cannot ghost");
+            $this->assertStringEndsWith("\x1b[K", $rows[$row - 1], "viewport row $row erases its stale tail");
+        }
+        $this->assertStringContainsString('no items', $rows[0], 'the message owns the first row');
+        foreach (\range(1, 23) as $i) {
+            $this->assertSame("\x1b[" . ($i + 1) . ";1H\x1b[K", $rows[$i], 'only erase-only cleared rows stand below the message');
+        }
+        $this->assertSame('', $rows[24], 'the frame terminates with a trailing "\n"');
     }
 
     public function testPrefixerAndSuffixerReturnsAreSweptIntoTheFrame(): void

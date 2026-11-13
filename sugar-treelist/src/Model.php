@@ -1169,10 +1169,10 @@ final class Model
 
             return $delta;
         } catch (\Throwable $e) {
-            // A failed frame never reached the screen, so its rows must not
-            // sit in the memo — a stale memo would make every later delta
-            // skip rows the terminal never saw. Drop the memo (and the size
-            // stamp) and the next successful view() repaints in full.
+            // A failed frame never reached the screen as CONTENT, so its rows
+            // must not sit in the memo — a stale memo would make every later
+            // delta skip rows the terminal never saw. Drop the memo (and the
+            // size stamp) and the next successful view() repaints in full.
             $this->previousRows = null;
             $this->prevWidth = null;
             $this->prevHeight = null;
@@ -1181,7 +1181,27 @@ final class Model
             // frame content: it goes through the same frame sweep (sanitize
             // + CR fold) as item values so no control byte, forged zone
             // sentinel, or cursor-return overwrite can ride the error sink.
-            return self::sweepForFrame($e->getMessage()) . "\n";
+            $messageLines = \explode("\n", self::sweepForFrame($e->getMessage()));
+            // A caught frame must be as tall as the viewport it replaces:
+            // the old one-line return left rows 2..height of the previous
+            // frame untouched, so a list that shrinks to empty (clear(), or
+            // a filter matching nothing) painted its message over a ghost
+            // of the old rows. Emit exactly $height rows reusing the delta
+            // path's per-row addressing — CUP homes the row, swept message
+            // (or nothing) writes it, CSI K erases the stale tail — so every
+            // viewport row is rewritten or cleared regardless of where the
+            // cursor sits. With no usable height (a zero viewport is itself
+            // a refusal) the message stands alone.
+            if ($this->height < 1) {
+                return \implode("\n", $messageLines) . "\n";
+            }
+            $messageCount = \min(\count($messageLines), $this->height);
+            $frame = '';
+            for ($row = 1; $row <= $this->height; $row++) {
+                $content = $row <= $messageCount ? $messageLines[$row - 1] : '';
+                $frame .= Ansi::CSI . $row . ';1H' . $content . Ansi::CSI . 'K' . "\n";
+            }
+            return $frame;
         }
     }
 
