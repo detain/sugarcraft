@@ -57,6 +57,9 @@ final class PrivateRetainedDir
     /** Suffix of the intermediate a write lands in before its rename. */
     public const PARTIAL_SUFFIX = '.partial';
 
+    /** A partial younger than this may belong to a live writer. */
+    public const STRANDED_PARTIAL_MIN_AGE_SECONDS = 60;
+
     private function __construct()
     {
     }
@@ -199,7 +202,7 @@ final class PrivateRetainedDir
         $file = $dir . '/' . $name;
         $partial = $file . self::PARTIAL_SUFFIX;
 
-        if (@lstat($partial) !== false) {
+        if (@lstat($partial) !== false && !self::clearStrandedPartial($partial, $label)) {
             throw new \RuntimeException('refusing to overwrite a pre-existing ' . $label . ' partial: ' . $partial);
         }
 
@@ -226,6 +229,44 @@ final class PrivateRetainedDir
         }
 
         return $file;
+    }
+
+    /**
+     * Remove a partial a dead writer stranded, so one crash mid-write does not
+     * wedge every later save of that file. Only a regular file of our own uid
+     * at least {@see STRANDED_PARTIAL_MIN_AGE_SECONDS} old goes; a link, a
+     * foreign file, or a live writer's fresh in-flight file is refused (false).
+     */
+    private static function clearStrandedPartial(string $partial, string $label): bool
+    {
+        clearstatcache(true, $partial);
+        $stat = @lstat($partial);
+
+        if ($stat === false) {
+            return true;
+        }
+
+        if ((((int) $stat['mode']) & 0o170000) !== 0o100000) {
+            return false;
+        }
+
+        $uid = \function_exists('posix_geteuid') ? \posix_geteuid() : null;
+
+        if ($uid !== null && (int) $stat['uid'] !== $uid) {
+            return false;
+        }
+
+        if (time() - (int) $stat['mtime'] < self::STRANDED_PARTIAL_MIN_AGE_SECONDS || !@unlink($partial)) {
+            return false;
+        }
+
+        try {
+            Log::raw('stranded ' . $label . ' partial cleared (the write proceeds): ' . $partial);
+        } catch (\Throwable) {
+            // the log records the repair; it is not the repair
+        }
+
+        return true;
     }
 
     /**
