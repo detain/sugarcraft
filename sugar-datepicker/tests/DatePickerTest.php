@@ -798,6 +798,28 @@ final class DatePickerTest extends TestCase
         $this->assertSame($dp->view(15), $dp->view(0));
         $this->assertSame($dp->view(63), $dp->view(100));
         $this->assertSame($dp->view(21), $dp->view());
+
+        // dp-23 (sugar-datepicker-026): renderWidth() is the exact oracle of
+        // the clamp — a host never has to shadow the arithmetic.
+        $this->assertSame(21, DatePicker::MIN_TOTAL_WIDTH);
+        $this->assertSame(63, DatePicker::MAX_TOTAL_WIDTH);
+        $this->assertSame(34, $dp->renderWidth(30, true));
+        $this->assertSame(63, $dp->renderWidth(64));
+        $this->assertSame(21, $dp->renderWidth(0));
+        $this->assertSame(25, $dp->renderWidth(21, true), 'the floor rises with the week column');
+
+        // Argless accessor answers "what will my argless view() measure?"
+        $configured = $dp->withWidth(40)->withShowWeekNumbers(true);
+        $this->assertSame(44, $configured->renderWidth());
+
+        // view() and renderWidth() agree column-for-column on the frame.
+        foreach ([[null, null], [30, true]] as [$w, $week]) {
+            $want = $dp->renderWidth($w, $week);
+            foreach (explode("\n", $dp->view($w, $week)) as $row => $line) {
+                $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+                $this->assertSame($want, mb_strlen($plain), "view row $row must span renderWidth()");
+            }
+        }
     }
 
     public function testClampCursorAfterNavigatingToShorterMonth(): void

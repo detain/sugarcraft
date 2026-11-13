@@ -218,6 +218,20 @@ configured render state (`withWidth()` / `withShowWeekNumbers()`), so the
 argless contract render honours the host's intent without every caller
 re-passing it.
 
+Because out-of-band requests clamp silently, a host that lays out around the
+picker should not shadow the arithmetic: `renderWidth()` is the exact oracle,
+running the same clamp path as `view()` for the same arguments (and falling
+back to the stored render state when called argless):
+
+```php
+$picker->renderWidth(30, true);      // 34 — what view(30, true) will measure
+$picker->renderWidth(64);            // 63 — the band ceiling, never rejected
+```
+
+The band's endpoints are published too: `DatePicker::MIN_TOTAL_WIDTH` (21,
+plus the 4-cell week column when enabled) and `DatePicker::MAX_TOTAL_WIDTH`
+(63).
+
 ## Styling
 
 Seven style setters accept bare SGR digit strings (e.g. `'7'`, `'1;31'`,

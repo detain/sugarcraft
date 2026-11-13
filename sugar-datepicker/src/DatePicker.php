@@ -43,7 +43,19 @@ final class DatePicker
     private const GRID_CELLS = 42;
 
     /** Largest buffer width View() accepts before clamping. */
-    private const MAX_TOTAL_WIDTH = 63;
+    /**
+     * Upper clamp for the TOTAL rendered width (calendar area + optional
+     * week column). Public with MIN_TOTAL_WIDTH so hosts can predict the
+     * silent-clamp band of dp-23 instead of shadowing its arithmetic.
+     */
+    public const MAX_TOTAL_WIDTH = 63;
+
+    /**
+     * Lower clamp for the TOTAL rendered width WITHOUT the week column —
+     * the natural 7×3 grid. With `showWeekNumbers` the floor rises by
+     * WEEK_COL_CHARS (to 25); {@see renderWidth()} is the exact oracle.
+     */
+    public const MIN_TOTAL_WIDTH = 21;
 
     /** Characters reserved for the optional ISO week-number column. */
     private const WEEK_COL_CHARS = 4;
@@ -974,14 +986,32 @@ final class DatePicker
      * @param ?bool $showWeekNumbers Show ISO week number column on the left.
      *                      Null (default) falls back to the
      *                      withShowWeekNumbers() state intent.
+     * @see renderWidth() for the exact total this clamp produces.
      */
+    /**
+     * Exact total width the renderer will produce for the given intent,
+     * following the SAME clamp path view() takes — the predictable oracle
+     * behind the silent-clamp contract (dp-23, sugar-datepicker-026).
+     * Null arguments fall back to the stored withWidth()/
+     * withShowWeekNumbers() state, so `renderWidth()` answers "what will
+     * my argless view() measure?" for TEA hosts.
+     */
+    public function renderWidth(?int $width = null, ?bool $showWeekNumbers = null): int
+    {
+        $width ??= $this->renderWidth;
+        $showWeekNumbers ??= $this->showWeekNumbers;
+        $weekColWidth = $showWeekNumbers ? self::WEEK_COL_CHARS : 0;
+        $minTotal = self::MIN_TOTAL_WIDTH + $weekColWidth;
+
+        return \max($minTotal, \min(self::MAX_TOTAL_WIDTH, $width + $weekColWidth));
+    }
+
     public function view(?int $width = null, ?bool $showWeekNumbers = null): string
     {
         $width ??= $this->renderWidth;
         $showWeekNumbers ??= $this->showWeekNumbers;
         $weekColWidth = $showWeekNumbers ? self::WEEK_COL_CHARS : 0;
-        $minTotal = self::DAYS_IN_WEEK * self::CELL_CHARS + $weekColWidth;
-        $totalWidth = \max($minTotal, \min(self::MAX_TOTAL_WIDTH, $width + $weekColWidth));
+        $totalWidth = $this->renderWidth($width, $showWeekNumbers);
         $height = 9; // header + day-names + sep + 6 week rows
 
         $buffer = Buffer::new($totalWidth, $height);
