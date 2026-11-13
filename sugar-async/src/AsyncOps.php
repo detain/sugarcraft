@@ -431,7 +431,12 @@ final class AsyncOps
      * Cancel() on the returned promise abandons the whole cycle: backoff
      * timers are released, no further attempt is scheduled, the current
      * attempt's promise is cancel()ed, and the returned promise rejects with
-     * OperationCancelledException.
+     * OperationCancelledException. A $token fired mid-attempt does the same
+     * to the visible promise: the in-flight attempt is cancel()ed, and if the
+     * driver ignores the abort (a hung or canceller-less promise), the wait
+     * rejects immediately with a generic 'Retry cancelled mid-cycle'
+     * OperationCancelledException rather than waiting forever; a cooperative
+     * driver still settles with the stage-specific rejection.
      *
      * The attempt cap alone does not bound wall-clock: exponential backoff
      * (2^n) can stretch a bounded attempt count into an unbounded wait, and a
@@ -443,7 +448,8 @@ final class AsyncOps
      * @param callable(): PromiseInterface $operation  The operation to retry
      * @param int $attempts  Maximum number of attempts (must be >= 1)
      * @param float $baseBackoffSeconds  Initial backoff after a failure (seconds)
-     * @param CancellationToken|null $token  Optional cancellation token to abort retries
+     * @param CancellationToken|null $token  Optional cancellation token to abort
+     *        retries — honoured before, during and after each attempt (see above).
      * @param float|null $maxTotalSeconds  Optional wall-clock budget across all
      *        attempts. The budget bounds when a NEW attempt may start: a
      *        backoff that would overshoot the cutoff is clamped to start
@@ -494,14 +500,38 @@ final class AsyncOps
         // external token is mirrored into it, every backoff stage watches it,
         // and abandoning the returned promise fires it. Stages consult exactly
         // one token, and a consumer's cancel() stops the whole cycle instead
-        // of silently no-opping on a canceller-less Deferred.
+        // of silently doing nothing on a Deferred that cannot be cancelled.
         $stop = CancellationSource::new();
         $mirror = null;
+        // By-reference captures: the token can only fire after retry() has
+        // returned (an already-cancelled token fires synchronously at
+        // registration, while these are still null — guarded below), so the
+        // mirror always sees the assigned stage promises.
+        $core = null;
+        $outer = null;
+        $coreSettled = false;
         if ($token !== null) {
-            // The mirror is dropped as soon as the cycle settles (below), so a
-            // long-lived external token carries no residue per retry.
-            $mirror = $token->onCancel(static function () use ($stop): void {
+            // The mirror is dropped the moment the cycle settles or the wait is
+            // abandoned (below), so a long-lived external token carries no
+            // residue per retry.
+            $mirror = $token->onCancel(static function () use ($stop, &$core, &$outer, &$coreSettled): void {
                 $stop->cancel();
+                // Honour a token fire DURING an attempt: stages consult the
+                // stop token between attempts, but a hung driver never regains
+                // control to consult anything. Aborting the in-flight promise
+                // lets a cooperative driver settle the cycle with its
+                // stage-specific rejection; if nothing settled, the visible
+                // wait rejects here instead of waiting forever.
+                if ($core !== null) {
+                    try {
+                        $core->cancel();
+                    } catch (\Throwable) {
+                        // An exploding driver abort still gets the treatment below.
+                    }
+                }
+                if ($outer !== null && $coreSettled === false) {
+                    $outer->reject(new OperationCancelledException('Retry cancelled mid-cycle'));
+                }
             });
         }
 
@@ -529,21 +559,24 @@ final class AsyncOps
             $onRetry,
         );
 
-        $outer = new Deferred(static function () use ($stop, $core): never {
+        $outer = new Deferred(static function () use ($stop, $core, $mirror): never {
             $stop->cancel();
             try {
                 $core->cancel();
             } catch (\Throwable) {
                 // A driver whose abort explodes still abandons the wait.
             }
+            $mirror?->unsubscribe();
             throw new OperationCancelledException('Async operation cancelled');
         });
         $core->then(
-            static function (mixed $value) use ($outer, $mirror): void {
+            static function (mixed $value) use ($outer, $mirror, &$coreSettled): void {
+                $coreSettled = true;
                 $mirror?->unsubscribe();
                 $outer->resolve($value);
             },
-            static function (\Throwable $error) use ($outer, $mirror): void {
+            static function (\Throwable $error) use ($outer, $mirror, &$coreSettled): void {
+                $coreSettled = true;
                 $mirror?->unsubscribe();
                 $outer->reject($error);
             },

@@ -254,6 +254,115 @@ final class AsyncOpsAbandonmentTest extends TestCase
         $this->assertSame(1, $calls);
     }
 
+    public function testAbandoningRetryDropsItsMirrorRegistration(): void
+    {
+        // Probe D of the registration census: abandoning a retry whose attempt
+        // is stuck must not leave the external-token mirror behind — pre-fix
+        // only the settle handlers unsubscribed it, so five abandons over a
+        // hung driver accumulated five closure chains on the token.
+        $source = CancellationSource::new();
+        $loop = new StreamSelectLoop();
+
+        for ($i = 0; $i < 5; $i++) {
+            $inner = new Deferred(); // no canceller: ignores cancel(), never settles
+            $cycle = AsyncOps::retry(
+                static fn(): PromiseInterface => $inner->promise(),
+                attempts: 3,
+                baseBackoffSeconds: 10.0,
+                token: $source->token(),
+                loop: $loop,
+            );
+            $cycle->then(null, static function (\Throwable $e): void {
+            });
+            $cycle->cancel();
+        }
+
+        $this->assertSame(0, self::pendingRegistrations($source->token()), 'abandoned retry cycles must not accumulate mirrors on a long-lived token');
+        $this->assertSame(0, self::armedTimers($loop));
+    }
+
+    public function testTokenFiredMidAttemptRejectsTheCycleEvenIfTheDriverIgnoresCancel(): void
+    {
+        // sugar-async-011: a token fire DURING an attempt used to neither abort
+        // nor reject — stages only consulted the token between attempts, and a
+        // hung driver never regains control to consult anything.
+        $source = CancellationSource::new();
+        $loop = new StreamSelectLoop();
+        $inner = new Deferred(); // ignores cancel(), models a hung driver
+
+        $error = null;
+        AsyncOps::retry(
+            static fn(): PromiseInterface => $inner->promise(),
+            attempts: 5,
+            baseBackoffSeconds: 10.0,
+            token: $source->token(),
+            loop: $loop,
+        )->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $source->cancel(); // fires DURING attempt 1
+
+        $this->assertInstanceOf(OperationCancelledException::class, $error, 'the mid-attempt token fire rejects the visible wait');
+        $this->assertSame('Retry cancelled mid-cycle', $error->getMessage());
+        $this->assertSame(0, self::armedTimers($loop));
+    }
+
+    public function testTokenFiredMidAttemptLetsACooperativeDriverSettleTheCycle(): void
+    {
+        // Precedence companion: the generic mid-cycle reject is a backstop, not
+        // a bulldozer — a driver that honours cancel() still settles the wait
+        // with the stage-specific rejection.
+        $source = CancellationSource::new();
+        $loop = new StreamSelectLoop();
+
+        $driver = new Deferred(static function (callable $resolve, callable $reject): void {
+            $reject(new \RuntimeException('driver aborted'));
+        });
+
+        $error = null;
+        AsyncOps::retry(
+            static fn(): PromiseInterface => $driver->promise(),
+            attempts: 5,
+            baseBackoffSeconds: 10.0,
+            token: $source->token(),
+            loop: $loop,
+        )->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $source->cancel();
+
+        $this->assertInstanceOf(OperationCancelledException::class, $error);
+        $this->assertStringContainsString('after attempt 1', $error->getMessage(), 'the cooperative driver settles with the stage-specific rejection');
+    }
+
+    public function testExternalTokenMidBackoffKeepsTheStageSpecificRejection(): void
+    {
+        // Second precedence arm: during backoff the stop source settles the
+        // cycle synchronously through the stage registration, so the mirror's
+        // generic reject must not paper over '...during backoff after attempt N'.
+        $source = CancellationSource::new();
+        $loop = new StreamSelectLoop();
+
+        $operation = static function (): PromiseInterface {
+            $d = new Deferred();
+            $d->reject(new \RuntimeException('attempt failed'));
+            return $d->promise();
+        };
+
+        $error = null;
+        AsyncOps::retry($operation, attempts: 4, baseBackoffSeconds: 30.0, token: $source->token(), loop: $loop)
+            ->then(null, static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            });
+
+        $source->cancel(); // mid-backoff, long before the 30s timer could fire
+
+        $this->assertInstanceOf(OperationCancelledException::class, $error);
+        $this->assertStringContainsString('during backoff after attempt 1', $error->getMessage());
+    }
+
     public function testRetryStillResolvesThroughTheAbandonmentWrapper(): void
     {
         $loop = new StreamSelectLoop();
