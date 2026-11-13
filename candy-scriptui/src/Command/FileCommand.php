@@ -9,6 +9,7 @@ use SugarCraft\ScriptUi\Attribute\Example;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\FileModel;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
+use SugarCraft\ScriptUi\Runtime\OptionList;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Runtime\PositiveInt;
@@ -42,6 +43,7 @@ final class FileCommand extends Command
             ->addOption('file',      null, InputOption::VALUE_NONE,     'Allow selecting files (default).')
             ->addOption('show-size', null, InputOption::VALUE_NONE,     'Render the file-size column.')
             ->addOption('show-help', null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('extensions', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Only show files with these extensions; repeatable and comma-split (.png,.jpg).', [])
             ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, max 86400).', 0);
     }
@@ -80,6 +82,13 @@ final class FileCommand extends Command
             InteractiveRuntime::paint(\SugarCraft\Core\Util\Sanitize::cellValue($header) . "\n");
         }
 
+        // scriptui-45 (finding 063): repeatable AND comma-split, merged via
+        // the escape-aware OptionList splitter shared with --selected (-76),
+        // so a token list like `.png,.jpg` and two flags are equal spellings.
+        /** @var list<string> $extensionsRaw */
+        $extensionsRaw = (array) $input->getOption('extensions');
+        $allowedExtensions = OptionList::expand($extensionsRaw);
+
         $model   = FileModel::newPrompt(
             cwd:        $cwd,
             height:     $height,
@@ -87,6 +96,7 @@ final class FileCommand extends Command
             allowFiles: $allowFiles,
             showHidden: (bool) $input->getOption('all'),
             showSize:   (bool) $input->getOption('show-size'),
+            allowedExtensions: $allowedExtensions,
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(loop: $loop, 

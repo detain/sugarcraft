@@ -26,6 +26,9 @@ final class FileModel implements Model
      *                           selected (paired with `--directory`).
      * @param bool $showHidden   Include dotfiles in the listing.
      * @param bool $showSize     Render the file-size column.
+     * @param list<string> $allowedExtensions  Only files with these
+     *        extensions are listed (scriptui-45; empty = all; directories
+     *        always ride through — the widget owns normalisation).
      */
     public static function newPrompt(
         ?string $cwd = null,
@@ -34,12 +37,18 @@ final class FileModel implements Model
         bool $allowFiles = true,
         bool $showHidden = false,
         bool $showSize = false,
+        array $allowedExtensions = [],
     ): self {
         $picker = FilePicker::new($cwd, max(1, $height))
             ->withDirAllowed($allowDirs)
             ->withFileAllowed($allowFiles)
             ->withShowHidden($showHidden)
             ->withShowSize($showSize);
+        if ($allowedExtensions !== []) {
+            // scriptui-45 (finding 063): the widget's own readdir predicate —
+            // the picker normalises (lower-case, leading dot trimmed).
+            $picker = $picker->withAllowedExtensions($allowedExtensions);
+        }
         [$picker, ] = $picker->focus();
         return new self($picker, false);
     }
