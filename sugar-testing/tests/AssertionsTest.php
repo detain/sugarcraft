@@ -68,6 +68,22 @@ final class AssertionsTest extends TestCase
         Assertions::assertCellGrid(["\xff\xfe"], Buffer::new(2, 1));
     }
 
+    public function testEscapeAnsiCoversC1ControlsAndNeverDoubleEscapes(): void
+    {
+        // Failure dumps must survive a latin-1 terminal: the whole 8-bit
+        // C1 range joins the \xNN roster alongside C0, and the ESC-first
+        // substitution must not re-wrap its own inserted marks.
+        $escape = new \ReflectionMethod(Assertions::class, 'escapeAnsi');
+        $escape->setAccessible(true);
+
+        $this->assertSame('\\x1b', $escape->invoke(null, "\x1b"));
+        $this->assertSame("a\nb\tc", $escape->invoke(null, "a\nb\tc"));
+        $this->assertSame('\\x07', $escape->invoke(null, "\x07"));
+        $this->assertSame('\\x80\\x9B\\x9F', $escape->invoke(null, "\x80\x9b\x9f"));
+        $this->assertSame('\\x1b[31m', $escape->invoke(null, "\x1b[31m"));
+        $this->assertSame('\\x1b\\x90Q', $escape->invoke(null, "\x1b\x90Q"));
+    }
+
     public function testAssertGoldenAnsiCreatesWhenUpdateGoldensSetAndMissing(): void
     {
         $goldenPath = $this->fixturesDir . '/new.golden';

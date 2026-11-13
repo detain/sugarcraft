@@ -376,13 +376,14 @@ final class Assertions
     private static function expandStringRow(string $row, int $rowIndex, int $width): array
     {
         // \X matches one extended grapheme cluster; false on invalid UTF-8.
-        $clusters = preg_match_all('/\X/u', $row);
+        // A single call both validates and collects — the old second
+        // un-guarded preg_match_all duplicated the walk and could not
+        // itself fail after the first returned non-false.
+        $clusterCount = preg_match_all('/\X/u', $row, $matches);
 
-        if ($clusters === false) {
+        if ($clusterCount === false) {
             throw new InvalidArgumentException(Lang::t('assertions.row_not_utf8', ['row' => $rowIndex]));
         }
-
-        preg_match_all('/\X/u', $row, $matches);
 
         $built = [];
         foreach ($matches[0] as $cluster) {
@@ -561,24 +562,26 @@ final class Assertions
     /**
      * Escape control bytes in a string for human-readable display.
      *
-     * ESC becomes `\x1b`, CR/BEL/DEL and every other C0 control except
-     * newline and tab become `\xNN`, so a failure dump cannot be reprogrammed
-     * by escape sequences or cursor movement arriving as ESC-led or C0 bytes.
-     * The 8-bit C1 range (0x80-0x9F) is not covered: those bytes pass through
-     * raw, which a latin-1-decoding terminal could still interpret as a
-     * single-byte CSI.
+     * ESC becomes `\x1b`; CR/BEL/DEL, every other C0 control except newline
+     * and tab, and the whole 8-bit C1 range (0x80-0x9F) become `\xNN`, so a
+     * failure dump cannot be reprogrammed by escape sequences, by cursor
+     * movement, or by a latin-1-decoding terminal reading a stray C1 byte
+     * as a single-byte CSI.
      *
      * @param string $bytes
      * @return string
      */
     private static function escapeAnsi(string $bytes): string
     {
+        // ESC is replaced first, and its replacement carries no bytes the
+        // callback class below matches, so inserted marks are never
+        // double-escaped.
         $withEscaped = str_replace("\x1b", '\\x1b', $bytes);
 
         // Tab (\x09) and newline (\x0a) survive so the dump stays laid out;
-        // CR, BEL, NUL, SGR-adjacent controls and DEL become \xNN.
+        // CR, BEL, NUL, SGR-adjacent controls, C1 codes and DEL become \xNN.
         $result = preg_replace_callback(
-            '/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/',
+            '/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f]/',
             static fn (array $m): string => '\x' . strtoupper(bin2hex($m[0])),
             $withEscaped,
         );
