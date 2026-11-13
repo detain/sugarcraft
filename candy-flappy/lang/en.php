@@ -38,8 +38,8 @@ return [
     'ui.plain_live_full'     => 'space/Enter/^/w flap . r restart . q quit',
     'ui.plain_live_short'    => 'space flap . q quit',
     'ui.quit_hint' => 'press q to quit.',
-    'notty.line1'            => 'candy-flappy needs an interactive terminal.',
-    'notty.line2'            => 'No usable colour capability was detected (non-TTY stdout or TERM=dumb).',
+    'notty.line1'            => 'candy-flappy needs a terminal that can render its output.',
+    'notty.line2'            => 'stdout is not an interactive terminal, or TERM=dumb was detected.',
     'size.notice'            => 'candy-flappy needs a {need} terminal; this one is {have}.',
     'size.resume'            => 'Resize the window and the game resumes right here.',
 ];

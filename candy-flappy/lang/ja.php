@@ -29,8 +29,8 @@ return [
     'ui.plain_live_full'     => 'スペース/Enter/^/w はばたく . r 再起動 . q 終了',
     'ui.plain_live_short'    => 'スペースではばたく . q 終了',
     'ui.quit_hint' => 'q キーで終了します。',
-    'notty.line1'            => 'candy-flappy には対話型ターミナルが必要です。',
-    'notty.line2'            => '利用できる色機能が検出できませんでした (stdout が TTY でないか TERM=dumb)。',
+    'notty.line1'            => 'candy-flappy は出力を描画できるターミナルが必要です。',
+    'notty.line2'            => 'stdout が対話型ターミナルでないか、TERM=dumb が検出されました。',
     'size.notice'            => 'candy-flappy には {need} のターミナルが必要です。現在は {have} です。',
     'size.resume'            => 'ウィンドウを広げると、このままゲームが再開します。',
 ];

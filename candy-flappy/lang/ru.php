@@ -29,8 +29,8 @@ return [
     'ui.plain_live_full'     => 'пробел/Enter/^/w - взмах . r - заново . q - выход',
     'ui.plain_live_short'    => 'пробел - взмах . q - выход',
     'ui.quit_hint' => 'нажмите q для выхода.',
-    'notty.line1'            => 'candy-flappy нужен интерактивный терминал.',
-    'notty.line2'            => 'Пригодная цветовая способность не обнаружена (stdout без TTY или TERM=dumb).',
+    'notty.line1'            => 'candy-flappy нужен терминал, способный отобразить вывод.',
+    'notty.line2'            => 'stdout не является интерактивным терминалом или обнаружен TERM=dumb.',
     'size.notice'            => 'candy-flappy нужен терминал {need}; этот — {have}.',
     'size.resume'            => 'Измените размер окна, и игра продолжится прямо здесь.',
 ];

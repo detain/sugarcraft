@@ -29,8 +29,8 @@ return [
     'ui.plain_live_full'     => 'cirpma icin bosluk/Enter/^/w . r yeniden . q cik',
     'ui.plain_live_short'    => 'cirpma icin bosluk . q cik',
     'ui.quit_hint' => 'çıkmak için q tuşuna basın.',
-    'notty.line1'            => 'candy-flappy etkileşimli bir terminal gerektirir.',
-    'notty.line2'            => 'Kullanılabilir renk yeteneği algılanmadı (stdout TTY değil veya TERM=dumb).',
+    'notty.line1'            => 'candy-flappy, çıktısını gösterebilen bir terminal gerektirir.',
+    'notty.line2'            => 'stdout etkileşimli bir terminal değil veya TERM=dumb algılandı.',
     'size.notice'            => 'candy-flappy {need} bir terminal ister; bu {have}.',
     'size.resume'            => 'Pencereyi büyütün, oyun tam burada devam eder.',
 ];

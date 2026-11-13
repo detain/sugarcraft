@@ -29,8 +29,8 @@ return [
     'ui.plain_live_full'     => 'spacja/Enter/^/w macha . r ponow . q wyjdz',
     'ui.plain_live_short'    => 'spacja macha . q wyjdz',
     'ui.quit_hint' => 'naciśnij q, aby zakończyć.',
-    'notty.line1'            => 'candy-flappy potrzebuje interaktywnego terminala.',
-    'notty.line2'            => 'Nie wykryto użytecznych możliwości kolorów (stdout bez TTY albo TERM=dumb).',
+    'notty.line1'            => 'candy-flappy potrzebuje terminala, który potrafi wyświetlić jego wyjście.',
+    'notty.line2'            => 'stdout nie jest interaktywnym terminalem albo wykryto TERM=dumb.',
     'size.notice'            => 'candy-flappy potrzebuje terminala {need}; ten ma {have}.',
     'size.resume'            => 'Zmień rozmiar okna, a gra wznowi dokładnie tutaj.',
 ];

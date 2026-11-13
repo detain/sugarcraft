@@ -29,8 +29,8 @@ return [
     'ui.plain_live_full'     => 'spatie/Enter/^/w slag . r opnieuw . q stop',
     'ui.plain_live_short'    => 'spatie slaat . q stop',
     'ui.quit_hint' => 'druk op q om te stoppen.',
-    'notty.line1'            => 'candy-flappy heeft een interactieve terminal nodig.',
-    'notty.line2'            => 'Geen bruikbare kleurcapabiliteit gevonden (geen-TTY stdout of TERM=dumb).',
+    'notty.line1'            => 'candy-flappy heeft een terminal nodig die de uitvoer kan weergeven.',
+    'notty.line2'            => 'stdout is geen interactieve terminal of TERM=dumb is gedetecteerd.',
     'size.notice'            => 'candy-flappy heeft een {need}-terminal nodig; deze is {have}.',
     'size.resume'            => 'Maak het venster groter en het spel gaat precies hier verder.',
 ];

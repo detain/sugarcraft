@@ -29,8 +29,8 @@ return [
     'ui.plain_live_full'     => 'espaco/Enter/^/w bate . r reiniciar . q sair',
     'ui.plain_live_short'    => 'espaco bate . q sair',
     'ui.quit_hint' => 'pressione q para sair.',
-    'notty.line1'            => 'o candy-flappy precisa de um terminal interativo.',
-    'notty.line2'            => 'Nenhuma capacidade de cor utilizável detetada (stdout não-TTY ou TERM=dumb).',
+    'notty.line1'            => 'o candy-flappy precisa de um terminal capaz de mostrar a sua saída.',
+    'notty.line2'            => 'o stdout não é um terminal interativo ou foi detetado TERM=dumb.',
     'size.notice'            => 'o candy-flappy precisa de um terminal {need}; este tem {have}.',
     'size.resume'            => 'Redimensione a janela e o jogo continua exatamente aqui.',
 ];

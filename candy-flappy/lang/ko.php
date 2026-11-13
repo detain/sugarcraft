@@ -29,8 +29,8 @@ return [
     'ui.plain_live_full'     => 'space/Enter/^/w 날갯짓 . r 재시작 . q 종료',
     'ui.plain_live_short'    => 'space로 날갯짓 . q 종료',
     'ui.quit_hint' => 'q를 눌러 종료합니다.',
-    'notty.line1'            => 'candy-flappy에는 대화형 터미널이 필요합니다.',
-    'notty.line2'            => '사용할 수 있는 색상 기능을 찾지 못했습니다 (stdout이 TTY가 아니거나 TERM=dumb).',
+    'notty.line1'            => 'candy-flappy는 출력을 렌더링할 수 있는 터미널이 필요합니다.',
+    'notty.line2'            => 'stdout이 대화형 터미널이 아니거나 TERM=dumb이 감지되었습니다.',
     'size.notice'            => 'candy-flappy에는 {need} 터미널이 필요합니다; 이 터미널은 {have}입니다.',
     'size.resume'            => '창 크기를 조정하면 바로 여기서 게임이 이어집니다.',
 ];

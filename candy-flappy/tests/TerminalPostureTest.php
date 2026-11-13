@@ -98,9 +98,13 @@ final class TerminalPostureTest extends TestCase
         // nothing else, i.e. a game only Ctrl+C ends).
         [$g, $cmd] = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())
             ->update(new ColorProfileMsg(ColorProfile::NoTty));
-        // flappy-11: line1 now folds at 38 cells ("interactive" stays on the
-        // first fragment), so the pin tracks the intact head of the sentence.
-        $this->assertStringContainsString('needs an interactive', $g->view());
+        // flappy-16: the headline names the real requirement (a terminal
+        // that can RENDER — a TERM=dumb user IS at an interactive one);
+        // line1 folds at 38 cells so the pin tracks the intact first
+        // fragment 'candy-flappy needs a terminal that can', and line2
+        // names both disjoint detection causes whole.
+        $this->assertStringContainsString('needs a terminal that can', $g->view());
+        $this->assertStringContainsString('not an interactive terminal', $g->view());
         $this->assertStringNotContainsString("\x1b[", $g->view());
         // flappy-11: the refusal must survive a 40-column terminal without
         // the terminal's own invisible reflow, and it must name q.

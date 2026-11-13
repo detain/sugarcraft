@@ -29,8 +29,8 @@ return [
     'ui.plain_live_full'     => 'mezernik/Enter/^/w mava . r znovu . q konec',
     'ui.plain_live_short'    => 'mezernik mava . q konec',
     'ui.quit_hint' => 'stiskněte q pro ukončení.',
-    'notty.line1'            => 'candy-flappy potřebuje interaktivní terminál.',
-    'notty.line2'            => 'Nezjistila se žádná použitelná barevná způsobilost (stdout není TTY nebo TERM=dumb).',
+    'notty.line1'            => 'candy-flappy potřebuje terminál, který umí vykreslit jeho výstup.',
+    'notty.line2'            => 'stdout není interaktivní terminál nebo byl zjištěn TERM=dumb.',
     'size.notice'            => 'candy-flappy potřebuje terminál {need}; tento má {have}.',
     'size.resume'            => 'Změňte velikost okna a hra pokračuje přesně tady.',
 ];
