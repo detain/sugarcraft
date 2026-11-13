@@ -11,9 +11,11 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use React\Socket\Connection as SocketConnection;
 use SugarCraft\Code\Host\RemoteSessionHost;
+use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ForkedChild;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
@@ -327,7 +329,11 @@ final class WorkspaceHostClient
         foreach ($listeners as $listener) {
             try {
                 $listener($reason);
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                // Fan-out isolation stays (one bad listener must not strand
+                // its siblings), but the failure rides the log funnel: a
+                // listener that throws is a gateway bug the operator needs.
+                Log::channel(Log::APP, ErrorLog::line($e, 'workspace host exit listener'));
             }
         }
     }

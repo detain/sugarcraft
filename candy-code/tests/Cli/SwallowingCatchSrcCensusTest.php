@@ -93,10 +93,6 @@ final class SwallowingCatchSrcCensusTest extends TestCase
             1,
             'ROLLBACK after a failed COMMIT must not replace the original error, which is handed to discardIfDamaged() one statement later',
         ],
-        'src/Server/Workspace/WorkspaceHostClient.php::exited' => [
-            1,
-            'exit listeners run best-effort when the host reports exit; identical polity to the gone row above',
-        ],
         'src/Session/EnhancedSessionStore.php::usageRollups' => [
             1,
             'a failed ROLLBACK inside the fold-error handler must not replace the original error, which the enclosing catch rethrows on the next line; C-SES-9.a, adjudicated 2026-10-27 (cc/cure-swallow) as the same polity as the immediateTransaction row below',
