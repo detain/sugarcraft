@@ -44,7 +44,8 @@ declare(strict_types=1);
  *
  * WHAT IS IN SCOPE. Every first-level directory that carries a
  * `composer.json` with an `autoload` section — a lib's REAL autoload roots
- * (psr-4, classmap, files), read from its manifest exactly the way
+ * (directory-form psr-4 / classmap / files entries), read from its manifest
+ * exactly the way
  * candy-code's guard reads them, never an assumed `src/`. `autoload-dev` is
  * deliberately not read for the same stated reason the guard gives: Composer
  * registers it for the root package only, so a lib's own tests are
@@ -469,10 +470,18 @@ final class CheckChildLifetimes
     }
 
     /**
-     * The autoload roots one manifest declares — psr-4, classmap, files.
+     * The directory-form autoload roots one manifest declares.
+     *
+     * A classmap/files entry that points at a FILE (a legal composer form)
+     * is refused loudly: array_filter('is_dir') used to drop such entries
+     * in silence, which hid autoloaded code - and any proc_open site in it -
+     * from the census. A root nested inside another root of the same
+     * manifest is pruned to the outermost, so no file is ever tokenized
+     * twice (double tokenization would inflate site counts and poison the
+     * COUNT DRIFT ledger).
      *
      * @param  array<string, mixed> $manifest
-     * @return list<string> absolute directories
+     * @return list<string> absolute directories, in declaration order
      */
     public static function autoloadRoots(string $libDir, array $manifest): array
     {
@@ -489,7 +498,24 @@ final class CheckChildLifetimes
             }
         }
 
-        return array_values(array_unique(array_filter($paths, 'is_dir')));
+        foreach ($paths as $path) {
+            if (is_file($path)) {
+                fwrite(STDERR, "check-child-lifetimes: $libDir autoloads a file ($path) - the census walks directory roots only; point the entry at its directory.\n");
+                exit(2);
+            }
+        }
+
+        $dirs = array_values(array_unique(array_filter($paths, 'is_dir')));
+        $dropped = [];
+        foreach ($dirs as $outer) {
+            foreach ($dirs as $inner) {
+                if ($inner !== $outer && str_starts_with($inner, $outer . '/')) {
+                    $dropped[$inner] = true;
+                }
+            }
+        }
+
+        return array_values(array_filter($dirs, static fn(string $dir): bool => !isset($dropped[$dir])));
     }
 
     /**

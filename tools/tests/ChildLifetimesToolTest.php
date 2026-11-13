@@ -424,6 +424,61 @@ final class ChildLifetimesToolTest extends TestCase
         $this->assertSame(0, $report['sites']);
     }
 
+    public function testFileFormAutoloadEntryIsALoudRefusal(): void
+    {
+        // RT-12 (013): a classmap entry pointing at a FILE used to be
+        // dropped in silence by array_filter('is_dir') - the autoloaded
+        // code and every spawn in it vanished from the census while the
+        // docblock advertised classmap support. Now it refuses.
+        \mkdir("$this->tmpDir/filemap-lib/src", 0777, true);
+        \file_put_contents(
+            "$this->tmpDir/filemap-lib/composer.json",
+            (string) \json_encode([
+                'name' => 'sugarcraft/filemap-lib',
+                'autoload' => ['classmap' => ['src/File.php']],
+            ]),
+        );
+        \file_put_contents(
+            "$this->tmpDir/filemap-lib/src/File.php",
+            "<?php\n\$p = proc_open(['true'], [0 => ['pipe', 'r']], \$pipes);\n",
+        );
+
+        [$out, $err, $rc] = $this->runTool($this->tmpDir);
+
+        $this->assertSame(2, $rc, $out . $err);
+        $this->assertStringContainsString('autoloads a file', $err);
+        $this->assertStringContainsString('src/File.php', $err);
+    }
+
+    public function testNestedRootsArePrunedToTheOutermost(): void
+    {
+        // RT-12 (059): two roots of one manifest where one nests inside the
+        // other walked the inner files twice - dedupe keys on root paths,
+        // never on containment. Each .php must tokenize exactly once.
+        \mkdir("$this->tmpDir/nested-lib/src/Sub", 0777, true);
+        \file_put_contents(
+            "$this->tmpDir/nested-lib/composer.json",
+            (string) \json_encode([
+                'name' => 'sugarcraft/nested-lib',
+                'autoload' => ['psr-4' => [
+                    'SugarCraft\\ToolFixture\\Outer\\' => 'src/',
+                    'SugarCraft\\ToolFixture\\Inner\\' => 'src/Sub/',
+                ]],
+            ]),
+        );
+        foreach (['src/Up.php', 'src/Sub/Down.php'] as $rel) {
+            \file_put_contents(
+                "$this->tmpDir/nested-lib/$rel",
+                "<?php\n\$p = proc_open(['true'], [0 => ['pipe', 'r']], \$pipes);\n",
+            );
+        }
+
+        $report = \CheckChildLifetimes::derive($this->tmpDir);
+
+        $this->assertSame(2, $report['files'], 'the inner root walked Down.php a second time');
+        $this->assertSame(2, $report['sites'], 'nested double-walk tokenized a spawn twice');
+    }
+
     /**
      * @return array{0:string,1:string,2:int} stdout, stderr, exit code
      */
