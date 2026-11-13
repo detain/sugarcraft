@@ -306,13 +306,24 @@ function emitFile(DOMDocument $out, string $name, array $file): DOMElement
         $fileEl->appendChild($classEl);
     }
 
+    // RT-36: decorate-sort-undecorate with the SAME limit-3 shape the
+    // sibling parsers in this file use. The old comparator exploded
+    // unbounded, so a coverage name containing '|' bled past the key
+    // fields and truncated the compared name to its first fragment (the
+    // determinism this file claims then hinged on an unstated no-pipe
+    // assumption), on top of re-parsing both operands O(m log m) times.
     $keys = $file['lineOrder'];
-    usort($keys, static function (string $a, string $b) use ($file): int {
-        $ka = explode('|', $a);
-        $kb = explode('|', $b);
-        return ((int) $ka[0] <=> (int) $kb[0]) ?: (strcmp($ka[1], $kb[1]) ?: strcmp($ka[2], $kb[2]));
-    });
+    $decorated = [];
     foreach ($keys as $key) {
+        [$num, $type, $name] = array_pad(explode('|', $key, 3), 3, '');
+        $decorated[] = [$num, $type, $name, $key];
+    }
+    usort(
+        $decorated,
+        static fn(array $a, array $b): int => ((int) $a[0] <=> (int) $b[0])
+            ?: (strcmp($a[1], $b[1]) ?: strcmp($a[2], $b[2]))
+    );
+    foreach ($decorated as [$num, $type, $name, $key]) {
         $fileEl->appendChild(emitLine($out, $key, $file['lines'][$key]));
     }
 

@@ -225,6 +225,37 @@ $badUsage = sprintf('php %s onlytwoargs 2>&1', escapeshellarg(__DIR__ . '/merge-
 exec($badUsage, $badOut, $rc5);
 check($rc5 === 1, 'wrong argc exits 1');
 
+// ---------- RT-36: names containing '|' keep their FULL value as key ----------
+// The retired comparator exploded unbounded, so `p|q` compared as `p` against
+// `p` — the tie order depended on input order (violating the emitted
+// "num then type then name" contract the header claims). A single same-num
+// pair in adversarial input order pins the full-name comparison.
+$pdir = sys_get_temp_dir() . '/merge-clover-selfcheck-' . getmypid() . '-pipes';
+check(is_dir($pdir) || mkdir($pdir, 0o755, true) || is_dir($pdir), "pipe fixture dir {$pdir}");
+putClover("{$pdir}/clover-0.xml", <<<'XML'
+  <file name="/root/P.php">
+    <line num="7" type="method" name="p|q" visibility="public" complexity="1" crap="2" count="0"/>
+    <line num="7" type="method" name="p" visibility="public" complexity="1" crap="2" count="0"/>
+    <line num="8" type="stmt" count="0"/>
+    <metrics loc="9" ncloc="9" classes="0" methods="2" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="1" coveredstatements="0" elements="3" coveredelements="0"/>
+  </file>
+  <metrics files="1" loc="9" ncloc="9" classes="0" methods="2" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="1" coveredstatements="0" elements="3" coveredelements="0"/>
+XML);
+$pdest = "{$pdir}/merged.xml";
+[$prc, $plog] = runMerge($pdir, '1', $pdest);
+check($prc === 0, "pipe-name merge exit 0 (log: {$plog})");
+$pn = [];
+foreach (simplexml_load_file($pdest)->project->file->line as $l) {
+    if ((string) $l['type'] === 'method') {
+        $pn[] = (string) $l['name'];
+    }
+}
+check($pn === ['p', 'p|q'], 'pipe names sorted by FULL name (strcmp("p","p|q")<0) despite adversarial input order');
+foreach (glob("{$pdir}/*") ?: [] as $entry) {
+    @unlink($entry);
+}
+@rmdir($pdir);
+
 // cleanup fixtures (best effort — CI runners are ephemeral, dev boxes accumulate nothing)
 foreach (glob("{$dir}/*") ?: [] as $entry) {
     is_dir($entry) ? @rmdir($entry) : @unlink($entry);
