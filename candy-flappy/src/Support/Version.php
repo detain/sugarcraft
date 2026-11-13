@@ -7,9 +7,10 @@ namespace SugarCraft\Flappy\Support;
 /**
  * The version string this tool reports on `--version`.
  *
- * Lighter namespace copy of candy-top/src/Support/Version.php (the DST-1
- * program): {@see self::CURRENT} is the checkout fallback and the ONE
- * override is the build stamp of the phar this process was launched from.
+ * A lean copy of candy-top's Version class (DST-1 program), in this
+ * package's namespace: {@see self::CURRENT} is the checkout fallback and
+ * the ONE override is the build stamp of the phar this process was
+ * launched from.
  * candy-flappy ships no `self-update`, so the ordering machinery candy-top
  * needs (parse/compare, fail-closed on `dev-master`) has nothing to serve
  * here — any non-empty stamp the build wrote is reported verbatim, and a
