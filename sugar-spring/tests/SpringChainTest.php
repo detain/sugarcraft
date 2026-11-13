@@ -107,6 +107,108 @@ final class SpringChainTest extends TestCase
     }
 
     /**
+     * SPR-15 (finding 059, shipped ruling: DOCUMENT + PIN, not change):
+     * withStage() is building-time sugar — its return carries no
+     * activeIndex, so appending to an ALREADY-TICKED chain deliberately
+     * rewinds the run to stage 0. The docblock has always said so; this
+     * pins the words against the behaviour so a silent "preserve the
+     * index" drift (or any refactor of the rebuild) is a disclosed
+     * contract change. The rewound chain must still COMPLETE — settled
+     * stages hand off again on their own tick, so the restart re-runs
+     * cheaply rather than hanging — and live joins/retargets mid-flight
+     * remain SpringCollection's job.
+     */
+    public function testWithStageOnATickedChainDeliberatelyRewindsToStageZero(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        // A chain handally parked at stage 1 with stage 0 already settled —
+        // the exact "mid-run" state an append is being tested against.
+        $running = new SpringChain(
+            [
+                [$spring, 100.0, 0.0, 100.0], // settled stage
+                [$spring, 0.0, 0.0, 50.0],    // active stage
+            ],
+            1,
+        );
+
+        $extended = $running->withStage($spring, 0.0, 0.0, 25.0);
+
+        $this->assertCount(3, $extended->currentPositions(), 'the append must add the stage');
+        $this->assertSame(0, $extended->activeStage(), 'appending to a ticked chain rewinds to stage 0 (documented building-time-only contract)');
+        $this->assertSame(1, $running->activeStage(), 'the original chain is untouched (copy-on-write)');
+
+        $ticks = 0;
+        while (!$extended->isComplete() && $ticks < 2000) {
+            $extended = $extended->tick();
+            $ticks++;
+        }
+        $this->assertTrue($extended->isComplete(), 'a rewound chain still completes — settled stages re-hand-off, not re-animate');
+        $this->assertLessThan(400, $ticks, 'the settled stage re-hand-offs on its own tick, it does NOT re-animate (a measured fresh three-stage run of these same springs costs 487 ticks)');
+    }
+
+    /**
+     * SPR-15 (finding 060): SpringChain::SETTLING_THRESHOLD used to be a
+     * consultable constant with NO observable consequence anywhere in the
+     * suite. This drives a real three-stage chain to completion and checks
+     * the contract the README quotes: every stage lands within the 5e-4
+     * hand-off tolerance of its target — "visibly done", not exact. Tighten
+     * the constant without telling anyone and this test reddens on a real
+     * frame, not on an assertSame of a number to itself.
+     */
+    public function testThreeStageDriveLandsEveryStageWithinHandoffTolerance(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $targets = [100.0, 50.0, 25.0];
+        $chain = SpringChain::new([
+            [$spring, 0.0, 0.0, $targets[0]],
+            [$spring, 0.0, 0.0, $targets[1]],
+            [$spring, 0.0, 0.0, $targets[2]],
+        ]);
+
+        // Observable consequence of WHICH band is in force (finding 060,
+        // second leg): the hand-off boundaries of the candidate thresholds
+        // are measured — the chain's 5e-4 band hands stage 0 off at tick
+        // 170, a looser 1e-3 would already be at stage 1 by tick 162, and a
+        // stale lone-spring 1e-4 would wait until 187. Two boundary frames
+        // pin the constant to its observable behaviour: at tick 165 the run
+        // must still be in stage 0 (looser bands are red), and at tick 178
+        // it must be in stage 1 with stage 1 still far from any settle band
+        // (tighter bands are red).
+        $probe = $chain;
+        for ($i = 0; $i < 165; $i++) {
+            $probe = $probe->tick();
+        }
+        $this->assertSame(0, $probe->activeStage(), 'tick 165: the 5e-4 hand-off has not fired yet (a 1e-3 band would have fired at 162)');
+
+        for ($i = 165; $i < 178; $i++) {
+            $probe = $probe->tick();
+        }
+        $this->assertSame(1, $probe->activeStage(), 'tick 178: the 5e-4 hand-off has fired (a stale 1e-4 band would not fire until 187)');
+        $this->assertGreaterThan(
+            1.0,
+            abs($probe->currentPositions()[1] - $targets[1]),
+            'stage 1 is only just starting — nowhere near any settle band',
+        );
+
+        $ticks = 0;
+        while (!$chain->isComplete() && $ticks < 6000) {
+            $chain = $chain->tick();
+            $ticks++;
+        }
+
+        $this->assertTrue($chain->isComplete(), 'a plain three-stage chain must complete within the tick bound');
+        $positions = $chain->currentPositions();
+        $this->assertCount(3, $positions);
+        foreach ($targets as $index => $target) {
+            $this->assertLessThan(
+                SpringChain::SETTLING_THRESHOLD,
+                abs($positions[$index] - $target),
+                "stage {$index} must land inside the documented 5e-4 hand-off band (got {$positions[$index]} vs {$target})",
+            );
+        }
+    }
+
+    /**
      * M-D discriminator: a single tick must move the ACTIVE stage's position
      * within the same call — a renderer reading currentPositions() off the
      * returned chain sees this frame, not yesterday's. (The old tuple's
