@@ -242,6 +242,10 @@ final class SuspendedDelegations
         try {
             @unlink($this->path(HookContextFiles::verifiedDirectory($this->dir), $id));
         } catch (\RuntimeException) {
+            // verifiedDirectory() refused the store directory (symlink, foreign
+            // owner, loose mode): nothing under it is ours to unlink, and the
+            // same refusal already makes load() report the run as absent, so a
+            // forget that cannot reach the file leaves nothing resumable behind.
         }
     }
 

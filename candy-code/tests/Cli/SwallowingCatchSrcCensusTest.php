@@ -65,10 +65,6 @@ final class SwallowingCatchSrcCensusTest extends TestCase
      * @var array<string, array{0: int, 1: string}> site => [count, justification]
      */
     private const BARE_EMPTY_CATCH_ROSTER = [
-        'src/Agents/SuspendedDelegations.php::forget' => [
-            1,
-            'unlink of a verified-context artifact already wrapped in @; an undeletable temp file is not a forget failure',
-        ],
         'src/Background/PtyRelay.php::main' => [
             1,
             'close() on a pty that never started while the launch-failure refusal below is already the answer; the sibling arm at the first close() says the same in a comment, this one was bare when the census grew',
