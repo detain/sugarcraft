@@ -661,4 +661,43 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
         return '';
     }
+
+    public function testServerRequestHandlerTimeIsCreditedAcrossTheHandshakeLegs(): void
+    {
+        // The handler-credit thread: the server talks back during the
+        // INITIALIZE leg and our handler spends 600 ms answering — the one
+        // wall clock the start budget must NOT bill. tools/list then sleeps
+        // 650 ms: raw leg time 1.25 s overruns the 1.0 s budget, so the start
+        // only succeeds because the credit lands on the SAME $deadline the
+        // next leg resumes with (requestAs/requestEncoded thread it by
+        // reference). Before the thread, the closure captured $deadline by
+        // value, the credit died at the leg boundary, and this start failed.
+        $handlerAnswered = false;
+        $server = new StdioMcpServer(
+            'credited',
+            PHP_BINARY,
+            [self::fixture('credentialed_handshake_server.php'), '0.65'],
+            startTimeoutSeconds: 1.0,
+            onServerMessage: static function (string $method, ?array $params, bool $isNotification) use (&$handlerAnswered): ?array {
+                usleep(600_000);
+                $handlerAnswered = true;
+
+                return null; // the default ping answer
+            },
+        );
+        $this->live[] = $server;
+
+        $startedAt = StdioMcpServer::monotonicNow();
+        $server->start();
+        $elapsed = StdioMcpServer::monotonicNow() - $startedAt;
+
+        self::assertTrue($handlerAnswered, 'the fixture never spoke during the initialize leg');
+        self::assertGreaterThan(1.0, $elapsed, 'a start that finished inside the raw budget proves nothing about the credit');
+        self::assertLessThan(1.6, $elapsed, 'the credited deadline was not honored: handler time still consumed the budget');
+        self::assertSame(
+            ['credentialed'],
+            array_map(static fn ($tool): string => $tool->name, $server->listTools()),
+            'the roster behind the credited leg never registered',
+        );
+    }
 }

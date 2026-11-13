@@ -54,7 +54,11 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * a server that streams notifications forever starves a per-read timeout —
  * every individual read arrives in time, so the budget never expires, and the
  * process hangs (product-measured, rc=124). One deadline checked at the top of
- * each leg bounds the exchange as a unit instead.
+ * each leg bounds the exchange as a unit instead — and the thread is BY
+ * REFERENCE across the handshake legs, so the handler-credit law holds for
+ * the whole budget: wall clock spent answering the server mid-handshake is
+ * added back onto the SAME instant the next leg resumes with, instead of a
+ * by-value copy silently discarding the credit at the leg boundary.
  *
  * Timeout discipline: DEFAULT_START_TIMEOUT_SECONDS bounds the HANDSHAKE only.
  * callTool() carries NO deadline by default — a tool call is somebody's real
@@ -644,7 +648,7 @@ final class StdioMcpServer implements McpServer
             // "expected object, received array" error. The configured map (the
             // server-request law) rides through the same (object) cast, so the
             // default [] still lands as {} byte-for-byte.
-            $response = $this->request('initialize', [
+            $response = $this->requestAs((string) $this->ids->next(), 'initialize', [
                 'protocolVersion' => self::PROTOCOL_VERSION,
                 'capabilities' => (object) $this->capabilities,
                 'clientInfo' => $this->clientInfo,
@@ -707,7 +711,7 @@ final class StdioMcpServer implements McpServer
             // optional ({cursor?}) and omission is exactly what the reference
             // TS client puts on the wire, so it is the shape every server has
             // been tested against.
-            $this->tools = $this->collectToolPages($this->request('tools/list', null, $deadline), $deadline);
+            $this->tools = $this->collectToolPages($this->requestAs((string) $this->ids->next(), 'tools/list', null, $deadline), $deadline);
         } catch (\Throwable $failure) {
             // A throw from any handshake leg — the oversized-frame refusal
             // rides this path — must not leave the spawned child alive on the
@@ -1218,10 +1222,23 @@ final class StdioMcpServer implements McpServer
      * {@see request()} under an id the caller already drew — callTool() needs
      * it to name the request in a `notifications/cancelled`.
      *
+     * $deadline is taken by reference, matching {@see self::readResponse()}'s
+     * law: a server-request handler answered mid-leg is credited BACK onto
+     * this instant, so a caller that threads one budget across several legs
+     * (the handshake, the pagination walk) sees handler wall clock excluded
+     * from the WHOLE budget, not just from the leg that paused. Public
+     * request()/notify() keep the by-VALUE signature on purpose — making a
+     * public parameter by-reference would forbid the documented call shape
+     * `request($m, $p, monotonicNow() + 5)` (PHP fatals on expressions
+     * passed by reference), and per-call credit confined to one call is the
+     * honest public semantics.
+     *
      * @param array<string,mixed>|null $params
      */
-    private function requestAs(string $id, string $method, ?array $params, ?float $deadline): ?McpMessage
+    private function requestAs(string $id, string $method, ?array $params, ?float &$deadline): ?McpMessage
     {
+        self::refuseImplausibleDeadline($deadline);
+
         return $this->requestEncoded($id, McpMessage::request($id, $method, $params)->toJson(), $deadline);
     }
 
@@ -1230,11 +1247,15 @@ final class StdioMcpServer implements McpServer
      * matching reply. Encoding is split out so a caller can tell "the
      * arguments could not be encoded" (nothing was written) apart from "the
      * wait died" (a refused frame, a handler fault) — the honest-cause
-     * rails review M10 asked for.
+     * rails the reply-shape review asked for.
+     *
+     * $deadline threads by reference (see {@see self::requestAs()}): the
+     * closure binds to the CALLER's instant, so readResponse's handler-credit
+     * extension outlives the closure and reaches the next leg.
      */
-    private function requestEncoded(string $id, string $json, ?float $deadline): ?McpMessage
+    private function requestEncoded(string $id, string $json, ?float &$deadline): ?McpMessage
     {
-        return $this->exchange($deadline, true, function (string $prefix) use ($json, $id, $deadline): ?McpMessage {
+        return $this->exchange($deadline, true, function (string $prefix) use ($json, $id, &$deadline): ?McpMessage {
             if (!$this->writeLine($prefix . $json, $deadline)) {
                 $this->lastFailureCause = 'the request could not be written to the server';
 
@@ -2222,7 +2243,7 @@ final class StdioMcpServer implements McpServer
      *
      * @return list<McpTool>
      */
-    private function collectToolPages(?McpMessage $first, float $deadline): array
+    private function collectToolPages(?McpMessage $first, ?float &$deadline): array
     {
         $data = $first?->toArray();
         $tools = $this->requireToolsListPage($first, $data, 1);
@@ -2243,7 +2264,7 @@ final class StdioMcpServer implements McpServer
             }
             $seenCursors[$cursor] = true;
 
-            $response = $this->request('tools/list', ['cursor' => $cursor], $deadline);
+            $response = $this->requestAs((string) $this->ids->next(), 'tools/list', ['cursor' => $cursor], $deadline);
             $data = $response?->toArray();
             $tools = array_merge($tools, $this->requireToolsListPage($response, $data, $page));
         }
