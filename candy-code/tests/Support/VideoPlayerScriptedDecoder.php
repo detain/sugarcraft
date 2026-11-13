@@ -94,6 +94,12 @@ final class VideoPlayerScriptedDecoder implements Decoder
         return true;
     }
 
+    public function seeksBySeconds(): bool
+    {
+        // reopen() resumes at floor($startSec * $fps): the start really is honoured.
+        return true;
+    }
+
     public function vpOpenCount(): int
     {
         return $this->vpOpenCount;
