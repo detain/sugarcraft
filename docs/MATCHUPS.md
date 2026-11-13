@@ -75,7 +75,7 @@ ships as `App\` — called out in the table below.
 | **SugarToast** (`sugar-toast/`) | 🟢 ready | Floating notification overlays — Error / Warning / Info / Success types, configurable position and host-driven auto-dismiss. |
 | **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + delta-rendering Table (sort/filter/cursor) + sticky Viewport + Scrollbar — ratio-based sizing, gap, align, per-column styling. |
 | **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from candy-code (BuildsUnifiedDiff; candy-code's DiffGutter delegates its scan half here). |
-| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow SERVER narrowing (tool rosters follow servers). Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
+| **SugarMCPClient** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow SERVER narrowing (tool rosters follow servers). Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
 | **SugarReleases** (`sugar-releases/`) | 🟢 ready | Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling latest channel), sha256-sidecar + Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap helper. Extracted from candy-code's `SelfUpdate`/`UpdateCheck`/`WindowsSwap` (owner decision G-10=A); candy-top is the second consumer. |
 | **SugarIgnore** (`sugar-ignore/`) | 🟢 ready | gitignore-style ignore matching over injected file contents (no IO) — negation, dir-only, anchoring, `**`, escapes, nested ignore files, `.git/info/exclude` precedence, backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code's `IgnoreRules` (owner decision G-10=A); candy-git, candy-files and candy-git-server are the intended second consumers. |
 
@@ -213,7 +213,7 @@ reference projects supplied the ideas, not the code.
 | SugarInput (sugar-input/) | none — first-party (semantics follow charmbracelet/bubbletea) |
 | SugarLog (sugar-log/) | [log](https://github.com/charmbracelet/log) |
 | SugarMarkdown (sugar-markdown/) | [glamour](https://github.com/charmbracelet/glamour) |
-| Sugar MCP Client (sugar-mcp-client/) | none — first-party |
+| SugarMCPClient (sugar-mcp-client/) | none — first-party |
 | SugarMetrics (sugar-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
 | SugarMouse (sugar-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
 | SugarNavstack (sugar-navstack/) | [bubbleo](https://github.com/KevM/bubbleo) |
