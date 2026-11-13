@@ -16,17 +16,26 @@ use SugarCraft\Vterm\Theme;
  * Colors are resolved through the configured {@see Theme} so user-selected
  * themes reach the rendered GIF.
  *
+ * The tile store is a true LRU: the cache array's insertion order doubles as
+ * access order (every hit re-appends its entry), so the head is always the
+ * least-recently-used tile and eviction there holds the hard bound of
+ * {@see self::MAX_CACHE_TILES} entries. A plain FIFO would evict still-hot
+ * glyphs — long renders cycle through the working set, and the recency rule
+ * is what keeps that set resident (finding candy-vcr-056).
+ *
  * No upstream counterpart: charmbracelet/vhs screenshots a live ttyd with
  * Chromium + ffmpeg and ships no tile cache of this shape — this
  * .tape→GIF raster pipeline is original to SugarCraft.
  */
 final class Glyphs
 {
-    /** @var array<string, \GdImage> */
+    /**
+     * Tile store keyed by cache key; the array's insertion order is the LRU
+     * order (hits re-append, eviction takes the head).
+     *
+     * @var array<string, \GdImage>
+     */
     private array $cache = [];
-
-    /** @var \SplQueue<string> FIFO queue for O(1) eviction order */
-    private \SplQueue $evictionQueue;
 
     private const MAX_CACHE_TILES = 4096;
 
@@ -53,7 +62,6 @@ final class Glyphs
     ) {
         $this->fontSize = $fontSize;
         $this->theme = $theme ?? new Theme();
-        $this->evictionQueue = new \SplQueue();
     }
 
     /**
@@ -62,6 +70,15 @@ final class Glyphs
     public function cacheStats(): array
     {
         return ['hits' => $this->hits, 'misses' => $this->misses, 'evictions' => $this->evictions];
+    }
+
+    /**
+     * Live tiles in the cache. Exposed so tests can assert the hard bound and
+     * eviction order without reaching into the store.
+     */
+    public function cacheSize(): int
+    {
+        return count($this->cache);
     }
 
     public function cellWidth(): int
@@ -115,14 +132,17 @@ final class Glyphs
 
         if (isset($this->cache[$key])) {
             $this->hits++;
-            return $this->cache[$key];
+            $tile = $this->cache[$key];
+            unset($this->cache[$key]);
+            $this->cache[$key] = $tile;
+
+            return $tile;
         }
 
         $this->misses++;
         $this->evictIfNeeded();
         $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $this->cellW, $fgRgb, $bgRgb);
         $this->cache[$key] = $tile;
-        $this->evictionQueue->enqueue($key);
 
         return $tile;
     }
@@ -149,7 +169,11 @@ final class Glyphs
 
         if (isset($this->cache[$key])) {
             $this->hits++;
-            return $this->cache[$key];
+            $tile = $this->cache[$key];
+            unset($this->cache[$key]);
+            $this->cache[$key] = $tile;
+
+            return $tile;
         }
 
         $this->misses++;
@@ -157,25 +181,28 @@ final class Glyphs
         $wideW = $this->cellW * 2;
         $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $wideW, $fgRgb, $bgRgb);
         $this->cache[$key] = $tile;
-        $this->evictionQueue->enqueue($key);
 
         return $tile;
     }
 
     /**
-     * Evict the oldest cache entry if the cache has reached the size limit.
-     * Uses SplQueue for O(1) FIFO eviction order.
+     * Evict least-recently-used entries until a new insert keeps the store at
+     * or below the hard bound. The head of the array is the LRU entry because
+     * every access re-appends its key; the loop form holds the invariant even
+     * if a future caller inserts several tiles per eviction check.
      */
     private function evictIfNeeded(): void
     {
-        if (count($this->cache) >= self::MAX_CACHE_TILES) {
-            $oldestKey = $this->evictionQueue->dequeue();
-            if ($oldestKey !== null && isset($this->cache[$oldestKey])) {
-                $oldImage = $this->cache[$oldestKey];
-                unset($this->cache[$oldestKey]);
-                imagedestroy($oldImage);
-                $this->evictions++;
+        while (count($this->cache) >= self::MAX_CACHE_TILES) {
+            $lruKey = array_key_first($this->cache);
+            if ($lruKey === null) {
+                return;
             }
+
+            $oldImage = $this->cache[$lruKey];
+            unset($this->cache[$lruKey]);
+            imagedestroy($oldImage);
+            $this->evictions++;
         }
     }
 

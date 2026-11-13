@@ -149,4 +149,43 @@ final class GlyphsTest extends TestCase
         $this->assertSame(0, $stats['hits']);
         $this->assertSame(4, $stats['misses']);
     }
+
+    /**
+     * VCR-S29 (finding candy-vcr-056): the eviction order must be recency, not
+     * insertion age. Fill the store to the 4096 hard bound, touch the FIRST
+     * entry so it becomes most-recently-used, then push two more tiles through
+     * — a FIFO would sacrifice the touched entry, the LRU must sacrifice the
+     * untouched successors instead. The bound itself is the invariant: over a
+     * long render the store never exceeds 4096 live tiles.
+     */
+    public function testTrueLruEvictsLeastRecentlyUsedAtTheHardBound(): void
+    {
+        $g = $this->createGlyphs();
+
+        for ($i = 0; $i < 4096; $i++) {
+            $g->tile("k{$i}", 15, 0, false, false, false);
+        }
+
+        $this->assertSame(4096, $g->cacheSize());
+        $this->assertSame(0, $g->cacheStats()['evictions']);
+
+        // Touch the first tile: under recency it survives the next evictions.
+        $g->tile('k0', 15, 0, false, false, false);
+        $this->assertSame(1, $g->cacheStats()['hits']);
+
+        $g->tile('k4096', 15, 0, false, false, false);
+        $g->tile('k4097', 15, 0, false, false, false);
+
+        // Hard bound: the store never grows past capacity ...
+        $this->assertSame(4096, $g->cacheSize());
+        $this->assertSame(2, $g->cacheStats()['evictions']);
+
+        // ... and the evicted pair is the LRU head (k1, k2), not k0.
+        $missesBefore = $g->cacheStats()['misses'];
+        $g->tile('k0', 15, 0, false, false, false);
+        $this->assertSame($missesBefore, $g->cacheStats()['misses'], 'touched k0 must still be cached');
+
+        $g->tile('k1', 15, 0, false, false, false);
+        $this->assertSame($missesBefore + 1, $g->cacheStats()['misses'], 'LRU-first k1 must have been evicted');
+    }
 }
