@@ -24,7 +24,7 @@ pane build one on top of `Store::list()`.
 
 ## Features
 
-- **Multi-database** — separate stores with the `key@dbname` suffix; the SQLite file for a name is created the first time something is written to it (reads of a missing database just see emptiness)
+- **Multi-database** — separate stores with the `key@dbname` suffix; the SQLite file for a name is created the first time something is written to it (reads of a missing database come back empty)
 - **Binary-safe** — values containing NUL bytes or invalid UTF-8 are stored base64-encoded with the binary flag (auto-detected; `--binary`/`--text` override); binary entries export as base64 envelopes and reimport byte-exact
 - **Glob patterns** — `list` and `delete` accept `*` and `?`; `\*`/`\?` spell literals
 
@@ -40,7 +40,7 @@ pane build one on top of `Store::list()`.
 - **SQLite-backed** — one file per database under `$XDG_CONFIG_HOME/skate/` (or `~/.config/skate/`; see Data directory)
 - **Iterable streams** — `list()` yields results without loading everything into memory
 - **TTL / expiry** — integer epoch seconds, so an entry means the same instant on every machine and timezone; `prune` removes expired residue
-- **Levenshtein suggestions** — a key miss prints the closest live key (within half the query's codepoint count) to stderr
+- **Levenshtein suggestions** — a key miss prints the closest live key (within half the query's codepoint count, floored at one edit so short queries still get a hint) to stderr
 - **Import/Export** — JSON and YAML (`yml` accepted), fail-fast: a bad document or an unround-trippable value refuses before writing anything
 - **Atomic transactions** — `transaction()` wraps a callback in BEGIN IMMEDIATE/COMMIT/ROLLBACK
 - **Pinned connection pragmas** — WAL with a 62.5 MiB page-cache cap and a
@@ -49,8 +49,9 @@ pane build one on top of `Store::list()`.
   economics of both choices are argued at the pragmas in `src/Database.php`
 - **Plain text output** — the CLI emits no color and no escapes of its own;
   `get` echoes the stored bytes untouched. `--sanitize` collapses a value to
-  one line, stripping every control a terminal would execute (C0, ESC, DEL,
-  and the UTF-8-encoded C1 pair) — script-friendly by contract
+  one line, stripping every control a terminal would execute (the C0 controls
+  — ESC is one of them — plus DEL and the UTF-8-encoded C1 pair) —
+  script-friendly by contract
 
 ## Install
 
@@ -121,11 +122,12 @@ To try the CLI without touching your real store, sandbox it first:
 ```bash
 candy-kv set <key> [value] [--ttl SECONDS] [--binary|--text]   # no value reads STDIN — silently, no prompt (see STDIN)
 candy-kv get <key> [--sanitize]                               # exact stored bytes by default
-candy-kv list [-k|-v] [-r] [-d DELIM] [pattern]               # one row per entry
+candy-kv list [-k|-v] [-r] [-d DELIM] [@db] [pattern]         # one row per entry; @db scopes the listing
 candy-kv delete <key> [--dry-run]                             # exact key or glob pattern
 candy-kv list-dbs                                             # databases present in the dir
-candy-kv prune                                                # remove expired residue (default db)
-candy-kv import <json|yaml|yml> <path> [--no-atomic]          # path=- reads STDIN
+candy-kv delete-db <name>                                     # remove one database file (and its sidecars)
+candy-kv prune [--db NAME|--all]                              # remove expired residue (default db, unless routed)
+candy-kv import <json|yaml|yml> <path> [--no-atomic] [--if-exists=MODE] [--max-bytes=N]  # path=- reads STDIN
 candy-kv export <json|yaml|yml> [db] [pattern]
 candy-kv --help    # or: -h, help
 candy-kv --version
@@ -141,9 +143,22 @@ candy-kv --version
   truncate it at the first NUL; such payloads belong in `--binary`.
 - `get` prints the exact stored bytes (no added newline, no scrubbing) so
   round-trips and `$(candy-kv get k)` stay honest. `--sanitize` collapses the
-  value to one line with C0 controls, ESC, DEL and the UTF-8-encoded C1
-  controls stripped for terminal printing.
+  value to one line with the C0 controls (ESC included) and DEL stripped, plus
+  the UTF-8-encoded C1 pair, for terminal printing.
 - `--dry-run` reports how many entries `delete` would touch and writes nothing.
+- `--binary` and `--text` are mutually exclusive: passing both refuses as a
+  usage error (exit 2) instead of letting flag order decide.
+- `prune` sweeps the default database; `--db NAME` routes the sweep, `key@db`
+  positional is the same routing in suffix spelling, and `--all` walks every
+  listed database, printing the per-database counts.
+- `delete-db <name>` removes one database (plus its sidecars). A typo'd name
+  is reported with `did you mean` hints over the databases that exist.
+- `import --if-exists` chooses the clobber policy for keys already stored:
+  `replace` (default), `skip` (keep the live row), or `fail` (refuse, naming
+  the key). An overwriting import always says how much it replaced.
+- `import --max-bytes N` raises the per-document size ceiling above the
+  268435456-byte (256 MiB) default; `0` removes it. Oversized documents are
+  refused before their bytes are read.
 - `--` ends option processing: `set backup -- --ttl=60` stores the literal
   value `--ttl=60`. Only the first `--` ends option processing — a second one
   is ordinary positional data, so `set k -- --` stores the value `--`.
@@ -164,13 +179,14 @@ candy-kv --version
 | Situation | Code |
 |---|---|
 | success | 0 |
-| key/pattern found nothing (`get` miss, `delete` miss) | 1 |
-| a runtime error (unreadable store, failed write) | 1 |
-| usage error: unknown command, unknown option, bad/missing arguments, `--ttl 0`, pattern passed to `get` | 2 |
+| key/pattern found nothing (`get` miss, `delete` miss, `delete-db`/`prune --db` on an absent database) | 1 |
+| a runtime error (unreadable store, failed write, oversized document) | 1 |
+| usage error: unknown command, unknown option, bad/missing arguments, `--ttl 0`, contradictory `--binary --text`, pattern passed to `get` | 2 |
 
-Nothing is written on exit 2 paths. The "pattern passed to `get`" refusal
-inspects the raw key bytes (`bin/candy-kv`: `strpbrk($key, '*?')`), so it fires
-on escaped spellings too — see Glob patterns above.
+Nothing is written on exit 2 paths. The "pattern passed to `get`" refusal fires
+on *unescaped* glob bytes only — a `\*`/`\?` spelling is not a pattern but the
+grammar's literal escape, and `get 'ra\*wt'` fetches the key `ra*wt`; the same
+bytes unescaped stay the pattern refusal (see Glob patterns above).
 
 Two edge cases complete the table. A bare `candy-kv` (no arguments at all) prints
 the help and exits **0** — asking for guidance is not a usage error; exit 2
@@ -195,7 +211,7 @@ $ candy-kv list
 color	blue                                   # key, TAB, value; rows newline-terminated
 greeting	Hello, World!
 $ candy-kv get colar
-key not found; did you mean 'color'?           # stderr; exit 1
+Key not found; did you mean 'color'?            # stderr; exit 1
 $ candy-kv delete 'user-*' --dry-run
 Nothing deleted: no entries match "user-*".    # stderr; exit 1 (no user-* keys exist)
 $ candy-kv list -v
@@ -206,7 +222,7 @@ default
 notes
 ```
 
-Newline discipline: `get` never adds a newline (piped `set` stores stdin
+Newline discipline: `get` never adds a newline (piped `set` stores STDIN
 byte-verbatim, so `echo token | candy-kv set k` stores the trailing newline
 too — use `printf %s` or pass the value as an argument for exact bytes);
 `list`, `delete`, `prune`,
@@ -214,7 +230,10 @@ and import success lines are newline-terminated one-shots. `list` scrubs
 control bytes from stored keys/values for the terminal (a multi-line value
 prints as one collapsed line); the `-d` delimiter itself prints raw. Binary
 entries print as `<binary N bytes>` in `list` — their decoded bytes come from
-`get` (exact) or `saveTo()`.
+`get` (exact) or `saveTo()`. Upstream skate's `list -b` (raw bytes inline) has
+no equivalent: the collapsed marker is deliberate, so a dump of binary values
+can never scribble on your terminal; reach for `get` per key where a ported
+script asked for `-b`.
 
 ### TTL (Time-To-Live)
 
@@ -225,37 +244,53 @@ candy-kv set session:abc123 '{"user":"bob"}' --ttl=3600  # expires in one hour
 Expiry is stored as an integer epoch second, so a database written in one
 timezone reads with the same true instants everywhere. Pre-2026-10 databases
 stored offset-bearing ISO strings — candy-kv migrates those rows once, on
-open, preserving each row's exact instant. A row is live at `expires_at >=
-now` — an integer-second comparison; `Entry::isExpired()` carries the same
-rule at sub-second precision, so at the exact expiry second SQL readers keep
-the row while `isExpired()` may already call it expired: a same-second
-boundary of at most one second, resolved in the user's favour on SQL reads.
-Expired entries are
-invisible to every reader (`get`, `list`, `delete`, `count`) but still occupy
-disk until you `candy-kv prune`, which deletes exactly the complement set.
+open, preserving each row's exact instant; a cell that no longer parses at
+all is quarantined as expired — loudly, naming the key — rather than letting
+it block the whole store from opening.
+
+Liveness has a one-second boundary worth stating precisely. A row is live
+when `expires_at >= now`, an integer-second comparison every SQL read makes.
+`Entry::isExpired()` checks the same instant at sub-second precision. During
+the final second the two can disagree; when they do, SQL reads keep the row —
+the boundary resolves in the user's favour.
+
+Expired entries are invisible to every reader (`get`, `list`, `delete`,
+`count`) but still occupy disk until you `candy-kv prune`, which removes
+exactly the expired rows every reader hides (`--db NAME` routes the sweep,
+`--all` walks every database).
+
+Zero and absent TTLs mean different things on different surfaces — the table
+is the whole map:
+
+| Door | Given | Result |
+|---|---|---|
+| CLI `--ttl 0` (or negative) | zero | usage error, exit 2, nothing stored — omit `--ttl` for forever |
+| `Store::set(..., ttlSeconds: 0)` or negative | ≤ 0 | a **forever** entry — expiry arms only above zero |
+| `Store::setWithTtl(..., ttlSeconds: 0)` or negative | ≤ 0 | documented NO-OP — nothing is stored at all |
 
 ### STDIN
 
-When no value is given as an argument, `set` reads from stdin. For import, use `-` or `/dev/stdin` as the path:
+When no value is given as an argument, `set` reads from STDIN. For import, use `-` or `/dev/stdin` as the path:
 
 ```bash
 printf %s my-secret-token | candy-kv set api-token
 candy-kv import json - < backup.json
 ```
 
-> **Note:** piped values are stored verbatim — the full stdin is read with no
-> trimming, byte-for-byte (and without a size bound; see Import/export
-> memory).
+> **Note:** piped values are stored verbatim — STDIN is read with no
+> trimming, byte-for-byte, under the same 256 MiB default size ceiling as
+> import documents (`SizeCap`; the import door raises it per call with
+> `--max-bytes`, the set door uses the default).
 
-The `-` stdin sentinel is meaningful only as `import`'s path argument. Option
+The `-` STDIN sentinel is meaningful only as `import`'s path argument. Option
 parsing exempts a bare `-` from the dash prefix for **every** subcommand
-(`ArgParser::isOptionLike()`), so elsewhere it is literal data, never a stdin
+(`ArgParser::isOptionLike()`), so elsewhere it is literal data, never a STDIN
 switch and never an error: `set k -` stores a one-character dash value,
 `get -` looks up a key literally named `-`, and `list -` is a pattern matching
 the single character `-`.
 
-There is no prompt and no tty check behind the stdin fallback
-(`stream_get_contents(STDIN)` in `bin/candy-kv`): running `candy-kv set k`
+There is no prompt and no tty check behind the STDIN fallback (`SizeCap::readStream(STDIN, ...)`
+in `bin/candy-kv`): running `candy-kv set k`
 with nothing piped waits silently for the value, which looks like a hang at a
 keyboard until EOF arrives (Ctrl-D). Pipe the value or pass it as the second
 argument; `printf %s my-secret-token | candy-kv set api-token` never pauses.
@@ -266,8 +301,9 @@ The rightmost **unescaped** `@` routes the key: `cache@notes` stores entry
 `cache` in database `notes`. A literal `@` inside an entry key is spelled
 `\@`, so `support\@acme` is one key regardless of other `@` signs. A key with
 no separator stays in the default database, and a leading `@` (`@x`) is a
-literal key, never a database suffix. More than one unescaped `@` in the
-entry part (`a@b@c`) is refused rather than guessed. The same law is public
+literal key, never a database suffix. A further unescaped `@` left in the
+entry part after routing (`a@b@c` — the rightmost one routes, which strands
+`a@b` with another) is refused rather than guessed. The same law is public
 in the library: `Store::splitKey('a\@b@db', 'default')` returns
 `['db', 'a@b']`. Export writes a stored key's literal `@` back in that
 escaped spelling (the `@database` suffix stays raw), so a dump reimports
@@ -276,7 +312,10 @@ the backslash itself, so key spellings whose decoded form ends in a
 backslash or carries a doubled-backslash `@` (`bs\`, `a\\@b`) are refused
 loudly at every door — `set`, `get`, `delete`, import, and qualified export
 — instead of being silently rewritten and re-routed; keep such bytes out of
-keys (store them base64 or in the value).
+keys (store them base64 or in the value). Names are case-sensitive at every
+level: unlike upstream skate, which lowercases keys and database names on
+input, candy-kv stores what you type — `Foo` and `foo` are two keys, and
+`k@Notes` and `k@notes` are two databases.
 
 Glob characters `*`/`?` in a key name are reachable by `get` through the
 pattern engine's own escape: `get 'ra\*wt'` fetches the literal key `ra*wt`
@@ -310,7 +349,10 @@ key the document does not otherwise carry is simply ignored, not an error.
 zero/negative TTL on an entry refuses that import too (a forever entry omits
 the TTL instead). An atomic import that would write to more than one database
 refuses unless `--no-atomic` (library: `atomic: false`) is given, so the
-BEGIN/COMMIT guard cannot be bypassed by value shapes.
+BEGIN/COMMIT guard cannot be bypassed by value shapes. A re-import of a dump
+whose keys are already stored replaces them by default — and the success line
+says how many entries it overwrote; `--if-exists=skip` keeps live rows and
+`--if-exists=fail` refuses the import naming the key.
 
 Exporting with an explicit `[db]` argument qualifies every key to
 `key@dbname` so the dump reimports into the same databases; a pattern or
@@ -321,9 +363,13 @@ Both formats are value-preserving: backslashes, newlines, colons, empty
 strings and control bytes round-trip, and binary entries come back as
 binary — through JSON **and** both YAML engines. Remaining TTLs are exported
 for live entries only (expired rows are invisible to the reader the export
-walks). Note that import/export buffer the whole document in memory (a
-binary value costs ~1.33× in base64 text); the streaming surface is
-`list()`/`saveTo()`.
+walks). Size is bounded, not buffered: an import document may not exceed the
+256 MiB default ceiling — a file is refused on its stat before its bytes are
+read, and a stream (STDIN included) is stopped within one chunk of the cap —
+`--max-bytes N` raises the ceiling, `0` removes it. Export streams
+row-by-row: peak memory stays flat whether the database holds three thousand
+rows or thirty thousand (a binary value still costs ~1.33× as base64 text in
+the document itself).
 
 **JSON envelope.** Plain `"key": "value"` pairs. Binary entries ride
 base64; their keys are listed in a reserved `"_binary"` array. Remaining
@@ -344,48 +390,53 @@ the same base64; TTLs become `skate_ttl_<key>` integer lines and binary
 flags `skate_binary_<key>` lines. For compatibility the YAML route also
 **reads** the legacy nested `_ttl:` / `_binary:` envelope (the JSON reserved
 shape pasted into YAML) and honors it like the flat lines
-(`src/Import/YamlImporter.php:108-126`); the `skate_…` lines above are the
+(`src/Import/YamlImporter.php`); the `skate_…` lines above are the
 only shape YAML export ever writes. When symfony/yaml is installed it renders
 and parses the identical flat shape (plus `!!binary` tags for stray control
-bytes, which the fallback parser also reads). A single process always uses
-one engine, and the two are not interchangeable parsers: the fallback
-refuses an unquoted colon-containing key that symfony accepts (`e:f: hey`
-becomes key `e:f` there), and it keeps `true`-style value tokens as
-literal text where symfony decodes them to a bool — the importer refuses
-bools, so a document carrying `true` imports on one engine and is refused
-on the other (a decoded int is stringified on import and lands identically
-either way). The fallback also refuses constructs
-only symfony wraps for very long
-plain scalars, and it says which line failed. Export refuses keys that would
+bytes, which the fallback parser also reads). One engine serves a process,
+and the two agree on that data contract; they differ only on the edge shapes
+below. **Colon keys:** the fallback refuses an unquoted colon-containing key
+that symfony accepts — `e:f: hey` becomes the key `e:f` under symfony and a
+refusal under the fallback. **Bool tokens:** the fallback keeps `true`-style
+tokens as literal text where symfony decodes them to a bool; the importer
+refuses bools, so a document carrying `true` imports on one engine and is
+refused on the other (a decoded int is stringified on import and lands
+identically either way). **Long scalars:** for very long plain scalars the
+fallback refuses constructs symfony would fold or wrap — and, unlike symfony,
+it names the line that failed. Export refuses keys that would
 collide with the reserved shapes **of the format being written** — `_ttl` /
 `_binary` for JSON, `skate_ttl_…` / `skate_binary_…` for YAML — instead of
 emitting unreadable files.
 
 ### CLI surface vs library surface
 
-The CLI covers `set`, `get`, `list`, `delete`, `list-dbs`, `prune`, `import`
-and `export` — `list-dbs` is a thin loop over `Store::listDatabases()` and
-`prune` calls `Store::pruneExpired()` (default database), so those two
+The CLI covers `set`, `get`, `list`, `delete`, `list-dbs`, `delete-db`,
+`prune`, `import` and `export` — `list-dbs` is a thin loop over
+`Store::listDatabases()`, `delete-db` calls `Store::deleteDatabase()`, and
+`prune` sweeps `Store::pruneExpired()` by default with `--db NAME` / `--all`
+routing the same law per database (`Store::pruneDatabase()`), so those
 library twins do have CLI verbs. Everything else is library-only, by
 design: `Store::entry()`, `suggestionFor()`, `setWithTtl()`,
 `fuzzyFilter()`, `setFile()`, `saveTo()`, `transaction()`,
-`deleteDatabase()`, and the whole single-file surface (`Database::count()`,
-`raw()`, `allKeys()`, `pruneExpired()` on any database other than the
-default, `close()`) have no CLI verbs — the binary stays a thin front end
-for the everyday loop.
+and the rest of the single-file surface (`Database::count()`,
+`raw()`, `allKeys()`, `close()`) have no CLI verbs — the binary stays a thin
+front end for the everyday loop.
 
 Import and export keep that shape programmatically, not just as CLI verbs:
 `SugarCraft\Kv\Import\JsonImporter` and `SugarCraft\Kv\Import\YamlImporter` are
 public API — constructed with a `Store` (plus options such as `ttl`), each
-exposes `importFromFile(string $path, bool $atomic = true): int` and
-`importFromString(string $text, bool $atomic = true): int`, where `$atomic =
-false` is the `--no-atomic` skip-the-wrapping-transaction path. On the other
+exposes `importFromFile(string $path, bool $atomic = true, string $ifExists = 'replace', int $maxBytes = SizeCap::DEFAULT_MAX_BYTES)` and
+the same-shaped `importFromString(string $text, ...)` — both answer an
+`ImportReport` (imported / overwritten / skipped counts), where `$atomic =
+false` is the `--no-atomic` skip-the-wrapping-transaction path, `$ifExists`
+carries the clobber policy and `$maxBytes` the size ceiling. On the other
 side, `SugarCraft\Kv\Cli\ExportCommand` exposes `run(...): int` (writes to
 stdout, returns the exit code) and `exportToString(string $format, ?string
 $dbName = null, ?string $pattern = null): string` for callers that want the
 document as a value. Key-bearing commands route to a named
-database through the `key@dbname` suffix; `list` alone always scans the
-default database (patterns cannot select a db), while `export <format> [db]`
+database through the `key@dbname` suffix; the CLI `list` scans the default
+database unless its first positional is a lone `@db` token, which scopes the
+listing to that database (`list @notes 'user-*'`), while `export <format> [db]`
 takes an explicit database name.
 
 ## Public API
@@ -401,10 +452,13 @@ takes an explicit database name.
 | `setWithTtl(string $key, mixed $value, int $ttlSeconds): void` | Convenience setter — stringable values (scalars plus `__toString` objects); arrays, resources and non-stringable objects throw; `ttlSeconds <= 0` is a documented NO-OP (stores nothing) |
 | `get(string $key, string $fallback = ''): string` | Exact-key read; pure — no terminal writes, expired or missing keys return the fallback |
 | `entry(string $key): ?Entry` | Full entry (metadata included, live rows only) |
-| `suggestionFor(string $key): ?string` | Closest live key within half the query's codepoint count (what the CLI prints on a miss); `null` when nothing is near |
-| `list(?string $pattern = null, ?string $dbName = null, bool $reverse = false, string $mode = 'all', string $delimiter = "\t")` | Lazy generator — `Entry` objects, or plain `string` keys/values with `$mode` `'keys'`/`'values'`. The `$delimiter` parameter is accepted for signature compatibility but no path applies it any more (the CLI prints the raw delimiter; kept because removing it breaks the public API — slated for a v2 removal) |
+| `suggestionFor(string $key): ?string` | Closest live key within half the query's codepoint count, floored at one edit (what the CLI prints on a miss); `null` when nothing is near |
+| `suggestDatabase(string $name): ?string` | Same distance law over the listed database names — the `delete-db`/`prune --db` typo hint |
+| `list(?string $pattern = null, ?string $dbName = null, bool $reverse = false, string $mode = 'all', string $delimiter = "\t")` | Lazy generator — `Entry` objects, or plain `string` keys/values with `$mode` `'keys'`/`'values'`. The `$delimiter` parameter is accepted for signature compatibility but no path applies it any longer (the CLI prints the raw delimiter; kept because removing it breaks the public API — slated for a v2 removal) |
 | `delete(string $key): int` | Exact key or glob; returns live entries removed |
 | `pruneExpired(): int` | Permanently delete expired rows from the default database (readers never see them; this reclaims the disk) |
+| `pruneDatabase(string $dbName): int` | The same sweep aimed at one named database (`--db`/`--all` routing); a missing database answers 0 without creating it |
+| `isReservedDatabase(string $name): bool` | The `settings` reservation door, public so the CLI answers reserved names before typo-suggesting |
 | `setFile(string $key, string $filePath): Entry` | Store file contents as a binary entry |
 | `saveTo(string $key, string $filePath): bool` | Write an entry to disk, created/tightened `0600` before any byte lands |
 | `fuzzyFilter(string $query, ?string $dbName = null): array` | Live Smith-Waterman scored key search (sugar-fuzzy), best match first |
@@ -421,7 +475,10 @@ takes an explicit database name.
 entries), `binary`, `createdAt`/`modifiedAt` (`DateTimeImmutable`, display
 timestamps only), `expiresAt` (`?DateTimeImmutable`), `isExpired()`, and
 `rawValue()` which base64-decodes when `binary` is set (a binary row holding
-corrupt base64 raises rather than printing its own encoding as content).
+corrupt base64 raises rather than printing its own encoding as content). A
+row whose stored date cell no longer parses raises the same keyed way —
+`Entry '<key>' does not hold a valid <field> date` — at construction, the one
+point every accessor meets the database.
 `Entry::binary($key, $bytes)` is the factory for the binary form.
 `Database` is the single-file layer behind a store name:
 `get/raw/set/delete/deleteMany/list/allKeys/count/pruneExpired/transaction/
@@ -435,20 +492,22 @@ share the case-sensitive, character-wise semantics of exact ones.
 - Values are stored **unencrypted** — SQLite is a container, not a vault. The
   token example above is readable with `sqlite3` or any text editor.
 - A fresh database file is born under the process umask — SQLite offers no
-  creation mode — and schema pages are the only bytes written at that mode
-  before the open path tightens the file (existing loose files alike) plus
-  its `*-wal` / `*-shm` sidecars to `0600` (owner-only), so no user value
-  byte ever lands on a looser file; a chmod that cannot be applied fails
-  the open loudly. The data directory is created `0700`. `saveTo()` likewise
-  chmods its target before writing.
+  creation mode — and only schema pages are written at that mode before the
+  file is tightened. On open, the file and its `*-wal` / `*-shm` sidecars are
+  tightened to `0600` (owner-only); pre-existing looser files are tightened
+  too, so no user-value byte ever lands on a looser file. A chmod that cannot
+  be applied fails the open loudly. The data directory is created `0700` and
+  its mode is re-asserted on every open. `saveTo()` likewise writes through a
+  private temporary file into a `0600` target.
 - `get` on a typo prints the closest key to stderr. On shared machines,
   remember key names can themselves be sensitive — stderr is still a log.
-  Suggestions fire only within half the query's codepoint count; a far-from-anything
-  miss says just `key not found: <the sanitized query>` (shipped string
-  `key not found: {key}`, `cli.key_not_found` in `lang/en.php`).
+  Suggestions fire only within half the query's codepoint count (floored at
+  one edit); a far-from-anything
+  miss says just `Key not found: <the sanitized query>` (shipped string
+  `Key not found: {key}`, `cli.key_not_found` in `lang/en.php`).
 - **Command lines are not secret storage.** Anything passed as an argument
   (`candy-kv set token "$SECRET"`) is visible to `ps`, shell history, and any
-  process accounting. Piping the value via stdin keeps it out of argv — that
+  process accounting. Piping the value via STDIN keeps it out of argv — that
   is the high-value-entry path. `--binary` has no bearing on exposure: it
   only forces the base64 storage form (see Binary-safe above), it does not
   hide, encrypt, or redact anything, and the value still round-trips through
@@ -483,18 +542,26 @@ CLI diagnostics and success lines are localized: the binary selects a locale
 from `LC_ALL` → `LC_MESSAGES` → `LANG` at start-up (16 shipped locales, see
 `lang/`). The missing-argument usage line is part of that translated surface —
 `usage()` emits `Lang::t('cli.usage_*')` before exit 2, so `LANG=fr candy-kv
-get` answers `Usage : candy-kv get <clé>`. The translated set is the CLI's
+get` answers `Usage : candy-kv get <clé> [--sanitize]`. The translated set is the CLI's
 own answers: usage lines, the key/database miss diagnostics and their
 suggestions, and the success counts (`Deleted …`, `Imported … Overwrote …`,
 `pruned …`, `Deleted database …`). Four surfaces stay English by
-design: `candy-kv --help` (a fixed
-heredoc — its flag needles are pinned by `CliContractTest`), `src/Cli/ArgParser.php`'s
-own parse errors (unknown option, surplus positional — the one surface quoted
-verbatim by the test suite), the import/export failure diagnostics —
-refusal wrappers such as `File not found: <path>` and the importers'
-RuntimeException texts, a design the `src/Cli/ImportCommand.php` docblock
-states outright — and the library's own validation throws (`Store` key
-routing, `Database` writes, expiry laws). Exactly two library exceptions are
+design:
+
+1. `candy-kv --help` — a fixed heredoc whose every documented flag is pinned
+   by `CliContractTest`;
+2. `src/Cli/ArgParser.php`'s own parse errors (unknown option, surplus
+   positional, malformed values) — the one surface quoted
+   verbatim by the test suite;
+3. the import/export failure diagnostics —
+   refusal wrappers such as `File not found: <path>` and the importers'
+   RuntimeException texts, a design the `src/Cli/ImportCommand.php` docblock
+   states outright;
+4. the library's own validation throws (`Store` key routing, `Database`
+   writes, expiry laws).
+
+Only (2) through (4) can surface as exceptions; the help heredoc is not one.
+Exactly two library exceptions are
 catalog-keyed, so they follow the active locale: `store.cannot_read` and
 `database.entry_unreadable`. Everything else English above is English on
 purpose, not drift.
@@ -532,7 +599,10 @@ candy-kv uses [sugar-fuzzy](https://github.com/detain/sugarcraft/tree/master/sug
 
 ## Accessor deprecation (2026-10-24)
 
-Two public accessors were renamed to bare form (the naming rule the tests below pin; the rename history lives in [CHANGELOG.md](CHANGELOG.md)). `Database::getRaw()` became `raw()` — `raw` was unclaimed on the class (the store verbs `get`/`set`/`list` are the canonical vocabulary, no `raw` among them). `Store::getFile()` became `saveTo()`: the operation writes store data out to disk, so a direction verb describes it better than a getter; `saveTo()` won over `export()` because the package's own CLI already owns the `export` command (a whole-database dump) and a per-entry `Store::export()` would blur that vocabulary. The store-side mutator `setFile()` keeps its name — it is the file form of the canonical `set()` verb. The legacy spellings stayed as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0`; they will be removed in candy-kv v2.0.0 (see [CHANGELOG.md](CHANGELOG.md)).
+The house naming rule is bare accessors — no `get` prefix — and two public
+accessors were renamed into it. The paragraphs below explain each rename, and
+`tests/AccessorDeprecationTest.php` (described under the table) pins the rule;
+the rename history lives in [CHANGELOG.md](CHANGELOG.md). `Database::getRaw()` became `raw()` — `raw` was unclaimed on the class (the store verbs `get`/`set`/`list` are the canonical vocabulary, no `raw` among them). `Store::getFile()` became `saveTo()`: the operation writes store data out to disk, so a direction verb describes it better than a getter; `saveTo()` won over `export()` because the package's own CLI already owns the `export` command (a whole-database dump) and a per-entry `Store::export()` would blur that vocabulary. The store-side mutator `setFile()` keeps its name — it is the file form of the canonical `set()` verb. The legacy spellings stayed as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0`; they will be removed in candy-kv v2.0.0 (see [CHANGELOG.md](CHANGELOG.md)).
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
