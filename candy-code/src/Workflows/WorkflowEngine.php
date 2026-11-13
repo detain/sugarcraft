@@ -3183,8 +3183,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // still holds the mid-loop tokens, so they are dropped here and
                 // the author's shadowed values come from the record instead.
                 $restoredLoop = $loop !== null && $accumulate !== null && $stageIndex === $currentStageIndex
-                    ? self::restoredLoopRound($prior['loopRound'] ?? null, $stageIndex, $loopName, self::stageInputHash($stage, $stageType), (int) $loop['max'])
+                    ? self::restoredLoopRound($prior['loopRound'] ?? null, $stageIndex, $loopName, self::stageInputHash($stage, $stageType))
                     : null;
+                // A restored loop that has no round left to run (its `max:` is spent, or its
+                // `until:` already holds: the kill landed after the last round settled but
+                // before the stage did) settles on the persisted set. Nothing re-dispatches.
+                $restoredSettled = false;
                 if ($restoredLoop !== null) {
                     $restoredAccumulator = [
                         'items' => $restoredLoop['accumulator']['items'],
@@ -3198,20 +3202,29 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         unset($restoredContext[$token]);
                     }
                     $restoredContext[StageCondition::LOOP_DRY_ROUNDS_CONTEXT_KEY] = $restoredAccumulator['dry'];
-                    // A record whose loop had already met its `until:` (killed in
-                    // the instant before the stage settled) restarts the loop
-                    // rather than running a round the author's clause ruled out.
-                    if (!StageCondition::evaluate($loop['until'], $this->withBudgetRemaining($restoredContext))) {
-                        $round = $restoredLoop['completedRounds'] + 1;
-                        $accumulator = $restoredAccumulator;
-                        $shadowed = $restoredLoop['shadowed'];
-                        $context = $restoredContext;
-                        // Carried on the live slot so a pause before this loop's
-                        // next round still records the progress it resumed from.
-                        $this->liveRuns[$liveToken]['loopRound'] = $restoredLoop;
+                    $round = $restoredLoop['completedRounds'] + 1;
+                    $accumulator = $restoredAccumulator;
+                    $shadowed = $restoredLoop['shadowed'];
+                    $context = $restoredContext;
+                    // Carried on the live slot so a pause before this loop's
+                    // next round still records the progress it resumed from.
+                    $this->liveRuns[$liveToken]['loopRound'] = $restoredLoop;
+                    $restoredSettled = $restoredLoop['completedRounds'] >= (int) $loop['max']
+                        || StageCondition::evaluate($loop['until'], $this->withBudgetRemaining($restoredContext));
+                    if ($restoredSettled) {
+                        $stageResult = new StageResult(
+                            stageName: $loopName,
+                            status: WorkflowStatus::Completed,
+                            startedAt: new \DateTimeImmutable(),
+                            completedAt: new \DateTimeImmutable(),
+                        );
                     }
                 }
-                do {
+                // do-while in shape: the body runs at least once, unless a restored loop has settled.
+                while (true) {
+                    if ($restoredSettled) {
+                        break;
+                    }
                     if ($loop !== null) {
                         $context['round'] = $round;
                         // Round 1 has no previous round: the token keeps
@@ -3348,11 +3361,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
                             }
                         }
                     }
-                } while ($loop !== null
-                    && $round <= $loop['max']
-                    && $this->runCancellation?->isCancelled() !== true
-                    && $this->budgetStop === null
-                    && !StageCondition::evaluate($loop['until'], $this->withBudgetRemaining($context)));
+                    if (!($loop !== null
+                        && $round <= $loop['max']
+                        && $this->runCancellation?->isCancelled() !== true
+                        && $this->budgetStop === null
+                        && !StageCondition::evaluate($loop['until'], $this->withBudgetRemaining($context)))) {
+                        break;
+                    }
+                }
 
                 if ($loop !== null) {
                     unset($this->liveRuns[$liveToken]['loopRound']);
@@ -6457,13 +6473,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
     /**
      * #26: the persisted settled-rounds state of an accumulate loop, when it is
      * usable for the stage about to run: the same stage at the same index with
-     * an unchanged declaration, a well-formed set, and rounds still left under
-     * `max:`. Anything else is null, and the loop starts from round 1 as it
-     * always did — a record written before this state existed is that case.
+     * an unchanged declaration and a well-formed set of at least one settled
+     * round. A spent `max:` or a met `until:` is still usable: the stage settles
+     * on that set without dispatching (see the caller). Anything else is null,
+     * and the loop starts from round 1 as it always did — a record written
+     * before this state existed is that case.
      *
      * @return array{stage: string, stageIndex: int, hash: string, completedRounds: int, accumulator: array{items: list<mixed>, keys: list<string>, fresh: list<mixed>, dry: int}, shadowed: array<string, mixed>}|null
      */
-    private static function restoredLoopRound(mixed $state, int $stageIndex, string $stageName, string $hash, int $max): ?array
+    private static function restoredLoopRound(mixed $state, int $stageIndex, string $stageName, string $hash): ?array
     {
         if (!is_array($state)
             || ($state['stageIndex'] ?? null) !== $stageIndex
@@ -6472,7 +6490,6 @@ final class WorkflowEngine implements WorkflowEngineInterface
             || !hash_equals($state['hash'], $hash)
             || !is_int($state['completedRounds'] ?? null)
             || $state['completedRounds'] < 1
-            || $state['completedRounds'] >= $max
             || !is_array($state['shadowed'] ?? null)
             || !is_array($state['accumulator'] ?? null)
         ) {

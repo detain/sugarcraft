@@ -553,11 +553,14 @@ kept.
   number into the run's pause or run record, so a resumed run continues at the
   next round with the same `{{seen}}`, `{{fresh}}` and dry count — completed
   rounds are not re-dispatched. The resume applies only when the record is for
-  this same stage at the same position, its declaration is unchanged, and the
-  loop still has rounds left under `max:` and has not met `until:`; otherwise
-  the loop starts from round 1 with an empty set. A record written before this
+  this same stage at the same position and its declaration is unchanged; a
+  record whose `max:` is already spent or whose `until:` already holds settles
+  on the persisted set without dispatching anything. Otherwise the loop starts
+  from round 1 with an empty set. A record written before this
   state existed resumes exactly as it always did, from round 1. `cache: true`
-  can still carry the recorded `{"items":…}` row.
+  can still carry the recorded `{"items":…}` row. The one kill window left is
+  inside a round: a kill while its agents run re-dispatches that round alone,
+  and its spend is not recorded again.
 
 #### Loop-only `until:` leaves
 

@@ -54,11 +54,11 @@ final class WorkflowAccumulateResumeTest extends TestCase
     }
 
     /** Round 1 adds a and b, round 2 adds c, round 3 adds nothing: dry 1 ends the loop. */
-    private function registerFindLoop(string $name): void
+    private function registerFindLoop(string $name, string $prompt = 'find {{round}} seen {{seen}}'): void
     {
         $this->outputs = ['{"f":["a","b"]}', '{"f":["c"]}', '{"f":[]}'];
         $this->registry->register((new WorkflowBuilder())->name($name)
-            ->stage('find', Tasks::agent('f')->prompt('find {{round}} seen {{seen}}')->outputSchema(['type' => 'object']))
+            ->stage('find', Tasks::agent('f')->prompt($prompt)->outputSchema(['type' => 'object']))
             ->loop(['max' => 5, 'accumulate' => ['pointer' => '/f'], 'until' => ['dry' => 1]])
             ->build());
     }
@@ -145,6 +145,128 @@ final class WorkflowAccumulateResumeTest extends TestCase
         self::assertNotEmpty($events);
         self::assertMatchesRegularExpression('/^started:plan-[0-9a-f]{8}-1$/', $events[0]);
         self::assertStringStartsWith('dispatch:', $events[1]);
+    }
+
+    /**
+     * The record the live run writes as round 3 is about to dispatch — what a kill
+     * during round 3 leaves behind — with its writer's pid dropped so it reads as an orphan.
+     *
+     * @return array<string, mixed>
+     */
+    private function captureMidLoopRecord(string $name): array
+    {
+        $captured = null;
+        $this->onDispatch = function (string $task) use (&$captured, $name): void {
+            if (str_starts_with($task, 'find 3 ') && $captured === null) {
+                $captured = (string) file_get_contents($this->pauseFile($name));
+            }
+        };
+        $this->engine()->run($name);
+        $this->onDispatch = null;
+
+        self::assertIsString($captured);
+        $record = json_decode($captured, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(2, $record['loopRound']['completedRounds'] ?? null, 'two rounds settled before the kill');
+        unset($record['pid'], $record['pidStartedAt']);
+
+        return $record;
+    }
+
+    public function testAMetUntilOnResumeSettlesOnThePersistedSetWithoutDispatching(): void
+    {
+        $this->registerFindLoop('until-met');
+        $record = $this->captureMidLoopRecord('until-met');
+        // Killed after round 3 settled with a dry count that meets `until: {dry: 1}`,
+        // but before the stage did: the set is final and no round may run again.
+        $record['loopRound']['completedRounds'] = 3;
+        $record['loopRound']['accumulator']['dry'] = 1;
+        $this->writePauseFile('until-met', $record);
+
+        $this->prompts = [];
+        $this->outputs = ['{"f":["never"]}'];
+        $result = $this->engine()->resume('until-met');
+
+        self::assertSame(WorkflowStatus::Completed, $result->status, (string) $result->firstFailure()?->error);
+        self::assertSame([], $this->prompts, 'a met until: dispatches nothing on resume');
+        self::assertSame('{"items":["a","b","c"],"keys":["a","b","c"],"rounds":3}', $result->stageResults[0]->output);
+    }
+
+    public function testASpentMaxOnResumeSettlesOnThePersistedSetWithoutDispatching(): void
+    {
+        $this->registerFindLoop('max-spent');
+        $record = $this->captureMidLoopRecord('max-spent');
+        // Round 5 (= max:) settled and the kill landed before the stage did.
+        $record['loopRound']['completedRounds'] = 5;
+        $record['loopRound']['accumulator']['items'] = ['a', 'b', 'c', 'd', 'e'];
+        $record['loopRound']['accumulator']['keys'] = ['a', 'b', 'c', 'd', 'e'];
+        $record['loopRound']['accumulator']['dry'] = 0;
+        $this->writePauseFile('max-spent', $record);
+
+        $this->prompts = [];
+        $this->outputs = ['{"f":["never"]}'];
+        $result = $this->engine()->resume('max-spent');
+
+        self::assertSame(WorkflowStatus::Completed, $result->status, (string) $result->firstFailure()?->error);
+        self::assertSame([], $this->prompts, 'a spent max: dispatches nothing on resume');
+        self::assertSame('{"items":["a","b","c","d","e"],"keys":["a","b","c","d","e"],"rounds":5}', $result->stageResults[0]->output);
+    }
+
+    public function testADeclarationChangeOnResumeRestartsTheLoopFromRoundOneWithAnEmptySet(): void
+    {
+        $this->registerFindLoop('edited');
+        $this->writePauseFile('edited', $this->captureMidLoopRecord('edited'));
+
+        // The author edits the stage's prompt before resuming: the persisted round state
+        // no longer describes this stage, so nothing of it may be carried over.
+        $this->registerFindLoop('edited', 'hunt {{round}} seen {{seen}}');
+        $this->prompts = [];
+        $result = $this->engine()->resume('edited');
+
+        self::assertSame(WorkflowStatus::Completed, $result->status, (string) $result->firstFailure()?->error);
+        self::assertSame([
+            'hunt 1 seen []',
+            'hunt 2 seen ["a","b"]',
+            'hunt 3 seen ["a","b","c"]',
+        ], $this->prompts, 'a changed declaration starts the loop over from round 1');
+    }
+
+    public function testAKillOnTheToolPathLeavesAResumableRecord(): void
+    {
+        $yaml = "name: tool-kill\nstages:\n  - name: find\n    prompt: 'find {{round}} seen {{seen}}'\n    outputSchema: {type: object}\n"
+            . "    loop:\n      max: 5\n      accumulate: {pointer: /f}\n      until: {dry: 1}\n";
+        $workflow = $this->registry->fromYamlString($yaml);
+        $this->outputs = ['{"f":["a","b"]}', '{"f":["c"]}', '{"f":[]}'];
+
+        $runId = null;
+        $captured = null;
+        $engine = $this->engine();
+        $engine->setRunStartedSink(static function (string $id) use (&$runId): void {
+            $runId = $id;
+        });
+        $this->onDispatch = function (string $task) use (&$captured, &$runId): void {
+            // The tool path's record is what a SIGTERM during round 3 would leave on disk.
+            if (str_starts_with($task, 'find 3 ') && $captured === null && $runId !== null) {
+                $captured = (string) file_get_contents($this->pauseFile($runId));
+            }
+        };
+        $engine->runPlan($workflow, $yaml);
+        $this->onDispatch = null;
+
+        self::assertIsString($runId);
+        self::assertIsString($captured, 'the tool path writes its record as it settles rounds');
+        $record = json_decode($captured, true, 512, JSON_THROW_ON_ERROR);
+        self::assertTrue($record['planRun'] ?? false);
+        self::assertSame(2, $record['loopRound']['completedRounds'] ?? null);
+
+        // The killed writer is gone: its record reads as an orphan, which resumePlan accepts.
+        unset($record['pid'], $record['pidStartedAt']);
+        $this->writePauseFile($runId, $record);
+        $this->prompts = [];
+        $this->outputs = ['{"f":[]}'];
+        $result = $this->engine()->resumePlan($runId);
+
+        self::assertSame(WorkflowStatus::Completed, $result->status, (string) $result->firstFailure()?->error);
+        self::assertSame(['find 3 seen ["a","b","c"]'], $this->prompts, 'rounds 1 and 2 are not re-dispatched');
     }
 
     private function pauseFile(string $name): string
