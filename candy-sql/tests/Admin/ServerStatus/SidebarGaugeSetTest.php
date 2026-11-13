@@ -81,7 +81,7 @@ final class SidebarGaugeSetTest extends TestCase
 
         $this->assertStringContainsString('Connections', $view);
         $this->assertStringContainsString('Traffic', $view);
-        $this->assertStringContainsString('Key Eff', $view);
+        $this->assertStringContainsString('Key Efficiency', $view);
         $this->assertStringContainsString('QPS', $view);
         $this->assertStringContainsString('InnoDB', $view);
     }

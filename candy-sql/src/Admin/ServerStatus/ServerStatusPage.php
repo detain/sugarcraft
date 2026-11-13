@@ -353,16 +353,16 @@ final class ServerStatusPage extends PageBase
         $list = DefinitionList::new()
             ->withPlaceholder('-')
             ->withRows([
-                ['SSL Enabled', $this->tristate($this->hasSsl($serverVars))],
-                ['SSL Cipher', $this->resolveValue($serverVars['ssl_cipher'] ?? null)],
+                ['TLS Active', $this->tristate($this->hasSsl($serverVars))],
+                ['TLS Cipher', $this->resolveValue($serverVars['ssl_cipher'] ?? null)],
                 ['TLS Version', $this->resolveValue($serverVars['tls_version'] ?? null)],
-                ['Have SSL', $this->tristate($this->tristateValue($serverVars['have_ssl'] ?? null))],
+                ['SSL support', $this->tristate($this->tristateValue($serverVars['have_ssl'] ?? null))],
                 ['SSL CA', $this->resolveDir($serverVars['ssl_ca'] ?? null)],
                 ['SSL Cert', $this->resolveDir($serverVars['ssl_cert'] ?? null)],
                 ['SSL Key', $this->resolveDir($serverVars['ssl_key'] ?? null)],
             ]);
 
-        return Card::titled($list, 'SSL / Secure Connection')->render();
+        return Card::titled($list, 'TLS / Secure Connection')->render();
     }
 
     private function renderReplicaPanel(): string
@@ -390,11 +390,11 @@ final class ServerStatusPage extends PageBase
                 ->withPlaceholder('-')
                 ->withRows([
                     ['Channel', $this->resolveValue($channelRow['Channel_name'] ?? $channelRow['Connection_name'] ?? null)],
-                    ['Master Host', $this->resolveValue($channelRow['Master_Host'] ?? $channelRow['Source_Host'] ?? null)],
-                    ['Master Port', $this->resolveValue($channelRow['Master_Port'] ?? $channelRow['Source_Port'] ?? null)],
-                    ['Slave IO Running', $this->replicaState($channelRow['Slave_IO_Running'] ?? $channelRow['Replica_IO_Running'] ?? null)],
-                    ['Slave SQL Running', $this->replicaState($channelRow['Slave_SQL_Running'] ?? $channelRow['Replica_SQL_Running'] ?? null)],
-                    ['Seconds Behind', $this->secondsBehind($channelRow['Seconds_Behind_Master'] ?? $channelRow['Seconds_Behind_Source'] ?? null)],
+                    ['Source Host', $this->resolveValue($channelRow['Master_Host'] ?? $channelRow['Source_Host'] ?? null)],
+                    ['Source Port', $this->resolveValue($channelRow['Master_Port'] ?? $channelRow['Source_Port'] ?? null)],
+                    ['Replica IO Running', $this->replicaState($channelRow['Slave_IO_Running'] ?? $channelRow['Replica_IO_Running'] ?? null)],
+                    ['Replica SQL Running', $this->replicaState($channelRow['Slave_SQL_Running'] ?? $channelRow['Replica_SQL_Running'] ?? null)],
+                    ['Seconds Behind Source', $this->secondsBehind($channelRow['Seconds_Behind_Master'] ?? $channelRow['Seconds_Behind_Source'] ?? null)],
                     ['Relay Log File', $this->resolveValue($channelRow['Relay_Log_File'] ?? null)],
                     ['Relay Pos', $this->resolveValue($channelRow['Relay_Log_Pos'] ?? null)],
                 ]);

@@ -1118,7 +1118,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         };
 
         if ($phase === self::DLG_INPUT) {
-            $prompt = "  Edit [{$modeLabel}]: {$varName}  (current: {$currentValue})\n";
+            $prompt = "  Edit ({$modeLabel}) {$varName} (current: {$currentValue})\n";
             // D-M28: the raw scope tokens meant nothing on screen — spell the
             // semantics out, the one place an explainer is load-bearing.
             $prompt .= "  GLOBAL = runtime only (lost on restart) · PERSIST = runtime + config file · PERSIST_ONLY = config file only (applies at next restart)\n";

@@ -1274,7 +1274,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         if ($this->readOnlyMode) {
             $lines[] = $muted->render('  (Read-only mode - no privileges to modify)');
         } else {
-            $lines[] = '  [: Enable Full PS   ]: Disable PS   .: Reset to Defaults';
+            $lines[] = '  Key "[" Enable Full Performance Schema   Key "]" Disable   Key "." Reset to Defaults';
         }
 
         $lines[] = '';

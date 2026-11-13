@@ -281,4 +281,22 @@ final class ServerStatusPageTest extends TestCase
         $this->assertStringContainsString('No', $page->tristate('NO'));
         $this->assertStringContainsString('No', $page->tristate('OFF'));
     }
+
+    /**
+     * SQL-P18 (adminpages-036) census: the stale slave/SSL vocabulary must be
+     * gone from the page source — canonical labels only ("Replica …", TLS,
+     * "SSL support", Source Host/Port).
+     */
+    public function testStaleReplicationAndSslVocabularyIsGoneFromThePage(): void
+    {
+        $source = (string) \file_get_contents(__DIR__ . '/../../../src/Admin/ServerStatus/ServerStatusPage.php');
+
+        foreach (["'SSL Enabled'", "'Have SSL'", "'Slave IO Running'", "'Slave SQL Running'", "['Master Host'", "['Master Port'", "'SSL / Secure Connection'"] as $stale) {
+            $this->assertSame(0, \substr_count($source, $stale), "stale label still present: {$stale}");
+        }
+
+        foreach (["['TLS Active'", "'SSL support'", "'Replica IO Running'", "'Replica SQL Running'", "'TLS / Secure Connection'"] as $canonical) {
+            $this->assertGreaterThanOrEqual(1, \substr_count($source, $canonical), "canonical label missing: {$canonical}");
+        }
+    }
 }

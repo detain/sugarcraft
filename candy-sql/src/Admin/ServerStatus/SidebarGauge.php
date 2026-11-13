@@ -55,7 +55,7 @@ final class SidebarGauge
         return match ($this->type) {
             GaugeType::Connections   => 'Connections',
             GaugeType::Traffic       => 'Traffic',
-            GaugeType::KeyEfficiency => 'Key Eff',
+            GaugeType::KeyEfficiency => 'Key Efficiency',
             GaugeType::Qps           => 'QPS',
             GaugeType::InnoDB        => 'InnoDB',
         };

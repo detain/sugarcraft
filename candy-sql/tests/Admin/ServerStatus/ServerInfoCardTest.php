@@ -132,8 +132,10 @@ final class ServerInfoCardTest extends TestCase
         $card = new \SugarCraft\Sql\Admin\ServerStatus\ServerInfoCard($this->context);
         $result = $card->render();
 
-        // 86400 seconds = 1 day, should show "1d" or similar
-        $this->assertStringContainsString('86400s', $result);
+        // SQL-P18 (adminpages-040): the debug-style "(86400s)" parenthetical is
+        // gone — the human duration is the whole readout, raw seconds nowhere.
+        $this->assertStringContainsString('24h', $result);
+        $this->assertStringNotContainsString('86400s', $result);
     }
 
     public function testRenderIncludesRunningSinceWhenUptimeSet(): void

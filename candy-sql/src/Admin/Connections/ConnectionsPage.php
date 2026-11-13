@@ -565,9 +565,10 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      */
     private function renderKeyHints(): string
     {
+        // SQL-P18 (adminpages-020): bracket grammar like every other page.
         $hints = $this->filteredProcesslist() === []
-            ? 'j/k:nav  f:filter  r:refresh'
-            : 'j/k:nav  K:kill  X:kill-query  f:filter  r:refresh';
+            ? '[j/k] nav  [f] filter  [r] refresh'
+            : '[j/k] nav  [K] kill  [X] kill-query  [f] filter  [r] refresh';
 
         return Style::new()->foreground(Color::hex('#6b7280'))->render($hints);
     }

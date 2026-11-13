@@ -228,12 +228,14 @@ final class Catalog
     /**
      * Ensure the metadata has been loaded.
      *
-     * @throws \RuntimeException If load() has not been called
+     * @throws \LogicException If load() has not been called (SQL-P18: programmer seam, dev channel)
      */
     private function ensureLoaded(): void
     {
         if ($this->reports === null) {
-            throw new \RuntimeException(
+            throw new \LogicException(
+                // SQL-P18 (adminpages-040): a programmer seam, not user copy —
+                // LogicException routes it to the dev channel by convention.
                 'Catalog has not been loaded. Call load() first.'
             );
         }

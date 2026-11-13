@@ -214,7 +214,8 @@ final class ChangeTracker
             $item instanceof SetupConsumers => $item->name,
             $item instanceof SetupActors => "{$item->host}:{$item->user}:{$item->role}",
             $item instanceof SetupObjects => "{$item->objectType}:{$item->objectSchema}:{$item->objectName}",
-            default => throw new \InvalidArgumentException('Unknown item type: ' . get_class($item)),
+            // SQL-P18 (adminpages-040): internal item vocabulary — a dev-only channel
+            default => throw new \LogicException('Unknown item type: ' . get_class($item)),
         };
     }
 

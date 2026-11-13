@@ -294,9 +294,9 @@ final class ConnectionsPageTest extends TestCase
 
         $view = ConnectionsPage::new($this->context)->view();
 
-        $this->assertStringContainsString('K:kill', $view);
-        $this->assertStringContainsString('X:kill-query', $view);
-        $this->assertStringContainsString('f:filter', $view);
+        $this->assertStringContainsString('[K] kill', $view);
+        $this->assertStringContainsString('[X] kill-query', $view);
+        $this->assertStringContainsString('[f] filter', $view);
     }
 
     public function testKeyHintsDropKillOnEmptyProcesslist(): void
@@ -305,8 +305,20 @@ final class ConnectionsPageTest extends TestCase
 
         $view = ConnectionsPage::new($this->context)->view();
 
-        $this->assertStringNotContainsString('K:kill', $view); // no rows → no kill advertised
-        $this->assertStringNotContainsString('X:kill-query', $view);
-        $this->assertStringContainsString('f:filter', $view); // filter stays: it can still be undone
+        $this->assertStringNotContainsString('[K] kill', $view); // no rows → no kill advertised
+        $this->assertStringNotContainsString('[X] kill-query', $view);
+        $this->assertStringContainsString('[f] filter', $view); // filter stays: it can still be undone
+    }
+
+    /**
+     * SQL-P18 (adminpages-020) census: ConnectionsPage was the sole colon-grammar
+     * page; the house form is `[key] verb` everywhere.
+     */
+    public function testBracketGrammarCensusOnTheHintLine(): void
+    {
+        $source = (string) \file_get_contents(__DIR__ . '/../../../src/Admin/Connections/ConnectionsPage.php');
+
+        $this->assertSame(0, \substr_count($source, 'j/k:nav'));
+        $this->assertGreaterThanOrEqual(2, \substr_count($source, '[j/k] nav'));
     }
 }

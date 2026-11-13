@@ -74,11 +74,12 @@ final class ServerInfoCard
     }
 
     /**
-     * Human-readable uptime keeping the raw seconds for reference.
+     * Human-readable uptime (SQL-P18, adminpages-040): the debug-style
+     * "(298800s)" parenthetical carried no information duration does not.
      */
     private function formatUptime(int $uptime): string
     {
-        return Format::duration($uptime) . ' (' . $uptime . 's)';
+        return Format::duration($uptime);
     }
 
     /**

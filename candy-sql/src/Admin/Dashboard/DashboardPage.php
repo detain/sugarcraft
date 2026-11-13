@@ -139,7 +139,7 @@ final class DashboardPage extends PageBase
             '',
             '  ' . $muted->render('SHOW GLOBAL STATUS / pg_stat_database'),
             '',
-            '  ' . $muted->render('Press [q] to return to browse mode'),
+            '  ' . $muted->render('Press [q] to return to the Tables view'),
         ]);
     }
 
@@ -553,9 +553,11 @@ final class DashboardPage extends PageBase
             return $lines;
         }
 
+        // SQL-P18 (adminpages-021): one unit notation (kB/s for the /1024
+        // legs, B/s raw) — the lowercase b/s was a fifth style.
         $lines[] = $asKb
-            ? sprintf('%s %.1f kb/s', $verb, $counter->lastValue() / 1024.0)
-            : sprintf('%s %s b/s', $verb, sprintf('%.0f', $counter->lastValue()));
+            ? sprintf('%s %.1f kB/s', $verb, $counter->lastValue() / 1024.0)
+            : sprintf('%s %s B/s', $verb, sprintf('%.0f', $counter->lastValue()));
 
         return $lines;
     }
@@ -580,19 +582,27 @@ final class DashboardPage extends PageBase
         }
         $kb = $bytes !== null && $bytes->hasValue() ? $bytes->lastValue() / 1024.0 : null;
         if ($kb !== null) {
-            $lines[] = sprintf('data written %.1f kb/s', $kb);
+            $lines[] = sprintf('data written %.1f kB/s', $kb);
         }
 
         $writes = $this->counterCells['Disk Write Requests:counter'] ?? null;
         if ($writes !== null) {
             $consumed['Disk Write Requests:counter'] = true;
             if ($writes->hasValue()) {
-                $lines[] = sprintf('writes %s #/s', $writes->scaledFormatted());
+                // The `#` glyph was unique to this line — name the unit.
+                $lines[] = sprintf('writes %s ops/s', $writes->scaledFormatted());
             }
         }
 
-        if ($kb !== null) {
-            $lines[] = sprintf('writing %.1f kb/s', $kb);
+        // SQL-P18 (adminpages-021): the third line mirrored the FIRST counter
+        // under a synonym label; Workbench's frame mirrors TWO readings. Give
+        // it its source truth (Innodb_os_log_written) and name the row.
+        $log = $this->counterCells['Redo Log Bytes Written:counter'] ?? null;
+        if ($log !== null) {
+            $consumed['Redo Log Bytes Written:counter'] = true;
+            if ($log->hasValue()) {
+                $lines[] = sprintf('log written %.1f kB/s', $log->lastValue() / 1024.0);
+            }
         }
 
         return $lines;

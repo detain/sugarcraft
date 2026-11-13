@@ -59,7 +59,7 @@ final class SidebarGaugeTest extends TestCase
     public function testLabelReturnsKeyEffForKeyEfficiencyType(): void
     {
         $gauge = SidebarGauge::new(GaugeType::KeyEfficiency, 0.5);
-        $this->assertSame('Key Eff', $gauge->label());
+        $this->assertSame('Key Efficiency', $gauge->label());
     }
 
     public function testLabelReturnsQpsForQpsType(): void
