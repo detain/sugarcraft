@@ -258,9 +258,17 @@ backfilling, carry the real instant on each line — or feed the batch through
 `push --time=<unix>` (one beat) / `push --` (stdin JSON-lines), which run the
 same ignore door, clamps and locking as an interactive push.
 
-Day files are keyed by the machine's **local** calendar date, so history
-written while crossing time zones stays filed under the date it was tracked.
-Nothing is ever deleted: beats accumulate until you remove them by hand or
+Day files are keyed by the calendar date in PHP's **effective timezone**.
+Since PHP 8.3 the `TZ` environment variable no longer steers that zone, so a
+cron or wrapper that sets only `TZ` files under whatever `date.timezone`
+resolves to (usually UTC) — set `date.timezone` in `php.ini` to choose the
+filing zone. The readers then part company after a zone change: the dashboard
+timeline re-buckets heartbeats by their timestamps in the *current* zone,
+`export`, `summary` and `forget` walk day files under the keys their writers
+used, and `gaps` works from the raw stamps — so the same store can show a
+beat in a different day column than the file that holds it. Nothing is lost
+or corrupted; it is only "which day was this" resolving three ways. Nothing
+is ever deleted: beats accumulate until you remove them by hand or
 archive them with `backup` (which copies and never trims).
 
 ### Fixing a bad entry
