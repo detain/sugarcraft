@@ -17,6 +17,16 @@ candy-flappy — a Flappy-Bird-style game for the terminal, built on the SugarCr
 
 *Formerly published as `sugarcraft/honey-flap` (renamed 2026-10; namespace `SugarCraft\Flap\` → `SugarCraft\Flappy\`). The first run of `bin/candy-flappy` migrates a pre-rename `.honey-flap` high-score directory automatically, under the same config base the game itself uses: `$XDG_CONFIG_HOME` first, `$HOME/.config` as fallback (see "High scores, config, and environment").*
 
+## Requirements
+
+PHP **8.3+** and two PHP extensions — **`intl`** and **`mbstring`** — are
+hard requirements: `sugar-core`'s cell-width maths depends on them. They are
+declared in `composer.json`, so the composer path enforces them directly.
+The phar below ships its vendor **frozen** and never consults composer
+metadata, so the CLI runs a named launch preflight instead: it prints the
+missing extension(s) and exits 2 rather than dying mid-first-frame with an
+undefined-function error.
+
 ## Install & run
 
 ```bash

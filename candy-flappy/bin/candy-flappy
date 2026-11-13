@@ -115,6 +115,19 @@ if ($unknown !== []) {
     exit(2);
 }
 
+// flappy-35 (finding -084): the frozen-vendor phar bypasses composer
+// metadata entirely, and sugar-core's cell-width maths hard-requires intl +
+// mbstring — missing extensions used to surface as an undefined-function
+// Error mid-first-frame. Name them, exit 2 (invocation error), never 255.
+$missing = array_values(array_filter(
+    ['intl', 'mbstring'],
+    static fn (string $ext): bool => !extension_loaded($ext),
+));
+if ($missing !== []) {
+    fwrite(STDERR, 'candy-flappy: missing required PHP extension(s): ' . implode(', ', $missing) . "\n");
+    exit(2);
+}
+
 // flappy-01 (finding -001): the framed world writes alt-screen and truecolor
 // bytes; a piped or redirected launch used to paint escape-sequence garbage
 // into files and pipes. The in-band NoTty refusal cannot help that shape —

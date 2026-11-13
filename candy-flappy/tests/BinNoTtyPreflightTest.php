@@ -138,6 +138,50 @@ final class BinNoTtyPreflightTest extends TestCase
         self::assertSame(1, $exit, 'a dumb-terminal refusal exits 1, never a signal death');
     }
 
+    public function testMissingExtensionsRefuseByNameWithExitTwo(): void
+    {
+        // flappy-35 (finding -084): `php -n` drops the ini-loaded shared
+        // extensions — the exact field shape of a frozen-vendor phar run on
+        // a bare interpreter. On statically built interpreters there is
+        // nothing to drop, so the leg probes first.
+        $probe = proc_open(
+            [PHP_BINARY, '-n', '-r', 'echo extension_loaded("intl") ? "y" : "n";'],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pp,
+        );
+        self::assertIsResource($probe);
+        $state = (string) stream_get_contents($pp[1]);
+        fclose($pp[1]);
+        fclose($pp[2]);
+        proc_close($probe);
+        if ($state === 'y') {
+            self::markTestSkipped('this interpreter builds intl in — nothing for -n to drop');
+        }
+
+        $proc = proc_open(
+            [PHP_BINARY, '-n', self::BIN],
+            [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            null,
+            ['PATH' => (string) (getenv('PATH') ?: ''), 'TERM' => 'xterm-256color'],
+        );
+        self::assertIsResource($proc);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($proc);
+
+        self::assertSame(2, $exit, 'an extension refusal is an invocation error, never 255: ' . $stderr);
+        self::assertSame('', $stdout);
+        self::assertStringContainsString('extension', $stderr);
+        self::assertStringContainsString('intl', $stderr, 'the refusal must name what is missing');
+    }
+
     public function testDiagnosticFlagsStillAnswerWhilePiped(): void    {
         // Order law: the preflight sits AFTER the flag legs — diagnostics
         // must stay usable from CI pipes and shell scripts.

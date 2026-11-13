@@ -30,6 +30,8 @@
     ],
     "require": {
         "php": "^8.3",
+        "ext-intl": "*",
+        "ext-mbstring": "*",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-spring": "dev-master"
