@@ -650,7 +650,7 @@ final class FocusRingTest extends TestCase
      * white-box half of the parity guard: it holds regardless of whether runtime
      * assertions are enabled (zend.assertions may be -1 under phpunit).
      */
-    private static function assertCacheConsistent(FocusRing $ring): void
+    private static function assertCacheConsistent(FocusRing $ring, string $context = ''): void
     {
         $ref = new \ReflectionProperty(FocusRing::class, 'enabledPositions');
         /** @var list<int> $actual */
@@ -664,10 +664,11 @@ final class FocusRingTest extends TestCase
             }
         }
 
+        $tag = $context === '' ? '' : $context . ': ';
         self::assertSame(
             $expected,
             $actual,
-            'maintained enabledPositions must equal a freshly-computed list',
+            $tag . 'maintained enabledPositions must equal a freshly-computed list',
         );
 
         // The private disabled set may only name registered ids; a phantom entry
@@ -678,11 +679,82 @@ final class FocusRingTest extends TestCase
         self::assertSame(
             [],
             array_diff(array_map('strval', array_keys($disabledSet)), $ring->ids()),
-            'disabled set must not name an unregistered id',
+            $tag . 'disabled set must not name an unregistered id',
         );
-        self::assertSame(count($ring->enabledIds()), $ring->enabledCount());
-        self::assertSame(count($ring->disabledIds()), $ring->disabledCount());
-        self::assertSame($ring->disabledIds(), $ring->jsonSerialize()['disabled']);
+        self::assertSame(count($ring->enabledIds()), $ring->enabledCount(), $tag . 'enabled counts agree');
+        self::assertSame(count($ring->disabledIds()), $ring->disabledCount(), $tag . 'disabled counts agree');
+        self::assertSame($ring->disabledIds(), $ring->jsonSerialize()['disabled'], $tag . 'snapshot disabled list agrees');
+    }
+
+    // ─── SF-06 roster gate: every ring-returning member is walk-covered ───
+
+    /**
+     * The pinned, alphabetically sorted list of public methods whose declared
+     * return type is the ring itself (factories included, nullable shapes like
+     * fromJson()/tryFocus() included — they still mint rings). A mutator added
+     * without joining this list and the walk plan below reddens the roster
+     * assert: the gate has bite (a scratch method was proven red when the band
+     * was authored). Accessors and the FocusTrap factory are outside it.
+     */
+    public function testRingReturningRosterIsPinnedAndWalkCovered(): void
+    {
+        $roster = [];
+        foreach ((new \ReflectionClass(FocusRing::class))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            $type = (string) $method->getReturnType();
+            if (in_array(ltrim($type, '?'), ['self', 'static', FocusRing::class], true)) {
+                $roster[] = $method->getName();
+            }
+        }
+        sort($roster);
+
+        $pinned = [
+            'disable',
+            'enable',
+            'focus',
+            'focusFirst',
+            'focusLast',
+            'fromJson',
+            'new',
+            'next',
+            'of',
+            'ofStrict',
+            'previous',
+            'register',
+            'reorder',
+            'restore',
+            'unregister',
+        ];
+        self::assertSame($pinned, $roster, 'a new ring-returning member must join this roster and the walk plan');
+        self::assertSame($pinned, array_keys(self::ringWalkPlan()), 'the walk plan must cover exactly the roster');
+
+        $base = FocusRing::of('a', 'b', 'c', 'd');
+        foreach (self::ringWalkPlan() as $name => $step) {
+            $result = $step($base);
+            self::assertNotNull($result, $name);
+            self::assertCacheConsistent($result, $name);
+        }
+    }
+
+    /** @return array<string, callable(FocusRing): ?FocusRing> one small mutation per roster member */
+    private static function ringWalkPlan(): array
+    {
+        return [
+            'disable' => static fn (FocusRing $r): FocusRing => $r->disable('c'),
+            'enable' => static fn (FocusRing $r): FocusRing => $r->disable('c')->enable('c'),
+            'focus' => static fn (FocusRing $r): FocusRing => $r->focus('c'),
+            'focusFirst' => static fn (FocusRing $r): FocusRing => $r->focusFirst(),
+            'focusLast' => static fn (FocusRing $r): FocusRing => $r->focusLast(),
+            'fromJson' => static fn (FocusRing $r): ?FocusRing => FocusRing::fromJson('{"ids":["a","b"],"focused":"b","disabled":["a"]}'),
+            'new' => static fn (FocusRing $r): FocusRing => FocusRing::new(),
+            'next' => static fn (FocusRing $r): FocusRing => $r->next(),
+            'of' => static fn (FocusRing $r): FocusRing => FocusRing::of('a', 'b', 'a'),
+            'ofStrict' => static fn (FocusRing $r): FocusRing => FocusRing::ofStrict('d', 'c', 'b', 'a'),
+            'previous' => static fn (FocusRing $r): FocusRing => $r->previous(),
+            'register' => static fn (FocusRing $r): FocusRing => $r->register('e'),
+            'reorder' => static fn (FocusRing $r): FocusRing => $r->reorder('d', 'c', 'b', 'a'),
+            'restore' => static fn (FocusRing $r): FocusRing => FocusRing::restore(['ids' => ['a', 'b'], 'focused' => 'b']),
+            'unregister' => static fn (FocusRing $r): FocusRing => $r->unregister('b'),
+        ];
     }
 
     // ─── Coverage: next() / previous() wrap-around branches ─────────────────
