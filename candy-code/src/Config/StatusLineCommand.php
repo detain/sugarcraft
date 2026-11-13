@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\App\StatusLineResultMsg;
 use SugarCraft\Code\Support\DrainsStreamedChild;
 use SugarCraft\Code\Support\ForkedChild;
@@ -209,12 +210,9 @@ final class StatusLineCommand
      * that produced nothing USABLE blanks rather than half-asserting, and a
      * command whose one-row readout is 16 KiB long is a misconfiguration whose
      * first 16 KiB is not a truer answer than nothing. The measured one is
-     * cost: {@see \SugarCraft\Code\Renderer::withStatusLineCommand()} calls
-     * `Width::of()` on the cached line EVERY FRAME, i.e. every keystroke, and a
-     * 16 KiB line makes that a per-keystroke grapheme walk over 16 KiB. The
-     * blank costs nothing. (The same walk is already paid by a command that
-     * emits just under the cap and exits 0 — see the note in
-     * {@see \SugarCraft\Code\Renderer::withStatusLineCommand()}.)
+     * cost of a long line. The width is now measured once per write
+     * ({@see store()}), so the per-frame reader pays no grapheme walk either
+     * way; the blank is still the honest answer for a 16 KiB readout.
      *
      * Pinned by `StatusLineCommandTest::testHittingTheCapBlanksTheSegmentEvenWhenTheChildExitedCleanly()`,
      * whose under-cap control is what makes the cap the only difference.
@@ -277,6 +275,15 @@ final class StatusLineCommand
      * segment at all.
      */
     private static string $line = '';
+
+    /**
+     * {@see $line} as the status bar paints it (display-sanitised), and its
+     * column width. Both are computed where the line is WRITTEN
+     * ({@see store()}), so the per-frame reader does no grapheme walk.
+     */
+    private static string $display = '';
+
+    private static int $displayWidth = 0;
 
     /**
      * `microtime(true)` of the last completed run, or 0.0 when none has run
@@ -387,7 +394,7 @@ final class StatusLineCommand
     {
         self::$active = self::fromSettings($config);
         self::$cwd = $cwd;
-        self::$line = '';
+        self::store('');
         self::$refreshedAt = 0.0;
         self::$inFlight = false;
         self::$lastStdin = null;
@@ -452,6 +459,25 @@ final class StatusLineCommand
         return self::$line;
     }
 
+    /** {@see line()} display-sanitised for the bar; computed at write time. */
+    public static function display(): string
+    {
+        return self::$display;
+    }
+
+    /** Column width of {@see display()}; computed at write time, not per frame. */
+    public static function displayWidth(): int
+    {
+        return self::$displayWidth;
+    }
+
+    private static function store(string $line): void
+    {
+        self::$line = $line;
+        self::$display = Sanitize::stripZoneSentinels(Sanitize::untrustedForDisplay($line));
+        self::$displayWidth = self::$display === '' ? 0 : Width::of(self::$display);
+    }
+
     /**
      * Run the configured command if its {@see $refreshSeconds} (by default
      * {@see REFRESH_SECONDS}) have passed since the last run, and cache what
@@ -487,7 +513,7 @@ final class StatusLineCommand
             return;
         }
 
-        self::$line = $command->run(self::$cwd, self::$lastStdin);
+        self::store($command->run(self::$cwd, self::$lastStdin));
         self::$refreshedAt = microtime(true);
     }
 
@@ -590,7 +616,7 @@ final class StatusLineCommand
      */
     public static function settle(string $line): void
     {
-        self::$line = $line;
+        self::store($line);
         self::$refreshedAt = microtime(true);
         self::$inFlight = false;
     }

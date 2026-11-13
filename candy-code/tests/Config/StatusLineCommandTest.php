@@ -348,6 +348,28 @@ final class StatusLineCommandTest extends TestCase
     }
 
     /**
+     * The width is measured where the line is WRITTEN (settle), and the
+     * per-frame readers are plain statics: display()/displayWidth() agree with
+     * a fresh Width::of() and are replaced by the next write and by reset().
+     */
+    public function testSettleCachesDisplayAndItsWidthForTheFrameReader(): void
+    {
+        StatusLineCommand::settle("日本語 main\x1b[31m!");
+        self::assertSame(
+            \SugarCraft\Core\Util\Width::of(StatusLineCommand::display()),
+            StatusLineCommand::displayWidth(),
+        );
+        self::assertGreaterThan(0, StatusLineCommand::displayWidth());
+
+        StatusLineCommand::settle('ab');
+        self::assertSame(2, StatusLineCommand::displayWidth());
+
+        StatusLineCommand::reset();
+        self::assertSame(0, StatusLineCommand::displayWidth());
+        self::assertSame('', StatusLineCommand::display());
+    }
+
+    /**
      * A COMMAND THAT TRAPS TERM IS STILL BOUNDED, which is the whole reason
      * {@see StatusLineCommand::terminateAndEscalate()} escalates to signal 9.
      * Every other hang fixture in this file dies on the SIGTERM, so none of
