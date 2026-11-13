@@ -2166,6 +2166,38 @@ final class BufferTest extends TestCase
         new Cell('a', null, null, -1);
     }
 
+    public function testABorderRunSpanPaintsAndReplaysAtItsDeclaredWidth(): void
+    {
+        // The chosen span law (sugar-cellbuffer-015): a width-N lead is
+        // accompanied by width-0 partner cells for its extra columns —
+        // sugar-table's own fill shape (Table.php stores the full-width run
+        // as the lead's rune and masks the rest). Replay through
+        // diff/applyDiff now re-establishes that exact shape: mask cells
+        // included, so text, bytes and every cell survive intact.
+        $span = new Cell('───', null, null, 3);
+        $current = Buffer::fromGrid(4, 1, [
+            $span,
+            Cell::continuation(),
+            Cell::continuation(),
+            Cell::new('x'),
+        ]);
+        $previous = Buffer::new(4, 1);
+
+        $this->assertSame('───x', $current->text());
+        $this->assertSame('───x', $current->toAnsi());
+
+        $restored = $previous->applyDiff($current->diff($previous));
+
+        $this->assertSame($current->toAnsi(), $restored->toAnsi());
+        $this->assertSame($current->text(), $restored->text());
+        $this->assertTrue($restored->cellAt(0, 0)->equals($span));
+        $this->assertSame(0, $restored->cellAt(1, 0)->width());
+        $this->assertSame(0, $restored->cellAt(2, 0)->width());
+        $this->assertSame('x', $restored->cellAt(3, 0)->rune());
+        $this->assertCount(4, $restored->jsonSerialize()['grid']);
+        $this->assertSame([], $current->diff($restored));
+    }
+
     public function testTextOfABlankBufferIsRowsOfSpaces(): void
     {
         $this->assertSame("   \n   ", Buffer::new(3, 2)->text());

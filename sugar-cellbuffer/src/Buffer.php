@@ -747,12 +747,13 @@ final class Buffer implements \JsonSerializable
                         $link,
                         $width,
                     );
-                    // If wide char, fill the next cell as continuation.
-                    if ($width === 2) {
-                        $nextCol = $cursorCol + 1;
-                        if ($nextCol < $this->width) {
-                            $grid[$cursorRow * $this->width + $nextCol] = Cell::continuation();
-                        }
+                    // Wide lead: fill the columns it covers. Width 2 writes
+                    // its one continuation; larger run-length spans (the
+                    // border-fill idiom, span law in Cell) mask every column
+                    // they occupy, so a replay re-establishes the same
+                    // painted shape the source grid carried.
+                    for ($pairCol = $cursorCol + 1; $pairCol < $cursorCol + $width && $pairCol < $this->width; $pairCol++) {
+                        $grid[$cursorRow * $this->width + $pairCol] = Cell::continuation();
                     }
                     $cursorCol += $width;
                 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\CellBuffer;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * A single terminal cell — the atom of buffer rendering.
  *
@@ -48,10 +50,16 @@ final class Cell implements \JsonSerializable
      * @param Style|null $style  Per-cell style or null for defaults
      * @param Hyperlink|null $link OSC 8 hyperlink or null
      * @param int         $width  Columns the rune occupies (0 continuation,
-     *                            1 normal, 2 wide; run-length spans carry their
-     *                            column count). Negative widths are refused.
+     *                            1 normal, 2 wide). Widths above 2 are run-length
+     *                            spans and carry the SPAN LAW: the rune must be
+     *                            exactly $width display columns wide (sugar-table
+     *                            border fills store the full-width run as the
+     *                            lead's rune). A short rune behind a large
+     *                            declared width under-paints every frame it
+     *                            touches — such pairings are refused.
      *
-     * @throws \InvalidArgumentException when $width is negative.
+     * @throws \InvalidArgumentException when $width is negative, or when a
+     *         width > 2 span declares more columns than its rune occupies.
      */
     public function __construct(
         public readonly string $rune,
@@ -60,10 +68,18 @@ final class Cell implements \JsonSerializable
         public readonly int $width,
     ) {
         // Negative widths desync every column computation (toAnsi, diff,
-        // encoder cursor). Widths above 2 are a legal run-length idiom
-        // (sugar-table border fills), so only the sign is enforced here.
+        // encoder cursor). Widths above 2 are the legal run-length idiom
+        // (sugar-table border fills), so larger values must MEASURE UP —
+        // the width-vs-rune desync class (a one-char rune painting a
+        // four-column cell under-paints three columns of every frame,
+        // silently) is refused at the type, once, where it is created.
         if ($width < 0) {
             throw new \InvalidArgumentException("Cell width must not be negative: {$width}");
+        }
+        if ($width > 2 && Width::of($rune) !== $width) {
+            throw new \InvalidArgumentException(
+                "Cell run-length span of width {$width} requires a rune exactly {$width} display columns wide, got " . Width::of($rune)
+            );
         }
     }
 
@@ -107,7 +123,9 @@ final class Cell implements \JsonSerializable
      * Display width in terminal cells.
      *
      * @return int 0 (continuation), 1 (normal), 2 (wide/CJK/emoji), or a
-     *              larger column count for run-length spans (0 or above).
+     *              larger column count for run-length spans — spans of 3+
+     *              must carry a rune of exactly that many columns (the
+     *              span law enforced by the constructor; 0 or above).
      */
     public function width(): int { return $this->width; }
 
@@ -150,6 +168,13 @@ final class Cell implements \JsonSerializable
         $width = (int) ($data['width'] ?? 1);
         if ($width < 0) {
             throw new \InvalidArgumentException("Cell width must not be negative: {$width}");
+        }
+        if ($width > 2 && Width::of((string) ($data['rune'] ?? '')) !== $width) {
+            // The span law is a constructor invariant, so it is re-applied
+            // here: a forged payload cannot mint a desyncing run-length cell.
+            throw new \InvalidArgumentException(
+                "Cell run-length span of width {$width} requires a rune exactly {$width} display columns wide"
+            );
         }
 
         $this->rune = $data['rune'];

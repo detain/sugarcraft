@@ -198,6 +198,64 @@ final class CellTest extends TestCase
         $this->assertTrue($original->equals($reconstituted));
     }
 
+    // ─── Run-length span law (sugar-cellbuffer-015) ─────────────────────
+
+    public function testASpanNarrowerThanItsDeclaredWidthIsRefused(): void
+    {
+        // The finding's desync probe: a one-char rune behind a 4-column
+        // declaration under-paints three columns of every frame. Now the
+        // pairing is refused where it is created.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cell run-length span of width 4 requires a rune exactly 4 display columns wide, got 1');
+
+        new Cell('x', null, null, 4);
+    }
+
+    public function testAMeasuringRunLengthSpanIsAccepted(): void
+    {
+        // sugar-table's border-fill idiom (Table.php stores the full-width
+        // run as the lead's rune) stays constructible.
+        $span = new Cell(str_repeat('─', 5), null, null, 5);
+
+        $this->assertSame(5, $span->width());
+    }
+
+    public function testTheSpanLawAlsoCatchesOverlongRunes(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires a rune exactly 3 display columns wide, got 5');
+
+        new Cell(str_repeat('─', 5), null, null, 3);
+    }
+
+    public function testWidthsBelowThreeAreNotReMeasured(): void
+    {
+        // The law binds spans only: 0/1/2 keep their historic leniency so
+        // combining clusters and hand-declared wide cells never regress.
+        $this->assertSame(2, (new Cell('x', null, null, 2))->width());
+        $this->assertSame(1, (new Cell('ab', null, null, 1))->width());
+        $this->assertSame(0, Cell::continuation()->width());
+    }
+
+    public function testUnserializationRefusesAForgedMismatchedSpan(): void
+    {
+        $fresh = (new \ReflectionClass(Cell::class))->newInstanceWithoutConstructor();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cell run-length span of width 3 requires a rune exactly 3 display columns wide');
+
+        $fresh->__unserialize(['rune' => 'x', 'style' => null, 'link' => null, 'width' => 3]);
+    }
+
+    public function testSerializationRoundTripCarriesALegalSpan(): void
+    {
+        $span = new Cell(str_repeat('─', 4), null, null, 4);
+        $reconstituted = (new \ReflectionClass(Cell::class))->newInstanceWithoutConstructor();
+        $reconstituted->__unserialize($span->__serialize());
+
+        $this->assertTrue($span->equals($reconstituted));
+    }
+
     public function testJsonSerialize(): void
     {
         $cell = Cell::new('A', Style::bold());

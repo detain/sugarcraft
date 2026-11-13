@@ -74,7 +74,7 @@ No `.vhs` demo — this is a pure data model; `examples/basic.php` + `examples/d
 
 ## Wide characters
 
-Wide cells (CJK, many emoji) declare `width: 2` — the pair law is exactly a width-2 contract; larger widths are single run-length spans that carry no continuation cells. The writing API enforces the pair for you: `withCellAt()`, `fill()` and `withRegion()` automatically write the width-0 continuation partner to the right (a width-2 lead straddling the last column DEGRADES to a blank there — a two-column rune never paints past the frame edge, and `applyDiff()` mirrors the degrade), blank a left-behind continuation when a lead is replaced, and blank the displaced partner when a new lead lands on an existing pair's slot — no orphaned half-pair can survive a public mutation. Encoded streams skip continuations while the cursor advance trusts each lead's declared width, keeping wire and grid in contract.
+Wide cells (CJK, many emoji) declare `width: 2` — the pair law is exactly a width-2 contract; larger widths (3+) are run-length spans: the lead paints all N columns from its own rune, the **span law** requires that rune to measure exactly N display columns (a short rune behind a big declaration is refused by the constructor and by unserialization), and the covered columns carry width-0 mask cells — sugar-table's own border-fill shape. The writing API enforces the pair for you: `withCellAt()`, `fill()` and `withRegion()` automatically write the width-0 continuation partner to the right (a width-2 lead straddling the last column DEGRADES to a blank there — a two-column rune never paints past the frame edge, and `applyDiff()` mirrors the degrade), blank a left-behind continuation when a lead is replaced, and blank the displaced partner when a new lead lands on an existing pair's slot — no orphaned half-pair can survive a public mutation. Encoded streams skip continuations while the cursor advance trusts each lead's declared width, keeping wire and grid in contract.
 
 ```php
 // Width is declared, never measured: pass width 2 explicitly.
@@ -107,7 +107,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 
 ### Cell
 
-- `Cell::new(string $rune = ' ', ?Style $style = null, ?Hyperlink $link = null, int $width = 1): self` — negative widths are refused; `0` marks a continuation, `2` a wide lead (the only width that carries a continuation partner), larger values are single run-length spans (see sugar-table's border fills).
+- `Cell::new(string $rune = ' ', ?Style $style = null, ?Hyperlink $link = null, int $width = 1): self` — negative widths are refused; `0` marks a continuation, `2` a wide lead (the only width that carries a continuation partner), larger values are single run-length spans (see sugar-table's border fills). Spans must MEASURE UP: a width `N > 2` cell requires a rune exactly `N` display columns wide (the span law, checked with sugar-core's `Width::of`) — a short rune behind a big declared width under-paints every frame it touches, so the pairing is refused at construction (and again on unserialization).
 - `Cell::continuation(): self` — blank width-0 partner cell.
 - `Cell::rune(): string`, `Cell::style(): ?Style`, `Cell::link(): ?Hyperlink`, `Cell::width(): int`, `Cell::equals(Cell $other): bool`.
 
