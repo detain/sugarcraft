@@ -935,4 +935,47 @@ final class FlexboxTest extends TestCase
             \explode("\n", $box->render(12, 3)),
         );
     }
+
+    /**
+     * The squeezed-container fallback branch (finding-012): when the basis
+     * spend exhausts the budget (flexFree <= 0), EVERY basis-less item still
+     * receives one cell — including ratio-paid items — and the renderer's
+     * final clamp contains the overflow. Before this test the branch had
+     * zero coverage: deleting it silently shipped 0-cell (then negative)
+     * allocations for starved flex items.
+     */
+    public function testSqueezeFallbackStillAllocatesOneCellToEveryFlexItem(): void
+    {
+        $box = FlexBox::row();
+        $allocate = new \ReflectionMethod($box, 'allocateMainAxis');
+        $allocate->setAccessible(true);
+
+        $measured = [
+            ['item' => FlexItem::new('AAA')->withBasis(3), 'width' => 3, 'height' => 1],
+            ['item' => FlexItem::new('B'), 'width' => 1, 'height' => 1],
+            ['item' => FlexItem::new('C')->withRatio(0), 'width' => 1, 'height' => 1],
+        ];
+
+        // Exact exhaustion: usable 3, fixedSum 3, flexFree 0.
+        $alloc = $allocate->invoke($box, $measured, 3, 0);
+        $this->assertSame(3, $alloc[0]['allocated'], 'basis item keeps its box-clamped basis');
+        $this->assertSame(1, $alloc[1]['allocated'], 'starved ratio item still gets one cell');
+        $this->assertSame(1, $alloc[2]['allocated'], 'basis-less zero-ratio item still gets one cell');
+
+        // Over-committed: the 1-cell gap drives flexFree negative and the
+        // basis clamps to the box; the fallback floor is unchanged.
+        $alloc2 = $allocate->invoke($box, $measured, 3, 1);
+        $this->assertSame(3, $alloc2[0]['allocated'], 'basis clamps to the box, never the usable');
+        $this->assertSame(1, $alloc2[1]['allocated'], 'negative flexFree still floors at one cell');
+    }
+
+    public function testSqueezeRendererClampsOverflowRows(): void
+    {
+        // The same branch at the byte seam: 3+1 allocated cells in a 3-wide
+        // box must paint exactly the box — the overflow is clamped, never
+        // emitted (terminal desync law).
+        $box = FlexBox::row(FlexItem::new('AAA')->withBasis(3), FlexItem::new('B'));
+
+        $this->assertSame('AAA', $box->render(3, 1));
+    }
 }
