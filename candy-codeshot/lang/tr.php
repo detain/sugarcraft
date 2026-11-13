@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot: bilinmeyen bayrak '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot: bilinmeyen bayrak '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: beklenmeyen argüman '{arg}' - en fazla bir giriş dosyası verilebilir",
-    'cli.unknown_theme'       => "candy-codeshot: bilinmeyen tema '{name}'. Bilinenler: dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot: bilinmeyen pencere tarzı '{style}'. Bilinenler: macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot: bilinmeyen biçem '{format}'. Bilinenler: svg, png",
-    'cli.gd_required'         => 'candy-codeshot: PNG çıktısı için ext-gd gerekli',
-    'cli.font_not_found'      => "candy-codeshot: yazı tipi dosyası bulunamadı: '{path}'",
-    'cli.font_invalid'        => "candy-codeshot: '{path}' geçerli bir yazı tipi dosyası değil (TTF, OTF, WOFF veya WOFF2 bekleniyordu)",
-    'cli.bad_highlight'       => "candy-codeshot: geçersiz vurgu biçemi '{format}'. Kullanım: baş:bitiş (örn. 3:7) veya baş:bitiş:#renk (örn. 3:7:#fffbe6) kullanın",
-    'cli.read_failed'          => "candy-codeshot: girdi okunamadı: '{path}'",
+    'cli.unknown_theme'         => "candy-codeshot: bilinmeyen tema '{name}'. Bilinenler: dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: '{path}' tema dosyası geçerli bir JSON teması olarak okunamadı",
+    'cli.unknown_window_style'  => "candy-codeshot: bilinmeyen pencere tarzı '{style}'. Bilinenler: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot: bilinmeyen biçem '{format}'. Bilinenler: svg, png",
+    'cli.gd_required'           => 'candy-codeshot: PNG çıktısı için ext-gd gerekli',
+    'cli.font_not_found'        => "candy-codeshot: yazı tipi dosyası bulunamadı: '{path}'",
+    'cli.font_invalid'          => "candy-codeshot: '{path}' geçerli bir yazı tipi dosyası değil (TTF, OTF, WOFF veya WOFF2 bekleniyordu)",
+    'cli.bad_highlight'         => "candy-codeshot: geçersiz vurgu biçemi '{format}'. Kullanım: baş:bitiş (örn. 3:7) veya baş:bitiş:#renk (örn. 3:7:#fffbe6) kullanın",
+    'cli.read_failed'           => "candy-codeshot: girdi okunamadı: '{path}'",
     'cli.read_failed_stdin'     => 'candy-codeshot: stdin okunamadı',
-    'cli.input_too_large'     => 'candy-codeshot: giriş {limit} bayt sınırını aşıyor (okuma reddedildi)',
-    'cli.path_outside_cwd'    => "candy-codeshot: '{path}' geçerli çalışma dizininin dışında (izin vermek için --unsafe-paths kullanın)",
-    'cli.write_failed'        => "candy-codeshot: yazılamadı '{path}'",
-    'cli.missing_value'       => "candy-codeshot: {option} bir değer bekliyor",
-    'cli.bad_number'          => "candy-codeshot: {option} negatif olmayan bir tam sayı bekliyor, alınan '{value}'",
-    'cli.png_ignores'         => "candy-codeshot: PNG çıktısı SVG'ye-özel seçenekleri yoksayar: {options} (--format svg kullanın)",
-    'cli.highlight_rejected'  => "candy-codeshot: '{spec}' vurgusu reddedildi: {reason}",
-    'cli.format_mismatch'     => "candy-codeshot: çıkış biçemi '{format}', '{path}' uzantısıyla eşleşmiyor",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot: giriş {limit} bayt sınırını aşıyor (okuma reddedildi)',
+    'cli.path_outside_cwd'      => "candy-codeshot: '{path}' geçerli çalışma dizininin dışında (izin vermek için --unsafe-paths kullanın)",
+    'cli.write_failed'          => "candy-codeshot: yazılamadı '{path}'",
+    'cli.missing_value'         => "candy-codeshot: {option} bir değer bekliyor",
+    'cli.bad_number'            => "candy-codeshot: {option} negatif olmayan bir tam sayı bekliyor, alınan '{value}'",
+    'cli.png_ignores'           => "candy-codeshot: PNG çıktısı SVG'ye-özel seçenekleri yoksayar: {options} (--format svg kullanın)",
+    'cli.highlight_rejected'    => "candy-codeshot: '{spec}' vurgusu reddedildi: {reason}",
+    'cli.format_mismatch'       => "candy-codeshot: çıkış biçemi '{format}', '{path}' uzantısıyla eşleşmiyor",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - kodu veya terminal çıktısını SVG ya da PNG ekran görüntüsü olarak işler
 
 Kullanım:
@@ -39,7 +40,7 @@ Bayrak değerleri ayrı argümanlardır: "--theme dracula", "--theme=dracula" de
 ("=" biçimi bilinmeyen bayrak olarak reddedilir).
 
 Seçenekler:
-  --theme <ad>            Tema adı: dark, light, dracula, tokyo-night, nord (varsayılan: dark)
+  --theme <ad|dosya>      Tema adı (dark, light, dracula, tokyo-night, nord) veya JSON tema dosyası (varsayılan: dark)
   --padding <n>           İçerik çevresindeki boşluk (varsayılan: 24)
   --no-window             Pencere süslemelerini gizle (trafik lambaları, başlık çubuğu)
   --no-shadow             Gölgeyi kapat
@@ -79,10 +80,10 @@ Notlar:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: girdi yolu "{path}" bir dizin - bir dosya verin veya stdin ile pipe edin',
-    'cli.png_to_tty'          => 'candy-codeshot: ham PNG baytları terminale yazılmıyor (--output <dosya.png> kullanın)',
-    'cli.stdin_tty'           => 'candy-codeshot: stdin\'den okunuyor - bir dosya verin veya girdi pipe\'layın (bitirmek için Ctrl-D)',
-    'cli.render_failed'     => 'candy-codeshot: oluşturulama başarısız: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot: {format} çıktısı çok büyük ({width} x {height} = {pixels} piksel; sınır {cap}). İçeriği, dolgu payını veya satır sayısını azaltın.',
-    'cli.font_too_large'     => 'candy-codeshot: yazı tipi dosyası yansıtmak için çok büyük: {size} bayt, {cap} sınırını aşıyor ({path})',
+    'cli.is_directory'          => 'candy-codeshot: girdi yolu "{path}" bir dizin - bir dosya verin veya stdin ile pipe edin',
+    'cli.png_to_tty'            => 'candy-codeshot: ham PNG baytları terminale yazılmıyor (--output <dosya.png> kullanın)',
+    'cli.stdin_tty'             => 'candy-codeshot: stdin\'den okunuyor - bir dosya verin veya girdi pipe\'layın (bitirmek için Ctrl-D)',
+    'cli.render_failed'         => 'candy-codeshot: oluşturulama başarısız: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot: {format} çıktısı çok büyük ({width} x {height} = {pixels} piksel; sınır {cap}). İçeriği, dolgu payını veya satır sayısını azaltın.',
+    'cli.font_too_large'        => 'candy-codeshot: yazı tipi dosyası yansıtmak için çok büyük: {size} bayt, {cap} sınırını aşıyor ({path})',
 ];

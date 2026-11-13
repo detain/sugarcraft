@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot: خيار غير معروف '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot: خيار غير معروف '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: وسيط غير متوقع '{arg}' - ملف إدخال واحد كحد أقصى",
-    'cli.unknown_theme'       => "candy-codeshot: سمة غير معروفة '{name}'. المعروفة: dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot: نمط نافذة غير معروف '{style}'. المعروفة: macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot: صيغة غير معروفة '{format}'. المعروفة: svg, png",
-    'cli.gd_required'         => 'candy-codeshot: امتداد gd مطلوب لإخراج PNG',
-    'cli.font_not_found'      => "candy-codeshot: لم يتم العثور على ملف الخط: '{path}'",
-    'cli.font_invalid'        => "candy-codeshot: '{path}' ليس ملف خط صالح (المتوقع TTF أو OTF أو WOFF أو WOFF2)",
-    'cli.bad_highlight'       => "candy-codeshot: صيغة تظليل غير صالحة '{format}'. استخدم البداية:النهاية (مثل 3:7) أو البداية:النهاية:#اللون (مثل 3:7:#fffbe6)",
-    'cli.read_failed'          => "candy-codeshot: تعذر قراءة الإدخال من '{path}'",
+    'cli.unknown_theme'         => "candy-codeshot: سمة غير معروفة '{name}'. المعروفة: dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: تعذر قراءة ملف السمة '{path}' كسمة JSON صالحة",
+    'cli.unknown_window_style'  => "candy-codeshot: نمط نافذة غير معروف '{style}'. المعروفة: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot: صيغة غير معروفة '{format}'. المعروفة: svg, png",
+    'cli.gd_required'           => 'candy-codeshot: امتداد gd مطلوب لإخراج PNG',
+    'cli.font_not_found'        => "candy-codeshot: لم يتم العثور على ملف الخط: '{path}'",
+    'cli.font_invalid'          => "candy-codeshot: '{path}' ليس ملف خط صالح (المتوقع TTF أو OTF أو WOFF أو WOFF2)",
+    'cli.bad_highlight'         => "candy-codeshot: صيغة تظليل غير صالحة '{format}'. استخدم البداية:النهاية (مثل 3:7) أو البداية:النهاية:#اللون (مثل 3:7:#fffbe6)",
+    'cli.read_failed'           => "candy-codeshot: تعذر قراءة الإدخال من '{path}'",
     'cli.read_failed_stdin'     => 'candy-codeshot: تعذر قراءة stdin',
-    'cli.input_too_large'     => 'candy-codeshot: يتجاوز الإدخال حد {limit} بايت (تم رفض القراءة)',
-    'cli.path_outside_cwd'    => "candy-codeshot: المسار '{path}' يقع خارج مجلد العمل الحالي (استخدم --unsafe-paths للسماح)",
-    'cli.write_failed'        => "candy-codeshot: تعذر الكتابة إلى '{path}'",
-    'cli.missing_value'       => "candy-codeshot: {option} يتطلب قيمة",
-    'cli.bad_number'          => "candy-codeshot: {option} يتوقع عددًا صحيحًا غير سالب، وقد وصل '{value}'",
-    'cli.png_ignores'         => "candy-codeshot: إخراج PNG يتجاهل خيارات SVG فقط: {options} (استخدم --format svg)",
-    'cli.highlight_rejected'  => "candy-codeshot: رفض التظليل '{spec}': {reason}",
-    'cli.format_mismatch'     => "candy-codeshot: صيغة الإخراج '{format}' لا تطابق امتداد '{path}'",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot: يتجاوز الإدخال حد {limit} بايت (تم رفض القراءة)',
+    'cli.path_outside_cwd'      => "candy-codeshot: المسار '{path}' يقع خارج مجلد العمل الحالي (استخدم --unsafe-paths للسماح)",
+    'cli.write_failed'          => "candy-codeshot: تعذر الكتابة إلى '{path}'",
+    'cli.missing_value'         => "candy-codeshot: {option} يتطلب قيمة",
+    'cli.bad_number'            => "candy-codeshot: {option} يتوقع عددًا صحيحًا غير سالب، وقد وصل '{value}'",
+    'cli.png_ignores'           => "candy-codeshot: إخراج PNG يتجاهل خيارات SVG فقط: {options} (استخدم --format svg)",
+    'cli.highlight_rejected'    => "candy-codeshot: رفض التظليل '{spec}': {reason}",
+    'cli.format_mismatch'       => "candy-codeshot: صيغة الإخراج '{format}' لا تطابق امتداد '{path}'",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - يعرض الشفرة أو مخرجات الطرفية كلقطة SVG أو PNG
 
 طريقة الاستخدام:
@@ -39,7 +40,7 @@ candy-codeshot - يعرض الشفرة أو مخرجات الطرفية كلقط
 (صيغة "=" تُرفض كخيار غير معروف).
 
 الخيارات:
-  --theme <name>          اسم السمة: dark, light, dracula, tokyo-night, nord (الافتراضي: dark)
+  --theme <اسم|ملف>       اسم السمة (dark, light, dracula, tokyo-night, nord) أو ملف سمة JSON (الافتراضي: dark)
   --padding <n>           الحشوة حول المحتوى (الافتراضي: 24)
   --no-window             إخفاء زخرفة النافذة (أضواء المرور، شريط العنوان)
   --no-shadow             تعطيل الظل
@@ -77,10 +78,10 @@ candy-codeshot - يعرض الشفرة أو مخرجات الطرفية كلقط
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: مسار الإدخال "{path}" دليل - مرر ملفًا أو ادخل عبر stdin',
-    'cli.png_to_tty'          => 'candy-codeshot: رفض كتابة بايتات PNG أولية إلى الطرفية (استخدم --output <file.png>)',
-    'cli.stdin_tty'           => 'candy-codeshot: القراءة من stdin - مرر ملفًا أو ادخل البيانات (Ctrl-D للإنهاء)',
-    'cli.render_failed'     => 'candy-codeshot: فشل العرض: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot: مخرج {format} كبير جدًا ({width} x {height} = {pixels} بكسل؛ الحد {cap}). قلل المحتوى أو الحشو أو عدد الأسطر.',
-    'cli.font_too_large'     => 'candy-codeshot: ملف الخط كبير جدًا للتضمين: {size} بايت تتجاوز حد {cap} ({path})',
+    'cli.is_directory'          => 'candy-codeshot: مسار الإدخال "{path}" دليل - مرر ملفًا أو ادخل عبر stdin',
+    'cli.png_to_tty'            => 'candy-codeshot: رفض كتابة بايتات PNG أولية إلى الطرفية (استخدم --output <file.png>)',
+    'cli.stdin_tty'             => 'candy-codeshot: القراءة من stdin - مرر ملفًا أو ادخل البيانات (Ctrl-D للإنهاء)',
+    'cli.render_failed'         => 'candy-codeshot: فشل العرض: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot: مخرج {format} كبير جدًا ({width} x {height} = {pixels} بكسل؛ الحد {cap}). قلل المحتوى أو الحشو أو عدد الأسطر.',
+    'cli.font_too_large'        => 'candy-codeshot: ملف الخط كبير جدًا للتضمين: {size} بايت تتجاوز حد {cap} ({path})',
 ];

@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot：无法识别的标志 '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot：无法识别的标志 '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: 意外参数 '{arg}' - 最多只能指定一个输入文件",
-    'cli.unknown_theme'       => "candy-codeshot：未知的主题 '{name}'。已知：dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot：未知的窗口样式 '{style}'。已知：macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot：未知的格式 '{format}'。已知：svg, png",
-    'cli.gd_required'         => 'candy-codeshot：PNG 输出需要 ext-gd',
-    'cli.font_not_found'      => "candy-codeshot：找不到字体文件：'{path}'",
-    'cli.font_invalid'        => "candy-codeshot：'{path}' 不是有效的字体文件（期望 TTF、OTF、WOFF 或 WOFF2）",
-    'cli.bad_highlight'       => "candy-codeshot：无效的高亮格式 '{format}'。请使用 开始:结束（例如 3:7）或 开始:结束:#颜色（例如 3:7:#fffbe6）",
-    'cli.read_failed'          => "candy-codeshot：读取输入失败：'{path}'",
+    'cli.unknown_theme'         => "candy-codeshot：未知的主题 '{name}'。已知：dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: 主题文件 '{path}' 无法作为有效的 JSON 主题读取",
+    'cli.unknown_window_style'  => "candy-codeshot：未知的窗口样式 '{style}'。已知：macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot：未知的格式 '{format}'。已知：svg, png",
+    'cli.gd_required'           => 'candy-codeshot：PNG 输出需要 ext-gd',
+    'cli.font_not_found'        => "candy-codeshot：找不到字体文件：'{path}'",
+    'cli.font_invalid'          => "candy-codeshot：'{path}' 不是有效的字体文件（期望 TTF、OTF、WOFF 或 WOFF2）",
+    'cli.bad_highlight'         => "candy-codeshot：无效的高亮格式 '{format}'。请使用 开始:结束（例如 3:7）或 开始:结束:#颜色（例如 3:7:#fffbe6）",
+    'cli.read_failed'           => "candy-codeshot：读取输入失败：'{path}'",
     'cli.read_failed_stdin'     => 'candy-codeshot：读取 stdin 失败',
-    'cli.input_too_large'     => 'candy-codeshot：输入超过 {limit} 字节上限，拒绝读取',
-    'cli.path_outside_cwd'    => "candy-codeshot：路径 '{path}' 位于当前工作目录之外（使用 --unsafe-paths 允许）",
-    'cli.write_failed'        => "candy-codeshot：写入失败 '{path}'",
-    'cli.missing_value'       => "candy-codeshot：{option} 需要一个值",
-    'cli.bad_number'          => "candy-codeshot：{option} 期望非负整数，收到 '{value}'",
-    'cli.png_ignores'         => "candy-codeshot：PNG 输出会忽略仅限 SVG 的选项：{options}（请使用 --format svg）",
-    'cli.highlight_rejected'  => "candy-codeshot：高亮 '{spec}' 被拒绝：{reason}",
-    'cli.format_mismatch'     => "candy-codeshot：输出格式 '{format}' 与 '{path}' 的扩展名不匹配",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot：输入超过 {limit} 字节上限，拒绝读取',
+    'cli.path_outside_cwd'      => "candy-codeshot：路径 '{path}' 位于当前工作目录之外（使用 --unsafe-paths 允许）",
+    'cli.write_failed'          => "candy-codeshot：写入失败 '{path}'",
+    'cli.missing_value'         => "candy-codeshot：{option} 需要一个值",
+    'cli.bad_number'            => "candy-codeshot：{option} 期望非负整数，收到 '{value}'",
+    'cli.png_ignores'           => "candy-codeshot：PNG 输出会忽略仅限 SVG 的选项：{options}（请使用 --format svg）",
+    'cli.highlight_rejected'    => "candy-codeshot：高亮 '{spec}' 被拒绝：{reason}",
+    'cli.format_mismatch'       => "candy-codeshot：输出格式 '{format}' 与 '{path}' 的扩展名不匹配",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
 
 用法:
@@ -39,7 +40,7 @@ candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
 （"=" 形式会被当作无法识别的标志拒绝）。
 
 选项:
-  --theme <name>          主题名称：dark, light, dracula, tokyo-night, nord（默认：dark）
+  --theme <name|file>     主题名称（dark, light, dracula, tokyo-night, nord）或 JSON 主题文件（默认：dark）
   --padding <n>           内容周围的留白（默认：24）
   --no-window             隐藏窗口装饰（红绿灯、标题栏）
   --no-shadow             禁用阴影
@@ -77,10 +78,10 @@ candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => "candy-codeshot：输入路径 '{path}' 是目录 - 请传入文件或经 stdin 管道输入",
-    'cli.png_to_tty'          => 'candy-codeshot：拒绝向终端写入原始 PNG 字节 (使用 --output <file.png>)',
-    'cli.stdin_tty'           => 'candy-codeshot：正在从 stdin 读取 - 请传入文件或管道输入 (Ctrl-D 结束)',
-    'cli.render_failed'     => 'candy-codeshot：渲染失败: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot：{format} 输出过大 ({width} x {height} = {pixels} 像素; 上限 {cap})。请减少内容、边距或行数。',
-    'cli.font_too_large'     => 'candy-codeshot：字体文件过大无法嵌入: {size} 字节超过 {cap} 限制 ({path})',
+    'cli.is_directory'          => "candy-codeshot：输入路径 '{path}' 是目录 - 请传入文件或经 stdin 管道输入",
+    'cli.png_to_tty'            => 'candy-codeshot：拒绝向终端写入原始 PNG 字节 (使用 --output <file.png>)',
+    'cli.stdin_tty'             => 'candy-codeshot：正在从 stdin 读取 - 请传入文件或管道输入 (Ctrl-D 结束)',
+    'cli.render_failed'         => 'candy-codeshot：渲染失败: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot：{format} 输出过大 ({width} x {height} = {pixels} 像素; 上限 {cap})。请减少内容、边距或行数。',
+    'cli.font_too_large'        => 'candy-codeshot：字体文件过大无法嵌入: {size} 字节超过 {cap} 限制 ({path})',
 ];

@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot: onbekende vlag '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot: onbekende vlag '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: onverwacht argument '{arg}' - maximaal één invoerbestand",
-    'cli.unknown_theme'       => "candy-codeshot: onbekend thema '{name}'. Bekend: dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot: onbekende vensterstijl '{style}'. Bekend: macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot: onbekend formaat '{format}'. Bekend: svg, png",
-    'cli.gd_required'         => 'candy-codeshot: ext-gd is vereist voor PNG-uitvoer',
-    'cli.font_not_found'      => "candy-codeshot: lettertypebestand niet gevonden: '{path}'",
-    'cli.font_invalid'        => "candy-codeshot: '{path}' is geen geldig lettertypebestand (verwacht TTF, OTF, WOFF of WOFF2)",
-    'cli.bad_highlight'       => "candy-codeshot: ongeldig markeringformaat '{format}'. Gebruik begin:einde (bijv. 3:7) of begin:einde:#kleur (bijv. 3:7:#fffbe6)",
-    'cli.read_failed'          => "candy-codeshot: kan invoer uit '{path}' niet lezen",
+    'cli.unknown_theme'         => "candy-codeshot: onbekend thema '{name}'. Bekend: dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: temabestand '{path}' kon niet als geldig JSON-thema worden gelezen",
+    'cli.unknown_window_style'  => "candy-codeshot: onbekende vensterstijl '{style}'. Bekend: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot: onbekend formaat '{format}'. Bekend: svg, png",
+    'cli.gd_required'           => 'candy-codeshot: ext-gd is vereist voor PNG-uitvoer',
+    'cli.font_not_found'        => "candy-codeshot: lettertypebestand niet gevonden: '{path}'",
+    'cli.font_invalid'          => "candy-codeshot: '{path}' is geen geldig lettertypebestand (verwacht TTF, OTF, WOFF of WOFF2)",
+    'cli.bad_highlight'         => "candy-codeshot: ongeldig markeringformaat '{format}'. Gebruik begin:einde (bijv. 3:7) of begin:einde:#kleur (bijv. 3:7:#fffbe6)",
+    'cli.read_failed'           => "candy-codeshot: kan invoer uit '{path}' niet lezen",
     'cli.read_failed_stdin'     => 'candy-codeshot: kan stdin niet lezen',
-    'cli.input_too_large'     => 'candy-codeshot: invoer overschrijdt de limiet van {limit} bytes (lezen geweigerd)',
-    'cli.path_outside_cwd'    => "candy-codeshot: pad '{path}' valt buiten de huidige werkmap (gebruik --unsafe-paths om dit toe te staan)",
-    'cli.write_failed'        => "candy-codeshot: kan niet schrijven naar '{path}'",
-    'cli.missing_value'       => "candy-codeshot: {option} vereist een waarde",
-    'cli.bad_number'          => "candy-codeshot: {option} verwacht een niet-negatief geheel getal, gekregen '{value}'",
-    'cli.png_ignores'         => "candy-codeshot: PNG-uitvoer negeert SVG-only-opties: {options} (gebruik --format svg)",
-    'cli.highlight_rejected'  => "candy-codeshot: markering '{spec}' geweigerd: {reason}",
-    'cli.format_mismatch'     => "candy-codeshot: uitvoerformaat '{format}' komt niet overeen met de extensie van '{path}'",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot: invoer overschrijdt de limiet van {limit} bytes (lezen geweigerd)',
+    'cli.path_outside_cwd'      => "candy-codeshot: pad '{path}' valt buiten de huidige werkmap (gebruik --unsafe-paths om dit toe te staan)",
+    'cli.write_failed'          => "candy-codeshot: kan niet schrijven naar '{path}'",
+    'cli.missing_value'         => "candy-codeshot: {option} vereist een waarde",
+    'cli.bad_number'            => "candy-codeshot: {option} verwacht een niet-negatief geheel getal, gekregen '{value}'",
+    'cli.png_ignores'           => "candy-codeshot: PNG-uitvoer negeert SVG-only-opties: {options} (gebruik --format svg)",
+    'cli.highlight_rejected'    => "candy-codeshot: markering '{spec}' geweigerd: {reason}",
+    'cli.format_mismatch'       => "candy-codeshot: uitvoerformaat '{format}' komt niet overeen met de extensie van '{path}'",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - render code of terminaluitvoer als SVG- of PNG-screenshot
 
 Gebruik:
@@ -39,7 +40,7 @@ Vlagwaarden zijn aparte argumenten: "--theme dracula", niet "--theme=dracula"
 (de "=" vorm wordt geweigerd als onbekende vlag).
 
 Opties:
-  --theme <naam>          Themanaam: dark, light, dracula, tokyo-night, nord (standaard: dark)
+  --theme <naam|bestand>  Themanaam (dark, light, dracula, tokyo-night, nord) of een JSON-bestand met een thema (standaard: dark)
   --padding <n>           Ruimte rond de inhoud (standaard: 24)
   --no-window             Verberg vensterchroom (verkeerslichten, titelbalk)
   --no-shadow             slagschad uitschakelen
@@ -80,10 +81,10 @@ Voorbeelden:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: invoerpad "{path}" is een map - geef een bestand op of pipe via stdin',
-    'cli.png_to_tty'          => 'candy-codeshot: weigert ruwe PNG-bytes naar een terminal te schrijven (gebruik --output <bestand.png>)',
-    'cli.stdin_tty'           => 'candy-codeshot: leest van stdin - geef een bestand op of pipe de invoer (Ctrl-D om te beëindigen)',
-    'cli.render_failed'     => 'candy-codeshot: renderen mislukt: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot: {format}-uitvoer te groot ({width} x {height} = {pixels} pixels; limiet {cap}). Verklein inhoud, opvulling of aantal regels.',
-    'cli.font_too_large'     => 'candy-codeshot: lettertypebestand te groot om in te bedden: {size} bytes overschrijden de limiet van {cap} ({path})',
+    'cli.is_directory'          => 'candy-codeshot: invoerpad "{path}" is een map - geef een bestand op of pipe via stdin',
+    'cli.png_to_tty'            => 'candy-codeshot: weigert ruwe PNG-bytes naar een terminal te schrijven (gebruik --output <bestand.png>)',
+    'cli.stdin_tty'             => 'candy-codeshot: leest van stdin - geef een bestand op of pipe de invoer (Ctrl-D om te beëindigen)',
+    'cli.render_failed'         => 'candy-codeshot: renderen mislukt: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot: {format}-uitvoer te groot ({width} x {height} = {pixels} pixels; limiet {cap}). Verklein inhoud, opvulling of aantal regels.',
+    'cli.font_too_large'        => 'candy-codeshot: lettertypebestand te groot om in te bedden: {size} bytes overschrijden de limiet van {cap} ({path})',
 ];

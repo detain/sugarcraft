@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot: neznámý příznak '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot: neznámý příznak '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: neočekávaný argument '{arg}' - jako vstup lze zadat nejvýše jeden soubor",
-    'cli.unknown_theme'       => "candy-codeshot: neznámé téma '{name}'. Známá: dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot: neznámý styl okna '{style}'. Známé: macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot: neznámý formát '{format}'. Známé: svg, png",
-    'cli.gd_required'         => 'candy-codeshot: ext-gd je vyžadován pro výstup PNG',
-    'cli.font_not_found'      => "candy-codeshot: soubor písma nenalezen: '{path}'",
-    'cli.font_invalid'        => "candy-codeshot: '{path}' není platný soubor písma (očekáváno TTF, OTF, WOFF nebo WOFF2)",
-    'cli.bad_highlight'       => "candy-codeshot: neplatný formát zvýraznění '{format}'. Použijte start:konec (např. 3:7) nebo start:konec:#barva (např. 3:7:#fffbe6)",
-    'cli.read_failed'          => "candy-codeshot: nelze číst vstup ze souboru '{path}'",
+    'cli.unknown_theme'         => "candy-codeshot: neznámé téma '{name}'. Známá: dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: soubor tématu '{path}' nelze přečíst jako platné téma JSON",
+    'cli.unknown_window_style'  => "candy-codeshot: neznámý styl okna '{style}'. Známé: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot: neznámý formát '{format}'. Známé: svg, png",
+    'cli.gd_required'           => 'candy-codeshot: ext-gd je vyžadován pro výstup PNG',
+    'cli.font_not_found'        => "candy-codeshot: soubor písma nenalezen: '{path}'",
+    'cli.font_invalid'          => "candy-codeshot: '{path}' není platný soubor písma (očekáváno TTF, OTF, WOFF nebo WOFF2)",
+    'cli.bad_highlight'         => "candy-codeshot: neplatný formát zvýraznění '{format}'. Použijte start:konec (např. 3:7) nebo start:konec:#barva (např. 3:7:#fffbe6)",
+    'cli.read_failed'           => "candy-codeshot: nelze číst vstup ze souboru '{path}'",
     'cli.read_failed_stdin'     => 'candy-codeshot: nelze číst ze stdinu',
-    'cli.input_too_large'     => 'candy-codeshot: vstup překračuje limit {limit} bajtů (čtení zamítnuto)',
-    'cli.path_outside_cwd'    => "candy-codeshot: cesta '{path}' je mimo aktuální pracovní adresář (povolte pomocí --unsafe-paths)",
-    'cli.write_failed'        => "candy-codeshot: nelze zapisovat do '{path}'",
-    'cli.missing_value'       => "candy-codeshot: {option} vyžaduje hodnotu",
-    'cli.bad_number'          => "candy-codeshot: {option} očekává nezáporné celé číslo, obdrženo '{value}'",
-    'cli.png_ignores'         => "candy-codeshot: výstup PNG ignoruje pouze-SVG volby: {options} (použijte --format svg)",
-    'cli.highlight_rejected'  => "candy-codeshot: zvýraznění '{spec}' zamítnuto: {reason}",
-    'cli.format_mismatch'     => "candy-codeshot: formát výstupu '{format}' neodpovídá příponě souboru '{path}'",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot: vstup překračuje limit {limit} bajtů (čtení zamítnuto)',
+    'cli.path_outside_cwd'      => "candy-codeshot: cesta '{path}' je mimo aktuální pracovní adresář (povolte pomocí --unsafe-paths)",
+    'cli.write_failed'          => "candy-codeshot: nelze zapisovat do '{path}'",
+    'cli.missing_value'         => "candy-codeshot: {option} vyžaduje hodnotu",
+    'cli.bad_number'            => "candy-codeshot: {option} očekává nezáporné celé číslo, obdrženo '{value}'",
+    'cli.png_ignores'           => "candy-codeshot: výstup PNG ignoruje pouze-SVG volby: {options} (použijte --format svg)",
+    'cli.highlight_rejected'    => "candy-codeshot: zvýraznění '{spec}' zamítnuto: {reason}",
+    'cli.format_mismatch'       => "candy-codeshot: formát výstupu '{format}' neodpovídá příponě souboru '{path}'",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - vykreslí kód nebo terminálový výstup do SVG či PNG screenshotu
 
 Použití:
@@ -39,7 +40,7 @@ Hodnoty příznaků jsou samostatné argumenty: "--theme dracula", ne "--theme=d
 (tvar "=" je odmítnut jako neznámý příznak).
 
 Volby:
-  --theme <název>         Název tématu: dark, light, dracula, tokyo-night, nord (výchozí: dark)
+  --theme <název|soubor>  Název tématu (dark, light, dracula, tokyo-night, nord) nebo soubor tématu JSON (výchozí: dark)
   --padding <n>           odsazení kolem obsahu (výchozí: 24)
   --no-window             Skrýt výzdobu okna (světla, titulek)
   --no-shadow             Vypnout stín
@@ -79,10 +80,10 @@ Příklady:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: vstupní cesta "{path}" je adresář - zadejte soubor, nebo vstup převeďte přes stdin',
-    'cli.png_to_tty'          => 'candy-codeshot: odmítám zapisovat surová PNG data do terminálu (použijte --output <soubor.png>)',
-    'cli.stdin_tty'           => 'candy-codeshot: čtu ze stdin - zadejte soubor nebo převeďte vstup (Ctrl-D ukončí)',
-    'cli.render_failed'     => 'candy-codeshot: vykreslení selhalo: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot: výstup {format} je příliš velký ({width} x {height} = {pixels} pixelů; limit {cap}). Zmenšte obsah, odsazení nebo počet řádků.',
-    'cli.font_too_large'     => 'candy-codeshot: font je příliš velký na vložení: {size} bytů překračuje limit {cap} ({path})',
+    'cli.is_directory'          => 'candy-codeshot: vstupní cesta "{path}" je adresář - zadejte soubor, nebo vstup převeďte přes stdin',
+    'cli.png_to_tty'            => 'candy-codeshot: odmítám zapisovat surová PNG data do terminálu (použijte --output <soubor.png>)',
+    'cli.stdin_tty'             => 'candy-codeshot: čtu ze stdin - zadejte soubor nebo převeďte vstup (Ctrl-D ukončí)',
+    'cli.render_failed'         => 'candy-codeshot: vykreslení selhalo: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot: výstup {format} je příliš velký ({width} x {height} = {pixels} pixelů; limit {cap}). Zmenšte obsah, odsazení nebo počet řádků.',
+    'cli.font_too_large'        => 'candy-codeshot: font je příliš velký na vložení: {size} bytů překračuje limit {cap} ({path})',
 ];

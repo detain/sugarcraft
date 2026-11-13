@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot: unbekanntes Flag '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot: unbekanntes Flag '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: unerwartetes Argument '{arg}' - höchstens eine Eingabedatei möglich",
-    'cli.unknown_theme'       => "candy-codeshot: unbekanntes Theme '{name}'. Bekannt: dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot: unbekannter Fensterstil '{style}'. Bekannt: macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot: unbekanntes Format '{format}'. Bekannt: svg, png",
-    'cli.gd_required'         => 'candy-codeshot: ext-gd wird für PNG-Ausgabe benötigt',
-    'cli.font_not_found'      => "candy-codeshot: Schriftdatei nicht gefunden: '{path}'",
-    'cli.font_invalid'        => "candy-codeshot: '{path}' ist keine gültige Schriftdatei (erwartet TTF, OTF, WOFF oder WOFF2)",
-    'cli.bad_highlight'       => "candy-codeshot: ungültiges Highlight-Format '{format}'. Format start:end (z. B. 3:7) oder start:end:#farbe (z. B. 3:7:#fffbe6)",
-    'cli.read_failed'          => "candy-codeshot: Eingabe aus '{path}' konnte nicht gelesen werden",
+    'cli.unknown_theme'         => "candy-codeshot: unbekanntes Theme '{name}'. Bekannt: dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: die Theme-Datei '{path}' konnte nicht als gültiges JSON-Thema gelesen werden",
+    'cli.unknown_window_style'  => "candy-codeshot: unbekannter Fensterstil '{style}'. Bekannt: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot: unbekanntes Format '{format}'. Bekannt: svg, png",
+    'cli.gd_required'           => 'candy-codeshot: ext-gd wird für PNG-Ausgabe benötigt',
+    'cli.font_not_found'        => "candy-codeshot: Schriftdatei nicht gefunden: '{path}'",
+    'cli.font_invalid'          => "candy-codeshot: '{path}' ist keine gültige Schriftdatei (erwartet TTF, OTF, WOFF oder WOFF2)",
+    'cli.bad_highlight'         => "candy-codeshot: ungültiges Highlight-Format '{format}'. Format start:end (z. B. 3:7) oder start:end:#farbe (z. B. 3:7:#fffbe6)",
+    'cli.read_failed'           => "candy-codeshot: Eingabe aus '{path}' konnte nicht gelesen werden",
     'cli.read_failed_stdin'     => 'candy-codeshot: Eingabe von stdin konnte nicht gelesen werden',
-    'cli.input_too_large'     => 'candy-codeshot: Eingabe überschreitet das Limit von {limit} Bytes (Lesen verweigert)',
-    'cli.path_outside_cwd'    => "candy-codeshot: Pfad '{path}' liegt außerhalb des aktuellen Arbeitsverzeichnisses (mit --unsafe-paths erlauben)",
-    'cli.write_failed'        => "candy-codeshot: Schreiben fehlgeschlagen '{path}'",
-    'cli.missing_value'       => "candy-codeshot: {option} erwartet einen Wert",
-    'cli.bad_number'          => "candy-codeshot: {option} erwartet eine nicht-negative Ganzzahl, erhalten '{value}'",
-    'cli.png_ignores'         => "candy-codeshot: PNG-Ausgabe ignoriert SVG-only-Optionen: {options} (bitte --format svg verwenden)",
-    'cli.highlight_rejected'  => "candy-codeshot: Highlight '{spec}' abgelehnt: {reason}",
-    'cli.format_mismatch'     => "candy-codeshot: Ausgabeformat '{format}' passt nicht zur Erweiterung von '{path}'",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot: Eingabe überschreitet das Limit von {limit} Bytes (Lesen verweigert)',
+    'cli.path_outside_cwd'      => "candy-codeshot: Pfad '{path}' liegt außerhalb des aktuellen Arbeitsverzeichnisses (mit --unsafe-paths erlauben)",
+    'cli.write_failed'          => "candy-codeshot: Schreiben fehlgeschlagen '{path}'",
+    'cli.missing_value'         => "candy-codeshot: {option} erwartet einen Wert",
+    'cli.bad_number'            => "candy-codeshot: {option} erwartet eine nicht-negative Ganzzahl, erhalten '{value}'",
+    'cli.png_ignores'           => "candy-codeshot: PNG-Ausgabe ignoriert SVG-only-Optionen: {options} (bitte --format svg verwenden)",
+    'cli.highlight_rejected'    => "candy-codeshot: Highlight '{spec}' abgelehnt: {reason}",
+    'cli.format_mismatch'       => "candy-codeshot: Ausgabeformat '{format}' passt nicht zur Erweiterung von '{path}'",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - Code oder Terminal-Ausgabe als SVG- oder PNG-Screenshot rendern
 
 Aufruf:
@@ -39,7 +40,7 @@ Flag-Werte sind eigene Argumente: "--theme dracula", nicht "--theme=dracula"
 (die Schreibweise mit "=" wird als unbekanntes Flag abgelehnt).
 
 Optionen:
-  --theme <name>          Theme-Name: dark, light, dracula, tokyo-night, nord (Standard: dark)
+  --theme <name>          Theme-Name (dark, light, dracula, tokyo-night, nord) oder eine JSON-Theme-Datei (Standard: dark)
   --padding <n>           Abstand um den Inhalt (Standard: 24)
   --no-window             Fensterchrome ausblenden (Ampel, Titelleiste)
   --no-shadow             Schlagschatten deaktivieren
@@ -80,10 +81,10 @@ Beispiele:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: Eingabepfad "{path}" ist ein Verzeichnis - bitte eine Datei übergeben oder die Eingabe über stdin weiterleiten',
-    'cli.png_to_tty'          => 'candy-codeshot: rohe PNG-Daten werden nicht auf ein Terminal geschrieben (--output <Datei.png> verwenden)',
-    'cli.stdin_tty'           => 'candy-codeshot: lese von stdin - Datei übergeben oder die Eingabe über stdin lesen (Strg-D beendet)',
-    'cli.render_failed'     => 'candy-codeshot: Rendern fehlgeschlagen: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot: {format}-Ausgabe zu groß ({width} x {height} = {pixels} Pixel; Grenze {cap}). Inhalt, Padding oder Zeilenanzahl reduzieren.',
-    'cli.font_too_large'     => 'candy-codeshot: Schriftdatei zu groß zum Einbetten: {size} Bytes überschreiten das {cap}-Limit ({path})',
+    'cli.is_directory'          => 'candy-codeshot: Eingabepfad "{path}" ist ein Verzeichnis - bitte eine Datei übergeben oder die Eingabe über stdin weiterleiten',
+    'cli.png_to_tty'            => 'candy-codeshot: rohe PNG-Daten werden nicht auf ein Terminal geschrieben (--output <Datei.png> verwenden)',
+    'cli.stdin_tty'             => 'candy-codeshot: lese von stdin - Datei übergeben oder die Eingabe über stdin lesen (Strg-D beendet)',
+    'cli.render_failed'         => 'candy-codeshot: Rendern fehlgeschlagen: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot: {format}-Ausgabe zu groß ({width} x {height} = {pixels} Pixel; Grenze {cap}). Inhalt, Padding oder Zeilenanzahl reduzieren.',
+    'cli.font_too_large'        => 'candy-codeshot: Schriftdatei zu groß zum Einbetten: {size} Bytes überschreiten das {cap}-Limit ({path})',
 ];

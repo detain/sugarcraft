@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot: 인식할 수 없는 플래그 '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot: 인식할 수 없는 플래그 '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: 예상치 못한 인자 '{arg}' - 입력 파일은 최대 하나만 허용",
-    'cli.unknown_theme'       => "candy-codeshot: 알 수 없는 테마 '{name}'. 알려진 테마: dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot: 알 수 없는 창 스타일 '{style}'. 알려진 스타일: macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot: 알 수 없는 형식 '{format}'. 알려진 형식: svg, png",
-    'cli.gd_required'         => 'candy-codeshot: PNG 출력에는 ext-gd가 필요합니다',
-    'cli.font_not_found'      => "candy-codeshot: 글꼴 파일을 찾을 수 없습니다: '{path}'",
-    'cli.font_invalid'        => "candy-codeshot: '{path}'는 유효한 글꼴 파일이 아닙니다 (TTF, OTF, WOFF 또는 WOFF2 필요)",
-    'cli.bad_highlight'       => "candy-codeshot: 잘못된 강조 형식 '{format}'. 시작:끝 (예: 3:7) 또는 시작:끝:#색 (예: 3:7:#fffbe6)을 사용하세요",
-    'cli.read_failed'          => "candy-codeshot: '{path}' 입력을 읽지 못했습니다",
+    'cli.unknown_theme'         => "candy-codeshot: 알 수 없는 테마 '{name}'. 알려진 테마: dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: 테마 파일 '{path}'을(를) 유효한 JSON 테마로 읽을 수 없습니다",
+    'cli.unknown_window_style'  => "candy-codeshot: 알 수 없는 창 스타일 '{style}'. 알려진 스타일: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot: 알 수 없는 형식 '{format}'. 알려진 형식: svg, png",
+    'cli.gd_required'           => 'candy-codeshot: PNG 출력에는 ext-gd가 필요합니다',
+    'cli.font_not_found'        => "candy-codeshot: 글꼴 파일을 찾을 수 없습니다: '{path}'",
+    'cli.font_invalid'          => "candy-codeshot: '{path}'는 유효한 글꼴 파일이 아닙니다 (TTF, OTF, WOFF 또는 WOFF2 필요)",
+    'cli.bad_highlight'         => "candy-codeshot: 잘못된 강조 형식 '{format}'. 시작:끝 (예: 3:7) 또는 시작:끝:#색 (예: 3:7:#fffbe6)을 사용하세요",
+    'cli.read_failed'           => "candy-codeshot: '{path}' 입력을 읽지 못했습니다",
     'cli.read_failed_stdin'     => 'candy-codeshot: stdin을 읽지 못했습니다',
-    'cli.input_too_large'     => 'candy-codeshot: 입력이 제한값 {limit}바이트를 초과합니다(읽기 거부)',
-    'cli.path_outside_cwd'    => "candy-codeshot: 경로 '{path}'가 현재 작업 디렉터리 밖에 있습니다 (허용하려면 --unsafe-paths 사용)",
-    'cli.write_failed'        => "candy-codeshot: 쓰기 실패 '{path}'",
-    'cli.missing_value'       => "candy-codeshot: {option}에는 값이 필요합니다",
-    'cli.bad_number'          => "candy-codeshot: {option}은(는) 음이 아닌 정수를 기대합니다, 받은 값 '{value}'",
-    'cli.png_ignores'         => "candy-codeshot: PNG 출력은 SVG 전용 옵션을 무시합니다: {options} (--format svg를 사용하세요)",
-    'cli.highlight_rejected'  => "candy-codeshot: 강조 '{spec}' 거부됨: {reason}",
-    'cli.format_mismatch'     => "candy-codeshot: 출력 형식 '{format}'이(가) '{path}'의 확장자와 일치하지 않습니다",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot: 입력이 제한값 {limit}바이트를 초과합니다(읽기 거부)',
+    'cli.path_outside_cwd'      => "candy-codeshot: 경로 '{path}'가 현재 작업 디렉터리 밖에 있습니다 (허용하려면 --unsafe-paths 사용)",
+    'cli.write_failed'          => "candy-codeshot: 쓰기 실패 '{path}'",
+    'cli.missing_value'         => "candy-codeshot: {option}에는 값이 필요합니다",
+    'cli.bad_number'            => "candy-codeshot: {option}은(는) 음이 아닌 정수를 기대합니다, 받은 값 '{value}'",
+    'cli.png_ignores'           => "candy-codeshot: PNG 출력은 SVG 전용 옵션을 무시합니다: {options} (--format svg를 사용하세요)",
+    'cli.highlight_rejected'    => "candy-codeshot: 강조 '{spec}' 거부됨: {reason}",
+    'cli.format_mismatch'       => "candy-codeshot: 출력 형식 '{format}'이(가) '{path}'의 확장자와 일치하지 않습니다",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷으로 렌더링
 
 사용법:
@@ -39,7 +40,7 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
 ("=" 형식은 인식할 수 없는 플래그로 거부됩니다).
 
 옵션:
-  --theme <name>          테마 이름: dark, light, dracula, tokyo-night, nord (기본: dark)
+  --theme <name|file>     테마 이름(dark, light, dracula, tokyo-night, nord) 또는 JSON 테마 파일 (기본: dark)
   --padding <n>           내용 주변 여백 (기본: 24)
   --no-window             창 장식 숨김 (신호등, 제목 표시줄)
   --no-shadow             그림자 효과 비활성화
@@ -78,10 +79,10 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: 입력 경로 "{path}"는 디렉터리입니다 - 파일을 전달하거나 stdin으로 파이프하세요',
-    'cli.png_to_tty'          => 'candy-codeshot: 원시 PNG 바이트를 터미널에 쓰는 것을 거부합니다 (--output <file.png> 사용)',
-    'cli.stdin_tty'           => 'candy-codeshot: stdin에서 읽는 중 - 파일을 전달하거나 입력을 파이프하세요 (Ctrl-D로 종료)',
-    'cli.render_failed'     => 'candy-codeshot: 렌더링 실패: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot: {format} 출력이 너무 큽니다 ({width} x {height} = {pixels}픽셀; 제한 {cap}). 콘텐츠, 여백 또는 줄 수를 줄이세요.',
-    'cli.font_too_large'     => 'candy-codeshot: 글꼴 파일을 포함하기에 너무 큽니다: {size}바이트가 제한 {cap}를 초과합니다 ({path})',
+    'cli.is_directory'          => 'candy-codeshot: 입력 경로 "{path}"는 디렉터리입니다 - 파일을 전달하거나 stdin으로 파이프하세요',
+    'cli.png_to_tty'            => 'candy-codeshot: 원시 PNG 바이트를 터미널에 쓰는 것을 거부합니다 (--output <file.png> 사용)',
+    'cli.stdin_tty'             => 'candy-codeshot: stdin에서 읽는 중 - 파일을 전달하거나 입력을 파이프하세요 (Ctrl-D로 종료)',
+    'cli.render_failed'         => 'candy-codeshot: 렌더링 실패: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot: {format} 출력이 너무 큽니다 ({width} x {height} = {pixels}픽셀; 제한 {cap}). 콘텐츠, 여백 또는 줄 수를 줄이세요.',
+    'cli.font_too_large'        => 'candy-codeshot: 글꼴 파일을 포함하기에 너무 큽니다: {size}바이트가 제한 {cap}를 초과합니다 ({path})',
 ];

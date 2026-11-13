@@ -968,6 +968,104 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('unknown window style', $stillRefused['stderr']);
     }
 
+    public function testVsCodeThemeFileIsAcceptedByTheThemeFlag(): void
+    {
+        // cs-19 (G2, -027): the whole user value of the file route — a
+        // real VS Code theme JSON rides --theme end to end.
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/in.txt', "x\n");
+            file_put_contents(
+                $dir . '/vsc.json',
+                '{"colors":{"editor.background":"#010203","editor.foreground":"#aabbcc"},'
+                . '"tokenColors":[{"scope":"keyword","settings":{"foreground":"#ff0000"}}]}',
+            );
+            $result = $this->runCli(['--no-window', '--no-shadow', '--theme', 'vsc.json', 'in.txt'], null, $dir);
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('#010203', $result['stdout'], 'the VS Code editor.background must become the canvas');
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testFlatPaletteThemeFileIsAcceptedByTheThemeFlag(): void
+    {
+        // The sibling sniff arm: no colors/tokenColors keys → the flat
+        // palette loader door, the post-cs-18 house schema.
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/in.txt', "x\n");
+            file_put_contents(
+                $dir . '/flat.json',
+                '{"background":"#101020","color":"#d0d0e0","borderColor":"#303050"}',
+            );
+            $result = $this->runCli(['--no-window', '--no-shadow', '--theme', 'flat.json', 'in.txt'], null, $dir);
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('#101020', $result['stdout'], 'the flat palette background must reach the canvas');
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testHostileOrMissingThemeFileExitsTwoLocalized(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/in.txt', "x\n");
+            file_put_contents($dir . '/hostile.json', '{');
+
+            $hostile = $this->runCli(['--theme', 'hostile.json', 'in.txt'], null, $dir);
+            $this->assertSame(2, $hostile['exitCode']);
+            $this->assertStringContainsString("theme file 'hostile.json' could not be read as a valid JSON theme", $hostile['stderr']);
+
+            $missing = $this->runCli(['--theme', 'nope.json', 'in.txt'], null, $dir);
+            $this->assertSame(2, $missing['exitCode']);
+            $this->assertStringContainsString('could not be read as a valid JSON theme', $missing['stderr']);
+
+            // Localization proof: the refusal comes through Lang::t, so a
+            // German locale renders the fan-out text, not the English one.
+            $german = $this->runCli(['--theme', 'nope.json', 'in.txt'], null, $dir, ['LC_ALL' => 'de']);
+            $this->assertSame(2, $german['exitCode']);
+            $this->assertStringContainsString("die Theme-Datei 'nope.json' konnte nicht als g\xC3\xBCltiges JSON-Thema gelesen werden", $german['stderr']);
+            $this->assertStringNotContainsString('could not be read', $german['stderr']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testThemeFileOutsideCwdIsRefusedByConfinement(): void
+    {
+        // The cs-02 gate rides the new lane, never bypassed: the file may
+        // exist and be perfectly valid JSON — outside the CWD it is still
+        // refused with the same message every other path gets.
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/in.txt', "x\n");
+            file_put_contents($outside . '/good.json', '{"background":"#101020","color":"#d0d0e0"}');
+
+            $result = $this->runCli(['--theme', $outside . '/good.json', 'in.txt'], null, $dir);
+            $this->assertSame(2, $result['exitCode']);
+            $this->assertStringContainsString('outside the current working directory', $result['stderr']);
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testNameThemeMissKeepsTheKnownListMessage(): void
+    {
+        // Discrimination arm: a name-shaped typo must NOT be routed to
+        // the file lane (it never looked like a path) — migrating users
+        // still get the 'Known: dark, light…' hint.
+        $result = $this->runCli(['--theme', 'monokai'], "x\n");
+        $this->assertSame(2, $result['exitCode']);
+        $this->assertStringContainsString("unknown theme 'monokai'", $result['stderr']);
+        $this->assertStringNotContainsString('theme file', $result['stderr']);
+    }
+
     private function makeTempDir(): string
     {
         $dir = sys_get_temp_dir() . '/codeshot_cwd_' . uniqid('', true);

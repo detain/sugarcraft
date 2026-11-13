@@ -254,9 +254,12 @@ Build a custom theme via the `Theme` constructor — set background / foreground
 / border / shadow / line-number colour / window-control colours / font family
 / size / line height / highlight band colour (`Theme::$highlight`, a nullable
 string and the default `--highlight` colour; all five bundled presets set
-their own). VS Code themes and the library's flat JSON palette files can be
-imported with `Theme\VsCodeThemeLoader::load()` and
-`Theme\FlatPaletteThemeLoader::load()`.
+their own). VS Code theme JSON and the library's flat-palette JSON can be
+imported straight from the CLI with `--theme <path.json>`: the path rides
+the same CWD confinement as every other file argument, VS Code files are
+sniffed by their `colors` / `tokenColors` keys and anything else is read
+as a flat palette. Library-side doors:
+`Theme\VsCodeThemeLoader::load()` and `Theme\FlatPaletteThemeLoader::load()`.
 
 ## Known limitations
 

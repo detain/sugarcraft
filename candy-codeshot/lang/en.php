@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot: unrecognised flag '{flag}'",
-    'cli.unexpected_argument'  => "candy-codeshot: unexpected argument '{arg}' - at most one input file may be given",
-    'cli.unknown_theme'        => "candy-codeshot: unknown theme '{name}'. Known: dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot: unknown window style '{style}'. Known: macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'       => "candy-codeshot: unknown format '{format}'. Known: svg, png",
-    'cli.gd_required'          => 'candy-codeshot: ext-gd is required for PNG output',
-    'cli.font_not_found'       => "candy-codeshot: font file not found: '{path}'",
-    'cli.font_invalid'         => "candy-codeshot: '{path}' is not a valid font file (expected TTF, OTF, WOFF or WOFF2)",
-    'cli.bad_highlight'        => "candy-codeshot: invalid highlight format '{format}'. Use start:end (e.g. 3:7) or start:end:#colour (e.g. 3:7:#fffbe6)",
-    'cli.read_failed'          => "candy-codeshot: failed to read input from '{path}'",
-    'cli.read_failed_stdin'    => 'candy-codeshot: failed to read stdin',
-    'cli.input_too_large'      => 'candy-codeshot: input exceeds the {limit}-byte limit (refusing to read)',
-    'cli.path_outside_cwd'     => "candy-codeshot: path '{path}' is outside the current working directory (use --unsafe-paths to allow)",
-    'cli.write_failed'         => "candy-codeshot: failed to write '{path}'",
-    'cli.missing_value'        => "candy-codeshot: {option} requires a value",
-    'cli.bad_number'           => "candy-codeshot: {option} expects a non-negative integer, got '{value}'",
-    'cli.png_ignores'          => "candy-codeshot: PNG output ignores SVG-only options: {options} (use --format svg)",
-    'cli.highlight_rejected'   => "candy-codeshot: rejected highlight '{spec}': {reason}",
-    'cli.format_mismatch'      => "candy-codeshot: output format '{format}' does not match the extension of '{path}'",
-    'cli.usage'                => <<<'USAGE'
+    'cli.unknown_flag'          => "candy-codeshot: unrecognised flag '{flag}'",
+    'cli.unexpected_argument'   => "candy-codeshot: unexpected argument '{arg}' - at most one input file may be given",
+    'cli.unknown_theme'         => "candy-codeshot: unknown theme '{name}'. Known: dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: theme file '{path}' could not be read as a valid JSON theme",
+    'cli.unknown_window_style'  => "candy-codeshot: unknown window style '{style}'. Known: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot: unknown format '{format}'. Known: svg, png",
+    'cli.gd_required'           => 'candy-codeshot: ext-gd is required for PNG output',
+    'cli.font_not_found'        => "candy-codeshot: font file not found: '{path}'",
+    'cli.font_invalid'          => "candy-codeshot: '{path}' is not a valid font file (expected TTF, OTF, WOFF or WOFF2)",
+    'cli.bad_highlight'         => "candy-codeshot: invalid highlight format '{format}'. Use start:end (e.g. 3:7) or start:end:#colour (e.g. 3:7:#fffbe6)",
+    'cli.read_failed'           => "candy-codeshot: failed to read input from '{path}'",
+    'cli.read_failed_stdin'     => 'candy-codeshot: failed to read stdin',
+    'cli.input_too_large'       => 'candy-codeshot: input exceeds the {limit}-byte limit (refusing to read)',
+    'cli.path_outside_cwd'      => "candy-codeshot: path '{path}' is outside the current working directory (use --unsafe-paths to allow)",
+    'cli.write_failed'          => "candy-codeshot: failed to write '{path}'",
+    'cli.missing_value'         => "candy-codeshot: {option} requires a value",
+    'cli.bad_number'            => "candy-codeshot: {option} expects a non-negative integer, got '{value}'",
+    'cli.png_ignores'           => "candy-codeshot: PNG output ignores SVG-only options: {options} (use --format svg)",
+    'cli.highlight_rejected'    => "candy-codeshot: rejected highlight '{spec}': {reason}",
+    'cli.format_mismatch'       => "candy-codeshot: output format '{format}' does not match the extension of '{path}'",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - render code or terminal output to an SVG or PNG screenshot
 
 Usage:
@@ -39,7 +40,7 @@ Flag values are separate arguments: "--theme dracula", not "--theme=dracula"
 (the "=" form is rejected as an unrecognised flag).
 
 Options:
-  --theme <name>          Theme name: dark, light, dracula, tokyo-night, nord (default: dark)
+  --theme <name|file>     Theme name (dark, light, dracula, tokyo-night, nord) or a JSON theme file (default: dark)
   --padding <n>           Padding around content (default: 24)
   --no-window             Hide window chrome (traffic lights, title bar)
   --no-shadow             Disable drop shadow
@@ -82,10 +83,10 @@ Examples:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'         => "candy-codeshot: input path '{path}' is a directory - pass a file, or pipe via stdin",
-    'cli.png_to_tty'           => 'candy-codeshot: refusing to write raw PNG bytes to a terminal (use --output <file.png>)',
-    'cli.stdin_tty'            => 'candy-codeshot: reading from stdin - pass a file or pipe input (Ctrl-D when done)',
-    'cli.render_failed'        => 'candy-codeshot: rendering failed: {reason}',
-    'cli.pixels_exceeded'      => 'candy-codeshot: {format} output too large ({width} x {height} = {pixels} pixels; cap {cap}). Reduce content, padding or line count.',
-    'cli.font_too_large'       => 'candy-codeshot: font file too large to embed: {size} bytes exceed the {cap} limit ({path})',
+    'cli.is_directory'          => "candy-codeshot: input path '{path}' is a directory - pass a file, or pipe via stdin",
+    'cli.png_to_tty'            => 'candy-codeshot: refusing to write raw PNG bytes to a terminal (use --output <file.png>)',
+    'cli.stdin_tty'             => 'candy-codeshot: reading from stdin - pass a file or pipe input (Ctrl-D when done)',
+    'cli.render_failed'         => 'candy-codeshot: rendering failed: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot: {format} output too large ({width} x {height} = {pixels} pixels; cap {cap}). Reduce content, padding or line count.',
+    'cli.font_too_large'        => 'candy-codeshot: font file too large to embed: {size} bytes exceed the {cap} limit ({path})',
 ];

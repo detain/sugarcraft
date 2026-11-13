@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot: opção desconhecida '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot: opção desconhecida '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: argumento inesperado '{arg}' - no máximo um arquivo de entrada",
-    'cli.unknown_theme'       => "candy-codeshot: tema desconhecido '{name}'. Conhecidos: dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot: estilo de janela desconhecido '{style}'. Conhecidos: macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot: formato desconhecido '{format}'. Conhecidos: svg, png",
-    'cli.gd_required'         => 'candy-codeshot: ext-gd é obrigatório para saída PNG',
-    'cli.font_not_found'      => "candy-codeshot: arquivo de fonte não encontrado: '{path}'",
-    'cli.font_invalid'        => "candy-codeshot: '{path}' não é um arquivo de fonte válido (esperado TTF, OTF, WOFF ou WOFF2)",
-    'cli.bad_highlight'       => "candy-codeshot: formato de destaque inválido '{format}'. Use início:fim (ex. 3:7) ou início:fim:#cor (ex. 3:7:#fffbe6)",
-    'cli.read_failed'          => "candy-codeshot: falha ao ler a entrada de '{path}'",
+    'cli.unknown_theme'         => "candy-codeshot: tema desconhecido '{name}'. Conhecidos: dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: o arquivo de tema '{path}' não pôde ser lido como um tema JSON válido",
+    'cli.unknown_window_style'  => "candy-codeshot: estilo de janela desconhecido '{style}'. Conhecidos: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot: formato desconhecido '{format}'. Conhecidos: svg, png",
+    'cli.gd_required'           => 'candy-codeshot: ext-gd é obrigatório para saída PNG',
+    'cli.font_not_found'        => "candy-codeshot: arquivo de fonte não encontrado: '{path}'",
+    'cli.font_invalid'          => "candy-codeshot: '{path}' não é um arquivo de fonte válido (esperado TTF, OTF, WOFF ou WOFF2)",
+    'cli.bad_highlight'         => "candy-codeshot: formato de destaque inválido '{format}'. Use início:fim (ex. 3:7) ou início:fim:#cor (ex. 3:7:#fffbe6)",
+    'cli.read_failed'           => "candy-codeshot: falha ao ler a entrada de '{path}'",
     'cli.read_failed_stdin'     => 'candy-codeshot: falha ao ler a entrada padrão (stdin)',
-    'cli.input_too_large'     => 'candy-codeshot: a entrada excede o limite de {limit} bytes (leitura recusada)',
-    'cli.path_outside_cwd'    => "candy-codeshot: o caminho '{path}' está fora do diretório de trabalho atual (use --unsafe-paths para permitir)",
-    'cli.write_failed'        => "candy-codeshot: falha ao escrever '{path}'",
-    'cli.missing_value'       => "candy-codeshot: {option} requer um valor",
-    'cli.bad_number'          => "candy-codeshot: {option} espera um inteiro não negativo, recebido '{value}'",
-    'cli.png_ignores'         => "candy-codeshot: a saída PNG ignora opções somente-SVG: {options} (use --format svg)",
-    'cli.highlight_rejected'  => "candy-codeshot: destaque '{spec}' rejeitado: {reason}",
-    'cli.format_mismatch'     => "candy-codeshot: o formato de saída '{format}' não corresponde à extensão de '{path}'",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot: a entrada excede o limite de {limit} bytes (leitura recusada)',
+    'cli.path_outside_cwd'      => "candy-codeshot: o caminho '{path}' está fora do diretório de trabalho atual (use --unsafe-paths para permitir)",
+    'cli.write_failed'          => "candy-codeshot: falha ao escrever '{path}'",
+    'cli.missing_value'         => "candy-codeshot: {option} requer um valor",
+    'cli.bad_number'            => "candy-codeshot: {option} espera um inteiro não negativo, recebido '{value}'",
+    'cli.png_ignores'           => "candy-codeshot: a saída PNG ignora opções somente-SVG: {options} (use --format svg)",
+    'cli.highlight_rejected'    => "candy-codeshot: destaque '{spec}' rejeitado: {reason}",
+    'cli.format_mismatch'       => "candy-codeshot: o formato de saída '{format}' não corresponde à extensão de '{path}'",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - renderiza código ou saída de terminal como captura SVG ou PNG
 
 Uso:
@@ -39,7 +40,7 @@ Os valores das opções são argumentos separados: "--theme dracula", não "--th
 (a forma "=" é rejeitada como opção desconhecida).
 
 Opções:
-  --theme <nome>          Nome do tema: dark, light, dracula, tokyo-night, nord (padrão: dark)
+  --theme <nome|arquivo>  Nome do tema (dark, light, dracula, tokyo-night, nord) ou um arquivo de tema JSON (padrão: dark)
   --padding <n>           Espaçamento ao redor do conteúdo (padrão: 24)
   --no-window             Ocultar a janela (semáforos, barra de título)
   --no-shadow             Desativar a sombra
@@ -79,10 +80,10 @@ Exemplos:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot: o caminho de entrada "{path}" é um diretório - passe um arquivo ou envie via stdin',
-    'cli.png_to_tty'          => 'candy-codeshot: recusando gravar bytes PNG brutos em um terminal (use --output <arquivo.png>)',
-    'cli.stdin_tty'           => 'candy-codeshot: lendo de stdin - passe um arquivo ou envie a entrada (Ctrl-D para encerrar)',
-    'cli.render_failed'     => 'candy-codeshot: falha na renderização: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot: saída {format} grande demais ({width} x {height} = {pixels} pixels; limite {cap}). Reduza o conteúdo, o espaçamento ou o número de linhas.',
-    'cli.font_too_large'     => 'candy-codeshot: arquivo de fonte grande demais para incorporar: {size} bytes excedem o limite de {cap} ({path})',
+    'cli.is_directory'          => 'candy-codeshot: o caminho de entrada "{path}" é um diretório - passe um arquivo ou envie via stdin',
+    'cli.png_to_tty'            => 'candy-codeshot: recusando gravar bytes PNG brutos em um terminal (use --output <arquivo.png>)',
+    'cli.stdin_tty'             => 'candy-codeshot: lendo de stdin - passe um arquivo ou envie a entrada (Ctrl-D para encerrar)',
+    'cli.render_failed'         => 'candy-codeshot: falha na renderização: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot: saída {format} grande demais ({width} x {height} = {pixels} pixels; limite {cap}). Reduza o conteúdo, o espaçamento ou o número de linhas.',
+    'cli.font_too_large'        => 'candy-codeshot: arquivo de fonte grande demais para incorporar: {size} bytes excedem o limite de {cap} ({path})',
 ];

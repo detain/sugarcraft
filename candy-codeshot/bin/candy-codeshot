@@ -31,6 +31,8 @@ use SugarCraft\CodeShot\PngRenderer;
 use SugarCraft\CodeShot\SvgRenderer;
 use SugarCraft\CodeShot\Support\Version;
 use SugarCraft\CodeShot\Theme;
+use SugarCraft\CodeShot\Theme\FlatPaletteThemeLoader;
+use SugarCraft\CodeShot\Theme\VsCodeThemeLoader;
 
 // The three house autoload shapes, in the order candy-mdview probes them:
 // a standalone dev checkout, a composer-installed dependency copied to its
@@ -258,6 +260,73 @@ function candy_codeshot_int_flag(string $option, ?string $value, int $max = PHP_
     return (int) $raw;
 }
 
+/**
+ * cs-19 (G2, -027): `--theme` accepts the five built-ins OR a path to a
+ * JSON theme file — upstream ships dozens of themes the library loaders
+ * could read but the CLI never reached. A value is path-like when it
+ * carries a directory separator or a .json suffix; everything else stays
+ * in the name lane so a plain typo still gets the 'Known: dark, light…'
+ * message rather than a file complaint.
+ */
+function candy_codeshot_looks_like_theme_path(string $name): bool
+{
+    return str_contains($name, '/') || str_contains($name, '\\')
+        || str_ends_with(strtolower($name), '.json');
+}
+
+/**
+ * Resolve a path-like --theme value to a Theme or exit 2 with a localized
+ * refusal (every arm writes its own line, like the font/input doors).
+ *
+ * The path rides the cs-02 gate, never a bypass: confinement first (the
+ * same cli.path_outside_cwd refusal as every other path), then the
+ * regular-file door. The bytes are read once with the loaders' own doors
+ * (10 s timeout, 1 MB cap — a truncated blob fails the parse loudly, it
+ * never half-loads) and sniffed per the loader contracts: a top-level
+ * object carrying VS Code's `colors` or `tokenColors` keys goes to
+ * VsCodeThemeLoader, anything else tries the flat-palette loader. Both
+ * fromArray doors are total post-cs-11, so the only remaining refusals
+ * are unreadable and unparseable shapes. Built-ins win on collision:
+ * `--theme dark` is Theme::dark() even when a ./dark exists.
+ */
+function candy_codeshot_theme_from_file(string $path, bool $unsafe): Theme
+{
+    $confined = candy_codeshot_confine_path($path, $unsafe);
+    if ($confined === null) {
+        fwrite(STDERR, Lang::t('cli.path_outside_cwd', ['path' => $path]) . "\n");
+        exit(2);
+    }
+    if (!is_file($confined) || !is_readable($confined)) {
+        fwrite(STDERR, Lang::t('cli.theme_file_unreadable', ['path' => $path]) . "\n");
+        exit(2);
+    }
+
+    $json = file_get_contents(
+        $confined,
+        false,
+        stream_context_create(['options' => ['timeout' => 10]]),
+        0,
+        1_000_000,
+    );
+
+    try {
+        $data = $json === false ? null : json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+    } catch (\JsonException) {
+        $data = null;
+    }
+
+    if (!is_array($data)) {
+        fwrite(STDERR, Lang::t('cli.theme_file_unreadable', ['path' => $path]) . "\n");
+        exit(2);
+    }
+
+    $isVsCode = isset($data['colors']) || isset($data['tokenColors']);
+
+    return $isVsCode
+        ? VsCodeThemeLoader::fromArray($data)
+        : FlatPaletteThemeLoader::fromArray($data);
+}
+
 /** Ceilings for the numeric geometry flags (generous: nobody wants 512px of padding). */
 const MAX_PADDING       = 512;
 const MAX_BORDER_RADIUS = 64;
@@ -420,6 +489,12 @@ $theme = match (strtolower(str_replace('_', '-', $themeName))) {
     'nord'        => Theme::nord(),
     default       => null,
 };
+// cs-19 (G2): not one of the five folded names — if the value reads as a
+// path, hand it to the confined theme-file lane (which exits 2 on every
+// refusal); only true name-shaped misses reach the known-list message.
+if ($theme === null && candy_codeshot_looks_like_theme_path($themeName)) {
+    $theme = candy_codeshot_theme_from_file($themeName, $unsafePaths);
+}
 if ($theme === null) {
     fwrite(STDERR, Lang::t('cli.unknown_theme', ['name' => $themeName]) . "\n");
     exit(2);

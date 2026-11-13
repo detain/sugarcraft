@@ -9,26 +9,27 @@
 declare(strict_types=1);
 
 return [
-    'cli.unknown_flag'         => "candy-codeshot：認識できないフラグ '{flag}'",
+    'cli.unknown_flag'          => "candy-codeshot：認識できないフラグ '{flag}'",
 'cli.unexpected_argument'  => "candy-codeshot: 予期しない引数 '{arg}' - 入力ファイルは最大 1 件です",
-    'cli.unknown_theme'       => "candy-codeshot：不明なテーマ '{name}'。既知：dark, light, dracula, tokyo-night, nord",
-    'cli.unknown_window_style' => "candy-codeshot：不明なウィンドウスタイル '{style}'。既知：macos, windows-terminal, iterm, hyper, none",
-    'cli.unknown_format'      => "candy-codeshot：不明な形式 '{format}'。既知：svg, png",
-    'cli.gd_required'         => 'candy-codeshot：PNG出力にはext-gdが必要です',
-    'cli.font_not_found'      => "candy-codeshot：フォントファイルが見つかりません：'{path}'",
-    'cli.font_invalid'        => "candy-codeshot：'{path}'は有効なフォントファイルではありません（TTF、OTF、WOFFまたはWOFF2が必要）",
-    'cli.bad_highlight'       => "candy-codeshot：不正なハイライト形式 '{format}'。開始:終了（例 3:7）または開始:終了:#色（例 3:7:#fffbe6）を使用してください",
-    'cli.read_failed'          => "candy-codeshot：入力の読み取りに失敗：'{path}'",
+    'cli.unknown_theme'         => "candy-codeshot：不明なテーマ '{name}'。既知：dark, light, dracula, tokyo-night, nord",
+    'cli.theme_file_unreadable' => "candy-codeshot: テーマファイル '{path}' を有効な JSON テーマとして読み込めませんでした",
+    'cli.unknown_window_style'  => "candy-codeshot：不明なウィンドウスタイル '{style}'。既知：macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'        => "candy-codeshot：不明な形式 '{format}'。既知：svg, png",
+    'cli.gd_required'           => 'candy-codeshot：PNG出力にはext-gdが必要です',
+    'cli.font_not_found'        => "candy-codeshot：フォントファイルが見つかりません：'{path}'",
+    'cli.font_invalid'          => "candy-codeshot：'{path}'は有効なフォントファイルではありません（TTF、OTF、WOFFまたはWOFF2が必要）",
+    'cli.bad_highlight'         => "candy-codeshot：不正なハイライト形式 '{format}'。開始:終了（例 3:7）または開始:終了:#色（例 3:7:#fffbe6）を使用してください",
+    'cli.read_failed'           => "candy-codeshot：入力の読み取りに失敗：'{path}'",
     'cli.read_failed_stdin'     => 'candy-codeshot：stdin の読み取りに失敗',
-    'cli.input_too_large'     => 'candy-codeshot：入力が上限 {limit} バイトを超過しています（読み取りを拒否）',
-    'cli.path_outside_cwd'    => "candy-codeshot：パス '{path}' は現在の作業ディレクトリの外にあります（許可するには --unsafe-paths を使用）",
-    'cli.write_failed'        => "candy-codeshot：書き込みに失敗 '{path}'",
-    'cli.missing_value'       => "candy-codeshot：{option} には値が必要です",
-    'cli.bad_number'          => "candy-codeshot：{option} は非負の整数を期待していますが '{value}' を受け取りました",
-    'cli.png_ignores'         => "candy-codeshot：PNG出力はSVG専用オプションを無視します：{options}（--format svg を使用してください）",
-    'cli.highlight_rejected'  => "candy-codeshot：ハイライト '{spec}' を拒否しました：{reason}",
-    'cli.format_mismatch'     => "candy-codeshot：出力形式 '{format}' が '{path}' の拡張子と一致しません",
-    'cli.usage'               => <<<'USAGE'
+    'cli.input_too_large'       => 'candy-codeshot：入力が上限 {limit} バイトを超過しています（読み取りを拒否）',
+    'cli.path_outside_cwd'      => "candy-codeshot：パス '{path}' は現在の作業ディレクトリの外にあります（許可するには --unsafe-paths を使用）",
+    'cli.write_failed'          => "candy-codeshot：書き込みに失敗 '{path}'",
+    'cli.missing_value'         => "candy-codeshot：{option} には値が必要です",
+    'cli.bad_number'            => "candy-codeshot：{option} は非負の整数を期待していますが '{value}' を受け取りました",
+    'cli.png_ignores'           => "candy-codeshot：PNG出力はSVG専用オプションを無視します：{options}（--format svg を使用してください）",
+    'cli.highlight_rejected'    => "candy-codeshot：ハイライト '{spec}' を拒否しました：{reason}",
+    'cli.format_mismatch'       => "candy-codeshot：出力形式 '{format}' が '{path}' の拡張子と一致しません",
+    'cli.usage'                 => <<<'USAGE'
 candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリーンショットにレンダリング
 
 使用法:
@@ -39,7 +40,7 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
 （"=" 形式は認識できないフラグとして拒否されます）。
 
 オプション:
-  --theme <name>          テーマ名: dark, light, dracula, tokyo-night, nord（既定: dark）
+  --theme <name|file>     テーマ名 (dark, light, dracula, tokyo-night, nord) または JSON テーマファイル（既定: dark）
   --padding <n>           内容の余白（既定: 24）
   --no-window             ウィンドウ装飾を非表示（トラフィックライト、タイトルバー）
   --no-shadow             ドロップシャドウを無効化
@@ -79,10 +80,10 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
-    'cli.is_directory'        => 'candy-codeshot：入力パス "{path}" はディレクトリです - ファイルを渡すか stdin でパイプしてください',
-    'cli.png_to_tty'          => 'candy-codeshot：生の PNG バイトを端末に書き込むことは拒否されました (--output <file.png> を使用)',
-    'cli.stdin_tty'           => 'candy-codeshot：stdin から読み込み中 - ファイルを渡すか入力してください (Ctrl-D で終了)',
-    'cli.render_failed'     => 'candy-codeshot：描画に失敗しました: {reason}',
-    'cli.pixels_exceeded'    => 'candy-codeshot：{format} 出力が大きすぎます ({width} x {height} = {pixels} ピクセル; 上限 {cap})。内容、余白または行数を減らしてください。',
-    'cli.font_too_large'     => 'candy-codeshot：フォントファイルが大きすぎて埋め込めません: {size} バイトは上限 {cap} を超えています ({path})',
+    'cli.is_directory'          => 'candy-codeshot：入力パス "{path}" はディレクトリです - ファイルを渡すか stdin でパイプしてください',
+    'cli.png_to_tty'            => 'candy-codeshot：生の PNG バイトを端末に書き込むことは拒否されました (--output <file.png> を使用)',
+    'cli.stdin_tty'             => 'candy-codeshot：stdin から読み込み中 - ファイルを渡すか入力してください (Ctrl-D で終了)',
+    'cli.render_failed'         => 'candy-codeshot：描画に失敗しました: {reason}',
+    'cli.pixels_exceeded'       => 'candy-codeshot：{format} 出力が大きすぎます ({width} x {height} = {pixels} ピクセル; 上限 {cap})。内容、余白または行数を減らしてください。',
+    'cli.font_too_large'        => 'candy-codeshot：フォントファイルが大きすぎて埋め込めません: {size} バイトは上限 {cap} を超えています ({path})',
 ];
