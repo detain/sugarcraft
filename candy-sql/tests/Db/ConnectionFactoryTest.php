@@ -186,6 +186,12 @@ final class ConnectionFactoryTest extends TestCase
     public function testFromConfigCreatesSqliteFileDatabase(): void
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'candy_query_test_') . '.sqlite';
+        // SQL-O15 migration: the appended '.sqlite' never existed (tempnam
+        // names the un-suffixed file), so this leg previously PASSED by
+        // exercising PDO's create-on-open default — the very behaviour the
+        // no-create law now refuses. Touch the file: the leg's real subject
+        // is dialing an EXISTING SQLite file.
+        touch($tmpFile);
         try {
             $config = ConnectionConfig::new(
                 driver: 'sqlite',
@@ -240,6 +246,7 @@ final class ConnectionFactoryTest extends TestCase
     public function testFromArgvWithIndividualFlags(): void
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'candy_query_test_') . '.sqlite';
+        touch($tmpFile); // SQL-O15 migration — see testFromConfigCreatesSqliteFileDatabase
         try {
             $argv = [
                 'program',
@@ -358,5 +365,63 @@ final class ConnectionFactoryTest extends TestCase
 
         $both = ConnectionFactory::fromDsn('pgsql://u:p@dbhost/app?ssl-mode=disable&sslmode=require');
         $this->assertSame('disable', $both->sslMode);
+    }
+
+    /**
+     * SQL-O15 (once-019): the SQLite no-create law must guard every dial,
+     * not just the bare-path form. A path-shaped DSN that names a missing
+     * file used to fall through to PDO's create-on-open default and mint an
+     * empty database (losing every write at exit); it now answers the same
+     * named refusal SqliteDatabase::open() gives, WITHOUT creating the file.
+     */
+    public function testSqliteFileDsnRefusesNonexistentPathWithoutCreatingIt(): void
+    {
+        $missing = sys_get_temp_dir() . '/candy-sql-o15-' . bin2hex(random_bytes(6)) . '.sqlite';
+        $this->assertFalse(is_file($missing));
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('no such SQLite file: ' . $missing);
+            ConnectionFactory::fromArgv(['program', '--dsn=sqlite://' . $missing]);
+        } finally {
+            // The refusal must be a real door: nothing may be minted.
+            if (is_file($missing)) {
+                @unlink($missing);
+                $this->fail('the refused DSN still created the SQLite file');
+            }
+        }
+    }
+
+    public function testSqliteFlagRouteRefusesMissingFileWithTheBarePathSentence(): void
+    {
+        $missing = sys_get_temp_dir() . '/candy-sql-o15-flag-' . bin2hex(random_bytes(6)) . '.sqlite';
+        $this->assertFalse(is_file($missing));
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('no such SQLite file: ' . $missing);
+            ConnectionFactory::fromArgv(['program', '--driver=sqlite', '--db=' . $missing]);
+        } finally {
+            if (is_file($missing)) {
+                @unlink($missing);
+            }
+        }
+    }
+
+    public function testSqliteDsnToAnExistingFileStillDials(): void
+    {
+        // Non-vacuity: the refusal keys on EXISTENCE, not on the DSN shape.
+        $tmp = tempnam(sys_get_temp_dir(), 'candy_sql_o15_ok_') . '.sqlite';
+        touch($tmp);
+        try {
+            $db = ConnectionFactory::fromArgv(['program', '--dsn=sqlite://' . $tmp]);
+            $this->assertInstanceOf(SqliteDatabase::class, $db);
+            $this->assertTrue($db->ping());
+            $db->close();
+        } finally {
+            if (is_file($tmp)) {
+                unlink($tmp);
+            }
+        }
     }
 }

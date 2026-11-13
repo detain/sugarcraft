@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Factory for creating DatabaseInterface instances from various config sources.
  *
@@ -308,6 +310,19 @@ final class ConnectionFactory
      */
     private static function createSqlite(ConnectionConfig $config): SqliteDatabase
     {
+        // SQL-O15 (once-019): the no-create law guarded only the bare-path
+        // launcher door (SqliteDatabase::open). A path-shaped DSN or flag
+        // (--dsn=sqlite:///missing/app.sqlite, --driver=sqlite --db=…)
+        // reached PDO's create-on-open default instead: the empty file was
+        // minted silently and every write at exit landed in nothing — the
+        // exact loss the refusal exists to prevent. Every SQLite FILE path
+        // the factory dials now answers the same named refusal; ':memory:'
+        // (and the empty dbname the resolver folds onto it) stay exempt.
+        $path = $config->dbname;
+        if ($path !== ':memory:' && $path !== '' && !\is_file($path)) {
+            throw new \RuntimeException(Lang::t('database.no_file', ['path' => $path]));
+        }
+
         $pdo = new \PDO($config->dsn);
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         return new SqliteDatabase($pdo, $config->dbname);

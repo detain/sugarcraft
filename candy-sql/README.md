@@ -48,6 +48,11 @@ bin/candy-sql --dsn=mysql://user:pass@localhost:3306/dbname
 bin/candy-sql --dsn=pgsql://user:pass@localhost:5432/dbname
 bin/candy-sql --dsn=sqlite:///absolute/path/to/db.sqlite
 
+# The same DSN strings also ride as the positional argument (no --dsn= prefix
+# needed), and :memory: dials a throwaway database that is never a file:
+bin/candy-sql mysql://user:pass@localhost:3306/dbname
+bin/candy-sql sqlite://:memory:
+
 # Individual flags (no DSN)
 bin/candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
 
@@ -60,9 +65,12 @@ bin/candy-sql --connect=prod
 ```
 
 Supported drivers are `sqlite`, `mysql` and `pgsql` (`ConnectionFactory::SUPPORTED_DRIVERS`); anything else — including
-`sqlsrv://` DSNs — throws at parse time. For SQLite, the bare path must name an **existing** file: `SqliteDatabase::open()`
-hard-refuses nonexistent paths rather than silently creating an empty database that loses every write at exit
-(`SqliteDatabase::open()`; `ConnectionFactory::fromPath()` inherits the same refusal) — point at a real file or
+`sqlsrv://` DSNs — throws at parse time. A SQLite path must name an **existing** file: `SqliteDatabase::open()`
+hard-refuses nonexistent paths rather than silently creating an empty database that loses every write at exit.
+The same no-create law now guards **every** SQLite file the launcher dials, not just the bare-path form —
+positional DSN, `--dsn=sqlite:///path`, and `--driver=sqlite --db=path` all route through
+`ConnectionFactory::createSqlite()`, which answers the identical `no such SQLite file` refusal before PDO's
+create-on-open default can mint an empty database (`:memory:` stays exempt) — point at a real file or
 import first (e.g. `sqlite3 fresh.sqlite < dump.sql`).
 
 **Extensions.** The composer manifest hard-requires `ext-pdo_sqlite` and `ext-sqlite3`, while `ext-pdo_mysql` and
@@ -922,11 +930,16 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   SLEEP(60)` sleeps, a user-defined function in the projection runs, and
   `INTO OUTFILE`/`INTO DUMPFILE` clauses reach the filesystem. Inspecting a
   hostile thread's query text is not a neutral act.
-- **`--history=<path>` writes wherever you point it.** The flag accepts any
-  path and overwrites an existing file at that path; the owner-only modes
-  (dir 0700 / file 0600) apply to what the recorder creates, not to what it
-  replaces. The flag is a user-owned CLI choice — do not pass a path you do
-  not own the contents of.
+- **`--history=<path>` opens and appends wherever you point it — it never
+  overwrites.** The flag accepts any path: a fresh file is created (dir 0700 /
+  file 0600), and an **existing** file is reopened in place and appended to
+  (`CREATE TABLE IF NOT EXISTS history` — `SqliteHistoryStore`'s own open
+  path). The real hazard is therefore not lost data but foreign files: point
+  the flag at a valid SQLite database that belongs to something else and the
+  recorder silently adds a `history` table (plus its WAL sidecar files) to
+  it. A pre-existing file that carries group/world permission bits is
+  mode-TIGHTENED (those bits cleared), never loosened. The flag is a
+  user-owned CLI choice — do not point it at a database you do not own.
 - **Reconnect automation is MySQL-only.** `ReconnectManager` folds the
   2002/2003/2013 error codes for MySQL sessions; a PostgreSQL or SQLite
   handle that drops stays dropped until the process relaunches.
