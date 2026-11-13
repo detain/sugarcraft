@@ -26,6 +26,13 @@ namespace CandyCode\Bundles\MsTeams\MsTeams;
  * ever. Production wires the closure to the published JWKS (refreshing at
  * most every five minutes when an unknown kid shows up — a kid we cannot
  * resolve is a refusal, never a fetch storm).
+ *
+ * Replay posture, stated plainly: a captured token replayed INSIDE its
+ * signed window is accepted. We carry no jti replay-cache on purpose — the
+ * `aud` pin scopes a token to this one bot, Bot Framework lifetimes are
+ * minutes, and `exp` is required above; an LRU of seen ids buys a bounded
+ * window more defence than its memory growth and false-refusals on a
+ * legitimate retry are worth, per the class's short-lifetime stance.
  */
 final class Jwt
 {
