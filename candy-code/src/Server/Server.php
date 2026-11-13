@@ -139,6 +139,8 @@ final class Server
      * @param (\Closure(): float)|null       $clock          the seconds clock the session-expiry sweep reads (defaults to wall time)
      * @param (\Closure(): float)|null       $readDeadline   per-request read-deadline seconds (ISS-055); null for the documented default
      */
+    private bool $revokeHooked = false;
+
     private function __construct(
         private readonly ServerConfig $config,
         private readonly AuthContext $auth,
@@ -311,8 +313,16 @@ final class Server
         });
         $http->listen($source);
 
+        if (!$this->revokeHooked) {
+            $this->revokeHooked = true;
+            $this->auth->viewerTokens->onRevoked(function (string $id): void {
+                $this->closeViewerSockets($id);
+            });
+        }
+
         $this->expirySweep ??= $this->loop->addPeriodicTimer(self::EXPIRY_SWEEP_SECONDS, function (): void {
             $this->closeExpiredSessions();
+            $this->closeDeadViewerSockets();
         });
 
         return (string) $this->listener->getAddress();
@@ -389,6 +399,43 @@ final class Server
             $pushStore->prunePrincipal($principal);
         }
         ($this->log)(\sprintf('token rotated: signed every client out (%d socket%s closed)', $closed, $closed === 1 ? '' : 's'));
+
+        return $closed;
+    }
+
+    /**
+     * Close every socket a viewer grant opened — the `token.revoke` arm. A
+     * socket is authenticated once at upgrade and keeps its principal for
+     * life, so revoking the grant alone would leave the viewer reading.
+     * Answers how many sockets closed.
+     */
+    public function closeViewerSockets(string $tokenId): int
+    {
+        $closed = 0;
+        foreach ($this->connections as $connection) {
+            if ($connection->tokenId() === $tokenId) {
+                $connection->close(self::CLOSE_SIGNED_OUT, 'this share token was revoked');
+                ++$closed;
+            }
+        }
+        if ($closed > 0) {
+            ($this->log)(\sprintf('viewer grant %s revoked (%d socket%s closed)', $tokenId, $closed, $closed === 1 ? '' : 's'));
+        }
+
+        return $closed;
+    }
+
+    /** Close viewer sockets whose grant has expired (or otherwise left the store). */
+    public function closeDeadViewerSockets(): int
+    {
+        $closed = 0;
+        foreach ($this->connections as $connection) {
+            $id = $connection->tokenId();
+            if ($id !== null && !$this->auth->viewerTokens->live($id)) {
+                $connection->close(self::CLOSE_SIGNED_OUT, 'this share token expired');
+                ++$closed;
+            }
+        }
 
         return $closed;
     }

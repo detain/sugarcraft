@@ -77,6 +77,9 @@ final class ViewerTokens
 
     private float $lastFlush = 0.0;
 
+    /** @var list<\Closure(string): void> told the id of every grant {@see revoke()} drops */
+    private array $revokeListeners = [];
+
     /**
      * @param \Closure(): float           $clock one clock for every expiry
      * @param (\Closure(string): void)|null $log  boot-refusal lines, never tokens
@@ -237,6 +240,33 @@ final class ViewerTokens
     }
 
     /**
+     * Run $listener with the grant id each time {@see revoke()} drops one, so
+     * the server can close the sockets that grant opened without waiting for
+     * a sweep. Rotation ({@see revokeAll()}) is not announced here: it has
+     * its own socket sweep in the server.
+     *
+     * @param \Closure(string): void $listener
+     */
+    public function onRevoked(\Closure $listener): void
+    {
+        $this->revokeListeners[] = $listener;
+    }
+
+    /** Whether a grant with $id is still live (unrevoked and unexpired). */
+    public function live(string $id): bool
+    {
+        $this->boot();
+        $this->purge();
+        foreach ($this->entries as $row) {
+            if ($row['id'] === $id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Drop the grant with $id; answers whether one existed (the revoke RPC's
      * only consumer-visible bit, and deliberately no richer answer that
      * could probe which ids ever were).
@@ -248,6 +278,9 @@ final class ViewerTokens
             if ($row['id'] === $id) {
                 unset($this->entries[$hash]);
                 $this->revocationStands();
+                foreach ($this->revokeListeners as $listener) {
+                    $listener($id);
+                }
 
                 return true;
             }
