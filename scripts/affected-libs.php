@@ -20,7 +20,9 @@ declare(strict_types=1);
  *   php scripts/affected-libs.php --files path/a path/b ...
  *   php scripts/affected-libs.php --files-stdin   # newline-separated on stdin
  *
- * Stdout: one JSON object (see KEYS below).
+ * Stdout: one JSON object — the keys are annotated inline at the emit
+ * site near the bottom of this file (repo-tooling-060: this used to point at a
+ * "KEYS below" section that never existed).
  * Stderr: human-readable debug summary.
  */
 
@@ -75,6 +77,34 @@ const FORCE_ALL_FILES = [
     // The rename map drives sync-sugarcraft.yml's legacy-preservation logic,
     // so an edit to it must re-sync every lib (plan_rename.md step 2.2 #5).
     'tools/renames.json',
+    // RT-38 (repo-tooling-042): the four repo-wide tools. Each runs today as
+    // its own dedicated CI leg and catches its own direct breakage, but their
+    // OUTPUTS shape every lib's install/test/publish wiring — an edit that is
+    // behaviorally wrong yet self-consistent (refresh-deps mis-linking,
+    // parallel-tests mis-sharding, check-path-repos under-enforcing,
+    // pin-siblings mis-pinning) is only observable in the per-lib legs. The
+    // widening intuition goes here so it is load-bearing, not tribal.
+    'scripts/refresh-deps.php',
+    'scripts/parallel-tests.sh',
+    'tools/check-path-repos.php',
+    'scripts/pin-siblings.php',
+];
+
+/**
+ * RT-38 (repo-tooling-054): dirs that legitimately ship tests WITHOUT a
+ * composer.json. The tool's discovery globs composer.json, so such a dir is
+ * invisible to the matrix; the finding is that the SAME silence hid an
+ * accidentally manifest-less lib. Named-and-reasoned exemption is the
+ * tripwire's counterpart — a phpunit.xml dir off this list must carry a
+ * composer.json or discovery fails loud.
+ *
+ * candy-discord/candy-msteams are composer-less BY OWNER RULING D2 of the
+ * code-chat program (no-composer plugin bundles; disclosed standing fact in
+ * the scsite closeout — not re-litigated here, this entry only records it).
+ */
+const COMPOSER_LESS_TEST_DIRS = [
+    'candy-discord'  => 'plugin bundle, composer-less by owner ruling D2 (code-chat program)',
+    'candy-msteams'  => 'plugin bundle, composer-less by owner ruling D2 (code-chat program)',
 ];
 
 function fail(string $msg): never
@@ -116,6 +146,26 @@ function discover_libs(): array
     if ($offenders !== []) {
         fail('rejected lib dir name(s) failing slug grammar: ' . implode(', ', $offenders)
             . ' (lib slugs must match ^[a-z0-9][a-z0-9-]*$)');
+    }
+
+    // RT-38 tripwire: the composer.json glob can never SEE a manifest-less
+    // test dir — that is the candy-discord/msteams invisibility class. Sweep
+    // from the phpunit.xml side instead: any test dir without composer.json
+    // must be named-and-reasoned in COMPOSER_LESS_TEST_DIRS, or the next
+    // accidental "forgot the manifest" surfaces as a red, not silence.
+    $ghosts = [];
+    foreach (glob(ROOT . '/*/phpunit.xml') ?: [] as $path) {
+        $dir = basename(dirname($path));
+        if (is_file(dirname($path) . '/composer.json')) {
+            continue;
+        }
+        if (!array_key_exists($dir, COMPOSER_LESS_TEST_DIRS)) {
+            $ghosts[] = $dir;
+        }
+    }
+    if ($ghosts !== []) {
+        fail('test dirs with phpunit.xml but no composer.json and no COMPOSER_LESS_TEST_DIRS exemption: '
+            . implode(', ', $ghosts) . ' (either add the manifest or name-and-reason the exemption)');
     }
     sort($libs);
     return $libs;
