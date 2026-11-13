@@ -117,6 +117,15 @@ mode is enabled.
 
 ### Msg routing cheat-sheet
 
+bubbles ships one `Delegate` every component shares for key handling.
+sugar-widgets deliberately diverges: routing is re-implemented per
+component (this cheat-sheet + `Key\KeyMap`), so porters must NOT assume
+a drop-in delegate — the adoption question is an OPEN owner ruling
+recorded in `docs/MATCHUPS.md` (SugarWidgets row), together with the
+ruled-out dispositions of the five unported bubbles components
+(Button / Ruler / Caret / Checkbox / Group) and where to compose them
+instead.
+
 Forward these into your model's `update()` so the embedded component
 can react: `SugarCraft\Widgets\Cursor\BlinkMsg` (Cursor / TextInput,
 deprecated alias of `Forms\Cursor\BlinkMsg`),
