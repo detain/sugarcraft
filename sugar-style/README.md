@@ -91,10 +91,10 @@ echo Layout::place(40, 10, Position::CENTER, Position::CENTER, 'centered text');
 // Split panes: a divider column / tiled rule between blocks (empty blocks
 // are dropped together with their divider)
 echo Layout::joinHorizontalWithDivider(Position::TOP, '│', $left, $right);
-echo Layout::joinVerticalWithDivider(Position::LEFT, '─', $top, $bottom);
+echo Layout::joinVerticalWithDivider(Position::LEFT, '─', $header, $body);
 
 // Block clips (ANSI-aware): clipHead/clipTail by rows, clipWidth by cells
-echo Layout::clipWidth($block, 40, '…');
+echo Layout::clipWidth($body, 40, '…');
 ```
 
 Only lowercase method names are defined (`joinHorizontal`, `place`, …);
@@ -111,13 +111,20 @@ caller-built marker (`‹N›`, `»`). The full law is in the `ZoneRow`
 docblock.
 
 ```php
+use SugarCraft\Style\Bar\ZoneEntry;
+use SugarCraft\Style\Bar\ZonePiece;
+use SugarCraft\Style\Bar\ZoneRow;
+
+$cols = 12;
+$tabs = [ZoneEntry::of([ZonePiece::of('one', 'tab:1'), ZonePiece::of(' ×', 'x:1')])];
+
 $row = ZoneRow::new()
     ->withLead(ZonePiece::of('[+]', 'win:new'))
     ->withEntries($tabs)                       // list<ZoneEntry>
     ->withOverflow(fn (int $n) => ZoneEntry::of([ZonePiece::of("‹{$n}›")]))
-    ->withMarker(fn (string $id, string $s) => Mark::zone($id, $s));
+    ->withMarker(fn (string $id, string $s) => $s); // e.g. Mark::zone($id, $s)
 
-echo $row->render($cols, marked: false);
+echo $row->render($cols, false);
 $zones = $row->zones($cols);   // [row, from, to, id] spans
 ```
 
