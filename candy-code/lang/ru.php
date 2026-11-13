@@ -5310,4 +5310,5 @@ TXT,
     'cmd.sendto.mode.params' => 'только параметры',
     'cmd.sendto.mode.mask' => '{mode} + маска',
     'cmd.sendto.row' => '{name} отправлен в форму генерации — импортировано полей: {count} ({via}, {mode})',
+    'context.intent.unusable_glob' => 'У заметки памяти {id} непригодный триггер `when: path:` ({glob}), поэтому он никогда не сработает. Измените или удалите заметку.',
 ];

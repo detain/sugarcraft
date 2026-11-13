@@ -5310,4 +5310,5 @@ Generierungsformular-Entwurf. Bereits im Entwurf vorhandene Werte werden nie
     'cmd.sendto.mode.params' => 'nur Parameter',
     'cmd.sendto.mode.mask' => '{mode} + Maske',
     'cmd.sendto.row' => '{name} an das Generierungsformular gesendet — {count} Felder importiert ({via}, {mode})',
+    'context.intent.unusable_glob' => 'Die Gedächtnisnotiz {id} hat einen `when: path:`-Auslöser ({glob}), der nicht verwendbar ist und daher nie ausgelöst wird. Bearbeite oder lösche die Notiz.',
 ];

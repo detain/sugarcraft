@@ -353,6 +353,13 @@ PROMPT;
                 $restricted = $this->restrict($backend);
                 $prompt = $this->prompt($entries);
             } catch (\Throwable) {
+                // Deliberately silent: this is the PREP half of a background
+                // consolidation (journal read, state read, prompt build). Nothing
+                // is lost by skipping — the cursor has not moved, so the next
+                // trigger retries the same entries — and the twin
+                // AutoMemoryConsolidator documents the same silence. The pass's
+                // own failures (runner/settle) DO announce through
+                // DreamPassCompletedMsg::$error; only a prep fault stays quiet.
                 return resolve(null);
             }
 

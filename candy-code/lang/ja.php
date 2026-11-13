@@ -5307,4 +5307,5 @@ TXT,
     'cmd.sendto.mode.params' => 'パラメータのみ',
     'cmd.sendto.mode.mask' => '{mode} + マスク',
     'cmd.sendto.row' => '{name} を生成フォームに送信しました — {count} 個のフィールドをインポート ({via}, {mode})',
+    'context.intent.unusable_glob' => 'メモリノート {id} の `when: path:` トリガー ({glob}) は使用できないため、発火しません。ノートを編集または削除してください。',
 ];

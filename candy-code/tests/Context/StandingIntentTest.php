@@ -11,6 +11,7 @@ use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\ProjectMemoryWriter;
 use SugarCraft\Code\Context\PromptFence;
 use SugarCraft\Code\Context\RulePathNudge;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Memory\MemoryEntry;
 use SugarCraft\Code\Memory\MemoryStore;
@@ -106,6 +107,26 @@ final class StandingIntentTest extends TestCase
             id: $id,
             when: $when,
         );
+    }
+
+    /** S-X07: a note whose stored glob cannot be built says so once, not never. */
+    public function testUnusableStoredGlobIsDisclosedOncePerTracker(): void
+    {
+        RuntimeNoticeSink::arm(false);
+        try {
+            RuntimeNoticeSink::drain();
+            $tracker = self::trackerWithIntents([new MemoryEntry('dead1', 'intent', [], 'user', 'B', new \DateTimeImmutable(), new \DateTimeImmutable(), 'path:')]);
+
+            self::assertNull($tracker->forPath('src/a.php'));
+            $rows = RuntimeNoticeSink::drain();
+            self::assertCount(1, $rows);
+            self::assertStringContainsString('dead1', $rows[0]);
+
+            $tracker->forPath('src/b.php');
+            self::assertSame([], RuntimeNoticeSink::drain(), 'disclosed once, not per consult');
+        } finally {
+            RuntimeNoticeSink::drain();
+        }
     }
 
     // ---------------------------------------------------------------- the trigger vocabulary

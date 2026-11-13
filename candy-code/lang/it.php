@@ -5311,4 +5311,5 @@ sovrascritti (la legge onlyUnset).',
     'cmd.sendto.mode.params' => 'solo parametri',
     'cmd.sendto.mode.mask' => '{mode} + maschera',
     'cmd.sendto.row' => '{name} inviato al modulo di generazione — {count} campi importati ({via}, {mode})',
+    'context.intent.unusable_glob' => 'La nota di memoria {id} ha un trigger `when: path:` ({glob}) non utilizzabile, quindi non scatterà mai. Modifica o elimina la nota.',
 ];

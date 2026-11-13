@@ -8,6 +8,8 @@ use Closure;
 use InvalidArgumentException;
 use SugarCraft\Code\Context\Triggers\KeywordTrigger;
 use SugarCraft\Code\Context\Triggers\PathTrigger;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Memory\MemoryEntry;
 
 /**
@@ -239,6 +241,15 @@ final class RulePathNudge
      * @var (Closure(): list<MemoryEntry>)|null
      */
     private ?Closure $intentSource = null;
+
+    /**
+     * Ids of notes whose unusable `when: path:` glob has already been
+     * disclosed, so a permanently broken note speaks once per tracker, not on
+     * every rebuild.
+     *
+     * @var array<string, true>
+     */
+    private array $unusableReported = [];
 
     /**
      * The intents this channel can announce, keyed by note id (first-seen wins).
@@ -565,10 +576,26 @@ final class RulePathNudge
 
             $intents[$note->id()] = $note;
             $digests[$note->id()] = self::intentDigest($note);
+            $this->discloseUnusableGlob($note);
         }
 
         $this->intents = $intents;
         $this->intentDigests = $digests;
+    }
+
+    /**
+     * Say once that a note's `when: path:` glob cannot be built, so its nudge is
+     * dead — hand-edited and imported notes bypass the save-time validation.
+     */
+    private function discloseUnusableGlob(MemoryEntry $note): void
+    {
+        $glob = $note->whenPathGlob();
+        if ($glob === null || isset($this->unusableReported[$note->id()]) || self::intentTrigger($note) !== null) {
+            return;
+        }
+
+        $this->unusableReported[$note->id()] = true;
+        RuntimeNoticeSink::warn(Lang::t('context.intent.unusable_glob', ['id' => $note->id(), 'glob' => $glob]));
     }
 
     /**

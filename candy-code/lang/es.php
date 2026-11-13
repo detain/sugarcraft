@@ -5310,4 +5310,5 @@ sobrescriben (la ley onlyUnset).',
     'cmd.sendto.mode.params' => 'solo parámetros',
     'cmd.sendto.mode.mask' => '{mode} + máscara',
     'cmd.sendto.row' => '{name} enviado al formulario de generación — {count} campos importados ({via}, {mode})',
+    'context.intent.unusable_glob' => 'La nota de memoria {id} tiene un disparador `when: path:` ({glob}) que no se puede usar, así que nunca se activará. Edita o elimina la nota.',
 ];

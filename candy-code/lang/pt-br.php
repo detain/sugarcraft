@@ -5310,4 +5310,5 @@ sobrescritos (a lei onlyUnset).',
     'cmd.sendto.mode.params' => 'apenas parâmetros',
     'cmd.sendto.mode.mask' => '{mode} + máscara',
     'cmd.sendto.row' => '{name} enviado ao formulário de geração — {count} campos importados ({via}, {mode})',
+    'context.intent.unusable_glob' => 'A nota de memória {id} tem um gatilho `when: path:` ({glob}) inutilizável, então nunca será disparada. Edite ou exclua a nota.',
 ];

@@ -5385,4 +5385,5 @@ overwritten (the onlyUnset law).',
     'cmd.sendto.mode.params' => 'parameters only',
     'cmd.sendto.mode.mask' => '{mode} + mask',
     'cmd.sendto.row' => 'sent {name} to the generate form — {count} fields imported ({via}, {mode})',
+    'context.intent.unusable_glob' => 'Memory note {id} has a `when: path:` trigger ({glob}) that cannot be used, so it will never fire. Edit or delete the note.',
 ];

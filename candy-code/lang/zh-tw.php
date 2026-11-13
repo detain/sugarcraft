@@ -5305,4 +5305,5 @@ TXT,
     'cmd.sendto.mode.params' => '僅參數',
     'cmd.sendto.mode.mask' => '{mode} + 遮罩',
     'cmd.sendto.row' => '已將 {name} 傳送到產生表單 — 匯入了 {count} 個欄位（{via}，{mode}）',
+    'context.intent.unusable_glob' => '記憶筆記 {id} 的 `when: path:` 觸發器（{glob}）無法使用，因此永遠不會觸發。請編輯或刪除該筆記。',
 ];

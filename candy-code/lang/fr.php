@@ -5311,4 +5311,5 @@ brouillon du formulaire de génération. Les valeurs déjà présentes dans le b
     'cmd.sendto.mode.params' => 'paramètres uniquement',
     'cmd.sendto.mode.mask' => '{mode} + masque',
     'cmd.sendto.row' => '{name} envoyé au formulaire de génération — {count} champs importés ({via}, {mode})',
+    'context.intent.unusable_glob' => 'La note de mémoire {id} a un déclencheur `when: path:` ({glob}) inutilisable, elle ne se déclenchera donc jamais. Modifiez ou supprimez la note.',
 ];
