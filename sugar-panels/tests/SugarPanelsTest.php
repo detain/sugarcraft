@@ -7,6 +7,7 @@ namespace SugarCraft\Panels\Tests;
 use SugarCraft\Panels\{Node, SugarPanels};
 use SugarCraft\Core\Util\{Ansi, Color};
 use SugarCraft\Style\Align;
+use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 use SugarCraft\Style\VAlign;
 use PHPUnit\Framework\TestCase;
@@ -966,6 +967,20 @@ final class SugarPanelsTest extends TestCase
             self::body(SugarPanels::new()->render($leaf, 6, 1)),
             self::body(SugarPanels::new()->render($leaf->withPadding(1), 6, 1)),
         );
+    }
+
+    public function testDisablingAndReEnablingTheFrameKeepsTheChosenStyle(): void
+    {
+        $node = Node::leaf('hi')->withBorder(true)->withBorderStyle(Border::normal())->withBorder(false);
+        $hidden = self::body(SugarPanels::new()->render($node, 8, 4));
+
+        $this->assertDoesNotMatchRegularExpression('/[┌┐└┘├┤┬┴┼─│]/u', $hidden, 'withBorder(false) paints no frame bytes');
+        $this->assertStringContainsString('hi', Ansi::strip($hidden), 'the content keeps painting inside the frameless box');
+
+        $reshown = self::body(SugarPanels::new()->render($node->withBorder(true), 8, 4));
+
+        $this->assertStringContainsString('┌', $reshown, 'the style chosen before the round-trip survives it — no silent snap back to the rounded default');
+        $this->assertStringNotContainsString('╭', $reshown);
     }
 
     public function testContentStoredOnAContainerNeverReachesTheScreen(): void

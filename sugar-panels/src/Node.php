@@ -117,7 +117,9 @@ final class Node
 
     /**
      * No-border wrapper — suppresses every frame and every divider through
-     * the whole subtree, so adjacent panels render touching. The wrapper
+     * the whole subtree, so adjacent panels render touching. Contrast with
+     * {@see self::withBorder}(false), which hides one node's own frame and
+     * leaves the rest of the layout's rules in place. The wrapper
      * carries border:false and threads $noFrames on render (see
      * SugarPanels::renderNoBorder; pinned by tests/FramingAndSeparatorsTest.php).
      */
@@ -205,6 +207,13 @@ final class Node
         return $this->mutate(padding: \max(0, $cells));
     }
 
+    /**
+     * Toggle this node's OWN frame. Contrast with {@see self::noBorder()},
+     * which flattens a whole subtree's frames and dividers, while this hides
+     * only the one box and leaves sibling frames and rules alone. The chosen
+     * border style survives a `true → false → true` round-trip: disabling
+     * hides the frame, enabling re-shows the style that was last set.
+     */
     public function withBorder(bool $show): self
     {
         // When enabling the border, use rounded chars as default if no

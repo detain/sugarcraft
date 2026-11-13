@@ -19,7 +19,7 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 
 - **H/V composition** — build arbitrary layouts by nesting `horizontal()` and `vertical()` panels
 - **Box-drawing borders** — Unicode box-drawing glyphs (╭ ╮ ╰ ╯ │ ─), any sugar-style `Border` style
-- **No-border mode** — `noBorder()` flattens a subtree: neither its frames nor its dividers are painted, so adjacent panels touch
+- **No-border mode** — `noBorder()` flattens a subtree: neither its frames nor its dividers are painted, so adjacent panels touch (to hide one box's own frame without touching its neighbours' rules, use `withBorder(false)`)
 - **Leaf padding** — inner whitespace around painted content; containers ignore it, their children fill the box
 - **ANSI-aware content** — styled/coloured leaf text places by *visible* columns: escape sequences ride with the grapheme they style (zero width), wide graphemes keep their two columns, and a clipped or unbalanced span is auto-reset so colour never bleeds past the box
 - **Word-wrap at paint time** — a leaf line wider than its region is re-wrapped to fit at cell boundaries; over-long words split at grapheme boundaries, and only height overflow is dropped (see *Small viewports*)
@@ -231,7 +231,7 @@ There is no focus or active-panel facet — see
 | `$panels->leaf(string)` | Leaf node with string content |
 | `$panels->horizontal(Node ...)` | Horizontal (row) layout |
 | `$panels->vertical(Node ...)` | Vertical (column) layout |
-| `$panels->noBorder(Node)` | Flatten a subtree: no frames, no dividers |
+| `$panels->noBorder(Node)` | Flatten a subtree: no frames, no dividers (contrast `withBorder(false)`, which hides one box's frame only) |
 | `$panels->render(Node, int $width, int $height)` | Paint one frame; throws `InvalidArgumentException` on a viewport outside the documented ranges |
 | `$panels->resetPreviousFrame()` | Drop the frame cache — next `render()` repaints full, without erasing |
 | `SugarPanels::MAX_VIEWPORT_DIMENSION` | 4096 cells — largest viewport side accepted |
@@ -249,7 +249,7 @@ There is no focus or active-panel facet — see
 | `->withMinWidth(int)` / `->withMinHeight(int)` | Floor for the natural size. In the flex path it floors; in the legacy equal-split fallback a `min*` acts as a proportional **weight**, not a floor |
 | `->withMaxWidth(int)` / `->withMaxHeight(int)` | Cap on the node's painted footprint (frame + padding + content). `0` means no cap. Margin rides **outside** the cap: the claimed footprint is cap + margin, and `totalWidth()` / `totalHeight()` say so |
 | `->withPadding(int)` | Inner padding (cells) — leaf nodes only; ignored on containers |
-| `->withBorder(bool)` | Show/hide the node's own frame — **on by default** for leaves and containers |
+| `->withBorder(bool)` | Show/hide **this node's own** frame — **on by default** for leaves and containers; the chosen style survives a `false → true` round-trip (contrast `noBorder()`, which flattens a whole subtree) |
 | `->withSpacing(int)` | Gap between children (cells). At `0` the divider shares the previous child's boundary, and it declines to overwrite a glyph that is already painted |
 | `->withContent(string)` | Replace leaf content (new node) — a container paints its children, so content stored there is inert |
 | `->withFlex(int)` | Fill leftover space by weight (0 = fixed, natural size) |
