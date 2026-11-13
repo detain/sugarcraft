@@ -2540,6 +2540,44 @@ final class PlayerTest extends TestCase
     }
 
     /**
+     * @testdox SV-M47: the active cue follows the playhead, not the wall
+     *           clock — a paused player keeps painting the cue, and a paused
+     *           seek repaints it at the landed time
+     */
+    public function testPausedPlayerKeepsPaintingTheActiveCue(): void
+    {
+        $frames = [];
+        for ($i = 0; $i < 10; $i++) {
+            $frames[] = new RgbFrame(str_repeat("\x10\x20\x30", 80 * 24), 80, 24);
+        }
+        $subs = WebVtt::parse("WEBVTT\n\n00:01.000 --> 00:02.000\nFIRST CUE\n\n00:03.000 --> 00:04.000\nSECOND CUE\n");
+        $caption = static function (Player $p): string {
+            $rows = preg_split("/\r\n|\n/", $p->view()) ?: [];
+            return (string) end($rows);
+        };
+
+        // Frame 0 of fps 2.0 is 0.0 s — before any cue. Paused (the fromDecoder
+        // default; playback starts paused), no caption row is owed yet.
+        $idle = Player::fromDecoder(decoder: new FakeDecoder($frames), cellsW: 80, cellsH: 24, fps: 2.0, mode: Mode::Ascii, totalFrames: 10, subtitles: $subs);
+        $this->assertTrue($idle->paused, 'the pin rides the paused state, which is also the shipped open state');
+        $this->assertStringNotContainsString('FIRST CUE', $caption($idle));
+
+        // Land inside the first cue while PAUSED: the caption paints at once.
+        $first = $idle->withSeek(3);
+        $this->assertTrue($first->paused, 'withSeek never un-pauses');
+        $this->assertStringContainsString('FIRST CUE', $caption($first), 'the paused playhead paints its cue');
+
+        // A tick while paused must not advance the playhead nor blank the
+        // cue: pause is a legibility state, not a subtitle freeze.
+        [$held] = $first->update(new TickMsg());
+        $this->assertStringContainsString('FIRST CUE', $caption($held), 'the held cue keeps painting through ticks');
+
+        // A seek while paused repaints at the landed time, skipping the gap.
+        $second = $held->withSeek(7);
+        $this->assertStringContainsString('SECOND CUE', $caption($second), 'a paused seek repaints the cue at the landed playhead');
+    }
+
+    /**
      * @testdox SV-H7: the documented pane window (10-200 x 5-80) binds at
      *           every size entry — a 9999x9999 pane is a memory DoS
      *

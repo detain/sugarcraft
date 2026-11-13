@@ -389,7 +389,7 @@ Playback starts paused — `Space` is the first key you will press.
 | --- | --- |
 | `resize` | Terminal resize (SIGWINCH) re-scales video automatically — under `Reel::play()` the `Program` host installs the handler; embedding hosts forward `WindowSizeMsg` themselves (see Host contract) |
 | `loop` | Loop is set at open time via `Reel::new()->withLoop(true)->play()` (no keyboard shortcut) |
-| `subtitles` | Attached at open time via `Reel::withSubtitles()` (no keyboard shortcut) |
+| `subtitles` | Attached at open time via `Reel::withSubtitles()` (the example takes `--subs=FILE`; no keyboard shortcut). The active cue keeps painting while **paused** — it follows the playhead, not the clock |
 | `audio` | No key toggles audio: on/off is chosen at open time via `Reel::withAudio()`, and `AudioPlayer::pause()` / `resume()` (or `mute()` / `unmute()`) are the only levers, never bound to a key |
 
 ## Accessibility
@@ -398,8 +398,12 @@ Playback starts paused — `Space` is the first key you will press.
   is attached with `Reel::withSubtitles()`, the active cue renders as plain
   text one row below the frame **in every rendering mode** — that row is
   what a screen reader, a terminal text capture, or a transcript tool can
-  read. The image protocols (sixel, kitty, iTerm2) draw frames as graphics
-  and emit no text at all, so a video without a caption track is opaque to
+  read. The cue follows the **playhead**, not the wall clock: a paused
+  player keeps painting the active cue (Space at 12.3 s holds the sentence
+  you are reading; a seek repaints the cue at the landed time) — pause is a
+  legibility state, not a subtitle freeze. The image protocols (sixel,
+  kitty, iTerm2) draw frames as graphics and emit no text at all, so a
+  video without a caption track is opaque to
   assistive technology: the track is the text alternative for the visual
   channel in the WCAG 1.2 sense.
 - Everything is operable from the keyboard (see

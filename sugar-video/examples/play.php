@@ -10,6 +10,7 @@ declare(strict_types=1);
  *   php examples/play.php                    # synthetic gradient pattern
  *   php examples/play.php video.mp4        # play a real video file
  *   php examples/play.php video.mp4 ascii   # force ASCII rendering mode
+ *   php examples/play.php video.mp4 --subs=tiny.vtt  # captioned playback
  *   php examples/play.php --help           # show usage
  *
  * Controls:
@@ -50,6 +51,9 @@ Play a video file or a built-in synthetic test pattern in the terminal.
 Arguments:
   path          Path to a video file (mp4, avi, gif, webm, etc.)
                Use "synthetic" to generate a built-in gradient test pattern.
+  --subs=FILE   Attach a WebVTT/SRT subtitle track (the caption rides the
+               reserved bottom row of the pane, and it keeps painting while
+               paused — the cue follows the playhead, not the clock)
   mode          Rendering mode (optional, default: auto-detect terminal capability)
                ascii      — grayscale luminance ramp (no color)
                ansi256    — 256-color cube + grey ramp
@@ -89,10 +93,24 @@ HELP
 
 $argv = $GLOBALS['argv'] ?? [];
 $prog = $argv[0] ?? 'play.php';
-$arg1 = $argv[1] ?? '';
-$arg2 = $argv[2] ?? '';
 
-if ($arg1 === '--help' || $arg1 === '-h') {
+// SV-M47: one walk splits options from positionals. --subs=<file> is the
+// first option that carries a VALUE — anything else starting with '-' keeps
+// the historic unknown-option refusal (STDERR, exit 1), and the positional
+// order is untouched ([path] [mode]).
+$positional = [];
+$subsArg = null;
+foreach (array_slice($argv, 1) as $arg) {
+    if (str_starts_with($arg, '--subs=')) {
+        $subsArg = substr($arg, strlen('--subs='));
+        continue;
+    }
+    $positional[] = $arg;
+}
+$arg1 = $positional[0] ?? '';
+$arg2 = $positional[1] ?? '';
+
+if (($arg1 === '--help' || $arg1 === '-h') && $subsArg === null) {
     help($prog);
     exit(0);
 }
@@ -161,6 +179,18 @@ try {
     // Apply mode override if explicitly requested via CLI.
     if ($mode !== null) {
         $reel = $reel->withMode($mode);
+    }
+
+    // SV-M47: the headline subtitle feature had no door on the shipped
+    // surface — withSubtitles() existed only to unit tests. A missing track
+    // file is the same user-facing class as a missing video: one sentence,
+    // exit 1, no trace.
+    if ($subsArg !== null) {
+        if ($subsArg === '' || !is_file($subsArg)) {
+            fwrite(STDERR, "subtitle file not found: {$subsArg}\n");
+            exit(1);
+        }
+        $reel = $reel->withSubtitles($subsArg);
     }
 
     $reel->play();
