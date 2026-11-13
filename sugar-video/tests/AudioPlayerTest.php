@@ -7,6 +7,7 @@ namespace SugarCraft\Video\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Video\AudioPlayer;
 use SugarCraft\Video\Source\Probe;
+use SugarCraft\Video\Tests\Concerns\CapturesErrorLog;
 
 /**
  * Test double for AudioPlayer that allows controlling buildCommand output
@@ -119,6 +120,8 @@ final class CoalesceAudioPlayer extends AudioPlayer
  */
 final class AudioPlayerTest extends TestCase
 {
+    use CapturesErrorLog;
+
     // -------------------------------------------------------------------------
     // isPlaying() — baseline / precondition
     // -------------------------------------------------------------------------
@@ -1188,5 +1191,36 @@ final class AudioPlayerTest extends TestCase
         $this->assertIsInt($clearAt);
         $this->assertIsInt($guardAt);
         $this->assertLessThan($guardAt, $clearAt, 'explicit start() cancels the intent before the guard asks');
+    }
+
+    // -------------------------------------------------------------------------
+    // SV-M23/023 — missing audio binary: loud degrade, never a throw
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox M23: a host with no ffplay and no mpv announces it once, then stays quiet
+     *
+     * The degradation the README Requires block promises: audio is optional
+     * by contract, so the missing-binary path must be visible exactly once
+     * per companion (the fact cannot change mid-session) and must never
+     * throw, never block, never repeat per respawn attempt.
+     */
+    public function testMissingAudioBinaryAnnouncesOnceAndNeverThrows(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        $player->setFakeCommand(null); // simulate "no binary available"
+
+        $first = $this->captureErrorLog(static function () use ($player): void {
+            $player->start();
+        });
+        $this->assertStringContainsString('ffplay nor mpv', $first, 'the silent no-op now announces its reason (SV-M23/023)');
+
+        $second = $this->captureErrorLog(static function () use ($player): void {
+            $player->start();
+            $player->resume(); // a respawn attempt must not shout again
+        });
+        $this->assertSame('', $second, 'once per instance — the announcement is a fact, not a heartbeat');
+
+        $this->assertNull($player->exitCode(), 'and the degrade still spawns nothing');
     }
 }

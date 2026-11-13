@@ -11,6 +11,7 @@ declare(strict_types=1);
 return [
     // Decoder errors
     'subtitle.unreadable' => 'sugar-video: subtitle file could not be read ({path}) — playback continues without captions',
+    'audio.binary_missing' => 'sugar-video: neither ffplay nor mpv was found on this host — audio playback is unavailable, video continues silent',
     'subtitle.too_large' => 'sugar-video: subtitle file ({path}) exceeds the {max}-byte ceiling — ignored',
     'subtitle.cue_cap' => 'sugar-video: subtitle track truncated at {max} cues',
     'render.mode_unsupported' => 'sugar-video: the {mode} render mode is not supported on this terminal (its graphics escape bytes would be invisible garbage there) — this seat picks {best}; omit --mode or choose a supported one',

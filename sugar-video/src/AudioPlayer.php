@@ -23,7 +23,10 @@ use SugarCraft\Video\Support\FfmpegCommandBuilder;
  * Graceful degradation:
  * - If the audio subprocess exits immediately (no audio track), isPlaying()
  *   returns false without error.
- * - If neither ffplay nor mpv is available, start() is a silent no-op.
+ * - If neither ffplay nor mpv is available, start() announces the fact once
+ *   on error_log and stays off (SV-M23/023) — audio is optional by contract,
+ *   so the missing-binary path is a loud degrade, never a throw, and never
+ *   the silent shadow the other refuse paths argue against.
  *
  * No single upstream — the audio-companion + wall-clock pacing approach is
  * drawn from maxcurzi/tplay and joelibaceta/video-to-ascii.
@@ -164,6 +167,9 @@ class AudioPlayer
     /** True while a resume() defers its respawn to the next due heartbeat (SV-L87/087). */
     private bool $resumePending = false;
 
+    /** Once-per-instance flag for the missing-binary announcement (SV-M23/023). */
+    private bool $binaryMissingAnnounced = false;
+
     /**
      * Highest monotonic instant at which the running subprocess was OBSERVED
      * alive (spawn stamps it, isPlaying() lifts it) — the billing ceiling of
@@ -237,9 +243,11 @@ class AudioPlayer
      * Uses proc_open() with an array command form for safe argument
      * handling — no shell interpolation.
      *
-     * Silent no-op when:
+     * Silent or announced no-op when:
      * - Neither ffplay nor mpv is installed (Probe::ffplay() returns null
-     *   and `command -v mpv` also fails).
+     *   and `command -v mpv` also fails) — announced once on error_log
+     *   (SV-M23/023), because a host that silently never had audio is the
+     *   shadow this lib's refuse-loud law exists to prevent.
      * - The audio source is option-shaped: a path starting with '-' would be
      *   parsed as an ffplay/mpv command-line OPTION rather than a file, and
      *   mpv's --script= flag is arbitrary Lua execution — this route only
@@ -282,7 +290,16 @@ class AudioPlayer
 
         $cmd = $this->buildCommand();
         if ($cmd === null) {
-            // Neither audio binary is available — silent degradation.
+            // Neither audio binary is available — silent degradation is what
+            // every host saw for a year; SV-M23/023 makes it a LOUD degrade:
+            // announce-not-throw (audio is optional by contract, video keeps
+            // playing), once per instance — the fact cannot change
+            // mid-session and a respawn ladder must not shout per toggle.
+            if (!$this->binaryMissingAnnounced) {
+                $this->binaryMissingAnnounced = true;
+                error_log(Lang::t('audio.binary_missing'));
+            }
+
             return;
         }
 

@@ -69,6 +69,10 @@ Requires:
   animated sniffing never touches the network, so those sources go through
   `ffmpeg` too, and on an ffmpeg-less host both remote routes fail loudly with
   the `decoder.ffmpeg_missing` message.
+- `ffplay` or `mpv` in `$PATH` for audio output. With neither, playback is
+  silent but not secretly so: `AudioPlayer::start()` announces the missing
+  binary once on `error_log` and stays off (video playback is unaffected) —
+  audio is optional by contract.
 - A terminal with at least 256-color support for ANSI modes
 
 ## Usage
