@@ -7,6 +7,7 @@ return [
     'viewport.width_nonneg' => 'Width must be non-negative',
     'viewport.height_nonneg' => 'Height must be non-negative',
     'list.dim_nonneg' => 'Dimensions must be non-negative',
+    'list.title_multiline' => 'Item titles must be single-line; put extra lines in the description',
     'spinner.empty_frames' => 'spinner style needs at least one frame',
     'spinner.fps_positive' => 'spinner fps must be > 0',
     'scrollbar.total_nonneg' => 'scrollbar total must be >= 0',

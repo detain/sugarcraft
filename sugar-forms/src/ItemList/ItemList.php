@@ -93,6 +93,7 @@ final class ItemList implements Model
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('list.dim_nonneg'));
         }
+        self::assertSingleLineTitles($items);
         return new self(
             items: array_values($items),
             cursor: 0,
@@ -276,7 +277,12 @@ final class ItemList implements Model
             }
             $lines[] = $title;
             if ($this->showDescription && $item->description() !== '') {
-                $lines[] = '    ' . RenderSafe::clean($item->description());
+                // One array entry per PHYSICAL line (sugar-forms-074): a
+                // description with embedded newlines paints as several
+                // indented rows, and the walk/budget count each of them.
+                foreach (explode("\n", $item->description()) as $descLine) {
+                    $lines[] = '    ' . RenderSafe::clean($descLine);
+                }
             }
         }
         if ($this->showStatusBar && ($status = $this->status()) !== '') {
@@ -323,9 +329,30 @@ final class ItemList implements Model
         return $this->mutate(focused: false);
     }
 
+    /**
+     * Fail-fast boundary (sugar-forms-074): the row walk, the line budget
+     * and the click mapping all count one rendered line per title, so a
+     * title carrying a newline would multiply physical rows beneath a
+     * single counted line and every later click lands on the wrong item.
+     * Descriptions are the documented multi-line surface instead (their
+     * newlines are accounted per line at render and hit-test); titles may
+     * not. SetItem and the constructor both funnel through here.
+     *
+     * @param list<Item> $items
+     */
+    private static function assertSingleLineTitles(array $items): void
+    {
+        foreach ($items as $item) {
+            if (str_contains($item->title(), "\n")) {
+                throw new \InvalidArgumentException(Lang::t('list.title_multiline'));
+            }
+        }
+    }
+
     /** @param list<Item> $items */
     public function setItems(array $items): self
     {
+        self::assertSingleLineTitles($items);
         $clone = $this->mutate(items: array_values($items));
         return $clone->reclamp();
     }
@@ -337,6 +364,7 @@ final class ItemList implements Model
      */
     public function setItem(int $index, Item $item): self
     {
+        self::assertSingleLineTitles([$item]);
         $count = count($this->items);
         if ($count === 0) {
             return $this;
@@ -524,7 +552,14 @@ final class ItemList implements Model
     /** Screen lines one item's body costs: title plus an indented description row. */
     private function linesForItem(Item $item): int
     {
-        return $this->showDescription && $item->description() !== '' ? 2 : 1;
+        if (!$this->showDescription) {
+            return 1;
+        }
+        $description = $item->description();
+        if ($description === '') {
+            return 1;
+        }
+        return 2 + substr_count($description, "\n");
     }
 
     /**
@@ -616,7 +651,11 @@ final class ItemList implements Model
     /**
      * Glyph rendered before the highlighted (cursor) item. Default '> '
      * (two cells: arrow + space). The string is taken verbatim — pass
-     * the trailing space yourself if you want one.
+     * the trailing space yourself if you want one. No 2-cell assumption
+     * is baked into the layout math (sugar-forms-075): the prefix's cost
+     * rides the width clip as a measured cell run, and rows are hit by
+     * line only, so a wide or styled prefix shifts what the clip trims,
+     * never where a click lands.
      */
     public function withCursorPrefix(string $glyph): self
     {
@@ -785,10 +824,16 @@ final class ItemList implements Model
             }
             $line++;
             if ($this->showDescription && $item->description() !== '') {
-                if ($screenLine === $line) {
-                    return $top + $i;
+                // Walk every physical description line, not just the
+                // single-line default (sugar-forms-074): a click on the
+                // third painted row of a three-row body selects the body.
+                $descLines = substr_count($item->description(), "\n") + 1;
+                for ($d = 0; $d < $descLines; $d++) {
+                    if ($screenLine === $line) {
+                        return $top + $i;
+                    }
+                    $line++;
                 }
-                $line++;
             }
         }
         return null;
