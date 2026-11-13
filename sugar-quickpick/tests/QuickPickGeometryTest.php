@@ -107,8 +107,91 @@ final class QuickPickGeometryTest extends TestCase
         $h = QuickPick::new($items)->setWindowHeight(6)->setWindowWidth(40)->show()->cursorBottom();
 
         $rendered = $h->view(\str_repeat('.', 40));
-        $this->assertMatchesRegularExpression('/↕ showing \d+-\d+ of 12/', $rendered, 'scrolled list must say where it is (M13)');
         $this->assertStringContainsString('item11', $rendered);
+
+        // -078: the marker used to be pinned by presence regex only, so the
+        // top+1 / top+maxShow arithmetic could drift unnoticed. h=6 leaves a
+        // 4-row band; the overflow marker reserves one (3 items shown);
+        // bottom cursor 11 pins top = min(11-3+1, 12-3) = 9 — the final
+        // window of the list.
+        $lines = \explode("\n", $rendered);
+        $this->assertSame(
+            '  ↕ showing 10-12 of 12',
+            \rtrim($lines[5]),
+            'marker arithmetic pinned exactly at the bottom cursor (M13/-078)'
+        );
+    }
+
+    public function testNarrowFrameSuppressesMarkerInsteadOfGrowingTheFrame(): void
+    {
+        // -002: h=3 used to render 4 rows (header + separator + item +
+        // marker) and h=2 emitted the inverted range 'showing 2-1 of 3'.
+        // A 3-row frame now shows one item, no marker, and exactly its
+        // budgeted rows — the background below stays untouched.
+        $items = [new FilteredItem(1, 'one'), new FilteredItem(2, 'two'), new FilteredItem(3, 'three')];
+        $h = QuickPick::new($items)->setWindowHeight(3)->setWindowWidth(12)->show();
+
+        $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 5, ''))));
+        $this->assertStringNotContainsString('↕', \implode("\n", $lines), 'marker suppressed while it cannot fit');
+        $this->assertStringContainsString('one', $lines[2]);
+        $this->assertSame('', $lines[3], 'no overlay row past the 3-row window');
+    }
+
+    public function testWindowHeightInvariantAcrossHeightsAndCorpusSizes(): void
+    {
+        // -002/-078 sweep: heights 1..6 x counts 0..4. The windowed region
+        // (floor 2 rows applies to the setter) must never emit a row past
+        // its budget, and any visible range text must read first <= last.
+        for ($height = 1; $height <= 6; $height++) {
+            for ($count = 0; $count <= 4; $count++) {
+                $items = [];
+                for ($i = 0; $i < $count; $i++) {
+                    $items[] = new FilteredItem($i + 1, "item$i");
+                }
+                $handler = QuickPick::new($items)->setWindowHeight($height)->setWindowWidth(16)->show();
+                $lines = \explode("\n", $handler->view(\implode("\n", \array_fill(0, 8, ''))));
+
+                $budget = \max(2, $height);
+                foreach (\array_slice($lines, $budget) as $offset => $line) {
+                    $this->assertSame(
+                        '',
+                        $line,
+                        "h=$height count=$count: overlay row leaked past the $budget-row window (line " . ($budget + $offset) . ')'
+                    );
+                }
+
+                foreach ($lines as $line) {
+                    if (\preg_match('/↕ showing (\d+)-(\d+) of (\d+)/', $line, $m) !== 1) {
+                        continue;
+                    }
+                    $this->assertGreaterThanOrEqual(1, (int) $m[1], "range start below 1 (h=$height count=$count)");
+                    $this->assertLessThanOrEqual(
+                        (int) $m[2],
+                        (int) $m[1],
+                        "inverted range '$m[0]' (h=$height count=$count)"
+                    );
+                    $this->assertLessThanOrEqual(
+                        (int) $m[3],
+                        (int) $m[2],
+                        "range end past corpus count (h=$height count=$count)"
+                    );
+                }
+            }
+        }
+    }
+
+    public function testEmptyCorpusSaysNoItemsDistinctFromNoMatches(): void
+    {
+        // -028: an empty corpus rendered a blank frame, indistinguishable
+        // from a fault. It must say 'no items'; a filter that matched
+        // nothing still says 'no matches' — the two states are distinct.
+        $empty = QuickPick::new([])->setWindowHeight(4)->setWindowWidth(20)->show();
+        $this->assertStringContainsString('no items', $empty->view(\str_repeat('.', 20)));
+
+        $filtered = QuickPick::new(['apple'])->setWindowHeight(4)->setWindowWidth(20)->show()->type('zz');
+        $rendered = $filtered->view(\str_repeat('.', 20));
+        $this->assertStringContainsString('no matches', $rendered);
+        $this->assertStringNotContainsString('no items', $rendered);
     }
 
     public function testFittingListCarriesNoMarker(): void
@@ -132,8 +215,9 @@ final class QuickPickGeometryTest extends TestCase
     public function testWindowHeightFloorKeepsItemBand(): void
     {
         // mm9: below 2 rows nothing could ever render; the floor keeps the
-        // header + separator and lets the pad budget place at least a
-        // marker row.
+        // header + separator. Since -002 a 2-row frame carries no chrome at
+        // all — the marker is suppressed while it cannot fit and the clamp
+        // trims anything that would overflow the budget.
         $h = QuickPick::new(['apple'])->setWindowHeight(1)->show();
         $lines = \explode("\n", $h->view(''));
 

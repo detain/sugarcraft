@@ -204,20 +204,28 @@ final class QuickPick
     /**
      * Set the overlay window height in ROWS of the frame — header and
      * separator included, so the visible item count is $h - 2, minus one
-     * more row when the overflow marker is needed (and only while more
-     * than one row would remain).
+     * more row when the overflow marker is needed. The marker shows only
+     * when it fits inside the window: if reserving its row would empty
+     * the list band, the marker is suppressed rather than growing the
+     * frame (-002).
      *
-     * Two chrome states live in the item area: the overflow marker
-     * '  ↕ showing %d-%d of %d' and, when a non-empty filter matches
-     * nothing, '  no matches'. Item and header rows are truncateAnsi-clipped
-     * to the frame; these two are pad-only, so on a frame narrower than the
+     * The windowed region — header, separator, item rows, chrome — is
+     * emitted as EXACTLY $h rows: padded with blanks when short, clamped
+     * when any row would overflow, never grown past $h.
+     *
+     * Three chrome states live in the item area: the overflow marker
+     * '  ↕ showing %d-%d of %d', '  no matches' when a non-empty filter
+     * matches nothing, and '  no items' when the corpus itself is empty
+     * (-028). Item and header rows are truncateAnsi-clipped to the frame;
+     * these chrome rows are pad-only, so on a frame narrower than the
      * text they spill past the right border rather than clipping (cosmetic
      * overflow; clipping would change behavior — owner call).
      *
-     * Clamped to a minimum of 2: below that no item row can ever exist
-     * (the frame would be nothing but chrome). helpBar/statusBar rows
-     * are appended BELOW this height — the composited frame may exceed
-     * $h when they are visible.
+     * Clamped to a minimum of 2: below that no item row can ever exist,
+     * and at exactly 2 the frame is header + separator only — no chrome
+     * row survives the clamp. helpBar/statusBar rows are appended BELOW
+     * this height — the composited frame may exceed $h when they are
+     * visible.
      */
     public function setWindowHeight(int $h): self
     {
@@ -763,11 +771,17 @@ final class QuickPick
         $visibleRows = \max(0, $this->windowHeight - 2);
         // M13: when the corpus overflows the window the list used to slide
         // silently — the user could not tell where in a 10k-item history they
-        // were. Reserve one row for a position marker; the frame keeps its
-        // exact height (the marker rides inside the pad budget).
+        // were. Reserve one row for a position marker. -002: the marker is
+        // suppressed when reserving its row would empty the list band — a
+        // frame that silently grew a row, or emitted the inverted range
+        // 'showing 2-1 of 3', is worse than no marker at all.
         $markerNeeded = $count > $visibleRows;
-        if ($markerNeeded && $visibleRows > 1) {
-            $visibleRows--;
+        if ($markerNeeded) {
+            if ($visibleRows > 1) {
+                $visibleRows--;
+            } else {
+                $markerNeeded = false;
+            }
         }
         $maxShow = \min($count, $visibleRows);
         $top = $this->cursor < $visibleRows
@@ -800,11 +814,19 @@ final class QuickPick
                 \sprintf('  ↕ showing %d-%d of %d', $top + 1, $top + $maxShow, $count),
                 $winWidth
             );
-        } elseif ($count === 0 && $filter !== '') {
+        } elseif ($count === 0) {
             // M12: an empty result set used to render as blank rows —
-            // indistinguishable from a frozen UI. Say so instead.
-            $lines[] = Width::padRight('  no matches', $winWidth);
+            // indistinguishable from a frozen UI. Say so, and say WHY:
+            // -028 an empty corpus with no filter active prints 'no
+            // items' (nothing to pick); a filter that matched nothing
+            // prints 'no matches' (the filter is the problem).
+            $lines[] = Width::padRight($filter !== '' ? '  no matches' : '  no items', $winWidth);
         }
+
+        // -002 invariant: the windowed region never emits more than
+        // $windowHeight rows (padded up to exactly that below); help/status
+        // chrome appends under it by design and is outside this budget.
+        $lines = \array_slice($lines, 0, $this->windowHeight);
 
         while (\count($lines) < $this->windowHeight) {
             $lines[] = \str_repeat(' ', $winWidth);
