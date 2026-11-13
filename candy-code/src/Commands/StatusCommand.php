@@ -119,6 +119,11 @@ final class StatusCommand
                 'percent' => (string) (int) round($used / $window * 100),
             ])
             : Lang::t('cmd.status.context.unmeasured'));
+        // Optional fact (absent = measured): the window is a guess, so the
+        // page says what it assumed rather than printing it as a limit.
+        if (($facts['contextWindowAssumed'] ?? false) === true && \is_int($window) && $window > 0) {
+            $lines[] = '  ' . Lang::t('cmd.context.window.assumed', ['tokens' => self::tokens($window)]);
+        }
 
         $lines[] = '';
         $lines[] = Lang::t('cmd.status.spend');

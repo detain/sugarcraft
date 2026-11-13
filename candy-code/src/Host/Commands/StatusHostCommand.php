@@ -78,6 +78,7 @@ final class StatusHostCommand implements HostCommand
             'model' => $engine?->model(),
             'contextTokens' => $context->contextTokens,
             'contextTokenLimit' => $context->contextTokenLimit,
+            'contextWindowAssumed' => $context->windowAssumed,
             'spend' => $tracker === null
                 ? Lang::t('cmd.status.spend.untracked')
                 : SpendLedger::new()->statusLine($tracker, $cap),

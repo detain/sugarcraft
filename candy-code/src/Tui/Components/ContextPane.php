@@ -200,6 +200,9 @@ final class ContextPane
         $total = $percent === null
             ? Lang::t('tui.context.total_partial', $figures)
             : Lang::t('tui.context.total', $figures + ['percent' => (string) $percent]);
+        if ($model->windowAssumed) {
+            $total .= ' ' . Lang::t('tui.context.window_assumed');
+        }
 
         return [
             [
@@ -323,6 +326,7 @@ final class ContextPane
             // null as "no pruning measured", the same honesty the class
             // doc demands of unmeasured figures.
             prunedTokens: ($freed === null || $freed === 0) ? null : $freed,
+            windowAssumed: $chat?->contextWindowAssumed() ?? false,
         );
     }
 

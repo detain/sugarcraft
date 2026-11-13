@@ -44,6 +44,8 @@ final readonly class ContextPaneModel
         public ?int $cachePercent = null,
         /** Tokens freed by output pruning; null = no pruning measured. */
         public ?int $prunedTokens = null,
+        /** True when the window is a guess the backend did not report. */
+        public bool $windowAssumed = false,
     ) {
     }
 
@@ -56,52 +58,53 @@ final readonly class ContextPaneModel
         bool $stale,
         ?int $cachePercent,
         ?int $prunedTokens,
+        bool $windowAssumed,
     ): self {
-        return new self($categories, $historyTokens, $window, $expanded, $drill, $stale, $cachePercent, $prunedTokens);
+        return new self($categories, $historyTokens, $window, $expanded, $drill, $stale, $cachePercent, $prunedTokens, $windowAssumed);
     }
 
     public function withCategories(?ContextCategories $categories): self
     {
         // A fresh snapshot retires the staleness flag by definition: it was
         // taken against the current history.
-        return $this->mutate($categories, $this->historyTokens, $this->window, $this->expanded, $this->drill, false, $this->cachePercent, $this->prunedTokens);
+        return $this->mutate($categories, $this->historyTokens, $this->window, $this->expanded, $this->drill, false, $this->cachePercent, $this->prunedTokens, $this->windowAssumed);
     }
 
     public function withHistoryTokens(int $historyTokens): self
     {
-        return $this->mutate($this->categories, $historyTokens, $this->window, $this->expanded, $this->drill, $this->stale, $this->cachePercent, $this->prunedTokens);
+        return $this->mutate($this->categories, $historyTokens, $this->window, $this->expanded, $this->drill, $this->stale, $this->cachePercent, $this->prunedTokens, $this->windowAssumed);
     }
 
     public function withWindow(int $window): self
     {
-        return $this->mutate($this->categories, $this->historyTokens, $window, $this->expanded, $this->drill, $this->stale, $this->cachePercent, $this->prunedTokens);
+        return $this->mutate($this->categories, $this->historyTokens, $window, $this->expanded, $this->drill, $this->stale, $this->cachePercent, $this->prunedTokens, $this->windowAssumed);
     }
 
     public function withExpanded(bool $expanded): self
     {
         // Collapsing hides the rows, so a drill open on a row would be
         // invisible state — it clears with the collapse.
-        return $this->mutate($this->categories, $this->historyTokens, $this->window, $expanded, $expanded ? $this->drill : null, $this->stale, $this->cachePercent, $this->prunedTokens);
+        return $this->mutate($this->categories, $this->historyTokens, $this->window, $expanded, $expanded ? $this->drill : null, $this->stale, $this->cachePercent, $this->prunedTokens, $this->windowAssumed);
     }
 
     public function withDrill(?ContextCategory $drill): self
     {
-        return $this->mutate($this->categories, $this->historyTokens, $this->window, $this->expanded, $drill, $this->stale, $this->cachePercent, $this->prunedTokens);
+        return $this->mutate($this->categories, $this->historyTokens, $this->window, $this->expanded, $drill, $this->stale, $this->cachePercent, $this->prunedTokens, $this->windowAssumed);
     }
 
     public function withStale(bool $stale): self
     {
-        return $this->mutate($this->categories, $this->historyTokens, $this->window, $this->expanded, $this->drill, $stale, $this->cachePercent, $this->prunedTokens);
+        return $this->mutate($this->categories, $this->historyTokens, $this->window, $this->expanded, $this->drill, $stale, $this->cachePercent, $this->prunedTokens, $this->windowAssumed);
     }
 
     public function withCachePercent(?int $cachePercent): self
     {
-        return $this->mutate($this->categories, $this->historyTokens, $this->window, $this->expanded, $this->drill, $this->stale, $cachePercent, $this->prunedTokens);
+        return $this->mutate($this->categories, $this->historyTokens, $this->window, $this->expanded, $this->drill, $this->stale, $cachePercent, $this->prunedTokens, $this->windowAssumed);
     }
 
     public function withPrunedTokens(?int $prunedTokens): self
     {
-        return $this->mutate($this->categories, $this->historyTokens, $this->window, $this->expanded, $this->drill, $this->stale, $this->cachePercent, $prunedTokens);
+        return $this->mutate($this->categories, $this->historyTokens, $this->window, $this->expanded, $this->drill, $this->stale, $this->cachePercent, $prunedTokens, $this->windowAssumed);
     }
 
     /**
