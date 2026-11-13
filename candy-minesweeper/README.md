@@ -90,7 +90,7 @@ Stats persistence is opt-in. Set `CANDY_MINESWEEPER_STATS=/path/to/stats.json` a
 | `f`                | Cycle marker: flag → question (`?`) → clear |
 | Left-click         | Reveal cell (mouse)              |
 | Right-click        | Toggle flag (mouse)              |
-| `c` / middle-click / double-left-click | Chord — open a number's ring once its flags match exactly (see Chord click below) |
+| `c` / middle-click / double-left-click | Chord — reveal a number's ring once its flags match exactly (see Chord click below) |
 | `S`                | Save the live game to the slot   |
 | `L`                | Load the saved game              |
 | `r`                | Restart with new mines           |

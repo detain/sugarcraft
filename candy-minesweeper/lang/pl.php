@@ -30,7 +30,7 @@ return [
     'ui.cleared' => '★ wygrane — naciśnij r, aby zagrać ponownie · n, aby wybrać planszę',
     'ui.help_rules' => 'liczba = miny obok · flaguj podejrzane · odkryj resztę by wygrać',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  ruch  ·  spacja / enter  odkryj',
-    'ui.help_board' => 'lewy przycisk  otwórz · f / prawy  flaga · c / środkowy  otwórz okolice',
+    'ui.help_board' => 'lewy przycisk  odkryj · f / prawy  flaga · c / środkowy  odkryj okolice',
     'ui.help_loss' => '{mark} zła flaga · * pominięta mina',
     'ui.help_session' => 'r  restart  ·  S  zapisz  ·  L  wczytaj  ·  q / Esc / Ctrl+C  wyjdź',
     'ui.saved' => 'Gra zapisana',
