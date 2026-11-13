@@ -162,10 +162,10 @@ its `Layout\Grid\` option value parts.
 | `Heatmap` | Heat map visualization with legend | `new(data)`, `sample()`, `withLegend()`, `withValues()`, `withLowColor()`, `withHighColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/heatmap.gif) |
 | `RadarChart` | Radar/spider chart for multi-axis data | `new(labels, series)`, `withSize()`, `withGridLines()`, `withShowLabels()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/radar-chart.gif) |
 | `Sparkline` | Inline sparkline chart (ring buffer) | `new(int $width = 40)` with data via `push()`/`pushAll()` (no ctor data), `withWidth()`, `withHeight()`, `withDataPoints()`, `withFill()`, `withDimEdge()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline.gif) |
-| `SparklineBar` | Bar-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowValues()`, `withColor()`, `withMaxColor()`, `withMinColor()`, `withBarGaps()`, `withSeparator()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-bar.gif) |
+| `SparklineBar` | Bar-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowValues()` (default **on** — pass `false` to opt out), `withColor()`, `withMaxColor()`, `withMinColor()`, `withBarGaps()`, `withSeparator()`, `setSize()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-bar.gif) |
 | `SparklineArea` | Area-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowLine()`, `withShowFill()`, `withLineColor()`, `withFillColor()`, `withMaxColor()`, `withMinColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-area.gif) |
 | `SparkArea` | Spark area chart | `new(array $values)`, `withHeight()`, `withColor()`, `withShowMinMax()`, `withGradient()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spark-area.gif) |
-| `FunnelChart` | Funnel chart visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/funnel-chart.gif) |
+| `FunnelChart` | Funnel chart visualization | `new(array $stages)`, `withHorizontal()`, `withShowValues()` (default **on** — pass `false` to opt out), `withShowPercentages()` (default **on** — pass `false` to opt out), `setSize()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/funnel-chart.gif) |
 | `Funnel` | Funnel visualization component | | |
 | `Meter` | Meter/gauge component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/meter.gif) |
 | `OHLC` | Open-High-Low-Close data | | |
@@ -173,7 +173,7 @@ its `Layout\Grid\` option value parts.
 | `Waterfall` | Waterfall chart | | |
 | `WaterfallItem` | Waterfall bar item | | |
 | `Progress` | Progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress.gif) |
-| `ProgressRing` | Circular progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-ring.gif) |
+| `ProgressRing` | Circular progress indicator | `new(float $ratio)`, `withRadius()`, `withPercentage()` (the `N%` label is **on** by default — pass `false` to opt out), `withRatio()`, `withFilledColor()`, `withEmptyColor()`, `setSize()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-ring.gif) |
 
 #### Value redundancy (color-vision aids)
 
