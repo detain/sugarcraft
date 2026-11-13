@@ -210,15 +210,6 @@ final class Mailbox
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::unreadCount()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getUnreadCount(string $teammateId): int { return $this->unreadCount($teammateId); }
-
-    /**
      * Block until the next unread message arrives in a teammate's inbox, or
      * a bounded timeout elapses.
      *

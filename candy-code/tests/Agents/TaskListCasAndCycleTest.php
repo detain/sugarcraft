@@ -76,11 +76,11 @@ final class TaskListCasAndCycleTest extends TestCase
         $list->updateTaskStatus('t', TaskStatus::Pending);
 
         $this->assertFalse($list->claimTask('t', 'mate', $seen));
-        $this->assertSame(TaskStatus::Pending, $list->getTask('t')?->status);
-        $this->assertNull($list->getTask('t')?->assignedTo);
+        $this->assertSame(TaskStatus::Pending, $list->task('t')?->status);
+        $this->assertNull($list->task('t')?->assignedTo);
 
         $this->assertTrue($list->claimTask('t', 'mate', $list->revision('t')), 'the current revision claims');
-        $this->assertSame(TaskStatus::InProgress, $list->getTask('t')?->status);
+        $this->assertSame(TaskStatus::InProgress, $list->task('t')?->status);
     }
 
     public function testAReleaseOnAStaleRevisionIsRefused(): void
@@ -93,10 +93,10 @@ final class TaskListCasAndCycleTest extends TestCase
         $list->updateTaskStatus('r', TaskStatus::InProgress);
 
         $this->assertFalse($list->releaseTask('r', 'mate', $seen));
-        $this->assertSame('mate', $list->getTask('r')?->assignedTo);
+        $this->assertSame('mate', $list->task('r')?->assignedTo);
         $this->assertTrue($list->releaseTask('r', 'mate'), 'without an expected revision the current one is used');
-        $this->assertSame(TaskStatus::Pending, $list->getTask('r')?->status);
-        $this->assertNull($list->getTask('r')?->assignedTo);
+        $this->assertSame(TaskStatus::Pending, $list->task('r')?->status);
+        $this->assertNull($list->task('r')?->assignedTo);
     }
 
     public function testAnOlderDatabaseIsMigratedInPlace(): void
@@ -137,7 +137,7 @@ final class TaskListCasAndCycleTest extends TestCase
         } catch (\InvalidArgumentException $e) {
             $this->assertStringContainsString('self -> self', $e->getMessage());
         }
-        $this->assertSame([], $list->getTask('self')?->dependsOn);
+        $this->assertSame([], $list->task('self')?->dependsOn);
     }
 
     public function testAddDependencyRefusesAnEdgeThatClosesALoop(): void
@@ -153,12 +153,12 @@ final class TaskListCasAndCycleTest extends TestCase
         } catch (\InvalidArgumentException $e) {
             $this->assertStringContainsString('a -> c -> b -> a', $e->getMessage());
         }
-        $this->assertSame([], $list->getTask('a')?->dependsOn, 'the refused edge was not written');
+        $this->assertSame([], $list->task('a')?->dependsOn, 'the refused edge was not written');
 
         // A diamond is not a cycle.
         $list->addTask($this->task('d', ['b']));
         $list->addDependency('d', 'c');
-        $this->assertSame(['b', 'c'], $list->getTask('d')?->dependsOn);
+        $this->assertSame(['b', 'c'], $list->task('d')?->dependsOn);
     }
 
     public function testAddTaskRefusesALoopClosedThroughAForwardReference(): void
@@ -193,8 +193,8 @@ final class TaskListCasAndCycleTest extends TestCase
 
         // Would time out in 0.2 s if either refusal had kept the write lock.
         $list->addTask($this->task('after'));
-        $this->assertNotNull($list->getTask('after'));
-        $this->assertNull($list->getTask('q'));
+        $this->assertNotNull($list->task('after'));
+        $this->assertNull($list->task('q'));
     }
 
     public function testACompletionOnAStaleRevisionIsRefusedAndWritesNothing(): void
@@ -211,7 +211,7 @@ final class TaskListCasAndCycleTest extends TestCase
         $this->assertFalse($list->completeTask('a', 'stale result', $seen));
         $this->assertFalse($list->failTask('a', 'stale error', $seen));
 
-        $task = $list->getTask('a');
+        $task = $list->task('a');
         $this->assertSame(TaskStatus::InProgress, $task?->status);
         $this->assertSame('other', $task?->assignedTo);
         $this->assertNull($task?->result);
@@ -230,11 +230,11 @@ final class TaskListCasAndCycleTest extends TestCase
         $this->assertTrue($list->failTask('b', 'broke', $list->revision('b')));
         $this->assertTrue($list->completeTask('c', 'no revision named'));
 
-        $this->assertSame(TaskStatus::Completed, $list->getTask('a')?->status);
-        $this->assertSame('done', $list->getTask('a')?->result);
-        $this->assertSame(TaskStatus::Failed, $list->getTask('b')?->status);
-        $this->assertSame('broke', $list->getTask('b')?->error);
-        $this->assertSame(TaskStatus::Completed, $list->getTask('c')?->status);
+        $this->assertSame(TaskStatus::Completed, $list->task('a')?->status);
+        $this->assertSame('done', $list->task('a')?->result);
+        $this->assertSame(TaskStatus::Failed, $list->task('b')?->status);
+        $this->assertSame('broke', $list->task('b')?->error);
+        $this->assertSame(TaskStatus::Completed, $list->task('c')?->status);
     }
 
     public function testFinishingAMissingTaskStillThrows(): void
@@ -271,7 +271,7 @@ final class TaskListCasAndCycleTest extends TestCase
             $this->assertStringContainsString('"t1" already exists', $taken->getMessage());
         }
 
-        $this->assertSame('Task t1', $first->getTask('t1')?->title);
+        $this->assertSame('Task t1', $first->task('t1')?->title);
         $this->assertSame(0, $first->revision('t1'), 'the refused inserts wrote nothing');
     }
 
@@ -309,10 +309,10 @@ final class TaskListCasAndCycleTest extends TestCase
         $this->assertSame(0, pcntl_wexitstatus($status), 'the child wrote through a connection of its own');
 
         // And the parent's connection still works after the child exited.
-        $this->assertSame(TaskStatus::Completed, $list->getTask('before-fork')?->status);
-        $this->assertNotNull($list->getTask('from-child'));
+        $this->assertSame(TaskStatus::Completed, $list->task('before-fork')?->status);
+        $this->assertNotNull($list->task('from-child'));
         $list->addTask($this->task('after-fork'));
-        $this->assertNotNull($list->getTask('after-fork'));
+        $this->assertNotNull($list->task('after-fork'));
     }
 
     // -------------------------------------------------------------------------
@@ -335,7 +335,7 @@ final class TaskListCasAndCycleTest extends TestCase
         $this->assertSame([], $released);
         $this->assertSame([[getmypid(), BackgroundSupervisor::procStartTime(getmypid())]], $probed);
         $this->assertSame([], $list->releaseOrphanedClaims(), 'the real probe sees this process alive');
-        $this->assertSame(TaskStatus::InProgress, $list->getTask('live')?->status);
+        $this->assertSame(TaskStatus::InProgress, $list->task('live')?->status);
     }
 
     public function testADeadClaimantsTaskGoesBackToPending(): void
@@ -349,11 +349,11 @@ final class TaskListCasAndCycleTest extends TestCase
 
         $this->assertSame(['orphan'], $list->releaseOrphanedClaims());
 
-        $orphan = $list->getTask('orphan');
+        $orphan = $list->task('orphan');
         $this->assertSame(TaskStatus::Pending, $orphan?->status);
         $this->assertNull($orphan?->assignedTo);
         $this->assertSame($before + 1, $list->revision('orphan'));
-        $this->assertSame(TaskStatus::InProgress, $list->getTask('kept')?->status);
+        $this->assertSame(TaskStatus::InProgress, $list->task('kept')?->status);
         $this->assertTrue($list->claimTask('orphan', 'someone-else'), 'the released task is claimable again');
     }
 
@@ -364,7 +364,7 @@ final class TaskListCasAndCycleTest extends TestCase
         $list->addTask($this->task('legacy', [], TaskStatus::InProgress, 'mate'));
 
         $this->assertSame([], $list->releaseOrphanedClaims(static fn(): bool => false));
-        $this->assertSame(TaskStatus::InProgress, $list->getTask('legacy')?->status);
+        $this->assertSame(TaskStatus::InProgress, $list->task('legacy')?->status);
     }
 
     // -------------------------------------------------------------------------

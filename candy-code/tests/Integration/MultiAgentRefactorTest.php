@@ -195,7 +195,7 @@ final class MultiAgentRefactorTest extends TestCase
 
         // --- Architect plans a small refactor: two independent implementation
         // tasks, plus a review task gated on both being completed. ---
-        $taskList = $team->getTaskList();
+        $taskList = $team->taskList();
         $taskList->addTask($this->makeTask('task-a', $teamId, 'Extract helper in module A'));
         $taskList->addTask($this->makeTask('task-b', $teamId, 'Extract helper in module B'));
         $taskList->addTask($this->makeTask('task-review', $teamId, 'Review both extractions', ['task-a', 'task-b']));
@@ -203,7 +203,7 @@ final class MultiAgentRefactorTest extends TestCase
         // Before either coder task is done, the review task must NOT be
         // claimable — this is the dependency-gating half of "reviewer
         // verifies", exercised for real via TaskList::allDependenciesCompleted().
-        $unblockedBefore = array_map(fn(Task $t) => $t->id, $taskList->getUnblockedTasks('reviewer-1'));
+        $unblockedBefore = array_map(fn(Task $t) => $t->id, $taskList->unblockedTasks('reviewer-1'));
         $this->assertNotContains(
             'task-review',
             $unblockedBefore,
@@ -290,9 +290,9 @@ final class MultiAgentRefactorTest extends TestCase
         $this->assertSame(['coder-1', 'coder-2'], $this->sortPair($winnerA, $winnerB));
 
         // Confirm final persisted state matches the winners recorded above.
-        $freshTaskList = $team->getTaskList();
-        $finalTaskA = $freshTaskList->getTask('task-a');
-        $finalTaskB = $freshTaskList->getTask('task-b');
+        $freshTaskList = $team->taskList();
+        $finalTaskA = $freshTaskList->task('task-a');
+        $finalTaskB = $freshTaskList->task('task-b');
         $this->assertSame(TaskStatus::Completed, $finalTaskA->status);
         $this->assertSame(TaskStatus::Completed, $finalTaskB->status);
         $this->assertSame($winnerA, $finalTaskA->assignedTo);
@@ -300,7 +300,7 @@ final class MultiAgentRefactorTest extends TestCase
 
         // --- Reviewer verifies: now that both coder tasks are completed,
         // the review task must be claimable, and the reviewer claims + completes it. ---
-        $unblockedAfter = array_map(fn(Task $t) => $t->id, $freshTaskList->getUnblockedTasks('reviewer-1'));
+        $unblockedAfter = array_map(fn(Task $t) => $t->id, $freshTaskList->unblockedTasks('reviewer-1'));
         $this->assertContains(
             'task-review',
             $unblockedAfter,
@@ -312,7 +312,7 @@ final class MultiAgentRefactorTest extends TestCase
         $this->assertTrue($claimed, 'Reviewer should be able to claim the now-unblocked review task.');
         $freshTaskList->completeTask('task-review', 'Both extractions verified consistent.');
 
-        $reviewedTask = $freshTaskList->getTask('task-review');
+        $reviewedTask = $freshTaskList->task('task-review');
         $this->assertSame(TaskStatus::Completed, $reviewedTask->status);
         $this->assertSame('reviewer-1', $reviewedTask->assignedTo);
 
@@ -351,7 +351,7 @@ final class MultiAgentRefactorTest extends TestCase
         $manager = new TeamManager($this->tmpRoot . '/.candy-code/teams');
         $team = $manager->createTeam($teamId, 'Refactor Team', 'lead-agent', new TeamConfig(maxTeammates: 10));
 
-        $taskList = $team->getTaskList();
+        $taskList = $team->taskList();
         $taskList->addTask($this->makeTask('task-a', $teamId, 'Extract helper in module A'));
         $taskList->addTask($this->makeTask('task-b', $teamId, 'Extract helper in module B'));
 
@@ -366,11 +366,11 @@ final class MultiAgentRefactorTest extends TestCase
             'one coder facing two claimable tasks must take the first and leave the second',
         );
 
-        $fresh = $team->getTaskList();
-        $this->assertSame(TaskStatus::Completed, $fresh->getTask('task-a')->status);
+        $fresh = $team->taskList();
+        $this->assertSame(TaskStatus::Completed, $fresh->task('task-a')->status);
         $this->assertSame(
             TaskStatus::Pending,
-            $fresh->getTask('task-b')->status,
+            $fresh->task('task-b')->status,
             'the second task must still be claimable by the other coder',
         );
 
@@ -432,7 +432,7 @@ final class MultiAgentRefactorTest extends TestCase
         $teamId = uniqid((string) getmypid(), true) . '-throwing';
         $manager = new TeamManager($this->tmpRoot . '/.candy-code/teams');
         $team = $manager->createTeam($teamId, 'Refactor Team', 'lead-agent', new TeamConfig(maxTeammates: 10));
-        $team->getTaskList()->addTask($this->makeTask('task-a', $teamId, 'Extract helper in module A'));
+        $team->taskList()->addTask($this->makeTask('task-a', $teamId, 'Extract helper in module A'));
 
         // Make the child's FIRST createWorktree() throw, exactly as a second
         // claim by the same coder would.
@@ -662,7 +662,7 @@ final class MultiAgentRefactorTest extends TestCase
                 // Another coder already holds this task (or it briefly
                 // wasn't claimable yet) — stop retrying once it is no
                 // longer pending, otherwise keep racing for it.
-                $current = $childTeam->getTaskList()->getTask($taskId);
+                $current = $childTeam->taskList()->task($taskId);
                 if ($current !== null && $current->status !== TaskStatus::Pending) {
                     break;
                 }
@@ -708,7 +708,7 @@ final class MultiAgentRefactorTest extends TestCase
                 // Leave a breadcrumb: without it a livelock and a genuine
                 // double-claim regression both surface as an empty winner
                 // list with nothing to tell them apart.
-                $status = $childTeam->getTaskList()->getTask($taskId)?->status->value ?? 'missing';
+                $status = $childTeam->taskList()->task($taskId)?->status->value ?? 'missing';
                 file_put_contents(
                     "{$resultDir}/{$taskId}.gaveup.{$coderId}",
                     "status={$status} attempts={$attempts}",
@@ -719,7 +719,7 @@ final class MultiAgentRefactorTest extends TestCase
             }
 
             file_put_contents("{$resultDir}/{$taskId}.won.{$coderId}", $coderId, LOCK_EX);
-            $childTeam->getTaskList()->completeTask($taskId, "Implemented by {$coderId}.");
+            $childTeam->taskList()->completeTask($taskId, "Implemented by {$coderId}.");
 
             // ONE TASK PER CODER. See this method's doc-block: `continue` here
             // is what let a fast coder claim both and ask WorktreeManager for

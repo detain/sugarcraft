@@ -302,7 +302,7 @@ final class WorkflowIncrementalPauseTest extends TestCase
         // The precedence pin: a leftover file would make status() report the
         // failed run as PAUSED — withdrawal keeps Failed readable.
         $this->assertFileDoesNotExist($this->pauseFile());
-        $this->assertSame(WorkflowStatus::Failed, $this->engine->getStatus('three'));
+        $this->assertSame(WorkflowStatus::Failed, $this->engine->status('three'));
     }
 
     public function testAnOlderShapedRecordStillResumes(): void

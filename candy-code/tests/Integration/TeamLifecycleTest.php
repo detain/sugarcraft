@@ -128,7 +128,7 @@ final class TeamLifecycleTest extends TestCase
         $team->addTeammate($teammate2);
         $team->addTeammate($teammate3);
 
-        $teammates = $team->getTeammates();
+        $teammates = $team->teammates();
 
         self::assertCount(3, $teammates);
         self::assertSame('tm-1', $teammates[0]->id);
@@ -199,7 +199,7 @@ final class TeamLifecycleTest extends TestCase
         self::assertFalse($claimed2);
 
         // Verify task-1 is now InProgress and assigned to tm-1
-        $retrievedTask1 = $taskList->getTask('task-1');
+        $retrievedTask1 = $taskList->task('task-1');
         self::assertNotNull($retrievedTask1);
         self::assertSame(TaskStatus::InProgress, $retrievedTask1->status);
         self::assertSame('tm-1', $retrievedTask1->assignedTo);
@@ -208,7 +208,7 @@ final class TeamLifecycleTest extends TestCase
         $claimed3 = $taskList->claimTask('task-2', 'tm-2');
         self::assertTrue($claimed3);
 
-        $retrievedTask2 = $taskList->getTask('task-2');
+        $retrievedTask2 = $taskList->task('task-2');
         self::assertNotNull($retrievedTask2);
         self::assertSame(TaskStatus::InProgress, $retrievedTask2->status);
         self::assertSame('tm-2', $retrievedTask2->assignedTo);
@@ -217,13 +217,13 @@ final class TeamLifecycleTest extends TestCase
         $claimed4 = $taskList->claimTask('task-3', 'tm-3');
         self::assertTrue($claimed4);
 
-        $retrievedTask3 = $taskList->getTask('task-3');
+        $retrievedTask3 = $taskList->task('task-3');
         self::assertNotNull($retrievedTask3);
         self::assertSame(TaskStatus::InProgress, $retrievedTask3->status);
         self::assertSame('tm-3', $retrievedTask3->assignedTo);
 
         // Verify pending tasks are empty (all claimed)
-        $pending = $taskList->getPendingTasks();
+        $pending = $taskList->pendingTasks();
         self::assertCount(0, $pending);
     }
 
@@ -261,7 +261,7 @@ final class TeamLifecycleTest extends TestCase
         $taskList->completeTask('task-complete-1', 'Widget built successfully');
 
         // Verify status and result
-        $retrieved = $taskList->getTask('task-complete-1');
+        $retrieved = $taskList->task('task-complete-1');
         self::assertNotNull($retrieved);
         self::assertSame(TaskStatus::Completed, $retrieved->status);
         self::assertSame('Widget built successfully', $retrieved->result);
@@ -316,12 +316,12 @@ final class TeamLifecycleTest extends TestCase
         $taskList->completeTask('task-result-2', 'Deployed to production');
 
         // Lead retrieves results via getTask()
-        $result1 = $taskList->getTask('task-result-1');
+        $result1 = $taskList->task('task-result-1');
         self::assertNotNull($result1);
         self::assertSame('Tests written: 42 passing', $result1->result);
         self::assertSame(TaskStatus::Completed, $result1->status);
 
-        $result2 = $taskList->getTask('task-result-2');
+        $result2 = $taskList->task('task-result-2');
         self::assertNotNull($result2);
         self::assertSame('Deployed to production', $result2->result);
         self::assertSame(TaskStatus::Completed, $result2->status);
@@ -345,7 +345,7 @@ final class TeamLifecycleTest extends TestCase
 
         self::assertSame(1, $manager->teamCount());
         self::assertTrue($manager->hasTeam('team-cleanup'));
-        self::assertSame($team, $manager->getTeam('team-cleanup'));
+        self::assertSame($team, $manager->team('team-cleanup'));
 
         $removed = $manager->removeTeam('team-cleanup');
 
@@ -353,7 +353,7 @@ final class TeamLifecycleTest extends TestCase
         self::assertSame('team-cleanup', $removed->id);
         self::assertSame(0, $manager->teamCount());
         self::assertFalse($manager->hasTeam('team-cleanup'));
-        self::assertNull($manager->getTeam('team-cleanup'));
+        self::assertNull($manager->team('team-cleanup'));
     }
 
     /**
@@ -447,31 +447,31 @@ final class TeamLifecycleTest extends TestCase
         $taskList1->completeTask('task-team1-only', 'Team 1 result');
 
         // Team 2 task should still be pending
-        $team2Task = $taskList2->getTask('task-team2-only');
+        $team2Task = $taskList2->task('task-team2-only');
         self::assertNotNull($team2Task);
         self::assertSame(TaskStatus::Pending, $team2Task->status);
 
         // Team 1 task is completed with result
-        $team1Task = $taskList1->getTask('task-team1-only');
+        $team1Task = $taskList1->task('task-team1-only');
         self::assertNotNull($team1Task);
         self::assertSame(TaskStatus::Completed, $team1Task->status);
         self::assertSame('Team 1 result', $team1Task->result);
 
         // Verify teammates are isolated
-        self::assertCount(1, $team1->getTeammates());
-        self::assertSame('tm-indep-1', $team1->getTeammates()[0]->id);
+        self::assertCount(1, $team1->teammates());
+        self::assertSame('tm-indep-1', $team1->teammates()[0]->id);
 
-        self::assertCount(1, $team2->getTeammates());
-        self::assertSame('tm-indep-2', $team2->getTeammates()[0]->id);
+        self::assertCount(1, $team2->teammates());
+        self::assertSame('tm-indep-2', $team2->teammates()[0]->id);
 
         // Verify teams are registered independently
-        self::assertNotNull($manager->getTeam('team-indep-1'));
-        self::assertNotNull($manager->getTeam('team-indep-2'));
+        self::assertNotNull($manager->team('team-indep-1'));
+        self::assertNotNull($manager->team('team-indep-2'));
 
         $manager->removeTeam('team-indep-1');
         self::assertSame(1, $manager->teamCount());
-        self::assertNull($manager->getTeam('team-indep-1'));
-        self::assertNotNull($manager->getTeam('team-indep-2'));
+        self::assertNull($manager->team('team-indep-1'));
+        self::assertNotNull($manager->team('team-indep-2'));
 
         $manager->removeTeam('team-indep-2');
         self::assertSame(0, $manager->teamCount());
@@ -521,7 +521,7 @@ final class TeamLifecycleTest extends TestCase
             $team->addTeammate($tm1);
             $team->addTeammate($tm2);
 
-            $mailbox = $team->getMailbox();
+            $mailbox = $team->mailbox();
             self::assertInstanceOf(Mailbox::class, $mailbox);
 
             $sentAt = new \DateTimeImmutable();
@@ -556,11 +556,11 @@ final class TeamLifecycleTest extends TestCase
 
             // Mark as read and verify getUnreadCount drops to 0
             $mailbox->markRead('tm-mb-2', 'msg-001');
-            self::assertSame(0, $mailbox->getUnreadCount('tm-mb-2'));
+            self::assertSame(0, $mailbox->unreadCount('tm-mb-2'));
 
             // Alice's inbox should still be empty
             self::assertCount(0, $mailbox->peek('tm-mb-1'));
-            self::assertSame(0, $mailbox->getUnreadCount('tm-mb-1'));
+            self::assertSame(0, $mailbox->unreadCount('tm-mb-1'));
         } finally {
             if ($originalHome === null) {
                 unset($_SERVER['HOME']);

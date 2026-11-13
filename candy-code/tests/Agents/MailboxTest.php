@@ -294,7 +294,7 @@ final class MailboxTest extends TestCase
         $this->assertFalse($messages[1]->read);
 
         // Verify messages are still unread in the file
-        $stillUnread = $mailbox->getUnreadCount('teammate-d');
+        $stillUnread = $mailbox->unreadCount('teammate-d');
         $this->assertSame(2, $stillUnread);
     }
 
@@ -331,7 +331,7 @@ final class MailboxTest extends TestCase
         $mailbox->markRead('teammate-e', 'msg-read-1');
 
         // Verify unread count decreased
-        $this->assertSame(1, $mailbox->getUnreadCount('teammate-e'));
+        $this->assertSame(1, $mailbox->unreadCount('teammate-e'));
 
         // Verify correct message is marked read
         $messages = $mailbox->peek('teammate-e');
@@ -360,7 +360,7 @@ final class MailboxTest extends TestCase
         $mailbox->markRead('teammate-f', 'msg-does-not-exist');
 
         // Original message should still be unread
-        $this->assertSame(1, $mailbox->getUnreadCount('teammate-f'));
+        $this->assertSame(1, $mailbox->unreadCount('teammate-f'));
     }
 
     // -------------------------------------------------------------------------
@@ -402,14 +402,14 @@ final class MailboxTest extends TestCase
             'read' => false,
         ]) . "\n", FILE_APPEND);
 
-        $this->assertSame(2, $mailbox->getUnreadCount('teammate-g'));
+        $this->assertSame(2, $mailbox->unreadCount('teammate-g'));
     }
 
     public function testGetUnreadCountReturnsZeroWhenInboxEmpty(): void
     {
         $mailbox = new Mailbox($this->basePath);
 
-        $this->assertSame(0, $mailbox->getUnreadCount('empty-inbox'));
+        $this->assertSame(0, $mailbox->unreadCount('empty-inbox'));
     }
 
     // -------------------------------------------------------------------------

@@ -289,14 +289,14 @@ final class AgentManagerTest extends TestCase
 
         $created = $this->agentManager->createSubAgent('get-agent', 'Get test');
 
-        $retrieved = $this->agentManager->getSubAgent($created->id);
+        $retrieved = $this->agentManager->subAgent($created->id);
 
         $this->assertSame($created, $retrieved);
     }
 
     public function testGetSubAgentNotFoundReturnsNull(): void
     {
-        $retrieved = $this->agentManager->getSubAgent('nonexistent-id');
+        $retrieved = $this->agentManager->subAgent('nonexistent-id');
         $this->assertNull($retrieved);
     }
 
@@ -1118,11 +1118,11 @@ final class AgentManagerTest extends TestCase
         $subAgent = $this->agentManager->createSubAgent('remove-agent', 'Remove test');
         $id = $subAgent->id;
 
-        $this->assertNotNull($this->agentManager->getSubAgent($id));
+        $this->assertNotNull($this->agentManager->subAgent($id));
 
         $this->agentManager->removeSubAgent($id);
 
-        $this->assertNull($this->agentManager->getSubAgent($id));
+        $this->assertNull($this->agentManager->subAgent($id));
     }
 
     public function testRemoveSubAgentNotFoundDoesNothing(): void
@@ -1317,7 +1317,7 @@ final class AgentManagerTest extends TestCase
         $this->assertCount(1, $results);
 
         // Sub-agent must be registered so it can be looked up
-        $tracked = $agentManager->getSubAgent('track-sub');
+        $tracked = $agentManager->subAgent('track-sub');
         $this->assertSame($subAgent, $tracked);
     }
 
@@ -1381,7 +1381,7 @@ final class AgentManagerTest extends TestCase
 
         $this->agentManager->setTeamManager($teamManager);
 
-        $this->assertSame($teamManager, $this->agentManager->getTeamManager());
+        $this->assertSame($teamManager, $this->agentManager->teamManager());
     }
 
     public function testCreateTeamDelegates(): void
@@ -1397,7 +1397,7 @@ final class AgentManagerTest extends TestCase
         $this->assertSame('lead-agent-1', $team->leadAgentId);
 
         // Verify it was actually registered in TeamManager
-        $this->assertSame($team, $teamManager->getTeam('test-team'));
+        $this->assertSame($team, $teamManager->team('test-team'));
     }
 
     /**
@@ -1433,7 +1433,7 @@ final class AgentManagerTest extends TestCase
         $created = $teamManager->createTeam('existing-team', 'Existing Team', 'lead-agent-2');
 
         // AgentManager should return it via getTeam
-        $retrieved = $this->agentManager->getTeam('existing-team');
+        $retrieved = $this->agentManager->team('existing-team');
 
         $this->assertSame($created, $retrieved);
     }
@@ -1443,7 +1443,7 @@ final class AgentManagerTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('TeamManager has not been set on AgentManager');
 
-        $this->agentManager->getTeam('any-team');
+        $this->agentManager->team('any-team');
     }
 
     public function testHasTeamDelegates(): void
@@ -1520,13 +1520,13 @@ final class AgentManagerTest extends TestCase
         $this->agentManager->setTeamManager($teamManager);
 
         // Initially empty
-        $this->assertSame([], $this->agentManager->getTeams());
+        $this->assertSame([], $this->agentManager->teams());
 
         // Create some teams
         $team1 = $this->agentManager->createTeam('team-1', 'Team One', 'lead-1');
         $team2 = $this->agentManager->createTeam('team-2', 'Team Two', 'lead-2');
 
-        $teams = $this->agentManager->getTeams();
+        $teams = $this->agentManager->teams();
 
         $this->assertCount(2, $teams);
         $this->assertSame($team1, $teams[0]);
@@ -1538,7 +1538,7 @@ final class AgentManagerTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('TeamManager has not been set on AgentManager');
 
-        $this->agentManager->getTeams();
+        $this->agentManager->teams();
     }
 
     public function testTeamCountDelegates(): void

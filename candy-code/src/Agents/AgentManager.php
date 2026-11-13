@@ -792,15 +792,6 @@ final class AgentManager
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::subAgent()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getSubAgent(string $id): ?SubAgent { return $this->subAgent($id); }
-
-    /**
      * Every run this manager knows of — spawned here or mirrored from a
      * forked turn — in creation order.
      *
@@ -2204,7 +2195,7 @@ final class AgentManager
     {
         $pool ??= $this->workerPool ?? new AgentWorkerPool();
 
-        // Register each sub-agent so it is trackable via getSubAgent().
+        // Register each sub-agent so it is trackable via subAgent().
         $batch = [];
         foreach ($agents as $agent) {
             assert($agent instanceof SubAgent, 'executeAll requires SubAgent[]');
@@ -2732,15 +2723,6 @@ final class AgentManager
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::teamManager()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTeamManager(): ?TeamManager { return $this->teamManager(); }
-
-    /**
      * Create a new team and register it.
      *
      * @throws \RuntimeException When no team manager is set
@@ -2772,15 +2754,6 @@ final class AgentManager
 
         return $this->teamManager->team($teamId);
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::team()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTeam(string $teamId): ?Team { return $this->team($teamId); }
 
     /**
      * Check whether a team exists (is registered).
@@ -2824,15 +2797,6 @@ final class AgentManager
 
         return $this->teamManager->teams();
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::teams()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTeams(): array { return $this->teams(); }
 
     /**
      * Return the number of currently registered teams.

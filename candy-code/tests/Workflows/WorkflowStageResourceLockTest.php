@@ -217,7 +217,7 @@ final class WorkflowStageResourceLockTest extends TestCase
 
         // The failed run withdrew its O1 record and status stays Failed.
         self::assertFileDoesNotExist($this->tempDir . '/workflows/.running/locked.json');
-        self::assertSame(WorkflowStatus::Failed, $engine->getStatus('locked'));
+        self::assertSame(WorkflowStatus::Failed, $engine->status('locked'));
 
         // Once the hold is gone, the same workflow runs — and its output is
         // ordinary again.

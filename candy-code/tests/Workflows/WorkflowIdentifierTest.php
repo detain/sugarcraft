@@ -159,8 +159,8 @@ final class WorkflowIdentifierTest extends TestCase
         $id = $this->engine->run('safe')->workflowId;
         $this->engine->pause($id);
 
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus($id));
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus('safe'));
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status($id));
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status('safe'));
     }
 
     /**
@@ -180,7 +180,7 @@ final class WorkflowIdentifierTest extends TestCase
             new AgentWorkerPool(2, $this->mockExecutor),
         );
 
-        $this->assertSame(WorkflowStatus::Paused, $fresh->getStatus($id));
+        $this->assertSame(WorkflowStatus::Paused, $fresh->status($id));
     }
 
     /**
@@ -239,8 +239,8 @@ final class WorkflowIdentifierTest extends TestCase
         $this->engine->pause('deploy-1a2b3c4d');
 
         $this->assertFileExists($this->pauseDir() . '/deploy-1a2b3c4d.json');
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus('deploy-1a2b3c4d'));
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus($id));
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status('deploy-1a2b3c4d'));
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status($id));
     }
 
     /**
@@ -279,7 +279,7 @@ final class WorkflowIdentifierTest extends TestCase
         ]);
 
         file_put_contents($this->pauseDir() . '/legacy.json', $legacy('legacy'));
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus('legacy'));
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status('legacy'));
         $resumed = $this->engine->resume('legacy');
         $this->assertSame(WorkflowStatus::Completed, $resumed->status);
         $this->assertSame('from-the-old-build', $resumed->context['stage-1.output']);
@@ -287,7 +287,7 @@ final class WorkflowIdentifierTest extends TestCase
         file_put_contents($this->pauseDir() . '/legacy-1a2b3c4d.json', $legacy('legacy-1a2b3c4d'));
         $this->assertSame(
             WorkflowStatus::Paused,
-            $this->engine->getStatus('legacy-1a2b3c4d'),
+            $this->engine->status('legacy-1a2b3c4d'),
             'a legacy file named after a run ID is still found by that ID',
         );
         $this->expectException(WorkflowNotFoundException::class);
@@ -308,7 +308,7 @@ final class WorkflowIdentifierTest extends TestCase
         }
 
         $this->expectException(WorkflowNotRunningException::class);
-        $this->engine->getStatus('never-paused');
+        $this->engine->status('never-paused');
     }
 
     /**
@@ -318,7 +318,7 @@ final class WorkflowIdentifierTest extends TestCase
     public function testAnIdentifierWithPathSeparatorsIsStillRejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->engine->getStatus('../../etc/passwd');
+        $this->engine->status('../../etc/passwd');
     }
 
     private function removeDirectory(string $dir): void

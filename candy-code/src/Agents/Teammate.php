@@ -41,15 +41,6 @@ final readonly class Teammate
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::status()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getStatus(): TeammateStatus { return $this->status(); }
-
-    /**
      * Returns a new Teammate instance with the given worktree path associated.
      *
      * This wires the teammate to a specific worktree for atomic task claiming:

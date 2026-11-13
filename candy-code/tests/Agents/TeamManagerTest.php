@@ -196,7 +196,7 @@ final class TeamManagerTest extends TestCase
         $tm->createTeam(teamId: 'team-1', name: 'Team 1', leadAgentId: 'lead-1');
         $tm->createTeam(teamId: 'team-2', name: 'Team 2', leadAgentId: 'lead-2');
 
-        $teams = $tm->getTeams();
+        $teams = $tm->teams();
 
         $this->assertCount(2, $teams);
         $this->assertSame('team-1', $teams[0]->id);
@@ -212,7 +212,7 @@ final class TeamManagerTest extends TestCase
             leadAgentId: 'lead-1',
         );
 
-        $retrieved = $tm->getTeam('get-team');
+        $retrieved = $tm->team('get-team');
 
         $this->assertNotNull($retrieved);
         $this->assertSame($created->id, $retrieved->id);
@@ -223,7 +223,7 @@ final class TeamManagerTest extends TestCase
     {
         $tm = $this->createTeamManager();
 
-        $result = $tm->getTeam('nonexistent');
+        $result = $tm->team('nonexistent');
 
         $this->assertNull($result);
     }
@@ -270,7 +270,7 @@ final class TeamManagerTest extends TestCase
             dependsOn: [],
             isContested: false,
         );
-        $team->getTaskList()->addTask($task);
+        $team->taskList()->addTask($task);
 
         // Before the fix, TaskList::dispatchTeammateIdle() had no caller at all,
         // so a teammate going idle never resulted in real reassignment.
@@ -278,7 +278,7 @@ final class TeamManagerTest extends TestCase
 
         $this->assertSame('idle-task-1', $claimedTaskId);
 
-        $reloadedTask = $team->getTaskList()->getTask('idle-task-1');
+        $reloadedTask = $team->taskList()->task('idle-task-1');
         $this->assertNotNull($reloadedTask);
         $this->assertSame(TaskStatus::InProgress, $reloadedTask->status);
         $this->assertSame('teammate-idle-1', $reloadedTask->assignedTo);
@@ -326,7 +326,7 @@ final class TeamManagerTest extends TestCase
             dependsOn: [],
             isContested: false,
         );
-        $team->getTaskList()->addTask($task);
+        $team->taskList()->addTask($task);
 
         $result = $tm->handleTeammateIdle($teamId, 'teammate-idle-4');
 
@@ -351,7 +351,7 @@ final class TeamManagerTest extends TestCase
         $this->assertNotNull($removed);
         $this->assertSame($created->id, $removed->id);
         $this->assertFalse($tm->hasTeam('remove-me'));
-        $this->assertNull($tm->getTeam('remove-me'));
+        $this->assertNull($tm->team('remove-me'));
     }
 
     public function testRemoveTeamReturnsNullForNonexistent(): void
@@ -424,7 +424,7 @@ final class TeamManagerTest extends TestCase
             config: $config,
         );
 
-        $retrievedConfig = $tm->getTeamConfig('config-team');
+        $retrievedConfig = $tm->teamConfig('config-team');
 
         $this->assertNotNull($retrievedConfig);
         $this->assertSame(10, $retrievedConfig->maxTeammates);
@@ -437,7 +437,7 @@ final class TeamManagerTest extends TestCase
     {
         $tm = $this->createTeamManager();
 
-        $result = $tm->getTeamConfig('nonexistent');
+        $result = $tm->teamConfig('nonexistent');
 
         $this->assertNull($result);
     }
@@ -462,7 +462,7 @@ final class TeamManagerTest extends TestCase
         $tm2 = new TeamManager($tempDir . '/teams');
         $this->assertTrue($tm2->hasTeam('persist-team'));
 
-        $team = $tm2->getTeam('persist-team');
+        $team = $tm2->team('persist-team');
         $this->assertNotNull($team);
         $this->assertSame('persist-team', $team->id);
         $this->assertSame('Persisted Team', $team->name);
@@ -625,7 +625,7 @@ final class TeamManagerTest extends TestCase
 
         // Round-trip through a fresh manager: atomic write must be loadable JSON.
         $reloaded = new TeamManager($this->tempDir . '/teams');
-        $this->assertNotNull($reloaded->getTeam('perm-probe'));
+        $this->assertNotNull($reloaded->team('perm-probe'));
     }
 
     // -------------------------------------------------------------------------

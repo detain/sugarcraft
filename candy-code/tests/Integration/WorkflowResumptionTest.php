@@ -418,7 +418,7 @@ final class WorkflowResumptionTest extends TestCase
         ];
         file_put_contents($pauseFile, json_encode($pauseData));
 
-        $status = $this->engine->getStatus('status-check-test');
+        $status = $this->engine->status('status-check-test');
 
         $this->assertSame(WorkflowStatus::Paused, $status);
     }

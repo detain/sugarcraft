@@ -1229,30 +1229,12 @@ final class AgentWorkerPool
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::activeCount()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getActiveCount(): int { return $this->activeCount(); }
-
-    /**
      * Number of agents waiting to execute.
      */
     public function queueSize(): int
     {
         return count($this->queue);
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::queueSize()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getQueueSize(): int { return $this->queueSize(); }
 
     /**
      * Cancel a specific agent by ID.
@@ -1417,15 +1399,6 @@ final class AgentWorkerPool
     {
         return $this->executor;
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::executor()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getExecutor(): ?ExecutorInterface { return $this->executor(); }
 
     // -------------------------------------------------------------------------
     // Internal helpers

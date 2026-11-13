@@ -54,7 +54,7 @@ final class AgentManagerProjectionTest extends TestCase
         $this->assertSame(1, $manager->projectedSubAgentCount());
         $this->assertTrue($manager->isWorking('coder'), 'the dashboard dot flips on from the open beat alone');
         $this->assertSame(['coder'], array_map(static fn ($a) => $a->name, $manager->active()));
-        $row = $manager->getSubAgent('cid-1');
+        $row = $manager->subAgent('cid-1');
         $this->assertNotNull($row);
         $this->assertSame(SubAgent::STATUS_RUNNING, $row->status);
         $this->assertSame('begins', $row->output);
@@ -79,7 +79,7 @@ final class AgentManagerProjectionTest extends TestCase
         $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_STARTED, 'cid-1', 'no-such-agent', 'task', 1, ''));
 
         $this->assertSame(0, $manager->projectedSubAgentCount());
-        $this->assertNull($manager->getSubAgent('cid-1'));
+        $this->assertNull($manager->subAgent('cid-1'));
     }
 
     public function testProgressBeatsStreamIntoTheLiveBuffers(): void
@@ -89,7 +89,7 @@ final class AgentManagerProjectionTest extends TestCase
 
         $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_PROGRESS, 'cid-1', 'coder', '', 2, 'step one done'));
 
-        $row = $manager->getSubAgent('cid-1');
+        $row = $manager->subAgent('cid-1');
         $this->assertNotNull($row);
         $this->assertSame(SubAgent::STATUS_STREAMING, $row->status);
         $this->assertSame('step one done', $row->output);
@@ -121,7 +121,7 @@ final class AgentManagerProjectionTest extends TestCase
                 error: $outcome === SubAgentActivity::OUTCOME_COMPLETE ? null : ($error ?? 'ignored for a completed run'),
             ));
 
-            $row = $manager->getSubAgent('cid-1');
+            $row = $manager->subAgent('cid-1');
             $this->assertNotNull($row);
             $this->assertSame($status, $row->status, "outcome {$outcome}");
             $this->assertSame($error, $row->error, "outcome {$outcome}");
@@ -142,7 +142,7 @@ final class AgentManagerProjectionTest extends TestCase
             SubAgentActivity::OP_QUEUED, $placeholder, 'coder', 'task', 1, '', parentCallId: 'tc_2',
         ));
 
-        $row = $manager->getSubAgent($placeholder);
+        $row = $manager->subAgent($placeholder);
         $this->assertNotNull($row);
         $this->assertSame(SubAgent::STATUS_PENDING, $row->status, 'waiting for a slot is not running');
         $this->assertNull($row->startedAt);
@@ -151,8 +151,8 @@ final class AgentManagerProjectionTest extends TestCase
             SubAgentActivity::OP_STARTED, 'cid-2', 'coder', 'task', 1, '', parentCallId: 'tc_2',
         ));
 
-        $this->assertNull($manager->getSubAgent($placeholder), 'the placeholder gives way to the real run');
-        $this->assertSame(SubAgent::STATUS_RUNNING, $manager->getSubAgent('cid-2')?->status);
+        $this->assertNull($manager->subAgent($placeholder), 'the placeholder gives way to the real run');
+        $this->assertSame(SubAgent::STATUS_RUNNING, $manager->subAgent('cid-2')?->status);
         $this->assertSame(1, $manager->projectedSubAgentCount());
     }
 
@@ -164,7 +164,7 @@ final class AgentManagerProjectionTest extends TestCase
 
         $manager->projectRemoteSubAgent(self::beat(SubAgentActivity::OP_FINISHED, 'cid-1', 'coder', '', 3, 'final report'));
 
-        $row = $manager->getSubAgent('cid-1');
+        $row = $manager->subAgent('cid-1');
         $this->assertNotNull($row);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $row->status);
         $this->assertNotNull($row->completedAt);
@@ -185,7 +185,7 @@ final class AgentManagerProjectionTest extends TestCase
 
         $manager->clearProjectedSubAgents();
 
-        $this->assertNull($manager->getSubAgent('mirror-1'));
+        $this->assertNull($manager->subAgent('mirror-1'));
         $this->assertSame(0, $manager->projectedSubAgentCount());
         $rows = $manager->subAgentsOf('coder');
         $this->assertCount(1, $rows, 'the local spawn is the manager\'s own bookkeeping — clearing display state must not destroy it');
@@ -233,7 +233,7 @@ final class AgentManagerProjectionTest extends TestCase
         $manager->projectRemoteSubAgent(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'cid-1', 'coder', '', 3, "a\nb", 800, 0.02, 40));
         $manager->projectRemoteSubAgent(new SubAgentActivity(SubAgentActivity::OP_PROGRESS, 'cid-1', 'coder', '', 2, 'a', 300, 0.01, 10));
 
-        $row = $manager->getSubAgent('cid-1');
+        $row = $manager->subAgent('cid-1');
         $this->assertNotNull($row);
         $this->assertSame(800, $row->tokensUsed);
         $this->assertSame(0.02, $row->costUsd);

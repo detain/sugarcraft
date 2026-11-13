@@ -65,8 +65,8 @@ final class TeamToolTest extends TestCase
     {
         $manager = Bootstrap::agentManager($this->tempDir . '/repo');
 
-        self::assertInstanceOf(TeamManager::class, $manager->getTeamManager());
-        self::assertSame([], $manager->getTeams());
+        self::assertInstanceOf(TeamManager::class, $manager->teamManager());
+        self::assertSame([], $manager->teams());
     }
 
     public function testCreateListsAndRefusesADuplicate(): void
@@ -132,7 +132,7 @@ final class TeamToolTest extends TestCase
 
         $refusal = $this->err($tool->execute(['action' => 'depend', 'team' => 'alpha', 'task' => 't1', 'blocked_by' => ['t2']]));
         self::assertStringContainsStringIgnoringCase('cycle', $refusal);
-        self::assertSame([], $this->manager()->getTeam('alpha')?->getTaskList()->getTask('t1')?->dependsOn);
+        self::assertSame([], $this->manager()->team('alpha')?->taskList()->task('t1')?->dependsOn);
 
         self::assertStringContainsString('no task t9', $this->err($tool->execute(['action' => 'depend', 'team' => 'alpha', 'task' => 't1', 'blocked_by' => ['t9']])));
     }
@@ -140,7 +140,7 @@ final class TeamToolTest extends TestCase
     public function testAStaleRevisionRefusesTheClaimAndTheCompletion(): void
     {
         $tool = $this->teamWithChain();
-        $list = $this->manager()->getTeam('alpha')?->getTaskList();
+        $list = $this->manager()->team('alpha')?->taskList();
         self::assertNotNull($list);
         $seen = (int) $list->revision('t1');
 
@@ -196,7 +196,7 @@ final class TeamToolTest extends TestCase
 
         self::assertStringContainsString('Back to pending (their claimant\'s session ended): t1.', $list);
         self::assertStringContainsString('t1 [pending] "Only task"', $list);
-        self::assertSame(TaskStatus::Pending, $this->manager()->getTeam('alpha')?->getTaskList()->getTask('t1')?->status);
+        self::assertSame(TaskStatus::Pending, $this->manager()->team('alpha')?->taskList()->task('t1')?->status);
     }
 
     public function testTheTeammateCapRefusesAnExtraClaimant(): void
@@ -224,7 +224,7 @@ final class TeamToolTest extends TestCase
             'Team "manual" does not hand out tasks: name the `task` to claim',
             $this->ok($tool->execute(['action' => 'claim', 'team' => 'manual', 'teammate' => 'alice'])),
         );
-        self::assertSame(TaskStatus::Pending, $this->manager()->getTeam('manual')?->getTaskList()->getTask('t1')?->status);
+        self::assertSame(TaskStatus::Pending, $this->manager()->team('manual')?->taskList()->task('t1')?->status);
         self::assertStringContainsString('Claimed t1', $this->ok($tool->execute(['action' => 'claim', 'team' => 'manual', 'teammate' => 'alice', 'task' => 't1'])));
         self::assertFalse($this->manager()->autoAssigns('manual'));
     }
@@ -247,7 +247,7 @@ final class TeamToolTest extends TestCase
 
         $list = $this->ok($tool->execute(['action' => 'list', 'team' => 'alpha']));
         self::assertStringContainsString('t1 [in_progress] "Slow"; owner alice; overdue: held 5 min, past the team\'s limit', $list);
-        self::assertSame(TaskStatus::InProgress, $this->manager()->getTeam('alpha')?->getTaskList()->getTask('t1')?->status, 'overdue is a mark: nothing was taken back');
+        self::assertSame(TaskStatus::InProgress, $this->manager()->team('alpha')?->taskList()->task('t1')?->status, 'overdue is a mark: nothing was taken back');
 
         // Another teammate still cannot; the lead can.
         self::assertStringContainsString('was not released', $this->err($tool->execute(['action' => 'release', 'team' => 'alpha', 'teammate' => 'bob', 'task' => 't1'])));
@@ -266,7 +266,7 @@ final class TeamToolTest extends TestCase
         $this->backdateClaim('alpha', 't1', 30 * 86400);
 
         self::assertStringNotContainsString('overdue', $this->ok($tool->execute(['action' => 'list', 'team' => 'alpha'])));
-        $task = $this->manager()->getTeam('alpha')?->getTaskList()->getTask('t1');
+        $task = $this->manager()->team('alpha')?->taskList()->task('t1');
         self::assertNotNull($task);
         self::assertNull($this->manager()->overdueSeconds('alpha', $task));
     }

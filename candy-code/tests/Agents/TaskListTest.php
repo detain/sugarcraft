@@ -132,7 +132,7 @@ final class TaskListTest extends TestCase
         $this->assertTrue($list->claimTask('task-release', 'tm-1'));
         $this->assertTrue($list->releaseTask('task-release', 'tm-1'));
 
-        $reloaded = $list->getTask('task-release');
+        $reloaded = $list->task('task-release');
         $this->assertSame(\SugarCraft\Code\Agents\TaskStatus::Pending, $reloaded?->status);
         $this->assertNull($reloaded?->assignedTo);
 
@@ -158,7 +158,7 @@ final class TaskListTest extends TestCase
 
         $list->addTask($task);
 
-        $found = $list->getTask('task-persist');
+        $found = $list->task('task-persist');
         $this->assertNotNull($found);
         $this->assertSame('task-persist', $found->id);
         $this->assertSame('Persist test', $found->title);
@@ -183,7 +183,7 @@ final class TaskListTest extends TestCase
 
         $list->addTask($task);
 
-        $found = $list->getTask('task-status');
+        $found = $list->task('task-status');
         $this->assertSame(TaskStatus::InProgress, $found->status);
     }
 
@@ -194,7 +194,7 @@ final class TaskListTest extends TestCase
 
         $list->addTask($task);
 
-        $found = $list->getTask('task-deps');
+        $found = $list->task('task-deps');
         $this->assertSame(['dep-1', 'dep-2'], $found->dependsOn);
     }
 
@@ -206,7 +206,7 @@ final class TaskListTest extends TestCase
         $list->addTask($this->makeTask('t2', 'team-x', 'Two'));
         $list->addTask($this->makeTask('t3', 'team-x', 'Three'));
 
-        $pending = $list->getPendingTasks();
+        $pending = $list->pendingTasks();
         $this->assertCount(3, $pending);
     }
 
@@ -223,7 +223,7 @@ final class TaskListTest extends TestCase
         $list->addTask($this->makeTask('t-completed', 'team-y', 'Completed', status: TaskStatus::Completed));
         $list->addTask($this->makeTask('t-failed', 'team-y', 'Failed', status: TaskStatus::Failed));
 
-        $pending = $list->getPendingTasks();
+        $pending = $list->pendingTasks();
 
         $this->assertCount(1, $pending);
         $this->assertSame('t-pending', $pending[0]->id);
@@ -233,7 +233,7 @@ final class TaskListTest extends TestCase
     {
         $list = new TaskList($this->dbPath);
 
-        $result = $list->getPendingTasks();
+        $result = $list->pendingTasks();
 
         $this->assertIsArray($result);
         $this->assertCount(0, $result);
@@ -250,7 +250,7 @@ final class TaskListTest extends TestCase
 
         $list->addTask($task);
 
-        $found = $list->getTask('find-me');
+        $found = $list->task('find-me');
 
         $this->assertNotNull($found);
         $this->assertSame('find-me', $found->id);
@@ -262,7 +262,7 @@ final class TaskListTest extends TestCase
     {
         $list = new TaskList($this->dbPath);
 
-        $found = $list->getTask('non-existent-id');
+        $found = $list->task('non-existent-id');
 
         $this->assertNull($found);
     }
@@ -280,10 +280,10 @@ final class TaskListTest extends TestCase
         $list->addTask($this->makeTask('task-inprogress', 'team-st', 'InProgress', status: TaskStatus::InProgress));
         $list->addTask($this->makeTask('task-completed', 'team-st', 'Completed', status: TaskStatus::Completed));
 
-        $pending = $list->getTasksByStatus(TaskStatus::Pending);
-        $inProgress = $list->getTasksByStatus(TaskStatus::InProgress);
-        $completed = $list->getTasksByStatus(TaskStatus::Completed);
-        $failed = $list->getTasksByStatus(TaskStatus::Failed);
+        $pending = $list->tasksByStatus(TaskStatus::Pending);
+        $inProgress = $list->tasksByStatus(TaskStatus::InProgress);
+        $completed = $list->tasksByStatus(TaskStatus::Completed);
+        $failed = $list->tasksByStatus(TaskStatus::Failed);
 
         $this->assertCount(2, $pending);
         $this->assertCount(1, $inProgress);
@@ -300,7 +300,7 @@ final class TaskListTest extends TestCase
         $list = new TaskList($this->dbPath);
         $list->addTask($this->makeTask('some-task', 'team-st', 'Some task'));
 
-        $result = $list->getTasksByStatus(TaskStatus::Failed);
+        $result = $list->tasksByStatus(TaskStatus::Failed);
 
         $this->assertIsArray($result);
         $this->assertCount(0, $result);
@@ -314,10 +314,10 @@ final class TaskListTest extends TestCase
         $list->addTask($this->makeTask('p2', 'team-multi', 'Pending 2', status: TaskStatus::Pending));
         $list->addTask($this->makeTask('c1', 'team-multi', 'Completed 1', status: TaskStatus::Completed));
 
-        $pending = $list->getTasksByStatus(TaskStatus::Pending);
+        $pending = $list->tasksByStatus(TaskStatus::Pending);
         $this->assertCount(2, $pending);
 
-        $completed = $list->getTasksByStatus(TaskStatus::Completed);
+        $completed = $list->tasksByStatus(TaskStatus::Completed);
         $this->assertCount(1, $completed);
         $this->assertSame('c1', $completed[0]->id);
     }
@@ -335,9 +335,9 @@ final class TaskListTest extends TestCase
         $list->addTask($this->makeTask('task-c', 'team-tm', 'Task C', [], TaskStatus::Pending, 'teammate-y'));
         $list->addTask($this->makeTask('task-unassigned', 'team-tm', 'Unassigned'));
 
-        $tasksForX = $list->getTasksForTeammate('teammate-x');
-        $tasksForY = $list->getTasksForTeammate('teammate-y');
-        $tasksForZ = $list->getTasksForTeammate('teammate-z');
+        $tasksForX = $list->tasksForTeammate('teammate-x');
+        $tasksForY = $list->tasksForTeammate('teammate-y');
+        $tasksForZ = $list->tasksForTeammate('teammate-z');
 
         $this->assertCount(2, $tasksForX);
         $this->assertCount(1, $tasksForY);
@@ -353,7 +353,7 @@ final class TaskListTest extends TestCase
         $list = new TaskList($this->dbPath);
         $list->addTask($this->makeTask('some-task', 'team-empty', 'Some task'));
 
-        $result = $list->getTasksForTeammate('nonexistent-teammate');
+        $result = $list->tasksForTeammate('nonexistent-teammate');
 
         $this->assertIsArray($result);
         $this->assertCount(0, $result);
@@ -366,7 +366,7 @@ final class TaskListTest extends TestCase
         $list->addTask($this->makeTask('active-task', 'team-tm', 'Active', [], TaskStatus::InProgress, 'teammate-m'));
         $list->addTask($this->makeTask('done-task', 'team-tm', 'Done', [], TaskStatus::Completed, 'teammate-m'));
 
-        $tasks = $list->getTasksForTeammate('teammate-m');
+        $tasks = $list->tasksForTeammate('teammate-m');
 
         $this->assertCount(2, $tasks);
         $ids = array_map(fn(Task $t) => $t->id, $tasks);
@@ -385,7 +385,7 @@ final class TaskListTest extends TestCase
 
         $list->updateTaskStatus('update-me', TaskStatus::InProgress);
 
-        $found = $list->getTask('update-me');
+        $found = $list->task('update-me');
         $this->assertSame(TaskStatus::InProgress, $found->status);
     }
 
@@ -396,7 +396,7 @@ final class TaskListTest extends TestCase
 
         $list->updateTaskStatus('block-me', TaskStatus::Blocked);
 
-        $found = $list->getTask('block-me');
+        $found = $list->task('block-me');
         $this->assertSame(TaskStatus::Blocked, $found->status);
     }
 
@@ -407,7 +407,7 @@ final class TaskListTest extends TestCase
 
         $list->updateTaskStatus('keep-fields', TaskStatus::InProgress);
 
-        $found = $list->getTask('keep-fields');
+        $found = $list->task('keep-fields');
         $this->assertSame('keep-fields', $found->id);
         $this->assertSame('team-v', $found->teamId);
         $this->assertSame('Keep fields', $found->title);
@@ -427,7 +427,7 @@ final class TaskListTest extends TestCase
 
         $list->completeTask('complete-me', "All done, here's the result");
 
-        $found = $list->getTask('complete-me');
+        $found = $list->task('complete-me');
         $this->assertSame(TaskStatus::Completed, $found->status);
         $this->assertSame("All done, here's the result", $found->result);
         $this->assertNull($found->error);
@@ -443,7 +443,7 @@ final class TaskListTest extends TestCase
         $list->completeTask('complete-time', 'done');
         $after = new \DateTimeImmutable();
 
-        $found = $list->getTask('complete-time');
+        $found = $list->task('complete-time');
         $this->assertNotNull($found->completedAt);
         $this->assertGreaterThanOrEqual($before->format('U'), $found->completedAt->format('U'));
         $this->assertLessThanOrEqual($after->format('U'), $found->completedAt->format('U'));
@@ -456,7 +456,7 @@ final class TaskListTest extends TestCase
 
         $list->completeTask('done-pending', 'done');
 
-        $pending = $list->getPendingTasks();
+        $pending = $list->pendingTasks();
         $this->assertCount(0, $pending);
     }
 
@@ -471,7 +471,7 @@ final class TaskListTest extends TestCase
 
         $list->failTask('fail-me', 'Connection timeout after 30s');
 
-        $found = $list->getTask('fail-me');
+        $found = $list->task('fail-me');
         $this->assertSame(TaskStatus::Failed, $found->status);
         $this->assertNull($found->result);
         $this->assertSame('Connection timeout after 30s', $found->error);
@@ -487,7 +487,7 @@ final class TaskListTest extends TestCase
         $list->failTask('fail-time', 'error message');
         $after = new \DateTimeImmutable();
 
-        $found = $list->getTask('fail-time');
+        $found = $list->task('fail-time');
         $this->assertNotNull($found->completedAt);
         $this->assertGreaterThanOrEqual($before->format('U'), $found->completedAt->format('U'));
         $this->assertLessThanOrEqual($after->format('U'), $found->completedAt->format('U'));
@@ -500,7 +500,7 @@ final class TaskListTest extends TestCase
 
         $list->failTask('fail-pending', 'something broke');
 
-        $pending = $list->getPendingTasks();
+        $pending = $list->pendingTasks();
         $this->assertCount(0, $pending);
     }
 
@@ -554,7 +554,7 @@ final class TaskListTest extends TestCase
         $list->addTask($t1);
         $list->addTask($t3);
 
-        $pending = $list->getPendingTasks();
+        $pending = $list->pendingTasks();
 
         $this->assertSame('oldest', $pending[0]->id);
         $this->assertSame('middle', $pending[1]->id);
@@ -573,7 +573,7 @@ final class TaskListTest extends TestCase
         $result = $list->claimTask('claimable', 'teammate-a');
 
         $this->assertTrue($result);
-        $task = $list->getTask('claimable');
+        $task = $list->task('claimable');
         $this->assertSame(TaskStatus::InProgress, $task->status);
         $this->assertSame('teammate-a', $task->assignedTo);
         $this->assertNotNull($task->claimedAt);
@@ -669,7 +669,7 @@ final class TaskListTest extends TestCase
         $result = $list->claimTask('blocked-task', 'teammate-a');
 
         $this->assertFalse($result);
-        $task = $list->getTask('blocked-task');
+        $task = $list->task('blocked-task');
         $this->assertSame(TaskStatus::Pending, $task->status);
     }
 
@@ -686,7 +686,7 @@ final class TaskListTest extends TestCase
         $result = $list->claimTask('ready-task', 'teammate-a');
 
         $this->assertTrue($result);
-        $task = $list->getTask('ready-task');
+        $task = $list->task('ready-task');
         $this->assertSame(TaskStatus::InProgress, $task->status);
     }
 
@@ -725,7 +725,7 @@ final class TaskListTest extends TestCase
 
         $list->addDependency('task-with-dep', 'new-dep');
 
-        $task = $list->getTask('task-with-dep');
+        $task = $list->task('task-with-dep');
         $this->assertSame(['existing-dep', 'new-dep'], $task->dependsOn);
     }
 
@@ -736,7 +736,7 @@ final class TaskListTest extends TestCase
 
         $list->addDependency('task-no-dup', 'some-dep'); // Add same dep again
 
-        $task = $list->getTask('task-no-dup');
+        $task = $list->task('task-no-dup');
         $this->assertSame(['some-dep'], $task->dependsOn);
     }
 
@@ -758,7 +758,7 @@ final class TaskListTest extends TestCase
         $list->addTask($this->makeTask('unblocked-1', 'team-ub', 'First'));
         $list->addTask($this->makeTask('unblocked-2', 'team-ub', 'Second'));
 
-        $unblocked = $list->getUnblockedTasks('teammate-a');
+        $unblocked = $list->unblockedTasks('teammate-a');
 
         $this->assertCount(2, $unblocked);
     }
@@ -768,7 +768,7 @@ final class TaskListTest extends TestCase
         $list = new TaskList($this->dbPath);
         $list->addTask($this->makeTask('others-task', 'team-ub', 'Others', [], TaskStatus::Pending, 'teammate-x'));
 
-        $unblocked = $list->getUnblockedTasks('teammate-a');
+        $unblocked = $list->unblockedTasks('teammate-a');
 
         $this->assertCount(0, $unblocked);
     }
@@ -778,7 +778,7 @@ final class TaskListTest extends TestCase
         $list = new TaskList($this->dbPath);
         $list->addTask($this->makeTask('blocked', 'team-ub', 'Blocked', ['missing-dep']));
 
-        $unblocked = $list->getUnblockedTasks('teammate-a');
+        $unblocked = $list->unblockedTasks('teammate-a');
 
         $this->assertCount(0, $unblocked);
     }
@@ -790,7 +790,7 @@ final class TaskListTest extends TestCase
         $list->completeTask('dep', 'done');
         $list->addTask($this->makeTask('now-unblocked', 'team-ub', 'Now free', ['dep']));
 
-        $unblocked = $list->getUnblockedTasks('teammate-a');
+        $unblocked = $list->unblockedTasks('teammate-a');
 
         $this->assertCount(1, $unblocked);
         $this->assertSame('now-unblocked', $unblocked[0]->id);
@@ -806,7 +806,7 @@ final class TaskListTest extends TestCase
         // Task assigned to teammate-b - not visible to teammate-a
         $list->addTask($this->makeTask('theirs', 'team-ub', 'Theirs', [], TaskStatus::Pending, 'teammate-b'));
 
-        $unblocked = $list->getUnblockedTasks('teammate-a');
+        $unblocked = $list->unblockedTasks('teammate-a');
 
         $this->assertCount(2, $unblocked);
         $ids = array_map(fn(Task $t) => $t->id, $unblocked);
@@ -849,7 +849,7 @@ final class TaskListTest extends TestCase
         $this->assertFalse($second);
 
         // Verify the task is still assigned to the first claimer
-        $task = $list->getTask('race-task');
+        $task = $list->task('race-task');
         $this->assertSame('teammate-a', $task->assignedTo);
         $this->assertSame(TaskStatus::InProgress, $task->status);
     }
@@ -973,7 +973,7 @@ final class TaskListTest extends TestCase
                 . implode(', ', $winners)
         );
 
-        $task = $list->getTask('race-task-fork');
+        $task = $list->task('race-task-fork');
         $this->assertSame(TaskStatus::InProgress, $task->status);
         $this->assertNotNull($task->assignedTo);
 

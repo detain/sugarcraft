@@ -184,10 +184,10 @@ final class WorkflowResumeReportingTest extends TestCase
 
         $this->assertTrue($next->inFlight, 'a resume occupies the session like a run does');
         $this->assertCount(1, $next->history, 'nothing has run yet: only the command is echoed');
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus($id), 'not started on the update() tick');
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status($id), 'not started on the update() tick');
 
         $this->settleWorkflowCmd($cmd);
-        $this->assertSame(WorkflowStatus::Completed, $this->engine->getStatus($id));
+        $this->assertSame(WorkflowStatus::Completed, $this->engine->status($id));
     }
 
     /**
@@ -216,12 +216,12 @@ final class WorkflowResumeReportingTest extends TestCase
         $loop->run();
         $this->assertTrue($this->suspended, 'the run never reached stage a');
         $this->assertNull($resolved, 'the run must still be live');
-        $this->assertSame(WorkflowStatus::Running, $this->engine->getStatus('three'));
+        $this->assertSame(WorkflowStatus::Running, $this->engine->status('three'));
 
         [$paused] = (new Chat(inputBuf: '/workflow pause three', workflowEngine: $this->engine))
             ->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertStringContainsString('Pause requested', $paused->history[1]->content);
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus('three'));
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status('three'));
 
         if ($resolved === null) {
             $loop->run();

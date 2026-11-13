@@ -291,7 +291,7 @@ final class WorktreeManagerTest extends TestCase
         $agentId = 'path-lookup-agent';
         $createdPath = $this->manager->createWorktree($agentId);
 
-        $retrievedPath = $this->manager->getWorktreePath($agentId);
+        $retrievedPath = $this->manager->worktreePath($agentId);
 
         $this->assertSame($createdPath, $retrievedPath);
     }
@@ -301,7 +301,7 @@ final class WorktreeManagerTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('does not exist');
 
-        $this->manager->getWorktreePath('nonexistent-agent-abc');
+        $this->manager->worktreePath('nonexistent-agent-abc');
     }
 
     public function testGetWorktreePathReturnsAbsolutePath(): void
@@ -309,7 +309,7 @@ final class WorktreeManagerTest extends TestCase
         $agentId = 'absolute-path-agent';
         $this->manager->createWorktree($agentId);
 
-        $path = $this->manager->getWorktreePath($agentId);
+        $path = $this->manager->worktreePath($agentId);
 
         $this->assertTrue(str_starts_with($path, '/'), 'Path should be absolute');
     }
@@ -361,7 +361,7 @@ final class WorktreeManagerTest extends TestCase
         $this->manager->createWorktree($agentId);
 
         // Manually remove directory to simulate orphaned worktree
-        $path = $this->manager->getWorktreePath($agentId);
+        $path = $this->manager->worktreePath($agentId);
         $this->removeDirectory($path);
 
         $worktrees = $this->manager->listWorktrees();
@@ -447,7 +447,7 @@ final class WorktreeManagerTest extends TestCase
         // agent2's worktree still exists and is accessible
         $this->assertFalse(is_dir($path1));
         $this->assertTrue(is_dir($path2));
-        $this->assertTrue($this->manager->getWorktreePath($agent2) === $path2);
+        $this->assertTrue($this->manager->worktreePath($agent2) === $path2);
 
         // Registry reflects only agent2 remaining
         $worktrees = $this->manager->listWorktrees();
@@ -482,7 +482,7 @@ final class WorktreeManagerTest extends TestCase
         $this->manager->createWorktree($agentId);
         $this->manager->markWorktreeNamed($agentId);
 
-        $path = $this->manager->getWorktreePath($agentId);
+        $path = $this->manager->worktreePath($agentId);
         $this->assertTrue(is_dir($path));
 
         // Backdate the worktree's createdAt to make it stale
@@ -517,7 +517,7 @@ final class WorktreeManagerTest extends TestCase
 
         $this->manager->createWorktree($agentId);
 
-        $path = $this->manager->getWorktreePath($agentId);
+        $path = $this->manager->worktreePath($agentId);
         $this->assertTrue(is_dir($path));
 
         // Backdate the worktree's createdAt to make it stale (but leave it clean)
@@ -580,7 +580,7 @@ final class WorktreeManagerTest extends TestCase
     {
         $agentId = 'sweep-due-agent';
         $this->manager->createWorktree($agentId);
-        $path = $this->manager->getWorktreePath($agentId);
+        $path = $this->manager->worktreePath($agentId);
 
         // Backdate so the worktree is stale-and-clean, same setup as the
         // cleanupStaleWorktrees() removal test above.
@@ -604,7 +604,7 @@ final class WorktreeManagerTest extends TestCase
     {
         $agentId = 'sweep-throttled-agent';
         $this->manager->createWorktree($agentId);
-        $path = $this->manager->getWorktreePath($agentId);
+        $path = $this->manager->worktreePath($agentId);
 
         $cutoff = (new \DateTimeImmutable())->modify('-8 days')->format(\DateTimeImmutable::ATOM);
         $reflection = new \ReflectionClass($this->manager);

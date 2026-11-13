@@ -5,12 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Agents\AgentType;
-use SugarCraft\Code\Agents\Mailbox;
-use SugarCraft\Code\Agents\TaskList;
-use SugarCraft\Code\Agents\TaskStatus;
-use SugarCraft\Code\Agents\TeamManager;
-use SugarCraft\Code\Agents\Teammate;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\MCP\GitOperationResult;
 use SugarCraft\Code\MCP\McpAuthStore;
@@ -57,13 +51,6 @@ final class AccessorDeprecationTest extends TestCase
     private static function eraPairs(): array
     {
         return [
-            'AgentManager::getSubAgent' => ['SugarCraft\Code\Agents\AgentManager', 'Agents/AgentManager.php', 'getSubAgent', 'subAgent', false],
-            'AgentManager::getTeam' => ['SugarCraft\Code\Agents\AgentManager', 'Agents/AgentManager.php', 'getTeam', 'team', false],
-            'AgentManager::getTeamManager' => ['SugarCraft\Code\Agents\AgentManager', 'Agents/AgentManager.php', 'getTeamManager', 'teamManager', false],
-            'AgentManager::getTeams' => ['SugarCraft\Code\Agents\AgentManager', 'Agents/AgentManager.php', 'getTeams', 'teams', false],
-            'AgentWorkerPool::getActiveCount' => ['SugarCraft\Code\Agents\AgentWorkerPool', 'Agents/AgentWorkerPool.php', 'getActiveCount', 'activeCount', false],
-            'AgentWorkerPool::getExecutor' => ['SugarCraft\Code\Agents\AgentWorkerPool', 'Agents/AgentWorkerPool.php', 'getExecutor', 'executor', false],
-            'AgentWorkerPool::getQueueSize' => ['SugarCraft\Code\Agents\AgentWorkerPool', 'Agents/AgentWorkerPool.php', 'getQueueSize', 'queueSize', false],
             'BackgroundSupervisor::getActiveSessions' => ['SugarCraft\Code\Background\BackgroundSupervisor', 'Background/BackgroundSupervisor.php', 'getActiveSessions', 'activeSessions', false],
             'BackgroundSupervisor::getSession' => ['SugarCraft\Code\Background\BackgroundSupervisor', 'Background/BackgroundSupervisor.php', 'getSession', 'session', false],
             'BackgroundSupervisor::getStallWarnings' => ['SugarCraft\Code\Background\BackgroundSupervisor', 'Background/BackgroundSupervisor.php', 'getStallWarnings', 'stallWarnings', false],
@@ -76,7 +63,6 @@ final class AccessorDeprecationTest extends TestCase
             'GitOperationResult::getOutputOrNull' => ['SugarCraft\Code\MCP\GitOperationResult', 'MCP/GitOperationResult.php', 'getOutputOrNull', 'outputOrNull', false],
             'HookRegistry::getForEvent' => ['SugarCraft\Code\Hooks\HookRegistry', 'Hooks/HookRegistry.php', 'getForEvent', 'forEvent', false],
             'HttpMcpServer::getPrompt' => ['SugarCraft\Code\MCP\HttpMcpServer', 'MCP/HttpMcpServer.php', 'getPrompt', 'prompt', false],
-            'Mailbox::getUnreadCount' => ['SugarCraft\Code\Agents\Mailbox', 'Agents/Mailbox.php', 'getUnreadCount', 'unreadCount', false],
             'McpAuthStore::getServerStatus' => ['SugarCraft\Code\MCP\McpAuthStore', 'MCP/McpAuthStore.php', 'getServerStatus', 'serverStatus', false],
             'McpClient::getPrompt' => ['SugarCraft\Code\MCP\McpClient', 'MCP/McpClient.php', 'getPrompt', 'prompt', false],
             'MenuBar::getActiveItem' => ['SugarCraft\Code\Tui\Components\MenuBar', 'Tui/Components/MenuBar.php', 'getActiveItem', 'activeItem', true],
@@ -96,21 +82,6 @@ final class AccessorDeprecationTest extends TestCase
             'SseMcpServer::getPrompt' => ['SugarCraft\Code\MCP\SseMcpServer', 'MCP/SseMcpServer.php', 'getPrompt', 'prompt', false],
             'StallDetector::getStallWarnings' => ['SugarCraft\Code\Tui\StallDetector', 'Tui/StallDetector.php', 'getStallWarnings', 'stallWarnings', false],
             'StdioMcpServer::getPrompt' => ['SugarCraft\Code\MCP\StdioMcpServer', 'MCP/StdioMcpServer.php', 'getPrompt', 'prompt', false],
-            'TaskList::getPendingTasks' => ['SugarCraft\Code\Agents\TaskList', 'Agents/TaskList.php', 'getPendingTasks', 'pendingTasks', false],
-            'TaskList::getTask' => ['SugarCraft\Code\Agents\TaskList', 'Agents/TaskList.php', 'getTask', 'task', false],
-            'TaskList::getTasksByStatus' => ['SugarCraft\Code\Agents\TaskList', 'Agents/TaskList.php', 'getTasksByStatus', 'tasksByStatus', false],
-            'TaskList::getTasksForTeammate' => ['SugarCraft\Code\Agents\TaskList', 'Agents/TaskList.php', 'getTasksForTeammate', 'tasksForTeammate', false],
-            'TaskList::getUnblockedTasks' => ['SugarCraft\Code\Agents\TaskList', 'Agents/TaskList.php', 'getUnblockedTasks', 'unblockedTasks', false],
-            'Team::getMailbox' => ['SugarCraft\Code\Agents\Team', 'Agents/Team.php', 'getMailbox', 'mailbox', false],
-            'Team::getTaskList' => ['SugarCraft\Code\Agents\Team', 'Agents/Team.php', 'getTaskList', 'taskList', false],
-            'Team::getTeammate' => ['SugarCraft\Code\Agents\Team', 'Agents/Team.php', 'getTeammate', 'teammate', false],
-            'Team::getTeammates' => ['SugarCraft\Code\Agents\Team', 'Agents/Team.php', 'getTeammates', 'teammates', false],
-            'TeamManager::getTeam' => ['SugarCraft\Code\Agents\TeamManager', 'Agents/TeamManager.php', 'getTeam', 'team', false],
-            'TeamManager::getTeamConfig' => ['SugarCraft\Code\Agents\TeamManager', 'Agents/TeamManager.php', 'getTeamConfig', 'teamConfig', false],
-            'TeamManager::getTeams' => ['SugarCraft\Code\Agents\TeamManager', 'Agents/TeamManager.php', 'getTeams', 'teams', false],
-            'Teammate::getStatus' => ['SugarCraft\Code\Agents\Teammate', 'Agents/Teammate.php', 'getStatus', 'status', false],
-            'WorkflowEngine::getStatus' => ['SugarCraft\Code\Workflows\WorkflowEngine', 'Workflows/WorkflowEngine.php', 'getStatus', 'status', false],
-            'WorktreeManager::getWorktreePath' => ['SugarCraft\Code\Agents\WorktreeManager', 'Agents/WorktreeManager.php', 'getWorktreePath', 'worktreePath', false],
         ];
     }
 
@@ -123,16 +94,6 @@ final class AccessorDeprecationTest extends TestCase
     private static function runtimeEraPairs(): array
     {
         return [
-            'TaskList::getPendingTasks' => [TaskList::class, 'getPendingTasks', 'pendingTasks', [], static fn (string $d): object => new TaskList($d . '/tasks.db'), false],
-            'TaskList::getTask' => [TaskList::class, 'getTask', 'task', ['nope'], static fn (string $d): object => new TaskList($d . '/tasks.db'), false],
-            'TaskList::getTasksByStatus' => [TaskList::class, 'getTasksByStatus', 'tasksByStatus', [TaskStatus::Pending], static fn (string $d): object => new TaskList($d . '/tasks.db'), false],
-            'TaskList::getTasksForTeammate' => [TaskList::class, 'getTasksForTeammate', 'tasksForTeammate', ['tm'], static fn (string $d): object => new TaskList($d . '/tasks.db'), false],
-            'TaskList::getUnblockedTasks' => [TaskList::class, 'getUnblockedTasks', 'unblockedTasks', ['tm'], static fn (string $d): object => new TaskList($d . '/tasks.db'), false],
-            'Mailbox::getUnreadCount' => [Mailbox::class, 'getUnreadCount', 'unreadCount', ['tm'], static fn (string $d): object => new Mailbox($d), false],
-            'Teammate::getStatus' => [Teammate::class, 'getStatus', 'status', [], static fn (string $d): object => new Teammate('t1', 'team1', 'Name', AgentType::Coder, 'model', []), false],
-            'TeamManager::getTeams' => [TeamManager::class, 'getTeams', 'teams', [], static fn (string $d): object => new TeamManager($d . '/teams'), false],
-            'TeamManager::getTeam' => [TeamManager::class, 'getTeam', 'team', ['nope'], static fn (string $d): object => new TeamManager($d . '/teams'), false],
-            'TeamManager::getTeamConfig' => [TeamManager::class, 'getTeamConfig', 'teamConfig', ['nope'], static fn (string $d): object => new TeamManager($d . '/teams'), false],
             'HookRegistry::getForEvent' => [HookRegistry::class, 'getForEvent', 'forEvent', ['nope.event'], static fn (string $d): object => new HookRegistry(), false],
             'GitOperationResult::getOutputOrNull' => [GitOperationResult::class, 'getOutputOrNull', 'outputOrNull', [], static fn (string $d): object => new GitOperationResult(true, 'out', null, 'op', 'grp'), false],
             'McpAuthStore::getServerStatus' => [McpAuthStore::class, 'getServerStatus', 'serverStatus', ['https://example.invalid/mcp'], static fn (string $d): object => new McpAuthStore(new OAuthClientRegistration(null, $d . '/auth.json')), false],
@@ -249,7 +210,7 @@ final class AccessorDeprecationTest extends TestCase
         $roster = array_keys(self::eraPairs());
         sort($roster);
         self::assertSame($roster, $marked, 'the marked-forwarder census and the era roster moved apart — add/remove rows in lockstep');
-        self::assertCount(54, $marked, 'the era carries exactly 54 marked forwarders');
+        self::assertCount(31, $marked, 'the era carries exactly 31 marked forwarders');
     }
 
     public function testNoUnmarkedPublicGetAccessorSurvivesOutsideTheCarveOuts(): void

@@ -156,7 +156,7 @@ final class WorkflowControlMidRunTest extends TestCase
         $loop->run();
         $loop->cancelTimer($safety);
         self::assertSame(['do a'], $this->prompts, 'fixture: the fiber is suspended inside stage a');
-        self::assertSame(WorkflowStatus::Running, $this->engine->getStatus('three'), 'fixture: the run is live');
+        self::assertSame(WorkflowStatus::Running, $this->engine->status('three'), 'fixture: the run is live');
 
         return [$running, $async];
     }
@@ -287,7 +287,7 @@ final class WorkflowControlMidRunTest extends TestCase
         self::assertStringContainsString("Workflow 'three' cancelled", self::last($settled)->content);
         self::assertStringContainsString('Cancelled with Esc Esc', self::last($settled)->content);
         self::assertTrue(self::last($settled)->uiOnly, 'the engine report stays off the model wire');
-        self::assertSame(WorkflowStatus::Cancelled, $this->engine->getStatus('three'));
+        self::assertSame(WorkflowStatus::Cancelled, $this->engine->status('three'));
     }
 
     /**

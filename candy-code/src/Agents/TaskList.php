@@ -422,15 +422,6 @@ final class TaskList
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::pendingTasks()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getPendingTasks(): array { return $this->pendingTasks(); }
-
-    /**
      * Fetch a single task by ID.
      */
     public function task(string $taskId): ?Task
@@ -444,15 +435,6 @@ final class TaskList
 
         return $tasks[0] ?? null;
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::task()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTask(string $taskId): ?Task { return $this->task($taskId); }
 
     /**
      * Fetch all tasks with a given status.
@@ -472,15 +454,6 @@ final class TaskList
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::tasksByStatus()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTasksByStatus(TaskStatus $status): array { return $this->tasksByStatus($status); }
-
-    /**
      * Fetch all tasks assigned to a specific teammate.
      *
      * @return Task[]
@@ -496,15 +469,6 @@ final class TaskList
 
         return $tasks;
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::tasksForTeammate()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTasksForTeammate(string $teammateId): array { return $this->tasksForTeammate($teammateId); }
 
     // -------------------------------------------------------------------------
     // Claiming — atomic via per-task flock
@@ -790,15 +754,6 @@ final class TaskList
             }
         ));
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::unblockedTasks()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getUnblockedTasks(string $teammateId): array { return $this->unblockedTasks($teammateId); }
 
     // -------------------------------------------------------------------------
     // Helpers

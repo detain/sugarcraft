@@ -109,7 +109,7 @@ final class TeamToolHooksTest extends TestCase
 
         self::assertSame('Nothing claimed: a TeammateIdle hook held the next task back: review your last task first.', $claim);
         self::assertSame(['team_name' => 'alpha', 'teammate_name' => 'alice'], json_decode($seen[0]->toolInput, true));
-        self::assertSame(TaskStatus::Pending, (new TeamManager($this->tempDir . '/teams'))->getTeam('alpha')?->getTaskList()->getTask('t1')?->status);
+        self::assertSame(TaskStatus::Pending, (new TeamManager($this->tempDir . '/teams'))->team('alpha')?->taskList()->task('t1')?->status);
 
         // Naming the task is not an idle teammate asking for work: no hook.
         $this->ok($tool->execute(['action' => 'claim', 'team' => 'alpha', 'teammate' => 'alice', 'task' => 't1']));

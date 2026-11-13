@@ -949,7 +949,7 @@ final class WorkflowEngineTest extends TestCase
             $this->expectException(\SugarCraft\Code\Workflows\WorkflowNotRunningException::class);
             $this->expectExceptionMessageMatches('/No pause file found/i');
 
-            $this->engine->getStatus('nonexistent-pause-file');
+            $this->engine->status('nonexistent-pause-file');
         } finally {
             $_SERVER['HOME'] = $oldHome;
             putenv('HOME=' . $_SERVER['HOME']);
@@ -980,7 +980,7 @@ final class WorkflowEngineTest extends TestCase
             ];
             file_put_contents($pauseFile, json_encode($pauseData));
 
-            $status = $this->engine->getStatus('test-wf');
+            $status = $this->engine->status('test-wf');
 
             $this->assertSame(WorkflowStatus::Paused, $status);
         } finally {
@@ -1705,7 +1705,7 @@ final class WorkflowEngineTest extends TestCase
             // would have quietly broken resumption instead of relocating it.
             $this->assertSame(
                 WorkflowStatus::Paused,
-                $engine->getStatus('pause-location-test'),
+                $engine->status('pause-location-test'),
             );
         } finally {
             $oldHome === false ? putenv('HOME') : putenv('HOME=' . $oldHome);

@@ -2997,8 +2997,11 @@ final class MyProvider implements ProviderInterface
 
 Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"),
 ruling 3b), the 2026-10-24 remediation pass renamed 55 public `get*()` accessors
-across 27 classes to their bare twins. The legacy names remain as one-line BC
-forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` — they will be
+across 27 classes to their bare twins. The 23 forwarders on the `Agents`/`Workflows`
+classes (`AgentManager`, `AgentWorkerPool`, `Mailbox`, `TaskList`, `Team`,
+`TeamManager`, `Teammate`, `WorkflowEngine`, `WorktreeManager`) were swept in the
+2026-11 remediation (G-03) — the bare names are the only API there. The legacy
+names on the remaining classes stay as one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` — they will be
 removed in candy-code v2.0.0. Internal call sites in `src/` were switched to the
 bare forms in the same pass.
 
@@ -3015,13 +3018,6 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
-| `Agents` | `AgentManager` | `getSubAgent()` | `subAgent()` |
-| `Agents` | `AgentManager` | `getTeam()` | `team()` |
-| `Agents` | `AgentManager` | `getTeamManager()` | `teamManager()` |
-| `Agents` | `AgentManager` | `getTeams()` | `teams()` |
-| `Agents` | `AgentWorkerPool` | `getActiveCount()` | `activeCount()` |
-| `Agents` | `AgentWorkerPool` | `getExecutor()` | `executor()` |
-| `Agents` | `AgentWorkerPool` | `getQueueSize()` | `queueSize()` |
 | `Background` | `BackgroundSupervisor` | `getActiveSessions()` | `activeSessions()` |
 | `Background` | `BackgroundSupervisor` | `getSession()` | `session()` |
 | `Background` | `BackgroundSupervisor` | `getStallWarnings()` | `stallWarnings()` |
@@ -3034,7 +3030,6 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 | `MCP` | `GitOperationResult` | `getOutputOrNull()` | `outputOrNull()` |
 | `Hooks` | `HookRegistry` | `getForEvent()` | `forEvent()` |
 | `MCP` | `HttpMcpServer` | `getPrompt()` | `prompt()` |
-| `Agents` | `Mailbox` | `getUnreadCount()` | `unreadCount()` |
 | `MCP` | `McpAuthStore` | `getServerStatus()` | `serverStatus()` |
 | `MCP` | `McpClient` | `getPrompt()` | `prompt()` |
 | `Tui\Components` | `MenuBar` | `getActiveItem()` | `activeItem()` |
@@ -3054,21 +3049,6 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 | `MCP` | `SseMcpServer` | `getPrompt()` | `prompt()` |
 | `Tui` | `StallDetector` | `getStallWarnings()` | `stallWarnings()` |
 | `MCP` | `StdioMcpServer` | `getPrompt()` | `prompt()` |
-| `Agents` | `TaskList` | `getPendingTasks()` | `pendingTasks()` |
-| `Agents` | `TaskList` | `getTask()` | `task()` |
-| `Agents` | `TaskList` | `getTasksByStatus()` | `tasksByStatus()` |
-| `Agents` | `TaskList` | `getTasksForTeammate()` | `tasksForTeammate()` |
-| `Agents` | `TaskList` | `getUnblockedTasks()` | `unblockedTasks()` |
-| `Agents` | `Team` | `getMailbox()` | `mailbox()` |
-| `Agents` | `Team` | `getTaskList()` | `taskList()` |
-| `Agents` | `Team` | `getTeammate()` | `teammate()` |
-| `Agents` | `Team` | `getTeammates()` | `teammates()` |
-| `Agents` | `TeamManager` | `getTeam()` | `team()` |
-| `Agents` | `TeamManager` | `getTeamConfig()` | `teamConfig()` |
-| `Agents` | `TeamManager` | `getTeams()` | `teams()` |
-| `Agents` | `Teammate` | `getStatus()` | `status()` |
-| `Workflows` | `WorkflowEngine` | `getStatus()` | `status()` |
-| `Agents` | `WorktreeManager` | `getWorktreePath()` | `worktreePath()` |
 
 ## Tests
 

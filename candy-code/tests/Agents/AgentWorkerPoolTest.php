@@ -661,13 +661,13 @@ final class AgentWorkerPoolTest extends TestCase
     public function testGetActiveCountStartsAtZero(): void
     {
         $pool = new AgentWorkerPool(maxConcurrent: 5);
-        $this->assertSame(0, $pool->getActiveCount());
+        $this->assertSame(0, $pool->activeCount());
     }
 
     public function testGetQueueSizeStartsAtZero(): void
     {
         $pool = new AgentWorkerPool(maxConcurrent: 5);
-        $this->assertSame(0, $pool->getQueueSize());
+        $this->assertSame(0, $pool->queueSize());
     }
 
     // -------------------------------------------------------------------------
@@ -726,8 +726,8 @@ final class AgentWorkerPoolTest extends TestCase
         $pool = new AgentWorkerPool(maxConcurrent: 5);
         // Should not throw
         $pool->cancel('nonexistent-id');
-        $this->assertSame(0, $pool->getActiveCount());
-        $this->assertSame(0, $pool->getQueueSize());
+        $this->assertSame(0, $pool->activeCount());
+        $this->assertSame(0, $pool->queueSize());
     }
 
     // -------------------------------------------------------------------------
@@ -763,15 +763,15 @@ final class AgentWorkerPoolTest extends TestCase
         $pool10 = new AgentWorkerPool(maxConcurrent: 10);
 
         // Queue size should reflect configured max, not current load
-        $this->assertSame(0, $pool2->getQueueSize());
-        $this->assertSame(0, $pool10->getQueueSize());
+        $this->assertSame(0, $pool2->queueSize());
+        $this->assertSame(0, $pool10->queueSize());
     }
 
     public function testDefaultMaxConcurrent(): void
     {
         $pool = new AgentWorkerPool();
         // Default maxConcurrent is 5 (matching Claude Code's default)
-        $this->assertSame(0, $pool->getActiveCount());
+        $this->assertSame(0, $pool->activeCount());
     }
 
     // -------------------------------------------------------------------------
@@ -1356,7 +1356,7 @@ final class AgentWorkerPoolTest extends TestCase
 
                 $this->assertSame(
                     count($agents) - count($collected),
-                    $pool->getActiveCount(),
+                    $pool->activeCount(),
                     'After yielding ' . count($collected) . ' result(s), exactly that many agents '
                         . 'must have left $active — a forked agent that occupies two $active '
                         . 'slots leaves one behind with nothing able to remove it.',
@@ -1367,7 +1367,7 @@ final class AgentWorkerPoolTest extends TestCase
         });
 
         $this->assertCount(3, $results);
-        $this->assertSame(0, $pool->getActiveCount());
+        $this->assertSame(0, $pool->activeCount());
     }
 
     /**
@@ -2038,7 +2038,7 @@ final class AgentWorkerPoolTest extends TestCase
             'The synthesized result must come from the dead child\'s wait status, not from the '
                 . 'executor timing out on its own.',
         );
-        $this->assertSame(0, $pool->getActiveCount());
+        $this->assertSame(0, $pool->activeCount());
 
         // The startAgent() half of the timing fix, pinned on the only path that
         // can pin it: every other fork test seeds $activePids by Reflection and

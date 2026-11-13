@@ -2285,15 +2285,6 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::status()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getStatus(string $workflowId): WorkflowStatus { return $this->status($workflowId); }
-
-    /**
      * Build the filesystem path to a workflow's pause file.
      *
      * Anchored to the REGISTRY's own user-tier directory rather than to

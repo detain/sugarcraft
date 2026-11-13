@@ -6003,7 +6003,7 @@ final class ChatTest extends TestCase
 
         // Before W3.F2 the pool was iterated directly, so the manager never
         // saw the sub-agent and every telemetry accessor answered zero.
-        $this->assertSame($subAgent, $manager->getSubAgent('telemetry-agent'));
+        $this->assertSame($subAgent, $manager->subAgent('telemetry-agent'));
         $this->assertSame(1200, $manager->tokensUsed('TelemetryAgent'));
         $this->assertSame(0.42, $manager->costUsd('TelemetryAgent'));
         $this->assertSame(7, $manager->elapsedSeconds('TelemetryAgent'));

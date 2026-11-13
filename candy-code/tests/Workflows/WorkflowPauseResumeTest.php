@@ -154,7 +154,7 @@ final class WorkflowPauseResumeTest extends TestCase
     {
         $engine = $this->engine;
         $this->script[$prefix] = static function () use ($engine, $identifier, &$statusBefore): ?AgentResult {
-            $statusBefore = $engine->getStatus($identifier);
+            $statusBefore = $engine->status($identifier);
             $engine->pause($identifier);
 
             return null;
@@ -241,13 +241,13 @@ final class WorkflowPauseResumeTest extends TestCase
     public function testResumeConsumesThePauseFileSoStatusMovesOnAndASecondResumeIsRefused(): void
     {
         $id = $this->failedThenPaused();
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus($id));
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status($id));
 
         $this->engine->resume($id);
 
         $this->assertFileDoesNotExist($this->pauseFile());
-        $this->assertSame(WorkflowStatus::Completed, $this->engine->getStatus($id));
-        $this->assertSame(WorkflowStatus::Completed, $this->engine->getStatus('three'));
+        $this->assertSame(WorkflowStatus::Completed, $this->engine->status($id));
+        $this->assertSame(WorkflowStatus::Completed, $this->engine->status('three'));
 
         $this->prompts = [];
         try {
@@ -268,7 +268,7 @@ final class WorkflowPauseResumeTest extends TestCase
         $this->assertSame(WorkflowStatus::Failed, $again->status);
         $this->assertSame(['a', 'b'], self::stageNames($again));
         $this->assertFileDoesNotExist($this->pauseFile());
-        $this->assertSame(WorkflowStatus::Failed, $this->engine->getStatus($id));
+        $this->assertSame(WorkflowStatus::Failed, $this->engine->status($id));
 
         // Pause → fix → resume, a second time round.
         $this->engine->pause($id);
@@ -298,7 +298,7 @@ final class WorkflowPauseResumeTest extends TestCase
         $data = $this->pauseData();
         $this->assertSame(1, $data['stagesCompleted'], 'the file is rewritten with the stage that finished');
         $this->assertSame($run->workflowId, $data['workflowId']);
-        $this->assertSame(WorkflowStatus::Paused, $this->engine->getStatus($run->workflowId));
+        $this->assertSame(WorkflowStatus::Paused, $this->engine->status($run->workflowId));
 
         unset($this->script['do a']);
         $this->prompts = [];
@@ -365,7 +365,7 @@ final class WorkflowPauseResumeTest extends TestCase
 
         $this->assertSame(WorkflowStatus::Completed, $run->status);
         $this->assertFileDoesNotExist($this->pauseFile());
-        $this->assertSame(WorkflowStatus::Completed, $this->engine->getStatus($run->workflowId));
+        $this->assertSame(WorkflowStatus::Completed, $this->engine->status($run->workflowId));
     }
 
     /** The stage in flight fails after the pause was requested: the run failed, and the pause stands. */
@@ -395,15 +395,15 @@ final class WorkflowPauseResumeTest extends TestCase
     public function testStatusOfAFinishedRunThatWasNeverPausedIsItsFinalStatus(): void
     {
         $ok = $this->engine->run('three');
-        $this->assertSame(WorkflowStatus::Completed, $this->engine->getStatus($ok->workflowId));
+        $this->assertSame(WorkflowStatus::Completed, $this->engine->status($ok->workflowId));
 
         $this->failB();
         $failed = $this->engine->run('three');
-        $this->assertSame(WorkflowStatus::Failed, $this->engine->getStatus($failed->workflowId));
-        $this->assertSame(WorkflowStatus::Failed, $this->engine->getStatus('three'));
+        $this->assertSame(WorkflowStatus::Failed, $this->engine->status($failed->workflowId));
+        $this->assertSame(WorkflowStatus::Failed, $this->engine->status('three'));
 
         $this->expectException(WorkflowNotRunningException::class);
-        $this->engine->getStatus('never-ran');
+        $this->engine->status('never-ran');
     }
 
     /**

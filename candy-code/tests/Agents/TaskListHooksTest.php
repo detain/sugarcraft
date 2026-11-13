@@ -51,7 +51,7 @@ final class TaskListHooksTest extends TestCase
         $id = $list->addTask($task);
 
         $this->assertSame('task-1', $id);
-        $this->assertNotNull($list->getTask('task-1'));
+        $this->assertNotNull($list->task('task-1'));
     }
 
     // -------------------------------------------------------------------------
@@ -67,7 +67,7 @@ final class TaskListHooksTest extends TestCase
         $id = $list->addTask($task);
 
         $this->assertSame('task-2', $id);
-        $this->assertNotNull($list->getTask('task-2'));
+        $this->assertNotNull($list->task('task-2'));
     }
 
     // -------------------------------------------------------------------------
@@ -97,7 +97,7 @@ final class TaskListHooksTest extends TestCase
 
         $list->completeTask('task-4', 'all done');
 
-        $found = $list->getTask('task-4');
+        $found = $list->task('task-4');
         $this->assertSame(TaskStatus::Completed, $found->status);
         $this->assertSame('all done', $found->result);
     }
@@ -114,7 +114,7 @@ final class TaskListHooksTest extends TestCase
 
         $list->completeTask('task-5', 'result here');
 
-        $found = $list->getTask('task-5');
+        $found = $list->task('task-5');
         $this->assertSame(TaskStatus::Completed, $found->status);
         $this->assertSame('result here', $found->result);
         $this->assertFalse($found->isContested);
@@ -139,7 +139,7 @@ final class TaskListHooksTest extends TestCase
 
         $list->completeTask('task-6', 'result');
 
-        $found = $list->getTask('task-6');
+        $found = $list->task('task-6');
         $this->assertSame(TaskStatus::Completed, $found->status);
         $this->assertTrue($found->isContested, 'TaskCompleted block should mark task as contested');
     }

@@ -75,8 +75,8 @@ final class AgentManagerRetentionTest extends TestCase
             $this->runBatch($manager, 1);
         }
 
-        $this->assertSame($running, $manager->getSubAgent($running->id));
-        $this->assertSame($pending, $manager->getSubAgent($pending->id));
+        $this->assertSame($running, $manager->subAgent($running->id));
+        $this->assertSame($pending, $manager->subAgent($pending->id));
         $this->assertTrue($manager->isWorking('watcher'));
         $this->assertSame(['watcher' => 'still going'], $manager->liveOutputs(), 'liveOutputs() still reports the running agent');
     }
@@ -91,8 +91,8 @@ final class AgentManagerRetentionTest extends TestCase
         }
         $last = $this->runBatch($manager, 1)[0]->agentId;
 
-        $this->assertNull($manager->getSubAgent($first), 'the oldest finished sub-agent goes first');
-        $kept = $manager->getSubAgent($last);
+        $this->assertNull($manager->subAgent($first), 'the oldest finished sub-agent goes first');
+        $kept = $manager->subAgent($last);
         $this->assertNotNull($kept, 'the batch that just settled stays readable for the dashboard');
         $this->assertSame('output of ' . $last, $kept->output);
         $this->assertSame('output of ' . $last, substr($manager->liveOutput('worker'), -strlen('output of ' . $last)));
@@ -120,7 +120,7 @@ final class AgentManagerRetentionTest extends TestCase
 
         $manager->removeSubAgent($id);
 
-        $this->assertNull($manager->getSubAgent($id));
+        $this->assertNull($manager->subAgent($id));
         $this->assertSame(0, $manager->tokensUsed('worker'), 'a caller that removes a row asked for it to be forgotten');
         $this->assertSame(0, $manager->elapsedSeconds('worker'));
     }
@@ -136,11 +136,11 @@ final class AgentManagerRetentionTest extends TestCase
             $this->runBatch($manager, 1);
         }
 
-        $this->assertNotNull($manager->getSubAgent('cid-1'), 'a settled mirror is read between turns and cleared at the next dispatch');
+        $this->assertNotNull($manager->subAgent('cid-1'), 'a settled mirror is read between turns and cleared at the next dispatch');
         $this->assertSame(1, $manager->projectedSubAgentCount());
 
         $manager->clearProjectedSubAgents();
-        $this->assertNull($manager->getSubAgent('cid-1'));
+        $this->assertNull($manager->subAgent('cid-1'));
     }
 
     private function manager(): AgentManager

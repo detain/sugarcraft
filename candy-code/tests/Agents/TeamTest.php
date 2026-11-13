@@ -170,7 +170,7 @@ final class TeamTest extends TestCase
             createdAt: new \DateTimeImmutable(),
         );
 
-        $this->assertSame([], $team->getTeammates());
+        $this->assertSame([], $team->teammates());
     }
 
     public function testGetTeammatesReturnsAllAddedTeammates(): void
@@ -183,7 +183,7 @@ final class TeamTest extends TestCase
         $team->addTeammate($teammate1);
         $team->addTeammate($teammate2);
 
-        $teammates = $team->getTeammates();
+        $teammates = $team->teammates();
         $this->assertCount(2, $teammates);
         $this->assertSame($teammate1, $teammates[0]);
         $this->assertSame($teammate2, $teammates[1]);
@@ -200,8 +200,8 @@ final class TeamTest extends TestCase
 
         $team->addTeammate($teammate);
 
-        $this->assertCount(1, $team->getTeammates());
-        $this->assertSame($teammate, $team->getTeammates()[0]);
+        $this->assertCount(1, $team->teammates());
+        $this->assertSame($teammate, $team->teammates()[0]);
     }
 
     public function testAddTeammateThrowsForMismatchedTeamId(): void
@@ -231,12 +231,12 @@ final class TeamTest extends TestCase
         );
 
         $team->addTeammate($original);
-        $this->assertCount(1, $team->getTeammates());
-        $this->assertSame('Original', $team->getTeammates()[0]->name);
+        $this->assertCount(1, $team->teammates());
+        $this->assertSame('Original', $team->teammates()[0]->name);
 
         $team->addTeammate($replacement);
-        $this->assertCount(1, $team->getTeammates());
-        $this->assertSame('Replacement', $team->getTeammates()[0]->name);
+        $this->assertCount(1, $team->teammates());
+        $this->assertSame('Replacement', $team->teammates()[0]->name);
     }
 
     // -------------------------------------------------------------------------
@@ -279,8 +279,8 @@ final class TeamTest extends TestCase
         }
         $this->assertTrue($refused, 'Expected addTeammate() to throw once at capacity.');
 
-        $this->assertCount(1, $team->getTeammates());
-        $this->assertSame('tm-only', $team->getTeammates()[0]->id);
+        $this->assertCount(1, $team->teammates());
+        $this->assertSame('tm-only', $team->teammates()[0]->id);
     }
 
     public function testAddTeammateAllowsReplacementWhileAtCapacity(): void
@@ -300,8 +300,8 @@ final class TeamTest extends TestCase
         // Re-adding the SAME id does not grow the team, so it must still be allowed.
         $team->addTeammate($replacement);
 
-        $this->assertCount(1, $team->getTeammates());
-        $this->assertSame('Second', $team->getTeammates()[0]->name);
+        $this->assertCount(1, $team->teammates());
+        $this->assertSame('Second', $team->teammates()[0]->name);
     }
 
     public function testAddTeammateUpToDefaultCapacitySucceeds(): void
@@ -312,7 +312,7 @@ final class TeamTest extends TestCase
             $team->addTeammate($this->createTeammate("tm-{$i}", 'team-default-fill', "Member {$i}", AgentType::Coder));
         }
 
-        $this->assertCount(5, $team->getTeammates());
+        $this->assertCount(5, $team->teammates());
 
         $this->expectException(\RuntimeException::class);
         $team->addTeammate($this->createTeammate('tm-6', 'team-default-fill', 'Member 6', AgentType::Coder));
@@ -328,10 +328,10 @@ final class TeamTest extends TestCase
         $teammate = $this->createTeammate('tm-remove', 'team-remove', 'Eve', AgentType::Devops);
 
         $team->addTeammate($teammate);
-        $this->assertCount(1, $team->getTeammates());
+        $this->assertCount(1, $team->teammates());
 
         $team->removeTeammate('tm-remove');
-        $this->assertCount(0, $team->getTeammates());
+        $this->assertCount(0, $team->teammates());
     }
 
     public function testRemoveTeammateIsIdempotent(): void
@@ -343,7 +343,7 @@ final class TeamTest extends TestCase
         $team->removeTeammate('tm-gone');
         $team->removeTeammate('tm-gone'); // second call must not throw
 
-        $this->assertCount(0, $team->getTeammates());
+        $this->assertCount(0, $team->teammates());
     }
 
     public function testRemoveTeammateFromEmptyTeamIsIdempotent(): void
@@ -353,7 +353,7 @@ final class TeamTest extends TestCase
         // Must not throw
         $team->removeTeammate('nonexistent');
 
-        $this->assertCount(0, $team->getTeammates());
+        $this->assertCount(0, $team->teammates());
     }
 
     public function testRemoveTeammateOnlyRemovesSpecifiedId(): void
@@ -368,8 +368,8 @@ final class TeamTest extends TestCase
 
         $team->removeTeammate('tm-alice');
 
-        $this->assertCount(1, $team->getTeammates());
-        $this->assertSame('tm-bob', $team->getTeammates()[0]->id);
+        $this->assertCount(1, $team->teammates());
+        $this->assertSame('tm-bob', $team->teammates()[0]->id);
     }
 
     // -------------------------------------------------------------------------
@@ -385,7 +385,7 @@ final class TeamTest extends TestCase
             createdAt: new \DateTimeImmutable(),
         );
 
-        $this->assertInstanceOf(TaskList::class, $team->getTaskList());
+        $this->assertInstanceOf(TaskList::class, $team->taskList());
     }
 
     public function testGetTaskListReturnsSameInstance(): void
@@ -397,8 +397,8 @@ final class TeamTest extends TestCase
             createdAt: new \DateTimeImmutable(),
         );
 
-        $first = $team->getTaskList();
-        $second = $team->getTaskList();
+        $first = $team->taskList();
+        $second = $team->taskList();
 
         $this->assertSame($first, $second);
     }
@@ -416,7 +416,7 @@ final class TeamTest extends TestCase
             createdAt: new \DateTimeImmutable(),
         );
 
-        $this->assertInstanceOf(Mailbox::class, $team->getMailbox());
+        $this->assertInstanceOf(Mailbox::class, $team->mailbox());
     }
 
     public function testGetMailboxReturnsSameInstance(): void
@@ -428,8 +428,8 @@ final class TeamTest extends TestCase
             createdAt: new \DateTimeImmutable(),
         );
 
-        $first = $team->getMailbox();
-        $second = $team->getMailbox();
+        $first = $team->mailbox();
+        $second = $team->mailbox();
 
         $this->assertSame($first, $second);
     }
@@ -578,8 +578,8 @@ final class TeamTest extends TestCase
         );
         $first = $mk('task-rb-1');
         $second = $mk('task-rb-2');
-        $team->getTaskList()->addTask($first);
-        $team->getTaskList()->addTask($second);
+        $team->taskList()->addTask($first);
+        $team->taskList()->addTask($second);
 
         $this->assertTrue($team->claimTask($first->id, 'tm-rb', $wm), 'first claim must succeed');
 
@@ -591,7 +591,7 @@ final class TeamTest extends TestCase
         }
 
         $this->assertNotNull($failure, 'a teammate whose worktree already exists must fail, not silently double-wire');
-        $reloaded = $team->getTaskList()->getTask($second->id);
+        $reloaded = $team->taskList()->task($second->id);
         $this->assertNotNull($reloaded);
         $this->assertSame(
             \SugarCraft\Code\Agents\TaskStatus::Pending,
@@ -602,7 +602,7 @@ final class TeamTest extends TestCase
 
         $this->assertSame(
             \SugarCraft\Code\Agents\TaskStatus::InProgress,
-            $team->getTaskList()->getTask($first->id)?->status,
+            $team->taskList()->task($first->id)?->status,
             'the rollback is scoped to the task whose worktree step failed',
         );
     }
@@ -631,7 +631,7 @@ final class TeamTest extends TestCase
             dependsOn: [],
             isContested: false,
         );
-        $team->getTaskList()->addTask($task);
+        $team->taskList()->addTask($task);
 
         $wm = $this->createRealWorktreeManager();
 
@@ -663,7 +663,7 @@ final class TeamTest extends TestCase
             dependsOn: [],
             isContested: false,
         );
-        $team->getTaskList()->addTask($task);
+        $team->taskList()->addTask($task);
 
         $wm = $this->createRealWorktreeManager();
 
@@ -672,7 +672,7 @@ final class TeamTest extends TestCase
         $this->assertTrue($result);
 
         // Teammate's worktreePath must be updated to what createWorktree returned
-        $updatedTeammate = $team->getTeammate('tm-claim');
+        $updatedTeammate = $team->teammate('tm-claim');
         $this->assertNotNull($updatedTeammate);
         $this->assertNotNull($updatedTeammate->worktreePath);
         $this->assertStringEndsWith('/tm-claim', $updatedTeammate->worktreePath);
@@ -706,7 +706,7 @@ final class TeamTest extends TestCase
             dependsOn: [],
             isContested: false,
         );
-        $team->getTaskList()->addTask($task);
+        $team->taskList()->addTask($task);
 
         $wm = $this->createRealWorktreeManager();
 

@@ -115,7 +115,7 @@ final class TeammateTest extends TestCase
             tools: [],
         );
 
-        $this->assertSame(TeammateStatus::Idle, $teammate->getStatus());
+        $this->assertSame(TeammateStatus::Idle, $teammate->status());
     }
 
     // -------------------------------------------------------------------------

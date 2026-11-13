@@ -192,15 +192,6 @@ final class TeamManager
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::teams()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTeams(): array { return $this->teams(); }
-
-    /**
      * Fetch a team by its ID — re-reading the registry when this process has
      * not seen it, so a team another process created is found.
      */
@@ -214,15 +205,6 @@ final class TeamManager
     }
 
     /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::team()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTeam(string $teamId): ?Team { return $this->team($teamId); }
-
-    /**
      * Fetch the config for a given team.
      */
     public function teamConfig(string $teamId): ?TeamConfig
@@ -233,15 +215,6 @@ final class TeamManager
 
         return $this->teamConfigs[$teamId] ?? null;
     }
-
-    /**
-     * BC forwarder for the pre-rename accessor name.
-     *
-     * @deprecated The `get`-prefixed form breaks the house bare-accessor
-     *     convention; kept only as a BC forwarder. Use
-     *     {@see self::teamConfig()} instead. REMOVED-IN: 2.0.0.
-     */
-    public function getTeamConfig(string $teamId): ?TeamConfig { return $this->teamConfig($teamId); }
 
     /**
      * Return the number of currently registered teams.
