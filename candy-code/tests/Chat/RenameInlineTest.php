@@ -271,7 +271,7 @@ final class RenameInlineTest extends TestCase
 
         self::assertNotNull($next->sessionPicker());
         self::assertNotNull($this->store->getSession('s2'), 'nothing is deleted blind');
-        self::assertStringContainsString('press d twice', (string) $next->sessionPicker()->notice());
+        self::assertStringContainsString('press `d` twice', (string) $next->sessionPicker()->notice());
     }
 
     public function testThePaletteBranchRowForks(): void
