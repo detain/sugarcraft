@@ -229,15 +229,65 @@ final class PickerInputIntegrityTest extends TestCase
         $this->assertStringStartsWith("e\u{0301}", $rendered);
     }
 
-    public function testLettersJoinTheFilterOnceItIsNonEmpty(): void
+    public function testLettersAreQueryFromTheFirstKeystroke(): void
     {
-        // F-8 (Step 12): while empty, j/k are navigation; after any letter,
-        // further letters — j and k included — append to the query.
+        // -060 invert model: j/k never navigate — every letter, from the
+        // first keystroke on, belongs to the query.
         [, , $p] = $this->drive('proj');
         $this->assertSame('proj', $this->filterOf($p));
 
         [, , $q] = $this->drive('jj');
-        $this->assertSame('', $this->filterOf($q), 'empty-filter j/k stay navigation');
+        $this->assertSame('jj', $this->filterOf($q), 'j/k are letters on an empty filter too');
+    }
+
+    public function testCtrlUClearsTheFilter(): void
+    {
+        // -064: a mistyped query is one chord away from clean, not a
+        // backspace marathon.
+        [, , $p] = $this->drive("stag\x15prod\r");
+        $this->assertSame('prod', $this->filterOf($p));
+    }
+
+    public function testCtrlWStripsOneTrailingWord(): void
+    {
+        // -064: 'foo bar baz' + two Ctrl+W lands on 'foo'; trailing spaces
+        // ride out with the word they follow.
+        [, , $p] = $this->drive("foo bar baz\x17\x17j\x7f\r");
+        $this->assertSame('foo', $this->filterOf($p));
+    }
+
+    /**
+     * -062: pick() re-enters clean. Call pick() twice on the SAME picker
+     * with a typed filter left over from the first session and prove the
+     * second call starts empty (the historical one-shot leak: filter and
+     * cursor persisted across calls).
+     */
+    public function testPickResetsFilterAndCursorAcrossCalls(): void
+    {
+        [$in, , $p] = $this->makePicker('stag');
+        // First session: type 'stag', EOF maps to the cancel byte, pick()
+        // returns null with the query still in place.
+        $this->assertNull($p->pick($this->threeEndpoints()));
+        $this->assertSame('stag', $this->filterOf($p));
+
+        // Second session on the SAME object: a bare Enter must pick row 0
+        // fresh — not the filtered match, not a stale cursor.
+        rewind($in);
+        fwrite($in, "\r");
+        rewind($in);
+        $picked = $p->pick($this->threeEndpoints());
+        $this->assertNotNull($picked);
+        $this->assertSame('production', $picked->name, 'a reused picker must start from an empty filter');
+    }
+
+    public function testNoMatchesLineCarriesTheRescueHint(): void
+    {
+        // -063: the dead end now names its two exits.
+        [, $out, $p] = $this->drive('zzzz' . "\x1b", $this->threeEndpoints());
+        rewind($out);
+        $output = (string) stream_get_contents($out);
+        $this->assertStringContainsString('no matches', $output);
+        $this->assertStringContainsString('backspace or Esc', $output);
     }
 
     public function testSigintRestoresTheTerminalAndExits130(): void

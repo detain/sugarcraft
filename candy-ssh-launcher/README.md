@@ -15,7 +15,7 @@
 
 ![demo](.vhs/picker.gif)
 
-candy-ssh-launcher — a TUI directory of SSH endpoints for PHP 8.3+. Launch it, pick a host, hit Enter: the launcher replaces itself with an `ssh` session to that host, so prompts, keys and exit codes are all native ssh. Your machines live in one searchable list — type to filter, arrows or `j`/`k` to move, Enter to connect.
+candy-ssh-launcher — a TUI directory of SSH endpoints for PHP 8.3+. Launch it, pick a host, hit Enter: the launcher replaces itself with an `ssh` session to that host, so prompts, keys and exit codes are all native ssh. Your machines live in one searchable list — type to filter, arrows to move, Enter to connect.
 
 The config schema here is a **flat top-level list** of endpoint objects; charmbracelet/wishlist's top-level endpoint-name-keyed nested config is deliberately *not* accepted — feeding one in fails loudly (`wishlist yaml: unparseable line`, or a named refusal for inline-flow values and block mappings under list fields), never silently. <!-- @rename-keep -->
 
@@ -118,7 +118,7 @@ Unrecognized flags and options given without their value exit `2` and name the o
 2. `wishlist.yml` / `wishlist.yaml` / `wishlist.json` in the **current directory** (first that exists) <!-- @rename-keep -->
 3. `~/.config/wishlist.yml` / `.yaml` / `.json` (only when `$HOME` is set; again first that exists)
 
-So a config in the directory you launch from takes precedence over your home config. (The `wishlist.{yml,yaml,json}` file names predate the product rename and are kept for config-file compatibility.) Hosts are managed by **editing that file** — the launcher never rewrites your config. Unfiltered, the picker lists endpoints in exactly the order they appear in the file; typing narrows and re-ranks by match score. While the filter is empty, `j`/`k` move the selection like the arrows; once you have typed anything, `j` and `k` are letters of your query and only the arrows navigate.
+So a config in the directory you launch from takes precedence over your home config. (The `wishlist.{yml,yaml,json}` file names predate the product rename and are kept for config-file compatibility.) Hosts are managed by **editing that file** — the launcher never rewrites your config. Unfiltered, the picker lists endpoints in exactly the order they appear in the file; typing narrows and re-ranks by match score. Navigation is always the arrows, Home/End and PgUp/PgDn; `j` and `k` are query letters like any other, so filtering for `jumpbox` never scrolls the list instead of typing it.
 
 ## Config format
 
@@ -173,14 +173,15 @@ Limits of the embedded YAML reader: flat entries only, and a nested list is writ
 
 | Key       | Action                          |
 |-----------|---------------------------------|
-| ↑ / k     | Move up (arrows always; `k` only while the filter is empty) |
-| ↓ / j     | Move down (arrows always; `j` only while the filter is empty) |
+| ↑ / ↓     | Move up / down (arrows in both CSI and SS3 dialects) |
+| Ctrl+U    | Clear the filter                 |
 | Ctrl+H    | Delete one filter character (alias of Backspace) |
+| Ctrl+W    | Delete the last filter word      |
 | Home / End | Jump to the first / last match                |
 | PgUp / PgDn | Scroll one page through the matches           |
 | Enter     | Connect to highlighted endpoint |
 | Esc / ^C  | Quit without connecting (exit 130; on a real terminal ^C raises SIGINT, which the picker traps to restore the terminal first) |
-| (typing)  | Type to filter (once non-empty, `j`/`k` count as letters); Backspace deletes one filter codepoint (a compound emoji or flag may need two presses) |
+| (typing)  | Type to filter — every letter, `j`/`k` included, joins the query; Backspace deletes one filter codepoint (a compound emoji or flag-emoji such as 🇺🇸 may need two presses) |
 
 Arrow keys arrive as an `ESC [ A`-style byte burst; the decoder waits 150 ms for follow-on bytes so a burst fragmented by latency (tmux under load, a WAN hop) still reads as one keypress. Set `ESCDELAY` (milliseconds) to tune that window.
 

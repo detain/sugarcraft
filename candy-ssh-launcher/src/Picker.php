@@ -15,8 +15,9 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 /**
  * Tiny terminal picker — renders marker-prefixed display lines
  * (SELECTED_MARKER over displayLine()) of {@see Endpoint}s. The user
- * moves with j/k, ↑/↓, Home/End and PgUp/PgDn, narrows with
- * type-to-search, and picks with Enter. Returns the selected Endpoint,
+ * moves with ↑/↓, Home/End and PgUp/PgDn (j/k are query letters on
+ * every row — the invert model, -060), narrows with type-to-search,
+ * and picks with Enter. Returns the selected Endpoint,
  * or null on Esc or the cancel byte (0x03 — what a closed stdin maps to
  * as well). On a real terminal Ctrl-C raises SIGINT, which the picker
  * traps to restore the terminal before exiting 130.
@@ -143,6 +144,13 @@ class Picker
         }
         $this->totalEndpoints = count($endpoints);
         $this->aborted = false;
+        // -062: pick() is re-entrant-clean. The historical contract was
+        // one-shot (filter and cursor leaked across calls), and bin only
+        // ever calls once — but the class is non-final with subclass
+        // seams, so a reused picker must start from the same visible
+        // state it had fresh, not mid-query from the previous session.
+        $this->filter = '';
+        $this->cursor = 0;
         // Arm BEFORE raw mode: setRawMode shells out to stty (fork+exec+
         // reap), and a Ctrl+C landing in that window would hit SIG_DFL —
         // process dies, finally never runs, echo stays off. A SIGINT
@@ -184,26 +192,6 @@ class Picker
                     case "\x1bOA": /* SS3 Up — DECCKM application-cursor mode (-020) */
                         if ($this->cursor > 0) {
                             $this->cursor--;
-                        }
-                        break;
-                    case 'j':
-                    case 'k':
-                        // j/k navigate only while the filter is empty. Once
-                        // the user has started typing, letters belong to the
-                        // query — an unqualified j/k used to eat them, making
-                        // names like 'jumpbox' untypeable while arrows still
-                        // navigated unconditionally.
-                        if ($this->filter === '') {
-                            if ($key === 'j' && $this->cursor < count($matches) - 1) {
-                                $this->cursor++;
-                            } elseif ($key === 'k' && $this->cursor > 0) {
-                                $this->cursor--;
-                            }
-                            break;
-                        }
-                        if ($this->isTextKey($key)) {
-                            $this->filter .= $key;
-                            $this->cursor = 0;
                         }
                         break;
                     case "\x1b[H":
@@ -250,6 +238,19 @@ class Picker
                         // Only reset cursor if the filter actually changed —
                         // on an empty filter, backspace is a true no-op and
                         // the current selection should be preserved.
+                        if ($this->filter !== $before) {
+                            $this->cursor = 0;
+                        }
+                        break;
+                    case "\x15": /* Ctrl+U — clear the whole filter (-064) */
+                        $this->filter = '';
+                        $this->cursor = 0;
+                        break;
+                    case "\x17": /* Ctrl+W — delete one trailing filter word (-064) */
+                        $before = $this->filter;
+                        // House word-boundary class (shared with sugar-quickpick
+                        // lineage): whitespace + the last run of non-space.
+                        $this->filter = preg_replace('/\s*\S+\s*$/u', '', $this->filter) ?? '';
                         if ($this->filter !== $before) {
                             $this->cursor = 0;
                         }

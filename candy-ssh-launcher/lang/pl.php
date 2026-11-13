@@ -46,7 +46,7 @@ return [
     // picker chrome
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filtr: ',
-    'picker.no_matches'  => '  (brak dopasowań)',
+    'picker.no_matches'  => '  (brak dopasowań — Backspace lub Esc)',
     'picker.help'        => '  ↑/↓ lub j/k wybierz · Enter połącz · Esc wyjdź · pisz, aby filtrować',
     'picker.count'       => '  ({shown} z {total})',
 ];

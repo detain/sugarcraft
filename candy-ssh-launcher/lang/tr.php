@@ -46,7 +46,7 @@ return [
     // picker chrome
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filtre: ',
-    'picker.no_matches'  => '  (eşleşme yok)',
+    'picker.no_matches'  => '  (eşleşme yok — Backspace veya Esc)',
     'picker.help'        => '  ↑/↓ veya j/k seç · Enter bağlan · Esc çık · filtrelemek için yaz',
     'picker.count'       => '  ({total} içinden {shown})',
 ];

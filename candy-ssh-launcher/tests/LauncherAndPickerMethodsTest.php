@@ -408,7 +408,8 @@ final class LauncherAndPickerMethodsTest extends TestCase
         $in = fopen('php://memory', 'w+');
         $out = fopen('php://memory', 'w+');
         // Move down multiple times beyond list length, then enter
-        fwrite($in, "jjjjjj\r");
+        // (-060 invert: arrows navigate, j/k are letters)
+        fwrite($in, "\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\r");
         rewind($in);
 
         $p = new class($in, $out) extends Picker {

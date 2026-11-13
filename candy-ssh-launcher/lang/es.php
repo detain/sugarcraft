@@ -48,7 +48,7 @@ return [
     // picker chrome
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filtro: ',
-    'picker.no_matches'  => '  (sin coincidencias)',
+    'picker.no_matches'  => '  (sin coincidencias — Retroceso o Esc)',
     'picker.help'        => '  ↑/↓ o j/k seleccionar · Enter conectar · Esc salir · escribe para filtrar',
     'picker.count'       => '  ({shown} de {total})',
 ];

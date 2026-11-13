@@ -46,7 +46,7 @@ return [
     // picker chrome
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => '필터: ',
-    'picker.no_matches'  => '  (일치 없음)',
+    'picker.no_matches'  => '  (일치 없음 — Backspace 또는 Esc)',
     'picker.help'        => '  ↑/↓ 또는 j/k 선택 · Enter 연결 · Esc 종료 · 입력으로 필터',
     'picker.count'       => '  ({total} 중 {shown})',
 ];

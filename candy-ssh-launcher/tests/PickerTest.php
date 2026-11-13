@@ -54,18 +54,33 @@ final class PickerTest extends TestCase
         $this->assertSame('production', $picked->name);
     }
 
-    public function testJMovesDown(): void
+    public function testDownArrowMovesDown(): void
     {
-        [, , $p] = $this->makePicker("jj\r");
+        // -060 invert: navigation is the arrows (and SS3 forms); j/k are
+        // query letters on every row, never scroll keys.
+        [, , $p] = $this->makePicker("\x1b[B\x1b[B\r");
         $picked = $p->pick($this->endpoints());
         $this->assertSame('dev', $picked->name);
     }
 
-    public function testKMovesUp(): void
+    public function testUpArrowMovesUp(): void
     {
-        [, , $p] = $this->makePicker("jjjk\r");
+        [, , $p] = $this->makePicker("\x1b[B\x1b[B\x1b[A\r");
         $picked = $p->pick($this->endpoints());
         $this->assertSame('staging', $picked->name);
+    }
+
+    public function testJAndKAreQueryLettersFromTheFirstKeystroke(): void
+    {
+        // The 'jumpbox untypeable' class (-060): a leading j is text now.
+        // None of these rows contains a 'j', so the filter shows the
+        // no-matches chrome and Esc cancels with the letter still typed —
+        // proof the keystroke went to the query, not to a scroll.
+        [, , $p] = $this->makePicker("j\x1b");
+        $this->assertNull($p->pick($this->endpoints()));
+        $filter = new \ReflectionProperty(Picker::class, 'filter');
+        $filter->setAccessible(true);
+        $this->assertSame('j', $filter->getValue($p));
     }
 
     public function testEscReturnsNull(): void
@@ -120,9 +135,9 @@ final class PickerTest extends TestCase
         // This exercises the stream_select timeout window: when all
         // bytes arrive in one read, stream_select fires immediately
         // and we still reconstruct the full CSI sequence.
-        [, , $p] = $this->makePicker("j\x1b[A\r");
+        [, , $p] = $this->makePicker("\x1b[B\x1b[A\r");
         $picked = $p->pick($this->endpoints());
-        // j moves to staging (index 1), up arrow goes back to production (index 0)
+        // Down moves to staging (index 1), up arrow goes back to production (index 0)
         $this->assertSame('production', $picked->name);
     }
 
@@ -272,7 +287,7 @@ final class PickerTest extends TestCase
     {
         // Navigate down twice (to "dev"), backspace on empty filter (no-op),
         // then Enter — the selection should still be "dev", not reset to 0.
-        [, , $p] = $this->makePicker("jj\x7f\r");
+        [, , $p] = $this->makePicker("\x1b[B\x1b[B\x7f\r");
         $picked = $p->pick($this->endpoints());
         // Backspace on empty filter is a no-op, cursor stays at "dev"
         $this->assertSame('dev', $picked->name);
@@ -281,7 +296,7 @@ final class PickerTest extends TestCase
     public function testHomeKeyJumpsToFirst(): void
     {
         // F-25: Home was decoded but dropped; now it jumps to the first match.
-        [, , $p] = $this->makePicker("jjj\x1b[H\r");
+        [, , $p] = $this->makePicker("\x1b[B\x1b[B\x1b[B\x1b[H\r");
         $picked = $p->pick($this->endpoints());
         $this->assertSame('production', $picked->name);
     }

@@ -109,7 +109,7 @@ final class PickerChromeTest extends TestCase
         // session — Enter on an empty match set is a deliberate no-op.
         [, $gone] = $this->drive('zzzz' . "\x1b", $this->threeHosts());
         self::assertStringContainsString('  (0 of 3)', $gone);
-        self::assertStringContainsString('  (no matches)', $gone);
+        self::assertStringContainsString('  (no matches — backspace or Esc)', $gone, '-063: the dead end names its exits');
     }
 
     public function testEqualScoresPreserveConfigOrder(): void
