@@ -32,6 +32,67 @@ final class UserTest extends TestCase
         $this->assertTrue($ghost !== $original, 'setters stay immutable');
     }
 
+    /**
+     * S03 (finding 003): the pre-fix single-string match had no final
+     * anchor and a comment group that stopped at the first newline, so
+     * "valid-key-blob\n<anything>" passed and the trailing segment reached
+     * the store as its own authorized_keys line — where sshd reads a
+     * leading word as an OPTION (command="…" is login-time RCE planted by
+     * a key-add). Per-line validation with D-anchoring refuses the whole
+     * call on any bad line, atomically.
+     */
+    public function testAddAuthorizedKeyRejectsHostileLineShapes(): void
+    {
+        $good = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
+
+        $hostile = [
+            'newline-then-garbage'      => $good . "\nno-pty",
+            'newline-then-option'       => $good . "\ncommand=\"/bin/sh\"",
+            'garbage-then-newline'      => "not-a-key\n" . $good,
+            'blank-line-in-middle'      => $good . "\n\n" . $good . " tail with\nsecond line garbage",
+            'crlf-injected-option'      => $good . "\r\ncommand=\"rm -rf /\"",
+            'second-line-short-blob'    => $good . "\nssh-ed25519 AAAA short",
+            'single-garbage-with-eol'   => "not-a-valid-ssh-key\n",
+        ];
+
+        foreach ($hostile as $label => $input) {
+            try {
+                User::new('alice')->addAuthorizedKey($input);
+                $this->fail("hostile shape accepted: {$label}");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsStringIgnoringCase('key', $e->getMessage(), "refusal must name the key problem ({$label})");
+            }
+        }
+    }
+
+    public function testAddAuthorizedKeyValidatesCrlfPastesAndAppendsEveryGoodLine(): void
+    {
+        $k1 = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
+        $k2 = 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQD' . \str_repeat('A', 300) . ' rsa@host';
+
+        // A CRLF key-file paste of two valid lines: both land, stripped of
+        // the carriage returns, one list entry per line.
+        $user = User::new('alice')->addAuthorizedKey($k1 . "\r\n" . $k2 . "\r\n");
+        $this->assertSame([$k1, $k2], $user->authorizedKeysList());
+
+        // Whitespace-only input remains a no-op (old contract).
+        $this->assertSame([], User::new('bob')->addAuthorizedKey(" \n\r\n ")->authorizedKeysList());
+
+        // An all-blank SECOND line inside a paste is a separator, not an
+        // error — only malformed NON-empty lines refuse.
+        $ok = User::new('carol')->addAuthorizedKey($k1 . "\n   \n" . $k2);
+        $this->assertSame([$k1, $k2], $ok->authorizedKeysList());
+
+        // Immutability: refusal leaves the original untouched.
+        $base = User::new('dave')->addAuthorizedKey($k1);
+        try {
+            $base->addAuthorizedKey($k2 . "\ncommand=\"x\"");
+        } catch (\InvalidArgumentException) {
+            // expected
+        }
+        $this->assertSame([$k1], $base->authorizedKeysList(), 'a refused call must append nothing');
+    }
+
     public function testWithAdminFlipsOnlyTheAdminFlag(): void
     {
         $user = User::new('alice')->withActive(false)->withAdmin();

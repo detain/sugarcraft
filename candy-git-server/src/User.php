@@ -126,14 +126,57 @@ final class User
     /**
      * Add a public key to this user's authorized_keys.
      * Supports ssh-ed25519, ssh-rsa, ecdsa-sha2-*, sk-ssh-ed25519@openssh.com
+     *
+     * The input may be a whole multi-line paste (a key file handed to
+     * `user key` streams verbatim), so EVERY non-empty line is validated
+     * on its own and any single bad line refuses the entire call before a
+     * byte is appended. The old single-string match had no final anchor
+     * (no `D` modifier) and group 3 `(\s+.+)?$` stopped at the first
+     * newline — so "valid-key-blob\n<anything>" passed, and the trailing
+     * segment landed in the store as its own authorized_keys line. In
+     * sshd's grammar a leading word on such a line is an OPTION
+     * (`command="…"`, `no-agent-forwarding`, …): a key-add could plant a
+     * login-time command execution hook. Atomic refusal is the only safe
+     * shape: partial acceptance would make the store differ from what was
+     * validated.
      */
     public function addAuthorizedKey(string $pubKey): self
     {
-        $key = \trim($pubKey);
-        if ($key === '') return $this;
+        $lines = \preg_split('/\r?\n/', \trim($pubKey)) ?: [];
+        $validated = [];
+        foreach ($lines as $line) {
+            $line = \trim($line);
+            if ($line === '') {
+                continue; // blank separator inside a paste
+            }
+            $validated[] = self::validatedAuthorizedKeyLine($line);
+        }
+        if ($validated === []) {
+            return $this; // whitespace-only input: no key to add (old contract kept)
+        }
 
-        // Validate format: type base64data [comment]
-        if (!\preg_match('/^((?:ssh|ecdsa|sk)-[A-Za-z0-9@.-]+)\s+([A-Za-z0-9+\/=]+)(\s+.+)?$/', $key, $m)) {
+        $keys = $this->authorizedKeys === '' ? [] : \explode("\n", \rtrim($this->authorizedKeys, "\n"));
+        foreach ($validated as $line) {
+            $keys[] = $line;
+        }
+
+        $clone = clone $this;
+        $clone->authorizedKeys = \implode("\n", $keys);
+        return $clone;
+    }
+
+    /**
+     * One authorized_keys line, validated end-anchored; returns the line
+     * unchanged so the caller can commit all-or-nothing.
+     *
+     * @throws \InvalidArgumentException when the line is not a key
+     */
+    private static function validatedAuthorizedKeyLine(string $line): string
+    {
+        // Validate format: type base64data [comment], D-anchored — no
+        // trailing newline survives, the blob class must run to the
+        // subject's true end (or to whitespace starting a comment).
+        if (!\preg_match('/^((?:ssh|ecdsa|sk)-[A-Za-z0-9@.-]+)\s+([A-Za-z0-9+\/=]+)(\s.+)?$/D', $line, $m)) {
             throw new \InvalidArgumentException(Lang::t('user.invalid_ssh_key'));
         }
 
@@ -156,12 +199,7 @@ final class User
             ]));
         }
 
-        $keys = $this->authorizedKeys === '' ? [] : \explode("\n", \rtrim($this->authorizedKeys, "\n"));
-        $keys[] = $key;
-
-        $clone = clone $this;
-        $clone->authorizedKeys = \implode("\n", $keys);
-        return $clone;
+        return $line;
     }
 
     /**
