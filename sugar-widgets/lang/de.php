@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => 'pausiert',
     'key.bad_binding' => 'ungültige Tastenbelegung {key}: bitte kleinen Schlüsselnamen verwenden (ctrl+c, shift+tab, pageup, f5) oder ein druckbares Zeichen',
     'key.bad_binding_type' => 'Tastenbelegungen müssen Zeichenketten sein, erhalten: {key}',
+    'tree.use_branch_for_children' => 'für einen Knoten mit Kindknoten die Factory branch() verwenden',
 ];

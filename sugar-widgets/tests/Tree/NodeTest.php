@@ -161,4 +161,47 @@ final class NodeTest extends TestCase
         $branch = Node::branch('items', ...$children);
         $this->assertSame([0, 1, 2], array_keys($branch->children));
     }
+
+    public function testSubtreeInValueSlotThrowsNamingBranch(): void
+    {
+        // W-44/069: the 2-arg new Node(label, children) footgun renders
+        // flat and silent — now a typed construction error.
+        $this->expectException(\InvalidArgumentException::class);
+        new Node('x', [Node::leaf('y')]);
+    }
+
+    public function testTraversableValueSlotThrowsToo(): void
+    {
+        $gen = (static function (): \Generator {
+            yield Node::leaf('y');
+        })();
+        $this->expectException(\InvalidArgumentException::class);
+        new Node('x', $gen);
+    }
+
+    public function testPlainPayloadsStillStore(): void
+    {
+        // The guard hunts node-lists, not payloads: scalars, maps, and
+        // non-list arrays keep working (selectedValue() contract).
+        $s = Node::leaf('a', 'v');
+        $this->assertSame('v', $s->value);
+        $m = new Node('m', ['path' => '/tmp', 'size' => 2]);
+        $this->assertSame(['path' => '/tmp', 'size' => 2], $m->value);
+        $nums = new Node('n', [1, 2, 3]);
+        $this->assertSame([1, 2, 3], $nums->value);
+    }
+
+    public function testFactoriesConstructByteUnchanged(): void
+    {
+        // leaf()/branch() were never the footgun; their shapes must not
+        // move (construction-path regression pin).
+        $leaf = Node::leaf('l', 'p');
+        $this->assertSame('l', $leaf->label);
+        $this->assertSame('p', $leaf->value);
+        $this->assertSame([], $leaf->children);
+        $this->assertTrue($leaf->expanded);
+        $branch = Node::branch('b', Node::leaf('c'));
+        $this->assertNull($branch->value);
+        $this->assertCount(1, $branch->children);
+    }
 }

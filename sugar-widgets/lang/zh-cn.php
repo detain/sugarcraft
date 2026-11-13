@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => '已暂停',
     'key.bad_binding' => '无效的按键绑定 {key}：请使用小写按键名 (ctrl+c, shift+tab, pageup, f5) 或单个可打印字符',
     'key.bad_binding_type' => '按键绑定的键必须是字符串，收到的类型为 {key}',
+    'tree.use_branch_for_children' => '当节点有子节点时，请使用 branch() 工厂函数',
 ];

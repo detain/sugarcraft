@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => 'en pause',
     'key.bad_binding' => 'liaison de touches invalide {key} : utilisez un nom de touche en minuscules (ctrl+c, shift+tab, pageup, f5) ou un caractère imprimable',
     'key.bad_binding_type' => 'les touches de la liaison doivent être des chaînes, reçu : {key}',
+    'tree.use_branch_for_children' => 'utiliser la fabrique branch() pour un nœud avec des enfants',
 ];

@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => 'متوقف',
     'key.bad_binding' => 'ربط المفاتيح غير صالح "{key}": استخدم اسم مفتاح بأحرف صغيرة (ctrl+c، shift+tab، pageup، f5) أو حرفاً واحداً قابلاً للطباعة',
     'key.bad_binding_type' => 'يجب أن تكون مفاتيح الربط سلاسل نصية، والنوع المستلم هو {key}',
+    'tree.use_branch_for_children' => 'عندما يحتوي العقدة على أبناء استخدم المصنع branch()',
 ];

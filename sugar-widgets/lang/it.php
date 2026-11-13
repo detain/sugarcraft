@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => 'in pausa',
     'key.bad_binding' => 'associazione di tasti non valida {key}: usare un nome tasto minuscolo (ctrl+c, shift+tab, pageup, f5) oppure un singolo carattere stampabile',
     'key.bad_binding_type' => 'i tasti dell associazione devono essere stringhe, ricevuto {key}',
+    'tree.use_branch_for_children' => 'usare il costruttore branch() quando un nodo ha figli',
 ];

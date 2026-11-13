@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Widgets\Tree;
 
+use SugarCraft\Widgets\Lang;
+
 /**
  * A single node in a {@see Tree}.
  *
@@ -24,7 +26,19 @@ final class Node
         public readonly mixed $value = null,
         public readonly array $children = [],
         public readonly bool $expanded = true,
-    ) {}
+    ) {
+        // The 2-arg new Node($label, $children) footgun: a subtree (or any
+        // iterable of nodes) parked in the payload slot renders FLAT and
+        // silent — the classic misuse the leaf()/branch() factories exist
+        // to prevent, now refused at construction (W-44/069). A plain
+        // scalar/array payload the caller actually means still stores.
+        if (
+            $value instanceof \Traversable
+            || (is_array($value) && $value !== [] && array_is_list($value) && reset($value) instanceof self)
+        ) {
+            throw new \InvalidArgumentException(Lang::t('tree.use_branch_for_children'));
+        }
+    }
 
     /** Convenience factory — same shape as the constructor with a friendlier name. */
     public static function leaf(string $label, mixed $value = null): self

@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => 'duraklatıldı',
     'key.bad_binding' => 'geçersiz tuş bağı {key}: küçük harfli tuş adı (ctrl+c, shift+tab, pageup, f5) veya tek yazılabilir karakter kullanın',
     'key.bad_binding_type' => 'tuş bağları dize olmalıdır, alınan tür: {key}',
+    'tree.use_branch_for_children' => 'bir düğümün alt düğümleri varsa branch() fabrikasını kullanın',
 ];

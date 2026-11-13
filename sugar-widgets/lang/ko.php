@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => '일시정지',
     'key.bad_binding' => '잘못된 키 바인딩 {key}: 소문자 키 이름(ctrl+c, shift+tab, pageup, f5) 또는 인쇄 가능한 문자 하나를 사용하세요',
     'key.bad_binding_type' => '키 바인딩 키는 문자열이어야 하며, 받은 형식: {key}',
+    'tree.use_branch_for_children' => '노드에 자식이 있으면 branch() 팩토리를 사용하세요',
 ];

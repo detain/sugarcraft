@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => 'em pausa',
     'key.bad_binding' => 'combinação de teclas inválida {key}: use um nome de tecla em minúsculas (ctrl+c, shift+tab, pageup, f5) ou um caractere imprimível',
     'key.bad_binding_type' => 'as teclas da combinação devem ser cadeias de caracteres, recebido {key}',
+    'tree.use_branch_for_children' => 'use a fábrica branch() quando um nó tiver filhos',
 ];

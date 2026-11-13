@@ -36,4 +36,5 @@ return [
     'stopwatch.paused_tag' => 'wstrzymane',
     'key.bad_binding' => 'nieprawidłowe powiązanie klawiszy {key}: użyj małej nazwy klawisza (ctrl+c, shift+tab, pageup, f5) albo jednego znakowi drukowalnego',
     'key.bad_binding_type' => 'klawisze powiązania muszą być łańcuchami, otrzymano {key}',
+    'tree.use_branch_for_children' => 'użyj fabryki branch(), gdy węzeł ma dzieci',
 ];
