@@ -140,6 +140,23 @@ final readonly class Rail
     }
 
     /**
+     * The cursor position as a method — the grid-shaped read so generic host
+     * code can ask any viewport for its position the same way
+     * (`$grid->cursorIndex()` / `$rail->cursorIndex()`); delegates to the
+     * public readonly prop (sugar-gallery-044).
+     */
+    public function cursorIndex(): int
+    {
+        return $this->cursor;
+    }
+
+    /** The first painted row, grid-shaped read; see {@see cursorIndex()}. */
+    public function scrollIndex(): int
+    {
+        return $this->scroll;
+    }
+
+    /**
      * Return a copy with a different cursor, clamped to [0, count-1].
      * Scroll is clamped to at most the cursor so the card stays visible.
      * To restore an arbitrary (cursor, scroll) pair, construct the rail

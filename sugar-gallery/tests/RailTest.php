@@ -101,6 +101,18 @@ final class RailTest extends TestCase
         Rail::new('R')->withCards([0 => 'not-a-card']);
     }
 
+    public function testIndexAccessorsMatchThePropsOnAScrolledRail(): void
+    {
+        // sugar-gallery-044: the grid reads position via methods; the rail
+        // carried raw props only, so host code touching both viewports needed
+        // two shapes for one concept.
+        $rail = (new Rail('R', $this->cards(10)))->moveCursor(8, 3);
+
+        self::assertSame($rail->cursor, $rail->cursorIndex());
+        self::assertSame($rail->scroll, $rail->scrollIndex());
+        self::assertGreaterThan(0, $rail->scrollIndex(), 'genuinely scrolled — the accessor had something to report');
+    }
+
     public function testWithCardReplacesById(): void
     {
         $rail = new Rail('R', $this->cards(3));
