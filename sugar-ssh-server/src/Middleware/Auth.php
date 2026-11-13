@@ -135,6 +135,11 @@ final class Auth implements Middleware
      *                                                                    `['*']` for a name = any key, that name only.
      *                                                                    Tail position to keep the older positional
      *                                                                    call sites working.
+     *
+     * The bare constructor is deliberately permissive about empty lists
+     * (start-simple BC); when you want construction that cannot be
+     * accidentally unarmed, go through the named doors
+     * {@see Auth::allowingUsers()} and {@see Auth::pairs()} instead.
      */
     public function __construct(
         array $users = [],
@@ -148,6 +153,53 @@ final class Auth implements Middleware
         $this->userKeys             = $userKeys;
         $this->stderr               = StreamHelper::openOrValidate($stderr);
         $this->fingerprintValidator = $fingerprintValidator;
+    }
+
+    /**
+     * Gate on usernames only, constructed so it cannot be unarmed.
+     *
+     * Unlike the bare constructor — where an empty `$users` list is a
+     * valid "arm nothing, admit everyone" state — this factory REJECTS
+     * an empty list outright. A caller who reaches for `allowingUsers`
+     * has decided to restrict; handing it zero names is a mistake at the
+     * call site, not a policy, and silence here would ship an open gate
+     * under a name that promises a closed one.
+     *
+     * Key evidence is unchecked (the `keyFingerprints`/`userKeys` axes
+     * are empty); pair keys to names with {@see Auth::pairs()}.
+     *
+     * @param non-empty-list<string> $users Acceptable `Session::$user` values
+     *
+     * @throws \LogicException when `$users` is empty
+     */
+    public static function allowingUsers(array $users): self
+    {
+        if ($users === []) {
+            throw new \LogicException('Auth::allowingUsers() requires at least one user; an empty list would admit every session. Use new Auth() explicitly if arming nothing is intended.');
+        }
+
+        return new self($users);
+    }
+
+    /**
+     * Gate on the name↔key pairing, constructed so it cannot be unarmed.
+     *
+     * The same fail-fast rule as {@see Auth::allowingUsers()}: an empty
+     * `$userKeys` map is refused, because a "pairs" gate with no pairs
+     * checks nothing. Each name's list may use `Auth::ANY_KEY` to admit
+     * that name with or without key evidence.
+     *
+     * @param non-empty-array<string, list<string>> $userKeys Name => that name's allowed fingerprints
+     *
+     * @throws \LogicException when `$userKeys` is empty
+     */
+    public static function pairs(array $userKeys): self
+    {
+        if ($userKeys === []) {
+            throw new \LogicException('Auth::pairs() requires at least one name => key(s) entry; an empty map would admit every session. Use new Auth() explicitly if arming nothing is intended.');
+        }
+
+        return new self(userKeys: $userKeys);
     }
 
     public function handle(Context $ctx, Session $session, callable $next): void

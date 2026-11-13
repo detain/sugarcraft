@@ -571,4 +571,96 @@ final class AuthTest extends TestCase
         $this->assertStringNotContainsString('return true;', $body, 'a match may not short-circuit the walk');
         $this->assertStringNotContainsString('in_array($fp', $source, 'the fingerprint lists must never be scanned with an early-out');
     }
+
+    public function testAllowingUsersArmsTheUserGate(): void
+    {
+        // Notice capture lives with the bare-constructor arms; this door
+        // takes only the axis, so the pins here are the exit-contract
+        // outcomes: admit, and refuse-plus-refused-mark.
+        $a = Auth::allowingUsers(['alice', 'bob']);
+
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached);
+
+        $eve    = $this->session('eve');
+        $reachedEve = false;
+        $a->handle(Context::background(), $eve, function () use (&$reachedEve): void {
+            $reachedEve = true;
+        });
+        $this->assertFalse($reachedEve);
+        $this->assertTrue($eve->refused(), 'a refused session must carry the nonzero-exit mark');
+    }
+
+    public function testPairsArmsThePairedGate(): void
+    {
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:aliceKey';
+        $a = Auth::pairs(['alice' => ['SHA256:aliceKey'], 'bob' => ['SHA256:bobKey']]);
+
+        $alice  = $this->session('alice');
+        $reached = false;
+        $a->handle(Context::background(), $alice, function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached, 'alice presents her own key');
+        $this->assertFalse($alice->refused());
+
+        // The K4 cross-product admission must NOT happen through this door.
+        $bob      = $this->session('bob');
+        $reachedBob = false;
+        $a->handle(Context::background(), $bob, function () use (&$reachedBob): void {
+            $reachedBob = true;
+        });
+        $this->assertFalse($reachedBob, 'bob cannot borrow alice\'s key through the pairing map');
+        $this->assertTrue($bob->refused(), 'the unpaired attempt carries the nonzero-exit mark');
+    }
+
+    public function testAllowingUsersRefusesAnEmptyList(): void
+    {
+        // Fail-fast: an "allowing users" gate with zero names would be an
+        // open gate wearing a closed gate's name (vs. the bare ctor's
+        // deliberate empty-arms-nothing semantics).
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Auth::allowingUsers() requires at least one user');
+        Auth::allowingUsers([]);
+    }
+
+    public function testPairsRefusesAnEmptyMap(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Auth::pairs() requires at least one name');
+        Auth::pairs([]);
+    }
+
+    public function testEachFactoryEqualsItsEquivalentConstructorCall(): void
+    {
+        // Shape pin: the named doors are construction ergonomics, not a
+        // second semantics — every field must land exactly where the
+        // hand-armed bare constructor puts it.
+        $reflection = new \ReflectionClass(Auth::class);
+
+        $viaFactory = Auth::allowingUsers(['alice']);
+        $viaCtor    = new Auth(['alice']);
+        foreach (['users', 'keyFingerprints', 'userKeys', 'fingerprintValidator'] as $field) {
+            $property = $reflection->getProperty($field);
+            $this->assertSame(
+                $property->getValue($viaCtor),
+                $property->getValue($viaFactory),
+                "allowingUsers() must match new Auth(users: ...) on \${$field}",
+            );
+        }
+
+        $pairsFactory = Auth::pairs(['alice' => [Auth::ANY_KEY]]);
+        $pairsCtor    = new Auth(userKeys: ['alice' => [Auth::ANY_KEY]]);
+        foreach (['users', 'keyFingerprints', 'userKeys', 'fingerprintValidator'] as $field) {
+            $property = $reflection->getProperty($field);
+            $this->assertSame(
+                $property->getValue($pairsCtor),
+                $property->getValue($pairsFactory),
+                "pairs() must match new Auth(userKeys: ...) on \${$field}",
+            );
+        }
+    }
 }
