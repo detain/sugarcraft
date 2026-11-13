@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Layout;
 use SugarCraft\Style\Style;
 use SugarCraft\Style\VAlign;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 
 /**
  * A general-purpose boxing/wrapping component that adds padding around content.
@@ -141,7 +142,7 @@ final class Pad implements \SugarCraft\Dashboard\Foundation\SizedItem
         foreach ($lines as $line) {
             $lineWidth = Width::string($line);
             if ($lineWidth > $innerW) {
-                $line = $this->truncateToWidth($line, $innerW);
+                $line = Truncate::truncate($line, $innerW, '');
             } else {
                 $line = $line . str_repeat(' ', $innerW - $lineWidth);
             }
@@ -155,28 +156,6 @@ final class Pad implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         return implode("\n", array_slice($adjusted, 0, $innerH));
-    }
-
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        return mb_substr($s, 0, max(1, $lo), 'UTF-8');
     }
 
     // ─── Withers ──────────────────────────────────────────────────

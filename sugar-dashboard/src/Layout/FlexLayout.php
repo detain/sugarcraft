@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Layout;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Layout\AlignItems;
 use SugarCraft\Dashboard\Layout\JustifyContent;
 use SugarCraft\Dashboard\Foundation\Drawable;
@@ -171,7 +172,7 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if ($lineWidth < $itemWidth) {
                     $lineContent .= str_repeat(' ', $itemWidth - $lineWidth);
                 } elseif ($lineWidth > $itemWidth) {
-                    $lineContent = $this->truncateToWidth($lineContent, $itemWidth);
+                    $lineContent = Truncate::truncate($lineContent, $itemWidth, '');
                 }
 
                 $lines[$y] .= $lineContent;
@@ -234,7 +235,7 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($lineWidth < $totalWidth) {
                 $line .= str_repeat(' ', $totalWidth - $lineWidth);
             } elseif ($lineWidth > $totalWidth) {
-                $line = $this->truncateToWidth($line, $totalWidth);
+                $line = Truncate::truncate($line, $totalWidth, '');
             }
 
             $result[] = $line;
@@ -280,7 +281,7 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if ($lineWidth < $totalWidth) {
                     $lineContent .= str_repeat(' ', $totalWidth - $lineWidth);
                 } elseif ($lineWidth > $totalWidth) {
-                    $lineContent = $this->truncateToWidth($lineContent, $totalWidth);
+                    $lineContent = Truncate::truncate($lineContent, $totalWidth, '');
                 }
 
                 $alignedLines[] = $lineContent;
@@ -510,7 +511,7 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
         $lineWidth = Width::string($line);
 
         if ($lineWidth >= $totalWidth) {
-            return $this->truncateToWidth($line, $totalWidth);
+            return Truncate::truncate($line, $totalWidth, '');
         }
 
         $padding = $totalWidth - $lineWidth;
@@ -533,34 +534,6 @@ final class FlexLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
         $right = $padding - $left;
 
         return str_repeat(' ', $left) . $line . str_repeat(' ', $right);
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        if ($lo === 0) {
-            return '';
-        }
-        return mb_substr($s, 0, $lo, 'UTF-8');
     }
 
     /**

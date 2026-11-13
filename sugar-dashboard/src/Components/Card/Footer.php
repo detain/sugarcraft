@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
@@ -166,7 +167,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
         $contentWidth = Width::string($this->content);
 
         if ($contentWidth >= $width) {
-            return $this->truncateToWidth($this->content, $width);
+            return Truncate::truncate($this->content, $width, '');
         }
 
         $padding = $width - $contentWidth;
@@ -189,31 +190,6 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
         $right = $padding - $left;
 
         return str_repeat(' ', $left) . $content . str_repeat(' ', $right);
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        return mb_substr($s, 0, max(1, $lo), 'UTF-8');
     }
 
     /**

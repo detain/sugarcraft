@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Components\Card;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Layout\HAlign;
 use SugarCraft\Dashboard\Layout\VAlign;
 
@@ -143,7 +144,7 @@ final class Cover implements \SugarCraft\Dashboard\Foundation\SizedItem
                         HAlign::Center => $this->centerAlign($line, $lineWidth, $w),
                     };
                 } elseif ($lineWidth > $w) {
-                    $line = $this->truncateToWidth($line, $w);
+                    $line = Truncate::truncate($line, $w, '');
                 }
             } else {
                 $line = str_repeat(' ', $w);
@@ -165,34 +166,6 @@ final class Cover implements \SugarCraft\Dashboard\Foundation\SizedItem
         $right = $padding - $left;
 
         return str_repeat(' ', $left) . $line . str_repeat(' ', $right);
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        if ($lo === 0) {
-            return '';
-        }
-        return mb_substr($s, 0, $lo, 'UTF-8');
     }
 
     /**

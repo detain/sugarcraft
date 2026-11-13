@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Tests\Components\Calendar;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraftDashboardOutputTruncate;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Layout\HAlign;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Components\Calendar\ListComponent;
@@ -29,28 +31,22 @@ final class ListTest extends TestCase
         $this->assertInstanceOf(Item::class, $list);
     }
 
-    public function testTruncateToWidthFitsUndecoratedAndCutsDecorated(): void
+    public function testCanonicalTruncateFitsUndecoratedAndCutsDecorated(): void
     {
-        // 053: the old helper appended '…' even when nothing truncated,
-        // and a width-1 request could come back two columns wide.
-        $list = ListComponent::new(['x']);
-        $truncate = \Closure::bind(
-            fn (string $s, int $width): string => $this->truncateToWidth($s, $width),
-            $list,
-            ListComponent::class,
-        );
-
+        // 053 (now held by the Output\Truncate canonical after the D-22
+        // consolidation): the old helper appended '…' even when nothing
+        // truncated, and a width-1 request could come back two columns wide.
         foreach (range(1, 20) as $width) {
             $fits = str_repeat('a', $width);
-            $this->assertSame($fits, $truncate($fits, $width));
+            $this->assertSame($fits, Truncate::truncate($fits, $width));
 
-            $cut = $truncate(str_repeat('a', $width + 1), $width);
+            $cut = Truncate::truncate(str_repeat('a', $width + 1), $width);
             $this->assertSame($width, Width::string($cut));
             $this->assertStringEndsWith('…', $cut);
         }
 
-        $this->assertSame('…', $truncate('ab', 1));
-        $this->assertSame('…', $truncate('名x', 2));
+        $this->assertSame('…', Truncate::truncate('ab', 1));
+        $this->assertSame('…', Truncate::truncate('名x', 2));
     }
 
     // ═══════════════════════════════════════════════════════════════

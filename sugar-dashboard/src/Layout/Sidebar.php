@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
@@ -114,7 +115,7 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Title section
         if ($this->title !== null) {
             $titleWidth = $useWidth - 2;
-            $titleText = $this->truncateToWidth($this->title, $titleWidth);
+            $titleText = Truncate::truncate($this->title, $titleWidth, '');
             $lines[] = ' ' . $titleText . ' ';
             $lines[] = '─' . str_repeat('─', $titleWidth) . '─';
         }
@@ -133,7 +134,7 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
                     ? $icon
                     : ($icon !== '' ? $icon . ' ' . $label : $label);
 
-                $text = $this->truncateToWidth($text, $useWidth - 2);
+                $text = Truncate::truncate($text, $useWidth - 2, '');
 
                 if ($isActive && $this->activeColor !== null) {
                     $lines[] = '>' . $this->activeColor->toFg(ColorMode::profile()) . $text . Ansi::reset() . ' ';
@@ -202,31 +203,6 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         return $width;
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        return mb_substr($s, 0, max(1, $lo), 'UTF-8');
     }
 
     /**

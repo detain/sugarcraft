@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
@@ -125,7 +126,7 @@ final class Viewport implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($lineWidth < $width) {
                 $lineContent .= str_repeat(' ', $width - $lineWidth);
             } elseif ($lineWidth > $width) {
-                $lineContent = $this->truncateToWidth($lineContent, $width);
+                $lineContent = Truncate::truncate($lineContent, $width, '');
             }
 
             $result .= $lineContent . "\n";
@@ -181,7 +182,7 @@ final class Viewport implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         // Skip the first offset characters by finding the starting point
         if ($offset <= 0) {
-            return $this->truncateToWidth($s, $width);
+            return Truncate::truncate($s, $width, '');
         }
 
         // Find the character index that corresponds to the offset
@@ -203,35 +204,7 @@ final class Viewport implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Extract from startIndex with given width
         $remaining = mb_substr($s, $startIndex, null, 'UTF-8');
-        return $this->truncateToWidth($remaining, $width);
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        if ($lo === 0) {
-            return '';
-        }
-        return mb_substr($s, 0, $lo, 'UTF-8');
+        return Truncate::truncate($remaining, $width, '');
     }
 
     // ─── Withers ──────────────────────────────────────────────────

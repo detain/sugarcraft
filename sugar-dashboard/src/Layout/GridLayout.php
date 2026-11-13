@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Layout;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Theme;
 
@@ -214,10 +215,10 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
                 }
 
                 // Normalise the cell to exactly $cellWidth display columns.
-                // truncateToWidth may land a column short when a wide
+                // Truncate::truncate may land a column short when a wide
                 // grapheme straddles the cut, so pad unconditionally after.
                 $lineContent = Width::padRight(
-                    $this->truncateToWidth($itemLines[$dy] ?? '', $cellWidth),
+                    Truncate::truncate($itemLines[$dy] ?? '', $cellWidth, ''),
                     $cellWidth,
                 );
 
@@ -269,34 +270,6 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
             $sizes[] = ['width' => max(1, $w), 'height' => max(1, $h)];
         }
         return $sizes;
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        if ($lo === 0) {
-            return '';
-        }
-        return mb_substr($s, 0, $lo, 'UTF-8');
     }
 
     /**

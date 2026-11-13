@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Layout;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 
 /**
  * Advanced layout algorithm for arranging multiple items.
@@ -157,7 +158,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if ($lineWidth < $childWidth) {
                     $lineContent .= str_repeat(' ', $childWidth - $lineWidth);
                 } elseif ($lineWidth > $childWidth) {
-                    $lineContent = $this->truncateToWidth($lineContent, $childWidth);
+                    $lineContent = Truncate::truncate($lineContent, $childWidth, '');
                 }
 
                 $lines[$y] .= $lineContent;
@@ -218,7 +219,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if (Width::string($lineContent) < $childWidth) {
                     $lineContent .= str_repeat(' ', $childWidth - Width::string($lineContent));
                 } elseif (Width::string($lineContent) > $childWidth) {
-                    $lineContent = $this->truncateToWidth($lineContent, $childWidth);
+                    $lineContent = Truncate::truncate($lineContent, $childWidth, '');
                 }
                 $alignedLines[] = $lineContent;
             }
@@ -442,7 +443,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
         $lineWidth = Width::string($line);
 
         if ($lineWidth >= $width) {
-            return $this->truncateToWidth($line, $width);
+            return Truncate::truncate($line, $width, '');
         }
 
         $padding = $width - $lineWidth;
@@ -464,34 +465,6 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
         $right = $padding - $left;
 
         return str_repeat(' ', $left) . $line . str_repeat(' ', $right);
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        if ($lo === 0) {
-            return '';
-        }
-        return mb_substr($s, 0, $lo, 'UTF-8');
     }
 
     /**

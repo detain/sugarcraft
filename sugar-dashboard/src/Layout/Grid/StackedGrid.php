@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Layout\Grid;
 
+use SugarCraft\Dashboard\Output\Truncate;
+
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Theme;
 use SugarCraft\Dashboard\Layout\Breakpoint;
@@ -258,8 +260,8 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
         foreach ($lines as $line) {
             $lineWidth = \SugarCraft\Core\Util\Width::string($line);
             if ($lineWidth > $width) {
-                // Truncate with ellipsis
-                $line = self::truncateToWidth($line, $width);
+                // Truncate to the cell width (no marker: the cell is padded)
+                $line = Truncate::truncate($line, $width, '');
                 $lineWidth = $width;
             }
             if ($lineWidth < $width) {
@@ -292,43 +294,6 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
         }
         $lines = substr_count($item->render(), "\n") + 1;
         return max(1, $lines);
-    }
-
-    /**
-     * Truncate a string to fit within $width cell columns, preferring
-     * to preserve the end of the string (filename pattern) when
-     * truncation is needed.
-     */
-    private static function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if ($width === 1) {
-            return mb_substr($s, 0, 1, 'UTF-8');
-        }
-        // Try keeping full string first
-        if (\SugarCraft\Core\Util\Width::string($s) <= $width) {
-            return $s;
-        }
-        // Binary search for the longest prefix that fits
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (\SugarCraft\Core\Util\Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        $result = mb_substr($s, 0, $lo, 'UTF-8');
-        // Ensure we show at least something
-        if ($result === '') {
-            return mb_substr($s, 0, 1, 'UTF-8');
-        }
-        return $result;
     }
 
     // ─── Persistence ─────────────────────────────────────────────

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Components\Calendar;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Layout\HAlign;
 
 /**
@@ -107,7 +108,7 @@ final class ListComponent implements \SugarCraft\Dashboard\Foundation\SizedItem
                     HAlign::Center => $this->centerAlign($line, $lineWidth, $w),
                 };
             } elseif ($lineWidth > $w) {
-                $line = $this->truncateToWidth($line, $w);
+                $line = Truncate::truncate($line, $w);
             }
 
             $result[] = $line;
@@ -236,48 +237,6 @@ final class ListComponent implements \SugarCraft\Dashboard\Foundation\SizedItem
         $right = $padding - $left;
 
         return str_repeat(' ', $left) . $line . str_repeat(' ', $right);
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     *
-     * A line that FITS is returned undecorated; only genuinely cut lines
-     * carry the ellipsis, and the ellipsis is budgeted INSIDE the width
-     * (the pre-fix code appended '…' on the fits path and could return
-     * two columns for a width-1 request — finding 053).
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        // Budget 1 column for the ellipsis (truncation is certain here)
-        $maxContentWidth = $width - 1;
-        if ($maxContentWidth <= 0) {
-            return '…';
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $maxContentWidth) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        if ($lo === 0) {
-            // Not even the first glyph fits beside the ellipsis: the
-            // honest 1-cell answer is the ellipsis alone (finding 053's
-            // old bare '' silently dropped the truncation notice).
-            return '…';
-        }
-        $result = mb_substr($s, 0, $lo, 'UTF-8');
-        return $result . '…';
     }
 
     // ─── Withers ──────────────────────────────────────────────────

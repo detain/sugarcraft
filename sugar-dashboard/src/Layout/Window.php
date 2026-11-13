@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 
 /**
  * A window component with a title bar and content area.
@@ -102,8 +103,12 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
             return $this->content->render();
         }
 
-        // Build the title bar
-        $titleBar = $this->buildTitleBar($w);
+        // Build the title bar — at the width the padded Style will actually
+        // render (buildTitleBar returns content of $width-2; the Style pass
+        // fits $contentW and the borders add their own 2 on top, so the old
+        // $w here over-built the bar by 2 columns and Style's clamp ate the
+        // last visible column — the marker of a truncated title)
+        $titleBar = $this->buildTitleBar($contentW + 2);
 
         // Build the content
         $styledContent = $this->renderContent($contentW, $contentH);
@@ -172,7 +177,7 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Using: controls on left, title truncated on right
             $titleWidth = Width::string($titleText);
             if ($titleWidth > $availableWidth - 1) {
-                $titleText = $this->truncateToWidth($titleText, $availableWidth - $controlsWidth - 1) . '…';
+                $titleText = Truncate::truncate($titleText, $availableWidth - $controlsWidth - 1);
             }
             return $controlsStr . $titleText . str_repeat(' ', max(0, $availableWidth - Width::string($controlsStr . $titleText)));
         }
@@ -180,7 +185,7 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
         // No controls - just centered or left-aligned title
         $titleWidth = Width::string($titleText);
         if ($titleWidth > $availableWidth) {
-            $titleText = $this->truncateToWidth($titleText, $availableWidth - 1) . '…';
+            $titleText = Truncate::truncate($titleText, $availableWidth - 1);
         }
 
         return $titleText . str_repeat(' ', max(0, $availableWidth - Width::string($titleText)));
@@ -205,7 +210,7 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
         foreach ($lines as $line) {
             $lineWidth = Width::string($line);
             if ($lineWidth > $innerW) {
-                $line = $this->truncateToWidth($line, $innerW);
+                $line = Truncate::truncate($line, $innerW, '');
             } elseif ($lineWidth < $innerW) {
                 $line = $line . str_repeat(' ', $innerW - $lineWidth);
             }
@@ -252,32 +257,6 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result[] = str_repeat(' ', $maxWidth) . '░';
 
         return implode("\n", $result);
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int)(($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        $result = mb_substr($s, 0, max(1, $lo), 'UTF-8');
-        return $result . '…';
     }
 
     /**

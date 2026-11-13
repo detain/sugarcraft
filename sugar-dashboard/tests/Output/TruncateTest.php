@@ -166,13 +166,22 @@ final class TruncateTest extends TestCase
         );
     }
 
-    public function testTruncateStillStripsInsideTheCut(): void
+    public function testTruncatePreservesStylesThroughTheCut(): void
     {
-        // The cut path keeps the documented strip-behavior (kept remainder
-        // is escape-free until the style-preserving canonical lands).
+        // D-22 landed the style-preserving canonical: the kept prefix
+        // retains its SGR runs (the cut walk even harvests the trailing
+        // reset from past the budget), so the text stays RED and the
+        // sequence state is closed before the unstyled ellipsis.
         $result = Truncate::truncate("\x1b[31mred\x1b[0mtext", 5);
-        $this->assertStringNotContainsString("\x1b", $result);
+        $this->assertStringContainsString("\x1b[31m", $result);
+        $this->assertStringContainsString("\x1b[0m", $result);
         $this->assertStringEndsWith('…', $result);
+        $this->assertLessThanOrEqual(5, \SugarCraft\Core\Util\Width::string($result));
+        // Dangling-escape probe: every ESC in the kept prefix must start a
+        // complete sequence — no half-copied CSI bytes.
+        preg_match_all('/\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)/', $result, $complete);
+        preg_match_all('/\x1b/', $result, $escapes);
+        $this->assertCount(count($escapes[0]), $complete[0]);
     }
 
     public function testTruncateRightFittingStyledTextKeepsStyles(): void
