@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'git.spawn_failed'        => 'git: 실행 실패',
+    'git.spawn_failed'        => 'git: 실행 실패: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: 명령이 {seconds}초 후 시간 초과되었습니다',
     'git.unsafe_path'         => 'git: 안전하지 않은 worktree 경로: {path}',

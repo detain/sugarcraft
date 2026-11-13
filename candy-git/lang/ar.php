@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'git.spawn_failed'        => 'git: فشل التشغيل',
+    'git.spawn_failed'        => 'git: فشل التشغيل: {reason}',
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: انتهت مهلة الأمر بعد {seconds} ثانية',
     'git.unsafe_path'         => 'git: مسار worktree غير آمن: {path}',

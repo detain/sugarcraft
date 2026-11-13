@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Git\Tests;
 
+use SugarCraft\Git\Platform;
 use SugarCraft\Git\Process;
 use PHPUnit\Framework\TestCase;
 
@@ -153,5 +154,83 @@ final class ProcessTest extends TestCase
 
         $this->assertSame(100_000, strlen($r['stdout']));
         $this->assertStringNotContainsString('truncated', $r['stdout']);
+    }
+
+    /** The Windows ladder, exercised on any host by injecting the null device. */
+    private static function windowsLadder(): Platform
+    {
+        return Platform::windows()->withNullDevice('/dev/null');
+    }
+
+    public function testPlatformSeamAnswersBothBranches(): void
+    {
+        $this->assertFalse(Platform::posix()->isWindows());
+        $this->assertSame('/dev/null', Platform::posix()->nullDevice());
+        $this->assertTrue(Platform::windows()->isWindows());
+        $this->assertSame('NUL', Platform::windows()->nullDevice());
+        $this->assertSame(PHP_OS_FAMILY === 'Windows', Platform::new()->isWindows());
+        $this->assertSame('x', Platform::posix()->withNullDevice('x')->nullDevice());
+    }
+
+    public function testFindExecutableResolvesOnPathAndAnswersNullWhenAbsent(): void
+    {
+        $this->assertNotNull(Platform::posix()->findExecutable('sh', '/bin:/usr/bin'));
+        $this->assertNull(Platform::posix()->findExecutable('sh', '/nonexistent-dir'));
+        $this->assertNull(Platform::posix()->findExecutable('definitely-not-a-binary-xyz', '/bin:/usr/bin'));
+    }
+
+    public function testPolledLadderCapturesStdoutStderrExitAndStdin(): void
+    {
+        $r = Process::run(['sh', '-c', 'cat; echo err >&2; exit 3'], "hello\n", 5.0, self::windowsLadder());
+
+        $this->assertSame("hello\n", $r['stdout']);
+        $this->assertSame("err\n", $r['stderr']);
+        $this->assertSame(3, $r['exit']);
+        $this->assertFalse($r['timedOut']);
+    }
+
+    public function testPolledLadderGivesNullStdinAnImmediateEof(): void
+    {
+        $r = Process::run(['sh', '-c', 'cat; echo done'], null, 5.0, self::windowsLadder());
+
+        $this->assertSame("done\n", $r['stdout']);
+        $this->assertSame(0, $r['exit']);
+    }
+
+    public function testPolledLadderTimesOutThroughTheInjectedTreeKill(): void
+    {
+        $killed = [];
+        $platform = self::windowsLadder()->withKillTree(static function (int $pid) use (&$killed): void {
+            $killed[] = $pid;
+            exec('kill -9 ' . $pid);
+        });
+
+        $start = microtime(true);
+        $r = Process::run(['sleep', '3'], null, 0.3, $platform);
+
+        $this->assertTrue($r['timedOut']);
+        $this->assertLessThan(2.0, microtime(true) - $start);
+        $this->assertCount(1, $killed);
+        $this->assertGreaterThan(0, $killed[0]);
+    }
+
+    public function testPolledLadderCapsOutputWithOneNotice(): void
+    {
+        $r = Process::run(['sh', '-c', 'head -c 5000000 /dev/zero | tr "\\0" a'], null, 20.0, self::windowsLadder());
+
+        $this->assertStringEndsWith('[candy-git: output truncated at 4 MiB]', $r['stdout']);
+        $this->assertSame(1, substr_count($r['stdout'], 'truncated at 4 MiB'));
+    }
+
+    public function testSpawnFailureCarriesTheReasonNotTheMissingGitHint(): void
+    {
+        try {
+            Process::run(['git'], null, 1.0, Platform::posix()->withNullDevice('/nonexistent/dir/null'));
+            $this->fail('expected a spawn failure');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('failed to spawn', $e->getMessage());
+            $this->assertStringNotContainsString('{reason}', $e->getMessage());
+            $this->assertStringNotContainsString('install git', $e->getMessage());
+        }
     }
 }

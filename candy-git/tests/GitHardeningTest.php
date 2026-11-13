@@ -133,10 +133,10 @@ final class GitHardeningTest extends TestCase
     {
         // Structural leg: the EOF behavior above is indistinguishable from
         // "no fd 0 key at all" (which inherits the tty and blocks instead of
-        // EOF-ing on some reads). Pin the explicit /dev/null spec entry.
+        // EOF-ing on some reads). Pin the explicit null-device spec entry (Platform::nullDevice(): /dev/null, NUL on Windows).
         $src = (string) file_get_contents((new \ReflectionClass(Process::class))->getFileName());
 
-        self::assertSame(1, substr_count($src, "['file', '/dev/null', 'r']"));
+        self::assertSame(1, substr_count($src, "['file', \$platform->nullDevice(), 'r']"));
         self::assertStringContainsString('self::childEnv()', $src);
     }
 

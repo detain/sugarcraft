@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     // Git errors
-    'git.spawn_failed' => 'git: failed to spawn',
+    'git.spawn_failed' => 'git: failed to spawn: {reason}',
     'git.error'        => 'git: {stderr}',
     'git.timeout'      => 'git: command timed out after {seconds}s',
     'git.unsafe_path'  => 'git: unsafe worktree path: {path}',

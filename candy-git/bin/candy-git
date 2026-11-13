@@ -76,8 +76,13 @@ foreach ($flags as $stray) {
 // probe (or, worse, mid-operation failures on verbs like `git restore`).
 try {
     $probe = Process::run(['git', '--version'], null, 10.0);
-} catch (\RuntimeException) {
-    fwrite(STDERR, Lang::t('cli.no_git') . "\n");
+} catch (\RuntimeException $e) {
+    // "git is not installed" and "git is installed but would not launch"
+    // are different problems: only the first gets the install hint; the
+    // second surfaces the OS reason (git.spawn_failed carries it).
+    fwrite(STDERR, (\SugarCraft\Git\Platform::new()->findExecutable('git') === null
+        ? Lang::t('cli.no_git')
+        : 'candy-git: ' . $e->getMessage()) . "\n");
     exit(1);
 }
 $gitVersion = $probe['exit'] === 0 ? GitRequirement::parse((string) $probe['stdout']) : null;
@@ -98,8 +103,13 @@ $cwd = getcwd();
 // LINKED worktree too, where `.git` is a file (gitdir pointer), not a dir.
 try {
     $inRepository = $cwd !== false && Git::isRepository($cwd);
-} catch (\RuntimeException) {
-    fwrite(STDERR, Lang::t('cli.no_git') . "\n");
+} catch (\RuntimeException $e) {
+    // "git is not installed" and "git is installed but would not launch"
+    // are different problems: only the first gets the install hint; the
+    // second surfaces the OS reason (git.spawn_failed carries it).
+    fwrite(STDERR, (\SugarCraft\Git\Platform::new()->findExecutable('git') === null
+        ? Lang::t('cli.no_git')
+        : 'candy-git: ' . $e->getMessage()) . "\n");
     exit(1);
 }
 if (!$inRepository) {
