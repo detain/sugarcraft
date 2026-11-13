@@ -7,7 +7,7 @@ glance. The final section,
 maps each package back to the Go projects that sparked its design.
 
 > When this file changes, the matching row in the root
-> [`README.md`](../README.md) and the catalogue card on
+> [`README.md`](../README.md) and the catalog card on
 > [`docs/libraries.html`](./libraries.html) / [`docs/apps.html`](./apps.html)
 > must track it too. The per-package pages under [`docs/lib/`](./lib/) are
 > generated from [`docs/_data/`](./_data/) (`<slug>.json` +
@@ -53,7 +53,7 @@ ships as `App\` — called out in the table below.
 | **SugarImage** (`sugar-image/`) | 🟢 ready | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block, coverage-class symbol map: braille/sextant/octant/block glyphs via Hamming-distance candidate search — the chafa symbol engine ported); Mosaic facade (the ratatui-image 'Picker' counterpart); ext-gd. |
 | **SugarAnimation** (`sugar-animation/`) | 🟢 ready | ANSI/GIF animation toolkit — GIF decode + frame playback (antecedent: gifterm) and `.ansi` art playback (`AnsiArt` / `ArtLibrary` / `ArtLoop`); solid + density render presets; ext-gd for GIFs. The viewer CLI lives in candy-gifview. |
 | **SugarVideo** (`sugar-video/`) | 🟢 ready | Terminal video player (mp4/webm/avi/gif/webp(animated) → ascii/ansi/half-block/quarterblock/sixel/kitty/iTerm2) — ffmpeg pipe + pure-PHP GIF and animated-WebP decode (no ffmpeg child for those routes), delta repaint, seek, speed, audio companion. |
-| **SugarVterm** (`sugar-vterm/`) | 🟢 ready | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. The byte stream is modelled as hostile input: parser caps are enforced on ingest, and consumers that print cells carry their own sanitise duties. Done as of 2026-11-05: fully typed `src/`, 68-file suite (fuzzer and differential tests, golden fixtures), PHPStan at max, `.vhs` demo wired into the render matrix, a generated in-sync site page, and a production consumer in candy-vcr; zero TODO/FIXME markers. |
+| **SugarVterm** (`sugar-vterm/`) | 🟢 ready | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. The byte stream is modelled as hostile input: parser caps are enforced on ingest, and consumers that print cells carry their own sanitize duties. Done as of 2026-11-05: fully typed `src/`, 68-file suite (fuzzer and differential tests, golden fixtures), PHPStan at max, `.vhs` demo wired into the render matrix, a generated in-sync site page, and a production consumer in candy-vcr; zero TODO/FIXME markers. |
 | **SugarAnsiParser** (`sugar-ansi-parser/`) | 🟢 ready | ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes); feeds into SugarVterm for cell-grid rendering. |
 | **SugarCellbuffer** (`sugar-cellbuffer/`) | 🟢 ready | Cell-grid value objects — Buffer (2-D cell grid) and Cell (rune/style/link/width); shared foundation for all rendering, with minimal-repaint diffs via `Buffer::diff()`. |
 | **SugarPty** (`sugar-pty/`) | 🟢 ready | PTY primitive (Linux + macOS + Windows) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations over FFI to libc, with sanctioned `stty(1)` shell-out fallbacks on macOS (winsize read/write both directions) and a `posix_kill`-preferring kill path; opt-in controlling-terminal support. Legacy facades (`Pty`, `Child`) remain @deprecated through v1.x; `Spawn` is @internal live plumbing. Windows ConPTY landed (`Windows\ConPtySystem` over FFI primitives: Windows 10 1809+ / PHP 8.4+; no ctty/signals/fd — POSIX keeps those). |
@@ -119,7 +119,7 @@ than packages in the 42 + 22 matrix above: [`candy-discord/`](../candy-discord/)
 [`candy-msteams/`](../candy-msteams/) (Teams chats and channels do the same).
 Each publishes as its own `sugarcraft/*` composer library; neither is a
 require of the root aggregate, a row in the status tables above, or a tile
-in the site catalogue — their READMEs are the authority for how they work.
+in the site catalog — their READMEs are the authority for how they work.
 ---
 
 ## Naming conventions (cheat sheet)

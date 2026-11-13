@@ -157,7 +157,7 @@ class. `Pty::open()` → `PosixPtySystem::open()`. `Pty::read()` →
 ≤30 LOC each.
 *Acceptance:* Every facade is a pure delegation shim; CI green.
 
-🟢 **P4-LO-02 — `PtySystemFactory::default()` does not honour an env
+🟢 **P4-LO-02 — `PtySystemFactory::default()` does not honor an env
 override.**
 See P1-LO-03.
 

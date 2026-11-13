@@ -139,7 +139,7 @@ discoverable home for them: per-lib docblocks implement them, tests
 pin them, and a finding that violates one of them is a security
 finding, not a style nit. Report violations via
 <a href="https://github.com/detain/sugarcraft/blob/master/SECURITY.md">SECURITY.md</a>.</p>
-<h2><a id="1-the-terminal-is-a-sink--sanitise-before-you-paint" href="#1-the-terminal-is-a-sink--sanitise-before-you-paint" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>1. The terminal is a sink — sanitise before you paint</h2>
+<h2><a id="1-the-terminal-is-a-sink--sanitize-before-you-paint" href="#1-the-terminal-is-a-sink--sanitize-before-you-paint" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>1. The terminal is a sink — sanitize before you paint</h2>
 <p>Anything a program writes to a terminal is executed as <em>control
 semantics</em>: a raw <code>ESC</code> in a filename, a tool output line, an image
 byte stream or a markdown payload is an escape-sequence injection
@@ -287,7 +287,7 @@ vulnerability.</p>
 <h2><a id="5-stderr-echoes-are-terminal-writes-too" href="#5-stderr-echoes-are-terminal-writes-too" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>5. stderr echoes are terminal writes too</h2>
 <p>Writing a caught exception message, a subprocess stderr tail, or an
 HTTP response fragment to STDERR is writing to the same escape-semantics
-sink as a pane title — the same escape-semantics door. Sanitise (or
+sink as a pane title — the same escape-semantics door. Sanitize (or
 route through the launch-notice clip) anything that embeds
 attacker-influenced bytes before it reaches the error stream.</p>
 <h2><a id="6-image-and-media-bytes-are-untrusted" href="#6-image-and-media-bytes-are-untrusted" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>6. Image and media bytes are untrusted</h2>
@@ -297,10 +297,10 @@ enter the same sinks. They flow through <code>Sanitize</code> gates before
 titles/labels are composed from them, and dimension/name caps are
 fail-closed, not advisory.</p>
 <h2><a id="7-style-renderers-pass-bytes-through-untouched" href="#7-style-renderers-pass-bytes-through-untouched" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>7. Style renderers pass bytes through untouched</h2>
-<p><code>sugar-style</code> is a renderer, not a sanitiser: ESC and OSC sequences in
+<p><code>sugar-style</code> is a renderer, not a sanitizer: ESC and OSC sequences in
 styled content flow to the terminal unchanged, because its width
 arithmetic must see them to keep alignment honest. The caller owns
-ingress sanitisation (<code>Sanitize::untrusted*</code>). Two narrow doors exist
+ingress sanitization (<code>Sanitize::untrusted*</code>). Two narrow doors exist
 inside the lib: <code>Style::hyperlink()</code> refuses ids containing <code>;</code> or <code>:</code>,
 and tabs are expanded per <code>tabWidth</code> (default 4) while <code>\r</code> is never
 stripped. Wrapping pre-styled content composes at the byte level — an

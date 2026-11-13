@@ -46,7 +46,7 @@ exit(Server::new()
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>InProcessTransport (default)</strong><span>sugar-pty supervisor — allocates a PTY, spawns child with controllingTerminal:true, pumps bytes, forwards SIGWINCH. Lets you mount any cmd / shell / editor.</span></div>
-      <div class="feature"><strong>HostSshdTransport (legacy)</strong><span>Pre-PTY-upgrade behaviour. Middleware run inline against sshd's PTY directly. Zero subprocess overhead.</span></div>
+      <div class="feature"><strong>HostSshdTransport (legacy)</strong><span>Pre-PTY-upgrade behavior. Middleware run inline against sshd's PTY directly. Zero subprocess overhead.</span></div>
       <div class="feature"><strong>Spawn middleware (InProcess only)</strong><span>Terminal — produces cmd[] from Session via factory. Drives runChild() on the active transport.</span></div>
       <div class="feature"><strong>BubbleTea middleware (HostSshd only)</strong><span>Terminal — mounts a SugarCraft Program inline reading STDIN/STDOUT. Transport-aware: throws clearly under InProcess.</span></div>
       <div class="feature"><strong>Logger / Auth / RateLimit</strong><span>Transport-agnostic. Same composition surface under either mode.</span></div>
@@ -75,8 +75,8 @@ exit(Server::new()
 <tr><td>Context</td><td>withValue(string $k, mixed $v)</td><td>Return a new context with $k → $v attached</td></tr>
 <tr><td>Context</td><td>withDeadline(DateTimeImmutable)</td><td>Return a new cancelable context that is done when deadline passes</td></tr>
 <tr><td>Context</td><td>withCancelable()</td><td>Return a new cancelable context (call cancel() to trigger)</td></tr>
-<tr><td>Context</td><td>cancel(?Throwable)</td><td>Mark the context as cancelled</td></tr>
-<tr><td>Context</td><td>done(): bool</td><td>True when cancelled or deadline-exceeded</td></tr>
+<tr><td>Context</td><td>cancel(?Throwable)</td><td>Mark the context as canceled</td></tr>
+<tr><td>Context</td><td>done(): bool</td><td>True when canceled or deadline-exceeded</td></tr>
 <tr><td>Context</td><td>err(): ?Throwable</td><td>CancellationException, DeadlineExceededException, or null</td></tr>
 <tr><td>Context</td><td>value(string $k): mixed</td><td>Walk parent chain looking for $k; null if not found</td></tr>
 <tr><td>Session</td><td>user, term, cols, rows, clientHost, clientPort, serverHost, serverPort, tty, command, lang, sessionId, authMethod, keyFingerprint, clientVersion, serverVersion</td><td>Session metadata. The last five are filled in by <code>withProtocolMetadata()</code> and are honest only so far as the environment is: <code>sessionId</code> is minted per process, <code>authMethod</code> is sniffed from <code>SSH_USER_AUTH</code>, <code>keyFingerprint</code> is <strong>always null today</strong>, and the two version fields read names stock OpenSSH never exports.</td></tr>
@@ -117,7 +117,7 @@ exit(Server::new()
 <tr><td>SignalMsg</td><td>signalName</td><td>Signal delivery (SIGINT, SIGTERM, etc.)</td></tr>
 <tr><td>EnvMsg</td><td>name, value</td><td>Environment variable request</td></tr>
 <tr><td>BreakMsg</td><td>breakLengthMs</td><td>Break request — duration in milliseconds (<code>int</code>, defaults to <code>0</code>)</td></tr>
-<tr><td>CancellationException</td><td>extends RuntimeException</td><td>Thrown when Context is cancelled</td></tr>
+<tr><td>CancellationException</td><td>extends RuntimeException</td><td>Thrown when Context is canceled</td></tr>
 <tr><td>DeadlineExceededException</td><td>extends RuntimeException</td><td>Thrown when Context deadline passes</td></tr>
 </table>
   </div>

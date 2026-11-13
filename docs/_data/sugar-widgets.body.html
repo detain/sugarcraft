@@ -46,7 +46,7 @@ final class Search implements Model {
       <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump.</span></div>
       <div class="feature"><strong>Viewport</strong><span>Scrollable text region. Mouse wheel, scrollbar, keyboard nav.</span></div>
       <div class="feature"><strong>FilePicker</strong><span>Directory browser with icons, size, sort modes.</span></div>
-      <div class="feature"><strong>TextEdit + OptionRow</strong><span>btop-derived helpers: <code>Input\TextEdit</code> is an immutable inline editor with an underline caret (no hardware cursor), grapheme-cluster editing, cell-budget windowing and a digits-only mode; <code>Menu\OptionRow::renderRow()</code> draws btop's one-line options row (the two-line <code>render()</code> is deprecated). <code>Progress::withColorFunc</code> closures also receive the bar width for position-coloured ramps.</span></div>
+      <div class="feature"><strong>TextEdit + OptionRow</strong><span>btop-derived helpers: <code>Input\TextEdit</code> is an immutable inline editor with an underline caret (no hardware cursor), grapheme-cluster editing, cell-budget windowing and a digits-only mode; <code>Menu\OptionRow::renderRow()</code> draws btop's one-line options row (the two-line <code>render()</code> is deprecated). <code>Progress::withColorFunc</code> closures also receive the bar width for position-colored ramps.</span></div>
       <div class="feature"><strong>Paginator + Help + Key</strong><span>Dot / arabic page indicator, key-help footer, KeyMap binding DSL.</span></div>
     </div>
 
@@ -107,11 +107,11 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>Paginator</td><td>totalPages(): int</td><td>Return total page count (via the table's paginator)</td></tr>
 <tr><td>Table</td><td>paginator(): Paginator</td><td>Return a Paginator wired to the table's current page state</td></tr>
 <tr><td>Tree</td><td>new(Node ...$roots)</td><td>Create tree view from root nodes via the <code>Tree::new()</code> factory — immutable-fluent; the constructor itself is private</td></tr>
-<tr><td>Tree</td><td>withStyle(...)</td><td>Immutable override of the chrome knobs — cursorPrefix / unselectedPrefix / expandedGlyph / collapsedGlyph / leafGlyph (sanitised to single-line)</td></tr>
+<tr><td>Tree</td><td>withStyle(...)</td><td>Immutable override of the chrome knobs — cursorPrefix / unselectedPrefix / expandedGlyph / collapsedGlyph / leafGlyph (sanitized to single-line)</td></tr>
 <tr><td>Viewport</td><td>new(width = 80, height = 24)</td><td>Create scrollable viewport; content arrives via <code>setContent(string)</code> <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>Progress</td><td>new(ratio)</td><td>Create progress bar from a 0.0–1.0 ratio (clamped; NaN renders 0%)</td></tr>
 <tr><td>Progress</td><td>withPercent(float)</td><td>Return a new bar at the given ratio (same clamp; accepts NaN → 0%)</td></tr>
-<tr><td>Progress</td><td>withColorFunc(?Closure)</td><td>Per-filled-cell colour <code>fn(int $i, int $filledCells, float $percent, int $barWidth): Color</code> — the 4th arg (true bar width) enables btop position-coloured ramps; 3-arg closures still work</td></tr>
+<tr><td>Progress</td><td>withColorFunc(?Closure)</td><td>Per-filled-cell color <code>fn(int $i, int $filledCells, float $percent, int $barWidth): Color</code> — the 4th arg (true bar width) enables btop position-colored ramps; 3-arg closures still work</td></tr>
 <tr><td>Progress</td><td>withRenderMode(ProgressRenderMode)</td><td>Switch the glyph set — Block / Line / Slim render modes</td></tr>
 <tr><td>Progress</td><td>withPercentFormat(string $fmt)</td><td>Custom % suffix printf format receiving the 0–100 integer (default <code>'%3d%%'</code>)</td></tr>
 <tr><td>Timer</td><td>new(float $duration, float $interval = 1.0)</td><td>Countdown; duration is required. <code>start()</code> returns the next [model, Cmd] pair and <code>subscriptions()</code> arms the tick loop; the <code>epoch</code> on each TickMsg refuses counts from stopped generations</td></tr>
@@ -125,7 +125,7 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>TextEdit</td><td>insert(string) / backspace() / delete() / clear()</td><td>Edits; numeric mode rejects non-digit input</td></tr>
 <tr><td>TextEdit</td><td>withNumeric(bool)</td><td>Digits-only mode — strips existing non-digits</td></tr>
 <tr><td>TextEdit</td><td>view(int $limit = 0)</td><td>Render with SGR 4 underline caret, windowed to $limit display cells</td></tr>
-<tr><td>OptionRow</td><td>render(name, value, selected, editing, hasArrows, …)</td><td>btop options-menu two-line row (bold centred name + <code>← value →</code> / <code>↵</code>) <em>(deprecated — use <code>renderRow()</code> for the width-correct single-line row)</em></td></tr>
+<tr><td>OptionRow</td><td>render(name, value, selected, editing, hasArrows, …)</td><td>btop options-menu two-line row (bold centered name + <code>← value →</code> / <code>↵</code>) <em>(deprecated — use <code>renderRow()</code> for the width-correct single-line row)</em></td></tr>
 <tr><td>FilePicker</td><td>new(?string $cwd = null, int $height = 10)</td><td>Create file picker — cwd optional (defaults to the process cwd), height in rows <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list; items are <code>Item</code>/<code>StringItem</code> values <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 </table>

@@ -1,7 +1,7 @@
 # candy-vcr — Developer Guide
 
-`candy-vcr` provides extension points for custom recording behaviour,
-sanitisation, metadata injection, and custom message serialisation.
+`candy-vcr` provides extension points for custom recording behavior,
+sanitization, metadata injection, and custom message serialization.
 
 See also the operational counterpart: [Hub Admin Guide](../admin/candy-vcr.md).
 

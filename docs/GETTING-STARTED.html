@@ -307,14 +307,14 @@ and put <code>~/.config/composer/vendor/bin</code> on your <code>PATH</code>.</l
 </ul>
 <h2><a id="accessibility--reduced-motion" href="#accessibility--reduced-motion" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Accessibility &amp; reduced motion</h2>
 <ul>
-<li><strong><code>REDUCE_MOTION</code></strong> / <strong><code>PREFERS_REDUCED_MOTION</code></strong> — either variable reading on (anything except empty, <code>0</code>, <code>false</code>, <code>no</code>, <code>off</code>, case-insensitively) is read by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-colorprofile/src/Probe.php"><code>SugarCraft\ColorProfile\Probe::reducedMotion()</code></a> and honoured by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-spring/src/Spring.php"><code>sugar-spring</code></a>: spring-composed types snap straight to their target instead of animating (projectiles and easing curves are gate-yourself app-side; see the sugar-spring README).</li>
+<li><strong><code>REDUCE_MOTION</code></strong> / <strong><code>PREFERS_REDUCED_MOTION</code></strong> — either variable reading on (anything except empty, <code>0</code>, <code>false</code>, <code>no</code>, <code>off</code>, case-insensitively) is read by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-colorprofile/src/Probe.php"><code>SugarCraft\ColorProfile\Probe::reducedMotion()</code></a> and honored by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-spring/src/Spring.php"><code>sugar-spring</code></a>: spring-composed types snap straight to their target instead of animating (projectiles and easing curves are gate-yourself app-side; see the sugar-spring README).</li>
 <li><strong><code>NO_COLOR</code></strong>: color depth is detected fleet-wide by
 <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Util/ColorProfile.php"><code>sugar-core</code>'s <code>ColorProfile::detect()</code></a>
 (TERM / <code>COLORTERM</code> / <code>NO_COLOR</code> / CI probes) and announced to every
 program as a <code>ColorProfileMsg</code>; the full precedence ladder is documented
 in the <a href="/lib/sugar-colorprofile.html">sugar-colorprofile
 README</a>. Applying it is app-by-app:
-sugar-style renderers honour the profile, while some apps pick their depth
+sugar-style renderers honor the profile, while some apps pick their depth
 from their own config first — candy-top, for example, derives it from its
 <code>truecolor</code>/terminal-mode options and does not consume the startup message.
 If an app ignores <code>NO_COLOR</code>, that is a bug worth a report.</li>

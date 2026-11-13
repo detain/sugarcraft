@@ -281,7 +281,7 @@ git checkout master && git pull --ff-only
 - **Modify:** `sugar-pty/src/Pty.php` — keep public surface intact; static methods delegate to `PosixPtySystem`. Add `@deprecated since v0.x, will keep through v1.x` doc-block.
 - **Tests:** existing `Pty.php` tests must still pass unchanged. Add `sugar-pty/tests/Posix/PosixPtySystemTest.php` exercising the new class directly.
 - **Docs:** update `sugar-pty/README.md` quickstart to show both old (`Pty::open()`) and new (`PtySystemFactory::default()->open()`) styles; new is canonical.
-- **Review focus:** verbatim lift of EINTR/deadline read loop, `php://fd/N` stream cache, FFI ownership semantics. No behavioural change.
+- **Review focus:** verbatim lift of EINTR/deadline read loop, `php://fd/N` stream cache, FFI ownership semantics. No behavioral change.
 
 #### Step P0.3 — Extract `PosixSlavePty` + `PosixChild`
 
@@ -297,7 +297,7 @@ git checkout master && git pull --ff-only
 
 - **Subagent:** `general-purpose`.
 - **Branch:** `ai/sugar-pty-libc-termios-cdef`.
-- **Modify:** `sugar-pty/src/Libc.php` — extend `cdef` with `tcgetattr`, `tcsetattr`, `cfmakeraw`, `cfgetospeed`. Define `struct termios` as opaque ≥80-byte buffer (do **not** map individual fields — glibc/musl/Darwin differ). `sugar-pty/src/SizeIoctl.php` — add `@see creack/pty.GetsizeFull` doc-comment; no behaviour change yet.
+- **Modify:** `sugar-pty/src/Libc.php` — extend `cdef` with `tcgetattr`, `tcsetattr`, `cfmakeraw`, `cfgetospeed`. Define `struct termios` as opaque ≥80-byte buffer (do **not** map individual fields — glibc/musl/Darwin differ). `sugar-pty/src/SizeIoctl.php` — add `@see creack/pty.GetsizeFull` doc-comment; no behavior change yet.
 - **Tests:** `sugar-pty/tests/LibcTermiosTest.php` — assert the cdef parses and the new symbols resolve via `FFI::cdef()` on Linux + macOS. Skip on Windows. **No** actual termios syscalls yet — those land in P1.
 - **Docs:** one-line entry in `sugar-pty/CALIBER_LEARNINGS.md`: `[pattern:opaque-termios-struct] — struct termios layout differs glibc/musl/Darwin; treat as opaque buffer, only call cfmakeraw/tcgetattr/tcsetattr.`.
 - **Review focus:** struct size is ≥80 (covers Darwin's 72 + slack); cdef syntax compiles on both glibcs the CI tests with; no individual field reads.
@@ -332,7 +332,7 @@ git checkout master && git pull --ff-only
   - `makeRaw()` records the intent (clone with internal flag).
   - `apply()` runs `stty raw -echo`.
   - `restore()` runs `stty <saved>`.
-- **Tests:** `sugar-pty/tests/Posix/SttyTermiosTest.php` — same raw-mode behavioural test as P1.1; assert identical output bytes to FFI variant when both are run on the same shell.
+- **Tests:** `sugar-pty/tests/Posix/SttyTermiosTest.php` — same raw-mode behavioral test as P1.1; assert identical output bytes to FFI variant when both are run on the same shell.
 - **Docs:** README note: "fallback used automatically when ext-ffi unavailable; or force via `SUGARCRAFT_TERMIOS=stty`".
 - **Review focus:** all four `stty` invocations use `proc_open` with array argv (no shell quoting risk); errors don't leak terminal state.
 
@@ -342,7 +342,7 @@ git checkout master && git pull --ff-only
 - **Branch:** `ai/sugar-pty-termios-factory`.
 - **Create:** `sugar-pty/src/TermiosFactory.php` — `open(int|resource $fd): Termios`. Try `PosixTermios` first; on `Throwable` or `SUGARCRAFT_TERMIOS=stty`, fall back to `SttyTermios`. Logs once at info level on downgrade.
 - **Modify:** `sugar-pty/src/SizeIoctl.php` — add `query(int|resource $fd): array{cols:int,rows:int,xpix:int,ypix:int}` that wraps `TIOCGWINSZ`. Throws `RuntimeException` if `posix_isatty` is false (callers handle fallback).
-- **Tests:** `sugar-pty/tests/TermiosFactoryTest.php` — verify factory picks FFI by default; `SUGARCRAFT_TERMIOS=stty` forces fallback; both pass the same behavioural snapshot test. `sugar-pty/tests/SizeIoctlQueryTest.php` — open PTY, set 132×40 via `resize()`, assert `query()` returns 132×40.
+- **Tests:** `sugar-pty/tests/TermiosFactoryTest.php` — verify factory picks FFI by default; `SUGARCRAFT_TERMIOS=stty` forces fallback; both pass the same behavioral snapshot test. `sugar-pty/tests/SizeIoctlQueryTest.php` — open PTY, set 132×40 via `resize()`, assert `query()` returns 132×40.
 - **Docs:** `sugar-pty/README.md` Termios section; one-line entry in `CALIBER_LEARNINGS.md` for the env-var-forced-fallback pattern.
 - **Review focus:** factory does not throw on FFI absence — it downgrades silently (with log). `query()` returns the standardized `{cols,rows,xpix,ypix}` shape consistently with existing `SizeIoctl::unpack()`.
 
@@ -356,7 +356,7 @@ git checkout master && git pull --ff-only
   - `size()` tries `SizeIoctl::query($this->stream)` first; falls back to env vars / `stty size` only if `posix_isatty` is false.
   - `onResize()` / `drainSignals()` unchanged.
 - **Modify:** `sugar-core/composer.json` — add `"sugarcraft/sugar-pty": "@dev"` and path-repo (verify per CLAUDE.md gotcha).
-- **Tests:** existing `sugar-core` `PosixBackendTest` and `ProgramTest` must pass. Add a test forcing `SUGARCRAFT_TERMIOS=stty` env var and asserting identical raw-mode byte behaviour.
+- **Tests:** existing `sugar-core` `PosixBackendTest` and `ProgramTest` must pass. Add a test forcing `SUGARCRAFT_TERMIOS=stty` env var and asserting identical raw-mode byte behavior.
 - **Docs:** update `sugar-core/README.md` if it mentions stty (search and replace). Add CALIBER entry: `[pattern:tty-via-pty] — Util\\Tty\\PosixBackend now delegates termios to sugar-pty; stty is fallback-only.`
 - **Review focus:** Composer path-repo closure correct (`composer validate` without `--strict` passes); every lib that depends on sugar-core still installs cleanly; `stty` binary no longer in the hot path when ext-ffi present.
 
@@ -370,10 +370,10 @@ git checkout master && git pull --ff-only
 
 - **Subagent:** `general-purpose`.
 - **Branch:** `ai/sugar-pty-pump-options`.
-- **Create:** `sugar-pty/src/PumpOptions.php` — readonly value object: `chunkBytes` (default 4096), `selectTimeoutUs` (50000), `flushDeadlineSec` (0.5), `stdinEofGraceSec` (0.3), `veof` (`"\x04"`), `keepalive` (`?callable`), `onSigwinch` (`?callable`), `onChildExit` (`?callable`). Constants pulled verbatim from current `InProcessTransport` to preserve SSH behaviour.
+- **Create:** `sugar-pty/src/PumpOptions.php` — readonly value object: `chunkBytes` (default 4096), `selectTimeoutUs` (50000), `flushDeadlineSec` (0.5), `stdinEofGraceSec` (0.3), `veof` (`"\x04"`), `keepalive` (`?callable`), `onSigwinch` (`?callable`), `onChildExit` (`?callable`). Constants pulled verbatim from current `InProcessTransport` to preserve SSH behavior.
 - **Tests:** `sugar-pty/tests/PumpOptionsTest.php` — defaults, immutability via `with*()`, callable null-handling.
 - **Docs:** doc-comment on each field cites the originating constant in `InProcessTransport.php`.
-- **Review focus:** all `with*()` use the `mutate()` helper (CLAUDE.md immutable+fluent invariant); defaults exactly match current SSH-tested values (no behavioural drift).
+- **Review focus:** all `with*()` use the `mutate()` helper (CLAUDE.md immutable+fluent invariant); defaults exactly match current SSH-tested values (no behavioral drift).
 
 #### Step P2.2 — `PosixPump` skeleton (read/write + select loop)
 
@@ -385,7 +385,7 @@ git checkout master && git pull --ff-only
 - **Modify:** `InProcessTransport` — temporarily duplicate the logic (do NOT delete yet — P2.5 wires the migration). Just import `PosixPump` and add a hidden code path.
 - **Tests:** `sugar-pty/tests/Posix/PosixPumpTest.php` covering: simple write-through, large-buffer (1MB) round-trip, partial-write retry, EOF on stdin → graceful drain.
 - **Docs:** README architecture section gets Pump bullet.
-- **Review focus:** zero behavioural change at this stage; `InProcessTransport` callers still hit the original code path.
+- **Review focus:** zero behavioral change at this stage; `InProcessTransport` callers still hit the original code path.
 
 #### Step P2.3 — `PosixPump` EOF grace + flush deadline
 
@@ -412,7 +412,7 @@ git checkout master && git pull --ff-only
 - **Modify:** `candy-wish/src/Transport/InProcessTransport.php` — delete the inlined pump internals (`pump()`, `writeFully()`, `drainMaster()`, `forwardStdinToMaster()` and their constants). `runChild()` shrinks to: open pty → spawn child → attach SIGWINCH → instantiate `PosixPump` → `run()`. Target ~30 lines (down from 200+). <!-- @rename-keep -->
 - **Tests:** existing `candy-wish/tests/InProcessTransportRunChildTest.php` and `InProcessTransportSigwinchTest.php` must pass unchanged. Run the full candy-wish suite end-to-end SSH fixtures. <!-- @rename-keep -->
 - **Docs:** `candy-wish/README.md` updates the "Architecture" section to point at `candy-pty::PosixPump`. <!-- @rename-keep -->
-- **Review focus:** byte-for-byte parity with prior behaviour on the SSH SSH/ keepalive timing; no removed PumpOptions defaults; the SSH end-to-end suite passes.
+- **Review focus:** byte-for-byte parity with prior behavior on the SSH SSH/ keepalive timing; no removed PumpOptions defaults; the SSH end-to-end suite passes.
 
 **Phase P2 acceptance:** `candy-wish` full suite green. `candy-pty::PosixPump` is the single owner of the pump loop. Five PRs merged. <!-- @rename-keep -->
 
@@ -425,7 +425,7 @@ git checkout master && git pull --ff-only
 - **Subagent:** `general-purpose`.
 - **Branch:** `ai/sugar-pty-child-poll-trait`.
 - **Create:** `sugar-pty/src/Posix/ChildPollTrait.php` — package-private trait holding: `running=false` detection, `exitcode` capture before `proc_close()`, `-1` post-reap guard, destructor zombie-reaper safety net.
-- **Modify:** `PosixChild` to use the trait (no behavioural change — verify against `ChildLifecycleTest`).
+- **Modify:** `PosixChild` to use the trait (no behavioral change — verify against `ChildLifecycleTest`).
 - **Tests:** existing `sugar-pty/tests/SpawnTest.php` and `ControllingTerminalTest.php` must pass. Add `sugar-pty/tests/Posix/ChildPollTraitTest.php` exercising trait in isolation via a stub class.
 - **Docs:** doc-comment on trait cites the upstream `creack/pty` waitpid semantics.
 - **Review focus:** trait methods are protected/private (not bleeding into public API); destructor doesn't throw; `proc_close` -1 handling preserved verbatim.
@@ -448,7 +448,7 @@ git checkout master && git pull --ff-only
 - **Modify:** `candy-scriptui/composer.json` — add `"sugarcraft/sugar-pty": "@dev"` + path-repo (likely already transitive via sugar-core; verify).
 - **Tests:** existing `candy-scriptui` suite passes. Add no new tests (coverage lives in `PosixProcessTest`).
 - **Docs:** `candy-scriptui/README.md` updates the "Process Execution" section.
-- **Review focus:** every caller updated; `composer validate` clean; behavioural parity (especially around `RealProcess`'s `/dev/null` stdin binding).
+- **Review focus:** every caller updated; `composer validate` clean; behavioral parity (especially around `RealProcess`'s `/dev/null` stdin binding).
 
 **Phase P3 acceptance:** `candy-scriptui` full suite green. `proc_get_status()` polling lives in exactly one trait. Three PRs merged.
 
@@ -481,7 +481,7 @@ git checkout master && git pull --ff-only
 - **Modify:** `candy-wish/src/Middleware/Spawn.php` — replace static `Pty::open()` with injected/factory-resolved `PtySystem->open()`. <!-- @rename-keep -->
 - **Tests:** existing `SpawnMiddlewareTest` passes; add a test injecting a stub system to verify call count + args.
 - **Docs:** README middleware section.
-- **Review focus:** middleware behaviour unchanged for existing SSH flows; stub injection works end-to-end.
+- **Review focus:** middleware behavior unchanged for existing SSH flows; stub injection works end-to-end.
 
 #### Step P4.4 — `sugar-core::Program` optional `Termios` injection
 
@@ -641,7 +641,7 @@ Only if P0–P5 land on time. Each item is one step (one PR).
 
 - **Subagent:** `general-purpose`.
 - **Branch:** `ai/candy-vcr-record-idle-trim`.
-- **Modify:** `RecordCommand` — `--idle-trim <seconds>` flag. When a gap >N seconds appears between events, write the event with both `t` (compressed) and `tRaw` (original) fields. `candy-vcr/src/Player.php` — honour `tRaw` when present and `--no-trim` is passed to replay.
+- **Modify:** `RecordCommand` — `--idle-trim <seconds>` flag. When a gap >N seconds appears between events, write the event with both `t` (compressed) and `tRaw` (original) fields. `candy-vcr/src/Player.php` — honor `tRaw` when present and `--no-trim` is passed to replay.
 - **Tests:** `RecordCommandIdleTrimTest.php` — spawn `sleep 2` mid-session, assert original `tRaw` ≥ 2s while trimmed `t` < 0.5s. Replay test asserts both timing modes work.
 - **Docs:** README idle-trim section with the asciinema comparison from research doc §4.1.
 - **Review focus:** dual-timestamp format stays backward-compatible (events without `tRaw` still parse); `--no-trim` replay is opt-in, not default.
@@ -819,7 +819,7 @@ Parity check (manual, end of P5):
 1. **FFI termios struct layout differences between glibc / musl / Darwin libc.** `struct termios` size differs (glibc=60, Darwin=72) and `cfmakeraw` exists on both but isn't POSIX-mandated. Mitigation: treat the struct as opaque ≥80-byte buffer and only call `cfmakeraw`/`tcgetattr`/`tcsetattr` — never read individual fields from PHP. Test on alpine (musl) explicitly if shipping container support.
 2. **`ext-ffi` not always enabled.** Shared hosts, locked-down corporate PHP. Termios fallback addresses raw-mode case. For PTY allocation itself there's no fallback — document `ext-ffi` as a hard requirement, throw a clear `UnsupportedPlatformException` if missing.
 3. **`pcntl_async_signals` and ReactPHP loop interaction.** `SignalForwarder` defaults to async; the ReactPHP loop's own `pcntl_signal_dispatch` ticking may double-handle. Verify with `SignalForwarderTest` on a ReactPHP-driven scenario before declaring P4 done.
-4. **Migration of `candy-wish::InProcessTransport`** — the existing `STDIN_EOF_GRACE_SEC` / `FLUSH_DEADLINE_SEC` constants encode subtle SSH protocol assumptions. Keep them as the **defaults** of `PumpOptions` to avoid behavioural regression; verify the SSH end-to-end suite before merging P2. <!-- @rename-keep -->
+4. **Migration of `candy-wish::InProcessTransport`** — the existing `STDIN_EOF_GRACE_SEC` / `FLUSH_DEADLINE_SEC` constants encode subtle SSH protocol assumptions. Keep them as the **defaults** of `PumpOptions` to avoid behavioral regression; verify the SSH end-to-end suite before merging P2. <!-- @rename-keep -->
 5. **macOS CI runner cost.** macOS GitHub runners are 10x cost of Linux. P5's integration matrix should be limited to the necessary tests on macOS — not the full suite. Use `markTestSkipped` on Linux-only edge cases.
 6. **Composer path-repo closure.** Adding sugar-pty as a dependency of sugar-core means every lib that depends on sugar-core must also list sugar-pty in its `repositories[]`. Mechanically tedious but the CLAUDE.md "Gotchas" section explicitly warns about this. Use `scripts/affected-libs.php` output to enumerate before merge.
 7. **`candy-scriptui::RealProcess` deletion vs alias.** If it's `internal` and zero external callers, prefer deletion. Grep `RealProcess` across the monorepo before P3 to decide.

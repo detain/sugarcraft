@@ -18,7 +18,7 @@ The plan file should cover:
   class: the state machine, the OSC/DCS/APC/PM string-drain cluster
   (~250 lines of drain/acccumulate/terminate logic), the SGR-mouse family
   (1000/1006 coordinates, wheel press/release synthesis), DECRPM
-  acknowledgement counting, bracketed-paste accounting, and the
+  acknowledgment counting, bracketed-paste accounting, and the
   deferred-escape flush timer, all interleaved around `decode()`/
   `decodeClean()`.
 - **Recommended split** — two extractions, each behind a dedicated

@@ -13,7 +13,7 @@ Read `_templates/subagent_brief.md` and `updates.md` first.
 For every new public method introduced in the touched lib(s):
 
 - Does at least one test exercise it?
-- Does the test name describe behaviour, not implementation?
+- Does the test name describe behavior, not implementation?
 - Is the test in the right namespace mirroring `src/` → `tests/`?
 - Does the lib's golden suite cover the visible output (snapshot
   test) if the change is visual?

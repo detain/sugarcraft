@@ -30,7 +30,7 @@ periodic refresh.
 ## Tests
 
 - `sugar-dashboard/tests/Modules/<Each>ModuleTest.php` — scripted-input
-  behaviour test:
+  behavior test:
   - Feed a sequence of Msgs.
   - Assert `[Module, ?Cmd]` tuple shape.
   - Snapshot `view()` output.

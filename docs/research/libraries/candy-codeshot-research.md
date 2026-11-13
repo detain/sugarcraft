@@ -334,7 +334,7 @@ status notes; items 1-5 and 7 no longer describe the shipped library:
    `withLigatures()` emits `font-variant-ligatures: normal` — the
    viewer's font does the shaping; no built-in ligature tables.
 5. **Limited theme format** — **CLOSED**: `Theme\VsCodeThemeLoader` and
-   `Theme\FlatPaletteThemeLoader` import JSON colour schemes (token
+   `Theme\FlatPaletteThemeLoader` import JSON color schemes (token
    slots feed the highlighter), reachable from the CLI since the
    `--theme <path.json>` route shipped.
 6. **Hardcoded cell dimensions** — **STILL OPEN (by choice)**: layout

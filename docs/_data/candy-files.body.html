@@ -74,7 +74,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
       <div class="feature"><strong>Live search</strong><span><code>/</code> fuzzy-filters the active pane's current directory <strong>by name</strong> (not recursive; dotfiles obey the <code>.</code> visibility law). <code>↑</code>/<code>↓</code> move the result cursor, so <code>k</code>, <code>j</code> and every other printable type into the query (<code>/</code> itself cannot). <code>Enter</code> opens a directory result; on a file result it exits search with the pane cursor landed on the hit. A <code>Backspace</code> that empties the query exits.</span></div>
       <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates the current tab, <code>Ctrl+Tab</code>/<code>Ctrl+Shift+Tab</code> cycle (needs a terminal that reports modified Tab; <code>Ctrl+PgUp</code>/<code>Ctrl+PgDn</code> are the alternative — tmux and browser terminals may intercept modified Page keys), <code>Ctrl+w</code> closes (refuses the last tab).</span></div>
       <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores the last delete / move / rename; <code>Ctrl+y</code> redoes.</span></div>
-      <div class="feature"><strong>Localized prompts</strong><span>The executable activates a language detected from <code>$LC_ALL</code>/<code>$LANG</code> (16 catalogues, English default). Confirmation gates honor the affirmative each locale's prompt teaches — a German <code>(j/n)</code> answers <code>j</code>, a Russian <code>(д/н)</code> answers <code>д</code> — and <code>y</code> works everywhere.</span></div>
+      <div class="feature"><strong>Localized prompts</strong><span>The executable activates a language detected from <code>$LC_ALL</code>/<code>$LANG</code> (16 catalogs, English default). Confirmation gates honor the affirmative each locale's prompt teaches — a German <code>(j/n)</code> answers <code>j</code>, a Russian <code>(д/н)</code> answers <code>д</code> — and <code>y</code> works everywhere.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -89,7 +89,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
     <h3 style="margin-top: 32px;">Key Classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Manager</td><td>start(leftCwd, rightCwd, ?lister)</td><td>Factory — initialises two panes + first tab</td></tr>
+<tr><td>Manager</td><td>start(leftCwd, rightCwd, ?lister)</td><td>Factory — initializes two panes + first tab</td></tr>
 <tr><td>Manager</td><td>update(Msg): [Model, ?Cmd]</td><td>Main event loop — key dispatch, confirm gate</td></tr>
 <tr><td>Manager</td><td>view(): string</td><td>Renders two panes + tab bar + status line</td></tr>
 <tr><td>Manager</td><td>copy(src, dst), move(src, dst), rename(src, newName)</td><td>Direct single-entry helpers — rename/move run synchronously; the deferred engine is copy-only, and the committed copy path goes through the async command, not these</td></tr>

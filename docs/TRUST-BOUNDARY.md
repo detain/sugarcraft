@@ -7,7 +7,7 @@ pin them, and a finding that violates one of them is a security
 finding, not a style nit. Report violations via
 [SECURITY.md](../SECURITY.md).
 
-## 1. The terminal is a sink — sanitise before you paint
+## 1. The terminal is a sink — sanitize before you paint
 
 Anything a program writes to a terminal is executed as *control
 semantics*: a raw `ESC` in a filename, a tool output line, an image
@@ -135,7 +135,7 @@ vulnerability.
 
 Writing a caught exception message, a subprocess stderr tail, or an
 HTTP response fragment to STDERR is writing to the same escape-semantics
-sink as a pane title — the same escape-semantics door. Sanitise (or
+sink as a pane title — the same escape-semantics door. Sanitize (or
 route through the launch-notice clip) anything that embeds
 attacker-influenced bytes before it reaches the error stream.
 
@@ -149,10 +149,10 @@ fail-closed, not advisory.
 
 ## 7. Style renderers pass bytes through untouched
 
-`sugar-style` is a renderer, not a sanitiser: ESC and OSC sequences in
+`sugar-style` is a renderer, not a sanitizer: ESC and OSC sequences in
 styled content flow to the terminal unchanged, because its width
 arithmetic must see them to keep alignment honest. The caller owns
-ingress sanitisation (`Sanitize::untrusted*`). Two narrow doors exist
+ingress sanitization (`Sanitize::untrusted*`). Two narrow doors exist
 inside the lib: `Style::hyperlink()` refuses ids containing `;` or `:`,
 and tabs are expanded per `tabWidth` (default 4) while `\r` is never
 stripped. Wrapping pre-styled content composes at the byte level — an

@@ -160,7 +160,7 @@ interface ChildSpawner
 `InProcessTransport` dispatches SSH channel-level messages (RFC 4254:
 pty-req, window-change, shell, exec, signal, env, break) to a
 `ChannelHandler` rather than handling them inline. Implement the interface
-to customise channel-level behaviour — replacing PTY allocation, signal
+to customize channel-level behavior — replacing PTY allocation, signal
 delivery, shell spawning, etc.
 
 Only one of those messages is produced by anything in this library today:
@@ -258,7 +258,7 @@ The root `Context` is created by `Server::serve()` via `Context::background()`
 and passed to `Transport::run()`. Each middleware may:
 
 1. **Inspect** — call `$ctx->done()` or `$ctx->err()` to check if the
-   request has been cancelled or deadline-exceeded
+   request has been canceled or deadline-exceeded
 2. **Derive** — call `$ctx->withValue()`, `$ctx->withDeadline()`, or
    `$ctx->withCancelable()` to create a child context
 3. **Short-circuit** — return without calling `$next` to stop the chain
@@ -411,7 +411,7 @@ The `Middleware\Auth\*` classes provide pluggable SSH authentication:
 | Class | What it does | Seams for custom logic |
 |-------|--------------|-----------------------|
 | `PasswordAuth` | Validates `(user, password)` against a callback; reads `SSH_PASSWORD` env var | Inject any `callable(string, string): bool` |
-| `CertificateAuth` | Validates X.509 PEM cert from `SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` / `CERTIFICATE` env vars | Inject any `callable(string, Session): bool`; `$required` flag controls behaviour when no cert is present |
+| `CertificateAuth` | Validates X.509 PEM cert from `SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` / `CERTIFICATE` env vars | Inject any `callable(string, Session): bool`; `$required` flag controls behavior when no cert is present |
 | `AuthMethods` | Stores the method list in Context under `auth.methods`; the `SSH_AUTH_METHODS <list>` STDOUT line is opt-in (`announce: true`) because that text lands in the user's terminal, not in a protocol field | `AuthMethods::fromContext($ctx)` reports what the operator declared -- never what authenticated |
 | `KeyboardInteractive` | Sends challenge prompts to STDOUT, reads newline-delimited responses from STDIN (RFC 4256 format) | Inject `callable(list<string>): bool|null` to validate responses |
 

@@ -323,7 +323,7 @@ $queue = NotificationQueue::new()->push(Notification::success('Done!'));
 $toast = Toast::fromQueue($queue);  // Toast|null
 ```
 
-Each `Level` maps to a distinct colour scheme (Info → blue, Warning → amber,
+Each `Level` maps to a distinct color scheme (Info → blue, Warning → amber,
 Error → red, Success → green). The adapter preserves the `title` if set.
 
 ### Breakpoint — responsive layout helper
@@ -331,7 +331,7 @@ Error → red, Success → green). The adapter preserves the `title` if set.
 `Layout\Breakpoint` provides four static methods for responsive layout
 decisions. Default thresholds (90 / 140) are the conventional dashboard values.
 
-| Method | Behaviour | Defaults |
+| Method | Behavior | Defaults |
 |--------|-----------|----------|
 | `narrow(int $width, int $threshold = 90): bool` | `true` when width is below threshold | threshold 90 |
 | `medium(int $width, int $narrow = 90, int $wide = 140): bool` | `true` when narrow ≤ width < wide | narrow 90, wide 140 |
@@ -590,7 +590,7 @@ families grew independently, so their API shapes differ.
 |-----------------|-------------------|--------|--------------|
 | `Foundation\Color` | `\SugarCraft\Core\Util\Color` | **Alias** — same class via `class_alias` | True duplicate; sugar-dashboard now redirects via shim. Prefer the Core FQN in new code. |
 | `Foundation\Style` | `\SugarCraft\Style\Style` | Both canonical | Dash carries `toAnsi(ColorProfile)` + public `?Color $foreground/$background`; Sprinkles carries padding/margin/borders + private `$fg/$bg`. Consumers access `$style->foreground->r` on the Dash shape. |
-| `Foundation\Theme` | `\SugarCraft\Style\Theme` | Both canonical | Dash has 10 colour slots + `bar()/text()/fg()/bg()/color()/highlight()` helpers; Sprinkles has 13 colour slots (adds muted/info/border/separator/cursor) with readonly properties only. |
+| `Foundation\Theme` | `\SugarCraft\Style\Theme` | Both canonical | Dash has 10 color slots + `bar()/text()/fg()/bg()/color()/highlight()` helpers; Sprinkles has 13 color slots (adds muted/info/border/separator/cursor) with readonly properties only. |
 | `Foundation\Rect` | `\SugarCraft\Core\Rect` | Both canonical | Dash uses the rectmath bounds model (`minX, minY, maxX, maxY`); Core\Rect uses an offset+size model (`x, y, width, height`). Choose by the geometry model your code needs. |
 | `Foundation\Buffer` | `\SugarCraft\Vt\Buffer\Buffer` | Both canonical | Dash Buffer is an immutable ANSI renderer (`Sizer`/`Drawable`); Vt Buffer is a mutable VT-output grid for terminal emulation. | <!-- @rename-keep -->
 | `Foundation\Cell` | `\SugarCraft\Vt\Cell\Cell` | Both canonical | Dash Cell holds `(rune, Style)`; Vt Cell holds `(grapheme, Sgr, continuation, hyperlink)`. | <!-- @rename-keep -->

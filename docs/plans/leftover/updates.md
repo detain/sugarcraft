@@ -338,8 +338,8 @@ step 07.15 · PR#666 · candy-mosaic: add Animation (ImageSource[] + delays, imm
 fix for step 07.15 · PR#667 · resolved 2 CALIBER findings
 docs for step 07.15 · PR#668 · document Animation/AnimationDriver/renderFrame() in README (Animation section + Architecture) + end-user HTML (feature grid + API table) + dev guide (new docs/dev/candy-mosaic.md) + PHPDoc on 6 methods <!-- @rename-keep historical provenance -->
 step 07.16 · PR#669 · candy-pty: add openpty() FFI binding for Darwin (primary) with quartet fallback; libutil.so.1 path on Linux for future extension; OpenptyTest coverage <!-- @rename-keep historical provenance -->
-fix for step 07.16 · PR#670 · resolved 2 findings (CALIBER openpty-darwin-first + openpty-libutil-linux pattern entries; README API table + Platform behaviour section surfaces openpty() Darwin-first path)
-docs for step 07.16 · PR#671 · document openpty FFI in end-user HTML (Pty::open() feature description) + admin HTML (platform behaviour section) + dev HTML (internal PTY allocation section) + Libc::libutil() @return PHPDoc fix
+fix for step 07.16 · PR#670 · resolved 2 findings (CALIBER openpty-darwin-first + openpty-libutil-linux pattern entries; README API table + Platform behavior section surfaces openpty() Darwin-first path)
+docs for step 07.16 · PR#671 · document openpty FFI in end-user HTML (Pty::open() feature description) + admin HTML (platform behavior section) + dev HTML (internal PTY allocation section) + Libc::libutil() @return PHPDoc fix
 step 07.17 · PR#672 · candy-pty: add waitpid() FFI for fast process-exit detection (<1ms vs 10ms poll) + ChildPollWaitpidTest (5 tests) + signal-exit handling (128+signal) <!-- @rename-keep historical provenance -->
 tests-ci for step 07.17 · clean
 docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALIBER + end-user/admin/dev HTML + PHPDoc on tryWaitpid

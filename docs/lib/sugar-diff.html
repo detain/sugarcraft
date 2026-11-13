@@ -211,12 +211,12 @@ foreach (UnifiedScan::lines($patchText) as $row) {
       <div class="feature"><strong>Hunk / Line / LineKind</strong><span>One @@ block; one numbered row; eq/del/ins. All immutable value objects.</span></div>
       <div class="feature"><strong>Writer\UnifiedFormat</strong><span>Renders the GNU diff -u shape: headers (path labels whose text carries control bytes, a double quote or a backslash are C-quoted git core.quotePath-style), @@ ranges with GNU count elision, opt-in "\ No newline" markers and /dev/null labels.</span></div>
       <div class="feature"><strong>Writer\SideBySideFormat / SideBySideRow</strong><span>Pairs a diff into [left?, right?] rows for split viewers — from a computed Diff or raw patch text, one shared pairing rule.</span></div>
-      <div class="feature"><strong>Reader\UnifiedScan</strong><span>Walks any rendered unified diff, honouring each hunk's declared counts and classifying every row with ScanRowKind — row classification and numbering, no drawing. The public isHunkHeader() predicate is the walk's own recognition pattern, published so consumers gate boundaries without a second regex to drift.</span></div>
+      <div class="feature"><strong>Reader\UnifiedScan</strong><span>Walks any rendered unified diff, honoring each hunk's declared counts and classifying every row with ScanRowKind — row classification and numbering, no drawing. The public isHunkHeader() predicate is the walk's own recognition pattern, published so consumers gate boundaries without a second regex to drift.</span></div>
     </div>
 
     <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers; every row ships redundant non-colour channels (<code>LineKind::marker()</code>, <code>ScanRowKind</code>), so a viewer can tint with colour without ever making colour carry the change alone (WCAG 1.4.1).</li>
+      <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers; every row ships redundant non-color channels (<code>LineKind::marker()</code>, <code>ScanRowKind</code>), so a viewer can tint with color without ever making color carry the change alone (WCAG 1.4.1).</li>
       <li><strong>Editing tools</strong> — the same engine candy-code's Edit, Write and ApplyPatch tools use to report changes to the model and the user.</li>
       <li><strong>Patch consumers</strong> — UnifiedScan answers "which file line is this row?" for arbitrary incoming diffs, including multi-file git output.</li>
     </ul>
@@ -244,10 +244,10 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 <tr><td>DiffOptions</td><td>withIgnoreWhitespace(bool $ignore = true) / withIgnoreCase(bool $ignore = true)</td><td>Fold comparisons; emitted rows keep original bytes</td></tr>
 <tr><td>DiffOptions</td><td>withNoNewlineMarker(bool $on = true) / withDevNullOnEmptySide(bool $on = true)</td><td>GNU annotations, opt-in (the marker only annotates STRING sides)</td></tr>
 <tr><td>UnifiedFormat</td><td>write(Diff, string $oldPath, ?string $newPath) / hunksOnly(Diff): string</td><td>The writer behind Diff::unified()/hunkText(); NO_NEWLINE_ROW; path labels are control-byte-safe</td></tr>
-<tr><td>SideBySideFormat</td><td>rows(Diff) / fromUnified(string|list&lt;string&gt;): list&lt;SideBySideRow&gt;</td><td>Split-view pairing; SideBySideRow-&gt;left/-&gt;right, isPaired(); list rows are taken as given (no newline refusal — unlike a compute() side), so a host printing an embedded newline into its channel owns sanitising it</td></tr>
+<tr><td>SideBySideFormat</td><td>rows(Diff) / fromUnified(string|list&lt;string&gt;): list&lt;SideBySideRow&gt;</td><td>Split-view pairing; SideBySideRow-&gt;left/-&gt;right, isPaired(); list rows are taken as given (no newline refusal — unlike a compute() side), so a host printing an embedded newline into its channel owns sanitizing it</td></tr>
 <tr><td>UnifiedScan</td><td>lines(string|list&lt;string&gt;): list&lt;ScannedLine&gt;</td><td>Per-row old/new line numbers, fileHeader flag, and ScanRowKind; declared-count budgets, fail-closed boundaries (MAX_LINE_NUMBER_DIGITS caps start fields); list input is not newline-refused the way compute() sides are — a "a\n+++ forged" element scans as one verbatim row and the lib never re-emits it. ScanRowKind::isContentRow() is true exactly for Context/Insert/Delete, so pairing renderers gate runs on the kind instead of re-sniffing the marker column</td></tr>
 <tr><td>UnifiedScan</td><td>fileHeaders(string|list&lt;string&gt;): list&lt;bool&gt; / rowsOf(string): list&lt;string&gt;</td><td>Which rows start a new file; the writer-compatible row split</td></tr>
-<tr><td>UnifiedScan</td><td>isHunkHeader(string): bool</td><td>Recognition of the @@ -a,b +c,d @@ boundary by the single pattern the walk itself matches — recognised even when the numbers are too large to number (they close the hunk above without counting), so a consumer gating rows on this predicate cannot drift from what lines() reports</td></tr>
+<tr><td>UnifiedScan</td><td>isHunkHeader(string): bool</td><td>Recognition of the @@ -a,b +c,d @@ boundary by the single pattern the walk itself matches — recognized even when the numbers are too large to number (they close the hunk above without counting), so a consumer gating rows on this predicate cannot drift from what lines() reports</td></tr>
 </table>
     </div>
   </div>

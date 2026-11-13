@@ -109,7 +109,7 @@ sugar-panels research lists `BoxStyle` enum (Single/Double/Round/Bold/Classic/Hi
 
 ### SSOT-03 — sugar-flexbox composes sugar-widgets
 
-sugar-flexbox research's Priority 1 is `Viewport`, Priority 3 is `Scrollbar`. **Both already exist** in `sugar-widgets/src/Viewport/Viewport.php` and `sugar-widgets/src/Scrollbar/`. The sticker-specific behaviour (sticky positioning, scroll sync) should layer **on top** of sugar-widgets, not replace.
+sugar-flexbox research's Priority 1 is `Viewport`, Priority 3 is `Scrollbar`. **Both already exist** in `sugar-widgets/src/Viewport/Viewport.php` and `sugar-widgets/src/Scrollbar/`. The sticker-specific behavior (sticky positioning, scroll sync) should layer **on top** of sugar-widgets, not replace.
 
 **Action:**
 
@@ -735,7 +735,7 @@ hits `wttr.in` (or open-meteo); cache to disk; fall back on network
 failure. Wraps `interval=1800` for half-hour refresh.
 
 **Acceptance:** `tests/Modules/WeatherModuleTest.php` mocks the HTTP
-client and asserts cache hit/miss behaviour. `examples/dashboard-live.php`
+client and asserts cache hit/miss behavior. `examples/dashboard-live.php`
 includes the weather panel.
 
 **Size:** 1 PR.

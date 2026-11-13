@@ -254,7 +254,7 @@ written; these gaps have since closed in sugar-panels):**
 - Text alignment — **shipped**: `->withAlignH(?Align)` / `->withAlignV(?VAlign)`
 - Box titles — **shipped (top border only)**: `->withTitle(string)`; upstream's
   Top/Bottom/Inside placement variants remain unmapped
-- Colors — **shipped**: `->withStyle(?Style)` carries sugar-style colours and
+- Colors — **shipped**: `->withStyle(?Style)` carries sugar-style colors and
   attributes into the grid
 - Margin (outer) — **shipped**: `->withMargin(top, right, bottom, left)`, and
   the cap semantics keep margin outside `max*` (see README API table)

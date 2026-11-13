@@ -62,7 +62,7 @@ For everything else (`en-gb` vs `en-us`, `fr-ca` vs `fr-fr`,
 `de-at` vs `de-de`) the differences are too small to justify duplicate
 files — let the base-language fallback handle them.
 
-## Full list of base language codes recognised by glibc
+## Full list of base language codes recognized by glibc
 
 These are every language code that appears on a typical Linux locale
 listing (`locale -a`). Any of them can be used as a SugarCraft lang

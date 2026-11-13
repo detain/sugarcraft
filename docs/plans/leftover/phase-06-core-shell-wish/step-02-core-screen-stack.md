@@ -21,7 +21,7 @@ breadcrumb tracking.
 
 **Modify:**
 
-- `sugar-core/src/Program.php` — recognises ScreenStack-aware models
+- `sugar-core/src/Program.php` — recognizes ScreenStack-aware models
   by checking for a `screens(): ScreenStack` method; if present, drives
   the active screen's Model.
 

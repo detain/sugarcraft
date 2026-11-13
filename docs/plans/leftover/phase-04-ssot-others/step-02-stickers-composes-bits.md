@@ -20,7 +20,7 @@ Compose them; don't reinvent.
 - `sugar-flexbox/composer.json` — add `"sugarcraft/sugar-widgets": "@dev"`
   + path-repo.
 
-**Defer** the sticky-positioning + scroll-sync behaviour to step 10.12
+**Defer** the sticky-positioning + scroll-sync behavior to step 10.12
 (post-SSOT-03 feature work).
 
 ## Acceptance

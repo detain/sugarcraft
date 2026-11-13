@@ -43,7 +43,7 @@ wider once Screen/Scrollback/Cursor/Sgr/Mode count in).
 ## 3. The parity bridge — an oracle that already exists
 
 `candy-vcr/tests/VtParityTest.php` (767L) feeds the SAME recorded cassette bytes
-through both stacks and asserts agreement over a shared NORMALISED grid (char,
+through both stacks and asserts agreement over a shared NormalizED grid (char,
 palette index, the five renderer attribute bits). Its header records the
 convergence history: #1417 corrected the EMULATOR semantics (DECAWM, deferred
 wrap, RIS/DECSTR, IL/DL, SCS); the parity track then brought the RENDERER
@@ -54,7 +54,7 @@ combining marks, REP, BCE erases, the `CSI 0 L/M` adapter clamp.
 
 Consequence for any unification: **VtParityTest is a ready-made equivalence
 oracle** — the migration check for strategy B or C is largely "delete the
-normaliser, compare directly".
+normalizer, compare directly".
 
 ## 4. Candidate strategies
 

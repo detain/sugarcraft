@@ -18,7 +18,7 @@ in the recipe below.
 **Measurement discipline in this file.** Every count names what it counted. Anything I did not measure
 says **not measured**. Where a grep disagreed with `crush_code.md` or with RESUME, the grep is written
 down as the finding and the plan's claim is quoted beside it. That is not pedantry — it is this
-project's single dominant twenty-six-round defect (RESUME §5: *a number or a claim that travelled
+project's single dominant twenty-six-round defect (RESUME §5: *a number or a claim that traveled
 without its domain*), and a concurrency map is exactly the kind of document that spreads one.
 
 ---
@@ -167,7 +167,7 @@ fresh `cp -a` from a clean, pulled `master`. That is 7-10 seconds (§5.1).
 - **BS?** — does the item have to edit `candy-code/src/Cli/Bootstrap.php`? (the primary bottleneck)
 - **Chat?** — does it have to edit `candy-code/src/Chat.php`?
 - **+src?** — does it add a `src/**.php` file, i.e. does it move the five censuses (§6.5)?
-- **size** — S/M/L. **This column is an estimate, not a measurement.** It is my judgement from the
+- **size** — S/M/L. **This column is an estimate, not a measurement.** It is my judgment from the
   item's file fan-out and text; treat it as a hint for batching, never as a schedule.
 - **blocked-by** — hard dependencies only: a symbol that must exist, or a seam that must be wired
   first. "Feels later" is not in this column.
@@ -217,7 +217,7 @@ by phase: 2→3, 3→4, 4→1, 6→6, 7→4, 8→9 = **27**. ✅
 | **P6.4** | a `permission`/`permissionMode` settings block | `src/Cli/Bootstrap.php` (`permissionConfig()` ~2491, `permissionRules()` ~2659) | **W** | **P6.2**; the plan's other stated prerequisite (Phase 1 item 2, `PermissionGate` in the main loop) **is already satisfied** — Phase 1 is complete | M | ✅ | — | — |
 | **P6.5** | `keybindings` remap + `statusLine` command config | `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php` (the config read) | **W** | **P6.2** for the config half. The plan says this "can land independently at any point" — **that is true of the TUI half only**; the config half cannot precede the settings loader | M | ✅ | — | — |
 | **P6.6** | `--model` / `--permission-mode` CLI flags as the top precedence tier | `src/Cli/ArgvParser.php` (grep: **zero** `--model`/`--permission-mode` tokens today), `bin/candy-code`, `src/Cli/Bootstrap.php` | **W** | **P6.2** — "highest-precedence override tier" is meaningless without the tiers below it | M | ✅ | — | — |
-| **P7.3** | `docs/SKILLS.md`, `docs/AGENTS_AUTHORING.md`, `docs/MCP.md`, `docs/PERMISSIONS.md` | new files under `candy-code/docs/` | **D** | describes shipped behaviour — genuinely unblocked | M | — | — | — |
+| **P7.3** | `docs/SKILLS.md`, `docs/AGENTS_AUTHORING.md`, `docs/MCP.md`, `docs/PERMISSIONS.md` | new files under `candy-code/docs/` | **D** | describes shipped behavior — genuinely unblocked | M | — | — | — |
 | **P7.4** | `docs/HOOKS.md`, `docs/MEMORY.md`, `docs/WORKFLOWS.md`; fix README's built-in-hooks list (omits `BashEscapeDenyHook`) | new files under `candy-code/docs/`, `candy-code/README.md` | **D** | nothing | M | — | — | — |
 | **P7.5** | `docs/TROUBLESHOOTING.md` from `CALIBER_LEARNINGS.md`'s solved incidents | new file under `candy-code/docs/` | **D** | nothing | S | — | — | — |
 | **P7.6** | `docs/ARCHITECTURE.md`, incl. the "`App` wears two hats, do not retire it" warning | new file under `candy-code/docs/` | **D** | nothing | M | — | — | — |
@@ -274,7 +274,7 @@ paints it — zero `stall` hits in `src/Renderer.php`."* Measured:
 | what | measured |
 |---|---|
 | `stall` (case-insensitive) in `src/Renderer.php` | **0** — the plan's number is correct |
-| `stall` in `src/Tui/AgentOutputPane.php` | **the render branch, fully written**: `:58 $isStalled = $state->stallWarning !== null;`, `:43 STALL_TOKEN = 'shellWarning'`, and its docblock at `:20-21` — *"the border switches to the palette's warning colour and a `⚠ stalled` indicator appears"* |
+| `stall` in `src/Tui/AgentOutputPane.php` | **the render branch, fully written**: `:58 $isStalled = $state->stallWarning !== null;`, `:43 STALL_TOKEN = 'shellWarning'`, and its docblock at `:20-21` — *"the border switches to the palette's warning color and a `⚠ stalled` indicator appears"* |
 | is that painter reached? | **yes** — `AgentDashboardPane.php:237` calls `AgentOutputPane::render(...)` |
 | callers of `BackgroundSupervisor::getStallWarnings()` | **0** outside its own definition |
 | does anything pass `stallWarning:`? | **no** — `AgentDashboardPane::agentEntry()` (:343) and `sessionEntry()` (:369) both call `AgentOutputState::fromDisplayState(...)` without it, and the parameter defaults to `null` |
@@ -436,7 +436,7 @@ confirmed RCE counting as functionality and jumping the queue whenever a user re
 
 **Tier 2 — runs concurrently with Tier 1, in its own lanes**
 3. Lane D: P7.3, P7.4, P7.5, P7.6, P8.15 — zero code files, zero shared code, and P7's docs describe
-   already-shipped behaviour. This is the safest lane in the plan and should be running whenever N > 1.
+   already-shipped behavior. This is the safest lane in the plan and should be running whenever N > 1.
 4. Lane D: **P8.6 first, actually** — because §2.5(b) says it is probably already done, and a 20-minute
    confirmation that closes an item beats a 3-hour bundle that reimplements one.
 5. Lane C: P6.1, P8.10, P8.11, then P8.8 (P8.8 last in C because it is the census-mover — §6.5).
@@ -584,7 +584,7 @@ way — it invites you to believe the one that looks plausible.
 
 So: **always `fetch` before reading a lane's behind-count**, and never quote a lane's own
 freshness figure without saying when it was fetched. This is the same defect the whole plan
-tracks — a number that travelled without its domain — expressed in git refs instead of prose.
+tracks — a number that traveled without its domain — expressed in git refs instead of prose.
 
 ### 5.2d THE SUPERVISOR'S OWN SCRATCH FILES ARE INSIDE THE LANE, AND THE BRIEF SAYS `git add -A`
 
@@ -611,7 +611,7 @@ printf '%s\n' .lane-provenance .lane-wip.patch \
 **empty** — which is also a much better readiness signal than "only my own files are left",
 because it makes "clean" mean clean.
 
-Generalise the lesson: **any file the supervisor writes into a lane is a file some agent may
+Generalize the lesson: **any file the supervisor writes into a lane is a file some agent may
 commit.** Either exclude it or keep it outside the lane.
 
 ### 5.3 VERIFY EVERY LANE BEFORE HANDING IT TO AN AGENT
@@ -735,16 +735,16 @@ That is the main thing isolation buys, more than speed.
 
 ### 6.2 A corollary that RESUME §3 could not have known
 
-RESUME §3 says: *"Serialise anything touching the same file. A suite run that loads a file another lane
+RESUME §3 says: *"Serialize anything touching the same file. A suite run that loads a file another lane
 is editing shifts `file(__FILE__)` ranges against already-loaded reflection and produces phantom
-failures. Serialise the runs, not just the writes."*
+failures. Serialize the runs, not just the writes."*
 
 **In isolated directories that hazard is gone**, because a lane's suite loads only its own copy's files
 — which is exactly what §5.3 check (2) proves (`ReflectionClass::getFileName()` inside the lane, for
 both a sibling lib and candy-code itself). **So: lanes may run their suites concurrently.** This is my
 reading of §3's mechanism plus a direct measurement of the isolation, not something §3 says. If phantom
-failures ever appear anyway, re-serialise the runs and tell the supervisor — but do not serialise them
-pre-emptively, because a serialised test queue would remove most of the value of running 4 lanes.
+failures ever appear anyway, re-serialize the runs and tell the supervisor — but do not serialize them
+pre-emptively, because a serialized test queue would remove most of the value of running 4 lanes.
 
 ### 6.3 Commit and push discipline
 
@@ -983,7 +983,7 @@ Stated explicitly so nobody reads an estimate as a measurement (RESUME §5).
   table. Inferred from item text; there is no `PluginLoader` and no `Task` tool in `src/` to grep. Both
   bundles' measure steps must settle it, and if either does need `Chat.php`, §3.2's U/W carve-out
   applies to it too.
-- **The S/M/L size column.** Judgement, not measurement.
+- **The S/M/L size column.** Judgment, not measurement.
 - **Port-collision risk across N concurrent candy-code suites.** §5.5.
 - **Whether N concurrent full suites slow each other down.** One full suite in a probe copy took
   **3m11.497s** against the ~2m20s figure RESUME records for the live tree. Three confounds make that
@@ -1014,6 +1014,6 @@ textual conflict whose correct resolution is neither side's value but the **re-d
 
 The brief should therefore say, for these files specifically: on a conflict confined to a census
 count or an inventory row, **re-derive the value from the tree and continue** (the count is a
-function of the code, so recomputing it is not a judgement call), and report that you did. STOP
+function of the code, so recomputing it is not a judgment call), and report that you did. STOP
 remains the rule for a conflict anywhere else, including a conflict in the *prose* of those same
 test files, because that is a claim and not a count.

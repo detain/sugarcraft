@@ -22,7 +22,7 @@ slot in without changing call sites.
     first.
   - Recognized values: `posix-ffi` (default), `sidecar` (throws
     UnsupportedPlatformException for now with "deferred to phase 12"
-    message), `pecl` (same), `auto` (= default behaviour).
+    message), `pecl` (same), `auto` (= default behavior).
   - Unrecognized values throw `\InvalidArgumentException` with a
     helpful message listing valid values.
 - `sugar-pty/README.md` — document the env var in the Architecture
@@ -32,7 +32,7 @@ slot in without changing call sites.
 ## Tests
 
 - `sugar-pty/tests/PtySystemFactoryTest.php`:
-  - Asserts default behaviour with no env var set.
+  - Asserts default behavior with no env var set.
   - Asserts `SUGARCRAFT_PTY_BACKEND=posix-ffi` returns
     `PosixPtySystem`.
   - Asserts `SUGARCRAFT_PTY_BACKEND=sidecar` throws
@@ -43,7 +43,7 @@ slot in without changing call sites.
 
 - `cd sugar-pty && vendor/bin/phpunit --filter PtySystemFactory` green.
 - README has the new section documenting all four recognized values.
-- No behavioural change for default (no env var set) callers.
+- No behavioral change for default (no env var set) callers.
 
 ## Notes
 

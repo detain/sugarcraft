@@ -111,7 +111,7 @@ noticed. MEASURED: the diff is **root `composer.lock` only** (11+/11-), nothing 
 - **E490 -> track at E623**, not here. Ownership moved to E550/E593/E623, which ran the campaign;
   E623 explicitly DECLINES to retire E490. STEP 3 landed as `sugar-pty/tests/Support/HangWatchdog.php`.
 - **E496** — an entry whose explicit instruction was OVERRIDDEN: it said deleting the source-text
-  guard was "not a licence" (rule 6) and the scan WAS deleted. The replacement doc-block gives a
+  guard was "not a license" (rule 6) and the scan WAS deleted. The replacement doc-block gives a
   measured reason, so it reads deliberate — but it is on the record as an override, not a close.
 - **E508** — its own premise was measured FALSE (payload size irrelevant: 10 MiB to a live reader
   = 0.028s; 65,629 B to a deaf one = 15.006s). The 15s bound is still unthreaded, but E508's stated

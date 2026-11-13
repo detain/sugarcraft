@@ -227,7 +227,7 @@ This is a **full rewrite** in everything but name:
 
 Honestly: **almost nothing.**
 
-- The `Transport` interface idea generalises trivially but the
+- The `Transport` interface idea generalizes trivially but the
   Email-shaped `send(Email)` signature does not. A `Post` and an
   `Email` share no fields beyond "body string + zero-or-more
   attachments."
@@ -276,7 +276,7 @@ infrastructure and CLI parsing.
 
 ≈ Option A (~2 weeks) **plus** Option B (~12 weeks) **minus** maybe 1
 week of shared infra (CLI parser, i18n facade, transport interface
-generalisation).
+generalization).
 
 **Total:** ~12–16 weeks.
 
@@ -409,7 +409,7 @@ post-decision audit trail.
    - step `03` — Send spinner + Markdown preview
    - step `04` — TUI tests + VHS tape + docs
 
-Item #3 is **deferred until the user explicitly authorises** — the
+Item #3 is **deferred until the user explicitly authorizes** — the
 current leftover rollout still has 7.15 → 11 phases to land before
 adding a new TUI program. Hold for a follow-up plan PR.
 

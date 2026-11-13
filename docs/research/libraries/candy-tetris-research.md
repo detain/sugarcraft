@@ -62,7 +62,7 @@ private function tryRotate(int $delta): self
 - ~~Only horizontal kicks (±1, ±2) - no vertical kicks~~ — fixed: full vertical kick offsets ship
 - ~~No distinction between piece types (I vs J/L/S/T/Z)~~ — fixed: `SrsKickTable::kicks()` is per-kind
 - ~~No distinction between clockwise/counter-clockwise rotations~~ — fixed: per direction-pair transitions
-- ~~Does not use official SRS wall-kick tables~~ — fixed: official tables transcribed verbatim; single y-sign flip at the `Piece::rotationsWithKicks()` choke; behaviour pinned by `tests/Rotation/SrsKickBehaviorTest.php`
+- ~~Does not use official SRS wall-kick tables~~ — fixed: official tables transcribed verbatim; single y-sign flip at the `Piece::rotationsWithKicks()` choke; behavior pinned by `tests/Rotation/SrsKickBehaviorTest.php`
 
 ### Upstream Implementation (tetrigo)
 
@@ -591,6 +591,6 @@ Create test cases from official SRS test suite (see [Tetris Wiki SRS](https://te
 
 The candy-tetris implementation is solid and well-tested — **497 tests / 7401 assertions as of 2026-11-12** (82 tests / 1669 assertions when this document was written 2026-05-13). The core mechanics (bag randomizer, ghost piece, lock delay, hold) are correctly implemented.
 
-The main improvement opportunity **identified here — full SRS rotation — has shipped** (2026-11-12): true guideline kicks are live and behaviour-pinned, enabling the advanced "spins" that competitive players expect.
+The main improvement opportunity **identified here — full SRS rotation — has shipped** (2026-11-12): true guideline kicks are live and behavior-pinned, enabling the advanced "spins" that competitive players expect.
 
 **Remaining input-side gap:** DAS/ARR tuning (the only roadmap item above still open; see §6 low-priority table).

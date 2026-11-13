@@ -531,7 +531,7 @@ steps touch sugar-image.
   in `AnimationDriver.php`).
 - One small method on `KittyRenderer::renderFrame()` (see §4.3).
 - One example: `sugar-image/examples/animation.php` — animate a 5-
-  frame procedurally-generated colour cycle through the probed
+  frame procedurally-generated color cycle through the probed
   protocol.
 - One test: `sugar-image/tests/AnimationDriverTest.php` — fixture
   animation with 5 procedurally-generated `ImageSource` frames,

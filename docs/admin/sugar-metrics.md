@@ -35,7 +35,7 @@ $reg = new Registry(new PrometheusFileBackend('/var/lib/sugar-metrics/metrics.pr
 
 `node_exporter` scrapes every `.prom` file in that directory and exposes
 the metrics at `http://host:9100/metrics`. The file is written atomically
-(write-to-tmp + rename) and locked with `flock(LOCK_EX)` to serialise
+(write-to-tmp + rename) and locked with `flock(LOCK_EX)` to serialize
 concurrent writers.
 
 ### Histogram bucket semantics
@@ -152,13 +152,13 @@ rate(ssh_session_error_total[5m]) / rate(ssh_session_connect_total[5m])
 
 ## Failure modes
 
-| Scenario | Behaviour |
+| Scenario | Behavior |
 |----------|-----------|
 | Metrics file directory does not exist | `RuntimeException` on first `flush()`; process continues without metrics |
 | Disk full | `RuntimeException` on `flush()`; metrics for that interval are lost |
 | StatsD receiver unavailable | UDP write fails silently; no exception propagates to application |
 | Application crash before destructor | Last `flush()` may not run; node_exporter serves last successfully written file |
-| Concurrent writers (MultiBackend) | `PrometheusFileBackend` serialises via `flock(LOCK_EX)`; StatsD/JSON backends are unprotected |
+| Concurrent writers (MultiBackend) | `PrometheusFileBackend` serializes via `flock(LOCK_EX)`; StatsD/JSON backends are unprotected |
 
 ### Healthcheck pattern
 

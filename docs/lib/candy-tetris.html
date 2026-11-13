@@ -167,7 +167,7 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">SugarCraft runtime, SugarStyle for rounded borders + per-piece colours, uniform-shuffled 7-bag (injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style base scoring with modern Guideline bonuses. Full SRS wall-kicks via the Tetris Company Guideline tables, T-Spin detection via the centre-diagonal 3-corner rule, Back-to-Back (1.5×) and combo bonuses, and perfect-clear detection (+5000 × (level+1)).</p>
+<p class="lede" style="margin-top: 28px;">SugarCraft runtime, SugarStyle for rounded borders + per-piece colors, uniform-shuffled 7-bag (injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style base scoring with modern Guideline bonuses. Full SRS wall-kicks via the Tetris Company Guideline tables, T-Spin detection via the center-diagonal 3-corner rule, Back-to-Back (1.5×) and combo bonuses, and perfect-clear detection (+5000 × (level+1)).</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <p>Requires <code>php-cli</code> 8.3+ with <code>ext-intl</code> and <code>ext-mbstring</code>. Both are hard-required transitively by sugar-core, whose cell-width math segments through ICU — on a bare php-cli machine <code>composer install</code> is the step that refuses, naming sugar-core.</p>
@@ -213,7 +213,7 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
       <li><strong>The frame</strong> — the full single-player frame is 40×33; the honest floor is 40×24. Between them the sidebar reflows by budget, not by scroll: the help card gives way first and a one-row key pointer (the live <code>h</code> press) replaces it, so a floor terminal never loses every key at once. Below the floor a resize notice paints instead and play freezes until the terminal is big enough again — rows, not columns, are what the notice waits for.</li>
       <li><strong>The duel</strong> — the VS board has one posture: 54×33, exact. There is no compact versus frame; anything smaller answers the resize notice.</li>
       <li><strong>No TTY, no game</strong> — a launch with no terminal to play on (stdin or stdout a pipe or redirect, or <code>TERM=dumb</code>) is refused before anything paints: one plain line on stderr, zero escape bytes, exit code 1.</li>
-      <li><strong>No colour, still playable</strong> — <code>NO_COLOR</code> and <code>CLICOLOR=0</code> re-render the whole frame with zero SGR; shape carries every fact colour used to carry, and empty cells render as <code>·</code> so the grid stays readable. The escape hatches <code>CLICOLOR_FORCE=1</code> and <code>FORCE_COLOR</code> vouch for the terminal and skip the no-TTY refusal — under either one escapes are painted into a redirect as if the terminal were there.</li>
+      <li><strong>No color, still playable</strong> — <code>NO_COLOR</code> and <code>CLICOLOR=0</code> re-render the whole frame with zero SGR; shape carries every fact color used to carry, and empty cells render as <code>·</code> so the grid stays readable. The escape hatches <code>CLICOLOR_FORCE=1</code> and <code>FORCE_COLOR</code> vouch for the terminal and skip the no-TTY refusal — under either one escapes are painted into a redirect as if the terminal were there.</li>
     </ul>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
@@ -223,7 +223,7 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
       <div class="feature"><strong>Ghost piece</strong><span>Translucent preview at the hard-drop landing position.</span></div>
       <div class="feature"><strong>Hard drop / hold</strong><span>Space-bar drop; level-driven gravity speed-up at every 10 lines. Lock delay (500 ms window, 15-reset cap) in single player; VS boards lock on the grounding tick.</span></div>
       <div class="feature"><strong>Line-clear scoring</strong><span>NES-style base points — 1 → 40, 2 → 100, 3 → 300, 4 → 1200 — multiplied by (level + 1); the T-Spin and B2B bonuses follow the modern Guideline.</span></div>
-      <div class="feature"><strong>T-Spin (3-corner rule)</strong><span>Guideline detection on the diagonals of the T's centre: 3+ filled corners (wall/floor count as filled) score a full T-Spin (400 × level+1); exactly 2 with one on the nub side score a Mini (100 × level+1); 2 back corners score nothing. A Mini clearing 2+ lines is promoted to full.</span></div>
+      <div class="feature"><strong>T-Spin (3-corner rule)</strong><span>Guideline detection on the diagonals of the T's center: 3+ filled corners (wall/floor count as filled) score a full T-Spin (400 × level+1); exactly 2 with one on the nub side score a Mini (100 × level+1); 2 back corners score nothing. A Mini clearing 2+ lines is promoted to full.</span></div>
       <div class="feature"><strong>Back-to-Back (B2B)</strong><span>1.5× multiplier carried by consecutive difficult CLEARS (Tetris, or a full T-Spin that cleared lines). Resets on an ordinary 1–3 line clear; a clear-less lock — spin or quiet — leaves the chain untouched.</span></div>
       <div class="feature"><strong>Combo counter</strong><span>Consecutive line clears add combo × 10 × (level+1) bonus points; resets to 0 on a zero-line lock.</span></div>
       <div class="feature"><strong>Perfect clear</strong><span>Clearing the full board awards +5000 × (level+1) bonus — detected via Board::isPerfectClear().</span></div>
@@ -242,7 +242,7 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
     <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Tetromino</td><td>cases() / color()</td><td>Backed enum of the seven kinds; 256-colour code per kind</td></tr>
+<tr><td>Tetromino</td><td>cases() / color()</td><td>Backed enum of the seven kinds; 256-color code per kind</td></tr>
 <tr><td>Piece</td><td>rotated(delta) / moved(dx, dy)</td><td>Immutable transforms (withX/withY for placement)</td></tr>
 <tr><td>Piece</td><td>rotationsWithKicks(delta)</td><td>Candidate positions in SRS kick order (naive first); board-free — callers filter with Board::fits()</td></tr>
 <tr><td>Board</td><td>__construct(cells?)</td><td>10-wide grid (4 hidden + 20 visible rows; dims fixed by class constants, not settable)</td></tr>
@@ -255,11 +255,11 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
 <tr><td>Game</td><td>start() / update(msg)</td><td>TEA model: every message yields [Game, ?Cmd] — the literal wire type is <code>array{0: Game, 1: ?\Closure}</code></td></tr>
 <tr><td>SrsKickTable</td><td>kicks(piece, from, to)</td><td>Return kick offsets for a rotation transition</td></tr>
 <tr><td>SrsKickTable</td><td>allKicks(piece)</td><td>Return all transition tables for a piece</td></tr>
-<tr><td>Scoring\TSpin</td><td>detect(board, piece, lastActionWasRotation)</td><td>Centre-diagonal 3-corner rule; returns TSpin(active, mini)</td></tr>
+<tr><td>Scoring\TSpin</td><td>detect(board, piece, lastActionWasRotation)</td><td>Center-diagonal 3-corner rule; returns TSpin(active, mini)</td></tr>
 <tr><td>Scoring\TSpin</td><td>T_SPIN_POINTS / T_SPIN_MINI_POINTS</td><td>Base score constants (400 / 100, scaled by level+1)</td></tr>
 <tr><td>Game</td><td>startWithLockDelay()</td><td>Seed a game with a custom lock-delay window (SRS QoL knob)</td></tr>
 <tr><td>Game</td><td>addGarbageRows(count)</td><td>Push incoming garbage in from the bottom; versus mode's opponent channel</td></tr>
-<tr><td>Tetromino</td><td>rgbColor()</td><td>The piece's 24-bit truecolour value as an int</td></tr>
+<tr><td>Tetromino</td><td>rgbColor()</td><td>The piece's 24-bit truecolor value as an int</td></tr>
 <tr><td>Score</td><td>withDropPoints(points)</td><td>Add drop points to the score; lines and level stay put (the game feeds 1 per soft cell, 2 per hard cell)</td></tr>
 </table>
     </div>

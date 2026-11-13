@@ -148,14 +148,14 @@ places — READMEs use `vendor/bin/…` and `./bin/…` for different ones:
 
 ## Accessibility & reduced motion
 
-- **`REDUCE_MOTION`** / **`PREFERS_REDUCED_MOTION`** — either variable reading on (anything except empty, `0`, `false`, `no`, `off`, case-insensitively) is read by [`SugarCraft\ColorProfile\Probe::reducedMotion()`](../sugar-colorprofile/src/Probe.php) and honoured by [`sugar-spring`](../sugar-spring/src/Spring.php): spring-composed types snap straight to their target instead of animating (projectiles and easing curves are gate-yourself app-side; see the sugar-spring README).
+- **`REDUCE_MOTION`** / **`PREFERS_REDUCED_MOTION`** — either variable reading on (anything except empty, `0`, `false`, `no`, `off`, case-insensitively) is read by [`SugarCraft\ColorProfile\Probe::reducedMotion()`](../sugar-colorprofile/src/Probe.php) and honored by [`sugar-spring`](../sugar-spring/src/Spring.php): spring-composed types snap straight to their target instead of animating (projectiles and easing curves are gate-yourself app-side; see the sugar-spring README).
 - **`NO_COLOR`**: color depth is detected fleet-wide by
   [`sugar-core`'s `ColorProfile::detect()`](../sugar-core/src/Util/ColorProfile.php)
   (TERM / `COLORTERM` / `NO_COLOR` / CI probes) and announced to every
   program as a `ColorProfileMsg`; the full precedence ladder is documented
   in the [sugar-colorprofile
   README](../sugar-colorprofile/README.md). Applying it is app-by-app:
-  sugar-style renderers honour the profile, while some apps pick their depth
+  sugar-style renderers honor the profile, while some apps pick their depth
   from their own config first — candy-top, for example, derives it from its
   `truecolor`/terminal-mode options and does not consume the startup message.
   If an app ignores `NO_COLOR`, that is a bug worth a report.

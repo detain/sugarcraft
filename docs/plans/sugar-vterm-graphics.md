@@ -49,7 +49,7 @@ This memo proposes:
    three. Sixel is the hardest; iTerm2 / WezTerm is the smallest in
    bytes-of-parser but largest in image-data semantics.
 4. **Risks** — Sixel grammar is non-trivial (run-length encoding,
-   colour introducers, repeat counts, raster attributes); Kitty image-
+   color introducers, repeat counts, raster attributes); Kitty image-
    data chunks span an unbounded number of escape sequences with
    stateful merge semantics; iTerm2 OSC 1337 carries opaque base64
    payloads with key=value preamble. Memory cost can be unbounded if
@@ -148,14 +148,14 @@ in §6 because none of P0–P2 needed a product call; this does.
   - **iTerm2 / WezTerm inline images** — OSC `\x1b]1337;File=...` with
     base64 payload after the final `:`.
   - **DEC Sixel** — DCS `\x1bPq...` with raster attributes (`"<a>;<b>;<w>;<h>`),
-    colour introducers (`#<idx>;<type>;<r>;<g>;<b>`), the sixel byte
+    color introducers (`#<idx>;<type>;<r>;<g>;<b>`), the sixel byte
     grid itself (`?`–`~` mapped to 6-bit columns of pixels), repeat
     counts (`!<count><byte>`), and graphics newline (`-`) / carriage
     return (`$`).
 - **Common output type** — every decoder produces an `ImagePlacement`
   value object (immutable, namespace `SugarCraft\Vterm\Graphics\`) carrying
   enough metadata for a consumer to render or replay: source bytes
-  (or normalised PNG), cell origin row/col, cell width/height, image
+  (or normalized PNG), cell origin row/col, cell width/height, image
   id (if present), z-index (Kitty), transparency hints, source
   protocol enum, and the SGR state at the time of placement.
 - **Screen integration** — `ScreenHandler` records each `ImagePlacement`
@@ -190,7 +190,7 @@ in §6 because none of P0–P2 needed a product call; this does.
   protocol, xterm modifyOtherKeys. Those are separate research items;
   they are not graphics.
 - **OSC 8 v2 / OSC 9 / OSC 10/11/12 (foreground/background/cursor
-  colour query).** All small, but distinct from graphics; they can ship
+  color query).** All small, but distinct from graphics; they can ship
   in a separate small handler.
 - **Performance optimisation for the decode hot path.** First land
   correctness; benchmark after. Sixel decode is intentionally O(N) in
@@ -202,7 +202,7 @@ in §6 because none of P0–P2 needed a product call; this does.
 For each protocol, the decoder converts the escape-sequence payload
 to:
 
-- **A raw image-bytes buffer** (PNG-normalised when the source is
+- **A raw image-bytes buffer** (PNG-normalized when the source is
   Kitty `f=100`/`f=1`, or when the consumer requests PNG; raw RGBA
   otherwise).
 - **Width and height in pixels** (always known by the time decode
@@ -373,7 +373,7 @@ ambiguity by recording the placement explicitly and letting the
 consumer decide what to do at render time.
 
 A future flag (`Terminal::withSixelEats(bool)`) could opt into the
-"sixel eats cells" behaviour if a consumer wants strict xterm parity.
+"sixel eats cells" behavior if a consumer wants strict xterm parity.
 Default: off (Kitty semantics).
 
 ### 3.6 Diff API
@@ -400,7 +400,7 @@ incremental-render consumer.
 
 ### 4.1 sugar-image (encode-side reuse)
 
-The PNG-normalisation path in `sugar-image/src/Renderer/KittyRenderer.php`
+The PNG-normalization path in `sugar-image/src/Renderer/KittyRenderer.php`
 (`ensurePng()`, 25 LOC) and the Sixel pixel-grid extraction path are
 the *inverse* of what the decoders need. Worth lifting either:
 
@@ -424,7 +424,7 @@ duplication.
 
 sugar-image already requires `ext-gd`. The decoder needs the same
 for PNG encode (Kitty `f=100` round-trip + Sixel-to-PNG
-normalisation). Add `ext-gd` to `sugar-vterm/composer.json` `require`
+normalization). Add `ext-gd` to `sugar-vterm/composer.json` `require`
 **only when the decoder ships** — until then, sugar-vterm stays GD-free
 (it currently has zero ext deps beyond stdlib, which is a deliberate
 strength). The phase-1 step file MUST flag this as the first review
@@ -453,7 +453,7 @@ The whole graphics subtree is internal to sugar-vterm. Public API
 exposed: `Terminal::withGraphics(bool)` (default `false` to keep
 backward-compat; opt-in), `Terminal::withPlacementLimits(PlacementLimits)`,
 and `Screen::placements()`. Default disabled means existing consumers
-see no behaviour change.
+see no behavior change.
 
 ---
 
@@ -495,7 +495,7 @@ without placing.
 
 **Acceptance:** the round-trip test passes; existing 467 sugar-vterm
 tests still pass; `composer validate` clean; `Terminal::withGraphics(false)`
-remains the default and behaviour change is zero for legacy
+remains the default and behavior change is zero for legacy
 consumers.
 
 ### Phase 2 — Kitty full surface (4–5 weeks, multi-PR)
@@ -510,8 +510,8 @@ consumers.
   transmitted image; PlacementStore lookup).
 - 2c — delete action (`a=d` + `d=<scope>` where `d` is a / A / i / I
   / etc. per spec; full deletion-criterion table).
-- 2d — additional format keys (`f=24` raw RGB → PNG-normalise via
-  GD; `f=32` raw RGBA → PNG-normalise; `f=1` zlib → gzuncompress
+- 2d — additional format keys (`f=24` raw RGB → PNG-normalize via
+  GD; `f=32` raw RGBA → PNG-normalize; `f=1` zlib → gzuncompress
   before PNG decode).
 - 2e — z-index (`z=<int>`) preservation.
 
@@ -529,18 +529,18 @@ as ImagePlacement.
 
 **Sub-phases:**
 
-- 3a — `SixelLexer` (byte tokenizer): `#` colour-introducer,
+- 3a — `SixelLexer` (byte tokenizer): `#` color-introducer,
   `!` repeat, `?` – `~` data byte, `-` newline, `$` CR, `"` raster
   attribs.
 - 3b — `SixelPalette` (mutable indexed palette, parse HLS / RGB
-  colour types per `#<idx>;<type>;<a>;<b>;<c>` syntax — type 1 = HLS,
+  color types per `#<idx>;<type>;<a>;<b>;<c>` syntax — type 1 = HLS,
   type 2 = RGB).
 - 3c — `SixelRaster` + dimension inference (raster attribs gives w/h
   directly; absent raster attribs requires scanning the full data
   stream to infer band count × max-column, which is the protocol's
   worst-case parse).
 - 3d — pixel-grid assembly: for each 6-row band, walk bytes,
-  expand RLE, set 6 bits per column per colour.
+  expand RLE, set 6 bits per column per color.
 - 3e — `SixelToPng` via GD `imagecreatetruecolor` +
   `imagecolorallocate` per palette index + `imagesetpixel`. Encode
   PNG into ImagePlacement.
@@ -549,10 +549,10 @@ as ImagePlacement.
 - 3g — security: bound parse work by max-pixels (default 4 MP); 
   reject if exceeded.
 
-**Acceptance:** five canonical Sixel images (single colour, 4-colour,
-256-colour, RLE-heavy, raster-attribs-absent) round-trip via
+**Acceptance:** five canonical Sixel images (single color, 4-color,
+256-color, RLE-heavy, raster-attribs-absent) round-trip via
 sugar-image encode → decode → re-encode → byte-equal-after-
-normalisation. New tests under `tests/Graphics/Sixel/`; expect ~40.
+normalization. New tests under `tests/Graphics/Sixel/`; expect ~40.
 
 ### Phase 4 — iTerm2 / WezTerm OSC 1337 (2 weeks)
 
@@ -563,7 +563,7 @@ normalisation. New tests under `tests/Graphics/Sixel/`; expect ~40.
 - `sugar-vterm/src/Graphics/Iterm2/Iterm2Keys.php` (key=value parser
   for the `name=...:size=...:width=...:height=...:inline=1` preamble)
 - `sugar-vterm/src/Graphics/Iterm2/Iterm2Decoder.php` (split on first
-  `:`, decode base64, PNG-normalise via GD)
+  `:`, decode base64, PNG-normalize via GD)
 - `sugar-vterm/src/Handler/OscHandler.php` — route `1337` to
   GraphicsHandler::iterm2
 - `sugar-vterm/tests/Graphics/Iterm2DecoderTest.php`
@@ -617,9 +617,9 @@ The DEC Sixel spec is small (~6 pages) but unforgiving:
 - **Run-length encoding** with `!<count><byte>` where `<count>` is
   ASCII decimal, no fixed width, and applies to the *next* data
   byte. Single-byte-typo flips entire bands.
-- **Palette introducer with two colour types** (HLS where H is
+- **Palette introducer with two color types** (HLS where H is
   0–360°, L/S are 0–100; RGB where R/G/B are 0–100, **not** 0–255).
-  Off-by-one in the type-1 normalisation is easy and silent.
+  Off-by-one in the type-1 normalization is easy and silent.
 - **Raster attributes optional.** When absent, the decoder must
   *infer* the image width from the longest data row, which means a
   two-pass parse (count first, allocate second).
@@ -776,7 +776,7 @@ the following must hold:
 - Phase-11 strategic plans 11.01 (candy-mail) and 11.02 (candy-git-server
   TUI) target user-visible value. **This plan targets internal
   capability completeness only.** If product time is constrained,
-  defer this in favour of the other two.
+  defer this in favor of the other two.
 
 ---
 
@@ -879,7 +879,7 @@ prepare".
 3. **Sixel "eats cells" mode.** Phase-3 default = Kitty semantics
    (cells under image stay live). Should the strict-xterm mode flag
    land in phase 3 or defer to a follow-up? Recommendation: defer.
-4. **PNG normalisation vs raw passthrough.** Storing PNG bytes on
+4. **PNG normalization vs raw passthrough.** Storing PNG bytes on
    every placement costs encode CPU at decode time. Alternative:
    store raw RGBA + width + height; let consumer encode. Cleaner but
    larger memory footprint (PNG compresses; raw RGBA does not).

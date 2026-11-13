@@ -27,7 +27,7 @@ the constants.
 - `sugar-ssh-server/src/Transport/InProcessTransport.php` — replace the
   inline constants / numeric literals with `PumpOptions::sshDefault()`.
 - Doc-comment on `sshDefault()` cites: "matches values previously
-  hardcoded in InProcessTransport for SSH session behaviour".
+  hardcoded in InProcessTransport for SSH session behavior".
 
 ## Tests
 
@@ -42,7 +42,7 @@ the constants.
   returns nothing (the constants are gone; they live as
   `PumpOptions::sshDefault()` defaults).
 - sugar-ssh-server SSH end-to-end suite passes with identical timing
-  behaviour.
+  behavior.
 
 ## Notes
 

@@ -47,14 +47,14 @@ git branch | candy-scriptui filter</code></pre>
       <div class="feature"><strong>version</strong><span>Print the version — phar metadata first, then the composer.json ladder, then a dev fallback.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Keyboard &amp; colour</h3>
+    <h3 style="margin-top: 32px;">Keyboard &amp; color</h3>
     <p>Every interactive command is keyboard-driven — the README carries the full
     key map (arrows and Enter navigate; <code>j</code>/<code>k</code> and
     <code>g</code>/<code>G</code> move and jump in lists, the vim style applies
     except in <code>filter</code> where they are typed into the query; Esc aborts
     with exit <code>1</code> except in <code>pager</code>, where it finishes like
     <code>q</code>; Ctrl+C aborts with <code>130</code>). There is no mouse.
-    Colour follows one contract everywhere: <code>--no-ansi</code> is final,
+    Color follows one contract everywhere: <code>--no-ansi</code> is final,
     <code>--ansi</code> outranks every environment rule, and
     <code>FORCE_COLOR</code>, <code>CLICOLOR_FORCE</code>, <code>NO_COLOR</code>,
     <code>CLICOLOR</code>, and <code>TERM=dumb</code> resolve in that order —

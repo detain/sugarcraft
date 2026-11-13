@@ -19,7 +19,7 @@ Under **InProcessTransport** (default):
 
 **The exec contract, stated plainly (audit K1 + MAJOR 10).** `ssh host
 some-command` does *not* run `some-command` through this library's channel
-layer. sshd has already honoured its `ForceCommand` by the time PHP starts, so
+layer. sshd has already honored its `ForceCommand` by the time PHP starts, so
 the client's request arrives only as the `SSH_ORIGINAL_COMMAND` environment
 variable — `Session::$command` is the field that carries it — and stock
 `Spawn`/`BubbleTea` stacks ignore that field. If you want the peer's argument to
@@ -69,7 +69,7 @@ has no code to report).
 
 ### Signals handled
 
-| Signal | Behaviour |
+| Signal | Behavior |
 |--------|-----------|
 | `SIGTERM` / `SIGHUP` | Pump loop exits gracefully; child process gets SIGHUP then, after ~200 ms if still alive, a SIGKILL to its process group (backgrounded descendants are swept with it) |
 | `SIGINT` | Reaches the PTY child (controlling terminal semantics); pump loop drains and exits |
@@ -86,7 +86,7 @@ that needs resizes handled across sessions should read the size and call
 
 | Path | When | Contents |
 |------|------|----------|
-| Rate-limit state file (your `RateLimit` constructor's `$statePath`) | on each admitted request | JSON token-bucket map keyed `ip:<host>` / `user:<name>`, entries `{tokens, last, burst, rate}`. The read-decide-publish cycle is serialised by an exclusive `flock(LOCK_EX)` taken on a **stable sidecar** `<state-path>.lock`; the payload itself is republished 0600 via temp-file + atomic rename (`AtomicJsonFile`), which is why the lock cannot ride the payload inode (see below). Buckets that have refilled to burst are pruned on each publish. |
+| Rate-limit state file (your `RateLimit` constructor's `$statePath`) | on each admitted request | JSON token-bucket map keyed `ip:<host>` / `user:<name>`, entries `{tokens, last, burst, rate}`. The read-decide-publish cycle is serialized by an exclusive `flock(LOCK_EX)` taken on a **stable sidecar** `<state-path>.lock`; the payload itself is republished 0600 via temp-file + atomic rename (`AtomicJsonFile`), which is why the lock cannot ride the payload inode (see below). Buckets that have refilled to burst are pruned on each publish. |
 | Logger output (your `Logger` constructor's `$target`, or `$SSH_SERVER_LOG` when you use `Logger::auto()`; falls back to stderr) | on each session | JSONL one-line events (session start/end, user, client address, elapsed seconds). **A file sink is the only one that keeps them:** under `ForceCommand` the child's stderr is the connecting client's extended-data channel, and journald records only what sshd itself writes. `Logger::target()` reports the resolution; files the logger creates are `0600`. |
 
 Neither path is written unless the corresponding middleware is registered.
@@ -152,7 +152,7 @@ snippet): `is_writable()` on each directory and existing file, and log
 
 ### Language
 
-Sixteen catalogues ship under `sugar-ssh-server/lang/`, and **nothing in
+Sixteen catalogs ship under `sugar-ssh-server/lang/`, and **nothing in
 this stack selects among them implicitly**: the one code path that calls
 `T::setLocale()` is `Server::withLocale()`, applied at `serve()` entry
 only when you arm it. An unarmed server renders every notice — the
@@ -239,7 +239,7 @@ echoing it to stderr.
 says whose key it is. Configuring `users: ['alice','bob']` with
 `keyFingerprints: ['<alice-key>','<bob-key>']` therefore admits **bob
 presenting alice's key, as alice** — a fact no earlier document stated.
-That behaviour is pinned so it cannot change silently
+That behavior is pinned so it cannot change silently
 (`AuthTest::testFlatListsAdmitTheCrossProductThisIsTheAuditedShape`).
 The cure when you need real binding is the fifth argument, `userKeys`: a
 map of name => that name's own fingerprints, checked authoritatively
@@ -354,7 +354,7 @@ to settlement before the chain continues. Operational consequences:
   await when the session `Context` is already done — it raises the
   context's error instead of blocking up to the ceiling, so a
   deadline set earlier in the chain (`Context::withDeadline()`) is
-  honoured at the next await. Mid-await cancellation stays
+  honored at the next await. Mid-await cancellation stays
   producer-side: only the code holding the resolver can end it
   early. The long-running surfaces poll the same `done()`: the
   in-process pump arms the chain deadline as its own bound and, on
@@ -404,7 +404,7 @@ bridge's rule (gate refused => charge) does not describe.
   read-decide-publish cycle — because the payload's own inode is
   *replaced* by every publish: a lock taken on the payload is a lock on
   a file that no longer exists at that path, so each sibling sshd-spawned
-  process would serialise with nothing and hand every concurrent connect
+  process would serialize with nothing and hand every concurrent connect
   its full burst (six parallel connects against `burst: 3` all got in
   before the sidecar existed; the pin in
   `sugar-ssh-server/tests/Middleware/RateLimitTest.php` holds that

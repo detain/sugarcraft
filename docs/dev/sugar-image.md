@@ -1,7 +1,7 @@
 # SugarImage — Developer Guide
 
 Image-to-cell renderer for the terminal. This guide covers the
-extension points available for customising and embedding sugar-image.
+extension points available for customizing and embedding sugar-image.
 
 ## Extension points
 
@@ -101,7 +101,7 @@ combinations.
 - **Unit tests**: Use `ImageSource::fromGd($gdResource)` or
   `ImageSource::fromFile('path/to/small.png')` to supply synthetic frames.
   Prefer small PNG fixtures (8×8 px) to keep test runs fast.
-- **Behaviour tests**: Drive `AnimationDriver::update()` with a
+- **Behavior tests**: Drive `AnimationDriver::update()` with a
   `FrameTickMsg` to assert `[Model, ?Cmd]` tuple shape and index
   advancement.
 - **Snapshot tests**: Capture `view()` output as raw ANSI bytes and

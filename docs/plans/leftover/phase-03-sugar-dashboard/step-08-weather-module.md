@@ -37,7 +37,7 @@ network failure.
 ## Tests
 
 - `sugar-dashboard/tests/Modules/Weather/WeatherModuleTest.php`:
-  - Mocks `HttpClient`; asserts cache hit/miss behaviour.
+  - Mocks `HttpClient`; asserts cache hit/miss behavior.
   - Asserts network failure falls back to cached snapshot.
   - Asserts stale cache (> TTL) triggers re-fetch.
 - `sugar-dashboard/tests/Modules/Weather/WttrInClientTest.php`:

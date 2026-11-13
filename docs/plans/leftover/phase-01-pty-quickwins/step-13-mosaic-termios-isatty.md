@@ -46,7 +46,7 @@ WezTerm detection bug (bundle)
     is Kitty only.
   - For non-TTY input, assert `isAtty()` returns false without
     invoking `posix_isatty` directly (verify via reflection if
-    needed, or just verify behaviour parity).
+    needed, or just verify behavior parity).
 
 ## Acceptance
 
@@ -57,7 +57,7 @@ WezTerm detection bug (bundle)
 
 ## Notes
 
-- The WezTerm fix is a behaviour change — if anyone depended on the
+- The WezTerm fix is a behavior change — if anyone depended on the
   "WezTerm is also iTerm2" classification, this breaks them. Verify
   with `grep -rn "TERM_PROGRAM=WezTerm" /home/sites/sugarcraft` first.
 - TtyDetect goes in sugar-core because other consumers (sugar-widgets,

@@ -22,7 +22,7 @@ disabled, characters overwrite the rightmost column.
 ## Tests
 
 - `sugar-vterm/tests/Mode/AutoWrapTest.php` — feed text past margin with
-  autowrap on/off; assert respective behaviour.
+  autowrap on/off; assert respective behavior.
 
 ## Acceptance
 

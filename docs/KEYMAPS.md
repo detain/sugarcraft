@@ -45,7 +45,7 @@ Whether `Ctrl+Tab`, `Ctrl+Enter`, or Alt+letter ever reach an app as
   mode) — negotiated by apps like candy-code and candy-files at startup. A
   terminal that supports it reports each chord as its own event; one that
   does not sends the legacy bare-key bytes instead, so the app sees the
-  plain key and nothing new — never a half-recognised chord.
+  plain key and nothing new — never a half-recognized chord.
 - **xterm `modifyOtherKeys`** — the older fallback for the same problem.
 - Both (and the legacy encodings) are decoded in
   [sugar-input](../sugar-input/README.md); the byte-level state machine is
@@ -66,7 +66,7 @@ The env-var hub for the fleet is the shared table in the [sugar-core
 README](../sugar-core/README.md#environment-variables); the color-depth ladder
 (TERM/`COLORTERM`/`NO_COLOR`/force flags/CI) is documented by
 [sugar-colorprofile](../sugar-colorprofile/README.md). `REDUCE_MOTION` /
-`PREFERS_REDUCED_MOTION` behaviour and the honest per-app `NO_COLOR` status
+`PREFERS_REDUCED_MOTION` behavior and the honest per-app `NO_COLOR` status
 are in [GETTING-STARTED.md §Accessibility & reduced
 motion](GETTING-STARTED.md#accessibility--reduced-motion).
 

@@ -63,7 +63,7 @@ So:
   REDIRECT, never pipe — `phpunit | tail` reports tail's exit code. Judge by rc, never the banner.
   Needs a 600000 ms timeout (~3 min).
 - Skipped MUST be exactly 1 (a known McpClient skip). 2 means the symlinks broke; say so loudly.
-- Never paste more than ~15 lines of test output into your report. Summarise.
+- Never paste more than ~15 lines of test output into your report. Summarize.
 - tests/SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves is a KNOWN pre-existing
   timing flake. Don't skip it, don't weaken it, don't report it as your finding.
 

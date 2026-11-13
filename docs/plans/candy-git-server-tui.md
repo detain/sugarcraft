@@ -120,7 +120,7 @@ TUI plan **replaces this with sugar-ssh-server**:
 - Connection arrives.
 - sugar-ssh-server authenticates against `User::keys` (existing model).
 - If client sent `git-upload-pack` / `git-receive-pack` as the exec
-  command, route to `UploadPack` / `ReceivePack` (unchanged behaviour).
+  command, route to `UploadPack` / `ReceivePack` (unchanged behavior).
 - If client sent **no exec command** (interactive `ssh user@host`),
   start a TUI session.
 
@@ -171,7 +171,7 @@ in place; the TUI just composes them.
 - **sugar-flexbox** — `Viewport` for the scrollable lists (repo list,
   file tree, commit log) and `Scrollbar` to render the indicator.
 - **sugar-style** — `Style` for inline runs (highlight selected
-  row, dim metadata text, brand colour for branch names).
+  row, dim metadata text, brand color for branch names).
 - **sugar-markdown** — `Renderer` for README markdown, `SyntaxHighlighter`
   for file blob view.
 
@@ -321,7 +321,7 @@ goes back; `?` opens help.
 - Lines wrapped to viewport width (no horizontal scroll in v1; line
   too long → soft wrap with continuation indicator).
 - Line numbers gutter (4-char right-aligned).
-- Body coloured via `sugar-markdown\SyntaxHighlighter`, language detected
+- Body colored via `sugar-markdown\SyntaxHighlighter`, language detected
   by extension.
 
 ### 4.5 Commit log (phase 4)
@@ -340,7 +340,7 @@ goes back; `?` opens help.
 ```
 
 `enter` opens a sub-screen showing the commit's diff (text only —
-syntax highlighting per file, with `+`/`-` colourisation via
+syntax highlighting per file, with `+`/`-` colorisation via
 sugar-style).
 
 ### 4.6 Help panel (phase 5)
@@ -438,8 +438,8 @@ and the repo-list screen.
   until the candy-git `tags()` PR has merged. Do **not** start
   phase-2 step files until §6.1 reports that row green.
 
-**Tests (≥ 20):** snapshot tests for the three sub-panes; behaviour
-test for `tab` focus rotation; behaviour test for `c` emitting the
+**Tests (≥ 20):** snapshot tests for the three sub-panes; behavior
+test for `tab` focus rotation; behavior test for `c` emitting the
 clone-URL OSC-52 Cmd (via sugar-core `Cmd::setClipboard()`).
 
 **Acceptance:** drilling into any repo shows branches / tags /
@@ -513,7 +513,7 @@ syntax-highlight, show placeholder); files >1 MB refuse to load.
 
 **Acceptance:** can scroll the log of a repo with thousands of commits
 without freezing the event loop (paged); open any commit and see the
-diff with file-level colourisation.
+diff with file-level colorisation.
 
 ### Phase 5 — Polish (≈ 1 week)
 
@@ -529,7 +529,7 @@ diff with file-level colourisation.
 - HelpPanel modal (`?` keybind from any screen).
 - Theme polish — pick default theme; map keyboard cues consistently
   across all screens (current Charm convention: dim grey for hints,
-  brand colour for selection).
+  brand color for selection).
 
 **Tests (≥ 20):** modal lifecycle (push / dismiss / Esc),
 README-rendering snapshot, OSC-52 byte-level emission test.
@@ -798,7 +798,7 @@ the wire-protocol port — the marquee TUI feature has not been built.
 - `sugar-flexbox/src/Viewport.php` + `sugar-flexbox/src/Scrollbar.php`
   + `sugar-flexbox/src/Flex/FlexBox.php` — scrolling lists + layout.
 - `sugar-markdown/src/Renderer.php` — README markdown.
-- `sugar-markdown/src/SyntaxHighlighter.php` — file viewer colouring.
+- `sugar-markdown/src/SyntaxHighlighter.php` — file viewer coloring.
 - `candy-git/src/Git.php` (`GitDriver` impl) — git shell-out.
 
 ### This plan's own step file

@@ -52,7 +52,7 @@ Four loose ends on the `candy-vcr record` CLI:
   terminal is on the child by design, but signals do leak).
 - The `htop -n 1` invocation runs htop for one screen refresh then
   exits — fast and deterministic for CI.
-- The `--env-allow-secrets` flag is opt-in only; default behaviour
+- The `--env-allow-secrets` flag is opt-in only; default behavior
   (strip secrets) is unchanged.
 
 ---

@@ -19,7 +19,7 @@ secondary route, for when the form is unavailable or you prefer mail.
 
 You can expect:
 
-- An acknowledgement of receipt within **48 hours**.
+- An acknowledgment of receipt within **48 hours**.
 - A first-pass triage assessment within **7 days**.
 - A fix target — either a patched release with a CVE if applicable,
   or an explanation of why we don't consider the report a
@@ -53,7 +53,7 @@ fixed vulnerability is shipped by cutting a new tag and pushing the
 updated `master`; phar users receive it through the signed
 `self-update` path (with `self-update --rollback` as a one-shot escape
 hatch). If you need a patched binary for a specific released version,
-say so in your report and we will prioritise the release cut.
+say so in your report and we will prioritize the release cut.
 
 ## Scope
 
@@ -71,7 +71,7 @@ handful of network-facing surfaces. Practical attack surfaces:
   execute arbitrary user input through a shell when the caller
   supplies an argv list.
 - **OSC 8 hyperlinks** (`SugarCraft\Core\Util\Ansi::hyperlink`) — URLs
-  should be passed through verbatim; we don't sanitise the URL but we
+  should be passed through verbatim; we don't sanitize the URL but we
   do escape it inside the OSC envelope.
 - **Terminal-escape injection from untrusted data** — every
   presentation sink that can render attacker-influenced strings
@@ -80,7 +80,7 @@ handful of network-facing surfaces. Practical attack surfaces:
   The full fleet contract lives in
   [docs/TRUST-BOUNDARY.md](./docs/TRUST-BOUNDARY.md); bypassing it is
   a vulnerability, not a style nit.
-- **Terminal image path** (`candy-image` + `SugarCraft\Image`) — image bytes are untrusted input end to end: decode rides the magic-byte allow-list and structural refusals (animated WebP rejected pre-decode, AVIF/JXL/TIFF refused on container), and every leg that echoes detected state or render payloads — `--dump-detect` output and the mosaic text tiers — must honour the fleet `Sanitize` contract in docs/TRUST-BOUNDARY.md above; block and character tiers emit plain Unicode glyphs while sixel/kitty/iTerm2 payloads are encoded graphics — a trust-boundary violation on either leg is a report, not a style choice.
+- **Terminal image path** (`candy-image` + `SugarCraft\Image`) — image bytes are untrusted input end to end: decode rides the magic-byte allow-list and structural refusals (animated WebP rejected pre-decode, AVIF/JXL/TIFF refused on container), and every leg that echoes detected state or render payloads — `--dump-detect` output and the mosaic text tiers — must honor the fleet `Sanitize` contract in docs/TRUST-BOUNDARY.md above; block and character tiers emit plain Unicode glyphs while sixel/kitty/iTerm2 payloads are encoded graphics — a trust-boundary violation on either leg is a report, not a style choice.
 - **Network-facing apps** — `candy-git-server` (self-hostable Git
   server), `sugar-ssh-server` (ForceCommand SSH hub middleware), and
   the `candy-code` web UI / `serve` mode (including its container

@@ -38,7 +38,7 @@ the canonical import.
 
 ## Tests
 
-`cd sugar-dashboard && vendor/bin/phpunit` green. Behaviour should be
+`cd sugar-dashboard && vendor/bin/phpunit` green. Behavior should be
 byte-identical — sugar-dashboard's Style/Color/etc were either thin wrappers
 or duplicates.
 

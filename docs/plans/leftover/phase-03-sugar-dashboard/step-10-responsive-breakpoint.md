@@ -25,7 +25,7 @@ layouts collapse to single-column under width 90 (Homedash convention).
 - `sugar-dashboard/src/Layout/Grid/StackedGrid.php`:
   - `render()` checks `Breakpoint::narrow($this->width)`. When narrow,
     flatten to a single column (concatenate column contents vertically).
-- `sugar-dashboard/examples/dashboard-live.php` — confirm behaviour at
+- `sugar-dashboard/examples/dashboard-live.php` — confirm behavior at
   `COLUMNS=80` (narrow) and `COLUMNS=120` (wide).
 
 ## Tests

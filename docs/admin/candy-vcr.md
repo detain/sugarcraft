@@ -20,7 +20,7 @@ lose previously written events.
 
 ### Signals handled
 
-| Signal | Behaviour |
+| Signal | Behavior |
 |--------|-----------|
 | `SIGTERM` / `SIGHUP` | `RecordCommand` restores the host TTY termios then re-raises with the default handler so the process exits with the expected status. |
 | `SIGINT` | Reaches the recorded child when `--no-ctty` is NOT set. The recorder still finalises the cassette cleanly on the way out. |

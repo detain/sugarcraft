@@ -161,7 +161,7 @@
     </nav>
 
     <div class="docs-body">
-<p class="lede" style="margin-top: 28px;">Pipe styled output through CandyAnsiInspect and each escape becomes a labelled line. Decodes SGR / CSI / OSC / DCS / APC / SS3, DEC private modes, kitty keyboard protocol, synchronized output, unicode grapheme mode.</p>
+<p class="lede" style="margin-top: 28px;">Pipe styled output through CandyAnsiInspect and each escape becomes a labeled line. Decodes SGR / CSI / OSC / DCS / APC / SS3, DEC private modes, kitty keyboard protocol, synchronized output, unicode grapheme mode.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ansi-inspect</code></pre>
@@ -182,9 +182,9 @@ ESC[?2026h  enable synchronized output</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>SGR</strong><span>Foreground / background / underline (58/59) colour (16 / 256 / 24-bit truecolor) + bold / italic / underline (all <code>4:N</code> styles) / blink / reverse / conceal / strike / faint / overline / super- and subscript, plus matching off codes.</span></div>
+      <div class="feature"><strong>SGR</strong><span>Foreground / background / underline (58/59) color (16 / 256 / 24-bit truecolor) + bold / italic / underline (all <code>4:N</code> styles) / blink / reverse / conceal / strike / faint / overline / super- and subscript, plus matching off codes.</span></div>
       <div class="feature"><strong>CSI</strong><span>Cursor moves, erase (including ECH), scroll region (DECSTBM), insert/delete line/char, tab set + backtab (<code>g</code>), repeat SGR (<code>b</code>), save/restore cursor (<code>s</code>/<code>u</code>), CR/LF/NEL (<code>E</code>/<code>F</code>), HVP/VPR/HPR positioning, Insert (<code>2~</code>), DSR + device-attributes reports, XTWINOPS, mouse reports (SGR / 1015 / X10), DECSCUSR cursor shape, DECRQM/DECRPM mode query.</span></div>
-      <div class="feature"><strong>OSC</strong><span>Title (0/2), icon (1), palette (4), cwd (7), hyperlink (8, params and URI split), colour set/query (10/11/12 with <code>?</code>), palette reset (104), shell prompt markers (133/1337).</span></div>
+      <div class="feature"><strong>OSC</strong><span>Title (0/2), icon (1), palette (4), cwd (7), hyperlink (8, params and URI split), color set/query (10/11/12 with <code>?</code>), palette reset (104), shell prompt markers (133/1337).</span></div>
       <div class="feature"><strong>DEC private</strong><span>Cursor visibility, autowrap (7), blinking cursor (12), cursor-key application (1), origin mode (6), mouse modes (1000/1002/1003/1005/1006/1015), focused output (2031), alt screen (1047/1048/1049), bracketed paste (2004), sync output (2026).</span></div>
       <div class="feature"><strong>Kitty keyboard</strong><span>Query / push / pop progressive enhancement levels, flags via <code>=</code>…u, layer pop by count.</span></div>
       <div class="feature"><strong>Library mode</strong><span><code>Inspector::parse($bytes)</code> yields <code>Segment</code> values, <code>Inspector::report($bytes)</code> renders the CLI's one-shot text, <code>StreamingInspector</code> drives live pipes, <code>ExecRunner::run()</code> reports a PTY child.</span></div>
@@ -204,10 +204,10 @@ ESC[?2026h  enable synchronized output</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Inspector</td><td>parse(bytes)</td><td>Parse ANSI bytes into segments</td></tr>
-<tr><td>Inspector</td><td>report(bytes)</td><td>One-shot labelled report text — the exact lines the CLI prints</td></tr>
+<tr><td>Inspector</td><td>report(bytes)</td><td>One-shot labeled report text — the exact lines the CLI prints</td></tr>
 <tr><td>Inspector</td><td>reportAsJson(bytes)</td><td>Machine-readable JSON array of {type, content, description}</td></tr>
 <tr><td>Inspector</td><td>encodeSegmentsJson(segments)</td><td>Render any segment list as that JSON array</td></tr>
-<tr><td>Inspector</td><td>sanitizeLabelBytes(text)</td><td>Tokenise control bytes for safe display labels</td></tr>
+<tr><td>Inspector</td><td>sanitizeLabelBytes(text)</td><td>Tokenize control bytes for safe display labels</td></tr>
 <tr><td>Segment</td><td>raw()</td><td>Abstract — the segment's bytes verbatim (sequences in normalized form)</td></tr>
 <tr><td>Segment</td><td>describe()</td><td>Abstract — printable bytes + decoded label, or the text payload verbatim</td></tr>
 <tr><td>TextSegment</td><td>$value</td><td>Readonly property — visible text between escape sequences</td></tr>

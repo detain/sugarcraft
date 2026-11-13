@@ -6,7 +6,7 @@
 
 - [sweeprs](https://docs.rs/sweeprs/latest/sweeprs/) (Rust engine)
 - [minesweeprs](https://docs.rs/minesweeprs/latest/minesweeprs/) (Rust solver)
-- [JSMinesweeper](https://github.com/DavidNHill/JSMinesweeper) (JS solver/analyser)
+- [JSMinesweeper](https://github.com/DavidNHill/JSMinesweeper) (JS solver/analyzer)
 - [vsego.org/minesweeper](https://vsego.org/minesweeper/) (Pure JS library)
 - [wesmar/minesweeper](https://github.com/wesmar/minesweeper) (Windows C++)
 
@@ -433,7 +433,7 @@ cd /home/sites/sugarcraft/candy-minesweeper && vendor/bin/phpunit --filter First
 2. [xqm32/gist: Minesweeper Game in Go](https://gist.github.com/xqm32/a5c85ce46cd51a4edc80e7f4479acf62) — Go source code example
 3. [sweeprs](https://docs.rs/sweeprs/latest/sweeprs/) — Rust Minesweeper engine
 4. [minesweeprs](https://docs.rs/minesweeprs/latest/minesweeprs/) — Rust solver
-5. [JSMinesweeper](https://github.com/DavidNHill/JSMinesweeper) — JS solver/analyser
+5. [JSMinesweeper](https://github.com/DavidNHill/JSMinesweeper) — JS solver/analyzer
 6. [vsego.org/minesweeper](https://vsego.org/minesweeper/) — Pure JS library
 7. [wesmar/minesweeper](https://github.com/wesmar/minesweeper) — C++ Windows implementation
 8. [DZone: Minesweeper Algorithms Explained](https://dzone.com/articles/minesweeper-algorithms-explained) — Core algorithms

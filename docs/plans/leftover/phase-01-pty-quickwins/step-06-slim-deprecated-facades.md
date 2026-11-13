@@ -38,7 +38,7 @@ public surface is identical.
 - sugar-pty + sugar-core + candy-scriptui + sugar-ssh-server + candy-vcr full
   suites green.
 - `grep -rn "use SugarCraft\\\\Pty\\\\Pty;\|use SugarCraft\\\\Pty\\\\Spawn;" /home/sites/sugarcraft/*/src`
-  — confirm any remaining callers still get correct behaviour (they
+  — confirm any remaining callers still get correct behavior (they
   hit the delegated implementation).
 
 ## Notes

@@ -308,7 +308,7 @@ public static function reportAsJson(string $input): string
 
 ### Priority 5: Visual Representation Enhancements ⏭ declined
 
-⏭ **Declined by design.** The report is deliberately plain text — colouring or highlighting the transcript would fight the byte-trustworthy property (README "Divergences from sequin").
+⏭ **Declined by design.** The report is deliberately plain text — coloring or highlighting the transcript would fight the byte-trustworthy property (README "Divergences from sequin").
 
 **Why:** Improve debugging DX with syntax highlighting and inline visualization.
 
@@ -347,7 +347,7 @@ public static function highlight(string $input, HighlightTheme $theme = null): s
 
 ## 4. Missing Sequence Types ✅ largely shipped
 
-✅ **Largely shipped.** Mouse (X10/SGR/1015), kitty keyboard flags, DA1/DA2/DA3, DSR 5n/6n, HVP/ECH/XTWINOPS, Insert `2~`, DECALN, charset designation, OSC 8 split, 104/133/1337, colour query-vs-set and SGR `4:N`/58/59 all decode now; the live inventory is README "What it decodes", pinned by `tests/MouseVocabularyTest.php` and `tests/InspectorTest.php`.
+✅ **Largely shipped.** Mouse (X10/SGR/1015), kitty keyboard flags, DA1/DA2/DA3, DSR 5n/6n, HVP/ECH/XTWINOPS, Insert `2~`, DECALN, charset designation, OSC 8 split, 104/133/1337, color query-vs-set and SGR `4:N`/58/59 all decode now; the live inventory is README "What it decodes", pinned by `tests/MouseVocabularyTest.php` and `tests/InspectorTest.php`.
 
 ### From upstream sequin:
 

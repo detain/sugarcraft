@@ -30,7 +30,7 @@ for free.
 
 ## Tests
 
-- `sugar-core/tests/Util/EditorTest.php` — verify behaviour parity:
+- `sugar-core/tests/Util/EditorTest.php` — verify behavior parity:
   same exit codes, same stdout/stderr semantics, same exception
   on failure. Use a fixture editor script.
 - `sugar-core/tests/Util/OpenTest.php` — same parity check for the
@@ -49,7 +49,7 @@ for free.
 - These are user-facing utilities — preserve every public method's
   signature and return shape.
 - PosixProcess gives stderr capture for free. If Editor/Open currently
-  discard stderr, that's fine; keep the behaviour. If they
+  discard stderr, that's fine; keep the behavior. If they
   intentionally surface stderr (Editor specifically), capture it.
 - After this lands, `grep -rn "proc_open" sugar-core/src` should only
   flag `Cmd` machinery (intentional) and the test fixtures.

@@ -632,9 +632,9 @@ Both need a human at a real terminal; neither blocks (a) or (b).
 - **Never remove dormant code — wire it or document it as an intentional seam.** The
   audit's own research agents made several "delete this" recommendations that were
   explicitly overridden. Honor that override.
-- **Serialise anything touching the same file.** A *suite run* that loads a file
+- **Serialize anything touching the same file.** A *suite run* that loads a file
   another lane is editing shifts `file(__FILE__)` ranges against already-loaded
-  reflection and produces phantom failures. Serialise the runs, not just the writes.
+  reflection and produces phantom failures. Serialize the runs, not just the writes.
 
 ## 4. Environment facts
 
@@ -654,14 +654,14 @@ Both need a human at a real terminal; neither blocks (a) or (b).
   via exit code while the banner still prints "OK, but there were issues!". Check `$?`,
   never the banner.
 - `php-cs-fixer` is NOT installed here, and this lib is not cs-fixer-clean repo-wide.
-  Don't report its absence; don't normalise unrelated files.
+  Don't report its absence; don't normalize unrelated files.
 - Never commit a per-lib `composer.lock`; no `repositories[]` in a lib manifest.
   Verify with `php tools/check-path-repos.php --no-lib-path-repos` (must exit 0).
 
 ## 5. THE recurring defect — twenty-six rounds running
 
 **A number or a claim must never travel without its domain.** A count, width, limit,
-or behavioural claim that is true of one thing, written next to a different thing.
+or behavioral claim that is true of one thing, written next to a different thing.
 It has appeared in *every single round*, including inside the work of the agent
 fixing the previous round's instance of it, and in the supervisor's own notes.
 
@@ -689,7 +689,7 @@ clause false while keeping its keywords intact.** So:
   they get confused constantly).
 - Prefer deriving a value at runtime over writing a literal.
 - A docblock clause nothing asserts is this defect in prose form. Either pin it
-  behaviourally or name it as an honest gap — never add a presence check that looks
+  behaviorally or name it as an honest gap — never add a presence check that looks
   like coverage.
 - **Changing a fact falsifies every place that described the old one.** Sweep `src/`,
   `tests/`, `README.md` and `candy-code/docs/` — a past round's sweep missed `tests/`
@@ -734,7 +734,7 @@ a run. Judge a mutation by whether the **targeted test file** flips green→red 
   runs in **0.054s at rc 0**, and `--filter` against a single file is ~0.02s. Corrected
   2026-08-19: the old blanket "never judge green from a directory-scoped run" was
   discouraging the only affordable mutation harness in this suite. Use single-file runs
-  freely for mutation loops; only the FINAL green/red judgement needs the full configured run.
+  freely for mutation loops; only the FINAL green/red judgment needs the full configured run.
 - `tests/Cli/BootstrapSkillSkipsTest.php` run **alone** is rc=1 (`OK, but there were issues!
   Risky: 2`) on a clean tree and contributes 0 risky in the full suite — order-dependent,
   pre-existing, backlog **E36**. Do not chase it as a regression. (round-68 lane ec ruled E36 CLOSED/not-reproducible — still: don't chase, don't gate on it).
@@ -1161,13 +1161,13 @@ share a premise before treating them as independent.*
 values separately, and never let a census row answer "is this path safe?" with a sentence about the
 string rather than about what it resolves to.**
 
-### (sweep-3) a guard written from the sanitiser's byte class tests the sanitiser, not the surface
+### (sweep-3) a guard written from the sanitizer's byte class tests the sanitizer, not the surface
 *(was round-35 block, lines 4202–4205 (final-sweep addition))*
 
-**The rule: a guard test written from the sanitiser's byte class tests the sanitiser, not the
+**The rule: a guard test written from the sanitizer's byte class tests the sanitizer, not the
 surface.** Write it from the property the surface needs — here, *a report has exactly the number of
 lines the renderer intended, whatever the fields contain* — and it fails for any escape, including the
-ones the sanitiser was never meant to cover.
+ones the sanitizer was never meant to cover.
 
 ### (sweep-4) a green suite is not a pinned invariant — mutate the clause or you have not pinned it
 *(was round-41 block, line 3496 (final-sweep addition))*
