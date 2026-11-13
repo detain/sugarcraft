@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} coincidió con .sugartrackignore — omitido",
     'cli.push_ignored_wholesale' => 'push: {file} omitido por un patrón total en {ignore_file} ({patterns} patrones); el proyecto "{project}" no registra nada — elimina o restringe ese archivo',
     'cli.push_invalid_duration' => 'push: la duración debe ser un número entero de segundos, se recibió "{value}"',
+    'cli.push_empty_field' => 'push: el campo {field} no debe estar vacío',
     'cli.push_invalid_time' => 'push: --time debe ser un número entero de segundos unix, se recibió "{value}"',
     'cli.push_time_stdin_conflict' => 'push: --time no se acepta en el modo por lotes de stdin; cada línea lleva su propio tiempo',
     'cli.push_stdin_malformed' => 'push: la línea {line} de stdin no es un registro de latido válido — omitida',

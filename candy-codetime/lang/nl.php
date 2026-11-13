@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} kwam overeen met .sugartrackignore — overgeslagen",
     'cli.push_ignored_wholesale' => 'push: {file} overgeslagen door een algemeen patroon in {ignore_file} ({patterns} patronen); project "{project}" legt niets vast — verwijder dat bestand of beperk het',
     'cli.push_invalid_duration' => 'push: duur moet een geheel getal in seconden zijn, ontvangen "{value}"',
+    'cli.push_empty_field' => 'push: het veld {field} mag niet leeg zijn',
     'cli.push_invalid_time' => 'push: --time moet een geheel getal in unix-seconden zijn, ontvangen "{value}"',
     'cli.push_time_stdin_conflict' => 'push: --time wordt niet geaccepteerd in batchmodus via stdin; geef elke regel zijn eigen tijd',
     'cli.push_stdin_malformed' => 'push: stdin-regel {line} is geen geldige heartbeat-record — overgeslagen',

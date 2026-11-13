@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push : {file} correspondait à .sugartrackignore — ignoré",
     'cli.push_ignored_wholesale' => 'push : {file} ignoré par un motif global dans {ignore_file} ({patterns} motifs) ; le projet "{project}" ne consigne rien — supprimez ce fichier ou restreignez-le',
     'cli.push_invalid_duration' => 'push : la durée doit être un nombre entier de secondes, valeur reçue : "{value}"',
+    'cli.push_empty_field' => 'push : le champ {field} ne doit pas être vide',
     'cli.push_invalid_time' => 'push : --time doit être un nombre entier de secondes unix, valeur reçue : "{value}"',
     'cli.push_time_stdin_conflict' => 'push : --time est refusé en mode lot stdin ; chaque ligne porte son propre horodatage',
     'cli.push_stdin_malformed' => 'push : la ligne {line} de stdin n’est pas un battement valide — ignorée',

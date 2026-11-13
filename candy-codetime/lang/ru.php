@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} совпал с .sugartrackignore — пропущено",
     'cli.push_ignored_wholesale' => 'push: {file} пропущен из-за всепокрывающего шаблона в {ignore_file} ({patterns} шаблонов); проект "{project}" ничего не записывает — удалите этот файл или сузьте его',
     'cli.push_invalid_duration' => 'push: длительность — целое число секунд, получено "{value}"',
+    'cli.push_empty_field' => 'push: поле {field} не может быть пустым',
     'cli.push_invalid_time' => 'push: --time — целое число секунд unix, получено "{value}"',
     'cli.push_time_stdin_conflict' => 'push: --time не принимается в пакетном режиме stdin; у каждой строки своё время',
     'cli.push_stdin_malformed' => 'push: строка {line} из stdin не является корректной записью активности — пропущена',

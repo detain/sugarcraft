@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} 이 .sugartrackignore 와 일치하여 건너뛰었습니다",
     'cli.push_ignored_wholesale' => 'push: {ignore_file}의 전체 일치 패턴({patterns}개)으로 {file} 건너뜀; "{project}" 프로젝트는 아무것도 기록되지 않습니다 — 파일을 삭제하거나 좁히십시오',
     'cli.push_invalid_duration' => 'push: 지속 시간은 초 단위의 정수여야 합니다. 입력값: "{value}"',
+    'cli.push_empty_field' => 'push: {field}은(는) 비워 둘 수 없습니다',
     'cli.push_invalid_time' => 'push: --time은 유닉스 초 정수여야 합니다. 입력값: "{value}"',
     'cli.push_time_stdin_conflict' => 'push: stdin 일괄 모드에서는 --time을 쓸 수 없습니다. 각 줄에 자체 시간을 넣으세요',
     'cli.push_stdin_malformed' => 'push: stdin 줄 {line}이 유효한 하트비트 레코드가 아닙니다 — 건너뜀',

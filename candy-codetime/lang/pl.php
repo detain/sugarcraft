@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} pasował do .sugartrackignore — pominięto",
     'cli.push_ignored_wholesale' => 'push: {file} pominięty przez wzorzec całkowity w {ignore_file} ({patterns} wzorców); projekt "{project}" nic nie zapisuje — usuń ten plik lub go zawęź',
     'cli.push_invalid_duration' => 'push: czas trwania musi być liczbą całkowitą sekund, otrzymano "{value}"',
+    'cli.push_empty_field' => 'push: pole {field} nie może być puste',
     'cli.push_invalid_time' => 'push: --time musi być liczbą całkowitą sekund uniksa, otrzymano "{value}"',
     'cli.push_time_stdin_conflict' => 'push: --time nie jest akceptowany w trybie wsadowym ze stdin; każda linia ma własny czas',
     'cli.push_stdin_malformed' => 'push: wiersz {line} ze stdin nie jest prawidłowym rekordem bicia serca — pominięto',

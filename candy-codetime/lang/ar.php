@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: تطابق {file} مع .sugartrackignore — تم تخطيه",
     'cli.push_ignored_wholesale' => 'push: تم تخطي {file} بسبب نمط شامل في {ignore_file} ({patterns} أنماط)؛ لا يسجل المشروع "{project}" شيئًا — احذف هذا الملف أو قيّده',
     'cli.push_invalid_duration' => 'push: يجب أن تكون المدة عددًا صحيحًا بالثواني، الوارد: "{value}"',
+    'cli.push_empty_field' => 'push: الحقل {field} يجب ألا يكون فارغًا',
     'cli.push_invalid_time' => 'push: يجب أن تكون --time عددًا صحيحًا بثوانٍ يونكس، الوارد: "{value}"',
     'cli.push_time_stdin_conflict' => 'push: لا يُقبل --time مع وضع الدفعات عبر stdin؛ امنح كل سطر وقته الخاص',
     'cli.push_stdin_malformed' => 'push: سطر stdin {line} ليس سجل نبض صالحًا — تم تخطيه',

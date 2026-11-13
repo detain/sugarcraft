@@ -347,6 +347,15 @@ if ($cmd === 'push') {
             fwrite(STDERR, Lang::t('cli.push_usage') . "\n");
             exit(1);
         }
+        foreach (['project' => $project, 'language' => $language, 'file' => $file] as $field => $value) {
+            if ($value === '') {
+                // CT-S15: the empty string is a typed argument, not a missing
+                // one — it gets its own refusal so no door stores a ghost beat.
+                fwrite(STDERR, Lang::t('cli.push_empty_field', ['field' => $field]) . "\n");
+                fwrite(STDERR, Lang::t('cli.push_usage') . "\n");
+                exit(1);
+            }
+        }
         try {
             [$ignore, $ignorePath] = $ignoreFor($file, $cwd);
         } catch (\Throwable $e) {
@@ -425,6 +434,10 @@ if ($cmd === 'push') {
             $malformed++;
             continue;
         }
+        // Capture door (CT-S15): a batch row without a time is stamped at the
+        // moment it is read in — the documented contract. The wall-clock lives
+        // here at capture, never inside the storage readers.
+        $row['time'] ??= time();
         try {
             [$ignore, $ignorePath] = $ignoreFor($row['file'], $cwd);
         } catch (\Throwable $e) {

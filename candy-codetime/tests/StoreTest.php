@@ -677,4 +677,20 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         (new Store($this->tmp . '/never-created'))->enforcePrivateModes();
         $this->assertDirectoryDoesNotExist($this->tmp . '/never-created');
     }
+
+    public function testATimelessRowIsDroppedLikeGarbageNotHydratedWithNow(): void
+    {
+        // CT-S15: storage readers never invent timestamps — a decoded row
+        // without `time` shares the corrupt-line lane (counted, named).
+        $dir = $this->tmp . '/timeless-' . bin2hex(random_bytes(4));
+        mkdir($dir, 0o700);
+        $good = json_encode(['time' => 1775000000, 'project' => 'p', 'language' => 'l', 'file' => 'f', 'duration' => 5]);
+        $ghost = json_encode(['project' => 'x', 'language' => 'l', 'file' => 'f', 'duration' => 5]);
+        file_put_contents($dir . '/2026-05-05.jsonl', $good . "\n" . $ghost . "\n");
+        $store = new Store($dir);
+        $rows = $store->loadDay(new \DateTimeImmutable('2026-05-05'));
+        $this->assertCount(1, $rows);
+        $this->assertSame(1775000000, $rows[0]->time);
+        $this->assertSame(1, $store->drainDiagnostics()['dropped']);
+    }
 }

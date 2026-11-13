@@ -178,7 +178,13 @@ final class SqliteBackend implements HeartbeatReader
         try {
             while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
                 $row['tags'] = json_decode((string) $row['tags'], true) ?: [];
-                $rows[] = Heartbeat::fromArray($row);
+                try {
+                    $rows[] = Heartbeat::fromArray($row);
+                } catch (\Throwable) {
+                    // CT-S15: a NULL/garbage time in a hand-poisoned legacy
+                    // row is corrupt data — skip it rather than fabricate a
+                    // live beat at read time.
+                }
             }
         } finally {
             // Statements and results are closed on every path — a leaked cursor

@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} corrispondeva a .sugartrackignore — saltato",
     'cli.push_ignored_wholesale' => 'push: {file} saltato per un pattern globale in {ignore_file} ({patterns} pattern); il progetto "{project}" non registra niente — elimina o restringi il file',
     'cli.push_invalid_duration' => 'push: la durata deve essere un numero intero di secondi, ricevuto "{value}"',
+    'cli.push_empty_field' => 'push: il campo {field} non deve essere vuoto',
     'cli.push_invalid_time' => 'push: --time deve essere un numero intero di secondi unix, ricevuto "{value}"',
     'cli.push_time_stdin_conflict' => 'push: --time non è accettato in modalità batch da stdin; ogni riga porta il proprio timestamp',
     'cli.push_stdin_malformed' => 'push: la riga {line} di stdin non è un heartbeat valido — saltata',

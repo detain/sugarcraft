@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} は .sugartrackignore に一致したためスキップしました",
     'cli.push_ignored_wholesale' => 'push: {ignore_file} 内の全一致パターン（{patterns} 件）により {file} をスキップ；プロジェクト「{project}」は何も記録されません — ファイルを削除するか範囲を狭めてください',
     'cli.push_invalid_duration' => 'push: 持続時間は秒単位の整数である必要があります。受け取った値: "{value}"',
+    'cli.push_empty_field' => 'push: {field} を空にすることはできません',
     'cli.push_invalid_time' => 'push: --time は Unix エポック秒の整数である必要があります。受け取った値: "{value}"',
     'cli.push_time_stdin_conflict' => 'push: stdin バッチモードでは --time を使用できません。各行にそれぞれの時刻を指定してください',
     'cli.push_stdin_malformed' => 'push: stdin の行 {line} は有効なハートビートレコードではありません — スキップ',

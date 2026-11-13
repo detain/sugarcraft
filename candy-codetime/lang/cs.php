@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} odpovídá .sugartrackignore — přeskočeno",
     'cli.push_ignored_wholesale' => 'push: {file} přeskočen plošným vzorem v {ignore_file} ({patterns} vzorů); projekt "{project}" nic nezaznamenává — soubor smažte nebo zúžte',
     'cli.push_invalid_duration' => 'push: doba trvání musí být celé číslo v sekundách, obdrženo "{value}"',
+    'cli.push_empty_field' => 'push: pole {field} nesmí být prázdné',
     'cli.push_invalid_time' => 'push: --time musí být celé číslo unixových sekund, obdrženo "{value}"',
     'cli.push_time_stdin_conflict' => 'push: --time se v dávkovém režimu ze stdin nepoužívá; každý řádek má vlastní čas',
     'cli.push_stdin_malformed' => 'push: řádek stdin {line} není platný záznam tepu — přeskočeno',

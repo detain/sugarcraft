@@ -165,8 +165,11 @@ Each line of a day file is one JSON object:
 <path as supplied>, "duration": <seconds>, "tags": <array>}`. The CLI never
 sets tags; a plugin-written tag is honored on read and export. Readers should
 ignore unknown keys. Timestamps are part of the payload, not the envelope: a
-line echoed **without** `time` gets stamped at the moment it is *read*, so a
-batch fed in after the fact files every beat under batch-time. If you are
+line fed through the `push --` stdin door **without** `time` gets stamped at
+the moment it is read *in*, so a batch pushed after the fact files every beat
+under batch-time. A raw line placed in a day file with no `time` is a corrupt
+record: readers drop it (counted on the day-file warning lane) rather than
+invent a live beat at read time. If you are
 backfilling, carry the real instant on each line — or feed the batch through
 `push --time=<unix>` (one beat) / `push --` (stdin JSON-lines), which run the
 same ignore door, clamps and locking as an interactive push.

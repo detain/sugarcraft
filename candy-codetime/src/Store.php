@@ -268,7 +268,15 @@ final class Store implements HeartbeatReader
                 }
                 $decoded = json_decode($line, true);
                 if (is_array($decoded)) {
-                    $rows[] = Heartbeat::fromArray($decoded);
+                    try {
+                        $rows[] = Heartbeat::fromArray($decoded);
+                    } catch (\Throwable) {
+                        // CT-S15: a decoded row without a usable time is
+                        // corrupt storage — dropped on the same loud lane as
+                        // undecodable lines, never stamped with wall-clock NOW.
+                        $firstOffender = $firstOffender === 0 ? $lineNo : $firstOffender;
+                        $malformed++;
+                    }
                 } else {
                     // CT-S19: a line nobody will ever read must still be
                     // counted here — the silence around these drains was the

@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} entsprach .sugartrackignore — übersprungen",
     'cli.push_ignored_wholesale' => 'push: {file} durch ein Gesamt-Muster in {ignore_file} übersprungen ({patterns} Muster); das Projekt "{project}" zeichnet nichts auf — diese Datei löschen oder einschränken',
     'cli.push_invalid_duration' => 'push: die Dauer muss eine ganze Zahl in Sekunden sein, erhalten: "{value}"',
+    'cli.push_empty_field' => 'push: Das Feld {field} darf nicht leer sein',
     'cli.push_invalid_time' => 'push: --time muss eine ganze Zahl in Unix-Sekunden sein, erhalten: "{value}"',
     'cli.push_time_stdin_conflict' => 'push: --time wird im Stdin-Stapelmodus nicht akzeptiert; jede Zeile trägt ihre eigene Zeit',
     'cli.push_stdin_malformed' => 'push: Zeile {line} von stdin ist kein gültiger Heartbeat-Datensatz — übersprungen',

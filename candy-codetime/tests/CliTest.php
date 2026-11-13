@@ -881,4 +881,27 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString('saved in the sqlite backend', $add['stderr']);
         $this->assertFileExists($this->dataDir . '/candy-codetime.db');
     }
+
+    public function testAPushWithEmptyNamedFieldsIsRefusedRatherThanStored(): void
+    {
+        // CT-S15: an empty typed argument gets its own one-line refusal —
+        // no door stores a ghost beat with a blank name.
+        $res = $this->runCli(['push', '', '', '', '5']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('must not be empty', $res['stderr']);
+        $this->assertSame([], glob($this->dataDir . '/*.jsonl'), 'nothing was stored');
+    }
+
+    public function testStdinRowsWithoutATimeAreStampedAtCapture(): void
+    {
+        // CT-S15: the wall-clock fabrication lives at the capture door only,
+        // which is exactly the contract the README states for push --.
+        $res = $this->runCli(['push', '--'], null, [], json_encode(['project' => 'cap', 'language' => 'php', 'file' => '/srv/cap.php']) . "\n");
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $day = $this->dataDir . '/' . date('Y-m-d') . '.jsonl';
+        $this->assertFileExists($day);
+        $row = json_decode(trim(explode("\n", (string) file_get_contents($day))[0]), true);
+        $this->assertSame('cap', $row['project']);
+        $this->assertEqualsWithDelta(time(), (int) $row['time'], 60, 'stamped at the moment it was read in');
+    }
 }

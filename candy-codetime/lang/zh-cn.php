@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} 匹配 .sugartrackignore — 已跳过",
     'cli.push_ignored_wholesale' => 'push：{file} 被 {ignore_file} 中的全匹配模式跳过（共 {patterns} 个模式）；项目“{project}”没有记录任何内容——请删除该文件或缩小其范围',
     'cli.push_invalid_duration' => 'push: 时长必须为整数秒，收到 "{value}"',
+    'cli.push_empty_field' => 'push：{field} 不能为空',
     'cli.push_invalid_time' => 'push: --time 必须为 unix 秒整数，收到 "{value}"',
     'cli.push_time_stdin_conflict' => 'push: stdin 批量模式不接受 --time；请为每行提供自己的时间',
     'cli.push_stdin_malformed' => 'push: stdin 第 {line} 行不是有效的心跳记录——已跳过',

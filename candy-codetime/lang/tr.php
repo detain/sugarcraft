@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} .sugartrackignore ile eşleşti — atlandı",
     'cli.push_ignored_wholesale' => 'push: {ignore_file} içindeki topten bir desen nedeniyle {file} atlandı ({patterns} desen); "{project}" projesi hiçbir şey kaydetmiyor — dosyayı silin veya daraltın',
     'cli.push_invalid_duration' => 'push: süre, saniye cinsinden bir tam sayı olmalı, alınan: "{value}"',
+    'cli.push_empty_field' => 'push: {field} alanı boş olamaz',
     'cli.push_invalid_time' => 'push: --time, unix saniyesi cinsinden bir tam sayı olmalı, alınan: "{value}"',
     'cli.push_time_stdin_conflict' => 'push: stdin toplu modunda --time kabul edilmez; her satır kendi zamanını taşısın',
     'cli.push_stdin_malformed' => 'push: stdin satırı {line} geçerli bir kalp atışı kaydı değil — atlandı',

@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => 'push: {file} matched .sugartrackignore — skipped',
     'cli.push_ignored_wholesale' => 'push: {file} skipped by a wholesale pattern in {ignore_file} ({patterns} patterns); project "{project}" records nothing — delete or narrow that file',
     'cli.push_invalid_duration' => 'push: duration must be a whole number of seconds, got "{value}"',
+    'cli.push_empty_field' => 'push: the {field} must not be empty',
     'cli.push_invalid_time' => 'push: --time must be a whole number of unix seconds, got "{value}"',
     'cli.push_time_stdin_conflict' => 'push: --time is not accepted with the stdin batch mode; give each line its own time',
     'cli.push_stdin_malformed' => 'push: stdin line {line} is not a valid heartbeat record — skipped',

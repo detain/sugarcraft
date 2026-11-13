@@ -44,12 +44,37 @@ final class HeartbeatTest extends TestCase
 
     public function testFromArrayUsesDefaultsForMissingFields(): void
     {
-        $hb = Heartbeat::fromArray([]);
-        $this->assertGreaterThan(0, $hb->time);
+        // CT-S15 re-pin: the empty row no longer hydrates with wall-clock
+        // NOW. `time` is required; the optional text legs keep their
+        // defaults.
+        $hb = Heartbeat::fromArray(['time' => 100]);
+        $this->assertSame(100, $hb->time);
         $this->assertSame('unknown', $hb->project);
         $this->assertSame('unknown', $hb->language);
         $this->assertSame('', $hb->file);
         $this->assertSame(60, $hb->duration);
+    }
+
+    public function testFromArrayRefusesAMissingTimeInsteadOfFabricatingOne(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Heartbeat::fromArray(['project' => 'x']);
+    }
+
+    public function testFromArrayRefusesANonNumericTimeLikeAMissingOne(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Heartbeat::fromArray(['time' => 'not-a-time']);
+    }
+
+    public function testConstructorClampsToTheDocumentedUpperBounds(): void
+    {
+        $hb = new Heartbeat(
+            time: PHP_INT_MAX, project: 'p', language: 'l', file: 'f',
+            duration: PHP_INT_MAX,
+        );
+        $this->assertSame(Heartbeat::MAX_TIME_SECONDS, $hb->time);
+        $this->assertSame(Heartbeat::MAX_DURATION_SECONDS, $hb->duration);
     }
 
     public function testFromArrayCoercesScalars(): void
