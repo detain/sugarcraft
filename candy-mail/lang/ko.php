@@ -77,4 +77,5 @@ return [
     'smtp.incomplete_credentials' => 'SMTP 자격 증명이 불완전합니다: 사용자 이름과 암호를 모두 지정하거나 익명 전송을 위해 둘 다 비워 두십시오',
     'email.non_ascii_address' => '전자 메일 주소 {addr}에 비 ASCII 문자가 있습니다: SMTPUTF8는 지원되지 않습니다 — ASCII 봉투 주소를 사용하십시오',
     'smtp.openssl_missing' => 'SMTP 연결(STARTTLS/SMTPS)을 보호하려면 ext-openssl이 필요합니다 - 확장 기능을 설치하십시오. 채널이 암호화되기 전에는 아무것도 전송되지 않습니다',
+    'cli.render_8bit_divergence' => '참고: --render는 8BITMIME을 지원하는 중계기가 보는 대로 8비트 본문을 미리 봅니다. 확장 기능이 없는 중계기에는 이 부분들이 회선에서 quoted-printable로 재인코딩되어 전달됩니다(RFC 6152). 아래 바이트는 실제로 전송되는 내용과 다를 수 있습니다.',
 ];

@@ -60,6 +60,15 @@ final class SmtpTransport implements Transport
     private string $lastResponse = '';
     /** Runtime flag: is the live channel currently encrypted? */
     private bool $encrypted = false;
+    /**
+     * Latch (CM-46): was the most recent session encrypted? Reset at the
+     * start of every connect, raised by implicit TLS or a completed STARTTLS
+     * upgrade, and deliberately NOT cleared on disconnect — the success
+     * banner calls name() after quit() has closed the socket, and the
+     * transport it reports must describe the channel the mail actually
+     * travelled, not the current (gone) socket state.
+     */
+    private bool $sessionEncrypted = false;
     /** EHLO capability snapshot — lastResponse is clobbered by later replies. */
     private bool $serverSupports8Bit = false;
 
@@ -332,6 +341,17 @@ final class SmtpTransport implements Transport
 
     public function name(): string
     {
+        // The success banner says 'Email sent via {transport}' — reporting a
+        // bare smtp:// after a send that actually rode TLS under-reports the
+        // security of the channel it just certified (CM-46). Implicit mode
+        // is known at construction; STARTTLS is only truthful after the
+        // upgrade latched.
+        if ($this->implicitTls) {
+            return "smtps://{$this->host}:{$this->port}";
+        }
+        if ($this->sessionEncrypted) {
+            return "smtp+starttls://{$this->host}:{$this->port}";
+        }
         return "smtp://{$this->host}:{$this->port}";
     }
 
@@ -375,6 +395,9 @@ final class SmtpTransport implements Transport
         // (SMTPS/465) the handshake already completed inside
         // stream_socket_client(), so the channel is encrypted from byte one.
         $this->encrypted = $this->implicitTls;
+        // CM-46: the banner latch starts from THIS connection's mode — a
+        // second send() cannot inherit the first one's encrypted verdict.
+        $this->sessionEncrypted = $this->implicitTls;
 
         $this->readResponse(220);
 
@@ -534,6 +557,9 @@ final class SmtpTransport implements Transport
             throw new \RuntimeException(Lang::t('smtp.starttls_failed'));
         }
         $this->encrypted = true;
+        // The upgrade happened — the banner latch keeps this verdict even
+        // after quit()/disconnect clears the live flag (CM-46).
+        $this->sessionEncrypted = true;
 
         // Re-EHLO after TLS so the post-upgrade extension list (e.g. AUTH) is fresh.
         $this->sendRaw("EHLO {$this->getHeloHost()}\r\n");

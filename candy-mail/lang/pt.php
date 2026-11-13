@@ -77,4 +77,5 @@ return [
     'smtp.incomplete_credentials' => 'Credenciais SMTP incompletas: forneça usuário e senha juntos, ou nenhum deles para envio anônimo',
     'email.non_ascii_address' => 'O endereço de e-mail {addr} contém caracteres não ASCII: SMTPUTF8 não é suportado — use um endereço ASCII',
     'smtp.openssl_missing' => 'ext-openssl é necessário para proteger a conexão SMTP (STARTTLS/SMTPS) - instale a extensão; nada é enviado antes que o canal possa ser criptografado',
+    'cli.render_8bit_divergence' => 'Nota: o --render pré-visualiza o corpo de 8 bits como um relay com 8BITMIME o veria; um relay sem a extensão recebe estas partes re-codificadas em quoted-printable no cabo (RFC 6152). Os bytes abaixo podem diferir do que for enviado.',
 ];

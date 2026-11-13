@@ -861,6 +861,29 @@ final class BinDispatchTest extends TestCase
         $this->assertStringContainsString('multipart/mixed', $result['out']);
     }
 
+    public function testRenderStampsThe8BitDivergenceOnlyForRawHighBytes(): void
+    {
+        // CM-46: the unconnected preview cannot know the relay's 8BITMIME
+        // stance, so an 8-bit body that renders as-is here ships
+        // quoted-printable to a relay without the extension. The note must
+        // fire on raw 8-bit bytes in the document — and NOT on content that
+        // the renderer already encoded 7-bit-safe.
+        $raw = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--render'],
+            stdin: "Grüße\n",
+        );
+        $this->assertSame(0, $raw['status']);
+        $this->assertStringContainsString('Content-Transfer-Encoding: 8bit', $raw['out']);
+        $this->assertStringContainsString('8BITMIME', $raw['err'], 'raw 8-bit preview declares the wire divergence');
+
+        $encoded = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--render', '--subject', 'Grüße'],
+            stdin: "hi\n",
+        );
+        $this->assertSame(0, $encoded['status']);
+        $this->assertStringNotContainsString('8BITMIME', $encoded['err'], 'an RFC 2047-encoded subject is 7-bit-safe on every relay');
+    }
+
     public function testHeloFlagSetsTheMessageIdIdentity(): void
     {
         // M-Q: the Message-ID host leaked the internal machine name with no

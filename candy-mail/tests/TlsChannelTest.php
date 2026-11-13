@@ -167,6 +167,10 @@ final class TlsChannelTest extends TestCase
             $this->assertGreaterThanOrEqual(2, $reEhlo, 'client re-EHLOs after STARTTLS');
             $this->assertGreaterThan($auth, $indexOf('MAIL FROM'), 'conversation continued');
             $this->assertGreaterThan(0, $indexOf('QUIT'));
+            // CM-46: after the session closed, the banner seam must still
+            // report the channel the mail actually rode — a bare smtp://
+            // here would under-report a send that upgraded to TLS.
+            $this->assertSame("smtp+starttls://127.0.0.1:{$port}", $transport->name());
         } finally {
             $this->reap($pid);
         }
@@ -196,6 +200,9 @@ final class TlsChannelTest extends TestCase
             // CM-20: the fake advertises LOGIN + PLAIN, so the ladder's
             // PLAIN preference must be what the transcript shows.
             $this->assertMatchesRegularExpression('/^AUTH PLAIN /m', $transcript);
+            // CM-46: implicit mode is nameable before the dial and must
+            // still be reported as smtps:// after the session closed.
+            $this->assertSame("smtps://127.0.0.1:{$port}", $transport->name());
         } finally {
             $this->reap($pid);
         }

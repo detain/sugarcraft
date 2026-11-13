@@ -77,4 +77,5 @@ return [
     'smtp.incomplete_credentials' => 'SMTP 凭据不完整: 请同时提供用户名和密码，或者两者皆空以匿名发送',
     'email.non_ascii_address' => '邮件地址 {addr} 包含非 ASCII 字符：不支持 SMTPUTF8 — 请使用 ASCII 信封地址',
     'smtp.openssl_missing' => '保护 SMTP 连接（STARTTLS/SMTPS）需要 ext-openssl — 请安装该扩展；在信道可加密之前不会发送任何内容',
+    'cli.render_8bit_divergence' => '注：--render 按支持 8BITMIME 的中继所见预览 8 位正文；没有该扩展的中继会在线路上把这些部分重新编码为 quoted-printable（RFC 6152）。以下内容可能与实际发送的字节不同。',
 ];

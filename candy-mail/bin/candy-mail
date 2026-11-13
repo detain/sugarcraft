@@ -271,7 +271,16 @@ function main(array $argv): int
         $renderer = $configured instanceof SmtpTransport
             ? $configured
             : new SmtpTransport(host: 'localhost', heloHost: $heloPreview);
-        fwrite(STDOUT, $renderer->buildMimeMessage($email));
+        $mime = $renderer->buildMimeMessage($email);
+        // Third divergence (CM-46): an unconnected preview cannot know the
+        // relay's 8BITMIME stance, so 8-bit bodies render as-is here but go
+        // quoted-printable on a relay that lacks the extension (RFC 6152).
+        // Raw high bytes surviving into the document are exactly the parts
+        // that chose CTE: 8bit — 7-bit-safe encodings cannot contain them.
+        if (\preg_match('/[\x80-\xFF]/', $mime) === 1) {
+            fwrite(STDERR, Lang::t('cli.render_8bit_divergence') . "\n");
+        }
+        fwrite(STDOUT, $mime);
         return 0;
     }
 

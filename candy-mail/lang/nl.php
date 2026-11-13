@@ -77,4 +77,5 @@ return [
     'smtp.incomplete_credentials' => 'SMTP-gegevens onvolledig: geef zowel gebruikersnaam als wachtwoord op, of beide leeg voor anonieme verzending',
     'email.non_ascii_address' => 'E-mailadres {addr} bevat niet-ASCII tekens: SMTPUTF8 wordt niet ondersteund — gebruik een ASCII-adres',
     'smtp.openssl_missing' => 'ext-openssl is vereist om de SMTP-verbinding te beveiligen (STARTTLS/SMTPS) - installeer de extensie; er wordt niets verzonden voordat het kanaal versleuteld kan worden',
+    'cli.render_8bit_divergence' => 'Let op: --render toont een voorbeeld van de 8-bit body zoals een 8BITMIME-compatibele relay die zou zien; een relay zonder de extensie krijgt deze onderdelen als quoted-printable opnieuw gecodeerd op de draad (RFC 6152). De onderstaande bytes kunnen afwijken van wat verzonden wordt.',
 ];

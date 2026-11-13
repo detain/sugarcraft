@@ -77,4 +77,5 @@ return [
     'smtp.incomplete_credentials' => 'SMTP 認証情報が不完全です。ユーザー名とパスワードを両方指定するか、匿名送信の場合はどちらも空にしてください',
     'email.non_ascii_address' => 'メール アドレス {addr} に非 ASCII 文字が含まれています: SMTPUTF8 は未対応です — ASCII のエンベロープ アドレスを使用してください',
     'smtp.openssl_missing' => 'SMTP 接続 (STARTTLS/SMTPS) を保護するには ext-openssl が必要です — 拡張機能をインストールしてください。チャネルを暗号化できるまで何も送信されません',
+    'cli.render_8bit_divergence' => '注: --render は 8 ビット本文を 8BITMIME 対応リレーが見るままにプレビューします。拡張を持たないリレーにはこれらの部分が回線上で quoted-printable に再エンコードされて届きます (RFC 6152)。以下は実際に送信されるバイトと異なる可能性があります。',
 ];
