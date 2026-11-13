@@ -21,8 +21,8 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Manager;
 
 /**
- * @param Manager      $mgr
- * @param list<string> $items
+ * @param Manager      $mgr    Manager whose mark() wraps each row into its own zone
+ * @param list<string> $items  Row labels to render as clickable items
  */
 function renderColumn(Manager $mgr, array $items): string
 {
