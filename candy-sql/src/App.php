@@ -374,7 +374,8 @@ final class App implements Model
                 ),
             ]);
         }
-        // For wide query results, h/l + ←/→ scroll the ResultTable's columns.
+        // Wide results scroll column-wise via h/l + ←/→ — query runs AND table
+        // previews alike ride the same ResultTable (SQL-C14/client-014).
         if ($this->browse->resultTable !== null) {
             if ($msg->type === KeyType::Left
                 || ($msg->type === KeyType::Char && $msg->rune === 'h')) {
@@ -870,7 +871,12 @@ final class App implements Model
             'browse' => $this->browse
                 ->withRows($msg->rows)
                 ->withRowCursor(0)
-                ->withResultTable(null)
+                // SQL-C14/client-014: browse joins the query path on ONE grid
+                // object — the old null here meant the Rows pane fell back to
+                // the non-scrolling sugar-table arm, so h/l silently died and
+                // a wide preview cut mid-word (the capability depended on the
+                // ENTRY, not the pane).
+                ->withResultTable(ResultTable::fromRows($msg->rows))
                 ->withRowsLoading(false),
             'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($msg->rows))),
         ]);
@@ -941,8 +947,10 @@ final class App implements Model
                     ->withSelectedTable($name)
                     ->withRows($rows)
                     ->withRowCursor(0)
-                    // Browsing a table → the sugar-table grid, not the query viewer.
-                    ->withResultTable(null)
+                    // SQL-C14/client-014: the sync browse arms (SQLite + startup)
+                    // join the async one on the SAME grid object — entry flavor
+                    // must not decide whether h/l scrolls.
+                    ->withResultTable(ResultTable::fromRows($rows))
                     ->withRowsLoading(false),
                 'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($rows))),
             ]);

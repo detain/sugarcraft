@@ -440,7 +440,7 @@ final class AppTest extends TestCase
         $this->assertStringContainsString('alice', $a->browse->resultTable->render());
     }
 
-    public function testLoadTableClearsResultTable(): void
+    public function testLoadTableRebuildsTheSharedResultGridView(): void
     {
         $a = App::start($this->db());
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → rows
@@ -452,12 +452,52 @@ final class AppTest extends TestCase
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
         $this->assertNotNull($a->browse->resultTable);
-        // Cycle Query → Admin → Tables, then Enter loads a table, which drops
-        // the query result viewer back to the sugar-table browse grid.
+        // SQL-C14/client-014: one grid, one behaviour — Enter on a table does
+        // NOT drop the shared view to a non-scrolling browse grid (the old
+        // resultTable=null shape that made h/l lie). It REBUILDS the grid from
+        // the preview rows: the query's `SELECT 1` column is replaced by the
+        // table's own columns, so the pane always reflects the current rows.
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → admin
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → tables
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, '')); // load selected table
-        $this->assertNull($a->browse->resultTable);
+        $grid = $a->browse->resultTable;
+        $this->assertNotNull($grid, 'browsing keeps the shared scrolling grid (h/l never dead)');
+        $columns = array_map(static fn ($c): string => (string) $c, $grid->columns());
+        $this->assertContains('title', $columns, 'the grid now shows the posts preview columns');
+        $this->assertStringNotContainsString('alice', $grid->render(), 'cursor 0 is posts — no users rows leak in');
+        $this->assertStringContainsString('hello', $grid->render(), 'the preview rebuilt from posts');
+    }
+
+    public function testAWideBrowsePreviewScrollsHorizontally(): void
+    {
+        // SQL-C14 acceptance (client-014): a wide preview used to cut mid-word
+        // with `l` doing nothing — the h/l branch only engaged for query
+        // results (browse nulled the grid). Browse now rides the same object,
+        // so the scroll keys reach the LAST column through the real key path.
+        $pdo = new \PDO('sqlite::memory:');
+        $pdo->exec('CREATE TABLE wide (id INTEGER PRIMARY KEY, alpha TEXT, bravo TEXT, charlie TEXT, delta TEXT, echo_col TEXT, zulu TEXT)');
+        $wide = static fn (string $mark): string => $mark . str_repeat('x', 40);
+        $pdo->exec("INSERT INTO wide (alpha, bravo, charlie, delta, echo_col, zulu) VALUES ('{$wide('A')}', '{$wide('B')}', '{$wide('C')}', '{$wide('D')}', '{$wide('E')}', '{$wide('Z')}')");
+        $db = new Database($pdo);
+
+        $a = App::start($db); // loads the preview of `wide` synchronously
+        $grid = $a->browse->resultTable;
+        $this->assertNotNull($grid, 'the startup preview rides the shared grid');
+        $this->assertTrue($grid->canScrollRight(), 'a 7-col preview of 40-char cells overflows the pane');
+        $this->assertStringNotContainsString('Zxxx', $grid->render(), 'the last column starts off-screen');
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, '')); // pane cycle → Rows
+        for ($i = 0; $i < 12 && $a->browse->resultTable->canScrollRight(); $i++) {
+            [$a, $cmd] = $a->update(new KeyMsg(KeyType::Char, 'l'));
+            $this->assertNull($cmd, 'the scroll is a pure fold');
+        }
+
+        $this->assertFalse($a->browse->resultTable->canScrollRight(), 'the scroll walked to the end');
+        $this->assertStringContainsString(
+            'Zxxx',
+            $a->browse->resultTable->render(),
+            'the LAST column of a BROWSE preview is reachable via l (was a dead key)',
+        );
     }
 
     public function testEnterInsertsNewlineInEditor(): void

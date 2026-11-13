@@ -275,9 +275,12 @@ final class Renderer
             return self::frame($a, Pane::Rows, $title, $body, $width);
         }
 
-        // Executed-query results render through ResultTable (its horizontal-
-        // scroll grid with JSON pretty-printing + a styled NULL token); regular
-        // table browsing renders through sugar-table.
+        // Executed-query results AND table previews both render through
+        // ResultTable — the one scrolling grid for the pane (SQL-C14/client-014:
+        // horizontal scroll, JSON pretty-printing + a styled NULL token; the
+        // capability no longer depends on how the rows arrived). The legacy
+        // sugar-table arm below survives only as the defensive fallback for a
+        // hand-built model whose rows carry no grid object.
         if ($a->browse->resultTable !== null) {
             // D-C2/D-C06: the row cursor drives the vertical window so every
             // row of a long result set is reachable — and the grid now fits
