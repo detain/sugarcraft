@@ -136,4 +136,61 @@ final class SymbolGraphTest extends TestCase
 
         self::assertEquals(SymbolGraph::new($tags)->rankedEntries(), SymbolGraph::new(array_reverse($tags, true))->rankedEntries());
     }
+
+    /**
+     * S-O35: rankedEntries() builds nodes, pair weights and out-weights in ONE
+     * edge walk (it used to walk three times before the credit pass).
+     */
+    public function testRankedEntriesWalksTheEdgesOnce(): void
+    {
+        $method = new \ReflectionMethod(SymbolGraph::class, 'rankedEntries');
+        $lines = file((string) $method->getFileName(), FILE_IGNORE_NEW_LINES);
+        self::assertIsArray($lines);
+        $body = implode("\n", array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        self::assertSame(1, substr_count($body, '$this->walk('), 'one walk feeds nodes, weights and out-weights');
+        self::assertStringNotContainsString('$this->fileRanks(', $body);
+    }
+
+    /**
+     * The folded walk must credit exactly what the public edge enumeration
+     * implies: the share of each edge is rank(from) * weight / outWeight(from),
+     * summed per (definer, identifier), ordered rank desc then file/ident desc.
+     */
+    public function testTheFoldedWalkOrdersEntriesLikeTheEnumeratedEdges(): void
+    {
+        $tags = [
+            'a.php' => [Tag::definition('a.php', 1, 'Alpha', Tag::TYPE_CLASS), Tag::reference('a.php', 2, 'Beta')],
+            'b.php' => [Tag::definition('b.php', 1, 'Beta', Tag::TYPE_CLASS), Tag::reference('b.php', 2, 'Gamma'), Tag::reference('b.php', 3, 'Alpha')],
+            'c.php' => [Tag::definition('c.php', 1, 'Gamma', Tag::TYPE_CLASS), Tag::reference('c.php', 2, 'Alpha'), Tag::reference('c.php', 3, 'Beta')],
+            'd.php' => [Tag::definition('d.php', 1, 'Delta', Tag::TYPE_CLASS), Tag::reference('d.php', 2, 'Alpha')],
+            'e.php' => [],
+        ];
+        $graph = SymbolGraph::new($tags);
+
+        $ranks = $graph->fileRanks();
+        $edges = $graph->edges();
+        $out = [];
+        foreach ($edges as $edge) {
+            $out[$edge['from']] = ($out[$edge['from']] ?? 0.0) + $edge['weight'];
+        }
+        $credit = [];
+        foreach ($edges as $edge) {
+            $key = $edge['to'] . "\0" . $edge['ident'];
+            $credit[$key] ??= [$edge['to'], $edge['ident'], 0.0];
+            $credit[$key][2] += ($ranks[$edge['from']] ?? 0.0) * $edge['weight'] / $out[$edge['from']];
+        }
+        usort($credit, static fn (array $x, array $y): int => [$y[2], $y[0], $y[1]] <=> [$x[2], $x[0], $x[1]]);
+        $expected = array_map(static fn (array $c): string => $c[0], $credit);
+
+        $actual = [];
+        foreach ($graph->rankedEntries() as $entry) {
+            if ($entry['tag'] !== null) {
+                $actual[] = $entry['path'];
+            }
+        }
+
+        self::assertSame($expected, $actual, 'entry order is the enumerated-edge credit order');
+        self::assertContains('e.php', array_column($graph->rankedEntries(), 'path'), 'the tagless file still trails as a bare entry');
+    }
 }

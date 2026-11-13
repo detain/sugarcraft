@@ -377,14 +377,28 @@ final class SymbolGraph
      */
     public function rankedEntries(?PageRank $pageRank = null): array
     {
-        $ranks = $this->fileRanks($pageRank);
-
-        // Each source file's total out-weight, summed edge by edge in walk
-        // order, so the shares below are the enumerated graph's to the bit.
+        // ONE walk feeds all three things the ranking needs (S-O35): the node
+        // set, the collapsed pair weights PageRank consumes, and each source
+        // file's total out-weight, summed edge by edge in walk order so the
+        // shares below are the enumerated graph's to the bit. nodes(),
+        // weights() and fileRanks() each walk on their own for their own
+        // callers; this method is the hot one, so it does not pay three times.
+        $nodes = [];
+        $weights = [];
         $outWeight = [];
-        $this->walk(static function (string $from, string $to, float $weight) use (&$outWeight): void {
+        $this->walk(static function (string $from, string $to, float $weight) use (&$nodes, &$weights, &$outWeight): void {
+            $nodes[$from] = true;
+            $nodes[$to] = true;
+            $weights[$from][$to] = ($weights[$from][$to] ?? 0.0) + $weight;
             $outWeight[$from] = ($outWeight[$from] ?? 0.0) + $weight;
         });
+        // The pair map is handed over as a temporary, like fileRanks() does:
+        // PageRank normalises it in place and a held copy would double it.
+        $ranks = ($pageRank ?? PageRank::new())->rank(
+            \array_map('strval', \array_keys($nodes)),
+            self::release($weights),
+            $this->personalization,
+        );
 
         // "definer\0ident" => [definer, ident, rank]. An edge's share depends
         // on its referencer and identifier only, so each identifier's credit
@@ -450,6 +464,23 @@ final class SymbolGraph
         }
 
         return $entries;
+    }
+
+    /**
+     * The array $slot holds, leaving $slot empty — so the caller can pass it
+     * on as a sole-owner temporary (PageRank rewrites its input in place and a
+     * second live reference would force a full copy).
+     *
+     * @param array<string, array<string, float>> $slot
+     *
+     * @return array<string, array<string, float>>
+     */
+    private static function release(array &$slot): array
+    {
+        $value = $slot;
+        $slot = [];
+
+        return $value;
     }
 
     /**
