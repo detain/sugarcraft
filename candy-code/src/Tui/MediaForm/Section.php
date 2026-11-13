@@ -40,6 +40,15 @@ interface Section
      * The section holding $field on the row that row currently edits (the
      * form commits a live field back through this door); a field the section
      * does not own leaves it as it was.
+     *
+     * RULING (2026-11-12, S-U12), for every `with*()` on a section: one that
+     * has nothing to change returns `$this`, not a copy. Sections are
+     * immutable, so the identity return is not aliasing of mutable state, and
+     * the form compares by identity to skip a rebuild. The no-change fast paths
+     * ({@see Sections\OutputSection::withField()} — no Field rows at all —
+     * {@see Sections\RegistrySection::withDisplayOverrides()} and
+     * {@see Sections\VideoSection::withFieldValues()}) are this clause,
+     * adjudicated once here; a new section copies it rather than re-arguing it.
      */
     public function withField(Field $field): self;
 
