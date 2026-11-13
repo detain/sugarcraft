@@ -229,6 +229,11 @@ final class ChildLifetimesToolTest extends TestCase
 
         $report = \CheckChildLifetimes::derive($this->tmpDir);
 
+        // Sight-pins FIRST: without them an analyzer regression that sees
+        // zero sites passes assertSame([], findings) vacuously — the door
+        // this arm exists to guard would silently close.
+        $this->assertSame(1, $report['libs']);
+        $this->assertGreaterThanOrEqual(1, $report['sites'], 'the fd-3 fixture spawn was not seen');
         $this->assertSame([], $report['findings']);
     }
 
