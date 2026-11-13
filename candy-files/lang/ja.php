@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} を {new} に名前変更しました',
     'status.renamed_overwrote'  => '{old} を {new} に名前変更しました （上書き {overwrote} 件）',
     'status.rename_failed' => '名前変更に失敗: {name}',
+    'status.rename_invalid'    => '名前変更拒否：無効な名前 {name}',
     'status.nothing_to_undo' => '元に戻す操作がありません',
     'status.undone' => '元に戻しました: {description}',
     'status.undo_with_errors' => '{description} の取り消しでエラー {errors} 件',

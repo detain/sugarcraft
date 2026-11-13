@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} rinominato in {new}',
     'status.renamed_overwrote'  => '{old} rinominato in {new} ({overwrote} sovrascritte)',
     'status.rename_failed' => 'rinomina fallita: {name}',
+    'status.rename_invalid'    => 'Rinomina rifiutata: nome non valido {name}',
     'status.nothing_to_undo' => 'nulla da annullare',
     'status.undone' => 'annullato: {description}',
     'status.undo_with_errors' => 'annullamento di {description} con {errors} errori',

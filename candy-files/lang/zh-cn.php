@@ -41,6 +41,7 @@ return [
     'status.renamed' => '已将 {old} 重命名为 {new}',
     'status.renamed_overwrote'  => '已将 {old} 重命名为 {new} （覆盖 {overwrote} 个）',
     'status.rename_failed' => '重命名失败：{name}',
+    'status.rename_invalid'    => '重命名已拒绝：无效名称 {name}',
     'status.nothing_to_undo' => '没有可撤销的操作',
     'status.undone' => '已撤销：{description}',
     'status.undo_with_errors' => '撤销 {description} 时发生 {errors} 个错误',

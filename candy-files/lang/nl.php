@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} hernoemd naar {new}',
     'status.renamed_overwrote'  => '{old} hernoemd naar {new} ({overwrote} overschreven)',
     'status.rename_failed' => 'hernoemen mislukt: {name}',
+    'status.rename_invalid'    => 'Hernoemen geweigerd: ongeldige naam {name}',
     'status.nothing_to_undo' => 'niets ongedaan te maken',
     'status.undone' => 'ongedaan gemaakt: {description}',
     'status.undo_with_errors' => 'ongedaan maken van {description} met {errors} fouten',

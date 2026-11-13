@@ -41,6 +41,7 @@ return [
     'status.renamed' => 'أُعيدت تسمية {old} إلى {new}',
     'status.renamed_overwrote'  => 'أُعيدت تسمية {old} إلى {new} ({overwrote} استبدال)',
     'status.rename_failed' => 'فشل إعادة التسمية: {name}',
+    'status.rename_invalid'    => 'إعادة التسمية مرفوضة: اسم غير صالح {name}',
     'status.nothing_to_undo' => 'لا شيء للتراجع عنه',
     'status.undone' => 'تم التراجع: {description}',
     'status.undo_with_errors' => 'التراجع عن {description} مع {errors} أخطاء',

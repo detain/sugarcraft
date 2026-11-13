@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} → {new} olarak adlandırıldı',
     'status.renamed_overwrote'  => '{old} → {new} olarak adlandırıldı ({overwrote} üzerine yazıldı)',
     'status.rename_failed' => 'yeniden adlandırma başarısız: {name}',
+    'status.rename_invalid'    => 'Yeniden adlandırma reddedildi: geçersiz ad {name}',
     'status.nothing_to_undo' => 'geri alınacak bir şey yok',
     'status.undone' => 'geri alındı: {description}',
     'status.undo_with_errors' => '{description} geri alınırken {errors} hata',

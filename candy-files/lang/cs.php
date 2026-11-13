@@ -41,6 +41,7 @@ return [
     'status.renamed' => 'přejmenováno {old} na {new}',
     'status.renamed_overwrote'  => 'přejmenováno {old} na {new} ({overwrote} přepsáno)',
     'status.rename_failed' => 'přejmenování selhalo: {name}',
+    'status.rename_invalid'    => 'Přejmenování zamítnuto: neplatný název {name}',
     'status.nothing_to_undo' => 'nic ke vrácení',
     'status.undone' => 'vráceno: {description}',
     'status.undo_with_errors' => 'vrácení {description} s chybami {errors}',

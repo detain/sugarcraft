@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} renommé en {new}',
     'status.renamed_overwrote'  => '{old} renommé en {new} ({overwrote} écrasées)',
     'status.rename_failed' => 'échec du renommage : {name}',
+    'status.rename_invalid'    => 'Renommage refusé : nom invalide {name}',
     'status.nothing_to_undo' => 'rien à annuler',
     'status.undone' => 'annulé : {description}',
     'status.undo_with_errors' => 'annulation de {description} avec {errors} erreur(s)',

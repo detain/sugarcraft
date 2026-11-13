@@ -41,6 +41,7 @@ return [
     'status.renamed' => 'zmieniono nazwę {old} na {new}',
     'status.renamed_overwrote'  => 'zmieniono nazwę {old} na {new} (nadpisano {overwrote})',
     'status.rename_failed' => 'zmiana nazwy nieudana: {name}',
+    'status.rename_invalid'    => 'Zmiana nazwy odrzucona: nieprawidłowa nazwa {name}',
     'status.nothing_to_undo' => 'brak operacji do cofnięcia',
     'status.undone' => 'cofnięto: {description}',
     'status.undo_with_errors' => 'cofanie {description} z błędami: {errors}',

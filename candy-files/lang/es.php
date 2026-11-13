@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} renombrado a {new}',
     'status.renamed_overwrote'  => '{old} renombrado a {new} ({overwrote} sobrescritas)',
     'status.rename_failed' => 'error al renombrar: {name}',
+    'status.rename_invalid'    => 'Renombro rechazado: nombre no válido {name}',
     'status.nothing_to_undo' => 'nada que deshacer',
     'status.undone' => 'deshecho: {description}',
     'status.undo_with_errors' => 'deshacer {description} con {errors} error(es)',

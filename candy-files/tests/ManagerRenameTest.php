@@ -261,12 +261,67 @@ final class ManagerRenameTest extends TestCase
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'i'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'l'));
 
-        // Enter to confirm - should fail due to path traversal
+        // Enter to confirm - refused by the CF-24 legality guard, and the
+        // NAMED rule message (status.rename_invalid) now distinguishes it
+        // from a real filesystem failure (status.rename_failed).
         [$result] = $m->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertSame(ConfirmState::None, $result->confirm);
-        $this->assertStringContainsString('failed', $result->status);
+        $this->assertSame('rename refused: invalid name ../evil', $result->status);
         // Original file should still exist
         $this->assertFileExists($file);
+    }
+
+    /**
+     * CF-24 (audit 034): the old '..' SUBSTRING leg refused names that are
+     * perfectly legal on ext4 - 'v1..v2.pdf' is touchable, readable, and
+     * was refusaled by the app alone. Segment-equality (the rule mkdir
+     * already honors) lets it land; the traversal net is unchanged.
+     */
+    public function testRenameLegalDoubleDotNameLands(): void
+    {
+        $file = $this->tmpDir . '/oldname.txt';
+        file_put_contents($file, 'versioned');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        foreach (['v', '1', '.', '.', 'v', '2', '.', 'p', 'd', 'f'] as $ch) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$done] = $m->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertStringContainsString('renamed oldname.txt to v1..v2.pdf', $done->status);
+        $this->assertFileDoesNotExist($file);
+        $this->assertFileExists($this->tmpDir . '/v1..v2.pdf');
+        $this->assertSame('versioned', file_get_contents($this->tmpDir . '/v1..v2.pdf'));
+        $this->assertTrue($done->canUndo());
+    }
+
+    /**
+     * The segment-equality edges: bare '.' and '..' stay refused, each with
+     * the NAMED rule message quoting the refused NEW name (the old generic
+     * string named neither the rule nor the offending input).
+     */
+    public function testRenameBareSegmentsRefusedWithNamedRule(): void
+    {
+        foreach (['.', '..'] as $bad) {
+            $file = $this->tmpDir . '/keep.txt';
+            file_put_contents($file, 'x');
+            $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+            for ($i = 0; $i < strlen($bad); $i++) {
+                [$m] = $m->update(new KeyMsg(KeyType::Char, $bad[$i]));
+            }
+            [$done] = $m->update(new KeyMsg(KeyType::Enter, ''));
+            $this->assertSame(
+                'rename refused: invalid name ' . $bad,
+                $done->status,
+                'refusal message names the rule and the refused input',
+            );
+            $this->assertFileExists($file, $bad . ' must not touch the disk');
+            $this->assertFalse($done->canUndo(), $bad . ' leaves no undo entry');
+            @unlink($file);
+        }
     }
 
     public function testRenameSuccessful(): void
@@ -323,9 +378,11 @@ final class ManagerRenameTest extends TestCase
     }
 
     /**
-     * The same choke on the FAILURE path: rename_failed embeds the source
-     * name, so a blocked traversal attempt on an escape-named file must
-     * still report inertly.
+     * The same choke on the REFUSAL path. CF-24 moved traversal refusals to
+     * the named rule message (status.rename_invalid), which embeds the
+     * TYPED name — attacker-writable bytes too. The escape-crafted source
+     * name stays the fixture (it is what the pane shows), while the refused
+     * input itself carries the poison: the refusal must echo it inertly.
      */
     public function testRenameFailedStatusCarriesNoEscapeBytes(): void
     {
@@ -335,17 +392,16 @@ final class ManagerRenameTest extends TestCase
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, '.'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, '.'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, 'o'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, 'u'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, 't'));
+        // OSC set-title craft wrapping a traversal: the buffer keeps raw
+        // truth, so the separator leg still refuses — and the message
+        // renders the sanitized form.
+        [$m] = $m->update(new KeyMsg(KeyType::Char, "\x1b]0;pwned\x07../out"));
         [$blocked] = $m->update(new KeyMsg(KeyType::Enter, ''));
 
-        $this->assertStringContainsString('failed', $blocked->status);
+        $this->assertSame('rename refused: invalid name ../out', $blocked->status);
         $this->assertStringNotContainsString("\x1b", $blocked->status, 'even the refusal must not echo raw escape bytes');
         $this->assertStringNotContainsString("\x07", $blocked->status);
+        $this->assertFileExists($this->tmpDir . '/' . $evil);
     }
 
     /**

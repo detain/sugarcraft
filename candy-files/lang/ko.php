@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} → {new} 이름 변경됨',
     'status.renamed_overwrote'  => '{old} → {new} 이름 변경됨, 덮어쓰기 {overwrote}건',
     'status.rename_failed' => '이름 변경 실패: {name}',
+    'status.rename_invalid'    => '이름 변경 거부: 잘못된 이름 {name}',
     'status.nothing_to_undo' => '실행 취소할 항목 없음',
     'status.undone' => '실행 취소됨: {description}',
     'status.undo_with_errors' => '{description} 실행 취소 중 오류 {errors}건',

@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} in {new} umbenannt',
     'status.renamed_overwrote'  => '{old} in {new} umbenannt ({overwrote} überschrieben)',
     'status.rename_failed' => 'Umbenennen fehlgeschlagen: {name}',
+    'status.rename_invalid'    => 'Umbenennen verweigert: ungültiger Name {name}',
     'status.nothing_to_undo' => 'nichts rückgängig zu machen',
     'status.undone' => 'rückgängig gemacht: {description}',
     'status.undo_with_errors' => 'Rückgängig ({description}) mit {errors} Fehler(n)',

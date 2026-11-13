@@ -41,6 +41,7 @@ return [
     'status.renamed' => '{old} переименован в {new}',
     'status.renamed_overwrote'  => '{old} переименован в {new} (перезаписано {overwrote})',
     'status.rename_failed' => 'сбой переименования: {name}',
+    'status.rename_invalid'    => 'Переименование отклонено: недопустимое имя {name}',
     'status.nothing_to_undo' => 'нечего отменять',
     'status.undone' => 'отменено: {description}',
     'status.undo_with_errors' => 'отмена {description}: ошибок {errors}',

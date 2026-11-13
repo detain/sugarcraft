@@ -1274,11 +1274,17 @@ final class Manager implements Model
                 ->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
                 ->withInputBuffer(null);
         }
-        // Path-traversal guard: reject names containing directory separators
-        if (str_contains($newName, '/') === true || str_contains($newName, '\\') === true || str_contains($newName, '..') === true) {
+        // CF-24 (audit 034) legality guard. Separators stay SUBSTRING-refused
+        // (a rename writes a base name). The '..' substring leg was pure
+        // over-refusal: the nets that matter — this separator leg plus the
+        // canonicalPath containment below — already refuse every traversal
+        // shape, while '..' as a substring wrongly refused legal names like
+        // 'v1..v2.pdf'. '.'/'..' are refused by exact SEGMENT equality
+        // (same rule performMkdir already honors).
+        if (str_contains($newName, '/') === true || str_contains($newName, '\\') === true || $newName === '.' || $newName === '..') {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => Entry::sanitizeName($srcName)]))
+                ->withConfirm(ConfirmState::None, Lang::t('status.rename_invalid', ['name' => Entry::sanitizeName($newName)]))
                 ->withInputBuffer(null);
         }
         // Additional path traversal guard: validate resolved path stays within source directory
