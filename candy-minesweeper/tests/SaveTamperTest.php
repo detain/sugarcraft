@@ -467,6 +467,17 @@ final class SaveTamperTest extends TestCase
     /** @param mixed $data */
     private function writeStats(mixed $data): string
     {
+        // msw-12: every counter key must be present, so array fixtures start
+        // from the full twelve-key honest set and the leg overrides only the
+        // field under test — the coherence refusals below stay meaningful.
+        if (is_array($data)) {
+            $data = $data + [
+                'easyGames' => 0, 'easyWins' => 0, 'easyBest' => null,
+                'standardGames' => 0, 'standardWins' => 0, 'standardBest' => null,
+                'mediumGames' => 0, 'mediumWins' => 0, 'mediumBest' => null,
+                'expertGames' => 0, 'expertWins' => 0, 'expertBest' => null,
+            ];
+        }
         $path = $this->homeDir . '/stats.json';
         file_put_contents($path, json_encode(['version' => 1, 'data' => $data], JSON_THROW_ON_ERROR));
         return $path;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Minesweeper\Stats;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Minesweeper\Difficulty;
 use SugarCraft\Minesweeper\Stats;
@@ -20,6 +21,8 @@ use SugarCraft\Minesweeper\Stats;
  */
 final class DifficultyStats
 {
+    use Mutable;
+
     public function __construct(
         private readonly Stats $stats,
     ) {}
@@ -73,17 +76,17 @@ final class DifficultyStats
         }
 
         $stats = new Stats(
-            easyGames:   self::expectInt($data['easyGames']   ?? null, 0, $path),
-            easyWins:    self::expectInt($data['easyWins']    ?? null, 0, $path),
+            easyGames:   self::expectInt($data['easyGames']   ?? null, $path),
+            easyWins:    self::expectInt($data['easyWins']    ?? null, $path),
             easyBest:    self::expectNullableInt($data['easyBest']    ?? null, $path),
-            standardGames: self::expectInt($data['standardGames'] ?? null, 0, $path),
-            standardWins:  self::expectInt($data['standardWins']  ?? null, 0, $path),
+            standardGames: self::expectInt($data['standardGames'] ?? null, $path),
+            standardWins:  self::expectInt($data['standardWins']  ?? null, $path),
             standardBest:  self::expectNullableInt($data['standardBest'] ?? null, $path),
-            mediumGames: self::expectInt($data['mediumGames'] ?? null, 0, $path),
-            mediumWins:  self::expectInt($data['mediumWins']  ?? null, 0, $path),
+            mediumGames: self::expectInt($data['mediumGames'] ?? null, $path),
+            mediumWins:  self::expectInt($data['mediumWins']  ?? null, $path),
             mediumBest:  self::expectNullableInt($data['mediumBest']  ?? null, $path),
-            expertGames: self::expectInt($data['expertGames'] ?? null, 0, $path),
-            expertWins:  self::expectInt($data['expertWins']  ?? null, 0, $path),
+            expertGames: self::expectInt($data['expertGames'] ?? null, $path),
+            expertWins:  self::expectInt($data['expertWins']  ?? null, $path),
             expertBest:  self::expectNullableInt($data['expertBest']  ?? null, $path),
         );
 
@@ -105,15 +108,18 @@ final class DifficultyStats
     }
 
     /**
-     * Validate and coerce a required integer field.
+     * Validate a required integer counter.
      *
-     * @throws \RuntimeException if the value is present but not an int
+     * Absent is a REFUSAL, not a default: save() always writes the full
+     * twelve-key set, so a missing counter means the file was truncated or
+     * hand-edited — exactly the clobber vector the scalar-data guard above
+     * exists for. Zero-defaulting a half-deleted file would silently
+     * overwrite the real tally on the next save.
+     *
+     * @throws \RuntimeException if the field is absent or not an int
      */
-    private static function expectInt(mixed $v, int $default, string $path): int
+    private static function expectInt(mixed $v, string $path): int
     {
-        if ($v === null) {
-            return $default;
-        }
         if (!is_int($v)) {
             throw new \RuntimeException("Invalid persistence format in: {$path}");
         }
@@ -156,21 +162,21 @@ final class DifficultyStats
             ->withPermissions(0600)
             ->write([
                 'version' => 1,
-            'data' => [
-                'easyGames' => $s->easyGames,
-                'easyWins' => $s->easyWins,
-                'easyBest' => $s->easyBest,
-                'standardGames' => $s->standardGames,
-                'standardWins' => $s->standardWins,
-                'standardBest' => $s->standardBest,
-                'mediumGames' => $s->mediumGames,
-                'mediumWins' => $s->mediumWins,
-                'mediumBest' => $s->mediumBest,
-                'expertGames' => $s->expertGames,
-                'expertWins' => $s->expertWins,
-                'expertBest' => $s->expertBest,
-            ],
-        ]);
+                'data' => [
+                    'easyGames' => $s->easyGames,
+                    'easyWins' => $s->easyWins,
+                    'easyBest' => $s->easyBest,
+                    'standardGames' => $s->standardGames,
+                    'standardWins' => $s->standardWins,
+                    'standardBest' => $s->standardBest,
+                    'mediumGames' => $s->mediumGames,
+                    'mediumWins' => $s->mediumWins,
+                    'mediumBest' => $s->mediumBest,
+                    'expertGames' => $s->expertGames,
+                    'expertWins' => $s->expertWins,
+                    'expertBest' => $s->expertBest,
+                ],
+            ]);
     }
 
     /**
@@ -178,7 +184,7 @@ final class DifficultyStats
      */
     public function withGame(Difficulty $d, bool $won, ?int $time): self
     {
-        return new self($this->stats->withGame($d, $won, $time));
+        return $this->mutate(['stats' => $this->stats->withGame($d, $won, $time)]);
     }
 
     /**

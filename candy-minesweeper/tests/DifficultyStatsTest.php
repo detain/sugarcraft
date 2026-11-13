@@ -251,14 +251,20 @@ final class DifficultyStatsTest extends TestCase
     }
 
     /**
-     * On-disk backward-compat: files written by the pre-migration save()
-     * were COMPACT `{"version":1,"data":{...}}`. load() must still read them
-     * byte-for-byte, so existing stats files survive the format switch to
-     * pretty-printed output. Pins the exact on-disk key contract.
+     * On-disk format law: files may arrive compact or pretty (the format
+     * switch to pretty-printed output never broke reads of the FULL key set),
+     * but msw-12 made absent counter keys a refusal. This leg pins both
+     * truths for a pre-STANDARD-era compact file: readable shape, refused
+     * because the standard trio is genuinely missing.
      */
-    public function testLoadReadsLegacyCompactPayload(): void
+    public function testLoadRefusesLegacyCompactPayloadMissingStandardTrio(): void
     {
-        // Exactly what the old hand-rolled save() emitted: compact, no PRETTY.
+        // msw-12 turned the default-on-absent rung into a refusal, so a
+        // pre-STANDARD-era compact file (which genuinely lacked the standard
+        // trio) is now refused rather than silently re-zeroed: the CLI warns
+        // "ignoring unreadable stats file" and starts a fresh full-set tally.
+        // Losing one ancient tally is honest; overwriting a live file with
+        // zeros is the clobber the guard exists to stop.
         $legacy = json_encode([
             'version' => 1,
             'data' => [
@@ -275,10 +281,26 @@ final class DifficultyStatsTest extends TestCase
         ], JSON_THROW_ON_ERROR);
         file_put_contents($this->persistencePath, $legacy);
 
-        $loaded = DifficultyStats::load($this->persistencePath)?->stats();
-        $this->assertNotNull($loaded);
-        $this->assertSame(11, $loaded->easyGames);
-        $this->assertSame(6, $loaded->easyWins);
-        $this->assertSame(55, $loaded->easyBest);
+        $this->expectException(\RuntimeException::class);
+        DifficultyStats::load($this->persistencePath);
+    }
+
+    public function testLoadRefusesSingleAbsentCounterKey(): void
+    {
+        // msw-12 law in isolation: a well-formed full-set file minus exactly
+        // one counter is tampering, not a first-time zero.
+        $payload = json_encode([
+            'version' => 1,
+            'data' => [
+                'easyGames' => 3, 'easyWins' => 1, 'easyBest' => 21,
+                'standardGames' => 0, 'standardWins' => 0, 'standardBest' => null,
+                'mediumGames' => 0, 'mediumWins' => 0, 'mediumBest' => null,
+                'expertWins' => 0, 'expertBest' => null,
+            ],
+        ], JSON_THROW_ON_ERROR);
+        file_put_contents($this->persistencePath, $payload);
+
+        $this->expectException(\RuntimeException::class);
+        DifficultyStats::load($this->persistencePath);
     }
 }

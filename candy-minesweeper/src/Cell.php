@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Minesweeper;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * One cell on the minefield. Immutable value object — every transition
- * (reveal, flag, etc.) returns a fresh Cell rather than mutating in
- * place, so the {@see Board} can rebuild itself with normal array
- * spread without aliasing issues.
+ * (reveal, flag, etc.) routes the house {@see Mutable} with-pattern to
+ * return a fresh Cell rather than mutating in place, so {@see Board} can
+ * rebuild itself with normal array spread without aliasing issues.
  */
 final class Cell
 {
+    use Mutable;
+
     public function __construct(
         public readonly bool $mine,
         public readonly bool $revealed = false,
@@ -22,12 +26,12 @@ final class Cell
 
     public function withMine(bool $mine): self
     {
-        return new self($mine, $this->revealed, $this->flagged, $this->adjacent);
+        return $this->mutate(['mine' => $mine]);
     }
 
     public function withAdjacent(int $n): self
     {
-        return new self($this->mine, $this->revealed, $this->flagged, $n);
+        return $this->mutate(['adjacent' => $n]);
     }
 
     public function reveal(): self
@@ -35,7 +39,7 @@ final class Cell
         if ($this->revealed || $this->flagged) {
             return $this;
         }
-        return new self($this->mine, true, false, $this->adjacent);
+        return $this->mutate(['revealed' => true, 'flagged' => false]);
     }
 
     public function toggleFlag(): self
@@ -43,6 +47,6 @@ final class Cell
         if ($this->revealed) {
             return $this;
         }
-        return new self($this->mine, false, !$this->flagged, $this->adjacent);
+        return $this->mutate(['flagged' => !$this->flagged]);
     }
 }
