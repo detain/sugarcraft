@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Admin dashboard pages split into two sections:
  * - Management: process list, variables, status, debug
@@ -26,14 +28,14 @@ enum AdminPane: string
     public function label(): string
     {
         return match ($this) {
-            self::ProcessList => 'Process List',
-            self::Variables   => 'Variables',
-            self::Status      => 'Status',
-            self::QueryStats  => 'Query Stats',
-            self::Dashboard   => 'Dashboard',
-            self::TableStats  => 'Table Stats',
-            self::PerfSchema  => 'Performance Schema',
-            self::Debug       => 'Debug',
+            self::ProcessList => Lang::t('pane.process_list'),
+            self::Variables   => Lang::t('pane.variables'),
+            self::Status      => Lang::t('pane.status'),
+            self::QueryStats  => Lang::t('pane.query_stats'),
+            self::Dashboard   => Lang::t('pane.dashboard'),
+            self::TableStats  => Lang::t('pane.table_stats'),
+            self::PerfSchema  => Lang::t('pane.perf_schema'),
+            self::Debug       => Lang::t('pane.debug'),
         };
     }
 

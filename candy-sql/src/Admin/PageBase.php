@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Color;
@@ -72,11 +73,11 @@ abstract class PageBase implements Model
     protected function errorScreen(): string
     {
         if ($this->errorMessage === '') {
-            return Style::new()->foreground(Color::ansi(8))->render('  No data available yet.');
+            return Style::new()->foreground(Color::ansi(8))->render('  ' . Lang::t('page.no_data'));
         }
         // $errorMessage carries raw driver/server text — neutralize control
         // bytes before it reaches the terminal.
-        return 'Error: ' . CellValue::sanitize($this->errorMessage);
+        return Lang::t('page.error', ['message' => CellValue::sanitize($this->errorMessage)]);
     }
 
     /**
@@ -84,9 +85,9 @@ abstract class PageBase implements Model
      */
     protected function loadingScreen(): string
     {
-        return Style::new()->foreground(Color::ansi(3))->render('  ◌ Loading…')
+        return Style::new()->foreground(Color::ansi(3))->render('  ◌ ' . Lang::t('page.loading'))
             . "\n\n  "
-            . Style::new()->foreground(Color::ansi(8))->render('Fetching data from the server.');
+            . Style::new()->foreground(Color::ansi(8))->render(Lang::t('page.fetching'));
     }
 
     public function init(): ?\Closure

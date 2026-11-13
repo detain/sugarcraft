@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Reports;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Widgets\Tree\Node;
 use SugarCraft\Widgets\Tree\Tree;
 use SugarCraft\Core\KeyType;
@@ -207,7 +208,7 @@ final class ReportsPage extends PageBase implements RowNavigable
 
             return true;
         } catch (\Throwable $e) {
-            $this->errorMessage = 'Cannot access Performance Reports: ' . $e->getMessage();
+            $this->errorMessage = Lang::t('reports.cannot_access', ['message' => $e->getMessage()]);
 
             return false;
         }
@@ -623,7 +624,7 @@ final class ReportsPage extends PageBase implements RowNavigable
     {
         // SQL-P14: when a pane opened this page, say which one — the two
         // report panes must be tellable apart from the page itself.
-        $base = 'Performance Reports';
+        $base = Lang::t('reports.title');
 
         return Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render(
             $this->paneLabel !== null ? $base . ' · ' . $this->paneLabel : $base,
@@ -640,10 +641,10 @@ final class ReportsPage extends PageBase implements RowNavigable
 
     private function renderCategoryTree(): string
     {
-        $header = Style::new()->bold()->foreground(Color::hex('#c084fc'))->render('Categories');
+        $header = Style::new()->bold()->foreground(Color::hex('#c084fc'))->render(Lang::t('reports.categories'));
 
         if ($this->categories === []) {
-            return $header . "\n" . Style::new()->faint()->render('  (no data)');
+            return $header . "\n" . Style::new()->faint()->render('  ' . Lang::t('reports.no_data'));
         }
 
         // Each category is a Bits\Tree branch; only the selected category is
@@ -689,14 +690,14 @@ final class ReportsPage extends PageBase implements RowNavigable
             // is selected and we are still loading rather than awaiting input.
             $glyph = Spinner::new(SpinnerStyle::dot())->view();
             $label = $this->selectedReport === null
-                ? 'Loading reports…'
-                : "Loading {$this->currentReportCaption()}…";
+                ? Lang::t('reports.loading')
+                : Lang::t('reports.loading_one', ['caption' => $this->currentReportCaption()]);
 
             return Style::new()->foreground(Color::hex('#fbbf24'))->render("{$glyph} {$label}");
         }
 
         if ($this->currentResult->isEmpty()) {
-            return Style::new()->faint()->render("No data available for {$this->currentResult->report->caption}");
+            return Style::new()->faint()->render(Lang::t('reports.no_data_for', ['caption' => $this->currentResult->report->caption]));
         }
 
         $report = $this->currentResult->report;
@@ -773,7 +774,7 @@ final class ReportsPage extends PageBase implements RowNavigable
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav rows  [h/l] category  [[]/[]] report  [,/.] column  [c] unit  [r] refresh  [x] export  [q] back');
+            ->render(Lang::t('reports.help'));
     }
 
     private function renderErrorScreen(): string
@@ -781,16 +782,16 @@ final class ReportsPage extends PageBase implements RowNavigable
         $muted = Style::new()->foreground(Color::hex('#6b7280'));
 
         $lines = [];
-        $lines[] = Style::new()->bold()->foreground(Color::hex('#f87171'))->render('Performance Reports Unavailable');
+        $lines[] = Style::new()->bold()->foreground(Color::hex('#f87171'))->render(Lang::t('reports.unavailable'));
         $lines[] = '';
         // errorMessage embeds raw driver/server text — neutralize at egress.
         $lines[] = CellValue::sanitize($this->errorMessage);
         $lines[] = '';
         // SQL-P17 (adminpages-022): one grammatical sentence, not a two-line
         // verbless fragment split mid-thought.
-        $lines[] = $muted->render('Ensure MySQL 5.6.6+ with performance_schema=enabled and the sys schema installed.');
+        $lines[] = $muted->render(Lang::t('reports.ensure'));
         $lines[] = '';
-        $lines[] = $muted->render('[q] back');
+        $lines[] = $muted->render(Lang::t('reports.back'));
 
         return \implode("\n", $lines);
     }

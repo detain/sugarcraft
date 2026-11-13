@@ -316,7 +316,10 @@ final class ConnectionsPageTest extends TestCase
      */
     public function testBracketGrammarCensusOnTheHintLine(): void
     {
-        $source = (string) \file_get_contents(__DIR__ . '/../../../src/Admin/Connections/ConnectionsPage.php');
+        // The hint line moved into the lang catalog with SQL-O05 — census the en source of truth.
+        $catalog = require __DIR__ . '/../../../lang/en.php';
+        $source = $catalog['conn.help_empty'] . $catalog['conn.help_full']
+            . (string) \file_get_contents(__DIR__ . '/../../../src/Admin/Connections/ConnectionsPage.php');
 
         $this->assertSame(0, \substr_count($source, 'j/k:nav'));
         $this->assertGreaterThanOrEqual(2, \substr_count($source, '[j/k] nav'));

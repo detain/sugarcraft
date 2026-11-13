@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Connections;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
@@ -247,7 +248,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
             if ($ch === 'y' || $ch === 'Y') {
                 return $this->executeConfirmedKill();
             }
-            return [$this->withClearedKillPrompt('Kill cancelled'), null];
+            return [$this->withClearedKillPrompt(Lang::t('conn.kill_cancelled')), null];
         }
 
         // j/k or Up/Down navigate the processlist selection
@@ -310,11 +311,11 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         $selected = $this->filteredProcesslist()[$this->selectedIndex] ?? null;
 
         if ($selected === null) {
-            $clone->actionMessage = 'No connection selected';
+            $clone->actionMessage = Lang::t('conn.none_selected');
             return $clone;
         }
         if ($selected->isBackground) {
-            $clone->actionMessage = 'Refusing to kill a background thread';
+            $clone->actionMessage = Lang::t('conn.refuse_background');
             return $clone;
         }
 
@@ -352,10 +353,10 @@ final class ConnectionsPage extends PageBase implements RowNavigable
             ? $this->actions->killQuery($target->processId, $target->isBackground)
             : $this->actions->kill($target->processId, $target->isBackground);
 
-        $verb = $this->pendingKillIsQuery ? 'Kill query' : 'Kill';
+        $verb = $this->pendingKillIsQuery ? Lang::t('conn.verb_kill_query') : Lang::t('conn.verb_kill');
         $message = $ok
-            ? sprintf('%s sent to connection %s', $verb, (string) $target->processId)
-            : sprintf('%s failed for connection %s', $verb, (string) $target->processId);
+            ? Lang::t('conn.sent', ['verb' => $verb, 'id' => (string) $target->processId])
+            : Lang::t('conn.failed', ['verb' => $verb, 'id' => (string) $target->processId]);
 
         // Re-fetch so the killed connection drops out of the grid.
         [$clone, $cmd] = $this->handleRefresh();
@@ -504,7 +505,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
             $this->context->serverVariables();
             return true;
         } catch (\Throwable) {
-            $this->errorMessage = 'Unable to fetch server variables';
+            $this->errorMessage = Lang::t('conn.vars_fail');
             return false;
         }
     }
@@ -539,15 +540,14 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     private function renderActionLine(): string
     {
         if ($this->pendingKill !== null) {
-            $verb = $this->pendingKillIsQuery ? 'Cancel running query on' : 'KILL';
+            $verb = $this->pendingKillIsQuery ? Lang::t('conn.confirm_verb_query') : Lang::t('conn.confirm_verb_kill');
             return Style::new()->bold()->foreground(Color::hex('#f9e2af'))->render(
-                sprintf(
-                    '%s connection %s (%s@%s)?  [y] confirm   [any other key] cancel',
-                    $verb,
-                    (string) $this->pendingKill->processId,
-                    $this->pendingKill->user !== '' ? $this->pendingKill->user : '?',
-                    $this->pendingKill->host !== '' ? $this->pendingKill->host : '?',
-                ),
+                Lang::t('conn.confirm', [
+                    'verb' => $verb,
+                    'id' => (string) $this->pendingKill->processId,
+                    'user' => $this->pendingKill->user !== '' ? $this->pendingKill->user : '?',
+                    'host' => $this->pendingKill->host !== '' ? $this->pendingKill->host : '?',
+                ]),
             );
         }
         if ($this->actionMessage !== null) {
@@ -567,8 +567,8 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     {
         // SQL-P18 (adminpages-020): bracket grammar like every other page.
         $hints = $this->filteredProcesslist() === []
-            ? '[j/k] nav  [f] filter  [r] refresh'
-            : '[j/k] nav  [K] kill  [X] kill-query  [f] filter  [r] refresh';
+            ? Lang::t('conn.help_empty')
+            : Lang::t('conn.help_full');
 
         return Style::new()->foreground(Color::hex('#6b7280'))->render($hints);
     }

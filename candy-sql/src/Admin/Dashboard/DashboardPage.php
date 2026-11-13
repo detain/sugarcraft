@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Dashboard;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Forms\Spinner\Spinner;
 use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
@@ -133,13 +134,13 @@ final class DashboardPage extends PageBase
         $muted = Style::new()->foreground(Color::hex('#6b7280'));
 
         return implode("\n", [
-            Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('  Performance Dashboard'),
+            Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('  ' . Lang::t('dash.title')),
             '',
-            Style::new()->foreground(Color::hex('#fbbf24'))->render("    {$glyph} Fetching server metrics..."),
+            Style::new()->foreground(Color::hex('#fbbf24'))->render("    {$glyph} " . Lang::t('dash.fetching')),
             '',
             '  ' . $muted->render('SHOW GLOBAL STATUS / pg_stat_database'),
             '',
-            '  ' . $muted->render('Press [q] to return to the Tables view'),
+            '  ' . $muted->render(Lang::t('dash.back_hint')),
         ]);
     }
 
@@ -194,11 +195,11 @@ final class DashboardPage extends PageBase
      */
     private function renderQueryLog(int $width): string
     {
-        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Recent Queries');
+        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render(Lang::t('dash.recent_queries'));
 
         $entries = QueryLogger::entries();
         if ($entries === []) {
-            $muted = Style::new()->foreground(Color::ansi(8))->render('  (no queries yet)');
+            $muted = Style::new()->foreground(Color::ansi(8))->render('  ' . Lang::t('dash.no_queries'));
             return $title . "\n" . $muted;
         }
 
@@ -726,7 +727,7 @@ final class DashboardPage extends PageBase
         // VERSION() banner is server-controlled text: sanitize before the
         // header concatenation (adminpages-006).
         $version = CellValue::sanitize($this->context->versionString());
-        $status = $this->paused ? ' [PAUSED]' : '';
+        $status = $this->paused ? ' ' . Lang::t('bar.paused') : '';
 
         if ($this->isPostgres) {
             // SQL-P19 (adminpages-038): 'Uptime: N/A' was a permanent lie —
@@ -736,25 +737,23 @@ final class DashboardPage extends PageBase
             $pgUptime = $this->context->statusVariables()['uptime'] ?? '';
             $uptimeSegment = $pgUptime === ''
                 ? ''
-                : ' | Uptime: ' . Format::duration((float) $pgUptime);
+                : Lang::t('dash.uptime_segment', ['uptime' => Format::duration((float) $pgUptime)]);
 
-            return sprintf(
-                "Performance Dashboard%s | PostgreSQL %s%s\n",
-                $status,
-                $version,
-                $uptimeSegment,
-            );
+            return Lang::t('dash.header_pg', [
+                'status' => $status,
+                'version' => $version,
+                'uptime' => $uptimeSegment,
+            ]) . "\n";
         }
 
         $uptime = $this->context->statusVariables()['Uptime'] ?? '0';
         $uptimeStr = Format::duration((float) $uptime);
 
-        return sprintf(
-            "Performance Dashboard%s | MySQL %s | Uptime: %s\n",
-            $status,
-            $version,
-            $uptimeStr,
-        );
+        return Lang::t('dash.header_mysql', [
+            'status' => $status,
+            'version' => $version,
+            'uptime' => $uptimeStr,
+        ]) . "\n";
     }
 
     private function renderFooter(): string

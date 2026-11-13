@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Variables;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Widgets\Tabs\Tabs;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
@@ -207,7 +208,7 @@ final class VariablesPage extends PageBase implements RowNavigable
 
             return \count($vars) > 0;
         } catch (\Throwable $e) {
-            $this->errorMessage = 'Unable to load variables: ' . $e->getMessage();
+            $this->errorMessage = Lang::t('vars.load_fail', ['message' => $e->getMessage()]);
             return false;
         }
     }
@@ -530,11 +531,11 @@ final class VariablesPage extends PageBase implements RowNavigable
         }
 
         // Error — show in confirm phase (user can retry, cancel, or press 'p' to switch mode)
-        $errorMessage = $result['errorMessage'] ?? 'Unknown error';
+        $errorMessage = $result['errorMessage'] ?? Lang::t('vars.unknown_error');
 
         // Error 1238 = variable is not dynamic (requires restart) — suggest PERSIST_ONLY
         if (($result['errorCode'] ?? 0) === 1238) {
-            $errorMessage = "Error 1238: '{$varName}' is not dynamic — press [p] to use PERSIST_ONLY";
+            $errorMessage = Lang::t('vars.not_dynamic', ['name' => $varName]);
         }
 
         return [$this->withEditDialog(
@@ -791,7 +792,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         // self-write guard.  The TextInput placeholder shows $currentValue
         // so the user sees the original without pre-filling the state.
         $input = TextInput::new()
-            ->withPrompt('new value > ')
+            ->withPrompt(Lang::t('vars.new_value'))
             ->withPlaceholder($currentValue)
             ->setValue('');  // start empty so typing appends correctly
 
@@ -1118,11 +1119,11 @@ final class VariablesPage extends PageBase implements RowNavigable
         };
 
         if ($phase === self::DLG_INPUT) {
-            $prompt = "  Edit ({$modeLabel}) {$varName} (current: {$currentValue})\n";
+            $prompt = '  ' . Lang::t('vars.edit_head', ['mode' => $modeLabel, 'name' => $varName, 'current' => $currentValue]) . "\n";
             // D-M28: the raw scope tokens meant nothing on screen — spell the
             // semantics out, the one place an explainer is load-bearing.
-            $prompt .= "  GLOBAL = runtime only (lost on restart) · PERSIST = runtime + config file · PERSIST_ONLY = config file only (applies at next restart)\n";
-            $prompt .= '  Enter new value, [p] toggle mode, [Enter] confirm, [Esc] cancel';
+            $prompt .= '  ' . Lang::t('vars.scope_explain') . "\n";
+            $prompt .= '  ' . Lang::t('vars.edit_help');
             return Style::new()->foreground(Color::hex('#fde047'))->render($prompt);
         }
 

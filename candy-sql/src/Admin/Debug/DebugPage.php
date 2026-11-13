@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Debug;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -195,12 +196,12 @@ final class DebugPage extends PageBase implements RowNavigable
     private function renderHeader(): string
     {
         $entryCount = \count($this->errorsOnly ? QueryLogger::errorEntries() : QueryLogger::entries());
-        $title = Style::new()->bold()->foreground(Color::hex('#f59e0b'))->render('Debug Log');
+        $title = Style::new()->bold()->foreground(Color::hex('#f59e0b'))->render(Lang::t('debug.title'));
 
-        $counter = Style::new()->foreground(Color::hex('#6b7280'))->render(" ({$entryCount} entries)");
+        $counter = Style::new()->foreground(Color::hex('#6b7280'))->render(Lang::t('debug.entries', ['count' => $entryCount]));
 
         $filter = $this->errorsOnly
-            ? Style::new()->bold()->foreground(Color::hex('#ef4444'))->render('  [errors only]')
+            ? Style::new()->bold()->foreground(Color::hex('#ef4444'))->render('  ' . Lang::t('debug.errors_only'))
             : '';
 
         return "{$title}{$counter}{$filter}";
@@ -214,7 +215,7 @@ final class DebugPage extends PageBase implements RowNavigable
     private function renderLogEntries(array $entries): string
     {
         if ($entries === []) {
-            return Style::new()->foreground(Color::ansi(8))->render('  (no log entries)');
+            return Style::new()->foreground(Color::ansi(8))->render('  ' . Lang::t('debug.empty'));
         }
 
         // Reverse to show newest first
@@ -235,7 +236,7 @@ final class DebugPage extends PageBase implements RowNavigable
         if ($lastVisibleIndex < $totalEntries - 1) {
             $remaining = $totalEntries - $lastVisibleIndex - 1;
             $lines[] = '';
-            $lines[] = Style::new()->foreground(Color::ansi(8))->render("  ↑ {$remaining} more entries");
+            $lines[] = Style::new()->foreground(Color::ansi(8))->render('  ' . Lang::t('debug.more', ['count' => $remaining]));
         }
 
         return \implode("\n", $lines);
@@ -299,7 +300,7 @@ final class DebugPage extends PageBase implements RowNavigable
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav  [f] errors-only  [c] clear  [q] back');
+            ->render(Lang::t('debug.help'));
     }
 
     // ─── Accessors ───────────────────────────────────────────────────────────
