@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: continuazione prima di qualsiasi blocco '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: riga non analizzabile {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: mappatura a blocchi sotto `{field}:` alla riga {line}: {found} — questo campo deve essere un elenco di voci `- value`',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: virgoletta non chiusa nel valore: {found}',
     'config.entry_missing_field' => 'voce wishlist #{index}: campo obbligatorio mancante: {field}',
     'config.unknown_key' => 'voce wishlist: campo sconosciuto `{key}` ignorato — chiave non documentata',
     'config.unknown_key_nearmiss' => 'campo sconosciuto `{key}` ignorato — intendevi `{field}`?',

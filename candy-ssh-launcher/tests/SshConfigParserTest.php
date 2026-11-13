@@ -451,9 +451,11 @@ CONF;
         $this->assertSame($sq . $single . $sq, $imported[0]->host, 'import side keeps the doubled-quote value');
 
         $declared = Config::parse("- name: e1\n  host: h.test\n  description: " . $dq . $double . $dq . "\n", 'wishlist.yml');
-        $this->assertSame($double, $declared[0]->description, 'config side agrees: same bytes, same survival');
+        // Config resolves the escape pairs (-069); the scanner-level equality
+        // is that NEITHER carrier truncates at the hash.
+        $this->assertSame('a"b # c', $declared[0]->description, 'config side survives and unescapes');
 
         $declared = Config::parse("- name: e2\n  host: h.test\n  description: " . $sq . $single . $sq . "\n", 'wishlist.yml');
-        $this->assertSame($single, $declared[0]->description, 'config side agrees on the doubled-quote value');
+        $this->assertSame("it's #1", $declared[0]->description, 'config side survives and unescapes the doubled quote');
     }
 }

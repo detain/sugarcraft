@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: '- name:' 블록 앞에는 Continuation을 설정할 수 없습니다",
     'config.yaml_unparseable'  => 'wishlist yaml: 구문 분석할 수 없는 줄 {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: `{field}:` 아래 블록 매핑(줄 {line}: {found}) — 이 필드는 `- value` 항목 목록이어야 합니다',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: 값에 닫히지 않은 따옴표: {found}',
     'config.entry_missing_field' => '위시리스트 항목 #{index}: 필수 필드 누락: {field}',
     'config.unknown_key' => '알 수 없는 필드 `{key}` 무시 — 문서화된 키가 아닙니다',
     'config.unknown_key_nearmiss' => '알 수 없는 필드 `{key}` 무시 — `{field}`을(를) 의도했나요?',

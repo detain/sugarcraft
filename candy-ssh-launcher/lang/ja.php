@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml：'- name:' ブロックの前には Continuation を設定できません",
     'config.yaml_unparseable'  => 'wishlist yaml：解析できない行 {line}：{found}',
     'config.yaml_block_mapping' => 'wishlist yaml：`{field}:` の下のブロックマッピング（行 {line}: {found}）— このフィールドは `- value` アイテムのリストである必要があります',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: 値に閉じられていない引用符があります: {found}',
     'config.entry_missing_field' => 'wishlist エントリ #{index}: 必須フィールドがありません: {field}',
     'config.unknown_key' => '不明なフィールド `{key}` を無視しました — 文書化されたキーではありません',
     'config.unknown_key_nearmiss' => '不明なフィールド `{key}` を無視しました — `{field}` のことですか?',

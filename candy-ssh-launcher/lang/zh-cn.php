@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml：在任何 '- name:' 块之前不能有续行",
     'config.yaml_unparseable'  => 'wishlist yaml：无法解析的行 {line}：{found}',
     'config.yaml_block_mapping' => 'wishlist yaml：第 {line} 行在 `{field}:` 下的块映射：{found}——该字段必须是 `- value` 条目列表',
+    'config.yaml_unterminated_quote' => 'wishlist yaml：值中有未闭合的引号：{found}',
     'config.entry_missing_field' => 'wishlist 第 {index} 项缺少必填字段：{field}',
     'config.unknown_key' => '未知字段 `{key}` 已忽略 — 并非文档化的键',
     'config.unknown_key_nearmiss' => '未知字段 `{key}` 已忽略 — 是否指 `{field}`？',

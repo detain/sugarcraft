@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: pokračování před jakýmkoliv blokem '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: neparsovatelný řádek {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: blokové mapování pod `{field}:` na řádku {line}: {found} — toto pole musí být seznam položek `- value`',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: v hodnotě nezavřená uvozovka: {found}',
     'config.entry_missing_field' => 'položka wishlist #{index} postrádá povinný údaj: {field}',
     'config.unknown_key' => 'neznámé pole `{key}` ignorováno — není dokumentovaný klíč',
     'config.unknown_key_nearmiss' => 'neznámé pole `{key}` ignorováno — mysleli jste `{field}`?',

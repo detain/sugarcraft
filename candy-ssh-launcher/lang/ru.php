@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: продолжение перед любым блоком '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: неразбираемая строка {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: блочное отображение под `{field}:` в строке {line}: {found} — это поле должно быть списком элементов `- value`',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: незакрытая кавычка в значении: {found}',
     'config.entry_missing_field' => 'запись wishlist #{index}: не хватает обязательного поля: {field}',
     'config.unknown_key' => 'неизвестное поле `{key}` проигнорировано — такого ключа нет в документации',
     'config.unknown_key_nearmiss' => 'неизвестное поле `{key}` проигнорировано — вы имели в виду `{field}`?',

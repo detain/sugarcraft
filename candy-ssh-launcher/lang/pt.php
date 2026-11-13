@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: continuação antes de qualquer bloco '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: linha não analisável {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: mapeamento de bloco sob `{field}:` na linha {line}: {found} — este campo deve ser uma lista de itens `- value`',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: aspa não fechada no valor: {found}',
     'config.entry_missing_field' => 'entrada da wishlist #{index}: falta um campo obrigatório: {field}',
     'config.unknown_key' => 'campo desconhecido `{key}` ignorado — não é uma chave documentada',
     'config.unknown_key_nearmiss' => 'campo desconhecido `{key}` ignorado — quis dizer `{field}`?',

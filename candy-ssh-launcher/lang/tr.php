@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: herhangi bir '- name:' bloğundan önce Devamlılık ayarlanamaz",
     'config.yaml_unparseable'  => 'wishlist yaml: ayrıştırılamayan satır {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: {line}. satırdaki `{field}:` altında blok eşlemesi: {found} — bu alan bir `- value` öğeleri listesi olmalıdır',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: değerde kapatılmamış tırnak işareti: {found}',
     'config.entry_missing_field' => 'wishlist girdisi #{index}: gerekli alan eksik: {field}',
     'config.unknown_key' => 'bilinmeyen alan `{key}` yoksayıldı — belgelenmiş anahtar değil',
     'config.unknown_key_nearmiss' => 'bilinmeyen alan `{key}` yoksayıldı — `{field}` mi demek istediniz?',

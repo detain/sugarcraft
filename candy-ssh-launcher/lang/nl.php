@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: Continuation voor elk '- name:'-blok",
     'config.yaml_unparseable'  => 'wishlist yaml: onleesbare regel {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: blokindeling onder `{field}:` op regel {line}: {found} — dit veld moet een lijst van `- value` items zijn',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: onafgesloten aanhalingsteken in waarde: {found}',
     'config.entry_missing_field' => 'wishlist-item #{index}: verplicht veld ontbreekt: {field}',
     'config.unknown_key' => 'onbekend veld `{key}` genegeerd — niet gedocumenteerd',
     'config.unknown_key_nearmiss' => 'onbekend veld `{key}` genegeerd — bedoelde je `{field}`?',

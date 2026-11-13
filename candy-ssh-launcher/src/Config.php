@@ -249,9 +249,11 @@ final class Config
         // point at a real number instead of pasting the offending content
         // into a slot the message calls "line".
         foreach (explode("\n", $raw) as $lineNo => $rawLine) {
-            // Normalize tab indentation to spaces so tab-indented
-            // continuation keys parse instead of aborting.
-            $line = self::stripComment(str_replace("\t", '    ', $rawLine));
+            // -066: normalize tab indentation to spaces in the LEADING
+            // indent only — a tab inside a quoted scalar is data, and the
+            // ssh_config ingest path rewrites no bytes mid-value, so one
+            // value must not mean two things depending on the reader.
+            $line = self::stripComment(self::expandLeadingTabs($rawLine));
             // Trim trailing whitespace from the whole line
             $line = rtrim($line);
 
@@ -378,15 +380,94 @@ final class Config
         return CommentStrip::strip($line);
     }
 
+    /**
+     * Expand tab characters that sit in a line's LEADING indentation to
+     * four spaces each, iteratively, leaving every byte from the first
+     * non-(space|tab) character onward untouched (-066).
+     */
+    private static function expandLeadingTabs(string $line): string
+    {
+        return (string) preg_replace_callback(
+            '/^(?:[ ]*\t)+/',
+            static fn (array $m): string => str_replace("\t", '    ', $m[0]),
+            $line,
+            1
+        );
+    }
+
+    /**
+     * Inner slice of a quoted scalar, found with the same escape rules as
+     * the comment scanner ({@see CommentStrip::strip()}): inside double
+     * quotes a backslash consumes the next character, inside single quotes
+     * a doubled '' stays inside. Throws when the opening quote never
+     * closes — an unterminated quote names a broken config, not a hostname
+     * with a quote byte glued to it (-068).
+     *
+     * @throws \RuntimeException when the opening quote never closes
+     */
+    private static function quotedInner(string $v, string $quote): string
+    {
+        $length = strlen($v);
+        for ($i = 1; $i < $length; $i++) {
+            $ch = $v[$i];
+            if ($quote === '"' && $ch === '\\') {
+                $i++; // consume the escaped pair
+                continue;
+            }
+            if ($ch !== $quote) {
+                continue;
+            }
+            if ($quote === "'" && $i + 1 < $length && $v[$i + 1] === "'") {
+                $i++; // doubled '' — an escaped quote, stays inside
+                continue;
+            }
+
+            return substr($v, 1, $i - 1);
+        }
+
+        throw new \RuntimeException(Lang::t('config.yaml_unterminated_quote', [
+            'found' => self::diagnostic($v),
+        ]));
+    }
+
+    /**
+     * Resolve the double-quote escape pairs the scanner recognized: `\"`
+     * becomes `"` and `\\` becomes `\`; a backslash before anything else
+     * rides verbatim (this subset invents no other escapes, -069).
+     */
+    private static function unescapeDouble(string $inner): string
+    {
+        $out = '';
+        $length = strlen($inner);
+        for ($i = 0; $i < $length; $i++) {
+            if ($inner[$i] === '\\' && $i + 1 < $length
+                && ($inner[$i + 1] === '"' || $inner[$i + 1] === '\\')) {
+                $out .= $inner[++$i];
+                continue;
+            }
+            $out .= $inner[$i];
+        }
+
+        return $out;
+    }
+
     private static function yamlScalar(string $v): mixed
     {
         $v = trim($v);
         if ($v === '' || strtolower($v) === 'null' || $v === '~') {
             return null;
         }
-        if ((str_starts_with($v, '"') && str_ends_with($v, '"'))
-            || (str_starts_with($v, "'") && str_ends_with($v, "'"))) {
-            return substr($v, 1, -1);
+        // -068/-069: a leading quote opens a quoted scalar that MUST close
+        // under the subset's escape rules (\\-pairs in double quotes, doubled
+        // '' in single); an unclosed quote is a config error, never a value,
+        // so `host: "unclosed` cannot dispatch a quote-prefixed hostname.
+        // Closing scalars are unescaped — `a\"b` means `a"b`, the same bytes
+        // real YAML (and OpenSSH argv) would yield.
+        if (($v[0] ?? '') === '"' || ($v[0] ?? '') === "'") {
+            $quote = $v[0];
+            $inner = self::quotedInner($v, $quote);
+
+            return $quote === '"' ? self::unescapeDouble($inner) : str_replace("''", "'", $inner);
         }
         // YAML inline flow collections (`[a, b]`, `{k: v}`) are valid YAML
         // this flat parser cannot represent — silently carrying them as the

@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "Wishlist-YAML: Fortsetzung vor jedem '- name:'-Block",
     'config.yaml_unparseable'  => 'Wishlist-YAML: nicht analysierbare Zeile {line}: {found}',
     'config.yaml_block_mapping' => 'Wishlist-YAML: Block-Mapping unter `{field}:` in Zeile {line}: {found} — dieses Feld muss eine Liste von `- value`-Einträgen sein',
+    'config.yaml_unterminated_quote' => 'Wishlist-YAML: nicht abgeschlossenes Anführungszeichen im Wert: {found}',
     'config.entry_missing_field' => 'Wishlist-Eintrag #{index} fehlt ein Pflichtfeld: {field}',
     'config.unknown_key' => 'Wishlist-Eintrag: unbekanntes Feld `{key}` ignoriert — kein dokumentierter Schlüssel',
     'config.unknown_key_nearmiss' => 'Wishlist-Eintrag: unbekanntes Feld `{key}` ignoriert — meinten Sie `{field}`?',

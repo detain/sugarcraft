@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: لا يمكن تعيين المتابعة قبل أي كتلة '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: سطر غير قابل للتحليل {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: تعيين كتلة تحت `{field}:` في السطر {line}: {found} — يجب أن يكون هذا الحقل قائمة عناصر `- value`',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: علامة اقتباس غير مغلقة في القيمة: {found}',
     'config.entry_missing_field' => 'عنصر wishlist رقم {index}: يفتقد حقلاً إلزامياً: {field}',
     'config.unknown_key' => 'تم تجاهل الحقل غير المعروف `{key}` — ليس مفتاحاً موثقاً',
     'config.unknown_key_nearmiss' => 'تم تجاهل الحقل غير المعروف `{key}` — هل قصدت `{field}`؟',

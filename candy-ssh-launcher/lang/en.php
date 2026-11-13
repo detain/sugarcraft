@@ -16,6 +16,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: continuation before any '- name:' block",
     'config.yaml_unparseable'  => 'wishlist yaml: unparseable line {line}: {found}',
     'config.yaml_block_mapping' => 'wishlist yaml: block mapping under `{field}:` on line {line}: {found} — this field must be a list of `- value` items',
+    'config.yaml_unterminated_quote' => 'wishlist yaml: unterminated quote in value: {found}',
     'config.entry_missing_field' => 'wishlist entry #{index} is missing a required field: {field}',
     'config.unknown_key' => 'wishlist entry: unknown field `{key}` ignored — not a documented key',
     'config.unknown_key_nearmiss' => 'wishlist entry: unknown field `{key}` ignored — did you mean `{field}`?',

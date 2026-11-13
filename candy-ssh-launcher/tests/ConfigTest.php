@@ -446,9 +446,9 @@ YAML;
         // -095 (F-18 promise, escaped legs): the backslash-pair consume and
         // the doubled '' keep the scanner inside the quoted value, so a '#'
         // after an ESCAPED quote still does not truncate — the leg the
-        // clover report never exercised. The escapes ride verbatim (the
-        // unescape gap is -069's), pinned exactly as measured so a future
-        // change notices.
+        // clover report never exercised. Since -069 the closing scalar is
+        // also unescaped: the escape pairs resolve to the bytes the value
+        // was quoted to protect.
         $raw = <<<'YAML'
 - name: prod
   host: p.test
@@ -459,7 +459,90 @@ YAML;
 YAML;
         $endpoints = Config::parse($raw, 'wishlist.yml');
         $this->assertCount(2, $endpoints);
-        $this->assertSame('a\"b # c', $endpoints[0]->description);
-        $this->assertSame("it''s #1", $endpoints[1]->description);
+        $this->assertSame('a"b # c', $endpoints[0]->description);
+        $this->assertSame("it's #1", $endpoints[1]->description);
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function yamlQuoteStateProvider(): array
+    {
+        $dq = chr(34);
+        $sq = chr(39);
+        $bs = chr(92);
+        $tb = chr(9);
+
+        return [
+            // -066: a tab inside a quoted scalar is data — the ssh_config
+            // ingest path rewrites no bytes mid-value either.
+            'tab inside quotes survives' => [
+                $dq . 'x' . $tb . 'y' . $dq,
+                'x' . $tb . 'y',
+            ],
+            // -069: the two escape pairs the scanner recognizes resolve.
+            'escaped double quote unescapes' => [
+                $dq . 'a' . $bs . $dq . 'b' . $dq,
+                'a"b',
+            ],
+            'escaped backslash unescapes' => [
+                $dq . 'a' . $bs . $bs . 'b' . $dq,
+                'a' . $bs . 'b',
+            ],
+            'backslash before ordinary char rides verbatim' => [
+                $dq . 'a' . $bs . 'nb' . $dq,
+                'a' . $bs . 'nb',
+            ],
+            'doubled single quote unescapes' => [
+                $sq . 'it' . $sq . $sq . 's' . $sq,
+                "it's",
+            ],
+            'empty double-quoted scalar is empty string' => [$dq . $dq, ''],
+            'quoted inline flow stays an ordinary scalar' => [
+                $dq . '[a, b]' . $dq,
+                '[a, b]',
+            ],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('yamlQuoteStateProvider')]
+    public function testYamlQuoteStateScalars(string $quoted, string $expected): void
+    {
+        $endpoints = Config::parse(
+            "- name: a\n  host: h.test\n  description: " . $quoted . "\n",
+            'wishlist.yml'
+        );
+        $this->assertSame($expected, $endpoints[0]->description);
+    }
+
+    public function testUnterminatedDoubleQuoteIsRefusedNotDispatched(): void
+    {
+        // -068 measured pre-fix: `host: "unclosed` produced the literal
+        // quote-prefixed hostname `"unclosed` on the argv path. The quote
+        // must now name a broken config instead.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('unterminated quote');
+        Config::parse("- name: a\n  host: \"unclosed\n", 'wishlist.yml');
+    }
+
+    public function testUnterminatedSingleQuoteIsRefusedNotDispatched(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('unterminated quote');
+        Config::parse("- name: a\n  host: h.test\n  description: 'no end\n", 'wishlist.yml');
+    }
+
+    public function testEscapedQuoteDoesNotFakeTermination(): void
+    {
+        // The only quote byte inside is escaped — the scalar is still open.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('unterminated quote');
+        Config::parse("- name: a\n  host: h.test\n  description: \"a\\\"b\n", 'wishlist.yml');
+    }
+
+    public function testLeadingTabIndentationStillParses(): void
+    {
+        // -066's other half: the leading-indent expansion (not the global
+        // one) must keep tab-indented continuation keys working.
+        $endpoints = Config::parse("- name: a\n\thost: h.test\n", 'wishlist.yml');
+        $this->assertSame('h.test', $endpoints[0]->host);
     }
 }
