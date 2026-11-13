@@ -46,7 +46,7 @@ final class FrameDedup
         $index = 0;
 
         foreach ($stream as $snapshot) {
-            if ($prev !== null && $snapshot->equals($prev)) {
+            if ($prev !== null && self::isDuplicate($snapshot, $prev)) {
                 $prevHold++;
                 if ($prevHold <= $holdMax) {
                     continue;
@@ -58,5 +58,28 @@ final class FrameDedup
             $prev = $snapshot;
             $prevHold = 0;
         }
+    }
+
+    /**
+     * Duplicate test with a revision fast path.
+     *
+     * {@see \SugarCraft\Vterm\Terminal::revision()} is monotonic per feed:
+     * two snapshots from one terminal lineage with equal non-zero revisions
+     * have provably untouched grids, so the cursor check completes the
+     * decision and the full grid equals() — a deep cell-by-cell walk — is
+     * skipped. This collapses the idle-hold re-emissions FrameStream emits
+     * on its hold cadence to two integer compares each (finding 051).
+     *
+     * Revision 0 is the constructor default for hand-built snapshots with
+     * no captured lineage, so it is never trusted as proof; those fall
+     * through to the content compare exactly as before.
+     */
+    private static function isDuplicate(Snapshot $snapshot, Snapshot $prev): bool
+    {
+        if ($snapshot->revision > 0 && $snapshot->revision === $prev->revision) {
+            return $snapshot->cursor->equals($prev->cursor);
+        }
+
+        return $snapshot->equals($prev);
     }
 }

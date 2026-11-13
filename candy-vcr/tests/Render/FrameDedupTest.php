@@ -146,6 +146,67 @@ final class FrameDedupTest extends TestCase
         $cursor = new Cursor();
         return new Snapshot($grid, $cursor, $time);
     }
+
+    private function makeSnapshotWithCharAndRevision(int $row, int $col, string $char, int $revision): Snapshot
+    {
+        $grid = new Buffer(80, 24);
+        $grid->put($row, $col, new Cell($char));
+        return new Snapshot($grid, new Cursor(), 0.0, $revision);
+    }
+
+    /**
+     * Finding 051 fast path: equal non-zero revisions prove the grid was
+     * never fed between captures, so content-unequal grids with a shared
+     * revision collapse WITHOUT the deep grid compare. If equals() still
+     * ran, these two frames would pass through as 2.
+     */
+    public function testEqualNonZeroRevisionCollapsesWithoutGridCompare(): void
+    {
+        $frames = [
+            $this->makeSnapshotWithCharAndRevision(0, 0, 'P', 7),
+            $this->makeSnapshotWithCharAndRevision(40, 3, 'Q', 7),
+        ];
+        $stream = new ArrayFrameStream($frames);
+        $deduped = iterator_to_array(FrameDedup::dedup($stream));
+
+        $this->assertCount(1, $deduped);
+    }
+
+    /**
+     * The same content-unequal pair at revision 0 (the hand-built default
+     * with no captured lineage) must still fall through to the content
+     * compare and pass through — the fast path never trusts revision 0.
+     */
+    public function testRevisionZeroFallsThroughToContentCompare(): void
+    {
+        $frames = [
+            $this->makeSnapshotWithCharAndRevision(0, 0, 'P', 0),
+            $this->makeSnapshotWithCharAndRevision(40, 3, 'Q', 0),
+        ];
+        $stream = new ArrayFrameStream($frames);
+        $deduped = iterator_to_array(FrameDedup::dedup($stream));
+
+        $this->assertCount(2, $deduped);
+    }
+
+    /**
+     * A live lineage: frames captured across feeds carry increasing
+     * revisions and differing content, and dedup keeps every one.
+     */
+    public function testRealLineageDifferentRevisionsKeepGridCompare(): void
+    {
+        $terminal = Terminal::new(80, 24);
+        $frames = [
+            $terminal->snapshot(0.0),
+            $terminal->feed("\x1b[1;1HA")->snapshot(0.033),
+            $terminal->feed("\x1b[1;1HB")->snapshot(0.066),
+        ];
+        $stream = new ArrayFrameStream($frames);
+        $deduped = iterator_to_array(FrameDedup::dedup($stream));
+
+        $this->assertCount(3, $deduped);
+        $this->assertSame('B', $deduped[2]->grid->cell(0, 0)->char);
+    }
 }
 
 /**
