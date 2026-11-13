@@ -217,6 +217,31 @@ collected. An `add()` onto an already-unsubscribed composite disposes the
 incoming member immediately — the tracker never keeps a subscription for a
 disposal that already happened.
 
+### Handles & introspection
+
+Every stateful surface reports its own lifecycle through bare accessors —
+no state to parse, just ask:
+
+- `Subscription` (the interface every handle implements): `unsubscribe()`
+  disposes once and is then a no-op; `isActive()` reports whether it still
+  has disposal left to do.
+- `CancellationSource`: the firing side — `token()` hands out the consumer's
+  read-only view, `onCancel()` registers directly on that token, and
+  `isCancelled()`/`cancel()` mirror the triad so generic teardown code needs
+  only the `Cancellable` interface.
+- `Debounced`: `isActive()` reports whether the handle still responds to
+  `unsubscribe()`; `isPending()` whether a burst is scheduled to fire;
+  `flush()` resolves the pending burst immediately and returns its
+  `PromiseInterface`.
+- `Throttled`: `isActive()` as above; `isPending()` whether a trailing call
+  is queued for the window edge; `flush()` runs that queued call now and
+  ends the cooldown (`void` — the outcome arrives on the suppressed call's
+  promise).
+- `Subscriptions` (the composite): `count()` and `isEmpty()` reflect the
+  live members — the composite is `Countable` — while `isActive()` asks
+  whether the composite itself is still unsubscribable, and `add()`,
+  `of()`/`compose()`/`new()` build and collect handles.
+
 ## Suspension
 
 `Suspended` represents a paused command as data: it carries a `resume` callable
@@ -546,8 +571,10 @@ surface (`php examples/async-operations.php` and friends), not stubs.
 The suite runs on `StreamSelectLoop` and never sleeps past a test bound. A
 green run intentionally prints a few `sugar-async: cancellation callback
 failed:` and `sugar-async: subscription disposal failed:` lines — these are
-throw-logged probes pinning the hook-failure invariant, not breakage. Two
-laws learned the hard way:
+throw-logged probes pinning the hook-failure invariant, not breakage. For
+the two timer handles, `isPending()` is the obvious assertion seam for drain
+tests — assert scheduled state, never wall-clock. Two laws learned the hard
+way:
 
 - **Arm-time clock staleness.** Under ext-uv, deadlines are computed against a
   clock refreshed once per loop iteration: a timer armed after a long synchronous
