@@ -12,7 +12,9 @@ Shared async utilities for SugarCraft — cancellation tokens, subscriptions, di
 - **Subscriptions** — `Subscription` handles from `onCancel()` / `debounce()` / `throttle()` and `Subscriptions::compose()` for managing lifecycles in Model–Update–View apps
 - **Suspension** — `Suspended` value-object for commands paused across update cycles
 - **AsyncOps** — static helpers: `withTimeout`, `withDeadline`, `cancellable`, `singleFlight`, `retry`, `retryBounded`, `nap`, `reconnect`, `drain`, `all`, `race`, `pendingNotice`, `boundWait`, `debounce`, `throttle`
-- **AsyncCache** — promise-library-only async cache-aside: monotonic TTL, in-flight loader coalescing, optional serve-stale-on-error, optional entry bound with introspection
+- **AsyncCache** — loop-free async cache-aside (needs no event loop: arms no
+  timers): monotonic TTL, in-flight loader coalescing, optional
+  serve-stale-on-error, optional entry bound with introspection
 
 Six packages build on this vocabulary today — sugar-forms, sugar-vterm,
 candy-sql, candy-mail, candy-git-server, and candy-codetime — with the full
@@ -464,8 +466,9 @@ $promise->then(static fn (mixed $v): string => (string) $v);
 
 ## AsyncCache
 
-`AsyncCache` is a generic cache-aside primitive. It arms **no timers** itself —
-freshness is judged against a monotonic clock (`hrtime`) at read time, and any
+`AsyncCache` is a generic, loop-free cache-aside primitive — loop-free meaning
+it arms **no timers** itself: freshness is judged against a monotonic clock
+(`hrtime`) at read time, and any
 per-load timeout stays the caller's concern (compose with `withDeadline`).
 
 - `AsyncCache::new(ttlSeconds: 60.0, serveStaleOnError: false, clock: null, maxEntries: null)`

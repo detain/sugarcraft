@@ -10,7 +10,8 @@ use React\Promise\PromiseInterface;
 use function React\Promise\resolve;
 
 /**
- * Promise-library-only async cache-aside primitive: TTL freshness,
+ * Loop-free async cache-aside primitive (needs no event loop: arms no
+ * timers): TTL freshness,
  * concurrent-loader dedupe, optional serve-stale-on-error.
  *
  * Extracted from the candy-sql AdminQueryCache pattern. What generalizes is
