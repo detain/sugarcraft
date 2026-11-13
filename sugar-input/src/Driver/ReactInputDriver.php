@@ -40,7 +40,7 @@ final class ReactInputDriver implements ReadableStreamInterface
      *
      * The synchronous StreamInputDriver caps every read at 8192 bytes
      * (fread($stream, 8192)), so its decoder never sees more than 8192 bytes
-     * at once. This driver, by contrast, is handed the ENTIRE received chunk
+     * at once. This driver, by contrast, is handed the **entire** received chunk
      * in one ReactPHP 'data' event, so an unbounded paste bomb or a stuck
      * terminal could force one giant decode() that materialises an event list
      * as large as the input before any of it is emitted — a CPU/memory-DoS
@@ -97,7 +97,7 @@ final class ReactInputDriver implements ReadableStreamInterface
     /**
      * Pauses receiving data events.
      *
-     * The call forwards to the underlying stream, but it defers EMISSION, not
+     * The call forwards to the underlying stream, but it defers **emission**, not
      * decoding: events already decoded from an in-flight chunk are retained
      * in the internal event buffer (see `emitEvent()`) and flush on resume() — a listener
      * that pauses mid-chunk never strands those events until stream end.
@@ -128,7 +128,7 @@ final class ReactInputDriver implements ReadableStreamInterface
      * This driver decodes terminal bytes into Event objects, which no React
      * writable destination can accept (write() takes strings) — so piping the
      * driver itself would be a type hazard. The destination instead receives
-     * the RAW bytes from the wrapped stream (log/echo use-cases); consumers
+     * the **raw** bytes from the wrapped stream (log/echo use-cases); consumers
      * who want decoded events subscribe via on('data').
      */
     public function pipe(\React\Stream\WritableStreamInterface $dest, array $options = []): \React\Stream\WritableStreamInterface
@@ -157,7 +157,7 @@ final class ReactInputDriver implements ReadableStreamInterface
      * The chunk is sliced into pieces of at most MAX_CHUNK_SIZE bytes before
      * decoding so a single hostile 'data' event can never force one unbounded
      * decode() (see sliceChunk / MAX_CHUNK_SIZE). Feeding the pieces to the
-     * SAME decoder instance in order yields exactly the same events as one
+     * **same** decoder instance in order yields exactly the same events as one
      * whole-chunk decode, because EscapeDecoder stitches an incomplete trailing
      * sequence across decode() calls via its internal $remainder.
      */
@@ -270,9 +270,9 @@ final class ReactInputDriver implements ReadableStreamInterface
     /**
      * Handle the 'end' event from the underlying stream.
      *
-     * pause() defers EMISSION, not existence: events already decoded from an
+     * pause() defers **emission**, not existence: events already decoded from an
      * in-flight chunk are retained in the buffer, and a stream that has ended can
-     * never be resumed — so the retained events drain here REGARDLESS of
+     * never be resumed — so the retained events drain here **regardless** of
      * $paused, before 'end'. (They used to strand: this leg called
      * flushBuffer(), whose pause gate silently held them back.)
      */

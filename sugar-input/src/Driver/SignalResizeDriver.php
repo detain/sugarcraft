@@ -26,17 +26,17 @@ use SugarCraft\Input\Event;
  *       }
  *   }
  *
- * ONE-DISPOSITION LAW: arm() IS the SIGWINCH handler — a process can hold
+ * ONE-DISPOSITION LAW: arm() **is** the SIGWINCH handler — a process can hold
  * only one, and this driver's handler fans the signal out to every armed
- * instance. Applications must NOT install a second pcntl_signal(SIGWINCH,
- * ...): whichever installs LAST silently blinds the other. Responding to a
+ * instance. Applications must **not** install a second pcntl_signal(SIGWINCH,
+ * ...): whichever installs **last** silently blinds the other. Responding to a
  * resize needs no handler of your own — read() returns the ResizeEvent
  * carrying the fresh dimensions. (If your program already owns SIGWINCH for
  * other reasons, do not arm this driver.)
  *
  * arm() returns false — and read() then stays null forever — when ext-pcntl
  * is absent: the degraded mode is observable, never a silent half-start.
- * disarm() reverses the registration for one driver, and when the LAST armed
+ * disarm() reverses the registration for one driver, and when the **last** armed
  * driver disarms, the SIGWINCH disposition returns to SIG_DFL.
  *
  * Construction is side-effect free. Arm() flips the process-global signal
@@ -78,7 +78,7 @@ final class SignalResizeDriver implements InputDriver
     private static ?\WeakMap $sigwinchListeners = null;
 
     /**
-     * The SIGWINCH disposition as it stood BEFORE the first arm() in this
+     * The SIGWINCH disposition as it stood **before** the first arm() in this
      * process, captured lazily so disarm() can hand it back. 'captured'
      * is the sentinel — the stored handler may legitimately be 0 (SIG_DFL)
      * or a Closure owned by other code.
@@ -87,7 +87,7 @@ final class SignalResizeDriver implements InputDriver
      */
     private static array $sigwinchPrevious = ['captured' => false, 'handler' => 0];
 
-    /** Flag set by the SIGWINCH handler for THIS instance only */
+    /** Flag set by the SIGWINCH handler for **this** instance only */
     private bool $sigwinchReceived = false;
 
     /** Last known terminal columns */
@@ -129,7 +129,7 @@ final class SignalResizeDriver implements InputDriver
     /**
      * Opt in to the driver's process-global side effects.
      *
-     * Arm() is the ONLY place this class touches global state: it registers
+     * Arm() is the **only** place this class touches global state: it registers
      * the instance with the shared SIGWINCH fan-out registry, installs the
      * process-wide handler (flipping pcntl_async_signals on), and probes the
      * initial dimensions once via the probeDimensions() ladder — forking only
@@ -148,7 +148,7 @@ final class SignalResizeDriver implements InputDriver
             return false;
         }
 
-        // The process can hold only ONE SIGWINCH disposition, so registration
+        // The process can hold only **one** SIGWINCH disposition, so registration
         // is global: every live instance joins a WeakMap registry and a single
         // shared handler fans the flag out per-instance. A WeakMap is used so
         // an instance drops out of the registry on GC — no explicit unregister,
@@ -166,12 +166,12 @@ final class SignalResizeDriver implements InputDriver
     /**
      * Undo arm() for this instance (m3: arming used to be a one-way door).
      *
-     * Removes this driver from the fan-out registry. When it was the LAST
+     * Removes this driver from the fan-out registry. When it was the **last**
      * armed driver, the process-wide SIGWINCH disposition is restored —
      * to whatever handler was installed before the first `arm()` in this
      * process, or SIG_DFL if none existed — so a host that armed this driver for a
      * phase can hand the signal back intact instead of leaking the
-     * replacement. pcntl_async_signals() mode is deliberately NOT restored:
+     * replacement. pcntl_async_signals() mode is deliberately **not** restored:
      * flipping a process-wide dispatch mode off could strand signal code
      * other libraries armed after this driver, and the disposition (not the
      * mode) is what this driver ever claimed to own.
@@ -218,7 +218,7 @@ final class SignalResizeDriver implements InputDriver
 
         pcntl_async_signals(true);
         pcntl_signal(SIGWINCH, static function (int $sig): void {
-            // WeakMap single-variable foreach yields VALUES — iterate keys.
+            // WeakMap single-variable foreach yields **values** — iterate keys.
             foreach (self::$sigwinchListeners ?? new \WeakMap() as $driver => $ignored) {
                 $driver->markSigwinch();
             }
@@ -226,7 +226,7 @@ final class SignalResizeDriver implements InputDriver
     }
 
     /**
-     * Record a SIGWINCH for THIS instance only.
+     * Record a SIGWINCH for **this** instance only.
      *
      * Deliberately a bare flag write: this runs from the async-signal
      * handler, and the two tput forks used to ride it. A resize-drag
@@ -243,8 +243,8 @@ final class SignalResizeDriver implements InputDriver
      * Read the next resize event, or null if no resize has been detected.
      *
      * Per-path honesty: the null fast path (no SIGWINCH since the last call)
-     * is non-blocking and does nothing else. When a resize IS delivered, the
-     * dimensions are re-probed HERE — not in the signal handler — and
+     * is non-blocking and does nothing else. When a resize **is** delivered, the
+     * dimensions are re-probed **here** — not in the signal handler — and
      * the probe only forks on the tput last-resort arm: the Tty ioctl/env
      * legs are in-process (see probeDimensions).
      *
@@ -271,7 +271,7 @@ final class SignalResizeDriver implements InputDriver
      *
      * Arm 1 is sugar-core's Tty probe over STDOUT: the kernel's TIOCGWINSZ
      * ioctl on the terminal fd — zero forks, and it is the only source that
-     * tracks a resize LIVE. Its documented ladder (see
+     * tracks a resize **live**. Its documented ladder (see
      * SugarCraft\Core\Util\Tty) is ioctl first, then exported LINES/COLUMNS,
      * then the controlling terminal, then its own stty query; kernel truth
      * deliberately outranks env because bash refreshes COLUMNS/LINES only for
@@ -280,7 +280,7 @@ final class SignalResizeDriver implements InputDriver
      * exported env still beats the terminfo defaults below: it is somebody's
      * real answer, where tput-on-a-quiet-terminal is a guess.
      *
-     * Arm 2 keeps tput as the LAST resort (the capability allowlist and its
+     * Arm 2 keeps tput as the **last** resort (the capability allowlist and its
      * test seam stay meaningful), for the cases Tty cannot answer at all —
      * no controlling terminal, no exported size, stubbed probes.
      *

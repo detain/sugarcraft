@@ -10,16 +10,16 @@ New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-repl
 
 `sugar-input` is the missing input layer for SugarCraft — it decodes raw TTY bytes into structured `Event` objects that programs can switch on. It handles:
 
-- **Plain ASCII keys** — letters, digits, punctuation, control codes (the 0x7F byte IS `Backspace` — one raw code, no escape sequence)
-- **Legacy escape sequences** — F1–F24, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Tab, Enter, Escape, Backtab (`CSI Z`) — including the MODIFIED numbered-key family `CSI number ; modifier ~` that terminals really emit: modified forms like `3;2~` (Shift+Delete) and `21;5~` (Ctrl+F10) ship in common terminfo entries, so `3;5~` decodes as Ctrl+Delete rather than vanishing
-- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press with `isRepeat` set). Codepoints follow the spec's private-use layout: `57344`–`57454` carry the functional keys (arrows at `57350`–`57353`, the keypad block from `57399`), and codes below `57344` in `u` frames are TEXT codepoints — legacy tilde numbers like `11u` are counted drops, not F1. On release the key name gains the `Release` prefix (see [Key names](#key-names-the-complete-vocabulary))
+- **Plain ASCII keys** — letters, digits, punctuation, control codes (the 0x7F byte **is** `Backspace` — one raw code, no escape sequence)
+- **Legacy escape sequences** — F1–F24, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Tab, Enter, Escape, Backtab (`CSI Z`) — including the **modified** numbered-key family `CSI number ; modifier ~` that terminals really emit: modified forms like `3;2~` (Shift+Delete) and `21;5~` (Ctrl+F10) ship in common terminfo entries, so `3;5~` decodes as Ctrl+Delete rather than vanishing
+- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press with `isRepeat` set). Codepoints follow the spec's private-use layout: `57344`–`57454` carry the functional keys (arrows at `57350`–`57353`, the keypad block from `57399`), and codes below `57344` in `u` frames are **text** codepoints — legacy tilde numbers like `11u` are counted drops, not F1. On release the key name gains the `Release` prefix (see [Key names](#key-names-the-complete-vocabulary))
 - **xterm modifyOtherKeys** — wrapped keys `CSI 27 ; mods ; keysym ~`, so a modified key with no dedicated sequence is told apart from a plain press
 - **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (`Enter`)
-- **SGR mouse 1006 / 1016** — press, release, drag, and scroll (including horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 (pixels) frames carry colon sub-parameters and arrive byte-compatible with 1006 — the decoder keeps the first integer of each field, which for 1016 is a PIXEL coordinate. A stateless decoder cannot convert, so `x`/`y` are whatever the reporting mode measures; a host that enabled 1016 knows its own units. Non-numeric mouse parameters are refused, never cast to phantom origin clicks
+- **SGR mouse 1006 / 1016** — press, release, drag, and scroll (including horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 (pixels) frames carry colon sub-parameters and arrive byte-compatible with 1006 — the decoder keeps the first integer of each field, which for 1016 is a **pixel** coordinate. A stateless decoder cannot convert, so `x`/`y` are whatever the reporting mode measures; a host that enabled 1016 knows its own units. Non-numeric mouse parameters are refused, never cast to phantom origin clicks
 - **urxvt mouse 1015** — `CSI b ; x ; y M` decimal reports (no `<` introducer, so it never collides with 1006)
 - **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam; payload bytes outside the printable 7-bit range are refused with one counted drop — including the UTF-8 mode-1005 coordinate extension (`≥ 0x80`), which is deliberately not modelled and would otherwise surface forged high-button clicks
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
-- **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap (a paste over the cap announces one truncated `PasteEvent`, then DISCARDS the remaining body bytes until the real terminator — see [Bracketed paste](#bracketed-paste))
+- **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap (a paste over the cap announces one truncated `PasteEvent`, then **discards** the remaining body bytes until the real terminator — see [Bracketed paste](#bracketed-paste))
 - **Terminal replies** — DA1/DA2, DSR/CPR, XTWINOPS, Kitty flags, DECRPM and OSC/DCS/APC/PM strings are drained as `TerminalReplyEvent` — never buffered, never mis-parsed as keys (see below)
 
 ## Quickstart
@@ -35,7 +35,7 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
 $driver = new StreamInputDriver(STDIN);
 
 // Non-blocking read loop with an idle backoff — never a hot spin:
-// read() returns null BOTH when more bytes may come and when the stream
+// read() returns null **both** when more bytes may come and when the stream
 // hit EOF. isEof() tells the two apart; hasPending() says the decoder is
 // holding a partial sequence.
 while (!$driver->isEof()) {
@@ -55,7 +55,7 @@ while (!$driver->isEof()) {
 }
 ```
 
-Before any of this reaches the decoder, the HOST owns the terminal modes —
+Before any of this reaches the decoder, the **host** owns the terminal modes —
 see [Terminal setup is the host's duty](#terminal-setup-is-the-hosts-duty).
 
 One termination caveat: `isEof()` means "ended *and* drained", not "ended". If
@@ -147,7 +147,7 @@ $decoder->discardedPasteBytes();  // bytes dropped past the paste cap
 $decoder->reset();
 ```
 
-Feed whole reads; do NOT make a policy of feeding the decoder one byte per
+Feed whole reads; do **not** make a policy of feeding the decoder one byte per
 `decode()` call. A byte-at-a-time stream makes every bare `ESC` resolve eagerly to the
 `Escape` key under the default options (the deferred mode just holds it
 forever until flushed). Real reads deliver whole frames; if your reader can
@@ -167,7 +167,7 @@ construct the mix you want (named arguments make that a one-liner).
 | Driver | Reads | Notes |
 |---|---|---|
 | `StreamInputDriver` | any readable stream resource (e.g. `STDIN`) | Non-blocking by contract: takes over the stream's blocking flag on construction, restores it in `__destruct`; anything that is not a resource is refused at the constructor.<br>Each `read()` pulls at most two 8192-byte chunks (a partial frame is retried once) through the internal `EscapeDecoder` and returns events one at a time in order.<br>`isEof()` distinguishes "input ended" from `read()`'s shared idle-`null`.<br>`hasPending()` reports buffered events or a partial sequence.<br>`escapeDecoder()` exposes the owned decoder for `reset()`, `flushDeferredEscape()` and the counters. |
-| `ReactInputDriver` | a `React\Stream\ReadableStreamInterface` | PUSHES events by `emit('data', Event)` — it is not an `InputDriver`. `isReadable()` follows React's contract (`true` until the stream closes, not "bytes pending"); `pause()` defers emission — already-buffered events flush on `resume()`. Incoming chunks are sliced at 8192 bytes (`MAX_CHUNK_SIZE`) with a lone-trailing-`ESC` carry law so a boundary can never split a sequence's escape byte from its params. `pipe()` forwards the RAW byte stream, not events — the React "data" event name means one event per emit here, not per chunk. `escapeDecoder()` exposes the owned decoder. |
+| `ReactInputDriver` | a `React\Stream\ReadableStreamInterface` | **pushes** events by `emit('data', Event)` — it is not an `InputDriver`. `isReadable()` follows React's contract (`true` until the stream closes, not "bytes pending"); `pause()` defers emission — already-buffered events flush on `resume()`. Incoming chunks are sliced at 8192 bytes (`MAX_CHUNK_SIZE`) with a lone-trailing-`ESC` carry law so a boundary can never split a sequence's escape byte from its params. `pipe()` forwards the **raw** byte stream, not events — the React "data" event name means one event per emit here, not per chunk. `escapeDecoder()` exposes the owned decoder. |
 | `SignalResizeDriver` | `SIGWINCH` | The production producer of `ResizeEvent`. Construction is side-effect free; `arm(): bool` is opt-in: it joins a weak-map fan-out, installs the process-wide handler, enables `pcntl_async_signals()`, probes current dimensions through `tput cols`/`tput lines` (capability names are refused before any shell-out unless they are a well-formed terminfo name, and stay quoted even after validation), and returns `false` where pcntl is absent.<br>The handler itself only sets a per-instance flag — dimension probes run lazily in `read()`, so a resize-drag storm costs one probe pair, not 2×N forks from signal context.<br>`disarm(): bool` reverses the last `arm()`: when the final armed driver leaves, the SIGWINCH disposition is handed back (see the one-disposition law below). |
 
 One-disposition law: a process holds exactly one `SIGWINCH` handler and
@@ -202,11 +202,11 @@ lives in the docblocks and here.
 ### Terminal setup is the host's duty
 
 This library never writes to the terminal. It only decodes what it is handed,
-which means the bytes it models exist only if the HOST put the terminal into
+which means the bytes it models exist only if the **host** put the terminal into
 the right shape first:
 
 - **raw mode, echo off** — in canonical mode the line discipline buffers
-  until Enter, converts `\n`, and ECHOES what the "attacker" injected; a TUI
+  until Enter, converts `\n`, and **echoes** what the "attacker" injected; a TUI
   must disable ICANON/ECHO (via `stty`, termios, or `sugar-pty`) before
   driving a decoder. Arrow keys do not "work" without this step — they are
   waiting in the canonical line buffer.
@@ -224,8 +224,8 @@ the head is announced exactly once as a `PasteEvent` with `content` clipped
 to the cap, `truncated` set, and `truncationNotice()` — a localized one-liner
 suitable for showing the user why their paste looks short (`lang/en.php`;
 locale resolution follows sugar-core's `I18n\Lang` — English-only today: the
-key resolves through sugar-core's fallback and lands on `en`). The REMAINING BODY IS
-THEN DISCARDED — counted by `discardedPasteBytes()` — until the real
+key resolves through sugar-core's fallback and lands on `en`). The remaining body is
+**then discarded** — counted by `discardedPasteBytes()` — until the real
 `CSI 201 ~` terminator arrives. Overflow bytes are never re-decoded as
 keystrokes: an injected 1 MiB+ paste can end up commanding your input loop,
 so the cap's force-close must consume, not reinterpret. If the terminator
@@ -297,8 +297,8 @@ prefix.
 | Ctrl-paired symbols | 0x00 → `Space` with Ctrl; 0x1C–0x1F → `\`, `]`, `^`, `_` with Ctrl (no bare control byte ever reaches `$key` — the raw wire byte stays in `raw`) |
 
 Shift+letter is protocol-dependent — code accordingly: legacy terminals send
-the capital directly (`Shift+a` → key `"A"`, NO `SHIFT` bit), the Kitty
-protocol sends key `"a"` WITH the `SHIFT` bit; a match arm on that
+the capital directly (`Shift+a` → key `"A"`, **no** `SHIFT` bit), the Kitty
+protocol sends key `"a"` **with** the `SHIFT` bit; a match arm on that
 legacy-capital `"A"` silently stops matching the moment Kitty negotiation
 turns on — to handle Shift+letter in both worlds, match
 `mb_strtolower($key)` plus `$modifiers->includes(KeyModifier::SHIFT)` for
@@ -316,7 +316,7 @@ $event->modifiers->equals($other); // exact equality between two KeyModifier val
 
 The constants `SHIFT`(1), `ALT`(2), `CTRL`(4), `META`(8), `SUPER`(16),
 `HYPER`(32) (plus `CAPS_LOCK`(64), `NUM_LOCK`(128)) are internal **storage
-bits** in bubbletea's order — never wire values. The Kitty WIRE layout is a
+bits** in bubbletea's order — never wire values. The Kitty **wire** layout is a
 different map (`Super`=8, `Hyper`=16, `Meta`=32), and the translation lives
 exclusively in `KeyModifier::fromKittyInt()`, `fromXtermParam()` and
 `fromSgrMouse()`. `fromKittyInt()` reads wire bits 0–5 plus the lock-state
@@ -342,8 +342,8 @@ Modifier-field strictness differs by protocol. The Kitty path de-bases its
 every bit.
 
 Reserved combinations (the legacy wire cannot distinguish these — do not
-design keymaps against the distinction): `Ctrl+I` IS `Tab`, `Ctrl+J`/`Ctrl+M`
-ARE `Enter`, `Ctrl+[` IS `Escape`, `Ctrl+@`/`Ctrl+Space` is NUL (it arrives as
+design keymaps against the distinction): `Ctrl+I` **is** `Tab`, `Ctrl+J`/`Ctrl+M`
+**are** `Enter`, `Ctrl+[` **is** `Escape`, `Ctrl+@`/`Ctrl+Space` is NUL (it arrives as
 `Space` with Ctrl),
 and Alt via the `ESC` prefix collapses with Meta/Escape-then-key on legacy
 terminals. The Kitty protocol disambiguates all of them; negotiating it is
@@ -381,13 +381,13 @@ in one read or across many — is surfaced exactly once with `truncated` set and
 `body` clipped to 1 KiB. The decoder then keeps swallowing the rest of that
 open OSC/DCS until its terminator (even a terminator split across the chunk
 boundary) rather than resuming key decoding mid-string, which would leak the
-tail as keystrokes. That swallowing is bounded by the ABANDON BUDGET — 64 KiB
+tail as keystrokes. That swallowing is bounded by the **abandon budget** — 64 KiB
 of swallowed payload: a stream that never terminates the string is abandoned
 when the budget is spent, so keystrokes resume. The abandon folds the
-still-in-hand body past the boundary into ONE counted drop rather than
+still-in-hand body past the boundary into **one** counted drop rather than
 replaying it as a flood of printable keys. Which noise bytes that drop covers
 depends on where the reads fell; what cannot shift with chunk size is the
-control behaviour: one drain, one counted abandon, keystrokes resuming
+control behavior: one drain, one counted abandon, keystrokes resuming
 afterwards. Between the announce and the real terminator, up to one abandon
 budget of further traffic — including genuine keystrokes — is silently
 absorbed; that is the deliberate safety direction (a stuck prober swallows
@@ -430,7 +430,7 @@ immediately — the historical contract. Slow TTY reads that split a sequence
 right after the escape byte then decode its remainder as literal keystrokes
 (a split `ESC`+`[1;20R` decodes as `Escape`, `[`, `1`… — and on a real terminal a
 cursor-position report can absolutely arrive that way). Apps that bound reads
-with their own idle timer can opt into the deferred-escape behaviour:
+with their own idle timer can opt into the deferred-escape behavior:
 
 ```php
 $decoder = new EscapeDecoder(
@@ -514,8 +514,8 @@ The fleet-wide contract lives in
 the input-facing apps consume. The fleet's other lineage is sugar-core's
 `InputReader`: a stateful byte-stream parser that every sugar-core `Program`
 runs on its stdin path — `candy-code` included, which carries no reader of its
-own. The two are NOT guaranteed to agree on every
-exotic frame, and neither patches the other's gaps at runtime. Pick ONE decoder
+own. The two are **not** guaranteed to agree on every
+exotic frame, and neither patches the other's gaps at runtime. Pick **one** decoder
 for a program's whole input path; do not pipe bytes through both. The
 private-use-area law differs on purpose (above): this library passes PUA bytes
 through, while sugar-core's `InputReader` sweeps them from paste payloads at

@@ -11,7 +11,7 @@ use SugarCraft\Core\Concerns\Mutable;
  *
  * Allows applications to disable unused protocol parsing to reduce overhead.
  * All four protocol families are enabled by default; trailing-escape
- * deferral is a behaviour, not a protocol, and it defaults OFF. The options
+ * deferral is a behavior, not a protocol, and it defaults **off**. The options
  * are immutable: the decoder reads them at construction, and every change
  * yields a new instance — derive one setting from another with the with*()
  * methods, or build the whole mix with named arguments in one expression.
@@ -31,7 +31,7 @@ final class EscapeDecoderOptions
      *                            urxvt 1015 (CSI b ; x ; y M) and X10 (CSI M b x y).
      *                            1016 is byte-identical to 1006 on the wire, so the
      *                            stateless decoder keeps each field's first integer
-     *                            verbatim — under 1016 that IS a pixel coordinate.
+     *                            verbatim — under 1016 that **is** a pixel coordinate.
      *                            Units belong to the reporting mode the host enabled,
      *                            not to the decoder.
      * @param bool $enableKitty   Kitty keyboard protocol events (CSI code ; mods u — no private prefix;

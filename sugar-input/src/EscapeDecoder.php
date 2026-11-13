@@ -28,7 +28,7 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
  *  - SS3 keys including application-keypad mode (ESC O p..y, l, m, M — DECKPAM)
  *  - Focus events (CSI I / CSI O)
  *  - Bracketed paste (CSI 200 ~ ... CSI 201 ~)
- *  - Unsolicited terminal REPLIES (DA1/DA2, DSR/CPR, XTWINOPS, Kitty flags,
+ *  - Unsolicited terminal **replies** (DA1/DA2, DSR/CPR, XTWINOPS, Kitty flags,
  *    DECRPM, OSC/DCS/APC/PM strings) — structurally consumed and surfaced as
  *    {@see \SugarCraft\Input\Event\TerminalReplyEvent}, never left in the
  *    buffer and never mis-parsed as a keystroke.
@@ -43,7 +43,7 @@ final class EscapeDecoder
     private const PASTE_END   = "\x1b[201~";
 
     /**
-     * Upper bound on how many bytes of an INCOMPLETE sequence we will hold in
+     * Upper bound on how many bytes of an **incomplete** sequence we will hold in
      * $remainder between decode() calls. A legitimate escape sequence is short
      * (a handful of bytes); a legitimate large paste flows through the separate
      * paste path, never $remainder. Anything longer is a malformed / hostile
@@ -53,7 +53,7 @@ final class EscapeDecoder
     private const MAX_SEQUENCE_LENGTH = 128;
 
     /**
-     * Upper bound on how many bytes of an OSC/DCS/APC/PM STRING payload we will
+     * Upper bound on how many bytes of an OSC/DCS/APC/PM **string** payload we will
      * accumulate before draining the sequence as truncated. Legitimate replies
      * (XTGETTCAP, DECRQSS, color reports) are tens of bytes; the cap exists only
      * so a hostile never-terminated `ESC P` cannot grow memory without limit —
@@ -139,7 +139,7 @@ final class EscapeDecoder
      * Legacy numbered function keys in the tilde family (terminfo
      * `kf1..kf24`-style numbering: 11..38 with the VT gaps; conventions vary
      * between terminfo databases). This numbering belongs
-     * to the tilde space ONLY — CSI-u functional codes are the spec table
+     * to the tilde space **only** — CSI-u functional codes are the spec table
      * KITTY_FUNCTIONAL_KEYS below, not these numbers.
      */
     private const TILDE_FUNCTION_KEYS = [
@@ -276,7 +276,7 @@ final class EscapeDecoder
                 // incomplete escape fragment (e.g. a stale "ESC [" from before
                 // the paste) into $this->remainder, and that fragment must
                 // never stitch onto the first post-paste keystroke — the same
-                // drop-the-orphan law the stray paste-END handling follows.
+                // drop-the-orphan law the stray paste-**end** handling follows.
                 $this->remainder = '';
 
                 $this->pasteBuffer = '';
@@ -320,7 +320,7 @@ final class EscapeDecoder
             $byte = $stream[$i];
             $ord = ord($byte);
 
-            // Escape character — hand a GRAMMAR-BOUNDED VIEW of the tail to the
+            // Escape character — hand a **grammar-bounded view** of the tail to the
             // (unchanged) string-based escape handlers, so one decode() call
             // costs O(bytes the sequence actually spans) — never O(the whole
             // in-hand chunk) per escape (SI-10: a 500 KB escape-dense chunk
@@ -328,7 +328,7 @@ final class EscapeDecoder
             // ends at the first plausible sequence final, one lookahead byte
             // past an embedded ESC (the handlers' own ambiguity arms), or a
             // hard string-introducer budget; an incomplete sequence runs the
-            // view to the stream end, where the view IS the tail and the old
+            // view to the stream end, where the view **is** the tail and the old
             // stream-context rules (deferTrailingEscape, capped buffer) apply
             // unchanged. The advance is suffix-normalised: handleEscape's
             // `remaining` is always a suffix of the string it was handed, so
@@ -358,7 +358,7 @@ final class EscapeDecoder
                     $i += strlen($view) - strlen($result['remaining']);
                     if ($this->inString && $i < $len) {
                         // An OSC/DCS/SOS/PM/APC stayed open past the view:
-                        // hand the LIVE remainder to decode()'s string state
+                        // hand the **live** remainder to decode()'s string state
                         // machine on the next call (its own chunked legs
                         // bound it) rather than slicing a fresh tail per
                         // call. This bypasses bufferRemainder's sequence cap
@@ -371,7 +371,7 @@ final class EscapeDecoder
                 }
                 // Incomplete escape (no events, no progress): buffer the tail
                 // (capped) for the next decode() call and stop. The view run
-                // to the stream end here, so it IS the tail.
+                // to the stream end here, so it **is** the tail.
                 $this->bufferRemainder($view);
                 return $events;
             }
@@ -398,7 +398,7 @@ final class EscapeDecoder
             }
 
             // High byte (>= 0x80): a UTF-8 multibyte codepoint or an invalid byte.
-            // Decode the WHOLE codepoint as a single event — never split a
+            // Decode the **whole** codepoint as a single event — never split a
             // multibyte char into per-byte KeyEvents (that corrupts it for every
             // downstream consumer that treats key/raw as a UTF-8 string).
             $seqLen = $this->utf8SeqLength($stream, $i);
@@ -413,7 +413,7 @@ final class EscapeDecoder
 
             if ($i + $seqLen > $len) {
                 // Codepoint is split across the chunk boundary. If every byte we
-                // DO have is a valid continuation byte, this is an incomplete-but-
+                // **do** have is a valid continuation byte, this is an incomplete-but-
                 // valid tail: buffer it (a partial tail is <=3 bytes, so the cap
                 // never trips) and stop — the next decode() call completes it.
                 if ($this->allContinuationBytes($stream, $i + 1, $len)) {
@@ -521,9 +521,9 @@ final class EscapeDecoder
      * see what they need; a string introducer ("]", "P", "_", or "^") runs
      * to its BEL or ST terminator, or to the drain+abandon budget (the
      * payload legs measure against exactly that much); anything else (Alt+x,
-     * UTF-8) runs a flat few bytes. If the scan runs off the END of the
+     * UTF-8) runs a flat few bytes. If the scan runs off the **end** of the
      * in-hand stream,
-     * the returned length reaches the stream end — the view then IS the old
+     * the returned length reaches the stream end — the view then **is** the old
      * tail, so the handlers' incomplete-sequence decisions (defer the lone
      * trailing ESC, cap the buffered remainder) are made with the same
      * information as before this bound existed.
@@ -575,14 +575,14 @@ final class EscapeDecoder
      * Buffer an incomplete trailing sequence for the next decode() call,
      * bounding $remainder so a never-terminating sequence cannot grow it
      * without limit (a DoS vector — see MAX_SEQUENCE_LENGTH). Oversized tails
-     * retain no bytes but keep the sequence OPEN in the discard state (see
+     * retain no bytes but keep the sequence **open** in the discard state (see
      * consumeOverflowedSequence()); whatever events were already decoded are
      * still returned.
      */
     private function bufferRemainder(string $tail): void
     {
         if (strlen($tail) > self::MAX_SEQUENCE_LENGTH) {
-            // Cap hit: retain nothing — but the sequence is STILL open. Its
+            // Cap hit: retain nothing — but the sequence is **still** open. Its
             // continuation bytes are parameter traffic, not keystrokes, so
             // record the drop once and swallow forward until the final byte
             // (C2a: wiping the buffer and carrying on let the leftover bytes
@@ -600,10 +600,10 @@ final class EscapeDecoder
     /**
      * While an oversized sequence is still open, consume stream bytes until its
      * ECMA-48 final byte (0x40-0x7E — consumed, the sequence ends there) or a
-     * fresh ESC (NOT consumed — a new sequence begins). Returns the still-live
+     * fresh ESC (**not** consumed — a new sequence begins). Returns the still-live
      * suffix; '' when the whole chunk belonged to the dead sequence.
      *
-     * This makes a split hostile read decode IDENTICALLY to one big read.
+     * This makes a split hostile read decode **identically** to one big read.
      */
     private function consumeOverflowedSequence(string $stream): string
     {
@@ -673,7 +673,7 @@ final class EscapeDecoder
 
         // ESC ] / ESC P / ESC _ / ESC ^ — OSC / DCS / APC / PM string sequences.
         // A terminal answers color/capability queries (e.g. OSC 4 replies) on the
-        // SAME fd the user types on; these payloads are replies, never keystrokes —
+        // **same** fd the user types on; these payloads are replies, never keystrokes —
         // drain them to their terminator as a TerminalReplyEvent instead of leaking
         // the body as Alt-key spam.
         // @see xterm ctlseqs — OSC/DCS/APC/PM framing with ST or BEL terminators.
@@ -682,7 +682,7 @@ final class EscapeDecoder
         }
 
         // ESC <non-[> — Alt+key. When the byte after ESC is a UTF-8 lead,
-        // consume the COMPLETE codepoint: bubbletea decodes the full rune
+        // consume the **complete** codepoint: bubbletea decodes the full rune
         // following ESC as one Alt+rune event. Slicing here (ESC + lead byte
         // only) would strand the continuation bytes, which the resync path in
         // decodeClean then reports as stray lone-byte keys (Alt+é arriving as
@@ -725,7 +725,7 @@ final class EscapeDecoder
      *
      * Modified forms carry a parameter span before the final byte — xterm's
      * legacy modified-key shape `ESC O 1 ; <mod> <final>` (Shift+Left is
-     * `ESC O 1;2D`). The span MUST be consumed through the final byte: the
+     * `ESC O 1;2D`). The span **must** be consumed through the final byte: the
      * old single-byte scan dropped only the digit and leaked the rest as
      * printable keys. Same resync-through-the-final discipline the X10-mouse
      * branch names and uses.
@@ -753,7 +753,7 @@ final class EscapeDecoder
             $runs = [$pm[1]];
             if ($span >= strlen($afterO) || (isset($pm[2]) && $pm[2] === '')) {
                 // Final byte (or the modifier digit after ';') has not
-                // arrived yet: buffer the WHOLE tail for the next decode()
+                // arrived yet: buffer the **whole** tail for the next decode()
                 // call (a leading digit means no printable interpretation is
                 // possible anyway).
                 return ['events' => [], 'remaining' => "\x1bO" . $afterO];
@@ -788,7 +788,7 @@ final class EscapeDecoder
         $ss3Map = self::SS3_KEY_MAP;
 
         if (!isset($ss3Map[$final])) {
-            // Unknown final byte — the whole parameter+final span is ONE
+            // Unknown final byte — the whole parameter+final span is **one**
             // counted drop (never a one-byte drop plus a leaked remainder).
             $this->droppedUnknownCount++;
             return ['events' => [], 'remaining' => substr($afterO, $span + 1)];
@@ -872,9 +872,9 @@ final class EscapeDecoder
      */
     private function handleSgrMouse(string $afterLt): array
     {
-        // Find the FIRST final byte: 'M' (press/motion) or 'm' (release).
+        // Find the **first** final byte: 'M' (press/motion) or 'm' (release).
         // Searching for 'M' unconditionally first would let a chunk carrying a
-        // release followed by a press ("…1m…2M") match the LATER 'M' as the end
+        // release followed by a press ("…1m…2M") match the **later** 'M' as the end
         // of the first report, turning both events into one malformed drop.
         $mPos = strpos($afterLt, 'M');
         $lowerPos = strpos($afterLt, 'm');
@@ -895,7 +895,7 @@ final class EscapeDecoder
 
         $parts = explode(';', $params);
         if (count($parts) !== 3) {
-            // Malformed (wrong parameter count) but COMPLETE — consume through the
+            // Malformed (wrong parameter count) but **complete** — consume through the
             // final byte and resync on the genuine suffix. Returning the whole tail
             // here would re-buffer a terminated sequence forever and stall every
             // keystroke behind it in the same stream.
@@ -933,7 +933,7 @@ final class EscapeDecoder
         // Payload bytes must sit in the printable 7-bit range 0x20..0x7E.
         // A control byte means the report was truncated — resync on it rather
         // than swallowing a fresh ESC sequence. A byte >= 0x80 is the UTF-8
-        // mode 1005 coordinate extension: it is NOT modelled here, and the
+        // mode 1005 coordinate extension: it is **not** modelled here, and the
         // old permissive range let those bytes through to ord-32, surfacing
         // forged high-button clicks (a 0xA0 lead is "button 128"). Refuse
         // both shapes with one counted drop.
@@ -991,7 +991,7 @@ final class EscapeDecoder
      *    129 = scroll-right (xterm's bit-7 fold of the 66/67 forms)
      *
      * A wheel code (64/65/66/67 or 128/129, optionally | 32 | modifiers) must
-     * NEVER fall through to the plain-button path: `code & 3` of wheel-up (64)
+     * **never** fall through to the plain-button path: `code & 3` of wheel-up (64)
      * is 0, and of 128/129 is 0/1, which used to surface a phantom left- or
      * right-click for every plain wheel event.
      *
@@ -1032,20 +1032,20 @@ final class EscapeDecoder
     }
 
     /**
-     * Handle a Kitty keyboard protocol EVENT frame: CSI unicode-key-code
+     * Handle a Kitty keyboard protocol **event** frame: CSI unicode-key-code
      * [:shift-code[:base-code...]] ; modifiers[:event-type] u
      *
-     * Real Kitty frames carry NO private-mode "?" prefix — `CSI ? … u` is the
-     * keyboard-flags QUERY/REPLY family and is drained as a TerminalReplyEvent
+     * Real Kitty frames carry **no** private-mode "?" prefix — `CSI ? … u` is the
+     * keyboard-flags **query/reply** family and is drained as a TerminalReplyEvent
      * instead (see classifyPrivateReply). The two shapes are mutually
      * exclusive by dispatch: a "?" frame is never key traffic.
      *
-     * Release is recognized both in the legacy encoding (modifiers OR 0x20) and
+     * Release is recognized both in the legacy encoding (modifiers **or** 0x20) and
      * in the spec encoding (event-type sub-parameter 3; 1=press, 2=repeat).
      * Alternate key codes after the first colon in the code field are ignored —
      * the primary code identifies the key. Event type 2 (auto-repeat) is
      * surfaced as an ordinary press carrying {@see KeyEvent::$isRepeat}: a
-     * repeat IS a keystroke for every TUI consumer of this decoder, and
+     * repeat **is** a keystroke for every TUI consumer of this decoder, and
      * inventing a "Repeat"-prefixed key name would widen the event vocabulary
      * for no gain — the annotation does not change the key name.
      *
@@ -1058,7 +1058,7 @@ final class EscapeDecoder
     {
         // Isolate params (drop the final "u"), then the ';' fields with their
         // ':' sub-parameters. The grammar is `code[:alts] ; mods[:event-type]`
-        // — a THIRD ';' field (e.g. "97;5;9u") is a malformed frame, counted
+        // — a **third** ';' field (e.g. "97;5;9u") is a malformed frame, counted
         // as a drop, never silently truncated into the modifier.
         $body = substr($seq, 0, -1);
         $fields = explode(';', $body);
@@ -1128,9 +1128,9 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => "\x1b["];
         }
 
-        // A stray paste-END marker outside a paste is terminal noise: consume it
+        // A stray paste-**end** marker outside a paste is terminal noise: consume it
         // (counted as a drop) rather than retaining it in the remainder forever.
-        // A full paste-START never reaches here — decode()'s sentinel scan owns
+        // A full paste-**start** never reaches here — decode()'s sentinel scan owns
         // it — and a partial marker is held back by splitCsi()'s incomplete path.
         if ($this->options->enablePaste && str_starts_with($csi, '201~')) {
             $this->droppedUnknownCount++;
@@ -1156,10 +1156,10 @@ final class EscapeDecoder
     }
 
     /**
-     * Structurally isolate the CSI body up to AND INCLUDING its final byte. Per
+     * Structurally isolate the CSI body up to **and including** its final byte. Per
      * ECMA-48 a CSI (after "ESC [") is: parameter bytes 0x30-0x3F, then
      * intermediate bytes 0x20-0x2F, then exactly one final byte 0x40-0x7E.
-     * Anything AFTER the final byte is a genuine suffix — the next key(s) in the
+     * Anything **after** the final byte is a genuine suffix — the next key(s) in the
      * same chunk — handed back so decodeClean()'s offset walk resumes on it.
      *
      * @return array{state:'incomplete'}
@@ -1212,7 +1212,7 @@ final class EscapeDecoder
         }
 
         // CPR / DSR cursor position report: CSI row ; col R. Must be checked
-        // BEFORE the xterm modified-key path — "1;20R" otherwise fabricates a
+        // **before** the xterm modified-key path — "1;20R" otherwise fabricates a
         // phantom F3 with modifiers for the DSR reply to any ESC [ 6 n query.
         // (A plain F3 arrives as SS3 ESC O R, untouched here.)
         // @see xterm ctlseqs — "CSI Ps ; Ps R" cursor position report.
@@ -1262,8 +1262,8 @@ final class EscapeDecoder
             );
         }
 
-        // Kitty keyboard EVENT frame: CSI code[:alts] ; mods[:event-type] u —
-        // NO private prefix (that is the flags reply family handled above).
+        // Kitty keyboard **event** frame: CSI code[:alts] ; mods[:event-type] u —
+        // **no** private prefix (that is the flags reply family handled above).
         if ($final === 'u') {
             return $this->options->enableKitty
                 ? $this->handleKittyEvent($seq, $rest)
@@ -1272,7 +1272,7 @@ final class EscapeDecoder
 
         // ── Focus reports: bare CSI I (gained) / CSI O (lost) ──────────────
         // Recognized structurally at the final byte, so a focus report followed
-        // by more bytes in the SAME chunk ("\x1b[Iabc") no longer loses the
+        // by more bytes in the **same** chunk ("\x1b[Iabc") no longer loses the
         // event to an exact-string comparison against the whole tail.
         if ($this->options->enableFocus && $seq === 'I') {
             return ['events' => [new FocusEvent(true, "\x1b[" . $seq)], 'remaining' => $rest];
@@ -1291,7 +1291,7 @@ final class EscapeDecoder
             $finalKey = $m[3];
 
             // xterm modified keys carry num=1 and a modifier parameter; ";1"
-            // (and the parameter-less "1<final>") are an explicit NO-modifier —
+            // (and the parameter-less "1<final>") are an explicit **no**-modifier —
             // accepted, not refused: the shape is unmistakable and decoding
             // it agrees with the unmodified CSI final anyway.
             if ($num === 1 && $modRaw >= 1) {
@@ -1325,7 +1325,7 @@ final class EscapeDecoder
             return ['events' => [new KeyEvent('End', KeyModifier::none(), "\x1b[F")], 'remaining' => $rest];
         }
 
-        // Backtab: CSI Z (shift-TAB, sent by xterm & friends)
+        // Backtab: CSI Z (shift-**tab**, sent by xterm & friends)
         if ($seq === 'Z') {
             return ['events' => [new KeyEvent('Backtab', KeyModifier::shift(), "\x1b[Z")], 'remaining' => $rest];
         }
@@ -1333,7 +1333,7 @@ final class EscapeDecoder
         // modifyOtherKeys report (xterm): CSI 27 ; <mods> ; <keysym> ~. When a key
         // that has no dedicated CSI sequence is pressed with modifiers under
         // modifyOtherKeys=1/2, xterm wraps it in this unmistakable "27;" form so a
-        // plain 'a' and Ctrl+'a' never collide. The SET/RESET request is the
+        // plain 'a' and Ctrl+'a' never collide. The **set/reset** request is the
         // private "CSI > 4 ; level m" — a '>' frame drained as a terminal reply
         // above, never a keystroke. Not gated by enableKitty: this is the legacy
         // xterm extended-key family (final '~'), and the "27;n;n~" shape cannot be
@@ -1343,7 +1343,7 @@ final class EscapeDecoder
             $mods = (int) $mk[1];
             if ($mods < 1) {
                 // The modifyOtherKeys modifier field is 1 + bitmask; 0 is malformed.
-                // Passing 0 to fromXtermParam computes (0 - 1) = -1 and sets EVERY
+                // Passing 0 to fromXtermParam computes (0 - 1) = -1 and sets **every**
                 // bit, fabricating phantom Shift+Alt+Ctrl+Meta — reject it (fail fast)
                 // the same way the Kitty path clamps its de-based field.
                 return $this->dropUnknown($rest);
@@ -1362,12 +1362,12 @@ final class EscapeDecoder
         }
 
         // Numbered function keys and special keys — plain (`15~`) and the
-        // MODIFIED xterm form `CSI number ; modifier ~` (`3;5~` Ctrl+Delete,
+        // **modified** xterm form `CSI number ; modifier ~` (`3;5~` Ctrl+Delete,
         // `21;5~` Ctrl+F10, `3;2~` Shift+Delete). The two-parameter shape is
         // terminfo-standard, not invented: the xterm-256color and alacritty
         // entries ship kDC=\E[3;2~, and wezterm ships kf34=\E[21;5~. The form is
         // unmistakable at this point in the dispatch: the modifyOtherKeys wrap
-        // (`27;mods;keysym ~`) has THREE params and is decoded above, and a
+        // (`27;mods;keysym ~`) has **three** params and is decoded above, and a
         // number absent from both tables (a stray `200~`/`201~` paste marker
         // with a modifier riding along) still falls through to the counted drop.
         // @see ECMA-48 — CSI parameter bytes 0x30-0x3F, one final byte 0x40-0x7E.
@@ -1412,7 +1412,7 @@ final class EscapeDecoder
         }
 
         // Mouse 1015 (urxvt) report: CSI <b> ; <x> ; <y> M — three decimal
-        // parameters and a final byte that is ALWAYS 'M'. It is distinguished from
+        // parameters and a final byte that is **always** 'M'. It is distinguished from
         // the SGR 1006/1016 path solely by the absence of the '<' introducer
         // (handleCSI routes '<'-led reports to handleSgrMouse before ever reaching
         // here), so the two encodings never collide. Like X10 there is no lowercase
@@ -1560,7 +1560,7 @@ final class EscapeDecoder
      * only counted into discardedPasteBytes: they belong to the event the
      * announce already told the truth about.
      *
-     * Cap hit: announce ONCE with the truncated PasteEvent, but do NOT close
+     * Cap hit: announce **once** with the truncated PasteEvent, but do **not** close
      * the paste. Closing let every byte that followed — through the real
      * 201~ terminator — decode as synthetic keystrokes: attacker-controlled
      * pipe content was promoted to key traffic, the exact tmux send-keys
@@ -1598,7 +1598,7 @@ final class EscapeDecoder
     /**
      * Classify a complete private-mode CSI ("ESC [" + "?" / ">" params + final).
      *
-     * A private-mode sequence on the INPUT stream is a terminal reply (or an
+     * A private-mode sequence on the **input** stream is a terminal reply (or an
      * echo of a query) — never a keystroke. Families per xterm ctlseqs / Kitty
      * keyboard protocol:
      *  - final "c"   → DA1 (`CSI ? Ps ; Ps c`) / DA2 (`CSI > Ps ; Ps c`) reply
@@ -1743,7 +1743,7 @@ final class EscapeDecoder
                 if ($this->stringDiscarded + strlen($haystack) > self::MAX_STRING_ABANDON) {
                     // A stream that never terminates the string must not silence
                     // keystrokes forever — abandon and resync. The in-hand body
-                    // past the boundary is REFUSED as one counted drop rather
+                    // past the boundary is **refused** as one counted drop rather
                     // than replayed as tens of thousands of printable keys
                     // (SI-10 / FUZZ-05: the replay made a single hostile read
                     // cost unbounded events; bytes arriving in later reads are
@@ -1775,7 +1775,7 @@ final class EscapeDecoder
             if ($breached) {
                 // Cap breached: drain the head as one truncated reply, then keep
                 // swallowing the rest of the payload until its terminator. The
-                // old behaviour cleared the string state outright, so every
+                // old behavior cleared the string state outright, so every
                 // later byte of a >1 KiB OSC/DCS reply leaked back as keys.
                 $overflowed = $this->stringBuffer;
                 $body = substr($overflowed, 0, self::MAX_STRING_LENGTH);
@@ -1833,7 +1833,7 @@ final class EscapeDecoder
         }
 
         // A single read that carries both a >1 KiB body and its terminator must
-        // drain the SAME bounded reply the incremental (chunked) path produces —
+        // drain the **same** bounded reply the incremental (chunked) path produces —
         // clip the body and flag it, so read size cannot change the event.
         if (strlen($body) > self::MAX_STRING_LENGTH) {
             $truncated = true;
@@ -1855,7 +1855,7 @@ final class EscapeDecoder
     }
 
     /**
-     * Length of the longest STRICT suffix of $stream that is a proper prefix of
+     * Length of the longest **strict** suffix of $stream that is a proper prefix of
      * $marker — i.e. the number of trailing bytes that could be the beginning of
      * the marker split across reads (0 when nothing can be held back).
      */
@@ -1879,7 +1879,7 @@ final class EscapeDecoder
         $ord = ord($byte);
 
         // M12: Alt-modified presses of the three symbolic control keys carry
-        // the SAME names as their unmodified forms (Tab via decodeClean's
+        // the **same** names as their unmodified forms (Tab via decodeClean's
         // sibling, Enter via decodeControlChar, Backspace via decodeClean).
         // Without this, ESC+CR surfaced key="\r" while a bare CR surfaced
         // key='Enter' — one wire family, two vocabularies.
@@ -1913,7 +1913,7 @@ final class EscapeDecoder
     /**
      * Decode a control character.
      *
-     * Receives only bytes in 0x00-0x1f EXCEPT 0x1b: decodeClean() dispatches
+     * Receives only bytes in 0x00-0x1f **except** 0x1b: decodeClean() dispatches
      * every ESC byte through handleEscape() first (lone-ESC vs sequence
      * disambiguation lives there), so this method never sees one.
      */
@@ -1930,7 +1930,7 @@ final class EscapeDecoder
 
         // NUL (0x00): keyboards that produce it produce it as Ctrl+Space (the
         // layout's Ctrl+@ twin reaches the same byte). The wire byte has no
-        // letter to pair, so the conventional label IS the name: `Space`
+        // letter to pair, so the conventional label **is** the name: `Space`
         // under Ctrl. The raw byte stays visible in `raw`.
         if ($ord === 0x00) {
             return new KeyEvent('Space', KeyModifier::ctrl(), $byte);
@@ -1962,7 +1962,7 @@ final class EscapeDecoder
      * Kitty keyboard protocol functional key codes (U+E000 and above): the
      * contract is code -> key name, verbatim from the spec's functional-key
      * table. Codes below the table's floor never mint a functional key: in
-     * CSI-u frames the TEXT rule resolves printable codepoints to the
+     * CSI-u frames the **text** rule resolves printable codepoints to the
      * character itself and control-adjacent codes count as drops. An
      * unlisted code at or above the floor is a counted drop, never an
      * invented key. Names use
@@ -1975,7 +1975,7 @@ final class EscapeDecoder
      * KeyType::kittyFunctionalKeys() carries, cross-checked by
      * tests/KeySpecTableParityTest.
      *
-     * History this table cures: the decoder once INVENTED arrows at
+     * History this table cures: the decoder once **invented** arrows at
      * 57399-57402 (the spec's Kp0..Kp3) and borrowed xterm's *tilde*
      * numbering (1..6 / 11..34) into CSI-u space, where 11 is literally the
      * control-K byte; those forms now count as drops.
@@ -2099,7 +2099,7 @@ final class EscapeDecoder
     /**
      * Map a Kitty key code to a symbolic key name.
      *
-     * Codes below the functional table's 0xE000 start are TEXT codepoints:
+     * Codes below the functional table's 0xE000 start are **text** codepoints:
      * the four shared control codes and space keep their symbolic names, the
      * rest of 32–0xD7FF arrives as the character itself, and the surrogate
      * block plus the unnamed controls below 32 are unmapped — the caller
@@ -2137,7 +2137,7 @@ final class EscapeDecoder
             return chr($code + 32);
         }
 
-        // Remaining TEXT codepoints arrive as the character itself — digits,
+        // Remaining **text** codepoints arrive as the character itself — digits,
         // punctuation and Unicode runes below the spec's functional space.
         // Control-adjacent codes (< 32) were named above or stay counted drops,
         // and the surrogate block (0xD800–0xDFFF) is not a scalar value, so the
@@ -2153,7 +2153,7 @@ final class EscapeDecoder
     /**
      * Resolve a modifyOtherKeys `keysym` field to a key name.
      *
-     * The `CSI 27 ; <mods> ; <keysym> ~` report carries an X11 keysym, NOT a Kitty
+     * The `CSI 27 ; <mods> ; <keysym> ~` report carries an X11 keysym, **not** a Kitty
      * functional codepoint, so it must not be fed to kittyKeyCodeToName() blindly:
      * keysyms below 0xE000 are character codes, and passing them through the text
      * leg would name control-adjacent keysyms wrong. Printable ASCII (32..126) is
@@ -2175,7 +2175,7 @@ final class EscapeDecoder
      * the KP* vocabulary. Unassigned or unhoused keysyms (Select 0xFF60,
      * Pause 0xFF13, KP_Space, …) fall through to the honest counted drop —
      * mapping them would invent wire names the rest of the lib never emits.
-     * One keysymdef.h member is deliberately EXCLUDED: Delete (0xFFFF) is
+     * One keysymdef.h member is deliberately **excluded**: Delete (0xFFFF) is
      * the lib's long-pinned "unknown keysym drains" witness frame
      * (testModifyOtherKeysUnknownKeysymConsumed), so it keeps dropping.
      */
@@ -2230,7 +2230,7 @@ final class EscapeDecoder
         }
 
         if ($keysym >= 0xFF00 && $keysym <= 0xFFFF) {
-            // X11 function-keysym block — consulted BEFORE the Kitty-leg
+            // X11 function-keysym block — consulted **before** the Kitty-leg
             // fallthrough (0xFF00 numerically outranks 0xE000) and before the
             // unknown-drop, so Shift+Home (`27;2;65360~`) is a named event.
             return self::X11_KEYSYM_MAP[$keysym] ?? null;
