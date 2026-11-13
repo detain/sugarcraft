@@ -149,6 +149,41 @@ final class ConfigTest extends TestCase
         $this->assertSame([], $endpoints[0]->identityFiles);
     }
 
+    public function testOmittedOptionalFieldHasThreeLegalSpellings(): void
+    {
+        // -019 (docs pin): an optional field is left out, or written
+        // `key: null` / `key: ~` — all three read as omitted. A BARE `key:`
+        // is a different shape: it opens list mode for the list fields and
+        // is refused for the scalar ones, never silently omitted.
+        foreach (['null' => 'user: null', 'tilde' => 'user: ~', 'absent' => ''] as $spelling => $line) {
+            $raw = "- name: a\n  host: a.test\n  $line\n";
+            $endpoints = Config::parse($raw, 'wishlist.yml');
+            $this->assertNull($endpoints[0]->user, "spelling '$spelling' means omitted");
+        }
+    }
+
+    public function testBareScalarKeyIsRefusedNotOmitted(): void
+    {
+        // -019 refusal leg: `user:` with nothing under it arrives as the
+        // empty block shape, and the scalar guard names it.
+        $raw = "- name: a\n  host: a.test\n  user:\n";
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('field [user] must be a scalar, got array');
+        Config::parse($raw, 'wishlist.yml');
+    }
+
+    public function testBareListKeyOpensListItemMode(): void
+    {
+        // -019 list leg: `options:` with nothing on the line is exactly the
+        // block-list opener the README promises; with no items under it,
+        // the field reads as empty (null scalar → []).
+        $withItems = Config::parse("- name: a\n  host: a.test\n  options:\n  - x\n", 'wishlist.yml');
+        $this->assertSame(['x'], $withItems[0]->options);
+
+        $empty = Config::parse("- name: a\n  host: a.test\n  options:\n", 'wishlist.yml');
+        $this->assertSame([], $empty[0]->options);
+    }
+
     public function testIdentityExpansionNeverTouchesNonTildePathsEvenWhenHomeMoves(): void
     {
         // Trust-boundary leg: expansion consults $HOME only for values that
