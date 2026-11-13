@@ -116,4 +116,50 @@ final class TimeoutGuardTest extends TestCase
             );
         }
     }
+
+    /**
+     * scriptui-27 (finding 023): gum's --timeout takes a Go
+     * time.Duration; users type 5s / 1m30s / 250ms, not "300".
+     */
+    public function testTryParseSecondsAcceptsGoDurations(): void
+    {
+        $cases = [
+            '5s'      => 5.0,
+            '90s'     => 90.0,
+            '250ms'   => 0.25,
+            '1m'      => 60.0,
+            '1m30s'   => 90.0,
+            '1h'      => 3600.0,
+            '1.5h'    => 5400.0,
+            '1h30m'   => 5400.0,
+            '1h0.5m'  => 3630.0,
+            '0s'      => 0.0,
+            '500µs'   => 0.0005,
+            '500μs'   => 0.0005,
+            '500us'   => 0.0005,
+            '2ns'     => 2e-9,
+            '1m30'    => null, // no unit on the tail — refuses
+        ];
+        foreach ($cases as $raw => $expected) {
+            $seconds = -1.0;
+            $ok      = TimeoutGuard::tryParseSeconds((string) $raw, $seconds);
+            if ($expected === null) {
+                $this->assertFalse($ok, "must refuse unitless tail: $raw");
+                continue;
+            }
+            $this->assertTrue($ok, "must accept Go duration: $raw");
+            $this->assertEqualsWithDelta($expected, $seconds, 1e-9, "value for $raw");
+        }
+    }
+
+    public function testTryParseSecondsRefusesBadDurations(): void
+    {
+        foreach (['5x', '1d', '-5s', 's', '1 s', 'abc', '5s5', '1m30x', '1.2.3s'] as $raw) {
+            $seconds = -1.0;
+            $this->assertFalse(
+                TimeoutGuard::tryParseSeconds($raw, $seconds),
+                "must refuse duration garbage: $raw",
+            );
+        }
+    }
 }

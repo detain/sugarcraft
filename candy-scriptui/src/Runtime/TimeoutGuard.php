@@ -72,9 +72,9 @@ final class TimeoutGuard
      * A deadline flag must fail LOUD, never open: a bare `(float)` cast
      * maps a typo like `--timeout abc` to 0.0, and 0.0 means "no limit"
      * here — the run would then hang exactly when the caller asked for a
-     * bound. Only a non-negative finite number (null = option absent) is
-     * accepted; everything else is refused so the command can surface a
-     * diagnostic instead of arming an inert guard.
+     * bound. Accepted shapes (scriptui-27): a non-negative finite number
+     * (null/absent = inert), or a Go time.Duration string — 5s, 250ms,
+     * 1m30s, 1.5h, µs/micro spellings included. Everything else refuses.
      *
      * @param mixed $raw     Raw option value (string|int|float|null).
      * @param float $seconds Out-param: the parsed deadline in seconds
@@ -97,14 +97,52 @@ final class TimeoutGuard
             $seconds = $raw;
             return $seconds >= 0.0;
         }
-        if (!is_string($raw) || !is_numeric($raw)) {
+        if (!is_string($raw)) {
             return false;
         }
-        $parsed = (float) $raw;
-        if (!is_finite($parsed) || $parsed < 0.0) {
+        if (is_numeric($raw)) {
+            $parsed = (float) $raw;
+            if (!is_finite($parsed) || $parsed < 0.0) {
+                return false;
+            }
+            $seconds = $parsed;
+            return true;
+        }
+        // scriptui-27 (finding 023): gum's --timeout is a Go
+        // time.Duration — `5s`, `250ms`, `1m30s`, `1.5h` are the shapes
+        // users actually type; the bare-number reading only covered the
+        // seconds unit. A duration suffix is accepted in every Go
+        // spelling (ns/us/µs/ms/s/m/h, decimals with . or ,); compound
+        // sequential forms sum. Garbage still REFUSES — the loud-not-open
+        // rule above is unchanged.
+        return self::parseGoDuration($raw, $seconds);
+    }
+
+    private static function parseGoDuration(string $raw, float &$seconds): bool
+    {
+        $spec = strtolower(trim($raw));
+        if ($spec === '') {
             return false;
         }
-        $seconds = $parsed;
+        // µ (U+00B5) and μ (U+03BC) both spell Go's micro second.
+        $spec = strtr($spec, ["\u{00B5}" => 'u', "\u{03BC}" => 'u', ',' => '.']);
+        $mult = ['ns' => 1e-9, 'us' => 1e-6, 'ms' => 1e-3, 's' => 1.0, 'm' => 60.0, 'h' => 3600.0];
+        $total = 0.0;
+        $pos   = 0;
+        $len   = strlen($spec);
+        while ($pos < $len) {
+            if (
+                !preg_match('/\G([0-9]+(?:\.[0-9]+)?)(ns|us|ms|s|m|h)/', $spec, $m, PREG_OFFSET_CAPTURE, $pos)
+            ) {
+                return false;
+            }
+            $total += (float) $m[1][0] * $mult[$m[2][0]];
+            $pos   += strlen($m[0][0]);
+        }
+        if ($total > PHP_FLOAT_MAX || !is_finite($total)) {
+            return false;
+        }
+        $seconds = $total;
         return true;
     }
 

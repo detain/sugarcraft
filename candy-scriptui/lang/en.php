@@ -47,7 +47,7 @@ return [
     'confirm.unknown_default' => 'unknown --default value: {value}',
     'cursor_mode.unknown' => 'unknown --cursor-mode: {mode}',
     'runtime.no_terminal' => '{command} needs an interactive terminal; no controlling terminal is available.',
-    'runtime.bad_timeout' => 'Invalid --timeout value \'{value}\' — expected a non-negative number of seconds (0 disables the deadline).',
+    'runtime.bad_timeout' => "Invalid --timeout value '{value}' — expected a non-negative number of seconds or a duration like 5s/250ms/1m30s (0 disables the deadline).",
     'runtime.bad_number' => 'Invalid {flag} value \'{value}\' — expected a non-negative whole number.',
     'runtime.pcntl_missing' => 'ext-pcntl is not loaded: SIGINT/SIGTERM will kill this program without the 130/143 exit mapping.',
     'runtime.unknown_choice' => 'Invalid value for {option}: \'{value}\'. Allowed: {allowed}.',
