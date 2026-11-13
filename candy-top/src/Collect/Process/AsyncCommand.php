@@ -318,8 +318,14 @@ final class AsyncCommand
                 $env[(string) $key] = (string) $value;
             }
         }
-        // A host with no PATH must not birth a child that can find no helper.
-        $env['PATH'] ??= '/usr/bin:/bin';
+        // A host with no PATH must not birth a child that can find no
+        // helper — per-OS shape (candy-top-038): the POSIX default is
+        // meaningless on Windows, where SystemRoot carries the system
+        // tools; with no SystemRoot either, an empty PATH is the honest
+        // answer (a tool not found is reported, not mis-resolved).
+        $env['PATH'] ??= PHP_OS_FAMILY === 'Windows'
+            ? ((\getenv('SystemRoot') ?: 'C:\\Windows') . '\\System32')
+            : '/usr/bin:/bin';
 
         return $env;
     }
@@ -342,8 +348,12 @@ final class AsyncCommand
             register_shutdown_function(static fn () => self::shutdown());
         }
         $pipes = [];
+        // Windows has no /dev/null; PHP's implicit mapping is exactly the
+        // kind of undocumented dependency this file's env law refuses
+        // (candy-top-058) — name the device per OS instead.
+        $devnull = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
         try {
-            $process = @proc_open($argv, [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, null, self::childEnv());
+            $process = @proc_open($argv, [0 => ['file', $devnull, 'r'], 1 => ['pipe', 'w'], 2 => ['file', $devnull, 'w']], $pipes, null, self::childEnv());
         } catch (\Error) {
             return null; // proc_open listed in disable_functions
         }

@@ -111,6 +111,9 @@ final class Gpu implements Backend
      */
     public const array FALLBACK_BINARIES = ['/usr/lib/wsl/lib/nvidia-smi', '/usr/bin/nvidia-smi', '/usr/local/nvidia/bin/nvidia-smi'];
 
+    /** NVIDIA ships the Windows binary in System32; the driver drops it there on install (candy-top-038). */
+    public const array FALLBACK_BINARIES_WINDOWS = ['C:\\Windows\\System32\\nvidia-smi.exe'];
+
     public const float DEFAULT_INTERVAL = 5.0;
 
     private const int MAX_BACKOFF_EXPONENT = 5;
@@ -271,7 +274,7 @@ final class Gpu implements Backend
      * @param list<string>|null $fallbacks null = FALLBACK_BINARIES
      * @return list<string>
      */
-    public static function candidates(?string $path = null, ?array $fallbacks = null): array
+    public static function candidates(?string $path = null, ?array $fallbacks = null, ?string $osFamily = null): array
     {
         $found = [];
         $seen = [];
@@ -285,10 +288,15 @@ final class Gpu implements Backend
                 $found[] = $file;
             }
         };
-        foreach (AbsoluteSearchPath::directories($path) as $dir) {
-            $add($dir . '/nvidia-smi');
+        // Windows spells the tool "nvidia-smi.exe" and ships no /usr/...
+        // fallbacks (candy-top-038); every other OS keeps the exact bytes
+        // it probed before.
+        $windows = ($osFamily ?? PHP_OS_FAMILY) === 'Windows';
+        $name = 'nvidia-smi' . ($windows ? '.exe' : '');
+        foreach (AbsoluteSearchPath::directories($path, $osFamily) as $dir) {
+            $add($dir . DIRECTORY_SEPARATOR . $name);
         }
-        foreach ($fallbacks ?? self::FALLBACK_BINARIES as $file) {
+        foreach ($fallbacks ?? ($windows ? self::FALLBACK_BINARIES_WINDOWS : self::FALLBACK_BINARIES) as $file) {
             $add($file);
         }
 

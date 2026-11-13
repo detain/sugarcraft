@@ -23,15 +23,28 @@ final class AbsoluteSearchPath
     }
 
     /**
-     * @param string|null $path a PATH string; null reads the environment
+     * @param string|null $path      a PATH string; null reads the environment
+     * @param string|null $osFamily  PHP_OS_FAMILY seam for tests; production passes null
      * @return list<string> realpath'd directories that exist, PATH order, no duplicates
      */
-    public static function directories(?string $path = null): array
+    public static function directories(?string $path = null, ?string $osFamily = null): array
     {
+        // Drive-absolute entries ("C:\Windows\system32") are the Windows
+        // shape of "absolute" (candy-top-038); the leading-separator rule
+        // alone rejected every one of them. Acceptance must be OS-gated,
+        // not merely pattern-based: on Linux "C:\foo" is a RELATIVE name
+        // and realpath would resolve it against the monitor's cwd.
+        $windows = ($osFamily ?? PHP_OS_FAMILY) === 'Windows';
         $dirs = [];
         $seen = [];
-        foreach (explode(PATH_SEPARATOR, $path ?? (string) getenv('PATH')) as $dir) {
-            if ($dir === '' || !\str_starts_with($dir, DIRECTORY_SEPARATOR)) {
+        // PATH's own separator is per-OS (';' on Windows, ':' elsewhere):
+        // a drive entry contains ':', so splitting with the host's PATH_SEPARATOR
+        // would shred "C:\Windows" the moment the seam forces Windows.
+        $separator = $windows ? ';' : PATH_SEPARATOR;
+        foreach (explode($separator, $path ?? (string) getenv('PATH')) as $dir) {
+            $absolute = \str_starts_with($dir, DIRECTORY_SEPARATOR)
+                || ($windows && preg_match('#^[A-Za-z]:[\\\\/]#', $dir) === 1);
+            if ($dir === '' || !$absolute) {
                 continue;
             }
             $real = \realpath($dir);

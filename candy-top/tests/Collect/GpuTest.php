@@ -957,4 +957,23 @@ final class GpuTest extends TestCase
         $this->assertNull($snap->processes);
         $this->assertSame(['--query-gpu=' . implode(',', Gpu::QUERY_EXTENDED)], array_column($this->argvs, 1), 'one bounded wait per interval');
     }
+
+    public function testWindowsDiscoveryProbesTheExeNameOnlyUnderTheSeam(): void
+    {
+        // candy-top-038: the forced-Windows seam must look for
+        // nvidia-smi.exe and refuse relative PATH (bare-name Linux join
+        // never runs there); the Linux arm keeps its exact pre-row bytes.
+        $base = sys_get_temp_dir() . '/candy-top-winexe-' . bin2hex(random_bytes(4));
+        mkdir($base, 0777, true);
+        file_put_contents($base . '/nvidia-smi', "#!/bin/sh\necho x\n");
+        chmod($base . '/nvidia-smi', 0755);
+        try {
+            $this->assertSame([], Gpu::candidates($base, [], 'Windows'), 'the Windows seam probes nvidia-smi.exe — the bare-name Linux hit is never collected');
+            $this->assertSame([], Gpu::candidates('.', [], 'Windows'), 'relative PATH is refused under every OS');
+            $this->assertSame([$base . '/nvidia-smi'], Gpu::candidates($base), 'Linux arm byte-stays');
+        } finally {
+            @unlink($base . '/nvidia-smi');
+            @rmdir($base);
+        }
+    }
 }

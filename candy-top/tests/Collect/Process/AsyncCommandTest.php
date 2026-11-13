@@ -285,4 +285,25 @@ final class AsyncCommandTest extends TestCase
         $this->assertNotEmpty(AbsoluteSearchPath::directories(), 'the real environment yields at least one directory');
         rmdir($this->dir . '/sub');
     }
+
+    public function testDriveAbsoluteEntriesAreAcceptedOnlyOnWindows(): void
+    {
+        // candy-top-038: the gate is OS-based, not pattern-based — a Linux
+        // "C:\dir" is a RELATIVE name (exactly the hijack the doctrine
+        // refuses), while the same entry on Windows is drive-absolute.
+        $base = sys_get_temp_dir() . '/candy-top-drive-' . bin2hex(random_bytes(4));
+        $win = $base . '/C:\\Windows\\System32';
+        mkdir($win, 0777, true);
+        $oldCwd = getcwd();
+        chdir($base);
+        try {
+            $accepted = AbsoluteSearchPath::directories('C:\\Windows\\System32', 'Windows');
+            $this->assertNotEmpty($accepted, 'forced-Windows seam accepts the drive entry');
+            $this->assertSame([], AbsoluteSearchPath::directories('C:\\Windows\\System32'), 'Linux refuses the same string as relative');
+        } finally {
+            chdir($oldCwd);
+            rmdir($win); // one literal component on Linux: "C:\Windows\System32"
+            rmdir($base);
+        }
+    }
 }
