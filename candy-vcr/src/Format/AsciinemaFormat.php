@@ -20,8 +20,10 @@ use SugarCraft\Vcr\Support\Scalars;
  *
  * Event lines are `[relative_time, event_type, data]` in both versions;
  * `o` (stdout) becomes an Output event, `i` (stdin) an Input event and `x`
- * a Quit. Any other event type is skipped, so a cast carrying resize or
- * marker lines imports the session bytes without those extras.
+ * a Quit. Any other event type emits no event — but its time offset still
+ * advances the clock, so a cast carrying resize (`r`) or marker (`m`) lines
+ * imports the session bytes with every following event keeping its true
+ * place on the tape.
  *
  * Import is one-way: candy-vcr never writes `.cast`, and the Msg envelopes
  * a cassette can carry (`@type`-tagged key/mouse/paste events) have no
@@ -46,66 +48,76 @@ final class AsciinemaFormat
     public function read(string $path): Cassette
     {
         $handle = $this->openFile($path);
-
-        // Read header line
-        $headerLine = fgets($handle);
-        if ($headerLine === false) {
-            fclose($handle);
-            throw new \InvalidArgumentException("asciinema cast file is empty: {$path}");
-        }
-
-        $headerData = json_decode($headerLine, true);
-        if (!is_array($headerData)) {
-            fclose($handle);
-            throw new \InvalidArgumentException("asciinema cast file has invalid header: {$path}");
-        }
-
-        $version = $headerData['version'] ?? null;
-        // Cast v2 is what asciinema actually ships; v3 nests the size under
-        // `term`. Accepting only v3 rejected every real .cast file.
-        if ($version !== 2 && $version !== 3) {
-            fclose($handle);
-            // Non-scalar versions cannot interpolate to text — name their type instead.
-            $label = is_scalar($version) || $version === null ? (string) $version : get_debug_type($version);
-            throw new \InvalidArgumentException(
-                "asciinema format version {$label} not supported (only v2 and v3): {$path}",
-            );
-        }
-
-        // v2 carries width/height at the top level; v3 nests them under `term`.
-        // Malformed shapes in either arm degrade to the 80x24 defaults exactly
-        // as the previous nested `?? 80`/`?? 24` did.
-        $term = is_array($headerData['term'] ?? null) ? $headerData['term'] : [];
-        $cols = Scalars::int($headerData['width'] ?? $term['width'] ?? 80, 'asciinema terminal width');
-        $rows = Scalars::int($headerData['height'] ?? $term['height'] ?? 24, 'asciinema terminal height');
-        $createdAt = isset($headerData['timestamp'])
-            ? gmdate('Y-m-d\TH:i:s\Z', Scalars::int($headerData['timestamp'], 'asciinema timestamp'))
-            : gmdate('Y-m-d\TH:i:s\Z');
-
-        // Read events
-        $events = [];
-        $relativeTime = 0.0;
-
-        while (($line = fgets($handle)) !== false) {
-            $event = $this->parseLine($line, $relativeTime);
-            if ($event !== null) {
-                $events[] = $event;
-                $relativeTime = $event->t;
+        try {
+            // Read header line
+            $headerLine = fgets($handle);
+            if ($headerLine === false) {
+                throw new \InvalidArgumentException("asciinema cast file is empty: {$path}");
             }
+
+            $headerData = json_decode($headerLine, true);
+            if (!is_array($headerData)) {
+                throw new \InvalidArgumentException("asciinema cast file has invalid header: {$path}");
+            }
+
+            $version = $headerData['version'] ?? null;
+            // Cast v2 is what asciinema actually ships; v3 nests the size under
+            // `term`. Accepting only v3 rejected every real .cast file.
+            if ($version !== 2 && $version !== 3) {
+                // Non-scalar versions cannot interpolate to text — name their type instead.
+                $label = is_scalar($version) || $version === null ? (string) $version : get_debug_type($version);
+                throw new \InvalidArgumentException(
+                    "asciinema format version {$label} not supported (only v2 and v3): {$path}",
+                );
+            }
+
+            // v2 carries width/height at the top level; v3 nests them under `term`.
+            // Malformed shapes in either arm degrade to the 80x24 defaults exactly
+            // as the previous nested `?? 80`/`?? 24` did.
+            $term = is_array($headerData['term'] ?? null) ? $headerData['term'] : [];
+            $cols = Scalars::int($headerData['width'] ?? $term['width'] ?? 80, 'asciinema terminal width');
+            $rows = Scalars::int($headerData['height'] ?? $term['height'] ?? 24, 'asciinema terminal height');
+            $createdAt = isset($headerData['timestamp'])
+                ? gmdate('Y-m-d\TH:i:s\Z', Scalars::int($headerData['timestamp'], 'asciinema timestamp'))
+                : gmdate('Y-m-d\TH:i:s\Z');
+
+            // Read events
+            $events = [];
+            $relativeTime = 0.0;
+
+            while (($line = fgets($handle)) !== false) {
+                $decoded = json_decode($line, true);
+                if (!is_array($decoded) || count($decoded) < 2) {
+                    continue;
+                }
+                // Parse -> add offset -> THEN decide emit: a timestamped row
+                // consumed wall time even when its type is one this reader
+                // skips ('r', 'm', unknown). Advancing the clock only on
+                // emitted events erased each skipped row's delta and reset
+                // the tape for everything after it (finding 063).
+                $relativeTime += Scalars::float($decoded[0], 'asciinema event time');
+                $event = $this->parseEvent($decoded, $relativeTime);
+                if ($event !== null) {
+                    $events[] = $event;
+                }
+            }
+
+            return new Cassette(
+                new CassetteHeader(
+                    version: CassetteHeader::CURRENT_VERSION,
+                    createdAt: $createdAt,
+                    cols: $cols,
+                    rows: $rows,
+                    runtime: 'asciinema/v' . (string) $version,
+                ),
+                $events,
+            );
+        } finally {
+            // A mid-file throw (bad header field, unparseable time offset,
+            // over-ceiling event) used to leak the handle: repeated failed
+            // loads stacked descriptors (finding 036).
+            fclose($handle);
         }
-
-        fclose($handle);
-
-        return new Cassette(
-            new CassetteHeader(
-                version: CassetteHeader::CURRENT_VERSION,
-                createdAt: $createdAt,
-                cols: $cols,
-                rows: $rows,
-                runtime: 'asciinema/v' . (string) $version,
-            ),
-            $events,
-        );
     }
 
     /**
@@ -132,33 +144,24 @@ final class AsciinemaFormat
     }
 
     /**
-     * Parse a single asciinema event line.
+     * Build the cassette event for one decoded cast line, or null when the
+     * type is skipped. The caller has already folded the line's offset into
+     * the clock — skipped rows keep their wall time.
      *
-     * @param string $line JSON array: [relative_time, event_type, data]
-     * @param float $previousTime Cumulative time from previous events
-     * @return Event|null
+     * @param array<array-key, mixed> $decoded JSON array: [relative_time, event_type, data]
      */
-    private function parseLine(string $line, float $previousTime): ?Event
+    private function parseEvent(array $decoded, float $t): ?Event
     {
-        $decoded = json_decode($line, true);
-        if (!is_array($decoded) || count($decoded) < 2) {
-            return null;
-        }
-
-        // Use null coalescing to handle 2-element events (e.g. ["o"] with no data)
+        // Use null coalescing to handle 2-element events (e.g. ["x"] with no data)
         // and 3-element events (e.g. ["o", "data"]) gracefully.
-        $timeOffset = $decoded[0] ?? 0.0;
-        $type = $decoded[1] ?? '';
+        $type = $decoded[1];
         $data = $decoded[2] ?? '';
-
-        // Convert relative time offset to absolute time from cassette start
-        $t = $previousTime + Scalars::float($timeOffset, 'asciinema event time');
 
         return match ($type) {
             'o' => new Event(t: $t, kind: EventKind::Output, payload: ['b' => Scalars::string($data, 'asciinema event data')]),
             'i' => new Event(t: $t, kind: EventKind::Input, payload: ['b' => Scalars::string($data, 'asciinema event data')]),
             'x' => new Event(t: $t, kind: EventKind::Quit, payload: []),
-            default => null, // Unknown event type, skip
+            default => null, // 'r'/'m'/unknown types: their time counts, no event is emitted
         };
     }
 }
