@@ -159,6 +159,20 @@ final class TableTest extends TestCase
      * clamp the page and re-park the cursor — it used to keep the stale
      * interior page, rendering an empty body with a "Page 3 of 1" footer.
      */
+    /**
+     * ST-55 (finding 067): PageSize() is a read-only round-trip of
+     * withPageSize() — default 0 (no pagination) and the set value.
+     */
+    public function testPageSizeGetterRoundTrips(): void
+    {
+        $t = $this->makeTable();
+        $this->assertSame(0, $t->PageSize(), 'pagination is opt-in: the default page size is 0');
+
+        $paged = $t->withPageSize(5);
+        $this->assertSame(5, $paged->PageSize());
+        $this->assertSame(0, $t->PageSize(), 'the setter left the original untouched');
+    }
+
     public function testWithPageSizeShrinkClampsPage(): void
     {
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
