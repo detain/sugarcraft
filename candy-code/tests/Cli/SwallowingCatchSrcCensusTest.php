@@ -81,10 +81,6 @@ final class SwallowingCatchSrcCensusTest extends TestCase
             1,
             'session-artifact pruning is best-effort housekeeping at store construction time',
         ],
-        'src/Host/RemoteSessionHost.php::gone' => [
-            1,
-            'teardown listeners run best-effort when the host goes away; one listener failing must not strand the stream close that follows',
-        ],
         'src/MCP/SseMcpServer.php::assertSuccess' => [
             1,
             'close() on a response body that was consumed or read-errored already; the status verdict is taken from the response object, not the stream',

@@ -21,6 +21,7 @@ use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\RpcError;
+use SugarCraft\Code\Support\Log;
 
 use function React\Promise\reject;
 
@@ -174,6 +175,9 @@ final class RemoteSessionHost
 
     private int $lastSeq = 0;
 
+    /** Latch: one malformed-frame warning per stream, re-armed by wire(). */
+    private bool $malformedLogged = false;
+
     private function __construct(
         DuplexStreamInterface $stream,
         private readonly string $clientName,
@@ -209,6 +213,7 @@ final class RemoteSessionHost
     private function wire(DuplexStreamInterface $stream, string $initial): void
     {
         $epoch = ++$this->epoch;
+        $this->malformedLogged = false;
         $this->stream = $stream;
         $this->buffer = new MessageBuffer(
             self::closeFrameChecker(),
@@ -748,14 +753,28 @@ final class RemoteSessionHost
         return $this->sessionId ?? throw new \LogicException('open() a session first');
     }
 
+    /** A dropped frame is otherwise invisible; say so once per stream, not per frame. */
+    private function noteMalformed(string $what): void
+    {
+        if ($this->malformedLogged) {
+            return;
+        }
+        $this->malformedLogged = true;
+        Log::channel('host', 'dropped malformed frame (further drops on this stream are not logged): ' . $what);
+    }
+
     private function receive(string $payload): void
     {
         try {
             $message = \json_decode($payload, true, JsonRpc::MAX_DEPTH, \JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
+        } catch (\JsonException $e) {
+            $this->noteMalformed('undecodable frame: ' . \SugarCraft\Code\Server\ErrorLog::flatten($e->getMessage()));
+
             return;
         }
         if (!\is_array($message)) {
+            $this->noteMalformed('frame is not a JSON object');
+
             return;
         }
 
@@ -767,8 +786,9 @@ final class RemoteSessionHost
             foreach ($this->listeners as $listener) {
                 try {
                     $listener($envelope, $payload);
-                } catch (\Throwable) {
+                } catch (\Throwable $e) {
                     // One listener's failure is its own; the others still hear.
+                    Log::channel('host', 'event listener threw: ' . \SugarCraft\Code\Server\ErrorLog::line($e, 'listener'));
                 }
             }
 
@@ -1020,7 +1040,8 @@ final class RemoteSessionHost
         foreach ($listeners as $listener) {
             try {
                 $listener($reason);
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                Log::channel('host', 'close listener threw: ' . \SugarCraft\Code\Server\ErrorLog::line($e, 'listener'));
             }
         }
         $this->stream->close();
