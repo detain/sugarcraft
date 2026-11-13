@@ -8,7 +8,7 @@ use SugarCraft\Toast\{Action, Alert, Position, Toast, ToastType};
 use PHPUnit\Framework\TestCase;
 
 /**
- * Pins the documented trust boundary (README "Security & trust boundary",
+ * Pins the documented trust boundary (README "Security & Trust Boundary",
  * docs/TRUST-BOUNDARY.md §1): alert text is app-supplied, and the cell-grid
  * re-encode means view()'s output can carry ONLY the escape sequences the
  * renderer itself builds — a hostile message can never smuggle raw OSC,

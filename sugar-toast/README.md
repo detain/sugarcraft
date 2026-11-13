@@ -10,7 +10,7 @@
 
 # SugarToast
 
-sugar-toast — a floating alert notification component for terminal UIs, for PHP 8.3+. Alerts composite over the host's background frame at one of nine anchor positions and never block input.
+sugar-toast — a floating alert notification component for terminal UIs on PHP 8.3+. Alerts composite over the host's background frame at one of nine anchor positions and never block input.
 
 ## Features
 
@@ -29,7 +29,9 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **Styled alerts**: per-alert background/foreground/border colour overrides
 - **History log**: immutable, bounded record of dismissed, overflow-evicted and refused (DropNewest) alerts (default cap 100)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
-- **Accessibility environment variables**: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink; `NO_COLOR`/`CLICOLOR=0` drop all colour bytes (renderer palette, custom alert colours, inline message SGR); `CLICOLOR_FORCE` overrides. The gates are deliberately not spec-literal: a literal `NO_COLOR=0` counts as unset (suppression off) and `CLICOLOR` must read exactly `0` to drop colour — `CLICOLOR=00` keeps it; the divergence law lives in the colour-decision docblock. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself
+- **Accessibility environment variables**: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink; `NO_COLOR`/`CLICOLOR=0` drop all colour bytes (renderer palette, custom alert colours, inline message SGR); `CLICOLOR_FORCE` overrides
+  - The gates are deliberately not spec-literal — a literal `NO_COLOR=0` counts as unset (suppression off), and `CLICOLOR` must read exactly `0` to drop colour (`CLICOLOR=00` keeps it); the divergence law lives in the colour-decision docblock
+  - Environment-only checks — sugar-toast composites for its host and never probes a TTY itself
 
 ## Install
 
@@ -55,11 +57,19 @@ $bg = str_repeat("background content\n", 20);
 echo $toast->view($bg);
 ```
 
-Nothing surprising in the defaults: position `TopLeft`, `maxWidth` 50, `minWidth` 0 (auto-fit
-off), `duration` `null` (alerts persist until dismissed — persistence is the
-explicit `Alert::$persistent` sentinel, not a magic `null` expiry),
-`allowEscToClose` true, `maxConcurrent` `null` (unbounded), overflow
-`DropOldest`, history limit 100, symbol set `Unicode`.
+Nothing surprising in the defaults:
+
+| Default | Value |
+|---|---|
+| position | `TopLeft` |
+| `maxWidth` | 50 |
+| `minWidth` | 0 (auto-fit off) |
+| `duration` | `null` — alerts persist until dismissed; persistence is the explicit `Alert::$persistent` sentinel, not a magic `null` expiry |
+| `allowEscToClose` | true |
+| `maxConcurrent` | `null` (unbounded) |
+| overflow | `DropOldest` |
+| history limit | 100 |
+| symbol set | `Unicode` |
 
 Note the one thing the quickstart does not show: an expiry never fires on its
 own. sugar-toast keeps no timers — a timed alert leaves the screen at the next
@@ -150,8 +160,8 @@ message or action row can be visually occluded with no signal in the frame.
 Expiry reflow also MOVES surviving boxes (no stable anchors yet); a
 stable-row/`+N more` badge policy is still an open question and may change,
 so hosts with accessibility-critical stacks should cap
-`maxConcurrent` or use `Enqueue` deliberately — its surplus never drains on
-its own.
+`maxConcurrent` or use `Enqueue` deliberately — its surplus drains only as
+timed alerts expire: with persistent alerts the queue never drains on its own.
 
 ## Persistent Alerts
 
@@ -169,8 +179,9 @@ duration inheritance for a sentinel-carrying alert, so the escape hatch works
 even on a toast that has `withDuration()` configured:
 
 ```php
-$toast = Toast::new(50)->withPosition(Position::TopRight);  // no duration set
-$toast = $toast->alert(ToastType::Info, 'Connected');       // never expires
+$toast = Toast::new(50)->withPosition(Position::TopRight)->withDuration(5.0);
+$toast = $toast->alert(ToastType::Info, 'Connected');       // expires in 5 s — inheritance works
+$toast = $toast->push((new Alert(ToastType::Info, 'Pinned'))->withCancelledExpiry()); // escape hatch: survives anyway
 
 // Per-alert escape hatch from an inherited expiry — persistent is explicit,
 // so push() will NOT re-arm the toast's duration on this alert:
