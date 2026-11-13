@@ -9,9 +9,9 @@ namespace SugarCraft\Spring;
  *
  * Each preset encodes tension / friction / mass values that translate
  * to physically meaningful angularFrequency and dampingRatio inside
- * {@see SpringConfig}. The five triples are TUNED BY HAND for feel
- * (the react-spring/RN folk-table lineage); they are not verbatim
- * transcriptions of any published table — UIKit's animator, for
+ * {@see SpringConfig}. The five triples were tuned by hand for feel —
+ * the react-spring / RN folk-table lineage — and are not verbatim
+ * transcriptions of any published table: UIKit's animator, for
  * instance, exposes duration/damping curves, not tension/friction/mass.
  */
 enum SpringPreset
@@ -42,24 +42,24 @@ enum SpringPreset
                 friction: 10.0,
                 mass: 1.0,
             ),
-            self::Wobbly  => new SpringConfig(
+            self::Wobbly   => new SpringConfig(
                 tension: 180.0,
                 friction: 12.0,
                 mass: 1.0,
             ),
-            self::Stiff   => new SpringConfig(
+            self::Stiff    => new SpringConfig(
                 tension: 500.0,
                 friction: 20.0,
                 mass: 1.0,
             ),
-            self::Slow    => new SpringConfig(
-                tension:  50.0,
-                friction:  6.0,
+            self::Slow     => new SpringConfig(
+                tension: 50.0,
+                friction: 6.0,
                 mass: 1.0,
             ),
             self::Molasses => new SpringConfig(
-                tension:  30.0,
-                friction:  4.0,
+                tension: 30.0,
+                friction: 4.0,
                 mass: 1.0,
             ),
         };

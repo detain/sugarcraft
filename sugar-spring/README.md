@@ -204,9 +204,8 @@ Two more knobs: the constructor's fourth parameter
 `?bool $reducedMotionOverride` pins the behaviour for one spring —
 pass `false` to animate even when the env var is set, `true` to snap even
 when it is not (`null`, the default, defers to the environment).
-`Spring::fromPreset()`, `SpringConfig::spring()` and
-`SpringConfig::springAt60Fps()` take the same override as their final optional
-parameter.
+`Spring::fromPreset()` and `SpringConfig::spring()` take the same override as
+their final optional parameter.
 
 ```php
 use SugarCraft\Spring\Spring;
@@ -281,14 +280,16 @@ dampingRatio     = friction / (2 * sqrt(tension * mass))
 use SugarCraft\Spring\{SpringConfig, Spring};
 
 $config = new SpringConfig(tension: 180.0, friction: 12.0, mass: 1.0);
-$spring = $config->springAt60Fps();  // or ->spring($deltaTime)
-$snapped = $config->springAt60Fps(reducedMotionOverride: true);  // pin the snap, ignore the env
+$spring = $config->spring();  // 1/60 default; pass $deltaTime for another frame rate
+$snapped = $config->spring(reducedMotionOverride: true);  // pin the snap, ignore the env
 echo $config->angularFrequency;     // 13.416... (public readonly)
 ```
 
-Both `SpringConfig::spring()` and `SpringConfig::springAt60Fps()` return
-a pre-wired `Spring` instance ready to drive `update()` calls and accept the
-optional `reducedMotionOverride` described above.
+`SpringConfig::spring()` returns a pre-wired `Spring` instance ready to drive
+`update()` calls and accept the optional `reducedMotionOverride` described
+above. `SpringConfig::springAt60Fps()` is a deprecated synonym of its 1/60
+default leg (`REMOVED-IN: 2.0.0`): same door, two spellings, one of them
+going away.
 
 ## Projectile
 
@@ -638,7 +639,8 @@ back-flavoured control points — same honesty rule as `Easing`.
   non-finite, non-positive, or numerically degenerate) with public readonly
   `$angularFrequency` / `$dampingRatio` /
   `spring(float $deltaTime = 1/60, ?bool $reducedMotionOverride = null)` /
-  `springAt60Fps(?bool $reducedMotionOverride = null)`.
+  `springAt60Fps(?bool $reducedMotionOverride = null)` (deprecated synonym of
+  the default leg, REMOVED-IN: 2.0.0).
 - **`Projectile`** — `Projectile::new(...)` / `update()` / `position()` /
   `velocity()` / `acceleration()` (identical `->position` etc. properties
   exist) / `withPosition()` / `withVelocity()` / `withAcceleration()` /

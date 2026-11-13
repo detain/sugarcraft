@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Spring;
 
 /**
- * Physical spring parameters that translate into the coefficients consumed
- * by the underlying damped-harmonic-oscillator integration in {@see Spring}.
+ * The tension / friction / mass triple behind a {@see Spring}: physical
+ * parameters the class turns into the angular frequency and damping ratio
+ * the oscillator integrates with.
  *
  * The two derived values are:
  *   angularFrequency = sqrt(tension / mass)
  *   dampingRatio    = friction / (2 * sqrt(tension * mass))
  *
- * SpringConfig is immutable and can be used to construct a {@see Spring}
- * via its factory methods.
+ * SpringConfig is immutable. {@see spring()} is the door from a config to a
+ * Spring; {@see Spring::fromPreset()} is the preset door.
  */
 final readonly class SpringConfig
 {
@@ -100,8 +101,10 @@ final readonly class SpringConfig
     }
 
     /**
-     * Construct a spring pre-configured at 60 fps by default.
+     * Build a spring from this config's derived values.
      *
+     * @param float     $deltaTime             seconds per integration step
+     *        (default: 1/60 — one frame at 60 fps).
      * @param bool|null $reducedMotionOverride Overrides the environment
      *        reduced-motion lookup for the produced spring (null = consult env).
      */
@@ -111,10 +114,17 @@ final readonly class SpringConfig
     }
 
     /**
-     * Spring at 60 fps using this config's derived values.
+     * @deprecated Use {@see spring()} — at its default frame time that is
+     *             exactly this method (finding 072: two spellings, one door).
+     *             REMOVED-IN: 2.0.0.
      */
     public function springAt60Fps(?bool $reducedMotionOverride = null): Spring
     {
+        trigger_error(
+            'SpringConfig::springAt60Fps() is deprecated; use spring() with its 1/60 default. REMOVED-IN: 2.0.0.',
+            E_USER_DEPRECATED,
+        );
+
         return $this->spring(1.0 / 60.0, $reducedMotionOverride);
     }
 }

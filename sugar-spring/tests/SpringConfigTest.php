@@ -33,18 +33,62 @@ final class SpringConfigTest extends TestCase
         $this->assertInstanceOf(Spring::class, $spring);
     }
 
-    public function testSpringAt60FpsUsesCorrectDeltaTime(): void
+    /**
+     * SPR-29 (finding 013): the old dt-named tests asserted only
+     * instanceof Spring — a factory ignoring its dt argument stayed green.
+     * Frame-1 positions are now observed as EXACT bytes: 1/120 vs 1/60
+     * differ measurably, so a dropped argument cannot hide.
+     */
+    public function testSpringHonoursItsDeltaTimeArgumentAtFrameOne(): void
     {
         $config = new SpringConfig(tension: 100.0, friction: 10.0, mass: 1.0);
-        $spring = $config->springAt60Fps();
-        $this->assertInstanceOf(Spring::class, $spring);
+
+        [$pos120, $vel120] = $config->spring(1.0 / 120.0)->update(0.0, 0.0, 100.0);
+        [$pos60, $vel60] = $config->spring(1.0 / 60.0)->update(0.0, 0.0, 100.0);
+
+        $this->assertSame(0.33758046296570399, $pos120, 'frame 1 at 1/120 s');
+        $this->assertSame(79.863087014653175, $vel120, 'frame 1 velocity at 1/120 s');
+        $this->assertSame(1.3118325869926366, $pos60, 'frame 1 at 1/60 s');
+        $this->assertSame(152.80885700403078, $vel60, 'frame 1 velocity at 1/60 s');
+        $this->assertLessThan($pos60, $pos120, 'a half-size frame must carry the spring less far');
     }
 
-    public function testSpringWithCustomDeltaTime(): void
+    /**
+     * SPR-29 (finding 072): springAt60Fps() is exactly spring() with the
+     * 1/60 default — the twin door still answers, loudly deprecated, byte-
+     * identical to the canonical spelling (ADT-style roster entry for a
+     * non-get surface, kept in this file because the src get* census
+     * deliberately does not see it).
+     */
+    public function testSpringAt60FpsIsTheLoudDeprecatedTwinOfTheDefaultDoor(): void
     {
-        $config  = new SpringConfig(tension: 100.0, friction: 10.0, mass: 1.0);
-        $spring  = $config->spring(1.0 / 120.0);
-        $this->assertInstanceOf(Spring::class, $spring);
+        $config = new SpringConfig(tension: 100.0, friction: 10.0, mass: 1.0);
+
+        $message = null;
+        set_error_handler(static function (int $severity, string $text) use (&$message): bool {
+            if ($severity === E_USER_DEPRECATED) {
+                $message = $text;
+                return true;
+            }
+            return false;
+        }, E_USER_DEPRECATED);
+        try {
+            $viaAlias = $config->springAt60Fps();
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertStringContainsString('REMOVED-IN: 2.0.0', (string) $message);
+        $this->assertStringContainsString('use spring()', (string) $message);
+
+        $this->assertSame(
+            $config->spring(1.0 / 60.0)->update(0.0, 0.0, 100.0),
+            $viaAlias->update(0.0, 0.0, 100.0),
+            'the deprecated alias must answer with the exact bytes of the canonical door',
+        );
+
+        $doc = (string) (new \ReflectionMethod($config, 'springAt60Fps'))->getDocComment();
+        $this->assertStringContainsString('@deprecated', $doc);
     }
 
     // M-A (review 1102): the old `max(0.0, ·)` clamps manufactured exactly
@@ -155,18 +199,18 @@ final class SpringConfigTest extends TestCase
             [$snapPair[0], $snapPair[1]],
             'spring(dt, override: true) must snap despite any host env'
         );
-        $animatedPair = $config->springAt60Fps(false)->update(0.0, 0.0, 100.0);
+        $animatedPair = $config->spring(1.0 / 60.0, false)->update(0.0, 0.0, 100.0);
         $this->assertNotSame(
             [100.0, 0.0],
             [$animatedPair['position'], $animatedPair['velocity']],
-            'springAt60Fps(override: false) must animate despite any host env'
+            'spring(override: false) must animate despite any host env'
         );
     }
 
     public function testSpringFromConfigConverges(): void
     {
         $config = new SpringConfig(tension: 100.0, friction: 10.0, mass: 1.0);
-        $spring  = $config->springAt60Fps();
+        $spring  = $config->spring();
 
         $pos = 0.0;
         $vel = 0.0;
