@@ -11,6 +11,7 @@ use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Top\Collect\ContainerCollector;
 use SugarCraft\Top\Collect\ContainerInfo;
 use SugarCraft\Top\Collect\Sentinel;
 use SugarCraft\Top\Collect\VmInfo;
@@ -339,6 +340,48 @@ final class CtrPanelTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/\e\[[0-9;]*[34]8;2;/', $sgr, 'no truecolor in tty mode');
         $this->assertStringContainsString('xctr', strip_tags((string) preg_replace('/\e\[[0-9;]*m/', '', $sgr)), 'tty title: plain x');
         PanelPaint::assertGolden($this, 'ctr', 'tty-80x24.sgr.txt', $sgr);
+    }
+
+    public function testTheEmptyBoxNamesItsReason(): void
+    {
+        foreach (['unavailable' => 'No container engine running', 'disabled' => 'Container listing not supported on this platform'] as $reason => $line) {
+            $config = Config::new()->with('shown_boxes', 'cpu ctr proc');
+            $layout = PanelPaint::layout(100, 30, $config, PanelPaint::host());
+            $collector = new class ($reason) implements ContainerCollector {
+                public function __construct(private readonly string $reason)
+                {
+                }
+
+                public function enabled(): bool
+                {
+                    return true;
+                }
+
+                public function due(int $minWindowUs): bool
+                {
+                    return true;
+                }
+
+                public function rebased(): ContainerCollector
+                {
+                    return $this;
+                }
+
+                public function withVms(bool $vms): ContainerCollector
+                {
+                    return $this;
+                }
+
+                public function collect(array $processes, int $memTotal, int $cores, bool $perCore, int $historyCap): array
+                {
+                    return [new ContainerSnapshot([], $memTotal, max(1, $cores), $this->reason), $this];
+                }
+            };
+            $panel = $this->feed(CtrPanel::new(FakeProcList::new(8), $collector), $config, $layout, 2, FakeProcList::new(8));
+            $grid = PanelPaint::grid(PanelPaint::surface($panel, $config, $layout, PanelPaint::host()), $layout->box('ctr') ?? Rect::new(0, 0, 0, 0));
+            $this->assertStringContainsString($line, $grid, $reason . ' renders its own line');
+            $this->assertMatchesRegularExpression('/│\s{8,}' . preg_quote($line, '/') . '/', $grid, $reason . ' line is centred, not left-pinned');
+        }
     }
 
     public function testEmptyHostGolden(): void

@@ -648,6 +648,8 @@ return [
     'ctr.cpu' => 'Cpu',
     'ctr.mem' => 'Mem',
     'ctr.none' => 'No containers found',
+    'ctr.unavailable' => 'No container engine running',
+    'ctr.disabled' => 'Container listing not supported on this platform',
     'help.toggle_ctr' => 'Toggle CTR (containers) box.',
     'help.select_ctr' => 'Select previous/next container in CTR box.',
     // ---- ctr vms + engine detection ----

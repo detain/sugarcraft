@@ -18,6 +18,8 @@ final class ContainerSnapshot
         public readonly array $containers,
         public readonly int $memTotal = Sentinel::UNMEASURED_INT,
         public readonly int $coreCount = 1,
+        /** Why an empty roster is empty: none | unavailable | disabled (candy-top-097). */
+        public readonly ?string $emptyReason = null,
     ) {
     }
 

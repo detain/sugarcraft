@@ -94,7 +94,7 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
     public static function new(Source $procs, ContainerCollector $collector): self
     {
         // A disabled collector (FreeBSD) never samples: show the empty box at once.
-        return new self($procs, $collector, $collector->enabled() ? null : new ContainerSnapshot([]));
+        return new self($procs, $collector, $collector->enabled() ? null : new ContainerSnapshot([], emptyReason: 'disabled'));
     }
 
     /** The roster entry: the platform's ProcList + containers, or the fake fleet. */

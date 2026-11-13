@@ -213,7 +213,13 @@ final class CtrView
             $lc++;
         }
         if ($snapshot !== null && $count === 0) {
-            $r->put(1, 2, Lang::t('ctr.none'), $inactive);
+            // The empty box names its own cause, centred like the ipmi hints.
+            $why = match ($snapshot->emptyReason) {
+                'unavailable' => Lang::t('ctr.unavailable'),
+                'disabled' => Lang::t('ctr.disabled'),
+                default => Lang::t('ctr.none'),
+            };
+            $r->put(\max(1, \intdiv($W - Width::string($why), 2)), 2, $why, $inactive);
         }
 
         // Current selection and number of containers.

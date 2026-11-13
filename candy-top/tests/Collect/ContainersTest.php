@@ -52,6 +52,20 @@ final class ContainersTest extends TestCase
         }
     }
 
+    public function testAnEmptyRosterCarriesItsReason(): void
+    {
+        $collect = fn (array $procs): ?string => Containers::new($this->root . '/none', static fn (): string => '', static fn (): int => 1)
+            ->collect($procs, 0, 4, false, 10)[0]->emptyReason;
+        self::assertSame('unavailable', $collect([]), 'no engine process on the host');
+        self::assertSame('none', $collect([self::namedProc(7, 'dockerd')]), 'engine up, fleet empty');
+        self::assertSame('disabled', Containers::disabled()->collect([], 0, 4, false, 10)[0]->emptyReason, 'a FreeBSD seed says so');
+    }
+
+    private static function namedProc(int $pid, string $name): Process
+    {
+        return new Process($pid, 1, $name, $name, 'root', 0, 'S', 1, 0, 1, 0.0, 0.0);
+    }
+
     public function testTheLibvirtHostListsItsGuestsAsKvm(): void
     {
         // btop parse_cgroup: machine-qemu scopes are VMs, never containers.

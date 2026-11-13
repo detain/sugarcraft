@@ -138,7 +138,7 @@ final class Containers implements ContainerCollector
     {
         $cores = max(1, $cores);
         if (!$this->enabled) {
-            return [new ContainerSnapshot([], $memTotal, $cores), $this];
+            return [new ContainerSnapshot([], $memTotal, $cores, 'disabled'), $this];
         }
         $now = ($this->clock)();
         [$ctrs, $newDocker] = self::group($this->current, $processes, $this->vms);
@@ -182,9 +182,24 @@ final class Containers implements ContainerCollector
         }
 
         return [
-            new ContainerSnapshot($out, $memTotal, $cores),
+            // An empty box says why: an engine on the host but nothing in it
+            // is "none"; no engine process at all is "unavailable" (candy-top-097).
+            new ContainerSnapshot($out, $memTotal, $cores, $out === []
+                ? (self::engineRunning($processes) ? 'none' : 'unavailable')
+                : null),
             new self($this->root, $this->docker, $this->clock, true, $out, $now, $this->vms, $cache),
         ];
+    }
+
+    /** A container engine daemon on the host? (dockerd/containerd/podman/crio.) */
+    private static function engineRunning(array $processes): bool
+    {
+        foreach ($processes as $p) {
+            if (preg_match('/^(dockerd|containerd|podman|crio)/', $p->name) === 1) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
