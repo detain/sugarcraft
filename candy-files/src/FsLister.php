@@ -82,6 +82,9 @@ final class FsLister
                     isHidden:   str_starts_with($name, '.'),
                     linkTarget: $linkTarget,
                     linkBroken: $linkBroken,
+                    mode:       (int) $mode,
+                    uid:        (int) $stat['uid'],
+                    gid:        (int) $stat['gid'],
                 );
             }
             return $out;

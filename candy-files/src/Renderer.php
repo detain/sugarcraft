@@ -22,6 +22,11 @@ use SugarCraft\Files\Support\GlyphSet;
  */
 final class Renderer
 {
+    /** CF-52: terminal width at which each pane row gains its mtime column. */
+    private const DATE_MIN_COLS = 100;
+    /** CF-52: cells of `YYYY-MM-DD HH:MM`. */
+    private const DATE_CELLS = 16;
+
     public static function render(Manager $m): string
     {
         // CF-35: one tier decision per frame; every chrome
@@ -67,7 +72,10 @@ final class Renderer
             ? self::keyHelp($m->termCols, Width::of($focus), $glyphs, $rtl)
             : $m->status;
         $status = $focus . ' ' . Bidi::pinSeparator($glyphs->sep, $rtl) . ' ' . $rest;
-        if ($m->helpMode) {
+        if ($m->infoLines !== null) {
+            // CF-52: stat overlay, same frame-replacement contract as help.
+            $frame = self::renderInfo($m) . "\n" . self::statusBar($status);
+        } elseif ($m->helpMode) {
             // CF-28 (closes 041): the overlay replaces the browse frame —
             // the table is the whole point of the frame. The status line
             // stays so the focus cue survives; renderHelp windows the
@@ -168,7 +176,12 @@ final class Renderer
         // name column absorbs the difference: row overhead is 4 cells
         // (arrow, marker, two gaps) plus this size field.
         $sizeCol = max(7, Width::of(Lang::t('size.dir')), Width::of(Lang::t('size.link')));
-        $nameCol = max(10, $inner - 4 - $sizeCol);
+        // CF-52: the mtime column is a width-tiered luxury (CF-12 law): it
+        // only appears once the terminal is wide enough that the name column
+        // keeps >= 17 cells after paying for it. No live width (unit shape)
+        // and narrow terminals keep the historical row bytes exactly.
+        $dateCol = $termCols >= self::DATE_MIN_COLS ? self::DATE_CELLS + 1 : 0;
+        $nameCol = max(10, $inner - 4 - $sizeCol - $dateCol);
         $headCap = max(6, $inner - 6);           // '  [sort]' tail keeps 6 cells
 
         // CF-35: the ascii tier has no thick variant to lean on (box
@@ -229,9 +242,13 @@ final class Renderer
             // Cell-accurate columns: `%-26s`/`%7s` padded bytes, which
             // drifts for every double-width (CJK/emoji) name and for the
             // localized size tokens CF-16 introduces.
+            $date = '';
+            if ($dateCol > 0) {
+                $date = ' ' . Width::padRight($entry->mtime > 0 ? date('Y-m-d H:i', $entry->mtime) : '', self::DATE_CELLS);
+            }
             $rows[] = $arrow . $marker . ' '
                 . Width::padRight(self::truncate($name, $nameCol, $glyphs), $nameCol) . ' '
-                . Width::padRight($size, $sizeCol);
+                . Width::padRight($size, $sizeCol) . $date;
         }
         if ($below > 0) {
             $rows[] = '  ' . $glyphs->down . ' ' . Lang::t('pane.more_below', ['count' => $below]);
@@ -339,6 +356,25 @@ final class Renderer
         $lines[] = '';
         $lines[] = ' ' . Lang::t('help.dismiss');
         return implode("\n", $lines) . "\n\n";
+    }
+
+    /**
+     * CF-52: the `I` overlay. Lines were composed (localized, sanitized)
+     * by Manager::openInfo; this only titles, windows to the live height
+     * and appends the dismiss hint.
+     */
+    private static function renderInfo(Manager $m): string
+    {
+        $lines = $m->infoLines ?? [];
+        $capacity = $m->termRows > 0 ? max(1, $m->termRows - 5) : count($lines);
+        $lines = array_slice($lines, 0, $capacity);
+        $out = [Ansi::sgr(Ansi::BOLD) . Lang::t('info.title') . Ansi::reset()];
+        foreach ($lines as $line) {
+            $out[] = ' ' . $line;
+        }
+        $out[] = '';
+        $out[] = ' ' . Lang::t('info.dismiss');
+        return implode("\n", $out) . "\n\n";
     }
 
     private static function renderSearch(Manager $m): string

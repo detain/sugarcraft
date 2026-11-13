@@ -132,6 +132,8 @@ final class Manager implements Model
         public readonly array $dirMarks = [],
         /** CF-39: memo slot-dropper wired by start()/build(); null when the seam answers raw. */
         public readonly ?\Closure $listerInvalidator = null,
+        /** CF-52: the `I` stat overlay — pre-localized detail lines computed at open time (update, never view); null = closed. */
+        public readonly ?array $infoLines = null,
     ) {
         // The lister arrives exactly as the seam decided it (start() and
         // ManagerBuilder::build() are the memoized production paths);
@@ -279,6 +281,15 @@ final class Manager implements Model
         if ($this->helpMode) {
             if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === '?')) {
                 return [$this->mutate(['helpMode' => false]), null];
+            }
+            return [$this, null];
+        }
+
+        // CF-52: the stat overlay is a frame like help — it swallows every
+        // key but its own dismissal (Esc or the chord that opened it).
+        if ($this->infoLines !== null) {
+            if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === 'I')) {
+                return [$this->mutate(['infoLines' => null]), null];
             }
             return [$this, null];
         }
@@ -599,6 +610,9 @@ final class Manager implements Model
                 => $this->armMkdir(),
             $plain && $msg->rune === 'r'
                 => $this->refresh(),
+            // CF-52: full metadata for the entry under the cursor.
+            $plain && $msg->rune === 'I'
+                => $this->openInfo(),
             // Escape (outside search/confirm — those consume it earlier):
             // clear the multi-select. Before this arm existed,
             // Pane::clearSelection() had no production caller at all, so a
@@ -883,6 +897,55 @@ final class Manager implements Model
         $head = fread($fh, 8192);
         fclose($fh);
         return !is_string($head) || str_contains($head, "\x00");
+    }
+
+    /**
+     * CF-52: build the `I` overlay for the entry under the cursor (the
+     * pane's own directory when the cursor sits on `..` or the pane is
+     * empty). Everything is read HERE, in update(), with a fresh lstat —
+     * the listing's cached size/mtime can be stale by design (CF-39), and
+     * view() must stay a pure function of the Model. Lines arrive already
+     * localized and sanitized; the Renderer only lays them out.
+     */
+    private function openInfo(): self
+    {
+        $pane = $this->activePane();
+        $entry = $pane->currentEntry();
+        $full = $entry === null || $entry->isParentSentinel()
+            ? $pane->cwd
+            : Pane::join($pane->cwd, $entry->name);
+        $st = @lstat($full);
+        if ($st === false) {
+            return $this->withStatus(Lang::t('status.info_failed', ['name' => Entry::sanitizeName($full)]));
+        }
+        $mode = (int) $st['mode'];
+        $isLink = ($mode & 0170000) === 0120000;
+        $isDir = $isLink ? is_dir($full) : ($mode & 0170000) === 0040000;
+        $typeLabel = $isLink ? Lang::t('info.type_link') : ($isDir ? Lang::t('info.type_dir') : Lang::t('info.type_file'));
+        $fmt = static fn(int $ts): string => date('Y-m-d H:i:s', $ts);
+        $uid = (int) $st['uid'];
+        $gid = (int) $st['gid'];
+        $owner = function_exists('posix_getpwuid') ? (posix_getpwuid($uid)['name'] ?? (string) $uid) : (string) $uid;
+        $group = function_exists('posix_getgrgid') ? (posix_getgrgid($gid)['name'] ?? (string) $gid) : (string) $gid;
+        $size = (int) $st['size'];
+        $lines = [
+            Lang::t('info.path') . ': ' . Entry::sanitizeName($full),
+            Lang::t('info.type') . ': ' . $typeLabel,
+            Lang::t('info.size') . ': ' . Entry::humanSize($size) . ' (' . $size . ' B)',
+            Lang::t('info.mode') . ': ' . Entry::symbolicMode($mode) . sprintf(' (%04o)', $mode & 07777),
+            Lang::t('info.owner') . ': ' . Entry::sanitizeName($owner . ':' . $group),
+            Lang::t('info.modified') . ': ' . $fmt((int) $st['mtime']),
+            Lang::t('info.accessed') . ': ' . $fmt((int) $st['atime']),
+        ];
+        if ($isLink) {
+            $target = @readlink($full);
+            $lines[] = Lang::t('info.target') . ': ' . Entry::sanitizeName($target === false ? '' : $target);
+        }
+        $free = @disk_free_space($isDir ? $full : dirname($full));
+        if ($free !== false) {
+            $lines[] = Lang::t('info.free') . ': ' . Entry::humanSize($free);
+        }
+        return $this->mutate(['infoLines' => $lines, 'status' => '']);
     }
 
     private function goUp(): self

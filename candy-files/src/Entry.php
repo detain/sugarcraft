@@ -30,6 +30,12 @@ final class Entry
         public readonly string $linkTarget = '',
         /** True when the link's target does not resolve at scan time (CF-45, closes 081). */
         public readonly bool   $linkBroken = false,
+        /** CF-52: raw st_mode (type + permission bits) from lstat; 0 when the lister could not say. */
+        public readonly int    $mode = 0,
+        /** CF-52: owner uid from lstat; -1 when unknown (fake listers, non-POSIX). */
+        public readonly int    $uid = -1,
+        /** CF-52: group gid from lstat; -1 when unknown. */
+        public readonly int    $gid = -1,
     ) {}
 
     public static function parent(): self
@@ -61,9 +67,18 @@ final class Entry
         if ($this->isDir) {
             return Lang::t('size.dir');
         }
+        return self::humanSize($this->size);
+    }
+
+    /**
+     * Compact byte count (B/KB/MB/GB/TB, language-neutral units). Shared by
+     * the size column and the CF-52 info overlay's size / free-space lines.
+     */
+    public static function humanSize(int|float $bytes): string
+    {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $i = 0;
-        $n = (float) $this->size;
+        $n = (float) $bytes;
         $unitCount = count($units);
         while ($n >= 1024 && $i < $unitCount - 1) {
             $n /= 1024;
@@ -72,6 +87,40 @@ final class Entry
         return $i === 0
             ? sprintf('%dB',  (int) $n)
             : sprintf('%.1f%s', $n, $units[$i]);
+    }
+
+    /**
+     * CF-52: ls-style symbolic mode (`drwxr-xr-x`) from a raw st_mode,
+     * including setuid/setgid/sticky in the x slot the way ls prints them.
+     */
+    public static function symbolicMode(int $mode): string
+    {
+        $type = match ($mode & 0170000) {
+            0040000 => 'd',
+            0120000 => 'l',
+            0100000 => '-',
+            0060000 => 'b',
+            0020000 => 'c',
+            0010000 => 'p',
+            0140000 => 's',
+            default => '?',
+        };
+        $out = $type;
+        $special = [0004000, 0002000, 0001000];
+        for ($triad = 0; $triad < 3; $triad++) {
+            $shift = 6 - 3 * $triad;
+            $out .= ($mode >> $shift) & 4 ? 'r' : '-';
+            $out .= ($mode >> $shift) & 2 ? 'w' : '-';
+            $x = ($mode >> $shift) & 1;
+            $sp = ($mode & $special[$triad]) !== 0;
+            $out .= match (true) {
+                $sp && $x === 1 => $triad === 2 ? 't' : 's',
+                $sp => $triad === 2 ? 'T' : 'S',
+                $x === 1 => 'x',
+                default => '-',
+            };
+        }
+        return $out;
     }
 
     /**

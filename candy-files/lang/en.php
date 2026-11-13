@@ -76,7 +76,7 @@ return [
     'undo.copy'   => 'items copied: {count}',
 
     // Key help
-    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern',
+    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · e ext · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern · I info',
     'keyhelp.terse' => 'Tab swap · ↑↓ jk move · Enter open · l view · ← h up · space select · s sort · e ext · c copy · m move · R rename · d delete · q quit · / search · u/^z undo · ^y redo',
     'keyhelp.minimal' => 'Enter open · l view · q quit · / search',
     'help.title' => '{count} key bindings',
@@ -124,4 +124,19 @@ Usage:
     'cli.reason_missing' => 'does not exist',
     'cli.reason_unreadable' => 'is not readable',
     'status.deleted_trash_hint' => 'moved to session trash — deleted forever when you quit (u restores until then)',
+    'info.title' => 'File information',
+    'info.path' => 'Path',
+    'info.type' => 'Type',
+    'info.type_file' => 'file',
+    'info.type_dir' => 'directory',
+    'info.type_link' => 'symbolic link',
+    'info.size' => 'Size',
+    'info.mode' => 'Permissions',
+    'info.owner' => 'Owner',
+    'info.modified' => 'Modified',
+    'info.accessed' => 'Accessed',
+    'info.target' => 'Link target',
+    'info.free' => 'Free space',
+    'info.dismiss' => 'I or Esc closes',
+    'status.info_failed' => 'cannot read info for {name}',
 ];

@@ -135,6 +135,7 @@ naming `sugar-core`.
 | `N`             | Create a directory in the active pane through the text-entry mode (see Modes); `u` removes it again while it is empty |
 | `d`             | Delete (selection or cursor); arms the confirm gate (see Modes) |
 | `r`             | Refresh active pane                                       |
+| `I`             | Info overlay (CF-52) for the entry under the cursor (the pane's own directory on `..`): path, type, size in bytes, permissions (`drwxr-xr-x` + octal), owner:group, modified / accessed times, link target and the filesystem's free space — read fresh with `lstat` when the key is pressed. `I` or `Esc` closes it |
 | `q`             | Quit; while copy batches are in flight the first press only arms the question ("press q again") and any other key drops it |
 | `?`             | Toggle the help overlay (see Modes)                       |
 | `/`             | Start search mode over the active pane's listing (see Modes) |
@@ -148,6 +149,10 @@ naming `sugar-core`.
 | `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — standard terminal emulators report the modified Page keys unambiguously (tmux/browser terminals may intercept them) |
 | `u` / `Ctrl+z`  | Undo last operation                                      |
 | `Ctrl+y`        | Redo last undone operation                               |
+
+At 100 columns and wider each pane row also carries a modification-time column
+(`YYYY-MM-DD HH:MM`); narrower terminals keep the name and size columns only
+(the same width-tier law as the key-help line).
 
 Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and
 `^tab` is Ctrl+Tab. That in-app line is a partial cheat sheet; the full binding table is
@@ -339,7 +344,7 @@ reads through `FsLister`.
 
 ## Test plan
 
-- 443 tests / 6871 assertions — this pair is hand-typed: candy-files runs its
+- 455 tests / 7636 assertions — this pair is hand-typed: candy-files runs its
   suite lib-local and its totals are not part of the repository-wide pinned
   count, so re-derive them by running `vendor/bin/phpunit` in this directory
   whenever tests change.
