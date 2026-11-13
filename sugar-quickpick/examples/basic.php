@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * SugarQuickpick — basic fuzzy finder demo.
+ * sugar-quickpick — basic fuzzy finder demo.
  *
  * Run: php examples/basic.php
  */
@@ -26,7 +26,7 @@ $bg = \implode("\n", $bgLines);
 
 echo "=== Background view ===\n{$bg}\n\n";
 
-// Show hermit
+// Show the picker overlay
 $h = QuickPick::new($items)
     ->setPrompt('Filter: ')
     ->setMatchStyle("\x1b[33m")
