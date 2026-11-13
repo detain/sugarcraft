@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Layout;
 
 /**
  * Immutable value object representing a split pane layout.
@@ -187,7 +188,7 @@ final class SplitLayout
         $bottomLines = $this->truncateToHeight($this->bottomOrRightContent, $bottomHeight);
 
         // Build divider line
-        $divider = str_repeat($this->direction->divider(), $width);
+        $divider = Layout::tile($this->direction->divider(), $width);
 
         // Compose: top pane, divider, bottom pane
         $output = $topLines;
@@ -220,45 +221,27 @@ final class SplitLayout
             return $leftContent;
         }
 
-        // Split each pane's content into lines
-        $leftLines = explode("\n", $leftContent);
-        $rightLines = explode("\n", $rightContent);
+        // Width::padRight (inside the join) counts cells, never bytes: str_pad
+        // ate pad it did not occupy for every multibyte glyph and dragged the
+        // divider left. The left pane is padded to its ALLOCATED width first
+        // so the divider column holds even when its content is narrower.
+        $leftBlock = implode("\n", array_map(
+            static fn (string $line): string => Width::padRight($line, $leftWidth),
+            explode("\n", $leftContent),
+        ));
 
-        $maxLines = max(count($leftLines), count($rightLines));
-        $divider = $this->direction->divider();
+        // Layout's divider-aware join (rider R13); the rational resize algebra
+        // that chose the widths stays here. The library drops the rule beside
+        // an EMPTY block (a collapsed pane leaves no orphan rule); a split
+        // whose pane has width keeps its divider even with nothing in it, so
+        // an empty right pane is joined to an explicit rule column instead.
+        if ($rightContent === '') {
+            $rule = implode("\n", array_fill(0, Layout::height($leftBlock), $this->direction->divider()));
 
-        $outputLines = [];
-        for ($i = 0; $i < $maxLines; $i++) {
-            $leftLine = $leftLines[$i] ?? '';
-            $rightLine = $rightLines[$i] ?? '';
-
-            // Truncate each line to its pane width
-            $leftLine = $this->truncateToWidth($leftLine, $leftWidth);
-            $rightLine = $this->truncateToWidth($rightLine, $rightWidth);
-
-            // Pad left line to full width, then add divider and right line.
-            //
-            // Width::padRight(), not str_pad(): the pad has to be counted in
-            // the same unit the truncation above already counts in, and
-            // str_pad() counts BYTES. Every multibyte character therefore ate
-            // pad it did not occupy and dragged the divider left -- two
-            // columns for "ee" spelled with acute accents (2 cells, 4 bytes),
-            // one for a CJK glyph (2 cells, 3 bytes). Note that the accented
-            // case is multibyte WITHOUT being wide, so reaching for
-            // mb_strlen() here would fix it and leave the CJK case broken;
-            // only a cell-width measure fixes both.
-            //
-            // The error was always UNDER-padding (bytes >= cells for UTF-8),
-            // so no row was ever over-wide -- and padRight() is a no-op once
-            // the line already meets the width, so widening the pad cannot
-            // make one now. That matters: the diff renderer paints one line
-            // per terminal row, so an over-wide row corrupts the frame.
-            $outputLines[] = Width::padRight($leftLine, $leftWidth)
-                . $divider
-                . $rightLine;
+            return Layout::joinHorizontal(0.0, $leftBlock, $rule);
         }
 
-        return implode("\n", $outputLines);
+        return Layout::joinHorizontalWithDivider(0.0, $this->direction->divider(), $leftBlock, $rightContent);
     }
 
     /**

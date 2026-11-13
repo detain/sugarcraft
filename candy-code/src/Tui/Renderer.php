@@ -1963,60 +1963,39 @@ final class Renderer
         return '';
     }
 
+    // The block algebra (width / height / head-tail-width clips) is
+    // sugar-style's Layout (rider R13); these stay as the renderer's short
+    // names for it. Row clips keep their invariant: the cut is ANSI-aware,
+    // so clipping a styled line cannot leak its colour onto the rest of the
+    // screen (invariant 3 on renderView()).
+
     /** Visible width of the widest line in a rendered block ('' is 0 wide). */
     private static function blockWidth(string $block): int
     {
-        if ($block === '') {
-            return 0;
-        }
-
-        $widest = 0;
-        foreach (explode("\n", $block) as $line) {
-            $widest = max($widest, Width::string($line));
-        }
-
-        return $widest;
+        return Layout::width($block);
     }
 
     private static function lineCount(string $block): int
     {
-        return substr_count($block, "\n") + 1;
+        return Layout::height($block);
     }
 
     /** Keep at most $rows lines from the TOP of $block. */
     private static function clipHead(string $block, int $rows): string
     {
-        $lines = explode("\n", $block);
-
-        return count($lines) <= $rows ? $block : implode("\n", array_slice($lines, 0, $rows));
+        return Layout::clipHead($block, $rows);
     }
 
-    /**
-     * Keep at most $cols visible cells of every line in $block.
-     *
-     * The row clip's twin (see invariant 3 on {@see renderView()}). Truncation
-     * is ANSI-aware — escape sequences carry no width and a trailing SGR reset
-     * survives the cut — so clipping a styled line cannot leak its colour onto
-     * the rest of the screen.
-     */
+    /** Keep at most $cols visible cells of every line in $block. */
     private static function clipWidth(string $block, int $cols): string
     {
-        $lines = explode("\n", $block);
-        foreach ($lines as $i => $line) {
-            if (Width::string($line) > $cols) {
-                $lines[$i] = Width::truncateAnsi($line, $cols);
-            }
-        }
-
-        return implode("\n", $lines);
+        return Layout::clipWidth($block, $cols);
     }
 
     /** Keep at most $rows lines from the BOTTOM of $block. */
     private static function clipTail(string $block, int $rows): string
     {
-        $lines = explode("\n", $block);
-
-        return count($lines) <= $rows ? $block : implode("\n", array_slice($lines, -$rows));
+        return Layout::clipTail($block, $rows);
     }
 
     /**
