@@ -145,6 +145,67 @@ final class StdioPipeBacklogCapTest extends TestCase
         $this->assertSame($blob, (string) \file_get_contents($this->tmpDir . '/blob-out.txt'));
     }
 
+    /**
+     * S04 (finding 004): the REVERSE direction gets the cap the stdin
+     * side already had. A client that never reads its socket must not be
+     * able to make the pump buffer a child's entire (potentially
+     * gigabyte) answer in parent memory: at the cap the fread pauses, the
+     * child blocks on its stdout pipe, and the byte-less idle window ends
+     * the session through the reap ladder. 64 MiB of /dev/zero through an
+     * 16 MiB cap into an unread socketpair — the pre-fix shape buffered
+     * the whole 64 MiB; the capped shape must refuse to grow and must
+     * FAIL the session (killed child, non-zero exit) well inside the
+     * ceiling. The healthy path (client reading, pile under cap) is the
+     * existing multi-chunk round-trip pin above.
+     */
+    public function testUnreadChildAnswerIsCappedAndEndsOnTheIdleLadder(): void
+    {
+        $in = $this->readPointer('quiet-in.txt');          // EOF input immediately
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        // $out is WRITTEN by the pump but never READ: the client side that
+        // stopped consuming. ~200 KiB of socket buffer is all that drains.
+        [$muteNear, $clientEnd] = $pair;
+
+        $started = \microtime(true);
+        $code = StdioPipe::run(
+            $in,
+            $clientEnd,
+            ['head', '-c', (string) (64 * 1048576), '/dev/zero'],
+            \sys_get_temp_dir(),
+            '',
+            1.0, // squeeze the idle give-up so the pin measures teardown, not the 10 s window
+        );
+        $elapsed = \microtime(true) - $started;
+
+        $this->assertNotSame(0, $code, 'a stalled reader ends the session on the ladder, not a clean zero');
+        $this->assertLessThan(8.0, $elapsed, 'cap + idle ladder must end the stall within the census ceiling');
+
+        \fclose($in);
+        \fclose($muteNear);
+        \fclose($clientEnd);
+    }
+
+    /**
+     * S04 structural: the child→client read must be GATED at the backlog
+     * cap in source — the ordering (gate before the fread on pipes[1]) is
+     * the whole fix, and a future reshuffle back to drain-at-any-cost
+     * must go red here, not in a 64 MiB buffer under production load.
+     */
+    public function testTheChildOutboundReadIsGatedAtTheCapInSource(): void
+    {
+        $src = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Git/StdioPipe.php');
+
+        $gate = \strpos($src, 'strlen($pendingOut) <= self::PENDING_TO_CHILD_MAX_BYTES');
+        $this->assertIsInt($gate, 'the child->client backlog gate must exist');
+
+        $readBranch = \strpos($src, 'if (!$childOutDone && \\in_array($pipes[1]');
+        $firstOutFread = \strpos($src, 'fread($pipes[1]');
+        $this->assertIsInt($readBranch);
+        $this->assertIsInt($firstOutFread);
+        $this->assertLessThan($firstOutFread, $gate, 'the cap must be consulted BEFORE the stdout is drained');
+    }
+
     /** @return resource a readable pointer over a freshly written file */
     private function readPointer(string $name, string $contents = '')
     {

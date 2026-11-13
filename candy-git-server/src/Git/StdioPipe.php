@@ -47,14 +47,19 @@ final class StdioPipe
     public const STDERR_TAIL_BYTES = 8192;
 
     /**
-     * Ceiling on the client→child stdin backlog held in memory while the
-     * child's pipe refuses more bytes. A healthy child drains its stdin
-     * continuously, so the pile never grows past roughly one pipe buffer;
-     * a sustained multi-megabyte backlog means the child stopped consuming
-     * (wedged or hostile). Left uncapped, the pile grows until the hard
-     * wall-clock stop — a memory-exhaustion vector on the authenticated
-     * push path, where a client can stream gigabytes regardless of what
-     * the repository ever was. This is a MEMORY bound, not a timeout.
+     * Ceiling on the backlog held in memory in EITHER direction while the
+     * receiver refuses more bytes. client→child: a healthy child drains
+     * its stdin continuously, so the pile never grows past roughly one
+     * pipe buffer; a sustained multi-megabyte backlog means the child
+     * stopped consuming (wedged or hostile). child→client (S04, finding
+     * 004): a client that stops reading must likewise never pin the
+     * unflushed stdout tail beyond this line — the pump stops draining the
+     * child at the cap, the child blocks on its own stdout pipe, and the
+     * idle ladder ends the session. Left uncapped in either direction the
+     * pile grows until the hard wall-clock stop — a memory-exhaustion
+     * vector on the authenticated push path, where a client can stream
+     * gigabytes regardless of what the repository ever was. This is a
+     * MEMORY bound, not a timeout.
      */
     public const PENDING_TO_CHILD_MAX_BYTES = 16 * 1024 * 1024;
 
@@ -234,8 +239,21 @@ final class StdioPipe
                     }
                 }
 
-                // Child stdout -> client (buffer only the unflushed tail)
-                if (!$childOutDone && \in_array($pipes[1], $readCopy, true)) {
+                // Child stdout -> client (buffer only the unflushed tail).
+                // S04 (finding 004): the read is GATED at the backlog cap.
+                // A client that stops reading used to have its whole
+                // answer pile up here — unbounded — while the pump kept
+                // emptying the child into it. Above the cap the fread
+                // pauses, the child blocks on its own stdout pipe (the
+                // correct git backpressure), the byte-less idle window
+                // expires the session through the reap ladder below, and
+                // the resident memory never crosses one more chunk. A
+                // client that RESUMES is not deadlocked: the write-out leg
+                // below keeps draining, its catch-up reset empties the
+                // pile, and the gate reopens.
+                if (!$childOutDone && \in_array($pipes[1], $readCopy, true)
+                    && \strlen($pendingOut) <= self::PENDING_TO_CHILD_MAX_BYTES
+                ) {
                     $chunk = @\fread($pipes[1], self::CHUNK_BYTES);
                     if ($chunk === false || $chunk === '') {
                         if (@\feof($pipes[1])) {
