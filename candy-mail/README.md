@@ -319,6 +319,21 @@ the flags `--helo/--ca-file/--timeout` override their env rows when passed.
 Differentiated refusal codes per failure class remain a separate open
 CONV/CLI decision; until then, script authors branch on 0 vs 1 only.
 
+### What a success actually means
+
+A send that returns 0 (and prints `✓ Email sent via …`) means the message was
+**accepted by the transport for delivery**, not that it reached an inbox: on
+SMTP the 250 after the DATA terminator is the relay queueing the mail, on
+Resend the API reply is an accept, and in both cases bounces and rejections
+arrive later, out-of-band, at the envelope sender. `quit()` deliberately
+swallows farewell errors — by then the message is already queued, and a
+protocol blip during the goodbye must not latch a false failure over a
+successful accept. For CI, `--render` is the pre-flight wire check: it prints
+the exact MIME document without dialling anything. (The success banner's
+literal value stays "Email sent" in all 16 catalogs — renaming it churns
+every translation for a wording win the README now carries honestly; decision
+recorded here per CM-18.)
+
 Error **messages** follow the standard `LC_ALL`/`LC_MESSAGES`/`LANG` environment (16
 locales ship); the usage/help text is English by design. Examples under `examples/`
 are offline-safe: without real credentials they print the composed message instead of
