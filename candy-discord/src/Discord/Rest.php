@@ -8,6 +8,7 @@ use CandyCode\Bundles\Discord\Support\Log;
 use Psr\Http\Message\ResponseInterface;
 use React\Http\Browser;
 use React\Http\Message\Response;
+use SugarCraft\Code\Protocol\JsonRpc;
 
 /**
  * Discord REST v10 (https://discord.com/developers/docs/reference#api-versioning
@@ -211,9 +212,21 @@ final class Rest
                 if ($raw === '' || $status === 204) {
                     return [];
                 }
-                $decoded = \json_decode($raw, true);
+                try {
+                    $decoded = \json_decode($raw, true, JsonRpc::MAX_DEPTH, \JSON_THROW_ON_ERROR);
+                } catch (\JsonException $e) {
+                    // Corrupt-but-nonempty is a failure, not an empty result:
+                    // the caller must see the path, not a silent [].
+                    throw new RestException("discord {$method} {$path} returned a malformed body: {$e->getMessage()}", $status, 0, $e);
+                }
+                if (!\is_array($decoded)) {
+                    // Every REST payload anyone consumes is an object or a
+                    // list; a 2xx carrying a JSON scalar is corrupt in shape
+                    // even when it decodes.
+                    throw new RestException("discord {$method} {$path} returned a non-array body", $status);
+                }
 
-                return \is_array($decoded) ? $decoded : [];
+                return $decoded;
             },
             function (\Throwable $e) use ($method, $path): never {
                 $this->log->warn('discord_rest_failed', ['path' => $path, 'error' => $e->getMessage()]);

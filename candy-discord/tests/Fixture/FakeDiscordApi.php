@@ -41,6 +41,9 @@ final class FakeDiscordApi
      */
     public ?int $failAllWith = null;
 
+    /** @var ?string raw bytes to answer the NEXT request with, as a 200 body (malformed-decode tests) */
+    public ?string $rawNextBody = null;
+
     private ?SocketServer $server = null;
 
     public function __construct(private readonly LoopInterface $loop) {}
@@ -113,6 +116,13 @@ final class FakeDiscordApi
             }
             if ($this->failAllWith !== null) {
                 $connection->end($this->frame($this->failAllWith, '{}'));
+
+                return;
+            }
+            if ($this->rawNextBody !== null) {
+                $raw = $this->rawNextBody;
+                $this->rawNextBody = null;
+                $connection->end($this->frame(200, $raw));
 
                 return;
             }

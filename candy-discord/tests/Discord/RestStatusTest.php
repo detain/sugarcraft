@@ -105,6 +105,35 @@ final class RestStatusTest extends TestCase
         self::assertStringContainsString('discord 404 on DELETE /applications/app-9/commands/cmd1', $error->getMessage());
     }
 
+    public function testATwoHundredWithAMalformedBodyThrowsNamingTheMethodAndPath(): void
+    {
+        $this->api->rawNextBody = '{"id": '; // corrupt-but-nonempty: no more silent []
+
+        $error = null;
+        $this->rest()->get('/channels/42/messages')->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+        $this->settle();
+
+        self::assertInstanceOf(RestException::class, $error);
+        self::assertStringContainsString('discord GET /channels/42/messages returned a malformed body', $error->getMessage());
+        self::assertSame(200, $error->status);
+    }
+
+    public function testATwoHundredCarryingAJsonScalarIsRefusedAsNonArray(): void
+    {
+        $this->api->rawNextBody = '5';
+
+        $error = null;
+        $this->rest()->get('/applications/app-9')->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+        $this->settle();
+
+        self::assertInstanceOf(RestException::class, $error);
+        self::assertStringContainsString('discord GET /applications/app-9 returned a non-array body', $error->getMessage());
+    }
+
     private function rest(): Rest
     {
         return new Rest('tok', Log::silent(), 'http://127.0.0.1:' . $this->port);
