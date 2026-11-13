@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Clock;
+
 /**
  * THE ONE CONTAINMENT CHOKE POINT for every `proc_open()` in this package.
  *
@@ -403,53 +406,16 @@ final class ProcessContainment
         }
 
         $pid = \proc_get_status($probe)['pid'];
-        $deadline = \hrtime(true) + 2_000_000_000;
-
-        $report = '';
-        $open = [1 => $pipes[1], 2 => $pipes[2]];
-        while ($open !== []) {
-            $now = \hrtime(true);
-            if ($now >= $deadline) {
-                break;
-            }
-
-            /*
-             * stream_select REWRITES the array it is handed down to the
-             * streams that became ready \u2014 a pass with no data empties
-             * it. $open is the master list and every selection runs on a
-             * fresh copy of it; handed the master directly, the first
-             * no-data timeout would end the drain with the witness still
-             * in flight (LANE-CC roundtrip #2, caught by the Linux gate
-             * refusing every correctly wrapped arm).
-             */
-            $readable = $open;
-            $write = $except = null;
-            $micros = (int) min(50_000, ($deadline - $now) / 1000);
-
-            if (@\stream_select($readable, $write, $except, 0, $micros) === false) {
-                break;
-            }
-
-            foreach ($readable as $stream) {
-                $chunk = @\fread($stream, 4096);
-
-                if ($chunk === false) {
-                    continue;
-                }
-
-                $report .= $chunk;
-
-                if (\strlen($report) >= 4_096) {
-                    break 2;
-                }
-            }
-
-            foreach ($open as $key => $stream) {
-                if (@\feof($stream)) {
-                    unset($open[$key]);
-                }
-            }
-        }
+        // S-L02 (R4): the witness read is sugar-async's ChildPump — both pipes,
+        // 2 s, stopped once a stream holds the 4 KiB report ceiling (the
+        // witness is one short line; anything longer is not a witness).
+        $drain = ChildPump::drain(
+            [1 => $pipes[1], 2 => $pipes[2]],
+            Clock::monotonicSeconds() + 2.0,
+            4_096,
+            stopAtCap: true,
+        );
+        $report = $drain->buffer(1) . $drain->buffer(2);
 
         \fclose($pipes[0]);
         \fclose($pipes[1]);

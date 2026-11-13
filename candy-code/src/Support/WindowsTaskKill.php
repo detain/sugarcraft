@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Clock;
+
 /**
  * The Windows tree-kill: `taskkill /T /F /PID <pid>` as a short-lived child.
  *
@@ -159,42 +162,24 @@ final class WindowsTaskKill
         // sees EOF rather than a pipe held open by the teardown.
         \fclose($pipes[0]);
 
-        $deadline = \hrtime(true) + (int) (self::childBoundSeconds() * 1_000_000_000);
-        $open = [$pipes[1], $pipes[2]];
-        while ($open !== []) {
-            $read = [];
-            foreach ($open as $index => $stream) {
-                if (\feof($stream)) {
-                    \fclose($stream);
-                    unset($open[$index]);
-
-                    continue;
-                }
-                $read[] = $stream;
-            }
-            if ($open === []) {
-                break;
-            }
-            if (\hrtime(true) >= $deadline) {
-                // Wedged killer: stop it, drain-close, and let the exit
-                // status below report the failure honestly.
-                \proc_terminate($process, 9);
-                break;
-            }
-            $write = null;
-            $except = null;
-            if (@\stream_select($read, $write, $except, 0, 100_000) > 0) {
-                foreach ($read as $stream) {
-                    // Reading to EOF keeps the child unblocked on its
-                    // (small) output; the bytes themselves are nobody's
-                    // business — taskkill's verdict is its exit status.
-                    \fread($stream, 8192);
-                }
-            }
+        // S-L02 (R4): drain-and-discard to EOF under the child bound — taskkill's
+        // verdict is its exit status, its bytes are nobody's business. A wedged
+        // killer (deadline passed with a pipe still open) is stopped; the exit
+        // status below then reports the failure honestly.
+        $drain = ChildPump::drain(
+            [1 => $pipes[1], 2 => $pipes[2]],
+            Clock::monotonicSeconds() + self::childBoundSeconds(),
+            0,
+            discard: [1, 2],
+        );
+        if (!$drain->closed()) {
+            \proc_terminate($process, 9);
         }
 
-        foreach ($open as $stream) {
-            \fclose($stream);
+        foreach ([$pipes[1], $pipes[2]] as $stream) {
+            if (\is_resource($stream)) {
+                \fclose($stream);
+            }
         }
 
         return \proc_close($process) === 0;

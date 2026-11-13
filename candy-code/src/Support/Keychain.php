@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\Clock;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Lang;
@@ -385,43 +387,21 @@ final class Keychain
             \fclose($pipes[0]);
         }
 
-        \stream_set_blocking($pipes[1], false);
-        \stream_set_blocking($pipes[2], false);
-
-        $deadline = \microtime(true) + (self::$timeoutOverride ?? self::TIMEOUT_SECONDS);
-        $stdout = '';
-        $overflowed = false;
-        $timedOut = false;
-        while (!\feof($pipes[1]) || !\feof($pipes[2])) {
-            $remainingUs = (int) (($deadline - \microtime(true)) * 1000000);
-            if ($remainingUs <= 0) {
-                $timedOut = true;
-                break;
-            }
-            $read = [$pipes[1], $pipes[2]];
-            $writing = null;
-            $except = null;
-            if (@\stream_select($read, $writing, $except, intdiv($remainingUs, 1000000), $remainingUs % 1000000) === false) {
-                continue;
-            }
-            foreach ($read as $stream) {
-                $chunk = \fread($stream, 8192);
-                if ($chunk === false || $chunk === '') {
-                    continue;
-                }
-                if ($stream === $pipes[1]) {
-                    if (\strlen($stdout) >= self::MAX_STDOUT_BYTES) {
-                        $overflowed = true;
-                    } else {
-                        $stdout .= $chunk;
-                    }
-                } else {
-                    // stderr belongs to the backend's own diagnostics; the
-                    // exit code is the verdict, the text is not.
-                    continue;
-                }
-            }
-        }
+        // S-L02 (R4): the read loop is sugar-async's ChildPump. stdout keeps the
+        // head up to the secret ceiling (refused bytes = overflow); stderr is the
+        // backend's own diagnostics, drained so the child never blocks but not
+        // kept. The wall bound stays this method's: it also bounds the exit wait.
+        $budget = self::$timeoutOverride ?? self::TIMEOUT_SECONDS;
+        $deadline = \microtime(true) + $budget;
+        $drain = ChildPump::drain(
+            [1 => $pipes[1], 2 => $pipes[2]],
+            Clock::monotonicSeconds() + $budget,
+            self::MAX_STDOUT_BYTES,
+            discard: [2],
+        );
+        $stdout = $drain->buffer(1);
+        $overflowed = $drain->droppedBytes(1) > 0;
+        $timedOut = !$drain->closed();
 
         $exitCode = null;
         if (!$timedOut) {
