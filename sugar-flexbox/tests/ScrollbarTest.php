@@ -136,6 +136,36 @@ final class ScrollbarTest extends TestCase
         Scrollbar::vertical()->view(['total' => 10, 'position' => 0], 3);
     }
 
+    /**
+     * FBX-40 (finding-047): the horizontal factory was pinned by
+     * assertInstanceOf alone — nothing proved its bytes. Exact-output
+     * mirror of the vertical contract: default ░ track / █ thumb, thumb
+     * placement arithmetic, and NO arrows — the arrow legs are what the
+     * orientation defaults genuinely differ by (vertical's
+     * showArrows would paint ▲███▼ for the same state).
+     */
+    public function testHorizontalViewRendersTheExactBarBytes(): void
+    {
+        $sb = Scrollbar::horizontal();
+
+        $this->assertSame('███░░', $sb->view(['total' => 10, 'position' => 0, 'viewport' => 5], 5));
+        $this->assertSame('░░███', $sb->view(['total' => 10, 'position' => 5, 'viewport' => 5], 5));
+        $this->assertSame('░░░░░', $sb->view(['total' => 10, 'position' => 0, 'viewport' => 24], 5), 'fitting content is pure track');
+        $this->assertStringNotContainsString('▲', $sb->view(['total' => 10, 'position' => 0, 'viewport' => 5], 5), 'horizontal boots without arrows');
+
+        $v = Scrollbar::vertical();
+        $this->assertSame('▲███▼', $v->view(['total' => 10, 'position' => 0, 'viewport' => 5], 5), 'the vertical default keeps its arrows — the orientations are not interchangeable');
+    }
+
+    public function testHorizontalArrayStateAndValueObjectRenderIdentically(): void
+    {
+        $sb = Scrollbar::horizontal()->withTrackChar('#')->withThumbChar('+');
+        $fromArray = $sb->view(['total' => 10, 'position' => 4, 'viewport' => 3], 5);
+        $fromObject = $sb->view(new ScrollbarState(10, 4, 3), 5);
+        $this->assertSame($fromObject, $fromArray);
+        $this->assertMatchesRegularExpression('/^[#+]{5}$/', $fromArray);
+    }
+
     public function testArrayStateAndValueObjectRenderIdentically(): void
     {
         $sb = Scrollbar::vertical()->withTrackChar('#')->withThumbChar('+');

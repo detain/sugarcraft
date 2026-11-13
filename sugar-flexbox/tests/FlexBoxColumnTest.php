@@ -76,7 +76,14 @@ final class FlexBoxColumnTest extends TestCase
         $lines = \explode("\n", $output);
 
         $this->assertCount(8, $lines);
-        $this->assertStringContainsString('fixed', $output);
+        // FBX-40 (finding-048): row OWNERSHIP, not row count — the basis
+        // item must sit at the TOP occupying lines 0-2, and the flex item
+        // must own every remaining line. A swapped split (flex first)
+        // kept the old count-only pin green.
+        $fixedAt   = \array_search(true, \array_map(static fn(string $l): bool => \str_contains($l, 'fixed'), $lines), true);
+        $flexibleAt = \array_search(true, \array_map(static fn(string $l): bool => \str_contains($l, 'flexible'), $lines), true);
+        $this->assertSame(0, $fixedAt, 'the basis item owns the top of the column');
+        $this->assertSame(3, $flexibleAt, 'the flex item starts exactly where the basis block ends');
     }
 
     // ---- Column layout: gap ----
