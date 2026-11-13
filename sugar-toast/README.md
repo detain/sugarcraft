@@ -181,11 +181,11 @@ even on a toast that has `withDuration()` configured:
 ```php
 $toast = Toast::new(50)->withPosition(Position::TopRight)->withDuration(5.0);
 $toast = $toast->alert(ToastType::Info, 'Connected');       // expires in 5 s — inheritance works
-$toast = $toast->push((new Alert(ToastType::Info, 'Pinned'))->withCancelledExpiry()); // escape hatch: survives anyway
+$toast = $toast->push(Alert::new(ToastType::Info, 'Pinned')->withCancelledExpiry()); // escape hatch: survives anyway
 
 // Per-alert escape hatch from an inherited expiry — persistent is explicit,
 // so push() will NOT re-arm the toast's duration on this alert:
-$alert = (new Alert(ToastType::Info, 'Connected'))->withCancelledExpiry();
+$alert = Alert::new(ToastType::Info, 'Connected')->withCancelledExpiry();
 $toast = $toast->push($alert);
 ```
 
@@ -295,20 +295,20 @@ zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar); keys and `{count}` placeholde
 contract — only values translate. To add one, copy `lang/en.php` to
 `lang/<code>.php` and translate the values. The lookup chain follows
 `SugarCraft\Core\I18n\T`: exact locale → base language → `en` → raw key.
-That chain makes a new key a mandatory two-part step: add the row to
-`lang/en.php` — missing there, every locale ships the raw key — and to the
-other 16 locale files too; a locale that skips the row silently ships the
-English fallback instead of a translation.
+That chain makes a new key a mandatory two-part step, with two distinct
+failure modes: a key missing from `lang/en.php` renders as its raw key in
+every locale, while a key missing from one of the other 16 locale files
+renders the English fallback instead of a translation — silently.
 
-**Using the facade:**
+**Using the façade:**
 
 ```php
 use SugarCraft\Toast\Lang;
 use SugarCraft\Toast\ToastType;
 
-$label = ToastType::Error->label();        // 'Error' (i18n-aware)
-$prompt = Lang::t('dismiss');            // 'Press any key to dismiss'
-$counter = Lang::t('count', ['count' => 3]); // 'Notifications: 3'
+$label   = ToastType::Error->label();             // 'Error' (i18n-aware)
+$prompt  = Lang::t('dismiss');                     // 'Press any key to dismiss'
+$counter = Lang::t('count', ['count' => 3]);       // 'Notifications: 3'
 ```
 
 **Adding new translatable strings:**
@@ -347,8 +347,8 @@ eventually expires on its own instead of freezing on screen forever.
 `alert()` and `push()` accept ids too; `removeAlert(string $id)` retires a
 single alert by identity. `progressToast()` accepts the same `$expiresAt` and
 `$ttlSeconds` overrides as `alert()`. The progress value (0.0–1.0) is clamped on attach
-(`withProgress()`) and again at render; the `Alert` constructor itself only
-refuses non-finite and stores the value as given. `NAN`/`INF` are refused with
+(`withProgress()`) and again at render; the `Alert` constructor itself
+refuses only non-finite values and stores everything else as given. `NAN`/`INF` are refused with
 an `InvalidArgumentException` rather than rendering a lying bar.
 
 ## Action Buttons
@@ -363,7 +363,7 @@ $action = Action::new('Retry', function (): void {
     // reconnect logic here
 });
 
-$alert = (new Alert(ToastType::Error, 'Connection lost'))
+$alert = Alert::new(ToastType::Error, 'Connection lost')
     ->withActions([$action]);
 $toast  = $toast->push($alert);
 
@@ -372,7 +372,7 @@ $toast = $toast->alert(ToastType::Error, 'Connection lost', actions: [$action]);
 ```
 
 The library renders the `[Label]` buttons; dispatching them is the host's
-job — and it ships the geometry to do it with. `Action` is a value object
+job — and sugar-toast ships the geometry to do it with. `Action` is a value object
 with `readonly string $label` (normalised at construction: only inline SGR
 survives, see "Security & Trust Boundary") and `readonly \Closure(): void
 $callback`. `actionRects()` returns a hit-test rectangle for every rendered
@@ -435,15 +435,16 @@ required.
 
 ## Styled Alerts
 
-Each alert accepts explicit background, foreground, and border colours; an unset
-(`null`) override means UNSTYLED — no fill, terminal-default text and border —
-not the type palette: the type's colour reaches only the icon:
+Each alert accepts explicit background, foreground, and border colours; an
+unset (`null`) override means UNSTYLED — no fill, terminal-default text and
+border. It is deliberately NOT the type palette: the type's colour reaches
+only the icon.
 
 ```php
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Toast\{Alert, Toast, ToastType};
 
-$alert = (new Alert(ToastType::Success, 'Deployed'))
+$alert = Alert::new(ToastType::Success, 'Deployed')
     ->withBackgroundColor(Color::hex('#1a2f23'))
     ->withForegroundColor(Color::hex('#9ece6a'))
     ->withBorderColor(Color::hex('#9ece6a'));
@@ -577,12 +578,18 @@ already over the new cap survive until the next push evicts them.
 
 ## Shared Foundations
 
+- **[sugar-core](https://github.com/sugarcraft/sugar-core)** — the runtime
+  foundation the API tables already lean on: cell width/font metrics, colour
+  conversion (`Color::hex`), the `Sanitize` choke point, and the `I18n` base
+  behind `Lang`.
+
 - **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — alert queue
   composited via `Buffer`; each toast is a sub-`Buffer` composited into the
   screen `Buffer` for per-cell positioning and overlap resolution.
 
-- **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — golden-file
-  snapshot tests via `assertGoldenAnsi()` pin canonical queue layouts.
+- **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** (require-dev —
+  test infrastructure) — golden-file snapshot tests via `assertGoldenAnsi()`
+  pin canonical queue layouts.
 
 ## Security & Trust Boundary
 
