@@ -140,16 +140,53 @@ final class GeometryAndTerminalStateTest extends TestCase
         self::assertNull($sameCmd);
     }
 
+    /**
+     * scriptui-49: the tty/dumb/piped posture matrix now asserts HEADLESS via
+     * the injected terminal probes (-34 seam) — it used to ask the real
+     * environment and markTestSkip whenever a runner had no controlling
+     * terminal, which is every CI runner: the safety promise shipped with
+     * zero automated verification on the lane that mattered.
+     */
     public function testDumbTerminalsNeverGetAltScreenOrHiddenCursors(): void
     {
         putenv('TERM=dumb');
-        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
-        if ($options === null) {
-            $this->markTestSkipped('no controlling terminal for this child probe path');
+        // A real tty hosting a dumb capability: inline, alt-screen off,
+        // cursor stays visible.
+        InteractiveRuntime::setTerminalProbesForTesting([
+            'stdout' => true,
+            'stderr' => true,
+            'stdin'  => true,
+            'tty'    => null,
+        ]);
+        try {
+            $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+            self::assertNotNull($options, 'a tty-backed dumb terminal must still host a frame');
+            self::assertFalse($options->useAltScreen);
+            self::assertFalse($options->hideCursor);
+            self::assertTrue($options->inlineMode);
+            self::assertFalse($options->unicodeMode);
+
+            // Fully piped (no tty anywhere, no /dev/tty pair): the runtime
+            // REFUSES the interactive frame instead of skipping the check.
+            InteractiveRuntime::setTerminalProbesForTesting([
+                'stdout' => false,
+                'stderr' => false,
+                'stdin'  => false,
+                'tty'    => null,
+            ]);
+            self::assertNull(InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true));
+        } finally {
+            InteractiveRuntime::setTerminalProbesForTesting(null);
         }
-        self::assertFalse($options->useAltScreen);
-        self::assertFalse($options->hideCursor);
-        self::assertTrue($options->inlineMode);
+
+        // Opt-in real-controlling-terminal variant: runs only where a ctty
+        // exists, so it never masquerades as coverage on CI.
+        $real = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        if ($real !== null) {
+            self::assertFalse($real->useAltScreen);
+            self::assertFalse($real->hideCursor);
+            self::assertTrue($real->inlineMode);
+        }
     }
 
     /**
