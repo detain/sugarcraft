@@ -4,6 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+/**
+ * One temperature sample: discovered sensors keyed "chip/label" in
+ * discovery order, plus the per-core series.
+ *
+ * Every temperature is in °C. A Sensor's `temp` is Sentinel::UNMEASURED
+ * when its sysfs input vanished since discovery; `high`/`crit` fall back
+ * to btop's 80/95 defaults when the hardware publishes none. `cores` is
+ * empty on cpu_temp_only hosts, and cpu()/cpuCrit() answer UNMEASURED
+ * when no cpu sensor was selected.
+ */
 final class TempSnapshot
 {
     /**

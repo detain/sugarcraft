@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+/**
+ * One disk-throughput sample: measured devices keyed by kernel name, in
+ * /proc/diskstats order.
+ *
+ * Per-device rates are bytes/second, all or none of a device's fields
+ * Sentinel::UNMEASURED on its first sample ({@see DiskDevice}); the
+ * aggregate readRate()/writeRate() sum the measured devices only and are
+ * themselves UNMEASURED when no device has a rate yet.
+ */
 final class DiskIoSnapshot
 {
     /**
