@@ -25,8 +25,8 @@
 ```php
 final class Bird
 {
-    public const FLAP_KICK     = -22.0; // cells/sec upward
-    public const GRAVITY       = 70.0;  // cells/sec²
+    public const FLAP_KICK     = -10.0; // cells/sec upward
+    public const GRAVITY       = 18.0;  // cells/sec²
     public const TICKS_PER_SEC = 30;
 
     public static function spawn(int $x, float $y): self
@@ -44,7 +44,14 @@ final class Bird
 }
 ```
 
-**Key observation:** Uses SugarSpring `Projectile` with Y-down gravity (70.0 cells/sec²), flap resets velocity to -22.0 cells/sec upward.
+**Key observation:** Uses SugarSpring `Projectile` with Y-down gravity (18.0 cells/sec²), flap resets velocity to -10.0 cells/sec upward.
+
+> **Superseded (2026-11-13, flappy-33):** earlier revisions of this document
+> recorded `FLAP_KICK = -22.0` / `GRAVITY = 70.0` as the shipped values. The
+> live constants are `-10.0` / `18.0` (`src/Bird.php`); every figure here now
+> matches them. Do not “restore” the -22.0/70.0 pair — it was an abandoned
+> pre-tuning snapshot, and reading gravity from it overstates the shipped
+> value by about 3.9×.
 
 ---
 
@@ -85,7 +92,7 @@ func (m Model) Frame() (tea.Model, tea.Cmd) {
 
 | Aspect | flapioca | candy-flappy |
 |--------|----------|------------|
-| Gravity | 1 cell/tick (discrete) | 70.0 cells/sec² (continuous) |
+| Gravity | 1 cell/tick (discrete) | 18.0 cells/sec² (continuous) |
 | Tick rate | 5 Hz | 30 Hz |
 | World scroll | 5 cells/s (1 cell per 5 Hz tick) | 30 cells/s (1 cell per 30 Hz tick) |
 | Physics lib | None (manual) | SugarSpring Projectile |
@@ -200,8 +207,8 @@ pub fn jump(mut query: Query<&mut Bird>, keyboard_input: Res<ButtonInput<KeyCode
 | Feature | flapioca (Go) | candy-flappy (PHP) | Bevy (Rust) |
 |---------|---------------|------------------|-------------|
 | **Physics** | Discrete gravity | SugarSpring Projectile | ECS gravity system |
-| **Gravity value** | 1 cell/tick | 70.0 cells/sec² | 9.8 * 150 scale factor |
-| **Flap impulse** | Y-- (discrete) | -22.0 cells/sec | 400.0 (Bevy), 5000.0 (Rust) |
+| **Gravity value** | 1 cell/tick | 18.0 cells/sec² | 9.8 * 150 scale factor |
+| **Flap impulse** | Y-- (discrete) | -10.0 cells/sec | 400.0 (Bevy), 5000.0 (Rust) |
 | **Collision** | Cell-based | Cell-based | AABB/Circle |
 | **Rotation** | None | None | Yes (velocity-based) |
 | **Animation** | None | None | Sprite sheets |
