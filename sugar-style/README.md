@@ -365,7 +365,13 @@ echo Tree::new()
 - **`Table\Data`** — row-reader interface (`rows` / `columns` /
   `at($r, $c)`). Default impl `Table\StringData::fromMatrix(iterable)`.
 - **`Output`** — top-level `print` / `println` / `sprint` / `printf` /
-  `fprint($stream, …)` (style-agnostic).
+  `fprint($stream, …)` (style-agnostic). The styled twins live on `Style`:
+  `sprint(...)` joins its arguments with single spaces (a deliberate
+  divergence from Go's `fmt.Sprint`, which omits spaces between adjacent
+  string operands), `printfSprint($format, …)` substitutes with
+  `sprintf()` and returns the styled string (upstream `Printf` is a
+  writer), and `print` / `println` / `fprint($stream, …)` write the
+  joined output to STDOUT or a supplied stream.
 - **`Renderer`** — per-writer rendering context: `withColorProfile` /
   `withHasDarkBackground` / `newStyle()` / `lightDark()` /
   `resolveAdaptive(AdaptiveColor)` / `fromEnvironment()`.

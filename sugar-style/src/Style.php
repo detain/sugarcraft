@@ -1424,9 +1424,18 @@ final class Style
     }
 
     /**
-     * Alias for {@see render()} matching lipgloss v2's `Sprint`.
-     * Concatenates all arguments with single spaces between them
-     * before styling.
+     * Render the arguments, joined with single spaces between them.
+     *
+     * Named after Go's `fmt.Sprint` (which lipgloss v2's `Sprint`
+     * delegates to) but DELIBERATELY divergent: Go inserts a space only
+     * when neither neighbour operand is a string, so
+     * `fmt.Sprint("hello", "world")` yields `"helloworld"`. This
+     * signature accepts strings only, so a faithful port would never
+     * space anything; the space join is kept because callers read the
+     * output as prose. For Go-exact bytes pass `implode('', $parts)`
+     * as a single argument.
+     *
+     * The un-styled twin is {@see Output::sprint()} (same join rule).
      */
     public function sprint(string ...$content): string
     {
@@ -1434,7 +1443,11 @@ final class Style
     }
 
     /**
-     * Render and `printf`-substitute. Mirrors lipgloss v2's `Printf`.
+     * `printf`-substitution analogue: formats with `sprintf()`, renders
+     * the result styled, and RETURNS the string. Upstream lipgloss v2
+     * `Printf` is a writer that returns `(n, err)` — this is the
+     * analogue, not a mirror (the writing twin is {@see fprint()}).
+     * The un-styled twin is {@see Output::printf()}.
      */
     public function printfSprint(string $format, mixed ...$args): string
     {
@@ -1442,9 +1455,10 @@ final class Style
     }
 
     /**
-     * Render to STDOUT followed by a newline. Mirrors lipgloss v2's
-     * `Println` for non-TUI scripts that just want styled console
-     * output.
+     * Write the rendered {@see sprint()} output to STDOUT followed by a
+     * newline — for non-TUI scripts that just want styled console
+     * output. The space-join (and its Go divergence) is inherited from
+     * {@see sprint()}. The un-styled twin is {@see Output::println()}.
      */
     public function println(string ...$content): void
     {
@@ -1452,7 +1466,9 @@ final class Style
     }
 
     /**
-     * Render to STDOUT (no trailing newline). Mirrors `Print`.
+     * Write the rendered {@see sprint()} output to STDOUT (no trailing
+     * newline). Join semantics as in {@see sprint()}; the un-styled
+     * twin is {@see Output::print()}.
      */
     public function print(string ...$content): void
     {
@@ -1460,7 +1476,9 @@ final class Style
     }
 
     /**
-     * Render to a caller-supplied stream resource. Mirrors `Fprint`.
+     * Write the rendered {@see sprint()} output to a caller-supplied
+     * stream resource (no trailing newline). The un-styled twin is
+     * {@see Output::fprint()}.
      *
      * @param resource $stream
      */

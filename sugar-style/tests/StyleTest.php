@@ -623,12 +623,28 @@ final class StyleTest extends TestCase
         $this->assertSame(0,   $picked->b);
     }
 
-    // ---- Style writers (lipgloss v2 Sprint/Fprint/...) -----------------
+    // ---- Style writers (sprint family; space-join is a documented
+    //      divergence from Go fmt.Sprint, finding 033) -------------------
 
     public function testSprintConcatenatesWithSpaces(): void
     {
         $bold = Style::new()->bold();
         $this->assertSame("\x1b[1mhello world\x1b[0m", $bold->sprint('hello', 'world'));
+    }
+
+    /**
+     * Finding 033: the join rule is single spaces between ALL arguments.
+     * Go's fmt.Sprint would NOT space two adjacent strings
+     * ("helloworld"); this pin holds the deliberate divergence so a
+     * future "faithful port" flip is an explicit, disclosed change.
+     */
+    public function testSprintSpaceJoinIsDeliberateGoDivergence(): void
+    {
+        $plain = Style::new();
+        $this->assertSame('a b', $plain->sprint('a', 'b'));
+        $this->assertSame('a b c', $plain->sprint('a', 'b', 'c'));
+        $this->assertSame('ab', $plain->sprint('ab'));
+        $this->assertSame('helloworld', $plain->sprint('hello' . 'world'));
     }
 
     public function testPrintfSprintFormatsFirst(): void

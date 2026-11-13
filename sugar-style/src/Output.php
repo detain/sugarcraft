@@ -5,22 +5,30 @@ declare(strict_types=1);
 namespace SugarCraft\Style;
 
 /**
- * Top-level (un-styled) output helpers — the lipgloss equivalents of the
- * package-level `lipgloss.Print` / `Println` / `Sprint` / `Fprint` / `Printf`
- * functions. Each one mirrors the matching method on {@see Style} but
- * skips the styling layer so callers can use the same surface from
- * `lipgloss.X(...)` to `Output::x(...)` without needing a Style instance.
+ * Top-level (un-styled) output helpers — the equivalents of the
+ * package-level `lipgloss.Print` / `Println` / `Sprint` / `Fprint` /
+ * `Printf` functions. Each method is the un-styled twin of the matching
+ * {@see Style} method (`Output::sprint()` vs `Style::sprint()`, and so
+ * on) so callers can reach the same shape without a Style instance.
+ *
+ * The join rule matches {@see Style::sprint()} exactly — single spaces
+ * between every argument — and with it the same deliberate divergence
+ * from Go's `fmt.Sprint`: Go inserts a space only when neither
+ * neighbour operand is a string, so `Sprint("hello", "world")` yields
+ * `"helloworld"`. Likewise `printf()` here RETURNS the formatted string
+ * where upstream `Printf` writes it. For Go-exact bytes pass
+ * `implode('', $parts)` as a single argument.
  *
  * These helpers do *no* ANSI escape emission — pass already-styled strings
  * (e.g. the result of `Style::new()->bold(true)->render('hi')`) when you
- * want colour. The helpers exist so the `Output::println(...)` shape is
- * available without requiring a `Style::new()->println(...)` boilerplate.
+ * want colour.
  */
 final class Output
 {
     /**
-     * Concatenate arguments with single spaces. No newline. Mirrors
-     * lipgloss `Sprint`.
+     * Concatenate arguments with single spaces. No newline, no styling.
+     * Un-styled twin of {@see Style::sprint()} (same join rule and same
+     * Go divergence, both documented in the class docblock).
      */
     public static function sprint(string ...$parts): string
     {
@@ -28,7 +36,9 @@ final class Output
     }
 
     /**
-     * sprintf-flavoured concatenation. Mirrors lipgloss `Printf`.
+     * `sprintf()` substitution that RETURNS the formatted string
+     * (upstream `Printf` writes instead). Un-styled twin of
+     * {@see Style::printfSprint()}.
      */
     public static function printf(string $format, mixed ...$args): string
     {
@@ -36,8 +46,8 @@ final class Output
     }
 
     /**
-     * Write `Output::sprint($parts)` to STDOUT (no newline). Mirrors
-     * lipgloss `Print`.
+     * Write `Output::sprint($parts)` to STDOUT (no newline). Un-styled
+     * twin of {@see Style::print()}.
      */
     public static function print(string ...$parts): void
     {
@@ -45,8 +55,8 @@ final class Output
     }
 
     /**
-     * Write `Output::sprint($parts) . "\n"` to STDOUT. Mirrors
-     * lipgloss `Println`.
+     * Write `Output::sprint($parts) . "\n"` to STDOUT. Un-styled twin
+     * of {@see Style::println()}.
      */
     public static function println(string ...$parts): void
     {
@@ -55,7 +65,8 @@ final class Output
 
     /**
      * Write `Output::sprint($parts)` to a caller-supplied stream
-     * resource (no trailing newline). Mirrors lipgloss `Fprint`.
+     * resource (no trailing newline). Un-styled twin of
+     * {@see Style::fprint()}.
      *
      * @param resource $stream
      */
