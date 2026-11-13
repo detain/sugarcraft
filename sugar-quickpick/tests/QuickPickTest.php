@@ -1145,6 +1145,7 @@ final class QuickPickTest extends TestCase
         $this->assertStringEndsWith("\n", $with, 'a terminated background keeps its terminator');
         $this->assertStringEndsNotWith("\n\n", $with, 'the terminator must not double');
         $this->assertStringEndsNotWith("\n", $without, 'a bare background gains none');
+        $this->assertStringEndsNotWith("\n", $pick->view(''), 'the empty string has no terminator to keep — the element test must not misread its lone empty element as one');
         $this->assertSame($without, \substr($with, 0, -1), 'the newline byte is the only difference');
     }
 

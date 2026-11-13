@@ -287,8 +287,12 @@ final class QuickPick
      * frame (-002).
      *
      * The windowed region — header, separator, item rows, chrome — is
-     * emitted as EXACTLY $h rows: padded with blanks when short, clamped
-     * when any row would overflow, never grown past $h.
+     * emitted as EXACTLY the frame's row budget: $h is the MAXIMUM, padded
+     * up to it when short, clamped when any row would overflow, never
+     * grown past it. The budget shrinks on short terminals —
+     * `min($h, ttyRows − reserved chrome)` (border and visible help/status
+     * rows come off the screen first; floor two rows) — so the composed
+     * frame fits the screen (-029). On a roomy screen the budget is $h.
      *
      * Three chrome states live in the item area: the overflow marker
      * '  ↕ showing %d-%d of %d', '  no matches' when a non-empty filter
@@ -304,8 +308,9 @@ final class QuickPick
      * Clamped to a minimum of 2: below that no item row can ever exist,
      * and at exactly 2 the frame is header + separator only — no chrome
      * row survives the clamp. helpBar/statusBar rows are appended BELOW
-     * this height — the composited frame may exceed $h when they are
-     * visible.
+     * the windowed region — the composited frame may exceed $h when they
+     * are visible — but are reserved for by the terminal-row budget, so
+     * the whole frame still fits a short screen (-029).
      */
     public function setWindowHeight(int $h): self
     {
@@ -870,14 +875,14 @@ final class QuickPick
         }
 
         $border = $this->border;
+        $size   = $this->ttySize();
 
         if ($this->windowWidth > 0) {
             // The caller chose the OUTER width; clamp it to the live
             // terminal (-027: an over-cols width used to compose wrapping
             // rows). A border frame consumes two of its cells for the side
             // runes and needs a third for content — never slice the runes.
-            $cols       = $this->ttySize()['cols'];
-            $outerWidth = \min($this->windowWidth, $cols);
+            $outerWidth = \min($this->windowWidth, $size['cols']);
             if ($border !== null) {
                 $outerWidth = \max(3, $outerWidth);
                 $innerWidth = $outerWidth - 2;
@@ -891,21 +896,34 @@ final class QuickPick
             $outerWidth = $border !== null ? $innerWidth + 2 : $innerWidth;
         }
 
+        // S-40 (-029): terminal ROWS are consulted too. The frozen
+        // windowHeight is a MAXIMUM; rows the frame will grow after the
+        // window (border top+bottom, visible help/status bars) are reserved
+        // from the screen first. Shrink-only: a resize upward can recover
+        // up to the frozen value but never past it, mirroring the
+        // antecedent's model re-clamp.
+        $reservedChrome = ($border !== null ? 2 : 0)
+            + ($this->helpBar !== null && $this->helpBar->isVisible() ? 1 : 0)
+            + ($this->statusBar !== null && $this->statusBar->isVisible() ? 1 : 0);
+        $rowBudget = $this->effectiveRows($size['rows'], $reservedChrome);
+
         $bgLines = \explode("\n", $backgroundView);
-        // -052: a background that ends with "\n" surfaces that terminator as
-        // a trailing empty explode() element. The pop lets the composite
-        // write over the last line (and pad a tall overlay against a short
-        // background), but re-joining used to drop the byte: composing over
-        // "bg\n" answered "bg", silently rewriting a byte-shape the overlay
-        // never touched. Remember the pop and restore it on the way out.
-        $trailingNewline = \end($bgLines) === '';
-        if ($trailingNewline) {
+        // -052: a background ending in "\n" carries that terminator as its
+        // final byte; explode surfaces it as a trailing empty element. The
+        // pop lets the composite write over the last line (and pad a tall
+        // overlay against a short background), but re-joining used to drop
+        // the byte: composing over "bg\n" answered "bg", silently rewriting
+        // a byte-shape the overlay never touched. The predicate is the
+        // BYTE test, not the element test — the empty string's lone
+        // element is not a terminator. Remember it, restore it on the way out.
+        $trailingNewline = \str_ends_with($backgroundView, "\n");
+        if ($bgLines !== [] && \end($bgLines) === '') {
             \array_pop($bgLines);
         }
 
         // Build the overlay once — the previous code built it twice (once just to
         // count lines for padding, once to composite).
-        $lines = $this->buildOverlayLines($innerWidth);
+        $lines = $this->buildOverlayLines($innerWidth, $rowBudget);
         if ($border !== null) {
             $lines = $this->applyBorder($lines, $border, $innerWidth);
         }
@@ -960,9 +978,16 @@ final class QuickPick
     /**
      * Build the array of overlay lines for the current state at the given width.
      *
+     * @param int $winWidth  Content width of the windowed region
+     * @param int $rowBudget Row budget for the windowed region, computed by
+     *                       view() from the frozen windowHeight minus whatever
+     *                       the live terminal cannot spare (-029); the -002
+     *                       invariant reads against THIS number, not the
+     *                       frozen one.
+     *
      * @return list<string>
      */
-    private function buildOverlayLines(int $winWidth): array
+    private function buildOverlayLines(int $winWidth, int $rowBudget): array
     {
         $prompt   = $this->prompt;
         $filter   = $this->filterText;
@@ -990,7 +1015,7 @@ final class QuickPick
 
         $items = $this->filteredItems;
         $count = \count($items);
-        $visibleRows = \max(0, $this->windowHeight - 2);
+        $visibleRows = \max(0, $rowBudget - 2);
         // M13: when the corpus overflows the window the list used to slide
         // silently — the user could not tell where in a 10k-item history they
         // were. Reserve one row for a position marker. -002: the marker is
@@ -1061,12 +1086,13 @@ final class QuickPick
             );
         }
 
-        // -002 invariant: the windowed region never emits more than
-        // $windowHeight rows (padded up to exactly that below); help/status
-        // chrome appends under it by design and is outside this budget.
-        $lines = \array_slice($lines, 0, $this->windowHeight);
+        // -002 invariant: the windowed region never emits more than the
+        // row budget (padded up to exactly it below); help/status chrome
+        // appends under it by design and is outside this budget — but IS
+        // reserved for it by view()'s row clamp (-029).
+        $lines = \array_slice($lines, 0, $rowBudget);
 
-        while (\count($lines) < $this->windowHeight) {
+        while (\count($lines) < $rowBudget) {
             $lines[] = \str_repeat(' ', $winWidth);
         }
 
@@ -1092,6 +1118,21 @@ final class QuickPick
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * The row budget for one frame's windowed region (-029, shrink-only).
+     *
+     * The frozen windowHeight is the MAXIMUM the frame may ever occupy;
+     * the screen spares only `ttyRows - reservedChrome` for it, where
+     * reservedChrome counts the rows appended after the window (border
+     * top+bottom, one row per visible help/status bar). The floor keeps
+     * the two rows every frame must have (header + separator — the -002
+     * lesson: anything smaller renders nothing honest).
+     */
+    private function effectiveRows(int $ttyRows, int $reservedChrome): int
+    {
+        return (int) \min($this->windowHeight, \max(2, $ttyRows - $reservedChrome));
+    }
 
     /**
      * Coerce a mixed input array into a list of Item objects.

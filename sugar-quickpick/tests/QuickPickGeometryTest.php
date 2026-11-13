@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\QuickPick\Tests;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\QuickPick\{QuickPick, FilteredItem, Item};
+use SugarCraft\QuickPick\{QuickPick, FilteredItem, Item, HelpBar, StatusBar};
 use SugarCraft\QuickPick\Support\UntrustedText;
 use SugarCraft\Style\Border;
 use PHPUnit\Framework\TestCase;
@@ -140,42 +140,55 @@ final class QuickPickGeometryTest extends TestCase
 
     public function testWindowHeightInvariantAcrossHeightsAndCorpusSizes(): void
     {
-        // -002/-078 sweep: heights 1..6 x counts 0..4. The windowed region
-        // (floor 2 rows applies to the setter) must never emit a row past
-        // its budget, and any visible range text must read first <= last.
+        // -002/-078 sweep: heights 1..6 x counts 0..4, now x the S-40 rows
+        // dimension (null = live terminal, 4 = shorter than any frozen h,
+        // 30 = roomy). The windowed region (floor 2 rows applies to the
+        // setter; the row budget may shrink it below the frozen h) must
+        // never emit a row past its budget, and any visible range text
+        // must read first <= last.
         for ($height = 1; $height <= 6; $height++) {
             for ($count = 0; $count <= 4; $count++) {
-                $items = [];
-                for ($i = 0; $i < $count; $i++) {
-                    $items[] = new FilteredItem($i + 1, "item$i");
-                }
-                $handler = QuickPick::new($items)->setWindowHeight($height)->setWindowWidth(16)->show();
-                $lines = \explode("\n", $handler->view(\implode("\n", \array_fill(0, 8, ''))));
-
-                $budget = \max(2, $height);
-                foreach (\array_slice($lines, $budget) as $offset => $line) {
-                    $this->assertSame(
-                        '',
-                        $line,
-                        "h=$height count=$count: overlay row leaked past the $budget-row window (line " . ($budget + $offset) . ')'
-                    );
-                }
-
-                foreach ($lines as $line) {
-                    if (\preg_match('/↕ showing (\d+)-(\d+) of (\d+)/', $line, $m) !== 1) {
-                        continue;
+                foreach ([null, 4, 30] as $termRows) {
+                    $items = [];
+                    for ($i = 0; $i < $count; $i++) {
+                        $items[] = new FilteredItem($i + 1, "item$i");
                     }
-                    $this->assertGreaterThanOrEqual(1, (int) $m[1], "range start below 1 (h=$height count=$count)");
-                    $this->assertLessThanOrEqual(
-                        (int) $m[2],
-                        (int) $m[1],
-                        "inverted range '$m[0]' (h=$height count=$count)"
-                    );
-                    $this->assertLessThanOrEqual(
-                        (int) $m[3],
-                        (int) $m[2],
-                        "range end past corpus count (h=$height count=$count)"
-                    );
+                    $handler = QuickPick::new($items)->setWindowHeight($height)->setWindowWidth(16);
+                    if ($termRows !== null) {
+                        $handler = $handler->withTtySizeProvider(
+                            static fn(): array => ['cols' => 40, 'rows' => $termRows]
+                        );
+                    }
+                    $handler = $handler->show();
+                    $lines = \explode("\n", $handler->view(\implode("\n", \array_fill(0, 8, ''))));
+
+                    $budget = $termRows === null
+                        ? \max(2, $height)
+                        : \min(\max(2, $height), $termRows);
+                    foreach (\array_slice($lines, $budget) as $offset => $line) {
+                        $this->assertSame(
+                            '',
+                            $line,
+                            "h=$height count=$count rows=$termRows: overlay row leaked past the $budget-row window (line " . ($budget + $offset) . ')'
+                        );
+                    }
+
+                    foreach ($lines as $line) {
+                        if (\preg_match('/↕ showing (\d+)-(\d+) of (\d+)/', $line, $m) !== 1) {
+                            continue;
+                        }
+                        $this->assertGreaterThanOrEqual(1, (int) $m[1], "range start below 1 (h=$height count=$count)");
+                        $this->assertLessThanOrEqual(
+                            (int) $m[2],
+                            (int) $m[1],
+                            "inverted range '$m[0]' (h=$height count=$count)"
+                        );
+                        $this->assertLessThanOrEqual(
+                            (int) $m[3],
+                            (int) $m[2],
+                            "range end past corpus count (h=$height count=$count)"
+                        );
+                    }
                 }
             }
         }
@@ -488,5 +501,87 @@ final class QuickPickGeometryTest extends TestCase
             }
         }
         $this->assertTrue($found, 'a wider replacement formatter must re-derive widths, not reuse the swapped-out table');
+    }
+
+    public function testRowBudgetShrinksAWindowedFrameToTheTerminal(): void
+    {
+        // -029: terminal rows were never consulted — a frozen h=10 emitted
+        // 10 rows on a 5-row screen and the overflow scrolled off nobody
+        // could reach. The budget now clamps to the screen, and the window
+        // math (band, marker reservation) follows the SHRUNK number.
+        $items = [];
+        for ($i = 0; $i < 12; $i++) {
+            $items[] = new FilteredItem($i + 1, "item$i");
+        }
+        $pick = QuickPick::new($items)
+            ->setWindowHeight(10)
+            ->setWindowWidth(16)
+            ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 5])
+            ->show();
+
+        $lines = \explode("\n", $pick->view(''));
+        $this->assertCount(5, $lines, 'a 5-row screen spare exactly 5 frame rows');
+
+        // 5-row budget: header + separator leave a 3-row band; the marker
+        // reserves one, so 2 items and the honest range survive. The marker
+        // row is pad-only chrome and overflows the 16-cell frame verbatim.
+        $this->assertSame(
+            '  ↕ showing 1-2 of 12',
+            \rtrim($lines[4]),
+            'the marker arithmetic follows the shrunk band, not the frozen h'
+        );
+    }
+
+    public function testRowBudgetIsShrinkOnlyNeverGrowth(): void
+    {
+        // Resize UP must recover toward the frozen height but never past it:
+        // the host's setWindowHeight stays the maximum, mirroring the
+        // antecedent's model re-clamp.
+        $tall = QuickPick::new(['a', 'b', 'c', 'd'])
+            ->setWindowHeight(10)
+            ->setWindowWidth(16)
+            ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 20])
+            ->show();
+        $this->assertCount(10, \explode("\n", $tall->view('')), 'a roomy screen restores the frozen 10, not 20');
+
+        $tiny = $tall->setWindowHeight(3);
+        $this->assertCount(3, \explode("\n", $tiny->view('')), 'a shrunk h stays shrunk on a big screen');
+    }
+
+    public function testRowBudgetReservesBorderAndBarChrome(): void
+    {
+        // The rows appended AFTER the windowed region (border top+bottom,
+        // visible help/status bars) come off the screen before the window
+        // is sized, so the total frame fits: 6 rows with a border = 4
+        // windowed + 2 frame rows; 7 rows with two bars = 5 + 2.
+        $bordered = QuickPick::new(['a', 'b', 'c'])
+            ->setWindowHeight(10)
+            ->setWindowWidth(16)
+            ->withBorder(Border::normal())
+            ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 6])
+            ->show();
+        $this->assertCount(6, \explode("\n", $bordered->view('')), 'bordered frame fits a 6-row screen exactly');
+
+        $barred = QuickPick::new(['a', 'b', 'c'])
+            ->setWindowHeight(10)
+            ->setWindowWidth(16)
+            ->withHelpBar(new HelpBar(['ctrl-q' => 'quit']))
+            ->withStatusBar(new StatusBar('ready'))
+            ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 7])
+            ->show();
+        $this->assertCount(7, \explode("\n", $barred->view('')), 'window + two visible bars fit a 7-row screen exactly');
+    }
+
+    public function testRowBudgetFloorsAtTheTwoRowMinimumFrame(): void
+    {
+        // A screen too short for anything honest still gets the two-row
+        // minimum (header + separator): clamping to 1 would render an
+        // unusable stub instead of a slightly overflowing minimal frame.
+        $pick = QuickPick::new(['a', 'b'])
+            ->setWindowHeight(10)
+            ->setWindowWidth(16)
+            ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 1])
+            ->show();
+        $this->assertCount(2, \explode("\n", $pick->view('')), 'the documented floor survives a 1-row screen');
     }
 }

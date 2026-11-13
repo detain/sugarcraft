@@ -227,7 +227,12 @@ public function setMatchStyle(string $ansiStyle): self
 // would sit, and over a background-backed row the spill pushes that row's
 // surviving tail rightward instead of overwriting it. Truncating them to
 // the frame width would be a behavior change and is deliberately not done.
-// HelpBar and StatusBar rows append BELOW this height.
+// HelpBar and StatusBar rows append BELOW this height. The value is a
+// MAXIMUM: each frame also budgets the live terminal's rows — the windowed
+// region shrinks to `min(h, rows − reserved chrome)` (border and visible
+// help/status rows come off the screen first; a two-row minimum frame is
+// the floor), so a tall frozen window never spills past a short terminal
+// (-029, shrink-only: growing back recovers up to h, never past it).
 public function setWindowHeight(int $h): self
 
 // Set overlay width. 0 (default) = auto: the computed prompt+items width is
