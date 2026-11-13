@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Mail\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Mail\Tests\Support\DialogueGate;
 
 /**
  * End-to-end smoke tests for bin/candy-mail: each case runs the real CLI as a
@@ -436,9 +437,7 @@ final class BinDispatchTest extends TestCase
 
     public function testHostilePreStartTlsGreetingIsSanitizedOnSendFailure(): void
     {
-        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
-            $this->markTestSkipped('pcntl not available');
-        }
+        DialogueGate::requireFork();
 
         $errno  = 0;
         $errstr = '';
@@ -497,9 +496,7 @@ final class BinDispatchTest extends TestCase
 
     public function testSendSuccessExitsZeroAfterDeliveredMail(): void
     {
-        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
-            $this->markTestSkipped('pcntl not available');
-        }
+        DialogueGate::requireFork();
 
         $errno  = 0;
         $errstr = '';
@@ -622,9 +619,7 @@ final class BinDispatchTest extends TestCase
      */
     public function testTransportSmtpOverrideDialsTheRelayNotTheApi(): void
     {
-        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
-            $this->markTestSkipped('pcntl is required for the forked relay');
-        }
+        DialogueGate::requireFork();
 
         $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
         $this->assertNotFalse($server, 'could not reserve a loopback port: ' . $errstr);
@@ -1012,9 +1007,7 @@ final class BinDispatchTest extends TestCase
 
     public function testLegacyPopSmtpTlsValueCarriesToRequireTlsAndNewNameWins(): void
     {
-        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
-            $this->markTestSkipped('pcntl not available');
-        }
+        DialogueGate::requireFork();
 
         $errno  = 0;
         $errstr = '';

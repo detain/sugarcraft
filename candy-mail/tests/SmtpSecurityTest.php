@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Mail\Email;
 use SugarCraft\Mail\Attachment;
 use SugarCraft\Mail\SmtpTransport;
+use SugarCraft\Mail\Tests\Support\DialogueGate;
 
 /**
  * Regression tests for the SMTP transport TLS hardening:
@@ -738,9 +739,7 @@ final class SmtpSecurityTest extends TestCase
 
     public function testLegacyServerThatRejectsEhloIsGreetedWithHelo(): void
     {
-        if (!\function_exists('pcntl_fork')) {
-            $this->markTestSkipped('pcntl_fork unavailable');
-        }
+        DialogueGate::requireFork();
 
         $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
         $this->assertIsResource($server, "listen failed: $errstr");
@@ -804,9 +803,7 @@ final class SmtpSecurityTest extends TestCase
         // 4xx means "try again" (RFC 5321 4.2.1); answering it with HELO
         // would mask a real outage as a legacy server and silently lose
         // STARTTLS/AUTH capability discovery mid-incident. 5xx only.
-        if (!\function_exists('pcntl_fork')) {
-            $this->markTestSkipped('pcntl_fork unavailable');
-        }
+        DialogueGate::requireFork();
 
         $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
         $this->assertIsResource($server, "listen failed: $errstr");
@@ -892,9 +889,7 @@ final class SmtpSecurityTest extends TestCase
 
     private function requireFork(): void
     {
-        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
-            $this->markTestSkipped('pcntl not available');
-        }
+        DialogueGate::requireFork();
     }
 
     /**

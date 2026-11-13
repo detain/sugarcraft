@@ -7,6 +7,7 @@ namespace SugarCraft\Mail\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mail\Email;
 use SugarCraft\Mail\SmtpTransport;
+use SugarCraft\Mail\Tests\Support\DialogueGate;
 
 /**
  * Real encrypted-channel harness (CM-09, closes 009).
@@ -66,9 +67,7 @@ final class TlsChannelTest extends TestCase
         if (!\extension_loaded('openssl') || !\function_exists('openssl_pkey_new')) {
             $this->markTestSkipped('ext-openssl unavailable');
         }
-        if (!\function_exists('pcntl_fork')) {
-            $this->markTestSkipped('pcntl_fork unavailable');
-        }
+        DialogueGate::requireFork();
     }
 
     /**

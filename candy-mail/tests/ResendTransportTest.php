@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Mail\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Mail\Email;
 use SugarCraft\Mail\ResendTransport;
+use SugarCraft\Mail\Tests\Support\DialogueGate;
 
 /**
  * Tests for ResendTransport.
@@ -21,9 +23,7 @@ final class ResendTransportTest extends TestCase
 
     public function testConstructorStoredKeyRidesTheWire(): void
     {
-        if (!\function_exists('curl_init') || !\function_exists('pcntl_fork')) {
-            $this->markTestSkipped('ext-curl or ext-pcntl unavailable');
-        }
+        DialogueGate::requireCurlAndFork();
 
         // The old arm asserted name() — a constant. The constructor-stored
         // key is only proven when it reaches the endpoint: the forked fake
@@ -265,9 +265,7 @@ final class ResendTransportTest extends TestCase
      */
     private function forkFakeApi(int $status, string $reason, string $body): array
     {
-        if (!\function_exists('pcntl_fork')) {
-            $this->markTestSkipped('pcntl_fork unavailable');
-        }
+        DialogueGate::requireFork();
         if (!\function_exists('curl_init')) {
             $this->markTestSkipped('ext-curl unavailable');
         }
@@ -395,9 +393,30 @@ final class ResendTransportTest extends TestCase
     }
 
     /**
+     * CM-59: a pre-cancelled token refuses before any HTTP work. The
+     * apiUrl seam (CM-08) points at a closed loopback port so the
+     * counterfactual - a network failure instead of the cancellation
+     * sentence - stays deterministic and never leaves the box.
+     */
+    public function testCancelledTokenRefusesBeforeAnyHttpWork(): void
+    {
+        $source = CancellationSource::new();
+        $source->cancel();
+
+        $transport = new ResendTransport('re_test_key_123', apiUrl: 'http://127.0.0.1:1/');
+        $email = new Email(['from@example.com'], ['to@example.com'], 'Subject', 'Body');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Resend send cancelled before it started');
+
+        $transport->send($email, $source->token());
+    }
+
+    /**
      * @return array<int, mixed>
      */
-    private function invokeCurlOptions(ResendTransport $transport, string $json): array    {
+    private function invokeCurlOptions(ResendTransport $transport, string $json): array
+    {
         $method = new \ReflectionMethod($transport, 'curlOptions');
         $method->setAccessible(true);
 
