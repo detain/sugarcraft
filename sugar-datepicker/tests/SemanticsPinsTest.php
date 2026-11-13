@@ -67,7 +67,7 @@ final class SemanticsPinsTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-12-31'))
             ->withRangeMode(true)
-            ->MoveToDate(new \DateTimeImmutable('2026-05-10'))
+            ->moveToDate(new \DateTimeImmutable('2026-05-10'))
             ->handleKey(DatePicker::KEY_ENTER);
 
         $this->assertNotNull($dp->rangeStart());

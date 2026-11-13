@@ -14,84 +14,84 @@ final class DatePickerTest extends TestCase
     public function testNew(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        $this->assertSame(5,  $dp->ViewMonth());
-        $this->assertSame(2026, $dp->ViewYear());
+        $this->assertSame(5,  $dp->viewMonth());
+        $this->assertSame(2026, $dp->viewYear());
     }
 
     public function testNewDefaultsToNow(): void
     {
         $dp = DatePicker::new();
-        $this->assertGreaterThanOrEqual(1,  $dp->ViewMonth());
-        $this->assertLessThanOrEqual(12, $dp->ViewMonth());
+        $this->assertGreaterThanOrEqual(1,  $dp->viewMonth());
+        $this->assertLessThanOrEqual(12, $dp->viewMonth());
     }
 
     public function testGoToPreviousMonth(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
-            ->GoToPreviousMonth();
+            ->goToPreviousMonth();
 
-        $this->assertSame(4,  $dp->ViewMonth());
-        $this->assertSame(2026, $dp->ViewYear());
+        $this->assertSame(4,  $dp->viewMonth());
+        $this->assertSame(2026, $dp->viewYear());
     }
 
     public function testGoToPreviousMonthAtJanuary(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
-            ->GoToPreviousMonth();
+            ->goToPreviousMonth();
 
-        $this->assertSame(12, $dp->ViewMonth());
-        $this->assertSame(2025, $dp->ViewYear());
+        $this->assertSame(12, $dp->viewMonth());
+        $this->assertSame(2025, $dp->viewYear());
     }
 
     public function testGoToNextMonth(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
-            ->GoToNextMonth();
+            ->goToNextMonth();
 
-        $this->assertSame(6, $dp->ViewMonth());
+        $this->assertSame(6, $dp->viewMonth());
     }
 
     public function testGoToNextMonthAtDecember(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-12-15'))
-            ->GoToNextMonth();
+            ->goToNextMonth();
 
-        $this->assertSame(1,  $dp->ViewMonth());
-        $this->assertSame(2027, $dp->ViewYear());
+        $this->assertSame(1,  $dp->viewMonth());
+        $this->assertSame(2027, $dp->viewYear());
     }
 
     public function testGoToPreviousYear(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
-            ->GoToPreviousYear();
+            ->goToPreviousYear();
 
-        $this->assertSame(2025, $dp->ViewYear());
+        $this->assertSame(2025, $dp->viewYear());
     }
 
     public function testGoToNextYear(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
-            ->GoToNextYear();
+            ->goToNextYear();
 
-        $this->assertSame(2027, $dp->ViewYear());
+        $this->assertSame(2027, $dp->viewYear());
     }
 
     public function testGoToToday(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2020-01-01'))
-            ->GoToToday();
+            ->goToToday();
 
-        $this->assertSame((int) (new \DateTimeImmutable())->format('n'),  $dp->ViewMonth());
-        $this->assertSame((int) (new \DateTimeImmutable())->format('Y'),  $dp->ViewYear());
+        $this->assertSame((int) (new \DateTimeImmutable())->format('n'),  $dp->viewMonth());
+        $this->assertSame((int) (new \DateTimeImmutable())->format('Y'),  $dp->viewYear());
     }
 
     public function testSetTime(): void
     {
         $dp = DatePicker::new()
-            ->SetTime(new \DateTimeImmutable('2025-12-25'));
+            ->setTime(new \DateTimeImmutable('2025-12-25'));
 
-        $this->assertSame(12, $dp->ViewMonth());
-        $this->assertSame(2025, $dp->ViewYear());
+        $this->assertSame(12, $dp->viewMonth());
+        $this->assertSame(2025, $dp->viewYear());
     }
 
     public function testCursorLeftBoundary(): void
@@ -101,10 +101,10 @@ final class DatePickerTest extends TestCase
         // to a real day). Walk well past the left edge and confirm the clamp.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         for ($i = 0; $i < 8; $i++) {
-            $dp = $dp->MoveCursorLeft();
+            $dp = $dp->moveCursorLeft();
         }
 
-        $this->assertSame(0, $dp->CursorIndex());
+        $this->assertSame(0, $dp->cursorIndex());
     }
 
     public function testCursorRightBoundary(): void
@@ -114,50 +114,50 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
 
         for ($i = 0; $i < 45; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
 
-        $this->assertSame(41, $dp->CursorIndex());
+        $this->assertSame(41, $dp->cursorIndex());
     }
 
     public function testCursorUp(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->MoveCursorDown()
-            ->MoveCursorDown()
-            ->MoveCursorUp();
+            ->moveCursorDown()
+            ->moveCursorDown()
+            ->moveCursorUp();
 
-        $this->assertGreaterThanOrEqual(0, $dp->CursorIndex());
+        $this->assertGreaterThanOrEqual(0, $dp->cursorIndex());
     }
 
     public function testSelectDate(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->SelectDate();
+            ->selectDate();
 
-        $this->assertTrue($dp->IsSelecting());
-        $this->assertNotNull($dp->SelectedDate());
+        $this->assertTrue($dp->isSelecting());
+        $this->assertNotNull($dp->selectedDate());
     }
 
     public function testClearDate(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->SelectDate()
-            ->ClearDate();
+            ->selectDate()
+            ->clearDate();
 
-        $this->assertFalse($dp->IsSelecting());
-        $this->assertNull($dp->SelectedDate());
+        $this->assertFalse($dp->isSelecting());
+        $this->assertNull($dp->selectedDate());
     }
 
     public function testToggleSelection(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
 
-        $dp = $dp->ToggleSelection();
-        $this->assertTrue($dp->IsSelecting());
+        $dp = $dp->toggleSelection();
+        $this->assertTrue($dp->isSelecting());
 
-        $dp = $dp->ToggleSelection();
-        $this->assertFalse($dp->IsSelecting());
+        $dp = $dp->toggleSelection();
+        $this->assertFalse($dp->isSelecting());
     }
 
     public function testDateAtCursorAfterNavigation(): void
@@ -178,17 +178,17 @@ final class DatePickerTest extends TestCase
         // and yields null — Enter from it falls back to the first of month.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         for ($i = 0; $i < 5; $i++) {
-            $dp = $dp->MoveCursorLeft(); // idx5 (May1) -> idx0 (Sun blank)
+            $dp = $dp->moveCursorLeft(); // idx5 (May1) -> idx0 (Sun blank)
         }
 
-        $this->assertSame(0, $dp->CursorIndex());
+        $this->assertSame(0, $dp->cursorIndex());
         $this->assertNull($dp->dateAtCursor());
     }
 
     public function testViewRendersHeader(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        $view = $dp->View();
+        $view = $dp->view();
 
         $this->assertStringContainsString('2026', $view);
         $this->assertStringContainsString('May', $view);
@@ -197,7 +197,7 @@ final class DatePickerTest extends TestCase
     public function testViewRendersDayNames(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        $view = $dp->View();
+        $view = $dp->view();
 
         $this->assertStringContainsString('Su', $view);
         $this->assertStringContainsString('Mo', $view);
@@ -207,18 +207,18 @@ final class DatePickerTest extends TestCase
     public function testImmutability(): void
     {
         $a = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        $b = $a->GoToNextMonth();
+        $b = $a->goToNextMonth();
 
-        $this->assertSame(5,  $a->ViewMonth());
-        $this->assertSame(6,  $b->ViewMonth());
+        $this->assertSame(5,  $a->viewMonth());
+        $this->assertSame(6,  $b->viewMonth());
     }
 
     public function testWithStylesReturnNewInstance(): void
     {
         $a = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        $b = $a->WithHeaderStyle('1;31')
-               ->WithTodayStyle('1;32')
-               ->WithSelectedStyle('1;34');
+        $b = $a->withHeaderStyle('1;31')
+               ->withTodayStyle('1;32')
+               ->withSelectedStyle('1;34');
 
         $this->assertNotSame($a, $b);
     }
@@ -226,12 +226,12 @@ final class DatePickerTest extends TestCase
     public function testSelectDateAfterNavigating(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->MoveCursorDown()
-            ->MoveCursorRight()
-            ->SelectDate();
+            ->moveCursorDown()
+            ->moveCursorRight()
+            ->selectDate();
 
-        $this->assertNotNull($dp->SelectedDate());
-        $this->assertTrue($dp->IsSelecting());
+        $this->assertNotNull($dp->selectedDate());
+        $this->assertTrue($dp->isSelecting());
     }
 
     // -------------------------------------------------------------------------
@@ -263,32 +263,32 @@ final class DatePickerTest extends TestCase
         // grid index 5 for a Friday-start May 2026), no longer on cell 0.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         $dp = $dp->handleKey('right');
-        $this->assertSame(6, $dp->CursorIndex());
+        $this->assertSame(6, $dp->cursorIndex());
 
         $dp = $dp->handleKey('left');
-        $this->assertSame(5, $dp->CursorIndex());
+        $this->assertSame(5, $dp->cursorIndex());
     }
 
     public function testHandleKeyRight(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         $dp = $dp->handleKey('right');
-        $this->assertSame(6, $dp->CursorIndex());
+        $this->assertSame(6, $dp->cursorIndex());
     }
 
     public function testHandleKeyUp(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        $dp = $dp->MoveCursorDown()->MoveCursorDown();
+        $dp = $dp->moveCursorDown()->moveCursorDown();
         $dp = $dp->handleKey('up');
-        $this->assertLessThan(14, $dp->CursorIndex());
+        $this->assertLessThan(14, $dp->cursorIndex());
     }
 
     public function testHandleKeyDown(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         $dp = $dp->handleKey('down');
-        $this->assertSame(12, $dp->CursorIndex());
+        $this->assertSame(12, $dp->cursorIndex());
     }
 
     public function testHandleKeyHome(): void
@@ -377,7 +377,7 @@ final class DatePickerTest extends TestCase
 
         // Navigate to May 5
         for ($i = 0; $i < 4; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         $dp = $dp->handleKey('enter');
 
@@ -394,7 +394,7 @@ final class DatePickerTest extends TestCase
 
         $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
         for ($i = 0; $i < $firstDow; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         $dp = $dp->handleKey('enter');
 
@@ -412,13 +412,13 @@ final class DatePickerTest extends TestCase
         // the viewed date, so a fixed count of rights would drift).
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withRangeMode(true)
-            ->MoveToDate(new \DateTimeImmutable('2026-05-10'));
+            ->moveToDate(new \DateTimeImmutable('2026-05-10'));
 
         $dp = $dp->handleKey('enter'); // rangeStart = May 10
 
         // Navigate back to May 5 (index 9)
         for ($i = 0; $i < 5; $i++) {
-            $dp = $dp->MoveCursorLeft();
+            $dp = $dp->moveCursorLeft();
         }
 
         $dp = $dp->handleKey('enter'); // rangeEnd = May 5, then normalize to start=May 5, end=May 10
@@ -439,13 +439,13 @@ final class DatePickerTest extends TestCase
 
         // Move cursor to index 5 (May 1, a real day cell) to ensure cursor renders
         for ($i = 0; $i < 5; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
 
-        $viewDefault = $dp->View();
+        $viewDefault = $dp->view();
 
         // Underline style (SGR 4) should produce different bytes than default (SGR 7 reverse)
-        $viewUnderline = $dp->WithCursorStyle('4')->View();
+        $viewUnderline = $dp->withCursorStyle('4')->view();
 
         $this->assertNotSame($viewDefault, $viewUnderline,
             'Different cursor styles must produce different View() output');
@@ -457,10 +457,10 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'));
         for ($i = 0; $i < 5; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
 
-        $view = $dp->View();
+        $view = $dp->view();
 
         // The View() output must contain SGR [0;7m (Buffer emits reset+attrs)
         // at the cursor cell (May 1 at index 5)
@@ -475,11 +475,11 @@ final class DatePickerTest extends TestCase
             ->withToday(new \DateTimeImmutable('2026-05-15'));
 
         // Cursor at index 5 (May 1)
-        $view0 = $dp->View();
+        $view0 = $dp->view();
 
         // Move cursor down (index 12) then right (index 13 = May 9)
-        $dp2 = $dp->MoveCursorDown()->MoveCursorRight();
-        $viewMoved = $dp2->View();
+        $dp2 = $dp->moveCursorDown()->moveCursorRight();
+        $viewMoved = $dp2->view();
 
         $this->assertNotSame($view0, $viewMoved,
             'Moving the cursor must change the View() output');
@@ -508,11 +508,11 @@ final class DatePickerTest extends TestCase
         // for a Friday-start May 2026), so Enter selects it directly.
         $dp = $dp->handleKey('enter');
 
-        $this->assertTrue($dp->IsSelecting(),
+        $this->assertTrue($dp->isSelecting(),
             'Enter outside range mode must enter selection mode');
-        $this->assertNotNull($dp->SelectedDate(),
+        $this->assertNotNull($dp->selectedDate(),
             'Enter outside range mode must set a selected date');
-        $this->assertSame('2026-05-01', $dp->SelectedDate()->format('Y-m-d'));
+        $this->assertSame('2026-05-01', $dp->selectedDate()->format('Y-m-d'));
     }
 
     public function testHandleKeyEscapeOutsideRangeModeClearsDate(): void
@@ -524,13 +524,13 @@ final class DatePickerTest extends TestCase
             ->handleKey('end')   // D21: last valid day of May (index 35)
             ->handleKey('home'); // D21: first valid day, May 1 (index 5)
 
-        $dp = $dp->SelectDate();
-        $this->assertTrue($dp->IsSelecting());
+        $dp = $dp->selectDate();
+        $this->assertTrue($dp->isSelecting());
 
         $dp = $dp->handleKey('esc');
-        $this->assertFalse($dp->IsSelecting(),
+        $this->assertFalse($dp->isSelecting(),
             'Escape outside range mode must exit selection mode');
-        $this->assertNull($dp->SelectedDate(),
+        $this->assertNull($dp->selectedDate(),
             'Escape outside range mode must clear the selected date');
     }
 
@@ -541,22 +541,22 @@ final class DatePickerTest extends TestCase
         // clamp dereferenced a false date and crashed.
         $dp = DatePicker::new(new \DateTimeImmutable('0002-06-15'));
 
-        $dp = $dp->GoToPreviousYear();
-        $this->assertSame(1, $dp->ViewYear());
-        $this->assertSame(6, $dp->ViewMonth());
+        $dp = $dp->goToPreviousYear();
+        $this->assertSame(1, $dp->viewYear());
+        $this->assertSame(6, $dp->viewMonth());
 
         // Further presses stay pinned at the floor — no crash, no year 0.
-        $dp = $dp->GoToPreviousYear();
-        $this->assertSame(1, $dp->ViewYear());
-        $dp = $dp->GoToPreviousMonth();
-        $this->assertSame(1, $dp->ViewYear());
-        $this->assertSame(1, $dp->ViewMonth());
+        $dp = $dp->goToPreviousYear();
+        $this->assertSame(1, $dp->viewYear());
+        $dp = $dp->goToPreviousMonth();
+        $this->assertSame(1, $dp->viewYear());
+        $this->assertSame(1, $dp->viewMonth());
 
         // Queries and rendering all work at the floor.
-        $this->assertIsString($dp->View());
-        $this->assertIsString($dp->View(30, true));
-        $selected = $dp->SelectDate();
-        $this->assertTrue($selected->IsSelecting());
+        $this->assertIsString($dp->view());
+        $this->assertIsString($dp->view(30, true));
+        $selected = $dp->selectDate();
+        $this->assertTrue($selected->isSelecting());
     }
 
     public function testNavigatingPastYear9999DoesNotCrash(): void
@@ -566,17 +566,17 @@ final class DatePickerTest extends TestCase
         // survive it (5-digit years only arise from unbounded GoToNextYear in
         // an unbounded picker — this pin documents the tolerated upper edge).
         $dp = DatePicker::new(new \DateTimeImmutable('9999-12-31'));
-        $dp = $dp->GoToNextYear();
+        $dp = $dp->goToNextYear();
 
-        $this->assertSame(10000, $dp->ViewYear());
+        $this->assertSame(10000, $dp->viewYear());
         // Rendering must not throw and must produce a string.
-        $this->assertIsString($dp->View());
+        $this->assertIsString($dp->view());
         // The cursor date is unresolvable, so selection falls back to the
         // first-of-month probe which is also null → SelectDate REFUSES.
         $this->assertNull($dp->dateAtCursor());
-        $refused = $dp->SelectDate();
-        $this->assertFalse($refused->IsSelecting());
-        $this->assertNull($refused->SelectedDate());
+        $refused = $dp->selectDate();
+        $this->assertFalse($refused->isSelecting());
+        $this->assertNull($refused->selectedDate());
     }
 
     public function testViewWidthIsClampedNotRejected(): void
@@ -587,10 +587,10 @@ final class DatePickerTest extends TestCase
         // below the floor still renders the full seven day columns.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
 
-        $this->assertSame($dp->View(15), $dp->View(5));
-        $this->assertSame($dp->View(15), $dp->View(0));
-        $this->assertSame($dp->View(63), $dp->View(100));
-        $this->assertSame($dp->View(21), $dp->View());
+        $this->assertSame($dp->view(15), $dp->view(5));
+        $this->assertSame($dp->view(15), $dp->view(0));
+        $this->assertSame($dp->view(63), $dp->view(100));
+        $this->assertSame($dp->view(21), $dp->view());
     }
 
     public function testClampCursorAfterNavigatingToShorterMonth(): void
@@ -601,14 +601,14 @@ final class DatePickerTest extends TestCase
             ->withToday(new \DateTimeImmutable('2026-05-15'))
             ->handleKey('end');  // cursorIndex = 35 (May 31, last valid day)
 
-        $this->assertSame(35, $dp->CursorIndex());
+        $this->assertSame(35, $dp->cursorIndex());
 
         // Navigate to April 2026 (30 days, firstDow=3)
         // After navigation, clampCursor should pull index 35 back to 3 + 30 - 1 = 32
-        $dp2 = $dp->GoToPreviousMonth();
+        $dp2 = $dp->goToPreviousMonth();
 
         // April 30 is at index 3 + 29 = 32 (firstDow=3, lastDayIndex=32)
-        $this->assertSame(32, $dp2->CursorIndex(),
+        $this->assertSame(32, $dp2->cursorIndex(),
             'Cursor must be clamped to last valid index of shorter month');
     }
 
@@ -625,9 +625,9 @@ final class DatePickerTest extends TestCase
             ->withToday(new \DateTimeImmutable('2026-05-15'));
 
         $before = serialize($dp);
-        $dp->View();
-        $dp->View(21, true);
-        $dp->View(31);
+        $dp->view();
+        $dp->view(21, true);
+        $dp->view(31);
         $after = serialize($dp);
 
         $this->assertSame($before, $after,
@@ -639,7 +639,7 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'));
 
-        $this->assertSame($dp->View(), $dp->View(),
+        $this->assertSame($dp->view(), $dp->view(),
             'Repeated View() calls on the same instance must be identical');
     }
 
@@ -658,7 +658,7 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
             ->withToday(new \DateTimeImmutable('2026-01-15'));
 
-        $plain = \preg_replace('/\x1b\[[0-9;]*m/', '', $dp->View(21, true));
+        $plain = \preg_replace('/\x1b\[[0-9;]*m/', '', $dp->view(21, true));
         $lines = \array_values(\array_filter(
             \explode("\n", $plain),
             static fn (string $l): bool => \trim($l) !== '',
@@ -689,7 +689,7 @@ final class DatePickerTest extends TestCase
         // D9: the constructor seeds the cursor on May 1 (index 5). Pull it back
         // to grid index 0 so the sweep compares every index against Navigation.
         for ($k = 0; $k < 5; $k++) {
-            $dp = $dp->MoveCursorLeft();
+            $dp = $dp->moveCursorLeft();
         }
         for ($i = 0; $i < 41; $i++) {
             $expected = Navigation::gridIndexToDate($i, 5, 2026);
@@ -700,7 +700,7 @@ final class DatePickerTest extends TestCase
                 $actual?->format('Y-m-d'),
                 "dateAtCursor() must match Navigation::gridIndexToDate() at index $i",
             );
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
     }
 
@@ -711,12 +711,12 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-03-10'))
             ->withToday(new \DateTimeImmutable('2026-03-15'))
             ->handleKey('end');
-        $this->assertSame(30, $dp->CursorIndex());
+        $this->assertSame(30, $dp->cursorIndex());
 
         // → Feb 2026 (28 days, firstDow=0): last valid index = 0 + 28 - 1 = 27.
-        $feb = $dp->GoToPreviousMonth();
-        $this->assertSame(2, $feb->ViewMonth());
-        $this->assertSame(27, $feb->CursorIndex(),
+        $feb = $dp->goToPreviousMonth();
+        $this->assertSame(2, $feb->viewMonth());
+        $this->assertSame(27, $feb->cursorIndex(),
             'Cursor must clamp to Feb 28 (index 27) when leaving a 31-day month');
         $this->assertSame('2026-02-28', $feb->dateAtCursor()?->format('Y-m-d'));
     }
@@ -727,8 +727,8 @@ final class DatePickerTest extends TestCase
         // must agree for every grid index 0-41 in May 2026.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'));
-        $month = $dp->ViewMonth();
-        $year = $dp->ViewYear();
+        $month = $dp->viewMonth();
+        $year = $dp->viewYear();
 
         for ($idx = 0; $idx <= 41; $idx++) {
             // Simulate what dateAtCursor does for this index
@@ -770,9 +770,9 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withRangeMode(true);
         for ($i = 0; $i < 5; $i++) {
-            $dp = $dp->MoveCursorLeft();
+            $dp = $dp->moveCursorLeft();
         }
-        $this->assertSame(0, $dp->CursorIndex(), 'cursor rests on the empty lead-in cell');
+        $this->assertSame(0, $dp->cursorIndex(), 'cursor rests on the empty lead-in cell');
 
         $dp = $dp->handleKey('enter');
 
@@ -794,7 +794,7 @@ final class DatePickerTest extends TestCase
 
         // Move to May 5
         for ($i = 0; $i < 4; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         // Second Enter: rangeEnd = May 5
         $dp = $dp->handleKey('enter');
@@ -804,7 +804,7 @@ final class DatePickerTest extends TestCase
 
         // Move to May 10
         for ($i = 0; $i < 5; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         // Third Enter: both were set, so start fresh with May 10
         $dp = $dp->handleKey('enter');
@@ -827,20 +827,20 @@ final class DatePickerTest extends TestCase
 
         // Navigate to May 15 (firstDow=5 for May 1, so May 15 is at index 5+14=19)
         for ($i = 0; $i < 14; $i++) {
-            $dp = $dp->MoveCursorRight(); // D9 seed idx5 + 14 = idx19 = May 15
+            $dp = $dp->moveCursorRight(); // D9 seed idx5 + 14 = idx19 = May 15
         }
 
         // Verify we're on May 15
         $this->assertSame('2026-05-15', $dp->dateAtCursor()?->format('Y-m-d'));
 
         // Select the date
-        $dp = $dp->SelectDate();
+        $dp = $dp->selectDate();
 
-        $this->assertTrue($dp->IsSelecting());
-        $this->assertSame('2026-05-15', $dp->SelectedDate()?->format('Y-m-d'));
+        $this->assertTrue($dp->isSelecting());
+        $this->assertSame('2026-05-15', $dp->selectedDate()?->format('Y-m-d'));
 
         // View must render (the selectedTodayStyle branch applies)
-        $view = $dp->View();
+        $view = $dp->view();
         $this->assertIsString($view);
     }
 
@@ -851,18 +851,18 @@ final class DatePickerTest extends TestCase
             ->withToday(new \DateTimeImmutable('2026-12-25'));
 
         // With the pin, GoToToday lands on the injected date's month.
-        $this->assertSame(12, $pinned->GoToToday()->ViewMonth());
+        $this->assertSame(12, $pinned->goToToday()->viewMonth());
 
         $unpinned = $pinned->withoutToday();
         $this->assertNotSame($pinned, $unpinned);
 
         // Without it, GoToToday follows the real wall clock — prove the
         // reference is gone by comparing against a bare picker's behaviour.
-        $bare = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->GoToToday();
-        $this->assertSame((int) $bare->ViewMonth(), $unpinned->GoToToday()->ViewMonth());
+        $bare = DatePicker::new(new \DateTimeImmutable('2026-05-01'))->goToToday();
+        $this->assertSame((int) $bare->viewMonth(), $unpinned->goToToday()->viewMonth());
 
         // Immutability: the pinned instance keeps its injected today.
-        $this->assertSame(12, $pinned->GoToToday()->ViewMonth());
+        $this->assertSame(12, $pinned->goToToday()->viewMonth());
     }
 
     public function testSelectDateFallsBackToFirstOfMonthOnEmptyCell(): void
@@ -872,14 +872,14 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'));
         for ($i = 0; $i < 5; $i++) {
-            $dp = $dp->MoveCursorLeft(); // D9 seed idx5 -> empty Sunday idx0
+            $dp = $dp->moveCursorLeft(); // D9 seed idx5 -> empty Sunday idx0
         }
 
         $this->assertNull($dp->dateAtCursor(), 'Index 0 is an empty lead-in cell');
 
-        $selected = $dp->SelectDate();
-        $this->assertTrue($selected->IsSelecting());
-        $this->assertSame('2026-05-01', $selected->SelectedDate()?->format('Y-m-d'));
+        $selected = $dp->selectDate();
+        $this->assertTrue($selected->isSelecting());
+        $this->assertSame('2026-05-01', $selected->selectedDate()?->format('Y-m-d'));
     }
 
     public function testOutOfBoundsSelectedDayRendersFaint(): void
@@ -890,11 +890,11 @@ final class DatePickerTest extends TestCase
         // selection still reads disabled while keeping its colour cue.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-12-31')) // keep "today" clear of May
-            ->MoveToDate(new \DateTimeImmutable('2026-05-05'))
-            ->SelectDate()
+            ->moveToDate(new \DateTimeImmutable('2026-05-05'))
+            ->selectDate()
             ->withMinDate(new \DateTimeImmutable('2026-05-10'));
 
-        $this->assertNotNull($dp->SelectedDate(), 'the selection survives the tightened bound');
+        $this->assertNotNull($dp->selectedDate(), 'the selection survives the tightened bound');
 
         $build  = new \ReflectionMethod(DatePicker::class, 'buildCells');
         $cells  = $build->invoke($dp);
@@ -1081,5 +1081,37 @@ final class DatePickerTest extends TestCase
             \SugarCraft\Core\I18n\T::setLocale($prevLocale);
             \SugarCraft\Core\I18n\T::overrideNamespace('datepicker', __DIR__ . '/../lang');
         }
+    }
+
+    public function testMoveToDateOutsideViewedMonthResetsCursorToFirstSelectableDay(): void
+    {
+        // dp-25: the docblock used to promise "cursor keeps its clamped
+        // position" for out-of-month jumps; the implementation (shared with
+        // ctor/setTime via cursorForDate -> firstValidIndex) RE-ARMS the
+        // cursor on the viewed month's first selectable day. Pin the law.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->moveCursorRight()
+            ->moveCursorRight(); // cursor now idx7 (May 3), well off day 1
+        $this->assertSame(7, $dp->cursorIndex());
+
+        $jumped = $dp->moveToDate(new \DateTimeImmutable('2026-07-20'));
+
+        $this->assertSame(5, $jumped->viewMonth(), 'the view must NOT follow an out-of-month date');
+        $this->assertSame(2026, $jumped->viewYear());
+        $this->assertSame(5, $jumped->cursorIndex(), 'an out-of-month jump resets to the first selectable day, never the stale idx7');
+        $this->assertNull($jumped->selectedDate(), 'moveToDate must not touch the selection');
+    }
+
+    public function testMoveToDateOutOfBoundsJumpRespectsFirstSelectableDay(): void
+    {
+        // The reset consults min/max: with May 10 as the floor, the cursor
+        // lands on May 10 (idx 14), not May 1 (idx 5).
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withMinDate(new \DateTimeImmutable('2026-05-10'));
+
+        $jumped = $dp->moveToDate(new \DateTimeImmutable('2026-07-20'));
+
+        $this->assertSame(5, $jumped->viewMonth());
+        $this->assertSame(14, $jumped->cursorIndex(), 'reset lands on the first SELECTABLE day May 10 (dp-11 clamp law)');
     }
 }

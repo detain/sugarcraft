@@ -22,8 +22,8 @@ final class DatePickerStyleTest extends TestCase
     public function testWithCursorStyleFluent(): void
     {
         $a = $this->dp;
-        $b = $a->WithCursorStyle('7');
-        $c = $b->WithCursorStyle('1;31');
+        $b = $a->withCursorStyle('7');
+        $c = $b->withCursorStyle('1;31');
 
         $this->assertNotSame($a, $b);
         $this->assertNotSame($b, $c);
@@ -32,8 +32,8 @@ final class DatePickerStyleTest extends TestCase
     public function testWithRangeStyleFluent(): void
     {
         $a = $this->dp;
-        $b = $a->WithRangeStyle('1;35');
-        $c = $b->WithRangeStyle('1;36');
+        $b = $a->withRangeStyle('1;35');
+        $c = $b->withRangeStyle('1;36');
 
         $this->assertNotSame($a, $b);
         $this->assertNotSame($b, $c);
@@ -232,12 +232,12 @@ final class DatePickerStyleTest extends TestCase
 
         $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
         for ($i = 0; $i < $firstDow; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         $dp = $dp->handleKey('enter');
 
         for ($i = 0; $i < 4; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         $dp = $dp->handleKey('enter');
 
@@ -275,16 +275,16 @@ final class DatePickerStyleTest extends TestCase
 
         $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
         for ($i = 0; $i < $firstDow; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         $dp = $dp->handleKey('enter');
 
         for ($i = 0; $i < 4; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         $dp = $dp->handleKey('enter');
 
-        $view = $dp->View();
+        $view = $dp->view();
         $this->assertIsString($view);
     }
 
@@ -292,16 +292,16 @@ final class DatePickerStyleTest extends TestCase
     {
         // Full escape sequences are not valid SGR codes for With*Style() setters
         $this->expectException(\InvalidArgumentException::class);
-        $this->dp->WithHeaderStyle("\e[1m");
+        $this->dp->withHeaderStyle("\e[1m");
     }
 
     public function testWithStyleAcceptsValidSgr(): void
     {
         // Valid SGR codes should not throw
         $dp = $this->dp
-            ->WithHeaderStyle('1;31')
-            ->WithTodayStyle('7')
-            ->WithCursorStyle('');
+            ->withHeaderStyle('1;31')
+            ->withTodayStyle('7')
+            ->withCursorStyle('');
 
         $this->assertNotSame($this->dp, $dp);
     }
@@ -347,7 +347,7 @@ final class DatePickerStyleTest extends TestCase
         // through the loose '^[0-9;]*$' guard as silent no-op segments).
         foreach ([';', '1;', ';1', '1;;2'] as $shape) {
             try {
-                $this->dp->WithHeaderStyle($shape);
+                $this->dp->withHeaderStyle($shape);
                 $this->fail("SGR shape '{$shape}' must be rejected");
             } catch (\InvalidArgumentException) {
                 $this->assertTrue(true);
@@ -361,9 +361,9 @@ final class DatePickerStyleTest extends TestCase
         // Extended-colour introducers (38/48) are NOT in this set — see
         // testWithStyleRejectsExtendedColour below.
         $dp = $this->dp
-            ->WithHeaderStyle('1;31')
-            ->WithTodayStyle('105')
-            ->WithCursorStyle('4;36');
+            ->withHeaderStyle('1;31')
+            ->withTodayStyle('105')
+            ->withCursorStyle('4;36');
         $this->assertNotSame($this->dp, $dp);
     }
 
@@ -375,7 +375,7 @@ final class DatePickerStyleTest extends TestCase
         // render. It is refused loudly instead.
         foreach (['38;5;226', '48;2;10;20;30', '38'] as $shape) {
             try {
-                $this->dp->WithHeaderStyle($shape);
+                $this->dp->withHeaderStyle($shape);
                 $this->fail("extended-colour shape '{$shape}' must be rejected");
             } catch (\InvalidArgumentException) {
                 $this->assertTrue(true);
@@ -389,7 +389,7 @@ final class DatePickerStyleTest extends TestCase
         // is addcslashes-escaped so a forged ESC can never reach the terminal
         // through the error path.
         try {
-            $this->dp->WithHeaderStyle("\e[1m");
+            $this->dp->withHeaderStyle("\e[1m");
             $this->fail('a raw escape must be rejected');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringNotContainsString("\e", $e->getMessage(),
@@ -400,14 +400,14 @@ final class DatePickerStyleTest extends TestCase
         // string opening with the one-byte CSI (U+009B) put that raw C1 byte
         // back on the terminal through the exception path.
         try {
-            $this->dp->WithHeaderStyle("\x9b31m");
+            $this->dp->withHeaderStyle("\x9b31m");
             $this->fail('a raw C1 escape introducer must be rejected');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringNotContainsString("\x9b", $e->getMessage(),
                 'the message must not carry the raw C1 byte');
         }
         try {
-            $this->dp->WithHeaderStyle("\x01abc");
+            $this->dp->withHeaderStyle("\x01abc");
             $this->fail('a raw C0 byte must be rejected');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringNotContainsString("\x01", $e->getMessage(),
@@ -488,14 +488,14 @@ final class DatePickerStyleTest extends TestCase
     {
         // MT5: digit runs are capped so an unbounded parameter cannot slip in.
         $this->expectException(\InvalidArgumentException::class);
-        $this->dp->WithHeaderStyle(\str_repeat('1;', 40) . '1');
+        $this->dp->withHeaderStyle(\str_repeat('1;', 40) . '1');
     }
 
     public function testWithDayNameAndSelectedTodayStyleSetters(): void
     {
         // MT3: the two previously setterless style channels.
         $a = $this->dp;
-        $b = $a->WithDayNameStyle('36')->WithSelectedTodayStyle('1;33');
+        $b = $a->withDayNameStyle('36')->withSelectedTodayStyle('1;33');
         $this->assertNotSame($a, $b);
     }
 
@@ -504,10 +504,10 @@ final class DatePickerStyleTest extends TestCase
         // D3: a cursor resting on an empty lead-in cell must still emit a
         // reverse SGR (the single focus cue), not vanish. May 2026 starts on
         // Friday, so grid index 0 (Sunday) is an empty lead-in cell.
-        $empty = $this->dp->MoveCursorLeft()->MoveCursorLeft()
-            ->MoveCursorLeft()->MoveCursorLeft()->MoveCursorLeft();
+        $empty = $this->dp->moveCursorLeft()->moveCursorLeft()
+            ->moveCursorLeft()->moveCursorLeft()->moveCursorLeft();
         $this->assertNull($empty->dateAtCursor(), 'index 0 is the empty lead-in');
-        $this->assertStringContainsString("\x1b[0;7m", $empty->View(),
+        $this->assertStringContainsString("\x1b[0;7m", $empty->view(),
             'the cursor must render on an empty cell');
     }
 
@@ -518,20 +518,20 @@ final class DatePickerStyleTest extends TestCase
         // wore the selected style. selectedStyle = '1;36' → bold cyan, whose
         // ANSI16 slot-6 fg triple is 0;205;205; no other channel uses it, so
         // its presence in a view means the selection painted there.
-        $may = $this->dp->MoveToDate(new \DateTimeImmutable('2026-05-15'))
+        $may = $this->dp->moveToDate(new \DateTimeImmutable('2026-05-15'))
             ->withToday(new \DateTimeImmutable('2026-12-31')) // keep "today" out of May
             ->handleKey('enter');
-        $this->assertSame('2026-05-15', $may->SelectedDate()?->format('Y-m-d'));
-        $this->assertStringContainsString('38;2;0;205;205', $may->View(),
+        $this->assertSame('2026-05-15', $may->selectedDate()?->format('Y-m-d'));
+        $this->assertStringContainsString('38;2;0;205;205', $may->view(),
             'the selected day must carry the cyan style in its own month');
 
-        $june = $may->GoToNextMonth();
-        $this->assertSame(6, $june->ViewMonth());
-        $this->assertStringNotContainsString('38;2;0;205;205', $june->View(),
+        $june = $may->goToNextMonth();
+        $this->assertSame(6, $june->viewMonth());
+        $this->assertStringNotContainsString('38;2;0;205;205', $june->view(),
             'a day-of-month collision in another month must not be highlighted');
 
-        $nextYear = $may->GoToNextYear();
-        $this->assertStringNotContainsString('38;2;0;205;205', $nextYear->View(),
+        $nextYear = $may->goToNextYear();
+        $this->assertStringNotContainsString('38;2;0;205;205', $nextYear->view(),
             'the same collision across a year boundary must not be highlighted');
     }
 
@@ -541,9 +541,9 @@ final class DatePickerStyleTest extends TestCase
         // render, then crash on the first Enter through Navigation. The
         // constructor now floors the view to January 0001 so nothing throws.
         $dp = DatePicker::new(\DateTimeImmutable::createFromFormat('Y-m-d', '0000-01-01'));
-        $this->assertGreaterThanOrEqual(1, $dp->ViewYear());
-        $this->assertIsString($dp->View());
-        $this->assertIsString($dp->handleKey('enter')->View());
+        $this->assertGreaterThanOrEqual(1, $dp->viewYear());
+        $this->assertIsString($dp->view());
+        $this->assertIsString($dp->handleKey('enter')->view());
     }
 
     public function testMaxDateBelowFloorCannotDragViewUnderYearOne(): void
@@ -551,8 +551,8 @@ final class DatePickerStyleTest extends TestCase
         // D6 variant: a maxDate earlier than the calendar floor must not pull
         // the view under it — the floor is applied LAST.
         $dp = $this->dp->withMaxDate(\DateTimeImmutable::createFromFormat('Y-m-d', '0000-06-15'));
-        $this->assertGreaterThanOrEqual(1, $dp->ViewYear());
-        $this->assertIsString($dp->View());
+        $this->assertGreaterThanOrEqual(1, $dp->viewYear());
+        $this->assertIsString($dp->view());
     }
 
     public function testHomeAndEndLandOnRealDays(): void
@@ -569,17 +569,17 @@ final class DatePickerStyleTest extends TestCase
     {
         // D9: the edit-existing-value recipe. A date in the viewed month aims
         // the cursor on it; Enter then selects that exact date.
-        $dp = $this->dp->MoveToDate(new \DateTimeImmutable('2026-05-15'));
+        $dp = $this->dp->moveToDate(new \DateTimeImmutable('2026-05-15'));
         $this->assertSame('2026-05-15', $dp->dateAtCursor()?->format('Y-m-d'));
-        $this->assertSame('2026-05-15', $dp->handleKey('enter')->SelectedDate()?->format('Y-m-d'));
+        $this->assertSame('2026-05-15', $dp->handleKey('enter')->selectedDate()?->format('Y-m-d'));
     }
 
     public function testMoveToDateOutOfMonthKeepsView(): void
     {
         // A date outside the viewed month leaves the view untouched and keeps
         // the cursor on the first valid day (MoveToDate never re-anchors view).
-        $dp = $this->dp->MoveToDate(new \DateTimeImmutable('2026-09-03'));
-        $this->assertSame(5, $dp->ViewMonth());
+        $dp = $this->dp->moveToDate(new \DateTimeImmutable('2026-09-03'));
+        $this->assertSame(5, $dp->viewMonth());
         $this->assertStringStartsWith('2026-05-', $dp->dateAtCursor()?->format('Y-m-d') ?? '');
     }
 
@@ -599,9 +599,9 @@ final class DatePickerStyleTest extends TestCase
         };
 
         // Natural floor: even a request of 15 with a week column renders 25.
-        $this->assertSame(25, $maxLineWidth($this->dp->View(15, true)));
+        $this->assertSame(25, $maxLineWidth($this->dp->view(15, true)));
         // The upper cap: 63, never 67 — and the whole last day column survives.
-        $wide = $this->dp->View(63, true);
+        $wide = $this->dp->view(63, true);
         $this->assertLessThanOrEqual(63, $maxLineWidth($wide));
         $this->assertStringContainsString('31', $wide,
             'the last day of May must stay visible at the capped width');

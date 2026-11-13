@@ -18,8 +18,8 @@ final class ModelTest extends TestCase
     {
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
         $this->assertInstanceOf(Model::class, $model);
-        $this->assertSame(5, $model->picker()->ViewMonth());
-        $this->assertSame(2026, $model->picker()->ViewYear());
+        $this->assertSame(5, $model->picker()->viewMonth());
+        $this->assertSame(2026, $model->picker()->viewYear());
     }
 
     public function testInitReturnsNull(): void
@@ -45,12 +45,12 @@ final class ModelTest extends TestCase
     public function testUpdateWithRightMovesCursorRight(): void
     {
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
-        $initial = $model->picker()->CursorIndex();
+        $initial = $model->picker()->cursorIndex();
 
         $keyMsg = new KeyMsg(KeyType::Right);
         [$nextModel, $cmd] = $model->update($keyMsg);
 
-        $this->assertSame($initial + 1, $nextModel->picker()->CursorIndex());
+        $this->assertSame($initial + 1, $nextModel->picker()->cursorIndex());
         $this->assertNull($cmd);
     }
 
@@ -62,23 +62,23 @@ final class ModelTest extends TestCase
         $keyMsg = new KeyMsg(KeyType::Right);
         [$model, ] = $model->update($keyMsg);
 
-        $initial = $model->picker()->CursorIndex();
+        $initial = $model->picker()->cursorIndex();
         $keyMsg = new KeyMsg(KeyType::Left);
         [$nextModel, $cmd] = $model->update($keyMsg);
 
-        $this->assertSame($initial - 1, $nextModel->picker()->CursorIndex());
+        $this->assertSame($initial - 1, $nextModel->picker()->cursorIndex());
         $this->assertNull($cmd);
     }
 
     public function testUpdateWithDownMovesCursorDown(): void
     {
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
-        $initial = $model->picker()->CursorIndex();
+        $initial = $model->picker()->cursorIndex();
 
         $keyMsg = new KeyMsg(KeyType::Down);
         [$nextModel, $cmd] = $model->update($keyMsg);
 
-        $this->assertSame($initial + 7, $nextModel->picker()->CursorIndex());
+        $this->assertSame($initial + 7, $nextModel->picker()->cursorIndex());
         $this->assertNull($cmd);
     }
 
@@ -89,12 +89,12 @@ final class ModelTest extends TestCase
         // Move down first to ensure we're not at top boundary
         $keyMsg = new KeyMsg(KeyType::Down);
         [$model, ] = $model->update($keyMsg);
-        $initial = $model->picker()->CursorIndex();
+        $initial = $model->picker()->cursorIndex();
 
         $keyMsg = new KeyMsg(KeyType::Up);
         [$nextModel, $cmd] = $model->update($keyMsg);
 
-        $this->assertSame($initial - 7, $nextModel->picker()->CursorIndex());
+        $this->assertSame($initial - 7, $nextModel->picker()->cursorIndex());
         $this->assertNull($cmd);
     }
 
@@ -112,7 +112,7 @@ final class ModelTest extends TestCase
 
         // Home jumps to the first valid day (May 1 at index 5 — May 2026 opens
         // on Friday, so the Sunday lead-in cell 0 is never landed on).
-        $this->assertSame(5, $nextModel->picker()->CursorIndex());
+        $this->assertSame(5, $nextModel->picker()->cursorIndex());
         $this->assertNull($cmd);
     }
 
@@ -125,7 +125,7 @@ final class ModelTest extends TestCase
 
         // End lands on the last valid day (May 31 at index 35), not the raw
         // grid position 41 that may be a blank trailing cell.
-        $this->assertSame(35, $nextModel->picker()->CursorIndex());
+        $this->assertSame(35, $nextModel->picker()->cursorIndex());
         $this->assertNull($cmd);
     }
 
@@ -137,8 +137,8 @@ final class ModelTest extends TestCase
         [$nextModel, $cmd] = $model->update($msg);
 
         $this->assertSame(
-            $model->picker()->CursorIndex(),
-            $nextModel->picker()->CursorIndex()
+            $model->picker()->cursorIndex(),
+            $nextModel->picker()->cursorIndex()
         );
         $this->assertNull($cmd);
     }
@@ -176,7 +176,7 @@ final class ModelTest extends TestCase
 
         // Second Enter on a later day: completes the range, records date_selected
         // carrying BOTH endpoints.
-        $model = new Model($model->picker()->MoveCursorRight(), $store);
+        $model = new Model($model->picker()->moveCursorRight(), $store);
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
         $events = $store->release();
         $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::DATE_SELECTED));
@@ -193,14 +193,14 @@ final class ModelTest extends TestCase
         // GoTo{Previous,Next}Month so a README-only embedder can leave the
         // launch month.
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
-        $this->assertSame(5, $model->picker()->ViewMonth());
+        $this->assertSame(5, $model->picker()->viewMonth());
 
         [$next, $cmd] = $model->update(new KeyMsg(KeyType::PageDown));
-        $this->assertSame(6, $next->picker()->ViewMonth());
+        $this->assertSame(6, $next->picker()->viewMonth());
         $this->assertNull($cmd);
 
         [$prev, ] = $model->update(new KeyMsg(KeyType::PageUp));
-        $this->assertSame(4, $prev->picker()->ViewMonth());
+        $this->assertSame(4, $prev->picker()->viewMonth());
     }
 
     /**
@@ -303,7 +303,7 @@ final class ModelTest extends TestCase
             static fn(array $e): bool => $e['type'] === PickerEvent::DATE_CLEARED,
         ));
         $this->assertCount(1, $cleared);
-        $this->assertNull($model->picker()->SelectedDate());
+        $this->assertNull($model->picker()->selectedDate());
     }
 
     public function testSelectingADifferentDateRecordsAgain(): void
@@ -315,7 +315,7 @@ final class ModelTest extends TestCase
         $store = new EventStore();
         $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];           // May 1
-        $model = new Model($model->picker()->MoveCursorRight(), $store);
+        $model = new Model($model->picker()->moveCursorRight(), $store);
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];           // May 2 (different)
 
         $selected = array_values(array_filter(
@@ -345,7 +345,7 @@ final class ModelTest extends TestCase
         [$nextModel] = $model->update($keyMsg);
 
         // No store, no error - model still works
-        $this->assertSame(1, $nextModel->picker()->CursorIndex() - $model->picker()->CursorIndex());
+        $this->assertSame(1, $nextModel->picker()->cursorIndex() - $model->picker()->cursorIndex());
     }
 
     public function testModelPreservesStoreAcrossUpdates(): void
@@ -372,12 +372,12 @@ final class ModelTest extends TestCase
     {
         // Non-KeyMsg returns same picker unchanged (no-op branch)
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
-        $initialIndex = $model->picker()->CursorIndex();
+        $initialIndex = $model->picker()->cursorIndex();
 
         $msg = new class implements \SugarCraft\Core\Msg {};
         [$nextModel, $cmd] = $model->update($msg);
 
-        $this->assertSame($initialIndex, $nextModel->picker()->CursorIndex());
+        $this->assertSame($initialIndex, $nextModel->picker()->cursorIndex());
         $this->assertNull($cmd);
     }
 
@@ -390,13 +390,13 @@ final class ModelTest extends TestCase
 
         // Navigate to May 1
         for ($i = 0; $i < $firstDow; $i++) {
-            $picker = $picker->MoveCursorRight();
+            $picker = $picker->moveCursorRight();
         }
         $picker = $picker->handleKey(DatePicker::KEY_ENTER); // rangeStart set
 
         // Move to May 5 and set rangeEnd
         for ($i = 0; $i < 4; $i++) {
-            $picker = $picker->MoveCursorRight();
+            $picker = $picker->moveCursorRight();
         }
         $picker = $picker->handleKey(DatePicker::KEY_ENTER); // rangeEnd set
 
@@ -419,12 +419,12 @@ final class ModelTest extends TestCase
     {
         // Char keys (default case) should return same picker unchanged
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
-        $initialIndex = $model->picker()->CursorIndex();
+        $initialIndex = $model->picker()->cursorIndex();
 
         $keyMsg = new KeyMsg(KeyType::Char, 'a');
         [$nextModel, $cmd] = $model->update($keyMsg);
 
-        $this->assertSame($initialIndex, $nextModel->picker()->CursorIndex());
+        $this->assertSame($initialIndex, $nextModel->picker()->cursorIndex());
         $this->assertNull($cmd);
     }
 
@@ -447,9 +447,9 @@ final class ModelTest extends TestCase
 
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
 
-        $this->assertTrue($model->picker()->IsSelecting(),
+        $this->assertTrue($model->picker()->isSelecting(),
             'Enter in single mode must enter selection mode through update()');
-        $this->assertSame('2026-05-01', $model->picker()->SelectedDate()?->format('Y-m-d'));
+        $this->assertSame('2026-05-01', $model->picker()->selectedDate()?->format('Y-m-d'));
 
         $events = $store->release();
         $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::DATE_SELECTED));
@@ -465,7 +465,7 @@ final class ModelTest extends TestCase
         $model = $model->update(new KeyMsg(KeyType::End))[0];  // May 31 (index 35)
         $model = $model->update(new KeyMsg(KeyType::Home))[0]; // May 1 (index 5 — first selectable day unbounded)
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
-        $this->assertTrue($model->picker()->IsSelecting());
+        $this->assertTrue($model->picker()->isSelecting());
 
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
 
@@ -473,7 +473,7 @@ final class ModelTest extends TestCase
         $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::DATE_SELECTED));
         $this->assertCount(1, $selected,
             'Re-entering the same selecting state must not re-record');
-        $this->assertSame('2026-05-01', $model->picker()->SelectedDate()?->format('Y-m-d'));
+        $this->assertSame('2026-05-01', $model->picker()->selectedDate()?->format('Y-m-d'));
     }
 
     public function testEscapeInSingleModeClearsThroughTheTeaLoop(): void
@@ -481,12 +481,12 @@ final class ModelTest extends TestCase
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
         $model = $model->update(new KeyMsg(KeyType::Home))[0];
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
-        $this->assertTrue($model->picker()->IsSelecting());
+        $this->assertTrue($model->picker()->isSelecting());
 
         $model = $model->update(new KeyMsg(KeyType::Escape))[0];
 
-        $this->assertFalse($model->picker()->IsSelecting());
-        $this->assertNull($model->picker()->SelectedDate());
+        $this->assertFalse($model->picker()->isSelecting());
+        $this->assertNull($model->picker()->selectedDate());
     }
 
     public function testEnterOnOutOfBoundDateAnnouncesRefusal(): void
@@ -506,7 +506,7 @@ final class ModelTest extends TestCase
         $store->release();
         $model = $model->update(new KeyMsg(KeyType::Enter))[0]; // May 9 < min
 
-        $this->assertFalse($model->picker()->IsSelecting(),
+        $this->assertFalse($model->picker()->isSelecting(),
             'Refused selection must still change no state');
         $events = $store->release();
         $this->assertCount(1, $events);
@@ -557,7 +557,7 @@ final class ModelTest extends TestCase
         $this->assertSame('2026-05-01', $events[0]['payload']['date'],
             'The refused attempt is the fallback date, not a phantom');
         $this->assertSame('empty_cell', $events[0]['payload']['reason']);
-        $this->assertNull($model->picker()->SelectedDate());
+        $this->assertNull($model->picker()->selectedDate());
     }
 
     public function testEmptyCellWithInBoundsFallbackSelectsQuietly(): void
@@ -573,8 +573,8 @@ final class ModelTest extends TestCase
 
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
 
-        $this->assertTrue($model->picker()->IsSelecting());
-        $this->assertSame('2026-05-01', $model->picker()->SelectedDate()?->format('Y-m-d'));
+        $this->assertTrue($model->picker()->isSelecting());
+        $this->assertSame('2026-05-01', $model->picker()->selectedDate()?->format('Y-m-d'));
         $events = $store->release();
         $types = array_column($events, 'type');
         $this->assertNotContains(PickerEvent::SELECTION_REFUSED, $types);
@@ -673,11 +673,11 @@ final class ModelTest extends TestCase
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
 
         $this->assertSame(
-            $model->picker()->View(40, true),
+            $model->picker()->view(40, true),
             $model->view(40, true),
             'view() must forward width/week-number options'
         );
-        $this->assertSame($model->picker()->View(), $model->view());
+        $this->assertSame($model->picker()->view(), $model->view());
         $this->assertNotSame($model->view(40, true), $model->view());
     }
 

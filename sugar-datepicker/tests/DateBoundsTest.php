@@ -27,34 +27,34 @@ final class DateBoundsTest extends TestCase
     {
         $dp = self::may()->withMinDate(new \DateTimeImmutable('2026-03-10'));
 
-        $dp = $dp->GoToPreviousMonth(); // May → April (inside the window)
-        $this->assertSame(4, $dp->ViewMonth());
+        $dp = $dp->goToPreviousMonth(); // May → April (inside the window)
+        $this->assertSame(4, $dp->viewMonth());
 
-        $dp = $dp->GoToPreviousMonth(); // April → March (the floor month)
-        $this->assertSame(3, $dp->ViewMonth());
-        $this->assertSame(2026, $dp->ViewYear());
+        $dp = $dp->goToPreviousMonth(); // April → March (the floor month)
+        $this->assertSame(3, $dp->viewMonth());
+        $this->assertSame(2026, $dp->viewYear());
 
         // Further stepping stays at the floor month.
-        $dp = $dp->GoToPreviousMonth();
-        $this->assertSame(3, $dp->ViewMonth());
+        $dp = $dp->goToPreviousMonth();
+        $this->assertSame(3, $dp->viewMonth());
 
         // Year steps clamp too.
-        $dp = $dp->GoToPreviousYear();
-        $this->assertSame(3, $dp->ViewMonth());
-        $this->assertSame(2026, $dp->ViewYear());
+        $dp = $dp->goToPreviousYear();
+        $this->assertSame(3, $dp->viewMonth());
+        $this->assertSame(2026, $dp->viewYear());
     }
 
     public function testNavigationIsClampedAtMaxMonth(): void
     {
         $dp = self::may()->withMaxDate(new \DateTimeImmutable('2026-07-20'));
 
-        $dp = $dp->GoToNextMonth(); // May → June (inside the window)
-        $this->assertSame(6, $dp->ViewMonth());
-        $dp = $dp->GoToNextMonth(); // June → July (the ceiling month)
-        $this->assertSame(7, $dp->ViewMonth());
-        $dp = $dp->GoToNextYear();
-        $this->assertSame(7, $dp->ViewMonth());
-        $this->assertSame(2026, $dp->ViewYear());
+        $dp = $dp->goToNextMonth(); // May → June (inside the window)
+        $this->assertSame(6, $dp->viewMonth());
+        $dp = $dp->goToNextMonth(); // June → July (the ceiling month)
+        $this->assertSame(7, $dp->viewMonth());
+        $dp = $dp->goToNextYear();
+        $this->assertSame(7, $dp->viewMonth());
+        $this->assertSame(2026, $dp->viewYear());
     }
 
     public function testSelectingDateBeforeMinIsRefused(): void
@@ -63,26 +63,26 @@ final class DateBoundsTest extends TestCase
         // bound itself are unselectable.
         $dp = self::may()
             ->withMinDate(new \DateTimeImmutable('2026-03-10'))
-            ->GoToPreviousMonth()   // May → April
-            ->GoToPreviousMonth();  // April → March 2026
-        $this->assertSame(3, $dp->ViewMonth());
+            ->goToPreviousMonth()   // May → April
+            ->goToPreviousMonth();  // April → March 2026
+        $this->assertSame(3, $dp->viewMonth());
 
         // dp-11: Home now CLAMPS to the first selectable day — Mar 10, never
         // the dimmed Mar 1 (grid index 9; Mar 2026 starts Sunday, firstDow=0).
         $dp = $dp->handleKey('home');
-        $this->assertSame(9, $dp->CursorIndex());
+        $this->assertSame(9, $dp->cursorIndex());
         $this->assertSame('2026-03-10', $dp->dateAtCursor()?->format('Y-m-d'));
 
         // The arrows deliberately may rest on dimmed cells: one left parks on
         // Mar 9, before the bound → selection refusal, receiver unchanged.
         $refused = $dp->handleKey('left')->handleKey('enter');
-        $this->assertFalse($refused->IsSelecting());
-        $this->assertNull($refused->SelectedDate());
+        $this->assertFalse($refused->isSelecting());
+        $this->assertNull($refused->selectedDate());
 
         // And acceptance still lands exactly on the bound (Home parked us there).
         $ok = $dp->handleKey('enter');
-        $this->assertTrue($ok->IsSelecting());
-        $this->assertSame('2026-03-10', $ok->SelectedDate()?->format('Y-m-d'));
+        $this->assertTrue($ok->isSelecting());
+        $this->assertSame('2026-03-10', $ok->selectedDate()?->format('Y-m-d'));
     }
 
     public function testSelectingDateAfterMaxIsRefused(): void
@@ -95,16 +95,16 @@ final class DateBoundsTest extends TestCase
         // the first out-of-bound day.
         $dp = $dp->handleKey('home');
         for ($i = 0; $i < 20; $i++) {
-            $dp = $dp->MoveCursorRight();
+            $dp = $dp->moveCursorRight();
         }
         $this->assertSame('2026-05-21', $dp->dateAtCursor()?->format('Y-m-d'));
-        $this->assertFalse($dp->handleKey('enter')->IsSelecting());
+        $this->assertFalse($dp->handleKey('enter')->isSelecting());
 
-        $dp = $dp->MoveCursorLeft();
+        $dp = $dp->moveCursorLeft();
         $this->assertSame('2026-05-20', $dp->dateAtCursor()?->format('Y-m-d'));
         $ok = $dp->handleKey('enter');
-        $this->assertTrue($ok->IsSelecting());
-        $this->assertSame('2026-05-20', $ok->SelectedDate()?->format('Y-m-d'));
+        $this->assertTrue($ok->isSelecting());
+        $this->assertSame('2026-05-20', $ok->selectedDate()?->format('Y-m-d'));
     }
 
     public function testInBoundsReflectsWindow(): void
@@ -139,8 +139,8 @@ final class DateBoundsTest extends TestCase
         $this->assertNull($free->maxDate());
 
         // Unbounded again: the calendar floor (not the removed bound) governs.
-        $wayBack = $free->GoToPreviousMonth();
-        $this->assertSame(4, $wayBack->ViewMonth());
+        $wayBack = $free->goToPreviousMonth();
+        $this->assertSame(4, $wayBack->viewMonth());
     }
 
     public function testMinAfterMaxThrows(): void
@@ -163,25 +163,25 @@ final class DateBoundsTest extends TestCase
     {
         // Currently viewing May; a min of July must drag the view forward.
         $dp = self::may()->withMinDate(new \DateTimeImmutable('2026-07-01'));
-        $this->assertSame(7, $dp->ViewMonth());
-        $this->assertSame(2026, $dp->ViewYear());
+        $this->assertSame(7, $dp->viewMonth());
+        $this->assertSame(2026, $dp->viewYear());
 
         // A max of the previous month drags it back.
         $dp = self::may()->withMaxDate(new \DateTimeImmutable('2026-04-30'));
-        $this->assertSame(4, $dp->ViewMonth());
+        $this->assertSame(4, $dp->viewMonth());
     }
 
     public function testSetTimeAndGoToTodayRespectWindow(): void
     {
         $dp = self::may()->withMinDate(new \DateTimeImmutable('2026-08-01'));
 
-        $moved = $dp->SetTime(new \DateTimeImmutable('2026-01-05'));
-        $this->assertSame(8, $moved->ViewMonth());
-        $this->assertSame(2026, $moved->ViewYear());
+        $moved = $dp->setTime(new \DateTimeImmutable('2026-01-05'));
+        $this->assertSame(8, $moved->viewMonth());
+        $this->assertSame(2026, $moved->viewYear());
 
         // GoToToday: today is May 15 but the window starts in August.
-        $t = $dp->GoToToday();
-        $this->assertSame(8, $t->ViewMonth());
+        $t = $dp->goToToday();
+        $this->assertSame(8, $t->viewMonth());
     }
 
     public function testRangeEndpointsRespectBounds(): void
@@ -204,7 +204,7 @@ final class DateBoundsTest extends TestCase
         $this->assertNull($dp->rangeStart(),
             'Out-of-bound day cannot anchor a range even in range mode');
 
-        $dp = $dp->MoveCursorRight();
+        $dp = $dp->moveCursorRight();
         $this->assertSame('2026-05-10', $dp->dateAtCursor()?->format('Y-m-d'));
         $dp = $dp->handleKey('enter');
         $this->assertNotNull($dp->rangeStart());
@@ -228,9 +228,9 @@ final class DateBoundsTest extends TestCase
         // bounds govern FUTURE navigation/selection only.
         $dp = self::may()->handleKey('home'); // lands on May 1 (first valid day)
         $dp = $dp->handleKey('enter'); // selects May 1
-        $this->assertSame('2026-05-01', $dp->SelectedDate()?->format('Y-m-d'));
+        $this->assertSame('2026-05-01', $dp->selectedDate()?->format('Y-m-d'));
 
         $tightened = $dp->withMinDate(new \DateTimeImmutable('2026-05-10'));
-        $this->assertSame('2026-05-01', $tightened->SelectedDate()?->format('Y-m-d'));
+        $this->assertSame('2026-05-01', $tightened->selectedDate()?->format('Y-m-d'));
     }
 }

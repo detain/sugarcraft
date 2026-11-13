@@ -471,8 +471,12 @@ final class DatePicker
     /**
      * Aim the cursor at an arbitrary date (the edit-existing-value recipe):
      * when $date falls inside the currently viewed month the cursor lands on
-     * its cell; otherwise the view is unchanged and the cursor keeps its
-     * clamped position. Immutable.
+     * its cell; otherwise the view is unchanged and the cursor is re-aimed
+     * at the viewed month's FIRST SELECTABLE day (min/max consulted via
+     * firstValidIndex — the same "aim or reset to first valid" law the
+     * constructor and setTime follow). The cursor never keeps a stale
+     * position on an out-of-month jump: an off-screen cursor is worse than
+     * a reset one. Immutable.
      */
     public function moveToDate(\DateTimeImmutable $date): self
     {

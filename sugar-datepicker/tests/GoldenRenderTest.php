@@ -28,7 +28,7 @@ final class GoldenRenderTest extends TestCase
         // January 2026: first day is a Thursday (offset 4), has 31 days
         $dp = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
             ->withToday(new \DateTimeImmutable('2026-06-15'));
-        $output = $dp->View();
+        $output = $dp->view();
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -42,9 +42,9 @@ final class GoldenRenderTest extends TestCase
         // May 2026: first day is a Friday (offset 5), has 31 days
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-06-15'))
-            ->SelectDate();
+            ->selectDate();
 
-        $output = $dp->View();
+        $output = $dp->view();
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -59,7 +59,7 @@ final class GoldenRenderTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-06-01'))
             ->withToday(new \DateTimeImmutable('2026-06-15'));
 
-        $output = $dp->View();
+        $output = $dp->view();
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
