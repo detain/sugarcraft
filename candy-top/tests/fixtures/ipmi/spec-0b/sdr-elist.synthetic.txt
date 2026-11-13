@@ -1,0 +1,3 @@
+Fans             | 01h | ok  | 29.1 | Redundancy Lost
+Fan 1            | 02h | ok  | 29.2 | 5280 RPM
+Fan 2            | 03h | ok  | 29.3 | 5160 RPM

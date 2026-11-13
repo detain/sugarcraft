@@ -1,0 +1,3 @@
+Fans             | 0x2        | discrete   | 0x0280| na        | na        | na        | na        | na        | na        
+Fan 1            | 5280.000   | RPM        | ok    | na        | 1000.000  | na        | na        | na        | na        
+Fan 2            | 5160.000   | RPM        | ok    | na        | 1000.000  | na        | na        | na        | na        

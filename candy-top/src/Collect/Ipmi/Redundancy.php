@@ -5,10 +5,19 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Collect\Ipmi;
 
 /**
- * The state of a discrete redundancy sensor (IPMI sensor-specific offsets
- * for reading type 0x0B), e.g. HP's `Fans` aggregate: `sensor list`
- * prints only its bitmask (`0x1` = offset 0 = Fully Redundant), so the
- * offsets are decoded here. The lowest set bit wins.
+ * The state of a discrete redundancy sensor (IPMI v2.0 generic reading type
+ * 0x0B), e.g. HP's `Fans` aggregate: `sensor list` prints only its bitmask
+ * (`0x1` = offset 0 = Fully Redundant), so the offsets are decoded here.
+ *
+ * Spec offsets (bit n of the mask): 0 Fully Redundant, 1 Redundancy Lost,
+ * 2 Redundancy Degraded, 3 Non-redundant Sufficient from Redundant,
+ * 4 Non-redundant Sufficient from Insufficient, 5 Non-redundant Insufficient
+ * Resources, 6 Degraded from Fully Redundant, 7 Degraded from Non-redundant.
+ * When several offsets are asserted the WORST severity wins (a BMC that
+ * reports Full alongside Lost must not read healthy); ties go to the lowest
+ * offset. Bits above 0x80 are outside the spec and ignored, never thrown on:
+ * BMC data is untrusted. Column decision: discrete rows carry the event
+ * bitmask in the reading column; `sdr elist` text, when present, wins.
  */
 enum Redundancy
 {
@@ -18,20 +27,43 @@ enum Redundancy
     case NonRedundantSufficient;
     case NonRedundantInsufficient;
 
+    /** @var list<self> indexed by IPMI offset 0..7 */
+    private const OFFSETS = [
+        self::Full,
+        self::Lost,
+        self::Degraded,
+        self::NonRedundantSufficient,
+        self::NonRedundantSufficient,
+        self::NonRedundantInsufficient,
+        self::Degraded,
+        self::Degraded,
+    ];
+
     public static function fromState(?int $state): ?self
     {
-        if ($state === null || $state === 0) {
+        if ($state === null) {
             return null;
         }
 
-        return match (true) {
-            ($state & 0x01) !== 0 => self::Full,
-            ($state & 0x02) !== 0 => self::Lost,
-            ($state & 0x04) !== 0 => self::Degraded,
-            ($state & 0x18) !== 0 => self::NonRedundantSufficient,
-            ($state & 0x20) !== 0 => self::NonRedundantInsufficient,
-            ($state & 0xC0) !== 0 => self::Degraded,
-            default => null,
+        $best = null;
+        foreach (self::OFFSETS as $bit => $candidate) {
+            if (($state & (1 << $bit)) === 0) {
+                continue;
+            }
+            if ($best === null || $candidate->rank() > $best->rank()) {
+                $best = $candidate;
+            }
+        }
+
+        return $best;
+    }
+
+    private function rank(): int
+    {
+        return match ($this->severity()) {
+            SensorStatus::Ok => 0,
+            SensorStatus::NonCritical => 1,
+            default => 2,
         };
     }
 
@@ -41,9 +73,10 @@ enum Redundancy
         $t = strtolower($text);
 
         return match (true) {
-            str_contains($t, 'fully redundant') => self::Full,
             str_contains($t, 'redundancy lost') => self::Lost,
+            // Before Full: "Degraded from Fully Redundant" contains both phrases.
             str_contains($t, 'degraded') => self::Degraded,
+            str_contains($t, 'fully redundant') => self::Full,
             str_contains($t, 'insufficient resources') && !str_contains($t, 'from insufficient') => self::NonRedundantInsufficient,
             str_contains($t, 'non-redundant') || str_contains($t, 'sufficient') => self::NonRedundantSufficient,
             default => null,
