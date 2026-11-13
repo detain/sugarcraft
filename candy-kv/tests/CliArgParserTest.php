@@ -399,4 +399,35 @@ final class CliArgParserTest extends TestCase
         $auto = ArgParser::set(['candy-kv', 'set', 'k', 'v'], 2);
         $this->assertNull($auto['binary']);
     }
+
+    // ─── KV-S03 (kv-003): attached -d keeps the refuse-rather-than-guess law ──
+
+    public function testListRefusesAMultiLetterAttachedDashDErrorLikeToken(): void
+    {
+        // The old walk matched str_starts_with($arg, '-d') before the unknown-flag
+        // refusal, so a mistyped `list -debug pat` ran as a tabular listing with
+        // delimiter "ebug" at exit 0.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('-debug');
+        ArgParser::list(['candy-kv', 'list', '-debug', 'pat'], 2);
+    }
+
+    public function testListAttachedDelimiterStaysOneCharacter(): void
+    {
+        // Single-character attached delimiters — including the bare dash and
+        // single multi-byte characters — are unambiguous and stay green.
+        foreach (['|', ':', '-', 'é', '✓'] as $delimiter) {
+            $result = ArgParser::list(['candy-kv', 'list', '-d' . $delimiter], 2);
+            $this->assertSame($delimiter, $result['delimiter']);
+        }
+    }
+
+    public function testListLongerDelimitersRideTheSeparatedFormOnly(): void
+    {
+        $result = ArgParser::list(['candy-kv', 'list', '-d', ', ', 'pat'], 2);
+        $this->assertSame(', ', $result['delimiter']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        ArgParser::list(['candy-kv', 'list', '-d, '], 2);
+    }
 }

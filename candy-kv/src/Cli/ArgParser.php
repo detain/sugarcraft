@@ -185,6 +185,16 @@ final class ArgParser
             } elseif (str_starts_with($arg, '-d')) {
                 $attached = substr($arg, 2);
                 if ($attached !== '') {
+                    // Gate G2 / kv-003: an attached tail of two or more characters is
+                    // indistinguishable from a typo'd flag — `list -debug pat` silently
+                    // became a "|" tabular run with delimiter "ebug". The parser refuses
+                    // rather than guesses: an attached delimiter must be exactly one
+                    // character (the bare dash of `-d-` included). Longer delimiters are
+                    // unambiguous only in separated form: `-d ', '`.
+                    $attachedChars = \preg_split('//u', $attached, -1, PREG_SPLIT_NO_EMPTY);
+                    if (\strlen($attached) > 1 && ($attachedChars === false || \count($attachedChars) > 1)) {
+                        throw self::unknownOption($arg, 'list');
+                    }
                     $delimiter = $attached;
                 } else {
                     $next = $tokens[$p + 1] ?? null;

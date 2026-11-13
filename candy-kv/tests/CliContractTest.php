@@ -139,6 +139,15 @@ final class CliContractTest extends TestCase
         $this->assertSame(1, $this->runKv(['get', 'typo-k'])['exit']);
     }
 
+    public function testMultiLetterAttachedDashDIsRefusedNotGuessedAsDelimiter(): void
+    {
+        // G2 / kv-003: `list -debug pat` once ran as a tabular listing with
+        // delimiter "ebug" at exit 0. The parser now names the token and refuses.
+        $run = $this->runKv(['list', '-debug', 'pat']);
+        $this->assertSame(2, $run['exit'], $run['stderr']);
+        $this->assertStringContainsString('-debug', $run['stderr']);
+    }
+
     public function testSurplusPositionalRefused(): void
     {
         $run = $this->runKv(['set', 'k1', 'v1', 'oops']);
