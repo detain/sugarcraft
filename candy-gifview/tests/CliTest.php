@@ -248,19 +248,31 @@ final class CliTest extends TestCase
 
     public function testViewportCellsUsesTheDocumentedFallbackOffATty(): void
     {
-        [$cellsW, $cellsH] = Cli::viewportCells();
+        // The escape hatch would legitimately override the probe, so this
+        // pin needs the environment silent — capture, clear, restore.
+        $savedColumns = \getenv('COLUMNS');
+        $savedLines = \getenv('LINES');
+        \putenv('COLUMNS');
+        \putenv('LINES');
 
-        if (!\is_resource(\STDOUT) || !stream_isatty(STDOUT)) {
-            // phpunit/CI runs are piped — the deterministic branch.
-            $this->assertSame(Cli::FALLBACK_CELLS_W, $cellsW);
-            $this->assertSame(Cli::FALLBACK_CELLS_H, $cellsH);
+        try {
+            [$cellsW, $cellsH] = Cli::viewportCells();
 
-            return;
+            if (!\is_resource(\STDOUT) || !stream_isatty(STDOUT)) {
+                // phpunit/CI runs are piped — the deterministic branch.
+                $this->assertSame(Cli::FALLBACK_CELLS_W, $cellsW);
+                $this->assertSame(Cli::FALLBACK_CELLS_H, $cellsH);
+
+                return;
+            }
+
+            // Interactive run: sized from the real terminal, status line reserved.
+            $this->assertGreaterThan(0, $cellsW);
+            $this->assertGreaterThan(0, $cellsH);
+        } finally {
+            \putenv($savedColumns === false ? 'COLUMNS' : "COLUMNS=$savedColumns");
+            \putenv($savedLines === false ? 'LINES' : "LINES=$savedLines");
         }
-
-        // Interactive run: sized from the real terminal, status line reserved.
-        $this->assertGreaterThan(0, $cellsW);
-        $this->assertGreaterThan(0, $cellsH);
     }
 
     private function gifFixture(): string
@@ -597,9 +609,10 @@ final class CliTest extends TestCase
             'a narrow catch re-lets a raw \Error escape the launch/watch path',
         );
         $this->assertSame(
-            2,
+            3,
             substr_count($src, 'catch (\Throwable'),
-            'exactly the launch and watch-reload rescue sites must catch \Throwable',
+            'the launch rescue, the watch-reload rescue, and the viewport probe belt'
+                . ' are the three sites that must catch \Throwable',
         );
     }
 }

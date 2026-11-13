@@ -114,8 +114,17 @@ The key table is fixed in the player model; keys are not rebindable.
   legible there and is the better choice. On `TERM=dumb` or otherwise
   capability-poor terminals, expect raw escape sequences rather than a
   usable frame.
-- Alternate screen plus an ioctl size query on descriptor 1; off a tty the
-  viewport falls back to a deterministic 60×24 cell grid (piped output, CI).
+- The viewer switches to the alternate screen and sizes the viewport through
+  sugar-core's never-throwing terminal façade: an explicit `COLUMNS`/`LINES`
+  environment pair (positive integers) wins first, otherwise stdout is probed;
+  off a terminal (piped output, CI) the viewport falls back to a deterministic
+  60×24 cell grid. A probe failure can therefore never surface as a crash —
+  the worst answer is the fallback grid.
+- **Platforms**: Linux, macOS and WSL2 are supported. Because sizing now goes
+  through the façade, sugar-pty's `SUGARCRAFT_LIBC` rescue environment variable
+  is no longer load-bearing for the viewer. On hosts with `ffi.enable=0` the
+  size probe cannot fatal: the COLUMNS/LINES hatch or the 60×24 fallback
+  answers instead.
 - GIF transparency is composited against the terminal's own background —
   transparent cells render as whatever colour your terminal uses there.
 
@@ -188,14 +197,13 @@ The key table is fixed in the player model; keys are not rebindable.
 The whole animation engine — `Decoder`, `Frame`, `Renderer`, `Player`, and
 the separate `.ansi` art surface (`AnsiArt` / `ArtLibrary` / `ArtLoop`,
 which this viewer does not expose) — lives in
-[`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). This package is only the viewer app,
-plus [`sugarcraft/sugar-pty`](https://github.com/detain/sugarcraft/tree/master/sugar-pty) for the terminal-size ioctl query that
-sizes the viewport:
+[`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). This package is only the viewer app; the viewport is sized through sugar-core's never-throwing `Util\Tty` façade, and the direct
+[`sugarcraft/sugar-pty`](https://github.com/detain/sugarcraft/tree/master/sugar-pty) require keeps that façade's ioctl seat resolvable when this app is published standalone:
 
 | File              | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
 | `bin/candy-gifview` | Autoload probe, locale wiring (`T::setLocale(T::detect())` before the first message), and a `Cli::main()` hand-off — deliberately a thin shim. |
-| `src/Cli.php`     | Argv parsing (`--help`/`--version`, preset token with loud refusal, `--fps`/`--speed`/`--duration`/`--watch`/`--paused`, single-dash refusals), gd preflight, viewport sizing (`viewportCells()` — descriptor 1 behind a core `stream_isatty` gate, two rows reserved (status line + trailing newline guard)), intake caps (frame-count backstop, 64 MiB file gate, resident-cell budget), decode-failure exits (rescue catches take any `\Throwable` so a raw engine `\Error` still exits 1 loudly, wrapped in one localized `could not play` line; every interpolated echo — paths, argv tokens, and the relayed engine reason (which itself embeds a raw path) — passes a single `printable()` control-char choke before it reaches the terminal), Player wiring, Program launch, and signal re-encoding (`stopSignal()` → 128+N). `$play`, `$watchStat` and `$decode` closure seams keep every branch testable without entering the blocking loop. |
+| `src/Cli.php`     | Argv parsing (`--help`/`--version`, preset token with loud refusal, `--fps`/`--speed`/`--duration`/`--watch`/`--paused`, single-dash refusals), gd preflight, viewport sizing (`viewportCells()` — COLUMNS/LINES environment hatch, else sugar-core's never-throwing `Util\Tty` façade on stdout, two rows reserved (status line + trailing newline guard), 60×24 fallback off a tty), intake caps (frame-count backstop, 64 MiB file gate, resident-cell budget), decode-failure exits (rescue catches take any `\Throwable` so a raw engine `\Error` still exits 1 loudly, wrapped in one localized `could not play` line; every interpolated echo — paths, argv tokens, and the relayed engine reason (which itself embeds a raw path) — passes a single `printable()` control-char choke before it reaches the terminal), Player wiring, Program launch, and signal re-encoding (`stopSignal()` → 128+N). `$play`, `$watchStat` and `$decode` closure seams keep every branch testable without entering the blocking loop. |
 | `src/Support/Version.php` | Resolves the version stamp: the phar's embedded `metadata['version']` when running from a phar (release `x.y.z` or an honest `dev-<sha>`/`dev-build` stamp), falling back to the compiled `CURRENT` constant. |
 | `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.bad_flag`, `cli.bad_value`, `cli.too_many`, `cli.unexpected_value`, `cli.bad_preset`, `cli.no_frames`, `cli.cannot_play`, `cli.reason_frames_over`, `cli.reason_bytes_over`, `cli.reason_cells_over`, `cli.duration_static`, `cli.need_gd`, `cli.decoding`, `cli.truncated` — all shipping in 16 locales). `cli.no_autoload` mirrors, for parity, the string the bin shim prints before autoload exists, where translation cannot run. |
 

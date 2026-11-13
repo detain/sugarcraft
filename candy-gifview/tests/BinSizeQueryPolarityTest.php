@@ -16,9 +16,12 @@
  * and is pinned by RendererAdaptiveSizeDescriptorTest in sugar-animation; the bin
  * was the sibling that never got the fix.
  *
- * The size query now lives in `src/Cli.php::viewportCells()`, spelling
- * descriptor 1 as the literal and gating with core `stream_isatty(STDOUT)`,
- * which keeps the process's only ext-posix symbol out of the app. The bin is a
+ * The size query now lives in `src/Cli.php::viewportCells()`, which delegates
+ * the probe to sugar-core's never-throwing `Util\Tty` façade (an explicit
+ * COLUMNS/LINES environment pair wins first; off a tty the app answers its
+ * own 60x24 fallback). The app no longer touches the ioctl or the tty gate
+ * directly — the descriptor discipline moved into the façade's seats, and
+ * this file pins the delegation. The bin is a
  * shim; both files are scanned.
  */
 
@@ -27,6 +30,7 @@ declare(strict_types=1);
 namespace SugarCraft\GifView\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\GifView\Cli;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\Posix\PosixPtyPair;
 
@@ -127,20 +131,98 @@ final class BinSizeQueryPolarityTest extends TestCase
         );
     }
 
-    public function testCliQueriesDescriptorOneBehindACoreIsattyGate(): void
+    public function testCliDelegatesTheSizeProbeToTheNeverThrowingTtyFacade(): void
     {
         $cli = self::scanTargets()['src/Cli.php'];
 
-        $this->assertStringContainsString(
-            'SizeIoctl::query(1)',
+        $this->assertStringNotContainsString(
+            'SizeIoctl',
             $cli,
-            'STDOUT\'s descriptor is the literal 1; anything else is guessing',
+            'the app must not hand a descriptor to the raw ioctl: the never-throwing'
+                . ' Tty facade owns the probe, so no FFI failure can reach exit 255',
         );
         $this->assertStringContainsString(
-            'stream_isatty(STDOUT)',
+            'new Tty(',
             $cli,
-            'the tty gate must be core stream_isatty, not the ext-posix twin',
+            'viewportCells() must probe through SugarCraft\\Core\\Util\\Tty',
         );
+
+        // The rescue belt is structural: the probe arms must be wrapped so a
+        // hypothetical facade failure degrades to the fallback grid.
+        $probe = self::methodText($cli, 'viewportCells');
+        $this->assertStringContainsString(
+            'catch (\\Throwable)',
+            $probe,
+            'the size probe sits behind a catch-all belt',
+        );
+        $this->assertStringContainsString(
+            'FALLBACK_CELLS_W',
+            $probe,
+            'the non-tty and probe-failure arms land on the documented 60x24 fallback',
+        );
+    }
+
+    /** The text of one brace-flat method in $src, name through closing brace. */
+    private static function methodText(string $src, string $name): string
+    {
+        $start = strpos($src, 'function ' . $name);
+        self::assertNotFalse($start, "src/Cli.php must still define {$name}()");
+        $end = strpos($src, "\n    }", $start);
+        self::assertNotFalse($end, "unterminated {$name}() in src/Cli.php");
+
+        return substr($src, $start, $end - $start);
+    }
+
+    public function testViewportCellsHonoursTheEnvironmentEscapeHatch(): void
+    {
+        $saved = [];
+        foreach (['COLUMNS', 'LINES'] as $name) {
+            $saved[$name] = \getenv($name);
+        }
+
+        try {
+            \putenv('COLUMNS=100');
+            \putenv('LINES=50');
+            $this->assertSame(
+                [100, 48],
+                Cli::viewportCells(),
+                'a valid COLUMNS/LINES pair wins over any probe, rows keep the 2-row reserve',
+            );
+
+            \putenv('LINES=2');
+            $this->assertSame(
+                [100, 1],
+                Cli::viewportCells(),
+                'max(1, rows - 2) floors even a two-row terminal',
+            );
+
+            \putenv('COLUMNS=12.5');
+            \putenv('LINES=-5');
+            [$cellsW, $cellsH] = Cli::viewportCells();
+            if (!\is_resource(\STDOUT) || !\stream_isatty(\STDOUT)) {
+                $this->assertSame(
+                    [Cli::FALLBACK_CELLS_W, Cli::FALLBACK_CELLS_H],
+                    [$cellsW, $cellsH],
+                    'junk env values are ignored, not honoured',
+                );
+            } else {
+                $this->assertGreaterThan(0, $cellsW);
+                $this->assertGreaterThan(0, $cellsH);
+            }
+
+            \putenv('COLUMNS=100');
+            \putenv('LINES');
+            [$cellsW] = Cli::viewportCells();
+            $this->assertSame(
+                100,
+                $cellsW,
+                'COLUMNS alone still answers the width axis (per-axis hatch)',
+            );
+        } finally {
+            foreach ($saved as $name => $value) {
+                \putenv($value === false ? $name : "$name=$value");
+            }
+        }
     }
 
     public function testNeitherSurfaceReachesForExtPosix(): void

@@ -9,7 +9,7 @@ use SugarCraft\Animation\Player;
 use SugarCraft\Animation\Renderer;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
-use SugarCraft\Pty\SizeIoctl;
+use SugarCraft\Core\Util\Tty;
 
 /**
  * Command-line entry point: parse argv, size the decode grid to the viewport,
@@ -570,28 +570,72 @@ final class Cli
     /**
      * Size the decode grid to the terminal viewport: rows-2, one row for the
      * Player's status line and one for the trailing newline its view()
-     * emits — an over-tall final line scrolls the alt screen by one. Falls
-     * back to 60x24 when STDOUT is not a tty (e.g. piped/CI). On resize the
-     * engine re-clamps to rows-1 itself (sugar-animation Player; engine
-     * seam), so the reserve is exact for the initial paint.
+     * emits — an over-tall final line scrolls the alt screen by one. The
+     * COLUMNS/LINES environment pair wins first (bare positive integers —
+     * the universal CLI escape hatch for hosts the probe cannot answer);
+     * otherwise the never-throwing sugar-core Tty facade probes STDOUT. Off
+     * a terminal (piped output, CI) the grid is the deterministic 60x24
+     * fallback. On resize the engine re-clamps to rows-1 itself
+     * (sugar-animation Player; engine seam), so the reserve is exact for
+     * the initial paint.
      *
-     * Descriptor 1 is spelled as the literal: `(int) STDOUT` is the RESOURCE
-     * ID, not the descriptor — usually a different number that names STDERR,
-     * and context-dependent under a runner that reopens the STD streams —
-     * the same defect fixed in
-     * Renderer::withAdaptiveSize() and pinned by BinSizeQueryPolarityTest.
-     * stream_isatty() is core PHP, so the gate needs no ext-posix either.
+     * The probe delegates to the facade rather than querying the raw ioctl:
+     * the old seat read descriptor 1 behind a core stream_isatty gate and
+     * every FFI/ioctl failure surfaced as an uncaught exception with exit
+     * 255. Tty answers isTty() and size() without throwing, and the
+     * catch-all belt below turns even a hypothetical facade failure into
+     * the fallback grid. Descriptor discipline — `(int) STDOUT` is the
+     * RESOURCE ID, not the descriptor, the defect fixed in
+     * Renderer::withAdaptiveSize() — now belongs to the facade's own
+     * seats, pinned in sugar-core; BinSizeQueryPolarityTest pins this
+     * file's delegation.
      *
      * @return array{int, int} [cellsW, cellsH]
      */
     public static function viewportCells(): array
     {
-        if (\is_resource(\STDOUT) && stream_isatty(STDOUT)) {
-            $size = SizeIoctl::query(1);
+        $columns = self::envPositiveInt('COLUMNS');
+        $lines = self::envPositiveInt('LINES');
 
-            return [$size['cols'], max(1, $size['rows'] - 2)];
+        if (($columns === null || $lines === null) && \is_resource(\STDOUT)) {
+            try {
+                $tty = new Tty(\STDOUT);
+
+                if ($tty->isTty()) {
+                    $size = $tty->size();
+                    $columns ??= $size['cols'];
+                    $lines ??= $size['rows'];
+                }
+            } catch (\Throwable) {
+                // Belt: Tty is documented never to throw, but the viewer's
+                // outcome must stay a clean frame (or exit 1 with one
+                // localized line) — a failed probe degrades to the fallback
+                // axes below, never an escaping exception.
+            }
         }
 
-        return [self::FALLBACK_CELLS_W, self::FALLBACK_CELLS_H];
+        if ($columns !== null && $lines !== null) {
+            return [$columns, \max(1, $lines - 2)];
+        }
+
+        return [$columns ?? self::FALLBACK_CELLS_W, $lines ?? self::FALLBACK_CELLS_H];
+    }
+
+    /**
+     * A bare positive integer read from the environment, or null when the
+     * name is unset or not one (junk like "0", "-5" or "12.5" is ignored,
+     * not honoured).
+     */
+    private static function envPositiveInt(string $name): ?int
+    {
+        $raw = \getenv($name);
+
+        if (!\is_string($raw) || $raw === '' || !\ctype_digit($raw)) {
+            return null;
+        }
+
+        $value = (int) $raw;
+
+        return $value > 0 ? $value : null;
     }
 }
