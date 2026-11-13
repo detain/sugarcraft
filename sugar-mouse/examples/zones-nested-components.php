@@ -9,6 +9,8 @@ declare(strict_types=1);
  * but the prefixes keep their bounding boxes from colliding.
  *
  *   php examples/zones-nested-components.php
+ * Mouse path only — the keyboard twin is app-side per README's Accessibility
+ * section (see `zones-list-default.php` for the scripted pattern).
  */
 
 require __DIR__ . '/../vendor/autoload.php';

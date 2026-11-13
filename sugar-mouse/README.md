@@ -210,6 +210,12 @@ Concrete parity rules:
 - Never gate a command on tracker state alone (hover zone, `ClickCounter`
   streak): the keyboard path must reach the same command without pointer
   history.
+- A multi-click affordance (`ClickCounter` streaks) is a timed pointer
+  gesture — build a keyboard or single-action twin for the same command,
+  and consider surfacing `ClickCounter`'s `clickIntervalMs` as an
+  app-exposed setting: the 500 ms default is a pointer-timing tolerance,
+  and users with tremor or reduced dexterity may need it wider (cf. WCAG
+  guidance on user-controlled timing).
 
 ## Scan rules
 
@@ -601,7 +607,10 @@ least one emitted `ZoneDragMoveMsg`.
 `ClickCounter` wraps a `Manager` and tracks double/triple click
 streaks inside zones. It emits `DoubleClickMsg` on the second press
 and `TripleClickMsg` on the third press — all within a configurable
-click interval (default 500 ms). The streak resets when the interval
+click interval (default 500 ms — a pointer-timing tolerance, not a law:
+`ClickCounter::new(manager, clickIntervalMs: N)` widens the window, and
+apps should consider exposing it as a setting for users with tremor or
+reduced dexterity, per the Accessibility section). The streak resets when the interval
 expires or when a PRESS lands in a different zone (or outside every zone);
 hover movement never touches the streak, and wheel reports are inert. Presses arrive
 with plain mode-`1000` reporting (see
@@ -761,7 +770,8 @@ Runnable, self-explanatory files under `examples/` (after
 - `zones-buttons.php` — a button row through `Manager::newGlobal()`,
   marking, scanning and resolving clicks to zone ids.
 - `zones-list-default.php` — a selectable list: one manager, per-row
-  marked items, click-to-focus resolution.
+  marked items, click-to-focus resolution, plus a scripted keyboard twin
+  driving the same cursor with Down/Enter.
 - `zones-nested-components.php` — two `Manager::newPrefix()` managers
   (left/right panes) keeping identically-named ids from shadowing each
   other.

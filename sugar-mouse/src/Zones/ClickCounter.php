@@ -52,6 +52,10 @@ final class ClickCounter
      * @param Manager $manager Zone manager that has already run scan().
      * @param int $clickIntervalMs Window in milliseconds within which successive
      *                              clicks count toward a double/triple (default 500ms).
+     *                              The window is a pointer-timing tolerance: apps
+     *                              should expose it as a setting so users with tremor
+     *                              or reduced dexterity can widen the streak (README,
+     *                              Accessibility).
      * @param ?callable $now Clock returning "now" in seconds as a float.
      *                       Defaults to {@see microtime} when null. The seam lets
      *                       tests drive interval expiry deterministically instead
