@@ -175,6 +175,64 @@ final class ProgramTerminalRecoveryTest extends TestCase
         fclose($out);
     }
 
+    public function testTeardownSurvivesClosedOutputAndTornPipe(): void
+    {
+        $errors = [];
+        set_error_handler(static function (int $no, string $str) use (&$errors): bool {
+            if (!(error_reporting() & $no)) {
+                return true; // @-silenced, exactly as PHP's own handler treats it
+            }
+            $errors[] = $str;
+            return true;
+        });
+        try {
+            // Closed output resource: every write would TypeError.
+            [$in, $out, $writer] = $this->pipes();
+            $program = new Program($this->noopModel(), $this->options($in, $out, new StreamSelectLoop()));
+            (new \ReflectionMethod(Program::class, 'setupTerminal'))->invoke($program);
+            fclose($out);
+            (new \ReflectionMethod(Program::class, 'teardownTerminal'))->invoke($program);
+            (new \ReflectionMethod(Program::class, 'releaseTerminalForShutdown'))->invoke($program, getmypid());
+
+            // Torn pipe: reader gone, writes fail with EPIPE.
+            $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+            $this->assertNotFalse($sockets);
+            [$reader, $torn] = $sockets;
+            [$in2, , $writer2] = $this->pipes();
+            $program2 = new Program($this->noopModel(), $this->options($in2, $torn, new StreamSelectLoop()));
+            (new \ReflectionMethod(Program::class, 'setupTerminal'))->invoke($program2);
+            fclose($reader);
+            (new \ReflectionMethod(Program::class, 'teardownTerminal'))->invoke($program2);
+            fclose($torn);
+            fclose($in2);
+            fclose($writer2);
+            fclose($in);
+            fclose($writer);
+        } finally {
+            restore_error_handler();
+        }
+        $this->assertSame([], $errors, 'teardown must raise no Notice/Warning');
+    }
+
+    public function testLaterRestoreWritesStillAttemptedAfterAFailedWrite(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $program = new Program($this->noopModel(), $this->options($in, $out, new StreamSelectLoop()));
+        (new \ReflectionMethod(Program::class, 'setupTerminal'))->invoke($program);
+        $write = new \ReflectionMethod(Program::class, 'writeOutput');
+        $prop = new \ReflectionProperty(Program::class, 'output');
+        $dead = fopen('php://memory', 'w');
+        fclose($dead);
+        $prop->setValue($program, $dead);
+        $write->invoke($program, "lost");          // must not throw
+        $prop->setValue($program, $out);
+        $write->invoke($program, "later");
+        $this->assertStringContainsString('later', $this->drain($out));
+        fclose($out);
+        fclose($in);
+        fclose($writer);
+    }
+
     public function testTeardownTerminalIsIdempotentWhileAttached(): void
     {
         [$in, $out, $writer] = $this->pipes();

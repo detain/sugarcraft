@@ -1571,7 +1571,11 @@ final class Program
             return;
         }
         $this->terminalAttached = false;
-        $this->tty->restore();
+        try {
+            $this->tty->restore();
+        } catch (\Throwable) {
+            // A dead input stream must not skip the byte restores below.
+        }
         if ($this->activeBracketedPaste) {
             $this->writeOutput(Ansi::bracketedPasteOff());
         }
@@ -1920,20 +1924,27 @@ final class Program
         // sequences and large RawMsg/PrintMsg payloads partially emitted.
         $len = strlen($bytes);
         $written = 0;
-        while ($written < $len) {
-            $n = @fwrite($this->output, $written === 0 ? $bytes : substr($bytes, $written));
-            if ($n === false) {
-                break;
-            }
-            if ($n === 0) {
-                $w = [$this->output];
-                $r = $e = null;
-                if (@stream_select($r, $w, $e, 1) === false) {
+        // A closed resource makes fwrite()/stream_select() throw TypeError (the
+        // @ silencer does not cover that), and a torn pipe returns false with
+        // a Notice. Teardown is best-effort: swallow and let later restore
+        // writes still be attempted.
+        try {
+            while ($written < $len && is_resource($this->output)) {
+                $n = @fwrite($this->output, $written === 0 ? $bytes : substr($bytes, $written));
+                if ($n === false) {
                     break;
                 }
-                continue;
+                if ($n === 0) {
+                    $w = [$this->output];
+                    $r = $e = null;
+                    if (@stream_select($r, $w, $e, 1) === false) {
+                        break;
+                    }
+                    continue;
+                }
+                $written += $n;
             }
-            $written += $n;
+        } catch (\Throwable) {
         }
         $this->recorder?->recordOutput($bytes);
     }
