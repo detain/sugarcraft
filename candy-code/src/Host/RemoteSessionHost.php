@@ -22,6 +22,8 @@ use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Support\Log;
+use SugarCraft\McpClient\McpCall;
+use SugarCraft\McpClient\PendingCalls;
 
 use function React\Promise\reject;
 
@@ -129,11 +131,8 @@ final class RemoteSessionHost
 
     private int $snapshotPageRows = self::SNAPSHOT_PAGE_ROWS;
 
-    /** @var array<string, Deferred> request id => the answer's deferred */
-    private array $pending = [];
-
-    /** @var array<string, true> request ids answered as decoded objects ({@see callPreserving()}) */
-    private array $preserving = [];
+    /** In-flight requests by id; the "preserving" flag marks ids answered as decoded objects ({@see callPreserving()}). */
+    private PendingCalls $pending;
 
     private int $nextId = 0;
 
@@ -187,6 +186,7 @@ final class RemoteSessionHost
     ) {
         $this->reopen = $reopen;
         $this->after = $after;
+        $this->pending = new PendingCalls();
         $this->wire($stream, $initial);
     }
 
@@ -329,13 +329,10 @@ final class RemoteSessionHost
 
         $id = 'a' . ++$this->nextId;
         $deferred = new Deferred();
-        $this->pending[$id] = $deferred;
-        $this->buffer->sendMessage(JsonRpc::encode([
-            'jsonrpc' => JsonRpc::VERSION,
-            'id' => $id,
-            'method' => $method,
-            'params' => $params === [] ? new \stdClass() : $params,
-        ]));
+        $this->pending->register($id, self::settling($deferred));
+        // The envelope and the empty-params `{}` shim are sugar-mcp-client's
+        // McpCall (rider R17b), the one tested place for both.
+        $this->buffer->sendMessage(McpCall::request($id, $method, $params, \JSON_PRESERVE_ZERO_FRACTION));
 
         return $deferred->promise();
     }
@@ -359,24 +356,16 @@ final class RemoteSessionHost
 
         $id = 'a' . ++$this->nextId;
         $deferred = new Deferred();
-        $this->pending[$id] = $deferred;
-        $this->preserving[$id] = true;
-        $this->buffer->sendMessage(JsonRpc::encode([
-            'jsonrpc' => JsonRpc::VERSION,
-            'id' => $id,
-            'method' => $method,
-            'params' => $params === [] ? new \stdClass() : $params,
-        ]));
+        $this->pending->register($id, self::settling($deferred), true);
+        $this->buffer->sendMessage(McpCall::request($id, $method, $params, \JSON_PRESERVE_ZERO_FRACTION));
 
         if ($deadline !== null) {
             // A host that never answers must not park this Deferred (and its
             // pending row) forever; a late answer finds no row and is dropped.
             $loop ??= Loop::get();
             $timer = $loop->addTimer($deadline, function () use ($id, $deferred, $method): void {
-                if (isset($this->pending[$id])) {
-                    unset($this->pending[$id], $this->preserving[$id]);
-                    $deferred->reject(new \RuntimeException(\sprintf('no answer to %s in time', \substr($method, 0, 64))));
-                }
+                // A late answer finds no row and is dropped.
+                $this->pending->fail($id, new \RuntimeException(\sprintf('no answer to %s in time', \substr($method, 0, 64))));
             });
             $promise = $deferred->promise();
             $promise->then(static fn () => $loop->cancelTimer($timer), static fn () => $loop->cancelTimer($timer));
@@ -812,21 +801,19 @@ final class RemoteSessionHost
         }
 
         $id = $message['id'] ?? null;
-        if (!\is_string($id) || !isset($this->pending[$id])) {
+        if (!\is_string($id) || !$this->pending->has($id)) {
             return;
         }
-        $deferred = $this->pending[$id];
-        $preserve = isset($this->preserving[$id]);
-        unset($this->pending[$id], $this->preserving[$id]);
+        $preserve = $this->pending->isPreserving($id);
 
         if (\array_key_exists('result', $message)) {
             if ($preserve) {
                 $objects = \json_decode($payload, false, JsonRpc::MAX_DEPTH);
-                $deferred->resolve(\is_object($objects) && \property_exists($objects, 'result') ? $objects->result : new \stdClass());
+                $this->pending->settle($id, \is_object($objects) && \property_exists($objects, 'result') ? $objects->result : new \stdClass());
 
                 return;
             }
-            $deferred->resolve(\is_array($message['result']) ? $message['result'] : []);
+            $this->pending->settle($id, \is_array($message['result']) ? $message['result'] : []);
 
             return;
         }
@@ -835,12 +822,25 @@ final class RemoteSessionHost
         $data = \is_array($error['data'] ?? null) ? $error['data'] : [];
         $kind = \is_string($data['kind'] ?? null) ? $data['kind'] : null;
         unset($data['kind']);
-        $deferred->reject(RpcError::of(
+        $this->pending->fail($id, RpcError::of(
             ErrorCode::tryFrom((int) ($error['code'] ?? 0)) ?? ErrorCode::Internal,
             \is_string($error['message'] ?? null) ? $error['message'] : Lang::t('host.remote.refused'),
             $kind,
             $data,
         ));
+    }
+
+    /**
+     * The table's settle callback for one Deferred: a failure rejects it, a
+     * result resolves it.
+     *
+     * @return \Closure(?\Throwable, mixed): void
+     */
+    private static function settling(Deferred $deferred): \Closure
+    {
+        return static function (?\Throwable $failure, mixed $result) use ($deferred): void {
+            $failure !== null ? $deferred->reject($failure) : $deferred->resolve($result);
+        };
     }
 
     private function control(FrameInterface $frame): void
@@ -1027,12 +1027,7 @@ final class RemoteSessionHost
     /** Requests the current socket cannot answer any more, with why. */
     private function rejectPending(string $reason): void
     {
-        $pending = $this->pending;
-        $this->pending = [];
-        $this->preserving = [];
-        foreach ($pending as $deferred) {
-            $deferred->reject(new \RuntimeException($reason));
-        }
+        $this->pending->failAll($reason);
     }
 
     /**
