@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => 'registrados {duration}s de {project} ({language})',
-    'cli.usage' => "Uso: candy-codetime [--backend=file|sqlite] <command> [args]\n\nComandos:\n  dashboard              Inicia el panel TUI (lee el backend seleccionado)\n  push                   <project> <language> <file> [duration] | --  Registrar un heartbeat\n  milestone              add [name] [description] | list  Gestionar hitos (solo sqlite)\n  export                 <csv|json|ics> [days]  Exportar heartbeats (7 días por defecto)\n  gaps                   [days]  Mostrar huecos sin seguimiento de al menos 300 segundos (7 días por defecto)\n  backup                 Archivar datos de más de 30 días (copia; nunca borra)\n  help, --help, -h       Mostrar este uso\n  --version, -v          Imprimir la versión\n\nOpciones:\n  --backend=file|sqlite  Backend de almacenamiento para push/export/gaps/dashboard (por defecto: file)\n  --time=<unix>          push: registra el latido en estos segundos unix, no ahora\n  CANDY_CODETIME_DIR     Directorio de datos (por defecto: \$XDG_DATA_HOME/candy-codetime, si no \$HOME/.local/share/candy-codetime, o ./.local/share/candy-codetime cuando HOME no está definido)",
+    'cli.usage' => "Uso: candy-codetime [--backend=file|sqlite] <command> [args]\n\nComandos:\n  dashboard              Inicia el panel TUI (lee el backend seleccionado)\n  push                   <project> <language> <file> [duration] | --  Registrar un heartbeat\n  milestone              add [name] [description] | list  Gestionar hitos (solo sqlite)\n  export                 <csv|json|ics> [days]  Exportar heartbeats (7 días por defecto)\n  gaps                   [days]  Mostrar huecos sin seguimiento de al menos 300 segundos (7 días por defecto)\n  backup                 Archivar datos de más de 30 días (copia; nunca borra)\n  help, --help, -h       Mostrar este uso\n  --version, -v          Imprimir la versión\n\nOpciones:\n  --backend=file|sqlite  Backend de almacenamiento para push/export/gaps/dashboard (por defecto: file)\n  --time=<unix>          push: registra el latido en estos segundos unix, no ahora\n  --sqlite               backup: archivar la base de datos SQLite con VACUUM INTO (copia segura)\n  CANDY_CODETIME_DIR     Directorio de datos (por defecto: \$XDG_DATA_HOME/candy-codetime, si no \$HOME/.local/share/candy-codetime, o ./.local/share/candy-codetime cuando HOME no está definido)",
     'cli.push_usage' => 'Uso: candy-codetime push <project> <language> <file> [duration] [--time=<unix>] | candy-codetime push -- (lote de líneas JSON por stdin)',
     'cli.push_missing_args' => "push: faltan argumentos obligatorios (project, language, file)",
     'cli.push_ignored' => "push: {file} coincidió con .sugartrackignore — omitido",
@@ -44,7 +44,8 @@ return [
     'cli.backup_done' => "backup: {count} archivos archivados",
     'cli.backup_done_one' => 'backup: {count} archivo archivado',
     'cli.backup_none' => "backup: nada nuevo que archivar",
-    'cli.backup_sqlite_notice' => 'backup: la base de datos SQLite {db} NO es archivada por este comando — use sqlite3 <db> ".backup <dest>" o VACUUM INTO para una copia segura',
+    'cli.backup_sqlite_notice' => 'backup: este comando solo archiva los archivos diarios — para la base SQLite {db} use backup --sqlite (copia segura)',
+    'cli.backup_sqlite_done' => 'backup: base de datos archivada en {file}',
     'cli.unknown_command' => "candy-codetime: comando desconocido: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} está obsoleto; defina CANDY_CODETIME_DIR en su lugar.",
     'cli.migration_notice' => "candy-codetime: {notice}",

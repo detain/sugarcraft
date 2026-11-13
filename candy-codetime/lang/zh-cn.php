@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '已记录 {duration}s：{project} ({language})',
-    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   <project> <language> <file> [duration] | --  记录心跳\n  milestone              add [name] [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days]  导出心跳 (默认 7 天)\n  gaps                   [days]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  --time=<unix>          push: 将心跳记录到指定的 unix 秒，而不是现在\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime，未设置时用 \$HOME/.local/share/candy-codetime，HOME 也未设置时用 ./.local/share/candy-codetime)",
+    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   <project> <language> <file> [duration] | --  记录心跳\n  milestone              add [name] [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days]  导出心跳 (默认 7 天)\n  gaps                   [days]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  --time=<unix>          push: 将心跳记录到指定的 unix 秒，而不是现在\n  --sqlite               backup：用 VACUUM INTO 归档 SQLite 数据库（崩溃安全快照）\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime，未设置时用 \$HOME/.local/share/candy-codetime，HOME 也未设置时用 ./.local/share/candy-codetime)",
     'cli.push_usage' => '用法: candy-codetime push <project> <language> <file> [duration] [--time=<unix>] | candy-codetime push -- (stdin 批量 JSON 行)',
     'cli.push_missing_args' => "push: 缺少必需参数 (project, language, file)",
     'cli.push_ignored' => "push: {file} 匹配 .sugartrackignore — 已跳过",
@@ -44,7 +44,8 @@ return [
     'cli.backup_done' => "backup: 已归档 {count} 个文件",
     'cli.backup_done_one' => 'backup: 已归档 {count} 个文件',
     'cli.backup_none' => "backup: 没有可归档的新文件",
-    'cli.backup_sqlite_notice' => 'backup：SQLite 数据库 {db} 不会由此命令归档 — 请使用 sqlite3 <db> ".backup <dest>" 或 VACUUM INTO 以获得可崩溃安全的副本',
+    'cli.backup_sqlite_notice' => 'backup：此命令仅归档每日文件 — SQLite 数据库 {db} 请用 backup --sqlite 以获得崩溃安全副本',
+    'cli.backup_sqlite_done' => 'backup：数据库已归档到 {file}',
     'cli.unknown_command' => "candy-codetime: 未知命令: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} 已弃用；请改为设置 CANDY_CODETIME_DIR。",
     'cli.migration_notice' => "candy-codetime: {notice}",

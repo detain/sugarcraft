@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s 기록됨: {project} ({language})',
-    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   <project> <language> <file> [duration] | --  하트비트 기록\n  milestone              add [name] [description] | list  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days]  하트비트 내보내기 (기본 7일)\n  gaps                   [days]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  --time=<unix>          push: 지금 대신 지정 unix 초에 하트비트 기록\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime, 미설정 시 \$HOME/.local/share/candy-codetime, HOME도 미설정 시 ./.local/share/candy-codetime)",
+    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   <project> <language> <file> [duration] | --  하트비트 기록\n  milestone              add [name] [description] | list  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days]  하트비트 내보내기 (기본 7일)\n  gaps                   [days]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  --time=<unix>          push: 지금 대신 지정 unix 초에 하트비트 기록\n  --sqlite               backup: SQLite 데이터베이스를 VACUUM INTO로 보관 (충격에 안전한 스냅샷)\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime, 미설정 시 \$HOME/.local/share/candy-codetime, HOME도 미설정 시 ./.local/share/candy-codetime)",
     'cli.push_usage' => '사용법: candy-codetime push <project> <language> <file> [duration] [--time=<unix>] | candy-codetime push -- (stdin 일괄 JSON 줄)',
     'cli.push_missing_args' => "push: 필수 인자가 없습니다 (project, language, file)",
     'cli.push_ignored' => "push: {file} 이 .sugartrackignore 와 일치하여 건너뛰었습니다",
@@ -44,7 +44,8 @@ return [
     'cli.backup_done' => "backup: 파일 {count} 개를 보관했습니다",
     'cli.backup_done_one' => 'backup: 파일 {count} 개를 보관했습니다',
     'cli.backup_none' => "backup: 새로 보관할 항목이 없습니다",
-    'cli.backup_sqlite_notice' => 'backup: SQLite 데이터베이스 {db}는 이 명령으로 보관되지 않습니다 — 안전한 사본은 sqlite3 <db> ".backup <dest>" 또는 VACUUM INTO를 사용하십시오',
+    'cli.backup_sqlite_notice' => 'backup: 이 명령은 일별 파일만 보관합니다 — SQLite 데이터베이스 {db}는 backup --sqlite로 안전 복사',
+    'cli.backup_sqlite_done' => 'backup: 데이터베이스를 {file}(으)로 보관했습니다',
     'cli.unknown_command' => "candy-codetime: 알 수 없는 명령: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} 은(는) 지원이 중단되었습니다. 대신 CANDY_CODETIME_DIR 을 설정하세요.",
     'cli.migration_notice' => "candy-codetime: {notice}",

@@ -638,6 +638,19 @@ if ($cmd === 'backup') {
     // `-wal`/`-shm` sidecars until checkpointed, so even a byte-exact copy
     // of the `.db` alone would miss them (and sidecar files are no longer
     // transient to copy piecemeal either).
+    if (in_array('--sqlite', array_slice($positional, 1), true)) {
+        // CT-S23: the sqlite retention door. VACUUM INTO snapshots the
+        // database consistently even while appenders hold it; a byte copy
+        // could never say that, so plain rotate() still refuses the .db.
+        try {
+            $dest = (new AutoBackup($backupDir, [$dataDir]))->archiveSqliteDatabase($dbPath);
+        } catch (\RuntimeException $e) {
+            fwrite(STDERR, Sanitize::untrusted($e->getMessage()) . "\n");
+            exit(1);
+        }
+        fwrite(STDOUT, Lang::t('cli.backup_sqlite_done', ['file' => Sanitize::untrusted($dest)]) . "\n");
+        exit(0);
+    }
     if (is_file($dbPath)) {
         fwrite(STDERR, Lang::t('cli.backup_sqlite_notice', ['db' => Sanitize::untrusted($dbPath)]) . "\n");
     }

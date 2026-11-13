@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => 'zaznamenáno {duration}s projektu {project} ({language})',
-    'cli.usage' => "Použití: candy-codetime [--backend=file|sqlite] <command> [args]\n\nPříkazy:\n  dashboard              Spustí panel TUI (načítá vybraný backend)\n  push                   <project> <language> <file> [duration] | --  Zaznamenat heartbeat\n  milestone              add [name] [description] | list  Spravovat milníky (pouze sqlite)\n  export                 <csv|json|ics> [days]  Exportovat heartbeats (výchozí 7 dní)\n  gaps                   [days]  Zobrazit nesledované mezery alespoň 300 sekund (výchozí 7 dní)\n  backup                 Archivovat soubory starší než 30 dní (kopíruje; nikdy nemaže)\n  help, --help, -h       Zobrazit toto použití\n  --version, -v          Vytisknout verzi\n\nMožnosti:\n  --backend=file|sqlite  Backend úložiště pro push/export/gaps/dashboard (výchozí: file)\n  --time=<unix>          push: zaznamenat tep v těchto unixových sekundách místo teď\n  CANDY_CODETIME_DIR     Datový adresář (výchozí: \$XDG_DATA_HOME/candy-codetime, jinak \$HOME/.local/share/candy-codetime, nebo ./.local/share/candy-codetime když HOME není nastaven)",
+    'cli.usage' => "Použití: candy-codetime [--backend=file|sqlite] <command> [args]\n\nPříkazy:\n  dashboard              Spustí panel TUI (načítá vybraný backend)\n  push                   <project> <language> <file> [duration] | --  Zaznamenat heartbeat\n  milestone              add [name] [description] | list  Spravovat milníky (pouze sqlite)\n  export                 <csv|json|ics> [days]  Exportovat heartbeats (výchozí 7 dní)\n  gaps                   [days]  Zobrazit nesledované mezery alespoň 300 sekund (výchozí 7 dní)\n  backup                 Archivovat soubory starší než 30 dní (kopíruje; nikdy nemaže)\n  help, --help, -h       Zobrazit toto použití\n  --version, -v          Vytisknout verzi\n\nMožnosti:\n  --backend=file|sqlite  Backend úložiště pro push/export/gaps/dashboard (výchozí: file)\n  --time=<unix>          push: zaznamenat tep v těchto unixových sekundách místo teď\n  --sqlite               backup: archivovat databázi SQLite pomocí VACUUM INTO (bezpečná kopie)\n  CANDY_CODETIME_DIR     Datový adresář (výchozí: \$XDG_DATA_HOME/candy-codetime, jinak \$HOME/.local/share/candy-codetime, nebo ./.local/share/candy-codetime když HOME není nastaven)",
     'cli.push_usage' => 'Použití: candy-codetime push <project> <language> <file> [duration] [--time=<unix>] | candy-codetime push -- (dávka JSON řádků ze stdin)',
     'cli.push_missing_args' => "push: chybí povinné argumenty (project, language, file)",
     'cli.push_ignored' => "push: {file} odpovídá .sugartrackignore — přeskočeno",
@@ -44,7 +44,8 @@ return [
     'cli.backup_done' => "backup: {count} souborů archivováno",
     'cli.backup_done_one' => 'backup: {count} soubor archivován',
     'cli.backup_none' => "backup: nic nového k archivaci",
-    'cli.backup_sqlite_notice' => 'backup: databáze SQLite {db} tímto příkazem NE archivuje se — pro bezpečnou kopici použijte sqlite3 <db> ".backup <dest>" nebo VACUUM INTO',
+    'cli.backup_sqlite_notice' => 'backup: tento příkaz archivuje pouze denní soubory — pro databázi SQLite {db} použijte backup --sqlite (bezpečná kopie)',
+    'cli.backup_sqlite_done' => 'backup: databáze archivována do {file}',
     'cli.unknown_command' => "candy-codetime: neznámý příkaz: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} je zastaralé; nastavte místo toho CANDY_CODETIME_DIR.",
     'cli.migration_notice' => "candy-codetime: {notice}",

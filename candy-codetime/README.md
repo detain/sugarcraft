@@ -88,7 +88,7 @@ calendar date, matching the store layout.)
 | `milestone` | `add [name] [description]` \| `list` | Manage release markers. `name` and `description` are read for `add` only. Milestones live only in SQLite, so this command uses the sqlite backend regardless of `--backend` (a `milestone add` into a file-only data dir says so on stderr before it creates the database); the sqlite dashboard marks the milestone days with `*` under the weekday row. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). Output goes to STDOUT — redirect it to a file to save it. |
 | `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7, days clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). |
-| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data. Archives are named `<dir>_<file>.<day>` after the source day and its mtime date; re-running `backup` the same day is a no-op for files already archived (an existing target is skipped). **The SQLite database is not archived**: a byte copy of a live `.db` is a torn snapshot, so sqlite users must use `sqlite3 <db> ".backup <dest>"` or `VACUUM INTO '<dest>'` (the CLI prints this reminder when a `.db` is present). |
+| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data, and archives are never pruned either. A byte copy of a live `.db` would be a torn snapshot, so plain `backup` refuses the SQLite database (the reminder you see when a `.db` is present points at `backup --sqlite`, which runs a crash-safe `VACUUM INTO` snapshot into `<dir>-backups/`). Nothing trims the live database: it grows until you remove it yourself. |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
 
@@ -101,6 +101,7 @@ Options (accepted before or after the command):
 |--------------|--------|
 | `--backend=file\|sqlite` | Storage for `push`/`export`/`gaps`/`dashboard`. Both forms work: `--backend=sqlite` and `--backend sqlite`. The sqlite backend needs the `sqlite3` PHP extension; without it the CLI exits with a clear message instead of crashing. With neither the flag nor `CANDY_CODETIME_BACKEND` set, the CLI auto-selects `sqlite` when the database holds records and the JSONL store does not — the store is re-decided per invocation, never persisted. |
 | `CANDY_CODETIME_BACKEND=<name>` | Default backend (`file` or `sqlite`) for every invocation, so an sqlite user need not repeat the flag. An explicit `--backend` on the command line outranks it; a junk value is refused like a junk flag. The dashboard header badges the store it actually reads (`[file]`/`[sqlite]`), and when the *other* store also holds records the CLI prints a one-line pointer on STDERR. |
+| `--sqlite` (with `backup`) | Archive the SQLite database itself: `VACUUM INTO` writes a consistent standalone snapshot named `candy-codetime-<timestamp>.db` under `<dir>-backups/`, owner-private like every other archived payload. The live database is untouched — this is archive-only, no prune, no in-place vacuum. |
 | `CANDY_CODETIME_DIR=<path>` | Data directory (default `$XDG_DATA_HOME/candy-codetime`, falling back to `~/.local/share/candy-codetime` — note that an unset `HOME` resolves to `./.local/share/…`). |
 
 A storage failure ends any command with a one-line message on stderr and exit
@@ -152,7 +153,7 @@ $CANDY_CODETIME_DIR/
   candy-codetime.db     created by --backend=sqlite, and by `milestone` (which always uses sqlite)
   candy-codetime.db-wal WAL sidecar: recent commits live here until checkpointed
   candy-codetime.db-shm WAL index header (shared memory)
-<dir>-backups/          created by `backup`
+<dir>-backups/          created by `backup` (day files) and `backup --sqlite` (database snapshots)
 ```
 
 The SQLite backend tunes the database on every open: `journal_mode=WAL` so
@@ -169,8 +170,10 @@ open rather than silently no-op'ed against a layout it cannot read, and
 pre-versioning databases are stamped once after their tables are verified.
 The `-wal`/`-shm` sidecars are swept to `0600` with the database
 itself (Privacy below) and carry recent commits until checkpointed — one
-more reason the copy-only `backup` archive cannot cover sqlite; use
-`sqlite3 <db> ".backup <dest>"`.
+more reason a byte copy cannot cover sqlite; `backup --sqlite` snapshots the
+database crash-safely with `VACUUM INTO`. Nothing is ever pruned: neither the
+live `.db` nor the archives under `<dir>-backups/` are trimmed — retention is
+yours to manage (delete day files, or archive-and-remove by hand).
 
 Each line of a day file is one JSON object:
 `{"time": <unix seconds>, "project": <string>, "language": <string>, "file":

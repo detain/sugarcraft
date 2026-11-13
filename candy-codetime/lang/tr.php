@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s kaydedildi: {project} ({language})',
-    'cli.usage' => "Kullanım: candy-codetime [--backend=file|sqlite] <command> [args]\n\nKomutlar:\n  dashboard              TUI panelini başlat (seçili arka ucu okur)\n  push                   <project> <language> <file> [duration] | --  Kalp atışı kaydet\n  milestone              add [name] [description] | list  Kilometre taşlarını yönet (yalnızca sqlite)\n  export                 <csv|json|ics> [days]  Kalp atışlarını dışa aktar (varsayılan 7 gün)\n  gaps                   [days]  300 saniye ve üzeri izlenmeyen boşlukları göster (varsayılan 7 gün)\n  backup                 30 günden eski veri dosyalarını arşivle (yalnızca kopyalar; hiçbir zaman silmez)\n  help, --help, -h       Bu kullanımı göster\n  --version, -v          Sürümü yazdır\n\nSeçenekler:\n  --backend=file|sqlite  push/export/gaps/dashboard için depolama arka ucu (varsayılan: file)\n  --time=<unix>          push: kalp atışını şimdi yerine bu unix saniyesinde kaydet\n  CANDY_CODETIME_DIR     Veri dizini (varsayılan: \$XDG_DATA_HOME/candy-codetime, değilse \$HOME/.local/share/candy-codetime, HOME de ayarlanmamışsa ./.local/share/candy-codetime)",
+    'cli.usage' => "Kullanım: candy-codetime [--backend=file|sqlite] <command> [args]\n\nKomutlar:\n  dashboard              TUI panelini başlat (seçili arka ucu okur)\n  push                   <project> <language> <file> [duration] | --  Kalp atışı kaydet\n  milestone              add [name] [description] | list  Kilometre taşlarını yönet (yalnızca sqlite)\n  export                 <csv|json|ics> [days]  Kalp atışlarını dışa aktar (varsayılan 7 gün)\n  gaps                   [days]  300 saniye ve üzeri izlenmeyen boşlukları göster (varsayılan 7 gün)\n  backup                 30 günden eski veri dosyalarını arşivle (yalnızca kopyalar; hiçbir zaman silmez)\n  help, --help, -h       Bu kullanımı göster\n  --version, -v          Sürümü yazdır\n\nSeçenekler:\n  --backend=file|sqlite  push/export/gaps/dashboard için depolama arka ucu (varsayılan: file)\n  --time=<unix>          push: kalp atışını şimdi yerine bu unix saniyesinde kaydet\n  --sqlite               backup: SQLite veritabanını VACUUM INTO ile arşivle (çöküntüye dayanıklı kopya)\n  CANDY_CODETIME_DIR     Veri dizini (varsayılan: \$XDG_DATA_HOME/candy-codetime, değilse \$HOME/.local/share/candy-codetime, HOME de ayarlanmamışsa ./.local/share/candy-codetime)",
     'cli.push_usage' => 'Kullanım: candy-codetime push <project> <language> <file> [duration] [--time=<unix>] | candy-codetime push -- (stdin üzerinden JSON satır yığını)',
     'cli.push_missing_args' => "push: zorunlu argümanlar eksik (project, language, file)",
     'cli.push_ignored' => "push: {file} .sugartrackignore ile eşleşti — atlandı",
@@ -44,7 +44,8 @@ return [
     'cli.backup_done' => "backup: {count} dosya arşivlendi",
     'cli.backup_done_one' => 'backup: {count} dosya arşivlendi',
     'cli.backup_none' => "backup: arşivlenecek yeni bir şey yok",
-    'cli.backup_sqlite_notice' => 'backup: SQLite veritabanı {db} bu komutla arşivLENMEZ — güvenli bir kopya için sqlite3 <db> ".backup <dest>" veya VACUUM INTO kullanın',
+    'cli.backup_sqlite_notice' => 'backup: bu komut yalnız günlük dosyaları arşivler — SQLite veritabanı {db} için backup --sqlite gerekir (çöküntüye dayanıklı kopya)',
+    'cli.backup_sqlite_done' => 'backup: veritabanı {file} konumuna arşivlendi',
     'cli.unknown_command' => "candy-codetime: bilinmeyen komut: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} kullanımdan kaldırıldı; yerine CANDY_CODETIME_DIR ayarlayın.",
     'cli.migration_notice' => "candy-codetime: {notice}",

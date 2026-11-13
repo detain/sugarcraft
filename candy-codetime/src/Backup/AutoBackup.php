@@ -9,10 +9,11 @@ use SugarCraft\CodeTime\Store;
 /**
  * Rotating backup manager for JSONL data files.
  * Archives (copies) files whose mtime has aged past the keepDays threshold.
- * Scope is the per-day `*.jsonl` files; a SQLite database file living in the
- * same tree is NOT archived — the CLI says so out loud, because a byte copy of
- * a live database is a torn snapshot at best. The crash-safe remedy for sqlite
- * users is `sqlite3 <db> ".backup <dest>"` or `VACUUM INTO '<dest>'`.
+ * Scope of the copy-only rotate() is the per-day `*.jsonl` files; a byte copy
+ * of a live SQLite database would be a torn snapshot at best, so the database
+ * gets its own door instead: archiveSqliteDatabase() runs VACUUM INTO, which
+ * snapshots consistently from a live connection (the CLI's plain `backup`
+ * still refuses to copy the .db and says why).
  *
  * Everything this class copies lands owner-private (0700 directory, 0600
  * file), because an archive of the day files IS the privacy-sensitive payload:
@@ -100,6 +101,62 @@ final class AutoBackup
         }
 
         return $count;
+    }
+
+    /**
+     * Crash-safe archive of the SQLite database via VACUUM INTO.
+     *
+     * Unlike copy() over a .db file — which races WAL sidecars and captures
+     * whatever torn state the -wal happens to hold — VACUUM INTO reads the
+     * database through a consistent snapshot and writes a standalone file
+     * (no sidecars at the destination). The live database is not touched,
+     * so this is archive-only: nothing is pruned, vacuumed in place, or
+     * trimmed. The copy lands owner-private like every other archived
+     * payload, and an existing destination second is never overwritten.
+     *
+     * @return string the archived file's path
+     *
+     * @throws \RuntimeException if sqlite3 is unavailable, the source is
+     *                           missing, or the archive cannot be made.
+     */
+    public function archiveSqliteDatabase(string $dbPath): string
+    {
+        if (!extension_loaded('sqlite3')) {
+            throw new \RuntimeException('candy-codetime: backup --sqlite needs the sqlite3 PHP extension, which is not loaded in this PHP');
+        }
+        if (!is_file($dbPath)) {
+            throw new \RuntimeException("candy-codetime: no sqlite database at {$dbPath} — nothing to archive");
+        }
+
+        Store::ensurePrivateDir($this->backupDir, 'backup directory');
+        $dest = $this->backupDir . '/candy-codetime-' . date('Y-m-d-His') . '.db';
+
+        try {
+            $db = new \SQLite3($dbPath, SQLITE3_OPEN_READWRITE);
+        } catch (\Throwable $error) {
+            throw new \RuntimeException('candy-codetime: could not open ' . $dbPath . ' for archiving: ' . $error->getMessage());
+        }
+
+        // @ on the exec legs: a failure already answers through lastErrorMsg
+        // in the owned line below; PHP's duplicate warning stays out of the
+        // user's terminal (same law as SqliteBackend's ctor).
+        $stmt = @$db->prepare('VACUUM INTO ?');
+        if ($stmt === false) {
+            $message = $db->lastErrorMsg();
+            $db->close();
+            throw new \RuntimeException('candy-codetime: this SQLite build cannot run VACUUM INTO: ' . $message);
+        }
+        $stmt->bindValue(1, $dest, SQLITE3_TEXT);
+        if (@$stmt->execute() === false) {
+            $message = $db->lastErrorMsg();
+            $db->close();
+            throw new \RuntimeException("candy-codetime: could not archive {$dbPath} to {$dest}: " . $message);
+        }
+        $db->close();
+
+        Store::ensurePrivateFile($dest, 'archived database');
+
+        return $dest;
     }
 
     /**

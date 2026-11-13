@@ -542,6 +542,74 @@ final class CliTest extends TestCase
      * `backup_done` key printed "archived 1 files" on the common first run;
      * the selector now walks `cli.backup_done_one` at exactly one file.
      */
+    /**
+     * CT-S23: the whole door through the CLI — rows pushed to sqlite are
+     * archived crash-safely by `backup --sqlite` and the snapshot restores
+     * exactly what the database held.
+     */
+    public function testBackupSqliteArchivesTheDatabaseThroughTheCli(): void
+    {
+        $push = $this->runCli(
+            ['--backend=sqlite', 'push', 'proj', 'php', '/x/a.php', '60'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        $this->assertSame(0, $push['exit'], $push['stdout'] . $push['stderr']);
+
+        $res = $this->runCli(['backup', '--sqlite'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        try {
+            $this->assertSame(0, $res['exit'], $res['stdout'] . $res['stderr']);
+            $this->assertStringContainsString('archived the database', $res['stdout']);
+            if (!extension_loaded('sqlite3')) {
+                $this->markTestSkipped('sqlite3 extension not loaded');
+            }
+            $snapshots = glob($this->dataDir . '-backups/candy-codetime-*.db') ?: [];
+            $this->assertCount(1, $snapshots);
+            $check = new \SQLite3($snapshots[0]);
+            $this->assertSame(1, (int) $check->querySingle('SELECT count(*) FROM heartbeats'));
+            $check->close();
+        } finally {
+            foreach ([$this->dataDir, $this->dataDir . '-backups'] as $d) {
+                foreach (glob($d . '/*') ?: [] as $f) {
+                    @unlink($f);
+                }
+            }
+        }
+    }
+
+    public function testBackupSqliteRefusesWhenThereIsNoDatabase(): void
+    {
+        $res = $this->runCli(['backup', '--sqlite'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('no sqlite database', $res['stderr']);
+        $this->assertDirectoryDoesNotExist($this->dataDir . '-backups');
+    }
+
+    /**
+     * The plain copy-only archive still refuses the .db — but its reminder
+     * now names the shipped door instead of foreign tooling.
+     */
+    public function testPlainBackupReminderPointsAtTheSqliteDoor(): void
+    {
+        $push = $this->runCli(
+            ['--backend=sqlite', 'push', 'proj', 'php', '/x/a.php', '60'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        $this->assertSame(0, $push['exit'], $push['stdout'] . $push['stderr']);
+        $res = $this->runCli(['backup'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        try {
+            $this->assertSame(0, $res['exit'], $res['stdout'] . $res['stderr']);
+            $this->assertStringContainsString('backup --sqlite', $res['stderr']);
+        } finally {
+            foreach ([$this->dataDir, $this->dataDir . '-backups'] as $d) {
+                foreach (glob($d . '/*') ?: [] as $f) {
+                    @unlink($f);
+                }
+            }
+        }
+    }
+
     public function testBackupArchivalCountIsGrammaticalForOneAndMany(): void
     {
         $row = json_encode(['time' => 1714536000, 'project' => 'p', 'language' => 'php', 'file' => '/x/a.php', 'duration' => 60, 'tags' => []]) . "\n";

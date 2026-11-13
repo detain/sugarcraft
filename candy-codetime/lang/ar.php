@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => 'تم تسجيل {duration}s من {project} ({language})',
-    'cli.usage' => "الاستخدام: candy-codetime [--backend=file|sqlite] <command> [args]\n\nالأوامر:\n  dashboard              بدء لوحة التتبع TUI (يقرأ الواجهة الخلفية المحددة)\n  push                   <project> <language> <file> [duration] | --  تسجيل نبضة\n  milestone              add [name] [description] | list  إدارة الإنجازات (sqlite فقط)\n  export                 <csv|json|ics> [days]  تصدير النبضات (7 أيام افتراضيًا)\n  gaps                   [days]  عرض فترات الفراغ غير المتتبَّعة 300 ثانية أو أكثر (7 أيام افتراضيًا)\n  backup                 أرشفة ملفات أقدم من 30 يومًا (نسخ فقط؛ لا حذف أبدًا)\n  help, --help, -h       عرض هذا الاستخدام\n  --version, -v          طباعة الإصدار\n\nالخيارات:\n  --backend=file|sqlite  واجهة تخزين البيانات لـ push/export/gaps/dashboard (افتراضيًا: file)\n  --time=<unix>          push: سجّل النبض عند هذه الثواني يونكس بدل الآن\n  CANDY_CODETIME_DIR     دليل البيانات (افتراضيًا: \$XDG_DATA_HOME/candy-codetime، وإلا \$HOME/.local/share/candy-codetime، أو ./.local/share/candy-codetime عند عدم ضبط HOME)",
+    'cli.usage' => "الاستخدام: candy-codetime [--backend=file|sqlite] <command> [args]\n\nالأوامر:\n  dashboard              بدء لوحة التتبع TUI (يقرأ الواجهة الخلفية المحددة)\n  push                   <project> <language> <file> [duration] | --  تسجيل نبضة\n  milestone              add [name] [description] | list  إدارة الإنجازات (sqlite فقط)\n  export                 <csv|json|ics> [days]  تصدير النبضات (7 أيام افتراضيًا)\n  gaps                   [days]  عرض فترات الفراغ غير المتتبَّعة 300 ثانية أو أكثر (7 أيام افتراضيًا)\n  backup                 أرشفة ملفات أقدم من 30 يومًا (نسخ فقط؛ لا حذف أبدًا)\n  help, --help, -h       عرض هذا الاستخدام\n  --version, -v          طباعة الإصدار\n\nالخيارات:\n  --backend=file|sqlite  واجهة تخزين البيانات لـ push/export/gaps/dashboard (افتراضيًا: file)\n  --time=<unix>          push: سجّل النبض عند هذه الثواني يونكس بدل الآن\n  --sqlite               backup: أرشفة قاعدة بيانات SQLite عبر VACUUM INTO (نسخة آمنة من الأعطال)\n  CANDY_CODETIME_DIR     دليل البيانات (افتراضيًا: \$XDG_DATA_HOME/candy-codetime، وإلا \$HOME/.local/share/candy-codetime، أو ./.local/share/candy-codetime عند عدم ضبط HOME)",
     'cli.push_usage' => 'الاستخدام: candy-codetime push <project> <language> <file> [duration] [--time=<unix>] | candy-codetime push -- (دفعة JSON من stdin)',
     'cli.push_missing_args' => "push: الوسائط المطلوبة مفقودة (project, language, file)",
     'cli.push_ignored' => "push: تطابق {file} مع .sugartrackignore — تم تخطيه",
@@ -44,7 +44,8 @@ return [
     'cli.backup_done' => "backup: تمت أرشفة {count} ملفات",
     'cli.backup_done_one' => 'backup: تمت أرشفة {count} ملف',
     'cli.backup_none' => "backup: لا جديد للأرشفة",
-    'cli.backup_sqlite_notice' => 'backup: قاعدة بيانات SQLite {db} لا يتم أرشفتها بواسطة هذا الأمر — استخدم sqlite3 <db> ".backup <dest>" أو VACUUM INTO للحصول على نسخة آمنة',
+    'cli.backup_sqlite_notice' => 'backup: هذه الأرشفة تغطي ملفات اليوم فقط — قاعدة بيانات SQLite في {db} تتطلب backup --sqlite (نسخة آمنة من الأعطال)',
+    'cli.backup_sqlite_done' => 'backup: تمت أرشفة قاعدة البيانات إلى {file}',
     'cli.unknown_command' => "candy-codetime: أمر غير معروف: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: المتغير {variable} مهمل؛ استخدم CANDY_CODETIME_DIR بدلاً منه.",
     'cli.migration_notice' => "candy-codetime: {notice}",

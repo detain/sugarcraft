@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s を記録: {project} ({language})',
-    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   <project> <language> <file> [duration] | --  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
+    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   <project> <language> <file> [duration] | --  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
     'cli.push_usage' => '使用法: candy-codetime push <project> <language> <file> [duration] [--time=<unix>] | candy-codetime push -- (stdin からの JSON 一括)',
     'cli.push_missing_args' => "push: 必須引数が不足しています (project, language, file)",
     'cli.push_ignored' => "push: {file} は .sugartrackignore に一致したためスキップしました",
@@ -44,7 +44,8 @@ return [
     'cli.backup_done' => "backup: {count} 個のファイルをアーカイブしました",
     'cli.backup_done_one' => 'backup: {count} 個のファイルをアーカイブしました',
     'cli.backup_none' => "backup: アーカイブする新しいファイルはありません",
-    'cli.backup_sqlite_notice' => 'backup: SQLite データベース {db} はこのコマンドではアーカイブされません — 破損しないコピーには sqlite3 <db> ".backup <dest>" または VACUUM INTO を使用してください',
+    'cli.backup_sqlite_notice' => 'backup: このコマンドは日次ファイルのみアーカイブします — SQLite データベース {db} は backup --sqlite でクラッシュセーフにコピーできます',
+    'cli.backup_sqlite_done' => 'backup: データベースを {file} にアーカイブしました',
     'cli.unknown_command' => "candy-codetime: 不明なコマンド: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} は非推奨です。代わりに CANDY_CODETIME_DIR を設定してください。",
     'cli.migration_notice' => "candy-codetime: {notice}",

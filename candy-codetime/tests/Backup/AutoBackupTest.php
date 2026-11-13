@@ -41,6 +41,80 @@ final class AutoBackupTest extends TestCase
         }
     }
 
+    /**
+     * CT-S23 (finding 024): the sqlite retention door. VACUUM INTO must
+     * produce a restorable, owner-private snapshot; the live db stays
+     * untouched and no sidecar travels with the archive.
+     */
+    public function testArchiveSqliteDatabaseProducesARestorablePrivateSnapshot(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
+        $dbPath = $this->dataDir . '/candy-codetime.db';
+        $backend = new \SugarCraft\CodeTime\Storage\SqliteBackend($dbPath);
+        $beat = static fn(int $t): \SugarCraft\CodeTime\Heartbeat => new \SugarCraft\CodeTime\Heartbeat(
+            time: $t,
+            project: 'p',
+            language: 'php',
+            file: '/x/a.php',
+            duration: 60,
+        );
+        $backend->insert($beat(1717747200));
+        $backend->insert($beat(1717747260));
+        unset($backend);
+
+        $auto = new AutoBackup($this->backupDir, [$this->dataDir]);
+        $dest = $auto->archiveSqliteDatabase($dbPath);
+
+        $this->assertFileExists($dest);
+        $check = new \SQLite3($dest);
+        $this->assertSame(2, (int) $check->querySingle('SELECT count(*) FROM heartbeats'));
+        $this->assertNotFalse($check->querySingle('SELECT count(*) FROM milestones'));
+        $check->close();
+        clearstatcache();
+        $this->assertSame(0o600, fileperms($dest) & 0o777, 'an archived database is the payload: owner-private');
+    }
+
+    /**
+     * A snapshot of a second, taken a second later, is a NEW file — but a
+     * same-second re-run must never clobber what already landed.
+     */
+    public function testArchiveSqliteDatabaseNeverOverwritesAnExistingSnapshot(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
+        $dbPath = $this->dataDir . '/candy-codetime.db';
+        $backend = new \SugarCraft\CodeTime\Storage\SqliteBackend($dbPath);
+        unset($backend);
+
+        $auto = new AutoBackup($this->backupDir, [$this->dataDir]);
+        $startedAt = date('Y-m-d-His');
+        $auto->archiveSqliteDatabase($dbPath);
+
+        try {
+            $auto->archiveSqliteDatabase($dbPath);
+            if (date('Y-m-d-His') === $startedAt) {
+                $this->fail('a second archive inside the same second must refuse to overwrite');
+            }
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('could not archive', $e->getMessage());
+        }
+    }
+
+    public function testArchiveSqliteDatabaseRefusesAMissingDatabase(): void
+    {
+        $auto = new AutoBackup($this->backupDir, [$this->dataDir]);
+        try {
+            $auto->archiveSqliteDatabase($this->dataDir . '/absent.db');
+            $this->fail('archiving a database that is not there must refuse, not mint an empty file');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('nothing to archive', $e->getMessage());
+        }
+        $this->assertDirectoryDoesNotExist($this->backupDir, 'a refused archive leaves no directory behind');
+    }
+
     public function testRotateCopiesOldFiles(): void
     {
         // Create a file with old mtime (40 days ago)
