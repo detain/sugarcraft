@@ -463,10 +463,30 @@ final class SvgRenderer
 
     private static function xmlEscape(string $s): string
     {
-        // XML 1.0 forbids C0 scalars outright - a lone \x00 makes the whole
-        // document unparseable - so drop them before escaping. Tab, LF and
-        // CR stay legal and pass through untouched.
-        $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s) ?? '';
+        // Byte-level sweep — NO /u (byte semantics: the subject may be
+        // invalid UTF-8 and must still be swept). DEL and the C1 controls in
+        // their two-byte UTF-8 form (U+0080-U+009F) are dropped, not emitted,
+        // not numericised: this is the contract sugar-core's
+        // Sanitize::untrusted() specifies, and a numeric reference would be
+        // a character XML still cannot encode (-006).
+        $s = preg_replace('/[\x7f]|\xC2[\x80-\x9F]/', '', $s) ?? '';
+
+        // htmlspecialchars() silently returns '' for non-empty invalid UTF-8
+        // — the whole string misrepresented as empty (-050). Convert
+        // lossily-but-honestly first (the M12 rule the segment channel in
+        // AnsiParser already applies), which also makes the /u pass below
+        // safe: preg with /u fails outright on malformed subjects.
+        if (!mb_check_encoding($s, 'UTF-8')) {
+            $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+        }
+
+        // XML 1.0 forbids the C0 scalars outright — a lone \x00 makes the
+        // whole document unparseable — and libxml additionally rejects the
+        // U+FDD0-U+FDEF noncharacters and U+FFFE/FFFF even when the UTF-8 is
+        // well-formed (-015 killed one-shot renders). Tab, LF and CR stay
+        // legal and pass through untouched. Policy: drop (no valid XML
+        // encoding exists for these).
+        $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x{80}-\x{9F}\x{FDD0}-\x{FDEF}\x{FFFE}\x{FFFF}]/u', '', $s) ?? '';
 
         return htmlspecialchars($s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     }

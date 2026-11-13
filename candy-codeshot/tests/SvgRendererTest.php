@@ -102,6 +102,61 @@ final class SvgRendererTest extends TestCase
         $this->assertStringNotContainsString('<script>', $svg);
     }
 
+    // -------------------------------------------------------------------------
+    // cs-04 escape sweep: DEL/C1, XML-illegal scalars, invalid-UTF-8
+    // conversion (interim pins until cs-03 formalises the oracle).
+    // -------------------------------------------------------------------------
+
+    public function testSweptBytesNeverReachTheDocument(): void
+    {
+        // Text channel AND the title channel (the cat-channel filename path
+        // that used to flow unswept, P2 found c2 9b in). Sweep, not emit.
+        $svg = SvgRenderer::dark()
+            ->withTitle("file\xC2\x9Bname\x7f")
+            ->withWindow(false)
+            ->render("a\x7fb\xC2\x9Bc\n");
+
+        $this->assertNoIllegalControlBytes($svg);
+        $this->assertStringContainsString('filename', $svg);
+        $this->assertStringContainsString('abc', $svg);
+    }
+
+    public function testXmlIllegalNoncharactersAreDropped(): void
+    {
+        // U+FDD0-U+FDEF noncharacters and U+FFFE/FFFF are well-formed UTF-8
+        // but libxml rejects them, killing whole documents (-015).
+        $svg = SvgRenderer::dark()
+            ->withTitle("t\u{FDD0}x\u{FFFE}")
+            ->withWindow(false)
+            ->render("line\u{FFFF}end\n");
+
+        $this->assertNoIllegalControlBytes($svg);
+        $this->assertStringContainsString('tx', $svg);
+        $this->assertStringContainsString('lineend', $svg);
+    }
+
+    public function testInvalidUtf8TitleConvertsHonestlyInsteadOfVanishing(): void
+    {
+        // -050: htmlspecialchars silently empties non-empty invalid UTF-8.
+        // The conversion keeps the valid survivors either side of the junk
+        // (the M12 rule the segment channel already uses).
+        $svg = SvgRenderer::dark()
+            ->withTitle("pre\xFF\xFEpost")
+            ->withWindow(false)
+            ->render("keep\n");
+
+        $this->assertStringContainsString('pre??post', $svg);
+    }
+
+    private function assertNoIllegalControlBytes(string $svg): void
+    {
+        // Golden byte-scan: the swept bytes and the illegal scalars must
+        // never appear in a rendered document, whatever entered the input.
+        $this->assertSame(0, preg_match('/[\x7f]|\xC2[\x80-\x9F]/', $svg), 'DEL/C1 byte survived into the document');
+        $this->assertSame(0, preg_match('/\xEF\xBF[\xBE\xBF]/', $svg), 'U+FFFE/FFFF survived');
+        $this->assertSame(0, preg_match('/\xEF\xB7[\x90-\xAF]/', $svg), 'U+FDD0-FDEF noncharacter survived');
+    }
+
     public function testAnsiBackgroundBecomesRectFill(): void
     {
         // ANSI 44 = blue background
