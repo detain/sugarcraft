@@ -6,8 +6,9 @@ namespace CandyCode\Bundles\Discord\Support;
 
 /**
  * Model output → platform messages. Composition is shared (§9.4); the
- * limits are per-platform (§7.7: Discord 2000 chars / 17 lines; Teams takes
- * its own cap from config). Chunking happens here, never in the model loop.
+ * limits are per-platform (§7.7: Discord 2000 UTF-16 units / 17 lines;
+ * Teams takes its own cap from config). Chunking happens here, never in
+ * the model loop.
  *
  * Fences, by construction: pass one records the fence state before and
  * after every source line; pass two fills chunks and, wherever a chunk
@@ -134,8 +135,9 @@ final class OutboundChunker
         $pieces = [];
         $body = $line;
         while (self::len($body) > $room) {
-            $cut = \mb_strrpos(\mb_substr($body, 0, $room), ' ');
-            $cut = $cut === false ? $room : $cut + 1;
+            $window = self::codepointsWithin($body, $room);
+            $cut = \mb_strrpos(\mb_substr($body, 0, $window), ' ');
+            $cut = $cut === false ? $window : $cut + 1;
             $pieces[] = \rtrim(\mb_substr($body, 0, $cut));
             $body = \ltrim(\mb_substr($body, $cut));
         }
@@ -146,8 +148,38 @@ final class OutboundChunker
         return $pieces;
     }
 
+    /**
+     * Discord measures content in UTF-16 code units — its own client
+     * validates a JS content.length — so one astral emoji costs 2 against
+     * the 2000-unit cap. Counting codepoints instead under-budgets
+     * astral-heavy replies by up to half and invites the API's 400-reject,
+     * so this counts UTF-16LE units (pure bytes: no BOM, fixed
+     * little-endian, never a guess). Same text in, same count out.
+     */
     public static function len(string $text): int
     {
-        return \mb_strlen($text, 'UTF-8');
+        return \strlen(\mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')) >> 1;
+    }
+
+    /**
+     * How many leading codepoints of $text fit within $room UTF-16 units.
+     * Slicing stays in codepoint space (mb_substr's currency) while the
+     * budget is counted in units, so a hard-cut piece never straddles its
+     * ceiling and a surrogate pair is never split in half.
+     */
+    private static function codepointsWithin(string $text, int $room): int
+    {
+        $fit = 0;
+        $units = 0;
+        foreach (\mb_str_split($text, 1, 'UTF-8') as $ch) {
+            $width = self::len($ch);
+            if ($units + $width > $room) {
+                break;
+            }
+            $units += $width;
+            ++$fit;
+        }
+
+        return $fit;
     }
 }

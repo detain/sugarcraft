@@ -72,4 +72,41 @@ final class OutboundChunkerTest extends TestCase
     {
         self::assertSame([], OutboundChunker::split("```php\n```", 2000, 17));
     }
+
+    public function testLenCountsUtf16UnitsSoAstralCharactersCostTwo(): void
+    {
+        self::assertSame(0, OutboundChunker::len(''));
+        self::assertSame(1, OutboundChunker::len('a'));
+        self::assertSame(2, OutboundChunker::len('😀'));
+        self::assertSame(4, OutboundChunker::len('aé😀'));
+    }
+
+    public function testExactlyTwoThousandUnitsOfAstralTextRidesTheFastPath(): void
+    {
+        $text = str_repeat('😀', 1000); // 1000 codepoints, 2000 units
+        self::assertSame([$text], OutboundChunker::split($text, 2000, 17));
+    }
+
+    public function testFourThousandAstralUnitsSplitsIntoUnitBudgetedChunks(): void
+    {
+        $chunks = OutboundChunker::split(str_repeat('😀', 4000), 2000, 17);
+        // wordSplit keeps 16 units of fence headroom: 1984-unit pieces.
+        self::assertCount(5, $chunks);
+        self::assertSame(1984, OutboundChunker::len($chunks[0]));
+        foreach ($chunks as $chunk) {
+            self::assertLessThanOrEqual(2000, OutboundChunker::len($chunk));
+        }
+        self::assertSame(4000, \array_sum(\array_map(\mb_strlen(...), $chunks)), 'no character lost or duplicated');
+    }
+
+    public function testAnAstralHeavySpacedLineKeepsEveryChunkUnderTheCap(): void
+    {
+        $line = str_repeat('😀a ', 1500); // 6000 units, word-breakable
+        $chunks = OutboundChunker::split($line, 2000, 17);
+        self::assertGreaterThan(1, $chunks);
+        foreach ($chunks as $chunk) {
+            self::assertLessThanOrEqual(2000, OutboundChunker::len($chunk));
+        }
+        self::assertSame(trim($line), implode(' ', $chunks));
+    }
 }

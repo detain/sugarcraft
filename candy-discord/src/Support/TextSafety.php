@@ -65,6 +65,16 @@ final class TextSafety
         return $this->redact($text);
     }
 
+    /**
+     * Exact-byte sweep, best-effort by design: str_replace removes only a
+     * contiguous, case-exact occurrence of a registered secret. A homoglyph
+     * or interleaved-formatting or case-shifted variant survives — this is
+     * a floor against casual leakage, not a normalization adversary, and
+     * every one-way fold added to match more would silently rewrite
+     * legitimate text too. The compensating bounds carry the rest: pairing
+     * codes sit behind TTL 3600 + the 3-pending cap + DM/approver-only
+     * delivery, and the serve token's exposure is host-side.
+     */
     private function redact(string $text): string
     {
         foreach ($this->secrets as $secret) {
