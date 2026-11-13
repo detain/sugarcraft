@@ -1096,6 +1096,10 @@ final class Player implements Model
      * Ansi256/Sixel/Kitty/Iterm2 render
      * directly through their FrameRenderer.
      *
+     * Hosts that line-diff this output: ask {@see rendersWholeScreen()}
+     * (SV-M34) — the three image rungs ship one indivisible raster paint;
+     * every other rung, Ansi256 included, emits row-addressable lines.
+     *
      * @return string
      */
     public function view(): string
@@ -1804,6 +1808,25 @@ final class Player implements Model
     public function headers(): array
     {
         return $this->headers;
+    }
+
+    /**
+     * Whether {@see view()} ships the pane as ONE indivisible paint — the
+     * mosaic/image rungs emit a raster blob whose bytes carry no line
+     * structure, so a host that line-diffs its output must repaint whole
+     * frames instead (SV-M34/034). Every text rung — including the direct
+     * Ansi256 row stream, whose rows carry their own SGR and split cleanly
+     * at \r\n — answers false: its frames are row-addressable.
+     *
+     * This is the machine-readable truth behind the old host-side copy of
+     * GRAPHICS_MODES plus a width heuristic; a consumer asking the Player
+     * cannot drift from the lib's actual routing again.
+     */
+    public function rendersWholeScreen(): bool
+    {
+        // The answer must track view()'s DIRECT-render set exactly: the same
+        // three graphics protocols bypass the Buffer grid, nothing else does.
+        return $this->mode->isGraphics();
     }
 
     /**

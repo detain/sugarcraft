@@ -21,6 +21,9 @@ use SugarCraft\Video\Tests\FakeDecoder;
 use SugarCraft\Video\Render\HalfBlockRenderer;
 use SugarCraft\Video\Render\LumaRamp;
 use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Render\RendererFactory;
+use SugarCraft\ColorProfile\Probe\Capability;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\Testing\ProgramSimulator;
 use SugarCraft\Testing\Input\ScriptedInput;
 
@@ -3071,6 +3074,64 @@ final class PlayerTest extends TestCase
             'the scripted seam is consulted by now() — dropping it silently re-pins every pacing test to the real clock'
         );
         $this->assertSame(1.0, Player::MAX_TICK_DELTA_SEC, 'the burst ceiling is pinned');
+    }
+
+    /**
+     * @testdox SV-M34/034: rendersWholeScreen() answers the scripted mode matrix
+     *
+     * The three image rungs ship one indivisible raster paint (true); every
+     * text rung — Ansi256's direct row stream included, because its rows
+     * carry their own SGR and split cleanly — is row-addressable (false).
+     * Load-bearing: a consumer (candy-code's GRAPHICS_MODES copy + width
+     * heuristic) replaces its guesswork with this predicate, so a rung that
+     * changes routing must move the matrix here, loudly.
+     */
+    public function testRendersWholeScreenAnswersTheScriptedModeMatrix(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('graphics rung construction needs ext-gd');
+        }
+
+        // Pairs, not keys: PHP enums are not legal array offsets.
+        $expected = [
+            [Mode::Ascii, false],
+            [Mode::Ansi256, false],
+            [Mode::TrueColor, false],
+            [Mode::HalfBlock, false],
+            [Mode::QuarterBlock, false],
+            [Mode::Sixel, true],
+            [Mode::Kitty, true],
+            [Mode::Iterm2, true],
+        ];
+
+        RendererFactory::setDiagnoseForTesting(new ProbeReport([
+            Capability::Sixel->value => true,
+            Capability::KittyKeyboard->value => true,
+            Capability::ITerm2->value => true,
+        ]));
+
+        try {
+            foreach ($expected as [$mode, $want]) {
+                $player = Player::fromDecoder(
+                    decoder: $this->makeFakeDecoder(1),
+                    cellsW: 20,
+                    cellsH: 10,
+                    fps: 24.0,
+                    mode: $mode,
+                );
+                try {
+                    $this->assertSame(
+                        $want,
+                        $player->rendersWholeScreen(),
+                        $mode->label() . ' must ' . ($want ? 'repaint whole' : 'line-diff') . ' per the predicate'
+                    );
+                } finally {
+                    $player->stop();
+                }
+            }
+        } finally {
+            RendererFactory::setDiagnoseForTesting(null);
+        }
     }
 }
 
