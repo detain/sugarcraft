@@ -576,22 +576,34 @@ final class ImportExportTest extends TestCase
 
     public function testExportRunReturnsTwoForUnknownFormat(): void
     {
-        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
+        // candy-kv-081: memory sinks instead of the bare STDERR constant, so
+        // the usage line is asserted in-process and never leaks to the runner.
+        $err = \fopen('php://memory', 'r+');
+        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store, \STDOUT, $err);
 
         // Unknown format is a usage error under the strict contract: exit 2.
         $exitCode = $cli->run('invalid-format');
         $this->assertSame(2, $exitCode);
+
+        \rewind($err);
+        $this->assertStringContainsString("Unknown export format: invalid-format. Use 'json', 'yaml' or 'yml'.", (string) \stream_get_contents($err));
+        \fclose($err);
     }
 
     public function testExportRunReturnsOneOnFailure(): void
     {
-        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
-
         // The runtime-failure leg (exit 1) stays reachable: a database name
         // the store refuses (invalid spelling) is a failure to report, not a
         // usage exit 2 — the format itself was fine.
+        $err = \fopen('php://memory', 'r+');
+        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store, \STDOUT, $err);
+
         $exitCode = $cli->run('json', 'not a valid db name');
         $this->assertSame(1, $exitCode);
+
+        \rewind($err);
+        $this->assertStringContainsString('Export failed:', (string) \stream_get_contents($err), 'the failure wrapper must answer on the stderr sink, not the runner');
+        \fclose($err);
     }
 
     // ─── YAML import parser errors ──────────────────────────────────────────

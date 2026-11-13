@@ -19,9 +19,23 @@ use SugarCraft\Kv\YamlDialect;
  */
 final class ExportCommand
 {
+    /**
+     * @param Store    $store source store
+     * @param resource $stdout sink for the export payload (tests pass a
+     *                   memory stream; real runs keep STDOUT)
+     * @param resource $stderr sink for every diagnostic (candy-kv-081: the
+     *                   bare constants leaked usage/failure lines onto the
+     *                   runner's real STDOUT/STDERR — the sinks are now
+     *                   injectable)
+     */
     public function __construct(
         private readonly Store $store,
+        private readonly mixed $stdout = \STDOUT,
+        private readonly mixed $stderr = \STDERR,
     ) {
+        if (!\is_resource($this->stdout) || !\is_resource($this->stderr)) {
+            throw new \InvalidArgumentException('ExportCommand sinks must be writable stream resources.');
+        }
     }
 
     /**
@@ -37,17 +51,17 @@ final class ExportCommand
         // Usage-class error first: an unknown format is caller intent, not a store failure.
         if (!\in_array($format, ['json', 'yaml', 'yml'], true)) {
             // Sanitize-on-egress: $format is argv-chosen and may carry terminal escapes.
-            \fwrite(STDERR, "Unknown export format: " . Store::sanitizeForTty($format) . ". Use 'json', 'yaml' or 'yml'.\n");
+            \fwrite($this->stderr, "Unknown export format: " . Store::sanitizeForTty($format) . ". Use 'json', 'yaml' or 'yml'.\n");
             return 2;
         }
         try {
             $output = $this->exportToString($format, $dbName, $pattern);
-            \fwrite(STDOUT, $output);
+            \fwrite($this->stdout, $output);
             return 0;
         } catch (\Throwable $e) {
             // Sanitize-on-egress: the reserved-key refusal message names store
             // keys verbatim (poisoned stores choose them) — sanitize at the sink.
-            \fwrite(STDERR, "Export failed: " . Store::sanitizeForTty($e->getMessage()) . "\n");
+            \fwrite($this->stderr, "Export failed: " . Store::sanitizeForTty($e->getMessage()) . "\n");
             return 1;
         }
     }

@@ -7,6 +7,7 @@ namespace SugarCraft\Kv\Tests;
 use SugarCraft\Kv\Cli\ImportCommand;
 use SugarCraft\Kv\Store;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Kv\Tests\Support\SpawnBounded;
 
 /**
  * Tests for ImportCommand CLI handler.
@@ -15,10 +16,16 @@ use PHPUnit\Framework\TestCase;
  */
 final class ImportCommandTest extends TestCase
 {
+    use SpawnBounded;
+
     private string $tmpDir;
     private string $childConfigHome;
     private Store $store;
     private ImportCommand $cmd;
+    /** @var resource */
+    private $outStream;
+    /** @var resource */
+    private $errStream;
 
     protected function setUp(): void
     {
@@ -27,13 +34,31 @@ final class ImportCommandTest extends TestCase
         $this->childConfigHome = $this->tmpDir . '/xdg';
         \mkdir($this->childConfigHome, 0o700, true);
         $this->store = new Store($this->tmpDir, 'testdb');
-        $this->cmd = new ImportCommand($this->store);
+        // candy-kv-081: the in-process legs previously wrote through the bare
+        // STDOUT/STDERR constants and leaked lines onto the runner's real
+        // output — inject memory sinks instead, and assert into them so the
+        // success/failure wording is pinned, not just the exit codes.
+        $this->outStream = \fopen('php://memory', 'r+');
+        $this->errStream = \fopen('php://memory', 'r+');
+        $this->cmd = new ImportCommand($this->store, $this->outStream, $this->errStream);
     }
 
     protected function tearDown(): void
     {
         unset($this->store, $this->cmd);
+        \fclose($this->outStream);
+        \fclose($this->errStream);
         $this->removeDir($this->tmpDir);
+    }
+
+    /**
+     * @param resource $stream
+     */
+    private function captured($stream): string
+    {
+        \rewind($stream);
+
+        return (string) \stream_get_contents($stream);
     }
 
     private function removeDir(string $dir): void
@@ -56,6 +81,8 @@ final class ImportCommandTest extends TestCase
 
         $this->assertSame(0, $exit);
         $this->assertSame('json-value', $this->store->get('json-key'));
+        $this->assertSame(\SugarCraft\Kv\Lang::t('cli.imported_one') . "\n", $this->captured($this->outStream), 'the success line is the command\'s only stdout surface');
+        $this->assertSame('', $this->captured($this->errStream), 'a clean import must write no diagnostic');
     }
 
     public function testRunYamlFromFileReturnsZeroOnSuccess(): void
@@ -126,6 +153,7 @@ final class ImportCommandTest extends TestCase
         $exit = $this->cmd->run('csv', $path, false);
 
         $this->assertSame(2, $exit);
+        $this->assertStringContainsString("Unknown import format: csv. Use 'json', 'yaml' or 'yml'.", $this->captured($this->errStream));
     }
 
     public function testRunNonexistentFileReturnsOne(): void
@@ -133,6 +161,7 @@ final class ImportCommandTest extends TestCase
         $exit = $this->cmd->run('json', '/nonexistent/path/data.json', false);
 
         $this->assertSame(1, $exit);
+        $this->assertStringContainsString('File not found: /nonexistent/path/data.json', $this->captured($this->errStream));
     }
 
     public function testRunUnknownFormatLeavesStoreUnchanged(): void
@@ -159,6 +188,7 @@ final class ImportCommandTest extends TestCase
         $exit = $this->cmd->run('json', $path, false);
 
         $this->assertSame(1, $exit);
+        $this->assertStringContainsString('Import failed:', $this->captured($this->errStream), 'the malformed-document leg must answer on the stderr sink, not the runner');
     }
 
     public function testRunMalformedYamlReturnsOne(): void
@@ -268,22 +298,11 @@ final class ImportCommandTest extends TestCase
      * XDG_CONFIG_HOME, so the binary's own store isolation is under our control.
      *
      * @param list<string> $args
-     * @return array{stdout: string, stderr: string, exit: int}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
     private function runChild(array $args): array
     {
-        $cmd = \array_merge([\PHP_BINARY, \dirname(__DIR__) . '/bin/candy-kv'], $args);
-        $env = \getenv();
-        $env['XDG_CONFIG_HOME'] = $this->childConfigHome;
-
-        $proc = \proc_open($cmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
-        $this->assertIsResource($proc, 'failed to launch the candy-kv CLI');
-        \fclose($pipes[0]); // argv-fed commands must never wait on a terminal.
-        $stdout = (string) \stream_get_contents($pipes[1]);
-        $stderr = (string) \stream_get_contents($pipes[2]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-
-        return ['stdout' => $stdout, 'stderr' => $stderr, 'exit' => \proc_close($proc)];
+        // argv-fed commands must never wait on a terminal: spawnKv closes stdin.
+        return self::spawnKv($args, $this->childConfigHome);
     }
 }

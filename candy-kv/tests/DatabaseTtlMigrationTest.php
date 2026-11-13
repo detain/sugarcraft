@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Kv\Database;
+use SugarCraft\Kv\Tests\Support\SpawnBounded;
 
 /**
  * Regression pins for the TTL epoch migration.
@@ -20,6 +21,8 @@ use SugarCraft\Kv\Database;
  */
 final class DatabaseTtlMigrationTest extends TestCase
 {
+    use SpawnBounded;
+
     private string $tmpDir;
 
     protected function setUp(): void
@@ -323,30 +326,11 @@ final class DatabaseTtlMigrationTest extends TestCase
      * Run `php bin/candy-kv <args...>` with an isolated XDG_CONFIG_HOME.
      *
      * @param list<string> $args
-     * @return array{stdout: string, stderr: string, exit: int}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
     private function runBin(array $args, string $xdg): array
     {
-        $cmd = \array_merge([\PHP_BINARY, \dirname(__DIR__) . '/bin/candy-kv'], $args);
-
-        $env = \getenv();
-        $env['XDG_CONFIG_HOME'] = $xdg;
-
-        $proc = \proc_open($cmd, [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes, null, $env);
-        $this->assertIsResource($proc, 'failed to launch the candy-kv CLI');
-
-        // Close stdin so `set` never blocks waiting on a terminal.
-        \fclose($pipes[0]);
-        $stdout = \stream_get_contents($pipes[1]);
-        $stderr = \stream_get_contents($pipes[2]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        $exit = \proc_close($proc);
-
-        return ['stdout' => (string) $stdout, 'stderr' => (string) $stderr, 'exit' => $exit];
+        // spawnKv closes stdin so `set` never blocks waiting on a terminal.
+        return self::spawnKv($args, $xdg);
     }
 }

@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Kv\Support\Version;
+use SugarCraft\Kv\Tests\Support\SpawnBounded;
 
 /**
  * The phar packaging contract, pinned WITHOUT sealing the real vendor tree
@@ -27,6 +28,8 @@ use SugarCraft\Kv\Support\Version;
  */
 final class PharBuildScriptTest extends TestCase
 {
+    use SpawnBounded;
+
     public function testTheBinaryCarriesTheStubShapeAndThePharGuard(): void
     {
         $bin = file_get_contents(__DIR__ . '/../bin/candy-kv');
@@ -133,19 +136,9 @@ final class PharBuildScriptTest extends TestCase
      */
     private static function runPhp(array $args): array
     {
-        $proc = proc_open(
-            [PHP_BINARY, ...$args],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-        );
-        self::assertIsResource($proc);
-        fclose($pipes[0]);
-        $out = (string) stream_get_contents($pipes[1]);
-        $err = (string) stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        $run = self::spawnBounded([PHP_BINARY, ...$args]);
 
-        return [proc_close($proc), $out, $err];
+        return [$run['exit'], $run['stdout'], $run['stderr']];
     }
 
     public function testVersionAnswersCurrentOutsideAnArchiveAndNullForUnopenablePaths(): void
@@ -189,20 +182,10 @@ final class PharBuildScriptTest extends TestCase
         $script = realpath(__DIR__ . '/../tools/build-phar.php');
         self::assertIsString($script, 'sanity: the build script exists');
 
-        $proc = proc_open(
-            [PHP_BINARY, '-d', 'phar.readonly=0', $script, ...$args],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-        );
-        self::assertIsResource($proc);
-        // The child must not wait on us: close stdin immediately.
-        fclose($pipes[0]);
-        // Drain both pipes to EOF before judging (pipe-EOF law).
-        $out = (string) stream_get_contents($pipes[1]);
-        $err = (string) stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        // The child must not wait on us: spawnBounded closes stdin immediately,
+        // and both pipes drain concurrently (pipe-EOF law) under one deadline.
+        $run = self::spawnBounded([PHP_BINARY, '-d', 'phar.readonly=0', $script, ...$args]);
 
-        return [proc_close($proc), $out, $err];
+        return [$run['exit'], $run['stdout'], $run['stderr']];
     }
 }

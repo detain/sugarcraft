@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\Tests\Support\SpawnBounded;
 
 /**
  * End-to-end pins for the strict CLI contract (lib-fixes-1103 wave A).
@@ -23,6 +24,8 @@ use SugarCraft\Kv\Store;
  */
 final class CliContractTest extends TestCase
 {
+    use SpawnBounded;
+
     private string $configHome;
 
     protected function setUp(): void
@@ -61,8 +64,28 @@ final class CliContractTest extends TestCase
         $this->assertFalse(\is_dir($this->configHome . '/.config'));
     }
 
-    public function testVersionExitsZeroAndCreatesNoStorage(): void
+    /**
+     * candy-kv-084: the help verb has three spellings (--help, -h, bare
+     * `help`) answering through the same bin/candy-kv fallthrough — the old
+     * suite executed only one, so two could rot silently.
+     */
+    public function testShortHelpFlagExitsZeroAndCreatesNoStorage(): void
     {
+        $run = $this->runKv(['-h']);
+        $this->assertSame(0, $run['exit'], '-h must answer like --help, not face the unknown-command refusal');
+        $this->assertStringContainsString('candy-kv', $run['stdout']);
+        $this->assertFalse(\is_dir($this->configHome . '/.config'));
+    }
+
+    public function testBareHelpVerbExitsZeroAndCreatesNoStorage(): void
+    {
+        $run = $this->runKv(['help']);
+        $this->assertSame(0, $run['exit'], 'bare `help` must answer like --help, not face the unknown-command refusal');
+        $this->assertStringContainsString('candy-kv', $run['stdout']);
+        $this->assertFalse(\is_dir($this->configHome . '/.config'));
+    }
+
+    public function testVersionExitsZeroAndCreatesNoStorage(): void    {
         $run = $this->runKv(['--version']);
         $this->assertSame(0, $run['exit']);
         $this->assertNotSame('', \trim($run['stdout']));
@@ -359,7 +382,7 @@ final class CliContractTest extends TestCase
 
     /**
      * @param list<string> $args
-     * @return array{stdout: string, stderr: string, exit: int}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
     private function runKv(array $args): array
     {
@@ -368,7 +391,7 @@ final class CliContractTest extends TestCase
 
     /**
      * @param list<string> $args
-     * @return array{stdout: string, stderr: string, exit: int}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
     private function runKvFeeding(array $args, string $stdin): array
     {
@@ -377,32 +400,11 @@ final class CliContractTest extends TestCase
 
     /**
      * @param list<string> $args
-     * @return array{stdout: string, stderr: string, exit: int}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
     private function spawn(array $args, ?string $stdin): array
     {
-        $cmd = \array_merge([\PHP_BINARY, \dirname(__DIR__) . '/bin/candy-kv'], $args);
-        $env = \getenv();
-        $env['XDG_CONFIG_HOME'] = $this->configHome;
-
-        $proc = \proc_open($cmd, [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes, null, $env);
-        $this->assertIsResource($proc, 'failed to launch the candy-kv CLI');
-
-        if ($stdin !== null) {
-            \fwrite($pipes[0], $stdin);
-        }
-        \fclose($pipes[0]);
-        $stdout = \stream_get_contents($pipes[1]);
-        $stderr = \stream_get_contents($pipes[2]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        $exit = \proc_close($proc);
-
-        return ['stdout' => (string) $stdout, 'stderr' => (string) $stderr, 'exit' => $exit];
+        return self::spawnKv($args, $this->configHome, $stdin);
     }
 
     private function removeTree(string $dir): void

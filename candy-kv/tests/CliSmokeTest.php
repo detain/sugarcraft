@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Kv\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Kv\Tests\Support\SpawnBounded;
 
 /**
  * End-to-end smoke test that runs the real `bin/candy-kv` binary via proc_open.
@@ -21,6 +22,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class CliSmokeTest extends TestCase
 {
+    use SpawnBounded;
+
     private string $configHome;
 
     protected function setUp(): void
@@ -172,73 +175,23 @@ final class CliSmokeTest extends TestCase
      *
      * @param list<string> $args
      * @param string|null  $stdin  Bytes to pipe in; null closes stdin (EOF).
-     * @return array{stdout: string, stderr: string, exit: int}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
     private function runSkateFeeding(array $args, ?string $stdin): array
     {
-        $bin = \dirname(__DIR__) . '/bin/candy-kv';
-        $cmd = \array_merge([\PHP_BINARY, $bin], $args);
-
-        $env = \getenv();
-        $env['XDG_CONFIG_HOME'] = $this->configHome;
-
-        $proc = \proc_open($cmd, [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes, null, $env);
-        $this->assertIsResource($proc, 'failed to launch the candy-kv CLI');
-
-        if ($stdin !== null) {
-            \fwrite($pipes[0], $stdin);
-        }
-        \fclose($pipes[0]); // EOF for the child — it never waits on a terminal.
-        $stdout = \stream_get_contents($pipes[1]);
-        $stderr = \stream_get_contents($pipes[2]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        $exit = \proc_close($proc);
-
-        return ['stdout' => (string) $stdout, 'stderr' => (string) $stderr, 'exit' => $exit];
+        return self::spawnKv($args, $this->configHome, $stdin);
     }
 
     /**
      * Run `php bin/candy-kv <args...>` with an isolated XDG_CONFIG_HOME.
      *
      * @param list<string> $args
-     * @return array{stdout: string, stderr: string, exit: int}
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
     private function runSkate(array $args): array
     {
-        $bin = \dirname(__DIR__) . '/bin/candy-kv';
-        $cmd = \array_merge([\PHP_BINARY, $bin], $args);
-
-        $env = \getenv();
-        $env['XDG_CONFIG_HOME'] = $this->configHome;
-
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-
-        $proc = \proc_open($cmd, $descriptors, $pipes, null, $env);
-        $this->assertIsResource($proc, 'failed to launch the candy-kv CLI');
-
-        // These commands take their value on argv; close stdin so `set` never
-        // blocks waiting on a value from a terminal.
-        \fclose($pipes[0]);
-        $stdout = \stream_get_contents($pipes[1]);
-        $stderr = \stream_get_contents($pipes[2]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        $exit = \proc_close($proc);
-
-        return [
-            'stdout' => (string) $stdout,
-            'stderr' => (string) $stderr,
-            'exit' => $exit,
-        ];
+        // argv-fed commands must never wait on a terminal: spawnKv closes stdin.
+        return self::spawnKv($args, $this->configHome);
     }
 
     /**

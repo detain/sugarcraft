@@ -25,9 +25,23 @@ use SugarCraft\Kv\Store;
  */
 final class ImportCommand
 {
+    /**
+     * @param Store       $store receiving store
+     * @param resource    $stdout sink for the success line (tests pass a
+     *                    memory stream; real runs keep STDOUT)
+     * @param resource    $stderr sink for every diagnostic (candy-kv-081:
+     *                    writing to the bare constants bypassed PHPUnit's
+     *                    buffering and leaked lines onto the runner's real
+     *                    STDOUT/STDERR — the sinks are now injectable)
+     */
     public function __construct(
         private readonly Store $store,
+        private readonly mixed $stdout = \STDOUT,
+        private readonly mixed $stderr = \STDERR,
     ) {
+        if (!\is_resource($this->stdout) || !\is_resource($this->stderr)) {
+            throw new \InvalidArgumentException('ImportCommand sinks must be writable stream resources.');
+        }
     }
 
     /**
@@ -49,7 +63,7 @@ final class ImportCommand
         if ($importer === null) {
             // Usage-class error: the format the caller asked for is not a format at all.
             // Sanitize-on-egress: $format is argv-chosen and may carry terminal escapes.
-            \fwrite(STDERR, "Unknown import format: " . Store::sanitizeForTty($format) . ". Use 'json', 'yaml' or 'yml'.\n");
+            \fwrite($this->stderr, "Unknown import format: " . Store::sanitizeForTty($format) . ". Use 'json', 'yaml' or 'yml'.\n");
             return 2;
         }
 
@@ -57,7 +71,7 @@ final class ImportCommand
             if ($path === '-' || $path === '/dev/stdin') {
                 $json = \file_get_contents('php://stdin');
                 if ($json === false) {
-                    \fwrite(STDERR, "Failed to read from STDIN.\n");
+                    \fwrite($this->stderr, "Failed to read from STDIN.\n");
                     return 1;
                 }
                 if ($format === 'yaml' || $format === 'yml') {
@@ -68,7 +82,7 @@ final class ImportCommand
             } else {
                 if (!\file_exists($path)) {
                     // Sanitize-on-egress: the path is caller-chosen argv bytes.
-                    \fwrite(STDERR, "File not found: " . Store::sanitizeForTty($path) . "\n");
+                    \fwrite($this->stderr, "File not found: " . Store::sanitizeForTty($path) . "\n");
                     return 1;
                 }
                 if ($format === 'yaml' || $format === 'yml') {
@@ -78,13 +92,13 @@ final class ImportCommand
                 }
             }
 
-            \fwrite(STDOUT, Lang::t($count === 1 ? 'cli.imported_one' : 'cli.imported_n', ['count' => $count]) . "\n");
+            \fwrite($this->stdout, Lang::t($count === 1 ? 'cli.imported_one' : 'cli.imported_n', ['count' => $count]) . "\n");
             return 0;
         } catch (\Throwable $e) {
             // Sanitize-on-egress: importer failure texts name file-chosen keys
             // (JsonImporter 'Entry "%s" has a %s value', YamlDialect binary/base64
             // refusals) — attacker-chosen bytes must not reach the TTY raw.
-            \fwrite(STDERR, "Import failed: " . Store::sanitizeForTty($e->getMessage()) . "\n");
+            \fwrite($this->stderr, "Import failed: " . Store::sanitizeForTty($e->getMessage()) . "\n");
             return 1;
         }
     }
