@@ -771,10 +771,13 @@ final class EscapeDecoder
      *  - bit 2/3/4 (values 4/8/16): Shift / Alt / Ctrl
      *  - bit 5 (value 32): motion (drag)
      *  - bit 6 (value 64): wheel — bit 1 selects left/right, bit 0 up/down
+     *  - bit 7 (value 128): the horizontal-wheel pair — 128 = scroll-left,
+     *    129 = scroll-right (xterm's bit-7 fold of the 66/67 forms)
      *
-     * A wheel code (64/65/66/67, optionally | 32 | modifiers) must NEVER fall
-     * through to the plain-button path: `code & 3` of wheel-up (64) is 0, which
-     * used to surface a phantom left-click for every plain wheel event.
+     * A wheel code (64/65/66/67 or 128/129, optionally | 32 | modifiers) must
+     * NEVER fall through to the plain-button path: `code & 3` of wheel-up (64)
+     * is 0, and of 128/129 is 0/1, which used to surface a phantom left- or
+     * right-click for every plain wheel event.
      *
      * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html — SGR mouse.
      */
@@ -782,7 +785,14 @@ final class EscapeDecoder
     {
         $modifiers = KeyModifier::fromSgrMouse(($code >> 2) & 0x07);
 
-        if (($code & 64) !== 0) {
+        // xterm's bit-7 fold: 128/129 are the horizontal wheel pair sent in
+        // place of the 66/67 bit-6 forms. Fold into the bit-6 family so the
+        // same direction math classifies them — never a phantom button click.
+        if (($code & 128) !== 0 && ($code & 64) === 0) {
+            $code = ($code & ~128) | 64 | 2;
+        }
+
+        if (($code & 192) !== 0) {
             // Wheel family (bit 6): horizontal when bit 1 set; direction bit 0.
             if (($code & 2) !== 0) {
                 return ($code & 1) === 0

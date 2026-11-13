@@ -518,6 +518,54 @@ final class EscapeDecoderTest extends TestCase
         $this->assertTrue($m->isScroll());
     }
 
+    public function testSgrMouseHorizontalWheel6667(): void
+    {
+        // Bit-6 + bit-1 forms: 66 = scroll-left (stored 98), 67 = scroll-right
+        // (stored 99) — never a phantom press.
+        $left = $this->decoder->decode("\x1b[<66;10;20M")[0];
+        $this->assertTrue($left->isScroll());
+        $this->assertSame(98, $left->button);
+        $this->assertSame(10, $left->x);
+        $this->assertSame(20, $left->y);
+
+        $right = $this->decoder->decode("\x1b[<67;10;20M")[0];
+        $this->assertTrue($right->isScroll());
+        $this->assertSame(99, $right->button);
+    }
+
+    public function testSgrMouseHorizontalWheel128129NeverPhantomClicks(): void
+    {
+        // xterm bit-7 fold: 128/129 are the horizontal-wheel pair. Before the
+        // fold they fell through to the plain-button path as phantom left-
+        // (128 & 3 = 0) and right- (129 & 3 = 1) presses.
+        $left = $this->decoder->decode("\x1b[<128;10;20M")[0];
+        $this->assertInstanceOf(MouseEvent::class, $left);
+        $this->assertTrue($left->isScroll());
+        $this->assertSame(98, $left->button);
+        $this->assertSame(MouseEvent::ACTION_SCROLL, $left->action);
+        $this->assertSame(10, $left->x);
+        $this->assertSame(20, $left->y);
+
+        $right = $this->decoder->decode("\x1b[<129;10;20M")[0];
+        $this->assertTrue($right->isScroll());
+        $this->assertSame(99, $right->button);
+
+        // Press-shape equivalence with the 66/67 forms the fold names, and the
+        // release final cannot turn a wheel code into a release event.
+        $rel = $this->decoder->decode("\x1b[<128;3;4m")[0];
+        $this->assertTrue($rel->isScroll());
+        $this->assertSame(98, $rel->button);
+    }
+
+    public function testSgrMouseHorizontalWheel128129WithMotionAndModifiers(): void
+    {
+        // 128 | 32 (motion) | 4 (shift): still a scroll-left, shift recorded.
+        $m = $this->decoder->decode("\x1b[<164;5;6M")[0];
+        $this->assertTrue($m->isScroll());
+        $this->assertSame(98, $m->button);
+        $this->assertTrue($m->modifiers->includes(KeyModifier::SHIFT));
+    }
+
     public function testSgrMouseWithShiftModifier(): void
     {
         // Shift encoded as 4 added to button (SGR bit 2)
