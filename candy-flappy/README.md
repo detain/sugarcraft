@@ -116,8 +116,8 @@ best.
 
 ## Terminal requirements
 
-The framed world needs a 62 x 21 viewport (`Game::MIN_COLS` x `Game::MIN_ROWS`
-— the 60 x 18 world plus the border (two columns, two rows) and one status
+The framed world needs a 62x21 viewport (`Game::MIN_COLS` x `Game::MIN_ROWS`
+— the 60x18 world plus the border (two columns, two rows) and one status
 row); on a wider, taller terminal the frame stays that size and the surplus
 rows are simply unused.
 
