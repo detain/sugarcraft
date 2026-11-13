@@ -440,4 +440,26 @@ YAML;
         $this->assertSame('plain #2', $endpoints[1]->description);
         $this->assertSame(['VerifyOnly #3'], $endpoints[2]->options);
     }
+
+    public function testYamlEscapedQuoteLegsKeepTheHashOnTheConfigCarrier(): void
+    {
+        // -095 (F-18 promise, escaped legs): the backslash-pair consume and
+        // the doubled '' keep the scanner inside the quoted value, so a '#'
+        // after an ESCAPED quote still does not truncate — the leg the
+        // clover report never exercised. The escapes ride verbatim (the
+        // unescape gap is -069's), pinned exactly as measured so a future
+        // change notices.
+        $raw = <<<'YAML'
+- name: prod
+  host: p.test
+  description: "a\"b # c"
+- name: single
+  host: s.test
+  description: 'it''s #1'
+YAML;
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertCount(2, $endpoints);
+        $this->assertSame('a\"b # c', $endpoints[0]->description);
+        $this->assertSame("it''s #1", $endpoints[1]->description);
+    }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshLauncher\Tests;
 
+use SugarCraft\SshLauncher\Config;
 use SugarCraft\SshLauncher\SshConfigParser;
 use PHPUnit\Framework\TestCase;
 
@@ -424,5 +425,35 @@ CONF;
         $endpoints = $this->parse($raw);
         $this->assertCount(1, $endpoints);
         $this->assertStringContainsString('#1', $endpoints[0]->user);
+    }
+
+    public function testEscapedQuoteLegsSurviveCommentStrippingOnBothCarriers(): void
+    {
+        // -095 carrier pair: the backslash-pair consume and doubled '' legs
+        // of the (now shared, -065) comment scanner, through BOTH public
+        // parse entries on identical payload bytes. A future regression on
+        // either carrier goes red here — the drift guard -065's doctrine.
+        // The parser hands quoted arguments through verbatim (ssh_config
+        // quoting is an unimplemented subset leg), so the equality below is
+        // the comment-strip behaviour, not the scalar grammar.
+        $dq = chr(34);
+        $sq = chr(39);
+        $bs = chr(92);
+        $double = 'a' . $bs . $dq . 'b # c';
+        $single = 'it' . $sq . $sq . 's #1';
+
+        $imported = $this->parse("Host e1\n  HostName " . $dq . $double . $dq . "\n");
+        $this->assertCount(1, $imported);
+        $this->assertSame($dq . $double . $dq, $imported[0]->host, 'import side keeps the hash');
+
+        $imported = $this->parse("Host e2\n  HostName " . $sq . $single . $sq . "\n");
+        $this->assertCount(1, $imported);
+        $this->assertSame($sq . $single . $sq, $imported[0]->host, 'import side keeps the doubled-quote value');
+
+        $declared = Config::parse("- name: e1\n  host: h.test\n  description: " . $dq . $double . $dq . "\n", 'wishlist.yml');
+        $this->assertSame($double, $declared[0]->description, 'config side agrees: same bytes, same survival');
+
+        $declared = Config::parse("- name: e2\n  host: h.test\n  description: " . $sq . $single . $sq . "\n", 'wishlist.yml');
+        $this->assertSame($single, $declared[0]->description, 'config side agrees on the doubled-quote value');
     }
 }
