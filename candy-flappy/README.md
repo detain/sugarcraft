@@ -36,15 +36,30 @@ php candy-flappy.phar
 A rolling development phar is published on the host repository
 [`detain/sugarcraft`](https://github.com/detain/sugarcraft) under the GitHub
 Releases tag [`candy-flappy/dev`](https://github.com/detain/sugarcraft/releases/tag/candy-flappy/dev)
-as `candy-flappy.phar`. **That channel is FROZEN at the 2026-11-04 build
+as `candy-flappy.phar`. Once the freeze below lifts, that artifact is
+rebuilt automatically whenever the game's code changes on master. **It is
+currently FROZEN at the 2026-11-04 build
 (commit `f1c90bb34`)** — the 2026-11-05 sibling-pin CI wave has blocked phar
-rebuilds fleet-wide, so the per-push rebuild (when flappy is in the affected
-closure, else a forced dispatch) is not running; builds resume with the fleet
-phar-workflow cure. Until the release page shows an artifact newer than
+rebuilds fleet-wide. Until the release page shows an artifact newer than
 2026-11-04, prefer the composer/path installs above — the download there is
 a stale build, not the fresh one the wording once promised. Local rebuilds
 are unaffected: `php -d phar.readonly=0 tools/build-phar.php` still works,
 and its clean-published-vendor door fails CLOSED by design.
+
+### Verify the phar
+
+The release carries a `candy-flappy.phar.sha256` sidecar at the tag above;
+`.phar.commit` and `.phar.pins.json` provenance sidecars join the set with
+the fleet cure's post-freeze builds. Check a download with:
+
+```bash
+sha256sum -c candy-flappy.phar.sha256   # integrity
+grep -m1 . candy-flappy.phar.commit     # which build you actually hold
+```
+
+No minisign public key is anchored for this app (candy-flappy ships no
+self-update consumer), so `.sha256` plus `.phar.commit` are a disclosure of
+what you hold, not a cryptographic attestation of who built it.
 
 ### Command line
 
