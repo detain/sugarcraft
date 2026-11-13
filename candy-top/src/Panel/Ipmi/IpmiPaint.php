@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Panel\Ipmi;
 
 use SugarCraft\Style\Border;
 use SugarCraft\Top\Collect\Ipmi\SensorStatus;
+use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\Gfx\Just;
 use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Rect;
@@ -177,7 +178,7 @@ final class IpmiPaint
             ? sprintf($w >= 10000 ? '%.1f' : '%.2f', $w / 1000)
             : sprintf('%d', (int) round($w));
 
-        return $unit ? $num . ($kilos ? ' kW' : ' W') : $num . ($kilos ? 'k' : '');
+        return $unit ? $num . ($kilos ? Lang::t('unit.kilowatts') : Lang::t('unit.watts')) : $num . ($kilos ? 'k' : '');
     }
 
     /** RPM compactly: "980", "16.5k". */

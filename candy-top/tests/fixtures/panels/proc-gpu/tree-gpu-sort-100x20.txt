@@ -1,5 +1,5 @@
 ╭─┐⁴proc┌┐filter┌────────────────────┐gpu-only┌┐Omit ctr┌┐pause┌┐per-core┌┐reverse┌┐tree┌┐← gpu →┌─╮
-│Tree:                                      Threads: User:       MemB       Cpu%  GMem       Gpu%  │
+│Tree                                       Threads User         Mem       Cpu%  GMem       Gpu%   │
 │[-]─1 systemd (init)                              1 root        117M ⣀⣀⣀⢀⣤ 38.7     - ⣀⣀⣀⣀⣀    -  │
 │ │ [-]─5120 containerd-shim (containerd-shim-)    2 root        375M ⣀⣀⣀⢠⣀ 22.6     - ⣀⣀⣀⣀⣀    -  │
 │ │  │  └─5133 python3 ([docker:3f2a1b9c0d1e] )    3 root        675M ⣀⣀⣀⢀⣀ 13.7  6.7G ⣀⣀⣀⢰⣿ 87.2  │

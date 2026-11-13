@@ -274,7 +274,7 @@ final class CpuView
         $meterW = $c->width - ($showTemps ? 23 - ($bcs <= 1 && $bcols === 1 ? 6 : 0) : 11);
         $x += $box->ansi($x, $row, PositionMeter::render($ink, $meterW, $total, 'cpu'), $ink->fg('main_fg') . Symbols::BOLD);
         $x += $box->put($x, $row, Just::right($sampled ? (string) $total : Lang::t('value.unavailable'), 4), $sampled ? $ink->gradient('cpu', max(0, min(100, $total))) : $ink->fg('inactive_fg'));
-        $x += $box->put($x, $row, '%', $ink->fg('main_fg'));
+        $x += $box->put($x, $row, Lang::t('unit.percent'), $ink->fg('main_fg'));
         $temp = $p->history()->last('temp:cpu');
         if ($showTemps && $temp !== null) {
             $color = $ink->gradient('temp', self::pct($temp, $tempMax));
@@ -336,7 +336,7 @@ final class CpuView
             }
             $value = $history->last('core:' . $n) ?? 0;
             $x += $box->put($x, $row, Just::right((string) $value, $bcs < 2 ? 3 : 4), $enabled ? $ink->gradient('cpu', max(0, min(100, $value))) : $ink->fg('inactive_fg'));
-            $x += $box->put($x, $row, '%', $fg);
+            $x += $box->put($x, $row, Lang::t('unit.percent'), $fg);
 
             if ($freqMode !== 'off') {
                 $mhz = $history->last('freq:' . $n);
@@ -452,7 +452,7 @@ final class CpuView
                 } else {
                     $write(Just::right((string) $util, 3));
                 }
-                $write('%' . ($bcols === 1 ? ' ' : ''), $mainFg);
+                $write(Lang::t('unit.percent') . ($bcols === 1 ? ' ' : ''), $mainFg);
             }
             if ($hasMem && $bcols > 1) {
                 $write(' ');

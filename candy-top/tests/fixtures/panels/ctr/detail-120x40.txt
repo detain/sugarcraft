@@ -1,5 +1,5 @@
 ╭─┐ˣctr┌───────────────────────────────────────────────────────────────┬───────────────────────────────────┐[ select ]┌╮
-│Container:                          Engine:   Procs:   Mem       Cpu% │build lxc                              Cpu 1.5%│
+│Container                           Engine     Procs   Mem       Cpu% │build lxc                              Cpu 1.5%│
 │9a0c5e21b7d4                        k8s            1  201M ⣀⣀⣀⢀⣀  3.3 │                                               │
 │arch                                nspawn         1  385M ⣀⣀⣀⢀⣀  1.7 │                                               │
 │build                               lxc            2  595M ⣀⣀⣀⢀⣀  1.5 │                                               │

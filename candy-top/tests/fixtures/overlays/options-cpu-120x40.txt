@@ -12,7 +12,7 @@
 │            │ ← Cpu graph lower 1/12            Auto  → │ Sets the CPU/GPU stat shown in lower half of │              │
 ╰────────────│   Cpu invert lower                True    │ the CPU graph.                               │──────────────╯
 ╭─┐²mem┌─────│   Cpu single graph               False    │                                              │──────────────╮
-│ Total: 16.0│   Show gpu info                   Auto    │ CPU:                                         │    MemB  Cpu%│
+│ Total: 16.0│   Show gpu info                   Auto    │ CPU:                                         │     Mem  Cpu%│
 │ Used: 10.2 │  Temperature sensors                      │ "total" = Total cpu usage.                   │ 198 MiB  27.8│
 │ Available: │   Check temp                      True    │ "user" = User mode cpu usage.                │90.0 MiB  25.0│
 │ Cached: 3.2│   Cpu sensor                      Auto    │ "system" = Kernel mode cpu usage.            │ 244 MiB  13.6│

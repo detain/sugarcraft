@@ -189,7 +189,15 @@ final class NetView
      */
     private static function button(string $langKey, string $key, PanelFrame $frame): string
     {
-        return FrameBuilder::hotkey(Width::truncate(Lang::t($langKey), 4), $key, $frame->ink);
+        $label = Lang::t($langKey);
+        if (Width::string($label) > 4) {
+            $short = Lang::t($langKey . '_short');
+            if (Width::string($short) <= 4) {
+                $label = $short;
+            }
+        }
+
+        return FrameBuilder::hotkey(Width::truncate($label, 4), $key, $frame->ink);
     }
 
     /**

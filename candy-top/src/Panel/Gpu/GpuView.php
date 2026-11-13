@@ -106,7 +106,7 @@ final class GpuView
             $x += $box->put($x, $row, Lang::t('gpu.meter.' . $kind) . ' ', $mainFg . Symbols::BOLD);
             $x += $box->ansi($x, $row, PositionMeter::render($ink, max(1, $bw - ($showTemps ? 25 : 12)), $value, 'cpu'), $mainFg . Symbols::BOLD);
             $x += $box->put($x, $row, Just::right((string) $value, 5), $ink->gradient('cpu', self::pct($value)));
-            $x += $box->put($x, $row, '%', $mainFg);
+            $x += $box->put($x, $row, Lang::t('unit.percent'), $mainFg);
             $temp = $history->last(GpuPanel::key($i, 'temp'));
             if ($showTemps && $temp !== null) {
                 $x += $box->put($x, $row, ' ');
@@ -134,7 +134,7 @@ final class GpuView
             $x += $box->put($x, $row, sprintf('%5.' . $precision . 'f', $device->watts), $ink->gradient('cached', self::pct($pwr)));
             $x += $box->put($x, $row, 'W', $mainFg);
             if ($pstate !== null) {
-                $x += $box->put($x, $row, Lang::t('gpu.pstate') . ($pstate > 9 ? '' : ' ') . 'P', $mainFg);
+                $x += $box->put($x, $row, ' ' . Lang::t('gpu.pstate') . ' ' . ($pstate > 9 ? '' : ' ') . 'P', $mainFg);
                 $box->put($x, $row, (string) $pstate, $ink->gradient('cached', self::pct($pstate)));
             }
             $rows++;
@@ -152,7 +152,7 @@ final class GpuView
                 $x += $box->put($x, $row, Lang::t('gpu.' . $label) . ' ', $mainFg . Symbols::BOLD);
                 $x += $box->ansi($x, $row, PositionMeter::render($ink, $meterW, $v, 'cpu'), $mainFg . Symbols::BOLD);
                 $x += $box->put($x, $row, Just::right((string) $v, 4), $ink->gradient('cpu', self::pct($v)));
-                $x += $box->put($x, $row, '%', $mainFg);
+                $x += $box->put($x, $row, Lang::t('unit.percent'), $mainFg);
             }
             $rows++;
         }
@@ -191,7 +191,7 @@ final class GpuView
                 : Lang::t('gpu.mem_usage', ['mem' => $upper]) . Just::right($human->format(max(0, $d->memUsed)), $span);
             $x += $box->put($x, $row, $text, $mainFg);
             if ($sf->memClock && $d->clockMem >= 0) {
-                $box->put($x, $row, Lang::t('gpu.mem_clock', ['mem' => $upper]) . Just::right((int) round($d->clockMem) . Lang::t('gpu.mhz'), $half - 13), $mainFg);
+                $box->put($x, $row, '   ' . Lang::t('gpu.mem_clock', ['mem' => $upper]) . Just::right((int) round($d->clockMem) . Lang::t('gpu.mhz'), $half - 13), $mainFg);
             }
 
             return;
@@ -223,7 +223,7 @@ final class GpuView
         self::graph($box, $f, $graphX, $row + 1, max(1, $half - 2), $graphH, $family, false, $history->series(GpuPanel::key($i, 'vram')), 'used');
         $x = $sx + 2;
         $x += $box->put($x, $row + 1, Lang::t('gpu.total') . Just::right($human->format($d->memTotal), $half - 9), $mainFg . Symbols::BOLD);
-        $box->put($x + 3, $row + 1, Just::right((string) ($history->last(GpuPanel::key($i, 'vram')) ?? 0), 3) . '%', $mainFg);
+        $box->put($x + 3, $row + 1, Just::right((string) ($history->last(GpuPanel::key($i, 'vram')) ?? 0), 3) . Lang::t('unit.percent'), $mainFg);
 
         if ($sf->memUtilization) {
             $x = $sx;
@@ -232,7 +232,7 @@ final class GpuView
             $box->put($x, $row + 2, str_repeat(Symbols::H_LINE, max(0, $half - 14)) . self::DIV_RIGHT, $div);
             // btop offsets the series by 4 so 0-5 % still shows a dot.
             self::graph($box, $f, $sx + 1, $row + 3, max(1, $half - 1), 2, $family, false, $history->series(GpuPanel::key($i, 'memutil')), 'free', false, 100, 4);
-            $box->put($sx + 1, $row + 3, Just::right((string) ($history->last(GpuPanel::key($i, 'memutil')) ?? 0), 3) . '%');
+            $box->put($sx + 1, $row + 3, Just::right((string) ($history->last(GpuPanel::key($i, 'memutil')) ?? 0), 3) . Lang::t('unit.percent'));
         }
 
         if ($sf->memClock && $d->clockMem >= 0) {

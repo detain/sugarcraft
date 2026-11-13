@@ -527,14 +527,14 @@ final class IpmiView
             $pct = (int) round(100 * $watts / $scale);
             $big = IpmiPaint::watts($watts);
             $max = IpmiPaint::watts($scale, false);
-            $mid = $big . ' ' . $pct . '%';
+            $mid = $big . ' ' . $pct . Lang::t('unit.percent');
             $mx = $in->x + intdiv($in->width - mb_strwidth($mid), 2);
             if ($gx + 1 < $mx && $mx + mb_strwidth($mid) < $gx + $gw - mb_strwidth($max)) {
                 $r->put($gx, $y, '0', $ink->fg('inactive_fg'));
                 $r->put($gx + $gw - mb_strwidth($max), $y, $max, $ink->fg('inactive_fg'));
             }
             $r->put($mx, $y, $big, Symbols::BOLD . $ink->gradient('cpu', $pct));
-            $r->put($mx + mb_strwidth($big) + 1, $y, $pct . '%', $ink->fg('graph_text'));
+            $r->put($mx + mb_strwidth($big) + 1, $y, $pct . Lang::t('unit.percent'), $ink->fg('graph_text'));
             $y++;
         } elseif ($watts !== null) {
             self::powerLine($r, $ink, $d, $in->x, $y, $in->width);
@@ -611,7 +611,7 @@ final class IpmiView
             $col += $r->put($col, $y, $label . ' ', $ink->fg('inactive_fg'));
             $col += $r->put($col, $y, $value, $i === 1 ? $ink->fg('hi_fg') : $ink->fg('main_fg'));
         }
-        $r->put($col, $y, ' W', $ink->fg('inactive_fg'));
+        $r->put($col, $y, Lang::t('unit.watts'), $ink->fg('inactive_fg'));
     }
 
     /** The watts text of a supply: "480→448 W" (in→out), or one figure when only one side reads or both agree. */
@@ -667,7 +667,7 @@ final class IpmiView
         $tx = $x + $width - $effW - $textW;
         $r->put($tx, $y, Just::right(self::psuText($psu), $textW), $sev->severity() > 0 ? Symbols::BOLD . IpmiPaint::status($ink, $sev) : $ink->fg('main_fg'));
         if ($eff !== null && $effW > 0) {
-            $r->put($tx + $textW, $y, Just::right(sprintf('%d%%', (int) round($eff * 100)), $effW), $ink->gradient('free', (int) round(max(0.0, min(1.0, ($eff - 0.80) / 0.18)) * 100)));
+            $r->put($tx + $textW, $y, Just::right(sprintf('%d', (int) round($eff * 100)) . Lang::t('unit.percent'), $effW), $ink->gradient('free', (int) round(max(0.0, min(1.0, ($eff - 0.80) / 0.18)) * 100)));
         }
     }
 
@@ -922,7 +922,7 @@ final class IpmiView
         $shown = \array_slice($fans, 0, $cols * $in->height);
         $nameW = self::nameWidth($d, $shown, $in->width, $cols, 10);
         self::grid($r, $in, $cols, $shown, static function (IpmiSensor $s, int $x, int $y, int $w) use ($r, $ink, $nameW, $d, $tty): void {
-            $value = $s->kind === SensorKind::FanDuty ? sprintf('%.0f%%', (float) $s->value) : IpmiPaint::rpm((float) $s->value);
+            $value = $s->kind === SensorKind::FanDuty ? sprintf('%.0f', (float) $s->value) . Lang::t('unit.percent') : IpmiPaint::rpm((float) $s->value);
             $sev = $s->severity();
             if ($w < self::LIST_MIN['fans']) {
                 $pct = (int) round(min(100.0, 100 * (float) $s->value / $d->fanScale($s)));
@@ -1074,10 +1074,10 @@ final class IpmiView
             }
             $pct = (int) round(100 * $watts / $scale);
             $big = IpmiPaint::watts($watts);
-            $line = $big . ' ' . $pct . '%';
+            $line = $big . ' ' . $pct . Lang::t('unit.percent');
             $bx = $in->x + max(0, intdiv($gw - mb_strwidth($line), 2));
             $r->put($bx, $in->y + $gh, $big, Symbols::BOLD . $ink->gradient('cpu', $pct));
-            $r->put($bx + mb_strwidth($big) + 1, $in->y + $gh, $pct . '%', $ink->fg('graph_text'));
+            $r->put($bx + mb_strwidth($big) + 1, $in->y + $gh, $pct . Lang::t('unit.percent'), $ink->fg('graph_text'));
             if ($win !== null && $in->y + $gh + 1 < $chipsY) {
                 $mm = Lang::t('ipmi.min') . ' ' . IpmiPaint::watts($win[0]) . ' ' . Lang::t('ipmi.max') . ' ' . IpmiPaint::watts($win[2]);
                 if (mb_strwidth($mm) > $gw) {
@@ -1154,7 +1154,7 @@ final class IpmiView
         $fans = $d->readings->fans;
         $values = array_map(static fn (IpmiSensor $s): float => (float) $s->value, $fans);
         $duty = $fans[0]->kind === SensorKind::FanDuty;
-        $fmt = static fn (float $v): string => $duty ? sprintf('%.0f%%', $v) : IpmiPaint::rpm($v);
+        $fmt = static fn (float $v): string => $duty ? sprintf('%.0f', $v) . Lang::t('unit.percent') : IpmiPaint::rpm($v);
         $text = Lang::t('ipmi.fans_summary', ['n' => \count($fans), 'min' => $fmt(min($values)), 'max' => $fmt(max($values))]);
         $worst = SensorStatus::Ok;
         foreach ($fans as $f) {

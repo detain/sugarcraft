@@ -764,7 +764,7 @@ final class ProcView
         $cpu = $config->bool('proc_per_core') ? $e->cpu : $e->cpu * max(1, $cores);
         if ($alive) {
             $prec = $cpu < 9.995 ? 2 : ($cpu < 99.95 ? 1 : 0);
-            $r->put(1, 1, str_pad(number_format($cpu, $prec, '.', ''), 4, ' ', STR_PAD_LEFT) . '%', $title . self::BOLD);
+            $r->put(1, 1, str_pad(number_format($cpu, $prec, '.', ''), 4, ' ', STR_PAD_LEFT) . Lang::t('unit.percent'), $title . self::BOLD);
         }
         foreach (['C', 'P', 'U'] as $i => $l) {
             $r->put(1, 3 + $i, $l, $title . self::BOLD);
@@ -783,8 +783,8 @@ final class ProcView
         $values = [
             Lang::t('proc.status.' . $d->status()),
             $elapsed,
-            $extra !== null && $extra->ioReadTotal >= 0 ? ProcUnits::human($extra->ioReadTotal, false, 0, false, $mega) : '-',
-            $extra !== null && $extra->ioWriteTotal >= 0 ? ProcUnits::human($extra->ioWriteTotal, false, 0, false, $mega) : '-',
+            $extra !== null && $extra->ioReadTotal >= 0 ? ProcUnits::human($extra->ioReadTotal, false, 0, false, $mega) : Lang::t('value.unavailable'),
+            $extra !== null && $extra->ioWriteTotal >= 0 ? ProcUnits::human($extra->ioWriteTotal, false, 0, false, $mega) : Lang::t('value.unavailable'),
             self::cleanText($d->parent),
             self::cleanText($p->user),
             (string) $p->threads,
@@ -826,7 +826,7 @@ final class ProcView
         $r->put($lx, 6, Lang::t('proc.detail.cmd'), $title . self::BOLD);
         $cw = max(1, $dw - 6);
         if ($extra === null || $extra->cwd === null || $extra->cwd === '') {
-            $r->put($dx + 5, 5, Lang::t('proc.cwd_unavailable'), $inactive);
+            $r->put($dx + 5, 5, Lang::t('value.unavailable'), $inactive);
         } else {
             $r->put($dx + 5, 5, Width::truncate(self::cleanText($extra->cwd), $cw), $main);
         }

@@ -216,7 +216,7 @@ final class PlaceholderPanel implements Panel
 
     private static function pct(float $pct): string
     {
-        return $pct < 0 ? Lang::t('value.unavailable') : round($pct) . '%';
+        return $pct < 0 ? Lang::t('value.unavailable') : round($pct) . Lang::t('unit.percent');
     }
 
     private static function bytes(int|float $bytes): string

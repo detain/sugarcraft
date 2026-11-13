@@ -335,7 +335,7 @@ final class ProcPanelPaintTest extends TestCase
         $this->assertNotNull($box);
         $s = self::paint(ProcPanel::new(FakeProcList::demo()), $config, $layout, $box);
         $grid = self::crop($s, $box);
-        $this->assertStringContainsString('Pid:', $grid[1]);
+        $this->assertStringContainsString('Pid', $grid[1]);
         $this->assertStringContainsString('0/0', $grid[$box->height - 1]);
     }
 

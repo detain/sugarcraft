@@ -90,7 +90,7 @@ final class DisksView
                 if ($big) {
                     $pct = (string) $row->usedPercent;
                     $at = $a + (int) round($dw / 2) - (int) round(strlen($pct) / 2);
-                    self::centred($box, $f, $at, 1 + $cy, $pct . '%');
+                    self::centred($box, $f, $at, 1 + $cy, $pct . Lang::t('unit.percent'));
                     $state = $f->ink->fg('main_fg');
                 }
                 self::activity($box, $f, $d, $row, $a, 2 + $cy, $dw, $big, $state);
@@ -254,7 +254,7 @@ final class DisksView
     private static function meterRow(Region $box, PanelFrame $f, int $a, int $y, bool $big, string $label, string $short, int $percent, string $gradient, int $meter, string $human): void
     {
         $x = $a + 1;
-        $x += $box->put($x, $y, ($big ? ' ' . $label . Just::right($percent . '%', 4) : $short) . ' ');
+        $x += $box->put($x, $y, ($big ? ' ' . $label . Just::right($percent . Lang::t('unit.percent'), 4) : $short) . ' ');
         $x += $box->ansi($x, $y, PositionMeter::render($f->ink, $meter, $percent, $gradient));
         $box->put($x, $y, Just::right($human, $big ? 9 : 5));
     }

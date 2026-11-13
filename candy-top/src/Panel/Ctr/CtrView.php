@@ -273,7 +273,7 @@ final class CtrView
      */
     public static function detailTitle(ContainerInfo $c, int $dw, bool $perCore, int $cores): string
     {
-        $host = Lang::t('ctr.cpu') . ' ' . self::cpuText($c->cpu) . '%';
+        $host = Lang::t('ctr.cpu') . ' ' . self::cpuText($c->cpu) . Lang::t('unit.percent');
         $guest = self::guestShare($c, $perCore, $cores);
         if ($guest !== null && $c->vm !== null) {
             $right = Lang::t('ctr.cpu_guest', ['host' => $host, 'guest' => self::cpuText($guest), 'n' => $c->vm->vcpus]);

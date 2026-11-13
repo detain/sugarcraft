@@ -1,5 +1,5 @@
 ╭─┐⁴proc┌────────────────────────────────────────────────────────╮╭─┐³net┌─────────────────────────────────────────────╮
-│   Pid: Program:                     User:            MemB  Cpu%││ eth0                                               │
+│    Pid Program                      User              Mem  Cpu%││ eth0                                               │
 │    412 sshd                         root          198 MiB  27.8││                         ╭─┐download┌──────────────╮│
 │      1 systemd                      root         90.0 MiB  25.0││                         │ ▼ 1.21 MiB/s            ││
 │    880 postgres                     postgres      244 MiB  13.6││                         │   Top: 1.21 MiB/s       ││

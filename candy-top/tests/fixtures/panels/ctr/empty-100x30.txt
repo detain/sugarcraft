@@ -1,5 +1,5 @@
 ╭─┐ˣctr┌───────────────────────────────────────────────────────────────────────────────┐[ select ]┌╮
-│Container:                                                      Engine:   Procs:   Mem       Cpu% │
+│Container                                                       Engine     Procs   Mem       Cpu% │
 │                                       No containers found                                        │
 │                                                                                                  │
 │                                                                                                  │

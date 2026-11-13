@@ -12,7 +12,7 @@
 │            │  Appearance                               │ Set color theme.                             │              │
 ╰────────────│ ← Color theme 1/2              Default  → │                                              │──────────────╯
 ╭─┐²mem┌─────│   Theme background                True    │ Choose from all theme files in the bundled   │──────────────╮
-│ Total: 16.0│   Truecolor                       True    │ candy-top themes directory and               │    MemB  Cpu%│
+│ Total: 16.0│   Truecolor                       True    │ candy-top themes directory and               │     Mem  Cpu%│
 │ Used: 10.2 │  Terminal and input                       │ "~/.config/candy-top/themes".                │ 198 MiB  27.8│
 │ Available: │   Force tty                      False    │                                              │90.0 MiB  25.0│
 │ Cached: 3.2│   Vim keys                       False    │ "pastel" is candy-top's default theme.       │ 244 MiB  13.6│

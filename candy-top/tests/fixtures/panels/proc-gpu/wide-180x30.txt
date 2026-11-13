@@ -1,5 +1,5 @@
 ╭─┐⁴proc┌┐filter┌───────────────────────────────────────────────────────────────────────────────────────────────┐gpu-only┌┐Omit ctr┌┐pause┌┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─╮
-│    Pid: Program:         Command:                                                                           Threads: User:        IO/R   IO/W  MemB       Cpu%  GMem       Gpu%  │
+│     Pid Program          Command                                                                            Threads User         IO/R   IO/W   Mem       Cpu%  GMem       Gpu%   │
 │       1 systemd          /sbin/init splash                                                                         1 root           0B     0B  117M ⣀⣀⣀⢀⣤ 38.7     - ⣀⣀⣀⣀⣀    -  │
 │    5120 containerd-shim  /usr/bin/containerd-shim-runc-v2 -namespace moby                                          2 root            -      -  375M ⣀⣀⣀⢠⣀ 22.6     - ⣀⣀⣀⣀⣀    -  │
 │     412 sshd             sshd: /usr/sbin/sshd -D                                                                   2 root            -      -  199M ⣀⣀⣀⢀⣀ 24.3     - ⣀⣀⣀⣀⣀    -  │

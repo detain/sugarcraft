@@ -1,5 +1,5 @@
 ╭─┐⁴proc┌┐filter┌────────┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─╮
-│    Pid: Program: Command:              User:  MemB       Cpu%  │
+│     Pid Program  Command               User    Mem       Cpu%  │
 │       1 systemd  /sbin/init splash     root   117M ⣀⣀⣀⢀⣤ 38.7  │
 │    5120 containe /usr/bin/containerd-s root   375M ⣀⣀⣀⢠⣀ 22.6  │
 │     412 sshd     sshd: /usr/sbin/sshd  root   199M ⣀⣀⣀⢀⣀ 24.3  │

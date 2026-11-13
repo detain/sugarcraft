@@ -7,7 +7,7 @@
 │                                   ╰─────────────────────────────────────────╯│
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─┐²mem┌──────────┬─┐disks┌────────╮╭─┐⁴proc┌──────────────────────────────────╮
-│ Total: 16.0 GiB │                ││   Pid: Progra User:            MemB  Cpu%│
+│ Total: 16.0 GiB │                ││    Pid Progra User              Mem  Cpu%│
 │ Used: 10.2   64%│                ││    412 sshd   root          198 MiB  27.8│
 │ Available:   36%│                ││      1 system root         90.0 MiB  25.0│
 │ Cached: 3.   20%│                ││    880 postgr postgres      244 MiB  13.6│

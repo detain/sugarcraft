@@ -134,7 +134,7 @@ final class BorderBattery implements BatteryBadge
         $termWidth = $frame->layout->width;
         $wide = $termWidth >= 100;
         $time = $bat->seconds > 0 ? substr(ClockFormat::dhms($bat->seconds), 0, -3) : '';
-        $percent = $bat->percent . '%';
+      $percent = $bat->percent . Lang::t('unit.percent');
         $watts = $bat->watts >= 0 && $config->bool('show_battery_watts') ? sprintf('%.2fW', $bat->watts) : '';
         $symbol = self::SYMBOLS[$bat->status] ?? self::SYMBOLS['unknown'];
         $len = ($wide ? 11 : 0) + strlen($time) + strlen($percent) + strlen($watts) + strlen((string) $config->updateMs());

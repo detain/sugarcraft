@@ -440,10 +440,10 @@ final class ProcPanelGpuTest extends TestCase
         $gpu = $this->crop($this->painted($this->demo()));
         $headerPlain = explode("\n", $plain)[1];
         $headerGpu = explode("\n", $gpu)[1];
-        $this->assertSame(mb_strpos($headerPlain, 'Threads:') - 17, mb_strpos($headerGpu, 'Threads:'));
+        $this->assertSame(mb_strpos($headerPlain, 'Threads') - 17, mb_strpos($headerGpu, 'Threads'));
         $this->assertSame(mb_strpos($headerPlain, 'Cpu%') - 17, mb_strpos($headerGpu, 'Cpu%'));
         $this->assertSame(mb_strlen($headerPlain), mb_strlen($headerGpu));
-        $this->assertStringEndsWith('Cpu%  GMem       Gpu%  │', $headerGpu);
+        $this->assertStringEndsWith('Cpu%  GMem       Gpu%   │', $headerGpu);
     }
 
     public function testNoDataPaintsExactlyTheOldBox(): void

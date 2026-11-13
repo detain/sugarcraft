@@ -12,7 +12,7 @@
 │            │   Theme background                True    │ Recommended 2000 ms or above for better      │              │
 ╰────────────│   Truecolor                       True    │ sample times for graphs.                     │──────────────╯
 ╭─┐²mem┌─────│  Terminal and input                       │                                              │──────────────╮
-│ Total: 16.0│   Force tty                      False    │ At the 100 ms floor the UI measured          │    MemB  Cpu%│
+│ Total: 16.0│   Force tty                      False    │ At the 100 ms floor the UI measured          │     Mem  Cpu%│
 │ Used: 10.2 │   Vim keys        ╭─┐warning┌────────────────────────────────────────╮5-50 % of a        │ 198 MiB  27.8│
 │ Available: │   Disable mouse   │                                                  │                   │90.0 MiB  25.0│
 │ Cached: 3.2│  Layout           │    Config value update_ms set too low (<100).    │                   │ 244 MiB  13.6│

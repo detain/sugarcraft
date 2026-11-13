@@ -7,7 +7,7 @@
 │                               ⣿│ CMD                      /sbin/init splash                     │
 │                               ⣿│                                                                │
 ├─┐⁴proc┌┐filter┌────────────────┴───────┐Omit ctr┌┐pause┌┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─┤
-│    Pid: Program:         Command:           Threads: User:        IO/R   IO/W  MemB       Cpu%  │
+│     Pid Program          Command            Threads User         IO/R   IO/W   Mem       Cpu%   │
 │       1 systemd          /sbin/init splash         1 root           0B     0B  125M ⣀⣀⣀⣠⣤ 42.5  │
 │    5120 containerd-shim  /usr/bin/containerd-sh    2 root            -      -  367M ⣀⣀⣀⣄⣀ 16.2  │
 │     412 sshd             sshd: /usr/sbin/sshd -    2 root            -      -  190M ⣀⣀⣀⣀⣀ 20.1  │

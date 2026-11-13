@@ -7,7 +7,7 @@
 │                    ⣿│ CMD /usr/bin/containerd-shim-runc-v2 -nam│
 │                    ⣿│                  espace moby             │
 ├─┐⁴proc┌┐filter┌─────┴──┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─┤
-│    Pid: Program: Command:              User:  MemB       Cpu%  │
+│     Pid Program  Command               User    Mem       Cpu%  │
 │       1 systemd  /sbin/init splash     root   126M ⣀⣀⢀⣤⣤ 43.4  │
 │    5120 containe /usr/bin/containerd-s root   363M ⣀⣀⢠⣀⣀ 10.2  │
 │    6969 web01    [kvm:web01] /usr/bin/ libv+  997M ⣀⣀⢀⣀⣀  9.0  │

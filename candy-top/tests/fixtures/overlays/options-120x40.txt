@@ -12,7 +12,7 @@
 │            │   Theme background                True    │ Choose from all theme files in the bundled   │              │
 ╰────────────│   Truecolor                       True    │ candy-top themes directory and               │──────────────╯
 ╭─┐²mem┌─────│  Terminal and input                       │ "~/.config/candy-top/themes".                │──────────────╮
-│ Total: 16.0│   Force tty                      False    │                                              │    MemB  Cpu%│
+│ Total: 16.0│   Force tty                      False    │                                              │     Mem  Cpu%│
 │ Used: 10.2 │   Vim keys                       False    │ "pastel" is candy-top's default theme.       │ 198 MiB  27.8│
 │ Available: │   Disable mouse                  False    │ "Default" for btop's builtin theme.          │90.0 MiB  25.0│
 │ Cached: 3.2│  Layout                                   │ "TTY" for builtin 16-color theme.            │ 244 MiB  13.6│

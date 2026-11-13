@@ -150,6 +150,7 @@ final class MemView
                 $state = $mainFg;
             }
             [$title, $bytes, $series, $gradient] = self::item($name, $mem, $zswapRow, $f);
+            $title = self::label($title, $bigMem ? 10 : 5);
             $humanized = Humanizer::new($base10)->format($bytes, false);
             $percent = $p->history()->last($series) ?? 0;
             $row = 1 + $cy;
@@ -169,7 +170,7 @@ final class MemView
                 $gx = $gh >= 2 ? 1 : 2;
                 $end = self::graphics($box, $f, $p, $gx, $row + 1, $meterW, $gh, $series, $gradient, $percent, $family);
                 $pctAt = $gh >= 2 ? [2, $row + 1] : [$end, $row + 1];
-                $box->put($pctAt[0], $pctAt[1], Just::right($percent . '%', 4));
+                $box->put($pctAt[0], $pctAt[1], Just::right($percent . Lang::t('unit.percent'), 4));
                 $state = '';
                 $cy += $gh === 0 ? 2 : $gh + 1;
             } else {
@@ -203,6 +204,7 @@ final class MemView
             self::total($box, $f, $mem, $memWidth, $base10);
         }
         [$title, $bytes, $series, $gradient] = self::item($selected, $mem, $zswapUsed, $f);
+        $title = self::label($title, $memWidth > 21 ? 10 : 5);
         $humanized = Humanizer::new($base10)->format($bytes, false);
         $box->put(2, 2, mb_substr($title, 0, $memWidth > 21 ? 10 : 5) . ':', $ink->fg('main_fg'));
         $box->put($memWidth - 1 - strlen($humanized), 2, $humanized, $ink->fg('main_fg'));
@@ -212,7 +214,7 @@ final class MemView
             $box->ansi(2, 3 + $r, $line);
         }
         // After the graph's Fx::reset: the base style.
-        $box->put(2, 3, Just::right(($p->history()->last($series) ?? 0) . '%', 4));
+        $box->put(2, 3, Just::right(($p->history()->last($series) ?? 0) . Lang::t('unit.percent'), 4));
     }
 
     /** `Total:` + humanized MemTotal right-aligned to the mem column. */
@@ -230,18 +232,36 @@ final class MemView
      *
      * @return array{0: string, 1: int, 2: string, 3: string}
      */
+    /**
+     * The `.short` variant rides when the full title cannot fit the site
+     * budget (S-N16 / candy-top-114, the disks.free_short idiom) — the
+     * per-site slice below stays as the last resort for oversized
+     * translations, so English frames never change bytes.
+     */
+    private static function label(string $key, int $budget): string
+    {
+        $full = Lang::t($key);
+        if (Width::string($full) <= $budget) {
+            return $full;
+        }
+        $short = Lang::t($key . '_short');
+
+        return Width::string($short) <= $budget ? $short : $full;
+    }
+
+    /** @return array{0: string, 1: int, 2: string, 3: string} [title lang key, bytes, history series, gradient] */
     private static function item(string $name, MemorySnapshot $mem, bool $zswap, PanelFrame $f): array
     {
         return match ($name) {
             'swap_used' => $zswap
-                ? [Lang::t('mem.title.used'), $mem->swapUsedOnDisk(), 'swap_used_disk', 'used']
-                : [Lang::t('mem.title.used'), $mem->swapUsed, 'swap_used', 'used'],
-            'swap_free' => [Lang::t('mem.title.free'), $mem->swapFree, 'swap_free', 'free'],
-            'zswap' => [Lang::t('mem.title.zswap'), max(0, $mem->zswap), 'zswap', TintedGraph::gradientName($f->ink, ['zswap', 'cached', 'used'])],
-            'available' => [Lang::t('mem.title.available'), $mem->available, 'available', 'available'],
-            'cached' => [Lang::t('mem.title.cached'), $mem->cached, 'cached', 'cached'],
-            'free' => [Lang::t('mem.title.free'), $mem->free, 'free', 'free'],
-            default => [Lang::t('mem.title.used'), $mem->used, 'used', 'used'],
+                ? ['mem.title.used', $mem->swapUsedOnDisk(), 'swap_used_disk', 'used']
+                : ['mem.title.used', $mem->swapUsed, 'swap_used', 'used'],
+            'swap_free' => ['mem.title.free', $mem->swapFree, 'swap_free', 'free'],
+            'zswap' => ['mem.title.zswap', max(0, $mem->zswap), 'zswap', TintedGraph::gradientName($f->ink, ['zswap', 'cached', 'used'])],
+            'available' => ['mem.title.available', $mem->available, 'available', 'available'],
+            'cached' => ['mem.title.cached', $mem->cached, 'cached', 'cached'],
+            'free' => ['mem.title.free', $mem->free, 'free', 'free'],
+            default => ['mem.title.used', $mem->used, 'used', 'used'],
         };
     }
 

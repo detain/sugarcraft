@@ -12,7 +12,7 @@
 │            │   Theme background                True    │ Available values are "cpu mem net proc"      │              │
 ╰────────────│   Truecolor                       True    │ and "ctr" for the containers box,            │──────────────╯
 ╭─┐²mem┌─────│  Terminal and input                       │ "vms" for the VM dashboard,                  │──────────────╮
-│ Total: 16.0│   Force tty                      False    │ "ipmi" for the BMC box.                      │    MemB  Cpu%│
+│ Total: 16.0│   Force tty                      False    │ "ipmi" for the BMC box.                      │     Mem  Cpu%│
 │ Used: 10.2 │   Vim keys                       False    │ Or "gpuN" for GPU index N.                   │ 198 MiB  27.8│
 │ Available: │   Disable mouse                  False    │ Up to 6 GPU boxes can be shown at once.      │90.0 MiB  25.0│
 │ Cached: 3.2│  Layout                                   │ Separate values with whitespace.             │ 244 MiB  13.6│

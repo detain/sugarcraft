@@ -1,5 +1,5 @@
 ╭─┐⁴proc┌┐filter┌──────┐pause┌┐per-core┌┐reverse┌┐tree┌┐← pid →┌─╮
-│Tree:                                   User:  MemB       Cpu%  │
+│Tree                                    User    Mem       Cpu%  │
 │[-]─1 systemd (init)                    root   125M ⣀⣀⣀⣠⣤ 42.5  │
 │ │ [+]─412 sshd (sshd:)                 root   2.3G ⣀⣀⣀⣀⣠ 47.7  │
 │ │  ├─880 postgres                      post+  208M ⣀⣀⣀⣀⣀  5.9  │

@@ -1,5 +1,5 @@
 ╭─┐⁴proc┌┐filter┌─────┐tree┌┐← cpu lazy →┌─╮
-│    Pid: Program Comm User:  MemB  Cpu%   │
+│     Pid Program Comm User    Mem  Cpu%   │
 │       1 systemd init root   125M  42.5   │
 │    5120 contain cont root   367M  16.2   │
 │     412 sshd    sshd root   190M  20.1   │

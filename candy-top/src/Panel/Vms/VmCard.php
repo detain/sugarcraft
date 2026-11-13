@@ -114,7 +114,7 @@ final class VmCard
         $pct = $g->cpu >= 0 ? (int) round($g->cpu) : $cpu;
         $col = $cx + $r->ansi($cx, $y, $label . Lang::t('vms.cpu') . Symbols::UNBOLD . ' ');
         $col += $r->ansi($col, $y, PositionMeter::render($ink, $meterW, max(0, min(100, $pct ?? 0)), 'cpu'));
-        $r->ansi($col, $y, $main . ' ' . Just::right($pct === null ? Lang::t('vms.na') : $pct . '%', $graphW > 0 ? 4 : $rightW - 1));
+        $r->ansi($col, $y, $main . ' ' . Just::right($pct === null ? Lang::t('value.unavailable') : $pct . Lang::t('unit.percent'), $graphW > 0 ? 4 : $rightW - 1));
         if ($graphW > 0) {
             self::graph($r, $f, $cx + $cw - $graphW, $y, $graphW, 1, $h->series(self::key($g->path, 'cpu')), 100, 'cpu', $family);
         } elseif ($tall > 0) {
@@ -126,7 +126,7 @@ final class VmCard
         if ($y < $card->bottom() - 1) {
             $col = $cx + $r->ansi($cx, $y, $label . Lang::t('vms.ram') . Symbols::UNBOLD . ' ');
             $col += $r->ansi($col, $y, PositionMeter::render($ink, $meterW, $g->memPercent(), 'used'));
-            $used = $g->memUsed >= 0 ? ProcUnits::human($g->memUsed, true, 0, false, $mega) : Lang::t('vms.na');
+            $used = $g->memUsed >= 0 ? ProcUnits::human($g->memUsed, true, 0, false, $mega) : Lang::t('value.unavailable');
             $text = $g->memBytes > 0 ? $used . '/' . ProcUnits::human($g->memBytes, true, 0, false, $mega) : $used;
             $r->ansi($col, $y, $main . ' ' . Just::right($text, $rightW - 1));
             $y++;
@@ -167,7 +167,7 @@ final class VmCard
         $ink = $f->ink;
         $col = $x + $r->ansi($x, $y, $ink->fg('title') . Symbols::BOLD . Lang::t('vms.psi.label') . Symbols::UNBOLD . ' ');
         foreach (['cpu' => $g->psiCpu, 'mem' => $g->psiMem, 'io' => $g->psiIo] as $res => $value) {
-            $text = $value < 0 ? Lang::t('vms.na') : (int) round($value) . '%';
+            $text = $value < 0 ? Lang::t('value.unavailable') : (int) round($value) . Lang::t('unit.percent');
             $sgr = $value < 0 ? $ink->fg('inactive_fg') : $ink->gradient('temp', (int) max(0, min(100, round($value * 2))));
             $col += $r->ansi($col, $y, $ink->fg('graph_text') . Lang::t('vms.psi.' . $res) . ' ' . $sgr . Just::right($text, 4) . '  ');
         }
@@ -184,7 +184,7 @@ final class VmCard
         $ink = $f->ink;
         $col = $x + $r->ansi($x, $y, $ink->fg('title') . Symbols::BOLD . $label . Symbols::UNBOLD . ' ');
         if (!$known) {
-            $r->put($col, $y, Lang::t('vms.na'), $ink->fg('inactive_fg'));
+            $r->put($col, $y, Lang::t('value.unavailable'), $ink->fg('inactive_fg'));
 
             return;
         }
