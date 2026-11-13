@@ -228,4 +228,58 @@ final class ProbeReportTest extends TestCase
 
         $this->assertSame($customTime, $report->detectedAt);
     }
+
+    public function testRawMapReadAnswersThroughTheDeprecatedShim(): void
+    {
+        // CP-51 (sugar-colorprofile-064): the map itself is private; the
+        // legacy property read still answers — value-identical to
+        // allWithSource() — while raising exactly one E_USER_DEPRECATED.
+        $report = new ProbeReport([Capability::TrueColor->value => 'env:COLORTERM']);
+        $raised = [];
+        set_error_handler(static function (int $severity, string $message) use (&$raised): bool {
+            if ($severity === \E_USER_DEPRECATED) {
+                $raised[] = $message;
+
+                return true;
+            }
+
+            return false;
+        });
+
+        try {
+            $this->assertSame(
+                [Capability::TrueColor->value => 'env:COLORTERM'],
+                $report->capabilities,
+                'the shim answers the raw map unchanged',
+            );
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertCount(1, $raised, 'one deprecation per legacy read');
+        $this->assertStringContainsString('allWithSource()', $raised[0]);
+    }
+
+    public function testDirectWriteToTheRawMapThrows(): void
+    {
+        // The finding's write-side half: even pre-CP-51 a readonly class
+        // refused writes; post-CP-51 the property is additionally private,
+        // so a planted assignment must be an engine-level Error, never a
+        // silent no-op — the map's only doors are the constructor and reads.
+        $report = new ProbeReport([]);
+
+        $this->expectException(\Error::class);
+        /** @phpstan-ignore-next-line intentionally invalid */
+        $report->capabilities = ['bogus' => 'x'];
+    }
+
+    public function testShimCoversOnlyTheLegacyMapName(): void
+    {
+        $report = new ProbeReport([]);
+
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessage('Undefined property');
+        /** @phpstan-ignore-next-line intentionally invalid */
+        $unknown = $report->capabilitiesTwo;
+    }
 }

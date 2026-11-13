@@ -27,8 +27,16 @@ use SugarCraft\ColorProfile\Lang;
  */
 final readonly class ProbeReport
 {
-    /** Sanitized map of capability string key to its source string. */
-    public array $capabilities;
+    /**
+     * Sanitized map of capability string key to its source string.
+     *
+     * Private since CP-51 (sugar-colorprofile-064): the raw string-keyed map
+     * was a public second door competing with the typed ones — {@see all()}
+     * for enum keys, {@see allWithSource()} for the map plus its sources.
+     * Legacy `$report->capabilities` reads still answer through the
+     * deprecated {@see __get()} shim below.
+     */
+    private array $capabilities;
 
     /**
      * @param array<string, string>  $capabilities  Map of capability string key to its source string
@@ -105,6 +113,28 @@ final readonly class ProbeReport
     public function allWithSource(): array
     {
         return $this->capabilities;
+    }
+
+    /**
+     * One-release deprecation shim for the pre-CP-51 public map read
+     * (`$report->capabilities`) — answers the map and raises
+     * E_USER_DEPRECATED. Removal target: 2.0. New code must use
+     * {@see all()} or {@see allWithSource()}; writes never answered here
+     * (the class is readonly, so `$report->capabilities = …` throws
+     * regardless of this shim).
+     */
+    public function __get(string $name): mixed
+    {
+        if ($name === 'capabilities') {
+            \trigger_error(
+                'Reading ProbeReport::$capabilities directly is deprecated; use all() or allWithSource() (removal in 2.0).',
+                \E_USER_DEPRECATED,
+            );
+
+            return $this->capabilities;
+        }
+
+        throw new \Error(\sprintf('Undefined property: %s::$%s', static::class, $name));
     }
 
     /**

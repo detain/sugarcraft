@@ -866,6 +866,6 @@ final class TerminalProbeTest extends TestCase
         // Byte-equal against a fresh construction on the capabilities map —
         // the full answer, not just the one capability the grant carries.
         // (detectedAt is a per-run timestamp and is deliberately excluded.)
-        $this->assertSame($mk()->runProbe()->capabilities, $afterGrant->capabilities, 'post-grant default answers like a fresh construction');
+        $this->assertSame($mk()->runProbe()->allWithSource(), $afterGrant->allWithSource(), 'post-grant default answers like a fresh construction');
     }
 }
