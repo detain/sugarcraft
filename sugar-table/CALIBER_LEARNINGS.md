@@ -90,7 +90,11 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   compatibility. See `Table::$multilineMode`, `Table::calculateRowHeight()`, and
   `Table::fillDataRowLines()`.
 
-- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+- **[pattern:lang-base-inheritance]** `SugarCraft\Table\Lang` extends the shared
+  `SugarCraft\Core\I18n\Lang` base — `t()` is inherited wholesale, and the
+  `NAMESPACE`/`DIR` protected constants are the only per-lib declarations.
+  (Audit ST-79: this entry was the file's lone untagged line; tags are the
+  file's grammar.)
 
 - **[pattern:assert-golden-ansi]** Use `assertGoldenAnsi` for any new `render()` test. Fixture files live in `tests/fixtures/` with a `.golden` extension. Re-record goldens with `SUGAR_TESTING_UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes (audit ST-46: the prefixed env is the current spelling — the bare `UPDATE_GOLDENS` form remains a legacy alias; both are CREATE-only, so re-baselining means deleting the stale fixture first. README's Snapshot tests section is the authority). Mirrors: `docs/old/repo_map_step_28.md`.
 - **[pattern:stylefunc-signature-shift]** `Table::withStyleFunc()` now accepts
@@ -120,9 +124,9 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   scroll-stranding fix, `withRows()` prunes expanded identities absent from the new data.
   Invalid indices throw `OutOfBoundsException` (fail fast). Expansion bypasses
   column width truncation in both `fillDataRow` (single-line) and
-  `fillDataRowLines` (multiline). See `Table.php` lines 338–398
-  (`withExpandedRows`/`toggleExpanded`/`isExpanded`), 1106
-  (`fillDataRow` expansion check), and 1241 (`fillDataRowLines` expansion check).
+  `fillDataRowLines` (multiline). See `Table::withExpandedRows()`,
+  `Table::toggleExpanded()`, `Table::isExpanded()`, and the expansion
+  branches of `Table::fillDataRow()` / `Table::fillDataRowLines()`.
 
 - **[pattern:keyboard-navigation]** `scrollYForKey()` + `handleKey()` provide
   keyboard-driven vertical scrolling. `KEY_*` constants (`KEY_ARROW_UP`,
@@ -133,8 +137,8 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   `scrollYForKey()` + `withScrollY()` for immutable keyboard integration.
   Unrecognized keys are no-ops (return current `scrollY` unchanged). Requires
   `withViewportHeight()` to be set — when viewport height is 0, `maxScrollY()`
-  returns 0 and scrolling is disabled. See `Table.php` lines 507–580
-  (`KEY_*` constants, `scrollYForKey`, `handleKey`, `maxScrollY`).
+  returns 0 and scrolling is disabled. See the `Table::KEY_*` constants,
+  `Table::scrollYForKey()`, `Table::handleKey()`, and `Table::maxScrollY()`.
 
 - **[pattern:footer-type-enum]** `FooterType` enum controls footer content via
   `withFooterType(FooterType $type)`. Three cases: `Page` (default, shows "Page N
@@ -143,18 +147,18 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   uses a `match` expression on `$this->footerType` to select which footer to
   render. Row count calculation uses `TotalRows()` (filtered+sorted count) and
   respects pagination via `page * pageSize` offset. The `showing_rows` i18n key
-  is used via `Lang::t()`. See `FooterType.php` and `Table.php` lines 117
-  (property), 278–283 (`withFooterType`), 727–738 (`RowsFooter`), and 1336–1376
-  (`fillFooterRow`).
+  is used via `Lang::t()`. See `FooterType` and `Table::$footerType`,
+  `Table::withFooterType()`, `Table::RowsFooter()`, and
+  `Table::fillFooterRow()`.
 
 - **[pattern:cell-padding]** `withCellPadding(int $padding)` adds inner
   whitespace on left and right sides of each cell's content. The padding value
   is stored in `$this->cellPadding` and subtracted from effective content width
   in rendering methods via `$colWidth - (2 * $this->cellPadding)`. Padding does
   not affect column width calculations — the column width remains unchanged,
-  only the content area shrinks. Applied in `fillDataRow()` (line 1286),
-  `fillHeaderRow()` (line 1173), `fillDataRowLines()` (line 1426), and
-  `calculateRowHeight()` (line 1334) to ensure consistent treatment across all
+  only the content area shrinks. Applied in `Table::fillDataRow()`,
+  `Table::fillHeaderRow()`, `Table::fillDataRowLines()`, and
+  `Table::calculateRowHeight()` to ensure consistent treatment across all
   rendering paths.
 
 - **[pattern:hidden-columns]** `withHiddenCols(array $indices)` stores hidden
@@ -163,8 +167,9 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   or scroll position. Hidden columns still participate in data storage, filtering,
   sorting, and search operations — only rendering is affected. This enables
   optional columns that can be toggled via UI without losing data. See
-  `Table.php` lines 134–135 (property), 367–381 (`withHiddenCols`), and 1087–1098
-  (`isColumnVisible` hidden check at line 1089–1092).
+  `Table::$hiddenCols`, `Table::withHiddenCols()` (index form) and its
+  key-addressed companion `Table::withHiddenKeys()`, and the hidden check in
+  `Table::isColumnVisible()`.
 
 - **[history:accessor-rename-era]** sugar-table shipped zero `get*()` property
   accessors before the fleet rename window opened. Owner ruling 3b (dated
