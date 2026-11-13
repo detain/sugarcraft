@@ -623,6 +623,42 @@ final class Logger
         return $this->styles;
     }
 
+    /**
+     * The formatter currently rendering records. A bare `TextFormatter`
+     * handed to the constructor or setFormatter() comes back re-seeded with
+     * this logger's caller/timestamp/time-format state (SL-14 adopt seam),
+     * so the returned object is the one actually on the write path.
+     */
+    public function formatter(): Formatter
+    {
+        return $this->formatter;
+    }
+
+    /**
+     * Minimum level this logger writes. Named for the constructor parameter
+     * (`level:`), not `withMinLevel()` — the ctor noun is the source of truth.
+     */
+    public function level(): Level
+    {
+        return $this->minLevel;
+    }
+
+    /** Prefix string, or null when none is set. */
+    public function prefix(): ?string
+    {
+        return $this->prefix;
+    }
+
+    /**
+     * Main output stream (mixed: resource or sink accepted by the ctor).
+     * Errors at/above the setErrorStream() threshold go to that secondary
+     * stream instead; this accessor returns the primary one.
+     */
+    public function output(): mixed
+    {
+        return $this->stream;
+    }
+
     public function setStyles(Styles $styles): void
     {
         $this->styles = $styles;

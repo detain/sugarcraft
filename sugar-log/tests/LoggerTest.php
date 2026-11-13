@@ -901,4 +901,25 @@ final class LoggerTest extends TestCase
         $content = (string) \file_get_contents($this->tempPath);
         $this->assertStringContainsString('raw x', $content);
     }
+
+    public function testReadOnlyAccessorsExposeCurrentConfiguration(): void
+    {
+        $stream = \fopen('php://memory', 'w+');
+        $logger = Logger::new(stream: $stream, prefix: 'svc', level: Level::Warn);
+        $formatter = new TextFormatter();
+        $logger->setFormatter($formatter);
+
+        $this->assertSame(Level::Warn, $logger->level());
+        $this->assertSame('svc', $logger->prefix());
+        $this->assertSame($stream, $logger->output());
+        // The adopt seam re-seeds, so formatter() must return the object on
+        // the write path, not the bare instance that was handed in.
+        $adopted = $logger->formatter();
+        $this->assertInstanceOf(TextFormatter::class, $adopted);
+        $this->assertNotSame($formatter, $adopted);
+
+        $bare = Logger::new(stream: $stream);
+        $this->assertSame(Level::Info, $bare->level());
+        $this->assertNull($bare->prefix());
+    }
 }
