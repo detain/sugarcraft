@@ -417,7 +417,7 @@ final class FfmpegDecoder implements Decoder
         // back to true aspect on screen — fixes QuarterBlock's half-width look).
         $vf = sprintf(
             'fps=%s,scale=%d:%d:force_original_aspect_ratio=decrease:flags=bilinear,pad=%d:%d:(ow-iw)/2:(oh-ih)/2',
-            (string) $fps,
+            FfmpegCommandBuilder::formatFloat($fps),
             $padW,
             $padH,
             $padW,

@@ -1544,6 +1544,55 @@ PHP;
         }
     }
 
+    /**
+     * @testdox SV-M43: formatFloat keeps the historical dot-decimal bytes
+     */
+    public function testFloatFormattingMatchesTheOldCastBytes(): void
+    {
+        $this->assertSame('24', FfmpegCommandBuilder::formatFloat(24.0));
+        $this->assertSame('23.976', FfmpegCommandBuilder::formatFloat(23.976));
+        $this->assertSame('0.5', FfmpegCommandBuilder::formatFloat(0.5));
+        $this->assertSame(['-ss', '12.500'], FfmpegCommandBuilder::inputSeekFlag(12.5));
+    }
+
+    /**
+     * @testdox SV-M43: under a comma-decimal locale the argv still shows dots
+     *
+     * setlocale() needs the locale data installed; where the host lacks it the
+     * documented fallback is the format-string assert below (the argv sites
+     * must not use the locale-aware %f / bare float cast — a locale-less host
+     * cannot demonstrate the difference, so the shape is pinned instead).
+     */
+    public function testLocaleCommaHostStillEmitsDotDecimals(): void
+    {
+        $previous = setlocale(LC_NUMERIC, '0');
+        $applied = setlocale(LC_NUMERIC, 'de_DE.UTF-8', 'de_DE', 'de_DE@euro', 'German');
+
+        if ($applied === false) {
+            if ($previous !== false) {
+                setlocale(LC_NUMERIC, $previous);
+            }
+            // Documented skip arm: pin the formatter contract on a locale-blind host.
+            $this->assertSame('12.500', sprintf('%.3F', 12.5), '%F is the locale-independent form');
+            $src = (string) file_get_contents(\dirname(__DIR__) . '/src/Support/FfmpegCommandBuilder.php');
+            $this->assertStringNotContainsString("sprintf('%.3f'", $src, 'the seek flag must not use locale-aware %f');
+            $this->assertStringNotContainsString("'-ss', (string)", $src);
+            $decoderSrc = (string) file_get_contents(\dirname(__DIR__) . '/src/Decode/FfmpegDecoder.php');
+            $this->assertStringNotContainsString('(string) $fps', $decoderSrc, 'the fps filter must ride formatFloat()');
+            $this->markTestSkipped('no comma-decimal locale data on this host — format-string arms asserted instead');
+        }
+
+        try {
+            $flags = FfmpegCommandBuilder::inputSeekFlag(12.5);
+            $this->assertSame('12.500', $flags[1], 'LC_NUMERIC must not leak a comma into ffmpeg argv');
+            $cmd = FfmpegDecoder::buildCommand('ffmpeg', '/tmp/x.mp4', 64, 32, 23.976);
+            $vf = $cmd[array_search('-vf', $cmd, true) + 1];
+            $this->assertStringContainsString('fps=23.976,', $vf);
+        } finally {
+            setlocale(LC_NUMERIC, $previous === false ? 'C' : $previous);
+        }
+    }
+
     public function testTheMissingSourceRefusalNeverEchoesUrlCredentials(): void
     {
         $dir = sys_get_temp_dir() . '/sugar-video-cred-' . bin2hex(random_bytes(6));

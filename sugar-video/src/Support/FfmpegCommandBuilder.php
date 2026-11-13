@@ -198,7 +198,23 @@ final class FfmpegCommandBuilder
      */
     public static function inputSeekFlag(float $startSec): array
     {
-        return $startSec > 0.0 ? ['-ss', sprintf('%.3f', $startSec)] : [];
+        return $startSec > 0.0 ? ['-ss', sprintf('%.3F', $startSec)] : [];
+    }
+
+    /**
+     * A float formatted for ffmpeg filter argv, locale-immune.
+     *
+     * `(string) $fps` honours LC_NUMERIC on hosts with the locale data
+     * installed — a comma-decimal seat would emit `fps=23,976` and ffmpeg
+     * exits on the unparsable filter. `%.14F` is PHP's documented
+     * locale-INdependent float form; trimming the trailing zeros (and a bare
+     * trailing point) keeps the bytes identical to the historical cast on a
+     * dot host ("24", "23.976") — same shape as {@see secondsFromMillis()}'s
+     * deliberate integer split.
+     */
+    public static function formatFloat(float $value): string
+    {
+        return rtrim(rtrim(sprintf('%.14F', $value), '0'), '.');
     }
 
     /**
