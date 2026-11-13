@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Backend;
 
 use SugarCraft\Code\Context\ContextBreakdown;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\CacheBreakpoints;
 use SugarCraft\Code\Usage;
 
@@ -151,15 +152,11 @@ final class CacheHealthWatch
         }
 
         $this->breakNoticed = true;
-        $warning = sprintf(
-            'Prompt cache: %d requests in a row read under half of the prefix the request before them had sent'
-            . ' (cached share %d%% → %d%%). Something rewrites bytes the provider already cached on every'
-            . ' request; a context rewrite that is not byte-stable (a prune, a compression, a moving reminder)'
-            . ' is the usual cause, and each such request is billed at the full input price.',
-            $this->breakStreak,
-            $this->lastBreak['from'],
-            $this->lastBreak['to'],
-        );
+        $warning = Lang::t('agents.notice.cache_break', [
+            'count' => $this->breakStreak,
+            'from' => $this->lastBreak['from'],
+            'to' => $this->lastBreak['to'],
+        ]);
         RuntimeNoticeSink::warn($warning);
 
         return $warning;

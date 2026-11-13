@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Agents;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\SafeDelete;
@@ -318,7 +319,7 @@ final class WorktreeManager
 
         // Exit code 0 + dir exists = success; anything else is a failure.
         if (!$result['ok'] || $exitCode !== 0 || str_contains($outputStr, 'fatal')) {
-            RuntimeNoticeSink::warn("WorktreeManager: git worktree add failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
+            RuntimeNoticeSink::warn(Lang::t('agents.notice.worktree_add_failed', ['agent' => $agentId, 'code' => $exitCode, 'output' => $outputStr]));
             throw new \RuntimeException(
                 sprintf('Failed to create worktree for agent "%s": %s', $agentId, $outputStr ?: 'unknown error'),
             );
@@ -389,7 +390,7 @@ final class WorktreeManager
         // Git worktree remove returns exit code 0 on success, but may print to stderr.
         // Any exit code != 0 or output containing "fatal" indicates failure.
         if (!$result['ok'] || $exitCode !== 0 || str_contains($outputStr, 'fatal')) {
-            RuntimeNoticeSink::warn("WorktreeManager: git worktree remove failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
+            RuntimeNoticeSink::warn(Lang::t('agents.notice.worktree_remove_failed', ['agent' => $agentId, 'code' => $exitCode, 'output' => $outputStr]));
         }
 
         // PHP'S STAT CACHE IS STALE HERE AND IT IS NOT A DETAIL. `git worktree
@@ -619,11 +620,10 @@ final class WorktreeManager
         $anchor = $this->repoRoot !== '' ? $this->repoRoot : (getcwd() ?: '');
 
         if (!ContainedPath::within($includeFile, $anchor)) {
-            RuntimeNoticeSink::warn(sprintf(
-                'WorktreeManager: refusing worktreeIncludeFile "%s" — it resolves outside %s (%s), and a file '
-                . 'outside that tree does not list what this worktree wants copied.',
-                $this->config->worktreeIncludeFile,
-                $this->repoRoot !== '' ? 'the repository root' : 'the process working directory',
+            RuntimeNoticeSink::warn(Lang::t('agents.notice.include_file_refused', [
+                'file' => $this->config->worktreeIncludeFile,
+                'anchor_kind' => Lang::t($this->repoRoot !== '' ? 'agents.notice.anchor_repo_root' : 'agents.notice.anchor_cwd'),
+                'anchor' =>
                 // NAMED, not left as the empty string. And this arm is REACHABLE,
                 // which is the question the round that wrote it forgot to ask about
                 // its own messages: `getcwd()` returns false inside a directory that
@@ -632,7 +632,7 @@ final class WorktreeManager
                 // that is exactly the launch whose relative include path can no
                 // longer be anchored to anything.
                 $anchor === '' ? '<unresolvable>' : $anchor,
-            ));
+            ]));
 
             return;
         }
@@ -738,10 +738,9 @@ final class WorktreeManager
         $srcPath = $srcRoot . '/' . $pattern;
 
         if (!ContainedPath::within($srcPath, $srcRoot) || !self::patternStaysInside($pattern)) {
-            RuntimeNoticeSink::warn(sprintf(
-                'WorktreeManager: refusing .worktreeinclude pattern "%s" — it leaves the source root (%s) or '
-                . 'the worktree (%s).',
-                $pattern,
+            RuntimeNoticeSink::warn(Lang::t('agents.notice.include_pattern_refused', [
+                'pattern' => $pattern,
+                'source' =>
                 // "the repository root (%s)" is what this said, and with no repo
                 // root it printed `it leaves the repository root ()` — a refusal
                 // naming an operand that is the empty string. Two things were wrong
@@ -757,8 +756,8 @@ final class WorktreeManager
                 // an unreachable state is the twin of the figure that travels
                 // without its domain, and this round found three of those.
                 $srcRoot,
-                $destRoot,
-            ));
+                'dest' => $destRoot,
+            ]));
 
             return;
         }
@@ -1153,7 +1152,7 @@ final class WorktreeManager
                 // survives, the registry entry stands: a thing the caller
                 // asked removed and did not get, which belongs on the
                 // transcript and not only inside a returned count.
-                RuntimeNoticeSink::warn("WorktreeManager: stale worktree cleanup could not remove \"{$agentId}\"; the sweep skipped it and its registry entry stands: " . $e->getMessage());
+                RuntimeNoticeSink::warn(Lang::t('agents.notice.stale_cleanup_skipped', ['agent' => $agentId, 'reason' => $e->getMessage()]));
             }
         }
 

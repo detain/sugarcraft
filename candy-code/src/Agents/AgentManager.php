@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Agents;
 
 use SugarCraft\Code\Commands\ShareCommand;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Context\MemoryBlock;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Events\SubAgentActivity;
@@ -266,14 +267,11 @@ final class AgentManager
                     }
 
                     if ($this->isNarrowedBySession($declaration, $registryNames, $ceilingNames)) {
-                        $notices[] = sprintf(
-                            'agent "%s" declares "%s" in %s, which this session\'s allowedTools/disabledTools '
-                            . 'removed from the model-facing tool set — the grant survives, narrowed; if that '
-                            . 'is not the configuration you meant, check disabledTools/allowedTools.',
-                            $agent->name,
-                            $declaration,
-                            $field,
-                        );
+                        $notices[] = Lang::t('agents.notice.grant_narrowed', [
+                            'agent' => $agent->name,
+                            'declaration' => $declaration,
+                            'field' => $field,
+                        ]);
                     }
                 }
             }
@@ -672,11 +670,10 @@ final class AgentManager
                 default => 'complete',
             });
         } catch (\Throwable $unstored) {
-            RuntimeNoticeSink::warn(sprintf(
-                'sub-agent "%s" finished but could not be stored as a session: %s',
-                $finished->name,
-                $unstored->getMessage(),
-            ));
+            RuntimeNoticeSink::warn(Lang::t('agents.notice.child_not_stored', [
+                'name' => $finished->name,
+                'reason' => $unstored->getMessage(),
+            ]));
 
             return null;
         }
