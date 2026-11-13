@@ -43,7 +43,7 @@ final class ZoneHoverTrackerTest extends TestCase
      */
     private function buildManager(): Manager
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB'));
         return $m;
     }
@@ -162,7 +162,7 @@ final class ZoneHoverTrackerTest extends TestCase
         $m = $this->buildManager();
         $tracker = new ZoneHoverTracker($m);
 
-        $m2 = Manager::newGlobal();
+        $m2 = Manager::newUnprefixed();
         $m2->scan($m2->mark('x', 'X'));
         $next = $tracker->withManager($m2);
 
@@ -221,7 +221,7 @@ final class ZoneHoverTrackerTest extends TestCase
 
     public function testEmptyManagerReturnsNullHit(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $tracker = new ZoneHoverTracker($m);
 
         // No zones registered at all.

@@ -57,13 +57,27 @@ final class Manager
 
     /**
      * Build a fresh un-prefixed manager, independent of every other
-     * instance. Distinct from the {@see Zones} facade's shared default
+     * instance. The name says what it builds: a manager with NO id
+     * prefix. Distinct from the {@see Zones} facade's shared default
      * manager ({@see Zones::defaultManager()}) — use that one only when
      * the whole program agrees on a single zone namespace.
      */
-    public static function newGlobal(): self
+    public static function newUnprefixed(): self
     {
         return new self();
+    }
+
+    /**
+     * @deprecated Renamed to {@see self::newUnprefixed()} in SM-S12: the
+     *             old name taught the wrong thing — "global" suggested a
+     *             program-wide singleton, but the instance is exactly the
+     *             opposite (an independent, un-prefixed manager). This is
+     *             a thin delegating alias; new code calls the factory by
+     *             what it builds.
+     */
+    public static function newGlobal(): self
+    {
+        return self::newUnprefixed();
     }
 
     /**

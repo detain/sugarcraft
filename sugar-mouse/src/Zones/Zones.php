@@ -30,7 +30,7 @@ use SugarCraft\Core\Msg;
  * if (Zones::get('header')?->inBounds($mouse)) { … }
  * ```
  *
- * Prefer an explicit `Manager::newGlobal()` per-program when you want
+ * Prefer an explicit `Manager::newUnprefixed()` per-program when you want
  * isolation between sub-trees (e.g. tests, library composition).
  * The default manager is convenient for app code that has only one
  * UI tree.
@@ -48,7 +48,7 @@ final class Zones
      */
     public static function defaultManager(): Manager
     {
-        return self::$default ??= Manager::newGlobal();
+        return self::$default ??= Manager::newUnprefixed();
     }
 
     /**

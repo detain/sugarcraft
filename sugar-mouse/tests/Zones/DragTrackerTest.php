@@ -48,7 +48,7 @@ final class DragTrackerTest extends TestCase
      */
     private function buildManager(): Manager
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB'));
         return $m;
     }
@@ -193,7 +193,7 @@ final class DragTrackerTest extends TestCase
         $m = $this->buildManager();
         $tracker = new DragTracker($m);
 
-        $m2 = Manager::newGlobal();
+        $m2 = Manager::newUnprefixed();
         $m2->scan($m2->mark('x', 'X'));
         $next = $tracker->withManager($m2);
 

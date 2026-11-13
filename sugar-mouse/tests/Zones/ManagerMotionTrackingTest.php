@@ -16,7 +16,7 @@ final class ManagerMotionTrackingTest extends TestCase
      */
     public function testMotionTrackingAnsiTrueReturnsEnableSequence(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
 
         $seq = $m->motionTrackingAnsi(true);
 
@@ -25,7 +25,7 @@ final class ManagerMotionTrackingTest extends TestCase
 
     public function testMotionTrackingAnsiFalseReturnsDisableSequence(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
 
         $seq = $m->motionTrackingAnsi(false);
 
@@ -39,7 +39,7 @@ final class ManagerMotionTrackingTest extends TestCase
      */
     public function testDeprecatedSetMotionTrackingAliasDelegatesByteIdentical(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
 
         $this->assertSame($m->motionTrackingAnsi(true), $m->setMotionTracking(true));
         $this->assertSame($m->motionTrackingAnsi(false), $m->setMotionTracking(false));

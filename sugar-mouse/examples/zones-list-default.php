@@ -34,7 +34,7 @@ $items = [
     'Mint Toffee',
 ];
 
-$mgr = Manager::newGlobal();
+$mgr = Manager::newUnprefixed();
 
 // Each item is wrapped in its own zone id so a click can be routed to
 // the right row without computing y-coords by hand.

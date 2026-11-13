@@ -63,7 +63,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         // The would-be id 'cd efgh ij' has spaces → lone sentinel; the text
         // after it is visible, so it must survive the strip.
         $clean = $m->scan("ab{$o}cd efgh ij{$c}" . str_repeat('x', 20) . $m->mark('z', 'QQQQ'));
@@ -77,7 +77,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan("ab{$o}cd\nef\ngh{$c}xx\n" . $m->mark('z', 'QQQQ'));
 
         self::assertSame("abcd\nef\nghxx\nQQQQ", $clean);
@@ -89,7 +89,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         // An "id" carrying an SGR is not a tag: the old stripper ate the SGR
         // (and anything else up to the U+E001) along with the sentinels.
         $clean = $m->scan("{$o}\x1b[31m{$c}red\x1b[0m" . $m->mark('z', 'Q'));
@@ -102,7 +102,7 @@ final class ManagerStripMarkersTest extends TestCase
     public function testLoneOpenBeforeARealTagDoesNotSwallowIt(): void
     {
         $o = Sentinel::OPEN;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         // The first U+E001 ahead terminates z's open tag; the would-be id
         // 'abc<U+E000>z' is invalid, so only the stray 3 bytes go.
         $clean = $m->scan("{$o}abc" . $m->mark('z', 'Q'));
@@ -115,7 +115,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan("{$o}{$c}{$o}{$c}{$o}/{$c}" . $m->mark('z', 'QQQQ'));
 
         self::assertSame('QQQQ', $clean);
@@ -126,7 +126,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $long = str_repeat('a', Mark::MAX_ID_BYTES + 1);
         $clean = $m->scan($o . $long . $c . $m->mark('z', 'Q'));
 
@@ -139,7 +139,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $edge = str_repeat('a', Mark::MAX_ID_BYTES);
         // A valid open with no close (clipped frame): consumed whole.
         $clean = $m->scan($o . $edge . $c . 'Q');
@@ -151,7 +151,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan($m->mark('z', 'AB') . "{$o}/z z{$c}" . $m->mark('y', 'C'));
 
         self::assertSame('AB/z zC', $clean);
@@ -163,7 +163,7 @@ final class ManagerStripMarkersTest extends TestCase
     public function testBareCloseSentinelDropsOnlyItsBytes(): void
     {
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan("A{$c}B" . $m->mark('z', 'Q'));
 
         self::assertSame('ABQ', $clean);
@@ -173,7 +173,7 @@ final class ManagerStripMarkersTest extends TestCase
     public function testUnterminatedOpenAtEndOfFrameDropsOnlyItsBytes(): void
     {
         $o = Sentinel::OPEN;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
 
         self::assertSame('AB', $m->scan("AB{$o}"));
         self::assertSame('AB/', $m->scan("AB{$o}/"));
@@ -183,7 +183,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         // Every would-be id is ' ' + more stray sentinels → all lone.
         $clean = $m->scan(str_repeat("{$o} ", 5000) . $c . $m->mark('z', 'Q'));
 
@@ -195,7 +195,7 @@ final class ManagerStripMarkersTest extends TestCase
 
     public function testCrlfRowIsPreservedAndMatchesScan(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan("AAAA\r\n" . $m->mark('z', 'QQQQ'));
 
         self::assertSame("AAAA\r\nQQQQ", $clean);
@@ -205,7 +205,7 @@ final class ManagerStripMarkersTest extends TestCase
 
     public function testCrlfInsideMultiRowZone(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan($m->mark('z', "ABC\r\nDE") . "\r\n" . $m->mark('y', 'F'));
 
         self::assertSame("ABC\r\nDE\r\nF", $clean);
@@ -217,7 +217,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan("ab{$o}cd\r\nef{$c}" . $m->mark('z', 'QQ'));
 
         self::assertSame("abcd\r\nefQQ", $clean);
@@ -229,7 +229,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan("AAAA{$o}x\r{$c}" . $m->mark('z', 'QQ'));
 
         self::assertSame("AAAAx\rQQ", $clean);
@@ -239,7 +239,7 @@ final class ManagerStripMarkersTest extends TestCase
 
     public function testLoneCarriageReturnBeforeZone(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan("AAAA\r" . $m->mark('z', 'QQ'));
 
         self::assertSame("AAAA\rQQ", $clean);
@@ -252,7 +252,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan("AA{$o}/gone{$c}" . $m->mark('z', 'Q'));
 
         self::assertSame('AAQ', $clean);
@@ -264,7 +264,7 @@ final class ManagerStripMarkersTest extends TestCase
     {
         $o = Sentinel::OPEN;
         $c = Sentinel::CLOSE;
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan($m->mark('z', 'Q') . "{$o}cut{$c}BB");
 
         self::assertSame('QBB', $clean);

@@ -373,7 +373,7 @@ use SugarCraft\Core\MouseAction;   // the WIRE enum (Press / Release / Motion)
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Manager;
 
-$z = Manager::newGlobal();
+$z = Manager::newUnprefixed();
 
 // Build a frame
 $btnOk     = $z->mark('btn:ok',     '  OK  ');
@@ -440,7 +440,7 @@ resolves by smallest covering area, a full-screen modal scanned into the
 same registry loses every hit to any smaller zone painted underneath it —
 clicks land on invisible controls. Do not overlay layers inside one
 registry: retire the base ids (`clear($id)` / `clear()`) before a modal
-opens, or give each layer its own `Manager` (`newGlobal()` / `newPrefix()`)
+opens, or give each layer its own `Manager` (`newUnprefixed()` / `newPrefix()`)
 and route events to the top layer first. A stacking primitive (zone
 priority / paint-order stamp, area demoted to tiebreak) is an open owner
 decision; until it ships, the retire-or-split rule above is the contract.
@@ -726,10 +726,10 @@ wheel type matched first so it becomes `Scroll`, not `Press`).
 
 | Class | Method | Description |
 |---|---|---|
-| `Manager` | `newGlobal()` | Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is `Zones::defaultManager()`) |
+| `Manager` | `newUnprefixed()` | Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is `Zones::defaultManager()`); formerly spelled `newGlobal()`, which remains as a deprecated alias |
 | `Manager` | `newPrefix(prefix)` | Create prefixed manager for isolation |
 | `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
-| `Manager` | `scan(output, ?width = null)` | Merge-record zones into the registry (re-recorded ids replace, absent ids persist; a `newPrefix()` manager skips ids outside its prefix, a `newGlobal()` manager records every id), strip markers, clamp columns to `?width` |
+| `Manager` | `scan(output, ?width = null)` | Merge-record zones into the registry (re-recorded ids replace, absent ids persist; a `newPrefix()` manager skips ids outside its prefix, a `newUnprefixed()` manager records every id), strip markers, clamp columns to `?width` |
 | `Manager` | `anyInBounds(mouseMsg)` | Return the innermost zone under the mouse |
 | `Manager` | `get(name)` | Get zone by name |
 | `Manager` | `motionTrackingAnsi(bool)` | Return paired CSI 1003+1006 enable / LIFO disable sequence (bytes only, emits nothing; formerly the `setMotionTracking` setter) |
@@ -742,7 +742,7 @@ wheel type matched first so it becomes `Scroll`, not `Press`).
 | `Scan` | `strip(rendered)` | Public byte-wise removal of well-formed tags |
 | `Mark` | `untrusted(text)` | Sweep foreign sentinel framing bytes off untrusted labels |
 | `Zones` (static) | `mark` / `scan` / `get` / `clear` / `close` / `setEnabled` / `isEnabled` / `newPrefix` / `anyInBounds*` | Package-level facade over the default manager |
-| `Zones` (static) | `defaultManager()` | Read the shared default `Manager` the package-level facade routes through (`Manager::newGlobal()` builds a different, independent instance) |
+| `Zones` (static) | `defaultManager()` | Read the shared default `Manager` the package-level facade routes through (`Manager::newUnprefixed()` builds a different, independent instance) |
 | `Zone` | `inBounds(mouseMsg)` | Test if mouse is inside zone |
 | `ZoneHoverTracker` | `__construct(manager)` | Track hover state over a manager |
 | `ZoneHoverTracker` | `update(mouseMsg)` | Process mouse event, return enter/exit msg |
@@ -767,7 +767,7 @@ wheel type matched first so it becomes `Scroll`, not `Press`).
 Runnable, self-explanatory files under `examples/` (after
 `composer install`, run e.g. `php examples/zones-buttons.php`):
 
-- `zones-buttons.php` — a button row through `Manager::newGlobal()`,
+- `zones-buttons.php` — a button row through `Manager::newUnprefixed()`,
   marking, scanning and resolving clicks to zone ids.
 - `zones-list-default.php` — a selectable list: one manager, per-row
   marked items, click-to-focus resolution, plus a scripted keyboard twin

@@ -42,7 +42,7 @@ final class ClickCounterTest extends TestCase
      */
     private function buildManager(): Manager
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB'));
         return $m;
     }
@@ -158,7 +158,7 @@ final class ClickCounterTest extends TestCase
         $m = $this->buildManager();
         $counter = new ClickCounter($m);
 
-        $m2 = Manager::newGlobal();
+        $m2 = Manager::newUnprefixed();
         $m2->scan($m2->mark('x', 'X'));
         $next = $counter->withManager($m2);
 
@@ -255,7 +255,7 @@ final class ClickCounterTest extends TestCase
         [$counter] = $counter->update($this->press(2, 1));
         $this->assertSame(1, $counter->clickCount());
 
-        $m2 = Manager::newGlobal();
+        $m2 = Manager::newUnprefixed();
         $m2->scan($m2->mark('a', 'AAA') . '|' . $m2->mark('b', 'BBB'));
 
         $counter = $counter->withManager($m2);

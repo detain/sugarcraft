@@ -22,7 +22,7 @@ final class ManagerTest extends TestCase
 
     public function testMarkWrapsContentWithPuaMarkers(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $marked = $m->mark('btn', 'OK');
         // Delegated to sugar-mouse's Mark: PUA sentinel frame
         // U+E000 <id> U+E001 <content> U+E000 /<id> U+E001.
@@ -40,21 +40,21 @@ final class ManagerTest extends TestCase
     {
         // Mark::wrap validates prefix()+id against ^[A-Za-z0-9._:-]+$; a
         // space (or any sentinel/control byte) would desync zone scanning.
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $this->expectException(\InvalidArgumentException::class);
         $m->mark('bad id', 'X');
     }
 
     public function testScanStripsMarkersFromOutput(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $clean = $m->scan($m->mark('btn', 'OK'));
         $this->assertSame('OK', $clean);
     }
 
     public function testScanRecordsSimpleZone(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $z = $m->get('btn');
         $this->assertInstanceOf(Zone::class, $z);
@@ -66,7 +66,7 @@ final class ManagerTest extends TestCase
 
     public function testZoneWidthAndHeight(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'Hello'));
         $z = $m->get('btn');
         $this->assertSame(5, $z->width());
@@ -75,7 +75,7 @@ final class ManagerTest extends TestCase
 
     public function testInBoundsHits(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $z = $m->get('btn');
         $this->assertTrue($z->inBounds($this->click(1, 1)));
@@ -86,7 +86,7 @@ final class ManagerTest extends TestCase
 
     public function testRelativePosition(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan('xx' . $m->mark('btn', 'Hello'));
         $z = $m->get('btn');
         // Zone starts at col 3.
@@ -96,7 +96,7 @@ final class ManagerTest extends TestCase
 
     public function testTwoSideBySideZones(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $line = $m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB');
         $clean = $m->scan($line);
         $this->assertSame('AAA|BBB', $clean);
@@ -111,7 +111,7 @@ final class ManagerTest extends TestCase
 
     public function testZoneAcrossLines(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $rendered = $m->mark('block', "row1\nrow2");
         $m->scan($rendered);
         $z = $m->get('block');
@@ -123,7 +123,7 @@ final class ManagerTest extends TestCase
 
     public function testAnsiStylingDoesNotShiftZone(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $rendered = $m->mark('btn', "\x1b[31mOK\x1b[0m");
         $m->scan($rendered);
         $z = $m->get('btn');
@@ -133,7 +133,7 @@ final class ManagerTest extends TestCase
 
     public function testCjkWideCharCountsAsTwoCells(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $rendered = $m->mark('jp', '日本');
         $m->scan($rendered);
         $z = $m->get('jp');
@@ -143,12 +143,12 @@ final class ManagerTest extends TestCase
 
     public function testGetReturnsNullForUnknownId(): void
     {
-        $this->assertNull(Manager::newGlobal()->get('nope'));
+        $this->assertNull(Manager::newUnprefixed()->get('nope'));
     }
 
     public function testClearForgetsZones(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $this->assertNotNull($m->get('btn'));
         $m->clear();
@@ -158,7 +158,7 @@ final class ManagerTest extends TestCase
 
     public function testRescanReplacesPreviousBounds(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $first = $m->get('btn');
         $m->scan('   ' . $m->mark('btn', 'OK')); // shifted right by 3
@@ -171,7 +171,7 @@ final class ManagerTest extends TestCase
     {
         // U+200B (zero-width space) has no visual width; without proper
         // handling it would push later columns to the right.
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('a', 'X' . "\u{200B}" . 'X') . 'after');
         $z = $m->get('a');
         // 'X' + ZWSP + 'X' = 2 visible cells, not 3.
@@ -181,7 +181,7 @@ final class ManagerTest extends TestCase
 
     public function testEndMarkerWithoutStartIsIgnored(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         // A close tag (U+E000 /ghost U+E001) with no matching open — Scan
         // records nothing, and Scan::strip still removes the dangling tag.
         $clean = $m->scan(Sentinel::OPEN . '/ghost' . Sentinel::CLOSE . 'hi');
@@ -191,7 +191,7 @@ final class ManagerTest extends TestCase
 
     public function testSetEnabledFalseSkipsMarkers(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->setEnabled(false);
         $this->assertFalse($m->isEnabled());
         $marked = $m->mark('foo', 'hello');
@@ -203,7 +203,7 @@ final class ManagerTest extends TestCase
 
     public function testSetEnabledTrueResumesMarking(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->setEnabled(false);
         $m->mark('foo', 'hi'); // dropped
         $m->setEnabled(true);
@@ -253,7 +253,7 @@ final class ManagerTest extends TestCase
 
     public function testClearWithIdDropsOnlyThatZone(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn-a', 'A') . $m->mark('btn-b', 'B'));
         $this->assertCount(2, $m->all());
         $m->clear('btn-a');
@@ -263,7 +263,7 @@ final class ManagerTest extends TestCase
 
     public function testClearWithoutIdDropsAllZones(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn-a', 'A') . $m->mark('btn-b', 'B'));
         $m->clear();
         $this->assertSame([], $m->all());
@@ -271,7 +271,7 @@ final class ManagerTest extends TestCase
 
     public function testCloseDropsZonesAndDisablesManager(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $this->assertCount(1, $m->all());
         $m->close();
@@ -283,7 +283,7 @@ final class ManagerTest extends TestCase
 
     public function testCloseIsIdempotent(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->close();
         $m->close();
         $this->assertSame([], $m->all());
@@ -292,7 +292,7 @@ final class ManagerTest extends TestCase
 
     public function testAnyInBoundsReturnsHitZone(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $hit = $m->anyInBounds($this->click(1, 1));
         $this->assertInstanceOf(Zone::class, $hit);
@@ -301,21 +301,21 @@ final class ManagerTest extends TestCase
 
     public function testAnyInBoundsReturnsNullWhenNothingMatches(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $this->assertNull($m->anyInBounds($this->click(50, 50)));
     }
 
     public function testAnyInBoundsReturnsNullForNonMouseMsg(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $this->assertNull($m->anyInBounds(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'a')));
     }
 
     public function testAnyInBoundsAndUpdateRoutesHitToModelAsMsgZoneInBounds(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn-1', 'OK'));
         $model = new ZoneRoutingModel();
 
@@ -329,7 +329,7 @@ final class ManagerTest extends TestCase
 
     public function testAnyInBoundsAndUpdatePassesThroughOnMiss(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('btn', 'OK'));
         $model = new ZoneRoutingModel();
 
@@ -346,7 +346,7 @@ final class ManagerTest extends TestCase
      */
     public function testAnyInBoundsPrefersInnermostZone(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         // outer=A + inner + C  →  outer cols 1-4, inner cols 2-3
         $m->scan($m->mark('outer', 'A' . $m->mark('inner', 'BB') . 'C'));
 
@@ -371,7 +371,7 @@ final class ManagerTest extends TestCase
      */
     public function testAnyInBoundsTieBreaksToFirstInserted(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('first', 'AAA'));   // cols 1-3, row 1 — recorded first
         $m->scan($m->mark('second', 'AAA'));  // same rect, equal area — merges alongside
 
@@ -441,7 +441,7 @@ final class ManagerTest extends TestCase
     public function testUnprefixedScanAbsorbsAllIds(): void
     {
         $a = Manager::newPrefix('a-');
-        $g = Manager::newGlobal();
+        $g = Manager::newUnprefixed();
         $g->scan($a->mark('item-0', 'A'));
         $this->assertArrayHasKey('a-item-0', $g->all());
         $this->assertNotNull($g->get('a-item-0')); // wire spelling direct
@@ -453,7 +453,7 @@ final class ManagerTest extends TestCase
      */
     public function testScanWidthClampsZoneColumns(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $marked = $m->mark('wide', 'ABCDEFGHIJ'); // natural cols 1-10
         $m->scan($marked, 4);
         $z = $m->get('wide');
@@ -461,7 +461,7 @@ final class ManagerTest extends TestCase
         $this->assertSame(4, $z->endCol);
 
         // Without the clamp the same frame spans all ten columns.
-        $m2 = Manager::newGlobal();
+        $m2 = Manager::newUnprefixed();
         $m2->scan($marked);
         $this->assertSame(10, $m2->get('wide')->endCol);
     }
@@ -472,7 +472,7 @@ final class ManagerTest extends TestCase
      */
     public function testMarkValidatesIdsEvenWhenDisabled(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->setEnabled(false);
         $this->assertSame('hi', $m->mark('legal-id', 'hi')); // pass-through…
         $this->expectException(\InvalidArgumentException::class);
@@ -485,7 +485,7 @@ final class ManagerTest extends TestCase
      */
     public function testAllInBoundsReturnsEveryCoveringZoneSmallestFirst(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('outer', 'A' . $m->mark('inner', 'BB') . 'C'));
 
         $inside = $m->allInBounds($this->click(2, 1));
@@ -506,7 +506,7 @@ final class ManagerTest extends TestCase
      */
     public function testZoneAtResolvesCellGeometrically(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('outer', 'A' . $m->mark('inner', 'BB') . 'C'));
         $this->assertSame('inner', $m->zoneAt(2, 1)->id);
         $this->assertSame('outer', $m->zoneAt(1, 1)->id);
@@ -521,7 +521,7 @@ final class ManagerTest extends TestCase
     public function testZoneAcrossLinesRaggedWidths(): void
     {
         // Case 1: longer row first, shorter row second.
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('block', "longrow\nhi"));
         $z = $m->get('block');
         $this->assertSame(1, $z->startCol);
@@ -530,7 +530,7 @@ final class ManagerTest extends TestCase
         $this->assertSame(2, $z->endRow);
 
         // Case 2: shorter row first, longer row last.
-        $m2 = Manager::newGlobal();
+        $m2 = Manager::newUnprefixed();
         $m2->scan($m2->mark('block', "hi\nlongrow"));
         $z2 = $m2->get('block');
         $this->assertSame(1, $z2->startCol);
@@ -541,7 +541,7 @@ final class ManagerTest extends TestCase
         // Case 3: content ends exactly at a newline (trailing \n means
         // end marker lands at col 1 of a fresh row — must still use
         // the maxCol from the last content row, not col 1).
-        $m3 = Manager::newGlobal();
+        $m3 = Manager::newUnprefixed();
         $m3->scan($m3->mark('block', "longrow\n"));
         $z3 = $m3->get('block');
         $this->assertSame(1, $z3->startCol);
@@ -559,7 +559,7 @@ final class ManagerTest extends TestCase
      */
     public function testMarkScanRoundTripForConsumerIds(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         // Two 5-cell tabs then a 6-cell grid cell, side by side.
         $frame = $m->mark('tab-0', ' One ')      // cols 1-5
             . $m->mark('tab-1', ' Two ')          // cols 6-10
@@ -598,7 +598,7 @@ final class ManagerTest extends TestCase
 
     public function testAllReturnsAllZones(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('a', 'AAA') . $m->mark('b', 'BBB'));
 
         $all = $m->all();
@@ -621,13 +621,13 @@ final class ManagerTest extends TestCase
     {
         $forgedLabel = 'Save' . Sentinel::OPEN . 'evil' . Sentinel::CLOSE . 'X' . Sentinel::OPEN . '/evil' . Sentinel::CLOSE;
 
-        $unswept = Manager::newGlobal();
+        $unswept = Manager::newUnprefixed();
         $unswept->scan($unswept->mark('save', $forgedLabel));
         // 'X' painted at col 5 under the forged tag: evil (col 5) beats
         // save (cols 1-5) on the smallest-area rule.
         $this->assertSame('evil', $unswept->anyInBounds($this->click(5, 1))?->id);
 
-        $swept = Manager::newGlobal();
+        $swept = Manager::newUnprefixed();
         $swept->scan($swept->mark('save', Mark::untrusted($forgedLabel)));
         $this->assertNull($swept->get('evil'));
         $this->assertSame('save', $swept->anyInBounds($this->click(5, 1))?->id);
@@ -640,7 +640,7 @@ final class ManagerTest extends TestCase
      */
     public function testIdsAbsentFromFrameListsVanishedIdsInInsertionOrder(): void
     {
-        $m = Manager::newGlobal();
+        $m = Manager::newUnprefixed();
         $m->scan($m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB') . '|' . $m->mark('c', 'CCC'));
 
         $this->assertSame(['a', 'b', 'c'], $m->idsAbsentFromFrame([]));
@@ -653,6 +653,21 @@ final class ManagerTest extends TestCase
             $m->clear($stale);
         }
         $this->assertSame(['b'], array_keys($m->all()));
+    }
+
+    /**
+     * SM-S12: newGlobal() is a deprecated thin alias of newUnprefixed() —
+     * same shape (no id prefix, instance independent of the shared
+     * defaultManager). Pinned so the alias can never drift into a second
+     * semantic; removal is a gated BC decision, not an accident.
+     */
+    public function testNewGlobalAliasDelegatesToNewUnprefixed(): void
+    {
+        $viaAlias = Manager::newGlobal();
+        $this->assertInstanceOf(Manager::class, $viaAlias);
+        $viaAlias->scan($viaAlias->mark('a', 'A'));
+        $this->assertSame('a', $viaAlias->get('a')?->id, 'alias-built manager carries no id prefix');
+        $this->assertNotSame($viaAlias, \SugarCraft\Mouse\Zones\Zones::defaultManager(), 'alias is NOT the shared default');
     }
 }
 

@@ -18,7 +18,7 @@ use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Manager;
 
-$mgr = Manager::newGlobal();
+$mgr = Manager::newUnprefixed();
 
 // Plain padded content — styling (e.g. sugar-style borders) would ride the
 // string unchanged; zones measure visible cells only.
