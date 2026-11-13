@@ -416,4 +416,103 @@ final class ProgramExecCaptureTest extends TestCase
         $this->assertStringContainsString('120', $msg);
         $this->assertStringContainsString('17', $msg);
     }
+
+    // ─── sc-13 / sugar-core-011: Windows capture leg ──────────────────────
+
+    public function testWindowsFallbackReadsBothStreamsNotSilentEmpty(): void
+    {
+        [$proc, $out, $err] = $this->spawn(['sh', '-c', 'printf out; printf err >&2']);
+        [$stdout, $stderr, $timedOut] = $this->invokeStatic(
+            Program::class,
+            'drainCapturedPipes',
+            [$out, $err, 5.0, 4096, true], // $onWindows=true drives the CRT leg
+        );
+        $this->assertSame('out', $stdout);
+        $this->assertSame('err', $stderr);
+        $this->assertFalse($timedOut);
+        proc_close($proc);
+    }
+
+    public function testWindowsFallbackTruncatesWithMarkerPastCap(): void
+    {
+        // Small-stderr child by design: a child overflowing the unread
+        // stderr pipe while stdout is still being read is the documented
+        // sequential-read deadlock this leg carries (see docblock + README
+        // Windows caveat) — asserting it would be testing the hazard, not
+        // the cure.
+        [$proc, $out, $err] = $this->spawn([
+            'sh', '-c',
+            'head -c 300000 /dev/zero | tr "\\0" a; printf e >&2',
+        ]);
+        $cap   = 1024;
+        [$stdout, $stderr, $timedOut] = $this->invokeStatic(
+            Program::class,
+            'drainCapturedPipes',
+            [$out, $err, 15.0, $cap, true],
+        );
+        $marker = "\n...[capture truncated at {$cap} bytes]";
+        $this->assertSame(str_repeat('a', $cap) . $marker, $stdout);
+        $this->assertSame('e', $stderr);
+        $this->assertFalse($timedOut);
+        proc_close($proc);
+    }
+
+    public function testWindowsGuardIsPlatformScopedNotStreamScoped(): void
+    {
+        $proc = proc_open(
+            ['sh', '-c', 'true'],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        // This box is not Windows: the override must be what opens the CRT
+        // leg, and its absence must keep the POSIX loop (the $timedOut arm
+        // proves the select path ran: a never-ending child times out there
+        // but is simply read to EOF on the blocking leg).
+        $this->assertFalse($this->invokeStatic(
+            Program::class, 'streamSelectUnsupported', [$pipes[1], $pipes[2], null],
+        ));
+        $this->assertTrue($this->invokeStatic(
+            Program::class, 'streamSelectUnsupported', [$pipes[1], $pipes[2], true],
+        ));
+        $this->assertFalse($this->invokeStatic(
+            Program::class, 'streamSelectUnsupported', [null, null, true],
+        )); // nothing to read — no notice, no fallback
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($proc);
+    }
+
+    public function testWindowsDegradationNoticeLocalizes(): void
+    {
+        $msg = Lang::t('program.exec_select_unsupported');
+        $this->assertNotSame('program.exec_select_unsupported', $msg);
+        $this->assertStringContainsStringIgnoringCase('stream-select', $msg);
+    }
+
+    public function testWindowsLegGatesSourceShape(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Program.php');
+        $this->assertSame(
+            1,
+            preg_match(
+                '/streamSelectUnsupported\(\$stdoutPipe, \$stderrPipe, \$onWindows\)\) \{(?<arm>.*?)return \[\$stdout, \$stderr, false\];/s',
+                $src,
+                $m,
+            ),
+            'the unsupported-platform arm must exist inside drainCapturedPipes',
+        );
+        $this->assertStringContainsString('fwrite(STDERR, Lang::t(', $m['arm']);
+        $this->assertStringContainsString('blockingReadCapped($stdoutPipe', $m['arm']);
+        // The blocking leg must keep draining past the cap, never stop
+        // reading (that would re-create the child-parks-on-full-pipe bug).
+        $this->assertSame(
+            1,
+            preg_match(
+                '/private static function blockingReadCapped.*?if \(\$truncated\) \{\s*continue;/s',
+                $src,
+            ),
+            'blockingReadCapped must keep draining past the cap',
+        );
+    }
 }

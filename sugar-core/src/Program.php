@@ -1100,10 +1100,18 @@ final class Program
      * failures inside the deadline, and returns `timedOut` so the caller
      * can kill and bound-reap the child instead of freezing.
      *
+     * sugar-core-011 (Windows leg): that interleaved wait is impossible
+     * where stream_select() cannot watch the pipes, so the capture refuses
+     * to degrade silently there — see {@see streamSelectUnsupported()} for
+     * the platform fact and {@see blockingReadCapped()} for the loud
+     * fallback.
+     *
      * @param  resource|null $stdoutPipe
      * @param  resource|null $stderrPipe
      * @param  float         $deadlineSeconds wall ceiling for the whole wait
      * @param  int           $capBytes        running cap per captured stream
+     * @param  bool|null     $onWindows       platform override (tests exercise
+     *                                        the Windows leg on any OS)
      * @return array{0: string, 1: string, 2: bool} captured [stdout, stderr, timedOut]
      */
     private static function drainCapturedPipes(
@@ -1111,15 +1119,25 @@ final class Program
         $stderrPipe,
         float $deadlineSeconds = self::EXEC_WAIT_DEADLINE_SECONDS,
         int $capBytes = self::MAX_EXEC_CAPTURE_BYTES,
+        ?bool $onWindows = null,
     ): array {
+        if (self::streamSelectUnsupported($stdoutPipe, $stderrPipe, $onWindows)) {
+            // Loud degradation, never empty-without-a-word (sugar-core-011):
+            // the old Windows shape watched the very first select fail,
+            // abandoned the drain with zero bytes, and the blocking
+            // proc_close() handed the model an empty stdout as if the child
+            // had produced none.
+            fwrite(STDERR, Lang::t('program.exec_select_unsupported') . "\n");
+            $stdout = self::blockingReadCapped($stdoutPipe, $capBytes);
+            $stderr = self::blockingReadCapped($stderrPipe, $capBytes);
+            return [$stdout, $stderr, false];
+        }
+
         $stdout = '';
         $stderr = '';
         $stdoutTruncated = false;
         $stderrTruncated = false;
-        // Data-stream marker, deliberately NOT Lang::t(): it rides inside
-        // captured child output (ExecMsg), where a localized string would
-        // corrupt machine-parsed payloads. Documented in the README.
-        $marker = "\n...[capture truncated at {$capBytes} bytes]";
+        $marker = self::truncationMarker($capBytes);
 
         /** @var array<int, resource> $open */
         $open = [];
@@ -1187,6 +1205,71 @@ final class Program
         }
 
         return [$stdout, $stderr, $timedOut];
+    }
+
+    /**
+     * ASCII truncation marker injected once per captured stream past the
+     * byte cap. Data-stream text, deliberately NOT Lang::t(): it rides
+     * inside captured child output (ExecMsg), where a localized string
+     * would corrupt machine-parsed payloads. Documented in the README.
+     */
+    private static function truncationMarker(int $capBytes): string
+    {
+        return "\n...[capture truncated at {$capBytes} bytes]";
+    }
+
+    /**
+     * Can stream_select() watch these capture pipes at all?
+     *
+     * Platform fact, not a runtime probe (php.net stream_select: on
+     * Windows, select works only over socket streams — proc_open() pipes
+     * are CRT handles and cannot join the read set). The runtime
+     * "probe" IS the bug being cured: the old code let the first failed
+     * select silently abandon the drain. Guarding on the platform keeps
+     * the POSIX path identical and lets tests drive the Windows leg on
+     * any OS through the $onWindows override.
+     */
+    private static function streamSelectUnsupported($stdoutPipe, $stderrPipe, ?bool $onWindows = null): bool
+    {
+        $onWindows ??= DIRECTORY_SEPARATOR === '\\';
+        return $onWindows && (is_resource($stdoutPipe) || is_resource($stderrPipe));
+    }
+
+    /**
+     * Read one capture stream to EOF with the running byte cap,
+     * truncate-with-marker identical to the select loop (drain continues
+     * past the cap so the child never parks on a full pipe while this
+     * stream is being read). Blocking by design — the Windows fallback
+     * leg where select is impossible; the wall deadline cannot preempt a
+     * blocking CRT read, which is the documented Windows survivor caveat
+     * in the README. stdout-before-stderr order: a child overflowing the
+     * ~64 KiB unread stderr buffer while stdout is being read to EOF is
+     * the deadlock the interleaved POSIX loop exists to avoid, stated
+     * plainly rather than pretended away.
+     *
+     * @param resource|null $pipe
+     */
+    private static function blockingReadCapped($pipe, int $capBytes): string
+    {
+        if (!is_resource($pipe)) {
+            return '';
+        }
+        $out       = '';
+        $truncated = false;
+        while (($chunk = fread($pipe, 65536)) !== false && $chunk !== '') {
+            if ($truncated) {
+                continue; // over cap — keep draining to EOF, discard bytes
+            }
+            $room = $capBytes - strlen($out);
+            if (strlen($chunk) > $room) {
+                $out .= substr($chunk, 0, $room) . self::truncationMarker($capBytes);
+                $truncated = true;
+            } else {
+                $out .= $chunk;
+            }
+        }
+        fclose($pipe);
+        return $out;
     }
 
     private function runExec(ExecRequest $req): void

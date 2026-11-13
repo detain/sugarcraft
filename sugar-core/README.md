@@ -704,6 +704,16 @@ inherited write ends open), the child is terminated (SIGTERM, escalating to
 SIGKILL) and reaped inside a bounded window, and the resulting `ExecMsg`
 carries a `RuntimeException` with the localized
 `program.exec_deadline_exceeded` message — the TUI never freezes there.
+On Windows, `stream_select()` cannot watch `proc_open()` pipes at all;
+the capture leg refuses to degrade silently there — a localized notice is
+written to stderr and both streams are read sequentially with blocking
+reads under the same byte cap. The wall deadline cannot preempt a
+blocking CRT read, and stdout-before-stderr carries the classic
+unread-stderr deadlock risk if a child overflows ~64 KiB on the *other*
+stream — stated as the platform's documented caveat rather than
+pretended away (Windows-box verification is a named survivor; the
+behavioral fallback is tested on any OS through the code path's
+platform override).
 Terminal writes in both the renderer and the program loop are short-write
 safe and bounded the same way: a stalled output stream drops the frame tail
 after a 30-second writability wait, and the `Recorder` tee (the candy-vcr
