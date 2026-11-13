@@ -296,7 +296,7 @@ final class Compiler
         match (true) {
             $node instanceof OutputDirective => $this->compileOutput($node),
             $node instanceof SetDirective => $this->compileSet($node),
-            $node instanceof EnvDirective => $this->env[$node->key] = trim($node->value, '"\' '),
+            $node instanceof EnvDirective => $this->env[$node->key] = $this->compileEnvValue($node->value),
             $node instanceof TypeDirective => $this->compileType($node),
             $node instanceof EnterDirective => $this->emitKey("\r", null, 'Enter'),
             $node instanceof TabDirective => $this->emitKey("\t", "\x1b[Z", 'Tab'),
@@ -420,7 +420,11 @@ final class Compiler
 
     private function compileType(TypeDirective $node): void
     {
-        $chars = mb_str_split($node->text);
+        // Finding 006's compile-side half: the Lexer scanned the quoted run
+        // escape-aware and left the escapes in the value verbatim; here they
+        // resolve to the bytes the tape meant, so `Type "a\"b"` types `a"b`
+        // and the Decompiler's own `\"`/`\\` spellings round-trip honestly.
+        $chars = mb_str_split(Lexer::unescapeValue($node->text));
 
         // A pending Alt/Shift (finding 005 modifiers) merges into the run:
         // Alt becomes the ESC meta lead byte per character — sugar-core's
@@ -584,7 +588,24 @@ final class Compiler
      */
     private function compileCopy(CopyDirective $node): void
     {
-        $this->emitInputBytes("\x1b]52;c;" . base64_encode($node->text) . "\x07");
+        $this->emitInputBytes("\x1b]52;c;" . base64_encode(Lexer::unescapeValue($node->text)) . "\x07");
+    }
+
+    /**
+     * Resolve an `Env` value to the bytes it carries (finding 091): the
+     * Lexer's escape-aware arm already stripped the delimiters, so the only
+     * quoting left to honor is a legacy hand-written pair (strip ONE
+     * matched surrounding pair — never a char-class trim, which would eat
+     * into an escaped quote at either end), then unescape.
+     */
+    private function compileEnvValue(string $raw): string
+    {
+        $value = $raw;
+        if (strlen($value) >= 2 && preg_match('/^([\'"`])((?:\\\\.|[^\\\\])*?)\1$/', $value)) {
+            $value = substr($value, 1, -1);
+        }
+
+        return Lexer::unescapeValue(trim($value, " \t"));
     }
 
     /**
@@ -744,6 +765,16 @@ final class Compiler
         // Depth guard
         if ($this->sourceDepth >= self::MAX_SOURCE_DEPTH) {
             throw new \RuntimeException("Source include depth exceeded (max " . self::MAX_SOURCE_DEPTH . "): {$fullPath}");
+        }
+
+        // Size law (finding 032): a sub-include is a tape file too — route an
+        // over-cap include through the same named-problem channel as the
+        // unreadable ones instead of slurping megabytes of hostile input.
+        $includePath = $realPath !== false ? $realPath : $fullPath;
+        $includeSize = @filesize($includePath);
+        if ($includeSize !== false && $includeSize > Lexer::MAX_TAPE_BYTES) {
+            $this->reportSourceProblem($node->path, 'exceeds the ' . Lexer::MAX_TAPE_BYTES . '-byte tape cap');
+            return;
         }
 
         $source = $realPath !== false

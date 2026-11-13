@@ -84,9 +84,23 @@ final class TapeToGif
         $fps = (float) ($options['fps'] ?? 30.0);
         $cliTheme = $options['theme'] ?? null;
 
+        // Size law (finding 032): refuse by name BEFORE slurping — a stat is
+        // free, a multi-gigabyte slurp is the harm. The post-read strlen is
+        // the belt for stream-shaped paths filesize cannot measure.
+        $size = @filesize($tapePath);
+        if ($size !== false && $size > Lexer::MAX_TAPE_BYTES) {
+            throw new \RuntimeException(
+                'tape file ' . $tapePath . ' exceeds the ' . Lexer::MAX_TAPE_BYTES . '-byte tape cap',
+            );
+        }
         $source = @file_get_contents($tapePath);
         if ($source === false) {
             throw new \RuntimeException("Cannot read tape file: {$tapePath}");
+        }
+        if (strlen($source) > Lexer::MAX_TAPE_BYTES) {
+            throw new \RuntimeException(
+                'tape file ' . $tapePath . ' exceeds the ' . Lexer::MAX_TAPE_BYTES . '-byte tape cap',
+            );
         }
 
         $tokens = $this->lexer->tokenize($source);

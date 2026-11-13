@@ -144,6 +144,13 @@ final class RenderTapeCommand extends Command
     private function dryRun(string $tapePath, OutputInterface $output): int
     {
         try {
+            // Size law (finding 032): the stat gate refuses an oversized
+            // tape by name before it is ever slurped.
+            $size = @filesize($tapePath);
+            if ($size !== false && $size > Lexer::MAX_TAPE_BYTES) {
+                $output->writeln('<error>Failed: tape file ' . $tapePath . ' exceeds the ' . Lexer::MAX_TAPE_BYTES . '-byte tape cap</error>');
+                return 1;
+            }
             $source = @file_get_contents($tapePath);
             if ($source === false) {
                 $output->writeln("<error>Failed: cannot read tape file: {$tapePath}</error>");

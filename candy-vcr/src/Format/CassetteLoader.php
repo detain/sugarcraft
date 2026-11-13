@@ -133,9 +133,23 @@ final class CassetteLoader
 
     private function loadTape(string $path): Cassette
     {
+        // Size law (finding 032): refuse by name BEFORE slurping — a stat is
+        // free, a multi-gigabyte slurp is the harm. The post-read strlen is
+        // the belt for stream-shaped paths filesize cannot measure.
+        $size = @filesize($path);
+        if ($size !== false && $size > Lexer::MAX_TAPE_BYTES) {
+            throw new \RuntimeException(
+                'tape file ' . $path . ' exceeds the ' . Lexer::MAX_TAPE_BYTES . '-byte tape cap',
+            );
+        }
         $source = @file_get_contents($path);
         if ($source === false) {
             throw new \RuntimeException("cannot read tape file: {$path}");
+        }
+        if (strlen($source) > Lexer::MAX_TAPE_BYTES) {
+            throw new \RuntimeException(
+                'tape file ' . $path . ' exceeds the ' . Lexer::MAX_TAPE_BYTES . '-byte tape cap',
+            );
         }
         $tokens = (new Lexer())->tokenize($source);
         $ast = (new Parser())->parse($tokens);
