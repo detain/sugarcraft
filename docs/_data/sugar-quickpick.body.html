@@ -1,8 +1,8 @@
-<p class="lede" style="margin-top: 28px;">Fuzzy-search overlay: a render-and-state component your event loop drives — you decode keys and forward them (type(), cursorUp()/Down()); Enter is answered by the selected() query and hide() is the lifecycle call — neither is input the library consumes, it reads none itself. Composes into any SugarCraft app via the package-local Model contract. Supports structured Item objects, custom filter predicates, and persistent JSONL history.</p>
+<p class="lede" style="margin-top: 28px;">Fuzzy-search overlay: a render-and-state component your event loop drives — you decode keys and forward them (type(), cursorUp()/Down()); Enter is answered by the selected() query and hide() is the lifecycle call — neither is input the library consumes, it reads none itself. Composes into any SugarCraft app via the package-local QuickPickHost contract (the old Model name remains as a @deprecated alias). Supports structured Item objects, custom filter predicates, and persistent JSONL history.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-quickpick</code></pre>
-    <p><strong>Requirements:</strong> PHP 8.3+ with <code>ext-ffi</code> — the package hard-requires sugar-pty, which hard-requires FFI at install time even though only the opt-in <code>attachSigwinch()</code> path touches it (via <code>SignalForwarder</code>). <code>ext-pcntl</code> is needed only for that same attach; without it <code>attachSigwinch()</code> returns <code>false</code> and everything else works.</p>
+    <p><strong>Requirements:</strong> PHP 8.3+, no hard extension floor. <code>ext-pcntl</code> and <code>sugarcraft/sugar-pty</code> are both optional and both serve only the opt-in <code>attachSigwinch()</code> resize attach — sugar-pty supplies its automatic <code>SignalForwarder</code> path (and an <code>ext-ffi</code> install floor with it); without either, <code>attachSigwinch()</code> returns <code>false</code> and you drive resizes yourself (<code>invalidateAutoWidth()</code> once per resize, or pass a host installer callable). Everything else is pure string rendering. A <strong>UTF-8 capable terminal</strong> is expected: the built-in chrome draws <code>↕ ─ ▏ ⋯</code> runes, which show as mojibake on legacy non-UTF-8 terminals.</p>
     <p><strong>Stability:</strong> this package requires its <code>sugarcraft/</code> siblings at <code>dev-master</code>. A Composer project left on the default <code>stable</code> minimum-stability cannot resolve them — add <code>"minimum-stability": "dev", "prefer-stable": true</code> to the consuming root (or pin the released <code>sugarcraft/*</code> tags once cut). The monorepo publishes all libs together, so sibling versions always line up.</p>
 
     <h3 style="margin-top: 32px;">Quickstart — plain strings</h3>
@@ -10,7 +10,7 @@
 
 $quickpick = QuickPick::new(
     items: ['Ruby', 'PHP', 'Go', 'Rust', 'Python'],
-)->setPrompt('Choose language: ');</code></pre>
+)->withPrompt('Choose language: ');</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart — numbered items + history</h3>
     <pre class="code"><code class="language-php">use SugarCraft\QuickPick\QuickPick;
@@ -24,8 +24,8 @@ $items = [
 ];
 
 $quickpick = QuickPick::new($items)
-    ->setFilterFn(fn($item) => $item->number() > 0)
-    ->setPrompt('> ');
+    ->withFilterFn(fn($item) => $item->number() > 0)
+    ->withPrompt('> ');
 
 // Persist selections (path you own; files created are 0600)
 $historyPath = getenv('HOME') . '/.myapp/history.jsonl';
@@ -34,20 +34,36 @@ $history = new FileHistory($historyPath);
 if ($choice = $quickpick->selected()) {
     $history->append($choice);
 }
-$allItems = $history->all();</code></pre>
+$allItems = $history->all(); // renumbered 1..N by current load position — archived write-time ordinals are display-ignored</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Fuzzy matching</strong><span>Case-folded substring filter; a candidate must match in the first half of the text (codepoint-based). setRanker() swaps in true subsequence scoring.</span></div>
-            <div class="feature"><strong>Composition wrapper</strong><span>update()/view() Model contract — package-local, no init()/subscriptions plumbing.</span></div>
-            <div class="feature"><strong>Configurable</strong><span>Custom formatter, prompt, match highlight style, window size.</span></div>
+      <div class="feature"><strong>Fuzzy matching</strong><span>Case-folded substring filter; a candidate must match in the first half of the text (codepoint-based). withRanker() swaps in true subsequence scoring; a rejected-by-bias count surfaces as “N hidden by anchor bias”.</span></div>
+            <div class="feature"><strong>Composition wrapper</strong><span>QuickPickHost contract: update() answers [host, picker] — the updated QuickPick rides the tuple, the host needs no mutable state.</span></div>
+            <div class="feature"><strong>Configurable</strong><span>Custom formatter, prompt, match highlight style; window height is a maximum, clamped to the terminal row budget on short screens.</span></div>
             <div class="feature"><strong>Item interface</strong><span>Structured Item objects with number() + value() instead of raw strings.</span></div>
-            <div class="feature"><strong>Custom filter predicates</strong><span>setFilterFn() applies arbitrary Closure(Item): bool logic.</span></div>
-            <div class="feature"><strong>Persistent history</strong><span>FileHistory stores items as JSONL lines, one item per line.</span></div>
+            <div class="feature"><strong>Custom filter predicates</strong><span>withFilterFn() applies arbitrary Closure(Item): bool logic — seedable straight through new().</span></div>
+            <div class="feature"><strong>Persistent history</strong><span>FileHistory stores items as JSONL (version-stamped rows), post-open fd-trust verified, oversized lines dropped at a 64 KiB read cap, with appendDistinct() dedupe and an optional entry cap.</span></div>
             <div class="feature"><strong>Border &amp; Style</strong><span>withBorder() frames every row (T-junction separator); withStyle() paints each rendered row via sugar-style.</span></div>
             <div class="feature"><strong>HelpBar / StatusBar</strong><span>Keyboard-shortcut summary and status message rendered below the overlay.</span></div>
             <div class="feature"><strong>SIGWINCH resize</strong><span>withOnResize() + attachSigwinch() forward terminal resize events via SignalForwarder.</span></div>
     </div>
+
+    <h3 style="margin-top: 40px;">Keyboard contract (condensed)</h3>
+    <p>QuickPick <strong>reads no input itself</strong> — your event loop decodes keys and forwards calls:</p>
+    <table class="api-table">
+    <tr><th>Key</th><th>Call</th></tr>
+    <tr><td>printable text</td><td><code>type($s)</code></td></tr>
+    <tr><td>Backspace</td><td><code>backspace()</code></td></tr>
+    <tr><td>Ctrl+U</td><td><code>clear()</code></td></tr>
+    <tr><td>Up / Down</td><td><code>cursorUp()</code> / <code>cursorDown()</code> — optional step argument; there are no page keys, call with a step</td></tr>
+    <tr><td>Home / End</td><td><code>cursorTop()</code> / <code>cursorBottom()</code></td></tr>
+    <tr><td>Enter (accept)</td><td><code>selected()</code>, then <code>hide()</code> — <code>hide()</code> is not <code>accept()</code>: read the selection <em>before</em> hiding; <code>null</code> means nothing to accept</td></tr>
+    <tr><td>Esc (cancel)</td><td><code>hide()</code></td></tr>
+    </table>
+
+    <h3 style="margin-top: 40px;">Accessibility &amp; color policy</h3>
+    <p><strong>Colorless by default.</strong> The frame emits no SGR at all; emphasis reaches the cursor row through text channels a screen reader can speak — the <code>●</code> bullet and ordinal (both your <code>withItemFormatter</code>'s bytes, substitutable to plain ASCII; <code>withNumbered(false)</code> drops the ordinals and keeps the dot) and plain-language chrome rows rendered from the <code>Lang</code> catalogue (<code>“↕ showing 1-10 of 40”</code>, <code>“no matches”</code>, <code>“no items”</code>, <code>“N hidden by anchor bias”</code>). Every printed ordinal is a POSITION: coerced strings take their input position across the whole list, replayed history renumbers 1..N at load, and <code>cursor()</code> is the accessor for the selected row's position in what is on screen. SGR appears only where the host opts in (<code>withMatchStyle()</code>, <code>withStyle()</code>, the formatter); honoring <code>NO_COLOR</code>/<code>CLICOLOR</code> is host-side — skip the opt-ins on dumb terminals (the default already needs no color).</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -62,15 +78,16 @@ $allItems = $history->all();</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>QuickPick</td><td>new(array $items, ?Closure $itemFormatter)</td><td>Create fuzzy finder (items: string[] or Item[])</td></tr>
+<tr><td>QuickPick</td><td>new(array $items, ?Closure $itemFormatter, ?Closure $filterFn)</td><td>Create fuzzy finder (items: string[] or Item[]; coerced strings take their input position as ordinal; all three seeds factory-reachable)</td></tr>
 <tr><td>QuickPick</td><td>withItems(array $items)</td><td>Replace items; the filter text is kept and re-applied (cursor resets)</td></tr>
-<tr><td>QuickPick</td><td>setPrompt(string)</td><td>Set filter prompt string</td></tr>
-<tr><td>QuickPick</td><td>setFilterFn(Closure)</td><td>Set custom filter predicate: Closure(Item): bool</td></tr>
-<tr><td>QuickPick</td><td>setItemFormatter(Closure)</td><td>Set item formatter: Closure(value: string, isSelected: bool, number: int): string</td></tr>
-<tr><td>QuickPick</td><td>setMatchStyle(string)</td><td>Set ANSI SGR codes for match highlighting</td></tr>
-<tr><td>QuickPick</td><td>setWindowHeight(int)</td><td>Set overlay height in rows (header+separator included; visible items = height − 2, min 2; overflow/empty states consume an item row)</td></tr>
-<tr><td>QuickPick</td><td>setWindowWidth(int)</td><td>Set overlay width (0 = auto)</td></tr>
-<tr><td>QuickPick</td><td>setOffset(int $x, int $y)</td><td>Set overlay position (pure placement; negatives clamp; visibility unchanged)</td></tr>
+<tr><td>QuickPick</td><td>withPrompt(string)</td><td>Set filter prompt string</td></tr>
+<tr><td>QuickPick</td><td>withFilterFn(Closure)</td><td>Set custom filter predicate: Closure(Item): bool</td></tr>
+<tr><td>QuickPick</td><td>withItemFormatter(Closure)</td><td>Set item formatter: Closure(value: string, isSelected: bool, number: int): string</td></tr>
+<tr><td>QuickPick</td><td>withNumbered(bool $numbered = true)</td><td>Printed ordinals on/off: off hands the formatter number 0 for every row (built-in default renders the cursor dot alone; a custom formatter honoring "0 = no number" opts out the same way)</td></tr>
+<tr><td>QuickPick</td><td>withMatchStyle(string)</td><td>Set ANSI SGR codes for match highlighting</td></tr>
+<tr><td>QuickPick</td><td>withWindowHeight(int)</td><td>Set the overlay height MAXIMUM in rows (header+separator included; visible items = height − 2, min 2; overflow/empty states consume an item row; short terminals shrink the budget — the frame never exceeds tty rows minus reserved chrome)</td></tr>
+<tr><td>QuickPick</td><td>withWindowWidth(int)</td><td>Set overlay width (0 = auto)</td></tr>
+<tr><td>QuickPick</td><td>withOffset(int $x, int $y)</td><td>Set overlay position (pure placement; negatives clamp; visibility unchanged)</td></tr>
 <tr><td>QuickPick</td><td>show() / hide()</td><td>Show the overlay (resetting cursor and filter) or hide it</td></tr>
 <tr><td>QuickPick</td><td>type(string) / backspace() / clear()</td><td>Modify filter text</td></tr>
 <tr><td>QuickPick</td><td>cursorUp/Down/Top/Bottom()</td><td>Navigate item cursor</td></tr>
@@ -80,9 +97,10 @@ $allItems = $history->all();</code></pre>
 <tr><td>QuickPick</td><td>withStyle(?Style)</td><td>Apply sugar-style Style to overlay window</td></tr>
 <tr><td>QuickPick</td><td>withHelpBar(?HelpBar)</td><td>Attach keyboard-shortcut summary below filter list</td></tr>
 <tr><td>QuickPick</td><td>withStatusBar(?StatusBar)</td><td>Attach status message line at overlay bottom</td></tr>
-<tr><td>QuickPick</td><td>setRanker(?FuzzyMatcher)</td><td>Plug a sugar-fuzzy ranker (per-keystroke full-corpus scoring); null restores substring filter</td></tr>
+<tr><td>QuickPick</td><td>withRanker(?FuzzyMatcher)</td><td>Plug a sugar-fuzzy ranker (per-keystroke full-corpus scoring); null restores substring filter; emphasis styling is a separate opt-in via withMatchStyle()</td></tr>
 <tr><td>QuickPick</td><td>withOnResize(?Closure)</td><td>Register callback invoked on SIGWINCH (cols, rows); null detaches</td></tr>
-<tr><td>QuickPick</td><td>attachSigwinch()</td><td>Install SIGWINCH handler via SignalForwarder (requires ext-pcntl)</td></tr>
+<tr><td>QuickPick</td><td>attachSigwinch(?callable $installer = null)</td><td>Install the resize handler — default uses sugar-pty's SignalForwarder when that suggested package is present; a host $installer(fd, probe, handler) works over any delivery; returns false when nothing attached</td></tr>
+<tr><td>QuickPick</td><td>invalidateAutoWidth()</td><td>Drop the memoized computed width across the whole clone family (shared holder) — the manual resize path when neither pcntl nor sugar-pty is installed</td></tr>
 <tr><td>QuickPick</td><td>border() / style() / helpBar() / statusBar()</td><td>Query attached border, style, help bar, status bar</td></tr>
 <tr><td>QuickPick</td><td>view(string $backgroundView)</td><td>Render composited overlay over background</td></tr>
 <tr><td>HelpBar</td><td>new(array $shortcuts, bool $visible)</td><td>Create help bar with key→description pairs</td></tr>
@@ -98,11 +116,13 @@ $allItems = $history->all();</code></pre>
 <tr><td>StatusBar</td><td>render()</td><td>Render as "[name: value] message" string</td></tr>
 <tr><td>Item</td><td>interface number(), value()</td><td>Contract for filterable items</td></tr>
 <tr><td>FilteredItem</td><td>new(int $number, string $value)</td><td>Numbered Item implementation</td></tr>
-<tr><td>FileHistory</td><td>new(string $path, ?string $baseDir)</td><td>Target a JSONL history file (without a jail, nothing touches the filesystem yet — the file is created lazily on first append via exclusive-open then a best-effort chmod to 0600 before payload; a refused chmod stays umask-decided and unsignalled; the file's parent directory is never created, it must already exist). With <code>$baseDir</code> the confinement check is eager in the constructor: the base directory must exist (missing base throws InvalidArgumentException) and symlinked or escaping paths are refused at construction</td></tr>
-<tr><td>FileHistory</td><td>append(Item)</td><td>Append item as JSON line; fails loud (RuntimeException) on unopenable, unlocked, short-written or symlinked paths</td></tr>
-<tr><td>FileHistory</td><td>all()</td><td>Read all items from history (non-entry lines are skipped)</td></tr>
-<tr><td>FileHistory</td><td>clear() / path()</td><td>Empty the history (truncates in place under a lock) or get the file path</td></tr>
-<tr><td>Model</td><td>interface update(QuickPick, string), view(QuickPick)</td><td>Model–Update–View embedding contract</td></tr>
+<tr><td>FileHistory</td><td>new(string $path, ?string $baseDir, ?int $maxEntries)</td><td>Target a JSONL history file (nothing touches the filesystem until an op runs — the file is created lazily via exclusive-open then a verified 0600; every later open is fd-trust verified post-open: inode identity, own-uid, no group/other bits — a pre-planted foreign file receives nothing; the parent directory must already exist. With <code>$baseDir</code> the confinement check is eager in the constructor (missing base throws InvalidArgumentException; symlinked or escaping paths refused); <code>$maxEntries</code> caps growth for appendDistinct() rewrites (null = unbounded))</td></tr>
+<tr><td>FileHistory</td><td>append(Item)</td><td>Append item as a version-stamped JSON line; fails loud (RuntimeException) on unopenable, unlocked, short-written (torn bytes rolled back before release), or untrusted paths</td></tr>
+<tr><td>FileHistory</td><td>appendDistinct(Item)</td><td>Managed growth: last-wins dedupe by value under one held lock, optional cap trims to the newest N; honest rows re-emit byte-verbatim</td></tr>
+<tr><td>FileHistory</td><td>all()</td><td>Read all items, renumbered 1..N by current load position — the archived write-time ordinal in the row is display-ignored (replays number like the fresh lists they feed) (bounded 64 KiB line reads — oversized planted lines are dropped, not slurped; an existing-but-unreadable file throws, a genuinely absent one answers []; unparseable or future-format rows are skipped)</td></tr>
+<tr><td>FileHistory</td><td>clear() / path()</td><td>Empty the history (ftruncate under a hard-required exclusive lock — lock failure throws before a byte moves) or get the file path</td></tr>
+<tr><td>QuickPickHost</td><td>interface update(QuickPick, string): array, view(QuickPick): string</td><td>Model–Update–View embedding contract — update() answers the [host, picker] tuple, so the updated QuickPick never needs mutable host state</td></tr>
+<tr><td>Model</td><td>@deprecated alias of QuickPickHost</td><td>Declares no members of its own; old type-hints and instanceof keep resolving (implementors must adopt the tuple)</td></tr>
 </table>
   </div>
 </section>
